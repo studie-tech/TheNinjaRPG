@@ -12,7 +12,11 @@ import {
   resetTables,
 } from "../../../setup/testDatabase";
 
-const state = damageSimulationStateSchema.parse({ attacker: {}, defender: {}, action: {} });
+const state = damageSimulationStateSchema.parse({
+  attacker: {},
+  defender: {},
+  action: {},
+});
 
 describeWithDatabase("damage simulation history", () => {
   beforeEach(async () => {
@@ -54,12 +58,15 @@ describeWithDatabase("damage simulation history", () => {
       .from(damageSimulation)
       .where(eq(damageSimulation.userId, "simulator-user"))
       .orderBy(desc(damageSimulation.createdAt));
-    const seededKept = Array.from({ length: expected - 1 }, (_, i) =>
-      `sim-${String(existing - 1 - i).padStart(2, "0")}`,
+    const seededKept = Array.from(
+      { length: expected - 1 },
+      (_, i) => `sim-${String(existing - 1 - i).padStart(2, "0")}`,
     );
     expect(rows).toHaveLength(expected);
     expect(rows.map((row) => row.id)).toEqual(expect.arrayContaining(seededKept));
-    expect(rows.map((row) => row.id).filter((id) => !id.startsWith("sim-"))).toHaveLength(1);
+    expect(
+      rows.map((row) => row.id).filter((id) => !id.startsWith("sim-")),
+    ).toHaveLength(1);
 
     const other = await db
       .select({ id: damageSimulation.id })

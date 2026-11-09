@@ -59,12 +59,38 @@ describe("UTC purchase calendar", () => {
   it("keeps allowances separate when calendar period starts coincide", () => {
     const now = new Date("2026-06-01T12:00:00Z");
     const counters = [
-      { period: "DAILY" as const, periodStart: getItemPurchasePeriodStart("DAILY", now)!, quantity: 1 },
-      { period: "WEEKLY" as const, periodStart: getItemPurchasePeriodStart("WEEKLY", now)!, quantity: 3 },
+      {
+        period: "DAILY" as const,
+        periodStart: getItemPurchasePeriodStart("DAILY", now)!,
+        quantity: 1,
+      },
+      {
+        period: "WEEKLY" as const,
+        periodStart: getItemPurchasePeriodStart("WEEKLY", now)!,
+        quantity: 3,
+      },
     ];
-    expect(getItemPurchaseAllowance({ purchaseLimit: 5, purchaseLimitPeriod: "MONTHLY" }, counters, now).remaining).toBe(5);
-    expect(getItemPurchaseAllowance({ purchaseLimit: 5, purchaseLimitPeriod: "WEEKLY" }, counters, now).remaining).toBe(2);
-    expect(getItemPurchaseAllowance({ purchaseLimit: 5, purchaseLimitPeriod: "DAILY" }, counters, now).remaining).toBe(4);
+    expect(
+      getItemPurchaseAllowance(
+        { purchaseLimit: 5, purchaseLimitPeriod: "MONTHLY" },
+        counters,
+        now,
+      ).remaining,
+    ).toBe(5);
+    expect(
+      getItemPurchaseAllowance(
+        { purchaseLimit: 5, purchaseLimitPeriod: "WEEKLY" },
+        counters,
+        now,
+      ).remaining,
+    ).toBe(2);
+    expect(
+      getItemPurchaseAllowance(
+        { purchaseLimit: 5, purchaseLimitPeriod: "DAILY" },
+        counters,
+        now,
+      ).remaining,
+    ).toBe(4);
   });
   it("NONE ignores any stored quantity", () => {
     expect(
@@ -79,7 +105,13 @@ describe("UTC purchase calendar", () => {
     expect(
       getItemPurchaseAllowance(
         { purchaseLimit: 1, purchaseLimitPeriod: "DAILY" },
-        [{ period: "DAILY", periodStart: getItemPurchasePeriodStart("DAILY", now)!, quantity: 10 }],
+        [
+          {
+            period: "DAILY",
+            periodStart: getItemPurchasePeriodStart("DAILY", now)!,
+            quantity: 10,
+          },
+        ],
         now,
       ).remaining,
     ).toBe(0);

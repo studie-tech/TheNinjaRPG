@@ -29,7 +29,11 @@ import {
   insertUserItems,
   insertDefaultAiProfile,
 } from "../../../../setup/factories";
-import { formQuestTeam, insertQuestTeamWorld, insertTeamQuest } from "../../../../setup/questParty";
+import {
+  formQuestTeam,
+  insertQuestTeamWorld,
+  insertTeamQuest,
+} from "../../../../setup/questParty";
 import {
   callerFor,
   callerForDatabase,
@@ -60,25 +64,35 @@ describeWithDatabase("quest team snapshots during unrelated battle", () => {
     stubRateLimitTransport({ answerOtherRequests: true });
     await insertQuestTeamWorld();
     await insertUsers([
-      { userId: "enemy", username: "enemy", isAi: true, inArena: true, level: 50, rank: "JONIN" },
+      {
+        userId: "enemy",
+        username: "enemy",
+        isAi: true,
+        inArena: true,
+        level: 50,
+        rank: "JONIN",
+      },
     ]);
     await insertDefaultAiProfile({ userId: "enemy" });
     await insertItems([{ id: "scroll" }]);
-    await insertTeamQuest([
-            AllObjectives.parse({
-              id: "collect",
-              task: "collect_item",
-              collectItemIds: ["scroll"],
-              item_name: "Scroll",
-              sector: 50,
-              longitude: 11,
-              latitude: 10,
-              sectorType: "specific",
-              locationType: "specific",
-              nextObjectiveId: "wait",
-            }),
-            AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
-          ], { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 });
+    await insertTeamQuest(
+      [
+        AllObjectives.parse({
+          id: "collect",
+          task: "collect_item",
+          collectItemIds: ["scroll"],
+          item_name: "Scroll",
+          sector: 50,
+          longitude: 11,
+          latitude: 10,
+          sectorType: "specific",
+          locationType: "specific",
+          nextObjectiveId: "wait",
+        }),
+        AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
+      ],
+      { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 },
+    );
   });
   afterEach(() => vi.restoreAllMocks());
 

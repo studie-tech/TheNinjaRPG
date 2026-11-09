@@ -37,7 +37,10 @@ const CacheForm = ({ restricted = false }: { restricted?: boolean }) => {
     <WeightedCacheEditor
       cache={cache}
       onChange={setCache}
-      items={[{ id: "pill", name: "Chakra Pill", isRestrictedCacheReward: restricted }, { id: "bloodline", name: "Bloodline Scroll", isRestrictedCacheReward: true }]}
+      items={[
+        { id: "pill", name: "Chakra Pill", isRestrictedCacheReward: restricted },
+        { id: "bloodline", name: "Bloodline Scroll", isRestrictedCacheReward: true },
+      ]}
       isLoading={false}
       isError={false}
       onRetry={() => {}}
@@ -48,11 +51,15 @@ const CacheForm = ({ restricted = false }: { restricted?: boolean }) => {
 describe("weighted cache editor sections", () => {
   it("exposes existing restricted rewards for repair and excludes new restricted choices", async () => {
     const view = render(<CacheForm restricted />);
-    expect(view.getAllByRole("alert")[0]?.textContent).toContain(CACHE_RESTRICTED_REWARD_MESSAGE);
+    expect(view.getAllByRole("alert")[0]?.textContent).toContain(
+      CACHE_RESTRICTED_REWARD_MESSAGE,
+    );
     fireEvent.click(view.getByRole("button", { name: "Review first issue" }));
     const entry = view.getAllByRole("alert")[0]!.closest("details")!;
     fireEvent.click(within(entry).getByRole("combobox"));
-    await waitFor(() => expect(view.getByRole("option", { name: "Chakra Pill" })).toBeDefined());
+    await waitFor(() =>
+      expect(view.getByRole("option", { name: "Chakra Pill" })).toBeDefined(),
+    );
     expect(view.queryByRole("option", { name: "Bloodline Scroll" })).toBeNull();
   });
   it("collapses saved tiers and entries while keeping invalid numeric drafts available", async () => {

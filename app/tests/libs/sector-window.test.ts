@@ -31,7 +31,9 @@ describe("buildSectorWindowLayout", () => {
   it("projects every sector into an unrotated rectangular window", () => {
     for (let sector = 0; sector < tiles.length; sector++) {
       const layout = buildSectorWindowLayout(sector);
-      const byOffset = new Map(layout.map((entry) => [`${entry.dx},${entry.dy}`, entry]));
+      const byOffset = new Map(
+        layout.map((entry) => [`${entry.dx},${entry.dy}`, entry]),
+      );
       const position = sectorGridPosition(sector)!;
       expect(layout).toHaveLength(
         position.row === 0 || position.row === MAP_WORLD_ROWS - 1 ? 6 : 9,
@@ -92,7 +94,10 @@ describe("buildSectorWindowLayout", () => {
 
   it("golden: Shirohana and sector 1620 use ordinary grid neighbors", () => {
     const shirohana = new Map(
-      buildSectorWindowLayout(1631).map((entry) => [`${entry.dx},${entry.dy}`, entry.sector]),
+      buildSectorWindowLayout(1631).map((entry) => [
+        `${entry.dx},${entry.dy}`,
+        entry.sector,
+      ]),
     );
     expect(shirohana.get("0,1")).toBe(1559);
     expect(shirohana.get("1,0")).toBe(1632);

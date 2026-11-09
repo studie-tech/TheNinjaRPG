@@ -22,19 +22,23 @@ describe("authenticateCronRequest", () => {
     });
   });
 
-  it.each([undefined, "cron-secret", "Bearer wrong-secret", "Bearer cr0n-secret", "bearer cron-secret", "Bearer cron-secret-extra"])(
-    "rejects an invalid authorization header: %s",
-    async (authorization) => {
-      process.env.CRON_SECRET = "cron-secret";
+  it.each([
+    undefined,
+    "cron-secret",
+    "Bearer wrong-secret",
+    "Bearer cr0n-secret",
+    "bearer cron-secret",
+    "Bearer cron-secret-extra",
+  ])("rejects an invalid authorization header: %s", async (authorization) => {
+    process.env.CRON_SECRET = "cron-secret";
 
-      const response = authenticateCronRequest(request(authorization));
+    const response = authenticateCronRequest(request(authorization));
 
-      expect(response?.status).toBe(401);
-      await expect(response?.json()).resolves.toEqual({
-        error: "Unauthorized - Invalid or missing authorization header",
-      });
-    },
-  );
+    expect(response?.status).toBe(401);
+    await expect(response?.json()).resolves.toEqual({
+      error: "Unauthorized - Invalid or missing authorization header",
+    });
+  });
 
   it("accepts the exact Bearer token", () => {
     process.env.CRON_SECRET = "cron-secret";

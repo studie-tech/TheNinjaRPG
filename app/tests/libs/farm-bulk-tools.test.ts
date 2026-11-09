@@ -12,9 +12,7 @@ describe("farm bulk tool availability", () => {
   };
 
   it("enables consumable actions from selections and targets, not stack size", () => {
-    expect(
-      getFarmBulkToolAvailability({ ...availableInput, pending: false }),
-    ).toEqual({
+    expect(getFarmBulkToolAvailability({ ...availableInput, pending: false })).toEqual({
       canPlantAll: true,
       canWaterAll: true,
       canFertilizeAll: true,
@@ -23,9 +21,7 @@ describe("farm bulk tool availability", () => {
   });
 
   it("disables every bulk tool while another bulk action is pending", () => {
-    expect(
-      getFarmBulkToolAvailability({ ...availableInput, pending: true }),
-    ).toEqual({
+    expect(getFarmBulkToolAvailability({ ...availableInput, pending: true })).toEqual({
       canPlantAll: false,
       canWaterAll: false,
       canFertilizeAll: false,

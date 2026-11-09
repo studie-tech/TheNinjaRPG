@@ -32,11 +32,18 @@ describe("resolveOverworldPosition", () => {
   };
 
   it("returns fixed coordinates unchanged for specific/specific", () => {
-    expect(resolveOverworldPosition(cfg)).toEqual({ sector: 10, longitude: 3, latitude: 4 });
+    expect(resolveOverworldPosition(cfg)).toEqual({
+      sector: 10,
+      longitude: 3,
+      latitude: 4,
+    });
   });
 
   it("re-randomizes the tile within bounds for locationType random", () => {
-    const pos = resolveOverworldPosition({ ...cfg, locationType: "random" }, () => 0.99);
+    const pos = resolveOverworldPosition(
+      { ...cfg, locationType: "random" },
+      () => 0.99,
+    );
     expect(pos.sector).toBe(10);
     expect(pos.longitude).toBeLessThan(SECTOR_WIDTH);
     expect(pos.latitude).toBeLessThan(SECTOR_HEIGHT);
@@ -44,7 +51,12 @@ describe("resolveOverworldPosition", () => {
 
   it("picks a sector from the list for from_list", () => {
     const pos = resolveOverworldPosition(
-      { ...cfg, sectorType: "from_list", locationType: "random", sectorList: [11, 12, 13] },
+      {
+        ...cfg,
+        sectorType: "from_list",
+        locationType: "random",
+        sectorList: [11, 12, 13],
+      },
       () => 0,
     );
     expect(pos.sector).toBe(11);
@@ -100,10 +112,7 @@ describe("snapOverworldPositionToWalkable", () => {
 
   it("keeps a roll on shaded terrain", () => {
     expect(
-      snapOverworldPositionToWalkable(
-        { sector: 10, longitude: 0, latitude: 0 },
-        map,
-      ),
+      snapOverworldPositionToWalkable({ sector: 10, longitude: 0, latitude: 0 }, map),
     ).toEqual({ sector: 10, longitude: 0, latitude: 0 });
   });
 
@@ -114,10 +123,7 @@ describe("snapOverworldPositionToWalkable", () => {
       width: 1,
     } as unknown as NormalizedSectorMap;
     expect(
-      snapOverworldPositionToWalkable(
-        { sector: 10, longitude: 0, latitude: 0 },
-        empty,
-      ),
+      snapOverworldPositionToWalkable({ sector: 10, longitude: 0, latitude: 0 }, empty),
     ).toBeNull();
   });
 });

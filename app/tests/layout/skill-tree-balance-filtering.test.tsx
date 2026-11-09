@@ -16,7 +16,15 @@ it("sends the chosen minimum count, effects and numeric tiers", async () => {
     result.current.cf.setters.skillEffects(["damage"]);
     result.current.cf.setters.tiers(["2", "10"]);
   });
-  await waitFor(() => expect(getFilter(result.current)).toEqual({ minCount: 5, skillEffects: ["damage"], tiers: [2, 10] }), { timeout: 2000 });
+  await waitFor(
+    () =>
+      expect(getFilter(result.current)).toEqual({
+        minCount: 5,
+        skillEffects: ["damage"],
+        tiers: [2, 10],
+      }),
+    { timeout: 2000 },
+  );
 });
 
 it("omits a minimum count below one", async () => {

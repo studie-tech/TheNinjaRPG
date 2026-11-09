@@ -30,8 +30,7 @@ describe("farmShopPurchaseInputSchema", () => {
       farmShopPurchaseInputSchema.safeParse({ type: "PLOT", quantity: 2 }).success,
     ).toBe(false);
     expect(
-      farmShopPurchaseInputSchema.safeParse({ type: "EXTRACTOR", quantity: 2 })
-        .success,
+      farmShopPurchaseInputSchema.safeParse({ type: "EXTRACTOR", quantity: 2 }).success,
     ).toBe(false);
   });
 });

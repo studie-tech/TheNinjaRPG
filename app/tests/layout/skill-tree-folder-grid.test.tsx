@@ -10,14 +10,29 @@ beforeEach(() => {
   vi.spyOn(image, "default").mockImplementation(actualImage);
 });
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 it("serves legacy UploadThing folder art through the CDN host", () => {
-  const folder = { id: "taijutsu", name: "Taijutsu", image: "https://utfs.io/f/folder-key.webp" } as SkillTreeFolder;
+  const folder = {
+    id: "taijutsu",
+    name: "Taijutsu",
+    image: "https://utfs.io/f/folder-key.webp",
+  } as SkillTreeFolder;
   const view = render(
     <SkillTreeFolderGrid
       folders={[folder]}
-      folderStats={[{ folderId: "taijutsu", folderName: "Taijutsu", folderImage: folder.image ?? "", totalSkills: 4, ownedSkills: 1 }]}
+      folderStats={[
+        {
+          folderId: "taijutsu",
+          folderName: "Taijutsu",
+          folderImage: folder.image ?? "",
+          totalSkills: 4,
+          ownedSkills: 1,
+        },
+      ]}
       allSkills={[]}
       onFolderClick={() => undefined}
       selectedEffects={[]}
@@ -25,6 +40,8 @@ it("serves legacy UploadThing folder art through the CDN host", () => {
     />,
   );
   const image = view.getByAltText("Taijutsu") as HTMLImageElement;
-  expect(decodeURIComponent(image.getAttribute("src") ?? "")).toContain("https://uploadthing.b-cdn.net/f/folder-key.webp");
+  expect(decodeURIComponent(image.getAttribute("src") ?? "")).toContain(
+    "https://uploadthing.b-cdn.net/f/folder-key.webp",
+  );
   expect(view.getByText("1/4 skills")).toBeTruthy();
 });

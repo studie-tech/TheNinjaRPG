@@ -13,7 +13,9 @@ describe("getRewardArray sage mastery experience", () => {
 
 describe("hasReward reward_sage_modes", () => {
   it("hasReward is true when reward_sage_modes is set", () => {
-    expect(hasReward(ObjectiveReward.parse({ reward_sage_modes: ["sm_1"] }))).toBe(true);
+    expect(hasReward(ObjectiveReward.parse({ reward_sage_modes: ["sm_1"] }))).toBe(
+      true,
+    );
     expect(hasReward(ObjectiveReward.parse({ reward_sage_modes: [] }))).toBe(false);
   });
 });

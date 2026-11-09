@@ -8,7 +8,10 @@ import type { PropsWithChildren } from "react";
 import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { EVENT_TOURNAMENT_READY_SECONDS } from "@/drizzle/constants";
-import { useEventTournamentNoticeCache, useEventTournamentNotices } from "@/hooks/useEventTournamentNotices";
+import {
+  useEventTournamentNoticeCache,
+  useEventTournamentNotices,
+} from "@/hooks/useEventTournamentNotices";
 import { testApi, TrpcTestProviders } from "../setup/trpc";
 
 type Notices = RouterOutputs["tournament"]["getEventNotices"];
@@ -42,29 +45,46 @@ const settle = async () => {
 
 /** Move both the local clock and production deadline/recovery timers. */
 const advance = async (ms: number) => {
-  await act(async () => { now += ms; vi.advanceTimersByTime(ms); });
+  await act(async () => {
+    now += ms;
+    vi.advanceTimersByTime(ms);
+  });
   await settle();
 };
 
 /** Observe the production hook through a real tRPC cache with controlled server and socket delivery. */
-const setup = (initial: Notices = [], options: { offset?: number; defer?: boolean; fail?: boolean } = {}) => {
+const setup = (
+  initial: Notices = [],
+  options: { offset?: number; defer?: boolean; fail?: boolean } = {},
+) => {
   let authoritative = initial;
   let fail = options.fail ?? false;
   const pending: (() => void)[] = [];
   const read = vi.fn(() => authoritative);
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
   clients.push(queryClient);
-  const trpcClient = testApi.createClient({ links: [() => ({ op }) => observable((observer) => {
-    expect(op.path).toBe("tournament.getEventNotices");
-    const snapshot = read();
-    const shouldFail = fail;
-    const complete = () => {
-      if (shouldFail) observer.error(new Error("Notice unavailable") as never);
-      else { observer.next({ result: { data: snapshot } }); observer.complete(); }
-    };
-    if (options.defer) pending.push(complete);
-    else void Promise.resolve().then(complete);
-  })] });
+  const trpcClient = testApi.createClient({
+    links: [
+      () =>
+        ({ op }) =>
+          observable((observer) => {
+            expect(op.path).toBe("tournament.getEventNotices");
+            const snapshot = read();
+            const shouldFail = fail;
+            const complete = () => {
+              if (shouldFail) observer.error(new Error("Notice unavailable") as never);
+              else {
+                observer.next({ result: { data: snapshot } });
+                observer.complete();
+              }
+            };
+            if (options.defer) pending.push(complete);
+            else void Promise.resolve().then(complete);
+          }),
+    ],
+  });
   const handlers = new Set<() => void>();
   const channel = {
     bind: vi.fn((_event: string, callback: () => void) => handlers.add(callback)),
@@ -72,29 +92,54 @@ const setup = (initial: Notices = [], options: { offset?: number; defer?: boolea
   };
   const socket = { channel: vi.fn(() => channel) };
   const wrapper = ({ children }: PropsWithChildren) => (
-    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>{children}</TrpcTestProviders>
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+      {children}
+    </TrpcTestProviders>
   );
   const props = {
     enabled: true,
-    isPageActive: true, timeDiff: options.offset ?? 0,
-    pusher: socket as unknown as Pusher | undefined, userId: "player" as string | null,
+    isPageActive: true,
+    timeDiff: options.offset ?? 0,
+    pusher: socket as unknown as Pusher | undefined,
+    userId: "player" as string | null,
   };
-  const view = renderHook((input: typeof props) => ({
-    notices: useEventTournamentNotices(input), cache: useEventTournamentNoticeCache(),
-  }), { wrapper, initialProps: props });
+  const view = renderHook(
+    (input: typeof props) => ({
+      notices: useEventTournamentNotices(input),
+      cache: useEventTournamentNoticeCache(),
+    }),
+    { wrapper, initialProps: props },
+  );
   return {
-    ...view, props, pending, read, queryClient, channel,
+    ...view,
+    props,
+    pending,
+    read,
+    queryClient,
+    channel,
     key: getQueryKey(testApi.tournament.getEventNotices, undefined, "query"),
-    set: (notices: Notices) => { authoritative = notices; },
-    fail: (value: boolean) => { fail = value; },
+    set: (notices: Notices) => {
+      authoritative = notices;
+    },
+    fail: (value: boolean) => {
+      fail = value;
+    },
     reconnect: () => handlers.forEach((handler) => handler()),
   };
 };
 
 /** Construct an actionable notice using the server's fixed ready-check response window. */
-const notice = (deadline = now + EVENT_TOURNAMENT_READY_SECONDS * 1000, message = "Your tournament match is ready"): Notices => [{
-  tournamentId: "event", name: "Notice Cup", message, deadline,
-}];
+const notice = (
+  deadline = now + EVENT_TOURNAMENT_READY_SECONDS * 1000,
+  message = "Your tournament match is ready",
+): Notices => [
+  {
+    tournamentId: "event",
+    name: "Notice Cup",
+    message,
+    deadline,
+  },
+];
 
 it("uses one-minute discovery for empty registered-player notices across three hours in independent tabs", async () => {
   const tabs = [setup(), setup()];
@@ -118,19 +163,22 @@ it("discovers a new ready check within one minute and retains 15-second checks w
   expect(tab.read).toHaveBeenCalledTimes(7);
 });
 
-it.each(["You have a tournament invitation", "Your tournament match is ready"])("discovers a missed remote notice without a socket: %s", async (message) => {
-  const tab = setup();
-  tab.rerender({ ...tab.props, pusher: undefined });
-  await settle();
-  // Invitations and substitutions are discovered even when their push was lost.
-  const deadline = now + EVENT_TOURNAMENT_READY_SECONDS * 1000;
-  tab.set(notice(deadline, message));
-  await advance(60_000);
-  expect(tab.result.current.notices[0]?.message).toBe(message);
-  expect(deadline - now).toBeGreaterThan(0);
-  await advance(15_000);
-  expect(tab.read).toHaveBeenCalledTimes(3);
-});
+it.each(["You have a tournament invitation", "Your tournament match is ready"])(
+  "discovers a missed remote notice without a socket: %s",
+  async (message) => {
+    const tab = setup();
+    tab.rerender({ ...tab.props, pusher: undefined });
+    await settle();
+    // Invitations and substitutions are discovered even when their push was lost.
+    const deadline = now + EVENT_TOURNAMENT_READY_SECONDS * 1000;
+    tab.set(notice(deadline, message));
+    await advance(60_000);
+    expect(tab.result.current.notices[0]?.message).toBe(message);
+    expect(deadline - now).toBeGreaterThan(0);
+    await advance(15_000);
+    expect(tab.read).toHaveBeenCalledTimes(3);
+  },
+);
 
 it("retains one-minute discovery for an invitation with only 90 seconds to respond", async () => {
   const tab = setup();
@@ -164,10 +212,16 @@ it("refreshes after subscription confirmation, browser focus and network reconne
   await settle();
   expect(tab.result.current.notices).toHaveLength(1);
   tab.set([]);
-  await act(async () => { focusManager.setFocused(false); focusManager.setFocused(true); });
+  await act(async () => {
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+  });
   await settle();
   expect(tab.result.current.notices).toEqual([]);
-  await act(async () => { onlineManager.setOnline(false); onlineManager.setOnline(true); });
+  await act(async () => {
+    onlineManager.setOnline(false);
+    onlineManager.setOnline(true);
+  });
   await settle();
   expect(tab.read).toHaveBeenCalledTimes(4);
   tab.unmount();
@@ -191,22 +245,27 @@ it("pauses hidden and signed-out observers and refreshes on return", async () =>
   expect(tab.read).toHaveBeenCalledTimes(2);
 });
 
-it.each([-120_000, 120_000])("expires a notice despite a failed boundary refresh with clock offset %s", async (offset) => {
-  const tab = setup(notice(now - offset + 5000), { offset });
-  await settle();
-  expect(tab.result.current.notices).toHaveLength(1);
-  tab.fail(true);
-  await advance(6000);
-  expect(tab.result.current.notices).toEqual([]);
-  tab.fail(false);
-  tab.set([]);
-  await advance(15_000);
-  expect(tab.read).toHaveBeenCalledTimes(3);
-  expect(tab.result.current.notices).toEqual([]);
-});
+it.each([-120_000, 120_000])(
+  "expires a notice despite a failed boundary refresh with clock offset %s",
+  async (offset) => {
+    const tab = setup(notice(now - offset + 5000), { offset });
+    await settle();
+    expect(tab.result.current.notices).toHaveLength(1);
+    tab.fail(true);
+    await advance(6000);
+    expect(tab.result.current.notices).toEqual([]);
+    tab.fail(false);
+    tab.set([]);
+    await advance(15_000);
+    expect(tab.read).toHaveBeenCalledTimes(3);
+    expect(tab.result.current.notices).toEqual([]);
+  },
+);
 
 it("rejects an invitation whose deadline passes while the request is in flight", async () => {
-  const tab = setup(notice(now + 500, "You have a tournament invitation"), { defer: true });
+  const tab = setup(notice(now + 500, "You have a tournament invitation"), {
+    defer: true,
+  });
   await settle();
   now += 1000;
   await act(async () => tab.pending[0]!());
@@ -230,10 +289,15 @@ it("cancels a pre-change cold read before reconciling a committed tournament act
   await settle();
   tab.set(notice());
   let refresh: Promise<boolean> | undefined;
-  await act(async () => { refresh = tab.result.current.cache.refreshEventTournamentNotices(); });
+  await act(async () => {
+    refresh = tab.result.current.cache.refreshEventTournamentNotices();
+  });
   await settle();
   expect(tab.read).toHaveBeenCalledTimes(2);
-  await act(async () => { tab.pending[1]!(); await refresh; });
+  await act(async () => {
+    tab.pending[1]!();
+    await refresh;
+  });
   await settle();
   await act(async () => tab.pending[0]!());
   await settle();

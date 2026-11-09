@@ -26,7 +26,11 @@ const makeBattle = (
 const makeAttacker = (overrides: Record<string, unknown> = {}) =>
   makeBattleUser("attacker", { curHealth: 1, maxHealth: 100_000_000, ...overrides });
 const makeDefender = (overrides: Record<string, unknown> = {}) =>
-  makeBattleUser("defender", { curHealth: 100_000_000, maxHealth: 100_000_000, ...overrides });
+  makeBattleUser("defender", {
+    curHealth: 100_000_000,
+    maxHealth: 100_000_000,
+    ...overrides,
+  });
 
 /**
  * Same-round damage jutsu attacker -> defender. Distinct ids collapse onto one consequence.
@@ -130,7 +134,11 @@ const makeHealPrevent = (targetId: string, createdRound: number): UserEffect =>
   );
 
 /** Runs one packet and returns the observed HP deltas. */
-const runLeech = (effects: UserEffect[], attacker = makeAttacker(), defender = makeDefender()) => {
+const runLeech = (
+  effects: UserEffect[],
+  attacker = makeAttacker(),
+  defender = makeDefender(),
+) => {
   const battle = makeBattle([attacker, defender], effects);
   const { newBattle } = applyEffects(battle, "attacker", makeCombatAction());
   const a = newBattle.usersState.find((u) => u.userId === "attacker");
@@ -144,7 +152,11 @@ const runLeech = (effects: UserEffect[], attacker = makeAttacker(), defender = m
 describe("applyEffects — vamp + lifesteal shared 60% cap", () => {
   it("caps the COMBINED heal at 60% of damage when both proc (40% + 40% -> 60%)", () => {
     // Both raw contributions are 40% of damage; summed 80% must clamp to the 60% budget.
-    const { healGained, healthLost } = runLeech([makeAttack(), makeVamp(40), makeLifesteal(40)]);
+    const { healGained, healthLost } = runLeech([
+      makeAttack(),
+      makeVamp(40),
+      makeLifesteal(40),
+    ]);
 
     expect(healthLost).toBeGreaterThan(0);
     // Combined heal clamps to the shared budget.
@@ -171,7 +183,10 @@ describe("applyEffects — vamp + lifesteal shared 60% cap", () => {
     const lifestealOnly = runLeech([makeAttack(), makeLifesteal(20)]);
     const both = runLeech([makeAttack(), makeVamp(20), makeLifesteal(20)]);
     expect(both.healthLost).toBeGreaterThan(0);
-    expect(both.healGained).toBeCloseTo(vampOnly.healGained + lifestealOnly.healGained, 5);
+    expect(both.healGained).toBeCloseTo(
+      vampOnly.healGained + lifestealOnly.healGained,
+      5,
+    );
     expect(both.healGained).toBeLessThan(both.healthLost * DAMAGE_LEECH_CAP_RATIO);
   });
 
@@ -190,7 +205,11 @@ describe("applyEffects — vamp + lifesteal shared 60% cap", () => {
 
   it("on a killing blow only vamp heals (lifesteal needs a live target)", () => {
     const defender = makeDefender({ curHealth: 1 });
-    const kill = runLeech([makeAttack(), makeVamp(40), makeLifesteal(40)], makeAttacker(), defender);
+    const kill = runLeech(
+      [makeAttack(), makeVamp(40), makeLifesteal(40)],
+      makeAttacker(),
+      defender,
+    );
     // Damage is stat-based (not HP-based), so vamp against a LIVE defender deals identical
     // damage and thus identical vamp healing. On a killing blow lifesteal is suppressed, so the
     // heal must equal the vamp-only reference exactly — this would fail if lifesteal wrongly procced.
@@ -215,7 +234,11 @@ describe("applyEffects — vamp + lifesteal shared 60% cap", () => {
     // No-shield reference: vamp (40%) heals 0.4 * full damage D; healthLost == D.
     const ref = runLeech([makeAttack(), makeVamp(40)]);
     // Same hit, but the defender has a shield that absorbs a large chunk of it.
-    const shielded = runLeech([makeAttack(), makeVamp(40), makeShield("defender", ROUND)]);
+    const shielded = runLeech([
+      makeAttack(),
+      makeVamp(40),
+      makeShield("defender", ROUND),
+    ]);
     expect(ref.healthLost).toBeGreaterThan(0);
     // The shield absorbed damage, so less HP was lost than the unshielded reference.
     expect(shielded.healthLost).toBeLessThan(ref.healthLost);
@@ -230,7 +253,10 @@ describe("applyEffects — vamp + lifesteal shared 60% cap", () => {
     // and lifesteal never heals.
     const attacker = makeAttacker({ curHealth: 1, maxHealth: 100_000_000 });
     const defender = makeDefender();
-    const battle = makeBattle([attacker, defender], [makeAttack(), makeLifesteal(60), makeReflect(60)]);
+    const battle = makeBattle(
+      [attacker, defender],
+      [makeAttack(), makeLifesteal(60), makeReflect(60)],
+    );
     const { newBattle } = applyEffects(battle, "attacker", makeCombatAction());
     const a = newBattle.usersState.find((u) => u.userId === "attacker");
     expect(a?.curHealth).toBe(0);
@@ -242,7 +268,12 @@ describe("applyEffects — vamp + lifesteal shared 60% cap", () => {
     const control = runLeech([makeAttack(), makeVamp(40), makeLifesteal(40)]);
     expect(control.healGained).toBeGreaterThan(0);
     const prevent = makeHealPrevent("attacker", 0);
-    const { healGained } = runLeech([makeAttack(), makeVamp(40), makeLifesteal(40), prevent]);
+    const { healGained } = runLeech([
+      makeAttack(),
+      makeVamp(40),
+      makeLifesteal(40),
+      prevent,
+    ]);
     expect(healGained).toBe(0);
   });
 });

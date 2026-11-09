@@ -14,8 +14,10 @@ describe("jutsu progression by required rank", () => {
   });
 
   it("switches Elite Jonin XP requirements after reaching level 25", () => {
-    for (const level of [0, 1, 20, 24]) expect(getJutsuXpToLevel(elite, level)).toBe(5000);
-    for (const level of [25, 26, 29]) expect(getJutsuXpToLevel(elite, level)).toBe(10000);
+    for (const level of [0, 1, 20, 24])
+      expect(getJutsuXpToLevel(elite, level)).toBe(5000);
+    for (const level of [25, 26, 29])
+      expect(getJutsuXpToLevel(elite, level)).toBe(10000);
   });
 
   it("multiplies each training duration and its cap by five", () => {

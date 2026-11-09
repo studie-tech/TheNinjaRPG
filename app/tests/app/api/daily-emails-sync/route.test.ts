@@ -16,7 +16,9 @@ const cronRequest = () => new Request("https://example.com/api/daily-emails-sync
 /** Answer the Clerk user listing with one page of users. */
 const clerkUsers = (data: object[]) =>
   vi.spyOn(clerk, "clerkClient").mockResolvedValue({
-    users: { getUserList: vi.fn().mockResolvedValue({ data, totalCount: data.length }) },
+    users: {
+      getUserList: vi.fn().mockResolvedValue({ data, totalCount: data.length }),
+    },
   } as unknown as Awaited<ReturnType<typeof clerk.clerkClient>>);
 
 describe("daily-emails-sync cron", () => {
@@ -79,18 +81,58 @@ describe("daily-emails-sync cron", () => {
     insert.mockReturnValue({ values });
     execute.mockResolvedValue({ rowsAffected: 0 });
     clerkUsers([
-      { id: "known", username: "k", firstName: null, lastName: null, primaryEmailAddress: { emailAddress: "k@example.com" }, lastActiveAt: 1000 },
-      { id: "named", username: "ninja", firstName: "A", lastName: "B", primaryEmailAddress: { emailAddress: "ninja@example.com" }, lastActiveAt: 2000 },
-      { id: "unnamed", username: null, firstName: "Ada", lastName: "Lee", primaryEmailAddress: { emailAddress: "ada@example.com" }, lastActiveAt: 3000 },
-      { id: "noEmail", username: "x", firstName: null, lastName: null, primaryEmailAddress: null, lastActiveAt: 4000 },
+      {
+        id: "known",
+        username: "k",
+        firstName: null,
+        lastName: null,
+        primaryEmailAddress: { emailAddress: "k@example.com" },
+        lastActiveAt: 1000,
+      },
+      {
+        id: "named",
+        username: "ninja",
+        firstName: "A",
+        lastName: "B",
+        primaryEmailAddress: { emailAddress: "ninja@example.com" },
+        lastActiveAt: 2000,
+      },
+      {
+        id: "unnamed",
+        username: null,
+        firstName: "Ada",
+        lastName: "Lee",
+        primaryEmailAddress: { emailAddress: "ada@example.com" },
+        lastActiveAt: 3000,
+      },
+      {
+        id: "noEmail",
+        username: "x",
+        firstName: null,
+        lastName: null,
+        primaryEmailAddress: null,
+        lastActiveAt: 4000,
+      },
     ]);
 
     expect((await GET(cronRequest())).status).toBe(200);
 
     expect(values).toHaveBeenCalledTimes(1);
     expect(values.mock.calls[0]?.[0]).toEqual([
-      { userId: "named", callName: "ninja", email: "ninja@example.com", secret: expect.any(String), lastActivity: new Date(2000) },
-      { userId: "unnamed", callName: "Ada Lee", email: "ada@example.com", secret: expect.any(String), lastActivity: new Date(3000) },
+      {
+        userId: "named",
+        callName: "ninja",
+        email: "ninja@example.com",
+        secret: expect.any(String),
+        lastActivity: new Date(2000),
+      },
+      {
+        userId: "unnamed",
+        callName: "Ada Lee",
+        email: "ada@example.com",
+        secret: expect.any(String),
+        lastActivity: new Date(3000),
+      },
     ]);
   });
 

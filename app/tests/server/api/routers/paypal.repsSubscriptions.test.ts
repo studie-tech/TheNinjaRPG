@@ -34,11 +34,18 @@ describeWithDatabase("reputation-funded subscriptions", () => {
     const caller = await callerFor(paypalRouter, BUYER);
     const results = await Promise.all(
       Array.from({ length: ATTEMPTS }, () =>
-        caller.subscribeWithReps({ expectedUserId: BUYER, userId: BUYER, status: "GOLD" }),
+        caller.subscribeWithReps({
+          expectedUserId: BUYER,
+          userId: BUYER,
+          status: "GOLD",
+        }),
       ),
     );
     expect(results.filter((result) => result.success)).toHaveLength(1);
-    expect(results.find((result) => result.success)).toMatchObject({ userDelta: { reputationPoints: -cost }, userPatch: { federalStatus: "GOLD" } });
+    expect(results.find((result) => result.success)).toMatchObject({
+      userDelta: { reputationPoints: -cost },
+      userPatch: { federalStatus: "GOLD" },
+    });
     expect(await readUser(BUYER)).toMatchObject({
       federalStatus: "GOLD",
       reputationPoints: cost * (ATTEMPTS - 1),
@@ -48,17 +55,25 @@ describeWithDatabase("reputation-funded subscriptions", () => {
 
   it("never overdraws reputation when concurrent gifts exceed the balance", async () => {
     const cost = fedStatusRepsCost("NORMAL");
-    const giftees = Array.from({ length: ATTEMPTS }, (_, index) => `${GIFTEE}-${index}`);
+    const giftees = Array.from(
+      { length: ATTEMPTS },
+      (_, index) => `${GIFTEE}-${index}`,
+    );
     await insertUsers([
       { userId: BUYER, username: BUYER, reputationPoints: cost },
       ...giftees.map((userId) => ({ userId, username: userId })),
     ]);
     const caller = await callerFor(paypalRouter, BUYER);
     const results = await Promise.all(
-      giftees.map((userId) => caller.subscribeWithReps({ expectedUserId: BUYER, userId, status: "NORMAL" })),
+      giftees.map((userId) =>
+        caller.subscribeWithReps({ expectedUserId: BUYER, userId, status: "NORMAL" }),
+      ),
     );
     expect(results.filter((result) => result.success)).toHaveLength(1);
-    expect(results.find((result) => result.success)).toMatchObject({ userDelta: { reputationPoints: -cost }, userPatch: {} });
+    expect(results.find((result) => result.success)).toMatchObject({
+      userDelta: { reputationPoints: -cost },
+      userPatch: {},
+    });
     expect(await readUser(BUYER)).toMatchObject({ reputationPoints: 0 });
     const subscriptions = await readSubscriptions();
     expect(subscriptions).toHaveLength(1);
@@ -82,7 +97,11 @@ describeWithDatabase("reputation-funded subscriptions", () => {
       .set({ federalStatus: "NORMAL" })
       .where(eq(userData.userId, GIFTEE));
     const caller = callerForDatabase(paypalRouter, BUYER, database);
-    const result = await caller.subscribeWithReps({ expectedUserId: BUYER, userId: GIFTEE, status: "SILVER" });
+    const result = await caller.subscribeWithReps({
+      expectedUserId: BUYER,
+      userId: GIFTEE,
+      status: "SILVER",
+    });
     expect(result.success).toBe(false);
     expect(await readUser(BUYER)).toMatchObject({ reputationPoints: cost });
     expect(await readSubscriptions()).toHaveLength(0);
@@ -114,7 +133,10 @@ describeWithDatabase("reputation-funded subscriptions", () => {
       ),
     );
     expect(results.filter((result) => result.success)).toHaveLength(1);
-    expect(results.find((result) => result.success)).toMatchObject({ userPatch: { federalStatus: "GOLD" }, userDelta: { reputationPoints: -cost, reputationPointsTotal: -cost } });
+    expect(results.find((result) => result.success)).toMatchObject({
+      userPatch: { federalStatus: "GOLD" },
+      userDelta: { reputationPoints: -cost, reputationPointsTotal: -cost },
+    });
     expect(await readUser(BUYER)).toMatchObject({
       federalStatus: "GOLD",
       reputationPoints: cost * (ATTEMPTS - 1),
@@ -128,7 +150,12 @@ describeWithDatabase("reputation-funded subscriptions", () => {
   it("rejects an upgrade without debiting when the balance is short", async () => {
     const cost = calcFedUgradeCost("SILVER", "GOLD") ?? 0;
     await insertUsers([
-      { userId: BUYER, username: BUYER, federalStatus: "SILVER", reputationPoints: cost - 1 },
+      {
+        userId: BUYER,
+        username: BUYER,
+        federalStatus: "SILVER",
+        reputationPoints: cost - 1,
+      },
     ]);
     await (await getTestDatabase()).insert(paypalSubscription).values({
       id: "reps-subscription",

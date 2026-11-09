@@ -39,6 +39,7 @@ describe("useAbVariant", () => {
     expect(result.current.variant).toBe("control");
     rerender({ name: "ab_other_variant" });
     expect(result.current.variant).toBe("treatment_1");
-    document.cookie = "ab_other_variant=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    document.cookie =
+      "ab_other_variant=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
   });
 });

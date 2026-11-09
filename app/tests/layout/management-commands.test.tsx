@@ -9,22 +9,32 @@ import { ManagementCommands } from "@/layout/profileEdit/ManagementCommands";
 import * as UserContext from "@/utils/UserContext";
 
 let pending: Record<string, boolean>;
-const user = { userId: "owner", role: "OWNER" } as unknown as ComponentProps<typeof ManagementCommands>["user"];
+const user = { userId: "owner", role: "OWNER" } as unknown as ComponentProps<
+  typeof ManagementCommands
+>["user"];
 
 beforeEach(() => {
   pending = {};
-  const mutation = (name: string) => ({ useMutation: () => ({ mutate: vi.fn(), isPending: !!pending[name] }) });
+  const mutation = (name: string) => ({
+    useMutation: () => ({ mutate: vi.fn(), isPending: !!pending[name] }),
+  });
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
     misc: {
       getGlobalTavernEnabled: { useQuery: () => ({ data: true }) },
       toggleGlobalTavern: mutation("tavern"),
     },
-    staff: { unequipAllGear: mutation("gear"), unequipAllJutsus: mutation("jutsus"), releaseSector: mutation("sector") },
+    staff: {
+      unequipAllGear: mutation("gear"),
+      unequipAllJutsus: mutation("jutsus"),
+      releaseSector: mutation("sector"),
+    },
     profile: { awardExperienceToAll: mutation("experience") },
     skillTree: { resetAllUsersSkillPoints: mutation("skills") },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ updateUser: vi.fn(), prepareUserUpdate: vi.fn() }) as never);
+  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+    () => ({ updateUser: vi.fn(), prepareUserUpdate: vi.fn() }) as never,
+  );
 });
 
 afterEach(() => {
@@ -43,7 +53,14 @@ const expectedTrigger = (
   const Icon = icon;
   const { container, unmount } = render(
     <Button variant={variant} disabled={isPending} className={className}>
-      {isPending ? <Loader size={5} /> : <><Icon className="mr-2 h-4 w-4" />{label}</>}
+      {isPending ? (
+        <Loader size={5} />
+      ) : (
+        <>
+          <Icon className="mr-2 h-4 w-4" />
+          {label}
+        </>
+      )}
     </Button>,
   );
   const html = container.innerHTML;
@@ -52,7 +69,9 @@ const expectedTrigger = (
 };
 
 const triggers = (view: ReturnType<typeof render>) =>
-  [...view.container.querySelectorAll("[role='button'] > button")].map((button) => button.outerHTML);
+  [...view.container.querySelectorAll("[role='button'] > button")].map(
+    (button) => button.outerHTML,
+  );
 
 it.each([
   [{}],
@@ -65,7 +84,13 @@ it.each([
     expectedTrigger(ShieldOff, "Unequip All Gear", !!pending.gear),
     expectedTrigger(ShieldOff, "Unequip All Jutsus", !!pending.jutsus),
     expectedTrigger(Trash2, "Reset All Skill Trees", !!pending.skills),
-    expectedTrigger(Zap, "Award Experience to All", !!pending.experience, "default", "w-full bg-green-500"),
+    expectedTrigger(
+      Zap,
+      "Award Experience to All",
+      !!pending.experience,
+      "default",
+      "w-full bg-green-500",
+    ),
     expectedTrigger(Trash2, "Clear Sector", !!pending.sector),
   ]);
 });

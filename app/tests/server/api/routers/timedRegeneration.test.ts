@@ -28,7 +28,11 @@ import {
 import { IncreaseRegenerationTag } from "@/validators/combat";
 import { DialogObjective, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertUsers, insertQuests, insertQuestHistory } from "../../../setup/factories";
+import {
+  insertUsers,
+  insertQuests,
+  insertQuestHistory,
+} from "../../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../../setup/queues";
 import {
   callerFor,
@@ -88,39 +92,110 @@ describeWithDatabase(
       async (status) => {
         const db = await getTestDatabase();
         const from = new Date("2026-01-01T00:00:00Z");
-        await db.update(userData).set({
-          status, battleId: null, regenAt: from, updatedAt: from,
-          joinedVillageAt: new Date(from.getTime() - 100 * 86400000),
-          curHealth: 0, curChakra: 0, curStamina: 0,
-          travelFinishAt: new Date(from.getTime() + 600000),
-        }).where(eq(userData.userId, USER_ID));
+        await db
+          .update(userData)
+          .set({
+            status,
+            battleId: null,
+            regenAt: from,
+            updatedAt: from,
+            joinedVillageAt: new Date(from.getTime() - 100 * 86400000),
+            curHealth: 0,
+            curChakra: 0,
+            curStamina: 0,
+            travelFinishAt: new Date(from.getTime() + 600000),
+          })
+          .where(eq(userData.userId, USER_ID));
         if (status === "BATTLE") {
-          await insertQuests([{
-            id: "retained-recovery", questType: "battlepyramid",
-            content: { isolated: true, entryItems: [], objectives: [], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] },
-          }]);
-          await insertQuestHistory([{
-            userId: USER_ID, questId: "retained-recovery", questType: "battlepyramid", isolated: true,
-          }]);
+          await insertQuests([
+            {
+              id: "retained-recovery",
+              questType: "battlepyramid",
+              content: {
+                isolated: true,
+                entryItems: [],
+                objectives: [],
+                reward: ObjectiveReward.parse({}),
+                sceneBackground: "",
+                sceneCharacters: [],
+              },
+            },
+          ]);
+          await insertQuestHistory([
+            {
+              userId: USER_ID,
+              questId: "retained-recovery",
+              questType: "battlepyramid",
+              isolated: true,
+            },
+          ]);
         }
         await db.insert(userRaidBuff).values({
-          id: "retained-meal", userId: USER_ID, itemId: "meal",
-          createdAt: from, expiresAt: new Date(from.getTime() + 150000),
+          id: "retained-meal",
+          userId: USER_ID,
+          itemId: "meal",
+          createdAt: from,
+          expiresAt: new Date(from.getTime() + 150000),
           effects: [IncreaseRegenerationTag.parse({ power: 70 })],
         });
         await queueEnergy(USER_ID, [{ stat: "offence", energy: 1000 }]);
-        for (const [elapsed, rate, earned] of [[149999, 17, 34], [151001, 10, 34], [240000, 10, 54]] as const) {
+        for (const [elapsed, rate, earned] of [
+          [149999, 17, 34],
+          [151001, 10, 34],
+          [240000, 10, 54],
+        ] as const) {
           setSystemTime(new Date(from.getTime() + elapsed));
           const { user } = await fetchUpdatedUser({ client: db, userId: USER_ID });
-          expect(user).toEqual(expect.objectContaining({ status, curEnergy: 0, regenAt: from, regeneration: rate, regenerationWithoutTimedBuffs: 10 }));
-          expect(calcCurrent(user!.curEnergy, user!.maxEnergy, "AWAKE", user!.regenerationWithoutTimedBuffs, user!.regenAt, 0, undefined, user!.raidBuffs).current).toBe(earned);
+          expect(user).toEqual(
+            expect.objectContaining({
+              status,
+              curEnergy: 0,
+              regenAt: from,
+              regeneration: rate,
+              regenerationWithoutTimedBuffs: 10,
+            }),
+          );
+          expect(
+            calcCurrent(
+              user!.curEnergy,
+              user!.maxEnergy,
+              "AWAKE",
+              user!.regenerationWithoutTimedBuffs,
+              user!.regenAt,
+              0,
+              undefined,
+              user!.raidBuffs,
+            ).current,
+          ).toBe(earned);
           if (status === "TRAVEL") {
             for (const pool of ["Health", "Chakra", "Stamina"] as const)
-              expect(calcCurrent(user![`cur${pool}`], user![`max${pool}`], status, user!.regenerationWithoutTimedBuffs, user!.regenAt, 0, undefined, user!.raidBuffs).current).toBe(earned);
+              expect(
+                calcCurrent(
+                  user![`cur${pool}`],
+                  user![`max${pool}`],
+                  status,
+                  user!.regenerationWithoutTimedBuffs,
+                  user!.regenAt,
+                  0,
+                  undefined,
+                  user!.raidBuffs,
+                ).current,
+              ).toBe(earned);
           }
         }
-        expect(await readUser()).toEqual(expect.objectContaining({ status, curEnergy: 0, curHealth: 0, curChakra: 0, curStamina: 0, regenAt: from }));
-        expect(await readEnergyQueue(USER_ID)).toMatchObject([{ stat: "offence", energy: 1000 }]);
+        expect(await readUser()).toEqual(
+          expect.objectContaining({
+            status,
+            curEnergy: 0,
+            curHealth: 0,
+            curChakra: 0,
+            curStamina: 0,
+            regenAt: from,
+          }),
+        );
+        expect(await readEnergyQueue(USER_ID)).toMatchObject([
+          { stat: "offence", energy: 1000 },
+        ]);
       },
     );
 
@@ -132,28 +207,57 @@ describeWithDatabase(
       async (elapsed, ticks, earned) => {
         const db = await getTestDatabase();
         const from = new Date("2026-01-01T00:00:00Z");
-        await db.update(userData).set({
-          status: "AWAKE", battleId: null, regenAt: from, updatedAt: from,
-          joinedVillageAt: new Date(from.getTime() - 100 * 86400000),
-          curHealth: 0, curChakra: 0, curStamina: 0, curEnergy: 0,
-        }).where(eq(userData.userId, USER_ID));
-        await insertQuests([{
-          id: "entry-recovery", questType: "story",
-          content: { isolated: true, entryItems: [], objectives: [], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] },
-        }]);
+        await db
+          .update(userData)
+          .set({
+            status: "AWAKE",
+            battleId: null,
+            regenAt: from,
+            updatedAt: from,
+            joinedVillageAt: new Date(from.getTime() - 100 * 86400000),
+            curHealth: 0,
+            curChakra: 0,
+            curStamina: 0,
+            curEnergy: 0,
+          })
+          .where(eq(userData.userId, USER_ID));
+        await insertQuests([
+          {
+            id: "entry-recovery",
+            questType: "story",
+            content: {
+              isolated: true,
+              entryItems: [],
+              objectives: [],
+              reward: ObjectiveReward.parse({}),
+              sceneBackground: "",
+              sceneCharacters: [],
+            },
+          },
+        ]);
         await db.insert(userRaidBuff).values({
-          id: "entry-meal", userId: USER_ID, itemId: "meal",
-          createdAt: from, expiresAt: new Date(from.getTime() + 2.5 * STEP),
+          id: "entry-meal",
+          userId: USER_ID,
+          itemId: "meal",
+          createdAt: from,
+          expiresAt: new Date(from.getTime() + 2.5 * STEP),
           effects: [IncreaseRegenerationTag.parse({ power: 70 })],
         });
         setSystemTime(from);
         const { user } = await fetchUpdatedUser({ client: db, userId: USER_ID });
-        const story = await db.query.quest.findFirst({ where: eq(quest.id, "entry-recovery") });
+        const story = await db.query.quest.findFirst({
+          where: eq(quest.id, "entry-recovery"),
+        });
         setSystemTime(new Date(from.getTime() + elapsed));
 
         await upsertQuestEntry(db, user!, story!, "system", null);
 
-        const pools = { curHealth: earned, curChakra: earned, curStamina: earned, curEnergy: earned };
+        const pools = {
+          curHealth: earned,
+          curChakra: earned,
+          curStamina: earned,
+          curEnergy: earned,
+        };
         const stored = await readUser();
         expect(stored).toMatchObject({ status: "BATTLE", ...pools });
         expect(user).toMatchObject(pools);
@@ -305,12 +409,26 @@ describeWithDatabase(
         message: expect.stringContaining("state or target changed"),
       });
       const [recipient, paidHealer, unpaidHealer] = await Promise.all([
-        readUser(), readUser(winner.userId), readUser(loser.userId),
+        readUser(),
+        readUser(winner.userId),
+        readUser(loser.userId),
       ]);
-      expect(recipient).toMatchObject({ curHealth: 200, curEnergy: 54, status: "HOSPITALIZED" });
-      expect(recipient!.updatedAt.getTime()).toBeGreaterThan(before!.updatedAt.getTime());
-      expect(paidHealer).toMatchObject({ curChakra: 7985, medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY + 10 });
-      expect(unpaidHealer).toMatchObject({ curChakra: 8000, medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY });
+      expect(recipient).toMatchObject({
+        curHealth: 200,
+        curEnergy: 54,
+        status: "HOSPITALIZED",
+      });
+      expect(recipient!.updatedAt.getTime()).toBeGreaterThan(
+        before!.updatedAt.getTime(),
+      );
+      expect(paidHealer).toMatchObject({
+        curChakra: 7985,
+        medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY + 10,
+      });
+      expect(unpaidHealer).toMatchObject({
+        curChakra: 8000,
+        medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY,
+      });
 
       const retry = await (await callerFor(hospitalRouter, loser.userId)).userHeal({
         userId: USER_ID,
@@ -319,11 +437,19 @@ describeWithDatabase(
       expect(retry).toMatchObject({ success: true, expGain: 10 });
       expect(retry.chakraCost).toBeCloseTo(15);
       const [savedRecipient, ...savedHealers] = await Promise.all([
-        readUser(), ...healerIds.map((userId) => readUser(userId)),
+        readUser(),
+        ...healerIds.map((userId) => readUser(userId)),
       ]);
-      expect(savedRecipient).toMatchObject({ curHealth: 300, curEnergy: 54, status: "HOSPITALIZED" });
+      expect(savedRecipient).toMatchObject({
+        curHealth: 300,
+        curEnergy: 54,
+        status: "HOSPITALIZED",
+      });
       for (const healer of savedHealers) {
-        expect(healer).toMatchObject({ curChakra: 7985, medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY + 10 });
+        expect(healer).toMatchObject({
+          curChakra: 7985,
+          medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY + 10,
+        });
       }
     });
 

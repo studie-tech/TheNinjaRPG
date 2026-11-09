@@ -33,10 +33,23 @@ const seed = async () => {
     })),
   );
   await insertUsers([
-    { userId: kage, username: kage, villageId: "declaring", villagePrestige: KAGE_WAR_DECLARE_COST * 2 },
-    { userId: "declaring-member", username: "declaring-member", villageId: "declaring" },
+    {
+      userId: kage,
+      username: kage,
+      villageId: "declaring",
+      villagePrestige: KAGE_WAR_DECLARE_COST * 2,
+    },
+    {
+      userId: "declaring-member",
+      username: "declaring-member",
+      villageId: "declaring",
+    },
     { userId: "target-member", username: "target-member", villageId: "target" },
-    { userId: "bystander-member", username: "bystander-member", villageId: "bystander" },
+    {
+      userId: "bystander-member",
+      username: "bystander-member",
+      villageId: "bystander",
+    },
   ]);
   stubProfile("fetchUpdatedUser", async () => ({
     user: await database.query.userData.findFirst({
@@ -64,28 +77,39 @@ describeWithDatabase("declare enemy", () => {
     const users = await database.query.userData.findMany({
       columns: { userId: true, unreadNotifications: true, villagePrestige: true },
     });
-    const unread = Object.fromEntries(users.map((u) => [u.userId, u.unreadNotifications]));
+    const unread = Object.fromEntries(
+      users.map((u) => [u.userId, u.unreadNotifications]),
+    );
     expect(unread).toEqual({
       [kage]: 1,
       "declaring-member": 1,
       "target-member": 1,
       "bystander-member": 0,
     });
-    expect(users.find((u) => u.userId === kage)?.villagePrestige).toBe(KAGE_WAR_DECLARE_COST);
+    expect(users.find((u) => u.userId === kage)?.villagePrestige).toBe(
+      KAGE_WAR_DECLARE_COST,
+    );
     expect(await database.query.notification.findMany()).toHaveLength(1);
   });
 
   it("rejects the declaration when the war funds are spent after the funds check", async () => {
     const database = await seed();
-    const raced = beforeStatements(database, village, [async () => {
-      await database.update(village).set({ tokens: WAR_FUNDS_COST - 1 }).where(eq(village.id, "declaring"));
-    }]);
+    const raced = beforeStatements(database, village, [
+      async () => {
+        await database
+          .update(village)
+          .set({ tokens: WAR_FUNDS_COST - 1 })
+          .where(eq(village.id, "declaring"));
+      },
+    ]);
     const result = await callerForDatabase(villageRouter, kage, raced).declareEnemy({
       villageId: "target",
     });
     expect(result).toEqual({ success: false, message: "Insufficient funds" });
-    expect((await database.query.village.findFirst({ where: eq(village.id, "declaring") }))?.tokens)
-      .toBe(WAR_FUNDS_COST - 1);
+    expect(
+      (await database.query.village.findFirst({ where: eq(village.id, "declaring") }))
+        ?.tokens,
+    ).toBe(WAR_FUNDS_COST - 1);
     expect(await database.query.villageAlliance.findMany()).toEqual([]);
     expect(await database.query.notification.findMany()).toEqual([]);
   });

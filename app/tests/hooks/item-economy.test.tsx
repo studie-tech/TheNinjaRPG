@@ -1,6 +1,18 @@
 import * as radixSize from "@radix-ui/react-use-size";
-import { QueryClient, QueryClientProvider, useMutation, type UseMutationOptions } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, renderHook, waitFor } from "@testing-library/react";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useMutation,
+  type UseMutationOptions,
+} from "@tanstack/react-query";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
 import { type ComponentProps, type ReactNode, Suspense } from "react";
@@ -23,20 +35,31 @@ import * as itemFiltering from "@/layout/ItemFiltering";
 import * as ItemWithEffects from "@/layout/ItemWithEffects";
 import * as SuggestChange from "@/layout/SuggestChange";
 import * as pagination from "@/libs/pagination";
-import { ItemValidator, ItemValidatorRawSchema, UnlockItemVariantTag, type ZodItemType } from "@/validators/combat";
+import {
+  ItemValidator,
+  ItemValidatorRawSchema,
+  UnlockItemVariantTag,
+  type ZodItemType,
+} from "@/validators/combat";
 import { ItemVariantValidator } from "@/validators/item";
-import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS, type FurnitureGeometry } from "@/validators/itemFurniture";
+import {
+  DEFAULT_FURNITURE_DATA,
+  FURNITURE_ITEM_DEFAULTS,
+  type FurnitureGeometry,
+} from "@/validators/itemFurniture";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { validItemInput } from "../setup/items";
 
-const validItem = ItemValidator.parse(validItemInput({
-  name: "Shop item",
-  description: "Shop item",
-  battleDescription: "",
-  stackSize: 10,
-}));
+const validItem = ItemValidator.parse(
+  validItemInput({
+    name: "Shop item",
+    description: "Shop item",
+    battleDescription: "",
+    stackSize: 10,
+  }),
+);
 const data = {
   ...validItem,
   id: "shop-item",
@@ -50,7 +73,14 @@ const catalogueInvalidations = {
   getVariantNames: vi.fn(async () => undefined),
   getItemVariants: vi.fn(async (_input: { itemId: string }) => undefined),
 };
-const itemUtils = { item: Object.fromEntries(Object.entries(catalogueInvalidations).map(([name, invalidate]) => [name, { invalidate }])) };
+const itemUtils = {
+  item: Object.fromEntries(
+    Object.entries(catalogueInvalidations).map(([name, invalidate]) => [
+      name,
+      { invalidate },
+    ]),
+  ),
+};
 const ActualFurnitureViewsEditor = furnitureEditor.FurnitureViewsEditor;
 const ActualEditContent = EditContent;
 const actualUseItemEditForm = useItemEditForm;
@@ -83,7 +113,8 @@ const MEAL_FIELD_IDS = [
 beforeEach(() => {
   installBrowserGlobals();
   updateItem.mockReset();
-  for (const invalidate of Object.values(catalogueInvalidations)) invalidate.mockClear();
+  for (const invalidate of Object.values(catalogueInvalidations))
+    invalidate.mockClear();
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => itemUtils,
     item: {
@@ -110,36 +141,55 @@ describe("staff item economy editor", () => {
   it("saves ordinary items after the page converts nullable fields to empty strings", async () => {
     const pageData = { ...data, furnitureData: null };
     setNullsToEmptyStrings(pageData);
-    const { result } = renderHook(() => useItemEditForm(pageData, async () => undefined));
+    const { result } = renderHook(() =>
+      useItemEditForm(pageData, async () => undefined),
+    );
     await act(async () => {
       result.current.form.setValue("name", "Renamed shop item", { shouldDirty: true });
       await result.current.handleItemSubmit();
     });
     expect(result.current.form.getFieldState("furnitureData").error).toBeUndefined();
     expect(updateItem).toHaveBeenCalledTimes(1);
-    expect(updateItem).toHaveBeenCalledWith(expect.objectContaining({
-      id: data.id,
-      data: expect.objectContaining({ name: "Renamed shop item", furnitureData: null }),
-    }));
+    expect(updateItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: data.id,
+        data: expect.objectContaining({
+          name: "Renamed shop item",
+          furnitureData: null,
+        }),
+      }),
+    );
     expect(ItemValidator.safeParse(result.current.form.getValues()).success).toBe(true);
   });
   it("normalizes an existing combat item when switching to furniture and exposes placement controls", async () => {
-    const { result } = renderHook(() => useItemEditForm({
-      ...data,
-      itemType: "WEAPON",
-      maxEquips: 1,
-      slot: "HAND",
-      target: "CHARACTER",
-      canBeImbued: true,
-      effects: [{ type: "damage", description: "Attack", power: 1 }],
-    } as unknown as typeof data, async () => undefined));
-    expect(result.current.formData.some((field) => field.id === "furnitureData.action")).toBe(false);
+    const { result } = renderHook(() =>
+      useItemEditForm(
+        {
+          ...data,
+          itemType: "WEAPON",
+          maxEquips: 1,
+          slot: "HAND",
+          target: "CHARACTER",
+          canBeImbued: true,
+          effects: [{ type: "damage", description: "Attack", power: 1 }],
+        } as unknown as typeof data,
+        async () => undefined,
+      ),
+    );
+    expect(
+      result.current.formData.some((field) => field.id === "furnitureData.action"),
+    ).toBe(false);
     await act(async () => {
       result.current.form.setValue("itemType", "FURNITURE");
     });
     expect(result.current.form.getValues()).toMatchObject({
-      effects: [], slot: "NONE", target: "SELF", maxEquips: 0,
-      preventBattleUsage: true, maxImbueNumber: 0, maxDurability: 0,
+      effects: [],
+      slot: "NONE",
+      target: "SELF",
+      maxEquips: 0,
+      preventBattleUsage: true,
+      maxImbueNumber: 0,
+      maxDurability: 0,
       canBeImbued: false,
       furnitureData: { action: null, width: 24, groundAnchor: 100, isFloor: false },
     });
@@ -162,8 +212,11 @@ describe("staff item economy editor", () => {
       result.current.form.setValue("furnitureData.width", 32);
       result.current.form.setValue("furnitureData.action", "storage");
     });
-    expect(ItemValidator.parse(result.current.form.getValues()).furnitureData).toMatchObject({
-      width: 32, action: "storage",
+    expect(
+      ItemValidator.parse(result.current.form.getValues()).furnitureData,
+    ).toMatchObject({
+      width: 32,
+      action: "storage",
     });
     await act(async () => {
       result.current.form.setValue("itemType", "MATERIAL");
@@ -190,62 +243,88 @@ describe("staff item economy editor", () => {
     let editor!: ReturnType<typeof useItemEditForm>;
     const FurnitureEditor = () => {
       editor = useItemEditForm(savedFurniture, async () => undefined);
-      return <>
-        <EditContent
-          schema={ItemValidatorRawSchema}
-          form={editor.form as unknown as UseFormReturn<ZodItemType>}
-          formData={editor.formData.filter((field) => field.id.startsWith("furnitureData."))}
-          showSubmit={false}
-        />
-        {editor.form.getValues("itemType") === "FURNITURE" && <Controller
-          control={editor.form.control}
-          name="furnitureData.views"
-          render={({ field }) => <output>{JSON.stringify(field.value)}</output>}
-        />}
-        <output data-testid="dirty">{String(editor.form.formState.isDirty)}</output>
-      </>;
+      return (
+        <>
+          <EditContent
+            schema={ItemValidatorRawSchema}
+            form={editor.form as unknown as UseFormReturn<ZodItemType>}
+            formData={editor.formData.filter((field) =>
+              field.id.startsWith("furnitureData."),
+            )}
+            showSubmit={false}
+          />
+          {editor.form.getValues("itemType") === "FURNITURE" && (
+            <Controller
+              control={editor.form.control}
+              name="furnitureData.views"
+              render={({ field }) => <output>{JSON.stringify(field.value)}</output>}
+            />
+          )}
+          <output data-testid="dirty">{String(editor.form.formState.isDirty)}</output>
+        </>
+      );
     };
     const view = render(<FurnitureEditor />);
     expect(view.getByTestId("dirty").textContent).toBe("false");
-    expect(editor.form.getValues("furnitureData")).toEqual(savedFurniture.furnitureData);
+    expect(editor.form.getValues("furnitureData")).toEqual(
+      savedFurniture.furnitureData,
+    );
     const floor = view.getByRole("switch", { name: "Floor decoration" });
     fireEvent.click(floor);
     expect(editor.form.getValues("furnitureData.isFloor")).toBe(true);
     expect(editor.form.getFieldState("furnitureData.isFloor").isDirty).toBe(true);
     fireEvent.click(floor);
     expect(view.getByTestId("dirty").textContent).toBe("false");
-    expect(editor.form.getValues("furnitureData")).toEqual(savedFurniture.furnitureData);
+    expect(editor.form.getValues("furnitureData")).toEqual(
+      savedFurniture.furnitureData,
+    );
     await act(async () => {
       editor.form.setValue("itemType", "MATERIAL", { shouldDirty: true });
     });
     expect(view.queryByRole("switch", { name: "Floor decoration" })).toBeNull();
     expect(editor.form.getValues("furnitureData")).toBeNull();
     expect(editor.form.getFieldState("furnitureData").isDirty).toBe(true);
-    expect(editor.form.formState.defaultValues?.furnitureData).toEqual(savedFurniture.furnitureData);
+    expect(editor.form.formState.defaultValues?.furnitureData).toEqual(
+      savedFurniture.furnitureData,
+    );
     expect(view.getByTestId("dirty").textContent).toBe("true");
     await act(async () => {
       expect(await editor.form.trigger()).toBe(true);
       await editor.handleItemSubmit();
     });
     expect(updateItem).toHaveBeenCalledTimes(1);
-    expect(updateItem).toHaveBeenCalledWith(expect.objectContaining({
-      id: data.id,
-      data: expect.objectContaining({ itemType: "MATERIAL", furnitureData: null }),
-    }));
+    expect(updateItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: data.id,
+        data: expect.objectContaining({ itemType: "MATERIAL", furnitureData: null }),
+      }),
+    );
   });
   it("clears seed extraction when an extractable crop becomes furniture", async () => {
-    const crop = { ...data, itemType: "COOKING" as const, farmExtractSeedItemId: "rice-seed", farmExtractSeedCount: 5 };
+    const crop = {
+      ...data,
+      itemType: "COOKING" as const,
+      farmExtractSeedItemId: "rice-seed",
+      farmExtractSeedCount: 5,
+    };
     expect(ItemValidator.safeParse(crop).success).toBe(true);
     const { result } = renderHook(() => useItemEditForm(crop, async () => undefined));
-    expect(result.current.formData.some((field) => field.id === "farmExtractSeedItemId")).toBe(true);
+    expect(
+      result.current.formData.some((field) => field.id === "farmExtractSeedItemId"),
+    ).toBe(true);
     await act(async () => {
       result.current.form.setValue("itemType", "FURNITURE");
     });
     expect(result.current.form.getValues()).toMatchObject({
-      farmExtractSeedItemId: null, farmExtractSeedCount: 0,
+      farmExtractSeedItemId: null,
+      farmExtractSeedCount: 0,
     });
-    expect(result.current.formData.some((field) => field.id === "farmExtractSeedItemId")).toBe(false);
-    expect(result.current.formData.some((field) => field.id === "farmExtractSeedCount")).toBe(false);
+    expect(
+      result.current.formData.some((field) => field.id === "farmExtractSeedItemId"),
+    ).toBe(false);
+    expect(
+      result.current.formData.some((field) => field.id === "farmExtractSeedCount"),
+    ).toBe(false);
     expect(await result.current.form.trigger()).toBe(true);
     expect(ItemValidator.safeParse(result.current.form.getValues()).success).toBe(true);
   });
@@ -268,19 +347,29 @@ describe("staff item economy editor", () => {
           width: 32,
           groundAnchor: 80,
           geometry,
-          views: { "90": { image: "https://example.com/90.webp", width: 20, geometry } },
+          views: {
+            "90": { image: "https://example.com/90.webp", width: 20, geometry },
+          },
         },
       }),
     } as typeof data;
     const originalFurniture = structuredClone(savedFurniture.furnitureData);
     const replacement = "https://example.com/replacement.webp";
-    let measurement: client.RouterOutputs["item"]["getFurnitureImageGeometry"] | undefined;
+    let measurement:
+      | client.RouterOutputs["item"]["getFurnitureImageGeometry"]
+      | undefined;
     let editor!: ReturnType<typeof useItemEditForm>;
     let viewProps!: ComponentProps<typeof ActualFurnitureViewsEditor>;
     let selector!: ComponentProps<typeof ContentImageSelector.default>;
     const query = () => ({ data: measurement, isFetching: false });
     Object.assign(client.api.item, {
-      getItemWithCraftingRequirements: { useQuery: () => ({ data: savedFurniture, isPending: false, refetch: async () => undefined }) },
+      getItemWithCraftingRequirements: {
+        useQuery: () => ({
+          data: savedFurniture,
+          isPending: false,
+          refetch: async () => undefined,
+        }),
+      },
       getItemVariants: { useQuery: () => ({ data: [] }) },
       upsertItemVariant: { useMutation: () => ({ isPending: false }) },
       deleteItemVariant: { useMutation: () => ({ isPending: false }) },
@@ -288,7 +377,9 @@ describe("staff item economy editor", () => {
     });
     Object.assign(client.api, { useQueries: () => [query(), query(), query()] });
     vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
-    vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
+    vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+      data: { role: "CONTENT-ADMIN" },
+    } as never);
     vi.spyOn(radixSize, "useSize").mockReturnValue({ width: 0, height: 0 });
     vi.spyOn(ContentHelp, "ItemHelper").mockImplementation(() => null);
     vi.spyOn(SuggestChange, "SuggestChange").mockImplementation(() => null);
@@ -297,10 +388,15 @@ describe("staff item economy editor", () => {
       editor = actualUseItemEditForm(...args);
       return editor;
     });
-    vi.spyOn(editContent, "EditContent").mockImplementation((props) => <>
-      <ActualEditContent {...props} formData={props.formData.filter(({ id }) => id.startsWith("furnitureData."))} />
-      <output data-testid="dirty">{String(props.form.formState.isDirty)}</output>
-    </>);
+    vi.spyOn(editContent, "EditContent").mockImplementation((props) => (
+      <>
+        <ActualEditContent
+          {...props}
+          formData={props.formData.filter(({ id }) => id.startsWith("furnitureData."))}
+        />
+        <output data-testid="dirty">{String(props.form.formState.isDirty)}</output>
+      </>
+    ));
     vi.spyOn(furnitureEditor, "FurnitureViewsEditor").mockImplementation((props) => {
       viewProps = props;
       return <ActualFurnitureViewsEditor {...props} />;
@@ -312,39 +408,82 @@ describe("staff item economy editor", () => {
     const params = Promise.resolve({ itemid: savedFurniture.id });
     let view!: ReturnType<typeof render>;
     await act(async () => {
-      view = render(<Suspense fallback={null}><ItemEdit params={params} /></Suspense>);
+      view = render(
+        <Suspense fallback={null}>
+          <ItemEdit params={params} />
+        </Suspense>,
+      );
     });
     expect(view.getByTestId("dirty").textContent).toBe("false");
-    await act(async () => { viewProps.onBaseChange({}); });
+    await act(async () => {
+      viewProps.onBaseChange({});
+    });
     expect(view.getByTestId("dirty").textContent).toBe("false");
-    await act(async () => { selector.onUploadComplete(replacement); });
+    await act(async () => {
+      selector.onUploadComplete(replacement);
+    });
     expect(editor.form.getValues("image")).toBe(replacement);
-    expect(editor.form.getValues("furnitureData")).toEqual({ ...originalFurniture, geometry: undefined });
-    expect(editor.form.formState.defaultValues?.furnitureData).toEqual(originalFurniture);
+    expect(editor.form.getValues("furnitureData")).toEqual({
+      ...originalFurniture,
+      geometry: undefined,
+    });
+    expect(editor.form.formState.defaultValues?.furnitureData).toEqual(
+      originalFurniture,
+    );
     expect(editor.form.getFieldState("furnitureData").isDirty).toBe(true);
     expect(view.getByTestId("dirty").textContent).toBe("true");
-    expect(view.getByRole("button", { name: "Measuring furniture" }).hasAttribute("disabled")).toBe(true);
-    await act(async () => { viewProps.onBaseChange({ geometry: undefined }); });
+    expect(
+      view
+        .getByRole("button", { name: "Measuring furniture" })
+        .hasAttribute("disabled"),
+    ).toBe(true);
+    await act(async () => {
+      viewProps.onBaseChange({ geometry: undefined });
+    });
     expect(editor.form.getValues("furnitureData.geometry")).toBeUndefined();
     await act(async () => {
       viewProps.onBaseChange({ image: savedFurniture.image, geometry });
     });
     expect(editor.form.getValues("furnitureData")).toEqual(originalFurniture);
     expect(view.getByTestId("dirty").textContent).toBe("false");
-    await act(async () => { selector.onUploadComplete(replacement); });
+    await act(async () => {
+      selector.onUploadComplete(replacement);
+    });
     const measuredGeometry = { ...geometry, aspectRatio: 0.75 };
-    measurement = { success: true, message: "Measured", image: replacement, useFullFootprint: false, geometry: measuredGeometry };
-    await act(async () => { view.rerender(<Suspense fallback={null}><ItemEdit params={params} /></Suspense>); });
-    expect(editor.form.getValues("furnitureData")).toEqual({ ...originalFurniture, geometry: measuredGeometry });
-    expect(editor.form.formState.defaultValues?.furnitureData).toEqual(originalFurniture);
+    measurement = {
+      success: true,
+      message: "Measured",
+      image: replacement,
+      useFullFootprint: false,
+      geometry: measuredGeometry,
+    };
+    await act(async () => {
+      view.rerender(
+        <Suspense fallback={null}>
+          <ItemEdit params={params} />
+        </Suspense>,
+      );
+    });
+    expect(editor.form.getValues("furnitureData")).toEqual({
+      ...originalFurniture,
+      geometry: measuredGeometry,
+    });
+    expect(editor.form.formState.defaultValues?.furnitureData).toEqual(
+      originalFurniture,
+    );
     await act(async () => {
       expect(await editor.form.trigger()).toBe(true);
       fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
     });
     await waitFor(() => expect(updateItem).toHaveBeenCalledTimes(1));
-    expect(updateItem).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ image: replacement, furnitureData: { ...originalFurniture, geometry: measuredGeometry } }),
-    }));
+    expect(updateItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          image: replacement,
+          furnitureData: { ...originalFurniture, geometry: measuredGeometry },
+        }),
+      }),
+    );
   });
   it("starts unrestricted and places fields beside shop/trading settings", () => {
     const { result } = renderHook(() => useItemEditForm(data, async () => undefined));
@@ -367,7 +506,9 @@ describe("staff item economy editor", () => {
     await act(async () => {
       result.current.form.setValue("itemType", "MEAL");
     });
-    expect(result.current.formData.map((field): string => field.id)).toEqual(MEAL_FIELD_IDS);
+    expect(result.current.formData.map((field): string => field.id)).toEqual(
+      MEAL_FIELD_IDS,
+    );
   });
   it("requires quantity for a limited period and allows clearing bounds", async () => {
     const { result } = renderHook(() => useItemEditForm(data, async () => undefined));
@@ -392,14 +533,22 @@ describe("staff item economy editor", () => {
 
 describe("staff item selector refreshes", () => {
   let queryClient: QueryClient;
-  const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
   beforeEach(() => {
     queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     installBrowserGlobals({ events: [], scrollIntoView: true });
     vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
-    vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
-    vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
-    vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <section>{children}</section>);
+    vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+      data: { role: "CONTENT-ADMIN" },
+    } as never);
+    vi.spyOn(UserContext, "useUserData").mockReturnValue({
+      data: { role: "CONTENT-ADMIN" },
+    } as never);
+    vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
+      <section>{children}</section>
+    ));
     vi.spyOn(ContentHelp, "ItemHelper").mockImplementation(() => null);
     vi.spyOn(SuggestChange, "SuggestChange").mockImplementation(() => null);
     vi.spyOn(Image, "default").mockImplementation(({ alt }) => <span>{alt}</span>);
@@ -409,79 +558,204 @@ describe("staff item selector refreshes", () => {
     restoreBrowserGlobals();
   });
 
-  it.each([true, false])("refreshes token bindings and variant labels only after a successful item save (success=%s)", async (success) => {
-    type Input = client.RouterInputs["item"]["update"];
-    type Result = client.RouterOutputs["item"]["update"];
-    updateItem.mockResolvedValue({ success, message: success ? "Saved" : "Cannot save" });
-    Object.assign(client.api.item, {
-      update: { useMutation: (options: UseMutationOptions<Result, Error, Input>) => useMutation({ ...options, mutationFn: updateItem }) },
-    });
-    const refetch = vi.fn(async () => undefined);
-    const token = { ...data, itemType: "CONSUMABLE" as const, destroyOnUse: true, preventBattleUsage: true };
-    const { result } = renderHook(() => useItemEditForm(token, refetch), { wrapper });
-    await act(async () => {
-      result.current.form.setValue("name", "Renamed token", { shouldDirty: true });
-      result.current.form.setValue("effects", [UnlockItemVariantTag.parse({ variantId: "red-variant" })], { shouldDirty: true });
-      expect(ItemValidator.safeParse(result.current.form.getValues()).success).toBe(true);
-      await result.current.handleItemSubmit();
-    });
-    expect(updateItem).toHaveBeenCalledTimes(1);
-    expect(catalogueInvalidations.getAllNames).toHaveBeenCalledTimes(success ? 1 : 0);
-    expect(catalogueInvalidations.getVariantNames).toHaveBeenCalledTimes(success ? 1 : 0);
-    expect(refetch).toHaveBeenCalledTimes(success ? 1 : 0);
-  });
+  it.each([true, false])(
+    "refreshes token bindings and variant labels only after a successful item save (success=%s)",
+    async (success) => {
+      type Input = client.RouterInputs["item"]["update"];
+      type Result = client.RouterOutputs["item"]["update"];
+      updateItem.mockResolvedValue({
+        success,
+        message: success ? "Saved" : "Cannot save",
+      });
+      Object.assign(client.api.item, {
+        update: {
+          useMutation: (options: UseMutationOptions<Result, Error, Input>) =>
+            useMutation({ ...options, mutationFn: updateItem }),
+        },
+      });
+      const refetch = vi.fn(async () => undefined);
+      const token = {
+        ...data,
+        itemType: "CONSUMABLE" as const,
+        destroyOnUse: true,
+        preventBattleUsage: true,
+      };
+      const { result } = renderHook(() => useItemEditForm(token, refetch), { wrapper });
+      await act(async () => {
+        result.current.form.setValue("name", "Renamed token", { shouldDirty: true });
+        result.current.form.setValue(
+          "effects",
+          [UnlockItemVariantTag.parse({ variantId: "red-variant" })],
+          { shouldDirty: true },
+        );
+        expect(ItemValidator.safeParse(result.current.form.getValues()).success).toBe(
+          true,
+        );
+        await result.current.handleItemSubmit();
+      });
+      expect(updateItem).toHaveBeenCalledTimes(1);
+      expect(catalogueInvalidations.getAllNames).toHaveBeenCalledTimes(success ? 1 : 0);
+      expect(catalogueInvalidations.getVariantNames).toHaveBeenCalledTimes(
+        success ? 1 : 0,
+      );
+      expect(refetch).toHaveBeenCalledTimes(success ? 1 : 0);
+    },
+  );
 
-  it.each(["create", "update", "delete"] as const)("refreshes token variant choices after a variant %s", async (operation) => {
-    const variant = { ...ItemVariantValidator.parse({ name: "Red", image: "https://example.com/red.webp", costType: "VARIANT_TOKEN", cost: 1, order: 1 }), id: "red-variant", itemId: data.id };
-    const saveVariant = vi.fn(async () => ({ success: true, message: "Saved" }));
-    const deleteVariant = vi.fn(async () => ({ success: true, message: "Deleted" }));
-    Object.assign(client.api.item, {
-      getItemWithCraftingRequirements: { useQuery: () => ({ data: structuredClone(data), isPending: false, refetch: async () => undefined }) },
-      getItemVariants: { useQuery: () => ({ data: operation === "create" ? [] : [variant] }) },
-      upsertItemVariant: { useMutation: (options: UseMutationOptions<client.RouterOutputs["item"]["upsertItemVariant"], Error, client.RouterInputs["item"]["upsertItemVariant"]>) => useMutation({ ...options, mutationFn: saveVariant }) },
-      deleteItemVariant: { useMutation: (options: UseMutationOptions<client.RouterOutputs["item"]["deleteItemVariant"], Error, client.RouterInputs["item"]["deleteItemVariant"]>) => useMutation({ ...options, mutationFn: deleteVariant }) },
-    });
-    vi.spyOn(editContent, "EditContent").mockImplementation(() => <></>);
-    vi.spyOn(ContentImageSelector, "default").mockImplementation(({ onUploadComplete }) => <button type="button" onClick={() => onUploadComplete("https://example.com/new.webp")}>Choose variant image</button>);
-    vi.spyOn(Confirm, "default").mockImplementation(({ onAccept }) => <button type="button" onClick={(event) => onAccept?.(event, { close: () => undefined })}>Confirm variant deletion</button>);
-    const params = Promise.resolve({ itemid: data.id });
-    let view!: ReturnType<typeof render>;
-    await act(async () => { view = render(<Suspense fallback={null}><ItemEdit params={params} /></Suspense>, { wrapper }); });
-    if (operation === "delete") {
-      fireEvent.click(view.getByRole("button", { name: "Confirm variant deletion" }));
-    } else {
-      fireEvent.click(view.getByRole("button", { name: operation === "create" ? "+ Add Variant" : "Edit" }));
-      fireEvent.change(view.getByRole("textbox", { name: "Name" }), { target: { value: "Blue" } });
-      if (operation === "create") {
-        fireEvent.click(view.getByRole("combobox", { name: "Cost Type" }));
-        fireEvent.click(await view.findByRole("option", { name: "Variant Token" }));
+  it.each(["create", "update", "delete"] as const)(
+    "refreshes token variant choices after a variant %s",
+    async (operation) => {
+      const variant = {
+        ...ItemVariantValidator.parse({
+          name: "Red",
+          image: "https://example.com/red.webp",
+          costType: "VARIANT_TOKEN",
+          cost: 1,
+          order: 1,
+        }),
+        id: "red-variant",
+        itemId: data.id,
+      };
+      const saveVariant = vi.fn(async () => ({ success: true, message: "Saved" }));
+      const deleteVariant = vi.fn(async () => ({ success: true, message: "Deleted" }));
+      Object.assign(client.api.item, {
+        getItemWithCraftingRequirements: {
+          useQuery: () => ({
+            data: structuredClone(data),
+            isPending: false,
+            refetch: async () => undefined,
+          }),
+        },
+        getItemVariants: {
+          useQuery: () => ({ data: operation === "create" ? [] : [variant] }),
+        },
+        upsertItemVariant: {
+          useMutation: (
+            options: UseMutationOptions<
+              client.RouterOutputs["item"]["upsertItemVariant"],
+              Error,
+              client.RouterInputs["item"]["upsertItemVariant"]
+            >,
+          ) => useMutation({ ...options, mutationFn: saveVariant }),
+        },
+        deleteItemVariant: {
+          useMutation: (
+            options: UseMutationOptions<
+              client.RouterOutputs["item"]["deleteItemVariant"],
+              Error,
+              client.RouterInputs["item"]["deleteItemVariant"]
+            >,
+          ) => useMutation({ ...options, mutationFn: deleteVariant }),
+        },
+      });
+      vi.spyOn(editContent, "EditContent").mockImplementation(() => <></>);
+      vi.spyOn(ContentImageSelector, "default").mockImplementation(
+        ({ onUploadComplete }) => (
+          <button
+            type="button"
+            onClick={() => onUploadComplete("https://example.com/new.webp")}
+          >
+            Choose variant image
+          </button>
+        ),
+      );
+      vi.spyOn(Confirm, "default").mockImplementation(({ onAccept }) => (
+        <button
+          type="button"
+          onClick={(event) => onAccept?.(event, { close: () => undefined })}
+        >
+          Confirm variant deletion
+        </button>
+      ));
+      const params = Promise.resolve({ itemid: data.id });
+      let view!: ReturnType<typeof render>;
+      await act(async () => {
+        view = render(
+          <Suspense fallback={null}>
+            <ItemEdit params={params} />
+          </Suspense>,
+          { wrapper },
+        );
+      });
+      if (operation === "delete") {
+        fireEvent.click(view.getByRole("button", { name: "Confirm variant deletion" }));
+      } else {
+        fireEvent.click(
+          view.getByRole("button", {
+            name: operation === "create" ? "+ Add Variant" : "Edit",
+          }),
+        );
+        fireEvent.change(view.getByRole("textbox", { name: "Name" }), {
+          target: { value: "Blue" },
+        });
+        if (operation === "create") {
+          fireEvent.click(view.getByRole("combobox", { name: "Cost Type" }));
+          fireEvent.click(await view.findByRole("option", { name: "Variant Token" }));
+        }
+        fireEvent.click(view.getByRole("button", { name: "Choose variant image" }));
+        fireEvent.click(view.getByRole("button", { name: "Save Variant" }));
       }
-      fireEvent.click(view.getByRole("button", { name: "Choose variant image" }));
-      fireEvent.click(view.getByRole("button", { name: "Save Variant" }));
-    }
-    await waitFor(() => expect(catalogueInvalidations.getVariantNames).toHaveBeenCalledTimes(1));
-    expect(catalogueInvalidations.getItemVariants).toHaveBeenCalledWith({ itemId: data.id });
-    expect(operation === "delete" ? deleteVariant : saveVariant).toHaveBeenCalledTimes(1);
-  });
+      await waitFor(() =>
+        expect(catalogueInvalidations.getVariantNames).toHaveBeenCalledTimes(1),
+      );
+      expect(catalogueInvalidations.getItemVariants).toHaveBeenCalledWith({
+        itemId: data.id,
+      });
+      expect(
+        operation === "delete" ? deleteVariant : saveVariant,
+      ).toHaveBeenCalledTimes(1);
+    },
+  );
 
-  it.each([true, false])("refreshes token variant choices only after a successful parent deletion (success=%s)", async (success) => {
-    const refetch = vi.fn(async () => undefined);
-    const deleteItem = vi.fn(async () => ({ success, message: success ? "Deleted" : "Cannot delete" }));
-    Object.assign(client.api.item, {
-      getAll: { useInfiniteQuery: () => ({ data: { pages: [{ data: [data] }] }, isFetching: false, isPending: false, refetch, fetchNextPage: async () => undefined, hasNextPage: false }) },
-      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      delete: { useMutation: (options: UseMutationOptions<client.RouterOutputs["item"]["delete"], Error, client.RouterInputs["item"]["delete"]>) => useMutation({ ...options, mutationFn: deleteItem }) },
-    });
-    vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
-    vi.spyOn(itemFiltering, "default").mockImplementation(() => null);
-    vi.spyOn(itemFiltering, "useFiltering").mockReturnValue({ itemType: "ANY" } as never);
-    vi.spyOn(itemFiltering, "getFilter").mockReturnValue({} as never);
-    vi.spyOn(ItemWithEffects, "default").mockImplementation(({ item, onDelete }) => <button type="button" onClick={() => onDelete?.(item.id)}>Delete parent item</button>);
-    const view = render(<ManualItems />, { wrapper });
-    fireEvent.click(view.getByRole("button", { name: "Delete parent item" }));
-    await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1));
-    expect(deleteItem).toHaveBeenCalledWith({ id: data.id }, expect.anything());
-    expect(catalogueInvalidations.getVariantNames).toHaveBeenCalledTimes(success ? 1 : 0);
-    expect(catalogueInvalidations.getAllNames).toHaveBeenCalledTimes(success ? 1 : 0);
-  });
+  it.each([true, false])(
+    "refreshes token variant choices only after a successful parent deletion (success=%s)",
+    async (success) => {
+      const refetch = vi.fn(async () => undefined);
+      const deleteItem = vi.fn(async () => ({
+        success,
+        message: success ? "Deleted" : "Cannot delete",
+      }));
+      Object.assign(client.api.item, {
+        getAll: {
+          useInfiniteQuery: () => ({
+            data: { pages: [{ data: [data] }] },
+            isFetching: false,
+            isPending: false,
+            refetch,
+            fetchNextPage: async () => undefined,
+            hasNextPage: false,
+          }),
+        },
+        create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+        delete: {
+          useMutation: (
+            options: UseMutationOptions<
+              client.RouterOutputs["item"]["delete"],
+              Error,
+              client.RouterInputs["item"]["delete"]
+            >,
+          ) => useMutation({ ...options, mutationFn: deleteItem }),
+        },
+      });
+      vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
+      vi.spyOn(itemFiltering, "default").mockImplementation(() => null);
+      vi.spyOn(itemFiltering, "useFiltering").mockReturnValue({
+        itemType: "ANY",
+      } as never);
+      vi.spyOn(itemFiltering, "getFilter").mockReturnValue({} as never);
+      vi.spyOn(ItemWithEffects, "default").mockImplementation(({ item, onDelete }) => (
+        <button type="button" onClick={() => onDelete?.(item.id)}>
+          Delete parent item
+        </button>
+      ));
+      const view = render(<ManualItems />, { wrapper });
+      fireEvent.click(view.getByRole("button", { name: "Delete parent item" }));
+      await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1));
+      expect(deleteItem).toHaveBeenCalledWith({ id: data.id }, expect.anything());
+      expect(catalogueInvalidations.getVariantNames).toHaveBeenCalledTimes(
+        success ? 1 : 0,
+      );
+      expect(catalogueInvalidations.getAllNames).toHaveBeenCalledTimes(success ? 1 : 0);
+    },
+  );
 });

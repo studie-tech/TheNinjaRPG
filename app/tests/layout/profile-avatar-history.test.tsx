@@ -27,17 +27,38 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
     avatar: {
-      getHistoricalAvatars: { useInfiniteQuery: () => ({ data: hasData ? { pages: [{ data: avatars }] } : undefined, fetchNextPage, hasNextPage: false, isPending, isError, isFetchNextPageError, isFetching: false, refetch }) },
+      getHistoricalAvatars: {
+        useInfiniteQuery: () => ({
+          data: hasData ? { pages: [{ data: avatars }] } : undefined,
+          fetchNextPage,
+          hasNextPage: false,
+          isPending,
+          isError,
+          isFetchNextPageError,
+          isFetching: false,
+          refetch,
+        }),
+      },
       updateAvatar: { useMutation: () => ({ mutate: select, isPending: false }) },
       deleteAvatar: { useMutation: () => ({ mutate: remove, isPending: false }) },
     },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ data: { username: "Player" }, updateUser: vi.fn() }) as never);
+  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+    () => ({ data: { username: "Player" }, updateUser: vi.fn() }) as never,
+  );
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
   vi.spyOn(Avatar, "default").mockImplementation(({ alt }) => <img alt={alt} />);
-  vi.spyOn(Modal, "default").mockImplementation(({ isOpen, title, children, onAccept }) => isOpen ? (
-    <div role="dialog" aria-label={title}>{children}<button type="button" onClick={onAccept}>Proceed</button></div>
-  ) : null);
+  vi.spyOn(Modal, "default").mockImplementation(
+    ({ isOpen, title, children, onAccept }) =>
+      isOpen ? (
+        <div role="dialog" aria-label={title}>
+          {children}
+          <button type="button" onClick={onAccept}>
+            Proceed
+          </button>
+        </div>
+      ) : null,
+  );
 });
 
 afterEach(() => {
@@ -93,17 +114,32 @@ it("keeps avatar selection separate from confirmed deletion", () => {
   expect(choose.querySelector('button, [role="button"]')).toBeNull();
   fireEvent.click(choose);
   expect(select).toHaveBeenCalledWith({ avatar: 42, type: "user" });
-  const deleteButton = view.getAllByRole("button", { name: "Delete saved avatar 1" }).find((button) => button.tagName === "BUTTON")!;
+  const deleteButton = view
+    .getAllByRole("button", { name: "Delete saved avatar 1" })
+    .find((button) => button.tagName === "BUTTON")!;
   fireEvent.click(deleteButton);
   expect(select).toHaveBeenCalledTimes(1);
   expect(remove).not.toHaveBeenCalled();
-  fireEvent.click(within(view.getByRole("dialog", { name: "Confirm Deletion" })).getByRole("button", { name: "Proceed" }));
+  fireEvent.click(
+    within(view.getByRole("dialog", { name: "Confirm Deletion" })).getByRole("button", {
+      name: "Proceed",
+    }),
+  );
   expect(remove).toHaveBeenCalledWith({ avatar: 42 });
 });
 
 it("disables selection and deletion while the owning editor is unavailable", () => {
   avatars = [{ id: 42, avatar: "/saved.webp" }];
   const view = render(<HistoricalAiAvatar contentType="user" disabled />);
-  expect((view.getByRole("button", { name: "Use saved avatar 1" }) as HTMLButtonElement).disabled).toBe(true);
-  expect((view.getAllByRole("button", { name: "Delete saved avatar 1" }).find((button) => button.tagName === "BUTTON") as HTMLButtonElement).disabled).toBe(true);
+  expect(
+    (view.getByRole("button", { name: "Use saved avatar 1" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(
+    (
+      view
+        .getAllByRole("button", { name: "Delete saved avatar 1" })
+        .find((button) => button.tagName === "BUTTON") as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
 });

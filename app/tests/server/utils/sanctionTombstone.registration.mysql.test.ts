@@ -27,14 +27,21 @@ import { profileRouter } from "@/server/api/routers/profile";
 import { reportsRouter } from "@/server/api/routers/reports";
 import type { DrizzleClient } from "@/server/db";
 import * as sanctions from "@/server/utils/sanctionTombstone";
-import { hashSanctionIdentifier, type SanctionIdentity } from "@/server/utils/sanctionTombstone";
+import {
+  hashSanctionIdentifier,
+  type SanctionIdentity,
+} from "@/server/utils/sanctionTombstone";
 import * as sanctionQueries from "@/queries/reports";
 import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
 import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/storeIdentity";
 
 import { insertUsers } from "../../setup/factories";
 import { insertRegistrationContent, registerCharacter } from "../../setup/registration";
-import { insertSanctionReports, sanctionIdentity, stubClerkUsers } from "../../setup/sanctions";
+import {
+  insertSanctionReports,
+  sanctionIdentity,
+  stubClerkUsers,
+} from "../../setup/sanctions";
 import {
   callerFor,
   callerForDatabase,
@@ -44,7 +51,12 @@ import {
   resetTables,
 } from "../../setup/testDatabase";
 import { deferred } from "../../setup/deferred";
-import { aroundStatements, interceptExecute, sqlText, overrideQuery } from "../../setup/statements";
+import {
+  aroundStatements,
+  interceptExecute,
+  sqlText,
+  overrideQuery,
+} from "../../setup/statements";
 
 const DAY = 86_400_000;
 const EMAIL = "registration-appeal@example.com";
@@ -125,7 +137,13 @@ const expectUnpublished = async (
   ).toBeUndefined();
   expect(await reportsOf(userId)).toHaveLength(0);
   expect(await database.query.userReportComment.findMany()).toEqual(existingComments);
-  for (const table of [actionLog, userAttribute, bloodlineRolls, questHistory, userItem]) {
+  for (const table of [
+    actionLog,
+    userAttribute,
+    bloodlineRolls,
+    questHistory,
+    userItem,
+  ]) {
     expect(
       await database.select().from(table).where(eq(table.userId, userId)),
     ).toHaveLength(0);
@@ -349,21 +367,34 @@ describeWithDatabase("registration claims current sanction sources", () => {
             profileRouter,
             "Concurrent",
             database,
-          ).confirmDeletion({ userId: "Concurrent", confirmation: CHARACTER_DELETION_CONFIRMATION }),
+          ).confirmDeletion({
+            userId: "Concurrent",
+            confirmation: CHARACTER_DELETION_CONFIRMATION,
+          }),
         ).toMatchObject({ success: true });
         expect(await register("Concurrent")).toMatchObject({ success: true });
-        await database.insert(forumSection).values({ id: "section", name: "General", summary: "", policy: {} });
-        await database.insert(forumBoard).values({ id: "board", name: "Discussion", summary: "", sectionId: "section" });
-        await database.insert(forumThread).values({ id: "thread", boardId: "board", title: "Discussion", userId: "Concurrent" });
         await database
-          .insert(forumPost)
-          .values({
-            id: "replacement-post",
-            threadId: "thread",
-            userId: "Concurrent",
-            authorId: "Concurrent",
-            content: "Example post",
-          });
+          .insert(forumSection)
+          .values({ id: "section", name: "General", summary: "", policy: {} });
+        await database.insert(forumBoard).values({
+          id: "board",
+          name: "Discussion",
+          summary: "",
+          sectionId: "section",
+        });
+        await database.insert(forumThread).values({
+          id: "thread",
+          boardId: "board",
+          title: "Discussion",
+          userId: "Concurrent",
+        });
+        await database.insert(forumPost).values({
+          id: "replacement-post",
+          threadId: "thread",
+          userId: "Concurrent",
+          authorId: "Concurrent",
+          content: "Example post",
+        });
         expect(
           await database.query.userData.findFirst({
             where: eq(userData.userId, "Concurrent"),
@@ -443,7 +474,10 @@ describeWithDatabase("registration claims current sanction sources", () => {
               profileRouter,
               "LateOriginal",
               database,
-            ).confirmDeletion({ userId: "LateOriginal", confirmation: CHARACTER_DELETION_CONFIRMATION }),
+            ).confirmDeletion({
+              userId: "LateOriginal",
+              confirmation: CHARACTER_DELETION_CONFIRMATION,
+            }),
           ).toMatchObject({ success: true });
         else {
           await deleteAccount("LateOriginal");

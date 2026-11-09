@@ -13,12 +13,16 @@ const savePackage = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
+    <div>{children}</div>
+  ));
   vi.spyOn(RewardEditor, "RewardFormWrapper").mockImplementation(() => null);
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
     data: { userId: "staff", role: "CONTENT-ADMIN" },
   } as never);
-  const mutation = (mutate = vi.fn()) => ({ useMutation: () => ({ mutate, isPending: false }) });
+  const mutation = (mutate = vi.fn()) => ({
+    useMutation: () => ({ mutate, isPending: false }),
+  });
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
     rewardPackages: {
@@ -48,19 +52,28 @@ it("edits a package in place and saves a copy as a new package", () => {
   fireEvent.click(view.getByRole("button", { name: "Edit" }));
   expect(view.getByRole("heading", { name: "Edit Reward Package" })).toBeDefined();
   expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("Starter");
-  expect((view.getByLabelText("Description") as HTMLTextAreaElement).value).toBe("Some ryo");
+  expect((view.getByLabelText("Description") as HTMLTextAreaElement).value).toBe(
+    "Some ryo",
+  );
   fireEvent.click(view.getByRole("button", { name: "Save" }));
   fireEvent.click(view.getByRole("button", { name: "Cancel" }));
 
   fireEvent.click(view.getByRole("button", { name: "Copy" }));
   expect(view.getByRole("heading", { name: "Create Reward Package" })).toBeDefined();
   expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("Starter copy");
-  expect((view.getByLabelText("Description") as HTMLTextAreaElement).value).toBe("Some ryo");
+  expect((view.getByLabelText("Description") as HTMLTextAreaElement).value).toBe(
+    "Some ryo",
+  );
   fireEvent.click(view.getByRole("button", { name: "Save" }));
 
   expect(savePackage.mock.calls).toEqual([
     [{ id: "pack-1", data: { name: "Starter", description: "Some ryo", rewards } }],
-    [{ id: undefined, data: { name: "Starter copy", description: "Some ryo", rewards } }],
+    [
+      {
+        id: undefined,
+        data: { name: "Starter copy", description: "Some ryo", rewards },
+      },
+    ],
   ]);
   const [edited, copied] = savePackage.mock.calls.map((call) => call[0].data.rewards);
   expect(edited).not.toBe(rewards);

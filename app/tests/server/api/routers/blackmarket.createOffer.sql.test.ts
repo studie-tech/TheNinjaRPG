@@ -5,7 +5,12 @@ import { ryoTrade, userData } from "@/drizzle/schema";
 import { blackMarketRouter } from "@/server/api/routers/blackmarket";
 import { insertUsers } from "../../../setup/factories";
 import { beforeStatements } from "../../../setup/statements";
-import { callerForDatabase, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import {
+  callerForDatabase,
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../setup/testDatabase";
 
 const SELLER = "rep-seller";
 /** Reputation points a seller keeps after every listing. */
@@ -14,18 +19,28 @@ const REPS = 20;
 const RYO = 5_000;
 
 const reputation = async () =>
-  (await (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, SELLER) }))?.reputationPoints;
+  (
+    await (
+      await getTestDatabase()
+    ).query.userData.findFirst({ where: eq(userData.userId, SELLER) })
+  )?.reputationPoints;
 
 const offers = async () => (await getTestDatabase()).select().from(ryoTrade);
 
 const setReputation = async (reputationPoints: number) =>
-  (await getTestDatabase()).update(userData).set({ reputationPoints }).where(eq(userData.userId, SELLER));
+  (await getTestDatabase())
+    .update(userData)
+    .set({ reputationPoints })
+    .where(eq(userData.userId, SELLER));
 
 /** List REPS for RYO through a client that runs `race` just before the reputation debit. */
 const createOfferAfter = async (race?: () => Promise<unknown>) => {
   const database = await getTestDatabase();
   const client = race ? beforeStatements(database, userData, [race]) : database;
-  return callerForDatabase(blackMarketRouter, SELLER, client).createOffer({ reps: REPS, ryo: RYO });
+  return callerForDatabase(blackMarketRouter, SELLER, client).createOffer({
+    reps: REPS,
+    ryo: RYO,
+  });
 };
 
 /** A seller may list reputation only while keeping the reserve once the listing is debited. */
@@ -33,7 +48,12 @@ describeWithDatabase("blackmarket.createOffer", () => {
   beforeEach(async () => {
     await resetTables(ryoTrade, userData);
     await insertUsers([
-      { userId: SELLER, username: "Seller", level: REP_TRADE_MIN_LEVEL, reputationPoints: REPS + RESERVE },
+      {
+        userId: SELLER,
+        username: "Seller",
+        level: REP_TRADE_MIN_LEVEL,
+        reputationPoints: REPS + RESERVE,
+      },
     ]);
   });
 

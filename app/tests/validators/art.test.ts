@@ -11,7 +11,9 @@ describe.each([
   ["video", conceptVideoPromptSchema],
 ] as const)("%s generation input", (_type, schema) => {
   it("accepts the database prompt and seed limits", () => {
-    expect(schema.safeParse({ prompt: "a".repeat(5000), seed: 2147483647 }).success).toBe(true);
+    expect(
+      schema.safeParse({ prompt: "a".repeat(5000), seed: 2147483647 }).success,
+    ).toBe(true);
   });
 
   it("rejects prompts and seeds outside the database limits", () => {
@@ -23,9 +25,21 @@ describe.each([
 });
 
 it("bounds video negative prompts and preserves the optional default", () => {
-  expect(conceptVideoPromptSchema.parse({ prompt: "A ninja" }).negative_prompt).toBe("");
-  expect(conceptVideoPromptSchema.safeParse({ prompt: "A ninja", negative_prompt: "a".repeat(5000) }).success).toBe(true);
-  expect(conceptVideoPromptSchema.safeParse({ prompt: "A ninja", negative_prompt: "a".repeat(5001) }).success).toBe(false);
+  expect(conceptVideoPromptSchema.parse({ prompt: "A ninja" }).negative_prompt).toBe(
+    "",
+  );
+  expect(
+    conceptVideoPromptSchema.safeParse({
+      prompt: "A ninja",
+      negative_prompt: "a".repeat(5000),
+    }).success,
+  ).toBe(true);
+  expect(
+    conceptVideoPromptSchema.safeParse({
+      prompt: "A ninja",
+      negative_prompt: "a".repeat(5001),
+    }).success,
+  ).toBe(false);
 });
 
 describe("getTimeFrameinSeconds", () => {

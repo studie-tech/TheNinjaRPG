@@ -33,9 +33,13 @@ describe("retryRejectedOnce", () => {
 
   it("keeps the retryable first attempts when credential refresh fails", async () => {
     const results: Attempt[] = [{ token: "old", authRejected: true }];
-    await retryRejectedOnce(results, () => true, async () => {
-      throw new Error("refresh failed");
-    });
+    await retryRejectedOnce(
+      results,
+      () => true,
+      async () => {
+        throw new Error("refresh failed");
+      },
+    );
     expect(results).toEqual([{ token: "old", authRejected: true }]);
   });
 });

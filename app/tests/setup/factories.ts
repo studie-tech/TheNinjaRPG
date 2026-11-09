@@ -63,7 +63,13 @@ export const insertQuests = async (
     name: "Test quest",
     questType: "daily",
     ...entry,
-    content: { objectives: [], reward: {}, sceneBackground: "", sceneCharacters: [], ...entry.content },
+    content: {
+      objectives: [],
+      reward: {},
+      sceneBackground: "",
+      sceneCharacters: [],
+      ...entry.content,
+    },
   }));
   await database.insert(quest).values(rows as never);
   return rows;
@@ -162,7 +168,9 @@ export const jutsuRow = (
 
 export const insertJutsus = async (jutsus: Insert<typeof jutsu.$inferInsert>[]) => {
   const database = await getTestDatabase();
-  const rows = jutsus.map((entry, index) => jutsuRow(entry.id ?? `jutsu-${index}`, entry));
+  const rows = jutsus.map((entry, index) =>
+    jutsuRow(entry.id ?? `jutsu-${index}`, entry),
+  );
   await database.insert(jutsu).values(rows as never);
   return rows;
 };
@@ -188,7 +196,9 @@ export const insertUserPets = async (pets: Insert<typeof userPet.$inferInsert>[]
 };
 
 /** `fetchUpdatedUser` creates a missing vote row, and parallel requests would race on it. */
-export const insertUserVotes = async (votes: Insert<typeof userVote.$inferInsert>[]) => {
+export const insertUserVotes = async (
+  votes: Insert<typeof userVote.$inferInsert>[],
+) => {
   const database = await getTestDatabase();
   const rows = votes.map((entry) => ({
     id: `vote-${entry.userId}`,

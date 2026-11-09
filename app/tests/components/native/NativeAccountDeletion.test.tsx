@@ -108,8 +108,16 @@ describe("native deletion confirmation", () => {
     expect(state.mutate).not.toHaveBeenCalled();
   });
   it.each([
-    ["the permanence acknowledgement", "I understand that my account and progress cannot be recovered.", "DELETE MY ACCOUNT"],
-    ["the subscription acknowledgement", "I understand that recurring subscriptions must be cancelled separately.", "DELETE MY ACCOUNT"],
+    [
+      "the permanence acknowledgement",
+      "I understand that my account and progress cannot be recovered.",
+      "DELETE MY ACCOUNT",
+    ],
+    [
+      "the subscription acknowledgement",
+      "I understand that recurring subscriptions must be cancelled separately.",
+      "DELETE MY ACCOUNT",
+    ],
     ["the exact phrase", null, "DELETE MY ACCOUN"],
   ])("keeps deletion disabled without %s", (_missing, uncheck, phrase) => {
     render(<NativeAccountDeletion />);

@@ -32,7 +32,10 @@ const bounty = (id: string, username: string) => ({
   collectedAt: null,
 });
 // Radix's controlled contract: the trigger asks to toggle, Escape asks to close.
-const DialogState = createContext<{ open: boolean; onOpenChange: (open: boolean) => void }>({
+const DialogState = createContext<{
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}>({
   open: false,
   onOpenChange: () => undefined,
 });
@@ -45,8 +48,16 @@ const dialogStubs = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     children: ReactNode;
-  }) => <DialogState.Provider value={{ open, onOpenChange }}>{children}</DialogState.Provider>,
-  DialogTrigger: ({ children }: { children: ReactElement<{ onClick: () => void }> }) => {
+  }) => (
+    <DialogState.Provider value={{ open, onOpenChange }}>
+      {children}
+    </DialogState.Provider>
+  ),
+  DialogTrigger: ({
+    children,
+  }: {
+    children: ReactElement<{ onClick: () => void }>;
+  }) => {
     const { open, onOpenChange } = useContext(DialogState);
     return cloneElement(children, {
       onClick: () => {
@@ -107,7 +118,9 @@ beforeEach(() => {
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
   for (const [name, stub] of Object.entries(dialogStubs)) {
-    vi.spyOn(dialog, name as keyof typeof dialogStubs).mockImplementation(stub as never);
+    vi.spyOn(dialog, name as keyof typeof dialogStubs).mockImplementation(
+      stub as never,
+    );
   }
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
   vi.spyOn(Image, "default").mockImplementation(() => null);

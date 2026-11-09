@@ -19,7 +19,10 @@ describe("getStatTypeLabels", () => {
   });
 
   it("labels damage modifiers as universal", () => {
-    const tag = { type: "increasedamagegiven", statTypes: ["Taijutsu", "None"] as const };
+    const tag = {
+      type: "increasedamagegiven",
+      statTypes: ["Taijutsu", "None"] as const,
+    };
     expect(getStatTypeLabels(tag)).toEqual(["All damage"]);
   });
 });

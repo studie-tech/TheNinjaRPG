@@ -13,7 +13,12 @@ import {
 import { dataRouter } from "@/server/api/routers/data";
 import { insertItems, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import {
+  callerFor,
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../setup/testDatabase";
 
 /** A row on the range's first day, one at the last instant of its last day, and one just after it. */
 const ON_FIRST_DAY = new Date("2026-03-08T00:00:00.000Z");
@@ -41,7 +46,9 @@ describeWithDatabase("statistics date ranges", () => {
       visitorLog,
       userData,
     );
-    await insertUsers([{ userId: "analyst", username: "Analyst", role: "CODING-ADMIN", isAi: true }]);
+    await insertUsers([
+      { userId: "analyst", username: "Analyst", role: "CODING-ADMIN", isAi: true },
+    ]);
   });
 
   it("counts battle usage through the end day", async () => {
@@ -64,10 +71,9 @@ describeWithDatabase("statistics date ranges", () => {
       })),
     );
     const usage = async (range: { startDate: string; endDate: string }) =>
-      (await (await analyst()).getStatistics({ id: "kunai", type: "item", ...range })).usage.reduce(
-        (sum, row) => sum + row.count,
-        0,
-      );
+      (
+        await (await analyst()).getStatistics({ id: "kunai", type: "item", ...range })
+      ).usage.reduce((sum, row) => sum + row.count, 0);
     expect(await usage(RANGE)).toBe(2);
     expect(await usage(SINGLE_DAY)).toBe(1);
   });
@@ -86,9 +92,13 @@ describeWithDatabase("statistics date ranges", () => {
         api.getRecruitmentLevelDistribution({ sources: ["Dynamic"], ...range }),
       ]);
       return {
-        daily: daily.flatMap((row) => row.series).reduce((sum, entry) => sum + entry.count, 0),
+        daily: daily
+          .flatMap((row) => row.series)
+          .reduce((sum, entry) => sum + entry.count, 0),
         stats: stats.reduce((sum, row) => sum + row.count, 0),
-        levels: levels.flatMap((row) => row.levelDistribution).reduce((sum, entry) => sum + entry.count, 0),
+        levels: levels
+          .flatMap((row) => row.levelDistribution)
+          .reduce((sum, entry) => sum + entry.count, 0),
       };
     };
     expect(await signups(RANGE)).toEqual({ daily: 2, stats: 2, levels: 2 });
@@ -105,21 +115,33 @@ describeWithDatabase("statistics date ranges", () => {
       })),
     );
     const visitors = async (range: { startDate: string; endDate: string }) =>
-      (await (await analyst()).getRecruitmentMainMetrics({ utmSource: "discord", ...range })).visitors;
+      (
+        await (
+          await analyst()
+        ).getRecruitmentMainMetrics({ utmSource: "discord", ...range })
+      ).visitors;
     expect(await visitors(RANGE)).toBe(2);
     expect(await visitors(SINGLE_DAY)).toBe(1);
   });
 
   it("totals referral revenue through the end day", async () => {
     const db = await getTestDatabase();
-    await insertUsers([{ userId: "payer", username: "Payer", createdAt: new Date("2026-01-02T00:00:00Z") }]);
+    await insertUsers([
+      {
+        userId: "payer",
+        username: "Payer",
+        createdAt: new Date("2026-01-02T00:00:00Z"),
+      },
+    ]);
     await db.insert(visitorLog).values({
       id: "visit",
       ipHash: "payer",
       utmSource: "discord",
       createdAt: new Date("2026-01-01T00:00:00Z"),
     });
-    await db.insert(historicalIp).values({ userId: "payer", ip: "ip-payer", ipHash: "payer" });
+    await db
+      .insert(historicalIp)
+      .values({ userId: "payer", ip: "ip-payer", ipHash: "payer" });
     await db.insert(paypalTransaction).values(
       [ON_FIRST_DAY, ON_LAST_DAY, AFTER_LAST_DAY].map((createdAt, index) => ({
         id: `payment-${index}`,

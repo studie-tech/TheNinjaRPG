@@ -70,7 +70,10 @@ async function loadEntry(
   const context = {
     URL,
     AbortController,
-    CSS: { supports: (property: string) => property === "color" ? supportsColorMix : supportsSelectors },
+    CSS: {
+      supports: (property: string) =>
+        property === "color" ? supportsColorMix : supportsSelectors,
+    },
     navigator: { userAgent },
     document: { getElementById: () => ({ addEventListener() {} }) },
     window: {
@@ -102,7 +105,8 @@ describe("native origin configuration", () => {
     const entryConfig = `window.TNR_ORIGIN = ${JSON.stringify(PRODUCTION)};`;
     const ios = await loadEntry(entryConfig, {
       supportsColorMix: false,
-      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 15_8 like Mac OS X) TNR-Native/1.0.0 (ios)",
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 15_8 like Mac OS X) TNR-Native/1.0.0 (ios)",
     });
     expect(ios.navigated).toEqual([PRODUCTION]);
     expect(ios.requested).toHaveLength(1);

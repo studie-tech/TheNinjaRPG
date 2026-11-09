@@ -95,7 +95,9 @@ describe("Modal", () => {
     expect(proceed.parentElement?.firstElementChild).toBe(proceed);
     expect(close.className).toContain("order-1");
     expect(proceed.className).toContain("order-2");
-    expect(getByRole("button", { name: "Cancel listing" }).className).not.toContain("order-");
+    expect(getByRole("button", { name: "Cancel listing" }).className).not.toContain(
+      "order-",
+    );
     expect(proceed.className).toContain("bg-primary");
     expect(close.className).toContain("bg-card");
 
@@ -120,7 +122,13 @@ describe("Modal", () => {
     const accept = vi.fn();
     const close = vi.fn();
     const { getByRole, rerender } = render(
-      <Modal isOpen setIsOpen={close} title="Quantity" proceed_label="Proceed" onAccept={accept}>
+      <Modal
+        isOpen
+        setIsOpen={close}
+        title="Quantity"
+        proceed_label="Proceed"
+        onAccept={accept}
+      >
         <NumberInput value="" min={1} />
       </Modal>,
     );
@@ -129,7 +137,13 @@ describe("Modal", () => {
     expect(accept).not.toHaveBeenCalled();
     expect(close).not.toHaveBeenCalled();
     rerender(
-      <Modal isOpen setIsOpen={close} title="Quantity" proceed_label="Proceed" onAccept={accept}>
+      <Modal
+        isOpen
+        setIsOpen={close}
+        title="Quantity"
+        proceed_label="Proceed"
+        onAccept={accept}
+      >
         <NumberInput value={3} min={1} />
       </Modal>,
     );
@@ -144,7 +158,13 @@ describe("Modal", () => {
       const close = vi.fn();
       const invalid = vi.fn();
       const { getByRole } = render(
-        <Modal isOpen setIsOpen={close} title="Quantity" proceed_label="Proceed" onAccept={accept}>
+        <Modal
+          isOpen
+          setIsOpen={close}
+          title="Quantity"
+          proceed_label="Proceed"
+          onAccept={accept}
+        >
           <NumberInput value={value} min={1} onInvalid={invalid} />
         </Modal>,
       );

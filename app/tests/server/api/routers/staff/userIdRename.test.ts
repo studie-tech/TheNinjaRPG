@@ -35,7 +35,11 @@ import {
   userTitle,
   village,
 } from "@/drizzle/schema";
-import { OPENAI_REPORT_EMBEDDING_MODEL, REPORT_EMBEDDING_DIMENSIONS, STARTING_REPUTATION_POINTS } from "@/drizzle/constants";
+import {
+  OPENAI_REPORT_EMBEDDING_MODEL,
+  REPORT_EMBEDDING_DIMENSIONS,
+  STARTING_REPUTATION_POINTS,
+} from "@/drizzle/constants";
 import { registerRouter } from "@/server/api/routers/register";
 import { staffRouter } from "@/server/api/routers/staff";
 import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
@@ -50,8 +54,15 @@ import {
 } from "@/server/utils/purchases/grant";
 import { canonicalStoreUserId } from "@/server/utils/purchases/storeIdentity";
 import { initialPetSpecies } from "../../../../libs/pets/helpers/species";
-import { insertPetSpecies, insertUsers, insertUserPets } from "../../../../setup/factories";
-import { characterInput, insertRegistrationContent } from "../../../../setup/registration";
+import {
+  insertPetSpecies,
+  insertUsers,
+  insertUserPets,
+} from "../../../../setup/factories";
+import {
+  characterInput,
+  insertRegistrationContent,
+} from "../../../../setup/registration";
 import { beforeStatements, failStatements } from "../../../../setup/statements";
 import {
   callerFor,
@@ -86,7 +97,11 @@ const registerAgain = async (userId: string, tag: string, username: string) => {
   await insertRegistrationContent(tag, STAFF);
   const caller = await callerFor(registerRouter, userId);
   return caller.createCharacter(
-    characterInput({ username, recruiter_userid: null, bloodlineId: `${tag}-bloodline` }),
+    characterInput({
+      username,
+      recruiter_userid: null,
+      bloodlineId: `${tag}-bloodline`,
+    }),
   );
 };
 
@@ -99,7 +114,9 @@ describeWithDatabase("staff user-id rename", () => {
       warKill,
       recruitReferral,
       petSpecies,
-      huntingSession, huntingProgress, huntingReceipt,
+      huntingSession,
+      huntingProgress,
+      huntingReceipt,
       auctionOffer,
       bloodline,
       notification,
@@ -128,56 +145,125 @@ describeWithDatabase("staff user-id rename", () => {
     ]);
   });
 
-  it.each(["rename", "delete"] as const)("keeps hunting state aligned with character %s", async (operation) => {
-    const database = await getTestDatabase();
-    await database.insert(huntingSession).values({ userId: OLD_USER_ID, id: "hunt-session", habitatId: "forest", contractId: "boar", sector: 1, startedAt: new Date() });
-    await database.insert(huntingProgress).values({ userId: OLD_USER_ID, contractId: "boar", used: 1 });
-    await database.insert(huntingReceipt).values({ userId: OLD_USER_ID, battleId: "hunt", contractId: "boar", createdAt: new Date(), result: huntingVictoryReceipt(huntingBattleState(), "hunt", "Won") });
-    if (operation === "rename") {
-      const caller = await callerFor(staffRouter, STAFF);
-      expect((await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })).success).toBe(true);
-    } else await deleteUser(database, OLD_USER_ID);
-    for (const table of [huntingSession, huntingProgress, huntingReceipt]) {
-      expect(await database.select().from(table).where(eq(table.userId, OLD_USER_ID))).toHaveLength(0);
-      expect(await database.select().from(table).where(eq(table.userId, NEW_USER_ID))).toHaveLength(operation === "rename" ? 1 : 0);
-    }
-  });
+  it.each(["rename", "delete"] as const)(
+    "keeps hunting state aligned with character %s",
+    async (operation) => {
+      const database = await getTestDatabase();
+      await database.insert(huntingSession).values({
+        userId: OLD_USER_ID,
+        id: "hunt-session",
+        habitatId: "forest",
+        contractId: "boar",
+        sector: 1,
+        startedAt: new Date(),
+      });
+      await database
+        .insert(huntingProgress)
+        .values({ userId: OLD_USER_ID, contractId: "boar", used: 1 });
+      await database.insert(huntingReceipt).values({
+        userId: OLD_USER_ID,
+        battleId: "hunt",
+        contractId: "boar",
+        createdAt: new Date(),
+        result: huntingVictoryReceipt(huntingBattleState(), "hunt", "Won"),
+      });
+      if (operation === "rename") {
+        const caller = await callerFor(staffRouter, STAFF);
+        expect(
+          (await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }))
+            .success,
+        ).toBe(true);
+      } else await deleteUser(database, OLD_USER_ID);
+      for (const table of [huntingSession, huntingProgress, huntingReceipt]) {
+        expect(
+          await database.select().from(table).where(eq(table.userId, OLD_USER_ID)),
+        ).toHaveLength(0);
+        expect(
+          await database.select().from(table).where(eq(table.userId, NEW_USER_ID)),
+        ).toHaveLength(operation === "rename" ? 1 : 0);
+      }
+    },
+  );
 
   it("rejects renaming a character that does not exist", async () => {
     const database = await getTestDatabase();
     const caller = await callerFor(staffRouter, STAFF);
     expect(
-      await caller.updateUserId({ userId: "missing-character", newUserId: NEW_USER_ID }),
+      await caller.updateUserId({
+        userId: "missing-character",
+        newUserId: NEW_USER_ID,
+      }),
     ).toEqual({ success: false, message: "User not found" });
     expect(await database.query.storeUserIdAlias.findFirst()).toBeUndefined();
   });
 
   it("rejects a character ID change during hunting combat", async () => {
     const database = await getTestDatabase();
-    await database.update(userData).set({ status: "BATTLE", battleId: "hunt" }).where(eq(userData.userId, OLD_USER_ID));
-    await database.insert(huntingSession).values({ userId: OLD_USER_ID, id: "hunt-session", habitatId: "forest", contractId: "boar", sector: 1, battleId: "hunt", startedAt: new Date() });
+    await database
+      .update(userData)
+      .set({ status: "BATTLE", battleId: "hunt" })
+      .where(eq(userData.userId, OLD_USER_ID));
+    await database.insert(huntingSession).values({
+      userId: OLD_USER_ID,
+      id: "hunt-session",
+      habitatId: "forest",
+      contractId: "boar",
+      sector: 1,
+      battleId: "hunt",
+      startedAt: new Date(),
+    });
     const caller = await callerFor(staffRouter, STAFF);
-    expect((await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })).success).toBe(false);
+    expect(
+      (await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }))
+        .success,
+    ).toBe(false);
     expect((await database.query.huntingSession.findFirst())?.userId).toBe(OLD_USER_ID);
     expect(await database.query.storeUserIdAlias.findFirst()).toBeUndefined();
   });
 
   it("moves fixed-term offer ownership and acceptance when an account ID changes", async () => {
     const database = await getTestDatabase();
-    await database.insert(auctionOffer).values({ id: "rename-offer", ownerId: OLD_USER_ID, accepterId: OLD_USER_ID, offerType: "REQUEST", requestedItemId: "ore", requestedQuantity: 10, ryo: 300 });
+    await database.insert(auctionOffer).values({
+      id: "rename-offer",
+      ownerId: OLD_USER_ID,
+      accepterId: OLD_USER_ID,
+      offerType: "REQUEST",
+      requestedItemId: "ore",
+      requestedQuantity: 10,
+      ryo: 300,
+    });
     const caller = await callerFor(staffRouter, STAFF);
-    expect((await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })).success).toBe(true);
-    expect((await database.select().from(auctionOffer))[0]).toMatchObject({ ownerId: NEW_USER_ID, accepterId: NEW_USER_ID });
+    expect(
+      (await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }))
+        .success,
+    ).toBe(true);
+    expect((await database.select().from(auctionOffer))[0]).toMatchObject({
+      ownerId: NEW_USER_ID,
+      accepterId: NEW_USER_ID,
+    });
   });
 
   it("moves home styles and visibility when an account ID changes", async () => {
     const database = await getTestDatabase();
     const roomStyles = [{ room: "main", paint: "sage", floor: "slate" }] as const;
-    await database.insert(userHome).values({ userId: OLD_USER_ID, isPublic: true, roomStyles: [...roomStyles] });
+    await database
+      .insert(userHome)
+      .values({ userId: OLD_USER_ID, isPublic: true, roomStyles: [...roomStyles] });
     const caller = await callerFor(staffRouter, STAFF);
-    expect((await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })).success).toBe(true);
-    expect(await database.query.userHome.findFirst({ where: eq(userHome.userId, NEW_USER_ID) })).toMatchObject({ isPublic: true, roomStyles: [...roomStyles] });
-    expect(await database.query.userHome.findFirst({ where: eq(userHome.userId, OLD_USER_ID) })).toBeUndefined();
+    expect(
+      (await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }))
+        .success,
+    ).toBe(true);
+    expect(
+      await database.query.userHome.findFirst({
+        where: eq(userHome.userId, NEW_USER_ID),
+      }),
+    ).toMatchObject({ isPublic: true, roomStyles: [...roomStyles] });
+    expect(
+      await database.query.userHome.findFirst({
+        where: eq(userHome.userId, OLD_USER_ID),
+      }),
+    ).toBeUndefined();
   });
 
   it("moves skills, farms, ranked rewards, war records, referrals and student links to the new id", async () => {
@@ -186,21 +272,56 @@ describeWithDatabase("staff user-id rename", () => {
       { userId: "student", senseiId: OLD_USER_ID, recruiterId: OLD_USER_ID },
       { userId: "recruiter" },
     ]);
-    await database.insert(userSkill).values({ id: "skill", userId: OLD_USER_ID, skillId: "tree" });
-    await database.insert(farmPlot).values({ id: "plot", userId: OLD_USER_ID, slotIndex: 0 });
-    await database.insert(rankedUserRewards).values({ id: "reward", userId: OLD_USER_ID, seasonId: "s", division: "Wood" });
+    await database
+      .insert(userSkill)
+      .values({ id: "skill", userId: OLD_USER_ID, skillId: "tree" });
+    await database
+      .insert(farmPlot)
+      .values({ id: "plot", userId: OLD_USER_ID, slotIndex: 0 });
+    await database
+      .insert(rankedUserRewards)
+      .values({ id: "reward", userId: OLD_USER_ID, seasonId: "s", division: "Wood" });
     await database.insert(warKill).values([
-      { id: "kill", warId: "w", killerId: OLD_USER_ID, victimId: "student", killerVillageId: "a", victimVillageId: "b" },
-      { id: "death", warId: "w", killerId: "student", victimId: OLD_USER_ID, killerVillageId: "b", victimVillageId: "a" },
+      {
+        id: "kill",
+        warId: "w",
+        killerId: OLD_USER_ID,
+        victimId: "student",
+        killerVillageId: "a",
+        victimVillageId: "b",
+      },
+      {
+        id: "death",
+        warId: "w",
+        killerId: "student",
+        victimId: OLD_USER_ID,
+        killerVillageId: "b",
+        victimVillageId: "a",
+      },
     ]);
     await database.insert(recruitReferral).values([
-      { recruitUserId: OLD_USER_ID, recruiterId: "recruiter", isEligible: true, eligibilityReason: "IP_NOT_SHARED" },
-      { recruitUserId: "student", recruiterId: OLD_USER_ID, isEligible: true, eligibilityReason: "IP_NOT_SHARED" },
+      {
+        recruitUserId: OLD_USER_ID,
+        recruiterId: "recruiter",
+        isEligible: true,
+        eligibilityReason: "IP_NOT_SHARED",
+      },
+      {
+        recruitUserId: "student",
+        recruiterId: OLD_USER_ID,
+        isEligible: true,
+        eligibilityReason: "IP_NOT_SHARED",
+      },
     ]);
     const caller = await callerFor(staffRouter, STAFF);
-    expect((await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })).success).toBe(true);
+    expect(
+      (await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }))
+        .success,
+    ).toBe(true);
     for (const table of [userSkill, farmPlot, rankedUserRewards]) {
-      expect(await database.select().from(table)).toEqual([expect.objectContaining({ userId: NEW_USER_ID })]);
+      expect(await database.select().from(table)).toEqual([
+        expect.objectContaining({ userId: NEW_USER_ID }),
+      ]);
     }
     expect(await database.select().from(warKill)).toEqual(
       expect.arrayContaining([
@@ -210,11 +331,18 @@ describeWithDatabase("staff user-id rename", () => {
     );
     expect(await database.select().from(recruitReferral)).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ recruitUserId: NEW_USER_ID, recruiterId: "recruiter" }),
+        expect.objectContaining({
+          recruitUserId: NEW_USER_ID,
+          recruiterId: "recruiter",
+        }),
         expect.objectContaining({ recruitUserId: "student", recruiterId: NEW_USER_ID }),
       ]),
     );
-    expect(await database.query.userData.findFirst({ where: eq(userData.userId, "student") })).toMatchObject({
+    expect(
+      await database.query.userData.findFirst({
+        where: eq(userData.userId, "student"),
+      }),
+    ).toMatchObject({
       senseiId: NEW_USER_ID,
       recruiterId: NEW_USER_ID,
     });
@@ -253,11 +381,22 @@ describeWithDatabase("staff user-id rename", () => {
         { ...pet, id: "staff-companion", userId: STAFF },
         { ...pet, id: "parked-companion", storedExperience: 80 },
       ]),
-      database.update(userData).set({ rank: "GENIN", petExperience: 125, petAcquisitions: 3, activePetId: pet.id, petSlots: 2 }).where(eq(userData.userId, OLD_USER_ID)),
+      database
+        .update(userData)
+        .set({
+          rank: "GENIN",
+          petExperience: 125,
+          petAcquisitions: 3,
+          activePetId: pet.id,
+          petSlots: 2,
+        })
+        .where(eq(userData.userId, OLD_USER_ID)),
     ]);
     const before = await (await callerFor(petsRouter, OLD_USER_ID)).getPet();
     if (!before.pet) throw new Error("Companion not found before rename");
-    const staffPet = await database.query.userPet.findFirst({ where: eq(userPet.userId, STAFF) });
+    const staffPet = await database.query.userPet.findFirst({
+      where: eq(userPet.userId, STAFF),
+    });
     const caller = await callerFor(staffRouter, STAFF);
     for (let attempt = 0; attempt < 2; attempt++) {
       await expect(
@@ -266,7 +405,10 @@ describeWithDatabase("staff user-id rename", () => {
       const [after, oldPets, owner, unchangedStaffPet] = await Promise.all([
         (await callerFor(petsRouter, NEW_USER_ID)).getPet(),
         database.query.userPet.findMany({ where: eq(userPet.userId, OLD_USER_ID) }),
-        database.query.userData.findFirst({ columns: { petExperience: true, petAcquisitions: true }, where: eq(userData.userId, NEW_USER_ID) }),
+        database.query.userData.findFirst({
+          columns: { petExperience: true, petAcquisitions: true },
+          where: eq(userData.userId, NEW_USER_ID),
+        }),
         database.query.userPet.findFirst({ where: eq(userPet.userId, STAFF) }),
       ]);
       expect(after.pet).toEqual({ ...before.pet, userId: NEW_USER_ID });
@@ -274,61 +416,154 @@ describeWithDatabase("staff user-id rename", () => {
       expect(after.activePetId).toBe(pet.id);
       expect(after.slots).toBe(2);
       expect(after.pets).toHaveLength(2);
-      expect(after.pets.find((entry) => entry.id === "parked-companion")).toMatchObject({ userId: NEW_USER_ID, storedExperience: 80 });
+      expect(after.pets.find((entry) => entry.id === "parked-companion")).toMatchObject(
+        { userId: NEW_USER_ID, storedExperience: 80 },
+      );
       expect(owner).toEqual({ petExperience: 125, petAcquisitions: 3 });
       expect(oldPets).toEqual([]);
       expect(unchangedStaffPet).toEqual(staffPet);
     }
     await deleteUser(database, NEW_USER_ID);
-    expect(await database.query.userPet.findFirst({ where: eq(userPet.id, pet.id) })).toBeUndefined();
-    expect(await database.query.userPet.findFirst({ where: eq(userPet.userId, STAFF) })).toEqual(staffPet);
+    expect(
+      await database.query.userPet.findFirst({ where: eq(userPet.id, pet.id) }),
+    ).toBeUndefined();
+    expect(
+      await database.query.userPet.findFirst({ where: eq(userPet.userId, STAFF) }),
+    ).toEqual(staffPet);
   });
 
   it("finishes a failed companion ownership move when the rename is retried", async () => {
     const database = await getTestDatabase();
-    await insertUserPets([{ id: "retry-companion", userId: OLD_USER_ID, name: "Companion" }]);
+    await insertUserPets([
+      { id: "retry-companion", userId: OLD_USER_ID, name: "Companion" },
+    ]);
     await expect(
-      callerForDatabase(staffRouter, STAFF, failStatements(database, userPet)).updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
+      callerForDatabase(
+        staffRouter,
+        STAFF,
+        failStatements(database, userPet),
+      ).updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
     ).rejects.toThrow("Statement failed on purpose");
-    expect(await database.query.userData.findFirst({ where: eq(userData.userId, NEW_USER_ID) })).toBeDefined();
-    expect((await database.query.userPet.findFirst({ where: eq(userPet.id, "retry-companion") }))?.userId).toBe(OLD_USER_ID);
+    expect(
+      await database.query.userData.findFirst({
+        where: eq(userData.userId, NEW_USER_ID),
+      }),
+    ).toBeDefined();
+    expect(
+      (
+        await database.query.userPet.findFirst({
+          where: eq(userPet.id, "retry-companion"),
+        })
+      )?.userId,
+    ).toBe(OLD_USER_ID);
     await expect(
-      (await callerFor(staffRouter, STAFF)).updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
+      (await callerFor(staffRouter, STAFF)).updateUserId({
+        userId: OLD_USER_ID,
+        newUserId: NEW_USER_ID,
+      }),
     ).resolves.toMatchObject({ success: true });
-    expect((await database.query.userPet.findFirst({ where: eq(userPet.id, "retry-companion") }))?.userId).toBe(NEW_USER_ID);
-    expect(await database.query.userPet.findMany({ where: eq(userPet.userId, OLD_USER_ID) })).toEqual([]);
+    expect(
+      (
+        await database.query.userPet.findFirst({
+          where: eq(userPet.id, "retry-companion"),
+        })
+      )?.userId,
+    ).toBe(NEW_USER_ID);
+    expect(
+      await database.query.userPet.findMany({ where: eq(userPet.userId, OLD_USER_ID) }),
+    ).toEqual([]);
   });
 
   it("retains rename intent without moving ownership when the character claim fails, then retries", async () => {
     const database = await getTestDatabase();
-    await insertUserPets([{ id: "claim-companion", userId: OLD_USER_ID, name: "Companion" }]);
-    await database.insert(title).values({ id: "claim-title", name: "Private title", legacyOwnerId: OLD_USER_ID });
-    await database.insert(userTitle).values({ userId: OLD_USER_ID, titleId: "claim-title" });
-    await database.insert(huntingSession).values({ userId: OLD_USER_ID, id: "hunt-session", habitatId: "forest", contractId: "boar", sector: 1, startedAt: new Date() });
-    await database.insert(huntingProgress).values({ userId: OLD_USER_ID, contractId: "boar", used: 1 });
-    await database.insert(huntingReceipt).values({ userId: OLD_USER_ID, battleId: "hunt", contractId: "boar", createdAt: new Date(), result: huntingVictoryReceipt(huntingBattleState(), "hunt", "Won") });
-    await expect(callerForDatabase(staffRouter, STAFF, failStatements(database, userData)).updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })).rejects.toThrow("Statement failed on purpose");
-    expect(await database.query.storeUserIdAlias.findFirst()).toMatchObject({ oldUserId: OLD_USER_ID, newUserId: NEW_USER_ID });
-    const ownership = [userData, userPet, userTitle, huntingSession, huntingProgress, huntingReceipt];
+    await insertUserPets([
+      { id: "claim-companion", userId: OLD_USER_ID, name: "Companion" },
+    ]);
+    await database
+      .insert(title)
+      .values({ id: "claim-title", name: "Private title", legacyOwnerId: OLD_USER_ID });
+    await database
+      .insert(userTitle)
+      .values({ userId: OLD_USER_ID, titleId: "claim-title" });
+    await database.insert(huntingSession).values({
+      userId: OLD_USER_ID,
+      id: "hunt-session",
+      habitatId: "forest",
+      contractId: "boar",
+      sector: 1,
+      startedAt: new Date(),
+    });
+    await database
+      .insert(huntingProgress)
+      .values({ userId: OLD_USER_ID, contractId: "boar", used: 1 });
+    await database.insert(huntingReceipt).values({
+      userId: OLD_USER_ID,
+      battleId: "hunt",
+      contractId: "boar",
+      createdAt: new Date(),
+      result: huntingVictoryReceipt(huntingBattleState(), "hunt", "Won"),
+    });
+    await expect(
+      callerForDatabase(
+        staffRouter,
+        STAFF,
+        failStatements(database, userData),
+      ).updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }),
+    ).rejects.toThrow("Statement failed on purpose");
+    expect(await database.query.storeUserIdAlias.findFirst()).toMatchObject({
+      oldUserId: OLD_USER_ID,
+      newUserId: NEW_USER_ID,
+    });
+    const ownership = [
+      userData,
+      userPet,
+      userTitle,
+      huntingSession,
+      huntingProgress,
+      huntingReceipt,
+    ];
     for (const table of ownership) {
-      expect(await database.select().from(table).where(eq(table.userId, OLD_USER_ID))).toHaveLength(1);
-      expect(await database.select().from(table).where(eq(table.userId, NEW_USER_ID))).toHaveLength(0);
+      expect(
+        await database.select().from(table).where(eq(table.userId, OLD_USER_ID)),
+      ).toHaveLength(1);
+      expect(
+        await database.select().from(table).where(eq(table.userId, NEW_USER_ID)),
+      ).toHaveLength(0);
     }
     expect((await database.query.title.findFirst())?.legacyOwnerId).toBe(OLD_USER_ID);
-    expect((await (await callerFor(staffRouter, STAFF)).updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })).success).toBe(true);
+    expect(
+      (
+        await (
+          await callerFor(staffRouter, STAFF)
+        ).updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })
+      ).success,
+    ).toBe(true);
     for (const table of ownership) {
-      expect(await database.select().from(table).where(eq(table.userId, OLD_USER_ID))).toHaveLength(0);
-      expect(await database.select().from(table).where(eq(table.userId, NEW_USER_ID))).toHaveLength(1);
+      expect(
+        await database.select().from(table).where(eq(table.userId, OLD_USER_ID)),
+      ).toHaveLength(0);
+      expect(
+        await database.select().from(table).where(eq(table.userId, NEW_USER_ID)),
+      ).toHaveLength(1);
     }
     expect((await database.query.title.findFirst())?.legacyOwnerId).toBe(NEW_USER_ID);
   });
 
   it("closes permanent offers before deleting their owner's inventory", async () => {
     const database = await getTestDatabase();
-    await database.insert(auctionOffer).values({ id: "deleted-offer", ownerId: OLD_USER_ID, offerType: "REQUEST", requestedItemId: "ore", requestedQuantity: 10, ryo: 300 });
+    await database.insert(auctionOffer).values({
+      id: "deleted-offer",
+      ownerId: OLD_USER_ID,
+      offerType: "REQUEST",
+      requestedItemId: "ore",
+      requestedQuantity: 10,
+      ryo: 300,
+    });
     await deleteUser(database, OLD_USER_ID);
     expect((await database.select().from(auctionOffer))[0]?.status).toBe("CANCELLED");
-    expect(await database.select().from(userData).where(eq(userData.userId, OLD_USER_ID))).toHaveLength(0);
+    expect(
+      await database.select().from(userData).where(eq(userData.userId, OLD_USER_ID)),
+    ).toHaveLength(0);
   });
 
   it("moves collected titles and private labels on rename and removes only the deleted account's titles", async () => {
@@ -343,27 +578,64 @@ describeWithDatabase("staff user-id rename", () => {
       { userId: OLD_USER_ID, titleId: "rename-private-title" },
       { userId: STAFF, titleId: "rename-title", effects },
     ]);
-    await database.update(userData).set({ activeTitleId: "rename-private-title" }).where(eq(userData.userId, OLD_USER_ID));
+    await database
+      .update(userData)
+      .set({ activeTitleId: "rename-private-title" })
+      .where(eq(userData.userId, OLD_USER_ID));
     const caller = await callerFor(staffRouter, STAFF);
-    expect((await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID })).success).toBe(true);
-    expect(await database.query.userTitle.findMany({ where: eq(userTitle.userId, OLD_USER_ID) })).toHaveLength(0);
-    const owned = await database.query.userTitle.findMany({ where: eq(userTitle.userId, NEW_USER_ID) });
+    expect(
+      (await caller.updateUserId({ userId: OLD_USER_ID, newUserId: NEW_USER_ID }))
+        .success,
+    ).toBe(true);
+    expect(
+      await database.query.userTitle.findMany({
+        where: eq(userTitle.userId, OLD_USER_ID),
+      }),
+    ).toHaveLength(0);
+    const owned = await database.query.userTitle.findMany({
+      where: eq(userTitle.userId, NEW_USER_ID),
+    });
     expect(owned).toHaveLength(2);
-    expect(owned.find((entry) => entry.titleId === "rename-title")?.effects).toEqual(effects);
-    expect((await database.query.title.findFirst({ where: eq(title.id, "rename-private-title") }))?.legacyOwnerId).toBe(NEW_USER_ID);
-    expect((await database.query.userData.findFirst({ where: eq(userData.userId, NEW_USER_ID) }))?.activeTitleId).toBe("rename-private-title");
+    expect(owned.find((entry) => entry.titleId === "rename-title")?.effects).toEqual(
+      effects,
+    );
+    expect(
+      (
+        await database.query.title.findFirst({
+          where: eq(title.id, "rename-private-title"),
+        })
+      )?.legacyOwnerId,
+    ).toBe(NEW_USER_ID);
+    expect(
+      (
+        await database.query.userData.findFirst({
+          where: eq(userData.userId, NEW_USER_ID),
+        })
+      )?.activeTitleId,
+    ).toBe("rename-private-title");
     await deleteUser(database, NEW_USER_ID);
-    expect((await database.query.userTitle.findMany()).map((entry) => entry.userId)).toEqual([STAFF]);
-    expect((await database.query.title.findMany()).map((entry) => entry.id)).toEqual(["rename-title"]);
+    expect(
+      (await database.query.userTitle.findMany()).map((entry) => entry.userId),
+    ).toEqual([STAFF]);
+    expect((await database.query.title.findMany()).map((entry) => entry.id)).toEqual([
+      "rename-title",
+    ]);
   });
 
   it("removes stored moderation summaries for a deleted reporter or reported user", async () => {
     const database = await getTestDatabase();
-    await database.insert(userReport).values([
-      { id: "reported", reportedUserId: OLD_USER_ID, reason: "Reported user" },
-      { id: "reporter", reporterUserId: OLD_USER_ID, reason: "Reporter" },
-      { id: "retained", reason: "Other users' report" },
-    ].map((report) => ({ ...report, system: "comment", infraction: {}, aiInterpretation: "Moderation summary" })));
+    await database.insert(userReport).values(
+      [
+        { id: "reported", reportedUserId: OLD_USER_ID, reason: "Reported user" },
+        { id: "reporter", reporterUserId: OLD_USER_ID, reason: "Reporter" },
+        { id: "retained", reason: "Other users' report" },
+      ].map((report) => ({
+        ...report,
+        system: "comment",
+        infraction: {},
+        aiInterpretation: "Moderation summary",
+      })),
+    );
     const embedding = sql`TO_VECTOR(${JSON.stringify(Array(REPORT_EMBEDDING_DIMENSIONS).fill(1))})`;
     await database.insert(userReportEmbedding).values(
       ["reported", "reporter", "retained"].map((reportId) => ({
@@ -374,8 +646,12 @@ describeWithDatabase("staff user-id rename", () => {
       })),
     );
     await deleteUser(database, OLD_USER_ID);
-    expect((await database.select().from(userReport)).map((row) => row.id)).toEqual(["retained"]);
-    expect((await database.select().from(userReportEmbedding)).map((row) => row.reportId)).toEqual(["retained"]);
+    expect((await database.select().from(userReport)).map((row) => row.id)).toEqual([
+      "retained",
+    ]);
+    expect(
+      (await database.select().from(userReportEmbedding)).map((row) => row.reportId),
+    ).toEqual(["retained"]);
   });
 
   it("reserves every retired alias against later reuse", async () => {
@@ -434,15 +710,17 @@ describeWithDatabase("staff user-id rename", () => {
         pushToken: nanoid(),
         endsAt: new Date(Date.now() + 60_000),
       }),
-      database.insert(storePurchase).values(storeReceipt({
-        userId: OLD_USER_ID,
-        transactionId: "deleted-user-ledger",
-        productId: "tnr_reps_tier1",
-        reputationPoints: 8,
-        acceptedAt: new Date(),
-        grantedAt: new Date(),
-        purchasedAt: new Date(),
-      })),
+      database.insert(storePurchase).values(
+        storeReceipt({
+          userId: OLD_USER_ID,
+          transactionId: "deleted-user-ledger",
+          productId: "tnr_reps_tier1",
+          reputationPoints: 8,
+          acceptedAt: new Date(),
+          grantedAt: new Date(),
+          purchasedAt: new Date(),
+        }),
+      ),
     ]);
 
     await deleteUser(database, OLD_USER_ID);
@@ -626,16 +904,18 @@ describeWithDatabase("staff user-id rename", () => {
     // nothing live until the period after, while still being billed.
     const database = await getTestDatabase();
     const now = Date.now();
-    await database.insert(storePurchase).values(storeReceipt({
-      userId: OLD_USER_ID,
-      transactionId: "period-before-deletion",
-      productId: "tnr_federal_gold",
-      federalStatus: "GOLD",
-      acceptedAt: new Date(now - 20 * DAY),
-      grantedAt: new Date(now - 20 * DAY),
-      purchasedAt: new Date(now - 20 * DAY),
-      expiresAt: new Date(now - 1),
-    }));
+    await database.insert(storePurchase).values(
+      storeReceipt({
+        userId: OLD_USER_ID,
+        transactionId: "period-before-deletion",
+        productId: "tnr_federal_gold",
+        federalStatus: "GOLD",
+        acceptedAt: new Date(now - 20 * DAY),
+        grantedAt: new Date(now - 20 * DAY),
+        purchasedAt: new Date(now - 20 * DAY),
+        expiresAt: new Date(now - 1),
+      }),
+    );
     await deleteUser(database, OLD_USER_ID);
     await expect(
       grantStorePurchase(database, {
@@ -696,16 +976,18 @@ describeWithDatabase("staff user-id rename", () => {
     // returning character would be handed a tier that was cancelled or refunded.
     const database = await getTestDatabase();
     const now = Date.now();
-    await database.insert(storePurchase).values(storeReceipt({
-      userId: OLD_USER_ID,
-      transactionId: "ended-in-window",
-      productId: "tnr_federal_gold",
-      federalStatus: "GOLD",
-      acceptedAt: new Date(now - 20 * DAY),
-      grantedAt: new Date(now - 20 * DAY),
-      purchasedAt: new Date(now - 20 * DAY),
-      expiresAt: new Date(now + 10 * DAY),
-    }));
+    await database.insert(storePurchase).values(
+      storeReceipt({
+        userId: OLD_USER_ID,
+        transactionId: "ended-in-window",
+        productId: "tnr_federal_gold",
+        federalStatus: "GOLD",
+        acceptedAt: new Date(now - 20 * DAY),
+        grantedAt: new Date(now - 20 * DAY),
+        purchasedAt: new Date(now - 20 * DAY),
+        expiresAt: new Date(now + 10 * DAY),
+      }),
+    );
     await deleteUser(database, OLD_USER_ID);
     // A revocation without a transaction id resolves to the deleted character's id, not the
     // tombstone.
@@ -754,16 +1036,18 @@ describeWithDatabase("staff user-id rename", () => {
     const now = Date.now();
     await insertUsers([{ userId: "transfer-source", username: "transfer-src" }]);
     await Promise.all([
-      database.insert(storePurchase).values(storeReceipt({
-        userId: "transfer-source",
-        transactionId: "moves-to-deleted",
-        productId: "tnr_federal_gold",
-        federalStatus: "GOLD",
-        acceptedAt: new Date(now - 5 * DAY),
-        grantedAt: new Date(now - 5 * DAY),
-        purchasedAt: new Date(now - 5 * DAY),
-        expiresAt: new Date(now + 25 * DAY),
-      })),
+      database.insert(storePurchase).values(
+        storeReceipt({
+          userId: "transfer-source",
+          transactionId: "moves-to-deleted",
+          productId: "tnr_federal_gold",
+          federalStatus: "GOLD",
+          acceptedAt: new Date(now - 5 * DAY),
+          grantedAt: new Date(now - 5 * DAY),
+          purchasedAt: new Date(now - 5 * DAY),
+          expiresAt: new Date(now + 25 * DAY),
+        }),
+      ),
       database
         .update(userData)
         .set({ federalStatus: "GOLD" })
@@ -876,14 +1160,16 @@ describeWithDatabase("staff user-id rename", () => {
       columns: { reputationPoints: true },
       where: eq(userData.userId, OLD_USER_ID),
     });
-    await database.insert(storePurchase).values(storeReceipt({
-      userId: OLD_USER_ID,
-      transactionId: "reps-pending-on-retry",
-      productId: "tnr_reps_tier1",
-      reputationPoints: 8,
-      acceptedAt: new Date(),
-      purchasedAt: new Date(),
-    }));
+    await database.insert(storePurchase).values(
+      storeReceipt({
+        userId: OLD_USER_ID,
+        transactionId: "reps-pending-on-retry",
+        productId: "tnr_reps_tier1",
+        reputationPoints: 8,
+        acceptedAt: new Date(),
+        purchasedAt: new Date(),
+      }),
+    );
     await expect(
       registerAgain(OLD_USER_ID, "retry-existing", "Existing"),
     ).resolves.toEqual({
@@ -1017,7 +1303,9 @@ describeWithDatabase("staff user-id rename", () => {
 
   it("answers a failed rename only after its other moves have landed", async () => {
     const database = await getTestDatabase();
-    await database.insert(notification).values({ userId: OLD_USER_ID, content: "rename" });
+    await database
+      .insert(notification)
+      .values({ userId: OLD_USER_ID, content: "rename" });
     // Hold every account statement back, so the account move is still in flight when the
     // notification move fails
     const pause = () => new Promise((resolve) => setTimeout(resolve, 150));
@@ -1146,14 +1434,16 @@ describeWithDatabase("staff user-id rename", () => {
     });
     const transactionId = nanoid();
     const purchasedAt = new Date();
-    await database.insert(storePurchase).values(storeReceipt({
-      userId: OLD_USER_ID,
-      transactionId,
-      productId: "tnr_reps_tier1",
-      reputationPoints: 8,
-      acceptedAt: new Date(),
-      purchasedAt,
-    }));
+    await database.insert(storePurchase).values(
+      storeReceipt({
+        userId: OLD_USER_ID,
+        transactionId,
+        productId: "tnr_reps_tier1",
+        reputationPoints: 8,
+        acceptedAt: new Date(),
+        purchasedAt,
+      }),
+    );
 
     await expect(
       grantStorePurchase(database, {
@@ -1185,5 +1475,4 @@ describeWithDatabase("staff user-id rename", () => {
     });
     expect(receipt?.grantedAt).toBeInstanceOf(Date);
   });
-
 });

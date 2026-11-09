@@ -104,7 +104,12 @@ describe("battle usage restrictions", () => {
 
 describe("expired action cooldowns", () => {
   it("restores the tracked cooldown on the owning jutsu and item entries", () => {
-    const jutsu = makeJutsu({ id: "jutsu", name: "Jutsu", cooldown: 2, effects: [makeTag("heal")] });
+    const jutsu = makeJutsu({
+      id: "jutsu",
+      name: "Jutsu",
+      cooldown: 2,
+      effects: [makeTag("heal")],
+    });
     const item = makeWeapon({
       id: "pill",
       name: "Pill",
@@ -113,10 +118,34 @@ describe("expired action cooldowns", () => {
       effects: [makeTag("heal")],
     });
     const user = makeBattleUser("caster", {
-      jutsus: [{ id: "jutsu", jutsuId: "jutsu", equipped: true, level: 1, experience: 0, lastUsedRound: 1, originalCooldown: 7, origin: "user" as const }],
-      items: [makeBattleUserItem({ id: "owned", itemId: "pill", equipped: "ITEM_1", quantity: 1, lastUsedRound: 1, originalCooldown: 9 })],
+      jutsus: [
+        {
+          id: "jutsu",
+          jutsuId: "jutsu",
+          equipped: true,
+          level: 1,
+          experience: 0,
+          lastUsedRound: 1,
+          originalCooldown: 7,
+          origin: "user" as const,
+        },
+      ],
+      items: [
+        makeBattleUserItem({
+          id: "owned",
+          itemId: "pill",
+          equipped: "ITEM_1",
+          quantity: 1,
+          lastUsedRound: 1,
+          originalCooldown: 9,
+        }),
+      ],
     });
-    const battle = makeInjectBattle(user, { jutsus: { jutsu }, items: { pill: item } }, { round: 20, battleType: "ARENA" });
+    const battle = makeInjectBattle(
+      user,
+      { jutsus: { jutsu }, items: { pill: item } },
+      { round: 20, battleType: "ARENA" },
+    );
     availableUserActions(battle, "caster", false, true);
     expect(user.jutsus[0]).toMatchObject({ originalCooldown: 7, lastUsedRound: -7 });
     expect(user.items[0]).toMatchObject({ originalCooldown: 9, lastUsedRound: -9 });

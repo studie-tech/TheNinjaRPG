@@ -9,7 +9,9 @@ const EMBED =
 const setMarketingConsent = (marketing: boolean) => {
   window.Cookiebot = { consent: { marketing } };
   act(() => {
-    window.dispatchEvent(new window.Event(marketing ? "CookiebotOnAccept" : "CookiebotOnDecline"));
+    window.dispatchEvent(
+      new window.Event(marketing ? "CookiebotOnAccept" : "CookiebotOnDecline"),
+    );
   });
 };
 
@@ -35,7 +37,9 @@ describe("user-embedded iframes", () => {
       "https://www.youtube-nocookie.com/embed/KgXxLOb-lEk?si=abc",
     );
     expect(iframe?.hasAttribute("data-user-iframe")).toBe(true);
-    expect(iframe?.getAttribute("referrerpolicy")).toBe("strict-origin-when-cross-origin");
+    expect(iframe?.getAttribute("referrerpolicy")).toBe(
+      "strict-origin-when-cross-origin",
+    );
   });
 
   it("loads once marketing consent is given and hides again when it is withdrawn", () => {

@@ -8,11 +8,7 @@ import type { Item } from "@/drizzle/schema";
 import { insertAction } from "@/libs/combat/actions";
 import { getBattleGrid } from "@/libs/combat/util";
 import { VisualTag } from "@/validators/combat";
-import type {
-  CombatAction,
-  CompleteBattle,
-  ReturnedBattle,
-} from "@/libs/combat/types";
+import type { CombatAction, CompleteBattle, ReturnedBattle } from "@/libs/combat/types";
 import {
   makeBattleUser,
   makeBattleUserItem,
@@ -41,7 +37,9 @@ const makeBattle = (actor: ReturnType<typeof makeActor>): CompleteBattle =>
     roundStartAt: new Date("2020-01-01T00:00:00Z"),
     usersState: [actor],
     extraState: {
-      items: { [ITEM_ID]: { id: ITEM_ID, name: "Smoke Bomb", destroyOnUse: false } as Item },
+      items: {
+        [ITEM_ID]: { id: ITEM_ID, name: "Smoke Bomb", destroyOnUse: false } as Item,
+      },
     },
   });
 
@@ -75,7 +73,10 @@ describe("GROUND-targeted item usage records into usedActions", () => {
     });
 
     expect(result).toBe(true);
-    expect(battle.extraState.revealedActions).toEqual({ jutsuIds: [], itemIds: [ITEM_ID] });
+    expect(battle.extraState.revealedActions).toEqual({
+      jutsuIds: [],
+      itemIds: [ITEM_ID],
+    });
     const itemUses = actor.usedActions.filter((a) => a.type === "item");
     expect(itemUses.map((a) => a.id)).toContain(ITEM_ID);
   });

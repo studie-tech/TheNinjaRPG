@@ -11,15 +11,26 @@ const rollback = vi.fn();
 const endpointError = vi.fn();
 beforeEach(() => {
   run.mockReset().mockResolvedValue({ processed: 1 });
-  lock.mockReset().mockResolvedValue({ release: rollback, isClaimed: true, isNewMinute: true, prevTime: previous, response: Response.json(null) });
+  lock.mockReset().mockResolvedValue({
+    release: rollback,
+    isClaimed: true,
+    isNewMinute: true,
+    prevTime: previous,
+    response: Response.json(null),
+  });
   rollback.mockReset().mockResolvedValue(undefined);
-  endpointError.mockReset().mockReturnValue(Response.json({ error: "worker failed" }, { status: 500 }));
+  endpointError
+    .mockReset()
+    .mockReturnValue(Response.json({ error: "worker failed" }, { status: 500 }));
   stubCronAuth(() => null);
   vi.spyOn(timers, "deliverDueTimedPushes").mockImplementation(run);
   vi.spyOn(settings, "lockWithMinuteTimer").mockImplementation(lock);
   vi.spyOn(settings, "handleEndpointError").mockImplementation(endpointError);
 });
-afterEach(() => { resetServerModuleStubs(); vi.restoreAllMocks(); });
+afterEach(() => {
+  resetServerModuleStubs();
+  vi.restoreAllMocks();
+});
 const request = () => new Request("https://example.com/api/push-timers");
 it("rejects unauthenticated calls before timers or device reads", async () => {
   stubCronAuth(() => new Response(null, { status: 401 }));
@@ -28,7 +39,12 @@ it("rejects unauthenticated calls before timers or device reads", async () => {
   expect(run).not.toHaveBeenCalled();
 });
 it("retains the minute timer boundary", async () => {
-  lock.mockResolvedValue({ isClaimed: false, isNewMinute: false, prevTime: previous, response: new Response("wait") });
+  lock.mockResolvedValue({
+    isClaimed: false,
+    isNewMinute: false,
+    prevTime: previous,
+    response: new Response("wait"),
+  });
   expect(await (await GET(request())).text()).toBe("wait");
   expect(run).not.toHaveBeenCalled();
 });

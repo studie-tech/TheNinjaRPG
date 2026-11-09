@@ -121,11 +121,20 @@ describe("client cache invalidation", () => {
     ["under the `util` alias", `await util.profile.getUser.invalidate();\n${clan}`],
     ["with a blank line between", `${user}\n\n${clan}`],
     ["with a comment between", `${user}\n// why\n${clan}`],
-    ["with a wrapped argument list", `await utils.clan.get.invalidate({\n  id,\n});\n${clan}`],
-    ["with a wrapped member chain", `await utils.profile.getUser\n.invalidate();\n${clan}`],
+    [
+      "with a wrapped argument list",
+      `await utils.clan.get.invalidate({\n  id,\n});\n${clan}`,
+    ],
+    [
+      "with a wrapped member chain",
+      `await utils.profile.getUser\n.invalidate();\n${clan}`,
+    ],
     ["with trailing comments", `${user} // the user\n${clan} // the clan`],
     ["with a trailing block comment", `${user} /* the user */\n${clan}`],
-    ["with a bracket inside a string", `await utils.clan.get.invalidate("[");\n${clan}`],
+    [
+      "with a bracket inside a string",
+      `await utils.clan.get.invalidate("[");\n${clan}`,
+    ],
   ])("catches two invalidations %s", (_shape, source) => {
     expect(found(source)).toBe(1);
   });
@@ -134,7 +143,10 @@ describe("client cache invalidation", () => {
     ["one invalidation on its own", user],
     ["a statement between them", `${user}\nrouter.push("/");\n${clan}`],
     ["a cancel before an invalidate", `await utils.profile.getUser.cancel();\n${user}`],
-    ["an opt-out", `// ${OPT_OUT}: the second reads what the first wrote\n${user}\n${clan}`],
+    [
+      "an opt-out",
+      `// ${OPT_OUT}: the second reads what the first wrote\n${user}\n${clan}`,
+    ],
   ])("leaves %s alone", (_shape, source) => {
     expect(found(source)).toBe(0);
   });

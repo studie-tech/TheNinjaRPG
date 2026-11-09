@@ -10,7 +10,12 @@ describe("QueryError", () => {
     (layout) => {
       const onRetry = vi.fn();
       render(
-        <QueryError layout={layout} message="Unable to load." retryLabel="Retry" onRetry={onRetry} />,
+        <QueryError
+          layout={layout}
+          message="Unable to load."
+          retryLabel="Retry"
+          onRetry={onRetry}
+        />,
       );
       expect(screen.getByRole("alert").textContent).toContain("Unable to load.");
       fireEvent.click(screen.getByRole("button", { name: "Retry" }));
@@ -24,7 +29,9 @@ describe("QueryError", () => {
   });
 
   it("disables the control while retrying", () => {
-    render(<QueryError message="Unable to load." onRetry={() => undefined} isRetrying />);
+    render(
+      <QueryError message="Unable to load." onRetry={() => undefined} isRetrying />,
+    );
     expect(screen.getByRole<HTMLButtonElement>("button").disabled).toBe(true);
   });
 

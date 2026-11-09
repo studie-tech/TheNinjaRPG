@@ -60,7 +60,6 @@ describe("getFacingDirection", () => {
     expect(getFacingDirection(ai, [ai, dead, fled, alive], "right")).toBe("left");
   });
 
-
   it("breaks distance ties on userId so the pick is stable across frames", () => {
     const ai = user({ userId: "ai", direction: "right", longitude: 5, latitude: 5 });
     const west = user({ userId: "a-west", direction: "left", longitude: 3 });

@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { waitFor } from "@testing-library/react";
-import { InfiniteQueryObserver, QueryClient, type InfiniteData } from "@tanstack/react-query";
+import {
+  InfiniteQueryObserver,
+  QueryClient,
+  type InfiniteData,
+} from "@tanstack/react-query";
 import { describe, expect, it } from "bun:test";
 import { conversationQueryOptions } from "../setup/conversationQueryOptions";
 
@@ -20,7 +24,9 @@ const staleTime = new Function(`return (${staleTimeExpression});`)() as number;
 
 describe("cached conversation remounts", () => {
   it("shares immutable conversation writes with other observers and keeps pagination and refetch working", async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { staleTime, retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime, retry: false } },
+    });
     const queryKey = ["conversation-comments"];
     const reads: unknown[] = [];
     let version = "initial";
@@ -46,10 +52,17 @@ describe("cached conversation remounts", () => {
     try {
       await observer.refetch();
       const beforeInsert = observer.getCurrentResult().data!;
-      client.setQueryData<InfiniteData<ChatPage>>(queryKey, (old) => old && ({
-        pageParams: old.pageParams,
-        pages: old.pages.map((page) => ({ ...page, data: ["incoming", ...page.data] })),
-      }));
+      client.setQueryData<InfiniteData<ChatPage>>(
+        queryKey,
+        (old) =>
+          old && {
+            pageParams: old.pageParams,
+            pages: old.pages.map((page) => ({
+              ...page,
+              data: ["incoming", ...page.data],
+            })),
+          },
+      );
       const afterInsert = observer.getCurrentResult().data!;
       expect(afterInsert).not.toBe(beforeInsert);
       expect(beforeInsert.pages[0]?.data).toEqual(["initial page 0"]);
@@ -67,7 +80,10 @@ describe("cached conversation remounts", () => {
       version = "refetched";
       await observer.refetch();
       const afterRefetch = observer.getCurrentResult().data!;
-      expect(afterRefetch.pages.map((page) => page.data)).toEqual([["refetched page 0"], ["refetched page 1"]]);
+      expect(afterRefetch.pages.map((page) => page.data)).toEqual([
+        ["refetched page 0"],
+        ["refetched page 1"],
+      ]);
       expect(afterPagination.pages[0]?.data).toEqual(["incoming", "initial page 0"]);
       expect(afterRefetch.pageParams).toEqual([null, 1]);
       expect(reads).toEqual([null, 1, null, 1]);
@@ -88,36 +104,50 @@ describe("cached conversation remounts", () => {
 
   for (const file of ["Conversation.tsx", "TeamChatPanel.tsx"]) {
     it(`${file} refreshes missed parental restrictions and recovers when reopened`, async () => {
-      const client = new QueryClient({ defaultOptions: { queries: { staleTime, retry: false } } });
-      const queryKey = [["comments", "getConversationComments"], { convo_id: "chat", type: "infinite" }];
+      const client = new QueryClient({
+        defaultOptions: { queries: { staleTime, retry: false } },
+      });
+      const queryKey = [
+        ["comments", "getConversationComments"],
+        { convo_id: "chat", type: "infinite" },
+      ];
       let restricted = false;
       let reads = 0;
-      const mount = () => new InfiniteQueryObserver(client, {
-        ...conversationQueryOptions<ChatPage>(file),
-        queryKey,
-        initialPageParam: null,
-        queryFn: async (): Promise<ChatPage> => {
-          reads++;
-          return {
-            data: restricted ? [] : ["Permitted chat history"],
-            convo: restricted ? null : { id: "chat" },
-            restrictionMessage: restricted ? "Private messages are disabled by parental controls." : null,
-            nextCursor: undefined,
-          };
-        },
-      });
+      const mount = () =>
+        new InfiniteQueryObserver(client, {
+          ...conversationQueryOptions<ChatPage>(file),
+          queryKey,
+          initialPageParam: null,
+          queryFn: async (): Promise<ChatPage> => {
+            reads++;
+            return {
+              data: restricted ? [] : ["Permitted chat history"],
+              convo: restricted ? null : { id: "chat" },
+              restrictionMessage: restricted
+                ? "Private messages are disabled by parental controls."
+                : null,
+              nextCursor: undefined,
+            };
+          },
+        });
       let observer = mount();
       let unsubscribe = observer.subscribe(() => {});
       try {
         await waitFor(() => expect(observer.getCurrentResult().isSuccess).toBe(true));
         expect(reads).toBe(1);
-        expect(observer.getCurrentResult().data?.pages[0]?.data).toEqual(["Permitted chat history"]);
+        expect(observer.getCurrentResult().data?.pages[0]?.data).toEqual([
+          "Permitted chat history",
+        ]);
         unsubscribe();
         restricted = true;
 
         observer = mount();
         unsubscribe = observer.subscribe(() => {});
-        await waitFor(() => expect(observer.getCurrentResult().data?.pages[0]?.restrictionMessage).toBe("Private messages are disabled by parental controls."));
+        await waitFor(() =>
+          expect(observer.getCurrentResult().data?.pages[0]?.restrictionMessage).toBe(
+            "Private messages are disabled by parental controls.",
+          ),
+        );
         expect(reads).toBe(2);
         expect(observer.getCurrentResult().data?.pages[0]?.data).toEqual([]);
         expect(observer.getCurrentResult().data?.pages[0]?.convo).toBeNull();
@@ -126,9 +156,15 @@ describe("cached conversation remounts", () => {
 
         observer = mount();
         unsubscribe = observer.subscribe(() => {});
-        await waitFor(() => expect(observer.getCurrentResult().data?.pages[0]?.restrictionMessage).toBeNull());
+        await waitFor(() =>
+          expect(
+            observer.getCurrentResult().data?.pages[0]?.restrictionMessage,
+          ).toBeNull(),
+        );
         expect(reads).toBe(3);
-        expect(observer.getCurrentResult().data?.pages[0]?.data).toEqual(["Permitted chat history"]);
+        expect(observer.getCurrentResult().data?.pages[0]?.data).toEqual([
+          "Permitted chat history",
+        ]);
       } finally {
         unsubscribe();
         client.clear();

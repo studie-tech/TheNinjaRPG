@@ -1,9 +1,5 @@
-
 import { describe, expect, it, vi } from "bun:test";
-import {
-  isMysqlDuplicateKeyError,
-  retryOnDeadlock,
-} from "@/server/utils/mysqlErrors";
+import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 
 describe("isMysqlDuplicateKeyError", () => {
   it("returns true for common MySQL duplicate messages", () => {
@@ -14,12 +10,8 @@ describe("isMysqlDuplicateKeyError", () => {
         ),
       ),
     ).toBe(true);
-    expect(isMysqlDuplicateKeyError(new Error("ER_DUP_ENTRY: duplicate"))).toBe(
-      true,
-    );
-    expect(isMysqlDuplicateKeyError(new Error("UNIQUE constraint failed"))).toBe(
-      true,
-    );
+    expect(isMysqlDuplicateKeyError(new Error("ER_DUP_ENTRY: duplicate"))).toBe(true);
+    expect(isMysqlDuplicateKeyError(new Error("UNIQUE constraint failed"))).toBe(true);
   });
 
   it("returns true when Drizzle wraps the driver error as Failed query", () => {
@@ -120,7 +112,10 @@ describe("retryOnDeadlock", () => {
         if (calls < 3) throw deadlock();
       },
       4,
-      { baseDelayMs: 2, onRetry: (attempt, delayMs) => retries.push([attempt, delayMs]) },
+      {
+        baseDelayMs: 2,
+        onRetry: (attempt, delayMs) => retries.push([attempt, delayMs]),
+      },
     );
     expect(retries).toEqual([
       [1, 2],

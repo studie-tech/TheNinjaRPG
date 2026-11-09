@@ -14,7 +14,14 @@ const quad = (texture: Texture) => {
   element.renderable = new Sprite(texture);
   element.texture = texture;
   element.bounds = { minX: 0, minY: 0, maxX: 1, maxY: 1 };
-  element.transform = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 } as BatchableSprite["transform"];
+  element.transform = {
+    a: 1,
+    b: 0,
+    c: 0,
+    d: 1,
+    tx: 0,
+    ty: 0,
+  } as BatchableSprite["transform"];
   return element;
 };
 
@@ -23,7 +30,9 @@ describe("destroyed sources in retained batches", () => {
     // Pixi swaps a texture in place when the new source is already in the batch, so
     // the previous source stays listed until the batch is rebuilt.
     const shared = new Texture({ source: new TextureSource({ width: 4, height: 4 }) });
-    const previous = new Texture({ source: new TextureSource({ width: 4, height: 4 }) });
+    const previous = new Texture({
+      source: new TextureSource({ width: 4, height: 4 }),
+    });
     const batcher = new DefaultBatcher({ maxTextures: 4 });
     const fighter = quad(previous);
     batcher.begin();

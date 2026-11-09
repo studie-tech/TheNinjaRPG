@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { verifyDialogBranches, verifyQuestContentForSave, verifyQuestObjectiveFlow } from "@/libs/quest/validation";
+import {
+  verifyDialogBranches,
+  verifyQuestContentForSave,
+  verifyQuestObjectiveFlow,
+} from "@/libs/quest/validation";
 import type { AllObjectivesType } from "@/validators/objectives";
 
 /** Narrows compact objective fixtures to the validator's full objective type. */
@@ -10,7 +14,11 @@ const terminalDialog = objs([
   { id: "d1", task: "dialog", nextObjectiveId: [{ text: "Goodbye" }] },
 ]);
 const routedDialog = objs([
-  { id: "d1", task: "dialog", nextObjectiveId: [{ text: "Continue", nextObjectiveId: "o2" }] },
+  {
+    id: "d1",
+    task: "dialog",
+    nextObjectiveId: [{ text: "Continue", nextObjectiveId: "o2" }],
+  },
   { id: "o2", task: "collect_item" },
 ]);
 // Two independent objectives = two "starting" objectives: a legitimate shape for a
@@ -27,7 +35,8 @@ describe("verifyDialogBranches", () => {
 
   it("rejects a dialog objective with no branches", () => {
     expect(
-      verifyDialogBranches(objs([{ id: "d1", task: "dialog", nextObjectiveId: [] }])).check,
+      verifyDialogBranches(objs([{ id: "d1", task: "dialog", nextObjectiveId: [] }]))
+        .check,
     ).toBe(false);
   });
 
@@ -37,7 +46,11 @@ describe("verifyDialogBranches", () => {
 
   it("rejects a dialog branch routing to a non-existent objective id", () => {
     const dangling = objs([
-      { id: "d1", task: "dialog", nextObjectiveId: [{ text: "Continue", nextObjectiveId: "ghost" }] },
+      {
+        id: "d1",
+        task: "dialog",
+        nextObjectiveId: [{ text: "Continue", nextObjectiveId: "ghost" }],
+      },
     ]);
     expect(verifyDialogBranches(dangling).check).toBe(false);
   });
@@ -110,7 +123,12 @@ describe("verifyQuestContentForSave — overworld multi-bound guard", () => {
     { id: "b", task: "collect_item" },
   ]);
   const twoBoundConsecutive = objs([
-    { id: "a", task: "defeat_opponents", overworldPlacementId: "p1", nextObjectiveId: "b" },
+    {
+      id: "a",
+      task: "defeat_opponents",
+      overworldPlacementId: "p1",
+      nextObjectiveId: "b",
+    },
     { id: "b", task: "deliver_item", overworldPlacementId: "p2" },
   ]);
   const emptyPlacement = objs([

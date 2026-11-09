@@ -27,7 +27,9 @@ const makeCaller = () => {
 describe("raid damage threshold effects", () => {
   beforeEach(() => {
     stubProfile("fetchUser", async () => ({ role: "OWNER" }));
-    stubRateLimitTransport({ unexpectedRequestMessage: "Unexpected HTTP request in raid threshold tests" });
+    stubRateLimitTransport({
+      unexpectedRequestMessage: "Unexpected HTTP request in raid threshold tests",
+    });
   });
   afterEach(() => {
     resetServerModuleStubs();

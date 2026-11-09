@@ -8,14 +8,22 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as search from "@/utils/search";
 import * as UserContext from "@/utils/UserContext";
 
-const outlaw = { userId: "outlaw", villageId: "syndicate", isOutlaw: true, isBanned: false };
+const outlaw = {
+  userId: "outlaw",
+  villageId: "syndicate",
+  isOutlaw: true,
+  isBanned: false,
+};
 const noMutation = () => ({ mutate: vi.fn(), isPending: false });
 
 beforeEach(() => {
   vi.spyOn(ContentBox, "default").mockImplementation(({ title, children }) => (
     <section aria-label={title}>{children}</section>
   ));
-  vi.spyOn(search, "useUserPicker").mockReturnValue({ methods: {}, user: undefined } as never);
+  vi.spyOn(search, "useUserPicker").mockReturnValue({
+    methods: {},
+    user: undefined,
+  } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
     anbu: {

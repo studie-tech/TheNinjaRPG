@@ -1,4 +1,3 @@
-
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, it } from "bun:test";
@@ -14,7 +13,9 @@ const periodic = readdirSync(resolve(appRoot, "src/app/api"))
 const routes = [...new Set([...config.crons.map((cron) => cron.path), ...periodic])];
 
 // Content-review routes authenticate with the cron secret but are called by the audit workflow.
-const cronAuthenticated = readdirSync(resolve(appRoot, "src/app/api"), { recursive: true })
+const cronAuthenticated = readdirSync(resolve(appRoot, "src/app/api"), {
+  recursive: true,
+})
   .map(String)
   .filter((file) => file.endsWith("route.ts") && !file.startsWith("content-review"))
   .filter((file) =>
@@ -31,8 +32,12 @@ it.each(cronAuthenticated)("%s is scheduled in vercel.json", (route) => {
 it.each([...routes])("%s authenticates before timers or other work", (route) => {
   const file = resolve(appRoot, `src/app${route}/route.ts`);
   const source = readFileSync(file, "utf8");
-  expect(source).toContain('import { authenticateCronRequest } from "@/server/utils/cron";');
+  expect(source).toContain(
+    'import { authenticateCronRequest } from "@/server/utils/cron";',
+  );
   // Require the guard at the start of either established GET handler declaration.
   // This catches newly scheduled endpoints and work accidentally placed before auth.
-  expect(source).toMatch(/export (?:async function GET\(request: Request\)|const GET = async \(request: Request\) =>) \{\s*const authError = authenticateCronRequest\(request\);\s*if \(authError\) return authError;/);
+  expect(source).toMatch(
+    /export (?:async function GET\(request: Request\)|const GET = async \(request: Request\) =>) \{\s*const authError = authenticateCronRequest\(request\);\s*if \(authError\) return authError;/,
+  );
 });

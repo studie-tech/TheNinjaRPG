@@ -88,7 +88,9 @@ const cast = (
   ).toBe(true);
 };
 
-const systemDamageMultiplier = (1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100) * (1 - OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION / 100);
+const systemDamageMultiplier =
+  (1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100) *
+  (1 - OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION / 100);
 
 const powerOf = (tag: ZodAllTags) => getPower({ ...tag, level: 0 } as UserEffect).power;
 
@@ -172,9 +174,7 @@ describe("potency configuration", () => {
       "The power of Damage tags on your subsequent jutsu is increased by 20 power points for 3 rounds. Affected elements (match any): Fire, Water.",
     );
     expect(
-      getPotencyDescription(
-        DecreasePotencyTag.parse({ affectedElements: ["None"] }),
-      ),
+      getPotencyDescription(DecreasePotencyTag.parse({ affectedElements: ["None"] })),
     ).toContain("Affected elements (match any): None (non-elemental).");
   });
 
@@ -303,21 +303,24 @@ describe("potency arithmetic", () => {
   it.each(["increasepotency", "decreasepotency"] as const)(
     "suppresses bloodline %s only while a resolved seal is active on the caster",
     (type) => {
-      const action = makeAction([
-        makeTag("damage", { power: 40, powerPerLevel: 0 }),
-      ]);
+      const action = makeAction([makeTag("damage", { power: 40, powerPerLevel: 0 })]);
       const bloodline = makePotency(
         { type, power: 20, powerPerLevel: 0, calculation: "static" },
         { fromType: "bloodline" },
       );
       const jutsu = makePotency({ power: 5, powerPerLevel: 0, calculation: "static" });
-      const seal = makeEffect("seal", { rounds: 2 }, {
-        targetId: "attacker",
-        isNew: false,
-      });
+      const seal = makeEffect(
+        "seal",
+        { rounds: 2 },
+        {
+          targetId: "attacker",
+          isNew: false,
+        },
+      );
       const effects = [bloodline, jutsu, seal];
       const unsealedPower = type === "increasepotency" ? 65 : 25;
-      const resolvePower = () => resolvePotencyTags(action, effects, "attacker")[0]?.power;
+      const resolvePower = () =>
+        resolvePotencyTags(action, effects, "attacker")[0]?.power;
 
       expect(resolvePower()).toBe(45);
       expect(effects[0]).toBe(bloodline);
@@ -373,13 +376,13 @@ describe("potency element matching", () => {
         affectedTag: "none",
         power: 20,
       });
-      expect(resolvePotencyTags(action, [noSelection], "attacker")).toEqual(action.effects);
+      expect(resolvePotencyTags(action, [noSelection], "attacker")).toEqual(
+        action.effects,
+      );
     },
   );
 
-  it.each(
-    ["damage", "afterburn", "lifesteal", "reflect"] as const,
-  )(
+  it.each(["damage", "afterburn", "lifesteal", "reflect"] as const)(
     "matches elements on %s in both directions and modes",
     (type) => {
       const action = makeAction([
@@ -486,15 +489,31 @@ describe("potency combat lifecycle", () => {
     "snapshots ground %s on subsequent casts only while the caster occupies its tile",
     (type) => {
       let battle = makeBattle();
-      cast(battle, makeAction([
-        makeTag(type, { target: "INHERIT", power: 20, powerPerLevel: 0, rounds: 3 }),
-      ], { target: "GROUND" }), "attacker", 0);
-      const damage = makeAction([
-        makeTag("damage", { power: 40, powerPerLevel: 0, calculation: "static" }),
-      ], { id: "ground-boosted-cast" });
+      cast(
+        battle,
+        makeAction(
+          [
+            makeTag(type, {
+              target: "INHERIT",
+              power: 20,
+              powerPerLevel: 0,
+              rounds: 3,
+            }),
+          ],
+          { target: "GROUND" },
+        ),
+        "attacker",
+        0,
+      );
+      const damage = makeAction(
+        [makeTag("damage", { power: 40, powerPerLevel: 0, calculation: "static" })],
+        { id: "ground-boosted-cast" },
+      );
       const castPower = () => {
         cast(battle, damage);
-        return battle.usersEffects.filter((effect) => effect.actionId === damage.id).at(-1)?.power;
+        return battle.usersEffects
+          .filter((effect) => effect.actionId === damage.id)
+          .at(-1)?.power;
       };
       expect(castPower()).toBe(40);
       battle = applyEffects(battle, "attacker").newBattle;
@@ -520,17 +539,27 @@ describe("potency combat lifecycle", () => {
     ["ENEMIES", "defender", 60],
     ["ALL", "defender", 60],
     ["ALL", "missing", 40],
-  ] as const)("checks ground potency friendly fire %s from %s", (friendlyFire, creatorId, power) => {
-    const battle = makeBattle();
-    battle.groundEffects.push(makePotency(
-      { power: 20, powerPerLevel: 0, friendlyFire },
-      { creatorId, longitude: 0, latitude: 0 },
-    ));
-    cast(battle, makeAction([
-      makeTag("damage", { power: 40, powerPerLevel: 0, calculation: "static" }),
-    ]));
-    expect(battle.usersEffects.find((effect) => effect.type === "damage")?.power).toBe(power);
-  });
+  ] as const)(
+    "checks ground potency friendly fire %s from %s",
+    (friendlyFire, creatorId, power) => {
+      const battle = makeBattle();
+      battle.groundEffects.push(
+        makePotency(
+          { power: 20, powerPerLevel: 0, friendlyFire },
+          { creatorId, longitude: 0, latitude: 0 },
+        ),
+      );
+      cast(
+        battle,
+        makeAction([
+          makeTag("damage", { power: 40, powerPerLevel: 0, calculation: "static" }),
+        ]),
+      );
+      expect(
+        battle.usersEffects.find((effect) => effect.type === "damage")?.power,
+      ).toBe(power);
+    },
+  );
 
   it.each(["increasepotency", "decreasepotency"] as const)(
     "preserves %s element selections through casting and effect processing",
@@ -706,43 +735,43 @@ describe("potency combat lifecycle", () => {
     ).toBeCloseTo(1000 - 100 * systemDamageMultiplier * 0.6);
   });
 
-  it.each([
-    "OPPONENT",
-    "GROUND",
-  ] as const)("keeps separate SELF potency selections on %s area casts", (target) => {
-    const battle = makeBattle();
-    cast(
-      battle,
-      makeAction(
-        [
-          IncreasePotencyTag.parse({ affectedTag: "damage", power: 20 }),
-          IncreasePotencyTag.parse({ affectedTag: "heal", power: 10 }),
-          IncreasePotencyTag.parse({
-            affectedTag: "damage",
-            calculation: "percentage",
-            power: 10,
-          }),
-          IncreasePotencyTag.parse({
-            affectedTag: "damage",
-            affectedElements: ["Fire"],
-            power: 20,
-          }),
-          IncreasePotencyTag.parse({
-            affectedTag: "damage",
-            affectedElements: ["Water"],
-            power: 20,
-          }),
-        ],
-        { target, method: "AOE_CIRCLE_SPAWN" },
-      ),
-    );
-    expect(battle.usersEffects).toHaveLength(5);
-    expect(
-      battle.usersEffects.every(
-        (e) => e.targetId === "attacker" && e.fromType === "jutsu",
-      ),
-    ).toBe(true);
-  });
+  it.each(["OPPONENT", "GROUND"] as const)(
+    "keeps separate SELF potency selections on %s area casts",
+    (target) => {
+      const battle = makeBattle();
+      cast(
+        battle,
+        makeAction(
+          [
+            IncreasePotencyTag.parse({ affectedTag: "damage", power: 20 }),
+            IncreasePotencyTag.parse({ affectedTag: "heal", power: 10 }),
+            IncreasePotencyTag.parse({
+              affectedTag: "damage",
+              calculation: "percentage",
+              power: 10,
+            }),
+            IncreasePotencyTag.parse({
+              affectedTag: "damage",
+              affectedElements: ["Fire"],
+              power: 20,
+            }),
+            IncreasePotencyTag.parse({
+              affectedTag: "damage",
+              affectedElements: ["Water"],
+              power: 20,
+            }),
+          ],
+          { target, method: "AOE_CIRCLE_SPAWN" },
+        ),
+      );
+      expect(battle.usersEffects).toHaveLength(5);
+      expect(
+        battle.usersEffects.every(
+          (e) => e.targetId === "attacker" && e.fromType === "jutsu",
+        ),
+      ).toBe(true);
+    },
+  );
 
   it("snapshots ground effects and preserves their jutsu source when they land", () => {
     let battle = makeBattle([makePotency({ power: 20 })]);
@@ -779,57 +808,56 @@ describe("potency combat lifecycle", () => {
     expect(battle.usersEffects.find((e) => e.targetId === "barrier")?.power).toBe(60);
   });
 
-  it.each([
-    "afterburn",
-    "lifesteal",
-    "reflect",
-  ] as const)("adjusts %s in the post-damage phase and preserves its cap", (type) => {
-    for (const initialPower of [20, 90]) {
-      let battle = makeBattle([makePotency({ affectedTag: type, power: 20 })]);
-      battle.usersState.forEach((u) => {
-        u.curHealth = 3000;
-      });
-      cast(
-        battle,
-        makeAction([
-          makeTag(type, {
-            power: initialPower,
-            rounds: 3,
-            calculation: "percentage",
-            // Lifesteal reads damage dealt by its owner, while reflect reads damage
-            // received by its owner. Afterburn remains an opponent-targeted debuff.
-            target: type === "afterburn" ? "INHERIT" : "SELF",
-          }),
-        ]),
-      );
-      battle = applyEffects(battle, "attacker").newBattle;
-      battle.round++;
-      const reflecting = type === "reflect";
-      cast(
-        battle,
-        makeAction([
-          makeTag("damage", { power: 1000, rounds: 0, calculation: "static" }),
-        ]),
-        reflecting ? "defender" : "attacker",
-        reflecting ? 0 : 1,
-      );
-      battle = applyEffects(battle, reflecting ? "defender" : "attacker").newBattle;
-      const damage = 1000 * systemDamageMultiplier;
-      const converted = Math.floor(damage * Math.min(0.6, (initialPower + 20) / 100));
-      const attacker = battle.usersState.find((u) => u.userId === "attacker")!;
-      const defender = battle.usersState.find((u) => u.userId === "defender")!;
-      expect(attacker.curHealth).toBeCloseTo(
-        type === "lifesteal" ? 3000 + converted : reflecting ? 3000 - damage : 3000,
-      );
-      expect(defender.curHealth).toBeCloseTo(
-        reflecting
-          ? 3000 - converted
-          : type === "afterburn"
-            ? 3000 - damage - converted
-            : 3000 - damage,
-      );
-    }
-  });
+  it.each(["afterburn", "lifesteal", "reflect"] as const)(
+    "adjusts %s in the post-damage phase and preserves its cap",
+    (type) => {
+      for (const initialPower of [20, 90]) {
+        let battle = makeBattle([makePotency({ affectedTag: type, power: 20 })]);
+        battle.usersState.forEach((u) => {
+          u.curHealth = 3000;
+        });
+        cast(
+          battle,
+          makeAction([
+            makeTag(type, {
+              power: initialPower,
+              rounds: 3,
+              calculation: "percentage",
+              // Lifesteal reads damage dealt by its owner, while reflect reads damage
+              // received by its owner. Afterburn remains an opponent-targeted debuff.
+              target: type === "afterburn" ? "INHERIT" : "SELF",
+            }),
+          ]),
+        );
+        battle = applyEffects(battle, "attacker").newBattle;
+        battle.round++;
+        const reflecting = type === "reflect";
+        cast(
+          battle,
+          makeAction([
+            makeTag("damage", { power: 1000, rounds: 0, calculation: "static" }),
+          ]),
+          reflecting ? "defender" : "attacker",
+          reflecting ? 0 : 1,
+        );
+        battle = applyEffects(battle, reflecting ? "defender" : "attacker").newBattle;
+        const damage = 1000 * systemDamageMultiplier;
+        const converted = Math.floor(damage * Math.min(0.6, (initialPower + 20) / 100));
+        const attacker = battle.usersState.find((u) => u.userId === "attacker")!;
+        const defender = battle.usersState.find((u) => u.userId === "defender")!;
+        expect(attacker.curHealth).toBeCloseTo(
+          type === "lifesteal" ? 3000 + converted : reflecting ? 3000 - damage : 3000,
+        );
+        expect(defender.curHealth).toBeCloseTo(
+          reflecting
+            ? 3000 - converted
+            : type === "afterburn"
+              ? 3000 - damage - converted
+              : 3000 - damage,
+        );
+      }
+    },
+  );
 
   it("adjusts Heal and Increase Heal in their respective processing stages", () => {
     let battle = makeBattle([makePotency({ power: 20 })]);

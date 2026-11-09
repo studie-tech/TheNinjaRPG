@@ -3,14 +3,18 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as contentImage from "@/layout/ContentImage";
 import { BackpackList } from "@/layout/items/BackpackList";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
-
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 beforeEach(() => {
   installBrowserGlobals();
   window.localStorage.clear();
   // Canvas-drawn art is irrelevant to the list's behaviour.
-  vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => <span>{alt} art</span>);
+  vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => (
+    <span>{alt} art</span>
+  ));
 });
 
 afterEach(() => {
@@ -21,9 +25,25 @@ afterEach(() => {
   restoreBrowserGlobals();
 });
 
-type Fixture = { id: string; itemType?: string; slot?: string; rarity?: string; hidden?: boolean; durability?: number; maxDurability?: number };
+type Fixture = {
+  id: string;
+  itemType?: string;
+  slot?: string;
+  rarity?: string;
+  hidden?: boolean;
+  durability?: number;
+  maxDurability?: number;
+};
 
-const userItem = ({ id, itemType = "WEAPON", slot = "HAND", rarity = "COMMON", hidden = false, durability = 0, maxDurability = 0 }: Fixture) =>
+const userItem = ({
+  id,
+  itemType = "WEAPON",
+  slot = "HAND",
+  rarity = "COMMON",
+  hidden = false,
+  durability = 0,
+  maxDurability = 0,
+}: Fixture) =>
   ({
     id,
     itemId: `item-${id}`,
@@ -36,20 +56,43 @@ const userItem = ({ id, itemType = "WEAPON", slot = "HAND", rarity = "COMMON", h
     isInAuction: false,
     craftingFinishedAt: null,
     imbuements: [],
-    item: { id: `item-${id}`, name: id, image: null, rarity, itemType, slot, maxDurability, hidden },
+    item: {
+      id: `item-${id}`,
+      name: id,
+      image: null,
+      rarity,
+      itemType,
+      slot,
+      maxDurability,
+      hidden,
+    },
   }) as unknown as UserItemWithRelations;
 
 const items = [
   userItem({ id: "Storm Shuriken", slot: "THROWN", rarity: "RARE" }),
   userItem({ id: "Healing Salve", itemType: "CONSUMABLE", slot: "ITEM" }),
-  userItem({ id: "Worn Vest", itemType: "ARMOR", slot: "CHEST", durability: 10, maxDurability: 50 }),
+  userItem({
+    id: "Worn Vest",
+    itemType: "ARMOR",
+    slot: "CHEST",
+    durability: 10,
+    maxDurability: 50,
+  }),
   userItem({ id: "Secret Blade", hidden: true }),
 ];
 
 const player = { userId: "user-1", role: "USER" } as never;
 
 const renderList = (props: Partial<Parameters<typeof BackpackList>[0]> = {}) =>
-  render(<BackpackList items={items} userData={player} selectedId={undefined} onSelect={vi.fn()} {...props} />);
+  render(
+    <BackpackList
+      items={items}
+      userData={player}
+      selectedId={undefined}
+      onSelect={vi.fn()}
+      {...props}
+    />,
+  );
 
 const cardNames = () =>
   within(screen.getByRole("list", { name: "Backpack items" }))
@@ -58,7 +101,9 @@ const cardNames = () =>
 
 it("searches by name", () => {
   renderList();
-  fireEvent.change(screen.getByLabelText("Search items"), { target: { value: "salve" } });
+  fireEvent.change(screen.getByLabelText("Search items"), {
+    target: { value: "salve" },
+  });
   expect(cardNames()).toEqual(["Healing Salve"]);
 });
 
@@ -88,13 +133,27 @@ it("shows active variant names in Name order with matching art labels", () => {
     return {
       ...base,
       activeVariantId: "active",
-      item: { ...base.item, variants: [{ id: "active", image: "/blade.webp", name: index === 0 ? "Zebra Blade" : "Alpha Blade" }] },
+      item: {
+        ...base.item,
+        variants: [
+          {
+            id: "active",
+            image: "/blade.webp",
+            name: index === 0 ? "Zebra Blade" : "Alpha Blade",
+          },
+        ],
+      },
     } as UserItemWithRelations;
   });
   renderList({ items: swords });
   fireEvent.change(screen.getByLabelText("Sort"), { target: { value: "name" } });
-  const cards = within(screen.getByRole("list", { name: "Backpack items" })).getAllByRole("button");
-  expect(cards.map((card) => card.querySelector(".truncate")?.textContent)).toEqual(["Alpha Blade", "Zebra Blade"]);
+  const cards = within(
+    screen.getByRole("list", { name: "Backpack items" }),
+  ).getAllByRole("button");
+  expect(cards.map((card) => card.querySelector(".truncate")?.textContent)).toEqual([
+    "Alpha Blade",
+    "Zebra Blade",
+  ]);
   expect(within(cards[0]!).getByText("Alpha Blade art")).toBeDefined();
 });
 
@@ -108,7 +167,9 @@ it("hides hidden items from players but not content staff", () => {
 
 it("shows an empty state for no matches", () => {
   renderList();
-  fireEvent.change(screen.getByLabelText("Search items"), { target: { value: "kunai" } });
+  fireEvent.change(screen.getByLabelText("Search items"), {
+    target: { value: "kunai" },
+  });
   expect(cardNames()).toEqual([]);
   expect(screen.getByText("No items match")).toBeDefined();
   // Filters stay usable so the player can widen the search again.
@@ -126,7 +187,9 @@ it("selects a card with a click, as a real button", () => {
 
 it("marks the selected card", () => {
   renderList({ selectedId: "Worn Vest" });
-  expect(screen.getByRole("button", { name: /Worn Vest/ }).getAttribute("aria-current")).toBe("true");
+  expect(
+    screen.getByRole("button", { name: /Worn Vest/ }).getAttribute("aria-current"),
+  ).toBe("true");
 });
 
 it("shows gear level in the card text", () => {
@@ -134,5 +197,7 @@ it("shows gear level in the card text", () => {
   const card = screen.getByRole("button", { name: /^Worn Vest/ });
   expect(card.textContent).toContain("Common · Chest · Lv 1");
   // Items without levels keep the plain line.
-  expect(screen.getByRole("button", { name: /^Healing Salve/ }).textContent).not.toContain("Lv");
+  expect(
+    screen.getByRole("button", { name: /^Healing Salve/ }).textContent,
+  ).not.toContain("Lv");
 });

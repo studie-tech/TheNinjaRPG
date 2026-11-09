@@ -14,17 +14,26 @@ const mutateAsync = vi.fn(async () => ({ success: true, message: "Moved" }));
 beforeEach(() => {
   replace.mockClear();
   mutateAsync.mockClear();
-  vi.spyOn(nextNavigation, "useRouter").mockImplementation(() => ({ replace }) as never);
+  vi.spyOn(nextNavigation, "useRouter").mockImplementation(
+    () => ({ replace }) as never,
+  );
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({ profile: { getPublicUser: { invalidate }, getPublicUsers: { invalidate } } }),
+    useUtils: () => ({
+      profile: { getPublicUser: { invalidate }, getPublicUsers: { invalidate } },
+    }),
   });
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(Modal, "default").mockImplementation(({ isOpen, title, children, onAccept }) => isOpen ? (
-    <div role="dialog" aria-label={title}>
-      {children}
-      <button type="button" onClick={(event) => onAccept?.(event as never)}>Proceed</button>
-    </div>
-  ) : null);
+  vi.spyOn(Modal, "default").mockImplementation(
+    ({ isOpen, title, children, onAccept }) =>
+      isOpen ? (
+        <div role="dialog" aria-label={title}>
+          {children}
+          <button type="button" onClick={(event) => onAccept?.(event as never)}>
+            Proceed
+          </button>
+        </div>
+      ) : null,
+  );
 });
 
 afterEach(() => {
@@ -36,13 +45,19 @@ type Mutation = ComponentProps<typeof UpdateUserIdButton>["updateUserIdMutation"
 
 it("removes the stale action once the identity move commits", async () => {
   const view = render(
-    <UpdateUserIdButton userId="old_id" username="Mover" updateUserIdMutation={{ mutateAsync } as unknown as Mutation} />,
+    <UpdateUserIdButton
+      userId="old_id"
+      username="Mover"
+      updateUserIdMutation={{ mutateAsync } as unknown as Mutation}
+    />,
   );
   fireEvent.click(view.getAllByRole("button")[0] as HTMLElement);
   const input = view.getByLabelText("New Clerk user ID");
   fireEvent.change(input, { target: { value: "new_id" } });
   fireEvent.click(view.getByRole("button", { name: "Proceed" }));
-  await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ userId: "old_id", newUserId: "new_id" }));
+  await waitFor(() =>
+    expect(mutateAsync).toHaveBeenCalledWith({ userId: "old_id", newUserId: "new_id" }),
+  );
   await waitFor(() => expect(replace).toHaveBeenCalledWith("/userid/new_id"));
   expect(view.queryByRole("dialog")).toBeNull();
   expect(view.container.innerHTML).toBe("");
@@ -51,12 +66,22 @@ it("removes the stale action once the identity move commits", async () => {
 it("keeps the confirmation open after a rejected move", async () => {
   mutateAsync.mockResolvedValueOnce({ success: false, message: "Taken" });
   const view = render(
-    <UpdateUserIdButton userId="old_id" username="Mover" updateUserIdMutation={{ mutateAsync } as unknown as Mutation} />,
+    <UpdateUserIdButton
+      userId="old_id"
+      username="Mover"
+      updateUserIdMutation={{ mutateAsync } as unknown as Mutation}
+    />,
   );
   fireEvent.click(view.getAllByRole("button")[0] as HTMLElement);
-  fireEvent.change(view.getByLabelText("New Clerk user ID"), { target: { value: "new_id" } });
+  fireEvent.change(view.getByLabelText("New Clerk user ID"), {
+    target: { value: "new_id" },
+  });
   fireEvent.click(view.getByRole("button", { name: "Proceed" }));
-  await waitFor(() => expect(toast.showMutationToast).toHaveBeenCalledWith(expect.objectContaining({ success: false })));
+  await waitFor(() =>
+    expect(toast.showMutationToast).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false }),
+    ),
+  );
   expect(view.getByRole("dialog", { name: "Update User ID" })).toBeTruthy();
   expect(replace).not.toHaveBeenCalled();
 });

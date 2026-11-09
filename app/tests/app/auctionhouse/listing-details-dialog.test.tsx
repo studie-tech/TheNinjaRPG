@@ -1,5 +1,18 @@
-import { QueryClient, QueryClientProvider, useMutation, type UseMutationOptions } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useMutation,
+  type UseMutationOptions,
+} from "@tanstack/react-query";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as client from "@/app/_trpc/client";
@@ -7,7 +20,11 @@ import { AuctionDetailsDialog } from "@/app/[shell]/auctionhouse/ListingDetailsD
 import { auctionHouseLevelMessage } from "@/drizzle/constants";
 import * as ItemDetails from "@/layout/ItemWithEffects";
 import * as UserContext from "@/utils/UserContext";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 type Bid = { auctionId: string; amount: number };
 const placeBid = vi.fn((_input: Bid) => new Promise<never>(() => undefined));
@@ -26,9 +43,23 @@ const listingFor = (overrides: object = {}) => ({
   targetUserId: null,
   targetUser: null,
   expiresAt: new Date(Date.now() + 3_600_000),
-  bids: [{ id: "bid", bidderId: "viewer", amount: 100, status: "ACTIVE", createdAt: new Date(), bidder: null }],
+  bids: [
+    {
+      id: "bid",
+      bidderId: "viewer",
+      amount: 100,
+      status: "ACTIVE",
+      createdAt: new Date(),
+      bidder: null,
+    },
+  ],
   seller: { userId: "seller", username: "Seller", avatar: "/seller.webp" },
-  userItem: { quantity: 4, durability: 10, imbuements: [], item: { name: "Ore", canStack: true } },
+  userItem: {
+    quantity: 4,
+    durability: 10,
+    imbuements: [],
+    item: { name: "Ore", canStack: true },
+  },
   ...overrides,
 });
 
@@ -42,7 +73,10 @@ const renderDialog = (listing: object, user: object = {}) => {
     useUtils: () => ({}),
     auction: {
       getAuctionListing: { useQuery: () => ({ data: listing, isLoading: false }) },
-      placeBid: { useMutation: (options: UseMutationOptions<never, Error, Bid>) => useMutation({ ...options, mutationFn: placeBid }) },
+      placeBid: {
+        useMutation: (options: UseMutationOptions<never, Error, Bid>) =>
+          useMutation({ ...options, mutationFn: placeBid }),
+      },
       cancelAuction: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
   });
@@ -75,22 +109,40 @@ afterEach(async () => {
 describe("bid and buyout confirmations", () => {
   it("confirms a raised bid with its per-unit price and the bid it replaces", async () => {
     renderDialog(listingFor());
-    fireEvent.input(screen.getByPlaceholderText("Bid amount (whole numbers)"), { target: { value: "200" } });
+    fireEvent.input(screen.getByPlaceholderText("Bid amount (whole numbers)"), {
+      target: { value: "200" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Raise to" }));
     expect(within(confirmation()).getByRole("heading").textContent).toBe("Confirm Bid");
     expect(within(confirmation()).getByText(/Are you sure/).textContent).toBe(
       "Are you sure you want to place a bid of 200 ryo on this auction?50 ryo/unit · ×4Your current bid of 100 will be replaced.",
     );
-    expect(within(confirmation()).getByRole("button", { name: "Cancel" })).toBeDefined();
+    expect(
+      within(confirmation()).getByRole("button", { name: "Cancel" }),
+    ).toBeDefined();
     await act(async () => {
-      fireEvent.click(within(confirmation()).getByRole("button", { name: "Confirm Bid" }));
+      fireEvent.click(
+        within(confirmation()).getByRole("button", { name: "Confirm Bid" }),
+      );
     });
-    expect(placeBid.mock.calls.map((call) => call[0])).toEqual([{ auctionId: "listing", amount: 200 }]);
-    await waitFor(() => expect(within(confirmation()).getByRole("status").textContent).toBe("Submitting"));
-    const pending = within(confirmation()).getByRole("button", { name: "Submitting" }) as HTMLButtonElement;
+    expect(placeBid.mock.calls.map((call) => call[0])).toEqual([
+      { auctionId: "listing", amount: 200 },
+    ]);
+    await waitFor(() =>
+      expect(within(confirmation()).getByRole("status").textContent).toBe("Submitting"),
+    );
+    const pending = within(confirmation()).getByRole("button", {
+      name: "Submitting",
+    }) as HTMLButtonElement;
     expect(pending.disabled).toBe(true);
     expect(pending.getAttribute("aria-busy")).toBe("true");
-    expect((within(confirmation()).getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (
+        within(confirmation()).getByRole("button", {
+          name: "Cancel",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
     fireEvent.keyDown(confirmation(), { key: "Escape" });
     expect(confirmation()).toBeDefined();
   });
@@ -98,22 +150,42 @@ describe("bid and buyout confirmations", () => {
   it("confirms a buyout at the listed price", async () => {
     renderDialog(listingFor({ bids: [] }));
     fireEvent.click(screen.getByRole("button", { name: "Buy it now — 500 ryo" }));
-    expect(within(confirmation()).getByRole("heading").textContent).toBe("Confirm Buyout");
+    expect(within(confirmation()).getByRole("heading").textContent).toBe(
+      "Confirm Buyout",
+    );
     expect(within(confirmation()).getByText(/Are you sure/).textContent).toBe(
       "Are you sure you want to buyout this auction for 500 ryo? This will immediately complete the auction and transfer the item to you.125 ryo/unit · ×4",
     );
     await act(async () => {
-      fireEvent.click(within(confirmation()).getByRole("button", { name: "Confirm Buyout" }));
+      fireEvent.click(
+        within(confirmation()).getByRole("button", { name: "Confirm Buyout" }),
+      );
     });
-    expect(placeBid.mock.calls.map((call) => call[0])).toEqual([{ auctionId: "listing", amount: 500 }]);
-    await waitFor(() => expect(within(confirmation()).getByRole("status").textContent).toBe("Purchasing"));
-    expect((within(confirmation()).getByRole("button", { name: "Purchasing" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(placeBid.mock.calls.map((call) => call[0])).toEqual([
+      { auctionId: "listing", amount: 500 },
+    ]);
+    await waitFor(() =>
+      expect(within(confirmation()).getByRole("status").textContent).toBe("Purchasing"),
+    );
+    expect(
+      (
+        within(confirmation()).getByRole("button", {
+          name: "Purchasing",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
   });
 
   it("closes an idle confirmation on cancel", () => {
-    renderDialog(listingFor({ currencyType: "REPUTATION" }), { reputationPoints: 1000 });
-    fireEvent.click(screen.getByRole("button", { name: "Buy it now — 500 reputation" }));
-    expect(within(confirmation()).getByText(/Are you sure/).textContent).toContain("for 500 reputation?");
+    renderDialog(listingFor({ currencyType: "REPUTATION" }), {
+      reputationPoints: 1000,
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Buy it now — 500 reputation" }),
+    );
+    expect(within(confirmation()).getByText(/Are you sure/).textContent).toContain(
+      "for 500 reputation?",
+    );
     fireEvent.click(within(confirmation()).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(placeBid).not.toHaveBeenCalled();
@@ -135,14 +207,28 @@ describe("viewer eligibility", () => {
   });
 
   it("lets the targeted buyer of a direct lot bid", () => {
-    renderDialog(listingFor({ listingType: "DIRECT", targetUserId: "viewer", targetUser: { username: "Viewer", avatar: null } }));
+    renderDialog(
+      listingFor({
+        listingType: "DIRECT",
+        targetUserId: "viewer",
+        targetUser: { username: "Viewer", avatar: null },
+      }),
+    );
     expect(notices()).toEqual({ ...none, bidCard: true });
   });
 
   it("tells other viewers a direct lot is not theirs", () => {
-    renderDialog(listingFor({ listingType: "DIRECT", targetUserId: "other", targetUser: { username: "Other", avatar: null } }));
+    renderDialog(
+      listingFor({
+        listingType: "DIRECT",
+        targetUserId: "other",
+        targetUser: { username: "Other", avatar: null },
+      }),
+    );
     expect(notices()).toEqual({ ...none, directLot: true });
-    expect(screen.getByText(/You are not eligible to/).textContent).toBe("Direct lot for Other. You are not eligible to bid.");
+    expect(screen.getByText(/You are not eligible to/).textContent).toBe(
+      "Direct lot for Other. You are not eligible to bid.",
+    );
   });
 
   it("explains the auction house level requirement", () => {

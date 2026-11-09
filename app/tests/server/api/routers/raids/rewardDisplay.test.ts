@@ -71,42 +71,38 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
       { id: "reward-item-b", name: "Potion B" },
     ]);
     const database = await getTestDatabase();
-    await insertJutsus([{
-      id: "reward-jutsu",
-      name: "Reward Jutsu",
+    await insertJutsus([
+      {
+        id: "reward-jutsu",
+        name: "Reward Jutsu",
+        description: "Test",
+        image: "/test.png",
+        target: "CHARACTER",
+        range: 1,
+        battleDescription: "Test",
+      },
+    ]);
+    await database.insert(bloodline).values({
+      id: "reward-bloodline",
+      name: "Reward Bloodline",
       description: "Test",
       image: "/test.png",
-      target: "CHARACTER",
-      range: 1,
-      battleDescription: "Test",
-    }]);
-    await database
-      .insert(bloodline)
-      .values({
-        id: "reward-bloodline",
-        name: "Reward Bloodline",
-        description: "Test",
-        image: "/test.png",
-        effects: [],
-        rank: "D",
-      });
-    await database
-      .insert(badge)
-      .values({
-        id: "reward-badge",
-        name: "Reward Badge",
-        description: "Test",
-        image: "/test.png",
-      });
+      effects: [],
+      rank: "D",
+    });
+    await database.insert(badge).values({
+      id: "reward-badge",
+      name: "Reward Badge",
+      description: "Test",
+      image: "/test.png",
+    });
     await insertUserVotes([{ userId: "raid-reward-user" }]);
-    await database
-      .insert(raidParticipation)
-      .values({
-        id: "reward-participation",
-        questId: "reward-raid",
-        userId: "raid-reward-user",
-        damageDealt: 100,
-      });
+    await database.insert(raidParticipation).values({
+      id: "reward-participation",
+      questId: "reward-raid",
+      userId: "raid-reward-user",
+      damageDealt: 100,
+    });
     await database.insert(raidDamageThreshold).values({
       id: "reward-threshold",
       questId: "reward-raid",
@@ -161,21 +157,17 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
     async (owned) => {
       const database = await getTestDatabase();
       if (owned) {
-        await database
-          .insert(userJutsu)
-          .values({
-            id: "owned-jutsu",
-            userId: "raid-reward-user",
-            jutsuId: "reward-jutsu",
-          });
-        await database
-          .insert(bloodlineRolls)
-          .values({
-            id: "owned-bloodline",
-            userId: "raid-reward-user",
-            bloodlineId: "reward-bloodline",
-            type: "QUEST",
-          });
+        await database.insert(userJutsu).values({
+          id: "owned-jutsu",
+          userId: "raid-reward-user",
+          jutsuId: "reward-jutsu",
+        });
+        await database.insert(bloodlineRolls).values({
+          id: "owned-bloodline",
+          userId: "raid-reward-user",
+          bloodlineId: "reward-bloodline",
+          type: "QUEST",
+        });
         await database
           .insert(userBadge)
           .values({ userId: "raid-reward-user", badgeId: "reward-badge" });
@@ -239,7 +231,9 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
         ).reduce((sum, row) => sum + row.quantity, 0),
       ).toBe(3);
       for (const reread of rereads) expect(reread).not.toHaveBeenCalled();
-      expect(catalogueReads.mock.calls).toEqual(Array.from({ length: 2 }, () => [catalogueQuery]));
+      expect(catalogueReads.mock.calls).toEqual(
+        Array.from({ length: 2 }, () => [catalogueQuery]),
+      );
     },
   );
 });

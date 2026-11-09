@@ -24,7 +24,11 @@ import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
 import { UserContextProvider } from "@/utils/UserContext";
 import { actualUserContext } from "../setup/preload";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../setup/browserGlobals";
 import { testApi, TrpcTestProviders } from "../setup/trpc";
 
 const clients: QueryClient[] = [];
@@ -137,7 +141,8 @@ function mount(
       clanId: null,
       villageId: null,
       chatMuted: false,
-      mutedConversationIds: [], unmutedTavernIds: [],
+      mutedConversationIds: [],
+      unmutedTavernIds: [],
     },
     notifications: [],
     serverTime: Date.now(),

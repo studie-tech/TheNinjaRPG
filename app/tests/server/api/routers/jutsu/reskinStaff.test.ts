@@ -69,7 +69,9 @@ describeWithDatabase("jutsu reskin staff editing against a real MySQL", () => {
       { userId: OWNER, username: "Owner" },
       { userId: OTHER, username: "Other" },
     ] as never);
-    await insertJutsus(["jutsu-a", "jutsu-b"].map((id) => ({ id, requiredRank: "GENIN" })));
+    await insertJutsus(
+      ["jutsu-a", "jutsu-b"].map((id) => ({ id, requiredRank: "GENIN" })),
+    );
   });
 
   describe("getReskin", () => {

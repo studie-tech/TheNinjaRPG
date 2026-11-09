@@ -31,7 +31,11 @@ const router = t.router({
       .meta({ mcp: { description: "A custom description" } })
       .query(() => ({ success: true })),
     broken: t.procedure.query(() => {
-      throw new DrizzleQueryError("select secret", ["secret"], new TypeError("fetch failed"));
+      throw new DrizzleQueryError(
+        "select secret",
+        ["secret"],
+        new TypeError("fetch failed"),
+      );
     }),
   }),
   staff: t.router({ update: staffProcedure.input(idSchema).mutation(write) }),
@@ -39,7 +43,8 @@ const router = t.router({
 
 const tools = extractToolsFromProcedures(router);
 const registry = buildToolRegistry(tools);
-const toolAt = (path: string) => tools.find((tool) => tool.pathInRouter.join(".") === path);
+const toolAt = (path: string) =>
+  tools.find((tool) => tool.pathInRouter.join(".") === path);
 const call = (endpointName: string, input?: Record<string, unknown>, isStaff = false) =>
   handleCallEndpoint(
     registry,
@@ -71,14 +76,22 @@ describe("universal MCP exposure", () => {
 
   it("sends an empty object when input is omitted for an object schema", async () => {
     expect(firstText(await call("profile.filtered"))).toContain('"filtered":{}');
-    expect(firstText(await call("profile.update"))).toContain("Missing required fields");
+    expect(firstText(await call("profile.update"))).toContain(
+      "Missing required fields",
+    );
   });
 
   it("still enforces procedure authorization and input validation before writes", async () => {
     write.mockClear();
-    expect(firstText(await call("staff.update", { id: "ninja" }))).toContain("FORBIDDEN");
-    expect(firstText(await call("profile.update", { id: 123 }))).toContain("Error calling");
-    expect(firstText(await call("profile.update", {}))).toContain("Missing required fields");
+    expect(firstText(await call("staff.update", { id: "ninja" }))).toContain(
+      "FORBIDDEN",
+    );
+    expect(firstText(await call("profile.update", { id: 123 }))).toContain(
+      "Error calling",
+    );
+    expect(firstText(await call("profile.update", {}))).toContain(
+      "Missing required fields",
+    );
     expect(write).not.toHaveBeenCalled();
   });
 
@@ -90,7 +103,14 @@ describe("universal MCP exposure", () => {
 
   it("blocks unauthenticated mutations before creating a caller", async () => {
     const createCaller = vi.fn(async () => router.createCaller({ isStaff: false }));
-    const result = await handleCallEndpoint(registry, createCaller, "profile.update", () => [], () => false, { id: "ninja" });
+    const result = await handleCallEndpoint(
+      registry,
+      createCaller,
+      "profile.update",
+      () => [],
+      () => false,
+      { id: "ninja" },
+    );
     expect(firstText(result)).toContain("Insufficient permissions");
     expect(createCaller).not.toHaveBeenCalled();
   });

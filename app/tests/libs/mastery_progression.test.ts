@@ -212,7 +212,9 @@ describe("earned mastery progression", () => {
     expect(
       isAvailableUserQuests(
         packaged,
-        user({ masteryRanks: { ninjutsuMastery: "NOVICE", genjutsuMastery: "NOVICE" } }),
+        user({
+          masteryRanks: { ninjutsuMastery: "NOVICE", genjutsuMastery: "NOVICE" },
+        }),
       ).check,
     ).toBe(true);
     expect(
@@ -226,24 +228,53 @@ describe("earned mastery progression", () => {
   it("keeps alternative choice promotions out of the fixed completion gate", () => {
     const template = masteryQuestTemplates()[1]!;
     const packages = ["ninjutsuMastery", "genjutsuMastery"].map((stat) => ({
-      id: stat, packageId: stat, name: stat, description: "",
-      rewards: ObjectiveReward.parse({ reward_mastery_stat: stat, reward_mastery_rank: "ADEPT" }),
+      id: stat,
+      packageId: stat,
+      name: stat,
+      description: "",
+      rewards: ObjectiveReward.parse({
+        reward_mastery_stat: stat,
+        reward_mastery_rank: "ADEPT",
+      }),
     }));
     const player = user({ masteryRanks: { genjutsuMastery: "NOVICE" } });
     const choice = {
-      ...template, hidden: false, requiredNinjutsuMastery: 0,
-      content: { ...template.content, rewardMode: "choose" as const,
-        reward: QuestReward.parse({ reward_packages: packages }) },
+      ...template,
+      hidden: false,
+      requiredNinjutsuMastery: 0,
+      content: {
+        ...template.content,
+        rewardMode: "choose" as const,
+        reward: QuestReward.parse({ reward_packages: packages }),
+      },
     };
     for (const alternatives of [packages, [...packages].reverse()]) {
-      const quest = { ...choice, content: { ...choice.content,
-        reward: QuestReward.parse({ reward_packages: alternatives }) } };
+      const quest = {
+        ...choice,
+        content: {
+          ...choice.content,
+          reward: QuestReward.parse({ reward_packages: alternatives }),
+        },
+      };
       expect(isAvailableUserQuests(quest, player).check).toBe(true);
-      const fixed = { ...quest, content: { ...quest.content,
-        reward: QuestReward.parse({ reward_mastery_stat: "ninjutsuMastery",
-          reward_mastery_rank: "ADEPT", reward_packages: alternatives }) } };
+      const fixed = {
+        ...quest,
+        content: {
+          ...quest.content,
+          reward: QuestReward.parse({
+            reward_mastery_stat: "ninjutsuMastery",
+            reward_mastery_rank: "ADEPT",
+            reward_packages: alternatives,
+          }),
+        },
+      };
       expect(isAvailableUserQuests(fixed, player).check).toBe(false);
-      expect(isAvailableUserQuests(fixed, user({ masteryRanks: { ninjutsuMastery: "NOVICE" } })).check).toBe(true);
+      expect(
+        isAvailableUserQuests(
+          fixed,
+          user({ masteryRanks: { ninjutsuMastery: "NOVICE" } }),
+        ).check,
+      ).toBe(true);
     }
   });
 

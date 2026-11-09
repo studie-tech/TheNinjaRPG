@@ -11,18 +11,31 @@ import * as Modal from "@/layout/Modal";
 import * as UserContext from "@/utils/UserContext";
 import * as routing from "@/utils/routing";
 import { huntingContract } from "../setup/hunting";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../setup/browserGlobals";
 
 let store: ReturnType<typeof createStore>;
 let isLoading: boolean;
 let canClaimToday: boolean;
 const streakQuery = vi.fn();
-const cachedEncounter = { session: { id: "session", sector: 1, battleId: null }, contract: huntingContract() };
+const cachedEncounter = {
+  session: { id: "session", sector: 1, battleId: null },
+  contract: huntingContract(),
+};
 let encounterData: typeof cachedEncounter | null | undefined;
 let encounterError: Error | null;
 const refetch = vi.fn();
 const storageKey = "huntingArrival:popup-hunter";
-const user = { userId: "popup-hunter", occupation: "HUNTER", status: "AWAKE", sector: 1, tutorialOn: false };
+const user = {
+  userId: "popup-hunter",
+  occupation: "HUNTER",
+  status: "AWAKE",
+  sector: 1,
+  tutorialOn: false,
+};
 
 beforeEach(() => {
   vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
@@ -44,20 +57,36 @@ beforeEach(() => {
   streakQuery.mockReset();
   Object.assign(vi.spyOn(client, "api" as never), {
     hunting: {
-      getSession: { useQuery: () => ({ data: encounterData, error: encounterError, refetch }) },
+      getSession: {
+        useQuery: () => ({ data: encounterData, error: encounterError, refetch }),
+      },
     },
     activityStreak: {
-      getUserStreaks: { useQuery: (...args: unknown[]) => {
-        streakQuery(...args);
-        return { isLoading, data: isLoading ? undefined : { streaks: [{ canClaimToday, lastClaimDate: null }] } };
-      } },
+      getUserStreaks: {
+        useQuery: (...args: unknown[]) => {
+          streakQuery(...args);
+          return {
+            isLoading,
+            data: isLoading
+              ? undefined
+              : { streaks: [{ canClaimToday, lastClaimDate: null }] },
+          };
+        },
+      },
     },
   });
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: user } as never);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: user, timeDiff: 0 } as never);
+  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    data: user,
+    timeDiff: 0,
+  } as never);
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
-  vi.spyOn(HuntingBoard, "HuntingBoard").mockImplementation(() => <p>Hunting preparation</p>);
-  vi.spyOn(ActivityStreakPanel, "default").mockImplementation(() => <p>Reward claims</p>);
+  vi.spyOn(HuntingBoard, "HuntingBoard").mockImplementation(() => (
+    <p>Hunting preparation</p>
+  ));
+  vi.spyOn(ActivityStreakPanel, "default").mockImplementation(() => (
+    <p>Reward claims</p>
+  ));
 });
 
 afterEach(async () => {
@@ -77,46 +106,63 @@ const shell = (blocked = false) => (
   </Provider>
 );
 
-it.each(["/native-sign-in", "/native-sign-in/"])("clears an open reward blocker on %s without dismissing eligibility", async (pathname) => {
-  const route = vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
-  const popup = () => <Provider store={store}><ActivityStreakPopup /><button type="button">Continue to the app</button></Provider>;
-  const view = render(popup());
-  await view.findByRole("dialog", { name: "Daily Activity Rewards" });
-  expect(store.get(UserContext.blockingPopupOpenAtom)).toBe(true);
-  const dismissedDate = window.localStorage.getItem("streakPopupDismissedDateX");
+it.each(["/native-sign-in", "/native-sign-in/"])(
+  "clears an open reward blocker on %s without dismissing eligibility",
+  async (pathname) => {
+    const route = vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
+    const popup = () => (
+      <Provider store={store}>
+        <ActivityStreakPopup />
+        <button type="button">Continue to the app</button>
+      </Provider>
+    );
+    const view = render(popup());
+    await view.findByRole("dialog", { name: "Daily Activity Rewards" });
+    expect(store.get(UserContext.blockingPopupOpenAtom)).toBe(true);
+    const dismissedDate = window.localStorage.getItem("streakPopupDismissedDateX");
 
-  route.mockReturnValue(pathname);
-  view.rerender(popup());
-  await waitFor(() => expect(store.get(UserContext.blockingPopupOpenAtom)).toBe(false));
-  expect(view.queryByRole("dialog")).toBeNull();
-  expect(view.getByRole("button", { name: "Continue to the app" })).toBeTruthy();
-  expect(streakQuery.mock.calls.at(-1)?.[1]).toMatchObject({ enabled: false });
-  expect(window.localStorage.getItem("streakPopupDismissedDateX")).toBe(dismissedDate);
-
-  route.mockReturnValue("/travel");
-  view.rerender(popup());
-  await view.findByRole("dialog", { name: "Daily Activity Rewards" });
-  expect(streakQuery.mock.calls.at(-1)?.[1]).toMatchObject({ enabled: true });
-});
-
-it.each([false, true])("opens hunting after daily rewards close (initial loading: %s)", async (loading) => {
-  isLoading = loading;
-  const view = render(shell());
-  if (loading) {
-    await waitFor(() => expect(store.get(UserContext.blockingPopupOpenAtom)).toBe(true));
+    route.mockReturnValue(pathname);
+    view.rerender(popup());
+    await waitFor(() =>
+      expect(store.get(UserContext.blockingPopupOpenAtom)).toBe(false),
+    );
     expect(view.queryByRole("dialog")).toBeNull();
+    expect(view.getByRole("button", { name: "Continue to the app" })).toBeTruthy();
+    expect(streakQuery.mock.calls.at(-1)?.[1]).toMatchObject({ enabled: false });
+    expect(window.localStorage.getItem("streakPopupDismissedDateX")).toBe(
+      dismissedDate,
+    );
+
+    route.mockReturnValue("/travel");
+    view.rerender(popup());
+    await view.findByRole("dialog", { name: "Daily Activity Rewards" });
+    expect(streakQuery.mock.calls.at(-1)?.[1]).toMatchObject({ enabled: true });
+  },
+);
+
+it.each([false, true])(
+  "opens hunting after daily rewards close (initial loading: %s)",
+  async (loading) => {
+    isLoading = loading;
+    const view = render(shell());
+    if (loading) {
+      await waitFor(() =>
+        expect(store.get(UserContext.blockingPopupOpenAtom)).toBe(true),
+      );
+      expect(view.queryByRole("dialog")).toBeNull();
+      expect(window.sessionStorage.getItem(storageKey)).toBeNull();
+      isLoading = false;
+      view.rerender(shell());
+    }
+    const daily = await view.findByRole("dialog", { name: "Daily Activity Rewards" });
+    expect(view.queryByRole("dialog", { name: "Hunting encounter" })).toBeNull();
     expect(window.sessionStorage.getItem(storageKey)).toBeNull();
-    isLoading = false;
-    view.rerender(shell());
-  }
-  const daily = await view.findByRole("dialog", { name: "Daily Activity Rewards" });
-  expect(view.queryByRole("dialog", { name: "Hunting encounter" })).toBeNull();
-  expect(window.sessionStorage.getItem(storageKey)).toBeNull();
-  fireEvent.click(within(daily).getAllByRole("button", { name: "Close" })[0]!);
-  await view.findByRole("dialog", { name: "Hunting encounter" });
-  expect(store.get(UserContext.blockingPopupOpenAtom)).toBe(false);
-  expect(window.sessionStorage.getItem(storageKey)).toBeNull();
-});
+    fireEvent.click(within(daily).getAllByRole("button", { name: "Close" })[0]!);
+    await view.findByRole("dialog", { name: "Hunting encounter" });
+    expect(store.get(UserContext.blockingPopupOpenAtom)).toBe(false);
+    expect(window.sessionStorage.getItem(storageKey)).toBeNull();
+  },
+);
 
 it("opens hunting when daily-reward loading finishes without an eligible popup", async () => {
   isLoading = true;
@@ -168,10 +214,17 @@ it("preserves hunting when another arrival dialog takes focus", async () => {
 
 it("keeps the open encounter, focus and action feedback through a failed refresh and recovery", async () => {
   canClaimToday = false;
-  vi.spyOn(HuntingBoard, "HuntingBoard").mockImplementation(function HuntingPreparation() {
-    const [message, setMessage] = useState("");
-    return <><button onClick={() => setMessage("Preparation rejected")}>Prepare</button><p role="status">{message}</p></>;
-  });
+  vi.spyOn(HuntingBoard, "HuntingBoard").mockImplementation(
+    function HuntingPreparation() {
+      const [message, setMessage] = useState("");
+      return (
+        <>
+          <button onClick={() => setMessage("Preparation rejected")}>Prepare</button>
+          <p role="status">{message}</p>
+        </>
+      );
+    },
+  );
   const view = render(shell());
   const hunting = await view.findByRole("dialog", { name: "Hunting encounter" });
   const prepare = within(hunting).getByRole("button", { name: "Prepare" });
@@ -182,20 +235,28 @@ it("keeps the open encounter, focus and action feedback through a failed refresh
     view.rerender(shell());
     expect(view.getByRole("dialog", { name: "Hunting encounter" })).toBe(hunting);
     expect(document.activeElement).toBe(prepare);
-    expect(within(hunting).getByRole("status").textContent).toBe("Preparation rejected");
+    expect(within(hunting).getByRole("status").textContent).toBe(
+      "Preparation rejected",
+    );
     expect(view.queryByRole("button", { name: "Retry" })).toBeNull();
   }
 });
 
-it.each(["another sector", "no session"])("keeps the arrival empty after a failed refresh with cached %s", (result) => {
-  canClaimToday = false;
-  encounterData = result === "no session" ? null : { ...cachedEncounter, session: { ...cachedEncounter.session, sector: 2 } };
-  const view = render(shell());
-  expect(view.container.textContent).toBe("");
-  encounterError = new Error("Transient poll failure");
-  view.rerender(shell());
-  expect(view.container.textContent).toBe("");
-});
+it.each(["another sector", "no session"])(
+  "keeps the arrival empty after a failed refresh with cached %s",
+  (result) => {
+    canClaimToday = false;
+    encounterData =
+      result === "no session"
+        ? null
+        : { ...cachedEncounter, session: { ...cachedEncounter.session, sector: 2 } };
+    const view = render(shell());
+    expect(view.container.textContent).toBe("");
+    encounterError = new Error("Transient poll failure");
+    view.rerender(shell());
+    expect(view.container.textContent).toBe("");
+  },
+);
 
 it("offers Retry after an initial load failure and opens the recovered encounter", async () => {
   canClaimToday = false;
@@ -212,14 +273,23 @@ it("offers Retry after an initial load failure and opens the recovered encounter
   expect(view.queryByRole("button", { name: "Retry" })).toBeNull();
 });
 
-
-it.each([false, true])("respects the sleeping hunter's automatic-wake preference (%s)", async (autoWakeUp) => {
-  const sleepingHunter = { ...user, status: "ASLEEP", autoWakeUp };
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: sleepingHunter, timeDiff: 0 } as never);
-  const view = render(<Provider store={store}><HuntingArrival /></Provider>);
-  if (autoWakeUp) await view.findByRole("dialog", { name: "Hunting encounter" });
-  else {
-    expect(view.queryByRole("dialog")).toBeNull();
-    expect(view.queryByRole("button", { name: "Open hunting contract" })).toBeNull();
-  }
-});
+it.each([false, true])(
+  "respects the sleeping hunter's automatic-wake preference (%s)",
+  async (autoWakeUp) => {
+    const sleepingHunter = { ...user, status: "ASLEEP", autoWakeUp };
+    vi.spyOn(UserContext, "useUserData").mockReturnValue({
+      data: sleepingHunter,
+      timeDiff: 0,
+    } as never);
+    const view = render(
+      <Provider store={store}>
+        <HuntingArrival />
+      </Provider>,
+    );
+    if (autoWakeUp) await view.findByRole("dialog", { name: "Hunting encounter" });
+    else {
+      expect(view.queryByRole("dialog")).toBeNull();
+      expect(view.queryByRole("button", { name: "Open hunting contract" })).toBeNull();
+    }
+  },
+);

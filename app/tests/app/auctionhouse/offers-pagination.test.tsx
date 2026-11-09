@@ -8,7 +8,9 @@ const fetchNextPage = vi.fn(async () => undefined);
 let paginate: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
-  paginate = vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
+  paginate = vi
+    .spyOn(pagination, "useInfinitePagination")
+    .mockImplementation(() => undefined);
   Object.assign(vi.spyOn(client, "api" as never), {
     item: { getUserItems: { useQuery: () => ({ data: [], isPending: false }) } },
     auction: {
@@ -33,7 +35,9 @@ afterEach(() => {
 it("loads further offers from a sentinel like the sibling auction tabs", () => {
   const view = render(<AuctionOffers offerType="REQUEST" status="ACTIVE" />);
   expect(view.queryByRole("button", { name: "Load more" })).toBeNull();
-  const last = paginate.mock.calls.at(-1)?.[0] as Parameters<typeof pagination.useInfinitePagination>[0];
+  const last = paginate.mock.calls.at(-1)?.[0] as Parameters<
+    typeof pagination.useInfinitePagination
+  >[0];
   expect(last.fetchNextPage).toBe(fetchNextPage);
   expect(last.hasNextPage).toBe(true);
   expect(last.lastElement).toBeInstanceOf(HTMLDivElement);

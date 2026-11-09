@@ -6,7 +6,10 @@ import ManualItemsBalance from "@/app/[shell]/manual/item/balance/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as ItemBalanceFiltering from "@/layout/ItemBalanceFiltering";
 import * as UserContext from "@/utils/UserContext";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 const usage = [
   { name: "Kunai", itemId: "kunai", battleWon: 1, count: 3, equippedCount: 4 },
@@ -17,9 +20,13 @@ const usage = [
 beforeEach(() => {
   installBrowserGlobals();
   localStorage.clear();
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
+    <div>{children}</div>
+  ));
   vi.spyOn(ItemBalanceFiltering, "default").mockImplementation(() => null);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "USER" } } as never);
+  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    data: { role: "USER" },
+  } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
     data: {
@@ -55,9 +62,9 @@ it("lists one row per item by usage, each linking to that item's statistics", ()
     "Scroll",
     "Kunai",
   ]);
-  expect(
-    rows.map((row) => within(row).getByRole("link").getAttribute("href")),
-  ).toEqual(["/manual/item/statistics/scroll", "/manual/item/statistics/kunai"]);
+  expect(rows.map((row) => within(row).getByRole("link").getAttribute("href"))).toEqual(
+    ["/manual/item/statistics/scroll", "/manual/item/statistics/kunai"],
+  );
   expect(rows.map((row) => within(row).getAllByRole("cell")[1]?.textContent)).toEqual([
     "9",
     "5",

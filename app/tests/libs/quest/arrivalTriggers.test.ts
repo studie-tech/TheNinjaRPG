@@ -37,24 +37,38 @@ describe("getArrivalQuestTriggers", () => {
   });
 
   it("checks hidden-location and random-encounter objectives from any tile", () => {
-    for (const extra of [{ hideLocation: true }, { attackers: [{ ids: ["ai"], number: 5 }] }]) {
+    for (const extra of [
+      { hideLocation: true },
+      { attackers: [{ ids: ["ai"], number: 5 }] },
+    ]) {
       const user = trackerUser([trackerQuest("q", [travel("go", extra)])], [], playing);
       expect(getArrivalQuestTriggers(user, elsewhere).shouldCheckQuest).toBe(true);
     }
-    const empty = trackerUser([trackerQuest("q", [travel("go", { attackers: [] })])], [], playing);
+    const empty = trackerUser(
+      [trackerQuest("q", [travel("go", { attackers: [] })])],
+      [],
+      playing,
+    );
     expect(getArrivalQuestTriggers(empty, elsewhere).shouldCheckQuest).toBe(false);
   });
 
   it("checks a running timed collection away from its tile only", () => {
-    const collect = travel("collect", { task: "collect_item", collect_time_minutes: 5 });
+    const collect = travel("collect", {
+      task: "collect_item",
+      collect_time_minutes: 5,
+    });
     const tracked = (done: boolean) =>
       trackerUser(
         [trackerQuest("q", [collect])],
         [{ id: "q", goals: [{ id: "collect", done, timestamp: new Date() }] }],
         playing,
       );
-    expect(getArrivalQuestTriggers(tracked(false), elsewhere).shouldCheckQuest).toBe(true);
-    expect(getArrivalQuestTriggers(tracked(true), elsewhere).shouldCheckQuest).toBe(false);
+    expect(getArrivalQuestTriggers(tracked(false), elsewhere).shouldCheckQuest).toBe(
+      true,
+    );
+    expect(getArrivalQuestTriggers(tracked(true), elsewhere).shouldCheckQuest).toBe(
+      false,
+    );
     const untimed = trackerUser(
       [trackerQuest("q", [collect])],
       [{ id: "q", goals: [{ id: "collect", done: false }] }],
@@ -66,16 +80,21 @@ describe("getArrivalQuestTriggers", () => {
   it("ignores objectives that a consecutive quest has not reached", () => {
     const quest = trackerQuest(
       "q",
-      [
-        travel("first", { sector: 9, nextObjectiveId: "second" }),
-        travel("second"),
-      ],
+      [travel("first", { sector: 9, nextObjectiveId: "second" }), travel("second")],
       "daily",
       { consecutiveObjectives: true },
     );
     const pending = trackerUser(
       [quest],
-      [{ id: "q", goals: [{ id: "first", done: false }, { id: "second", done: false }] }],
+      [
+        {
+          id: "q",
+          goals: [
+            { id: "first", done: false },
+            { id: "second", done: false },
+          ],
+        },
+      ],
       playing,
     );
     expect(getArrivalQuestTriggers(pending, here).shouldCheckQuest).toBe(false);
@@ -98,21 +117,30 @@ describe("getArrivalQuestTriggers", () => {
   it("opens each unbound dialog quest on its tile outside the tutorial", () => {
     const dialog = (id: string, extra: object = {}) =>
       trackerQuest(id, [travel(`${id}-talk`, { task: "dialog", ...extra })]);
-    const quests = [dialog("a"), dialog("bound", { overworldPlacementId: "npc" }), dialog("b")];
-    expect(getArrivalQuestTriggers(trackerUser(quests, [], playing), here).dialogQuestIds).toEqual([
-      "a",
-      "b",
-    ]);
+    const quests = [
+      dialog("a"),
+      dialog("bound", { overworldPlacementId: "npc" }),
+      dialog("b"),
+    ];
     expect(
-      getArrivalQuestTriggers(trackerUser(quests, [], playing), elsewhere).dialogQuestIds,
-    ).toEqual([]);
+      getArrivalQuestTriggers(trackerUser(quests, [], playing), here).dialogQuestIds,
+    ).toEqual(["a", "b"]);
     expect(
-      getArrivalQuestTriggers(trackerUser(quests, [], { tutorialOn: true, tutorialStep: 0 }), here)
+      getArrivalQuestTriggers(trackerUser(quests, [], playing), elsewhere)
         .dialogQuestIds,
     ).toEqual([]);
     expect(
       getArrivalQuestTriggers(
-        trackerUser(quests, [], { tutorialOn: true, tutorialStep: TUTORIAL_STEPS_COUNT }),
+        trackerUser(quests, [], { tutorialOn: true, tutorialStep: 0 }),
+        here,
+      ).dialogQuestIds,
+    ).toEqual([]);
+    expect(
+      getArrivalQuestTriggers(
+        trackerUser(quests, [], {
+          tutorialOn: true,
+          tutorialStep: TUTORIAL_STEPS_COUNT,
+        }),
         here,
       ).dialogQuestIds,
     ).toEqual(["a", "b"]);
@@ -120,7 +148,9 @@ describe("getArrivalQuestTriggers", () => {
 
   it("returns no triggers for a user without quests", () => {
     const user = trackerUser([], [], playing);
-    expect(getArrivalQuestTriggers({ ...user, userQuests: undefined } as never, here)).toEqual({
+    expect(
+      getArrivalQuestTriggers({ ...user, userQuests: undefined } as never, here),
+    ).toEqual({
       shouldCheckQuest: false,
       dialogQuestIds: [],
     });

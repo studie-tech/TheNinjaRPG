@@ -11,7 +11,9 @@ afterEach(() => {
   restoreBrowserGlobals();
 });
 
-const select = (props: { disabled?: boolean; searchLabel?: string; emptyText?: string } = {}) => (
+const select = (
+  props: { disabled?: boolean; searchLabel?: string; emptyText?: string } = {},
+) => (
   <SearchSelect
     label="Wanted item"
     placeholder="Choose"

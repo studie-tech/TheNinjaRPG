@@ -1,7 +1,21 @@
 import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { DMG_SETTING_DEFAULTS } from "@/drizzle/constants";
-import { aiProfile, battle, battleHistory, gameSetting, item, jutsu, quest, questHistory, userData, userItem, userJutsu, userQueue, userVote } from "@/drizzle/schema";
+import {
+  aiProfile,
+  battle,
+  battleHistory,
+  gameSetting,
+  item,
+  jutsu,
+  quest,
+  questHistory,
+  userData,
+  userItem,
+  userJutsu,
+  userQueue,
+  userVote,
+} from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { calcJutsuTrainCost } from "@/libs/train";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
@@ -31,11 +45,20 @@ import {
 
 const userId = "queue-profile-drop";
 
-const queueCraft = async (hidden = false, startsAt = new Date(Date.now() - 120_000)) => {
+const queueCraft = async (
+  hidden = false,
+  startsAt = new Date(Date.now() - 120_000),
+) => {
   const db = await getTestDatabase();
   await db.delete(userQueue).where(eq(userQueue.userId, userId));
   await insertItems([
-    { id: "antidote", itemType: "CONSUMABLE", canBeCrafted: true, stackSize: 10, hidden },
+    {
+      id: "antidote",
+      itemType: "CONSUMABLE",
+      canBeCrafted: true,
+      stackSize: 10,
+      hidden,
+    },
     { id: "herb", stackSize: 100 },
   ]);
   await db.insert(userQueue).values({
@@ -45,7 +68,9 @@ const queueCraft = async (hidden = false, startsAt = new Date(Date.now() - 120_0
     position: 1,
     itemId: "antidote",
     quantity: 1,
-    materials: [{ userItemId: "spent-herbs", itemId: "herb", quantity: 2, storedAtHome: false }],
+    materials: [
+      { userItemId: "spent-herbs", itemId: "herb", quantity: 2, storedAtHome: false },
+    ],
     durationSeconds: 60,
     startsAt,
     finishesAt: new Date(startsAt.getTime() + 60_000),
@@ -54,7 +79,21 @@ const queueCraft = async (hidden = false, startsAt = new Date(Date.now() - 120_0
 
 describeWithDatabase("Queue settlement response reconciliation", () => {
   beforeEach(async () => {
-    await resetTables(battle, battleHistory, aiProfile, gameSetting, questHistory, quest, userQueue, userItem, item, userJutsu, jutsu, userVote, userData);
+    await resetTables(
+      battle,
+      battleHistory,
+      aiProfile,
+      gameSetting,
+      questHistory,
+      quest,
+      userQueue,
+      userItem,
+      item,
+      userJutsu,
+      jutsu,
+      userVote,
+      userData,
+    );
     const now = new Date();
     await insertUsers([
       {
@@ -111,40 +150,62 @@ describeWithDatabase("Queue settlement response reconciliation", () => {
     expect(first.craftingItemsChanged).toBe(false);
   });
 
-  it.each([false, true])("location checks request inventory refresh after queued craft output or refund (hidden: %s)", async (hidden) => {
-    await queueCraft(hidden);
-    const db = await getTestDatabase();
-    const result = await (await callerFor(questsRouter, userId)).checkLocationQuest();
-    const inventory = await db.query.userItem.findMany({ where: eq(userItem.userId, userId) });
-    expect(result.success).toBe(true);
-    expect(result.itemsChanged).toBe(true);
-    expect(inventory).toMatchObject([
-      { itemId: hidden ? "herb" : "antidote", quantity: hidden ? 2 : 1 },
-    ]);
-    if (!hidden) expect(inventory[0]!.craftingFinishedAt!.getTime()).toBeLessThan(Date.now());
-    expect(await db.query.userQueue.findMany({ where: eq(userQueue.userId, userId) })).toEqual([]);
-    // Both the output insertion and a drop that starts zero jobs must be reported.
-    expect((await fetchUpdatedUser({ client: db, userId })).craftingItemsChanged).toBe(false);
-    expect((await (await callerFor(questsRouter, userId)).checkLocationQuest()).itemsChanged).toBe(false);
-  });
+  it.each([false, true])(
+    "location checks request inventory refresh after queued craft output or refund (hidden: %s)",
+    async (hidden) => {
+      await queueCraft(hidden);
+      const db = await getTestDatabase();
+      const result = await (await callerFor(questsRouter, userId)).checkLocationQuest();
+      const inventory = await db.query.userItem.findMany({
+        where: eq(userItem.userId, userId),
+      });
+      expect(result.success).toBe(true);
+      expect(result.itemsChanged).toBe(true);
+      expect(inventory).toMatchObject([
+        { itemId: hidden ? "herb" : "antidote", quantity: hidden ? 2 : 1 },
+      ]);
+      if (!hidden)
+        expect(inventory[0]!.craftingFinishedAt!.getTime()).toBeLessThan(Date.now());
+      expect(
+        await db.query.userQueue.findMany({ where: eq(userQueue.userId, userId) }),
+      ).toEqual([]);
+      // Both the output insertion and a drop that starts zero jobs must be reported.
+      expect(
+        (await fetchUpdatedUser({ client: db, userId })).craftingItemsChanged,
+      ).toBe(false);
+      expect(
+        (await (await callerFor(questsRouter, userId)).checkLocationQuest())
+          .itemsChanged,
+      ).toBe(false);
+    },
+  );
 
   it("retains the craft inventory signal after a rejected passive settlement", async () => {
     await queueCraft();
     const db = await getTestDatabase();
     const prior = new Date(Date.now() - 600_000);
-    await db.update(userData).set({ updatedAt: prior, regenAt: prior }).where(eq(userData.userId, userId));
+    await db
+      .update(userData)
+      .set({ updatedAt: prior, regenAt: prior })
+      .where(eq(userData.userId, userId));
     const client = beforeStatements(db, userData, [
-      async () => db.update(userData).set({
-        updatedAt: sql`TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt})`,
-        curEnergy: 17,
-      }).where(eq(userData.userId, userId)),
+      async () =>
+        db
+          .update(userData)
+          .set({
+            updatedAt: sql`TIMESTAMPADD(MICROSECOND, 1000, ${userData.updatedAt})`,
+            curEnergy: 17,
+          })
+          .where(eq(userData.userId, userId)),
     ]);
     const result = await fetchUpdatedUser({ client, userId, forceRegen: true });
     expect(result.craftingItemsChanged).toBe(true);
     expect(result.startedQueuedJobs).toBe(1);
     expect(result.user?.curEnergy).toBe(17);
     expect(result.user?.queue).toEqual([]);
-    expect(await db.query.userItem.findMany({ where: eq(userItem.userId, userId) })).toHaveLength(1);
+    expect(
+      await db.query.userItem.findMany({ where: eq(userItem.userId, userId) }),
+    ).toHaveLength(1);
   });
 
   it("refreshes inventory when an objective ambush settles a craft due after profile hydration", async () => {
@@ -153,22 +214,60 @@ describeWithDatabase("Queue settlement response reconciliation", () => {
     await queueCraft(false, new Date(now.getTime() + 60_000));
     const db = await getTestDatabase();
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    await db.insert(gameSetting).values(Object.entries(DMG_SETTING_DEFAULTS).map(([name, value]) =>
-      ({ id: name, name, value, time: now })));
+    await db.insert(gameSetting).values(
+      Object.entries(DMG_SETTING_DEFAULTS).map(([name, value]) => ({
+        id: name,
+        name,
+        value,
+        time: now,
+      })),
+    );
     await insertUsers([{ userId: "ambusher", isAi: true, rank: "GENIN", level: 20 }]);
     await insertDefaultAiProfile({ userId: "ambusher" });
-    await insertQuests([{
-      id: "ambush-quest", questType: "mission", hidden: false,
-      content: { objectives: [EncountersAtLocation.parse({
-        id: "ambush", task: "win_encounter_at_location", sector: 0,
-        attackers: [{ ids: ["ambusher"], number: 100 }],
-      })], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [] },
-    }]);
-    await insertQuestHistory([{ id: "ambush-attempt", userId, questId: "ambush-quest", questType: "mission" }]);
-    await db.update(userData).set({ questData: [QuestTracker.parse({
-      id: "ambush-quest", startAt: now.toISOString(),
-      goals: [{ id: "ambush", value: 0, done: false, sector: 0, longitude: 0, latitude: 0 }],
-    })] }).where(eq(userData.userId, userId));
+    await insertQuests([
+      {
+        id: "ambush-quest",
+        questType: "mission",
+        hidden: false,
+        content: {
+          objectives: [
+            EncountersAtLocation.parse({
+              id: "ambush",
+              task: "win_encounter_at_location",
+              sector: 0,
+              attackers: [{ ids: ["ambusher"], number: 100 }],
+            }),
+          ],
+          reward: ObjectiveReward.parse({}),
+          sceneBackground: "",
+          sceneCharacters: [],
+        },
+      },
+    ]);
+    await insertQuestHistory([
+      { id: "ambush-attempt", userId, questId: "ambush-quest", questType: "mission" },
+    ]);
+    await db
+      .update(userData)
+      .set({
+        questData: [
+          QuestTracker.parse({
+            id: "ambush-quest",
+            startAt: now.toISOString(),
+            goals: [
+              {
+                id: "ambush",
+                value: 0,
+                done: false,
+                sector: 0,
+                longitude: 0,
+                latitude: 0,
+              },
+            ],
+          }),
+        ],
+      })
+      .where(eq(userData.userId, userId));
     let profileReads = 0;
     const client = overrideQuery(db, "userData", {
       findFirst: async (read, options) => {
@@ -181,14 +280,22 @@ describeWithDatabase("Queue settlement response reconciliation", () => {
         return user;
       },
     });
-    const result = await callerForDatabase(questsRouter, userId, client).checkLocationQuest();
+    const result = await callerForDatabase(
+      questsRouter,
+      userId,
+      client,
+    ).checkLocationQuest();
     expect(profileReads).toBe(1);
     expect(result.notifications).toContain("You have been attacked!");
-    expect(await db.query.battle.findFirst()).toMatchObject({ battleType: "RANDOM_ENCOUNTER" });
-    expect(await db.query.userItem.findMany({ where: eq(userItem.userId, userId) })).toMatchObject([
-      { itemId: "antidote", quantity: 1 },
-    ]);
-    expect(await db.query.userQueue.findMany({ where: eq(userQueue.userId, userId) })).toEqual([]);
+    expect(await db.query.battle.findFirst()).toMatchObject({
+      battleType: "RANDOM_ENCOUNTER",
+    });
+    expect(
+      await db.query.userItem.findMany({ where: eq(userItem.userId, userId) }),
+    ).toMatchObject([{ itemId: "antidote", quantity: 1 }]);
+    expect(
+      await db.query.userQueue.findMany({ where: eq(userQueue.userId, userId) }),
+    ).toEqual([]);
     expect(result.itemsChanged).toBe(true);
   });
 
@@ -249,7 +356,9 @@ describeWithDatabase("Queue settlement response reconciliation", () => {
     expect(result.user?.queue).toEqual([]);
     expect(result.requiresUserRefresh).toBe(true);
     expect(result.requiresProgressionRefresh).toBe(true);
-    expect(await db.query.userJutsu.findMany({ where: eq(userJutsu.userId, userId) })).toHaveLength(1);
+    expect(
+      await db.query.userJutsu.findMany({ where: eq(userJutsu.userId, userId) }),
+    ).toHaveLength(1);
     expect((await fetchUpdatedUser({ client: db, userId })).startedQueuedJobs).toBe(0);
   });
 

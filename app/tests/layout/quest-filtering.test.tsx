@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import * as useSize from "@radix-ui/react-use-size";
 import * as client from "@/app/_trpc/client";
 import {
@@ -17,7 +24,9 @@ let state: ReturnType<typeof useContentFiltering<typeof schema.fields>>;
 
 const Harness = () => {
   state = useContentFiltering(schema);
-  return <ContentFiltering schema={schema} state={state} triggerButtonId="filter-quests" />;
+  return (
+    <ContentFiltering schema={schema} state={state} triggerButtonId="filter-quests" />
+  );
 };
 
 /** Opens the filter popover and returns the User Level spinbutton. */

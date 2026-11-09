@@ -1,8 +1,13 @@
-
 import { eq, type SQL } from "drizzle-orm";
 import { MySqlDialect, QueryBuilder } from "drizzle-orm/mysql-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { bankTransfers, quest, questHistory, userData, village } from "@/drizzle/schema";
+import {
+  bankTransfers,
+  quest,
+  questHistory,
+  userData,
+  village,
+} from "@/drizzle/schema";
 import { calcHP } from "@/libs/profile";
 import { getNewTrackers } from "@/libs/quest";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
@@ -11,7 +16,11 @@ import { commitQuestObjectiveRewards } from "@/server/utils/questConsequences";
 import { updateRewards } from "@/server/utils/questRewards";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { IncreaseGatheringYield } from "@/validators/combat";
-import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
+import {
+  insertQuestHistory,
+  insertQuests,
+  insertUsers,
+} from "../../../../setup/factories";
 import { trackerQuest } from "../../../../setup/quest";
 import {
   describeWithDatabase,
@@ -24,7 +33,12 @@ const rewards = () => PostProcessedRewardSchema.parse({});
 
 type CommitInput = Parameters<typeof commitQuestObjectiveRewards>[0];
 /** Commit a resolved claim of `history` for `user` with the shared defaults; pass what a test varies. */
-const commit = <User extends { userId: string }>(client: CommitInput["client"], user: User, history: object, overrides: Partial<CommitInput> = {}) =>
+const commit = <User extends { userId: string }>(
+  client: CommitInput["client"],
+  user: User,
+  history: object,
+  overrides: Partial<CommitInput> = {},
+) =>
   commitQuestObjectiveRewards({
     client,
     userId: user.userId,
@@ -114,18 +128,22 @@ const makeClient = (
   historyAfterLostCompletion?: { completed: number } | null,
 ) => {
   const sets: Record<string, unknown>[] = [];
-  const update = vi.fn((table?: unknown) => table === village ? ({ set: () => ({ where: vi.fn().mockResolvedValue({ rowsAffected: 0 }) }) }) : ({
-    set: (value: Record<string, unknown>) => {
-      const result = updateResults[sets.length];
-      if (!result) {
-        throw new Error(
-          `Unexpected update #${sets.length + 1}; list every write this path issues`,
-        );
-      }
-      sets.push(value);
-      return { where: vi.fn().mockResolvedValue(result) };
-    },
-  }));
+  const update = vi.fn((table?: unknown) =>
+    table === village
+      ? { set: () => ({ where: vi.fn().mockResolvedValue({ rowsAffected: 0 }) }) }
+      : {
+          set: (value: Record<string, unknown>) => {
+            const result = updateResults[sets.length];
+            if (!result) {
+              throw new Error(
+                `Unexpected update #${sets.length + 1}; list every write this path issues`,
+              );
+            }
+            sets.push(value);
+            return { where: vi.fn().mockResolvedValue(result) };
+          },
+        },
+  );
   const deleteWhere = vi.fn().mockResolvedValue({ rowsAffected: 1 });
   const deleteFrom = vi.fn(() => ({ where: deleteWhere }));
   const queryBuilder = new QueryBuilder();
@@ -157,12 +175,16 @@ const makeClient = (
 const makeGatheringClient = () => {
   const sets: Record<string, unknown>[] = [];
   const inserted: { itemId?: string; quantity?: number }[] = [];
-  const update = vi.fn((table?: unknown) => table === village ? ({ set: () => ({ where: vi.fn().mockResolvedValue({ rowsAffected: 0 }) }) }) : ({
-    set: (value: Record<string, unknown>) => {
-      sets.push(value);
-      return { where: vi.fn().mockResolvedValue({ rowsAffected: 1 }) };
-    },
-  }));
+  const update = vi.fn((table?: unknown) =>
+    table === village
+      ? { set: () => ({ where: vi.fn().mockResolvedValue({ rowsAffected: 0 }) }) }
+      : {
+          set: (value: Record<string, unknown>) => {
+            sets.push(value);
+            return { where: vi.fn().mockResolvedValue({ rowsAffected: 1 }) };
+          },
+        },
+  );
   const select = vi.fn(() => ({
     from: vi.fn(() => ({
       where: vi
@@ -209,73 +231,121 @@ describe("quest reward commit", () => {
       reason: "Gathering reward",
       rewards: PostProcessedRewardSchema.parse({ reward_gathering_items: true }),
     });
-    expect(result.items).toEqual(Array(3).fill({ id: "herb-1", name: "Herb", quantity: 1 }));
+    expect(result.items).toEqual(
+      Array(3).fill({ id: "herb-1", name: "Herb", quantity: 1 }),
+    );
   });
   it.each([
     { captured: 2, current: 0, expected: 3 },
     { captured: 2, current: 7, expected: 3 },
     { captured: 0, current: 2, expected: 1 },
     { captured: undefined, current: 2, expected: 1 },
-  ])("pays captured gathering yield $captured with claim-time bonus $current", async ({ captured, current, expected }) => {
-    vi.spyOn(Math, "random").mockReturnValue(0);
-    const { user, missionHistory } = makeUser();
-    const { client, inserted } = makeGatheringClient();
-    const gatheringHistory = {
-      ...missionHistory,
-      quest: {
-        ...missionHistory.quest,
-        questType: "gathering",
-        content: {
-          ...missionHistory.quest.content,
-          objectives: [{ id: "collect", task: "collect_item" }],
+  ])(
+    "pays captured gathering yield $captured with claim-time bonus $current",
+    async ({ captured, current, expected }) => {
+      vi.spyOn(Math, "random").mockReturnValue(0);
+      const { user, missionHistory } = makeUser();
+      const { client, inserted } = makeGatheringClient();
+      const gatheringHistory = {
+        ...missionHistory,
+        quest: {
+          ...missionHistory.quest,
+          questType: "gathering",
+          content: {
+            ...missionHistory.quest.content,
+            objectives: [{ id: "collect", task: "collect_item" }],
+          },
         },
-      },
-    };
-    const result = await commitQuestObjectiveRewards({
-      client,
-      userId: user.userId,
-      user: {
-        ...user,
-        occupation: "GATHERING",
-        bloodline: { effects: [IncreaseGatheringYield.parse({ power: current })] },
-        userQuests: [gatheringHistory, ...user.userQuests.slice(1)],
-      } as never,
-      userQuest: gatheringHistory as never,
-      trackers: [{
-        id: missionHistory.questId,
-        goals: [{ id: "collect", done: true, collected: true, gatheringBonusQuantity: captured }],
-      }] as never,
-      rewards: PostProcessedRewardSchema.parse({ reward_gathering_items: true }),
-      resolved: true,
-      notifications: [],
-      consequences: [],
-      existingHistory: missionHistory,
-    });
-    expect(result.outcome).toBe("claimed");
-    expect(inserted.filter((row) => row.itemId === "herb-1")).toHaveLength(expected);
-  });
-  it.each([true, false])("commits a milestone level and all six stats only if the snapshot claim wins (%s)", async (wins) => {
-    const fixture = makeUser();
-    const history = { ...fixture.missionHistory, quest: { ...fixture.missionHistory.quest, questType: "starter", content: {
-      ...fixture.missionHistory.quest.content, reward: { reward_level: 101, reward_stats: 20_000 }
-    } } };
-    const user = { ...fixture.user, rank: "ELITE JONIN", level: 100,
-      offence: 1_300_000, defence: 1_300_000, strength: 400_000, speed: 400_000, intelligence: 400_000, willpower: 400_000,
-      userQuests: [history, ...fixture.user.userQuests.slice(1)] };
-    const { client, sets } = makeClient([
-      { rowsAffected: 1 }, { rowsAffected: wins ? 1 : 0 }, { rowsAffected: 1 }
-    ]);
-    const result = await commit(client, user, history, { rewards: { ...rewards(), reward_level: 101, reward_stats: 20_000 } });
-    expect(result.outcome).toBe(wins ? "claimed" : "state_changed");
-    expect(sets[1]).toMatchObject({ level: 101, offence: 1_320_000, strength: 420_000, maxHealth: calcHP(101) });
-    expect(user.level).toBe(wins ? 101 : 100);
-    if (wins) expect(result).toMatchObject({ userCacheEligible: false });
-    else expect(sets.at(-1)).toMatchObject({ completed: 0 });
-  });
+      };
+      const result = await commitQuestObjectiveRewards({
+        client,
+        userId: user.userId,
+        user: {
+          ...user,
+          occupation: "GATHERING",
+          bloodline: { effects: [IncreaseGatheringYield.parse({ power: current })] },
+          userQuests: [gatheringHistory, ...user.userQuests.slice(1)],
+        } as never,
+        userQuest: gatheringHistory as never,
+        trackers: [
+          {
+            id: missionHistory.questId,
+            goals: [
+              {
+                id: "collect",
+                done: true,
+                collected: true,
+                gatheringBonusQuantity: captured,
+              },
+            ],
+          },
+        ] as never,
+        rewards: PostProcessedRewardSchema.parse({ reward_gathering_items: true }),
+        resolved: true,
+        notifications: [],
+        consequences: [],
+        existingHistory: missionHistory,
+      });
+      expect(result.outcome).toBe("claimed");
+      expect(inserted.filter((row) => row.itemId === "herb-1")).toHaveLength(expected);
+    },
+  );
+  it.each([true, false])(
+    "commits a milestone level and all six stats only if the snapshot claim wins (%s)",
+    async (wins) => {
+      const fixture = makeUser();
+      const history = {
+        ...fixture.missionHistory,
+        quest: {
+          ...fixture.missionHistory.quest,
+          questType: "starter",
+          content: {
+            ...fixture.missionHistory.quest.content,
+            reward: { reward_level: 101, reward_stats: 20_000 },
+          },
+        },
+      };
+      const user = {
+        ...fixture.user,
+        rank: "ELITE JONIN",
+        level: 100,
+        offence: 1_300_000,
+        defence: 1_300_000,
+        strength: 400_000,
+        speed: 400_000,
+        intelligence: 400_000,
+        willpower: 400_000,
+        userQuests: [history, ...fixture.user.userQuests.slice(1)],
+      };
+      const { client, sets } = makeClient([
+        { rowsAffected: 1 },
+        { rowsAffected: wins ? 1 : 0 },
+        { rowsAffected: 1 },
+      ]);
+      const result = await commit(client, user, history, {
+        rewards: { ...rewards(), reward_level: 101, reward_stats: 20_000 },
+      });
+      expect(result.outcome).toBe(wins ? "claimed" : "state_changed");
+      expect(sets[1]).toMatchObject({
+        level: 101,
+        offence: 1_320_000,
+        strength: 420_000,
+        maxHealth: calcHP(101),
+      });
+      expect(user.level).toBe(wins ? 101 : 100);
+      if (wins) expect(result).toMatchObject({ userCacheEligible: false });
+      else expect(sets.at(-1)).toMatchObject({ completed: 0 });
+    },
+  );
   it("rejects a stale milestone before consuming history or delivering any rewards", async () => {
     const { user, missionHistory } = makeUser();
     const { client, update } = makeClient([]);
-    const result = await commit(client, { ...user, rank: "ELITE JONIN", level: 101 }, missionHistory, { rewards: { ...rewards(), reward_level: 101, reward_stats: 20_000 } });
+    const result = await commit(
+      client,
+      { ...user, rank: "ELITE JONIN", level: 101 },
+      missionHistory,
+      { rewards: { ...rewards(), reward_level: 101, reward_stats: 20_000 } },
+    );
     expect(result.outcome).toBe("state_changed");
     expect(update).not.toHaveBeenCalled();
   });
@@ -286,7 +356,12 @@ describe("quest reward commit", () => {
     const payout = PostProcessedRewardSchema.parse({ reward_money: 100 });
     await updateRewards({
       client,
-      user: { ...user, pvpExperience: 0, weeklyPvpKills: 4, weeklyPvpKillsAt: new Date() } as never,
+      user: {
+        ...user,
+        pvpExperience: 0,
+        weeklyPvpKills: 4,
+        weeklyPvpKillsAt: new Date(),
+      } as never,
       rewards: payout,
       reason: "QUEST",
     });
@@ -297,34 +372,68 @@ describe("quest reward commit", () => {
 
   it("does not regenerate a completed repeatable mission tracker from its closed history", async () => {
     const { user, missionHistory } = makeUser();
-    const history = { ...missionHistory, quest: { ...missionHistory.quest, maxCompletes: 3 } };
+    const history = {
+      ...missionHistory,
+      quest: { ...missionHistory.quest, maxCompletes: 3 },
+    };
     const hydrated = { ...user, userQuests: [history, ...user.userQuests.slice(1)] };
     const { client } = makeClient([
-      { rowsAffected: 1 }, { rowsAffected: 1 }, { rowsAffected: 1 }, { rowsAffected: 0 },
+      { rowsAffected: 1 },
+      { rowsAffected: 1 },
+      { rowsAffected: 1 },
+      { rowsAffected: 0 },
     ]);
     const result = await commit(client, hydrated, history);
     expect(result).toMatchObject({ outcome: "claimed", userCacheEligible: true });
-    expect(hydrated.userQuests.some((entry) => entry.questId === history.questId)).toBe(false);
-    expect(getNewTrackers(hydrated as never, [{ task: "any" }]).trackers.some((tracker) => tracker.id === history.questId)).toBe(false);
+    expect(hydrated.userQuests.some((entry) => entry.questId === history.questId)).toBe(
+      false,
+    );
+    expect(
+      getNewTrackers(hydrated as never, [{ task: "any" }]).trackers.some(
+        (tracker) => tracker.id === history.questId,
+      ),
+    ).toBe(false);
   });
 
-  it.each([0, 1])("projects accepted completion and requires reconciliation when %s farm timers change", async (farmRows) => {
-    const { user, missionHistory } = makeUser();
-    const { client, sets } = makeClient([
-      { rowsAffected: 1 },
-      { rowsAffected: 1 },
-      { rowsAffected: 1 },
-      { rowsAffected: farmRows },
-    ]);
-    const claimRewards = PostProcessedRewardSchema.parse({ reward_money: 50, reward_exp: 10 });
-    const result = await commit(client, user, missionHistory, { rewards: claimRewards });
-    expect(result).toMatchObject({ outcome: "claimed", userCacheEligible: farmRows === 0,
-      userDelta: { money: 50, earnedExperience: 10 } });
-    expect(user).toMatchObject({ money: 150, earnedExperience: 30, curEnergy: 50,
-      missionsD: 1, completedQuests: [{ id: missionHistory.id, questId: "mission-1", completed: 1 }] });
-    expect(missionHistory).toMatchObject({ completed: 1, endAt: expect.any(Date), previousCompletes: 1 });
-    expect(sets).toHaveLength(4);
-  });
+  it.each([0, 1])(
+    "projects accepted completion and requires reconciliation when %s farm timers change",
+    async (farmRows) => {
+      const { user, missionHistory } = makeUser();
+      const { client, sets } = makeClient([
+        { rowsAffected: 1 },
+        { rowsAffected: 1 },
+        { rowsAffected: 1 },
+        { rowsAffected: farmRows },
+      ]);
+      const claimRewards = PostProcessedRewardSchema.parse({
+        reward_money: 50,
+        reward_exp: 10,
+      });
+      const result = await commit(client, user, missionHistory, {
+        rewards: claimRewards,
+      });
+      expect(result).toMatchObject({
+        outcome: "claimed",
+        userCacheEligible: farmRows === 0,
+        userDelta: { money: 50, earnedExperience: 10 },
+      });
+      expect(user).toMatchObject({
+        money: 150,
+        earnedExperience: 30,
+        curEnergy: 50,
+        missionsD: 1,
+        completedQuests: [
+          { id: missionHistory.id, questId: "mission-1", completed: 1 },
+        ],
+      });
+      expect(missionHistory).toMatchObject({
+        completed: 1,
+        endAt: expect.any(Date),
+        previousCompletes: 1,
+      });
+      expect(sets).toHaveLength(4);
+    },
+  );
 
   it.each([
     ["mission", true, 20],
@@ -347,7 +456,12 @@ describe("quest reward commit", () => {
       const { client, sets } = makeClient(
         Array.from({ length: 4 }, () => ({ rowsAffected: 1 })),
       );
-      const result = await commit(client, { ...user, userQuests: [history, ...user.userQuests.slice(1)] }, history, { resolved });
+      const result = await commit(
+        client,
+        { ...user, userQuests: [history, ...user.userQuests.slice(1)] },
+        history,
+        { resolved },
+      );
       expect(result.outcome).toBe("claimed");
       const payout = sets.find((set) => "money" in set)!;
       if (amount) {
@@ -363,8 +477,13 @@ describe("quest reward commit", () => {
     "claims %s history and account state atomically before exposing completion credit",
     async (questType) => {
       const { user, missionHistory } = makeUser();
-      const history = { ...missionHistory, quest: { ...missionHistory.quest, questType } };
-      const { client, sets, update } = makeClient([{ rowsAffected: 0 }], { completed: 0 });
+      const history = {
+        ...missionHistory,
+        quest: { ...missionHistory.quest, questType },
+      };
+      const { client, sets, update } = makeClient([{ rowsAffected: 0 }], {
+        completed: 0,
+      });
       const result = await commit(client, { ...user, userQuests: [history] }, history);
       expect(result.outcome).toBe("state_changed");
       expect(sets).toEqual([{ joinedCompletion: true }]);
@@ -396,7 +515,10 @@ describe("quest reward commit", () => {
       updatedAt: expect.any(Date),
     });
     expect(result).toMatchObject({
-      postNotifications: ["Energy reward: 20 (restored up to capacity).", "Active crop growth times reduced by 1 minute."],
+      postNotifications: [
+        "Energy reward: 20 (restored up to capacity).",
+        "Active crop growth times reduced by 1 minute.",
+      ],
     });
   });
 
@@ -444,7 +566,10 @@ describe("quest reward commit", () => {
       { rowsAffected: 1 },
     ]);
 
-    const result = await commit(client, hydratedUser, missionHistory, { resolved: false, consequences: [{ type: "remove_item", ids: ["item-1"] }] });
+    const result = await commit(client, hydratedUser, missionHistory, {
+      resolved: false,
+      consequences: [{ type: "remove_item", ids: ["item-1"] }],
+    });
 
     expect(result.outcome).toBe("claimed");
     expect(deleteFrom).toHaveBeenCalledTimes(1);
@@ -466,7 +591,9 @@ describe("quest reward commit", () => {
       startAt: new Date().toISOString(),
     };
 
-    const result = await commit(client, user, missionHistory, { trackers: [trackerForResolvedQuest] as never });
+    const result = await commit(client, user, missionHistory, {
+      trackers: [trackerForResolvedQuest] as never,
+    });
 
     expect(result.outcome).toBe("claimed");
     expect(sets[1]).toMatchObject({ questData: [] });
@@ -481,17 +608,22 @@ describe("quest reward commit", () => {
     const { user, missionHistory } = makeUser();
     const { client, sets } = makeGatheringClient();
 
-    const result = await commit(client, { ...user, occupation: "GATHERING" }, missionHistory, {
-      rewards: PostProcessedRewardSchema.parse({
-        reward_gathering_items: true,
-      }),
-      trackers: [
-        {
-          id: missionHistory.questId,
-          goals: [{ id: "obj-1", done: true, value: 1 }],
-        },
-      ] as never,
-    });
+    const result = await commit(
+      client,
+      { ...user, occupation: "GATHERING" },
+      missionHistory,
+      {
+        rewards: PostProcessedRewardSchema.parse({
+          reward_gathering_items: true,
+        }),
+        trackers: [
+          {
+            id: missionHistory.questId,
+            goals: [{ id: "obj-1", done: true, value: 1 }],
+          },
+        ] as never,
+      },
+    );
 
     expect(result.outcome).toBe("claimed");
     // The fold still runs (the tier quest keeps its tracker) — only the finished quest is gone.
@@ -525,14 +657,20 @@ describe("quest reward commit", () => {
       const result = await commit(client, user, missionHistory, { rewardChoice });
 
       expect(result).toMatchObject({ outcome: "claimed", rewardChoicePending: true });
-      expect(sets[0]).toMatchObject({ completed: 1, pendingRewardChoice: rewardChoice });
+      expect(sets[0]).toMatchObject({
+        completed: 1,
+        pendingRewardChoice: rewardChoice,
+      });
     });
 
     it("never writes an offer for a non-terminal objective claim", async () => {
       const { user, missionHistory } = makeUser();
       const { client, sets } = makeClient([{ rowsAffected: 1 }, { rowsAffected: 1 }]);
 
-      const result = await commit(client, user, missionHistory, { resolved: false, rewardChoice });
+      const result = await commit(client, user, missionHistory, {
+        resolved: false,
+        rewardChoice,
+      });
 
       expect(result).toMatchObject({ outcome: "claimed", rewardChoicePending: false });
       expect(sets.some((set) => "pendingRewardChoice" in set)).toBe(false);
@@ -668,18 +806,18 @@ describe("quest reward commit", () => {
       const user = userWith([medicalQuest]);
       const { client } = makeClient([{ rowsAffected: 0 }]);
 
-      expect(await claimRewardChoiceTrackers(client, user as never, medicalReward)).toBe(
-        false,
-      );
+      expect(
+        await claimRewardChoiceTrackers(client, user as never, medicalReward),
+      ).toBe(false);
     });
 
     it("skips the snapshot when no quest tracks the picked experience", async () => {
       const user = userWith([]);
       const { client, update } = makeClient([]);
 
-      expect(await claimRewardChoiceTrackers(client, user as never, medicalReward)).toBe(
-        true,
-      );
+      expect(
+        await claimRewardChoiceTrackers(client, user as never, medicalReward),
+      ).toBe(true);
       expect(update).not.toHaveBeenCalled();
     });
   });
@@ -694,31 +832,72 @@ describeWithDatabase("quest reward claims", () => {
     { studentXp: 600, senseiXp: 1400, kills: 0, bonus: 115 },
     { studentXp: 1400, senseiXp: 600, kills: 0, bonus: 100 },
     { studentXp: 600, senseiXp: 1400, kills: 5, bonus: 116 },
-  ])("uses the sensei's own PvP boost and records the integer bonus $bonus", async ({ studentXp, senseiXp, kills, bonus }) => {
-    const client = await getTestDatabase();
-    await insertUsers([
-      { userId: "mission-sensei", pvpExperience: senseiXp, weeklyPvpKills: kills, weeklyPvpKillsAt: new Date(), money: 500 },
-      { userId: "mission-student", rank: "GENIN", senseiId: "mission-sensei", pvpExperience: studentXp, money: 500 },
-    ]);
-    await insertQuests([{ id: "sensei-mission", questType: "mission" }, { id: "sensei-tier", questType: "tier" }]);
-    await insertQuestHistory([
-      { userId: "mission-student", questId: "sensei-mission", questType: "mission" },
-      { userId: "mission-student", questId: "sensei-tier", questType: "tier" },
-    ]);
-    const user = (await client.query.userData.findFirst({
-      where: eq(userData.userId, "mission-student"),
-      with: { userQuests: { with: { quest: true } }, completedQuests: true, items: { with: { item: true } } },
-    }))!;
-    const history = user.userQuests.find(q => q.questId === "sensei-mission")!;
-    const claim = () => commit(client, user, history);
-    expect((await claim()).outcome).toBe("claimed");
-    expect(await client.query.userData.findFirst({ where: eq(userData.userId, "mission-sensei") })).toMatchObject({ money: 500 + bonus });
-    expect(await client.query.userData.findFirst({ where: eq(userData.userId, "mission-student") })).toMatchObject({ money: 500 });
-    expect(await client.query.bankTransfers.findMany()).toMatchObject([{ senderId: "mission-student", receiverId: "mission-sensei", amount: bonus, type: "sensei" }]);
-    expect((await claim()).outcome).toBe("already_completed");
-    expect(await client.query.userData.findFirst({ where: eq(userData.userId, "mission-sensei") })).toMatchObject({ money: 500 + bonus });
-    expect(await client.query.bankTransfers.findMany()).toHaveLength(1);
-  });
+  ])(
+    "uses the sensei's own PvP boost and records the integer bonus $bonus",
+    async ({ studentXp, senseiXp, kills, bonus }) => {
+      const client = await getTestDatabase();
+      await insertUsers([
+        {
+          userId: "mission-sensei",
+          pvpExperience: senseiXp,
+          weeklyPvpKills: kills,
+          weeklyPvpKillsAt: new Date(),
+          money: 500,
+        },
+        {
+          userId: "mission-student",
+          rank: "GENIN",
+          senseiId: "mission-sensei",
+          pvpExperience: studentXp,
+          money: 500,
+        },
+      ]);
+      await insertQuests([
+        { id: "sensei-mission", questType: "mission" },
+        { id: "sensei-tier", questType: "tier" },
+      ]);
+      await insertQuestHistory([
+        { userId: "mission-student", questId: "sensei-mission", questType: "mission" },
+        { userId: "mission-student", questId: "sensei-tier", questType: "tier" },
+      ]);
+      const user = (await client.query.userData.findFirst({
+        where: eq(userData.userId, "mission-student"),
+        with: {
+          userQuests: { with: { quest: true } },
+          completedQuests: true,
+          items: { with: { item: true } },
+        },
+      }))!;
+      const history = user.userQuests.find((q) => q.questId === "sensei-mission")!;
+      const claim = () => commit(client, user, history);
+      expect((await claim()).outcome).toBe("claimed");
+      expect(
+        await client.query.userData.findFirst({
+          where: eq(userData.userId, "mission-sensei"),
+        }),
+      ).toMatchObject({ money: 500 + bonus });
+      expect(
+        await client.query.userData.findFirst({
+          where: eq(userData.userId, "mission-student"),
+        }),
+      ).toMatchObject({ money: 500 });
+      expect(await client.query.bankTransfers.findMany()).toMatchObject([
+        {
+          senderId: "mission-student",
+          receiverId: "mission-sensei",
+          amount: bonus,
+          type: "sensei",
+        },
+      ]);
+      expect((await claim()).outcome).toBe("already_completed");
+      expect(
+        await client.query.userData.findFirst({
+          where: eq(userData.userId, "mission-sensei"),
+        }),
+      ).toMatchObject({ money: 500 + bonus });
+      expect(await client.query.bankTransfers.findMany()).toHaveLength(1);
+    },
+  );
 
   it("invalidates regeneration read between the quest claim and Energy payout", async () => {
     const database = await getTestDatabase();
@@ -749,16 +928,23 @@ describeWithDatabase("quest reward claims", () => {
     // The hydrated capacity may be newer than its throttled persisted value.
     user.maxEnergy = 250;
     let stale: typeof userData.$inferSelect | undefined;
-    const client = aroundStatements(database, userData, async (run) => {
-      stale = await database.query.userData.findFirst({
-        where: eq(userData.userId, user.userId),
-      });
-      return run();
-    }, { when: (set) => "curEnergy" in set });
+    const client = aroundStatements(
+      database,
+      userData,
+      async (run) => {
+        stale = await database.query.userData.findFirst({
+          where: eq(userData.userId, user.userId),
+        });
+        return run();
+      },
+      { when: (set) => "curEnergy" in set },
+    );
     const claim = await commit(client, user, history);
     expect(claim.outcome).toBe("claimed");
     if (claim.outcome === "claimed") {
-      expect(claim.postNotifications).toContain("Energy reward: 100 (restored up to capacity).");
+      expect(claim.postNotifications).toContain(
+        "Energy reward: 100 (restored up to capacity).",
+      );
     }
     expect(stale?.curEnergy).toBe(95);
     expect(

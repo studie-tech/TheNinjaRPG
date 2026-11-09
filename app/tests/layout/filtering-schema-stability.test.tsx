@@ -13,14 +13,22 @@ import { useFiltering as useRankedLoadoutFiltering } from "@/layout/RankedLoadou
 import { useFiltering as useRankedRankDistributionFiltering } from "@/layout/RankedRankDistributionFiltering";
 import { useFiltering as useSageModeFiltering } from "@/layout/SageModeFiltering";
 import { useFiltering as useSkillTreeFiltering } from "@/layout/SkillTreeFiltering";
-import { getFilter as getStatisticsFilter, useFiltering as useStatisticsFiltering } from "@/layout/StatisticsFiltering";
+import {
+  getFilter as getStatisticsFilter,
+  useFiltering as useStatisticsFiltering,
+} from "@/layout/StatisticsFiltering";
 import { useFiltering as useUserFiltering } from "@/layout/UserFiltering";
 import { getLocalDateStringMonthsAgo } from "@/utils/time";
 
-afterEach(() => { cleanup(); setSystemTime(); });
+afterEach(() => {
+  cleanup();
+  setSystemTime();
+});
 
 type Setter = (value: unknown) => void;
-type FilteringHook = () => { cf: { values: Record<string, unknown>; setters: Record<string, Setter> } };
+type FilteringHook = () => {
+  cf: { values: Record<string, unknown>; setters: Record<string, Setter> };
+};
 
 const hooks: Record<string, FilteringHook> = {
   AiBalance: useAiBalanceFiltering,
@@ -57,6 +65,8 @@ describe("statistics default dates", () => {
     setSystemTime(new Date("2031-03-15T12:00:00"));
     const { result } = renderHook(() => useStatisticsFiltering());
     expect(result.current.startDate).toBe(getLocalDateStringMonthsAgo(1));
-    expect(getStatisticsFilter(result.current)).toEqual({ startDate: getLocalDateStringMonthsAgo(1) });
+    expect(getStatisticsFilter(result.current)).toEqual({
+      startDate: getLocalDateStringMonthsAgo(1),
+    });
   });
 });

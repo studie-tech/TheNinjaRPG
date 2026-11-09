@@ -12,7 +12,11 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 type Options = {
   onMutate: unknown;
@@ -50,14 +54,22 @@ beforeEach(() => {
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children, topRightContent }) => (
-    <div>
-      {topRightContent}
-      {children}
-    </div>
-  ));
+  vi.spyOn(ContentBox, "default").mockImplementation(
+    ({ children, topRightContent }) => (
+      <div>
+        {topRightContent}
+        {children}
+      </div>
+    ),
+  );
   vi.spyOn(ConceptImage, "default").mockImplementation((() => null) as never);
-  vi.spyOn(Confirm, "default").mockImplementation((({ children, onAccept }: { children: ReactNode; onAccept: () => void }) => (
+  vi.spyOn(Confirm, "default").mockImplementation((({
+    children,
+    onAccept,
+  }: {
+    children: ReactNode;
+    onAccept: () => void;
+  }) => (
     <div>
       {children}
       <button type="button" onClick={onAccept}>
@@ -77,7 +89,10 @@ beforeEach(() => {
       create: capture("create"),
       createVideo: capture("createVideo"),
       getAll: {
-        useInfiniteQuery: () => ({ data: { pages: [{ data: images }] }, hasNextPage: false }),
+        useInfiniteQuery: () => ({
+          data: { pages: [{ data: images }] },
+          hasNextPage: false,
+        }),
         useQuery: () => ({ data: undefined, isLoading: false }),
       },
     },
@@ -92,17 +107,30 @@ afterEach(async () => {
 });
 
 const openVideoTab = () =>
-  fireEvent.mouseDown(screen.getByRole("tab", { name: /Video/ }), { button: 0, ctrlKey: false });
+  fireEvent.mouseDown(screen.getByRole("tab", { name: /Video/ }), {
+    button: 0,
+    ctrlKey: false,
+  });
 
 it("creates images and videos only when the reputation covers their cost", async () => {
   const view = mount(COST_CONCEPT_IMAGE);
-  fireEvent.change(screen.getByPlaceholderText("Describe your image..."), { target: { value: "A fox" } });
-  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Accept" })));
+  fireEvent.change(screen.getByPlaceholderText("Describe your image..."), {
+    target: { value: "A fox" },
+  });
+  await act(async () =>
+    fireEvent.click(screen.getByRole("button", { name: "Accept" })),
+  );
   expect(mutate.create).toHaveBeenCalledTimes(1);
-  expect(mutate.create.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ prompt: "A fox" }));
+  expect(mutate.create.mock.calls[0]?.[0]).toEqual(
+    expect.objectContaining({ prompt: "A fox" }),
+  );
   openVideoTab();
-  fireEvent.change(screen.getByPlaceholderText("Describe your video scene..."), { target: { value: "A run" } });
-  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Accept" })));
+  fireEvent.change(screen.getByPlaceholderText("Describe your video scene..."), {
+    target: { value: "A run" },
+  });
+  await act(async () =>
+    fireEvent.click(screen.getByRole("button", { name: "Accept" })),
+  );
   expect(mutate.createVideo).not.toHaveBeenCalled();
   expect(toast.showMutationToast).toHaveBeenLastCalledWith({
     success: false,
@@ -111,8 +139,12 @@ it("creates images and videos only when the reputation covers their cost", async
   view.unmount();
 
   mount(COST_CONCEPT_IMAGE - 1);
-  fireEvent.change(screen.getByPlaceholderText("Describe your image..."), { target: { value: "A fox" } });
-  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Accept" })));
+  fireEvent.change(screen.getByPlaceholderText("Describe your image..."), {
+    target: { value: "A fox" },
+  });
+  await act(async () =>
+    fireEvent.click(screen.getByRole("button", { name: "Accept" })),
+  );
   expect(mutate.create).toHaveBeenCalledTimes(1);
   expect(toast.showMutationToast).toHaveBeenLastCalledWith({
     success: false,
@@ -122,20 +154,35 @@ it("creates images and videos only when the reputation covers their cost", async
 
 it("shows a created image or video among the viewer's newest art", async () => {
   mount(1000);
-  const ownFilter = () => document.querySelector("svg.lucide-user")?.getAttribute("class") ?? "";
+  const ownFilter = () =>
+    document.querySelector("svg.lucide-user")?.getAttribute("class") ?? "";
   expect(ownFilter()).not.toContain("text-orange-500");
   expect(captured.create?.onMutate).toBe(prepareUserUpdate);
   expect(captured.createVideo?.onMutate).toBe(prepareUserUpdate);
-  fireEvent.change(screen.getByPlaceholderText("Describe your image..."), { target: { value: "A fox" } });
+  fireEvent.change(screen.getByPlaceholderText("Describe your image..."), {
+    target: { value: "A fox" },
+  });
 
-  const imageResult = { success: true, message: "Created", imageId: "img", userDelta: { reputationPoints: -1 } };
+  const imageResult = {
+    success: true,
+    message: "Created",
+    imageId: "img",
+    userDelta: { reputationPoints: -1 },
+  };
   await act(() => captured.create!.onSuccess(imageResult, {}, 7));
   expect(toast.showMutationToast).toHaveBeenLastCalledWith(imageResult);
-  expect((screen.getByPlaceholderText("Describe your image...") as HTMLInputElement).value).toBe("");
+  expect(
+    (screen.getByPlaceholderText("Describe your image...") as HTMLInputElement).value,
+  ).toBe("");
   expect(ownFilter()).toContain("text-orange-500");
   expect(push).toHaveBeenLastCalledWith("/conceptart/img");
 
-  const videoResult = { success: true, message: "Queued", videoId: "vid", userDelta: { reputationPoints: -5 } };
+  const videoResult = {
+    success: true,
+    message: "Queued",
+    videoId: "vid",
+    userDelta: { reputationPoints: -5 },
+  };
   await act(() => captured.createVideo!.onSuccess(videoResult, {}, 8));
   expect(toast.showMutationToast).toHaveBeenLastCalledWith({
     success: true,
@@ -149,17 +196,20 @@ it("shows a created image or video among the viewer's newest art", async () => {
   ]);
 
   await act(() => captured.create!.onSuccess({ success: false, message: "No" }, {}, 9));
-  await act(() => captured.createVideo!.onSuccess({ success: false, message: "Busy" }, {}, 9));
-  expect(toast.showMutationToast).toHaveBeenLastCalledWith({ success: false, message: "Busy" });
+  await act(() =>
+    captured.createVideo!.onSuccess({ success: false, message: "Busy" }, {}, 9),
+  );
+  expect(toast.showMutationToast).toHaveBeenLastCalledWith({
+    success: false,
+    message: "Busy",
+  });
   expect(push).toHaveBeenCalledTimes(2);
   expect(updateUser).toHaveBeenCalledTimes(2);
 });
 
 it("orders the gallery newest first", () => {
   mount(1000);
-  expect(screen.getAllByRole("link").map((link) => link.getAttribute("aria-label"))).toEqual([
-    "Image new",
-    "Image mid",
-    "Image old-liked",
-  ]);
+  expect(
+    screen.getAllByRole("link").map((link) => link.getAttribute("aria-label")),
+  ).toEqual(["Image new", "Image mid", "Image old-liked"]);
 });

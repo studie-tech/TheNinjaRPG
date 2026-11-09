@@ -3,8 +3,14 @@ import { shareUserCache, withoutUserPosition } from "@/utils/userCacheSharing";
 
 describe("profile cache structural sharing", () => {
   it("shares equal nested Dates and arrays while replacing a changed sibling without mutating snapshots", () => {
-    const previous = Object.freeze({ position: 1, data: Object.freeze([{ at: new Date(1000) }]) });
-    const next = Object.freeze({ position: 2, data: Object.freeze([{ at: new Date(1000) }]) });
+    const previous = Object.freeze({
+      position: 1,
+      data: Object.freeze([{ at: new Date(1000) }]),
+    });
+    const next = Object.freeze({
+      position: 2,
+      data: Object.freeze([{ at: new Date(1000) }]),
+    });
     const shared = shareUserCache(previous, next) as typeof next;
     expect(shared).not.toBe(previous);
     expect(shared.position).toBe(2);
@@ -28,7 +34,10 @@ describe("profile cache structural sharing", () => {
     [{ removed: undefined }, { added: undefined }],
     [{ removed: undefined }, {}],
     [{}, { added: undefined }],
-    [[1, 2], [2, 1]],
+    [
+      [1, 2],
+      [2, 1],
+    ],
     [[1, 2], [1]],
     [[1], [1, undefined]],
     [null, { at: new Date(1000) }],
@@ -75,17 +84,32 @@ describe("position-independent profile views", () => {
     expect(withoutUserPosition(initial)).toBe(selected);
     let current = initial;
     for (const longitude of [11, 12, 13]) {
-      const next = { ...profile(), longitude, latitude: 8, location: "Forest", updatedAt: new Date(2000 + longitude) };
+      const next = {
+        ...profile(),
+        longitude,
+        latitude: 8,
+        location: "Forest",
+        updatedAt: new Date(2000 + longitude),
+      };
       current = shareUserCache(current, next) as typeof current;
       expect(current.longitude).toBe(longitude);
       expect(current.training).toBe(initial.training);
       expect(withoutUserPosition(current)).toBe(selected);
       expect(next.training).not.toBe(initial.training);
     }
-    expect(selected).toEqual({ userId: "viewer", username: "Ninja", sector: 724, training: initial.training });
+    expect(selected).toEqual({
+      userId: "viewer",
+      username: "Ninja",
+      sector: 724,
+      training: initial.training,
+    });
     expect(initial.longitude).toBe(10);
     expect(initial.updatedAt.getTime()).toBe(1000);
-    expect(Object.keys(selected).some((key) => ["longitude", "latitude", "location", "updatedAt"].includes(key))).toBe(false);
+    expect(
+      Object.keys(selected).some((key) =>
+        ["longitude", "latitude", "location", "updatedAt"].includes(key),
+      ),
+    ).toBe(false);
   });
 
   it.each([
@@ -122,11 +146,17 @@ describe("position-independent profile views", () => {
   it("retains the view through an enclosing cache snapshot and replaces it after profile removal", () => {
     const previous = { userData: profile() };
     const selected = withoutUserPosition(previous.userData);
-    const moved = shareUserCache(previous, { userData: { ...profile(), longitude: 11 } }) as typeof previous;
+    const moved = shareUserCache(previous, {
+      userData: { ...profile(), longitude: 11 },
+    }) as typeof previous;
     expect(withoutUserPosition(moved.userData)).toBe(selected);
-    const removed = shareUserCache(moved, { userData: undefined }) as { userData: undefined };
+    const removed = shareUserCache(moved, { userData: undefined }) as {
+      userData: undefined;
+    };
     expect(removed.userData).toBeUndefined();
-    const replaced = shareUserCache(removed, { userData: { ...profile(), userId: "new-account" } }) as typeof previous;
+    const replaced = shareUserCache(removed, {
+      userData: { ...profile(), userId: "new-account" },
+    }) as typeof previous;
     expect(withoutUserPosition(replaced.userData)).not.toBe(selected);
     expect(withoutUserPosition(replaced.userData).userId).toBe("new-account");
   });

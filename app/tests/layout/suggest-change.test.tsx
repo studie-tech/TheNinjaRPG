@@ -31,7 +31,9 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), api);
   spyOnToasts();
   vi.spyOn(useSize, "useSize").mockReturnValue({ width: 0, height: 0 });
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: { role: "CONTENT" } } as never);
+  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+    data: { role: "CONTENT" },
+  } as never);
 });
 afterEach(() => {
   cleanup();
@@ -41,7 +43,11 @@ afterEach(() => {
 
 const openModal = () => {
   const view = render(
-    <SuggestChange entityType="JUTSU" entityId="jutsu" getData={() => ({ name: "A" })} />,
+    <SuggestChange
+      entityType="JUTSU"
+      entityId="jutsu"
+      getData={() => ({ name: "A" })}
+    />,
   );
   fireEvent.click(view.getByRole("button", { name: "Suggest a change" }));
   fireEvent.change(view.getByLabelText("Title"), { target: { value: "BL Rework" } });

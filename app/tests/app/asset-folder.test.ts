@@ -8,7 +8,9 @@ describe("bookmarked asset folder redirects", () => {
     ["A%2520B", "A%2520B"],
     ["%E9%9B%AA", "%E9%9B%AA"],
   ])("decodes the framework parameter once: %s", async (folder, query) => {
-    await expect(FolderPage({ params: Promise.resolve({ folder }) })).rejects.toMatchObject({
+    await expect(
+      FolderPage({ params: Promise.resolve({ folder }) }),
+    ).rejects.toMatchObject({
       digest: expect.stringContaining(`/manual/asset?folder=${query};`),
     });
   });

@@ -58,7 +58,10 @@ const warId = "settlement-war";
 const sectorId = 205;
 const tokens = WAR_PURCHASE_SHRINE_TOKEN_COST * 3;
 const intercept = (db: DrizzleClient, run: Parameters<typeof interceptExecute>[1]) =>
-  interceptExecute(withoutTransactions(db, "Settlement must not open a transaction"), run);
+  interceptExecute(
+    withoutTransactions(db, "Settlement must not open a transaction"),
+    run,
+  );
 /** Resolve the acting Kage as a minimal profile of their village's live row. */
 const stubKage = (db: DrizzleClient, villageId: string | (() => string)) =>
   stubProfile("fetchUpdatedUser", async () => {
@@ -76,10 +79,15 @@ const stubKage = (db: DrizzleClient, villageId: string | (() => string)) =>
 const stubUser = (
   db: DrizzleClient,
   userId: string,
-  relations: NonNullable<Parameters<DrizzleClient["query"]["userData"]["findFirst"]>[0]>["with"],
+  relations: NonNullable<
+    Parameters<DrizzleClient["query"]["userData"]["findFirst"]>[0]
+  >["with"],
 ) =>
   stubProfile("fetchUpdatedUser", async () => ({
-    user: await db.query.userData.findFirst({ where: eq(userData.userId, userId), with: relations }),
+    user: await db.query.userData.findFirst({
+      where: eq(userData.userId, userId),
+      with: relations,
+    }),
     requiresUserRefresh: false,
   }));
 const seed = async (type: WarType = "VILLAGE_WAR") => {
@@ -188,33 +196,65 @@ describeWithDatabase("guarded war settlement and delivery", () => {
       village,
     );
   });
-  afterEach(() => { resetServerModuleStubs(); vi.restoreAllMocks(); });
+  afterEach(() => {
+    resetServerModuleStubs();
+    vi.restoreAllMocks();
+  });
 
   it("settles overdue objective wars at the deadline with final decay, camps and allied bonuses", async () => {
     const db = await seed();
     await addAlly(db);
     const start = new Date(Date.now() - 8 * 86400000);
-    await db.update(war).set({ rules: { ...defaultWarRules, enabled: true }, combatStartedAt: start, lastTokenReductionAt: start, attackerWarHealth: 10000, defenderWarHealth: 9500 }).where(eq(war.id, warId));
-    await db.insert(villageStructure).values({ id: "ally-extra", name: "extra", route: "/townhall", image: "", villageId: "ally" });
+    await db
+      .update(war)
+      .set({
+        rules: { ...defaultWarRules, enabled: true },
+        combatStartedAt: start,
+        lastTokenReductionAt: start,
+        attackerWarHealth: 10000,
+        defenderWarHealth: 9500,
+      })
+      .where(eq(war.id, warId));
+    await db.insert(villageStructure).values({
+      id: "ally-extra",
+      name: "extra",
+      route: "/townhall",
+      image: "",
+      villageId: "ally",
+    });
     const ended = await handleWarEnd(await snapshot(db), db);
     expect(ended.status).toBe("ATTACKER_VICTORY");
     expect(ended.endedAt!.getTime()).toBe(start.getTime() + 7 * 86400000);
     expect(ended.attackerWarHealth).toBe(7900);
     expect(ended.defenderWarHealth).toBe(7400);
     expect(await balance(db, "ally")).toBe(tokens + WAR_VICTORY_TOKEN_BONUS / 2);
-    const allyVillage = (await db.query.village.findFirst({ where: eq(village.id, "ally") }))!;
+    const allyVillage = (await db.query.village.findFirst({
+      where: eq(village.id, "ally"),
+    }))!;
     expect(allyVillage.lastWarEndedAt!.getTime()).toBe(ended.endedAt!.getTime());
-    const allyStructure = (await db.query.villageStructure.findFirst({ where: eq(villageStructure.id, "ally-extra") }))!;
+    const allyStructure = (await db.query.villageStructure.findFirst({
+      where: eq(villageStructure.id, "ally-extra"),
+    }))!;
     expect(allyStructure.temporaryLevelBonus).toBe(3);
-    expect(allyStructure.temporaryLevelBonusExpiresAt!.getTime()).toBe(ended.endedAt!.getTime() + 5 * 86400000);
+    expect(allyStructure.temporaryLevelBonusExpiresAt!.getTime()).toBe(
+      ended.endedAt!.getTime() + 5 * 86400000,
+    );
     const boosts = await db.query.gameSetting.findMany();
     expect(boosts.find((b) => b.name === "war-ally-train")!.value).toBe(20);
     expect(boosts.find((b) => b.name === "war-ally-regen")!.value).toBe(40);
-    const loser = (await db.query.village.findFirst({ where: eq(village.id, "defender") }))!;
-    expect(loser.warExhaustionEndedAt!.getTime()).toBe(ended.endedAt!.getTime() + 4 * 86400000);
-    const loserStructure = (await db.query.villageStructure.findFirst({ where: eq(villageStructure.id, "defender/townhall") }))!;
+    const loser = (await db.query.village.findFirst({
+      where: eq(village.id, "defender"),
+    }))!;
+    expect(loser.warExhaustionEndedAt!.getTime()).toBe(
+      ended.endedAt!.getTime() + 4 * 86400000,
+    );
+    const loserStructure = (await db.query.villageStructure.findFirst({
+      where: eq(villageStructure.id, "defender/townhall"),
+    }))!;
     expect(loserStructure.temporaryLevelBonus).toBe(-2);
-    expect(loserStructure.temporaryLevelBonusExpiresAt!.getTime()).toBe(ended.endedAt!.getTime() + 3 * 86400000);
+    expect(loserStructure.temporaryLevelBonusExpiresAt!.getTime()).toBe(
+      ended.endedAt!.getTime() + 3 * 86400000,
+    );
   });
 
   it("withdrawal overlapping settlement either leaves before rewards or loses its claim", async () => {
@@ -330,8 +370,11 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     );
     await handleWarEnd(initial, client);
     expect(nativeWar).toHaveBeenCalledTimes(1);
-    expect(nativeWar).toHaveBeenCalledWith(client,
-      expect.arrayContaining(["attacker", "defender", "ally", "other"]), warId);
+    expect(nativeWar).toHaveBeenCalledWith(
+      client,
+      expect.arrayContaining(["attacker", "defender", "ally", "other"]),
+      warId,
+    );
     expect(await balance(db, "attacker")).toBe(tokens + WAR_VICTORY_TOKEN_BONUS / 2);
     expect(await balance(db, "ally")).toBe(tokens + WAR_VICTORY_TOKEN_BONUS / 2);
     expect(await balance(db, "defender")).toBe(tokens);
@@ -364,8 +407,16 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     await db.delete(gameSetting);
     const initial = await snapshot(db);
     const recorded = await recordQueries(() => handleWarEnd(initial, db));
-    expect(recorded.statements.filter((query) => /^select\b/i.test(query) && /\bfrom `GameSetting`/i.test(query))).toHaveLength(0);
-    expect(recorded.statements.filter((query) => /^insert ignore into `GameSetting`/i.test(query))).toHaveLength(1);
+    expect(
+      recorded.statements.filter(
+        (query) => /^select\b/i.test(query) && /\bfrom `GameSetting`/i.test(query),
+      ),
+    ).toHaveLength(0);
+    expect(
+      recorded.statements.filter((query) =>
+        /^insert ignore into `GameSetting`/i.test(query),
+      ),
+    ).toHaveLength(1);
     const settings = await db.select().from(gameSetting);
     expect(settings.map((row) => [row.name, row.value]).sort()).toEqual([
       ["war-ally-regen", WAR_WINNING_BOOST_REGEN_PERC],
@@ -377,14 +428,18 @@ describeWithDatabase("guarded war settlement and delivery", () => {
   it("preserves an existing boost with a generated ID and a later expiry", async () => {
     const db = await seed();
     const expiry = new Date(Date.now() + (WAR_WINNING_BOOST_DAYS + 1) * 86400000);
-    await db.update(gameSetting).set({ id: "legacy-regen", value: 99, time: expiry })
+    await db
+      .update(gameSetting)
+      .set({ id: "legacy-regen", value: 99, time: expiry })
       .where(eq(gameSetting.name, "war-attacker-regen"));
     await handleWarEnd(await snapshot(db), db);
     const settings = await db.select().from(gameSetting);
     expect(settings.filter((row) => row.name === "war-attacker-regen")).toEqual([
       expect.objectContaining({ id: "legacy-regen", value: 99, time: expiry }),
     ]);
-    expect(settings.find((row) => row.name === "war-attacker-train")?.value).toBe(WAR_WINNING_BOOST_TRAINING_PERC);
+    expect(settings.find((row) => row.name === "war-attacker-train")?.value).toBe(
+      WAR_WINNING_BOOST_TRAINING_PERC,
+    );
     expect((await savedWar(db))?.settlementPending).toBe(false);
   });
 
@@ -516,9 +571,17 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     expect(await balance(db, "defender")).toBe(tokens);
     const structures = await db.select().from(villageStructure);
     expect(structures.every((row) => row.temporaryLevelBonus === 0)).toBe(true);
-    expect(structures.find((row) => row.id === "attacker/traininggrounds")?.raidBoostExpiresAt).toBeInstanceOf(Date);
-    expect(structures.find((row) => row.id === "defender/traininggrounds")?.raidProtectedUntil).toBeInstanceOf(Date);
-    expect((await db.select().from(gameSetting)).every((setting) => setting.value === 0)).toBe(true);
+    expect(
+      structures.find((row) => row.id === "attacker/traininggrounds")
+        ?.raidBoostExpiresAt,
+    ).toBeInstanceOf(Date);
+    expect(
+      structures.find((row) => row.id === "defender/traininggrounds")
+        ?.raidProtectedUntil,
+    ).toBeInstanceOf(Date);
+    expect(
+      (await db.select().from(gameSetting)).every((setting) => setting.value === 0),
+    ).toBe(true);
     expect((await savedWar(db))?.settlementPending).toBe(false);
   });
 
@@ -571,11 +634,13 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     ).toBe("AWAKE");
     expect(await db.select().from(mpvpBattleQueue)).toHaveLength(0);
     expect(await db.select().from(mpvpBattleUser)).toHaveLength(0);
-    expect(await db.query.sector.findFirst()).toEqual(expect.objectContaining({
-      villageId: "attacker",
-      shrineLevel: 1,
-      capturedAt: ended.endedAt,
-    }));
+    expect(await db.query.sector.findFirst()).toEqual(
+      expect.objectContaining({
+        villageId: "attacker",
+        shrineLevel: 1,
+        capturedAt: ended.endedAt,
+      }),
+    );
     expect(
       (
         await db.query.villageStructure.findFirst({
@@ -591,7 +656,12 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     const declarationTokens = WAR_DECLARATION_COST + defaultWarRules.declarationCost;
     await db.update(village).set({ tokens: declarationTokens });
     await db.update(sector).set({ shrineLevel: 1 });
-    await db.insert(gameSetting).values({ id: "OBJECTIVE_WAR_enabled", name: "OBJECTIVE_WAR_enabled", time: new Date(), value: 1 });
+    await db.insert(gameSetting).values({
+      id: "OBJECTIVE_WAR_enabled",
+      name: "OBJECTIVE_WAR_enabled",
+      time: new Date(),
+      value: 1,
+    });
     await db.insert(sector).values([
       { sector: 301, villageId: "attacker", shrineLevel: 1 },
       { sector: 302, villageId: "attacker", shrineLevel: 1 },
@@ -599,25 +669,50 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     ]);
     const [objectiveStarted, sectorStarted] = await Promise.all([
       startDeclaredWar(db, {
-        attackerVillageId: "attacker", attackerVillageName: "attacker",
-        defenderVillageId: "defender", defenderVillageName: "defender",
-        initiatedByUserId: "attacker-kage", warType: "VILLAGE_WAR", targetStructureRoute: "/townhall",
+        attackerVillageId: "attacker",
+        attackerVillageName: "attacker",
+        defenderVillageId: "defender",
+        defenderVillageName: "defender",
+        initiatedByUserId: "attacker-kage",
+        warType: "VILLAGE_WAR",
+        targetStructureRoute: "/townhall",
       }),
-      startSectorWar(db, { id: "competing-sector", attackerVillageId: "other", defenderVillageId: "defender", initiatedByUserId: "other-kage", sectorId }),
+      startSectorWar(db, {
+        id: "competing-sector",
+        attackerVillageId: "other",
+        defenderVillageId: "defender",
+        initiatedByUserId: "other-kage",
+        sectorId,
+      }),
     ]);
     expect(Number(objectiveStarted) + Number(sectorStarted)).toBe(1);
     const objective = (await db.query.war.findMany()).find((w) => w.rules);
     if (objectiveStarted) expect(objective?.objectiveState?.objectives).toHaveLength(4);
     if (sectorStarted) expect(objective).toBeUndefined();
-    expect(await balance(db, "other")).toBe(declarationTokens - (sectorStarted ? WAR_DECLARATION_COST : 0));
-    expect(await balance(db, "attacker")).toBe(declarationTokens - (objectiveStarted ? defaultWarRules.declarationCost : 0));
+    expect(await balance(db, "other")).toBe(
+      declarationTokens - (sectorStarted ? WAR_DECLARATION_COST : 0),
+    );
+    expect(await balance(db, "attacker")).toBe(
+      declarationTokens - (objectiveStarted ? defaultWarRules.declarationCost : 0),
+    );
   });
 
   it("rejects a stale sector owner without charging or creating a war", async () => {
     const db = await seed();
     await db.delete(war);
-    await db.update(sector).set({ villageId: "ally" }).where(eq(sector.sector, sectorId));
-    expect(await startSectorWar(db, { id: "stale-sector", attackerVillageId: "attacker", defenderVillageId: "defender", initiatedByUserId: "attacker-kage", sectorId })).toBe(false);
+    await db
+      .update(sector)
+      .set({ villageId: "ally" })
+      .where(eq(sector.sector, sectorId));
+    expect(
+      await startSectorWar(db, {
+        id: "stale-sector",
+        attackerVillageId: "attacker",
+        defenderVillageId: "defender",
+        initiatedByUserId: "attacker-kage",
+        sectorId,
+      }),
+    ).toBe(false);
     expect(await balance(db, "attacker")).toBe(tokens);
     expect(await db.query.war.findMany()).toHaveLength(0);
   });
@@ -626,7 +721,15 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     const db = await seed();
     await db.delete(war);
     await db.delete(sector).where(eq(sector.sector, sectorId));
-    expect(await startSectorWar(db, { id: "deleted-sector", attackerVillageId: "attacker", defenderVillageId: "defender", initiatedByUserId: "attacker-kage", sectorId })).toBe(false);
+    expect(
+      await startSectorWar(db, {
+        id: "deleted-sector",
+        attackerVillageId: "attacker",
+        defenderVillageId: "defender",
+        initiatedByUserId: "attacker-kage",
+        sectorId,
+      }),
+    ).toBe(false);
     expect(await balance(db, "attacker")).toBe(tokens);
     expect(await db.query.war.findMany()).toHaveLength(0);
     expect(await db.query.sector.findMany()).toHaveLength(0);
@@ -635,25 +738,69 @@ describeWithDatabase("guarded war settlement and delivery", () => {
   it("treats missing sectors as Syndicate land when declaring sector wars", async () => {
     const db = await seed();
     await db.delete(war);
-    await db.insert(village).values({ id: VILLAGE_SYNDICATE_ID, name: "Syndicate", sector: 99, kageId: "syndicate-kage" });
-    await db.update(village).set({ tokens: WAR_DECLARATION_COST }).where(eq(village.id, "attacker"));
+    await db.insert(village).values({
+      id: VILLAGE_SYNDICATE_ID,
+      name: "Syndicate",
+      sector: 99,
+      kageId: "syndicate-kage",
+    });
+    await db
+      .update(village)
+      .set({ tokens: WAR_DECLARATION_COST })
+      .where(eq(village.id, "attacker"));
     await db.delete(sector).where(eq(sector.sector, sectorId));
-    expect(await startSectorWar(db, { id: "unowned-sector", attackerVillageId: "attacker", defenderVillageId: VILLAGE_SYNDICATE_ID, initiatedByUserId: "attacker-kage", sectorId })).toBe(true);
+    expect(
+      await startSectorWar(db, {
+        id: "unowned-sector",
+        attackerVillageId: "attacker",
+        defenderVillageId: VILLAGE_SYNDICATE_ID,
+        initiatedByUserId: "attacker-kage",
+        sectorId,
+      }),
+    ).toBe(true);
     expect(await balance(db, "attacker")).toBe(0);
-    expect((await db.query.war.findFirst())?.defenderVillageId).toBe(VILLAGE_SYNDICATE_ID);
+    expect((await db.query.war.findFirst())?.defenderVillageId).toBe(
+      VILLAGE_SYNDICATE_ID,
+    );
   });
 
   it("preserves selected objectives when a Kage attempts to release their sector", async () => {
     const db = await seed();
-    await db.update(war).set({ rules: { ...defaultWarRules, enabled: true }, objectiveState: { attackerEspionage: 0, defenderEspionage: 0, objectives: [{ sector: sectorId, villageId: "defender", hp: 5000, maxHp: 5000, isReserve: false, destroyed: false }] } }).where(eq(war.id, warId));
-    await insertUsers([{ userId: "defender-kage", username: "release-kage", villageId: "defender" }]);
+    await db
+      .update(war)
+      .set({
+        rules: { ...defaultWarRules, enabled: true },
+        objectiveState: {
+          attackerEspionage: 0,
+          defenderEspionage: 0,
+          objectives: [
+            {
+              sector: sectorId,
+              villageId: "defender",
+              hp: 5000,
+              maxHp: 5000,
+              isReserve: false,
+              destroyed: false,
+            },
+          ],
+        },
+      })
+      .where(eq(war.id, warId));
+    await insertUsers([
+      { userId: "defender-kage", username: "release-kage", villageId: "defender" },
+    ]);
     stubUser(db, "defender-kage", { village: true });
     const caller = callerForDatabase(villageRouter, "defender-kage", db);
     const blocked = await caller.releaseSector({ sector: sectorId });
     expect(blocked.success).toBe(false);
-    expect(blocked.message).toBe("Sector ownership or leadership changed, or this is an active war objective. Refresh and try again.");
+    expect(blocked.message).toBe(
+      "Sector ownership or leadership changed, or this is an active war objective. Refresh and try again.",
+    );
     expect((await db.query.sector.findFirst())?.villageId).toBe("defender");
-    await db.update(war).set({ endedAt: new Date(), status: "DRAW" }).where(eq(war.id, warId));
+    await db
+      .update(war)
+      .set({ endedAt: new Date(), status: "DRAW" })
+      .where(eq(war.id, warId));
     expect((await caller.releaseSector({ sector: sectorId })).success).toBe(true);
     expect(await db.query.sector.findMany()).toHaveLength(0);
   });
@@ -687,17 +834,22 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     expect(await balance(db, "attacker")).toBe(0);
     expect(await fetchActiveWars(db)).toHaveLength(0);
     expect((await db.query.war.findFirst())?.status).toBe("DEFENDER_VICTORY");
-    expect(await db.query.sector.findFirst()).toEqual(expect.objectContaining({
-      villageId: "defender",
-      shrineLevel: 3,
-      capturedAt: new Date(0),
-    }));
+    expect(await db.query.sector.findFirst()).toEqual(
+      expect.objectContaining({
+        villageId: "defender",
+        shrineLevel: 3,
+        capturedAt: new Date(0),
+      }),
+    );
   });
 
   for (const waitForLock of [false, true])
     it(`includes a sector declaration ${waitForLock ? "committed while capture waits on a row lock" : "committed after the sibling snapshot"}`, async () => {
       const db = await seed("SECTOR_WAR");
-      await db.update(village).set({ tokens: WAR_DECLARATION_COST * 2 }).where(eq(village.id, "other"));
+      await db
+        .update(village)
+        .set({ tokens: WAR_DECLARATION_COST * 2 })
+        .where(eq(village.id, "other"));
       await insertUsers([
         ...Array.from({ length: WAR_MINIMUM_MEMBERS_REQUIRED }, (_, index) => ({
           userId: index === 0 ? "other-kage" : `other-member-${index}`,
@@ -724,14 +876,23 @@ describeWithDatabase("guarded war settlement and delivery", () => {
           const pending = connection ? execute() : undefined;
           if (connection) await new Promise((resolve) => setTimeout(resolve, 50));
           expect((await savedWar(db))?.status).toBe("ACTIVE");
-          const declared = await callerForDatabase(warRouter, "other-kage", db).declareSectorWar({
+          const declared = await callerForDatabase(
+            warRouter,
+            "other-kage",
+            db,
+          ).declareSectorWar({
             sectorId,
             userVillageId: "other",
           });
           expect(declared.success).toBe(true);
-          declaredWarId = (await db.query.war.findMany()).find((row) => row.id !== warId)?.id;
+          declaredWarId = (await db.query.war.findMany()).find(
+            (row) => row.id !== warId,
+          )?.id;
           expect(declaredWarId).toBeDefined();
-          await db.update(userData).set({ warParticipantUntil: new Date(Date.now() + 86_400_000) }).where(eq(userData.villageId, "other"));
+          await db
+            .update(userData)
+            .set({ warParticipantUntil: new Date(Date.now() + 86_400_000) })
+            .where(eq(userData.villageId, "other"));
           await db.insert(questHistory).values({
             id: "sibling-quest",
             userId: "other-kage",
@@ -745,19 +906,33 @@ describeWithDatabase("guarded war settlement and delivery", () => {
       });
       try {
         const initial = await snapshot(db);
-        const ended = await handleWarEnd(initial, client, { shrineBuilderId: "attacker-kage" });
+        const ended = await handleWarEnd(initial, client, {
+          shrineBuilderId: "attacker-kage",
+        });
         expect(ended.status).toBe("ATTACKER_VICTORY");
         expect((await db.query.sector.findFirst())?.villageId).toBe("attacker");
-        expect(await db.query.war.findFirst({ where: eq(war.id, declaredWarId!) })).toEqual(expect.objectContaining({
-          status: "DEFENDER_VICTORY",
-          endedAt: ended.endedAt,
-        }));
+        expect(
+          await db.query.war.findFirst({ where: eq(war.id, declaredWarId!) }),
+        ).toEqual(
+          expect.objectContaining({
+            status: "DEFENDER_VICTORY",
+            endedAt: ended.endedAt,
+          }),
+        );
         expect(ended.settlement?.warIds).toContain(declaredWarId!);
         expect(ended.settlement?.villageIds).toContain("other");
-        expect((await db.query.userData.findFirst({ where: eq(userData.userId, "other-kage") }))?.warParticipantUntil.getTime()).toBe(0);
+        expect(
+          (
+            await db.query.userData.findFirst({
+              where: eq(userData.userId, "other-kage"),
+            })
+          )?.warParticipantUntil.getTime(),
+        ).toBe(0);
         expect(await db.select().from(questHistory)).toHaveLength(0);
         await handleWarEnd(initial, db, { shrineBuilderId: "attacker-kage" });
-        expect(await balance(db, "attacker")).toBe(tokens - WAR_PURCHASE_SHRINE_TOKEN_COST);
+        expect(await balance(db, "attacker")).toBe(
+          tokens - WAR_PURCHASE_SHRINE_TOKEN_COST,
+        );
         expect(await balance(db, "other")).toBe(WAR_DECLARATION_COST);
       } finally {
         await connection?.rollback();
@@ -896,9 +1071,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
         const reservation = await db.query.warAlly.findFirst();
         expect(reservation?.acceptedAt).toBeNull();
         expect(reservation?.endedAt !== null).toBe(failure === "response");
-        expect(reservation?.activeVillageId).toBe(
-          failure === "write" ? "ally" : null,
-        );
+        expect(reservation?.activeVillageId).toBe(failure === "write" ? "ally" : null);
         expect((await snapshot(db)).warAllies).toHaveLength(0);
         expect(await balance(db, "ally")).toBe(tokens);
         expect(await balance(db, "attacker")).toBe(tokens);
@@ -978,10 +1151,12 @@ describeWithDatabase("guarded war settlement and delivery", () => {
       await db.update(userRequest).set({ status: closedStatus });
       await db.update(warAlly).set({ endedAt: new Date(0) });
       expect((await closeOffer(db)).success).toBe(false);
-      expect(await db.query.warAlly.findFirst()).toEqual(expect.objectContaining({
-        tokensPaid: 100,
-        endedAt: new Date(0),
-      }));
+      expect(await db.query.warAlly.findFirst()).toEqual(
+        expect.objectContaining({
+          tokensPaid: 100,
+          endedAt: new Date(0),
+        }),
+      );
       expect(await balance(db, "ally")).toBe(tokens + 100);
       expect(await balance(db, "attacker")).toBe(tokens - 100);
     });
@@ -1115,8 +1290,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
   it("delayed delivery preserves quests and shrine queues created after the settlement", async () => {
     const db = await seed();
     const client = intercept(db, async (query, execute) => {
-      if (sqlText(query).includes("DELETE qh"))
-        throw new Error("Cleanup unavailable");
+      if (sqlText(query).includes("DELETE qh")) throw new Error("Cleanup unavailable");
       return execute();
     });
     const ended = await handleWarEnd(await snapshot(db), client);

@@ -23,7 +23,11 @@ import * as uploadthing from "@/utils/uploadthing";
 import * as UserContext from "@/utils/UserContext";
 import type { ActivityStreakFormType } from "@/validators/activityStreak";
 import type { FurnitureViews } from "@/validators/itemFurniture";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../setup/browserGlobals";
 
 type SelectorProps = ComponentProps<typeof ContentImageSelector.default>;
 type GenerationResult = { success: boolean; url?: string; message?: string };
@@ -39,7 +43,10 @@ type UploadCallbacks = {
 let options: GenerationOptions;
 let upload: UploadCallbacks;
 let history: ComponentProps<typeof HistoricalAiAvatarModule.HistoricalAiAvatar>;
-const requests: { input: Record<string, unknown>; complete: GenerationOptions["onSuccess"] }[] = [];
+const requests: {
+  input: Record<string, unknown>;
+  complete: GenerationOptions["onSuccess"];
+}[] = [];
 const mutate = vi.fn((input: Record<string, unknown>) => {
   requests.push({ input, complete: options.onSuccess });
 });
@@ -69,7 +76,11 @@ beforeEach(() => {
   requests.length = 0;
   installBrowserGlobals({ animationFrame: true });
   Object.assign(vi.spyOn(client, "api" as never), {
-    item: { getFurnitureImageGeometry: { useQuery: () => ({ data: undefined, isFetching: false }) } },
+    item: {
+      getFurnitureImageGeometry: {
+        useQuery: () => ({ data: undefined, isFetching: false }),
+      },
+    },
     useQueries: () => [0, 1, 2].map(() => ({ data: undefined, isFetching: false })),
     useUtils: () => ({ avatar: { getHistoricalAvatars: { invalidate } } }),
     generativeAi: {
@@ -82,10 +93,12 @@ beforeEach(() => {
     },
   });
   // Isolate application mutation callbacks from image storage, history and rich-editor widgets.
-  vi.spyOn(HistoricalAiAvatarModule, "HistoricalAiAvatar").mockImplementation((next) => {
-    history = next;
-    return null;
-  });
+  vi.spyOn(HistoricalAiAvatarModule, "HistoricalAiAvatar").mockImplementation(
+    (next) => {
+      history = next;
+      return null;
+    },
+  );
   vi.spyOn(Avatar, "default").mockImplementation(({ href, alt }) => (
     // biome-ignore lint/performance/noImgElement: isolated content image preview stub
     <img src={href ?? undefined} alt={alt} />
@@ -94,13 +107,24 @@ beforeEach(() => {
     // biome-ignore lint/performance/noImgElement: isolated furniture preview stub
     <img src={typeof src === "string" ? src : undefined} alt={alt} />
   ));
-  vi.spyOn(RichInput, "default").mockImplementation(({ id, label, control, disabled }) => {
-    const { field } = useController({ name: id, control });
-    return <label>{label}<textarea {...field} disabled={disabled} /></label>;
-  });
+  vi.spyOn(RichInput, "default").mockImplementation(
+    ({ id, label, control, disabled }) => {
+      const { field } = useController({ name: id, control });
+      return (
+        <label>
+          {label}
+          <textarea {...field} disabled={disabled} />
+        </label>
+      );
+    },
+  );
   vi.spyOn(uploadthing, "UploadButton").mockImplementation(((next: UploadCallbacks) => {
     upload = next;
-    return <button type="button" onClick={next.onUploadBegin}>Upload image</button>;
+    return (
+      <button type="button" onClick={next.onUploadBegin}>
+        Upload image
+      </button>
+    );
   }) as never);
   vi.spyOn(toast, "showMutationToast").mockImplementation(showToast);
 });
@@ -149,8 +173,12 @@ it("keeps a pending activity-streak image when the same config changes streak ty
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
   vi.spyOn(elementSize, "useSize").mockReturnValue({ width: 0, height: 0 });
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
+  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+    data: { role: "CONTENT-ADMIN" },
+  } as never);
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
+    <div>{children}</div>
+  ));
   vi.spyOn(EditContent, "EditContent").mockImplementation((props) => {
     form = props.form as unknown as UseFormReturn<ActivityStreakFormType>;
     return <ActualEditContent {...props} />;
@@ -158,7 +186,11 @@ it("keeps a pending activity-streak image when the same config changes streak ty
   const params = Promise.resolve({ configid: config.id });
   let view: ReturnType<typeof render>;
   await act(async () => {
-    view = render(<Suspense fallback={null}><ActivityStreakEditPage params={params} /></Suspense>);
+    view = render(
+      <Suspense fallback={null}>
+        <ActivityStreakEditPage params={params} />
+      </Suspense>,
+    );
   });
   fireEvent.click(view!.getByRole("button", { name: "Edit Image" }));
   fireEvent.click(view!.getByRole("button", { name: "Generate AI Image" }));
@@ -175,7 +207,11 @@ it("keeps a pending activity-streak image when the same config changes streak ty
 });
 
 describe("content furniture image generation", () => {
-  for (const [rotation, degrees] of [[1, 90], [2, 180], [3, 270]] as const) {
+  for (const [rotation, degrees] of [
+    [1, 90],
+    [2, 180],
+    [3, 270],
+  ] as const) {
     it(`recreates ${degrees}° from canonical art with its style and direction in the actual request`, () => {
       const prompt = furnitureViewPrompt("Tea table", rotation);
       const view = render(<ContentImageSelector.default {...props} prompt={prompt} />);
@@ -192,7 +228,9 @@ describe("content furniture image generation", () => {
         maxDim: props.maxDim,
         removeBg: true,
       });
-      expect(String(requests[0]?.input.prompt)).toContain(`${degrees} degrees clockwise`);
+      expect(String(requests[0]?.input.prompt)).toContain(
+        `${degrees} degrees clockwise`,
+      );
     });
   }
 
@@ -222,7 +260,11 @@ describe("content furniture image generation", () => {
     await act(() => requests[0]!.complete(generated));
     expect(onUploadComplete).toHaveBeenCalledWith(generated.url);
     expect(invalidate).toHaveBeenCalledTimes(1);
-    expect(view.getAllByRole("img").some((image) => image.getAttribute("src") === generated.url)).toBe(true);
+    expect(
+      view
+        .getAllByRole("img")
+        .some((image) => image.getAttribute("src") === generated.url),
+    ).toBe(true);
   });
 
   it("accepts subsequent generations after its own successful parent image update", async () => {
@@ -243,14 +285,20 @@ describe("content furniture image generation", () => {
     open(view);
     fireEvent.click(view.getByRole("button", { name: "Generate AI Image" }));
     await act(() => requests[0]!.complete(generated));
-    expect(view.getAllByRole("img").every((image) => image.getAttribute("src") === generated.url)).toBe(true);
+    expect(
+      view
+        .getAllByRole("img")
+        .every((image) => image.getAttribute("src") === generated.url),
+    ).toBe(true);
     fireEvent.click(view.getByRole("button", { name: "Generate AI Image" }));
     const next = { success: true, url: "https://example.com/next-generation.webp" };
     await act(() => requests[1]!.complete(next));
     expect(onUploadComplete).toHaveBeenLastCalledWith(next.url);
     expect(onUploadComplete).toHaveBeenCalledTimes(2);
     expect(invalidate).toHaveBeenCalledTimes(2);
-    expect(view.getAllByRole("img").every((image) => image.getAttribute("src") === next.url)).toBe(true);
+    expect(
+      view.getAllByRole("img").every((image) => image.getAttribute("src") === next.url),
+    ).toBe(true);
   });
 
   it("does not restore a removed furniture view when a pending generation completes", async () => {
@@ -265,7 +313,11 @@ describe("content furniture image generation", () => {
           image={original}
           width={30}
           groundAnchor={90}
-          geometry={{ aspectRatio: 4 / 3, visibleBounds: { x: 0, y: 0, width: 100, height: 100 }, footprint: { x: 10, y: 85, width: 80, height: 15 } }}
+          geometry={{
+            aspectRatio: 4 / 3,
+            visibleBounds: { x: 0, y: 0, width: 100, height: 100 },
+            footprint: { x: 10, y: 85, width: 80, height: 15 },
+          }}
           views={views}
           canEdit
           onBaseChange={onUploadComplete}
@@ -294,7 +346,13 @@ describe("content furniture image generation", () => {
   });
 
   it("shows missing-view guidance in the picker and dialog instead of a character avatar", () => {
-    const view = render(<ContentImageSelector.default {...props} imageUrl="" emptyImageLabel="Generate or upload this view" />);
+    const view = render(
+      <ContentImageSelector.default
+        {...props}
+        imageUrl=""
+        emptyImageLabel="Generate or upload this view"
+      />,
+    );
     expect(view.getByText("Generate or upload this view")).toBeTruthy();
     expect(view.queryByRole("img")).toBeNull();
     open(view);
@@ -309,9 +367,18 @@ describe("content furniture image generation", () => {
       open(view);
       fireEvent.click(view.getByRole("button", { name: "Generate AI Image" }));
       const replacement = vi.fn();
-      view.rerender(<ContentImageSelector.default {...props} {...{
-        [field]: field === "id" ? "other-item:furniture:90" : "https://example.com/replacement.webp",
-      }} onUploadComplete={replacement} />);
+      view.rerender(
+        <ContentImageSelector.default
+          {...props}
+          {...{
+            [field]:
+              field === "id"
+                ? "other-item:furniture:90"
+                : "https://example.com/replacement.webp",
+          }}
+          onUploadComplete={replacement}
+        />,
+      );
       await act(() => requests[0]!.complete(generated));
       expect(onUploadComplete).not.toHaveBeenCalled();
       expect(replacement).not.toHaveBeenCalled();
@@ -337,7 +404,13 @@ describe("content furniture image generation", () => {
     fireEvent.click(view.getByRole("button", { name: "Generate AI Image" }));
     view.unmount();
     const replacement = vi.fn();
-    render(<ContentImageSelector.default {...props} id="replacement" onUploadComplete={replacement} />);
+    render(
+      <ContentImageSelector.default
+        {...props}
+        id="replacement"
+        onUploadComplete={replacement}
+      />,
+    );
     await act(() => requests[0]!.complete(generated));
     expect(onUploadComplete).not.toHaveBeenCalled();
     expect(replacement).not.toHaveBeenCalled();
@@ -350,8 +423,18 @@ describe("content furniture image generation", () => {
     fireEvent.click(view.getByRole("button", { name: "Upload image" }));
     const previousUpload = upload;
     const replacement = vi.fn();
-    view.rerender(<ContentImageSelector.default {...props} id="other-item" onUploadComplete={replacement} />);
-    act(() => previousUpload.onClientUploadComplete([{ serverData: { fileUrl: generated.url } }]));
+    view.rerender(
+      <ContentImageSelector.default
+        {...props}
+        id="other-item"
+        onUploadComplete={replacement}
+      />,
+    );
+    act(() =>
+      previousUpload.onClientUploadComplete([
+        { serverData: { fileUrl: generated.url } },
+      ]),
+    );
     expect(onUploadComplete).not.toHaveBeenCalled();
     expect(replacement).not.toHaveBeenCalled();
   });
@@ -369,7 +452,13 @@ describe("content furniture image generation", () => {
     const previousSelection = history.onUpdate;
     view.unmount();
     const replacement = vi.fn();
-    render(<ContentImageSelector.default {...props} id="replacement" onUploadComplete={replacement} />);
+    render(
+      <ContentImageSelector.default
+        {...props}
+        id="replacement"
+        onUploadComplete={replacement}
+      />,
+    );
     act(() => previousSelection?.(generated.url));
     expect(onUploadComplete).not.toHaveBeenCalled();
     expect(replacement).not.toHaveBeenCalled();
@@ -379,7 +468,10 @@ describe("content furniture image generation", () => {
     const view = render(<ContentImageSelector.default {...props} />);
     open(view);
     fireEvent.click(view.getByRole("button", { name: "Generate AI Image" }));
-    const rejection = { success: false, message: "Image generation failed. Try again." };
+    const rejection = {
+      success: false,
+      message: "Image generation failed. Try again.",
+    };
     await act(() => requests[0]!.complete(rejection));
     expect(showToast).toHaveBeenCalledWith(rejection);
     expect(onUploadComplete).not.toHaveBeenCalled();

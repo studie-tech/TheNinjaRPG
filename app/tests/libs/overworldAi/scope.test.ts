@@ -9,12 +9,18 @@ const PLACEMENTS = [
 
 describe("placementsForObjective", () => {
   it("returns only FRIENDLY placements for deliver_item", () => {
-    const r = placementsForObjective(PLACEMENTS, { task: "deliver_item", selectedAiIds: [] });
+    const r = placementsForObjective(PLACEMENTS, {
+      task: "deliver_item",
+      selectedAiIds: [],
+    });
     expect(r.map((p) => p.id)).toEqual(["f1", "f2"]);
   });
 
   it("returns only FRIENDLY placements for dialog (ignores selectedAiIds)", () => {
-    const r = placementsForObjective(PLACEMENTS, { task: "dialog", selectedAiIds: ["ai-2"] });
+    const r = placementsForObjective(PLACEMENTS, {
+      task: "dialog",
+      selectedAiIds: ["ai-2"],
+    });
     expect(r.map((p) => p.id)).toEqual(["f1", "f2"]);
   });
 
@@ -27,12 +33,18 @@ describe("placementsForObjective", () => {
   });
 
   it("returns all for defeat_opponents with no AI selected", () => {
-    const r = placementsForObjective(PLACEMENTS, { task: "defeat_opponents", selectedAiIds: [] });
+    const r = placementsForObjective(PLACEMENTS, {
+      task: "defeat_opponents",
+      selectedAiIds: [],
+    });
     expect(r).toEqual(PLACEMENTS);
   });
 
   it("returns none for a task that cannot bind to an overworld placement", () => {
-    const r = placementsForObjective(PLACEMENTS, { task: "move_to_location", selectedAiIds: [] });
+    const r = placementsForObjective(PLACEMENTS, {
+      task: "move_to_location",
+      selectedAiIds: [],
+    });
     expect(r).toEqual([]);
   });
 });

@@ -42,6 +42,8 @@ describeWithDatabase("poll custom options", () => {
     const added = await (await callerFor(pollRouter, "genin")).addOption(input);
 
     expect(added.success).toBe(true);
-    expect(await database.query.pollOption.findMany()).toMatchObject([{ text: "Mine" }]);
+    expect(await database.query.pollOption.findMany()).toMatchObject([
+      { text: "Mine" },
+    ]);
   });
 });

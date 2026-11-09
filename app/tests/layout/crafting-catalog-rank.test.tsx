@@ -1,6 +1,14 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+  vi,
+} from "bun:test";
 import * as client from "@/app/_trpc/client";
 import type { ItemRarity } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
@@ -83,28 +91,33 @@ describe("CraftingCatalog crafting rank gate", () => {
     const userData = {
       craftingExperience: 0,
       bloodlineId: null,
-      items: [{
-        id: "gear",
-        equipped: "CHEST",
-        quantity: 1,
-        durability: 100,
-        level: 1,
-        craftingFinishedAt: new Date(start + 5000),
-        item: {
-          itemType: "ARMOR",
-          maxDurability: 100,
-          bloodlineId: null,
-          canBeImbued: true,
-          effects: [effect],
+      items: [
+        {
+          id: "gear",
+          equipped: "CHEST",
+          quantity: 1,
+          durability: 100,
+          level: 1,
+          craftingFinishedAt: new Date(start + 5000),
+          item: {
+            itemType: "ARMOR",
+            maxDurability: 100,
+            bloodlineId: null,
+            canBeImbued: true,
+            effects: [effect],
+          },
+          imbuements: [
+            {
+              craftingFinishedAt: new Date(start + 15_000),
+              item: { effects: [effect] },
+            },
+          ],
         },
-        imbuements: [{
-          craftingFinishedAt: new Date(start + 15_000),
-          item: { effects: [effect] },
-        }],
-      }],
+      ],
     } as unknown as UserWithRelations;
     const view = renderCatalog("COMMON", userData);
-    const duration = () => view.getByText("Total Crafting Time:").parentElement?.textContent;
+    const duration = () =>
+      view.getByText("Total Crafting Time:").parentElement?.textContent;
     expect(duration()).toBe("Total Crafting Time:60m");
     act(() => {
       vi.advanceTimersByTime(6000);
@@ -121,17 +134,17 @@ describe("CraftingCatalog crafting rank gate", () => {
   it.each([
     { rarity: "EPIC", rank: "Master" },
     { rarity: "LEGENDARY", rank: "Forgemaster" },
-  ] as const)("shows the required rank for $rarity items above Apprentice", ({
-    rarity,
-    rank,
-  }) => {
-    const view = renderCatalog(rarity);
-    expect(view.getByText("Total Crafting Time:").parentElement?.textContent).toBe(
-      `Total Crafting Time:Requires ${rank} rank`,
-    );
-    const craftButton = view.getByRole("button", { name: `Requires ${rank} rank` });
-    expect((craftButton as HTMLButtonElement).disabled).toBe(true);
-  });
+  ] as const)(
+    "shows the required rank for $rarity items above Apprentice",
+    ({ rarity, rank }) => {
+      const view = renderCatalog(rarity);
+      expect(view.getByText("Total Crafting Time:").parentElement?.textContent).toBe(
+        `Total Crafting Time:Requires ${rank} rank`,
+      );
+      const craftButton = view.getByRole("button", { name: `Requires ${rank} rank` });
+      expect((craftButton as HTMLButtonElement).disabled).toBe(true);
+    },
+  );
 
   it("keeps the crafting time and Craft button for rarities the rank allows", () => {
     const view = renderCatalog("RARE");

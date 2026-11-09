@@ -75,29 +75,38 @@ describeWithDatabase("moderation sanctions", () => {
     ["silence", "SILENCE_ACTIVATED", { isSilenced: true, status: "AWAKE" }],
     ["tradeBan", "TRADE_BAN_ACTIVATED", { isTradeBanned: true }],
     ["warn", "OFFICIAL_WARNING", { isWarned: true }],
-  ] as const)("%s records the decision and flags the user", async (action, status, flags) => {
-    const db = await getTestDatabase();
-    await insertCase();
-    const staff = callerForDatabase(reportsRouter, "staff", db);
-    expect(await staff[action](decision)).toMatchObject({ success: true });
-    expect(await target()).toMatchObject(flags);
-    const { report, comments } = await savedDecision();
-    expect(report?.status).toBe(status);
-    expect(comments).toHaveLength(1);
-    expect(comments[0]).toMatchObject({
-      userId: "staff",
-      reportId: "case",
-      content: decision.comment,
-      decision: status,
-    });
-  });
+  ] as const)(
+    "%s records the decision and flags the user",
+    async (action, status, flags) => {
+      const db = await getTestDatabase();
+      await insertCase();
+      const staff = callerForDatabase(reportsRouter, "staff", db);
+      expect(await staff[action](decision)).toMatchObject({ success: true });
+      expect(await target()).toMatchObject(flags);
+      const { report, comments } = await savedDecision();
+      expect(report?.status).toBe(status);
+      expect(comments).toHaveLength(1);
+      expect(comments[0]).toMatchObject({
+        userId: "staff",
+        reportId: "case",
+        content: decision.comment,
+        decision: status,
+      });
+    },
+  );
 
   it("timeout is admin-resolved and ends within the hour", async () => {
     const db = await getTestDatabase();
     await insertCase();
-    await db.update(userData).set({ role: "CONTENT-ADMIN" }).where(eq(userData.userId, "staff"));
+    await db
+      .update(userData)
+      .set({ role: "CONTENT-ADMIN" })
+      .where(eq(userData.userId, "staff"));
     const staff = callerForDatabase(reportsRouter, "staff", db);
-    const result = await staff.timeout({ object_id: "case", comment: decision.comment });
+    const result = await staff.timeout({
+      object_id: "case",
+      comment: decision.comment,
+    });
     expect(result).toMatchObject({ success: true });
     expect(await target()).toMatchObject({ isSilenced: true });
     const { report, comments } = await savedDecision();
@@ -124,7 +133,10 @@ describeWithDatabase("moderation sanctions", () => {
       status: "BAN_ACTIVATED",
       banEnd: new Date(Date.now() - 60_000),
     });
-    await db.update(userData).set({ isBanned: true }).where(eq(userData.userId, "target"));
+    await db
+      .update(userData)
+      .set({ isBanned: true })
+      .where(eq(userData.userId, "target"));
     vi.spyOn(gameSettings, "lockWithDailyTimer").mockResolvedValue({
       isNewDay: true,
       isClaimed: true,
@@ -142,7 +154,10 @@ describeWithDatabase("moderation sanctions", () => {
       status: "BAN_ACTIVATED",
       banEnd: new Date(Date.now() + 86_400_000),
     });
-    await db.update(userData).set({ isBanned: true }).where(eq(userData.userId, "target"));
+    await db
+      .update(userData)
+      .set({ isBanned: true })
+      .where(eq(userData.userId, "target"));
     const reset = await clearUserBanWithoutActiveReport(
       db,
       ["target"],

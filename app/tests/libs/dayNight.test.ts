@@ -38,10 +38,7 @@ describe("dayNight", () => {
     expect(getWorldCycleBrightness(midDawn)).toBeCloseTo(
       (WORLD_NIGHT_BRIGHTNESS + WORLD_DAY_BRIGHTNESS) / 2,
     );
-    expect(getWorldCycleBrightness(justBeforeDay)).toBeCloseTo(
-      WORLD_DAY_BRIGHTNESS,
-      4,
-    );
+    expect(getWorldCycleBrightness(justBeforeDay)).toBeCloseTo(WORLD_DAY_BRIGHTNESS, 4);
     expect(getWorldCycleBrightness(dayStart)).toBe(WORLD_DAY_BRIGHTNESS);
   });
 });

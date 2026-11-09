@@ -87,8 +87,14 @@ const mkBattle = (): Battle =>
 describe("summon() template lookup", () => {
   it("keeps a piloted summon under AI control in an AI tournament", () => {
     const users = [mkPlayer(), mkTemplate()];
-    const battle = mkBattle(); battle.extraState.tournamentAiOnly = true;
-    summon(users, { ...mkSummonEffect(), playerControlled: true } as GroundEffect, [], battle);
+    const battle = mkBattle();
+    battle.extraState.tournamentAiOnly = true;
+    summon(
+      users,
+      { ...mkSummonEffect(), playerControlled: true } as GroundEffect,
+      [],
+      battle,
+    );
     const spawned = users.find((u) => u.isSummon && u.controllerId === PLAYER_ID);
     expect(spawned?.isPiloted).toBe(true);
     expect(spawned?.isAutoCombat).toBe(true);
@@ -123,7 +129,9 @@ describe("summon() template lookup", () => {
   it("can still summon from a matching source without the template flag", () => {
     const usersState = [mkPlayer(), { ...mkTemplate(), isSummonTemplate: false }];
     expect(summon(usersState, mkSummonEffect(), [], mkBattle())?.color).toBe("blue");
-    expect(usersState.find((u) => u.controllerId === PLAYER_ID && u.isSummon)?.curHealth).toBe(500);
+    expect(
+      usersState.find((u) => u.controllerId === PLAYER_ID && u.isSummon)?.curHealth,
+    ).toBe(500);
   });
 
   it("finds the template by controllerId (the loaded aiId) and spawns the summon", () => {
@@ -137,9 +145,7 @@ describe("summon() template lookup", () => {
     expect(result?.txt).toContain("was summoned");
 
     // A new summon owned by the casting player must now be on the battlefield.
-    const spawned = usersState.find(
-      (u) => u.isSummon && u.controllerId === PLAYER_ID,
-    );
+    const spawned = usersState.find((u) => u.isSummon && u.controllerId === PLAYER_ID);
     expect(spawned).toBeDefined();
     expect(spawned?.curHealth).toBe(500); // pools set from effect.aiHp
   });
@@ -158,9 +164,7 @@ describe("summon() template lookup", () => {
     spliceOrphanedSummons(usersState);
 
     // The summon disappears (dies / expires), clearing the one-per-controller cap.
-    const spawned = usersState.find(
-      (u) => u.isSummon && u.controllerId === PLAYER_ID,
-    );
+    const spawned = usersState.find((u) => u.isSummon && u.controllerId === PLAYER_ID);
     if (spawned) spawned.curHealth = 0;
 
     // effect.aiId still points at the template, so a fresh cast must find it
@@ -207,9 +211,7 @@ describe("summon flag hygiene", () => {
     const res = summon(usersState, mkSummonEffect(), userEffects, mkBattle());
     expect(res?.color).toBe("blue");
 
-    const spawned = usersState.find(
-      (u) => u.isSummon && u.controllerId === PLAYER_ID,
-    );
+    const spawned = usersState.find((u) => u.isSummon && u.controllerId === PLAYER_ID);
     // structuredClone would inherit the template's flag; summon() must clear it.
     expect(spawned?.isSummonTemplate).toBe(false);
   });
@@ -405,9 +407,7 @@ describe("summon teardown after a re-cast", () => {
     const res = summon(usersState, effect, [], mkBattle());
     expect(res?.color).toBe("blue");
 
-    const spawned = usersState.find(
-      (u) => u.isSummon && u.controllerId === PLAYER_ID,
-    );
+    const spawned = usersState.find((u) => u.isSummon && u.controllerId === PLAYER_ID);
     expect(effect.summonedUserId).toBe(spawned?.userId);
   });
 });

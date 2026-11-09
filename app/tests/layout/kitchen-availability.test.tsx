@@ -43,52 +43,57 @@ describe("Kitchen recipe availability", () => {
     { requirements: false, owned: 0, label: "Recipe unavailable", disabled: true },
     { requirements: true, owned: 0, label: "Missing ingredients", disabled: true },
     { requirements: true, owned: 1, label: "Ready to cook", disabled: false },
-  ])("shows $label and gates the cooking action", ({
-    requirements,
-    owned,
-    label,
-    disabled,
-  }) => {
-    const recipe = {
-      id: "rice-bowl",
-      name: "Rice Bowl",
-      description: "A warm bowl of rice.",
-      rarity: "COMMON",
-      cookingMinLevel: 1,
-      cookingTimeSeconds: 60,
-      cookingOutputQuantity: 1,
-      cookingExperience: 10,
-      mealDurationSeconds: 60,
-      effects: [],
-      craftingRequirements: requirements
-        ? [{
-            id: "rice",
-            requirementItemId: "rice",
-            quantity: 1,
-            requirementItem: { name: "Rice" },
-          }]
-        : [],
-    } as unknown as RouterOutputs["occupation"]["getCookingRecipes"][number];
-    const query = <T,>(data: T) => ({ data, isPending: false, isError: false });
-    Object.assign(vi.spyOn(client, "api" as never), {
-      useUtils: () => ({}),
-      occupation: {
-        getCookingRecipes: { useQuery: () => query([recipe]) },
-        getCraftingQueue: { useQuery: () => query({ waiting: [], capacity: 2 }) },
-        craftItem: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-        cancelQueuedCraft: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      },
-      item: {
-        getUserItems: { useQuery: () => query([{ itemId: "rice", quantity: owned }]) },
-      },
-    });
-    const view = render(<Kitchen />);
-    const card = view.getByRole("button", { name: /Rice Bowl/ });
-    expect(card.textContent).toContain(label);
-    fireEvent.click(card);
-    expect(
-      (view.getByRole("button", { name: "Start cooking" }) as HTMLButtonElement).disabled,
-    ).toBe(disabled);
-    if (disabled) expect(view.getAllByText(label)).toHaveLength(2);
-  });
+  ])(
+    "shows $label and gates the cooking action",
+    ({ requirements, owned, label, disabled }) => {
+      const recipe = {
+        id: "rice-bowl",
+        name: "Rice Bowl",
+        description: "A warm bowl of rice.",
+        rarity: "COMMON",
+        cookingMinLevel: 1,
+        cookingTimeSeconds: 60,
+        cookingOutputQuantity: 1,
+        cookingExperience: 10,
+        mealDurationSeconds: 60,
+        effects: [],
+        craftingRequirements: requirements
+          ? [
+              {
+                id: "rice",
+                requirementItemId: "rice",
+                quantity: 1,
+                requirementItem: { name: "Rice" },
+              },
+            ]
+          : [],
+      } as unknown as RouterOutputs["occupation"]["getCookingRecipes"][number];
+      const query = <T,>(data: T) => ({ data, isPending: false, isError: false });
+      Object.assign(vi.spyOn(client, "api" as never), {
+        useUtils: () => ({}),
+        occupation: {
+          getCookingRecipes: { useQuery: () => query([recipe]) },
+          getCraftingQueue: { useQuery: () => query({ waiting: [], capacity: 2 }) },
+          craftItem: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+          cancelQueuedCraft: {
+            useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+          },
+        },
+        item: {
+          getUserItems: {
+            useQuery: () => query([{ itemId: "rice", quantity: owned }]),
+          },
+        },
+      });
+      const view = render(<Kitchen />);
+      const card = view.getByRole("button", { name: /Rice Bowl/ });
+      expect(card.textContent).toContain(label);
+      fireEvent.click(card);
+      expect(
+        (view.getByRole("button", { name: "Start cooking" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(disabled);
+      if (disabled) expect(view.getAllByText(label)).toHaveLength(2);
+    },
+  );
 });

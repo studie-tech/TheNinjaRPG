@@ -34,10 +34,13 @@ describe("calcHealFinish", () => {
     }
   });
 
-  it.each([-120_000, 120_000])("corrects a client clock offset of %s ms", (timeDiff) => {
-    const serverDeadline = calcHealFinish({ user, boost: 30 }).getTime();
-    expect(calcHealFinish({ user, boost: 30, timeDiff }).getTime()).toBe(
-      serverDeadline + timeDiff,
-    );
-  });
+  it.each([-120_000, 120_000])(
+    "corrects a client clock offset of %s ms",
+    (timeDiff) => {
+      const serverDeadline = calcHealFinish({ user, boost: 30 }).getTime();
+      expect(calcHealFinish({ user, boost: 30, timeDiff }).getTime()).toBe(
+        serverDeadline + timeDiff,
+      );
+    },
+  );
 });

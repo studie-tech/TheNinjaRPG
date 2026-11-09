@@ -82,9 +82,7 @@ describe("isAvailableUserQuests core requirements", () => {
   });
 
   it("preserves village and outlaw-syndicate eligibility", () => {
-    expect(available({ requiredVillage: "village-2" }).message).toContain(
-      "village",
-    );
+    expect(available({ requiredVillage: "village-2" }).message).toContain("village");
     expect(
       available(
         { requiredVillage: VILLAGE_SYNDICATE_ID },
@@ -102,9 +100,7 @@ describe("isAvailableUserQuests core requirements", () => {
       available(
         { prerequisiteQuestId: "prerequisite" },
         {
-          completedQuests: [
-            { id: "history-1", questId: "prerequisite", completed: 1 },
-          ],
+          completedQuests: [{ id: "history-1", questId: "prerequisite", completed: 1 }],
         },
       ).check,
     ).toBe(true);
@@ -120,18 +116,16 @@ describe("isAvailableUserQuests core requirements", () => {
   });
 
   it("gates quests by minimum farming level", () => {
-    expect(available({ requiredFarmingLevel: 2 }).message).toContain(
-      "farming level 2",
-    );
+    expect(available({ requiredFarmingLevel: 2 }).message).toContain("farming level 2");
     expect(
       available({ requiredFarmingLevel: 2 }, { farmingExperience: 500 }).check,
     ).toBe(true);
   });
 
   it("does not apply farming level gates to daily quests", () => {
-    expect(
-      available({ questType: "daily", requiredFarmingLevel: 100 }).check,
-    ).toBe(true);
+    expect(available({ questType: "daily", requiredFarmingLevel: 100 }).check).toBe(
+      true,
+    );
   });
 
   it("preserves lifetime attempt and completion caps for non-periodic quests", () => {

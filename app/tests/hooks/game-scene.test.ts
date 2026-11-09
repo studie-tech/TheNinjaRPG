@@ -12,7 +12,9 @@ afterEach(() => {
 
 describe("game scene failure reporting", () => {
   it("reports an initialization failure once and exposes the error state", async () => {
-    const report = vi.spyOn(telemetry, "reportRendererFailure").mockImplementation(() => {});
+    const report = vi
+      .spyOn(telemetry, "reportRendererFailure")
+      .mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
     const cause = new Error("This browser does not support WebGL");
     const { result } = renderHook(() =>
@@ -23,7 +25,9 @@ describe("game scene failure reporting", () => {
   });
 
   it("reports a frame failure and disposes the live scene", async () => {
-    const report = vi.spyOn(telemetry, "reportRendererFailure").mockImplementation(() => {});
+    const report = vi
+      .spyOn(telemetry, "reportRendererFailure")
+      .mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
     const dispose = vi.fn();
     let fail = (_: unknown) => {};
@@ -42,10 +46,19 @@ describe("game scene failure reporting", () => {
   });
 
   it("does not report work cancelled by unmounting", async () => {
-    const report = vi.spyOn(telemetry, "reportRendererFailure").mockImplementation(() => {});
+    const report = vi
+      .spyOn(telemetry, "reportRendererFailure")
+      .mockImplementation(() => {});
     let reject = (_: unknown) => {};
     const { unmount } = renderHook(() =>
-      useGameScene("farm", mount, () => new Promise<{ dispose: () => void }>((_, rejected) => { reject = rejected; })),
+      useGameScene(
+        "farm",
+        mount,
+        () =>
+          new Promise<{ dispose: () => void }>((_, rejected) => {
+            reject = rejected;
+          }),
+      ),
     );
     unmount();
     reject(new DOMException("Scene initialization cancelled", "AbortError"));

@@ -17,7 +17,11 @@ import type { UserEffect } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
 import { getTagSchema } from "@/validators/combat";
-import { insertLobbyBattle, loadCombatant, preloadLobby } from "../../../../libs/combat/helpers/preload";
+import {
+  insertLobbyBattle,
+  loadCombatant,
+  preloadLobby,
+} from "../../../../libs/combat/helpers/preload";
 import {
   insertItems,
   insertUserItems,
@@ -122,7 +126,9 @@ const seedBattle = async () => {
 
   const essentials = await fetchBattleEssentials(db);
   const users = await Promise.all(
-    USERS.map((userId) => loadCombatant(db, userId, essentials, { equippedItemsOnly: true })),
+    USERS.map((userId) =>
+      loadCombatant(db, userId, essentials, { equippedItemsOnly: true }),
+    ),
   );
   const processed = await preloadLobby(db, users, essentials, "SPARRING");
   await insertLobbyBattle(db, BATTLE, "SPARRING", processed);

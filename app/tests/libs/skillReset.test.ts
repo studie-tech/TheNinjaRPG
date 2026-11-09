@@ -25,20 +25,36 @@ describe("freeResetNote", () => {
 });
 
 describe("shared monthly reset allowance", () => {
-  it.each([ ["NONE", 1], ["NORMAL", 1], ["SILVER", 1], ["GOLD", 2] ] as const)("gives %s supporters %i free resets", (federalStatus, expected) => {
-    expect(getFreeResetAmount({ federalStatus, staffAccount: false } as UserData)).toBe(expected);
+  it.each([
+    ["NONE", 1],
+    ["NORMAL", 1],
+    ["SILVER", 1],
+    ["GOLD", 2],
+  ] as const)("gives %s supporters %i free resets", (federalStatus, expected) => {
+    expect(getFreeResetAmount({ federalStatus, staffAccount: false } as UserData)).toBe(
+      expected,
+    );
   });
   it("counts the resets persisted for the current month", () => {
     const month = new Date().toISOString().slice(0, 7);
-    expect(getMonthlyResetState({ monthlySkillResets: { month, count: 2 } } as UserData).count).toBe(2);
+    expect(
+      getMonthlyResetState({ monthlySkillResets: { month, count: 2 } } as UserData)
+        .count,
+    ).toBe(2);
   });
   it("starts a new allowance when the month changes", () => {
-    expect(getMonthlyResetState({ monthlySkillResets: { month: "2000-01", count: 2 } } as UserData).count).toBe(0);
+    expect(
+      getMonthlyResetState({
+        monthlySkillResets: { month: "2000-01", count: 2 },
+      } as UserData).count,
+    ).toBe(0);
   });
 });
 
 describe("getResetAllowance", () => {
-  const month = getMonthlyResetState({ monthlySkillResets: null } as unknown as UserData).month;
+  const month = getMonthlyResetState({
+    monthlySkillResets: null,
+  } as unknown as UserData).month;
   const user = (count: number, staffAccount = false) =>
     ({
       federalStatus: "GOLD",
@@ -57,7 +73,10 @@ describe("getResetAllowance", () => {
 
   it("stops being free once the allowance runs out", () => {
     const spent = getFreeResetAmount(user(0));
-    expect(getResetAllowance(user(spent))).toMatchObject({ isFree: false, remaining: 0 });
+    expect(getResetAllowance(user(spent))).toMatchObject({
+      isFree: false,
+      remaining: 0,
+    });
   });
 
   it("keeps staff resets free without drawing on the allowance", () => {

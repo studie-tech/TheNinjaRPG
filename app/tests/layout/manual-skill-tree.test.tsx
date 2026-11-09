@@ -17,31 +17,65 @@ let role: string;
 
 beforeEach(() => {
   installBrowserGlobals({ resizeObserver: true });
-  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   skills = [];
   role = "USER";
-  Object.assign(vi.spyOn(client, "api" as never), { skillTree: testApi.skillTree, bloodline: testApi.bloodline, useUtils: testApi.useUtils });
-  vi.spyOn(UserContext, "useUserData").mockImplementation(() => ({ data: { userId: "me", role } }) as never);
-  vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn(), back: vi.fn() } as never);
+  Object.assign(vi.spyOn(client, "api" as never), {
+    skillTree: testApi.skillTree,
+    bloodline: testApi.bloodline,
+    useUtils: testApi.useUtils,
+  });
+  vi.spyOn(UserContext, "useUserData").mockImplementation(
+    () => ({ data: { userId: "me", role } }) as never,
+  );
+  vi.spyOn(navigation, "useRouter").mockReturnValue({
+    push: vi.fn(),
+    back: vi.fn(),
+  } as never);
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
   vi.spyOn(skillTreeFiltering, "default").mockImplementation(() => null);
-  vi.spyOn(itemWithEffects, "default").mockImplementation((({ item, folderName, showEdit }: { item: { name: string }; folderName?: string; showEdit?: string }) => (
-    <div data-testid="skill">{item.name}{folderName ? ` (${folderName})` : ""}{showEdit ? " editable" : ""}</div>
+  vi.spyOn(itemWithEffects, "default").mockImplementation((({
+    item,
+    folderName,
+    showEdit,
+  }: {
+    item: { name: string };
+    folderName?: string;
+    showEdit?: string;
+  }) => (
+    <div data-testid="skill">
+      {item.name}
+      {folderName ? ` (${folderName})` : ""}
+      {showEdit ? " editable" : ""}
+    </div>
   )) as never);
 });
-afterEach(() => { cleanup(); queryClient.clear(); vi.restoreAllMocks(); restoreBrowserGlobals(); });
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+  vi.restoreAllMocks();
+  restoreBrowserGlobals();
+});
 
 const mount = () => {
   const trpcClient = fakeTrpcClient(async (path) => {
     if (path === "skillTree.getAll") return { data: skills, nextCursor: null };
     throw new Error(`Unexpected procedure ${path}`);
   });
-  return render(<TrpcTestProviders client={trpcClient} queryClient={queryClient}><ManualSkillTree /></TrpcTestProviders>);
+  return render(
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+      <ManualSkillTree />
+    </TrpcTestProviders>,
+  );
 };
 
 it("tells players when no skills match the filters", async () => {
   const view = mount();
-  expect(await view.findByText("No skills found given the search criteria.")).toBeTruthy();
+  expect(
+    await view.findByText("No skills found given the search criteria."),
+  ).toBeTruthy();
 });
 
 it("lists skills and shows folder and edit details only to content staff", async () => {
@@ -54,5 +88,7 @@ it("lists skills and shows folder and edit details only to content staff", async
 
   role = "CONTENT-ADMIN";
   const staff = mount();
-  await waitFor(() => expect(staff.getByTestId("skill").textContent).toBe("Dash (Movement) editable"));
+  await waitFor(() =>
+    expect(staff.getByTestId("skill").textContent).toBe("Dash (Movement) editable"),
+  );
 });

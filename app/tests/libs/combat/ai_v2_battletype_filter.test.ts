@@ -28,42 +28,85 @@ const summonJutsu = makeJutsu({
   battleDescription: "summons",
   target: "EMPTY_GROUND",
   range: 4,
-  effects: [makeTag("summon", {
-    aiId: "creature-1", aiHp: 1000, rounds: 4,
-    power: 70, powerPerLevel: 0, calculation: "percentage",
-    target: "INHERIT", friendlyFire: "ENEMIES", description: "summon",
-  })],
+  effects: [
+    makeTag("summon", {
+      aiId: "creature-1",
+      aiHp: 1000,
+      rounds: 4,
+      power: 70,
+      powerPerLevel: 0,
+      calculation: "percentage",
+      target: "INHERIT",
+      friendlyFire: "ENEMIES",
+      description: "summon",
+    }),
+  ],
 });
 
 const mkBattle = (battleType: BattleType): CompleteBattle =>
   makeAiBattle({
-    battleType, activeUserId: "ai1", width: 10, height: 10,
+    battleType,
+    activeUserId: "ai1",
+    width: 10,
+    height: 10,
     usersState: [
-      mkUser({ userId: "ai1", username: "Caster", controllerId: "ai1",
-        aiProfileId: PROFILE, longitude: 2, latitude: 2,
-        jutsus: [{ id: "uj1", jutsuId: SUMMON_JUTSU, level: 1, experience: 0,
-                   equipped: true, lastUsedRound: -99, originalCooldown: 0 }] }),
-      mkUser({ userId: "foe", username: "Foe", controllerId: "foe", isAi: false,
-        longitude: 6, latitude: 6 }),
+      mkUser({
+        userId: "ai1",
+        username: "Caster",
+        controllerId: "ai1",
+        aiProfileId: PROFILE,
+        longitude: 2,
+        latitude: 2,
+        jutsus: [
+          {
+            id: "uj1",
+            jutsuId: SUMMON_JUTSU,
+            level: 1,
+            experience: 0,
+            equipped: true,
+            lastUsedRound: -99,
+            originalCooldown: 0,
+          },
+        ],
+      }),
+      mkUser({
+        userId: "foe",
+        username: "Foe",
+        controllerId: "foe",
+        isAi: false,
+        longitude: 6,
+        latitude: 6,
+      }),
       // Hidden clone-source template the summon tag would copy from.
-      mkUser({ userId: "tmpl", username: "Creature", controllerId: "creature-1",
-        isSummon: true, isSummonTemplate: true, curHealth: 0,
-        longitude: 0, latitude: 0 }),
+      mkUser({
+        userId: "tmpl",
+        username: "Creature",
+        controllerId: "creature-1",
+        isSummon: true,
+        isSummonTemplate: true,
+        curHealth: 0,
+        longitude: 0,
+        latitude: 0,
+      }),
     ],
     extraState: {
       jutsus: { [SUMMON_JUTSU]: summonJutsu },
       aiProfiles: {
         [PROFILE]: {
-          id: PROFILE, name: "always summon", includeDefaultRules: false,
-          rules: [{
-            conditions: [],
-            // EMPTY_GROUND jutsu: aim at a free tile, not at the opponent's
-            // occupied one, or insertAction rejects it before the filter matters.
-            action: ActionUseSpecificJutsu.parse({
-              jutsuId: SUMMON_JUTSU,
-              target: "EMPTY_GROUND_CLOSEST_TO_SELF",
-            }),
-          }],
+          id: PROFILE,
+          name: "always summon",
+          includeDefaultRules: false,
+          rules: [
+            {
+              conditions: [],
+              // EMPTY_GROUND jutsu: aim at a free tile, not at the opponent's
+              // occupied one, or insertAction rejects it before the filter matters.
+              action: ActionUseSpecificJutsu.parse({
+                jutsuId: SUMMON_JUTSU,
+                target: "EMPTY_GROUND_CLOSEST_TO_SELF",
+              }),
+            },
+          ],
         },
       } as unknown as ExtraState["aiProfiles"],
     },

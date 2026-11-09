@@ -1,4 +1,3 @@
-
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect, QueryBuilder } from "drizzle-orm/mysql-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
@@ -63,7 +62,10 @@ const invoke = async (
   input?: unknown,
   userId: string | null = "viewer",
 ) => {
-  return resolverOf(skillTreeRouter[name])({ ctx: { drizzle, userId }, input: input as never }) as Promise<unknown>;
+  return resolverOf(skillTreeRouter[name])({
+    ctx: { drizzle, userId },
+    input: input as never,
+  }) as Promise<unknown>;
 };
 
 const setup = (role: UserRole | null) => {
@@ -85,7 +87,18 @@ const setup = (role: UserRole | null) => {
       userData: { findFirst: vi.fn().mockResolvedValue(user) },
       bloodline: { findFirst: vi.fn().mockResolvedValue(null) },
       skillTree: {
-        findMany: vi.fn().mockImplementation((options) => Promise.resolve(options?.where && new MySqlDialect().sqlToQuery(options.where).sql.includes("JSON_CONTAINS") ? [] : skills)),
+        findMany: vi
+          .fn()
+          .mockImplementation((options) =>
+            Promise.resolve(
+              options?.where &&
+                new MySqlDialect()
+                  .sqlToQuery(options.where)
+                  .sql.includes("JSON_CONTAINS")
+                ? []
+                : skills,
+            ),
+          ),
         findFirst: vi.fn().mockResolvedValue(skills[1]),
       },
       skillTreeFolder: {
@@ -114,11 +127,16 @@ describe("hidden skill-tree permissions", () => {
       expect(await invoke("createFolder", drizzle, data)).toMatchObject(
         allowed
           ? { success: true }
-          : { success: false, message: "You are not authorized to create hidden folders" },
+          : {
+              success: false,
+              message: "You are not authorized to create hidden folders",
+            },
       );
       expect(drizzle.insert).toHaveBeenCalledTimes(allowed ? 1 : 0);
 
-      expect(await invoke("updateFolder", drizzle, { id: "visible", data })).toMatchObject(
+      expect(
+        await invoke("updateFolder", drizzle, { id: "visible", data }),
+      ).toMatchObject(
         allowed
           ? { success: true }
           : { success: false, message: "You are not authorized to hide folders" },
@@ -220,7 +238,10 @@ describe("hidden skill-tree permissions", () => {
 
     drizzle.query.skillTree.findFirst.mockResolvedValue(visible);
     expect(
-      await invoke("update", drizzle, { id: visible.id, data: { ...data, hidden: true } }),
+      await invoke("update", drizzle, {
+        id: visible.id,
+        data: { ...data, hidden: true },
+      }),
     ).toMatchObject({
       success: false,
       message: "You are not authorized to hide skills",
@@ -271,7 +292,9 @@ describe("hidden skill-tree permissions", () => {
       jutsu: { findMany: vi.fn().mockResolvedValue([]) },
     });
     drizzle.query.userData.findFirst.mockReset();
-    drizzle.query.userData.findFirst.mockResolvedValueOnce(user).mockResolvedValueOnce(null);
+    drizzle.query.userData.findFirst
+      .mockResolvedValueOnce(user)
+      .mockResolvedValueOnce(null);
     drizzle.query.skillTree.findFirst.mockResolvedValue(skills[0]);
     drizzle.query.skillTree.findMany.mockResolvedValue([]);
     drizzle.query.userSkill.findMany.mockResolvedValue([]);
@@ -350,9 +373,13 @@ describe("hidden skill-tree permissions", () => {
       expect(rows.map((row) => row.skillId).sort()).toEqual(
         (allowed ? skills.map((entry) => entry.id) : ["public"]).sort(),
       );
-      expect(rows.find((row) => row.skillId === "public")).toMatchObject({ userCount: 2 });
+      expect(rows.find((row) => row.skillId === "public")).toMatchObject({
+        userCount: 2,
+      });
       if (allowed) {
-        expect(rows.find((row) => row.skillId === "secret")).toMatchObject({ userCount: 3 });
+        expect(rows.find((row) => row.skillId === "secret")).toMatchObject({
+          userCount: 3,
+        });
       }
       for (const row of rows) expect(row).not.toHaveProperty("hidden");
       expect(drizzle.query.skillTree.findMany).toHaveBeenCalledWith(
@@ -375,11 +402,19 @@ describe("hidden skill-tree permissions", () => {
       const { drizzle, owned, skills } = setup(role);
       const allowed = !excluded.includes(role);
       owned[0]!.activated = true;
-      drizzle.query.skillTree.findMany.mockResolvedValue(allowed ? skills : [skills[0]!]);
+      drizzle.query.skillTree.findMany.mockResolvedValue(
+        allowed ? skills : [skills[0]!],
+      );
       const list = await invoke("getAll", drizzle, { limit: 500 });
-      expect(list).toMatchObject({ data: allowed ? [expect.anything(), expect.anything(), expect.anything()] : [expect.objectContaining({ id: "public" })] });
+      expect(list).toMatchObject({
+        data: allowed
+          ? [expect.anything(), expect.anything(), expect.anything()]
+          : [expect.objectContaining({ id: "public" })],
+      });
       const options = drizzle.query.skillTree.findMany.mock.calls[0]![0] as {
-        where?: SQL; limit: number; offset: number;
+        where?: SQL;
+        limit: number;
+        offset: number;
       };
       expect(options).toMatchObject({ limit: 500, offset: 0 });
       if (allowed) {
@@ -392,78 +427,135 @@ describe("hidden skill-tree permissions", () => {
         expect(query.sql).toContain("`SkillTreeFolder`.`hidden` = ?");
         expect(query.params).toEqual(["SKILL", false, true]);
       }
-      drizzle.query.skillTree.findMany.mockResolvedValue(allowed ? [owned[0]!.skill] : []);
-      expect(await invoke("getAll", drizzle, { limit: 500, hidden: true })).toMatchObject({
+      drizzle.query.skillTree.findMany.mockResolvedValue(
+        allowed ? [owned[0]!.skill] : [],
+      );
+      expect(
+        await invoke("getAll", drizzle, { limit: 500, hidden: true }),
+      ).toMatchObject({
         data: allowed ? [expect.objectContaining({ id: "secret" })] : [],
       });
       drizzle.query.skillTree.findMany.mockResolvedValue([
-        skill("public"), skill("secret", true), skill("folder-secret", false, folders[1]),
+        skill("public"),
+        skill("secret", true),
+        skill("folder-secret", false, folders[1]),
       ]);
       expect(await invoke("getAllNames", drizzle)).toHaveLength(allowed ? 3 : 1);
-      expect(await invoke("get", drizzle, { id: "secret" })).toEqual(allowed ? expect.objectContaining({ id: "secret" }) : null);
-      expect(await invoke("getAllFolders", drizzle, { includeHidden: true })).toHaveLength(allowed ? 2 : 1);
-      expect(await invoke("getAllFolders", drizzle, { includeHidden: false })).toHaveLength(1);
+      expect(await invoke("get", drizzle, { id: "secret" })).toEqual(
+        allowed ? expect.objectContaining({ id: "secret" }) : null,
+      );
+      expect(
+        await invoke("getAllFolders", drizzle, { includeHidden: true }),
+      ).toHaveLength(allowed ? 2 : 1);
+      expect(
+        await invoke("getAllFolders", drizzle, { includeHidden: false }),
+      ).toHaveLength(1);
       expect(await invoke("getUserSkills", drizzle)).toMatchObject({
         skills: allowed ? [expect.anything()] : [],
         activatedSkillCount: 1,
         usedSkillPoints: 2,
       });
-      expect(await invoke("getFolderStats", drizzle)).toEqual(allowed ? [
-        { folderId: "visible", folderName: "Visible", folderImage: "", totalSkills: 2, ownedSkills: 1 },
-        { folderId: "hidden", folderName: "Hidden", folderImage: "", totalSkills: 1, ownedSkills: 0 },
-      ] : [{ folderId: "visible", folderName: "Visible", folderImage: "", totalSkills: 1, ownedSkills: 0 }]);
+      expect(await invoke("getFolderStats", drizzle)).toEqual(
+        allowed
+          ? [
+              {
+                folderId: "visible",
+                folderName: "Visible",
+                folderImage: "",
+                totalSkills: 2,
+                ownedSkills: 1,
+              },
+              {
+                folderId: "hidden",
+                folderName: "Hidden",
+                folderImage: "",
+                totalSkills: 1,
+                ownedSkills: 0,
+              },
+            ]
+          : [
+              {
+                folderId: "visible",
+                folderName: "Visible",
+                folderImage: "",
+                totalSkills: 1,
+                ownedSkills: 0,
+              },
+            ],
+      );
     },
   );
 
   it("does not expose hidden content to anonymous viewers or through pagination", async () => {
     const { drizzle } = setup(null);
     drizzle.query.skillTree.findMany.mockResolvedValue([]);
-    expect(await invoke("getAll", drizzle, { limit: 1, cursor: 1 }, null)).toMatchObject({ data: [] });
+    expect(
+      await invoke("getAll", drizzle, { limit: 1, cursor: 1 }, null),
+    ).toMatchObject({ data: [] });
     expect(drizzle.query.skillTree.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ limit: 1, offset: 1, where: expect.anything() }),
     );
-    expect(await invoke("getAllFolders", drizzle, { includeHidden: true }, null)).toHaveLength(1);
+    expect(
+      await invoke("getAllFolders", drizzle, { includeHidden: true }, null),
+    ).toHaveLength(1);
     expect(await invoke("get", drizzle, { id: "secret" }, null)).toBeNull();
   });
 
   it.each([...excluded, "CONTENT", "CODER", "OWNER"] as UserRole[])(
-    "guards activation and purchase for %s", async (role) => {
+    "guards activation and purchase for %s",
+    async (role) => {
       const { drizzle, write } = setup(role);
       const allowed = !excluded.includes(role);
-      expect(await invoke("purchaseSkill", drizzle, { skillId: "secret" })).toMatchObject({ success: allowed });
+      expect(
+        await invoke("purchaseSkill", drizzle, { skillId: "secret" }),
+      ).toMatchObject({ success: allowed });
       expect(write).toHaveBeenCalledTimes(allowed ? 1 : 0);
       drizzle.query.userSkill.findMany.mockResolvedValue([]);
-      expect(await invoke("purchaseSkill", drizzle, { skillId: "secret" })).toMatchObject({ success: allowed });
+      expect(
+        await invoke("purchaseSkill", drizzle, { skillId: "secret" }),
+      ).toMatchObject({ success: allowed });
       expect(write).toHaveBeenCalledTimes(allowed ? 2 : 0);
     },
   );
 
-  it.each([...excluded])("rejects visible skills inside hidden folders for %s", async (role) => {
-    const { drizzle, skills, write } = setup(role);
-    drizzle.query.skillTree.findFirst.mockResolvedValue(skills[2]);
-    expect(await invoke("purchaseSkill", drizzle, { skillId: "folder-secret" })).toMatchObject({ success: false });
-    expect(write).not.toHaveBeenCalled();
-  });
+  it.each([...excluded])(
+    "rejects visible skills inside hidden folders for %s",
+    async (role) => {
+      const { drizzle, skills, write } = setup(role);
+      drizzle.query.skillTree.findFirst.mockResolvedValue(skills[2]);
+      expect(
+        await invoke("purchaseSkill", drizzle, { skillId: "folder-secret" }),
+      ).toMatchObject({ success: false });
+      expect(write).not.toHaveBeenCalled();
+    },
+  );
 
-  it.each(["prerequisites", "points", "special", "activated"])("retains the %s guard for authorized staff", async (guard) => {
-    const { drizzle, skills, owned, write, user } = setup("OWNER");
-    if (guard === "prerequisites") skills[1]!.requiredSkillIds = ["missing"];
-    if (guard === "points") user!.skillPoints = 0;
-    if (guard === "special") {
-      skills[1]!.skillType = "SPECIAL";
-      drizzle.query.userSkill.findMany.mockResolvedValue([]);
-    }
-    if (guard === "activated") owned[0]!.activated = true;
-    expect(await invoke("purchaseSkill", drizzle, { skillId: "secret" })).toMatchObject({ success: false });
-    expect(write).not.toHaveBeenCalled();
-  });
+  it.each(["prerequisites", "points", "special", "activated"])(
+    "retains the %s guard for authorized staff",
+    async (guard) => {
+      const { drizzle, skills, owned, write, user } = setup("OWNER");
+      if (guard === "prerequisites") skills[1]!.requiredSkillIds = ["missing"];
+      if (guard === "points") user!.skillPoints = 0;
+      if (guard === "special") {
+        skills[1]!.skillType = "SPECIAL";
+        drizzle.query.userSkill.findMany.mockResolvedValue([]);
+      }
+      if (guard === "activated") owned[0]!.activated = true;
+      expect(
+        await invoke("purchaseSkill", drizzle, { skillId: "secret" }),
+      ).toMatchObject({ success: false });
+      expect(write).not.toHaveBeenCalled();
+    },
+  );
 
   it("allows an authorized owner to activate an unlocked hidden special skill", async () => {
     const { drizzle, skills, write } = setup("CONTENT");
     skills[1]!.skillType = "SPECIAL";
-    expect(await invoke("purchaseSkill", drizzle, { skillId: "secret" })).toMatchObject({
-      success: true,
-    });
+    expect(await invoke("purchaseSkill", drizzle, { skillId: "secret" })).toMatchObject(
+      {
+        success: true,
+      },
+    );
     expect(write).toHaveBeenCalledTimes(1);
   });
 
@@ -471,8 +563,14 @@ describe("hidden skill-tree permissions", () => {
     const { drizzle, skills } = setup("OWNER");
     skills[1]!.skillType = "SPECIAL";
     drizzle.query.userSkill.findMany.mockResolvedValue([]);
-    expect(await invoke("getFolderStats", drizzle)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ folderId: "visible", totalSkills: 1, ownedSkills: 0 }),
-    ]));
+    expect(await invoke("getFolderStats", drizzle)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          folderId: "visible",
+          totalSkills: 1,
+          ownedSkills: 0,
+        }),
+      ]),
+    );
   });
 });

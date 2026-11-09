@@ -23,9 +23,13 @@ const migration = await readFile(
 
 it("loads skill-point reconciliation through the migration journal", () => {
   const migrations = readMigrationFiles({
-    migrationsFolder: fileURLToPath(new URL("../../drizzle/migrations", import.meta.url)),
+    migrationsFolder: fileURLToPath(
+      new URL("../../drizzle/migrations", import.meta.url),
+    ),
   });
-  expect(migrations.filter(({ sql }) => sql.join("\n").includes(migration))).toHaveLength(1);
+  expect(
+    migrations.filter(({ sql }) => sql.join("\n").includes(migration)),
+  ).toHaveLength(1);
 });
 
 describeWithDatabase("skill-point reconciliation migration", () => {
@@ -46,7 +50,9 @@ describeWithDatabase("skill-point reconciliation migration", () => {
     await db.insert(skillTree).values(skills);
     const caller = await callerFor(skillTreeRouter, userId);
     for (const skill of skills) {
-      expect(await caller.purchaseSkill({ skillId: skill.id })).toMatchObject({ success: true });
+      expect(await caller.purchaseSkill({ skillId: skill.id })).toMatchObject({
+        success: true,
+      });
     }
     const allocations = await db.query.userSkill.findMany();
 
@@ -93,7 +99,9 @@ describeWithDatabase("skill-point reconciliation migration", () => {
     const original = await db.query.userData.findMany();
     await runRawSql(migration);
     const rows = await db.query.userData.findMany();
-    expect(Object.fromEntries(rows.map((row) => [row.userId, row.skillPoints]))).toEqual({
+    expect(
+      Object.fromEntries(rows.map((row) => [row.userId, row.skillPoints])),
+    ).toEqual({
       over: 30,
       under: 30,
       "level-31": 10,

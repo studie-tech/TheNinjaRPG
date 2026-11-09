@@ -14,7 +14,9 @@ describe("bank interest rate", () => {
   ] as const)(
     "adds the federal bonus in percentage points (boost %d, %s, staff %p)",
     (boost, federalStatus, staffAccount, percent) => {
-      expect(calcBankInterest(boost, { federalStatus, staffAccount })).toBeCloseTo(percent);
+      expect(calcBankInterest(boost, { federalStatus, staffAccount })).toBeCloseTo(
+        percent,
+      );
     },
   );
 

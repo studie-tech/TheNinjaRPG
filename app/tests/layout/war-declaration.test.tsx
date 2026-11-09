@@ -22,7 +22,11 @@ import type { UserWithRelations } from "@/routers/profile";
 import type { FetchActiveWarsReturnType } from "@/routers/war";
 import * as UserContext from "@/utils/UserContext";
 import { defaultWarRules } from "@/validators/war";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../setup/browserGlobals";
 import { controllableMutation, stubSelect } from "./helpers/warUi";
 import { testRouter } from "../setup/router";
 
@@ -89,9 +93,15 @@ beforeEach(() => {
   // Isolate globe rendering when another page has already loaded WarMap.
   vi.spyOn(GlobalMap, "default").mockImplementation((props) => (
     <>
-      <button type="button" onClick={() => props.onTileClick?.(102)}>Target tile</button>
-      <button type="button" onClick={() => props.onTileClick?.(103)}>Alliance tile</button>
-      <button type="button" onClick={() => props.onTileClick?.(105)}>Sector tile</button>
+      <button type="button" onClick={() => props.onTileClick?.(102)}>
+        Target tile
+      </button>
+      <button type="button" onClick={() => props.onTileClick?.(103)}>
+        Alliance tile
+      </button>
+      <button type="button" onClick={() => props.onTileClick?.(105)}>
+        Sector tile
+      </button>
     </>
   ));
   installBrowserGlobals();
@@ -115,7 +125,9 @@ beforeEach(() => {
     }),
     travel: {
       getAllSectors: {
-        useQuery: () => ({ data: ownsSector ? [{ villageId: own.id, sectors: [102] }] : [] }),
+        useQuery: () => ({
+          data: ownsSector ? [{ villageId: own.id, sectors: [102] }] : [],
+        }),
       },
     },
     village: {
@@ -178,7 +190,11 @@ describe("war room participation", () => {
   it("loads active wars without village membership and keeps village history unavailable", () => {
     vi.spyOn(ContentBox, "default").mockImplementation(
       ({ title, children, topRightContent }) => (
-        <><h1>{title}</h1>{topRightContent}{children}</>
+        <>
+          <h1>{title}</h1>
+          {topRightContent}
+          {children}
+        </>
       ),
     );
     user = { ...user, villageId: null, village: null };
@@ -263,13 +279,13 @@ describe("war declaration targets", () => {
     const decay = `Each day at war reduces your tokens by ${WAR_DAILY_TOKEN_DECAY_PERCENT_BASE}% (increasing to ${WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_5}% after 5 days and ${WAR_DAILY_TOKEN_DECAY_PERCENT_DAY_8}% after 8 days).`;
     const view = mount();
     fireEvent.click(view.getByRole("button", { name: "Target tile" }));
-    expect(view.getByRole("dialog").textContent).toContain(
-      `Village Tokens. ${decay}`,
-    );
+    expect(view.getByRole("dialog").textContent).toContain(`Village Tokens. ${decay}`);
     cleanup();
     const sector = mount();
     fireEvent.click(sector.getByRole("button", { name: "Sector tile" }));
-    expect(sector.getByRole("dialog").textContent).toContain(`Village Tokens. ${decay}`);
+    expect(sector.getByRole("dialog").textContent).toContain(
+      `Village Tokens. ${decay}`,
+    );
   });
 
   it("lists the alliances an enemy declaration breaks and the enemies it adds", () => {
@@ -282,12 +298,34 @@ describe("war declaration targets", () => {
         user={user}
         isKage
         villages={[rich, target, allied, third]}
-        relationships={[
-          { id: "own-target", villageIdA: own.id, villageIdB: target.id, status: "NEUTRAL" },
-          { id: "own-allied", villageIdA: own.id, villageIdB: allied.id, status: "ALLY" },
-          { id: "allied-target", villageIdA: allied.id, villageIdB: target.id, status: "ALLY" },
-          { id: "third-target", villageIdA: third.id, villageIdB: target.id, status: "ALLY" },
-        ] as VillageAlliance[]}
+        relationships={
+          [
+            {
+              id: "own-target",
+              villageIdA: own.id,
+              villageIdB: target.id,
+              status: "NEUTRAL",
+            },
+            {
+              id: "own-allied",
+              villageIdA: own.id,
+              villageIdB: allied.id,
+              status: "ALLY",
+            },
+            {
+              id: "allied-target",
+              villageIdA: allied.id,
+              villageIdB: target.id,
+              status: "ALLY",
+            },
+            {
+              id: "third-target",
+              villageIdA: third.id,
+              villageIdB: target.id,
+              status: "ALLY",
+            },
+          ] as VillageAlliance[]
+        }
       />,
     );
     fireEvent.click(view.getByRole("button", { name: "Target tile" }));
@@ -300,16 +338,23 @@ describe("war declaration targets", () => {
   });
 
   it("shows a structure's raid block and holds the raid until another structure is chosen", () => {
-    raidOptions = [{ route: "/missionhall", block: "Raided too recently" }, { route: "/traininggrounds" }];
+    raidOptions = [
+      { route: "/missionhall", block: "Raided too recently" },
+      { route: "/traininggrounds" },
+    ];
     user = { ...user, isOutlaw: true, village: { ...own, type: "HIDEOUT" } };
     const view = mount();
     fireEvent.click(view.getByRole("button", { name: "Target tile" }));
     expect(view.getByRole("status").textContent).toBe("Raided too recently");
-    expect((view.getByRole("button", { name: "Start Raid" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (view.getByRole("button", { name: "Start Raid" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
     const selector = view.getAllByRole("combobox", { name: "Structure" }).at(-1)!;
     fireEvent.change(selector, { target: { value: "/traininggrounds" } });
     expect(view.queryByRole("status")).toBeNull();
-    expect((view.getByRole("button", { name: "Start Raid" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(
+      (view.getByRole("button", { name: "Start Raid" }) as HTMLButtonElement).disabled,
+    ).toBe(false);
   });
 
   it("keeps the faction raid default and submits the selected structure", () => {
@@ -363,7 +408,9 @@ describe("paid sector shrine claims", () => {
             targetStructureRoute: "/townhall",
             settlement: null,
             settlementPending: false,
-            rules: null, objectiveState: null, combatStartedAt: null,
+            rules: null,
+            objectiveState: null,
+            combatStartedAt: null,
           } satisfies FetchActiveWarsReturnType
         }
       />,
@@ -409,7 +456,9 @@ describe("war map confirmations", () => {
     const view = mount();
     fireEvent.click(view.getByRole("button", { name: "Target tile" }));
     fireEvent.click(view.getByRole("button", { name: "Declare War" }));
-    await act(() => declarations.respond({ success: false, message: "Declaration rejected" }));
+    await act(() =>
+      declarations.respond({ success: false, message: "Declaration rejected" }),
+    );
     expect(view.getByRole("alert").textContent).toBe("Declaration rejected");
     fireEvent.click(view.getAllByRole("button", { name: /^Close$/ })[0]!);
     expect(view.queryByRole("dialog")).toBeNull();
@@ -446,13 +495,18 @@ describe("war map confirmations", () => {
       fireEvent.click(view.getByRole("button", { name: label }));
       expect(view.getByRole("dialog").getAttribute("aria-busy")).toBe("true");
       expect(
-        view.getAllByRole("button", { name: /^Close$/ })
+        view
+          .getAllByRole("button", { name: /^Close$/ })
           .every((button) => (button as HTMLButtonElement).disabled),
       ).toBe(true);
-      await act(() => declarations.respond({ success: false, message: "Declaration rejected" }));
+      await act(() =>
+        declarations.respond({ success: false, message: "Declaration rejected" }),
+      );
       expect(view.getByRole("alert").textContent).toBe("Declaration rejected");
       expect(view.getByRole("dialog").getAttribute("aria-busy")).toBe("false");
-      expect((view.getByRole("button", { name: label }) as HTMLButtonElement).disabled).toBe(false);
+      expect(
+        (view.getByRole("button", { name: label }) as HTMLButtonElement).disabled,
+      ).toBe(false);
       fireEvent.click(view.getByRole("button", { name: label }));
       expect(view.queryByRole("alert")).toBeNull();
       expect(declare).toHaveBeenCalledTimes(2);
@@ -469,9 +523,12 @@ describe("war map confirmations", () => {
     expect(view.getByRole("alert").textContent).toBe(
       "The declaration could not be completed. Please try again.",
     );
-    expect((view.getByRole("button", { name: "Declare War" }) as HTMLButtonElement).disabled).toBe(false);
     expect(
-      view.getAllByRole("button", { name: /^Close$/ })
+      (view.getByRole("button", { name: "Declare War" }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    expect(
+      view
+        .getAllByRole("button", { name: /^Close$/ })
         .every((button) => !(button as HTMLButtonElement).disabled),
     ).toBe(true);
   });
@@ -517,7 +574,9 @@ describe("objective war townhall health", () => {
   } as FetchActiveWarsReturnType;
   const freshWar = { ...war, attackerWarHealth: 9700, defenderWarHealth: 8200 };
   let response: FetchActiveWarsReturnType | undefined;
-  let pollInterval: (query: { state: { data?: { war: FetchActiveWarsReturnType } } }) => number | false;
+  let pollInterval: (query: {
+    state: { data?: { war: FetchActiveWarsReturnType } };
+  }) => number | false;
 
   beforeEach(() => {
     response = undefined;
@@ -528,7 +587,10 @@ describe("objective war townhall health", () => {
       useUtils: () => ({}),
       war: {
         getObjectiveWarInfo: {
-          useQuery: (_input: unknown, options: { refetchInterval: typeof pollInterval }) => {
+          useQuery: (
+            _input: unknown,
+            options: { refetchInterval: typeof pollInterval },
+          ) => {
             pollInterval = options.refetchInterval;
             return { data: response ? { war: response } : undefined };
           },
@@ -557,7 +619,8 @@ describe("objective war townhall health", () => {
     expect(
       labels.map(
         (label) =>
-          (label.parentElement?.querySelector(".bg-red-500") as HTMLElement).style.width,
+          (label.parentElement?.querySelector(".bg-red-500") as HTMLElement).style
+            .width,
       ),
     ).toEqual(health.map((current) => `${(current / 10000) * 100}%`));
   };
@@ -572,8 +635,13 @@ describe("objective war townhall health", () => {
   it("keeps masked kill history and statistics readable while preserving ordinary and self navigation", () => {
     const push = vi.fn();
     const router = {
-      back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), push,
-      replace: vi.fn(), prefetch: vi.fn(), bfcacheId: "war-history",
+      back: vi.fn(),
+      forward: vi.fn(),
+      refresh: vi.fn(),
+      push,
+      replace: vi.fn(),
+      prefetch: vi.fn(),
+      bfcacheId: "war-history",
     };
     // Bun preserves module mocks across files, so bind the hook to this test's router.
     vi.spyOn(navigation, "useRouter").mockReturnValue(router);
@@ -584,19 +652,31 @@ describe("objective war townhall health", () => {
     ];
     Object.assign(client.api.war, {
       getWarKills: {
-        useQuery: () => ({ data: identities.map((identity, index) => ({
-          id: `kill-${index}`, killerId: identity.userId,
-          killer: { ...identity, avatar: "" },
-          victim: { userId: "victim", username: "Victim", avatar: "" },
-          killerVillage: { name: "Attacker" }, victimVillage: { name: "Defender" },
-          killedAt: new Date(), sector: 1, shrineHpChange: 0, townhallHpChange: 0,
-        })) }),
+        useQuery: () => ({
+          data: identities.map((identity, index) => ({
+            id: `kill-${index}`,
+            killerId: identity.userId,
+            killer: { ...identity, avatar: "" },
+            victim: { userId: "victim", username: "Victim", avatar: "" },
+            killerVillage: { name: "Attacker" },
+            victimVillage: { name: "Defender" },
+            killedAt: new Date(),
+            sector: 1,
+            shrineHpChange: 0,
+            townhallHpChange: 0,
+          })),
+        }),
       },
       getWarKillStats: {
-        useQuery: () => ({ data: identities.map((identity) => ({
-          killerId: identity.userId, killerUsername: identity.username,
-          killerAvatar: "", villageName: null, count: 1,
-        })) }),
+        useQuery: () => ({
+          data: identities.map((identity) => ({
+            killerId: identity.userId,
+            killerUsername: identity.username,
+            killerAvatar: "",
+            villageName: null,
+            count: 1,
+          })),
+        }),
       },
     });
     const view = render(
@@ -605,7 +685,9 @@ describe("objective war townhall health", () => {
       </AppRouterContext.Provider>,
     );
     for (const icon of ["swords", "trophy"]) {
-      fireEvent.click(view.container.querySelector(`.lucide-${icon}`)!.closest("button")!);
+      fireEvent.click(
+        view.container.querySelector(`.lucide-${icon}`)!.closest("button")!,
+      );
       const rows = within(view.getByRole("dialog")).getAllByRole("row").slice(1);
       expect(rows).toHaveLength(3);
       expect(rows[0]!.textContent).toContain("Mercenary");
@@ -617,7 +699,9 @@ describe("objective war townhall health", () => {
         expect(push).toHaveBeenLastCalledWith(`/userid/${identities[index]!.userId}`);
       }
       push.mockClear();
-      fireEvent.click(within(view.getByRole("dialog")).getAllByRole("button", { name: "Close" })[0]!);
+      fireEvent.click(
+        within(view.getByRole("dialog")).getAllByRole("button", { name: "Close" })[0]!,
+      );
     }
   });
 
@@ -625,9 +709,11 @@ describe("objective war townhall health", () => {
     "shows the latest initial snapshot to %s",
     (villageId, isAttacker) => {
       response = freshWar;
-      const user = { userId: "viewer", villageId, role: "USER" } as NonNullable<
-        UserWithRelations
-      >;
+      const user = {
+        userId: "viewer",
+        villageId,
+        role: "USER",
+      } as NonNullable<UserWithRelations>;
       const view = render(<VillageWar war={war} user={user} isKage={false} />);
       expectHealth(view, isAttacker ? [9700, 8200] : [8200, 9700]);
     },
@@ -644,18 +730,35 @@ describe("objective war townhall health", () => {
     (villageId, sideVillageId, isAttacker) => {
       response = {
         ...freshWar,
-        warMercenaries: [{
-          id: "contract", warId: war.id, sideVillageId, userId: "viewer",
-          invitedById: "kage", tokens: 4, slot: 1, createdAt: new Date(),
-          acceptedAt: new Date(), endedAt: null, activeSlot: 1,
-          activeUserId: "viewer", invitedUserId: "viewer",
-        }],
+        warMercenaries: [
+          {
+            id: "contract",
+            warId: war.id,
+            sideVillageId,
+            userId: "viewer",
+            invitedById: "kage",
+            tokens: 4,
+            slot: 1,
+            createdAt: new Date(),
+            acceptedAt: new Date(),
+            endedAt: null,
+            activeSlot: 1,
+            activeUserId: "viewer",
+            invitedUserId: "viewer",
+          },
+        ],
       };
-      const user = { userId: "viewer", villageId, role: "USER" } as NonNullable<UserWithRelations>;
+      const user = {
+        userId: "viewer",
+        villageId,
+        role: "USER",
+      } as NonNullable<UserWithRelations>;
       const view = render(<VillageWar war={war} user={user} isKage={false} />);
-      expect(view.getByRole("heading", {
-        name: `${isAttacker ? "Attacking Defender" : "Defending Against Attacker"} - Village war`,
-      })).toBeDefined();
+      expect(
+        view.getByRole("heading", {
+          name: `${isAttacker ? "Attacking Defender" : "Defending Against Attacker"} - Village war`,
+        }),
+      ).toBeDefined();
       expectHealth(view, isAttacker ? [9700, 8200] : [8200, 9700]);
     },
   );
@@ -663,9 +766,11 @@ describe("objective war townhall health", () => {
   it.each(viewers)(
     "refreshes visible health after polling for %s",
     (villageId, isAttacker) => {
-      const user = { userId: "viewer", villageId, role: "USER" } as NonNullable<
-        UserWithRelations
-      >;
+      const user = {
+        userId: "viewer",
+        villageId,
+        role: "USER",
+      } as NonNullable<UserWithRelations>;
       const view = render(<VillageWar war={war} user={user} isKage={false} />);
       expectHealth(view, [10000, 10000]);
 
@@ -680,9 +785,15 @@ describe("objective war townhall health", () => {
   );
 
   it("shows the polled outcome, removes active actions and stops polling when a war ends", () => {
-    const user = { userId: "viewer", villageId: "attacker", role: "OWNER" } as NonNullable<UserWithRelations>;
+    const user = {
+      userId: "viewer",
+      villageId: "attacker",
+      role: "OWNER",
+    } as NonNullable<UserWithRelations>;
     const view = render(<VillageWar war={war} user={user} isKage />);
-    expect(view.getByRole("button", { name: "Surrender war objective-war" })).toBeDefined();
+    expect(
+      view.getByRole("button", { name: "Surrender war objective-war" }),
+    ).toBeDefined();
     expect(view.getByRole("button", { name: /Administratively end/ })).toBeDefined();
     expect(pollInterval({ state: {} })).toBe(10000);
 
@@ -690,7 +801,9 @@ describe("objective war townhall health", () => {
     view.rerender(<VillageWar war={war} user={user} isKage />);
     expect(view.getByText("Outcome: Victory")).toBeDefined();
     expect(view.getByText(/^Ended:/)).toBeDefined();
-    expect(view.queryByRole("button", { name: "Surrender war objective-war" })).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Surrender war objective-war" }),
+    ).toBeNull();
     expect(view.queryByRole("button", { name: /Administratively end/ })).toBeNull();
     expect(view.queryByText(/^HP \(/)).toBeNull();
     expect(pollInterval({ state: { data: { war: response } } })).toBe(false);
@@ -707,72 +820,138 @@ describe("objective war townhall health", () => {
       ).map(([status, label]) => [villageId, status, label] as const),
     ),
   )("shows %s the %s outcome as %s", (villageId, status, label) => {
-    const user = { userId: "viewer", villageId, role: "USER" } as NonNullable<UserWithRelations>;
+    const user = {
+      userId: "viewer",
+      villageId,
+      role: "USER",
+    } as NonNullable<UserWithRelations>;
     response = { ...war, status, endedAt: new Date() };
     const view = render(<VillageWar war={war} user={user} isKage={false} />);
-    const colour = { Victory: "text-green-500", Defeat: "text-red-500", "War ended in a Draw": "text-yellow-500" }[label];
+    const colour = {
+      Victory: "text-green-500",
+      Defeat: "text-red-500",
+      "War ended in a Draw": "text-yellow-500",
+    }[label];
     expect(view.getByText(`Outcome: ${label}`).className).toBe(`font-bold ${colour}`);
   });
 
-  it.each(viewers)("lists the viewer's side first on shrines and supporting forces for %s", (villageId, isAttacker) => {
-    const user = { userId: "viewer", villageId, role: "USER" } as NonNullable<UserWithRelations>;
-    const shrineWar = {
-      ...war,
-      rules: null,
-      attackerWarHealth: 9000,
-      defenderWarHealth: 8000,
-      attackerShrineHp: 400,
-      attackerShrineMaxHp: 500,
-      attackerShrineStatus: "ACTIVE",
-      defenderShrineHp: 0,
-      defenderShrineMaxHp: 500,
-      defenderShrineStatus: "CAPTURED",
-    } as unknown as FetchActiveWarsReturnType;
-    const view = render(<VillageWar war={shrineWar} user={user} isKage={false} />);
-    const order = isAttacker ? ["Attacker", "Defender"] : ["Defender", "Attacker"];
-    expect(view.getAllByText(/ Shrine$/).map((label) => label.textContent)).toEqual(order.map((name) => `${name} Shrine`));
-    expect(view.getAllByText(/^(Captured|Damaged|Active)$/).map((badge) => badge.textContent)).toEqual(
-      isAttacker ? ["Active", "Captured"] : ["Captured", "Active"],
-    );
-    const own = isAttacker ? (["HP (9000 / 10000)", "HP (400 / 500)"] as const) : (["HP (8000 / 10000)", "HP (0 / 500)"] as const);
-    const enemy = isAttacker ? (["HP (8000 / 10000)", "HP (0 / 500)"] as const) : (["HP (9000 / 10000)", "HP (400 / 500)"] as const);
-    expect(view.getAllByText(/^HP \(/).map((label) => label.textContent)).toEqual([own[0], enemy[0], own[1], enemy[1]]);
-    const forces = view.getByText("Supporting Forces").parentElement!;
-    expect([...forces.querySelectorAll("p.text-muted-foreground")].map((name) => name.textContent)).toEqual(order);
-    expect([...forces.querySelectorAll("span.text-sm")].map((ally) => ally.textContent)).toEqual(
-      isAttacker ? ["Attacking ally", "Defending ally"] : ["Defending ally", "Attacking ally"],
-    );
-  });
+  it.each(viewers)(
+    "lists the viewer's side first on shrines and supporting forces for %s",
+    (villageId, isAttacker) => {
+      const user = {
+        userId: "viewer",
+        villageId,
+        role: "USER",
+      } as NonNullable<UserWithRelations>;
+      const shrineWar = {
+        ...war,
+        rules: null,
+        attackerWarHealth: 9000,
+        defenderWarHealth: 8000,
+        attackerShrineHp: 400,
+        attackerShrineMaxHp: 500,
+        attackerShrineStatus: "ACTIVE",
+        defenderShrineHp: 0,
+        defenderShrineMaxHp: 500,
+        defenderShrineStatus: "CAPTURED",
+      } as unknown as FetchActiveWarsReturnType;
+      const view = render(<VillageWar war={shrineWar} user={user} isKage={false} />);
+      const order = isAttacker ? ["Attacker", "Defender"] : ["Defender", "Attacker"];
+      expect(view.getAllByText(/ Shrine$/).map((label) => label.textContent)).toEqual(
+        order.map((name) => `${name} Shrine`),
+      );
+      expect(
+        view
+          .getAllByText(/^(Captured|Damaged|Active)$/)
+          .map((badge) => badge.textContent),
+      ).toEqual(isAttacker ? ["Active", "Captured"] : ["Captured", "Active"]);
+      const own = isAttacker
+        ? (["HP (9000 / 10000)", "HP (400 / 500)"] as const)
+        : (["HP (8000 / 10000)", "HP (0 / 500)"] as const);
+      const enemy = isAttacker
+        ? (["HP (8000 / 10000)", "HP (0 / 500)"] as const)
+        : (["HP (9000 / 10000)", "HP (400 / 500)"] as const);
+      expect(view.getAllByText(/^HP \(/).map((label) => label.textContent)).toEqual([
+        own[0],
+        enemy[0],
+        own[1],
+        enemy[1],
+      ]);
+      const forces = view.getByText("Supporting Forces").parentElement!;
+      expect(
+        [...forces.querySelectorAll("p.text-muted-foreground")].map(
+          (name) => name.textContent,
+        ),
+      ).toEqual(order);
+      expect(
+        [...forces.querySelectorAll("span.text-sm")].map((ally) => ally.textContent),
+      ).toEqual(
+        isAttacker
+          ? ["Attacking ally", "Defending ally"]
+          : ["Defending ally", "Attacking ally"],
+      );
+    },
+  );
 
   it("does not poll historical objective wars", () => {
-    const user = { userId: "viewer", villageId: "attacker", role: "USER" } as NonNullable<UserWithRelations>;
-    render(<VillageWar war={{ ...war, status: "DRAW", endedAt: new Date() }} user={user} isKage={false} />);
+    const user = {
+      userId: "viewer",
+      villageId: "attacker",
+      role: "USER",
+    } as NonNullable<UserWithRelations>;
+    render(
+      <VillageWar
+        war={{ ...war, status: "DRAW", endedAt: new Date() }}
+        user={user}
+        isKage={false}
+      />,
+    );
     expect(pollInterval({ state: {} })).toBe(false);
   });
 
   describe("war room offers", () => {
     const person = { username: "Kage", level: 100, rank: "ELDER", village: null };
     const offer = (id: string, relatedId: string, senderId: string) => ({
-      id, relatedId, senderId, receiverId: senderId === "kage" ? "other" : "kage",
-      status: "PENDING", type: "WAR_ALLY", value: 10, createdAt: new Date(),
-      sender: person, receiver: person,
+      id,
+      relatedId,
+      senderId,
+      receiverId: senderId === "kage" ? "other" : "kage",
+      status: "PENDING",
+      type: "WAR_ALLY",
+      value: 10,
+      createdAt: new Date(),
+      sender: person,
+      receiver: person,
     });
-    const mountRoom = (requests: ReturnType<typeof offer>[], overrides: Partial<NonNullable<UserWithRelations>> = {}) => {
+    const mountRoom = (
+      requests: ReturnType<typeof offer>[],
+      overrides: Partial<NonNullable<UserWithRelations>> = {},
+    ) => {
       vi.spyOn(ContentBox, "default").mockImplementation(({ title, children }) => (
-        <><h1>{title}</h1>{children}</>
+        <>
+          <h1>{title}</h1>
+          {children}
+        </>
       ));
       const kage = {
-        userId: "kage", villageId: "attacker", isOutlaw: false,
-        village: { id: "attacker", kageId: "kage" }, ...overrides,
+        userId: "kage",
+        villageId: "attacker",
+        isOutlaw: false,
+        village: { id: "attacker", kageId: "kage" },
+        ...overrides,
       } as NonNullable<UserWithRelations>;
       const offers = { useQuery: () => ({ data: requests }) };
       Object.assign(client.api, {
         useUtils: () => ({ war: { getAllyOffers: { invalidate: vi.fn() } } }),
         travel: { getAllSectors: { useQuery: () => ({ data: [] }) } },
         village: {
-          getAlliances: { useQuery: () => ({ data: { villages: [], relationships: [] } }) },
+          getAlliances: {
+            useQuery: () => ({ data: { villages: [], relationships: [] } }),
+          },
           getVillageStructures: { useQuery: () => ({ data: [] }) },
-          releaseSector, leaveAlliance, declareEnemy,
+          releaseSector,
+          leaveAlliance,
+          declareEnemy,
         },
       });
       Object.assign(client.api.war, {
@@ -800,7 +979,10 @@ describe("objective war townhall health", () => {
     });
 
     it("keeps offers for other wars on the board", () => {
-      const view = mountRoom([offer("sent", war.id, "kage"), offer("received", "other-war", "other")]);
+      const view = mountRoom([
+        offer("sent", war.id, "kage"),
+        offer("received", "other-war", "other"),
+      ]);
       expect(view.getAllByRole("button", { name: "Cancel" })).toHaveLength(1);
       expect(view.getAllByRole("button", { name: "Accept" })).toHaveLength(1);
       expect(view.getByRole("heading", { name: "War Contract Offers" })).toBeDefined();

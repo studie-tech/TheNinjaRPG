@@ -44,7 +44,10 @@ describe("alignBattle leaves a summon-free battle untouched", () => {
 
   it("refills action points when the round progresses", () => {
     const users = plain();
-    users.forEach((u) => { u.actionPoints = 5; u.round = 3; });
+    users.forEach((u) => {
+      u.actionPoints = 5;
+      u.round = 3;
+    });
     const battle = battleOf(users);
     const { progressRound } = alignBattle(battle, [], "p1");
     expect(progressRound).toBe(true);
@@ -56,8 +59,11 @@ describe("alignBattle leaves a summon-free battle untouched", () => {
     const battle = battleOf([
       makeBattleUser("p1", { curHealth: 100, isAi: false }),
       makeBattleUser("s1", {
-        controllerId: "p1", isAi: true, isSummon: true,
-        isOriginal: true, curHealth: 500,
+        controllerId: "p1",
+        isAi: true,
+        isSummon: true,
+        isOriginal: true,
+        curHealth: 500,
       }),
       makeBattleUser("e1", { curHealth: 100, isAi: true }),
     ]);
@@ -72,7 +78,12 @@ describe("hasNoAvailableActions for ordinary actors", () => {
   // ordinary humans AND ordinary AI.
   const broke = (over: Partial<BattleUserState>) =>
     makeBattleUser("x", {
-      curHealth: 100, actionPoints: 0, jutsus: [], items: [], basicActions: [], ...over,
+      curHealth: 100,
+      actionPoints: 0,
+      jutsus: [],
+      items: [],
+      basicActions: [],
+      ...over,
     });
 
   it("an ordinary human with nothing affordable has no actions", () => {

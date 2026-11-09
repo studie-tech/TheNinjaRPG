@@ -41,7 +41,9 @@ const setup = (elapsedMs: number) => {
     },
     update,
   });
-  const index = vi.spyOn(reportSearch, "indexReportEmbeddings").mockResolvedValue(undefined);
+  const index = vi
+    .spyOn(reportSearch, "indexReportEmbeddings")
+    .mockResolvedValue(undefined);
   return { update, reports, index };
 };
 

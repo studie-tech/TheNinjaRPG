@@ -53,23 +53,38 @@ describe("content image provider routing", () => {
         message: "Image generated",
         url: imageUrl,
       });
-      const selected = provider === "OPENAI" ? replicate.txt2imgGPT : replicate.txt2imgNanoBanana;
-      const unused = provider === "OPENAI" ? replicate.txt2imgNanoBanana : replicate.txt2imgGPT;
+      const selected =
+        provider === "OPENAI" ? replicate.txt2imgGPT : replicate.txt2imgNanoBanana;
+      const unused =
+        provider === "OPENAI" ? replicate.txt2imgNanoBanana : replicate.txt2imgGPT;
       expect(selected).toHaveBeenCalledWith({
-        preprompt: input.preprompt, prompt: input.prompt, previousImg: input.previousImg,
-        removeBg: true, userId: "content-author", width: 1024, height: 1024, size: "portrait",
+        preprompt: input.preprompt,
+        prompt: input.prompt,
+        previousImg: input.previousImg,
+        removeBg: true,
+        userId: "content-author",
+        width: 1024,
+        height: 1024,
+        size: "portrait",
       });
       expect(unused).not.toHaveBeenCalled();
       expect(insert).toHaveBeenCalledWith(historicalAvatar);
       expect(values).toHaveBeenCalledWith([
-        { avatar: imageUrl, userId: input.relationId, status: "content-success", done: true },
+        {
+          avatar: imageUrl,
+          userId: input.relationId,
+          status: "content-success",
+          done: true,
+        },
       ]);
     },
   );
 
   it("rejects unsupported providers before generation or history writes", async () => {
     const { caller, insert } = makeCaller();
-    await expect(caller.createImg({ ...input, provider: "OTHER" as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller.createImg({ ...input, provider: "OTHER" as never }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(replicate.txt2imgGPT).not.toHaveBeenCalled();
     expect(replicate.txt2imgNanoBanana).not.toHaveBeenCalled();
     expect(insert).not.toHaveBeenCalled();
@@ -77,33 +92,50 @@ describe("content image provider routing", () => {
 
   it.each([
     { role: "USER", historyCount: 0, message: "You are not allowed to change content" },
-    { role: "OWNER", historyCount: 101, message: "Maximum of 100 creations per day reached" },
-  ] as const)("answers the $message guard for OpenAI", async ({ role, historyCount, message }) => {
-    stubProfile("fetchUser", async () => ({ role }));
-    const { caller, insert } = makeCaller(historyCount);
-    expect(await caller.createImg({ ...input, provider: "OPENAI" })).toEqual({
-      success: false,
-      message,
-      url: null,
-    });
-    expect(replicate.txt2imgGPT).not.toHaveBeenCalled();
-    expect(replicate.txt2imgNanoBanana).not.toHaveBeenCalled();
-    expect(insert).not.toHaveBeenCalled();
-  });
+    {
+      role: "OWNER",
+      historyCount: 101,
+      message: "Maximum of 100 creations per day reached",
+    },
+  ] as const)(
+    "answers the $message guard for OpenAI",
+    async ({ role, historyCount, message }) => {
+      stubProfile("fetchUser", async () => ({ role }));
+      const { caller, insert } = makeCaller(historyCount);
+      expect(await caller.createImg({ ...input, provider: "OPENAI" })).toEqual({
+        success: false,
+        message,
+        url: null,
+      });
+      expect(replicate.txt2imgGPT).not.toHaveBeenCalled();
+      expect(replicate.txt2imgNanoBanana).not.toHaveBeenCalled();
+      expect(insert).not.toHaveBeenCalled();
+    },
+  );
 
   it("allows the hundredth creation of the day", async () => {
     const { caller, insert } = makeCaller(100);
-    expect(await caller.createImg({ ...input, provider: "OPENAI" })).toMatchObject({ success: true });
+    expect(await caller.createImg({ ...input, provider: "OPENAI" })).toMatchObject({
+      success: true,
+    });
     expect(insert).toHaveBeenCalledWith(historicalAvatar);
   });
 
   it("retains recoverable generation failures without publishing content history", async () => {
     const failure = new Error("Failed to generate image");
     vi.spyOn(replicate, "txt2imgGPT").mockRejectedValue(failure);
-    const warning = vi.spyOn(Sentry, "captureException").mockReturnValue("warning-event");
+    const warning = vi
+      .spyOn(Sentry, "captureException")
+      .mockReturnValue("warning-event");
     const { caller, insert } = makeCaller();
-    expect(await caller.createImg({ ...input, provider: "OPENAI" })).toMatchObject({ success: false, url: null });
-    expect(warning).toHaveBeenCalledWith(failure, { level: "warning", tags: { source: "generativeAi.createImg" } });
+    expect(await caller.createImg({ ...input, provider: "OPENAI" })).toMatchObject({
+      success: false,
+      url: null,
+    });
+    expect(warning).toHaveBeenCalledWith(failure, {
+      level: "warning",
+      tags: { source: "generativeAi.createImg" },
+    });
     expect(insert).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,13 @@
 import { act, cleanup, render } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+  vi,
+} from "bun:test";
 import Countdown from "@/layout/Countdown";
 
 const BASE = Date.UTC(2026, 8, 16, 12, 0, 0);
@@ -66,7 +74,11 @@ describe("Countdown", () => {
     // Server clock is 2 s behind the client, so a server target 500 ms "ahead" is
     // 2.5 s ahead on the client clock.
     render(
-      <Countdown targetDate={new Date(BASE + 500)} timeDiff={2_000} onFinish={onFinish} />,
+      <Countdown
+        targetDate={new Date(BASE + 500)}
+        timeDiff={2_000}
+        onFinish={onFinish}
+      />,
     );
 
     act(() => {

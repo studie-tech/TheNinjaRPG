@@ -23,7 +23,9 @@ describe("isExtensionExecutorStack", () => {
   });
 
   it("does not match an app path that merely mentions executors", () => {
-    expect(isExtensionExecutorStack(["app:///src/libs/executors/helper.ts"])).toBe(false);
+    expect(isExtensionExecutorStack(["app:///src/libs/executors/helper.ts"])).toBe(
+      false,
+    );
   });
 
   it("ignores undefined frame paths rather than treating them as a match", () => {

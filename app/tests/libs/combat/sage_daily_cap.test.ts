@@ -37,7 +37,10 @@ describe("sage activation daily-cap gating", () => {
 });
 
 const runActivate = (user: BattleUserState) =>
-  activateSageMode(user, makeInjectBattle(user, { sageModes: { "sage-1": makeSageMode() } }));
+  activateSageMode(
+    user,
+    makeInjectBattle(user, { sageModes: { "sage-1": makeSageMode() } }),
+  );
 
 describe("sage activation daily-cap enforcement in combat", () => {
   it("refuses activation at the daily cap without spending resources", () => {

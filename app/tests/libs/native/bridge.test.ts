@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { addNativeListener, getPlatform, invoke, invokeSafe, isNative, NativeBridgeError } from "@/libs/native/bridge";
+import {
+  addNativeListener,
+  getPlatform,
+  invoke,
+  invokeSafe,
+  isNative,
+  NativeBridgeError,
+} from "@/libs/native/bridge";
 import * as widgets from "@/libs/native/widgetBridge";
 
 /**
@@ -16,7 +23,11 @@ const setWindow = (value: TestWindow | undefined) => {
     Reflect.deleteProperty(globalThis, "window");
     return;
   }
-  Object.defineProperty(globalThis, "window", { configurable: true, writable: true, value });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    writable: true,
+    value,
+  });
 };
 
 // The preload installs jsdom's `window` as a configurable, non-writable property, so tests

@@ -575,7 +575,8 @@ it("does not retry a rate-limited query back into the same limiter window", asyn
     Response.json([
       {
         error: superjson.serialize({
-          message: "Too many requests for this page. Please wait a moment and try again.",
+          message:
+            "Too many requests for this page. Please wait a moment and try again.",
           code: -32029,
           data: { code: "TOO_MANY_REQUESTS" },
         }),
@@ -642,7 +643,9 @@ const holdBatchedFetch = (data: unknown) => {
       .split(",").length;
     await new Promise<void>((resolve) => releases.push(resolve));
     return Response.json(
-      Array.from({ length: count }, () => ({ result: { data: superjson.serialize(data) } })),
+      Array.from({ length: count }, () => ({
+        result: { data: superjson.serialize(data) },
+      })),
     );
   });
   return releases;
@@ -815,7 +818,11 @@ it.each([true, false])(
 );
 
 it.each([
-  { name: "a query's server error", data: { code: "INTERNAL_SERVER_ERROR" }, fetches: 4 },
+  {
+    name: "a query's server error",
+    data: { code: "INTERNAL_SERVER_ERROR" },
+    fetches: 4,
+  },
   { name: "a query's error without data", fetches: 4 },
   { name: "a query's rejected input", data: { code: "BAD_REQUEST" }, fetches: 1 },
   { name: "a query's error with empty data", data: {}, fetches: 1 },
@@ -861,11 +868,23 @@ it.each([
 
 it("leaves endpoint recovery feedback to the feature callback", async () => {
   const notice = "This action checked you out of the hospital for free.";
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json([
-    { result: { data: superjson.serialize({ success: true, message: notice, actionNotice: notice }) } },
-  ]));
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    Response.json([
+      {
+        result: {
+          data: superjson.serialize({
+            success: true,
+            message: notice,
+            actionNotice: notice,
+          }),
+        },
+      },
+    ]),
+  );
   const { attack } = mountArenaMutation(session("a"));
-  await act(async () => { await attack(); });
+  await act(async () => {
+    await attack();
+  });
   expect(toastMessages()).toEqual([]);
   expect(queryClient.isMutating()).toBe(0);
 });

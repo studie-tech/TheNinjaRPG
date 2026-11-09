@@ -1,5 +1,13 @@
 import { cleanup, render } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+  vi,
+} from "bun:test";
 import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import * as tooltip from "@/components/ui/tooltip";
@@ -49,12 +57,18 @@ beforeEach(() => {
   const Pass = ({ children }: { children?: ReactNode }) => <>{children}</>;
   vi.spyOn(tooltip, "TooltipProvider").mockImplementation(Pass as never);
   vi.spyOn(tooltip, "Tooltip").mockImplementation(Pass as never);
-  vi.spyOn(tooltip, "TooltipTrigger").mockImplementation((({ className, children }: { className?: string; children?: ReactNode }) => (
-    <div data-trigger={className ?? ""}>{children}</div>
-  )) as never);
-  vi.spyOn(tooltip, "TooltipContent").mockImplementation((({ children }: { children?: ReactNode }) => (
-    <div data-tooltip="">{children}</div>
-  )) as never);
+  vi.spyOn(tooltip, "TooltipTrigger").mockImplementation((({
+    className,
+    children,
+  }: {
+    className?: string;
+    children?: ReactNode;
+  }) => <div data-trigger={className ?? ""}>{children}</div>) as never);
+  vi.spyOn(tooltip, "TooltipContent").mockImplementation((({
+    children,
+  }: {
+    children?: ReactNode;
+  }) => <div data-tooltip="">{children}</div>) as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
     profile: {
@@ -63,7 +77,11 @@ beforeEach(() => {
           data: {
             jutsuTraining: { name: "Fireball", level: 3, finishTraining: later(30) },
             crafting: { itemName: "Kunai", craftingFinishedAt: later(20) },
-            imbuement: { imbuedName: "Flame", targetName: "Sword", craftingFinishedAt: later(25) },
+            imbuement: {
+              imbuedName: "Flame",
+              targetName: "Sword",
+              craftingFinishedAt: later(25),
+            },
           },
         }),
       },
@@ -75,7 +93,10 @@ beforeEach(() => {
   vi.spyOn(Avatar, "default").mockReturnValue(null as never);
   vi.spyOn(Image, "default").mockReturnValue(null as never);
   vi.spyOn(PoolStatusBars, "PoolStatusBars").mockReturnValue(null as never);
-  vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({ data: user, timeDiff: 0 } as never);
+  vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({
+    data: user,
+    timeDiff: 0,
+  } as never);
 });
 
 afterEach(() => {
@@ -102,7 +123,13 @@ describe("sidebar status rows", () => {
   it("renders each timer and quota row with its link placement and tooltip", () => {
     const view = render(<MenuBoxProfile />);
     const all = rows(view);
-    const timers = all.filter((row) => row.outer === "DIV" && row.href && row.href !== "/missionhall" && row.href !== "/points");
+    const timers = all.filter(
+      (row) =>
+        row.outer === "DIV" &&
+        row.href &&
+        row.href !== "/missionhall" &&
+        row.href !== "/points",
+    );
     expect(timers).toEqual([
       {
         trigger: "w-full",
@@ -156,27 +183,40 @@ describe("sidebar status rows", () => {
         ["/profile", "両??", "Money on hand"],
         ["/missionhall", ` 1 / ${MISSIONS_PER_DAY}`, "Daily missions to complete"],
         ["/missionhall", ` 2 / ${ERRANDS_PER_DAY}`, "Daily errands to complete"],
-        ["/missionhall", ` 0 / ${MEDICAL_MISSIONS_PER_DAY}`, "Daily medical missions to complete"],
-        ["/missionhall", ` 1 / ${PVP_MISSIONS_PER_DAY}`, "Daily PvP missions to complete"],
+        [
+          "/missionhall",
+          ` 0 / ${MEDICAL_MISSIONS_PER_DAY}`,
+          "Daily medical missions to complete",
+        ],
+        [
+          "/missionhall",
+          ` 1 / ${PVP_MISSIONS_PER_DAY}`,
+          "Daily PvP missions to complete",
+        ],
         ["/points", " 7", "Reputation points for use in black market"],
-      ].map((row) => row as [string, string, string]).map(([href, text, tip]) => ({
-        trigger: "w-full",
-        outer: "A",
-        outerClass: "hover:text-orange-500",
-        href,
-        linkWraps: text,
-        text,
-        tooltip: tip,
-      })),
+      ]
+        .map((row) => row as [string, string, string])
+        .map(([href, text, tip]) => ({
+          trigger: "w-full",
+          outer: "A",
+          outerClass: "hover:text-orange-500",
+          href,
+          linkWraps: text,
+          text,
+          tooltip: tip,
+        })),
     );
-    const iconRows = [...view.container.querySelectorAll("[data-trigger]")].filter((trigger) =>
-      ["/traininggrounds", "/occupation", "/missionhall", "/points"].includes(
-        trigger.querySelector("a")?.getAttribute("href") ?? "",
-      ),
+    const iconRows = [...view.container.querySelectorAll("[data-trigger]")].filter(
+      (trigger) =>
+        ["/traininggrounds", "/occupation", "/missionhall", "/points"].includes(
+          trigger.querySelector("a")?.getAttribute("href") ?? "",
+        ),
     );
     expect(iconRows).toHaveLength(10);
     for (const trigger of iconRows) {
-      expect(trigger.querySelector("svg")?.getAttribute("class") ?? "").toContain("mr-2 h-6 w-6");
+      expect(trigger.querySelector("svg")?.getAttribute("class") ?? "").toContain(
+        "mr-2 h-6 w-6",
+      );
     }
   });
 

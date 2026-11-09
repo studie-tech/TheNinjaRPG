@@ -3,7 +3,9 @@
  * DATABASE_URL: developer or preview credentials must not become test databases. A configured
  * URL without consent is an error rather than a reason to silently skip SQL suites.
  */
-export const readTestDatabaseUrl = (environment: Record<string, string | undefined>) => {
+export const readTestDatabaseUrl = (
+  environment: Record<string, string | undefined>,
+) => {
   const url = environment.TEST_MYSQL_URL;
   if (url && environment.TEST_MYSQL_ALLOW_DESTRUCTIVE !== "1") {
     throw new Error(

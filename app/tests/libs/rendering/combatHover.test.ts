@@ -45,7 +45,12 @@ describe("getHighlightTilesCacheKey", () => {
     expect(
       getHighlightTilesCacheKey({ ...base, actionId: "a|3", battleVersion: 4 }),
     ).not.toEqual(
-      getHighlightTilesCacheKey({ ...base, actionId: "a", battleVersion: 3, userId: "4|user-1" }),
+      getHighlightTilesCacheKey({
+        ...base,
+        actionId: "a",
+        battleVersion: 3,
+        userId: "4|user-1",
+      }),
     );
   });
 

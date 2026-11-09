@@ -165,16 +165,38 @@ describe("sageModeAfter protection", () => {
     const user = makeBattleUser("sage", { userId: "sage" });
     const after = makeEffect(
       "decreasestat",
-      { power: 10, rounds: 2, calculation: "percentage", statTypes: ["Ninjutsu"], generalTypes: [] },
-      { id: "after-1", creatorId: "sage", targetId: "sage", targetType: "user",
-        fromType: "sageModeAfter", isNew: false, castThisRound: false, createdRound: 1 },
+      {
+        power: 10,
+        rounds: 2,
+        calculation: "percentage",
+        statTypes: ["Ninjutsu"],
+        generalTypes: [],
+      },
+      {
+        id: "after-1",
+        creatorId: "sage",
+        targetId: "sage",
+        targetType: "user",
+        fromType: "sageModeAfter",
+        isNew: false,
+        castThisRound: false,
+        createdRound: 1,
+      },
     );
     const usersEffects: UserEffect[] = [after];
     const cleanseEffect = makeEffect(
       "cleanse",
       { power: 100 },
-      { id: "cleanse-1", creatorId: "sage", targetId: "sage", targetType: "user",
-        isNew: true, castThisRound: true, createdRound: 1, fromType: "basic" },
+      {
+        id: "cleanse-1",
+        creatorId: "sage",
+        targetId: "sage",
+        targetType: "user",
+        isNew: true,
+        castThisRound: true,
+        createdRound: 1,
+        fromType: "basic",
+      },
     );
     cleanse(cleanseEffect, usersEffects, user);
     expect(usersEffects.find((e) => e.id === "after-1")?.rounds).toBe(2);
@@ -377,9 +399,7 @@ describe("sage mode instant tags", () => {
     const sageAfter = battle.usersState.find((u) => u.userId === "sage");
     expect(sageAfter?.curHealth).toBeGreaterThan(4000);
     expect(
-      battle.usersEffects.some(
-        (e) => e.fromType === "sageModeAfter" && e.rounds === 0,
-      ),
+      battle.usersEffects.some((e) => e.fromType === "sageModeAfter" && e.rounds === 0),
     ).toBe(false);
   });
 });

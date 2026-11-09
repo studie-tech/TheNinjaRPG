@@ -15,7 +15,11 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     auction: {
       getAuctionListings: {
-        useInfiniteQuery: () => ({ data: { pages: [] }, isLoading: false, hasNextPage: false }),
+        useInfiniteQuery: () => ({
+          data: { pages: [] },
+          isLoading: false,
+          hasNextPage: false,
+        }),
       },
     },
   });
@@ -27,16 +31,18 @@ afterEach(() => {
 });
 
 it("names the item search after the browsed listings", () => {
-  const placeholders = (["AUCTION", "DIRECT", "MINE", "MY_BIDS"] as const).map((browseTab) => {
-    render(
-      <AppRouterContext.Provider value={{} as never}>
-        <AuctionListing browseTab={browseTab} selectedStatus="ACTIVE" />
-      </AppRouterContext.Provider>,
-    );
-    const input = screen.getAllByRole("textbox")[0]?.getAttribute("placeholder");
-    cleanup();
-    return input;
-  });
+  const placeholders = (["AUCTION", "DIRECT", "MINE", "MY_BIDS"] as const).map(
+    (browseTab) => {
+      render(
+        <AppRouterContext.Provider value={{} as never}>
+          <AuctionListing browseTab={browseTab} selectedStatus="ACTIVE" />
+        </AppRouterContext.Provider>,
+      );
+      const input = screen.getAllByRole("textbox")[0]?.getAttribute("placeholder");
+      cleanup();
+      return input;
+    },
+  );
   expect(placeholders).toEqual([
     "Search by item name…",
     "Search by item name…",

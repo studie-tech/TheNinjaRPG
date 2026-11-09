@@ -18,7 +18,11 @@ const navigate = vi.fn();
 let onUrl: (url: string) => void;
 let pathname: string;
 let session: ReturnType<typeof UserContext.useUserData>;
-const character = { userId: "player", status: "AWAKE", userQuests: [] } as unknown as NonNullable<typeof session.data>;
+const character = {
+  userId: "player",
+  status: "AWAKE",
+  userQuests: [],
+} as unknown as NonNullable<typeof session.data>;
 
 beforeEach(() => {
   vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
@@ -30,33 +34,57 @@ beforeEach(() => {
 beforeEach(() => {
   navigate.mockClear();
   pathname = "/";
-  session = { isClerkLoaded: false, isSignedIn: true, userId: "player", data: undefined, status: "pending" } as typeof session;
+  session = {
+    isClerkLoaded: false,
+    isSignedIn: true,
+    userId: "player",
+    data: undefined,
+    status: "pending",
+  } as typeof session;
   vi.spyOn(UserContext, "useUserData").mockImplementation(() => session);
   vi.spyOn(clerk, "useClerk").mockReturnValue({ signOut: vi.fn() } as never);
   vi.spyOn(routing, "usePublicPathname").mockImplementation(() => pathname);
-  vi.spyOn(navigation, "useRouter").mockReturnValue({ push: navigate, back: vi.fn() } as never);
+  vi.spyOn(navigation, "useRouter").mockReturnValue({
+    push: navigate,
+    back: vi.fn(),
+  } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     register: { setReferralSource: { useMutation: () => ({ mutate: vi.fn() }) } },
     useUtils: () => ({ profile: { getUser: { invalidate: vi.fn(async () => {}) } } }),
   });
   vi.spyOn(Welcome, "default").mockImplementation(() => <p>Public welcome</p>);
-  vi.spyOn(Loader, "default").mockImplementation(({ explanation }) => <p>{explanation}</p>);
+  vi.spyOn(Loader, "default").mockImplementation(({ explanation }) => (
+    <p>{explanation}</p>
+  ));
   vi.spyOn(activity, "useLiveActivity").mockImplementation(() => {});
-  vi.spyOn(push, "useNativePush").mockReturnValue({ unregister: vi.fn(async () => {}) } as never);
+  vi.spyOn(push, "useNativePush").mockReturnValue({
+    unregister: vi.fn(async () => {}),
+  } as never);
   vi.spyOn(native, "isNative").mockReturnValue(true);
   vi.spyOn(native, "platform").mockReturnValue("ios");
-  vi.spyOn(native.appEvents, "onUrlOpen").mockImplementation((callback) => { onUrl = callback; return () => {}; });
+  vi.spyOn(native.appEvents, "onUrlOpen").mockImplementation((callback) => {
+    onUrl = callback;
+    return () => {};
+  });
   vi.spyOn(native.appEvents, "onBackButton").mockReturnValue(() => {});
   vi.spyOn(native.appEvents, "onStateChange").mockReturnValue(() => {});
   vi.spyOn(native.widgets, "sync").mockResolvedValue(undefined);
   vi.spyOn(native.widgets, "clear").mockResolvedValue(undefined);
 });
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const mount = () => {
   const store = createStore();
-  const tree = (home = true) => <Provider store={store}><NativeBridge />{home && <HomeLanding />}</Provider>;
+  const tree = (home = true) => (
+    <Provider store={store}>
+      <NativeBridge />
+      {home && <HomeLanding />}
+    </Provider>
+  );
   const view = render(tree());
   return { ...view, update: (home = true) => view.rerender(tree(home)) };
 };
@@ -84,7 +112,9 @@ describe("native links during home startup", () => {
     session = { ...session, isClerkLoaded: true, data: character, status: "success" };
     view.update();
     expect(navigate.mock.calls.map(([path]) => path)).toEqual([
-      "/jutsus", "/?ref=newer", "/profile",
+      "/jutsus",
+      "/?ref=newer",
+      "/profile",
     ]);
   });
 
@@ -105,7 +135,8 @@ describe("native links during home startup", () => {
     session = { ...session, isClerkLoaded: true, data: character, status: "success" };
     view.update();
     expect(navigate.mock.calls.map(([path]) => path)).toEqual([
-      "/jutsus", "/settings/device",
+      "/jutsus",
+      "/settings/device",
     ]);
   });
 
@@ -121,7 +152,11 @@ describe("native links during home startup", () => {
     expect(navigate).toHaveBeenLastCalledWith("/profile");
   });
 
-  it.each(["https://example.com/jutsus", "https://www.theninja-rpg.com/native-sign-in?flow=browser", "https://www.theninja-rpg.com/?ref=campaign"])("preserves normal home forwarding for %s", (url) => {
+  it.each([
+    "https://example.com/jutsus",
+    "https://www.theninja-rpg.com/native-sign-in?flow=browser",
+    "https://www.theninja-rpg.com/?ref=campaign",
+  ])("preserves normal home forwarding for %s", (url) => {
     const view = mount();
     act(() => onUrl(url));
     session = { ...session, isClerkLoaded: true, data: character, status: "success" };

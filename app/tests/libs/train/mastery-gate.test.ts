@@ -54,47 +54,70 @@ const ninjutsuBuff = {
 
 describe("jutsuRequirementWarning", () => {
   it("identifies a missing or different selected reskin when the bloodline requirement is met", () => {
-    const reskinned = { ...jutsu, requiredNinjutsuMastery: null, bloodlineId: "blood", bloodlineReskinId: "scarlet" };
+    const reskinned = {
+      ...jutsu,
+      requiredNinjutsuMastery: null,
+      bloodlineId: "blood",
+      bloodlineReskinId: "scarlet",
+    };
     for (const bloodlineId of ["blood", null]) {
       for (const bloodlineReskinId of [null, "other"]) {
-        expect(jutsuRequirementWarning(
-          { ...reskinned, bloodlineId },
-          { ...user, bloodlineId, bloodlineReskinId },
-        )).toBe("Select the required bloodline reskin to use this jutsu.");
+        expect(
+          jutsuRequirementWarning(
+            { ...reskinned, bloodlineId },
+            { ...user, bloodlineId, bloodlineReskinId },
+          ),
+        ).toBe("Select the required bloodline reskin to use this jutsu.");
       }
     }
   });
 
   it("reports the underlying bloodline requirement before the reskin requirement", () => {
-    const reskinned = { ...jutsu, requiredNinjutsuMastery: null, bloodlineId: "blood", bloodlineReskinId: "scarlet" };
+    const reskinned = {
+      ...jutsu,
+      requiredNinjutsuMastery: null,
+      bloodlineId: "blood",
+      bloodlineReskinId: "scarlet",
+    };
     for (const bloodlineId of [null, "other"]) {
       for (const bloodlineReskinId of [null, "other", "scarlet"]) {
-        expect(jutsuRequirementWarning(reskinned, { ...user, bloodlineId, bloodlineReskinId }))
-          .toBe("You do not have the required bloodline to use this jutsu.");
+        expect(
+          jutsuRequirementWarning(reskinned, {
+            ...user,
+            bloodlineId,
+            bloodlineReskinId,
+          }),
+        ).toBe("You do not have the required bloodline to use this jutsu.");
       }
     }
-    expect(jutsuRequirementWarning({ ...reskinned, bloodlineReskinId: null }, user))
-      .toBe("You do not have the required bloodline to use this jutsu.");
+    expect(
+      jutsuRequirementWarning({ ...reskinned, bloodlineReskinId: null }, user),
+    ).toBe("You do not have the required bloodline to use this jutsu.");
   });
 
   it("allows satisfied or unbound bloodline and reskin requirements", () => {
     const parentOwner = { ...user, bloodlineId: "blood", bloodlineReskinId: "scarlet" };
     for (const bloodlineId of [null, "blood"]) {
       for (const bloodlineReskinId of [null, "scarlet"]) {
-        expect(jutsuRequirementWarning(
-          { ...jutsu, requiredNinjutsuMastery: null, bloodlineId, bloodlineReskinId },
-          parentOwner,
-        )).toBe("");
+        expect(
+          jutsuRequirementWarning(
+            { ...jutsu, requiredNinjutsuMastery: null, bloodlineId, bloodlineReskinId },
+            parentOwner,
+          ),
+        ).toBe("");
       }
     }
-    expect(jutsuRequirementWarning({ ...jutsu, requiredNinjutsuMastery: null }, user)).toBe("");
+    expect(
+      jutsuRequirementWarning({ ...jutsu, requiredNinjutsuMastery: null }, user),
+    ).toBe("");
   });
 
   it("reserves pet jutsu for companions even when player requirements are met", () => {
     const available = { ...jutsu, requiredNinjutsuMastery: null };
     expect(jutsuRequirementWarning(available, user)).toBe("");
-    expect(jutsuRequirementWarning({ ...available, jutsuType: "PETS" }, user))
-      .toBe("Only companions can use this jutsu.");
+    expect(jutsuRequirementWarning({ ...available, jutsuType: "PETS" }, user)).toBe(
+      "Only companions can use this jutsu.",
+    );
   });
 
   it("rejects a jutsu whose mastery requirement the stored value misses", () => {
@@ -139,7 +162,7 @@ describe("training start preconditions", () => {
   });
 
   it("Energy spending has no daily limit, while mastery retains its own limit", () => {
-    const capped = {...trainee, dailyTrainings: MAX_DAILY_TRAININGS};
+    const capped = { ...trainee, dailyTrainings: MAX_DAILY_TRAININGS };
     expect(statTrainingBlockMessage(capped)).toBeNull();
     expect(masteryTrainingBlockMessage(capped)).toContain("24 hours");
   });
@@ -147,11 +170,13 @@ describe("training start preconditions", () => {
   it("names the slot that is already running", () => {
     const rested = { ...trainee, dailyTrainings: 0 };
     expect(
-      masteryTrainingBlockMessage({ ...rested, currentlyTrainingMastery: "sageMastery" }),
+      masteryTrainingBlockMessage({
+        ...rested,
+        currentlyTrainingMastery: "sageMastery",
+      }),
     ).toBe("You are already training a mastery");
   });
 });
-
 
 describe("player training modifiers", () => {
   const trainee = {
@@ -165,8 +190,12 @@ describe("player training modifiers", () => {
     const student = { ...trainee, senseiId: "sensei" };
     expect(getTrainingMultiplierBoost(student)).toBeCloseTo(1.05);
     expect(trainingMultiplier(student)).toBeCloseTo(0.0105);
-    expect(getTrainingMultiplierBoost({ ...student, trainingSpeed: "24hrs" })).toBeCloseTo(1.05);
-    expect(trainingMultiplier({ ...student, trainingSpeed: "24hrs" })).toBeCloseTo(1.008);
+    expect(
+      getTrainingMultiplierBoost({ ...student, trainingSpeed: "24hrs" }),
+    ).toBeCloseTo(1.05);
+    expect(trainingMultiplier({ ...student, trainingSpeed: "24hrs" })).toBeCloseTo(
+      1.008,
+    );
   });
 
   it("shows efficiency as each interval's gain per hour against 15min", () => {
@@ -174,9 +203,9 @@ describe("player training modifiers", () => {
       (trainEfficiency({ trainingSpeed }) *
         trainingMultiplier({ ...trainee, trainingSpeed })) /
       (trainingSpeedSeconds(trainingSpeed) / 3600);
-    expect(TrainingSpeeds.map((trainingSpeed) => trainEfficiency({ trainingSpeed }))).toEqual([
-      100, 90, 80, 70, 60, 50,
-    ]);
+    expect(
+      TrainingSpeeds.map((trainingSpeed) => trainEfficiency({ trainingSpeed })),
+    ).toEqual([100, 90, 80, 70, 60, 50]);
     for (const speed of TrainingSpeeds) {
       expect(gainPerHour(speed) / gainPerHour("15min")).toBeCloseTo(
         trainEfficiency({ trainingSpeed: speed }) / 100,
@@ -188,24 +217,37 @@ describe("player training modifiers", () => {
     const joined = { ...trainee, rank: "JONIN" as const, joinedVillageAt: new Date() };
     expect(getTrainingMultiplierBoost(joined)).toBe(0.5);
     expect(trainingMultiplier(joined)).toBe(0.005);
-    expect(getTrainingMultiplierBoost({ ...joined, joinedVillageAt: trainee.joinedVillageAt })).toBe(1);
+    expect(
+      getTrainingMultiplierBoost({
+        ...joined,
+        joinedVillageAt: trainee.joinedVillageAt,
+      }),
+    ).toBe(1);
   });
 
   it("pins each interval's duration, efficiency and multiplier", () => {
-    expect(TrainingSpeeds.map((trainingSpeed) => trainingSpeedSeconds(trainingSpeed))).toEqual([
-      900, 3600, 14400, 28800, 43200, 86400,
-    ]);
-    expect(TrainingSpeeds.map((trainingSpeed) => trainingMultiplier({ ...trainee, trainingSpeed }))).toEqual([
-      0.01, 0.04, 0.16, 0.32, 0.48, 0.96,
-    ]);
+    expect(
+      TrainingSpeeds.map((trainingSpeed) => trainingSpeedSeconds(trainingSpeed)),
+    ).toEqual([900, 3600, 14400, 28800, 43200, 86400]);
+    expect(
+      TrainingSpeeds.map((trainingSpeed) =>
+        trainingMultiplier({ ...trainee, trainingSpeed }),
+      ),
+    ).toEqual([0.01, 0.04, 0.16, 0.32, 0.48, 0.96]);
   });
 
   it("rejects training speeds outside the interval list", () => {
     for (const speed of ["2hrs", "constructor", "toString"]) {
       const trainingSpeed = speed as UserData["trainingSpeed"];
-      expect(() => trainEfficiency({ trainingSpeed })).toThrow("Invalid training speed");
-      expect(() => trainingMultiplier({ ...trainee, trainingSpeed })).toThrow("Invalid training speed");
-      expect(() => trainingSpeedSeconds(trainingSpeed)).toThrow("Invalid training speed");
+      expect(() => trainEfficiency({ trainingSpeed })).toThrow(
+        "Invalid training speed",
+      );
+      expect(() => trainingMultiplier({ ...trainee, trainingSpeed })).toThrow(
+        "Invalid training speed",
+      );
+      expect(() => trainingSpeedSeconds(trainingSpeed)).toThrow(
+        "Invalid training speed",
+      );
     }
   });
 });

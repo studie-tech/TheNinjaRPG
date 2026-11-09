@@ -38,8 +38,14 @@ beforeEach(() => {
     },
     quests: { specificQuests: { useQuery: () => ({ data: towers }) } },
     pvpRank: {
-      getCurrentTopPlayers: { useQuery: () => ({ data: [1200, 1190, 1180, 1170, 1160, 1150, 1140, 1130, 1120, 1110] }) },
-      getCurrentSeason: { useQuery: () => ({ data: { name: "Season 4", paused: false } }) },
+      getCurrentTopPlayers: {
+        useQuery: () => ({
+          data: [1200, 1190, 1180, 1170, 1160, 1150, 1140, 1130, 1120, 1110],
+        }),
+      },
+      getCurrentSeason: {
+        useQuery: () => ({ data: { name: "Season 4", paused: false } }),
+      },
       getRankedQueueCount: { useQuery: () => ({ data: 4 }) },
     },
   });
@@ -57,7 +63,9 @@ beforeEach(() => {
       }) as never,
   );
   vi.spyOn(combatHooks, "useAutoCombatSetting").mockReturnValue([true, vi.fn()]);
-  vi.spyOn(setupPanel, "BattleSetupControls").mockImplementation(() => <p>Setup controls</p>);
+  vi.spyOn(setupPanel, "BattleSetupControls").mockImplementation(() => (
+    <p>Setup controls</p>
+  ));
   vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({
     jutsu: "PvE build",
     item: "Item loadout 1",
@@ -72,13 +80,9 @@ afterEach(() => {
 
 it("lists the five modes with their status", () => {
   render(<ArenaOverview onOpen={vi.fn()} />);
-  expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
-    "Arena",
-    "Sparring",
-    "Battle Pyramid",
-    "Ranked PvP",
-    "Training dummy",
-  ]);
+  expect(
+    screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent),
+  ).toEqual(["Arena", "Sparring", "Battle Pyramid", "Ranked PvP", "Training dummy"]);
   expect(screen.getByText("Best match: Yama · Lv 20")).toBeDefined();
   expect(screen.getByText("Fights today: 3")).toBeDefined();
   expect(screen.getByText("2 challenges waiting")).toBeDefined();
@@ -87,7 +91,17 @@ it("lists the five modes with their status", () => {
 });
 
 it("names the tower being climbed", () => {
-  userQuests = [{ endAt: null, quest: { id: "t-1", name: "Ritual of Sotek", questType: "battlepyramid", content: { objectives: [] } } }];
+  userQuests = [
+    {
+      endAt: null,
+      quest: {
+        id: "t-1",
+        name: "Ritual of Sotek",
+        questType: "battlepyramid",
+        content: { objectives: [] },
+      },
+    },
+  ];
   render(<ArenaOverview onOpen={vi.fn()} />);
   expect(screen.getByText("Climbing Ritual of Sotek")).toBeDefined();
 });
@@ -117,7 +131,10 @@ it("summarises the selected loadouts and auto combat", () => {
 });
 
 it("leaves out loadouts a player cannot switch", () => {
-  vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({ jutsu: null, item: null });
+  vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({
+    jutsu: null,
+    item: null,
+  });
   render(<ArenaOverview onOpen={vi.fn()} />);
   expect(screen.getByText("Auto combat on")).toBeDefined();
 });

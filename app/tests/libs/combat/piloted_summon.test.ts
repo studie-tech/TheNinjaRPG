@@ -89,7 +89,10 @@ describe("isPiloted masking round-trip", () => {
       isPiloted: true,
       strength: 50, // privateState -> must be stripped for an opponent
     });
-    const masked = maskBattle(makeCompleteBattle({ usersState: [summon] }), "opponentX");
+    const masked = maskBattle(
+      makeCompleteBattle({ usersState: [summon] }),
+      "opponentX",
+    );
     expect(masked.usersState[0]).not.toHaveProperty("strength");
     expect(masked.usersState[0]).toHaveProperty("isPiloted", true);
   });
@@ -116,7 +119,12 @@ describe("piloted summons have no basic clear/cleanse", () => {
     });
 
   const actionIds = (users: BattleUserState[], actorId: string) =>
-    availableUserActions(makeCompleteBattle({ usersState: users }), actorId, true, true).map((a) => a.id);
+    availableUserActions(
+      makeCompleteBattle({ usersState: users }),
+      actorId,
+      true,
+      true,
+    ).map((a) => a.id);
 
   it("excludes clear and cleanse for a piloted summon, keeping other basics", () => {
     const ids = actionIds([player(), summon({ isPiloted: true })], "s1");

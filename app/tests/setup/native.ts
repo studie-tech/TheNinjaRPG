@@ -4,7 +4,9 @@ export type CapacitorBridge = {
   Plugins: Record<string, Record<string, unknown>>;
 };
 
-export const capacitorWindow = window as typeof window & { Capacitor?: CapacitorBridge };
+export const capacitorWindow = window as typeof window & {
+  Capacitor?: CapacitorBridge;
+};
 
 /** Put a native shell on the preloaded window; pair with `removeCapacitor` in `afterEach`. */
 export const installCapacitor = (

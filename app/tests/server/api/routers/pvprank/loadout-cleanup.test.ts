@@ -62,7 +62,11 @@ describeWithDatabase("ranked prohibited loadout cleanup", () => {
           id,
           battleUsageType: "BOTH" as const,
         })),
-        { id: "skill-jutsu", requiredSkillId: "skill", battleUsageType: "BOTH" as const },
+        {
+          id: "skill-jutsu",
+          requiredSkillId: "skill",
+          battleUsageType: "BOTH" as const,
+        },
         { id: "village-jutsu", villageId: "village", battleUsageType: "BOTH" as const },
         { id: "pve-jutsu", battleUsageType: "PVE" as const },
       ].map((entry) => ({
@@ -77,20 +81,22 @@ describeWithDatabase("ranked prohibited loadout cleanup", () => {
     await insertItems([
       { id: "weapon", itemType: "WEAPON", effects: [PoisonTag.parse({})] },
       { id: "weapon-two", itemType: "WEAPON", effects: [PoisonTag.parse({})] },
-      { id: "favorite-consumable", itemType: "CONSUMABLE", effects: [PoisonTag.parse({})] },
+      {
+        id: "favorite-consumable",
+        itemType: "CONSUMABLE",
+        effects: [PoisonTag.parse({})],
+      },
       { id: "bloodline-item", itemType: "WEAPON", bloodlineId: "bloodline" },
       { id: "skill-item", itemType: "WEAPON", requiredSkillId: "skill" },
     ]);
-    await db
-      .insert(rankedLoadout)
-      .values({
-        id: "ranked-loadout",
-        userId: USER,
-        loadout: loadout(
-          ["usable", "skill-jutsu", "village-jutsu", "pve-jutsu"],
-          ["weapon", "bloodline-item", "skill-item"],
-        ),
-      });
+    await db.insert(rankedLoadout).values({
+      id: "ranked-loadout",
+      userId: USER,
+      loadout: loadout(
+        ["usable", "skill-jutsu", "village-jutsu", "pve-jutsu"],
+        ["weapon", "bloodline-item", "skill-item"],
+      ),
+    });
   });
 
   const storedLoadout = async () => {
@@ -103,11 +109,18 @@ describeWithDatabase("ranked prohibited loadout cleanup", () => {
 
   it("loads rules alongside an empty ranked loadout in one query wave", async () => {
     const db = await getTestDatabase();
-    await db.update(rankedLoadout).set({ loadout: loadout([]) }).where(eq(rankedLoadout.userId, USER));
+    await db
+      .update(rankedLoadout)
+      .set({ loadout: loadout([]) })
+      .where(eq(rankedLoadout.userId, USER));
     const caller = await callerFor(pvpRankRouter, USER);
     const measured = await recordQueries(() => caller.getRankedLoadout());
     expect(measured.result.loadout).toEqual(loadout([]));
-    expect(measured.statements.filter((statement) => /from `JutsuEquipLimit`/i.test(statement))).toHaveLength(1);
+    expect(
+      measured.statements.filter((statement) =>
+        /from `JutsuEquipLimit`/i.test(statement),
+      ),
+    ).toHaveLength(1);
     expect(measured.roundTrips).toBe(1);
   });
 
@@ -128,7 +141,9 @@ describeWithDatabase("ranked prohibited loadout cleanup", () => {
     "excludes favorite-only heal and poison selections from queue caps (cleanup: %s)",
     async (needsCleanup) => {
       const original = await storedLoadout();
-      const selected = needsCleanup ? original.loadout : loadout(["usable"], ["weapon"]);
+      const selected = needsCleanup
+        ? original.loadout
+        : loadout(["usable"], ["weapon"]);
       const favorites = {
         favoriteJutsuIds: [...(selected.favoriteJutsuIds ?? []), ...FAVORITE_HEAL_IDS],
         favoriteWeaponIds: [...(selected.favoriteWeaponIds ?? []), "weapon-two"],
@@ -152,29 +167,42 @@ describeWithDatabase("ranked prohibited loadout cleanup", () => {
     },
   );
 
-  it.each([0, 2000])("preserves a valid selection saved after %i ms", async (offset) => {
-    const db = await getTestDatabase();
-    const original = await storedLoadout();
-    setSystemTime(new Date(original.updatedAt.getTime() + offset));
-    try {
-      const saved = await (await callerFor(pvpRankRouter, USER)).updateRankedLoadout(
-        loadout(["usable-two"], ["weapon-two"]),
-      );
-      expect(saved.success).toBe(true);
-      const measured = await recordQueries(() => cleanRankedProhibitedSelections(db, original, equipLimitFixture));
-      const cleaned = measured.result;
-      expect(measured.statements.some((statement) => statement.includes("JutsuEquipLimit"))).toBe(false);
-      expect(cleaned.loadout.loadout).toEqual(loadout(["usable-two"], ["weapon-two"]));
-      expect(cleaned.jutsus.map((entry) => entry.id)).toEqual(["usable-two"]);
-      expect(cleaned.items.map((entry) => entry.id)).toEqual(["weapon-two"]);
-      expect((await storedLoadout()).loadout).toEqual(loadout(["usable-two"], ["weapon-two"]));
-      expect((await storedLoadout()).updatedAt.getTime()).toBeGreaterThan(
-        original.updatedAt.getTime(),
-      );
-    } finally {
-      setSystemTime();
-    }
-  });
+  it.each([0, 2000])(
+    "preserves a valid selection saved after %i ms",
+    async (offset) => {
+      const db = await getTestDatabase();
+      const original = await storedLoadout();
+      setSystemTime(new Date(original.updatedAt.getTime() + offset));
+      try {
+        const saved = await (await callerFor(pvpRankRouter, USER)).updateRankedLoadout(
+          loadout(["usable-two"], ["weapon-two"]),
+        );
+        expect(saved.success).toBe(true);
+        const measured = await recordQueries(() =>
+          cleanRankedProhibitedSelections(db, original, equipLimitFixture),
+        );
+        const cleaned = measured.result;
+        expect(
+          measured.statements.some((statement) =>
+            statement.includes("JutsuEquipLimit"),
+          ),
+        ).toBe(false);
+        expect(cleaned.loadout.loadout).toEqual(
+          loadout(["usable-two"], ["weapon-two"]),
+        );
+        expect(cleaned.jutsus.map((entry) => entry.id)).toEqual(["usable-two"]);
+        expect(cleaned.items.map((entry) => entry.id)).toEqual(["weapon-two"]);
+        expect((await storedLoadout()).loadout).toEqual(
+          loadout(["usable-two"], ["weapon-two"]),
+        );
+        expect((await storedLoadout()).updatedAt.getTime()).toBeGreaterThan(
+          original.updatedAt.getTime(),
+        );
+      } finally {
+        setSystemTime();
+      }
+    },
+  );
   it("strips deleted, unshoppable and duplicate selections so the loadout can be edited", async () => {
     await insertItems([
       { id: "retired-item", name: "Retired item", itemType: "WEAPON", inShop: false },

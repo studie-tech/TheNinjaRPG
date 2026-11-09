@@ -26,9 +26,9 @@ beforeEach(() => {
     <div>{children}</div>
   ));
   vi.spyOn(SeasonManager, "SeasonManager").mockImplementation(() => <></>);
-  vi.spyOn(UnclaimedSeasonRewards, "UnclaimedSeasonRewards").mockImplementation(
-    () => <></>,
-  );
+  vi.spyOn(UnclaimedSeasonRewards, "UnclaimedSeasonRewards").mockImplementation(() => (
+    <></>
+  ));
   vi.spyOn(QueueLengthHistogram, "QueueLengthHistogram").mockImplementation(() => null);
   vi.spyOn(
     RankedRankDistributionHistogram,

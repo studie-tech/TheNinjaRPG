@@ -49,7 +49,12 @@ describe("insertAiSchema poolsMultiplier", () => {
     ]);
   });
 
-  it.each([0, -1, "invalid"])("rejects an invalid pool modifier: %s", (poolsMultiplier) => {
-    expect(insertAiSchema.safeParse({ ...makeAi(99, 1), poolsMultiplier }).success).toBe(false);
-  });
+  it.each([0, -1, "invalid"])(
+    "rejects an invalid pool modifier: %s",
+    (poolsMultiplier) => {
+      expect(
+        insertAiSchema.safeParse({ ...makeAi(99, 1), poolsMultiplier }).success,
+      ).toBe(false);
+    },
+  );
 });

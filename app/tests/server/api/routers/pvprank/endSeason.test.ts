@@ -4,7 +4,10 @@ import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverMod
 import { callerForDatabase } from "../../../../setup/testDatabase";
 
 /** Ending a season is a content-editor action on a season that must still be running. */
-const endSeasonAs = (role: string, season: { id: string; ended: boolean } | undefined) => {
+const endSeasonAs = (
+  role: string,
+  season: { id: string; ended: boolean } | undefined,
+) => {
   stubProfile("fetchUser", async () => ({ role }));
   const database = {
     query: { rankedSeason: { findFirst: vi.fn().mockResolvedValue(season) } },
@@ -23,7 +26,11 @@ describe("ending a ranked season", () => {
   });
 
   it.each([
-    ["USER", { id: "season", ended: false }, "You don't have permission to end ranked seasons"],
+    [
+      "USER",
+      { id: "season", ended: false },
+      "You don't have permission to end ranked seasons",
+    ],
     ["USER", undefined, "You don't have permission to end ranked seasons"],
     ["OWNER", undefined, "Season not found"],
     ["OWNER", { id: "season", ended: true }, "Season already ended"],

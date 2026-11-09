@@ -55,22 +55,20 @@ describeWithDatabase("moderation retrieval against Community MySQL", () => {
   it("indexes exactly the summary predicate and tracks every source-field update", async () => {
     const client = await getTestDatabase();
     const context = reportRow("context").additionalContext;
-    await client
-      .insert(userReport)
-      .values([
-        reportRow("eligible-old", {
-          aiInterpretation: "",
-          createdAt: new Date("2026-01-01"),
-        }),
-        reportRow("eligible-new", {
-          aiInterpretation: "",
-          createdAt: new Date("2026-02-01"),
-          status: "UNVIEWED",
-        }),
-        reportRow("summarized"),
-        reportRow("empty-context", { aiInterpretation: "", additionalContext: [] }),
-        reportRow("profile", { aiInterpretation: "", system: "user_profile" }),
-      ]);
+    await client.insert(userReport).values([
+      reportRow("eligible-old", {
+        aiInterpretation: "",
+        createdAt: new Date("2026-01-01"),
+      }),
+      reportRow("eligible-new", {
+        aiInterpretation: "",
+        createdAt: new Date("2026-02-01"),
+        status: "UNVIEWED",
+      }),
+      reportRow("summarized"),
+      reportRow("empty-context", { aiInterpretation: "", additionalContext: [] }),
+      reportRow("profile", { aiInterpretation: "", system: "user_profile" }),
+    ]);
     const indexed = () =>
       client
         .select({ id: userReport.id })

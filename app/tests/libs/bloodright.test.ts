@@ -9,10 +9,14 @@ const tiers = [
 ];
 describe("Bloodright refunds", () => {
   it("removes transitive dependents without removing another branch", () => {
-    expect(getBloodrightRefundIds("root", ["root", "child", "grandchild", "other"], tiers)).toEqual(["root", "child", "grandchild"]);
+    expect(
+      getBloodrightRefundIds("root", ["root", "child", "grandchild", "other"], tiers),
+    ).toEqual(["root", "child", "grandchild"]);
   });
   it("retains ancestors when refunding a leaf", () => {
-    expect(getBloodrightRefundIds("grandchild", ["root", "child", "grandchild"], tiers)).toEqual(["grandchild"]);
+    expect(
+      getBloodrightRefundIds("grandchild", ["root", "child", "grandchild"], tiers),
+    ).toEqual(["grandchild"]);
   });
   it("does not refund tiers the player has never purchased", () => {
     expect(getBloodrightRefundIds("root", ["root", "other"], tiers)).toEqual(["root"]);

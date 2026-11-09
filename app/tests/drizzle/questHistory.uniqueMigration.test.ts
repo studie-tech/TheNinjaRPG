@@ -1,4 +1,3 @@
-
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { asc } from "drizzle-orm";
@@ -211,4 +210,4 @@ describeWithDatabase("QuestHistory unique (userId, questId) migration", () => {
 
     expect((await survivors()).map((row) => row.id)).toEqual(["a", "b"]);
   });
-})
+});

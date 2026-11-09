@@ -50,7 +50,8 @@ type ShrineEndpointName =
 
 const endpoints = {
   upgradeShrine: {
-    setup: (db) => db.update(sector).set({ shrineLevel: 2 }).where(eq(sector.id, sectorId)),
+    setup: (db) =>
+      db.update(sector).set({ shrineLevel: 2 }).where(eq(sector.id, sectorId)),
     call: (caller) => caller.upgradeShrine({ sectorNumber: sectorId }),
     cost: SHRINE_UPGRADE_COST,
     patch: () => undefined,
@@ -64,7 +65,9 @@ const endpoints = {
   activateBoost: {
     call: (caller) => caller.activateBoost({ boostType: "Training", villageId }),
     cost: SHRINE_BOOST_COST,
-    patch: (stored) => ({ activeBoosts: { Training: stored?.shrineSettings.activeBoosts.Training } }),
+    patch: (stored) => ({
+      activeBoosts: { Training: stored?.shrineSettings.activeBoosts.Training },
+    }),
     verify: (_db, stored) => {
       expect(
         new Date(stored?.shrineSettings.activeBoosts.Training ?? "").getTime(),
@@ -122,9 +125,7 @@ const endpoints = {
     verify: (_db, stored) => {
       expect(stored?.shrineSettings.boostTemplate).toEqual<typeof template>(template);
       expect(stored?.shrineSettings.boostTemplateUpdatedBy).toBe("CacheKage");
-      expect(stored?.shrineSettings.boostTemplateUpdatedAt).toEqual(
-        expect.any(String),
-      );
+      expect(stored?.shrineSettings.boostTemplateUpdatedAt).toEqual(expect.any(String));
     },
   },
 } satisfies Record<ShrineEndpointName, ShrineEndpoint>;
@@ -196,14 +197,30 @@ describeWithDatabase("committed shrine cache state", () => {
       await db.update(sector).set({ shrineLevel: 0 }).where(eq(sector.id, sectorId));
       const caller = await callerFor(shrineRouter, userId);
       const result = await endpoints[endpoint].call(caller);
-      expect(result).toMatchObject({ success: false, message: "This shrine has been destroyed" });
-      expect((await db.query.village.findFirst({ where: eq(village.id, villageId) }))?.tokens).toBe(initialTokens + concurrentTokens);
-      expect(await db.query.sector.findFirst({ where: eq(sector.id, sectorId) })).toEqual(expect.objectContaining({ shrineLevel: 0, nextMaintainanceDueDate: maintenanceAt }));
+      expect(result).toMatchObject({
+        success: false,
+        message: "This shrine has been destroyed",
+      });
+      expect(
+        (await db.query.village.findFirst({ where: eq(village.id, villageId) }))
+          ?.tokens,
+      ).toBe(initialTokens + concurrentTokens);
+      expect(
+        await db.query.sector.findFirst({ where: eq(sector.id, sectorId) }),
+      ).toEqual(
+        expect.objectContaining({
+          shrineLevel: 0,
+          nextMaintainanceDueDate: maintenanceAt,
+        }),
+      );
     });
   }
 
   for (const mustRefresh of [false, true]) {
-    for (const [endpoint, shrine] of Object.entries(endpoints) as [ShrineEndpointName, ShrineEndpoint][]) {
+    for (const [endpoint, shrine] of Object.entries(endpoints) as [
+      ShrineEndpointName,
+      ShrineEndpoint,
+    ][]) {
       it(`${endpoint} returns the confirmed village update and refresh flag ${mustRefresh}`, async () => {
         const db = await getTestDatabase();
         requiresUserRefresh = mustRefresh;
@@ -213,21 +230,36 @@ describeWithDatabase("committed shrine cache state", () => {
         const result = await shrine.call(caller);
         expect(result.success).toBe(true);
         const cost = shrine.cost;
-        expect(result.userDelta).toEqual(mustRefresh ? undefined : cost ? {
-          village: { id: villageId, tokens: -cost },
-        } : {});
+        expect(result.userDelta).toEqual(
+          mustRefresh
+            ? undefined
+            : cost
+              ? {
+                  village: { id: villageId, tokens: -cost },
+                }
+              : {},
+        );
         // Only the initial snapshot reads the village; confirmed writes need no readback.
         expect(villageReads).toHaveBeenCalledTimes(1);
         const stored = await db.query.village.findFirst({
           where: eq(village.id, villageId),
         });
         const shrineSettings = shrine.patch(stored);
-        expect(result.userPatch?.village).toEqual<{ id: string; shrineSettings: typeof shrineSettings } | undefined>(shrineSettings ? {
-          id: villageId, shrineSettings,
-        } : undefined);
+        expect(result.userPatch?.village).toEqual<
+          { id: string; shrineSettings: typeof shrineSettings } | undefined
+        >(
+          shrineSettings
+            ? {
+                id: villageId,
+                shrineSettings,
+              }
+            : undefined,
+        );
         expect(stored?.tokens).toBe(initialTokens + concurrentTokens - cost);
         expect(stored?.shrineSettings.activeBoosts.PVP).toBe(concurrentBoost);
-        expect(result.userPatch?.village?.shrineSettings?.activeBoosts?.PVP).toBeUndefined();
+        expect(
+          result.userPatch?.village?.shrineSettings?.activeBoosts?.PVP,
+        ).toBeUndefined();
         await shrine.verify(db, stored);
       });
     }

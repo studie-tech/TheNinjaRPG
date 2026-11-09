@@ -38,7 +38,11 @@ import {
   insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../../../setup/queues";
-import { beforeStatements, failStatements, withoutTransactions } from "../../../../setup/statements";
+import {
+  beforeStatements,
+  failStatements,
+  withoutTransactions,
+} from "../../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -125,7 +129,10 @@ describeWithDatabase("managed quest battle and abandonment", () => {
     ]);
     await insertDefaultAiProfile();
   });
-  afterEach(async () => { vi.restoreAllMocks(); await resetTables(questHistory); });
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await resetTables(questHistory);
+  });
 
   /** Read the persisted attempt and content without inventing an entry receipt. */
   const snapshot = async () => {
@@ -160,8 +167,14 @@ describeWithDatabase("managed quest battle and abandonment", () => {
   /** Bind an unticketed Pyramid floor to the player's current overworld NPC tile. */
   const overworldFloorSnapshot = async () => {
     const { client, attempt } = await floorSnapshot(false);
-    await client.update(questHistory).set({ isolated: false }).where(eq(questHistory.id, "run"));
-    await client.update(userData).set({ status: "AWAKE" }).where(eq(userData.userId, "hero"));
+    await client
+      .update(questHistory)
+      .set({ isolated: false })
+      .where(eq(questHistory.id, "run"));
+    await client
+      .update(userData)
+      .set({ status: "AWAKE" })
+      .where(eq(userData.userId, "hero"));
     await client.insert(overworldAiPlacement).values({
       id: "npc",
       aiTemplateUserId: "foe",
@@ -277,7 +290,9 @@ describeWithDatabase("managed quest battle and abandonment", () => {
       expect(hero).toMatchObject({ status: "AWAKE", battleId: null });
       if (state === "abandoned") {
         expect(hero?.questData).toEqual([]);
-        expect((await client.query.questHistory.findFirst())?.endAt).toBeInstanceOf(Date);
+        expect((await client.query.questHistory.findFirst())?.endAt).toBeInstanceOf(
+          Date,
+        );
       }
       expect((await client.query.questHistory.findFirst())?.entryPaid).toBe(false);
     });
@@ -608,7 +623,11 @@ describeWithDatabase("managed quest battle and abandonment", () => {
       .update(userData)
       .set({ activeNpcQuestId: "pyramid" })
       .where(eq(userData.userId, "hero"));
-    const caller = callerForDatabase(router, "hero", withoutTransactions(client)).quests;
+    const caller = callerForDatabase(
+      router,
+      "hero",
+      withoutTransactions(client),
+    ).quests;
     const { result, statements } = await recordQueries(() =>
       caller.abandon({ id: "pyramid" }),
     );
@@ -669,7 +688,11 @@ describeWithDatabase("managed quest battle and abandonment", () => {
 
   it("arbitrates simultaneous paid entry and abandonment without split state", async () => {
     const { client, attempt } = await snapshot();
-    const caller = callerForDatabase(router, "hero", withoutTransactions(client)).quests;
+    const caller = callerForDatabase(
+      router,
+      "hero",
+      withoutTransactions(client),
+    ).quests;
     const [started, abandoned] = await Promise.all([
       startFloor(withoutTransactions(client), attempt),
       caller.abandon({ id: "pyramid" }),

@@ -1,5 +1,13 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+  vi,
+} from "bun:test";
 import * as client from "@/app/_trpc/client";
 import * as pools from "@/hooks/useEffectivePools";
 import * as Avatar from "@/layout/Avatar";
@@ -25,12 +33,16 @@ const mount = (timers: Record<string, Date | null>, timeDiff: number) => {
     warParticipantUntil: new Date(0),
     ...timers,
   };
-  vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({ data, timeDiff } as never);
+  vi.spyOn(userContext, "useUserDataSelector").mockReturnValue({
+    data,
+    timeDiff,
+  } as never);
   return render(<MenuBoxProfile />);
 };
 
 /** A server deadline `ms` ahead of the server clock, whose local reading is offset by timeDiff. */
-const serverDeadline = (ms: number, timeDiff: number) => new Date(localNow.getTime() - timeDiff + ms);
+const serverDeadline = (ms: number, timeDiff: number) =>
+  new Date(localNow.getTime() - timeDiff + ms);
 
 beforeEach(() => {
   setSystemTime(localNow);

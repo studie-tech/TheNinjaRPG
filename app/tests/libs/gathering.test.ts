@@ -10,19 +10,28 @@ describe("gathering yield", () => {
   const experience = GATHERING_REQUIRED_EXP["D RANK"];
 
   it("adds units only to successful drops without additional rolls", () => {
-    const roll = vi.spyOn(Math, "random").mockReturnValueOnce(0).mockReturnValueOnce(0.99);
+    const roll = vi
+      .spyOn(Math, "random")
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0.99);
     expect(getGatheringItemDrops(experience, [herb, ore], [], 2)).toEqual([
-      herb, herb, herb,
+      herb,
+      herb,
+      herb,
     ]);
     expect(roll).toHaveBeenCalledTimes(2);
   });
 
   it("preserves rank and allowed-material gates", () => {
     const roll = vi.spyOn(Math, "random").mockReturnValue(0);
-    expect(getGatheringItemDrops(experience, [{ ...herb, rarity: "LEGENDARY" }], [], 2)).toEqual([]);
+    expect(
+      getGatheringItemDrops(experience, [{ ...herb, rarity: "LEGENDARY" }], [], 2),
+    ).toEqual([]);
     expect(roll).not.toHaveBeenCalled();
     expect(getGatheringItemDrops(experience, [herb, ore], [ore.id], 2)).toEqual([
-      ore, ore, ore,
+      ore,
+      ore,
+      ore,
     ]);
     expect(roll).toHaveBeenCalledTimes(1);
   });

@@ -5,18 +5,19 @@ import * as Modal from "@/layout/Modal";
 import { SkillTreeFolderModal } from "@/layout/SkillTreeFolderModal";
 
 beforeEach(() => {
-  vi.spyOn(Modal, "default").mockImplementation(({ isOpen, title, proceed_label, onAccept, children }) =>
-    isOpen ? (
-      <div role="dialog" aria-label={title}>
-        {proceed_label && (
-          <button type="button" onClick={onAccept}>
-            {proceed_label}
-          </button>
-        )}
-        <span data-testid="accept">{onAccept ? "accept" : "none"}</span>
-        {children}
-      </div>
-    ) : null,
+  vi.spyOn(Modal, "default").mockImplementation(
+    ({ isOpen, title, proceed_label, onAccept, children }) =>
+      isOpen ? (
+        <div role="dialog" aria-label={title}>
+          {proceed_label && (
+            <button type="button" onClick={onAccept}>
+              {proceed_label}
+            </button>
+          )}
+          <span data-testid="accept">{onAccept ? "accept" : "none"}</span>
+          {children}
+        </div>
+      ) : null,
   );
 });
 
@@ -26,8 +27,20 @@ afterEach(() => {
 });
 
 const folder = (id: string, name: string) =>
-  ({ id, name, image: null, description: null, hidden: false }) as unknown as SkillTreeFolder;
-const skill = (id: string, tier: number, cost: number, requiredSkillIds: string[] = [], folderId = "f1") =>
+  ({
+    id,
+    name,
+    image: null,
+    description: null,
+    hidden: false,
+  }) as unknown as SkillTreeFolder;
+const skill = (
+  id: string,
+  tier: number,
+  cost: number,
+  requiredSkillIds: string[] = [],
+  folderId = "f1",
+) =>
   ({
     id,
     name: `Skill ${id}`,
@@ -71,7 +84,9 @@ const mount = (onPurchaseSkill = vi.fn()) =>
 describe("skill tree folder modal", () => {
   it("labels each skill card by its status", () => {
     const view = mount();
-    expect(view.getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual([
+    expect(
+      view.getAllByRole("button").map((button) => button.getAttribute("aria-label")),
+    ).toEqual([
       "Skill A, Tier 1, Active",
       "Skill B, Tier 1, Available",
       "Skill C, Tier 2, Prerequisites required",
@@ -92,7 +107,9 @@ describe("skill tree folder modal", () => {
 
   it("explains missing prerequisites and links a prerequisite in another folder", () => {
     const view = mount();
-    fireEvent.click(view.getByRole("button", { name: "Skill C, Tier 2, Prerequisites required" }));
+    fireEvent.click(
+      view.getByRole("button", { name: "Skill C, Tier 2, Prerequisites required" }),
+    );
     expect(view.queryByRole("button", { name: /Purchase for/ })).toBeNull();
     expect(view.getByTestId("accept").textContent).toBe("none");
     expect(view.getByText("Prerequisites not met")).toBeTruthy();

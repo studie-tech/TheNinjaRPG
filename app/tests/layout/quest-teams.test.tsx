@@ -11,7 +11,11 @@ import type { UserDeltaResponse } from "@/validators/userCache";
 
 type Options = {
   onMutate: () => number | undefined;
-  onSuccess: (result: UserDeltaResponse, variables: unknown, revision: number | undefined) => Promise<void>;
+  onSuccess: (
+    result: UserDeltaResponse,
+    variables: unknown,
+    revision: number | undefined,
+  ) => Promise<void>;
 };
 
 const previousCustomEvent = globalThis.CustomEvent;
@@ -24,8 +28,18 @@ const mutation = () => {
     useMutation: (options: Options) => {
       const [isPending, setPending] = useState(false);
       const revision = useRef<number | undefined>(undefined);
-      respond = async (result) => { await options.onSuccess(result, undefined, revision.current); setPending(false); };
-      return { isPending, mutate: (input: unknown) => { revision.current = options.onMutate(); mutate(input); setPending(true); } };
+      respond = async (result) => {
+        await options.onSuccess(result, undefined, revision.current);
+        setPending(false);
+      };
+      return {
+        isPending,
+        mutate: (input: unknown) => {
+          revision.current = options.onMutate();
+          mutate(input);
+          setPending(true);
+        },
+      };
     },
     respond: (result: UserDeltaResponse) => respond(result),
   };
@@ -37,22 +51,49 @@ const updateUser = vi.fn(async () => undefined);
 const invalidate = vi.fn(async () => undefined);
 const encounterLocation = { sector: 50, longitude: 12, latitude: 13 };
 const encounterTeam = () => ({
-  id: "team", questId: "quest", name: "Team", leaderId: "ninja",
+  id: "team",
+  questId: "quest",
+  name: "Team",
+  leaderId: "ninja",
   members: [
-    { userId: "ninja", username: "Leader", status: "AWAKE" as UserStatus, ...encounterLocation },
-    { userId: "helper", username: "Helper", status: "AWAKE" as UserStatus, ...encounterLocation },
+    {
+      userId: "ninja",
+      username: "Leader",
+      status: "AWAKE" as UserStatus,
+      ...encounterLocation,
+    },
+    {
+      userId: "helper",
+      username: "Helper",
+      status: "AWAKE" as UserStatus,
+      ...encounterLocation,
+    },
   ],
-  encounterLocation: { ...encounterLocation }, hasEncounter: true,
-  completed: false, failed: false, battleId: null, version: 1, isPublic: true,
+  encounterLocation: { ...encounterLocation },
+  hasEncounter: true,
+  completed: false,
+  failed: false,
+  battleId: null,
+  version: 1,
+  isPublic: true,
 });
 let current: ReturnType<typeof encounterTeam> | null;
-let actor: { userId: string; status: UserStatus; autoWakeUp: boolean } & typeof encounterLocation;
+let actor: {
+  userId: string;
+  status: UserStatus;
+  autoWakeUp: boolean;
+} & typeof encounterLocation;
 
 beforeEach(() => {
   vi.clearAllMocks();
   globalThis.CustomEvent = window.CustomEvent;
   current = null;
-  actor = { userId: "ninja", status: "HOSPITALIZED", autoWakeUp: true, ...encounterLocation };
+  actor = {
+    userId: "ninja",
+    status: "HOSPITALIZED",
+    autoWakeUp: true,
+    ...encounterLocation,
+  };
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
     data: actor,
     prepareUserUpdate: () => 7,
@@ -61,14 +102,48 @@ beforeEach(() => {
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   const inactive = { useMutation: () => ({ isPending: false }) };
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({ coop: { quest: { overview: { invalidate } } }, quests: { specificQuests: { invalidate }, getPendingRewardChoices: { invalidate } } }),
-    coop: { quest: {
-      overview: { useQuery: () => ({ data: { current, teams: [{ id: "team", questId: "quest", name: "Team", members: [], invited: false }] }, isPending: false }) },
-      create, join, leave: inactive, invite: inactive, remove: inactive, disband: inactive, startEncounter: start,
-    } },
+    useUtils: () => ({
+      coop: { quest: { overview: { invalidate } } },
+      quests: {
+        specificQuests: { invalidate },
+        getPendingRewardChoices: { invalidate },
+      },
+    }),
+    coop: {
+      quest: {
+        overview: {
+          useQuery: () => ({
+            data: {
+              current,
+              teams: [
+                {
+                  id: "team",
+                  questId: "quest",
+                  name: "Team",
+                  members: [],
+                  invited: false,
+                },
+              ],
+            },
+            isPending: false,
+          }),
+        },
+        create,
+        join,
+        leave: inactive,
+        invite: inactive,
+        remove: inactive,
+        disband: inactive,
+        startEncounter: start,
+      },
+    },
   });
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); globalThis.CustomEvent = previousCustomEvent; });
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  globalThis.CustomEvent = previousCustomEvent;
+});
 
 for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
   it(`offers an encounter attempt to the recoverable ${status} leader without changing roster status`, () => {
@@ -76,8 +151,12 @@ for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
     actor.status = status;
     current.members[0]!.status = status;
     const view = render(<QuestTeams questId="quest" />);
-    expect(view.getByRole("status").textContent).toContain("Ready to attempt the team encounter.");
-    expect(view.getByRole("list", { name: "Party members" }).textContent).toContain(status === "ASLEEP" ? "Asleep" : "Hospitalized");
+    expect(view.getByRole("status").textContent).toContain(
+      "Ready to attempt the team encounter.",
+    );
+    expect(view.getByRole("list", { name: "Party members" }).textContent).toContain(
+      status === "ASLEEP" ? "Asleep" : "Hospitalized",
+    );
     fireEvent.click(view.getByRole("button", { name: "Start Team Encounter" }));
     expect(start.mutate).toHaveBeenCalledWith({ partyId: "team" });
   });
@@ -101,7 +180,9 @@ for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {
     current.members[0]!.status = "ASLEEP";
     current.members[1]!.status = status;
     const view = render(<QuestTeams questId="quest" />);
-    expect(view.getByRole("status").textContent).toContain("Waiting for: Helper. They must be awake at the encounter location.");
+    expect(view.getByRole("status").textContent).toContain(
+      "Waiting for: Helper. They must be awake at the encounter location.",
+    );
   });
 
   it(`does not project recovery for the ${status} viewer who is not the leader`, () => {
@@ -125,25 +206,46 @@ for (const memberIndex of [0, 1]) {
       member[coordinate] += 1;
       if (memberIndex === 0) actor[coordinate] += 1;
       const view = render(<QuestTeams questId="quest" />);
-      expect(view.getByRole("status").textContent).toContain(`Waiting for: ${member.username}.`);
+      expect(view.getByRole("status").textContent).toContain(
+        `Waiting for: ${member.username}.`,
+      );
     });
   }
 }
 
-for (const [label, action] of [["Form Quest Team", create], ["Join Team", join]] as const) {
+for (const [label, action] of [
+  ["Form Quest Team", create],
+  ["Join Team", join],
+] as const) {
   it(`offers recovery beside a rejected ${label} and allows retry`, async () => {
     const view = render(<QuestTeams questId="quest" />);
     fireEvent.click(view.getByRole("button", { name: label }));
-    expect((view.getByRole("button", { name: label === "Form Quest Team" ? "Forming..." : label }) as HTMLButtonElement).disabled).toBe(true);
-    await act(() => action.respond({ success: false, message: actionStatusMessage("HOSPITALIZED") }));
-    expect(view.getByRole("alert").textContent).toContain(actionStatusMessage("HOSPITALIZED"));
-    expect(view.getByRole("link", { name: "Go to hospital" }).getAttribute("href")).toBe("/hospital");
-    expect((view.getByRole("button", { name: label }) as HTMLButtonElement).disabled).toBe(false);
+    expect(
+      (
+        view.getByRole("button", {
+          name: label === "Form Quest Team" ? "Forming..." : label,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    await act(() =>
+      action.respond({ success: false, message: actionStatusMessage("HOSPITALIZED") }),
+    );
+    expect(view.getByRole("alert").textContent).toContain(
+      actionStatusMessage("HOSPITALIZED"),
+    );
+    expect(
+      view.getByRole("link", { name: "Go to hospital" }).getAttribute("href"),
+    ).toBe("/hospital");
+    expect(
+      (view.getByRole("button", { name: label }) as HTMLButtonElement).disabled,
+    ).toBe(false);
     expect(updateUser).not.toHaveBeenCalled();
     expect(invalidate).not.toHaveBeenCalled();
     expect(toast.showMutationToast).not.toHaveBeenCalled();
     fireEvent.click(view.getByRole("button", { name: label }));
-    await act(() => action.respond({ success: false, message: "Quest is unavailable" }));
+    await act(() =>
+      action.respond({ success: false, message: "Quest is unavailable" }),
+    );
     expect(view.getByRole("alert").textContent).toBe("Quest is unavailable");
     expect(view.queryByRole("link", { name: "Go to hospital" })).toBeNull();
   });
@@ -151,10 +253,21 @@ for (const [label, action] of [["Form Quest Team", create], ["Join Team", join]]
   it(`retains one merged recovery notice after a rejected ${label}`, async () => {
     const view = render(<QuestTeams questId="quest" />);
     fireEvent.click(view.getByRole("button", { name: label }));
-    await act(() => action.respond({ success: false, message: `Quest is unavailable ${AUTO_WAKE_MESSAGE}`, actionNotice: AUTO_WAKE_MESSAGE }));
-    expect(view.getByRole("alert").textContent).toBe(`Quest is unavailable ${AUTO_WAKE_MESSAGE}`);
+    await act(() =>
+      action.respond({
+        success: false,
+        message: `Quest is unavailable ${AUTO_WAKE_MESSAGE}`,
+        actionNotice: AUTO_WAKE_MESSAGE,
+      }),
+    );
+    expect(view.getByRole("alert").textContent).toBe(
+      `Quest is unavailable ${AUTO_WAKE_MESSAGE}`,
+    );
     expect(view.queryByRole("link", { name: "Go to hospital" })).toBeNull();
-    expect(updateUser).toHaveBeenCalledWith(expect.objectContaining({ actionNotice: AUTO_WAKE_MESSAGE }), { revision: 7, refetch: false });
+    expect(updateUser).toHaveBeenCalledWith(
+      expect.objectContaining({ actionNotice: AUTO_WAKE_MESSAGE }),
+      { revision: 7, refetch: false },
+    );
     expect(toast.showMutationToast).toHaveBeenCalledTimes(1);
     expect(invalidate).not.toHaveBeenCalled();
   });

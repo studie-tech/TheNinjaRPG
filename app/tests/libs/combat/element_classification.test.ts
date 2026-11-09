@@ -6,7 +6,11 @@ import {
   userJutsuToAction,
 } from "@/libs/combat/actions";
 import { resolvePotencyTags } from "@/libs/combat/potency";
-import type { BattleUserJutsu, CombatAction, CompleteBattle } from "@/libs/combat/types";
+import type {
+  BattleUserJutsu,
+  CombatAction,
+  CompleteBattle,
+} from "@/libs/combat/types";
 import {
   canTrainJutsu,
   canUseJutsu,
@@ -197,7 +201,12 @@ describe("classification combat restrictions", () => {
     "matches temporal effects and seals against %s",
     (element) => {
       const { battle, action } = fixture();
-      expectTemporalAndSeal(battle, action, element, element === "Fire" || element === "Water");
+      expectTemporalAndSeal(
+        battle,
+        action,
+        element,
+        element === "Fire" || element === "Water",
+      );
     },
   );
 });

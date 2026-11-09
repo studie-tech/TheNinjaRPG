@@ -93,7 +93,9 @@ describe("fetchSpacetimeCompletedRun", () => {
   });
 
   it("throws when SpacetimeDB is unreachable", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("down", { status: 502 }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("down", { status: 502 }),
+    );
     await expect(fetchSpacetimeCompletedRun("42")).rejects.toThrow();
   });
 });

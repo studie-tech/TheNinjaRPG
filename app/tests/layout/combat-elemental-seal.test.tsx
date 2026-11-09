@@ -3,12 +3,7 @@ import { afterEach, expect, it } from "bun:test";
 import { CombatElementalSealNotice } from "@/layout/CombatElementalSealNotice";
 import { availableUserActions } from "@/libs/combat/actions";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
-import {
-  makeBattleUser,
-  makeEffect,
-  makeInjectBattle,
-  makeTag,
-} from "../setup/combat";
+import { makeBattleUser, makeEffect, makeInjectBattle, makeTag } from "../setup/combat";
 
 afterEach(() => cleanup());
 
@@ -58,9 +53,14 @@ it("explains a PvE loadout disappearing under a seal and restores it when the se
   expect(status.textContent).toBe("");
   expect(status.getAttribute("aria-atomic")).toBe("true");
 
-  const seal = makeEffect("elementalseal", { rounds: 2 }, {
-    targetId: "caster", castThisRound: false,
-  });
+  const seal = makeEffect(
+    "elementalseal",
+    { rounds: 2 },
+    {
+      targetId: "caster",
+      castThisRound: false,
+    },
+  );
   battle.usersEffects = [seal];
   view.rerender(notice());
   expect(jutsuNames()).toEqual([]);
@@ -78,9 +78,14 @@ it("explains a PvE loadout disappearing under a seal and restores it when the se
 
 it("follows the controlled actor and waits until a newly cast seal takes effect", () => {
   const battle = fixture();
-  const seal = makeEffect("elementalseal", { rounds: 2 }, {
-    targetId: "summon", castThisRound: true,
-  });
+  const seal = makeEffect(
+    "elementalseal",
+    { rounds: 2 },
+    {
+      targetId: "summon",
+      castThisRound: true,
+    },
+  );
   battle.usersEffects = [seal];
   const view = render(<CombatElementalSealNotice battle={battle} userId="summon" />);
   expect(view.getByRole("status").textContent).toBe("");

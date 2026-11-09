@@ -6,20 +6,36 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { aiSpriteAnimation, spriteAnimation, userData } from "@/drizzle/schema";
 import { spriteAnimationSchema } from "@/validators/spriteAnimation";
 import { insertUsers } from "../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables, runRawSql } from "../setup/testDatabase";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+  runRawSql,
+} from "../setup/testDatabase";
 
 const migration = await readFile(
-  new URL("../../drizzle/migrations/0144_seed_ai_action_animations.sql", import.meta.url),
+  new URL(
+    "../../drizzle/migrations/0144_seed_ai_action_animations.sql",
+    import.meta.url,
+  ),
   "utf8",
 );
 const smallSheetBackfill = await readFile(
-  new URL("../../drizzle/migrations/0143_backfill_sprite_small_urls.sql", import.meta.url),
+  new URL(
+    "../../drizzle/migrations/0143_backfill_sprite_small_urls.sql",
+    import.meta.url,
+  ),
   "utf8",
 );
-const expectedRows = [...migration.matchAll(/FROM \(\n([\s\S]*?)\n\) AS `expected`/g)].map(
-  (match) => match[1]!,
-);
-type Roster = { userId: string; actionKey: string; avatar: string; avatarFacing: "left" | "right" };
+const expectedRows = [
+  ...migration.matchAll(/FROM \(\n([\s\S]*?)\n\) AS `expected`/g),
+].map((match) => match[1]!);
+type Roster = {
+  userId: string;
+  actionKey: string;
+  avatar: string;
+  avatarFacing: "left" | "right";
+};
 
 const loadRoster = async () => {
   const db = await getTestDatabase();
@@ -27,7 +43,9 @@ const loadRoster = async () => {
     expectedRows.map(
       (rows) =>
         db.execute(
-          sql.raw(`SELECT userId, actionKey, avatar, avatarFacing FROM (${rows}) AS roster`),
+          sql.raw(
+            `SELECT userId, actionKey, avatar, avatarFacing FROM (${rows}) AS roster`,
+          ),
         ) as unknown as Promise<[Roster[]]>,
     ),
   );
@@ -36,10 +54,14 @@ const loadRoster = async () => {
 
 it("registers after the small sheet backfill without statement markers", () => {
   const migrations = readMigrationFiles({
-    migrationsFolder: fileURLToPath(new URL("../../drizzle/migrations", import.meta.url)),
+    migrationsFolder: fileURLToPath(
+      new URL("../../drizzle/migrations", import.meta.url),
+    ),
   });
   const index = migrations.findIndex(({ sql }) => sql.join("\n").includes(migration));
-  const backfill = migrations.findIndex(({ sql }) => sql.join("\n").includes(smallSheetBackfill));
+  const backfill = migrations.findIndex(({ sql }) =>
+    sql.join("\n").includes(smallSheetBackfill),
+  );
   expect(backfill).toBeGreaterThan(-1);
   expect(index).toBe(backfill + 1);
   expect(migration).not.toContain("--> statement-breakpoint");
@@ -66,7 +88,9 @@ describeWithDatabase("AI action animation migration", () => {
 
     await runRawSql(migration);
 
-    const sheets = await db.query.spriteAnimation.findMany({ orderBy: spriteAnimation.id });
+    const sheets = await db.query.spriteAnimation.findMany({
+      orderBy: spriteAnimation.id,
+    });
     const bindings = await db.query.aiSpriteAnimation.findMany({
       orderBy: [aiSpriteAnimation.userId, aiSpriteAnimation.actionKey],
     });
@@ -128,7 +152,9 @@ describeWithDatabase("AI action animation migration", () => {
     const rows = await db.query.aiSpriteAnimation.findMany({
       where: eq(aiSpriteAnimation.userId, manual.userId),
     });
-    expect(rows.find((row) => row.actionKey === manual.actionKey)?.animationId).toBe("manual-sheet");
+    expect(rows.find((row) => row.actionKey === manual.actionKey)?.animationId).toBe(
+      "manual-sheet",
+    );
     expect(
       await db.query.aiSpriteAnimation.findMany({
         where: eq(aiSpriteAnimation.userId, changed.userId),

@@ -42,12 +42,21 @@ export const aroundStatements = (
       (chunk) => chunk === table || (chunk as { table?: unknown })?.table === table,
     );
   };
-  const wrapBuilder = (builder: object, statement: { values?: SetValues } = {}): object =>
+  const wrapBuilder = (
+    builder: object,
+    statement: { values?: SetValues } = {},
+  ): object =>
     new Proxy(builder, {
       get(target, property, receiver) {
-        if (property === "then" || property === "catch" || property === "finally" || property === "execute") {
+        if (
+          property === "then" ||
+          property === "catch" ||
+          property === "finally" ||
+          property === "execute"
+        ) {
           const run = () => Promise.resolve(target as PromiseLike<unknown>);
-          const selected = !when || (statement.values !== undefined && when(statement.values));
+          const selected =
+            !when || (statement.values !== undefined && when(statement.values));
           const settle = selected ? around(run) : run();
           return property === "execute" ? () => settle : settle[property].bind(settle);
         }
@@ -65,7 +74,8 @@ export const aroundStatements = (
     });
   return new Proxy(client, {
     get(target, property, receiver) {
-      if (!operations.includes(property as Operation)) return Reflect.get(target, property, receiver);
+      if (!operations.includes(property as Operation))
+        return Reflect.get(target, property, receiver);
       if (property === "insert" || property === "update" || property === "delete") {
         return (subject: object) => {
           const builder = (target[property] as (t: object) => object)(subject);
@@ -78,7 +88,9 @@ export const aroundStatements = (
             get(selection, key, proxy) {
               if (key !== "from") return Reflect.get(selection, key, proxy);
               return (subject: object) => {
-                const query = (selection as unknown as { from: (t: object) => object }).from(subject);
+                const query = (
+                  selection as unknown as { from: (t: object) => object }
+                ).from(subject);
                 return subject === table ? wrapBuilder(query) : query;
               };
             },
@@ -140,7 +152,10 @@ export const failStatements = (
  */
 export const interceptExecute = (
   client: DrizzleClient,
-  handle: (query: RawStatement, run: () => ReturnType<DrizzleClient["execute"]>) => unknown,
+  handle: (
+    query: RawStatement,
+    run: () => ReturnType<DrizzleClient["execute"]>,
+  ) => unknown,
 ): DrizzleClient =>
   new Proxy(client, {
     get(target, property, receiver) {
@@ -212,7 +227,9 @@ export const inTransactions = (
   let attempts = 0;
   return replaceTransaction(client, (work, open) => {
     const attempt = ++attempts;
-    return open((tx) => work(wrap(tx as unknown as DrizzleClient, attempt) as unknown as typeof tx));
+    return open((tx) =>
+      work(wrap(tx as unknown as DrizzleClient, attempt) as unknown as typeof tx),
+    );
   });
 };
 

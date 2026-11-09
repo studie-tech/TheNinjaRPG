@@ -1,12 +1,32 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { bloodline, dataBattleAction, item, jutsu, userData, userItem, userJutsu } from "@/drizzle/schema";
+import {
+  bloodline,
+  dataBattleAction,
+  item,
+  jutsu,
+  userData,
+  userItem,
+  userJutsu,
+} from "@/drizzle/schema";
 import { dataRouter } from "@/server/api/routers/data";
-import { insertItems, insertJutsus, insertUsers, jutsuRow } from "../../../setup/factories";
+import {
+  insertItems,
+  insertJutsus,
+  insertUsers,
+  jutsuRow,
+} from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import {
+  callerFor,
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../setup/testDatabase";
 
-const statistics = async (input: { id: string; type: "jutsu" | "item" | "bloodline" | "ai" }) =>
-  (await callerFor(dataRouter, "viewer")).getStatistics(input);
+const statistics = async (input: {
+  id: string;
+  type: "jutsu" | "item" | "bloodline" | "ai";
+}) => (await callerFor(dataRouter, "viewer")).getStatistics(input);
 
 /** Content statistics: owner counts per level and in total, plus the battle usage rows. */
 describeWithDatabase("data.getStatistics", () => {
@@ -14,9 +34,24 @@ describeWithDatabase("data.getStatistics", () => {
 
   beforeEach(async () => {
     stubRateLimitTransport();
-    await resetTables(dataBattleAction, userJutsu, userItem, jutsu, item, bloodline, userData);
+    await resetTables(
+      dataBattleAction,
+      userJutsu,
+      userItem,
+      jutsu,
+      item,
+      bloodline,
+      userData,
+    );
     const db = await getTestDatabase();
-    await db.insert(bloodline).values({ id: "line", name: "Line", rank: "D", image: "", description: "Stats", effects: [] });
+    await db.insert(bloodline).values({
+      id: "line",
+      name: "Line",
+      rank: "D",
+      image: "",
+      description: "Stats",
+      effects: [],
+    });
     await insertUsers([
       { userId: "viewer", username: "Viewer" },
       { userId: "low-a", username: "LowA", level: 5, bloodlineId: "line" },
@@ -37,7 +72,13 @@ describeWithDatabase("data.getStatistics", () => {
       { id: "ui-3", userId: "high", itemId: "kunai" },
     ]);
     await db.insert(dataBattleAction).values([
-      { type: "jutsu", contentId: "fireball", battleType: "ARENA", battleWon: 1, count: 4 },
+      {
+        type: "jutsu",
+        contentId: "fireball",
+        battleType: "ARENA",
+        battleWon: 1,
+        count: 4,
+      },
       { type: "item", contentId: "kunai", battleType: "ARENA", battleWon: 0, count: 2 },
     ]);
   });
@@ -79,11 +120,17 @@ describeWithDatabase("data.getStatistics", () => {
 
   it("rejects balance filters outside their enums", async () => {
     const caller = await callerFor(dataRouter, "viewer");
-    await expect(caller.getRankedLoadoutStatistics({ types: ["bogus"] as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    await expect(caller.getBloodlineBalanceStatistics({ bloodlineRanks: ["Z"] as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller.getRankedLoadoutStatistics({ types: ["bogus"] as never }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      caller.getBloodlineBalanceStatistics({ bloodlineRanks: ["Z"] as never }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
   it("rejects an unknown statistics type", async () => {
-    await expect(statistics({ id: "fireball", type: "basic" as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      statistics({ id: "fireball", type: "basic" as never }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });

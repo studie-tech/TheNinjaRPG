@@ -103,12 +103,16 @@ describe("getStatusAfterComment", () => {
 
   it("hands a ticket staff picked up back to them when its creator replies", () => {
     expect(getStatusAfterComment("IN_PROGRESS", creator)).toBe("WAITING_FOR_STAFF");
-    expect(getStatusAfterComment("WAITING_FOR_USER", creator)).toBe("WAITING_FOR_STAFF");
+    expect(getStatusAfterComment("WAITING_FOR_USER", creator)).toBe(
+      "WAITING_FOR_STAFF",
+    );
     expect(getStatusAfterComment("WAITING_FOR_STAFF", creator)).toBeUndefined();
   });
 
   it("treats a staff member replying on their own ticket as the creator", () => {
-    expect(getStatusAfterComment("OPEN", { isCreator: true, isStaff: true })).toBeUndefined();
+    expect(
+      getStatusAfterComment("OPEN", { isCreator: true, isStaff: true }),
+    ).toBeUndefined();
   });
 
   it("puts an active ticket in progress when staff reply", () => {

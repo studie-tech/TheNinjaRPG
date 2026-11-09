@@ -12,7 +12,10 @@ import { battle, jutsu } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { HealTag } from "@/validators/combat";
-import { fakeInitiationClient, makeInitiationUser } from "../../../../libs/combat/helpers/preload";
+import {
+  fakeInitiationClient,
+  makeInitiationUser,
+} from "../../../../libs/combat/helpers/preload";
 import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 
 const participant = (
@@ -36,7 +39,11 @@ const startBattle = async (
   info: Partial<Parameters<typeof initiateBattle>[0]>,
   equipLimits = equipLimitFixture,
 ) => {
-  const { client, saved: savedBattle, readEquipLimits } = fakeInitiationClient(users, {
+  const {
+    client,
+    saved: savedBattle,
+    readEquipLimits,
+  } = fakeInitiationClient(users, {
     equipLimits,
     otherRows: [{ count: 0 }],
   });
@@ -112,7 +119,10 @@ describe("initiateBattle auto combat start", () => {
   it("keeps a PvP battle manual even when auto combat is requested", async () => {
     const { auto } = await startBattle(
       "COMBAT",
-      [participant("attacker"), participant("defender", { isAi: true, villageId: "b" })],
+      [
+        participant("attacker"),
+        participant("defender", { isAi: true, villageId: "b" }),
+      ],
       { autoCombatUserIds: ["attacker"] },
     );
     expect(auto.attacker).toBe(false);
@@ -138,9 +148,13 @@ describe("initiateBattle jutsu equipment limits", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it.each((["RANKED_SPARRING", "RANKED_PVP", "SPARRING"] as const).flatMap(
-    (battleType) => (["fetch", "configured", "unlimited"] as const).map((preload) => [battleType, preload] as const),
-  ))(
+  it.each(
+    (["RANKED_SPARRING", "RANKED_PVP", "SPARRING"] as const).flatMap((battleType) =>
+      (["fetch", "configured", "unlimited"] as const).map(
+        (preload) => [battleType, preload] as const,
+      ),
+    ),
+  )(
     "uses the matching equipment limits for %s (rules: %s)",
     async (battleType, preload) => {
       const player = participant("player");
@@ -149,7 +163,9 @@ describe("initiateBattle jutsu equipment limits", () => {
         ...Object.fromEntries(
           Object.entries(getTableColumns(jutsu)).map(([key, column]) => [
             key,
-            column.default && typeof column.default === "object" && "queryChunks" in column.default
+            column.default &&
+            typeof column.default === "object" &&
+            "queryChunks" in column.default
               ? new Date()
               : (column.default ?? null),
           ]),
@@ -176,18 +192,25 @@ describe("initiateBattle jutsu equipment limits", () => {
           jutsu: definition,
         },
       ];
-      const limits = [{ category: "heal", unrankedMaxEquipped: 0, rankedMaxEquipped: 3 }];
+      const limits = [
+        { category: "heal", unrankedMaxEquipped: 0, rankedMaxEquipped: 3 },
+      ];
       const { usersState, equipLimitReads } = await startBattle(
         battleType,
         [player, participant("opponent", { isAi: true, villageId: "b" })],
-        { jutsuEquipLimits: preload === "fetch" ? undefined : preload === "configured" ? limits : [] },
+        {
+          jutsuEquipLimits:
+            preload === "fetch" ? undefined : preload === "configured" ? limits : [],
+        },
         limits,
       );
       expect(
         usersState
           .find((user) => user.controllerId === player.userId)
           ?.jutsus.map((entry) => entry.jutsuId),
-      ).toEqual(battleType === "SPARRING" && preload !== "unlimited" ? [] : [definition.id]);
+      ).toEqual(
+        battleType === "SPARRING" && preload !== "unlimited" ? [] : [definition.id],
+      );
       expect(equipLimitReads).toBe(preload === "fetch" ? 1 : 0);
     },
   );

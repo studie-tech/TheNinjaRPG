@@ -36,7 +36,6 @@ const describeSql = (node: unknown) => {
 };
 
 describe("ANBU request squad identity", () => {
-
   it("resolves the squad from relatedId after a leader change", async () => {
     const squad = {
       id: "squad-1",
@@ -93,7 +92,11 @@ describe("ANBU request squad identity", () => {
       update: vi.fn().mockReturnValue({ set }),
     };
 
-    await reassignPendingAnbuRequestsOnPromotion(client as never, "squad-1", "new-leader");
+    await reassignPendingAnbuRequestsOnPromotion(
+      client as never,
+      "squad-1",
+      "new-leader",
+    );
 
     expect(client.update).toHaveBeenCalledWith(userRequest);
     expect(set).toHaveBeenCalledWith({ receiverId: "new-leader" });
@@ -578,7 +581,6 @@ describe("ANBU router request permissions and concurrency", () => {
 });
 
 describe("ANBU membership invariants", () => {
-
   it("atomically refuses to remove the last member", async () => {
     const squad = makeSquad({ leaderId: "member-1", memberCount: 1 });
     const { client, updates } = makeDrizzleMock(squad, [

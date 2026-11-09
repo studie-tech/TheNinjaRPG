@@ -65,19 +65,15 @@ const selfDebuff = (
 
 // The copy/mirror tag effect itself (cast by SELF onto OPP).
 const transferTag = (type: "copy" | "mirror"): UserEffect =>
-  makeEffect(
-    type,
-    { power: 100, rounds: 3, calculation: "percentage" } as never,
-    {
-      id: `${type}-tag`,
-      targetId: OPP,
-      creatorId: SELF,
-      level: 0,
-      isNew: true,
-      castThisRound: true,
-      createdRound: 1,
-    },
-  );
+  makeEffect(type, { power: 100, rounds: 3, calculation: "percentage" } as never, {
+    id: `${type}-tag`,
+    targetId: OPP,
+    creatorId: SELF,
+    level: 0,
+    isNew: true,
+    castThisRound: true,
+    createdRound: 1,
+  });
 const copyTag = (): UserEffect => transferTag("copy");
 const mirrorTag = (): UserEffect => transferTag("mirror");
 
@@ -151,12 +147,20 @@ describe("copy/mirror priority constants", () => {
 
 describe("selectTransferEffects", () => {
   it("returns [] when cap <= 0", () => {
-    expect(selectTransferEffects([makeTransferEffect("shield", 10)], testRank, 0)).toEqual([]);
+    expect(
+      selectTransferEffects([makeTransferEffect("shield", 10)], testRank, 0),
+    ).toEqual([]);
   });
 
   it("keeps repeated types ordered by strength", () => {
     const result = selectTransferEffects(
-      [makeTransferEffect("shield", 10), makeTransferEffect("shield", 40), makeTransferEffect("shield", 25)], testRank, 4,
+      [
+        makeTransferEffect("shield", 10),
+        makeTransferEffect("shield", 40),
+        makeTransferEffect("shield", 25),
+      ],
+      testRank,
+      4,
     );
     expect(result.map((e) => e.power)).toEqual([40, 25, 10]);
   });
@@ -164,8 +168,14 @@ describe("selectTransferEffects", () => {
   it("orders equal-power instances deterministically regardless of input order", () => {
     const low = makeTransferEffect("shield", 30, { id: "aaa" });
     const high = makeTransferEffect("shield", 30, { id: "bbb" });
-    for (const candidates of [[low, high], [high, low]]) {
-      expect(selectTransferEffects(candidates, testRank, 4).map((e) => e.id)).toEqual(["aaa", "bbb"]);
+    for (const candidates of [
+      [low, high],
+      [high, low],
+    ]) {
+      expect(selectTransferEffects(candidates, testRank, 4).map((e) => e.id)).toEqual([
+        "aaa",
+        "bbb",
+      ]);
     }
   });
 
@@ -205,7 +215,10 @@ describe("selectTransferEffects", () => {
       testRank,
       2,
     );
-    expect(result.map((e) => e.type)).toEqual(["increasedamagegiven", "increasedamagegiven"]);
+    expect(result.map((e) => e.type)).toEqual([
+      "increasedamagegiven",
+      "increasedamagegiven",
+    ]);
     expect(result[0]?.power).toBe(50);
   });
 
@@ -213,7 +226,9 @@ describe("selectTransferEffects", () => {
     // The damage-modifier pass mutates decrease* powers to -|power| in place, and
     // those objects persist in the battle state. |−40| must beat +5 within tier 0.
     const boost = makeTransferEffect("increasedamagegiven", 5, { id: "boost" });
-    const reduction = makeTransferEffect("decreasedamagetaken", 40, { id: "reduction" });
+    const reduction = makeTransferEffect("decreasedamagetaken", 40, {
+      id: "reduction",
+    });
     reduction.power = -40;
     const result = selectTransferEffects([boost, reduction], COPY_PRIORITY_RANK, 1);
     expect(result.map((e) => e.id)).toEqual(["reduction"]);
@@ -284,10 +299,30 @@ describe("copy tag: ceiling + priority", () => {
   it("respects the persistent ceiling across casts (already at 4 -> copies nothing)", () => {
     const effects: UserEffect[] = [
       // 4 effects already copied onto SELF
-      makeTransferEffect("increasedamagegiven", 40, { id: "c1", targetId: SELF, creatorId: SELF, fromEffectId: "src1" }),
-      makeTransferEffect("decreasedamagetaken", 30, { id: "c2", targetId: SELF, creatorId: SELF, fromEffectId: "src2" }),
-      makeTransferEffect("lifesteal", 20, { id: "c3", targetId: SELF, creatorId: SELF, fromEffectId: "src3" }),
-      makeTransferEffect("absorb", 50, { id: "c4", targetId: SELF, creatorId: SELF, fromEffectId: "src4" }),
+      makeTransferEffect("increasedamagegiven", 40, {
+        id: "c1",
+        targetId: SELF,
+        creatorId: SELF,
+        fromEffectId: "src1",
+      }),
+      makeTransferEffect("decreasedamagetaken", 30, {
+        id: "c2",
+        targetId: SELF,
+        creatorId: SELF,
+        fromEffectId: "src2",
+      }),
+      makeTransferEffect("lifesteal", 20, {
+        id: "c3",
+        targetId: SELF,
+        creatorId: SELF,
+        fromEffectId: "src3",
+      }),
+      makeTransferEffect("absorb", 50, {
+        id: "c4",
+        targetId: SELF,
+        creatorId: SELF,
+        fromEffectId: "src4",
+      }),
       // a fresh copyable buff on the opponent
       makeTransferEffect("shield", 90),
     ];
@@ -301,10 +336,30 @@ describe("copy tag: ceiling + priority", () => {
     // Without the creatorId scope in the budget filter these would exhaust the
     // ceiling and block the cast; with it, the copy must still succeed.
     const effects: UserEffect[] = [
-      makeTransferEffect("increasedamagegiven", 40, { id: "o1", targetId: SELF, creatorId: OPP, fromEffectId: "s1" }),
-      makeTransferEffect("decreasedamagetaken", 30, { id: "o2", targetId: SELF, creatorId: OPP, fromEffectId: "s2" }),
-      makeTransferEffect("lifesteal", 20, { id: "o3", targetId: SELF, creatorId: OPP, fromEffectId: "s3" }),
-      makeTransferEffect("absorb", 50, { id: "o4", targetId: SELF, creatorId: OPP, fromEffectId: "s4" }),
+      makeTransferEffect("increasedamagegiven", 40, {
+        id: "o1",
+        targetId: SELF,
+        creatorId: OPP,
+        fromEffectId: "s1",
+      }),
+      makeTransferEffect("decreasedamagetaken", 30, {
+        id: "o2",
+        targetId: SELF,
+        creatorId: OPP,
+        fromEffectId: "s2",
+      }),
+      makeTransferEffect("lifesteal", 20, {
+        id: "o3",
+        targetId: SELF,
+        creatorId: OPP,
+        fromEffectId: "s3",
+      }),
+      makeTransferEffect("absorb", 50, {
+        id: "o4",
+        targetId: SELF,
+        creatorId: OPP,
+        fromEffectId: "s4",
+      }),
       makeTransferEffect("shield", 90), // fresh copyable buff on the opponent
     ];
     copy(copyTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
@@ -319,16 +374,39 @@ describe("copy tag: ceiling + priority", () => {
     // identity checks (targetId/creatorId = SELF). Only the isCopyableEffect
     // scope in the budget filter keeps them from exhausting the ceiling.
     const effects: UserEffect[] = [
-      makeTransferEffect("increasedamagetaken", 40, { id: "n1", targetId: SELF, creatorId: SELF, fromEffectId: "s1" }),
-      makeTransferEffect("poison", 30, { id: "n2", targetId: SELF, creatorId: SELF, fromEffectId: "s2" }),
-      makeTransferEffect("wound", 20, { id: "n3", targetId: SELF, creatorId: SELF, fromEffectId: "s3" }),
-      makeTransferEffect("afterburn", 50, { id: "n4", targetId: SELF, creatorId: SELF, fromEffectId: "s4" }),
+      makeTransferEffect("increasedamagetaken", 40, {
+        id: "n1",
+        targetId: SELF,
+        creatorId: SELF,
+        fromEffectId: "s1",
+      }),
+      makeTransferEffect("poison", 30, {
+        id: "n2",
+        targetId: SELF,
+        creatorId: SELF,
+        fromEffectId: "s2",
+      }),
+      makeTransferEffect("wound", 20, {
+        id: "n3",
+        targetId: SELF,
+        creatorId: SELF,
+        fromEffectId: "s3",
+      }),
+      makeTransferEffect("afterburn", 50, {
+        id: "n4",
+        targetId: SELF,
+        creatorId: SELF,
+        fromEffectId: "s4",
+      }),
       makeTransferEffect("shield", 90), // fresh copyable buff on the opponent
     ];
     copy(copyTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
     const copied = effects.filter(
       (e) =>
-        e.targetId === SELF && e.creatorId === SELF && e.fromEffectId && e.type === "shield",
+        e.targetId === SELF &&
+        e.creatorId === SELF &&
+        e.fromEffectId &&
+        e.type === "shield",
     );
     expect(copied).toHaveLength(1);
   });
@@ -366,7 +444,12 @@ describe("copy tag: ceiling + priority", () => {
 
   it("skips the exact source already actively copied", () => {
     const effects: UserEffect[] = [
-      makeTransferEffect("lifesteal", 20, { id: "held", targetId: SELF, creatorId: SELF, fromEffectId: "srcL" }),
+      makeTransferEffect("lifesteal", 20, {
+        id: "held",
+        targetId: SELF,
+        creatorId: SELF,
+        fromEffectId: "srcL",
+      }),
       makeTransferEffect("lifesteal", 99, { id: "srcL" }),
     ];
     const before = effects.length;
@@ -377,7 +460,10 @@ describe("copy tag: ceiling + priority", () => {
   it("reports a no-op when the caster targets itself (self-copy)", () => {
     const effects: UserEffect[] = [
       // A copyable buff sitting on SELF; a self-cast must not clone it.
-      makeTransferEffect("increasedamagegiven", 40, { targetId: SELF, creatorId: SELF }),
+      makeTransferEffect("increasedamagegiven", 40, {
+        targetId: SELF,
+        creatorId: SELF,
+      }),
     ];
     const before = effects.length;
     const res = copy(copyTag(), effects, asUser(SELF, "Self"), asUser(SELF, "Self"));
@@ -454,10 +540,30 @@ describe("mirror tag: ceiling + priority + wound", () => {
   it("respects the persistent ceiling across casts (already at 4 -> mirrors nothing)", () => {
     const effects: UserEffect[] = [
       // 4 active mirrors by SELF on OPP
-      selfDebuff("increasedamagetaken", 50, { id: "m1", targetId: OPP, creatorId: SELF, fromEffectId: "s1" }),
-      selfDebuff("decreasedamagegiven", 40, { id: "m2", targetId: OPP, creatorId: SELF, fromEffectId: "s2" }),
-      selfDebuff("poison", 30, { id: "m3", targetId: OPP, creatorId: SELF, fromEffectId: "s3" }),
-      selfDebuff("wound", 20, { id: "m4", targetId: OPP, creatorId: SELF, fromEffectId: "s4" }),
+      selfDebuff("increasedamagetaken", 50, {
+        id: "m1",
+        targetId: OPP,
+        creatorId: SELF,
+        fromEffectId: "s1",
+      }),
+      selfDebuff("decreasedamagegiven", 40, {
+        id: "m2",
+        targetId: OPP,
+        creatorId: SELF,
+        fromEffectId: "s2",
+      }),
+      selfDebuff("poison", 30, {
+        id: "m3",
+        targetId: OPP,
+        creatorId: SELF,
+        fromEffectId: "s3",
+      }),
+      selfDebuff("wound", 20, {
+        id: "m4",
+        targetId: OPP,
+        creatorId: SELF,
+        fromEffectId: "s4",
+      }),
       // a fresh mirrorable debuff on SELF
       selfDebuff("afterburn", 60),
     ];
@@ -472,10 +578,30 @@ describe("mirror tag: ceiling + priority + wound", () => {
     // Without the creatorId scope these would exhaust this caster's budget;
     // with it, the mirror must still succeed.
     const effects: UserEffect[] = [
-      selfDebuff("increasedamagetaken", 50, { id: "o1", targetId: OPP, creatorId: OPP, fromEffectId: "s1" }),
-      selfDebuff("decreasedamagegiven", 40, { id: "o2", targetId: OPP, creatorId: OPP, fromEffectId: "s2" }),
-      selfDebuff("poison", 30, { id: "o3", targetId: OPP, creatorId: OPP, fromEffectId: "s3" }),
-      selfDebuff("wound", 20, { id: "o4", targetId: OPP, creatorId: OPP, fromEffectId: "s4" }),
+      selfDebuff("increasedamagetaken", 50, {
+        id: "o1",
+        targetId: OPP,
+        creatorId: OPP,
+        fromEffectId: "s1",
+      }),
+      selfDebuff("decreasedamagegiven", 40, {
+        id: "o2",
+        targetId: OPP,
+        creatorId: OPP,
+        fromEffectId: "s2",
+      }),
+      selfDebuff("poison", 30, {
+        id: "o3",
+        targetId: OPP,
+        creatorId: OPP,
+        fromEffectId: "s3",
+      }),
+      selfDebuff("wound", 20, {
+        id: "o4",
+        targetId: OPP,
+        creatorId: OPP,
+        fromEffectId: "s4",
+      }),
       selfDebuff("afterburn", 60), // fresh mirrorable debuff on SELF
     ];
     mirror(mirrorTag(), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
@@ -487,7 +613,12 @@ describe("mirror tag: ceiling + priority + wound", () => {
 
   it("skips the exact source already actively mirrored", () => {
     const effects: UserEffect[] = [
-      selfDebuff("poison", 20, { id: "held", targetId: OPP, creatorId: SELF, fromEffectId: "srcP" }),
+      selfDebuff("poison", 20, {
+        id: "held",
+        targetId: OPP,
+        creatorId: SELF,
+        fromEffectId: "srcP",
+      }),
       selfDebuff("poison", 99, { id: "srcP" }),
     ];
     const before = effects.length;
@@ -506,9 +637,24 @@ describe("mirror tag: ceiling + priority + wound", () => {
   it("ranks drain by delivered (duration-scaled) power when competing for a slot", () => {
     const effects: UserEffect[] = [
       // 3 active mirrors leave exactly one open slot
-      selfDebuff("increasedamagetaken", 50, { id: "m1", targetId: OPP, creatorId: SELF, fromEffectId: "s1" }),
-      selfDebuff("decreasedamagegiven", 40, { id: "m2", targetId: OPP, creatorId: SELF, fromEffectId: "s2" }),
-      selfDebuff("afterburn", 30, { id: "m3", targetId: OPP, creatorId: SELF, fromEffectId: "s3" }),
+      selfDebuff("increasedamagetaken", 50, {
+        id: "m1",
+        targetId: OPP,
+        creatorId: SELF,
+        fromEffectId: "s1",
+      }),
+      selfDebuff("decreasedamagegiven", 40, {
+        id: "m2",
+        targetId: OPP,
+        creatorId: SELF,
+        fromEffectId: "s2",
+      }),
+      selfDebuff("afterburn", 30, {
+        id: "m3",
+        targetId: OPP,
+        creatorId: SELF,
+        fromEffectId: "s3",
+      }),
       // both tail-tier: drain delivers floor(60 / mirror-rounds=3) = 20 < 50
       selfDebuff("drain", 60),
       selfDebuff("decreasestat", 50),
@@ -528,7 +674,12 @@ describe("mirror tag: ceiling + priority + wound", () => {
   it("reports a no-op when the caster targets itself (self-mirror)", () => {
     const effects: UserEffect[] = [selfDebuff("increasedamagetaken", 50)];
     const before = effects.length;
-    const res = mirror(mirrorTag(), effects, asUser(SELF, "Self"), asUser(SELF, "Self"));
+    const res = mirror(
+      mirrorTag(),
+      effects,
+      asUser(SELF, "Self"),
+      asUser(SELF, "Self"),
+    );
     expect(res?.txt).toContain("cannot mirror effects onto themselves");
     expect(effects.filter((e) => e.fromEffectId)).toHaveLength(0);
     expect(effects.length).toBe(before);
@@ -539,36 +690,53 @@ describe("transfer instances across casts", () => {
   beforeEach(() => vi.spyOn(Math, "random").mockReturnValue(0));
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(["copy", "mirror"] as ("copy" | "mirror")[])("%s transfers four strongest instances and refills expired slots", (type) => {
-    const transfer = type === "copy" ? copy : mirror;
-    const source = type === "copy" ? makeTransferEffect : selfDebuff;
-    const tagType = type === "copy" ? "increasedamagegiven" : "increasedamagetaken";
-    const landingId = type === "copy" ? SELF : OPP;
-    const sources = [10, 50, 20, 40, 30].map((power) => source(tagType, power));
-    const effects = [...sources];
-    const clones = () => effects.filter((e) => e.targetId === landingId && e.creatorId === SELF && e.fromEffectId);
-    const cast = () => transfer(transferTag(type), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
-    cast();
-    expect(clones().map((e) => e.power)).toEqual([50, 40, 30, 20]);
-    expect(clones().map((e) => e.fromEffectId)).toEqual([sources[1]!.id, sources[3]!.id, sources[4]!.id, sources[2]!.id]);
-    cast();
-    expect(clones()).toHaveLength(4);
-    clones()[0]!.rounds = 0;
-    cast();
-    const active = clones().filter((e) => e.rounds! > 0);
-    expect(active).toHaveLength(4);
-    expect(active.map((e) => e.power)).toEqual([40, 30, 20, 50]);
-    expect(sources.map((e) => e.power)).toEqual([10, 50, 20, 40, 30]);
-  });
+  it.each(["copy", "mirror"] as ("copy" | "mirror")[])(
+    "%s transfers four strongest instances and refills expired slots",
+    (type) => {
+      const transfer = type === "copy" ? copy : mirror;
+      const source = type === "copy" ? makeTransferEffect : selfDebuff;
+      const tagType = type === "copy" ? "increasedamagegiven" : "increasedamagetaken";
+      const landingId = type === "copy" ? SELF : OPP;
+      const sources = [10, 50, 20, 40, 30].map((power) => source(tagType, power));
+      const effects = [...sources];
+      const clones = () =>
+        effects.filter(
+          (e) => e.targetId === landingId && e.creatorId === SELF && e.fromEffectId,
+        );
+      const cast = () =>
+        transfer(transferTag(type), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
+      cast();
+      expect(clones().map((e) => e.power)).toEqual([50, 40, 30, 20]);
+      expect(clones().map((e) => e.fromEffectId)).toEqual([
+        sources[1]!.id,
+        sources[3]!.id,
+        sources[4]!.id,
+        sources[2]!.id,
+      ]);
+      cast();
+      expect(clones()).toHaveLength(4);
+      clones()[0]!.rounds = 0;
+      cast();
+      const active = clones().filter((e) => e.rounds! > 0);
+      expect(active).toHaveLength(4);
+      expect(active.map((e) => e.power)).toEqual([40, 30, 20, 50]);
+      expect(sources.map((e) => e.power)).toEqual([10, 50, 20, 40, 30]);
+    },
+  );
 
-  it.each(["copy", "mirror"] as ("copy" | "mirror")[])("%s fills remaining slots with new sources of a held type", (type) => {
-    const source = type === "copy" ? makeTransferEffect : selfDebuff;
-    const tagType = type === "copy" ? "increasedamagegiven" : "increasedamagetaken";
-    const effects = [source(tagType, 10), source(tagType, 20)];
-    const transfer = type === "copy" ? copy : mirror;
-    transfer(transferTag(type), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
-    effects.push(source(tagType, 30), source(tagType, 40), source(tagType, 50));
-    transfer(transferTag(type), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
-    expect(effects.filter((e) => e.fromEffectId).map((e) => e.power)).toEqual([20, 10, 50, 40]);
-  });
+  it.each(["copy", "mirror"] as ("copy" | "mirror")[])(
+    "%s fills remaining slots with new sources of a held type",
+    (type) => {
+      const source = type === "copy" ? makeTransferEffect : selfDebuff;
+      const tagType = type === "copy" ? "increasedamagegiven" : "increasedamagetaken";
+      const effects = [source(tagType, 10), source(tagType, 20)];
+      const transfer = type === "copy" ? copy : mirror;
+      transfer(transferTag(type), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
+      effects.push(source(tagType, 30), source(tagType, 40), source(tagType, 50));
+      transfer(transferTag(type), effects, asUser(SELF, "Self"), asUser(OPP, "Opp"));
+      expect(effects.filter((e) => e.fromEffectId).map((e) => e.power)).toEqual([
+        20, 10, 50, 40,
+      ]);
+    },
+  );
 });

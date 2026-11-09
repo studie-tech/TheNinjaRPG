@@ -13,7 +13,9 @@ const APP_DIR = join(import.meta.dirname, "..", "..", "src", "app", "[shell]");
  */
 const pageDirs = (dir: string): string[] => {
   const entries = readdirSync(dir, { withFileTypes: true });
-  const here = entries.some((e) => !e.isDirectory() && e.name === "page.tsx") ? [dir] : [];
+  const here = entries.some((e) => !e.isDirectory() && e.name === "page.tsx")
+    ? [dir]
+    : [];
   return entries
     .filter((e) => e.isDirectory())
     .flatMap((e) => pageDirs(join(dir, e.name)))
@@ -139,13 +141,12 @@ describe("stripSiteName", () => {
     expect(stripSiteName(input)).toBe(expected);
   });
 
-  it.each([
-    "Combat in TheNinja-RPG: basics",
-    "TNRx Tools",
-    "Villages of Seichi",
-  ])("leaves %j alone", (input) => {
-    expect(stripSiteName(input)).toBe(input);
-  });
+  it.each(["Combat in TheNinja-RPG: basics", "TNRx Tools", "Villages of Seichi"])(
+    "leaves %j alone",
+    (input) => {
+      expect(stripSiteName(input)).toBe(input);
+    },
+  );
 
   it("falls back to the input when nothing but the brand remains", () => {
     expect(stripSiteName("TheNinja-RPG")).toBe("TheNinja-RPG");
@@ -179,7 +180,10 @@ describe("isProfileIndexable", () => {
   // so one that Google found on an earlier crawl does not stay indexed indefinitely.
   it.each([
     ["below the level floor", { level: 13 }],
-    ["inactive past the window", { updatedAt: new Date(now - 91 * 24 * 60 * 60 * 1000) }],
+    [
+      "inactive past the window",
+      { updatedAt: new Date(now - 91 * 24 * 60 * 60 * 1000) },
+    ],
     ["never updated", { updatedAt: null }],
     ["an AI character", { isAi: true }],
     ["banned", { isBanned: true }],
@@ -189,9 +193,9 @@ describe("isProfileIndexable", () => {
   });
 
   it("treats the activity window as inclusive at the boundary", () => {
-    expect(isProfileIndexable({ ...active, updatedAt: profileIndexCutoff(now) }, now)).toBe(
-      true,
-    );
+    expect(
+      isProfileIndexable({ ...active, updatedAt: profileIndexCutoff(now) }, now),
+    ).toBe(true);
   });
 });
 
@@ -212,9 +216,19 @@ describe("discord link share card", () => {
       images: [image],
     });
     expect(metadata.openGraph?.description).toContain("Verified Ninja role");
-    expect(metadata.twitter).toMatchObject({ card: "summary_large_image", images: [image] });
+    expect(metadata.twitter).toMatchObject({
+      card: "summary_large_image",
+      images: [image],
+    });
     expect(metadata.robots).toEqual({ index: false });
-    const asset = join(import.meta.dirname, "..", "..", "public", "images", "discord-link-og.png");
+    const asset = join(
+      import.meta.dirname,
+      "..",
+      "..",
+      "public",
+      "images",
+      "discord-link-og.png",
+    );
     expect(existsSync(asset)).toBe(true);
   });
 });

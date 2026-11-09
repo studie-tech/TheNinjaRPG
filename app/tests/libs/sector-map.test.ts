@@ -4,7 +4,10 @@ import {
   resolveStructureTerrainSpec,
 } from "@/libs/sector-map/terrains";
 import { hexTileToPixel, normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
-import { ensureFullTerrainPalette, toWysiwygTiledJson } from "@/libs/sector-map/tiled-download";
+import {
+  ensureFullTerrainPalette,
+  toWysiwygTiledJson,
+} from "@/libs/sector-map/tiled-download";
 import type {
   NormalizedSectorMap,
   NormalizedSectorTile,
@@ -26,7 +29,7 @@ describe("sector map normalization", () => {
     const result = normalizeTiledSectorMap({
       terrainRegistry: mergeTerrainSpecs([]),
       sector: 12,
-      name:"Authored Test Sector",
+      name: "Authored Test Sector",
       sourceHash: "test-hash",
       tiledJson: {
         version: "1.10",
@@ -151,7 +154,11 @@ describe("sector map normalization", () => {
           {
             firstgid: 1,
             tiles: [
-              { id: 0, type: "ground", properties: [{ name: "terrain", value: "ground" }] },
+              {
+                id: 0,
+                type: "ground",
+                properties: [{ name: "terrain", value: "ground" }],
+              },
             ],
           },
         ],
@@ -180,7 +187,9 @@ describe("sector map normalization", () => {
     });
     expect(result.map).toBeUndefined();
     expect(
-      result.errors.some((error) => error.includes("invalid anchorKey or targetSector")),
+      result.errors.some((error) =>
+        error.includes("invalid anchorKey or targetSector"),
+      ),
     ).toBe(true);
   });
 
@@ -188,7 +197,7 @@ describe("sector map normalization", () => {
     const result = normalizeTiledSectorMap({
       terrainRegistry: mergeTerrainSpecs([]),
       sector: 12,
-      name:"Missing Spawn",
+      name: "Missing Spawn",
       tiledJson: {
         orientation: "hexagonal",
         width: 1,
@@ -230,19 +239,15 @@ describe("sector map normalization", () => {
       makeTestTile(2, 0),
     ]);
 
-    expect(isReachableCoordinate(narrowMap, { x: 0, y: 0 }, { x: 2, y: 0 })).toBe(
-      true,
-    );
-    expect(isReachableCoordinate(narrowMap, { x: 0, y: 0 }, { x: 0, y: 0 })).toBe(
-      true,
-    );
+    expect(isReachableCoordinate(narrowMap, { x: 0, y: 0 }, { x: 2, y: 0 })).toBe(true);
+    expect(isReachableCoordinate(narrowMap, { x: 0, y: 0 }, { x: 0, y: 0 })).toBe(true);
   });
 
   it("normalizes decoration objects with their authored size and offset", () => {
     const result = normalizeTiledSectorMap({
       terrainRegistry: mergeTerrainSpecs([]),
       sector: 12,
-      name:"Decorated Sector",
+      name: "Decorated Sector",
       tiledJson: {
         version: "1.10",
         orientation: "hexagonal",
@@ -414,7 +419,11 @@ describe("sector map normalization", () => {
           {
             firstgid: 1,
             tiles: [
-              { id: 0, type: "ground", properties: [{ name: "terrain", value: "ground" }] },
+              {
+                id: 0,
+                type: "ground",
+                properties: [{ name: "terrain", value: "ground" }],
+              },
             ],
           },
         ],
@@ -453,7 +462,11 @@ describe("creator-added terrain and decorations", () => {
   const toPixelX = (x: number) => hexTileToPixel(x, 0).x;
   const toPixelY = (x: number, y: number) => hexTileToPixel(x, y).y;
 
-  const baseMap = (extraTilesetTiles: unknown[], objects: unknown[], data: number[]) => ({
+  const baseMap = (
+    extraTilesetTiles: unknown[],
+    objects: unknown[],
+    data: number[],
+  ) => ({
     version: "1.10",
     orientation: "hexagonal",
     infinite: false,
@@ -568,7 +581,9 @@ describe("creator-added terrain and decorations", () => {
         },
       ],
       [1, 2, ...Array(14).fill(1)],
-    ) as unknown as { tilesets: { firstgid: number; tiles: { id: number; imageheight?: number }[] }[] };
+    ) as unknown as {
+      tilesets: { firstgid: number; tiles: { id: number; imageheight?: number }[] }[];
+    };
     const decoSet = gameMap.tilesets.find((t) => t.firstgid === 100);
     if (decoSet?.tiles[0]) decoSet.tiles[0].imageheight = 75;
     const registry = mergeTerrainSpecs([]);
@@ -584,9 +599,12 @@ describe("creator-added terrain and decorations", () => {
     // pixel sizes rescaled so size-in-tiles is preserved
     expect(mirrored.tileheight).toBe(28);
     const mirroredObj = (
-      (mirrored.layers as { type: string; objects?: { id: number; height?: number }[] }[])
-        .find((l) => l.type === "objectgroup")
-        ?.objects ?? []
+      (
+        mirrored.layers as {
+          type: string;
+          objects?: { id: number; height?: number }[];
+        }[]
+      ).find((l) => l.type === "objectgroup")?.objects ?? []
     ).find((o) => o.id === 50);
     expect(mirroredObj?.height).toBeCloseTo(140 * (28 / 56), 1);
     const viaKit = normalizeTiledSectorMap({
@@ -598,8 +616,9 @@ describe("creator-added terrain and decorations", () => {
     expect(direct.errors).toEqual([]);
     expect(viaKit.errors).toEqual([]);
     // Terrain must land on the same game cells
-    const terrainOf = (r?: { map?: { tiles: { x: number; y: number; terrain: string }[] } }) =>
-      r?.map?.tiles.map((t) => `${t.x},${t.y}:${t.terrain}`).sort();
+    const terrainOf = (r?: {
+      map?: { tiles: { x: number; y: number; terrain: string }[] };
+    }) => r?.map?.tiles.map((t) => `${t.x},${t.y}:${t.terrain}`).sort();
     expect(terrainOf(viaKit)).toEqual(terrainOf(direct));
     // The decoration keeps its cell, offsets and size across the mirror
     const a = direct.map?.objects.find((o) => o.id === "50");
@@ -698,9 +717,9 @@ describe("creator-added terrain and decorations", () => {
       tiledJson: baseMap([], [towerAt(77), towerAt(78)], Array(16).fill(1)),
     });
     expect(result.errors).toEqual([]);
-    expect(
-      result.warnings.some((w) => w.includes("sit at the same position")),
-    ).toBe(true);
+    expect(result.warnings.some((w) => w.includes("sit at the same position"))).toBe(
+      true,
+    );
   });
 
   it("rescues a decoration stamped onto the terrain layer as an object + warning", () => {
@@ -735,7 +754,9 @@ describe("creator-added terrain and decorations", () => {
       type: "landmark",
       x: 0,
       y: 0,
-      properties: [{ name: "assetKey", type: "string", value: "https://evil.example/track.png" }],
+      properties: [
+        { name: "assetKey", type: "string", value: "https://evil.example/track.png" },
+      ],
     };
     const result = normalizeTiledSectorMap({
       terrainRegistry: mergeTerrainSpecs([]),
@@ -849,7 +870,13 @@ describe("creator-added terrain and decorations", () => {
   });
 
   it("snaps hand-moved point objects to the hex under them", () => {
-    const moved = { id: 4, name: "spawn.village", type: "anchor", x: toPixelX(3), y: toPixelY(3, 1) };
+    const moved = {
+      id: 4,
+      name: "spawn.village",
+      type: "anchor",
+      x: toPixelX(3),
+      y: toPixelY(3, 1),
+    };
     const result = normalizeTiledSectorMap({
       terrainRegistry: mergeTerrainSpecs([]),
       sector: 7,
@@ -921,7 +948,9 @@ describe("standard terrain palette", () => {
 
   // Full-property signature of a terrain tile, matching the fields the dedup
   // compares. Two tiles with the same signature are duplicate palette entries.
-  const terrainSignature = (tile: { properties?: { name: string; value: unknown }[] }) => {
+  const terrainSignature = (tile: {
+    properties?: { name: string; value: unknown }[];
+  }) => {
     const p = Object.fromEntries((tile.properties ?? []).map((x) => [x.name, x.value]));
     return [
       p.terrain ?? "",
@@ -1108,17 +1137,28 @@ describe("validateNormalizedSectorMap rejections", () => {
     rejectsWith(makeTestMap(2, 2, tiles), "invalid walk cost");
   });
   it("accepts a map made entirely of shaded terrain", () => {
-    const tiles = fullTiles(2, 2).map((tile) => ({ ...tile, blocked: true, walkCost: 0 }));
-    expect(validateNormalizedSectorMap(makeTestMap(2, 2, tiles), registry).success).toBe(true);
+    const tiles = fullTiles(2, 2).map((tile) => ({
+      ...tile,
+      blocked: true,
+      walkCost: 0,
+    }));
+    expect(
+      validateNormalizedSectorMap(makeTestMap(2, 2, tiles), registry).success,
+    ).toBe(true);
   });
   it("rejects a missing spawn.default anchor", () => {
-    rejectsWith({ ...validMap(), anchors: [{ key: "spawn.other", x: 0, y: 0 }] }, "spawn.default");
+    rejectsWith(
+      { ...validMap(), anchors: [{ key: "spawn.other", x: 0, y: 0 }] },
+      "spawn.default",
+    );
   });
   it("rejects an exit referencing a missing anchor", () => {
     rejectsWith(
       {
         ...validMap(),
-        exits: [{ fromAnchor: "spawn.ghost", targetSector: 2, targetAnchor: "spawn.default" }],
+        exits: [
+          { fromAnchor: "spawn.ghost", targetSector: 2, targetAnchor: "spawn.default" },
+        ],
       },
       "missing anchor",
     );
@@ -1150,13 +1190,24 @@ describe("importer layer composition", () => {
             firstgid: 1,
             name: "terrain",
             tiles: [
-              { id: 0, type: "ground", properties: [{ name: "terrain", value: "ground" }] },
+              {
+                id: 0,
+                type: "ground",
+                properties: [{ name: "terrain", value: "ground" }],
+              },
               { id: 1, type: "ice", properties: [{ name: "terrain", value: "ice" }] },
             ],
           },
         ],
         layers: [
-          { id: 1, name: "terrain", type: "tilelayer", width: 2, height: 1, data: [HFLIP + 2, 1] },
+          {
+            id: 1,
+            name: "terrain",
+            type: "tilelayer",
+            width: 2,
+            height: 1,
+            data: [HFLIP + 2, 1],
+          },
           { id: 2, name: "objects", type: "objectgroup", objects: [spawnObject] },
         ],
       },
@@ -1183,7 +1234,13 @@ describe("importer layer composition", () => {
           {
             firstgid: 1,
             name: "terrain",
-            tiles: [{ id: 0, type: "ground", properties: [{ name: "terrain", value: "ground" }] }],
+            tiles: [
+              {
+                id: 0,
+                type: "ground",
+                properties: [{ name: "terrain", value: "ground" }],
+              },
+            ],
           },
           {
             firstgid: 50,
@@ -1200,8 +1257,22 @@ describe("importer layer composition", () => {
           },
         ],
         layers: [
-          { id: 1, name: "terrain", type: "tilelayer", width: 2, height: 1, data: [1, 1] },
-          { id: 2, name: "zones", type: "tilelayer", width: 2, height: 1, data: [50, 0] },
+          {
+            id: 1,
+            name: "terrain",
+            type: "tilelayer",
+            width: 2,
+            height: 1,
+            data: [1, 1],
+          },
+          {
+            id: 2,
+            name: "zones",
+            type: "tilelayer",
+            width: 2,
+            height: 1,
+            data: [50, 0],
+          },
           { id: 3, name: "objects", type: "objectgroup", objects: [spawnObject] },
         ],
       },

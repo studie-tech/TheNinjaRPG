@@ -1,5 +1,13 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+  vi,
+} from "bun:test";
 import { useLiveCountdown } from "@/hooks/useLiveCountdown";
 import { getRemainingStealthCooldown } from "@/libs/stealth";
 
@@ -35,18 +43,21 @@ describe("useLiveCountdown", () => {
     }
   });
 
-  it.each([0, undefined, null])("clears an active countdown when given %s", (stopped) => {
-    const { result, rerender } = renderHook(
-      ({ seconds }) => useLiveCountdown(seconds),
-      { initialProps: { seconds: 2 as number | undefined | null } },
-    );
-    act(() => vi.advanceTimersByTime(1_000));
-    expect(result.current).toBe(1);
-    rerender({ seconds: stopped });
-    expect(result.current).toBe(0);
-    act(() => vi.advanceTimersByTime(5_000));
-    expect(result.current).toBe(0);
-  });
+  it.each([0, undefined, null])(
+    "clears an active countdown when given %s",
+    (stopped) => {
+      const { result, rerender } = renderHook(
+        ({ seconds }) => useLiveCountdown(seconds),
+        { initialProps: { seconds: 2 as number | undefined | null } },
+      );
+      act(() => vi.advanceTimersByTime(1_000));
+      expect(result.current).toBe(1);
+      rerender({ seconds: stopped });
+      expect(result.current).toBe(0);
+      act(() => vi.advanceTimersByTime(5_000));
+      expect(result.current).toBe(0);
+    },
+  );
 
   it("accepts small extensions and reductions from a fresh remaining-time snapshot", () => {
     const { result, rerender } = renderHook(

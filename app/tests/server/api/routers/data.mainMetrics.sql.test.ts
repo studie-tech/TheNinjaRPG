@@ -13,9 +13,20 @@ import {
   visitorLog,
 } from "@/drizzle/schema";
 import { dataRouter } from "@/server/api/routers/data";
-import { insertItems, insertJutsus, insertQuests, insertUsers, jutsuRow } from "../../../setup/factories";
+import {
+  insertItems,
+  insertJutsus,
+  insertQuests,
+  insertUsers,
+  jutsuRow,
+} from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import {
+  callerFor,
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../setup/testDatabase";
 
 const VISITED_AT = new Date("2026-01-01T00:00:00Z");
 const SIGNED_UP_AT = new Date("2026-01-02T00:00:00Z");
@@ -43,21 +54,92 @@ const seedCohort = async () => {
       tutorialOn: false,
       createdAt: SIGNED_UP_AT,
     },
-    { userId: "unknown", username: "UnknownRecruit", tutorialStep: 2, createdAt: SIGNED_UP_AT },
+    {
+      userId: "unknown",
+      username: "UnknownRecruit",
+      tutorialStep: 2,
+      createdAt: SIGNED_UP_AT,
+    },
     // A disposable account: past the tutorial range, so signups skip it but rank metrics do not.
-    { userId: "disposable", username: "Disposable", rank: "JONIN", pvpFights: 1, tutorialStep: 100, createdAt: SIGNED_UP_AT },
-    { userId: "early", username: "Early", rank: "JONIN", createdAt: new Date("2025-12-01T00:00:00Z") },
-    { userId: "ai", username: "Bot", rank: "JONIN", isAi: true, createdAt: SIGNED_UP_AT },
+    {
+      userId: "disposable",
+      username: "Disposable",
+      rank: "JONIN",
+      pvpFights: 1,
+      tutorialStep: 100,
+      createdAt: SIGNED_UP_AT,
+    },
+    {
+      userId: "early",
+      username: "Early",
+      rank: "JONIN",
+      createdAt: new Date("2025-12-01T00:00:00Z"),
+    },
+    {
+      userId: "ai",
+      username: "Bot",
+      rank: "JONIN",
+      isAi: true,
+      createdAt: SIGNED_UP_AT,
+    },
   ]);
   await db.insert(visitorLog).values([
-    { id: "v-mobile", ipHash: "mobile", utmSource: "discord", userAgent: MOBILE_AGENT, createdAt: VISITED_AT },
-    { id: "v-desktop", ipHash: "desktop", utmSource: "discord", userAgent: DESKTOP_AGENT, createdAt: VISITED_AT },
-    { id: "v-unknown", ipHash: "unknown", utmSource: "discord", userAgent: null, createdAt: VISITED_AT },
-    { id: "v-disposable", ipHash: "disposable", utmSource: "discord", userAgent: MOBILE_AGENT, createdAt: VISITED_AT },
-    { id: "v-early", ipHash: "early", utmSource: "discord", userAgent: MOBILE_AGENT, createdAt: VISITED_AT },
-    { id: "v-ai", ipHash: "ai", utmSource: "discord", userAgent: MOBILE_AGENT, createdAt: VISITED_AT },
-    { id: "v-other", ipHash: "other", utmSource: "reddit", userAgent: DESKTOP_AGENT, createdAt: VISITED_AT },
-    { id: "v-direct", ipHash: "direct", utmSource: "", userAgent: DESKTOP_AGENT, createdAt: VISITED_AT },
+    {
+      id: "v-mobile",
+      ipHash: "mobile",
+      utmSource: "discord",
+      userAgent: MOBILE_AGENT,
+      createdAt: VISITED_AT,
+    },
+    {
+      id: "v-desktop",
+      ipHash: "desktop",
+      utmSource: "discord",
+      userAgent: DESKTOP_AGENT,
+      createdAt: VISITED_AT,
+    },
+    {
+      id: "v-unknown",
+      ipHash: "unknown",
+      utmSource: "discord",
+      userAgent: null,
+      createdAt: VISITED_AT,
+    },
+    {
+      id: "v-disposable",
+      ipHash: "disposable",
+      utmSource: "discord",
+      userAgent: MOBILE_AGENT,
+      createdAt: VISITED_AT,
+    },
+    {
+      id: "v-early",
+      ipHash: "early",
+      utmSource: "discord",
+      userAgent: MOBILE_AGENT,
+      createdAt: VISITED_AT,
+    },
+    {
+      id: "v-ai",
+      ipHash: "ai",
+      utmSource: "discord",
+      userAgent: MOBILE_AGENT,
+      createdAt: VISITED_AT,
+    },
+    {
+      id: "v-other",
+      ipHash: "other",
+      utmSource: "reddit",
+      userAgent: DESKTOP_AGENT,
+      createdAt: VISITED_AT,
+    },
+    {
+      id: "v-direct",
+      ipHash: "direct",
+      utmSource: "",
+      userAgent: DESKTOP_AGENT,
+      createdAt: VISITED_AT,
+    },
   ]);
   await db.insert(historicalIp).values(
     ["mobile", "desktop", "unknown", "disposable", "early", "ai"].map((userId) => ({
@@ -74,23 +156,58 @@ const seedCohort = async () => {
     })),
   );
   await insertQuests([
-    { id: "tier-1", name: "Tier one", description: "First", questType: "tier", tierLevel: 1 },
-    { id: "tier-2", name: "Tier two", description: "Second", questType: "tier", tierLevel: 2 },
+    {
+      id: "tier-1",
+      name: "Tier one",
+      description: "First",
+      questType: "tier",
+      tierLevel: 1,
+    },
+    {
+      id: "tier-2",
+      name: "Tier two",
+      description: "Second",
+      questType: "tier",
+      tierLevel: 2,
+    },
   ]);
   await db.insert(questHistory).values([
-    { id: "done-1", userId: "mobile", questId: "tier-1", questType: "tier", completed: 1 },
-    { id: "done-2", userId: "mobile", questId: "tier-2", questType: "tier", completed: 1 },
+    {
+      id: "done-1",
+      userId: "mobile",
+      questId: "tier-1",
+      questType: "tier",
+      completed: 1,
+    },
+    {
+      id: "done-2",
+      userId: "mobile",
+      questId: "tier-2",
+      questType: "tier",
+      completed: 1,
+    },
   ]);
 };
 
 describeWithDatabase("recruitment main metrics", () => {
   beforeEach(async () => {
-    await resetTables(paypalTransaction, questHistory, quest, referralSource, historicalIp, visitorLog, userData);
+    await resetTables(
+      paypalTransaction,
+      questHistory,
+      quest,
+      referralSource,
+      historicalIp,
+      visitorLog,
+      userData,
+    );
     await seedCohort();
   });
 
-  const metrics = async (input: { utmSource?: string; deviceType?: ("mobile" | "desktop" | "unknown")[]; includeTutorialDisabled?: boolean }) =>
-    (await callerFor(dataRouter, "analyst")).getRecruitmentMainMetrics(input);
+  const metrics = async (input: {
+    utmSource?: string;
+    deviceType?: ("mobile" | "desktop" | "unknown")[];
+    includeTutorialDisabled?: boolean;
+  }) => (await callerFor(dataRouter, "analyst")).getRecruitmentMainMetrics(input);
 
   it("reports every metric across all devices", async () => {
     const result = await metrics({ utmSource: "discord" });
@@ -111,20 +228,29 @@ describeWithDatabase("recruitment main metrics", () => {
       totalRevenueUsd: 0,
       nonStudentSignups: 3,
       nonStudentGeninSignups: 2,
-      tierQuestCompletions: [{ completedTiers: 2, deviceType: "mobile", username: "MobileRecruit" }],
+      tierQuestCompletions: [
+        { completedTiers: 2, deviceType: "mobile", username: "MobileRecruit" },
+      ],
       tierQuestDescriptions: ["Tier one: First", "Tier two: Second"],
     });
     expect(tutorialSteps).toHaveLength(2);
     expect(tutorialSteps).toEqual(
       expect.arrayContaining([
-        { steps: TUTORIAL_STEPS_COUNT, deviceType: "mobile", username: "MobileRecruit" },
+        {
+          steps: TUTORIAL_STEPS_COUNT,
+          deviceType: "mobile",
+          username: "MobileRecruit",
+        },
         { steps: 2, deviceType: "unknown", username: "UnknownRecruit" },
       ]),
     );
   });
 
   it("restricts every device metric to the selected devices", async () => {
-    const result = await metrics({ utmSource: "discord", deviceType: ["desktop", "unknown"] });
+    const result = await metrics({
+      utmSource: "discord",
+      deviceType: ["desktop", "unknown"],
+    });
     expect(result).toMatchObject({
       visitors: 2,
       visitorsByDevice: { mobile: 0, desktop: 1, unknown: 1 },
@@ -140,7 +266,9 @@ describeWithDatabase("recruitment main metrics", () => {
       tierQuestCompletions: [],
     });
     expect(result.signupRate).toBe(1);
-    expect(result.tutorialSteps).toEqual([{ steps: 2, deviceType: "unknown", username: "UnknownRecruit" }]);
+    expect(result.tutorialSteps).toEqual([
+      { steps: 2, deviceType: "unknown", username: "UnknownRecruit" },
+    ]);
   });
 
   it("treats an empty device list as no filter", async () => {
@@ -154,19 +282,41 @@ describeWithDatabase("recruitment main metrics", () => {
   });
 
   it("keeps tutorial-disabled signups only on request", async () => {
-    const steps = (await metrics({ utmSource: "discord", includeTutorialDisabled: true })).tutorialSteps;
-    expect(steps.map((entry) => entry.username).sort()).toEqual(["DesktopRecruit", "MobileRecruit", "UnknownRecruit"]);
+    const steps = (
+      await metrics({ utmSource: "discord", includeTutorialDisabled: true })
+    ).tutorialSteps;
+    expect(steps.map((entry) => entry.username).sort()).toEqual([
+      "DesktopRecruit",
+      "MobileRecruit",
+      "UnknownRecruit",
+    ]);
   });
 });
 
 describeWithDatabase("ranked loadout statistics", () => {
-  const seedPicks = async (picks: { type: "jutsu" | "item" | "consumable"; contentId: string; count: number; battleType?: "ARENA" | "COMBAT" }[]) =>
-    (await getTestDatabase()).insert(logRankedPicks).values(picks.map((pick) => ({ battleType: "ARENA" as const, ...pick })));
+  const seedPicks = async (
+    picks: {
+      type: "jutsu" | "item" | "consumable";
+      contentId: string;
+      count: number;
+      battleType?: "ARENA" | "COMBAT";
+    }[],
+  ) =>
+    (await getTestDatabase())
+      .insert(logRankedPicks)
+      .values(picks.map((pick) => ({ battleType: "ARENA" as const, ...pick })));
 
   afterEach(() => vi.restoreAllMocks());
 
-  const statistics = async (input: { minCount?: number; limit?: number; types?: string[]; name?: string }) => {
-    const rows = await (await callerFor(dataRouter, "analyst")).getRankedLoadoutStatistics(input as never);
+  const statistics = async (input: {
+    minCount?: number;
+    limit?: number;
+    types?: string[];
+    name?: string;
+  }) => {
+    const rows = await (
+      await callerFor(dataRouter, "analyst")
+    ).getRankedLoadoutStatistics(input as never);
     return rows.map((row) => `${row.type}:${row.name}:${row.battleType}:${row.count}`);
   };
 
@@ -174,7 +324,10 @@ describeWithDatabase("ranked loadout statistics", () => {
     stubRateLimitTransport();
     await resetTables(logRankedPicks, jutsu, item, userData);
     await insertUsers([{ userId: "analyst", role: "CODING-ADMIN", isAi: true }]);
-    await insertJutsus([jutsuRow("fireball", { name: "Fireball" }), jutsuRow("wave", { name: "Tidal Wave" })]);
+    await insertJutsus([
+      jutsuRow("fireball", { name: "Fireball" }),
+      jutsuRow("wave", { name: "Tidal Wave" }),
+    ]);
     await insertItems([
       { id: "kunai", name: "Kunai" },
       { id: "elixir", name: "Fire Elixir" },
@@ -199,7 +352,10 @@ describeWithDatabase("ranked loadout statistics", () => {
   });
 
   it("returns only the requested types", async () => {
-    expect(await statistics({ types: ["consumable"] })).toEqual(["consumable:Fire Elixir:ARENA:5", "consumable:Kunai:ARENA:1"]);
+    expect(await statistics({ types: ["consumable"] })).toEqual([
+      "consumable:Fire Elixir:ARENA:5",
+      "consumable:Kunai:ARENA:1",
+    ]);
     expect(await statistics({ types: ["jutsu", "item"] })).toEqual([
       "jutsu:Fireball:ARENA:9",
       "item:Kunai:ARENA:5",
@@ -212,17 +368,25 @@ describeWithDatabase("ranked loadout statistics", () => {
   });
 
   it("matches names case-insensitively in every content table", async () => {
-    expect(await statistics({ name: "fIrE" })).toEqual(["jutsu:Fireball:ARENA:9", "consumable:Fire Elixir:ARENA:5"]);
+    expect(await statistics({ name: "fIrE" })).toEqual([
+      "jutsu:Fireball:ARENA:9",
+      "consumable:Fire Elixir:ARENA:5",
+    ]);
   });
 
   it("applies the minimum count to summed battle types and the limit to the merged list", async () => {
-    await seedPicks([{ type: "jutsu", contentId: "wave", count: 4, battleType: "COMBAT" }]);
+    await seedPicks([
+      { type: "jutsu", contentId: "wave", count: 4, battleType: "COMBAT" },
+    ]);
     expect(await statistics({ minCount: 4 })).toEqual([
       "jutsu:Fireball:ARENA:9",
       "item:Kunai:ARENA:5",
       "consumable:Fire Elixir:ARENA:5",
       "jutsu:Tidal Wave:COMBAT:4",
     ]);
-    expect(await statistics({ limit: 2 })).toEqual(["jutsu:Fireball:ARENA:9", "item:Kunai:ARENA:5"]);
+    expect(await statistics({ limit: 2 })).toEqual([
+      "jutsu:Fireball:ARENA:9",
+      "item:Kunai:ARENA:5",
+    ]);
   });
 });

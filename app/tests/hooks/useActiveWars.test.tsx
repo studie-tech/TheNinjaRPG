@@ -65,31 +65,56 @@ const setup = (initial: Wars = [], props: Partial<Props> = {}) => {
   clients.push(queryClient);
   const trpcClient = fakeTrpcClient((_path, input) => read(input));
   const wrapper = ({ children }: PropsWithChildren) => (
-    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>{children}</TrpcTestProviders>
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+      {children}
+    </TrpcTestProviders>
   );
   const initialProps: Props = {
-    villageId: "own", enabled: true, polling: "discovery", timeDiff: 0, ...props,
+    villageId: "own",
+    enabled: true,
+    polling: "discovery",
+    timeDiff: 0,
+    ...props,
   };
-  const view = renderHook(({ villageId, ...options }: Props) => useActiveWars(villageId, options), {
-    wrapper, initialProps,
-  });
+  const view = renderHook(
+    ({ villageId, ...options }: Props) => useActiveWars(villageId, options),
+    {
+      wrapper,
+      initialProps,
+    },
+  );
   return {
-    ...view, read, initialProps,
-    set: (wars: Wars) => { authoritative = wars; },
-    fail: (value: boolean) => { shouldFail = value; },
-    invalidate: () => queryClient.invalidateQueries({ queryKey: getQueryKey(testApi.war.getActiveWars) }),
+    ...view,
+    read,
+    initialProps,
+    set: (wars: Wars) => {
+      authoritative = wars;
+    },
+    fail: (value: boolean) => {
+      shouldFail = value;
+    },
+    invalidate: () =>
+      queryClient.invalidateQueries({
+        queryKey: getQueryKey(testApi.war.getActiveWars),
+      }),
   };
 };
 
 /** The query transports the server's masked rows without rebuilding participation on the client. */
-const war = (combatStartedAt = now - 3_600_000): Wars[number] => ({
-  id: "war", status: "ACTIVE", endedAt: null,
-  combatStartedAt: new Date(combatStartedAt),
-  rules: { ...defaultWarRules, durationDays: 1 },
-  attackerWarHealth: 10_000, defenderWarHealth: 10_000,
-  warAllies: [], warMercenaries: [], mercenaryWarIds: {},
-  objectiveState: null,
-} as unknown as Wars[number]);
+const war = (combatStartedAt = now - 3_600_000): Wars[number] =>
+  ({
+    id: "war",
+    status: "ACTIVE",
+    endedAt: null,
+    combatStartedAt: new Date(combatStartedAt),
+    rules: { ...defaultWarRules, durationDays: 1 },
+    attackerWarHealth: 10_000,
+    defenderWarHealth: 10_000,
+    warAllies: [],
+    warMercenaries: [],
+    mercenaryWarIds: {},
+    objectiveState: null,
+  }) as unknown as Wars[number];
 
 it("bounds closed discovery to 181 reads per tab over three quiet hours", async () => {
   const tabs = [setup(), setup()];
@@ -142,22 +167,27 @@ it("deduplicates the initial live read and leaves nonpolling overview queries qu
   expect(overview.read).toHaveBeenCalledTimes(1);
 });
 
-it.each([-120_000, 120_000])("refreshes preparation and duration deadlines with clock offset %s", async (timeDiff) => {
-  const startsAt = now - timeDiff + 5000;
-  const tab = setup([war(startsAt)], { timeDiff });
-  await settle();
-  await advance(6000);
-  expect(tab.read).toHaveBeenCalledTimes(2);
-  // Moving combat to its final seconds also moves the duration boundary.
-  tab.set([war(now - timeDiff - 86_400_000 + 5000)]);
-  await act(async () => { await tab.invalidate(); });
-  await settle();
-  expect(tab.read).toHaveBeenCalledTimes(3);
-  tab.set([]);
-  await advance(6000);
-  expect(tab.read).toHaveBeenCalledTimes(4);
-  expect(tab.result.current.data).toEqual([]);
-});
+it.each([-120_000, 120_000])(
+  "refreshes preparation and duration deadlines with clock offset %s",
+  async (timeDiff) => {
+    const startsAt = now - timeDiff + 5000;
+    const tab = setup([war(startsAt)], { timeDiff });
+    await settle();
+    await advance(6000);
+    expect(tab.read).toHaveBeenCalledTimes(2);
+    // Moving combat to its final seconds also moves the duration boundary.
+    tab.set([war(now - timeDiff - 86_400_000 + 5000)]);
+    await act(async () => {
+      await tab.invalidate();
+    });
+    await settle();
+    expect(tab.read).toHaveBeenCalledTimes(3);
+    tab.set([]);
+    await advance(6000);
+    expect(tab.read).toHaveBeenCalledTimes(4);
+    expect(tab.result.current.data).toEqual([]);
+  },
+);
 
 it("retries missed remote changes after a failed discovery request", async () => {
   const tab = setup([war()]);
@@ -176,19 +206,27 @@ it("retries missed remote changes after a failed discovery request", async () =>
 it("skips hidden and offline interval requests and refreshes on focus and reconnect", async () => {
   const tab = setup([war()]);
   await settle();
-  await act(async () => { focusManager.setFocused(false); });
+  await act(async () => {
+    focusManager.setFocused(false);
+  });
   await advance(120_000);
   expect(tab.read).toHaveBeenCalledTimes(1);
   tab.set([]);
-  await act(async () => { focusManager.setFocused(true); });
+  await act(async () => {
+    focusManager.setFocused(true);
+  });
   await settle();
   expect(tab.read).toHaveBeenCalledTimes(2);
   expect(tab.result.current.data).toEqual([]);
-  await act(async () => { onlineManager.setOnline(false); });
+  await act(async () => {
+    onlineManager.setOnline(false);
+  });
   await advance(120_000);
   expect(tab.read).toHaveBeenCalledTimes(2);
   tab.set([war()]);
-  await act(async () => { onlineManager.setOnline(true); });
+  await act(async () => {
+    onlineManager.setOnline(true);
+  });
   await settle();
   expect(tab.read).toHaveBeenCalledTimes(3);
   expect(tab.result.current.data?.[0]?.id).toBe("war");
@@ -197,14 +235,22 @@ it("skips hidden and offline interval requests and refreshes on focus and reconn
 it("refreshes a fresh snapshot on focus/reconnect and invalidates immediately after local actions", async () => {
   const tab = setup([war()]);
   await settle();
-  await act(async () => { focusManager.setFocused(false); focusManager.setFocused(true); });
+  await act(async () => {
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+  });
   await settle();
   expect(tab.read).toHaveBeenCalledTimes(2);
-  await act(async () => { onlineManager.setOnline(false); onlineManager.setOnline(true); });
+  await act(async () => {
+    onlineManager.setOnline(false);
+    onlineManager.setOnline(true);
+  });
   await settle();
   expect(tab.read).toHaveBeenCalledTimes(3);
   tab.set([]);
-  await act(async () => { await tab.invalidate(); });
+  await act(async () => {
+    await tab.invalidate();
+  });
   await settle();
   expect(tab.read).toHaveBeenCalledTimes(4);
   expect(tab.result.current.data).toEqual([]);
@@ -220,7 +266,12 @@ it("changes the exact village key, preserves server masks and stops disabled or 
   await settle();
   expect(tab.read).toHaveBeenLastCalledWith({ villageId: "other" });
   expect(tab.result.current.data).toEqual([]);
-  tab.rerender({ ...tab.initialProps, villageId: "other", enabled: false, polling: "live" });
+  tab.rerender({
+    ...tab.initialProps,
+    villageId: "other",
+    enabled: false,
+    polling: "live",
+  });
   await advance(120_000);
   expect(tab.read).toHaveBeenCalledTimes(2);
   tab.unmount();

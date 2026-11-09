@@ -1,4 +1,11 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { ComponentProps } from "react";
 import Confirm from "@/layout/Confirm";
@@ -26,7 +33,12 @@ const trigger = () => screen.getByRole("button", { name: "Delete art" });
 const open = () => fireEvent.click(trigger());
 
 const confirm = (props: Partial<ComponentProps<typeof Confirm>> = {}) => (
-  <Confirm title="Delete?" button={<svg aria-hidden />} triggerLabel="Delete art" {...props}>
+  <Confirm
+    title="Delete?"
+    button={<svg aria-hidden />}
+    triggerLabel="Delete art"
+    {...props}
+  >
     Body
   </Confirm>
 );

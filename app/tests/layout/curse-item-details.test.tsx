@@ -10,12 +10,15 @@ const names = { useQuery: () => ({ data: [] }) };
 
 beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
-    bloodline: { getAllNames: names }, sageMode: { getAllNames: names },
+    bloodline: { getAllNames: names },
+    sageMode: { getAllNames: names },
     skillTree: { getAllNames: names },
     item: { getAllNames: names, getEvolutions: names },
     jutsu: { getEvolutions: names },
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "USER" } } as never);
+  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    data: { role: "USER" },
+  } as never);
 });
 
 afterEach(() => {
@@ -23,14 +26,26 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it.each([0, 70])("shows a Curse's %s percent damage bonus separately from its healing power", (damageBonusPercent) => {
-  const item: GenericObject = {
-    id: "curse-jutsu", name: "Curse", description: "Stores healing.",
-    createdAt: new Date(), updatedAt: new Date(),
-    effects: [CurseTag.parse({ power: 50, damageBonusPercent })],
-  };
-  const view = render(<ItemWithEffects item={item} hideImage />);
-  expect(view.getByText("Damage Bonus:").parentElement?.textContent).toBe(`Damage Bonus: ${damageBonusPercent}%`);
-  expect(view.getByText("Effect Power:").parentElement?.textContent).toBe("Effect Power: 50");
-  expect(view.getByText(/Increases the holder's damage by the configured Damage Bonus/)).toBeTruthy();
-});
+it.each([0, 70])(
+  "shows a Curse's %s percent damage bonus separately from its healing power",
+  (damageBonusPercent) => {
+    const item: GenericObject = {
+      id: "curse-jutsu",
+      name: "Curse",
+      description: "Stores healing.",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      effects: [CurseTag.parse({ power: 50, damageBonusPercent })],
+    };
+    const view = render(<ItemWithEffects item={item} hideImage />);
+    expect(view.getByText("Damage Bonus:").parentElement?.textContent).toBe(
+      `Damage Bonus: ${damageBonusPercent}%`,
+    );
+    expect(view.getByText("Effect Power:").parentElement?.textContent).toBe(
+      "Effect Power: 50",
+    );
+    expect(
+      view.getByText(/Increases the holder's damage by the configured Damage Bonus/),
+    ).toBeTruthy();
+  },
+);

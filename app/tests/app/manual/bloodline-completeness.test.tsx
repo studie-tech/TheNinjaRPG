@@ -40,9 +40,9 @@ beforeEach(() => {
   vi.spyOn(ContentDetails, "useContentDetails").mockReturnValue({} as never);
   vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: undefined } as never);
   vi.spyOn(Links, "ContentLinksCell").mockImplementation(() => null);
-  vi.spyOn(Charts, "ContentCompletenessPanel").mockImplementation(
-    ({ incomplete }) => <div>{incomplete}</div>,
-  );
+  vi.spyOn(Charts, "ContentCompletenessPanel").mockImplementation(({ incomplete }) => (
+    <div>{incomplete}</div>
+  ));
 });
 
 afterEach(() => {
@@ -60,7 +60,11 @@ describe("bloodline completeness", () => {
     const headers = screen.getAllByRole("columnheader").map((cell) => cell.textContent);
     expect(headers.at(-1)).toBe("Total");
     const rows = screen.getAllByRole("row").slice(1);
-    expect(rows.map((row) => within(row).getAllByRole("cell")[0]?.textContent)).toEqual(["Bare", "Short"]);
-    expect(rows.map((row) => within(row).getAllByRole("cell").at(-1)?.textContent)).toEqual(["2", "1"]);
+    expect(rows.map((row) => within(row).getAllByRole("cell")[0]?.textContent)).toEqual(
+      ["Bare", "Short"],
+    );
+    expect(
+      rows.map((row) => within(row).getAllByRole("cell").at(-1)?.textContent),
+    ).toEqual(["2", "1"]);
   });
 });

@@ -1,5 +1,12 @@
 import { QueryClient } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { PropsWithChildren } from "react";
 import * as client from "@/app/_trpc/client";
@@ -250,6 +257,10 @@ it("keeps a non-matching own message out of search results but prepends a fetche
   await waitFor(() => expect(hook.result.current.allComments).toHaveLength(2));
 
   fetched = row("incoming", "Peer message", "Peer");
-  await act(async () => receive({ message: "new", fromId: "peer", commentId: "incoming" }));
-  await waitFor(() => expect(hook.result.current.allComments?.[0]?.id).toBe("incoming"));
+  await act(async () =>
+    receive({ message: "new", fromId: "peer", commentId: "incoming" }),
+  );
+  await waitFor(() =>
+    expect(hook.result.current.allComments?.[0]?.id).toBe("incoming"),
+  );
 });

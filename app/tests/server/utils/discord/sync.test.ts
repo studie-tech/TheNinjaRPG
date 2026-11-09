@@ -18,7 +18,11 @@ describe("discord sync errorText", () => {
   it("reports a failed statement to Sentry and keeps it out of the sync errors", () => {
     const report = vi.spyOn(Sentry, "captureException").mockReturnValue("event");
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const failure = new DrizzleQueryError("select 1", ["secret"], new TypeError("fetch failed"));
+    const failure = new DrizzleQueryError(
+      "select 1",
+      ["secret"],
+      new TypeError("fetch failed"),
+    );
     expect(errorText(failure)).toBe(DATABASE_FAILURE_MESSAGE);
     expect(report).toHaveBeenCalledWith(failure, expect.anything());
   });

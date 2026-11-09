@@ -1,4 +1,3 @@
-
 import { eq } from "drizzle-orm";
 import * as nextServer from "next/server";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
@@ -37,41 +36,41 @@ describeWithDatabase("hospital recovery with a village bonus", () => {
   it.each([
     { secondsPastDeadline: -60, recovered: false },
     { secondsPastDeadline: 5, recovered: true },
-  ])("recovers=$recovered at $secondsPastDeadline seconds past the deadline", async ({
-    secondsPastDeadline,
-    recovered,
-  }) => {
-    const admission = new Date(
-      Date.now() - (HOSPITAL_BASE_HEAL_SECONDS * 0.8 + secondsPastDeadline) * 1000,
-    );
-    await insertUsers([
-      {
-        userId: USER_ID,
-        username: "HospitalRecovery",
-        villageId: VILLAGE_ID,
-        status: "HOSPITALIZED",
-        curHealth: 0,
-        maxHealth: 100,
-        money: 0,
-        regenAt: admission,
-        curEnergy: 0,
-        regeneration: 60,
-      },
-    ]);
-    const api = await callerFor(hospitalRouter, USER_ID);
-    const result = await api.npcHeal({ villageId: VILLAGE_ID });
-    expect(result.success).toBe(recovered);
-    if (!recovered) expect(result.message).toBe("You don't have enough money");
-    const database = await getTestDatabase();
-    const saved = await database.query.userData.findFirst({
-      where: eq(userData.userId, USER_ID),
-    });
-    expect(saved?.status).toBe(recovered ? "AWAKE" : "HOSPITALIZED");
-    expect(saved?.curHealth).toBe(recovered ? 100 : 0);
-    expect(saved?.money).toBe(0);
-    expect(saved?.curEnergy).toBe(recovered ? 100 : 0);
-    if (!recovered) expect(saved?.regenAt.getTime()).toBe(admission.getTime());
-  });
+  ])(
+    "recovers=$recovered at $secondsPastDeadline seconds past the deadline",
+    async ({ secondsPastDeadline, recovered }) => {
+      const admission = new Date(
+        Date.now() - (HOSPITAL_BASE_HEAL_SECONDS * 0.8 + secondsPastDeadline) * 1000,
+      );
+      await insertUsers([
+        {
+          userId: USER_ID,
+          username: "HospitalRecovery",
+          villageId: VILLAGE_ID,
+          status: "HOSPITALIZED",
+          curHealth: 0,
+          maxHealth: 100,
+          money: 0,
+          regenAt: admission,
+          curEnergy: 0,
+          regeneration: 60,
+        },
+      ]);
+      const api = await callerFor(hospitalRouter, USER_ID);
+      const result = await api.npcHeal({ villageId: VILLAGE_ID });
+      expect(result.success).toBe(recovered);
+      if (!recovered) expect(result.message).toBe("You don't have enough money");
+      const database = await getTestDatabase();
+      const saved = await database.query.userData.findFirst({
+        where: eq(userData.userId, USER_ID),
+      });
+      expect(saved?.status).toBe(recovered ? "AWAKE" : "HOSPITALIZED");
+      expect(saved?.curHealth).toBe(recovered ? 100 : 0);
+      expect(saved?.money).toBe(0);
+      expect(saved?.curEnergy).toBe(recovered ? 100 : 0);
+      if (!recovered) expect(saved?.regenAt.getTime()).toBe(admission.getTime());
+    },
+  );
 
   it("keeps accumulated Energy when paying for an early checkout", async () => {
     await insertUsers([

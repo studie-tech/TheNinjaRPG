@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
 import { MAP_SECTOR_ID_MAX, MAX_TRAVEL_PINS } from "@/drizzle/constants";
-import { parseTravelPins, sectorIdSchema, startGlobalMoveSchema, travelLocationSchema, travelPinSchema } from "@/validators/travel";
+import {
+  parseTravelPins,
+  sectorIdSchema,
+  startGlobalMoveSchema,
+  travelLocationSchema,
+  travelPinSchema,
+} from "@/validators/travel";
 
 test("sectorIdSchema rejects out-of-bounds sector", () => {
   const result = sectorIdSchema.safeParse(MAP_SECTOR_ID_MAX + 1);
@@ -35,7 +41,9 @@ test("startGlobalMoveSchema accepts only the target sector", () => {
 });
 
 test("startGlobalMoveSchema accepts and discards the client departure hint", () => {
-  expect(startGlobalMoveSchema.parse({ sector: 1649, curSector: 200 })).toEqual({ sector: 1649 });
+  expect(startGlobalMoveSchema.parse({ sector: 1649, curSector: 200 })).toEqual({
+    sector: 1649,
+  });
 });
 
 test("startGlobalMoveSchema rejects client-supplied landing coordinates", () => {
@@ -56,10 +64,11 @@ test("startGlobalMoveSchema rejects client-supplied landing coordinates", () => 
   }
 });
 
-
 test("travel locations accept sector-only raids and full quest coordinates", () => {
   expect(travelLocationSchema.parse({ sector: "724" })).toEqual({ sector: 724 });
-  expect(travelLocationSchema.parse({ sector: "724", longitude: "0", latitude: "25" })).toEqual({ sector: 724, longitude: 0, latitude: 25 });
+  expect(
+    travelLocationSchema.parse({ sector: "724", longitude: "0", latitude: "25" }),
+  ).toEqual({ sector: 724, longitude: 0, latitude: 25 });
 });
 
 test("travel locations reject invalid coordinates and sectors", () => {
@@ -69,17 +78,32 @@ test("travel locations reject invalid coordinates and sectors", () => {
     { sector: 1, longitude: "undefined", latitude: 0 },
     { sector: 1, longitude: -1, latitude: 0 },
     { sector: 1, longitude: 0.5, latitude: 0 },
-  ]) expect(travelLocationSchema.safeParse(location).success).toBe(false);
+  ])
+    expect(travelLocationSchema.safeParse(location).success).toBe(false);
 });
 
 test("stored pins keep valid entries when another pin is invalid", () => {
   const pin = { label: "Faction", sector: 724, longitude: 0, latitude: 25 };
   const other = { label: "Home", sector: 1, longitude: 3, latitude: 4 };
-  expect(parseTravelPins([pin, { ...pin, label: " " }, { label: "Sector", sector: 724 }, null, other])).toEqual([pin, other]);
+  expect(
+    parseTravelPins([
+      pin,
+      { ...pin, label: " " },
+      { label: "Sector", sector: 724 },
+      null,
+      other,
+    ]),
+  ).toEqual([pin, other]);
   expect(travelPinSchema.parse({ ...pin, label: " Faction " }).label).toBe("Faction");
-  expect(parseTravelPins(Array.from({ length: MAX_TRAVEL_PINS + 1 }, () => pin))).toHaveLength(MAX_TRAVEL_PINS);
+  expect(
+    parseTravelPins(Array.from({ length: MAX_TRAVEL_PINS + 1 }, () => pin)),
+  ).toHaveLength(MAX_TRAVEL_PINS);
   expect(parseTravelPins(undefined)).toEqual([]);
   expect(parseTravelPins({ pin })).toEqual([]);
-  expect(travelPinSchema.safeParse({ ...pin, label: "x".repeat(40) }).success).toBe(true);
-  expect(travelPinSchema.safeParse({ ...pin, label: "x".repeat(41) }).success).toBe(false);
+  expect(travelPinSchema.safeParse({ ...pin, label: "x".repeat(40) }).success).toBe(
+    true,
+  );
+  expect(travelPinSchema.safeParse({ ...pin, label: "x".repeat(41) }).success).toBe(
+    false,
+  );
 });

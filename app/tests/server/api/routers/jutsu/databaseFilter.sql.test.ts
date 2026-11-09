@@ -5,7 +5,11 @@ import { jutsu } from "@/drizzle/schema";
 import { jutsuDatabaseFilter } from "@/server/api/routers/jutsu";
 import type { JutsuFilteringSchema } from "@/validators/jutsu";
 import { insertJutsus, jutsuRow } from "../../../../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../../setup/testDatabase";
 
 const matching = async (input: Partial<JutsuFilteringSchema>) => {
   const db = await getTestDatabase();
@@ -22,9 +26,30 @@ describeWithDatabase("jutsuDatabaseFilter", () => {
   beforeEach(async () => {
     await resetTables(jutsu);
     await insertJutsus([
-      jutsuRow("fire", { name: "Great Fireball", jutsuType: "NORMAL", statClassification: "Ninjutsu", requiredRank: "GENIN", method: "SINGLE", target: "OPPONENT" }),
-      jutsuRow("water", { name: "Water Wall", jutsuType: "CLAN", statClassification: "Genjutsu", requiredRank: "CHUNIN", method: "AOE_WALL_SHOOT", target: "GROUND" }),
-      jutsuRow("pet", { name: "Pet Pounce", jutsuType: "PETS", statClassification: null, requiredRank: "JONIN", method: "COORDINATES", target: "CHARACTER" }),
+      jutsuRow("fire", {
+        name: "Great Fireball",
+        jutsuType: "NORMAL",
+        statClassification: "Ninjutsu",
+        requiredRank: "GENIN",
+        method: "SINGLE",
+        target: "OPPONENT",
+      }),
+      jutsuRow("water", {
+        name: "Water Wall",
+        jutsuType: "CLAN",
+        statClassification: "Genjutsu",
+        requiredRank: "CHUNIN",
+        method: "AOE_WALL_SHOOT",
+        target: "GROUND",
+      }),
+      jutsuRow("pet", {
+        name: "Pet Pounce",
+        jutsuType: "PETS",
+        statClassification: null,
+        requiredRank: "JONIN",
+        method: "COORDINATES",
+        target: "CHARACTER",
+      }),
       jutsuRow("hidden", { name: "Hidden Fire", hidden: true }),
     ]);
   });
@@ -41,14 +66,24 @@ describeWithDatabase("jutsuDatabaseFilter", () => {
       .select({ id: jutsu.id })
       .from(jutsu)
       .leftJoin(parent, eq(parent.id, "water"))
-      .where(and(...jutsuDatabaseFilter({ limit: 50, name: "wall" } as JutsuFilteringSchema, false, sql`${parent.name}`)))
+      .where(
+        and(
+          ...jutsuDatabaseFilter(
+            { limit: 50, name: "wall" } as JutsuFilteringSchema,
+            false,
+            sql`${parent.name}`,
+          ),
+        ),
+      )
       .orderBy(asc(jutsu.id));
     expect(rows.map((row) => row.id)).toEqual(["fire", "pet", "water"]);
   });
 
   it("drops every excluded value, including types and methods outside the old literal lists", async () => {
     expect(await matching({ excludedJutsuTypes: ["CLAN", "PETS"] })).toEqual(["fire"]);
-    expect(await matching({ excludedMethods: ["AOE_WALL_SHOOT", "COORDINATES"] })).toEqual(["fire"]);
+    expect(
+      await matching({ excludedMethods: ["AOE_WALL_SHOOT", "COORDINATES"] }),
+    ).toEqual(["fire"]);
     expect(await matching({ excludedTargets: ["OPPONENT"] })).toEqual(["pet", "water"]);
     expect(await matching({ excludedRanks: ["GENIN", "JONIN"] })).toEqual(["water"]);
   });

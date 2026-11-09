@@ -64,7 +64,9 @@ describe("system guide articles", () => {
   it("includes a unique published getting-started page", () => {
     const slugs = SYSTEM_GUIDE_ARTICLES.map((article) => article.slug);
     expect(new Set(slugs).size).toBe(slugs.length);
-    const start = SYSTEM_GUIDE_ARTICLES.find((article) => article.slug === "getting-started");
+    const start = SYSTEM_GUIDE_ARTICLES.find(
+      (article) => article.slug === "getting-started",
+    );
     expect(start?.published).toBe(true);
     expect(start?.seoDescription.length).toBeGreaterThan(80);
     expect(start?.seoDescription.length).toBeLessThanOrEqual(160);
@@ -88,6 +90,8 @@ describe("system guide articles", () => {
     expect(farming).toContain("Level farming to 100");
     expect(farming).toContain("through 4 growth stages");
     expect(farming).toContain("require at least level 10");
-    expect(farming).toContain("Seed extractors unlock at levels 10, 55 and 100 (up to 3).");
+    expect(farming).toContain(
+      "Seed extractors unlock at levels 10, 55 and 100 (up to 3).",
+    );
   });
 });

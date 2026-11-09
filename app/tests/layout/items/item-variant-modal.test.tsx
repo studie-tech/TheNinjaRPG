@@ -7,9 +7,15 @@ import type { UserItemWithVariants } from "@/drizzle/schema";
 import { ItemVariantModal } from "@/layout/items/ItemVariantModal";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
-type Options = { onSuccess: (result: unknown, variables: unknown, revision: number) => Promise<void> };
+type Options = {
+  onSuccess: (result: unknown, variables: unknown, revision: number) => Promise<void>;
+};
 const captured: Record<string, Options> = {};
 const onClose = vi.fn();
 const userItem = {
@@ -53,7 +59,10 @@ beforeEach(() => {
   const invalidate = { invalidate: vi.fn(async () => undefined) };
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({
-      item: { getUserUnlockedVariants: invalidate, getUserItemsWithVariants: invalidate },
+      item: {
+        getUserUnlockedVariants: invalidate,
+        getUserItemsWithVariants: invalidate,
+      },
       profile: { getUser: invalidate },
       travel: { getSectorData: invalidate },
     }),
@@ -89,19 +98,28 @@ it("closes through the parent when dismissed", () => {
   expect(screen.getByText("Closed")).toBeDefined();
 });
 
-it.each(["consumeVariantToken", "selectVariant"])("closes once after a successful %s", async (name) => {
-  mount();
-  await act(() => captured[name]!.onSuccess({ success: false, message: "No" }, {}, 1));
-  expect(onClose).not.toHaveBeenCalled();
-  expect(screen.getByRole("dialog")).toBeDefined();
-  await act(() => captured[name]!.onSuccess({ success: true, message: "Done" }, {}, 1));
-  expect(onClose).toHaveBeenCalledTimes(1);
-  expect(screen.getByText("Closed")).toBeDefined();
-});
+it.each(["consumeVariantToken", "selectVariant"])(
+  "closes once after a successful %s",
+  async (name) => {
+    mount();
+    await act(() =>
+      captured[name]!.onSuccess({ success: false, message: "No" }, {}, 1),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeDefined();
+    await act(() =>
+      captured[name]!.onSuccess({ success: true, message: "Done" }, {}, 1),
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Closed")).toBeDefined();
+  },
+);
 
 it("keeps the modal open after a purchase", async () => {
   mount();
-  await act(() => captured.purchaseVariant!.onSuccess({ success: true, message: "Bought" }, {}, 1));
+  await act(() =>
+    captured.purchaseVariant!.onSuccess({ success: true, message: "Bought" }, {}, 1),
+  );
   expect(onClose).not.toHaveBeenCalled();
   expect(screen.getByRole("dialog")).toBeDefined();
 });

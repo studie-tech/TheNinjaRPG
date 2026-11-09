@@ -10,7 +10,12 @@ import * as UserContext from "@/utils/UserContext";
 
 type HallUser = ComponentProps<typeof MissionHall>["userData"];
 
-const hallQuest = (id: string, questType: string, questRank: string, requiredVillage: string | null = null) => ({
+const hallQuest = (
+  id: string,
+  questType: string,
+  questRank: string,
+  requiredVillage: string | null = null,
+) => ({
   id,
   name: id,
   image: "",
@@ -42,22 +47,42 @@ const hallData = [
 
 const user = (overrides: Partial<HallUser> = {}) =>
   ({
-    userId: "player", sector: 0, rank: "JONIN", status: "AWAKE", level: 50,
-    isOutlaw: false, villageId: "konoha", userQuests: [], questData: [], medicalExperience: 0,
-    dailyMissions: 0, dailyErrands: 0, dailyMedicalMissions: 0, dailyPvpMissions: 0,
+    userId: "player",
+    sector: 0,
+    rank: "JONIN",
+    status: "AWAKE",
+    level: 50,
+    isOutlaw: false,
+    villageId: "konoha",
+    userQuests: [],
+    questData: [],
+    medicalExperience: 0,
+    dailyMissions: 0,
+    dailyErrands: 0,
+    dailyMedicalMissions: 0,
+    dailyPvpMissions: 0,
     ...overrides,
   }) as unknown as HallUser;
 
-let pickers: Record<string, { ids: string[]; count: number; disabled: boolean | undefined }>;
+let pickers: Record<
+  string,
+  { ids: string[]; count: number; disabled: boolean | undefined }
+>;
 
 beforeEach(() => {
   pickers = {};
   vi.spyOn(Image, "default").mockImplementation(({ alt }) => <img alt={alt} />);
-  vi.spyOn(MissionPicker, "default").mockImplementation(({ setting, missions, disabled }) => {
-    // The picker shows how many missions it was given.
-    pickers[setting.name] = { ids: missions.map((m) => m.id), count: missions.length, disabled };
-    return null;
-  });
+  vi.spyOn(MissionPicker, "default").mockImplementation(
+    ({ setting, missions, disabled }) => {
+      // The picker shows how many missions it was given.
+      pickers[setting.name] = {
+        ids: missions.map((m) => m.id),
+        count: missions.length,
+        disabled,
+      };
+      return null;
+    },
+  );
   vi.spyOn(QuestStartCache, "useQuestStartCacheUpdate").mockReturnValue({
     prepareQuestStartUpdate: () => ({}),
     updateQuestStart: vi.fn(),
@@ -93,23 +118,33 @@ describe("Mission Hall tiles", () => {
 
   it("keeps the A-rank picker on type plus village-locked quests of the other classifier", () => {
     render(<MissionHall userData={user()} />);
-    expect(pickers["A-rank"]?.ids.sort()).toEqual(["a-crime-village", "a-mission", "a-mission-syndicate"].sort());
+    expect(pickers["A-rank"]?.ids.sort()).toEqual(
+      ["a-crime-village", "a-mission", "a-mission-syndicate"].sort(),
+    );
     expect(pickers["A-rank"]?.count).toBe(3);
   });
 
   it("leaves unstartable A-rank errands off every picker", () => {
     render(<MissionHall userData={user()} />);
-    expect(Object.values(pickers).flatMap((picker) => picker.ids)).not.toContain("a-errand");
+    expect(Object.values(pickers).flatMap((picker) => picker.ids)).not.toContain(
+      "a-errand",
+    );
   });
 
   it("uses crime as the type for outlaws", () => {
     render(<MissionHall userData={user({ isOutlaw: true })} />);
-    expect(pickers["A-rank"]?.ids.sort()).toEqual(["a-crime", "a-crime-village", "a-mission-syndicate"].sort());
+    expect(pickers["A-rank"]?.ids.sort()).toEqual(
+      ["a-crime", "a-crime-village", "a-mission-syndicate"].sort(),
+    );
   });
 
   it("gives medical and PvP quests moved off the A-rank picker a home on their own tiles", () => {
     render(<MissionHall userData={user()} />);
-    expect(pickers.Medical?.ids.sort()).toEqual(["a-medical", "c-medical", "d-medical"]);
+    expect(pickers.Medical?.ids.sort()).toEqual([
+      "a-medical",
+      "c-medical",
+      "d-medical",
+    ]);
     expect(pickers.Medical?.count).toBe(3);
     expect(pickers.PvP?.ids).toEqual(["a-pvp"]);
   });

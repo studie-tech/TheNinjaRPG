@@ -1,7 +1,10 @@
 import { act, cleanup, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { renderToString } from "react-dom/server";
-import { ReadingPreferencesProvider, useReadingPreferences } from "@/hooks/useReadingPreferences";
+import {
+  ReadingPreferencesProvider,
+  useReadingPreferences,
+} from "@/hooks/useReadingPreferences";
 import {
   applyReadingPreferences,
   DEFAULT_READING_PREFERENCES,
@@ -26,7 +29,8 @@ const Probe = () => {
 };
 
 /** Mounts the public hook under its real provider, including persistence effects. */
-const renderPreferences = () => renderHook(() => useReadingPreferences(), { wrapper: ReadingPreferencesProvider });
+const renderPreferences = () =>
+  renderHook(() => useReadingPreferences(), { wrapper: ReadingPreferencesProvider });
 
 /** Executes the literal bootstrap with the same script attributes as the root layout. */
 const runHeadScript = () => {
@@ -61,10 +65,18 @@ describe("reading preferences", () => {
   it("keeps server markup stable without overwriting saved settings on mount", () => {
     const serialized = JSON.stringify(saved);
     window.localStorage.setItem(READING_PREFERENCES_STORAGE_KEY, serialized);
-    expect(renderToString(<ReadingPreferencesProvider><Probe /></ReadingPreferencesProvider>)).toBe("<span>default</span>");
+    expect(
+      renderToString(
+        <ReadingPreferencesProvider>
+          <Probe />
+        </ReadingPreferencesProvider>,
+      ),
+    ).toBe("<span>default</span>");
     const hook = renderPreferences();
     expect(hook.result.current.preferences).toEqual(saved);
-    expect(window.localStorage.getItem(READING_PREFERENCES_STORAGE_KEY)).toBe(serialized);
+    expect(window.localStorage.getItem(READING_PREFERENCES_STORAGE_KEY)).toBe(
+      serialized,
+    );
   });
 
   it("synchronizes mounted settings and persists a reset", () => {
@@ -73,10 +85,21 @@ describe("reading preferences", () => {
       second = useReadingPreferences();
       return null;
     };
-    const first = renderHook(() => useReadingPreferences(), { wrapper: ({ children }) => <ReadingPreferencesProvider>{children}<Second /></ReadingPreferencesProvider> });
+    const first = renderHook(() => useReadingPreferences(), {
+      wrapper: ({ children }) => (
+        <ReadingPreferencesProvider>
+          {children}
+          <Second />
+        </ReadingPreferencesProvider>
+      ),
+    });
     act(() => first.result.current.updatePreferences(saved));
     expect(second.preferences).toEqual(saved);
-    expect(parseReadingPreferences(window.localStorage.getItem(READING_PREFERENCES_STORAGE_KEY))).toEqual(saved);
+    expect(
+      parseReadingPreferences(
+        window.localStorage.getItem(READING_PREFERENCES_STORAGE_KEY),
+      ),
+    ).toEqual(saved);
     act(() => second.updatePreferences(DEFAULT_READING_PREFERENCES));
     expect(first.result.current.preferences).toEqual(DEFAULT_READING_PREFERENCES);
   });
@@ -97,8 +120,18 @@ describe("reading preferences", () => {
       second = useReadingPreferences();
       return null;
     };
-    const first = renderHook(() => useReadingPreferences(), { wrapper: ({ children }) => <ReadingPreferencesProvider>{children}<Second /></ReadingPreferencesProvider> });
-    const write = spyOn(Object.getPrototypeOf(window.localStorage), "setItem").mockImplementation(() => {
+    const first = renderHook(() => useReadingPreferences(), {
+      wrapper: ({ children }) => (
+        <ReadingPreferencesProvider>
+          {children}
+          <Second />
+        </ReadingPreferencesProvider>
+      ),
+    });
+    const write = spyOn(
+      Object.getPrototypeOf(window.localStorage),
+      "setItem",
+    ).mockImplementation(() => {
       throw new Error("Storage is full");
     });
     const warn = spyOn(console, "warn").mockImplementation(() => undefined);
@@ -115,7 +148,11 @@ describe("reading preferences", () => {
     act(() => second.updatePreferences(saved));
     expect(first.result.current.isPersisted).toBe(true);
     expect(second.isPersisted).toBe(true);
-    expect(parseReadingPreferences(window.localStorage.getItem(READING_PREFERENCES_STORAGE_KEY))).toEqual(saved);
+    expect(
+      parseReadingPreferences(
+        window.localStorage.getItem(READING_PREFERENCES_STORAGE_KEY),
+      ),
+    ).toEqual(saved);
   });
 
   it("retains temporary values and retry feedback when a settings panel remounts", () => {
@@ -124,15 +161,30 @@ describe("reading preferences", () => {
       current = useReadingPreferences();
       return null;
     };
-    const view = render(<ReadingPreferencesProvider><Capture /></ReadingPreferencesProvider>);
-    const write = spyOn(Object.getPrototypeOf(window.localStorage), "setItem").mockImplementation(() => {
+    const view = render(
+      <ReadingPreferencesProvider>
+        <Capture />
+      </ReadingPreferencesProvider>,
+    );
+    const write = spyOn(
+      Object.getPrototypeOf(window.localStorage),
+      "setItem",
+    ).mockImplementation(() => {
       throw new Error("Storage is full");
     });
     const warn = spyOn(console, "warn").mockImplementation(() => undefined);
     try {
       act(() => current.updatePreferences(saved));
-      view.rerender(<ReadingPreferencesProvider><span>Settings closed</span></ReadingPreferencesProvider>);
-      view.rerender(<ReadingPreferencesProvider><Capture /></ReadingPreferencesProvider>);
+      view.rerender(
+        <ReadingPreferencesProvider>
+          <span>Settings closed</span>
+        </ReadingPreferencesProvider>,
+      );
+      view.rerender(
+        <ReadingPreferencesProvider>
+          <Capture />
+        </ReadingPreferencesProvider>,
+      );
       expect(current.preferences).toEqual(saved);
       expect(current.isPersisted).toBe(false);
     } finally {
@@ -141,7 +193,11 @@ describe("reading preferences", () => {
     }
     act(() => current.updatePreferences(current.preferences));
     expect(current.isPersisted).toBe(true);
-    expect(parseReadingPreferences(window.localStorage.getItem(READING_PREFERENCES_STORAGE_KEY))).toEqual(saved);
+    expect(
+      parseReadingPreferences(
+        window.localStorage.getItem(READING_PREFERENCES_STORAGE_KEY),
+      ),
+    ).toEqual(saved);
   });
 
   it("applies the same allowlisted attributes before paint and after hydration", () => {
@@ -154,7 +210,10 @@ describe("reading preferences", () => {
     for (const attribute of Object.values(READING_ATTRIBUTES)) {
       expect(document.documentElement.hasAttribute(attribute)).toBe(false);
     }
-    window.localStorage.setItem(READING_PREFERENCES_STORAGE_KEY, '{"font":"invalid","palette":["cream"]}');
+    window.localStorage.setItem(
+      READING_PREFERENCES_STORAGE_KEY,
+      '{"font":"invalid","palette":["cream"]}',
+    );
     runHeadScript();
     for (const attribute of Object.values(READING_ATTRIBUTES)) {
       expect(document.documentElement.hasAttribute(attribute)).toBe(false);

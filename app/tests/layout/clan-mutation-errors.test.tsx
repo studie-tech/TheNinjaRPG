@@ -16,16 +16,37 @@ let fallback: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   fallback = vi.fn();
   queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false, onError: fallback } },
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false, onError: fallback },
+    },
   });
-  Object.assign(vi.spyOn(client, "api" as never), { clan: testApi.clan, useUtils: testApi.useUtils });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => ({ data: { userId: "leader", isOutlaw: false } }) as never);
+  Object.assign(vi.spyOn(client, "api" as never), {
+    clan: testApi.clan,
+    useUtils: testApi.useUtils,
+  });
+  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+    () => ({ data: { userId: "leader", isOutlaw: false } }) as never,
+  );
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(groupOrders, "GroupOrders").mockImplementation((({ onSubmit }: ComponentProps<typeof groupOrders.GroupOrders>) => (
-    <button type="button" onClick={() => void onSubmit({ content: "Gather at dawn" } as never).catch(() => undefined)}>Post orders</button>
+  vi.spyOn(groupOrders, "GroupOrders").mockImplementation((({
+    onSubmit,
+  }: ComponentProps<typeof groupOrders.GroupOrders>) => (
+    <button
+      type="button"
+      onClick={() =>
+        void onSubmit({ content: "Gather at dawn" } as never).catch(() => undefined)
+      }
+    >
+      Post orders
+    </button>
   )) as never);
 });
-afterEach(() => { cleanup(); queryClient.clear(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+  vi.restoreAllMocks();
+});
 
 it("leaves a failed clan mutation to the shared error handler", async () => {
   const failure = new TRPCClientError("Clan service unavailable");

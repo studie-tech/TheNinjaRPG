@@ -20,7 +20,12 @@ const numbers = (feedback: Feedback) =>
   feedback.container.children.filter((child): child is Text => child instanceof Text);
 const shown = (feedback: Feedback) => numbers(feedback).filter((text) => text.visible);
 const hit = (amount: number, severity: HitSeverity = "light", userId = "a") => ({
-  userId, amount, severity, x: 0, y: 100, dirX: 1,
+  userId,
+  amount,
+  severity,
+  x: 0,
+  y: 100,
+  dirX: 1,
 });
 
 describe("combat damage numbers", () => {
@@ -123,7 +128,9 @@ describe("combat damage numbers", () => {
     const original = text!.text;
     Object.defineProperty(text, "text", {
       get: () => original,
-      set: () => { writes++; },
+      set: () => {
+        writes++;
+      },
     });
     for (let tick = 0; tick < 30; tick++) feedback.animate(tick * 16, false, 1);
     expect(writes).toBe(0);
@@ -167,6 +174,8 @@ describe("combat camera kick", () => {
     feedback.show(hit(-1, "crushing"));
     const before = reach(feedback, 40);
     feedback.show(hit(-1, "light", "b"));
-    expect(Math.max(reach(feedback, 48), reach(feedback, 56))).toBeGreaterThan(before / 3);
+    expect(Math.max(reach(feedback, 48), reach(feedback, 56))).toBeGreaterThan(
+      before / 3,
+    );
   });
 });

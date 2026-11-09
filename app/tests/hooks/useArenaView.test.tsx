@@ -6,14 +6,18 @@ const eventDescriptor = Object.getOwnPropertyDescriptor(globalThis, "PopStateEve
 
 describe("useArenaView", () => {
   beforeEach(() => {
-    Object.defineProperty(globalThis, "PopStateEvent", { configurable: true, value: window.PopStateEvent });
+    Object.defineProperty(globalThis, "PopStateEvent", {
+      configurable: true,
+      value: window.PopStateEvent,
+    });
     window.history.replaceState({}, "", "/battlearena");
   });
 
   afterEach(() => {
     cleanup();
     window.history.replaceState({}, "", "/");
-    if (eventDescriptor) Object.defineProperty(globalThis, "PopStateEvent", eventDescriptor);
+    if (eventDescriptor)
+      Object.defineProperty(globalThis, "PopStateEvent", eventDescriptor);
     else Reflect.deleteProperty(globalThis, "PopStateEvent");
   });
 

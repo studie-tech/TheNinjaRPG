@@ -57,7 +57,13 @@ describeWithDatabase("orphaned jutsu reskins against a real MySQL", () => {
       { userId: STAFF, username: "Staff", role: "CONTENT" },
       { userId: OWNER, username: "Owner", extraReskinSlots: 0, reputationPoints: 500 },
     ] as never);
-    await insertJutsus(["jutsu-a", "jutsu-b", "jutsu-c"].map((id) => ({ id, name: `Jutsu ${id}`, requiredRank: "GENIN" })));
+    await insertJutsus(
+      ["jutsu-a", "jutsu-b", "jutsu-c"].map((id) => ({
+        id,
+        name: `Jutsu ${id}`,
+        requiredRank: "GENIN",
+      })),
+    );
   });
 
   afterEach(() => {
@@ -127,7 +133,10 @@ describeWithDatabase("orphaned jutsu reskins against a real MySQL", () => {
       const database = await getTestDatabase();
       await database
         .insert(jutsuReskin)
-        .values([reskinRow("orphan-1", "deleted-1"), reskinRow("orphan-2", "deleted-2")]);
+        .values([
+          reskinRow("orphan-1", "deleted-1"),
+          reskinRow("orphan-2", "deleted-2"),
+        ]);
       await database
         .insert(userJutsu)
         .values({ id: "uj-owner-a", userId: OWNER, jutsuId: "jutsu-a" });
@@ -169,12 +178,12 @@ describeWithDatabase("orphaned jutsu reskins against a real MySQL", () => {
         limit: 10,
         hideAi: true,
       });
-      expect(result.data.map((reskin) => [reskin.id, reskin.jutsu?.id ?? null])).toEqual(
-        [
-          ["orphan-1", null],
-          ["live-1", "jutsu-a"],
-        ],
-      );
+      expect(
+        result.data.map((reskin) => [reskin.id, reskin.jutsu?.id ?? null]),
+      ).toEqual([
+        ["orphan-1", null],
+        ["live-1", "jutsu-a"],
+      ]);
     });
 
     it("keeps reskins of deleted jutsu visible when filtering by base jutsu", async () => {

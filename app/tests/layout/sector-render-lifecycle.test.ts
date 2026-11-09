@@ -4,18 +4,34 @@ import { createRenderScope } from "@/libs/rendering/scope";
 
 const parentOf = () => {
   const owned = new Set<() => void>();
-  const parent = { own: (cleanup: () => void) => { owned.add(cleanup); }, disown: (cleanup: () => void) => { owned.delete(cleanup); }, isDisposed: () => false } as GameRenderer;
-  return { parent, owned, dispose: () => { for (const cleanup of owned) cleanup(); } };
+  const parent = {
+    own: (cleanup: () => void) => {
+      owned.add(cleanup);
+    },
+    disown: (cleanup: () => void) => {
+      owned.delete(cleanup);
+    },
+    isDisposed: () => false,
+  } as GameRenderer;
+  return {
+    parent,
+    owned,
+    dispose: () => {
+      for (const cleanup of owned) cleanup();
+    },
+  };
 };
 
 describe("travel scene ownership", () => {
   it("releases removed sectors immediately and keeps retained sectors alive", () => {
     const { parent, owned, dispose } = parentOf();
-    const retained = createRenderScope(parent), departed = createRenderScope(parent);
+    const retained = createRenderScope(parent),
+      departed = createRenderScope(parent);
     const released: string[] = [];
     retained.own(() => released.push("retained"));
     departed.own(() => released.push("departed"));
-    departed.dispose(); departed.dispose();
+    departed.dispose();
+    departed.dispose();
     expect(released).toEqual(["departed"]);
     expect(departed.signal.aborted).toBe(true);
     expect(retained.signal.aborted).toBe(false);

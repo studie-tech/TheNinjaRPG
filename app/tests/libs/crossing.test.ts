@@ -66,16 +66,7 @@ describe("crossing edge primitives", () => {
   it("keeps aligned parameters and scales differently sized maps", () => {
     expect(mapParam(2, 4, 8)).toBe(5);
     expect(
-      resolveSectorMapEdgeCrossing(
-        EDGE_EAST,
-        3,
-        1,
-        4,
-        6,
-        EDGE_WEST,
-        8,
-        10,
-      ),
+      resolveSectorMapEdgeCrossing(EDGE_EAST, 3, 1, 4, 6, EDGE_WEST, 8, 10),
     ).toEqual({ entryEdge: EDGE_WEST, entryX: 0, entryY: 2 });
   });
 });
@@ -134,13 +125,15 @@ describe("cylindrical world topology", () => {
   });
 
   it("uses irregular climate regions instead of latitude-wide biome bands", () => {
-    const rowBiomes = Array.from({ length: MAP_WORLD_ROWS }, (_, row) =>
-      new Set(
-        tiles
-          .slice(row * MAP_WORLD_COLUMNS, (row + 1) * MAP_WORLD_COLUMNS)
-          .map((tile) => tile.t)
-          .filter((terrain) => terrain !== 0),
-      ),
+    const rowBiomes = Array.from(
+      { length: MAP_WORLD_ROWS },
+      (_, row) =>
+        new Set(
+          tiles
+            .slice(row * MAP_WORLD_COLUMNS, (row + 1) * MAP_WORLD_COLUMNS)
+            .map((tile) => tile.t)
+            .filter((terrain) => terrain !== 0),
+        ),
     );
     const mixedClimateRows = rowBiomes.filter((biomes) => biomes.size > 1).length;
     const desertRows = rowBiomes.filter((biomes) => biomes.has(2)).length;
@@ -232,10 +225,12 @@ describe("deterministic spherical climate", () => {
     });
     const west = point(-Math.PI + epsilon);
     const east = point(Math.PI - epsilon);
-    expect(Math.abs(globalContinentalness(west) - globalContinentalness(east))).toBeLessThan(
+    expect(
+      Math.abs(globalContinentalness(west) - globalContinentalness(east)),
+    ).toBeLessThan(0.00001);
+    expect(Math.abs(globalTemperature(west) - globalTemperature(east))).toBeLessThan(
       0.00001,
     );
-    expect(Math.abs(globalTemperature(west) - globalTemperature(east))).toBeLessThan(0.00001);
     expect(Math.abs(globalMoisture(west) - globalMoisture(east))).toBeLessThan(0.00001);
   });
 });
@@ -248,14 +243,20 @@ describe("game crossing wrapper", () => {
       const entryEdges = getSectorEntryEdges(sector);
       SectorNeighborDirections.forEach((direction, index) => {
         expect(neighbors[direction]).toBe<number | undefined>(tiles[sector]!.n[index]);
-        expect(entryEdges[direction]).toBe<number | undefined>(tiles[sector]!.ne[index]);
+        expect(entryEdges[direction]).toBe<number | undefined>(
+          tiles[sector]!.ne[index],
+        );
         if (neighbors[direction] < 0) return;
 
         const globeExitEdge = index as EdgeIndex;
         const mapExitEdge = sectorMapEdgeForGlobeEdge(globeExitEdge);
         const globeEntryEdge = entryEdges[direction] as EdgeIndex;
         const mapEntryEdge = sectorMapEdgeForGlobeEdge(globeEntryEdge);
-        for (let parameter = 0; parameter < edgeLength(mapExitEdge, W, H); parameter++) {
+        for (
+          let parameter = 0;
+          parameter < edgeLength(mapExitEdge, W, H);
+          parameter++
+        ) {
           const exit = edgeCell(mapExitEdge, parameter, W, H);
           const result = resolveSectorCrossing(
             sector,
@@ -352,14 +353,16 @@ describe("rendered sector-map edges", () => {
       { x: 9, y: 11 },
       { x: 5, y: 0 },
     ];
-    const near = findNearestWalkableEdgeTile(
-      { ...map, tiles } as never,
-      "north",
-      { x: 7, y: 11 },
-    );
+    const near = findNearestWalkableEdgeTile({ ...map, tiles } as never, "north", {
+      x: 7,
+      y: 11,
+    });
     expect(near).toEqual({ x: 9, y: 11 });
     expect(
-      findNearestWalkableEdgeTile({ ...map, tiles: [] } as never, "north", { x: 7, y: 11 }),
+      findNearestWalkableEdgeTile({ ...map, tiles: [] } as never, "north", {
+        x: 7,
+        y: 11,
+      }),
     ).toBeNull();
   });
 });

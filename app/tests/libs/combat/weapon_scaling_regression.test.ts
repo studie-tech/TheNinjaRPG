@@ -92,12 +92,7 @@ describe("weapon action scaling", () => {
       level: 1,
     });
 
-    const weaponDamage = damageCalc(
-      weaponDamageEffect,
-      attacker,
-      defender,
-      dmgConfig,
-    );
+    const weaponDamage = damageCalc(weaponDamageEffect, attacker, defender, dmgConfig);
     const jutsuDamage = damageCalc(jutsuDamageEffect, attacker, defender, dmgConfig);
 
     expect(getPower(weaponDamageEffect).power).toBe(31);

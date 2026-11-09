@@ -63,10 +63,7 @@ describe("canRetryQuestBattle", () => {
 
 describe("start_battle loss and retry eligibility", () => {
   it("keeps the battle retryable when a loss has no fail branch", () => {
-    const quest = makeQuest([
-      battleObjective(),
-      terminalObjective("won", "win_quest"),
-    ]);
+    const quest = makeQuest([battleObjective(), terminalObjective("won", "win_quest")]);
     const goal = goalAfterLoss(quest);
 
     expect(goal?.recentlyDied).toBe(true);

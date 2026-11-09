@@ -12,12 +12,18 @@ import type { RemoteCommand } from "@/libs/native/audioSession";
 import type { UserWithRelations } from "@/routers/profile";
 import * as audioUtils from "@/utils/audio";
 import * as timeUtils from "@/utils/time";
-import { capacitorWindow, removeCapacitor, type CapacitorBridge } from "../setup/native";
+import {
+  capacitorWindow,
+  removeCapacitor,
+  type CapacitorBridge,
+} from "../setup/native";
 
 /** Audio hook state and native session fakes the provider reads; reset after each test. */
 const audio = {
   remoteCommand: undefined as ((command: RemoteCommand) => void) | undefined,
-  setEnabled: vi.fn(async (_enabled: boolean, _isPreferenceChange?: boolean) => undefined),
+  setEnabled: vi.fn(
+    async (_enabled: boolean, _isPreferenceChange?: boolean) => undefined,
+  ),
   activate: vi.fn(async () => true),
   deactivate: vi.fn(async (_preserveControls?: boolean) => undefined),
   isPlaying: false,
@@ -271,7 +277,9 @@ describe("shared SFX preference action", () => {
   beforeEach(() => {
     updatePreferences.mockClear();
     Object.assign(vi.spyOn(client, "api" as never), {
-      profile: { updatePreferences: { useMutation: () => ({ mutate: updatePreferences }) } },
+      profile: {
+        updatePreferences: { useMutation: () => ({ mutate: updatePreferences }) },
+      },
     });
     vi.spyOn(iframeHook, "useIframeMute").mockReturnValue({
       isIframesMuted: false,
@@ -376,7 +384,9 @@ describe("shared SFX preference action", () => {
       act(() => view.result.current.setSfxEnabled(true));
       expect(view.result.current.sfxOn).toBe(true);
       expect(audioPreferences.getAudioPreference("sfxOn", false)).toBe(true);
-      act(() => { void view.result.current.setAudioEnabled(true); });
+      act(() => {
+        void view.result.current.setAudioEnabled(true);
+      });
       expect(audioPreferences.getAudioPreference("musicOn", false)).toBe(true);
       expect(updatePreferences).not.toHaveBeenCalled();
       expect(updateUser).not.toHaveBeenCalled();

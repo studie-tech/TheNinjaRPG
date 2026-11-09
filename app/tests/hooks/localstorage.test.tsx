@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-
 describe("useLocalStorage URL anchors", () => {
   beforeEach(() => {
     installBrowserGlobals({ events: ["CustomEvent"] });
@@ -23,9 +22,7 @@ describe("useLocalStorage URL anchors", () => {
     (fragment) => {
       window.history.replaceState({}, "", `/battlearena#${fragment}`);
 
-      const { result } = renderHook(() =>
-        useLocalStorage("arenaTab", "Arena", true),
-      );
+      const { result } = renderHook(() => useLocalStorage("arenaTab", "Arena", true));
 
       expect(result.current[0]).toBe("Arena");
       expect(window.localStorage.getItem("arenaTab")).toBe('"Arena"');
@@ -36,9 +33,7 @@ describe("useLocalStorage URL anchors", () => {
     window.localStorage.setItem("arenaTab", JSON.stringify("Training"));
     window.history.replaceState({}, "", "/battlearena#%");
 
-    const { result } = renderHook(() =>
-      useLocalStorage("arenaTab", "Arena", true),
-    );
+    const { result } = renderHook(() => useLocalStorage("arenaTab", "Arena", true));
 
     expect(result.current[0]).toBe("Training");
     expect(window.localStorage.getItem("arenaTab")).toBe('"Training"');
@@ -50,9 +45,7 @@ describe("useLocalStorage URL anchors", () => {
       window.localStorage.setItem("arenaTab", JSON.stringify("Training"));
       window.history.replaceState({}, "", `/battlearena#${encodeURIComponent(value)}`);
 
-      const { result } = renderHook(() =>
-        useLocalStorage("arenaTab", "Arena", true),
-      );
+      const { result } = renderHook(() => useLocalStorage("arenaTab", "Arena", true));
 
       expect(result.current[0]).toBe(value);
       expect(window.localStorage.getItem("arenaTab")).toBe(JSON.stringify(value));
@@ -61,9 +54,7 @@ describe("useLocalStorage URL anchors", () => {
 
   it("ignores a malformed hashchange and handles the next valid fragment", () => {
     window.localStorage.setItem("arenaTab", JSON.stringify("Training"));
-    const { result } = renderHook(() =>
-      useLocalStorage("arenaTab", "Arena", true),
-    );
+    const { result } = renderHook(() => useLocalStorage("arenaTab", "Arena", true));
     const errors: Event[] = [];
     const recordError = (event: Event) => errors.push(event);
     window.addEventListener("error", recordError);

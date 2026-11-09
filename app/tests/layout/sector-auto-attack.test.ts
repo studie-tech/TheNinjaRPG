@@ -2,21 +2,31 @@ import { expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 
 // Exercise the ANBU auto-attack without mounting its WebGL scene, as in sector-movement-feedback.test.ts.
-const source = readFileSync(new URL("../../src/layout/Sector.tsx", import.meta.url), "utf8");
-const transpiler = new (require("bun").Transpiler)({ loader: "ts" }) as { transformSync(source: string): string };
+const source = readFileSync(
+  new URL("../../src/layout/Sector.tsx", import.meta.url),
+  "utf8",
+);
+const transpiler = new (require("bun").Transpiler)({ loader: "ts" }) as {
+  transformSync(source: string): string;
+};
 const block = (startMarker: string, endMarker: string) => {
   const start = source.indexOf(startMarker);
   const end = source.indexOf(endMarker, start);
   if (start < 0 || end < 0) throw new Error(`Missing auto-attack code: ${startMarker}`);
   return source.slice(start, end);
 };
-const evaluate = (code: string, scope: object) => new Function("scope", `with (scope) { ${transpiler.transformSync(code)} }`)(scope);
+const evaluate = (code: string, scope: object) =>
+  new Function("scope", `with (scope) { ${transpiler.transformSync(code)} }`)(scope);
 
 const enemy = { userId: "enemy", longitude: 4, latitude: 6 };
 const setup = (origin: { col: number; row: number }) => {
   const attack = vi.fn();
   const scope = {
-    api: { combat: { attackUser: { useMutation: () => ({ mutate: attack, isPending: false }) } } },
+    api: {
+      combat: {
+        attackUser: { useMutation: () => ({ mutate: attack, isPending: false }) },
+      },
+    },
     prepareUserUpdate: vi.fn(),
     autoAttackMode: true,
     sector: 3,
@@ -47,7 +57,16 @@ it("attacks an enemy on the player's tile with the tile's biome and socket", () 
   const test = setup({ col: 4, row: 6 });
   test.maybeAutoAttack();
   expect(test.attack.mock.calls).toEqual([
-    [{ originSocketId: "socket-1", userId: "enemy", longitude: 4, latitude: 6, sector: 3, asset: "forest" }],
+    [
+      {
+        originSocketId: "socket-1",
+        userId: "enemy",
+        longitude: 4,
+        latitude: 6,
+        sector: 3,
+        asset: "forest",
+      },
+    ],
   ]);
   expect(test.scope.setTarget).not.toHaveBeenCalled();
   expect(test.scope.lastAutoAttackTimeRef.current).toBeGreaterThan(0);

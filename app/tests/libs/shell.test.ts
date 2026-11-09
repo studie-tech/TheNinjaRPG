@@ -1,6 +1,10 @@
 import { GAME_LAYOUTS } from "@/libs/gameLayouts";
 import { LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
-import { drawWallpaperVariant, WALLPAPER_EXPERIMENT, WALLPAPER_VARIANTS } from "@/libs/wallpaperExperiment";
+import {
+  drawWallpaperVariant,
+  WALLPAPER_EXPERIMENT,
+  WALLPAPER_VARIANTS,
+} from "@/libs/wallpaperExperiment";
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { LAYOUT_PREFERENCE_COOKIE } from "@/libs/layoutPreference";
 import {
@@ -83,11 +87,14 @@ describe("publicPathForShellPath", () => {
 });
 
 describe("chooseShell", () => {
-  const CHROME = "Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/129.0 Safari/537.36";
+  const CHROME =
+    "Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/129.0 Safari/537.36";
   const GOOGLEBOT =
     "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
   const request = (
-    overrides: Partial<Omit<ShellRequest, "cookies">> & { cookies?: Record<string, string> },
+    overrides: Partial<Omit<ShellRequest, "cookies">> & {
+      cookies?: Record<string, string>;
+    },
   ): ShellRequest => ({
     userAgent: CHROME,
     pathname: "/home",
@@ -100,29 +107,69 @@ describe("chooseShell", () => {
 
   it("gives a first-time visitor on the landing page the default layout", () => {
     const { variant, assigned } = chooseShell(request({ pathname: "/" }));
-    expect(assigned).toEqual({ [LEMU_EXPERIMENT]: "treatment_1", [WALLPAPER_EXPERIMENT]: "winter" });
-    expect(variant).toEqual({ client: "web", layout: "default", signedIn: false, wallpaper: "winter" });
+    expect(assigned).toEqual({
+      [LEMU_EXPERIMENT]: "treatment_1",
+      [WALLPAPER_EXPERIMENT]: "winter",
+    });
+    expect(variant).toEqual({
+      client: "web",
+      layout: "default",
+      signedIn: false,
+      wallpaper: "winter",
+    });
   });
 
   it("draws nothing off the landing page, and nothing a visitor already carries", () => {
     expect(chooseShell(request({ pathname: "/home" })).assigned).toEqual({});
     const carried = chooseShell(
-      request({ pathname: "/", cookies: { [LEMU_EXPERIMENT]: "control", [WALLPAPER_EXPERIMENT]: "spring" } }),
+      request({
+        pathname: "/",
+        cookies: { [LEMU_EXPERIMENT]: "control", [WALLPAPER_EXPERIMENT]: "spring" },
+      }),
     );
     expect(carried.assigned).toEqual({});
   });
 
   it("draws a fresh assignment when the browser only carries the previous experiment", () => {
-    const choice = chooseShell(request({ pathname: "/", cookies: { ab_lemu_replacement_2: "treatment", [WALLPAPER_EXPERIMENT]: "spring" } }));
+    const choice = chooseShell(
+      request({
+        pathname: "/",
+        cookies: {
+          ab_lemu_replacement_2: "treatment",
+          [WALLPAPER_EXPERIMENT]: "spring",
+        },
+      }),
+    );
     expect(choice.assigned).toEqual({ [LEMU_EXPERIMENT]: "treatment_1" });
   });
 
-  it.each(["treatment_1", "treatment_2", "treatment_3", "treatment_4", "treatment_5", "treatment_6"])("preserves %s across landing visits", (variant) => {
-    expect(chooseShell(request({ pathname: "/", cookies: { [LEMU_EXPERIMENT]: variant, [WALLPAPER_EXPERIMENT]: "spring" } })).assigned).toEqual({});
+  it.each([
+    "treatment_1",
+    "treatment_2",
+    "treatment_3",
+    "treatment_4",
+    "treatment_5",
+    "treatment_6",
+  ])("preserves %s across landing visits", (variant) => {
+    expect(
+      chooseShell(
+        request({
+          pathname: "/",
+          cookies: { [LEMU_EXPERIMENT]: variant, [WALLPAPER_EXPERIMENT]: "spring" },
+        }),
+      ).assigned,
+    ).toEqual({});
   });
 
   it("reassigns an invalid cookie rather than recording an unknown arm", () => {
-    expect(chooseShell(request({ pathname: "/", cookies: { [LEMU_EXPERIMENT]: "treatment", [WALLPAPER_EXPERIMENT]: "spring" } })).assigned).toEqual({ [LEMU_EXPERIMENT]: "treatment_1" });
+    expect(
+      chooseShell(
+        request({
+          pathname: "/",
+          cookies: { [LEMU_EXPERIMENT]: "treatment", [WALLPAPER_EXPERIMENT]: "spring" },
+        }),
+      ).assigned,
+    ).toEqual({ [LEMU_EXPERIMENT]: "treatment_1" });
   });
 
   it("preserves a pixel preference on both public and signed-in pages", () => {
@@ -136,35 +183,79 @@ describe("chooseShell", () => {
     expect(signedIn.variant.layout).toBe("pixel");
   });
 
-  it.each([...GAME_LAYOUTS])("preserves $name on public and signed-in pages", ({ id }) => {
-    const cookies = { [LAYOUT_PREFERENCE_COOKIE]: id };
-    expect(chooseShell(request({ cookies }), "").variant.layout).toBe(id);
-    expect(chooseShell(request({ cookies, userId: "user_1" })).variant.layout).toBe(id);
-    expect(publicPathForShellPath(`/web-${id}-in/layouts`)).toBe("/layouts");
-  });
+  it.each([...GAME_LAYOUTS])(
+    "preserves $name on public and signed-in pages",
+    ({ id }) => {
+      const cookies = { [LAYOUT_PREFERENCE_COOKIE]: id };
+      expect(chooseShell(request({ cookies }), "").variant.layout).toBe(id);
+      expect(chooseShell(request({ cookies, userId: "user_1" })).variant.layout).toBe(
+        id,
+      );
+      expect(publicPathForShellPath(`/web-${id}-in/layouts`)).toBe("/layouts");
+    },
+  );
 
   it("keeps an opted-in welcome page outside default-layout experiments", () => {
-    const choice = chooseShell(request({ pathname: "/", cookies: {
-      [LAYOUT_PREFERENCE_COOKIE]: "17-obsidian-council",
-      [WALLPAPER_EXPERIMENT]: "winter",
-    } }), "17-obsidian-council");
-    expect(choice.variant).toEqual({ client: "web", layout: "17-obsidian-council", signedIn: false });
+    const choice = chooseShell(
+      request({
+        pathname: "/",
+        cookies: {
+          [LAYOUT_PREFERENCE_COOKIE]: "17-obsidian-council",
+          [WALLPAPER_EXPERIMENT]: "winter",
+        },
+      }),
+      "17-obsidian-council",
+    );
+    expect(choice.variant).toEqual({
+      client: "web",
+      layout: "17-obsidian-council",
+      signedIn: false,
+    });
     expect(choice.assigned).toEqual({});
     expect(parseShellParam(shellParam(choice.variant))).toEqual(choice.variant);
   });
 
-  it.each(["", "not-a-theme", "1-horizon-watch"])("preserves an explicit layout on public pages when welcome setting is %j", (setting) => {
-    const choice = chooseShell(request({ cookies: { [LAYOUT_PREFERENCE_COOKIE]: "17-obsidian-council" } }), setting);
-    expect(choice.variant.layout).toBe("17-obsidian-council");
-  });
+  it.each(["", "not-a-theme", "1-horizon-watch"])(
+    "preserves an explicit layout on public pages when welcome setting is %j",
+    (setting) => {
+      const choice = chooseShell(
+        request({ cookies: { [LAYOUT_PREFERENCE_COOKIE]: "17-obsidian-council" } }),
+        setting,
+      );
+      expect(choice.variant.layout).toBe("17-obsidian-council");
+    },
+  );
 
-  it.each(GAME_LAYOUTS.map((layout) => layout.id))("can roll out %s publicly without overriding game preferences", (setting) => {
-    expect(chooseShell(request({}), setting).variant.layout).toBe(setting);
-    expect(chooseShell(request({ cookies: { [LAYOUT_PREFERENCE_COOKIE]: "default" } }), setting).variant.layout).toBe("default");
-    expect(chooseShell(request({ cookies: { [LAYOUT_PREFERENCE_COOKIE]: "pixel" } }), setting).variant.layout).toBe("pixel");
-    expect(chooseShell(request({ userId: "player" }), setting).variant.layout).toBe("default");
-    expect(chooseShell(request({ userId: "player", cookies: { [LAYOUT_PREFERENCE_COOKIE]: "pixel" } }), setting).variant.layout).toBe("pixel");
-  });
+  it.each(GAME_LAYOUTS.map((layout) => layout.id))(
+    "can roll out %s publicly without overriding game preferences",
+    (setting) => {
+      expect(chooseShell(request({}), setting).variant.layout).toBe(setting);
+      expect(
+        chooseShell(
+          request({ cookies: { [LAYOUT_PREFERENCE_COOKIE]: "default" } }),
+          setting,
+        ).variant.layout,
+      ).toBe("default");
+      expect(
+        chooseShell(
+          request({ cookies: { [LAYOUT_PREFERENCE_COOKIE]: "pixel" } }),
+          setting,
+        ).variant.layout,
+      ).toBe("pixel");
+      expect(chooseShell(request({ userId: "player" }), setting).variant.layout).toBe(
+        "default",
+      );
+      expect(
+        chooseShell(
+          request({
+            userId: "player",
+            cookies: { [LAYOUT_PREFERENCE_COOKIE]: "pixel" },
+          }),
+          setting,
+        ).variant.layout,
+      ).toBe("pixel");
+    },
+  );
 
   it("gives a signed-in player without a preference the default layout", () => {
     expect(chooseShell(request({ userId: "user_1" })).variant.layout).toBe("default");
@@ -173,13 +264,17 @@ describe("chooseShell", () => {
   it("reads the signed-in frame from Clerk's client marker, not from the token", () => {
     // A stale token on one RSC fetch must not flip the whole shell and remount it: the
     // marker outlives the token, and it is what the client's own frame decision uses.
-    const staleToken = chooseShell(request({ cookies: { __client_uat: "1789800000" } }));
+    const staleToken = chooseShell(
+      request({ cookies: { __client_uat: "1789800000" } }),
+    );
     expect(staleToken.variant.signedIn).toBe(true);
     const verified = chooseShell(request({ userId: "user_1" }));
     expect(verified.variant.signedIn).toBe(true);
     const signedOut = chooseShell(request({ cookies: { __client_uat: "0" } }));
     expect(signedOut.variant.signedIn).toBe(false);
-    const multiSession = chooseShell(request({ cookies: { __client_uat_V9abc: "17" } }));
+    const multiSession = chooseShell(
+      request({ cookies: { __client_uat_V9abc: "17" } }),
+    );
     expect(multiSession.variant.signedIn).toBe(true);
   });
 
@@ -217,32 +312,70 @@ describe("chooseShell", () => {
       }),
     );
     const android = chooseShell(
-      request({ userAgent: "Mozilla/5.0 (Linux; Android 14) TNR-Native/1.2.0 (android)" }),
+      request({
+        userAgent: "Mozilla/5.0 (Linux; Android 14) TNR-Native/1.2.0 (android)",
+      }),
     );
     expect(ios.variant.client).toBe("ios");
     expect(android.variant.client).toBe("android");
   });
 });
 
- describe("wallpaper shell isolation", () => {
+describe("wallpaper shell isolation", () => {
   for (const wallpaper of WALLPAPER_VARIANTS) {
     it(`round trips ${wallpaper} and reuses its assignment off the landing page`, () => {
-      const variant = { client: "web" as const, layout: "default" as const, signedIn: false, wallpaper };
+      const variant = {
+        client: "web" as const,
+        layout: "default" as const,
+        signedIn: false,
+        wallpaper,
+      };
       expect(parseShellParam(shellParam(variant))).toEqual(variant);
       expect(publicPathForShellPath(`/${shellParam(variant)}/signup`)).toBe("/signup");
-      const choice = chooseShell({ userAgent: "Chrome", userId: null, pathname: "/signup", cookies: new Map([[WALLPAPER_EXPERIMENT, wallpaper]]), draw: () => "control", drawWallpaper: () => "control" });
+      const choice = chooseShell({
+        userAgent: "Chrome",
+        userId: null,
+        pathname: "/signup",
+        cookies: new Map([[WALLPAPER_EXPERIMENT, wallpaper]]),
+        draw: () => "control",
+        drawWallpaper: () => "control",
+      });
       expect(choice.variant).toEqual(variant);
       expect(choice.assigned).toEqual({});
     });
   }
   it("does not enroll prefetch, native, crawlers or existing sessions", () => {
-    const base = { userAgent: "Chrome", userId: null, pathname: "/", cookies: new Map<string, string>(), draw: () => "control" as const, drawWallpaper: () => "winter" as const };
-    for (const overrides of [{ isDocument: false }, { userAgent: "Googlebot" }, { userId: "user_1" }, { cookies: new Map([["__client_uat", "17"]]) }, { userAgent: "TNR-Native/1.2.0 (ios)" }]) {
-      expect(chooseShell({ ...base, ...overrides }).assigned[WALLPAPER_EXPERIMENT]).toBeUndefined();
+    const base = {
+      userAgent: "Chrome",
+      userId: null,
+      pathname: "/",
+      cookies: new Map<string, string>(),
+      draw: () => "control" as const,
+      drawWallpaper: () => "winter" as const,
+    };
+    for (const overrides of [
+      { isDocument: false },
+      { userAgent: "Googlebot" },
+      { userId: "user_1" },
+      { cookies: new Map([["__client_uat", "17"]]) },
+      { userAgent: "TNR-Native/1.2.0 (ios)" },
+    ]) {
+      expect(
+        chooseShell({ ...base, ...overrides }).assigned[WALLPAPER_EXPERIMENT],
+      ).toBeUndefined();
     }
   });
   it("replaces an invalid assignment on a document landing visit", () => {
-    expect(chooseShell({ userAgent: "Chrome", userId: null, pathname: "/", cookies: new Map([[WALLPAPER_EXPERIMENT, "bogus"]]), draw: () => "control", drawWallpaper: () => "summer" }).variant.wallpaper).toBe("summer");
+    expect(
+      chooseShell({
+        userAgent: "Chrome",
+        userId: null,
+        pathname: "/",
+        cookies: new Map([[WALLPAPER_EXPERIMENT, "bogus"]]),
+        draw: () => "control",
+        drawWallpaper: () => "summer",
+      }).variant.wallpaper,
+    ).toBe("summer");
   });
   describe("drawWallpaperVariant", () => {
     afterEach(() => vi.restoreAllMocks());
@@ -254,4 +387,4 @@ describe("chooseShell", () => {
       expect(drawWallpaperVariant()).toBe(variant);
     });
   });
- });
+});

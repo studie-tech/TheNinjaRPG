@@ -33,12 +33,13 @@ describeWithDatabase("account deletion clan departure retries", () => {
       message: "This AI is used by an active hunting session. Wait for it to finish.",
     });
     const advance = vi.fn();
-    const step = () => runDeletionStep({
-      phase: "IDENTITY_DELETED",
-      removeIdentity: vi.fn(),
-      removeGameData: () => removeAccountGameData("departing"),
-      advance,
-    });
+    const step = () =>
+      runDeletionStep({
+        phase: "IDENTITY_DELETED",
+        removeIdentity: vi.fn(),
+        removeGameData: () => removeAccountGameData("departing"),
+        advance,
+      });
     await expect(step()).rejects.toThrow("active hunting session");
     expect(advance).not.toHaveBeenCalled();
     await step();
@@ -75,13 +76,15 @@ describeWithDatabase("account deletion clan departure retries", () => {
         kageId: "departing",
         type: "HIDEOUT",
       });
-      await insertClans([{
-        id: "faction",
-        name: "Faction",
-        villageId: "hideout",
-        leaderId: "departing",
-        coLeader1: lastMember ? null : "successor",
-      }]);
+      await insertClans([
+        {
+          id: "faction",
+          name: "Faction",
+          villageId: "hideout",
+          leaderId: "departing",
+          coLeader1: lastMember ? null : "successor",
+        },
+      ]);
       vi.spyOn(clans, "removeFromClan").mockImplementationOnce(async (...args) => {
         await depart(...args);
         expect(

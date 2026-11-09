@@ -12,7 +12,9 @@ beforeEach(() => {
   push.mockClear();
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
   vi.spyOn(Avatar, "default").mockImplementation(() => null);
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
+    <div>{children}</div>
+  ));
   Object.assign(vi.spyOn(client, "api" as never), {
     combat: {
       listOngoingBattles: {

@@ -54,7 +54,9 @@ describe("announcement body", () => {
   });
 
   it("replaces references it cannot safely decode", () => {
-    expect(toPlainText("lone surrogate &#xD800; here")).toBe("lone surrogate \uFFFD here");
+    expect(toPlainText("lone surrogate &#xD800; here")).toBe(
+      "lone surrogate \uFFFD here",
+    );
     expect(toPlainText("out of range &#1114112;")).toBe("out of range \uFFFD");
     expect(toPlainText("null &#0;")).toBe("null \uFFFD");
   });

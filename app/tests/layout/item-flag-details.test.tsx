@@ -26,7 +26,9 @@ beforeEach(() => {
     item: { getAllNames: names, getEvolutions: names },
     jutsu: { getEvolutions: names },
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "USER" } } as never);
+  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    data: { role: "USER" },
+  } as never);
 });
 
 afterEach(() => {

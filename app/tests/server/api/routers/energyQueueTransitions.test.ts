@@ -122,21 +122,24 @@ const prepare = async (queue = entries) => {
   ]);
   await queueEnergy(USER, queue);
   await insertUserVotes([{ userId: USER }]);
-  await db
-    .insert(sectorMap)
-    .values(
-      [HOME, AWAY].map((sector) => ({
-        id: `map-${sector}`,
-        sector,
-        name: "Map",
-        width: 26,
-        height: 26,
-        status: "PUBLISHED" as const,
-        normalizedJson: mapFor(sector),
-      })),
-    );
+  await db.insert(sectorMap).values(
+    [HOME, AWAY].map((sector) => ({
+      id: `map-${sector}`,
+      sector,
+      name: "Map",
+      width: 26,
+      height: 26,
+      status: "PUBLISHED" as const,
+      normalizedJson: mapFor(sector),
+    })),
+  );
 };
-const walk = async (sector: number, curLongitude: number, longitude: number, villageId = "home") =>
+const walk = async (
+  sector: number,
+  curLongitude: number,
+  longitude: number,
+  villageId = "home",
+) =>
   (await callerFor(travelRouter, USER)).moveInSector({
     sector,
     curLongitude,
@@ -206,7 +209,9 @@ describeWithDatabase("Energy queue state transitions", () => {
     const result = await fetchUpdatedUser({ client, userId: USER });
     expect(result.requiresUserRefresh).toBe(true);
     expect(result.user?.offence).toBeGreaterThan(10);
-    expect(getEnergyQueue(result.user!)).toEqual<Array<(typeof entries)[number] | undefined>>([entries[1]]);
+    expect(getEnergyQueue(result.user!)).toEqual<
+      Array<(typeof entries)[number] | undefined>
+    >([entries[1]]);
   });
   it("does not credit away-sector ticks after walking home", async () => {
     await prepare();
@@ -222,7 +227,9 @@ describeWithDatabase("Energy queue state transitions", () => {
     expect(user.offence).toBe(18.5);
     expect(user.defence).toBe(10);
     expect(user.curEnergy).toBe(0);
-    expect(await readEnergyQueue(USER)).toEqual<Array<(typeof entries)[number] | undefined>>([entries[1]]);
+    expect(await readEnergyQueue(USER)).toEqual<
+      Array<(typeof entries)[number] | undefined>
+    >([entries[1]]);
   });
   it("preserves all travel pools and unfinished ticks without training during travel", async () => {
     await prepare();
@@ -255,94 +262,175 @@ describeWithDatabase("Energy queue state transitions", () => {
     });
     expect((await read())!.defence).toBe(10);
   });
-  it.each([true, false])("cleaner preserves travel recovery policy with queued training=%s", async queued => {
-    await prepare(queued ? entries : []);
-    const db = await getTestDatabase();
-    const regenAt = new Date(Date.now() - 195_000);
-    await patch({ status: "TRAVEL", travelFinishAt: new Date(Date.now() - 1000), regenAt,
-      curHealth: 0, curChakra: 0, curStamina: 0, maxHealth: 1000, maxChakra: 1000, maxStamina: 1000 });
-    await db.insert(gameSetting).values({ id: "travel-regen", name: "regenGainMultiplier", value: 2, time: new Date(Date.now() + 86_400_000) });
-    await completeExpiredGlobalTravel(db);
-    const arrived = (await read())!;
-    expect(arrived.status).toBe("AWAKE");
-    expect(arrived.travelFinishAt).toBeNull();
-    expect(arrived.curEnergy).toBe(queued ? 100 : 0);
-    expect([arrived.curHealth, arrived.curChakra, arrived.curStamina]).toEqual(queued ? [630, 630, 630] : [0, 0, 0]);
-    expect(arrived.regenAt.getTime()).toBe(regenAt.getTime() + (queued ? 180_000 : 0));
-    expect(arrived.offence).toBe(10);
-    expect(arrived.defence).toBe(10);
-    expect(await readEnergyQueue(USER)).toEqual(queued ? entries : []);
-    await completeExpiredGlobalTravel(db);
-    expect(await read()).toEqual(arrived);
-    if (queued) {
-      await fetchUpdatedUser({ client: db, userId: USER, forceRegen: true });
-      // The stored arrival Energy can train one entry, but travel ticks cannot replay.
-      expect((await read())!.offence).toBe(18.5);
-      expect((await read())!.defence).toBe(10);
-      expect(await readEnergyQueue(USER)).toEqual<Array<(typeof entries)[number] | undefined>>([entries[1]]);
-    }
-  });
+  it.each([true, false])(
+    "cleaner preserves travel recovery policy with queued training=%s",
+    async (queued) => {
+      await prepare(queued ? entries : []);
+      const db = await getTestDatabase();
+      const regenAt = new Date(Date.now() - 195_000);
+      await patch({
+        status: "TRAVEL",
+        travelFinishAt: new Date(Date.now() - 1000),
+        regenAt,
+        curHealth: 0,
+        curChakra: 0,
+        curStamina: 0,
+        maxHealth: 1000,
+        maxChakra: 1000,
+        maxStamina: 1000,
+      });
+      await db.insert(gameSetting).values({
+        id: "travel-regen",
+        name: "regenGainMultiplier",
+        value: 2,
+        time: new Date(Date.now() + 86_400_000),
+      });
+      await completeExpiredGlobalTravel(db);
+      const arrived = (await read())!;
+      expect(arrived.status).toBe("AWAKE");
+      expect(arrived.travelFinishAt).toBeNull();
+      expect(arrived.curEnergy).toBe(queued ? 100 : 0);
+      expect([arrived.curHealth, arrived.curChakra, arrived.curStamina]).toEqual(
+        queued ? [630, 630, 630] : [0, 0, 0],
+      );
+      expect(arrived.regenAt.getTime()).toBe(
+        regenAt.getTime() + (queued ? 180_000 : 0),
+      );
+      expect(arrived.offence).toBe(10);
+      expect(arrived.defence).toBe(10);
+      expect(await readEnergyQueue(USER)).toEqual(queued ? entries : []);
+      await completeExpiredGlobalTravel(db);
+      expect(await read()).toEqual(arrived);
+      if (queued) {
+        await fetchUpdatedUser({ client: db, userId: USER, forceRegen: true });
+        // The stored arrival Energy can train one entry, but travel ticks cannot replay.
+        expect((await read())!.offence).toBe(18.5);
+        expect((await read())!.defence).toBe(10);
+        expect(await readEnergyQueue(USER)).toEqual<
+          Array<(typeof entries)[number] | undefined>
+        >([entries[1]]);
+      }
+    },
+  );
 
   it.each([
-    ["endpoint", false], ["cleaner", false], ["endpoint", true], ["cleaner", true],
-  ] as const)("%s integrates timed travel recovery without stacking or training queued stats (meal still active=%s)", async (mode, live) => {
-    await prepare();
-    const db = await getTestDatabase();
-    const regenAt = new Date(Date.now() - 195_000);
-    await patch({
-      status: "TRAVEL", travelFinishAt: new Date(Date.now() - 1000), regenAt,
-      regeneration: 10, villageId: null,
-      curHealth: 0, curChakra: 0, curStamina: 0,
-      maxHealth: 1000, maxChakra: 1000, maxStamina: 1000,
-    });
-    await db.insert(userRaidBuff).values([
-      { id: "travel-meal", userId: USER, createdAt: regenAt,
-        expiresAt: new Date(regenAt.getTime() + (live ? 300_000 : 90_000)),
-        effects: [IncreaseRegenerationTag.parse({ power: 50 })] },
-      { id: "travel-raid", userId: USER, createdAt: regenAt,
-        expiresAt: new Date(regenAt.getTime() + 150_000),
-        effects: [IncreaseRegenerationTag.parse({ power: 20 })] },
-    ]);
-    const complete = async () => {
-      if (mode === "cleaner") await completeExpiredGlobalTravel(db);
-      else expect((await (await callerFor(travelRouter, USER)).finishGlobalMove()).success).toBe(true);
-    };
-    await complete();
-    const arrived = (await read())!;
-    // After meal expiry: 15 from the meal, 12 from the raid, then 10 at the base rate.
-    const recovery = live ? 45 : 37;
-    expect([arrived.curHealth, arrived.curChakra, arrived.curStamina, arrived.curEnergy]).toEqual(Array(4).fill(recovery));
-    expect(arrived.regenAt.getTime()).toBe(regenAt.getTime() + 180_000);
-    expect([arrived.offence, arrived.defence]).toEqual([10, 10]);
-    expect(await readEnergyQueue(USER)).toEqual(entries);
-    await complete();
-    expect(await read()).toEqual(expect.objectContaining({
-      curHealth: recovery, curChakra: recovery, curStamina: recovery, curEnergy: recovery,
-      regenAt: arrived.regenAt, offence: 10, defence: 10,
-    }));
-    expect(await readEnergyQueue(USER)).toEqual(entries);
-  });
+    ["endpoint", false],
+    ["cleaner", false],
+    ["endpoint", true],
+    ["cleaner", true],
+  ] as const)(
+    "%s integrates timed travel recovery without stacking or training queued stats (meal still active=%s)",
+    async (mode, live) => {
+      await prepare();
+      const db = await getTestDatabase();
+      const regenAt = new Date(Date.now() - 195_000);
+      await patch({
+        status: "TRAVEL",
+        travelFinishAt: new Date(Date.now() - 1000),
+        regenAt,
+        regeneration: 10,
+        villageId: null,
+        curHealth: 0,
+        curChakra: 0,
+        curStamina: 0,
+        maxHealth: 1000,
+        maxChakra: 1000,
+        maxStamina: 1000,
+      });
+      await db.insert(userRaidBuff).values([
+        {
+          id: "travel-meal",
+          userId: USER,
+          createdAt: regenAt,
+          expiresAt: new Date(regenAt.getTime() + (live ? 300_000 : 90_000)),
+          effects: [IncreaseRegenerationTag.parse({ power: 50 })],
+        },
+        {
+          id: "travel-raid",
+          userId: USER,
+          createdAt: regenAt,
+          expiresAt: new Date(regenAt.getTime() + 150_000),
+          effects: [IncreaseRegenerationTag.parse({ power: 20 })],
+        },
+      ]);
+      const complete = async () => {
+        if (mode === "cleaner") await completeExpiredGlobalTravel(db);
+        else
+          expect(
+            (await (await callerFor(travelRouter, USER)).finishGlobalMove()).success,
+          ).toBe(true);
+      };
+      await complete();
+      const arrived = (await read())!;
+      // After meal expiry: 15 from the meal, 12 from the raid, then 10 at the base rate.
+      const recovery = live ? 45 : 37;
+      expect([
+        arrived.curHealth,
+        arrived.curChakra,
+        arrived.curStamina,
+        arrived.curEnergy,
+      ]).toEqual(Array(4).fill(recovery));
+      expect(arrived.regenAt.getTime()).toBe(regenAt.getTime() + 180_000);
+      expect([arrived.offence, arrived.defence]).toEqual([10, 10]);
+      expect(await readEnergyQueue(USER)).toEqual(entries);
+      await complete();
+      expect(await read()).toEqual(
+        expect.objectContaining({
+          curHealth: recovery,
+          curChakra: recovery,
+          curStamina: recovery,
+          curEnergy: recovery,
+          regenAt: arrived.regenAt,
+          offence: 10,
+          defence: 10,
+        }),
+      );
+      expect(await readEnergyQueue(USER)).toEqual(entries);
+    },
+  );
 
-  it.each(["queued", "bulk"])("cleaner retries a %s deadlock without replaying recovery", async mode => {
-    await prepare(mode === "queued" ? entries : []);
-    const db = await getTestDatabase();
-    const regenAt = new Date(Date.now() - 195_000);
-    await patch({ status: "TRAVEL", travelFinishAt: new Date(Date.now() - 1000), regenAt });
-    let attempts = 0;
-    const racingDb = aroundStatements(db, userData, async (run) => {
-      attempts++;
-      if (attempts === 1) throw new Error("Deadlock found when trying to get lock; try restarting transaction");
-      return run();
-    }, { when: (set) => ("regenAt" in set) === (mode === "queued") });
-    await completeExpiredGlobalTravel(racingDb);
-    expect(attempts).toBe(2);
-    const arrived = (await read())!;
-    expect(arrived).toMatchObject({ status: "AWAKE", curEnergy: mode === "queued" ? 100 : 0, offence: 10, defence: 10 });
-    expect(await readEnergyQueue(USER)).toEqual(mode === "queued" ? entries : []);
-    expect(arrived.regenAt.getTime()).toBe(regenAt.getTime() + (mode === "queued" ? 180_000 : 0));
-    await completeExpiredGlobalTravel(db);
-    expect(await read()).toEqual(arrived);
-  });
+  it.each(["queued", "bulk"])(
+    "cleaner retries a %s deadlock without replaying recovery",
+    async (mode) => {
+      await prepare(mode === "queued" ? entries : []);
+      const db = await getTestDatabase();
+      const regenAt = new Date(Date.now() - 195_000);
+      await patch({
+        status: "TRAVEL",
+        travelFinishAt: new Date(Date.now() - 1000),
+        regenAt,
+      });
+      let attempts = 0;
+      const racingDb = aroundStatements(
+        db,
+        userData,
+        async (run) => {
+          attempts++;
+          if (attempts === 1)
+            throw new Error(
+              "Deadlock found when trying to get lock; try restarting transaction",
+            );
+          return run();
+        },
+        { when: (set) => "regenAt" in set === (mode === "queued") },
+      );
+      await completeExpiredGlobalTravel(racingDb);
+      expect(attempts).toBe(2);
+      const arrived = (await read())!;
+      expect(arrived).toMatchObject({
+        status: "AWAKE",
+        curEnergy: mode === "queued" ? 100 : 0,
+        offence: 10,
+        defence: 10,
+      });
+      expect(await readEnergyQueue(USER)).toEqual(mode === "queued" ? entries : []);
+      expect(arrived.regenAt.getTime()).toBe(
+        regenAt.getTime() + (mode === "queued" ? 180_000 : 0),
+      );
+      await completeExpiredGlobalTravel(db);
+      expect(await read()).toEqual(arrived);
+    },
+  );
 
   it("cleaner applies the population PvP boost before consuming travel recovery ticks", async () => {
     await prepare();
@@ -350,16 +438,25 @@ describeWithDatabase("Energy queue state transitions", () => {
     const regenAt = new Date(Date.now() - 195_000);
     await insertUsers([{ userId: "pvp-population", pvpExperience: 600 }]);
     await patch({
-      status: "TRAVEL", travelFinishAt: new Date(Date.now() - 1000), regenAt,
-      pvpExperience: 1400, joinedVillageAt: new Date(Date.now() - 100 * 86_400_000),
-      curHealth: 0, curChakra: 0, curStamina: 0,
-      maxHealth: 1000, maxChakra: 1000, maxStamina: 1000,
+      status: "TRAVEL",
+      travelFinishAt: new Date(Date.now() - 1000),
+      regenAt,
+      pvpExperience: 1400,
+      joinedVillageAt: new Date(Date.now() - 100 * 86_400_000),
+      curHealth: 0,
+      curChakra: 0,
+      curStamina: 0,
+      maxHealth: 1000,
+      maxChakra: 1000,
+      maxStamina: 1000,
     });
 
     await completeExpiredGlobalTravel(db);
     const arrived = (await read())!;
     expect(arrived.status).toBe("AWAKE");
-    expect([arrived.curHealth, arrived.curChakra, arrived.curStamina]).toEqual([397, 397, 397]);
+    expect([arrived.curHealth, arrived.curChakra, arrived.curStamina]).toEqual([
+      397, 397, 397,
+    ]);
     expect(arrived.regenAt.getTime()).toBe(regenAt.getTime() + 180_000);
     expect(await readEnergyQueue(USER)).toEqual(entries);
     await completeExpiredGlobalTravel(db);
@@ -368,7 +465,11 @@ describeWithDatabase("Energy queue state transitions", () => {
 
   it("cleaner leaves future travel untouched", async () => {
     await prepare();
-    await patch({ status: "TRAVEL", travelFinishAt: new Date(Date.now() + 60_000), regenAt: new Date(Date.now() - 195_000) });
+    await patch({
+      status: "TRAVEL",
+      travelFinishAt: new Date(Date.now() + 60_000),
+      regenAt: new Date(Date.now() - 195_000),
+    });
     const before = (await read())!;
     await completeExpiredGlobalTravel(await getTestDatabase());
     expect(await read()).toEqual(before);
@@ -378,16 +479,36 @@ describeWithDatabase("Energy queue state transitions", () => {
     await prepare();
     const db = await getTestDatabase();
     const regenAt = new Date(Date.now() - 195_000);
-    await patch({ status: "TRAVEL", travelFinishAt: new Date(Date.now() - 1000), regenAt });
+    await patch({
+      status: "TRAVEL",
+      travelFinishAt: new Date(Date.now() - 1000),
+      regenAt,
+    });
     const changedAt = new Date(Date.now() + 60_000);
     let raced = false;
-    const racingDb = beforeStatements(db, userData, [async () => {
-      raced = true;
-      await patch({ updatedAt: changedAt, curEnergy: 1 });
-    }], { when: (set) => "regenAt" in set });
+    const racingDb = beforeStatements(
+      db,
+      userData,
+      [
+        async () => {
+          raced = true;
+          await patch({ updatedAt: changedAt, curEnergy: 1 });
+        },
+      ],
+      { when: (set) => "regenAt" in set },
+    );
     await completeExpiredGlobalTravel(racingDb);
     expect(raced).toBe(true);
-    expect(await read()).toEqual(expect.objectContaining({ status: "TRAVEL", regenAt, updatedAt: changedAt, curEnergy: 1, offence: 10, defence: 10 }));
+    expect(await read()).toEqual(
+      expect.objectContaining({
+        status: "TRAVEL",
+        regenAt,
+        updatedAt: changedAt,
+        curEnergy: 1,
+        offence: 10,
+        defence: 10,
+      }),
+    );
     expect(await readEnergyQueue(USER)).toEqual(entries);
   });
 
@@ -401,20 +522,23 @@ describeWithDatabase("Energy queue state transitions", () => {
     expect(after.regenAt).toEqual(before.regenAt);
     expect(after.updatedAt).toEqual(before.updatedAt);
   });
-  it.each([HOME, AWAY])("defers queued Energy settlement while walking within sector %s", async (sector) => {
-    await prepare();
-    await patch({ sector, regenAt: new Date(Date.now() - 195_000) });
-    const before = (await read())!;
-    expect((await walk(sector, 25, 24)).success).toBe(true);
-    const after = (await read())!;
-    expect(after.longitude).toBe(24);
-    expect(after.curEnergy).toBe(before.curEnergy);
-    expect(after.offence).toBe(before.offence);
-    expect(after.defence).toBe(before.defence);
-    expect(after.regenAt).toEqual(before.regenAt);
-    expect(after.updatedAt).toEqual(before.updatedAt);
-    expect(await readEnergyQueue(USER)).toEqual(entries);
-  });
+  it.each([HOME, AWAY])(
+    "defers queued Energy settlement while walking within sector %s",
+    async (sector) => {
+      await prepare();
+      await patch({ sector, regenAt: new Date(Date.now() - 195_000) });
+      const before = (await read())!;
+      expect((await walk(sector, 25, 24)).success).toBe(true);
+      const after = (await read())!;
+      expect(after.longitude).toBe(24);
+      expect(after.curEnergy).toBe(before.curEnergy);
+      expect(after.offence).toBe(before.offence);
+      expect(after.defence).toBe(before.defence);
+      expect(after.regenAt).toEqual(before.regenAt);
+      expect(after.updatedAt).toEqual(before.updatedAt);
+      expect(await readEnergyQueue(USER)).toEqual(entries);
+    },
+  );
   it("settles deferred home-sector ticks before walking away", async () => {
     await prepare();
     await patch({ longitude: 24, regenAt: new Date(Date.now() - 65_000) });
@@ -424,20 +548,36 @@ describeWithDatabase("Energy queue state transitions", () => {
     expect(user.sector).toBe(AWAY);
     expect(user.offence).toBe(18.5);
     expect(user.defence).toBe(10);
-    expect(await readEnergyQueue(USER)).toEqual<Array<(typeof entries)[number] | undefined>>([entries[1]]);
+    expect(await readEnergyQueue(USER)).toEqual<
+      Array<(typeof entries)[number] | undefined>
+    >([entries[1]]);
   });
   it("rechecks war-camp access after settlement changes village membership", async () => {
     await prepare();
     const db = await getTestDatabase();
-    await db.insert(village).values({ id: "outlaws", name: "Outlaws", sector: 100, kageId: "outlaw-kage", type: "OUTLAW" });
+    await db.insert(village).values({
+      id: "outlaws",
+      name: "Outlaws",
+      sector: 100,
+      kageId: "outlaw-kage",
+      type: "OUTLAW",
+    });
     await db.insert(war).values({
-      id: "home-war", attackerVillageId: "home", defenderVillageId: "enemy",
-      type: "VILLAGE_WAR", status: "ACTIVE", rules: { ...defaultWarRules, enabled: true },
+      id: "home-war",
+      attackerVillageId: "home",
+      defenderVillageId: "enemy",
+      type: "VILLAGE_WAR",
+      status: "ACTIVE",
+      rules: { ...defaultWarRules, enabled: true },
       combatStartedAt: new Date(Date.now() - 3600_000),
     });
     await db.insert(warCamp).values({
-      id: "away-camp", warId: "home-war", sector: AWAY, guardianId: "guardian",
-      startsAt: new Date(Date.now() - 3600_000), endsAt: new Date(Date.now() + 3600_000),
+      id: "away-camp",
+      warId: "home-war",
+      sector: AWAY,
+      guardianId: "guardian",
+      startsAt: new Date(Date.now() - 3600_000),
+      endsAt: new Date(Date.now() + 3600_000),
     });
     await patch({ villagePrestige: -1 });
     // A client-supplied new village must not reuse admission granted to the old one.
@@ -446,7 +586,11 @@ describeWithDatabase("Energy queue state transitions", () => {
       success: false,
       message: "This sector is reserved for participants in an active war camp.",
     });
-    expect(await read()).toMatchObject({ villageId: "outlaws", sector: HOME, longitude: 25 });
+    expect(await read()).toMatchObject({
+      villageId: "outlaws",
+      sector: HOME,
+      longitude: 25,
+    });
   });
   it("rejects a stale queued within-sector move without settling training", async () => {
     await prepare();
@@ -471,14 +615,16 @@ describeWithDatabase("Energy queue state transitions", () => {
         avatarLight: "https://example.com/avatar.png",
       });
     expect(result.success).toBe(false);
-    expect(await read()).toEqual(expect.objectContaining({
-      longitude: 25,
-      regenAt: before.regenAt,
-      updatedAt: changedAt,
-      curEnergy: 1,
-      offence: before.offence,
-      defence: before.defence,
-    }));
+    expect(await read()).toEqual(
+      expect.objectContaining({
+        longitude: 25,
+        regenAt: before.regenAt,
+        updatedAt: changedAt,
+        curEnergy: 1,
+        offence: before.offence,
+        defence: before.defence,
+      }),
+    );
     expect(await readEnergyQueue(USER)).toEqual(entries);
   });
   it("finishes travel repeatedly without a queue or another snapshot write", async () => {
@@ -501,10 +647,15 @@ describeWithDatabase("Energy queue state transitions", () => {
     const before = (await read())!;
     const changedAt = new Date(before.updatedAt.getTime() + 1);
     const db = await getTestDatabase();
-    const racingDb = aroundStatements(db, userData, async (run) => {
-      await patch({ updatedAt: changedAt, curHealth: 42 });
-      return run();
-    }, { operations: ["update"] });
+    const racingDb = aroundStatements(
+      db,
+      userData,
+      async (run) => {
+        await patch({ updatedAt: changedAt, curHealth: 42 });
+        return run();
+      },
+      { operations: ["update"] },
+    );
     const result = await travelRouter
       .createCaller({ drizzle: racingDb, userId: USER } as never)
       .finishGlobalMove();
@@ -512,141 +663,330 @@ describeWithDatabase("Energy queue state transitions", () => {
       success: false,
       message: "Your travel state changed. Please try again",
     });
-    expect(await read()).toEqual(expect.objectContaining({
-      status: "TRAVEL",
-      regenAt,
-      curEnergy: before.curEnergy,
-      curHealth: 42,
-      updatedAt: changedAt,
-    }));
+    expect(await read()).toEqual(
+      expect.objectContaining({
+        status: "TRAVEL",
+        regenAt,
+        curEnergy: before.curEnergy,
+        curHealth: 42,
+        updatedAt: changedAt,
+      }),
+    );
     expect(await readEnergyQueue(USER)).toEqual(entries);
   });
   it("preloads real Energy capacity and boosted recovery before forced combat loadouts", async () => {
     await prepare([]);
     const db = await getTestDatabase();
     await patch({ isOutlaw: true, stealthActive: false, curEnergy: 250 });
-    await insertUsers([{ userId: "attacker", username: "Attacker", rank: "JONIN", level: 1, status: "AWAKE", isOutlaw: true, sector: HOME, longitude: 25, latitude: 10 }]);
-    await insertItems([{ id: "energy-armor", itemType: "ARMOR", effects: [makeEffect("increasemaxpools", { power: 200, powerPerLevel: 0, calculation: "static", rounds: 1, poolsAffected: ["Energy"] })] }]);
-    await insertUserItems([{ userId: USER, itemId: "energy-armor", equipped: "ITEM_1", durability: 100 }]);
+    await insertUsers([
+      {
+        userId: "attacker",
+        username: "Attacker",
+        rank: "JONIN",
+        level: 1,
+        status: "AWAKE",
+        isOutlaw: true,
+        sector: HOME,
+        longitude: 25,
+        latitude: 10,
+      },
+    ]);
+    await insertItems([
+      {
+        id: "energy-armor",
+        itemType: "ARMOR",
+        effects: [
+          makeEffect("increasemaxpools", {
+            power: 200,
+            powerPerLevel: 0,
+            calculation: "static",
+            rounds: 1,
+            poolsAffected: ["Energy"],
+          }),
+        ],
+      },
+    ]);
+    await insertUserItems([
+      { userId: USER, itemId: "energy-armor", equipped: "ITEM_1", durability: 100 },
+    ]);
     await insertDefaultAiProfile();
-    await db.insert(gameSetting).values({ id: "regen-gain", name: "regenGainMultiplier", value: 2, time: new Date(Date.now() + 86_400_000) });
-    const trigger = vi.spyOn(getServerPusher(), "trigger").mockResolvedValue({} as never);
+    await db.insert(gameSetting).values({
+      id: "regen-gain",
+      name: "regenGainMultiplier",
+      value: 2,
+      time: new Date(Date.now() + 86_400_000),
+    });
+    const trigger = vi
+      .spyOn(getServerPusher(), "trigger")
+      .mockResolvedValue({} as never);
     try {
-      const result = await initiateBattle({
-        client: db, userIds: ["attacker"], targetIds: [USER], sector: HOME,
-        longitude: 25, latitude: 10, biome: "default",
-        forceLoadouts: [{ id: "empty", userId: USER, loadout: { weaponIds: [], consumableIds: [], jutsuIds: [] }, createdAt: new Date(), updatedAt: new Date() }],
-      }, "RANKED_SPARRING");
+      const result = await initiateBattle(
+        {
+          client: db,
+          userIds: ["attacker"],
+          targetIds: [USER],
+          sector: HOME,
+          longitude: 25,
+          latitude: 10,
+          biome: "default",
+          forceLoadouts: [
+            {
+              id: "empty",
+              userId: USER,
+              loadout: { weaponIds: [], consumableIds: [], jutsuIds: [] },
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ],
+        },
+        "RANKED_SPARRING",
+      );
       expect(result.success).toBe(true);
-      const state = (await db.query.battle.findFirst({ where: eq(battle.id, result.battleId!) }))!;
+      const state = (await db.query.battle.findFirst({
+        where: eq(battle.id, result.battleId!),
+      }))!;
       expect(state.extraState.energyCapacity?.[USER]).toBe(300);
       expect(state.extraState.energyRegeneration?.[USER]).toBe(200);
-      expect(state.usersState.find(user => user.userId === USER)?.items).toEqual([]);
+      expect(state.usersState.find((user) => user.userId === USER)?.items).toEqual([]);
       expect((await read())!.curEnergy).toBe(250);
     } finally {
       trigger.mockRestore();
     }
   });
 
-  it.each(["ninjutsuMastery", "Wind"] as const)("collects an offline opponent's final %s session before combat without queue rows", async stat => {
-    await prepare([]);
-    const db = await getTestDatabase();
-    await patch({
-      isOutlaw: true,
-      stealthActive: false,
-      trainingSpeed: "15min",
-      ...(stat === "Wind" ? {
-        currentlyTrainingElement: stat, elementalTrainingSpeed: "15min" as const,
-        elementalTrainingStartedAt: new Date(Date.now() - 20 * 60_000),
-      } : {
-        currentlyTrainingMastery: stat, masteryTrainingStartedAt: new Date(Date.now() - 20 * 60_000),
-      }),
-    });
-    await insertUsers([{ userId: "attacker", username: "Attacker", rank: "JONIN", level: 1, status: "AWAKE", isOutlaw: true, sector: HOME, longitude: 25, latitude: 10 }]);
-    await insertDefaultAiProfile();
-    await insertItems([{ id: "mastery-energy-armor", itemType: "ARMOR", requiredNinjutsuMastery: 100, effects: [makeEffect("increasemaxpools", { power: 200, powerPerLevel: 0, calculation: "static", rounds: 1, poolsAffected: ["Energy"] })] }]);
-    await insertUserItems([{ userId: USER, itemId: "mastery-energy-armor", equipped: "ITEM_1", durability: 100 }]);
-    const trigger = vi.spyOn(getServerPusher(), "trigger").mockResolvedValue({} as never);
-    try {
-      const result = await initiateBattle({
-        client: db, userIds: ["attacker"], targetIds: [USER], sector: HOME,
-        longitude: 25, latitude: 10, biome: "default",
-      }, "SPARRING");
-      expect(result.success).toBe(true);
-      const state = (await db.query.battle.findFirst({ where: eq(battle.id, result.battleId!) }))!;
-      expect(state.extraState.energyCapacity?.[USER]).toBe(stat === "Wind" ? 100 : 300);
-      const user = (await read())!;
-      expect(stat === "Wind" ? user.currentlyTrainingElement : user.currentlyTrainingMastery).toBeNull();
-      expect(stat === "Wind" ? user.elementalTrainingStartedAt : user.masteryTrainingStartedAt).toBeNull();
-      expect(stat === "Wind" ? user.elementalMastery.Wind : user.ninjutsuMastery).toBeGreaterThan(0);
-      expect(user.dailyTrainings).toBe(1);
-      expect(await db.select().from(userQueue)).toEqual([]);
-      expect((await db.select().from(trainingLog)).map(log => log.stat)).toEqual([stat]);
-    } finally {
-      trigger.mockRestore();
-    }
-  });
+  it.each(["ninjutsuMastery", "Wind"] as const)(
+    "collects an offline opponent's final %s session before combat without queue rows",
+    async (stat) => {
+      await prepare([]);
+      const db = await getTestDatabase();
+      await patch({
+        isOutlaw: true,
+        stealthActive: false,
+        trainingSpeed: "15min",
+        ...(stat === "Wind"
+          ? {
+              currentlyTrainingElement: stat,
+              elementalTrainingSpeed: "15min" as const,
+              elementalTrainingStartedAt: new Date(Date.now() - 20 * 60_000),
+            }
+          : {
+              currentlyTrainingMastery: stat,
+              masteryTrainingStartedAt: new Date(Date.now() - 20 * 60_000),
+            }),
+      });
+      await insertUsers([
+        {
+          userId: "attacker",
+          username: "Attacker",
+          rank: "JONIN",
+          level: 1,
+          status: "AWAKE",
+          isOutlaw: true,
+          sector: HOME,
+          longitude: 25,
+          latitude: 10,
+        },
+      ]);
+      await insertDefaultAiProfile();
+      await insertItems([
+        {
+          id: "mastery-energy-armor",
+          itemType: "ARMOR",
+          requiredNinjutsuMastery: 100,
+          effects: [
+            makeEffect("increasemaxpools", {
+              power: 200,
+              powerPerLevel: 0,
+              calculation: "static",
+              rounds: 1,
+              poolsAffected: ["Energy"],
+            }),
+          ],
+        },
+      ]);
+      await insertUserItems([
+        {
+          userId: USER,
+          itemId: "mastery-energy-armor",
+          equipped: "ITEM_1",
+          durability: 100,
+        },
+      ]);
+      const trigger = vi
+        .spyOn(getServerPusher(), "trigger")
+        .mockResolvedValue({} as never);
+      try {
+        const result = await initiateBattle(
+          {
+            client: db,
+            userIds: ["attacker"],
+            targetIds: [USER],
+            sector: HOME,
+            longitude: 25,
+            latitude: 10,
+            biome: "default",
+          },
+          "SPARRING",
+        );
+        expect(result.success).toBe(true);
+        const state = (await db.query.battle.findFirst({
+          where: eq(battle.id, result.battleId!),
+        }))!;
+        expect(state.extraState.energyCapacity?.[USER]).toBe(
+          stat === "Wind" ? 100 : 300,
+        );
+        const user = (await read())!;
+        expect(
+          stat === "Wind"
+            ? user.currentlyTrainingElement
+            : user.currentlyTrainingMastery,
+        ).toBeNull();
+        expect(
+          stat === "Wind"
+            ? user.elementalTrainingStartedAt
+            : user.masteryTrainingStartedAt,
+        ).toBeNull();
+        expect(
+          stat === "Wind" ? user.elementalMastery.Wind : user.ninjutsuMastery,
+        ).toBeGreaterThan(0);
+        expect(user.dailyTrainings).toBe(1);
+        expect(await db.select().from(userQueue)).toEqual([]);
+        expect((await db.select().from(trainingLog)).map((log) => log.stat)).toEqual([
+          stat,
+        ]);
+      } finally {
+        trigger.mockRestore();
+      }
+    },
+  );
 
-  it.each(["ninjutsuMastery", "Wind"] as const)("settles an offline opponent's due jutsu level and %s queue before the fight", async stat => {
-    const kind = stat === "Wind" ? "ELEMENT" : "MASTERY";
-    await prepare([]);
-    const db = await getTestDatabase();
-    const finished = new Date(Date.now() - 30 * 60_000);
-    await patch({
-      isOutlaw: true,
-      stealthActive: false,
-      trainingSpeed: "15min",
-      ...(stat === "Wind" ? {
-        currentlyTrainingElement: stat, elementalTrainingSpeed: "15min" as const,
-        elementalTrainingStartedAt: new Date(Date.now() - 20 * 60_000),
-      } : {
-        currentlyTrainingMastery: stat, masteryTrainingStartedAt: new Date(Date.now() - 20 * 60_000),
-      }),
-    });
-    await insertUsers([{ userId: "attacker", username: "Attacker", rank: "JONIN", level: 1, status: "AWAKE", isOutlaw: true, sector: HOME, longitude: 25, latitude: 10 }]);
-    await insertDefaultAiProfile();
-    await insertJutsus([{ id: "queued-jutsu", name: "Queued" }]);
-    await db.insert(userJutsu).values({ id: "uj-queued", userId: USER, jutsuId: "queued-jutsu", level: 2, equipped: true, finishTraining: finished });
-    await db.insert(userQueue).values({
-      id: "q-jutsu", userId: USER, kind: "JUTSU", position: 1, jutsuId: "queued-jutsu", reservedRyo: 0,
-      durationSeconds: 60, startsAt: finished, finishesAt: new Date(finished.getTime() + 60_000),
-    });
-    await queueMasteries(USER, [{ stat: stat === "Wind" ? "Earth" : "genjutsuMastery", speed: "1hr" }], kind);
-    const trigger = vi.spyOn(getServerPusher(), "trigger").mockResolvedValue({} as never);
-    try {
-      const result = await initiateBattle({
-        client: db, userIds: ["attacker"], targetIds: [USER], sector: HOME,
-        longitude: 25, latitude: 10, biome: "default",
-      }, "SPARRING");
-      expect(result.success).toBe(true);
-      // The queued level started when the previous one finished, before the fighters were read.
-      const owned = (await db.query.userJutsu.findFirst({ where: eq(userJutsu.id, "uj-queued") }))!;
-      expect(owned.level).toBe(3);
-      expect(owned.finishTraining!.getTime()).toBeGreaterThan(finished.getTime());
-      const state = (await db.query.battle.findFirst({ where: eq(battle.id, result.battleId!) }))!;
-      const fighter = state.usersState.find((user) => user.userId === USER)!;
-      expect(fighter.jutsus.find((j) => j.jutsuId === "queued-jutsu")?.level).toBe(3);
-      // The finished mastery session was collected and the queued one started at its end.
-      const user = (await read())!;
-      expect(stat === "Wind" ? user.currentlyTrainingElement : user.currentlyTrainingMastery).toBe(stat === "Wind" ? "Earth" : "genjutsuMastery");
-      expect(stat === "Wind" ? user.elementalTrainingSpeed : user.trainingSpeed).toBe("1hr");
-      expect(stat === "Wind" ? user.elementalMastery.Wind : user.ninjutsuMastery).toBeGreaterThan(stat === "Wind" ? 0 : 10);
-      expect(stat === "Wind" ? user.elementalQueueHead : user.masteryQueueHead).toBe(1);
-      expect(await readMasteryQueue(USER, kind)).toEqual([]);
-      // The started jutsu row is gone; the consumed mastery row waits for the next edit.
-      expect((await db.select().from(userQueue)).map((row) => row.kind)).toEqual([kind]);
-      expect((await db.select().from(trainingLog)).map((log) => log.stat)).toEqual([stat]);
-    } finally {
-      trigger.mockRestore();
-    }
-  });
+  it.each(["ninjutsuMastery", "Wind"] as const)(
+    "settles an offline opponent's due jutsu level and %s queue before the fight",
+    async (stat) => {
+      const kind = stat === "Wind" ? "ELEMENT" : "MASTERY";
+      await prepare([]);
+      const db = await getTestDatabase();
+      const finished = new Date(Date.now() - 30 * 60_000);
+      await patch({
+        isOutlaw: true,
+        stealthActive: false,
+        trainingSpeed: "15min",
+        ...(stat === "Wind"
+          ? {
+              currentlyTrainingElement: stat,
+              elementalTrainingSpeed: "15min" as const,
+              elementalTrainingStartedAt: new Date(Date.now() - 20 * 60_000),
+            }
+          : {
+              currentlyTrainingMastery: stat,
+              masteryTrainingStartedAt: new Date(Date.now() - 20 * 60_000),
+            }),
+      });
+      await insertUsers([
+        {
+          userId: "attacker",
+          username: "Attacker",
+          rank: "JONIN",
+          level: 1,
+          status: "AWAKE",
+          isOutlaw: true,
+          sector: HOME,
+          longitude: 25,
+          latitude: 10,
+        },
+      ]);
+      await insertDefaultAiProfile();
+      await insertJutsus([{ id: "queued-jutsu", name: "Queued" }]);
+      await db.insert(userJutsu).values({
+        id: "uj-queued",
+        userId: USER,
+        jutsuId: "queued-jutsu",
+        level: 2,
+        equipped: true,
+        finishTraining: finished,
+      });
+      await db.insert(userQueue).values({
+        id: "q-jutsu",
+        userId: USER,
+        kind: "JUTSU",
+        position: 1,
+        jutsuId: "queued-jutsu",
+        reservedRyo: 0,
+        durationSeconds: 60,
+        startsAt: finished,
+        finishesAt: new Date(finished.getTime() + 60_000),
+      });
+      await queueMasteries(
+        USER,
+        [{ stat: stat === "Wind" ? "Earth" : "genjutsuMastery", speed: "1hr" }],
+        kind,
+      );
+      const trigger = vi
+        .spyOn(getServerPusher(), "trigger")
+        .mockResolvedValue({} as never);
+      try {
+        const result = await initiateBattle(
+          {
+            client: db,
+            userIds: ["attacker"],
+            targetIds: [USER],
+            sector: HOME,
+            longitude: 25,
+            latitude: 10,
+            biome: "default",
+          },
+          "SPARRING",
+        );
+        expect(result.success).toBe(true);
+        // The queued level started when the previous one finished, before the fighters were read.
+        const owned = (await db.query.userJutsu.findFirst({
+          where: eq(userJutsu.id, "uj-queued"),
+        }))!;
+        expect(owned.level).toBe(3);
+        expect(owned.finishTraining!.getTime()).toBeGreaterThan(finished.getTime());
+        const state = (await db.query.battle.findFirst({
+          where: eq(battle.id, result.battleId!),
+        }))!;
+        const fighter = state.usersState.find((user) => user.userId === USER)!;
+        expect(fighter.jutsus.find((j) => j.jutsuId === "queued-jutsu")?.level).toBe(3);
+        // The finished mastery session was collected and the queued one started at its end.
+        const user = (await read())!;
+        expect(
+          stat === "Wind"
+            ? user.currentlyTrainingElement
+            : user.currentlyTrainingMastery,
+        ).toBe(stat === "Wind" ? "Earth" : "genjutsuMastery");
+        expect(stat === "Wind" ? user.elementalTrainingSpeed : user.trainingSpeed).toBe(
+          "1hr",
+        );
+        expect(
+          stat === "Wind" ? user.elementalMastery.Wind : user.ninjutsuMastery,
+        ).toBeGreaterThan(stat === "Wind" ? 0 : 10);
+        expect(stat === "Wind" ? user.elementalQueueHead : user.masteryQueueHead).toBe(
+          1,
+        );
+        expect(await readMasteryQueue(USER, kind)).toEqual([]);
+        // The started jutsu row is gone; the consumed mastery row waits for the next edit.
+        expect((await db.select().from(userQueue)).map((row) => row.kind)).toEqual([
+          kind,
+        ]);
+        expect((await db.select().from(trainingLog)).map((log) => log.stat)).toEqual([
+          stat,
+        ]);
+      } finally {
+        trigger.mockRestore();
+      }
+    },
+  );
 
   it("preserves a concurrent discipline speed change when combat advances only the element queue", async () => {
     const now = new Date();
     setSystemTime(now);
     const { promise: ready, resolve: speedWriteReady } = deferred<void>();
     const { promise: release, resolve: releaseSpeedWrite } = deferred<void>();
-    const trigger = vi.spyOn(getServerPusher(), "trigger").mockResolvedValue({} as never);
+    const trigger = vi
+      .spyOn(getServerPusher(), "trigger")
+      .mockResolvedValue({} as never);
     try {
       await prepare([]);
       const db = await getTestDatabase();
@@ -661,29 +1001,54 @@ describeWithDatabase("Energy queue state transitions", () => {
         elementalTrainingStartedAt: new Date(now.getTime() - 14 * 60_000),
       });
       await queueMasteries(USER, [{ stat: "Earth", speed: "1hr" }], "ELEMENT");
-      await insertUsers([{ userId: "attacker", username: "Attacker", rank: "JONIN", level: 1, status: "AWAKE", isOutlaw: true, sector: HOME, longitude: 25, latitude: 10 }]);
+      await insertUsers([
+        {
+          userId: "attacker",
+          username: "Attacker",
+          rank: "JONIN",
+          level: 1,
+          status: "AWAKE",
+          isOutlaw: true,
+          sector: HOME,
+          longitude: 25,
+          latitude: 10,
+        },
+      ]);
       await insertDefaultAiProfile();
-      const speedDb = beforeStatements(db, userData, [async () => {
-        speedWriteReady();
-        await release;
-      }]);
+      const speedDb = beforeStatements(db, userData, [
+        async () => {
+          speedWriteReady();
+          await release;
+        },
+      ]);
       // The speed request reads before the element finishes, then waits to commit.
-      const speedChange = trainRouter.createCaller({ drizzle: speedDb, userId: USER } as never)
+      const speedChange = trainRouter
+        .createCaller({ drizzle: speedDb, userId: USER } as never)
         .updateTrainingSpeed({ speed: "4hrs" });
       await ready;
       setSystemTime(new Date(now.getTime() + 2 * 60_000));
       let raced = false;
-      const racingDb = beforeStatements(db, userData, [async () => {
-        // Commit the real speed mutation after preload and before the battle claim.
-        releaseSpeedWrite();
-        expect((await speedChange).success).toBe(true);
-        expect((await read())!.trainingSpeed).toBe("4hrs");
-        raced = true;
-      }]);
-      const result = await initiateBattle({
-        client: racingDb, userIds: ["attacker"], targetIds: [USER], sector: HOME,
-        longitude: 25, latitude: 10, biome: "default",
-      }, "SPARRING");
+      const racingDb = beforeStatements(db, userData, [
+        async () => {
+          // Commit the real speed mutation after preload and before the battle claim.
+          releaseSpeedWrite();
+          expect((await speedChange).success).toBe(true);
+          expect((await read())!.trainingSpeed).toBe("4hrs");
+          raced = true;
+        },
+      ]);
+      const result = await initiateBattle(
+        {
+          client: racingDb,
+          userIds: ["attacker"],
+          targetIds: [USER],
+          sector: HOME,
+          longitude: 25,
+          latitude: 10,
+          biome: "default",
+        },
+        "SPARRING",
+      );
       expect(result.success).toBe(true);
       expect(raced).toBe(true);
       const user = (await read())!;
@@ -696,7 +1061,9 @@ describeWithDatabase("Energy queue state transitions", () => {
       expect(user.elementalQueueHead).toBe(1);
       expect(user.elementalMastery.Wind).toBeGreaterThan(0);
       expect(user.dailyTrainings).toBe(1);
-      expect((await db.select().from(trainingLog)).map((log) => log.stat)).toEqual(["Wind"]);
+      expect((await db.select().from(trainingLog)).map((log) => log.stat)).toEqual([
+        "Wind",
+      ]);
     } finally {
       releaseSpeedWrite();
       setSystemTime();
@@ -742,21 +1109,27 @@ describeWithDatabase("Energy queue state transitions", () => {
         },
       ]);
       await insertDefaultAiProfile();
-      await db
-        .insert(gameSetting)
-        .values({
-          id: "training-gain",
-          name: "trainingGainMultiplier",
-          value: 2,
-          time: new Date(Date.now() + 86_400_000),
-        });
+      await db.insert(gameSetting).values({
+        id: "training-gain",
+        name: "trainingGainMultiplier",
+        value: 2,
+        time: new Date(Date.now() + 86_400_000),
+      });
       const trigger = vi
         .spyOn(getServerPusher(), "trigger")
         .mockResolvedValue({} as never);
       try {
         const hospitalize = () =>
-          db.update(userData).set({ status: "HOSPITALIZED" }).where(eq(userData.userId, "attacker"));
-        const racingDb = beforeStatements(db, userData, mode === "partial failure" ? [hospitalize] : [], { operations: ["update"] });
+          db
+            .update(userData)
+            .set({ status: "HOSPITALIZED" })
+            .where(eq(userData.userId, "attacker"));
+        const racingDb = beforeStatements(
+          db,
+          userData,
+          mode === "partial failure" ? [hospitalize] : [],
+          { operations: ["update"] },
+        );
         const start = () =>
           initiateBattle(
             {

@@ -67,7 +67,10 @@ describeWithDatabase("quest bootstrap guard", () => {
         sawPossible = true;
         // Only sound because this fixture clears the filters the guard does not look at; a new
         // filter on the query would legitimately break this without breaking the guard
-        expect(rows.length, `level ${level}: guard passed on an empty query`).toBeGreaterThan(0);
+        expect(
+          rows.length,
+          `level ${level}: guard passed on an empty query`,
+        ).toBeGreaterThan(0);
       } else {
         sawImpossible = true;
         // The direction that matters: skipping must never lose a startable quest
@@ -90,7 +93,11 @@ describeWithDatabase("quest bootstrap guard", () => {
 
     // In-band with nothing started: the call has to go through
     expect(
-      canBootstrapQuestType(await fetchQuestBootstrap(database, "user-guard"), "tier", 30),
+      canBootstrapQuestType(
+        await fetchQuestBootstrap(database, "user-guard"),
+        "tier",
+        30,
+      ),
     ).toBe(true);
 
     // A history row exists even when the quest was never finished, and

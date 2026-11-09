@@ -51,7 +51,11 @@ describe("usable crafting stacks", () => {
         { userItemId: "big", consumeQuantity: 1, newQuantity: 4 },
       ],
     });
-    expect(calculateItemConsumption(stacks, "ore", 11).consumptions.map((row) => row.newQuantity)).toEqual([0, 0, 0]);
+    expect(
+      calculateItemConsumption(stacks, "ore", 11).consumptions.map(
+        (row) => row.newQuantity,
+      ),
+    ).toEqual([0, 0, 0]);
   });
 });
 
@@ -80,9 +84,9 @@ describe("getCurrentCraftingStatus", () => {
   it("leaves the next rank's experience to the rank progress", () => {
     CRAFTING_RANKS.forEach((rank, index) => {
       const next = CRAFTING_RANKS[index + 1];
-      expect(getCraftingRankProgress(CRAFTING_REQUIRED_EXP[rank]).nextRankExperience).toBe(
-        next ? CRAFTING_REQUIRED_EXP[next] : null,
-      );
+      expect(
+        getCraftingRankProgress(CRAFTING_REQUIRED_EXP[rank]).nextRankExperience,
+      ).toBe(next ? CRAFTING_REQUIRED_EXP[next] : null);
     });
   });
 });

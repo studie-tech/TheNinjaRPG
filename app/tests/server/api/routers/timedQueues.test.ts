@@ -16,7 +16,11 @@ import {
   userVote,
 } from "@/drizzle/schema";
 import { getMasteryQueue } from "@/libs/queue";
-import { calcJutsuTrainCost, calcJutsuTrainTime, findJutsuInTraining } from "@/libs/train";
+import {
+  calcJutsuTrainCost,
+  calcJutsuTrainTime,
+  findJutsuInTraining,
+} from "@/libs/train";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
@@ -35,7 +39,11 @@ import {
   insertUserVotes,
 } from "../../../setup/factories";
 import { queueMasteries, readMasteryQueue } from "../../../setup/queues";
-import { beforeStatements, failStatements, inTransactions } from "../../../setup/statements";
+import {
+  beforeStatements,
+  failStatements,
+  inTransactions,
+} from "../../../setup/statements";
 import type { MasteryTrainingQueueEntry } from "@/validators/train";
 import { requireUser } from "../../../setup/userReads";
 import {
@@ -76,9 +84,14 @@ const insertUser = async ({
   if (masteryQueue) await queueMasteries(USER_ID, masteryQueue);
 };
 
-const setFederalStatus = async (federalStatus: "NONE" | "NORMAL" | "SILVER" | "GOLD") => {
+const setFederalStatus = async (
+  federalStatus: "NONE" | "NORMAL" | "SILVER" | "GOLD",
+) => {
   const database = await getTestDatabase();
-  await database.update(userData).set({ federalStatus }).where(eq(userData.userId, USER_ID));
+  await database
+    .update(userData)
+    .set({ federalStatus })
+    .where(eq(userData.userId, USER_ID));
 };
 
 const readUser = () => requireUser(USER_ID);
@@ -170,7 +183,10 @@ describeWithDatabase("jutsu training queue", () => {
     const result = await (await callerFor(jutsuRouter, USER_ID)).startTraining({
       jutsuId: "jutsu-b",
     });
-    expect(result).toMatchObject({ success: false, message: "Your jutsu training queue is full" });
+    expect(result).toMatchObject({
+      success: false,
+      message: "Your jutsu training queue is full",
+    });
     expect((await readUser()).money).toBe(START_MONEY);
     expect(await readJutsuQueue()).toHaveLength(1);
   });
@@ -187,7 +203,9 @@ describeWithDatabase("jutsu training queue", () => {
     expect(queue).toHaveLength(4);
     // Each queued level is priced at the level it trains, and the levels run back to back.
     expect(queue.map((entry) => entry.reservedRyo)).toEqual(
-      [0, 1, 2, 3].map((level) => calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, level)),
+      [0, 1, 2, 3].map((level) =>
+        calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, level),
+      ),
     );
     for (let i = 1; i < queue.length; i++) {
       expect(queue[i]?.startsAt).toEqual(queue[i - 1]?.finishesAt);
@@ -204,7 +222,8 @@ describeWithDatabase("jutsu training queue", () => {
     expect(await settleJutsuTrainingQueue(client, USER_ID)).toBe(2);
     const user = await readUser();
     const learned = await readUserJutsu("jutsu-b");
-    const firstFinish = finished.getTime() + calcJutsuTrainTime(queuedJutsu("jutsu-b"), 0, user);
+    const firstFinish =
+      finished.getTime() + calcJutsuTrainTime(queuedJutsu("jutsu-b"), 0, user);
     expect(learned?.level).toBe(1);
     expect(learned?.finishTraining?.getTime()).toBe(firstFinish);
     const leveled = await readUserJutsu("jutsu-a");
@@ -215,7 +234,8 @@ describeWithDatabase("jutsu training queue", () => {
     expect(await readJutsuQueue()).toEqual([]);
     // The level-0 price is below the 500 ryo reserved; the difference comes back.
     const refund =
-      500 - calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, 0) +
+      500 -
+      calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, 0) +
       (500 - calcJutsuTrainCost(queuedJutsu("jutsu-a") as never, 2));
     expect(user.money).toBe(START_MONEY + refund);
   });
@@ -270,7 +290,9 @@ describeWithDatabase("jutsu training queue", () => {
     await (await callerFor(jutsuRouter, USER_ID)).stopTraining();
     const learned = await readUserJutsu("jutsu-b");
     const trainTime = calcJutsuTrainTime(queuedJutsu("jutsu-b"), 0, await readUser());
-    expect(learned?.finishTraining?.getTime()).toBeGreaterThanOrEqual(before + trainTime);
+    expect(learned?.finishTraining?.getTime()).toBeGreaterThanOrEqual(
+      before + trainTime,
+    );
     expect(learned?.finishTraining?.getTime()).toBeLessThan(Date.now() + trainTime);
     expect((await readUserJutsu("jutsu-a"))?.level).toBe(1);
   });
@@ -293,7 +315,10 @@ describeWithDatabase("jutsu training queue", () => {
     await trainingJutsuA(finish);
     const caller = await callerFor(jutsuRouter, USER_ID);
     const result = await caller.startTraining({ jutsuId: "jutsu-a", levels: 3 });
-    expect(result).toMatchObject({ success: true, message: "Queued Jutsu jutsu-a levels 3-5" });
+    expect(result).toMatchObject({
+      success: true,
+      message: "Queued Jutsu jutsu-a levels 3-5",
+    });
     const queue = await readJutsuQueue();
     // jutsu-a is at level 2 (in training), so the queued entries train levels 3, 4 and 5.
     const costs = [2, 3, 4].map((level) =>
@@ -304,7 +329,9 @@ describeWithDatabase("jutsu training queue", () => {
     for (let i = 1; i < queue.length; i++) {
       expect(queue[i]?.startsAt).toEqual(queue[i - 1]?.finishesAt);
     }
-    expect((await readUser()).money).toBe(START_MONEY - costs.reduce((a, b) => a + b, 0));
+    expect((await readUser()).money).toBe(
+      START_MONEY - costs.reduce((a, b) => a + b, 0),
+    );
     // The queue view reports the level each entry trains to.
     const view = await caller.getTrainingQueue();
     expect(view.waiting.map((entry) => entry.level)).toEqual([3, 4, 5]);
@@ -333,7 +360,9 @@ describeWithDatabase("jutsu training queue", () => {
       calcJutsuTrainCost(queuedJutsu("jutsu-b") as never, level),
     );
     expect(queue.map((entry) => entry.reservedRyo)).toEqual(costs.slice(1));
-    expect((await readUser()).money).toBe(START_MONEY - costs.reduce((a, b) => a + b, 0));
+    expect((await readUser()).money).toBe(
+      START_MONEY - costs.reduce((a, b) => a + b, 0),
+    );
   });
 
   it("rejects more levels than the free queue slots without charging", async () => {
@@ -361,10 +390,12 @@ describeWithDatabase("jutsu training queue", () => {
       .where(eq(userJutsu.id, "uj-a"));
     await queueJutsu("q-1", "jutsu-a", minutesFromNow(10));
     const caller = await callerFor(jutsuRouter, USER_ID);
-    expect(await caller.startTraining({ jutsuId: "jutsu-a", levels: 2 })).toMatchObject({
-      success: false,
-      message: "Only 1 more level of this jutsu can be trained",
-    });
+    expect(await caller.startTraining({ jutsuId: "jutsu-a", levels: 2 })).toMatchObject(
+      {
+        success: false,
+        message: "Only 1 more level of this jutsu can be trained",
+      },
+    );
     expect((await readUser()).money).toBe(START_MONEY);
     expect((await caller.startTraining({ jutsuId: "jutsu-a" })).success).toBe(true);
     expect(await caller.startTraining({ jutsuId: "jutsu-a" })).toMatchObject({
@@ -499,9 +530,12 @@ const setupRecipe = async () => {
     },
   ]);
   const database = await getTestDatabase();
-  await database
-    .insert(craftingRequirement)
-    .values({ id: "req-1", craftItemId: "blade", requirementItemId: "ore", quantity: 3 });
+  await database.insert(craftingRequirement).values({
+    id: "req-1",
+    craftItemId: "blade",
+    requirementItemId: "ore",
+    quantity: 3,
+  });
 };
 
 const readItems = async () => {
@@ -513,7 +547,14 @@ const readCraftQueue = () => readQueue("CRAFT");
 
 describeWithDatabase("crafting queue", () => {
   beforeEach(async () => {
-    await resetTables(userQueue, craftingRequirement, userItem, item, userVote, userData);
+    await resetTables(
+      userQueue,
+      craftingRequirement,
+      userItem,
+      item,
+      userVote,
+      userData,
+    );
   });
 
   for (const missedActiveSnapshot of [false, true]) {
@@ -563,7 +604,9 @@ describeWithDatabase("crafting queue", () => {
       );
       expect(recorded.result).toBe(0);
       expect(
-        recorded.statements.filter((statement) => /^update `UserQueue`/i.test(statement)),
+        recorded.statements.filter((statement) =>
+          /^update `UserQueue`/i.test(statement),
+        ),
       ).toHaveLength(1);
       expect(recorded.statements.some((statement) => /^begin/i.test(statement))).toBe(
         missedActiveSnapshot,
@@ -683,7 +726,13 @@ describeWithDatabase("crafting queue", () => {
     const [queued] = await readCraftQueue();
     expect(queued?.startsAt).toEqual(finish);
     expect(queued?.materials).toEqual([
-      { userItemId: "ore-stack", itemId: "ore", name: "Ore", quantity: 6, storedAtHome: false },
+      {
+        userItemId: "ore-stack",
+        itemId: "ore",
+        name: "Ore",
+        quantity: 6,
+        storedAtHome: false,
+      },
     ]);
     expect((await readItems()).find((row) => row.id === "ore-stack")?.quantity).toBe(4);
     expect((await readUser()).craftingExperience).toBe(0);
@@ -715,7 +764,13 @@ describeWithDatabase("crafting queue", () => {
     await insertUser(CRAFTER);
     await insertItems([
       { id: "ore", name: "Ore", stackSize: 50 },
-      { id: "stew", name: "Stew", itemType: "COOKING", canBeCrafted: true, stackSize: 1 },
+      {
+        id: "stew",
+        name: "Stew",
+        itemType: "COOKING",
+        canBeCrafted: true,
+        stackSize: 1,
+      },
     ]);
     // The carried cooking bucket filled up while the craft was waiting.
     await insertUserItems(
@@ -735,16 +790,22 @@ describeWithDatabase("crafting queue", () => {
       position: 1,
       itemId: "stew",
       quantity: 1,
-      materials: [{ userItemId: "gone", itemId: "ore", quantity: 3, storedAtHome: false }],
+      materials: [
+        { userItemId: "gone", itemId: "ore", quantity: 3, storedAtHome: false },
+      ],
       durationSeconds: 60,
       startsAt,
       finishesAt: new Date(startsAt.getTime() + 60_000),
     });
     expect(await settleCraftingQueue(database, USER_ID)).toBe(0);
     const items = await readItems();
-    expect(items.filter((row) => row.itemId === "stew")).toHaveLength(COOKING_BASE_SLOTS);
+    expect(items.filter((row) => row.itemId === "stew")).toHaveLength(
+      COOKING_BASE_SLOTS,
+    );
     expect(
-      items.filter((row) => row.itemId === "ore").reduce((sum, row) => sum + row.quantity, 0),
+      items
+        .filter((row) => row.itemId === "ore")
+        .reduce((sum, row) => sum + row.quantity, 0),
     ).toBe(3);
     expect(await readCraftQueue()).toEqual([]);
   });
@@ -754,10 +815,17 @@ describeWithDatabase("crafting queue", () => {
     await setupRecipe();
     await insertUserItems([
       { id: "ore-stack", userId: USER_ID, itemId: "ore", quantity: 3 },
-      { id: "busy", userId: USER_ID, itemId: "blade", craftingFinishedAt: minutesFromNow(15) },
+      {
+        id: "busy",
+        userId: USER_ID,
+        itemId: "blade",
+        craftingFinishedAt: minutesFromNow(15),
+      },
     ]);
     const caller = await callerFor(occupationRouter, USER_ID);
-    expect((await caller.craftItem({ itemId: "blade", quantity: 1 })).success).toBe(true);
+    expect((await caller.craftItem({ itemId: "blade", quantity: 1 })).success).toBe(
+      true,
+    );
     // The emptied stack was deleted, so the ore comes back as a new stack.
     expect((await readItems()).some((row) => row.itemId === "ore")).toBe(false);
     const [queued] = await readCraftQueue();
@@ -766,9 +834,9 @@ describeWithDatabase("crafting queue", () => {
     const ore = (await readItems()).filter((row) => row.itemId === "ore");
     expect(ore.map((row) => row.quantity)).toEqual([3]);
     expect(await readCraftQueue()).toEqual([]);
-    expect((await caller.cancelQueuedCraft({ queueId: queued?.id ?? "" })).success).toBe(
-      false,
-    );
+    expect(
+      (await caller.cancelQueuedCraft({ queueId: queued?.id ?? "" })).success,
+    ).toBe(false);
     expect((await readItems()).filter((row) => row.itemId === "ore")).toHaveLength(1);
   });
 
@@ -777,13 +845,22 @@ describeWithDatabase("crafting queue", () => {
     await setupRecipe();
     await insertUserItems([
       { id: "ore-stack", userId: USER_ID, itemId: "ore", quantity: 10 },
-      { id: "busy", userId: USER_ID, itemId: "blade", craftingFinishedAt: minutesFromNow(15) },
+      {
+        id: "busy",
+        userId: USER_ID,
+        itemId: "blade",
+        craftingFinishedAt: minutesFromNow(15),
+      },
     ]);
     const caller = await callerFor(occupationRouter, USER_ID);
-    expect((await caller.craftItem({ itemId: "blade", quantity: 1 })).success).toBe(true);
+    expect((await caller.craftItem({ itemId: "blade", quantity: 1 })).success).toBe(
+      true,
+    );
     const [queued] = await readCraftQueue();
     const results = await Promise.all(
-      Array.from({ length: 4 }, () => caller.cancelQueuedCraft({ queueId: queued?.id ?? "" })),
+      Array.from({ length: 4 }, () =>
+        caller.cancelQueuedCraft({ queueId: queued?.id ?? "" }),
+      ),
     );
     expect(results.filter((result) => result.success)).toHaveLength(1);
     const ore = (await readItems()).filter((row) => row.itemId === "ore");
@@ -795,18 +872,26 @@ describeWithDatabase("crafting queue", () => {
     await setupRecipe();
     await insertUserItems([
       { id: "ore-stack", userId: USER_ID, itemId: "ore", quantity: 30 },
-      { id: "busy", userId: USER_ID, itemId: "blade", craftingFinishedAt: minutesFromNow(15) },
+      {
+        id: "busy",
+        userId: USER_ID,
+        itemId: "blade",
+        craftingFinishedAt: minutesFromNow(15),
+      },
     ]);
     const caller = await callerFor(occupationRouter, USER_ID);
     const results = await Promise.all(
-      Array.from({ length: 4 }, () => caller.craftItem({ itemId: "blade", quantity: 1 })),
+      Array.from({ length: 4 }, () =>
+        caller.craftItem({ itemId: "blade", quantity: 1 }),
+      ),
     );
     const queued = await readCraftQueue();
     expect(queued).toHaveLength(results.filter((result) => result.success).length);
     // Every queued craft holds its materials; the rest stayed in the inventory.
     const ore = (await readItems()).filter((row) => row.itemId === "ore");
     const held = queued.reduce(
-      (sum, row) => sum + (row.materials ?? []).reduce((total, m) => total + m.quantity, 0),
+      (sum, row) =>
+        sum + (row.materials ?? []).reduce((total, m) => total + m.quantity, 0),
       0,
     );
     expect(ore.reduce((sum, row) => sum + row.quantity, 0) + held).toBe(30);
@@ -817,16 +902,36 @@ describeWithDatabase("crafting queue", () => {
     await setupRecipe();
     await insertUserItems([
       { id: "ore-stack", userId: USER_ID, itemId: "ore", quantity: 30 },
-      { id: "busy", userId: USER_ID, itemId: "blade", craftingFinishedAt: minutesFromNow(15) },
+      {
+        id: "busy",
+        userId: USER_ID,
+        itemId: "blade",
+        craftingFinishedAt: minutesFromNow(15),
+      },
     ]);
     const database = await getTestDatabase();
-    const collision = beforeStatements(database, userQueue, [async () => {
-      throw new Error("Duplicate entry 'queuer-CRAFT-1' for key 'UserQueue_userId_kind_position_key'");
-    }]);
-    const result = await callerForDatabase(occupationRouter, USER_ID, collision).craftItem({ itemId: "blade", quantity: 1 });
-    expect(result).toMatchObject({ success: false, message: "Your crafting queue changed. Please try again." });
+    const collision = beforeStatements(database, userQueue, [
+      async () => {
+        throw new Error(
+          "Duplicate entry 'queuer-CRAFT-1' for key 'UserQueue_userId_kind_position_key'",
+        );
+      },
+    ]);
+    const result = await callerForDatabase(
+      occupationRouter,
+      USER_ID,
+      collision,
+    ).craftItem({ itemId: "blade", quantity: 1 });
+    expect(result).toMatchObject({
+      success: false,
+      message: "Your crafting queue changed. Please try again.",
+    });
     expect(await readCraftQueue()).toEqual([]);
-    expect((await readItems()).filter(row => row.itemId === "ore").reduce((sum, row) => sum + row.quantity, 0)).toBe(30);
+    expect(
+      (await readItems())
+        .filter((row) => row.itemId === "ore")
+        .reduce((sum, row) => sum + row.quantity, 0),
+    ).toBe(30);
   });
 
   it("starts a queued craft once under concurrent settlement", async () => {
@@ -863,30 +968,42 @@ describeWithDatabase("mastery training queue", () => {
     await resetTables(userQueue, trainingLog, userVote, userData);
   });
 
-  it.each(["AWAKE", "ASLEEP"] as const)("automatically collects the final session exactly once while %s", async (status) => {
-    const startedAt = minutesFromNow(-20);
-    await insertUser({
-      status,
-      trainingSpeed: "15min",
-      currentlyTrainingMastery: "ninjutsuMastery",
-      masteryTrainingStartedAt: startedAt,
-    });
-    const database = await getTestDatabase();
-    await Promise.all(Array.from({ length: 4 }, () => fetchUpdatedUser({ client: database, userId: USER_ID })));
-    const user = await readUser();
-    expect(user.status).toBe(status);
-    expect(user.currentlyTrainingMastery).toBeNull();
-    expect(user.masteryTrainingStartedAt).toBeNull();
-    expect(user.ninjutsuMastery).toBeGreaterThan(0);
-    expect(user.dailyTrainings).toBe(1);
-    expect(await readMasteryQueue(USER_ID)).toEqual([]);
-    const logs = await database.select().from(trainingLog).where(eq(trainingLog.userId, USER_ID));
-    expect(logs).toHaveLength(1);
-    expect(logs[0]?.trainingFinishedAt?.getTime()).toBe(startedAt.getTime() + 15 * MINUTE);
-    await fetchUpdatedUser({ client: database, userId: USER_ID, forceRegen: true });
-    expect((await readUser()).ninjutsuMastery).toBe(user.ninjutsuMastery);
-    expect((await readUser()).dailyTrainings).toBe(1);
-  });
+  it.each(["AWAKE", "ASLEEP"] as const)(
+    "automatically collects the final session exactly once while %s",
+    async (status) => {
+      const startedAt = minutesFromNow(-20);
+      await insertUser({
+        status,
+        trainingSpeed: "15min",
+        currentlyTrainingMastery: "ninjutsuMastery",
+        masteryTrainingStartedAt: startedAt,
+      });
+      const database = await getTestDatabase();
+      await Promise.all(
+        Array.from({ length: 4 }, () =>
+          fetchUpdatedUser({ client: database, userId: USER_ID }),
+        ),
+      );
+      const user = await readUser();
+      expect(user.status).toBe(status);
+      expect(user.currentlyTrainingMastery).toBeNull();
+      expect(user.masteryTrainingStartedAt).toBeNull();
+      expect(user.ninjutsuMastery).toBeGreaterThan(0);
+      expect(user.dailyTrainings).toBe(1);
+      expect(await readMasteryQueue(USER_ID)).toEqual([]);
+      const logs = await database
+        .select()
+        .from(trainingLog)
+        .where(eq(trainingLog.userId, USER_ID));
+      expect(logs).toHaveLength(1);
+      expect(logs[0]?.trainingFinishedAt?.getTime()).toBe(
+        startedAt.getTime() + 15 * MINUTE,
+      );
+      await fetchUpdatedUser({ client: database, userId: USER_ID, forceRegen: true });
+      expect((await readUser()).ninjutsuMastery).toBe(user.ninjutsuMastery);
+      expect((await readUser()).dailyTrainings).toBe(1);
+    },
+  );
 
   it("collects the last queued session during offline catch-up and ignores consumed rows afterward", async () => {
     await insertUser({
@@ -910,37 +1027,44 @@ describeWithDatabase("mastery training queue", () => {
     expect((await readUser()).ninjutsuMastery).toBe(user.ninjutsuMastery);
     expect((await readUser()).genjutsuMastery).toBe(user.genjutsuMastery);
     expect((await readUser()).dailyTrainings).toBe(2);
-    expect(await database.select().from(trainingLog).where(eq(trainingLog.userId, USER_ID))).toHaveLength(2);
+    expect(
+      await database.select().from(trainingLog).where(eq(trainingLog.userId, USER_ID)),
+    ).toHaveLength(2);
   });
 
-  it.each(["AWAKE", "ASLEEP"] as const)("collects the finished session and starts the queued one while %s", async (status) => {
-    const startedAt = minutesFromNow(-20);
-    await insertUser({
-      status,
-      trainingSpeed: "15min",
-      currentlyTrainingMastery: "ninjutsuMastery",
-      masteryTrainingStartedAt: startedAt,
-      masteryQueue: [{ stat: "genjutsuMastery", speed: "1hr" }],
-    });
-    await fetchUpdatedUser({ client: await getTestDatabase(), userId: USER_ID });
-    const user = await readUser();
-    expect(user.status).toBe(status);
-    expect(user.ninjutsuMastery).toBeGreaterThan(0);
-    expect(user.currentlyTrainingMastery).toBe("genjutsuMastery");
-    expect(user.trainingSpeed).toBe("1hr");
-    expect(user.masteryTrainingStartedAt?.getTime()).toBe(startedAt.getTime() + 15 * MINUTE);
-    expect(await readMasteryQueue(USER_ID)).toEqual([]);
-    expect(user.dailyTrainings).toBe(1);
-    const database = await getTestDatabase();
-    const logs = await database
-      .select()
-      .from(trainingLog)
-      .where(eq(trainingLog.userId, USER_ID));
-    expect(logs.map((log) => log.stat)).toEqual(["ninjutsuMastery"]);
-    // A second refresh has nothing left to settle.
-    await fetchUpdatedUser({ client: database, userId: USER_ID, forceRegen: true });
-    expect((await readUser()).ninjutsuMastery).toBe(user.ninjutsuMastery);
-  });
+  it.each(["AWAKE", "ASLEEP"] as const)(
+    "collects the finished session and starts the queued one while %s",
+    async (status) => {
+      const startedAt = minutesFromNow(-20);
+      await insertUser({
+        status,
+        trainingSpeed: "15min",
+        currentlyTrainingMastery: "ninjutsuMastery",
+        masteryTrainingStartedAt: startedAt,
+        masteryQueue: [{ stat: "genjutsuMastery", speed: "1hr" }],
+      });
+      await fetchUpdatedUser({ client: await getTestDatabase(), userId: USER_ID });
+      const user = await readUser();
+      expect(user.status).toBe(status);
+      expect(user.ninjutsuMastery).toBeGreaterThan(0);
+      expect(user.currentlyTrainingMastery).toBe("genjutsuMastery");
+      expect(user.trainingSpeed).toBe("1hr");
+      expect(user.masteryTrainingStartedAt?.getTime()).toBe(
+        startedAt.getTime() + 15 * MINUTE,
+      );
+      expect(await readMasteryQueue(USER_ID)).toEqual([]);
+      expect(user.dailyTrainings).toBe(1);
+      const database = await getTestDatabase();
+      const logs = await database
+        .select()
+        .from(trainingLog)
+        .where(eq(trainingLog.userId, USER_ID));
+      expect(logs.map((log) => log.stat)).toEqual(["ninjutsuMastery"]);
+      // A second refresh has nothing left to settle.
+      await fetchUpdatedUser({ client: database, userId: USER_ID, forceRegen: true });
+      expect((await readUser()).ninjutsuMastery).toBe(user.ninjutsuMastery);
+    },
+  );
 
   it("starts the next queued mastery when the player collects early", async () => {
     await insertUser({
@@ -949,7 +1073,10 @@ describeWithDatabase("mastery training queue", () => {
       masteryTrainingStartedAt: minutesFromNow(-10),
       masteryQueue: [{ stat: "taijutsuMastery", speed: "15min" }],
     });
-    const result = await (await callerFor(trainRouter, USER_ID)).stopMasteryTraining({ stat: "ninjutsuMastery", startedAt: (await readUser()).masteryTrainingStartedAt! });
+    const result = await (await callerFor(trainRouter, USER_ID)).stopMasteryTraining({
+      stat: "ninjutsuMastery",
+      startedAt: (await readUser()).masteryTrainingStartedAt!,
+    });
     expect(result.success).toBe(true);
     const user = await readUser();
     expect(user.currentlyTrainingMastery).toBe("taijutsuMastery");
@@ -965,8 +1092,15 @@ describeWithDatabase("mastery training queue", () => {
     const caller = await callerFor(trainRouter, USER_ID);
     const one = [{ stat: "genjutsuMastery" as const, speed: "15min" as const }];
     // The first saved refresh assigns the Genin's elements, which needs a full profile read.
-    await fetchUpdatedUser({ client: await getTestDatabase(), userId: USER_ID, forceRegen: true });
-    const saved = await caller.updateMasteryTrainingQueue({ expectedEntries: [], entries: one });
+    await fetchUpdatedUser({
+      client: await getTestDatabase(),
+      userId: USER_ID,
+      forceRegen: true,
+    });
+    const saved = await caller.updateMasteryTrainingQueue({
+      expectedEntries: [],
+      entries: one,
+    });
     expect(saved.success).toBe(true);
     // The saved queue comes back as a cache patch instead of a profile refetch.
     expect(getMasteryQueue(saved.userPatch as never)).toEqual(one);
@@ -1008,35 +1142,107 @@ describeWithDatabase("mastery training queue", () => {
   });
 
   it.each([
-    { name: "a new queue", current: [], entries: [{ stat: "genjutsuMastery", speed: "15min" }] },
-    { name: "an appended entry", current: [{ stat: "genjutsuMastery", speed: "15min" }], entries: [{ stat: "genjutsuMastery", speed: "15min" }, { stat: "taijutsuMastery", speed: "15min" }] },
-    { name: "a changed mastery", current: [{ stat: "genjutsuMastery", speed: "15min" }], entries: [{ stat: "taijutsuMastery", speed: "15min" }] },
-    { name: "a changed interval", current: [{ stat: "genjutsuMastery", speed: "15min" }], entries: [{ stat: "genjutsuMastery", speed: "1hr" }] },
-    { name: "reordered entries", current: [{ stat: "genjutsuMastery", speed: "15min" }, { stat: "taijutsuMastery", speed: "15min" }], entries: [{ stat: "taijutsuMastery", speed: "15min" }, { stat: "genjutsuMastery", speed: "15min" }] },
-  ] satisfies { name: string; current: MasteryTrainingQueueEntry[]; entries: MasteryTrainingQueueEntry[] }[])("rejects $name while asleep without changing the mastery queue", async ({ current, entries }) => {
-    await insertUser({ status: "ASLEEP", autoWakeUp: false, currentlyTrainingMastery: "ninjutsuMastery", masteryTrainingStartedAt: new Date(), curEnergy: 0, regeneration: 0 });
-    await queueMasteries(USER_ID, current);
-    const caller = await callerFor(trainRouter, USER_ID);
-    expect(await caller.updateMasteryTrainingQueue({ expectedEntries: current, entries })).toMatchObject({ success: false, message: "You are asleep. Wake up before taking this action." });
-    expect(await readMasteryQueue(USER_ID)).toEqual(current);
-    expect(await readUser()).toMatchObject({ status: "ASLEEP", currentlyTrainingMastery: "ninjutsuMastery" });
-  });
+    {
+      name: "a new queue",
+      current: [],
+      entries: [{ stat: "genjutsuMastery", speed: "15min" }],
+    },
+    {
+      name: "an appended entry",
+      current: [{ stat: "genjutsuMastery", speed: "15min" }],
+      entries: [
+        { stat: "genjutsuMastery", speed: "15min" },
+        { stat: "taijutsuMastery", speed: "15min" },
+      ],
+    },
+    {
+      name: "a changed mastery",
+      current: [{ stat: "genjutsuMastery", speed: "15min" }],
+      entries: [{ stat: "taijutsuMastery", speed: "15min" }],
+    },
+    {
+      name: "a changed interval",
+      current: [{ stat: "genjutsuMastery", speed: "15min" }],
+      entries: [{ stat: "genjutsuMastery", speed: "1hr" }],
+    },
+    {
+      name: "reordered entries",
+      current: [
+        { stat: "genjutsuMastery", speed: "15min" },
+        { stat: "taijutsuMastery", speed: "15min" },
+      ],
+      entries: [
+        { stat: "taijutsuMastery", speed: "15min" },
+        { stat: "genjutsuMastery", speed: "15min" },
+      ],
+    },
+  ] satisfies {
+    name: string;
+    current: MasteryTrainingQueueEntry[];
+    entries: MasteryTrainingQueueEntry[];
+  }[])(
+    "rejects $name while asleep without changing the mastery queue",
+    async ({ current, entries }) => {
+      await insertUser({
+        status: "ASLEEP",
+        autoWakeUp: false,
+        currentlyTrainingMastery: "ninjutsuMastery",
+        masteryTrainingStartedAt: new Date(),
+        curEnergy: 0,
+        regeneration: 0,
+      });
+      await queueMasteries(USER_ID, current);
+      const caller = await callerFor(trainRouter, USER_ID);
+      expect(
+        await caller.updateMasteryTrainingQueue({ expectedEntries: current, entries }),
+      ).toMatchObject({
+        success: false,
+        message: "You are asleep. Wake up before taking this action.",
+      });
+      expect(await readMasteryQueue(USER_ID)).toEqual(current);
+      expect(await readUser()).toMatchObject({
+        status: "ASLEEP",
+        currentlyTrainingMastery: "ninjutsuMastery",
+      });
+    },
+  );
 
   it("allows removing and clearing mastery entries while asleep", async () => {
-    await insertUser({ status: "ASLEEP", currentlyTrainingMastery: "ninjutsuMastery", masteryTrainingStartedAt: new Date(), curEnergy: 0, regeneration: 0 });
-    const entries = [{ stat: "genjutsuMastery" as const, speed: "15min" as const }, { stat: "taijutsuMastery" as const, speed: "15min" as const }];
+    await insertUser({
+      status: "ASLEEP",
+      currentlyTrainingMastery: "ninjutsuMastery",
+      masteryTrainingStartedAt: new Date(),
+      curEnergy: 0,
+      regeneration: 0,
+    });
+    const entries = [
+      { stat: "genjutsuMastery" as const, speed: "15min" as const },
+      { stat: "taijutsuMastery" as const, speed: "15min" as const },
+    ];
     await queueMasteries(USER_ID, entries);
     const caller = await callerFor(trainRouter, USER_ID);
-    expect(await caller.updateMasteryTrainingQueue({ expectedEntries: entries, entries: [entries[1]!] })).toMatchObject({ success: true });
+    expect(
+      await caller.updateMasteryTrainingQueue({
+        expectedEntries: entries,
+        entries: [entries[1]!],
+      }),
+    ).toMatchObject({ success: true });
     expect(await readMasteryQueue(USER_ID)).toEqual([entries[1]!]);
-    expect(await caller.updateMasteryTrainingQueue({ expectedEntries: [entries[1]!], entries: [] })).toMatchObject({ success: true });
+    expect(
+      await caller.updateMasteryTrainingQueue({
+        expectedEntries: [entries[1]!],
+        entries: [],
+      }),
+    ).toMatchObject({ success: true });
     expect(await readMasteryQueue(USER_ID)).toEqual([]);
     expect((await readUser()).status).toBe("ASLEEP");
   });
 
   it("requires an active session to queue behind", async () => {
     await insertUser();
-    const result = await (await callerFor(trainRouter, USER_ID)).updateMasteryTrainingQueue({
+    const result = await (
+      await callerFor(trainRouter, USER_ID)
+    ).updateMasteryTrainingQueue({
       expectedEntries: [],
       entries: [{ stat: "genjutsuMastery", speed: "15min" }],
     });
@@ -1046,7 +1252,17 @@ describeWithDatabase("mastery training queue", () => {
 
 describeWithDatabase("lazy queue settlement", () => {
   beforeEach(async () => {
-    await resetTables(userQueue, userJutsu, jutsu, trainingLog, userVote, questHistory, quest, userData, bloodline);
+    await resetTables(
+      userQueue,
+      userJutsu,
+      jutsu,
+      trainingLog,
+      userVote,
+      questHistory,
+      quest,
+      userData,
+      bloodline,
+    );
   });
 
   it("starts a level that came due while offline, backdated, on the next refresh", async () => {
@@ -1060,7 +1276,8 @@ describeWithDatabase("lazy queue settlement", () => {
     expect(learned?.level).toBe(1);
     // It started when jutsu-a finished, not when the player came back.
     expect(learned?.finishTraining?.getTime()).toBe(
-      finished.getTime() + calcJutsuTrainTime(queuedJutsu("jutsu-b"), 0, await readUser()),
+      finished.getTime() +
+        calcJutsuTrainTime(queuedJutsu("jutsu-b"), 0, await readUser()),
     );
     expect(await readJutsuQueue()).toEqual([]);
     // The refresh returns the user as it is after the start.
@@ -1104,10 +1321,21 @@ describeWithDatabase("lazy queue settlement", () => {
  */
 describeWithDatabase("queue round trips", () => {
   beforeEach(async () => {
-    await resetTables(userQueue, userJutsu, jutsu, trainingLog, userVote, questHistory, quest, userData, bloodline);
+    await resetTables(
+      userQueue,
+      userJutsu,
+      jutsu,
+      trainingLog,
+      userVote,
+      questHistory,
+      quest,
+      userData,
+      bloodline,
+    );
   });
 
-  const trips = async (work: () => Promise<unknown>) => (await recordQueries(work)).roundTrips;
+  const trips = async (work: () => Promise<unknown>) =>
+    (await recordQueries(work)).roundTrips;
   const makeDue = async () => {
     const database = await getTestDatabase();
     await database.update(userJutsu).set({ finishTraining: minutesFromNow(-0.5) });
@@ -1130,7 +1358,8 @@ describeWithDatabase("queue round trips", () => {
 
   it("getSidebarTimers: one round trip unless a level is due", async () => {
     await insertUser();
-    const timers = async () => (await callerFor(profileRouter, USER_ID)).getSidebarTimers();
+    const timers = async () =>
+      (await callerFor(profileRouter, USER_ID)).getSidebarTimers();
     expect(await trips(timers)).toBe(1);
     await trainingJutsuA(minutesFromNow(10));
     await queueJutsu("q-1", "jutsu-b", minutesFromNow(10));
@@ -1141,7 +1370,8 @@ describeWithDatabase("queue round trips", () => {
 
   it("queue views: one round trip per poll unless a job is due", async () => {
     await insertUser();
-    const jutsuQueue = async () => (await callerFor(jutsuRouter, USER_ID)).getTrainingQueue();
+    const jutsuQueue = async () =>
+      (await callerFor(jutsuRouter, USER_ID)).getTrainingQueue();
     const craftQueue = async () =>
       (await callerFor(occupationRouter, USER_ID)).getCraftingQueue();
     expect(await trips(jutsuQueue)).toBe(1);

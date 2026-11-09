@@ -30,9 +30,7 @@ import {
 describe("mobile navigation options", () => {
   it("gives every option its own icon", () => {
     expect(
-      Object.fromEntries(
-        MOBILE_NAV_OPTIONS.map((option) => [option.id, option.icon]),
-      ),
+      Object.fromEntries(MOBILE_NAV_OPTIONS.map((option) => [option.id, option.icon])),
     ).toEqual({
       academy: GraduationCap,
       traininggrounds: Dumbbell,

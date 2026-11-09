@@ -21,10 +21,20 @@ describe("battlefield aggro comparison", () => {
   it("shows party threat against an NPC and counts player-controlled summons", () => {
     const display = pveDisplay([
       user({}),
-      user({ userId: "summon", isSummon: true, isAi: true, isPiloted: true, enmity: 800 }),
+      user({
+        userId: "summon",
+        isSummon: true,
+        isAi: true,
+        isPiloted: true,
+        enmity: 800,
+      }),
     ]);
     expect(display.get("tank")).toEqual({ enmity: 1600, ratio: 1, isHighest: true });
-    expect(display.get("summon")).toEqual({ enmity: 800, ratio: 0.5, isHighest: false });
+    expect(display.get("summon")).toEqual({
+      enmity: 800,
+      ratio: 0.5,
+      isHighest: false,
+    });
     expect(display.has("boss")).toBe(false);
   });
 
@@ -41,7 +51,10 @@ describe("battlefield aggro comparison", () => {
   });
 
   it("leaves empty rings for zero or unset enmity and shows tied leaders equally", () => {
-    const empty = pveDisplay([user({ enmity: undefined }), user({ userId: "zero", enmity: 0 })]);
+    const empty = pveDisplay([
+      user({ enmity: undefined }),
+      user({ userId: "zero", enmity: 0 }),
+    ]);
     expect(empty.get("tank")).toEqual({ enmity: 0, ratio: 0, isHighest: false });
     expect(empty.get("zero")?.ratio).toBe(0);
     const tied = pveDisplay([user({}), user({ userId: "tie" })]);
@@ -56,21 +69,36 @@ describe("battlefield aggro comparison", () => {
   });
 
   it("hides threat in PvP, including players using auto combat", () => {
-    expect(getAggroDisplay([
-      user({ isAutoCombat: true }),
-      user({ userId: "opponent", direction: "right", isAutoCombat: true }),
-    ]).size).toBe(0);
+    expect(
+      getAggroDisplay([
+        user({ isAutoCombat: true }),
+        user({ userId: "opponent", direction: "right", isAutoCombat: true }),
+      ]).size,
+    ).toBe(0);
   });
 
   it("does not treat a player-piloted opposing summon as an NPC", () => {
-    expect(getAggroDisplay([
-      user({}),
-      user({ userId: "summon", direction: "right", isAi: true, isSummon: true, isPiloted: true }),
-    ]).size).toBe(0);
+    expect(
+      getAggroDisplay([
+        user({}),
+        user({
+          userId: "summon",
+          direction: "right",
+          isAi: true,
+          isSummon: true,
+          isPiloted: true,
+        }),
+      ]).size,
+    ).toBe(0);
   });
 
   it("hides a side's threat after its last opposing NPC leaves active combat", () => {
-    for (const state of [{ hidden: true }, { curHealth: 0 }, { fledBattle: true }, { leftBattle: true }]) {
+    for (const state of [
+      { hidden: true },
+      { curHealth: 0 },
+      { fledBattle: true },
+      { leftBattle: true },
+    ]) {
       expect(getAggroDisplay([user({}), { ...boss, ...state }]).size).toBe(0);
     }
   });

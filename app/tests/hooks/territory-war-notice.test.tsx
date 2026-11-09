@@ -15,7 +15,9 @@ beforeEach(() => {
   now = Date.UTC(2026, 10, 1, 12);
   vi.useFakeTimers();
   vi.spyOn(Date, "now").mockImplementation(() => now);
-  Object.assign(vi.spyOn(client, "api" as never), { territoryWar: testApi.territoryWar });
+  Object.assign(vi.spyOn(client, "api" as never), {
+    territoryWar: testApi.territoryWar,
+  });
   focusManager.setFocused(true);
 });
 
@@ -53,22 +55,48 @@ const setup = (initial: Notice, timeDiff = 0) => {
     if (fail) throw new Error("Notice unavailable");
     return authoritative;
   });
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
   clients.push(queryClient);
   const trpcClient = fakeTrpcClient(() => read());
   const wrapper = ({ children }: PropsWithChildren) => (
-    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>{children}</TrpcTestProviders>
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+      {children}
+    </TrpcTestProviders>
   );
-  const view = renderHook(({ enabled, active, offset }) => useTerritoryWarNotice(enabled, offset, active), {
-    wrapper, initialProps: { enabled: true, active: true, offset: timeDiff },
-  });
-  return { ...view, read, set: (notice: Notice) => { authoritative = notice; }, fail: (value: boolean) => { fail = value; } };
+  const view = renderHook(
+    ({ enabled, active, offset }) => useTerritoryWarNotice(enabled, offset, active),
+    {
+      wrapper,
+      initialProps: { enabled: true, active: true, offset: timeDiff },
+    },
+  );
+  return {
+    ...view,
+    read,
+    set: (notice: Notice) => {
+      authoritative = notice;
+    },
+    fail: (value: boolean) => {
+      fail = value;
+    },
+  };
 };
 
 /** A complete event snapshot makes query structural sharing and deadline dates realistic. */
-const event = (endsAt: number, startsAt = now - 1000): NonNullable<Notice["event"]> => ({
-  id: "event", predecessorId: "previous", sector: 100, guardianId: "guardian", version: 0,
-  startsAt: new Date(startsAt), endsAt: new Date(endsAt), resolvedAt: null,
+const event = (
+  endsAt: number,
+  startsAt = now - 1000,
+): NonNullable<Notice["event"]> => ({
+  id: "event",
+  predecessorId: "previous",
+  sector: 100,
+  guardianId: "guardian",
+  version: 0,
+  startsAt: new Date(startsAt),
+  endsAt: new Date(endsAt),
+  resolvedAt: null,
 });
 
 it("makes one cold-cache request across three quiet hours in independent tabs", async () => {
@@ -123,14 +151,20 @@ it("retries a failed boundary refresh and keeps discovering before the first eve
   expect(tab.result.current?.id).toBe("event");
 });
 
-it.each([-120_000, 120_000])("expires notices against server time with client offset %s", async (offset) => {
-  const tab = setup({ event: event(now - offset + 5000), nextStartsAt: null }, offset);
-  await settle();
-  expect(tab.result.current?.id).toBe("event");
-  // Even a stale response cannot extend an expired notice's visible lifetime.
-  await advance(6000);
-  expect(tab.result.current).toBeNull();
-});
+it.each([-120_000, 120_000])(
+  "expires notices against server time with client offset %s",
+  async (offset) => {
+    const tab = setup(
+      { event: event(now - offset + 5000), nextStartsAt: null },
+      offset,
+    );
+    await settle();
+    expect(tab.result.current?.id).toBe("event");
+    // Even a stale response cannot extend an expired notice's visible lifetime.
+    await advance(6000);
+    expect(tab.result.current).toBeNull();
+  },
+);
 
 it("hides a notice that expires while its response is in flight", async () => {
   const tab = setup({ event: event(now + 500), nextStartsAt: null });
@@ -142,10 +176,16 @@ it("hides a notice that expires while its response is in flight", async () => {
 it("refreshes quiet-window snapshots on focus, reconnect and return from a hidden page", async () => {
   const tab = setup({ event: null, nextStartsAt: new Date(now + 60_000) });
   await settle();
-  await act(async () => { focusManager.setFocused(false); focusManager.setFocused(true); });
+  await act(async () => {
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+  });
   await settle();
   expect(tab.read).toHaveBeenCalledTimes(2);
-  await act(async () => { onlineManager.setOnline(false); onlineManager.setOnline(true); });
+  await act(async () => {
+    onlineManager.setOnline(false);
+    onlineManager.setOnline(true);
+  });
   await settle();
   expect(tab.read).toHaveBeenCalledTimes(3);
   tab.rerender({ enabled: true, active: false, offset: 0 });

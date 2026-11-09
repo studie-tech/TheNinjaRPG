@@ -11,7 +11,9 @@ import * as UserContext from "@/utils/UserContext";
 const settled = async (): Promise<void> => undefined;
 const claim = vi.fn();
 let claimPending = false;
-let participation: { damageDealt: number; battleCount: number; rewardsClaimed: string[] } | undefined;
+let participation:
+  | { damageDealt: number; battleCount: number; rewardsClaimed: string[] }
+  | undefined;
 
 const thresholds = [
   { id: "t1", damageRequired: 100, rewards: { reward_money: 50 } },
@@ -19,7 +21,12 @@ const thresholds = [
   { id: "t3", damageRequired: 2000, rewards: {} },
 ];
 const participations = [
-  { id: "p1", rank: 1, damageDealt: 12345, user: { username: "Top", avatar: "https://example.com/top.png" } },
+  {
+    id: "p1",
+    rank: 1,
+    damageDealt: 12345,
+    user: { username: "Top", avatar: "https://example.com/top.png" },
+  },
   { id: "p2", rank: 2, damageDealt: 678, user: null },
 ];
 
@@ -43,7 +50,9 @@ beforeEach(() => {
     updateUser: settled,
   } as never);
   const query = (data: unknown) => ({ useQuery: () => ({ data, isFetching: false }) });
-  const mutation = () => ({ useMutation: () => ({ mutate: vi.fn(), isPending: false }) });
+  const mutation = () => ({
+    useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  });
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({ raids: {}, profile: {} }),
     raids: {
@@ -73,7 +82,9 @@ beforeEach(() => {
       leaveRaidQueue: mutation(),
       startRaidBattle: mutation(),
       readyToQueue: mutation(),
-      claimDamageReward: { useMutation: () => ({ mutate: claim, isPending: claimPending }) },
+      claimDamageReward: {
+        useMutation: () => ({ mutate: claim, isPending: claimPending }),
+      },
     },
   });
 });
@@ -89,7 +100,9 @@ const section = (view: ReturnType<typeof render>, heading: string) =>
 describe("raid details", () => {
   it("lists damage thresholds by claim state and claims a met tier", () => {
     const view = render(<RaidBrowser sectorFilter={5} />);
-    const tiers = [...section(view, "Damage Thresholds").querySelectorAll(".space-y-2 > div")];
+    const tiers = [
+      ...section(view, "Damage Thresholds").querySelectorAll(".space-y-2 > div"),
+    ];
     expect(tiers.map((tier) => tier.className)).toEqual([
       "rounded border p-3 text-sm border-transparent",
       "rounded border p-3 text-sm border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20",
@@ -100,7 +113,9 @@ describe("raid details", () => {
       "Tier 2: 500 damage100 ryoClaim",
       "Tier 3: 2,000 damage1,400 more",
     ]);
-    expect(tiers.map((tier) => tier.querySelector("span.font-medium")?.className)).toEqual([
+    expect(
+      tiers.map((tier) => tier.querySelector("span.font-medium")?.className),
+    ).toEqual([
       "font-medium text-green-600 dark:text-green-400",
       "font-medium text-green-600 dark:text-green-400",
       "font-medium ",
@@ -112,20 +127,36 @@ describe("raid details", () => {
   it("disables claiming while a claim is pending and counts everything as remaining without participation", () => {
     claimPending = true;
     const view = render(<RaidBrowser sectorFilter={5} />);
-    const pending = view.getByRole("button", { name: "Claiming..." }) as HTMLButtonElement;
+    const pending = view.getByRole("button", {
+      name: "Claiming...",
+    }) as HTMLButtonElement;
     expect(pending.disabled).toBe(true);
     cleanup();
     participation = undefined;
     const fresh = render(<RaidBrowser sectorFilter={5} />);
     expect(
-      [...section(fresh, "Damage Thresholds").querySelectorAll(".space-y-2 > div")].map((tier) => tier.textContent),
-    ).toEqual(["Tier 1: 100 damage50 ryo100 more", "Tier 2: 500 damage100 ryo500 more", "Tier 3: 2,000 damage2,000 more"]);
+      [...section(fresh, "Damage Thresholds").querySelectorAll(".space-y-2 > div")].map(
+        (tier) => tier.textContent,
+      ),
+    ).toEqual([
+      "Tier 1: 100 damage50 ryo100 more",
+      "Tier 2: 500 damage100 ryo500 more",
+      "Tier 3: 2,000 damage2,000 more",
+    ]);
   });
 
   it("ranks the damage leaderboard and names deleted users", () => {
     const view = render(<RaidBrowser sectorFilter={5} />);
-    const rows = [...section(view, "Damage Leaderboard").querySelectorAll(".space-y-2 > div")];
-    expect(rows.map((row) => row.textContent)).toEqual(["1Top12,345", "2Deleted User678"]);
-    expect(rows.map((row) => row.querySelector("img")?.getAttribute("alt"))).toEqual(["Top", "Deleted User"]);
+    const rows = [
+      ...section(view, "Damage Leaderboard").querySelectorAll(".space-y-2 > div"),
+    ];
+    expect(rows.map((row) => row.textContent)).toEqual([
+      "1Top12,345",
+      "2Deleted User678",
+    ]);
+    expect(rows.map((row) => row.querySelector("img")?.getAttribute("alt"))).toEqual([
+      "Top",
+      "Deleted User",
+    ]);
   });
 });

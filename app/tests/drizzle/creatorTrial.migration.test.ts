@@ -21,7 +21,12 @@ import { bossFormsFrom } from "@/libs/combat/bossFight";
 import { AiRule } from "@/validators/ai";
 import { bossArrivalSchema } from "@/validators/coop";
 import { JutsuValidator } from "@/validators/combat";
-import { describeWithDatabase, getTestDatabase, resetTables, runRawSql } from "../setup/testDatabase";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+  runRawSql,
+} from "../setup/testDatabase";
 
 const migration = await readFile(
   new URL("../../drizzle/migrations/0146_seed_creator_trial.sql", import.meta.url),
@@ -54,13 +59,22 @@ it("seeds with no statement markers", () => {
 
 describeWithDatabase("creator trial seed", () => {
   beforeEach(async () => {
-    await resetTables(aiProfile, aiSpriteAnimation, jutsu, spriteAnimation, userData, userJutsu);
+    await resetTables(
+      aiProfile,
+      aiSpriteAnimation,
+      jutsu,
+      spriteAnimation,
+      userData,
+      userJutsu,
+    );
     await seed();
   });
 
   it("creates every form at its rank's cap", async () => {
     const client = await getTestDatabase();
-    const forms = await client.query.userData.findMany({ where: inArray(userData.userId, IDS) });
+    const forms = await client.query.userData.findMany({
+      where: inArray(userData.userId, IDS),
+    });
     expect(forms.map((form) => form.userId).sort()).toEqual([...IDS].sort());
     for (const form of forms) {
       const caps = getUserCaps(form.rank);
@@ -104,7 +118,9 @@ describeWithDatabase("creator trial seed", () => {
     const client = await getTestDatabase();
     const owned = await client.query.userJutsu.findMany();
     for (const profile of await client.query.aiProfile.findMany()) {
-      const own = owned.filter((row) => row.userId === profile.userId).map((row) => row.jutsuId);
+      const own = owned
+        .filter((row) => row.userId === profile.userId)
+        .map((row) => row.jutsuId);
       for (const rule of profile.rules) {
         const { action } = AiRule.parse(rule);
         const used =
@@ -123,8 +139,12 @@ describeWithDatabase("creator trial seed", () => {
     const bindings = await client.query.aiSpriteAnimation.findMany();
     const sheets = await client.query.spriteAnimation.findMany();
     for (const [index, id] of IDS.entries()) {
-      const keys = bindings.filter((row) => row.userId === id).map((row) => row.actionKey);
-      expect(keys).toEqual(expect.arrayContaining(["idle", "move", "basic:basicAttack"]));
+      const keys = bindings
+        .filter((row) => row.userId === id)
+        .map((row) => row.actionKey);
+      expect(keys).toEqual(
+        expect.arrayContaining(["idle", "move", "basic:basicAttack"]),
+      );
       expect(keys.includes(TRANSFORMATION_ACTION)).toBe(index > 0);
     }
     for (const binding of bindings)
@@ -150,7 +170,8 @@ describeWithDatabase("creator trial seed", () => {
     const rows = await client.query.aiTransformation.findMany();
     const forms = bossFormsFrom(CREATOR_TRIAL_FIRST_FORM, rows);
     expect(forms.map((form) => form.aiId)).toEqual(IDS);
-    expect(forms.slice(1).map((form) => bossArrivalSchema.parse(form.arrival).tier))
-      .toEqual([1, 2, 3, 4]);
+    expect(
+      forms.slice(1).map((form) => bossArrivalSchema.parse(form.arrival).tier),
+    ).toEqual([1, 2, 3, 4]);
   });
 });

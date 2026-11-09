@@ -80,7 +80,26 @@ const makeGcdBattle = (jutsus: Jutsu[], items: Item[] = []) => {
     lastUsedRound: ba.lastUsedRound ?? 0,
   }));
   return makeInjectBattle(user, {
-    sharedCooldowns: {"barrier": 3, "buffprevent": 3, "cleanse": 3, "cleanseprevent": 3, "clear": 3, "clearprevent": 3, "consume": 3, "siphon": 3, "debuffprevent": 3, "drain": 3, "increasepoolcost": 3, "moveprevent": 3, "pierce": 3, "poison": 3, "seal": 3, "stun": 3, "summon": 3, "vamp": 3},
+    sharedCooldowns: {
+      barrier: 3,
+      buffprevent: 3,
+      cleanse: 3,
+      cleanseprevent: 3,
+      clear: 3,
+      clearprevent: 3,
+      consume: 3,
+      siphon: 3,
+      debuffprevent: 3,
+      drain: 3,
+      increasepoolcost: 3,
+      moveprevent: 3,
+      pierce: 3,
+      poison: 3,
+      seal: 3,
+      stun: 3,
+      summon: 3,
+      vamp: 3,
+    },
     jutsus: Object.fromEntries(jutsus.map((j) => [j.id, j])),
     items: Object.fromEntries(items.map((i) => [i.id, i])),
   });
@@ -101,7 +120,12 @@ const perform = (battle: CompleteBattle, round: number, actionId: string) => {
 };
 
 /** Rounds (within the inspected range) in which the action can be performed. */
-const usableRounds = (battle: CompleteBattle, actionId: string, from: number, to: number) =>
+const usableRounds = (
+  battle: CompleteBattle,
+  actionId: string,
+  from: number,
+  to: number,
+) =>
   Array.from({ length: to - from + 1 }, (_, i) => from + i).filter((round) => {
     battle.round = round;
     return usable(battle, actionId);
@@ -136,7 +160,9 @@ describe("global cooldown", () => {
               ? ["damage"]
               : [],
         );
-        const elementalItem = sharedConsumable("elemental-item", 0, ["elementaldamage"]);
+        const elementalItem = sharedConsumable("elemental-item", 0, [
+          "elementaldamage",
+        ]);
         const imbuedItem = sharedConsumable("imbued-item", 0, []);
         const battle = makeGcdBattle(
           [
@@ -280,7 +306,8 @@ describe("global cooldown", () => {
     expect(usableRounds(battle, "replacementTechnique", 4, 8)).toEqual([7, 8]);
     expect(usableRounds(battle, "move", 4, 8)).toEqual([4, 5, 6, 7, 8]);
     expect(
-      battle.usersState[0]!.basicActions.find((action) => action.id === "move")?.cooldown,
+      battle.usersState[0]!.basicActions.find((action) => action.id === "move")
+        ?.cooldown,
     ).toBeUndefined();
   });
 
@@ -302,7 +329,13 @@ describe("global cooldown", () => {
   it("uses the configured basic-action lock under cooldown reduction", () => {
     const battle = makeGcdBattle([sharedJutsu("rip", 5, "clear")]);
     battle.extraState.sharedCooldowns = { clear: 5 };
-    battle.usersEffects.push(makeEffect("decreasecooldown", { power: 12, rounds: 20, actionsAffected: ["clear"] }, { targetId: USER }));
+    battle.usersEffects.push(
+      makeEffect(
+        "decreasecooldown",
+        { power: 12, rounds: 20, actionsAffected: ["clear"] },
+        { targetId: USER },
+      ),
+    );
     perform(battle, 1, "rip");
     expect(usableRounds(battle, "clear", 1, 7)).toEqual([6, 7]);
   });
@@ -311,13 +344,18 @@ describe("global cooldown", () => {
     const item = sharedConsumable("potion", 8, []);
     const battle = makeGcdBattle([sharedJutsu("rip", 5, "clear")], [item]);
     battle.extraState.sharedCooldowns = { clear: 4 };
-    battle.usersState[0]!.items[0]!.imbuementEffects = [makeEffect("clear", { rounds: 2 })];
+    battle.usersState[0]!.items[0]!.imbuementEffects = [
+      makeEffect("clear", { rounds: 2 }),
+    ];
     perform(battle, 1, "rip");
     expect(usableRounds(battle, item.id, 1, 6)).toEqual([5, 6]);
   });
 
   it("uses different durations for configured tags", () => {
-    const battle = makeGcdBattle([sharedJutsu("a", 5, "clear"), sharedJutsu("b", 8, "clear")]);
+    const battle = makeGcdBattle([
+      sharedJutsu("a", 5, "clear"),
+      sharedJutsu("b", 8, "clear"),
+    ]);
     battle.extraState.sharedCooldowns = { clear: 5 };
     perform(battle, 1, "a");
     expect(usableRounds(battle, "b", 1, 7)).toEqual([6, 7]);
@@ -325,17 +363,27 @@ describe("global cooldown", () => {
 
   it("uses the longest matching tag, ignoring tags only on the source", () => {
     const a = sharedJutsu("a", 5, "clear");
-    a.effects.push(makeTag("clearprevent", { rounds: 2 }), makeTag("debuffprevent", { rounds: 2 }));
+    a.effects.push(
+      makeTag("clearprevent", { rounds: 2 }),
+      makeTag("debuffprevent", { rounds: 2 }),
+    );
     const b = sharedJutsu("b", 8, "clear");
     b.effects.push(makeTag("clearprevent", { rounds: 2 }));
     const battle = makeGcdBattle([a, b]);
-    battle.extraState.sharedCooldowns = { clear: 2, clearprevent: 5, debuffprevent: 10 };
+    battle.extraState.sharedCooldowns = {
+      clear: 2,
+      clearprevent: 5,
+      debuffprevent: 10,
+    };
     perform(battle, 1, "a");
     expect(usableRounds(battle, "b", 1, 7)).toEqual([6, 7]);
   });
 
   it("does not lock tags removed from configuration", () => {
-    const battle = makeGcdBattle([sharedJutsu("a", 5, "clear"), sharedJutsu("b", 8, "clear")]);
+    const battle = makeGcdBattle([
+      sharedJutsu("a", 5, "clear"),
+      sharedJutsu("b", 8, "clear"),
+    ]);
     battle.extraState.sharedCooldowns = {};
     perform(battle, 1, "a");
     expect(usable(battle, "b")).toBe(true);
@@ -367,7 +415,10 @@ describe("global cooldown", () => {
     // Heavenly Constructs in round 1 puts the potion on the GCD; Starlight Veil in
     // round 3 must lock it again even though its 10-round base cooldown is longer
     // than the GCD, so it is not usable in round 4.
-    const potion = sharedConsumable("miracle-potion", 10, ["debuffprevent", "clearprevent"]);
+    const potion = sharedConsumable("miracle-potion", 10, [
+      "debuffprevent",
+      "clearprevent",
+    ]);
     const battle = makeGcdBattle(
       [
         sharedJutsu("heavenly-constructs", 7, "debuffprevent"),

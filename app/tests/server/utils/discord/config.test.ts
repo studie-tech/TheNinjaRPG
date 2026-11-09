@@ -65,7 +65,9 @@ describe("getDiscordConfig", () => {
       DISCORD_VILLAGE_ROLE_IDS: JSON.stringify({ village1: "4444444444444444444" }),
     });
     const config = getDiscordConfig();
-    expect(config?.redirectUri).toBe("https://www.theninja-rpg.com/api/discord/callback");
+    expect(config?.redirectUri).toBe(
+      "https://www.theninja-rpg.com/api/discord/callback",
+    );
     expect(config?.verifiedRoleId).toBe("3333333333333333333");
     expect(config?.villageRoleIds).toEqual({ village1: "4444444444444444444" });
   });
@@ -77,7 +79,9 @@ describe("parsers", () => {
     expect(parseVillageRoleIds("not json")).toEqual({});
     expect(parseVillageRoleIds("[1,2]")).toEqual({});
     expect(
-      parseVillageRoleIds(JSON.stringify({ a: "4444444444444444444", b: 5, c: "role" })),
+      parseVillageRoleIds(
+        JSON.stringify({ a: "4444444444444444444", b: 5, c: "role" }),
+      ),
     ).toEqual({ a: "4444444444444444444" });
   });
 

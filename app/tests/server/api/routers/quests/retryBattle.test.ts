@@ -10,18 +10,19 @@ const makeCaller = (goals: Goal[] | null) => {
   const user =
     goals === null
       ? undefined
-      : { userId: "u1", status: "AWAKE", questData: [{ id: "quest-1", startAt: new Date(), goals }] };
+      : {
+          userId: "u1",
+          status: "AWAKE",
+          questData: [{ id: "quest-1", startAt: new Date(), goals }],
+        };
   const fetchUpdatedUser = vi.fn().mockResolvedValue({ user });
   stubProfile("fetchUpdatedUser", fetchUpdatedUser as never);
-  const drizzle = new Proxy(
-    withEmptyIsolationHistory({}),
-    {
-      get: (_target, prop) => {
-        if (prop === "query") return Reflect.get(_target, prop);
-        throw new Error(`unexpected database access: ${String(prop)}`);
-      },
+  const drizzle = new Proxy(withEmptyIsolationHistory({}), {
+    get: (_target, prop) => {
+      if (prop === "query") return Reflect.get(_target, prop);
+      throw new Error(`unexpected database access: ${String(prop)}`);
     },
-  );
+  });
   const caller = questsRouter.createCaller({ drizzle, userId: "u1" } as never);
   return { caller, fetchUpdatedUser };
 };

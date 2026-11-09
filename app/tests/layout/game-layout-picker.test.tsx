@@ -6,13 +6,27 @@ import { GameLayoutPicker } from "@/layout/GameLayoutPicker";
 import { LAYOUT_PREFERENCE_COOKIE } from "@/libs/layoutPreference";
 import { GAME_LAYOUTS, type GameLayoutId } from "@/libs/gameLayouts";
 import { LayoutContextProvider, useActiveLayout } from "@/utils/LayoutContext";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../setup/browserGlobals";
 
-type PickerRouter = { refresh: ReturnType<typeof vi.fn>; push: ReturnType<typeof vi.fn>; replace: ReturnType<typeof vi.fn> };
+type PickerRouter = {
+  refresh: ReturnType<typeof vi.fn>;
+  push: ReturnType<typeof vi.fn>;
+  replace: ReturnType<typeof vi.fn>;
+};
 // Module mocks persist across suites, so this file installs its own router.
 function getRouter(): PickerRouter {
-  const globals = globalThis as typeof globalThis & { __layoutPickerRouter?: PickerRouter };
-  globals.__layoutPickerRouter ??= { refresh: vi.fn(), push: vi.fn(), replace: vi.fn() };
+  const globals = globalThis as typeof globalThis & {
+    __layoutPickerRouter?: PickerRouter;
+  };
+  globals.__layoutPickerRouter ??= {
+    refresh: vi.fn(),
+    push: vi.fn(),
+    replace: vi.fn(),
+  };
   return globals.__layoutPickerRouter;
 }
 vi.mock("next/navigation", () => ({ useRouter: () => getRouter() }));
@@ -33,9 +47,13 @@ afterEach(async () => {
 
 const openPicker = async (layout: GameLayoutId = "default") => {
   const onLayoutChange = vi.fn();
-  const view = render(<GameLayoutPicker layout={layout} onLayoutChange={onLayoutChange} />);
+  const view = render(
+    <GameLayoutPicker layout={layout} onLayoutChange={onLayoutChange} />,
+  );
   expect(view.getAllByRole("combobox")).toHaveLength(1);
-  fireEvent.keyDown(view.getByRole("combobox", { name: "Game layout" }), { key: "ArrowDown" });
+  fireEvent.keyDown(view.getByRole("combobox", { name: "Game layout" }), {
+    key: "ArrowDown",
+  });
   await view.findByRole("option", { name: "Classic" });
   return { ...view, onLayoutChange };
 };
@@ -54,22 +72,45 @@ describe("game layout picker", () => {
     function LayoutFrame() {
       const [layout, setLayout] = useState<GameLayoutId>("default");
       return (
-        <LayoutContextProvider value={layout} onLayoutChange={setLayout} isPixelLanding={false}>
+        <LayoutContextProvider
+          value={layout}
+          onLayoutChange={setLayout}
+          isPixelLanding={false}
+        >
           <ConnectedPicker />
         </LayoutContextProvider>
       );
     }
     const view = render(<LayoutFrame />);
-    fireEvent.keyDown(view.getByRole("combobox", { name: "Game layout" }), { key: "ArrowDown" });
-    await act(async () => fireEvent.keyDown(await view.findByRole("option", { name: "Eclipse Observatory" }), { key: "Enter" }));
+    fireEvent.keyDown(view.getByRole("combobox", { name: "Game layout" }), {
+      key: "ArrowDown",
+    });
+    await act(async () =>
+      fireEvent.keyDown(
+        await view.findByRole("option", { name: "Eclipse Observatory" }),
+        { key: "Enter" },
+      ),
+    );
     expect(router.refresh).toHaveBeenCalledTimes(1);
-    expect(view.getByRole("combobox", { name: "Game layout" }).textContent).toContain("Eclipse Observatory");
-    expect(document.cookie).toContain(`${LAYOUT_PREFERENCE_COOKIE}=20-eclipse-observatory`);
-    expect(localStorage.getItem(LAYOUT_PREFERENCE_COOKIE)).toBe('"20-eclipse-observatory"');
+    expect(view.getByRole("combobox", { name: "Game layout" }).textContent).toContain(
+      "Eclipse Observatory",
+    );
+    expect(document.cookie).toContain(
+      `${LAYOUT_PREFERENCE_COOKIE}=20-eclipse-observatory`,
+    );
+    expect(localStorage.getItem(LAYOUT_PREFERENCE_COOKIE)).toBe(
+      '"20-eclipse-observatory"',
+    );
     expect(router.push).not.toHaveBeenCalled();
     expect(router.replace).not.toHaveBeenCalled();
-    fireEvent.keyDown(view.getByRole("combobox", { name: "Game layout" }), { key: "ArrowDown" });
-    await act(async () => fireEvent.keyDown(await view.findByRole("option", { name: "Sakura Courtyard" }), { key: "Enter" }));
+    fireEvent.keyDown(view.getByRole("combobox", { name: "Game layout" }), {
+      key: "ArrowDown",
+    });
+    await act(async () =>
+      fireEvent.keyDown(await view.findByRole("option", { name: "Sakura Courtyard" }), {
+        key: "Enter",
+      }),
+    );
     expect(router.refresh).toHaveBeenCalledTimes(2);
     expect(localStorage.getItem(LAYOUT_PREFERENCE_COOKIE)).toBe('"3-sakura-courtyard"');
   });
@@ -78,18 +119,32 @@ describe("game layout picker", () => {
     const view = await openPicker();
     expect(view.getAllByRole("listbox")).toHaveLength(1);
     expect(view.getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "Classic", "Pixel", "Eclipse Observatory", "Obsidian Council", "Sakura Courtyard",
+      "Classic",
+      "Pixel",
+      "Eclipse Observatory",
+      "Obsidian Council",
+      "Sakura Courtyard",
     ]);
   });
 
-  it.each([...GAME_LAYOUTS])("selects $name using its own layout ID", async ({ name, id }) => {
-    const view = await openPicker(id === "default" ? "pixel" : "default");
-    await act(async () => fireEvent.keyDown(view.getByRole("option", { name }), { key: "Enter" }));
-    await waitFor(() => expect(view.onLayoutChange).toHaveBeenCalledWith(id));
-  });
+  it.each([...GAME_LAYOUTS])(
+    "selects $name using its own layout ID",
+    async ({ name, id }) => {
+      const view = await openPicker(id === "default" ? "pixel" : "default");
+      await act(async () =>
+        fireEvent.keyDown(view.getByRole("option", { name }), { key: "Enter" }),
+      );
+      await waitFor(() => expect(view.onLayoutChange).toHaveBeenCalledWith(id));
+    },
+  );
 
-  it.each([...GAME_LAYOUTS])("restores $name directly as the current option", async ({ name, id }) => {
-    const view = await openPicker(id);
-    expect(view.getByRole("option", { name }).getAttribute("aria-selected")).toBe("true");
-  });
+  it.each([...GAME_LAYOUTS])(
+    "restores $name directly as the current option",
+    async ({ name, id }) => {
+      const view = await openPicker(id);
+      expect(view.getByRole("option", { name }).getAttribute("aria-selected")).toBe(
+        "true",
+      );
+    },
+  );
 });

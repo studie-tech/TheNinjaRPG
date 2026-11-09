@@ -43,7 +43,16 @@ const content = {
 describeWithDatabase("assignQuestToUser rejections", () => {
   beforeEach(async () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    await resetTables(questHistory, quest, userItem, item, villageStructure, war, village, userData);
+    await resetTables(
+      questHistory,
+      quest,
+      userItem,
+      item,
+      villageStructure,
+      war,
+      village,
+      userData,
+    );
     await insertUsers([
       {
         userId: "hero",
@@ -89,7 +98,9 @@ describeWithDatabase("assignQuestToUser rejections", () => {
       })),
     );
     await insertItems([{ id: "ticket", name: "Ticket", itemType: "WEAPON" }]);
-    await insertUserItems([{ id: "tickets", userId: "hero", itemId: "ticket", quantity: 3 }]);
+    await insertUserItems([
+      { id: "tickets", userId: "hero", itemId: "ticket", quantity: 3 },
+    ]);
     await insertQuests(
       (["battlepyramid", "war", "special"] as const).map((questType) => ({
         id: questType,
@@ -110,7 +121,10 @@ describeWithDatabase("assignQuestToUser rejections", () => {
     return overrideQuery(client, "userItem", {
       findMany: async (read, ...args) => {
         const rows = await read(...args);
-        await client.update(userItem).set({ quantity: 2 }).where(eq(userItem.id, "tickets"));
+        await client
+          .update(userItem)
+          .set({ quantity: 2 })
+          .where(eq(userItem.id, "tickets"));
         return rows;
       },
     });
@@ -119,13 +133,17 @@ describeWithDatabase("assignQuestToUser rejections", () => {
   const loadStart = async (questId: string) => {
     const client = await getTestDatabase();
     const { user } = await fetchUpdatedUser({ client, userId: "hero" });
-    const definition = await client.query.quest.findFirst({ where: eq(quest.id, questId) });
+    const definition = await client.query.quest.findFirst({
+      where: eq(quest.id, questId),
+    });
     return { client, user: user!, definition: definition! };
   };
 
   const expectNothingKept = async (quantity = 2) => {
     const client = await getTestDatabase();
-    const saved = await client.query.userData.findFirst({ where: eq(userData.userId, "hero") });
+    const saved = await client.query.userData.findFirst({
+      where: eq(userData.userId, "hero"),
+    });
     expect(await client.query.questHistory.findMany()).toHaveLength(0);
     expect(saved?.dailyWarMissions).toBe(0);
     expect(saved?.questData ?? []).toHaveLength(0);
@@ -155,10 +173,17 @@ describeWithDatabase("assignQuestToUser rejections", () => {
       .set({ updatedAt: new Date(user.updatedAt.getTime() + 60000) })
       .where(eq(userData.userId, "hero"));
     expect(
-      await assignQuestToUser({ client, user, quest: definition, source: "ui", prevAttempt: undefined }),
+      await assignQuestToUser({
+        client,
+        user,
+        quest: definition,
+        source: "ui",
+        prevAttempt: undefined,
+      }),
     ).toEqual({
       success: false,
-      message: "Your account changed or another Pyramid started. Refresh and try again.",
+      message:
+        "Your account changed or another Pyramid started. Refresh and try again.",
     });
     await expectNothingKept(3);
   });
@@ -211,7 +236,9 @@ describeWithDatabase("assignQuestToUser rejections", () => {
       prevAttempt: undefined,
     });
     expect(result).toEqual({ success: false, message: entryItemsChanged });
-    expect(user.userQuests.find((row) => row.questId === "special")?.entryPaid).toBe(false);
+    expect(user.userQuests.find((row) => row.questId === "special")?.entryPaid).toBe(
+      false,
+    );
   });
 
   it("marks the receipt on the caller's user when an item start pays", async () => {
@@ -225,17 +252,33 @@ describeWithDatabase("assignQuestToUser rejections", () => {
       prevAttempt: undefined,
     });
     expect(result).toMatchObject({ success: true, message: "Quest started: special" });
-    expect(user.userQuests.find((row) => row.questId === "special")?.entryPaid).toBe(true);
+    expect(user.userQuests.find((row) => row.questId === "special")?.entryPaid).toBe(
+      true,
+    );
     expect((await client.query.questHistory.findFirst())?.entryPaid).toBe(true);
     expect((await client.query.userItem.findFirst())?.quantity).toBe(2);
   });
 
-  it.each(["battlepyramid", "war"])("marks the receipt when a %s start pays", async (questId) => {
-    const { client, user, definition } = await loadStart(questId);
-    const result = await assignQuestToUser({ client, user, quest: definition, source: "ui", prevAttempt: undefined });
-    expect(result).toMatchObject({ success: true, message: `Quest started: ${questId}` });
-    expect(user.userQuests.find((row) => row.questId === questId)?.entryPaid).toBe(true);
-    expect((await client.query.questHistory.findFirst())?.entryPaid).toBe(true);
-    expect((await client.query.userItem.findFirst())?.quantity).toBe(2);
-  });
+  it.each(["battlepyramid", "war"])(
+    "marks the receipt when a %s start pays",
+    async (questId) => {
+      const { client, user, definition } = await loadStart(questId);
+      const result = await assignQuestToUser({
+        client,
+        user,
+        quest: definition,
+        source: "ui",
+        prevAttempt: undefined,
+      });
+      expect(result).toMatchObject({
+        success: true,
+        message: `Quest started: ${questId}`,
+      });
+      expect(user.userQuests.find((row) => row.questId === questId)?.entryPaid).toBe(
+        true,
+      );
+      expect((await client.query.questHistory.findFirst())?.entryPaid).toBe(true);
+      expect((await client.query.userItem.findFirst())?.quantity).toBe(2);
+    },
+  );
 });

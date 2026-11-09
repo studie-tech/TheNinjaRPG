@@ -17,7 +17,11 @@ describeWithDatabase("report statistics", () => {
     await resetTables(userReportComment, userReport, userData);
     await insertUsers([
       { userId: "statistics-player", username: "StatisticsPlayer", role: "USER" },
-      { userId: "statistics-moderator", username: "StatisticsModerator", role: "MODERATOR" },
+      {
+        userId: "statistics-moderator",
+        username: "StatisticsModerator",
+        role: "MODERATOR",
+      },
     ]);
   });
 

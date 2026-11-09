@@ -3,7 +3,6 @@ import { afterEach, beforeEach, expect, it } from "bun:test";
 import ElementImage from "@/layout/ElementImage";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-
 beforeEach(() => {
   installBrowserGlobals();
 });

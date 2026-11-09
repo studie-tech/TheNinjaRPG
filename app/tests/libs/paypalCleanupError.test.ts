@@ -63,7 +63,11 @@ describe("isPayPalSdkStack", () => {
   });
 
   it("keeps an error that only mentions PayPal", () => {
-    expect(isPayPalSdkStack("Error: see https://www.paypal.com/sdk/js\n    at f (https://a.example/b.js:1:1)")).toBe(false);
+    expect(
+      isPayPalSdkStack(
+        "Error: see https://www.paypal.com/sdk/js\n    at f (https://a.example/b.js:1:1)",
+      ),
+    ).toBe(false);
   });
 
   it("keeps an error without a stack", () => {

@@ -9,7 +9,9 @@ let hrefs: string[];
 
 beforeEach(() => {
   hrefs = [];
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
+    <div>{children}</div>
+  ));
   vi.spyOn(ImageLinkGrid, "ImageLinkGrid").mockImplementation(({ entries }) => {
     hrefs = entries.map((entry) => entry.href);
     return null;

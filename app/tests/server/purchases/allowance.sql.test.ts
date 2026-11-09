@@ -8,7 +8,11 @@ import {
 } from "@/drizzle/schema";
 import { reputationAllowanceUsed } from "@/server/utils/purchases/allowance";
 import { insertUsers } from "../../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../setup/testDatabase";
 
 const receipt = (id: string, reputationPoints: number) => ({
   id,
@@ -25,10 +29,18 @@ const receipt = (id: string, reputationPoints: number) => ({
 
 describeWithDatabase("reputation allowance", () => {
   beforeEach(async () => {
-    await resetTables(paypalTransaction, stripePayment, stripeCheckout, webStoreOrder, userData);
+    await resetTables(
+      paypalTransaction,
+      stripePayment,
+      stripeCheckout,
+      webStoreOrder,
+      userData,
+    );
     await insertUsers([{ userId: "buyer", username: "Buyer" }]);
     const db = await getTestDatabase();
-    await db.insert(paypalTransaction).values([receipt("kept", 20), receipt("retried", 5)]);
+    await db
+      .insert(paypalTransaction)
+      .values([receipt("kept", 20), receipt("retried", 5)]);
   });
 
   it("counts every receipt unless the caller names its own", async () => {

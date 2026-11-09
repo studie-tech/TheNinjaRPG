@@ -17,8 +17,14 @@ describe("conversation read scheduling", () => {
     } as unknown as DrizzleClient;
 
     const pending = fetchConversation({ client, title: "Global", userId: "reader" });
-    const startedTogether = findConversation.mock.calls.length === 1 && findPolicies.mock.calls.length === 1;
-    resolveConversation({ id: "public", isPublic: true, isStaffAvailable: false, users: [] });
+    const startedTogether =
+      findConversation.mock.calls.length === 1 && findPolicies.mock.calls.length === 1;
+    resolveConversation({
+      id: "public",
+      isPublic: true,
+      isStaffAvailable: false,
+      users: [],
+    });
     resolvePolicies([{ userId: "reader", enabled: true, tavernDisabled: true }]);
 
     const result = await pending;

@@ -44,7 +44,10 @@ describeWithDatabase("force-awake team cleanup", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("removes the team once its last member is woken", async () => {
-    const result = await (await callerFor(staffRouter, STAFF)).forceAwake({ userId: STUCK, reason });
+    const result = await (await callerFor(staffRouter, STAFF)).forceAwake({
+      userId: STUCK,
+      reason,
+    });
     expect(result.success).toBe(true);
     const db = await getTestDatabase();
     expect(await db.query.mpvpBattleQueue.findMany()).toHaveLength(0);
@@ -55,14 +58,29 @@ describeWithDatabase("force-awake team cleanup", () => {
     const client = beforeStatements(
       db,
       mpvpBattleQueue,
-      [async () => {
-        await db.insert(mpvpBattleUser).values({ id: "joiner", userId: "awake-joiner", clanBattleId: "awake-team", side: "ATTACKER", slot: 1 });
-      }],
+      [
+        async () => {
+          await db.insert(mpvpBattleUser).values({
+            id: "joiner",
+            userId: "awake-joiner",
+            clanBattleId: "awake-team",
+            side: "ATTACKER",
+            slot: 1,
+          });
+        },
+      ],
       { operations: ["delete"] },
     );
-    const result = await callerForDatabase(staffRouter, STAFF, client).forceAwake({ userId: STUCK, reason });
+    const result = await callerForDatabase(staffRouter, STAFF, client).forceAwake({
+      userId: STUCK,
+      reason,
+    });
     expect(result.success).toBe(true);
-    expect(await db.query.mpvpBattleQueue.findMany()).toEqual([expect.objectContaining({ id: "awake-team" })]);
-    expect(await db.query.mpvpBattleUser.findMany()).toEqual([expect.objectContaining({ id: "joiner" })]);
+    expect(await db.query.mpvpBattleQueue.findMany()).toEqual([
+      expect.objectContaining({ id: "awake-team" }),
+    ]);
+    expect(await db.query.mpvpBattleUser.findMany()).toEqual([
+      expect.objectContaining({ id: "joiner" }),
+    ]);
   });
 });

@@ -3,7 +3,11 @@ import { asc } from "drizzle-orm";
 import { anbuSquad, userData } from "@/drizzle/schema";
 import { updateAnbuSquadForRemoveAccountGameData } from "@/queries/accountDeletion";
 import { insertUsers } from "../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../setup/testDatabase";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../setup/testDatabase";
 
 const squad = (id: string, leaderId: string) => ({
   id,
@@ -23,15 +27,31 @@ describeWithDatabase("account deletion ANBU succession", () => {
   it("hands each led squad to its oldest other member and leaves other squads alone", async () => {
     const db = await getTestDatabase();
     await insertUsers([
-      { userId: "departing", anbuId: "led", createdAt: new Date("2024-01-01T00:00:00Z") },
+      {
+        userId: "departing",
+        anbuId: "led",
+        createdAt: new Date("2024-01-01T00:00:00Z"),
+      },
       { userId: "newer", anbuId: "led", createdAt: new Date("2025-03-01T00:00:00Z") },
       { userId: "older", anbuId: "led", createdAt: new Date("2025-01-01T00:00:00Z") },
-      { userId: "outsider", anbuId: "other", createdAt: new Date("2023-01-01T00:00:00Z") },
-      { userId: "elsewhere", anbuId: "other", createdAt: new Date("2025-02-01T00:00:00Z") },
+      {
+        userId: "outsider",
+        anbuId: "other",
+        createdAt: new Date("2023-01-01T00:00:00Z"),
+      },
+      {
+        userId: "elsewhere",
+        anbuId: "other",
+        createdAt: new Date("2025-02-01T00:00:00Z"),
+      },
     ]);
     await db
       .insert(anbuSquad)
-      .values([squad("led", "departing"), squad("alone", "departing"), squad("other", "elsewhere")]);
+      .values([
+        squad("led", "departing"),
+        squad("alone", "departing"),
+        squad("other", "elsewhere"),
+      ]);
 
     const result = await updateAnbuSquadForRemoveAccountGameData(db, "departing");
 

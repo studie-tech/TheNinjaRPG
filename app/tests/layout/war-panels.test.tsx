@@ -1,5 +1,13 @@
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+  vi,
+} from "bun:test";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as navigation from "next/navigation";
 import { type ReactNode, useState } from "react";
@@ -223,7 +231,9 @@ beforeEach(() => {
           },
         ),
       },
-      getActiveWars: { useQuery: vi.fn(() => ({ data: wars, refetch: activeWarsRefetch })) },
+      getActiveWars: {
+        useQuery: vi.fn(() => ({ data: wars, refetch: activeWarsRefetch })),
+      },
       getWarPointClaims: {
         useQuery: () => ({ data: claims, error: claimError, refetch: claimRefetch }),
       },
@@ -240,7 +250,9 @@ beforeEach(() => {
   vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
     () => ({ data: user, timeDiff, updateUser, prepareUserUpdate: () => 7 }) as never,
   );
-  vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => ({ data: select(user as never), timeDiff, updateUser }) as never);
+  vi.spyOn(UserContext, "useUserDataSelector").mockImplementation(
+    (select) => ({ data: select(user as never), timeDiff, updateUser }) as never,
+  );
   vi.spyOn(routing, "pushToCombat").mockImplementation(() => {});
   // Exercise our mounting/selection logic; shared Modal and Radix behavior have their own coverage.
   vi.spyOn(modal, "default").mockImplementation((props) => (
@@ -263,11 +275,20 @@ afterEach(() => {
 
 describe("war mercenary management", () => {
   const contract = (slot: number) => ({
-    id: `contract-${slot}`, warId: "war-1", sideVillageId: "own", userId: `mercenary-${slot}`,
-    invitedById: "kage", tokens: 4, slot, createdAt: new Date(NOW),
-    acceptedAt: slot === 1 ? new Date(NOW) : null, endedAt: null,
-    activeSlot: slot, activeUserId: slot === 1 ? `mercenary-${slot}` : null,
-    invitedUserId: `mercenary-${slot}`, user: { username: `Mercenary ${slot}` },
+    id: `contract-${slot}`,
+    warId: "war-1",
+    sideVillageId: "own",
+    userId: `mercenary-${slot}`,
+    invitedById: "kage",
+    tokens: 4,
+    slot,
+    createdAt: new Date(NOW),
+    acceptedAt: slot === 1 ? new Date(NOW) : null,
+    endedAt: null,
+    activeSlot: slot,
+    activeUserId: slot === 1 ? `mercenary-${slot}` : null,
+    invitedUserId: `mercenary-${slot}`,
+    user: { username: `Mercenary ${slot}` },
   });
 
   it("keeps the roster collapsed and omits hiring at capacity, restoring it when a slot opens", () => {
@@ -310,10 +331,16 @@ describe("war field objectives", () => {
       { userId: user.userId, username: "Mercenary", isMasked: false },
     ];
     info!.contributions = identities.map((identity) => ({
-      ...identity, damage: 100, recovery: 50, convertedAt: null, expiredAt: null,
+      ...identity,
+      damage: 100,
+      recovery: 50,
+      convertedAt: null,
+      expiredAt: null,
     }));
     info!.combatContributions = identities.map((identity) => ({
-      ...identity, kills: 1, losses: 0,
+      ...identity,
+      kills: 1,
+      losses: 0,
     }));
     const view = mount(<ObjectiveWarPanel warId="war-1" />);
     openTab(view, "Contributions");
@@ -337,14 +364,16 @@ describe("war field objectives", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(query).not.toHaveBeenCalled();
     expect(activeWarsQuery).toHaveBeenLastCalledWith(
-      { villageId: "own" }, expect.objectContaining({ refetchInterval: 60_000 }),
+      { villageId: "own" },
+      expect.objectContaining({ refetchInterval: 60_000 }),
     );
     expect(activeWarsRefetch).not.toHaveBeenCalled();
     expect(view.queryByRole("dialog")).toBeNull();
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(activeWarsQuery).toHaveBeenLastCalledWith(
-      { villageId: "own" }, expect.objectContaining({ refetchInterval: 10_000 }),
+      { villageId: "own" },
+      expect.objectContaining({ refetchInterval: 10_000 }),
     );
     expect(activeWarsRefetch).toHaveBeenCalledTimes(1);
     const dialog = view.getByRole("dialog", { name: "War" });
@@ -364,7 +393,8 @@ describe("war field objectives", () => {
     expect(view.queryByRole("region", { name: "War objectives" })).toBeNull();
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(activeWarsQuery).toHaveBeenLastCalledWith(
-      { villageId: "own" }, expect.objectContaining({ refetchInterval: 60_000 }),
+      { villageId: "own" },
+      expect.objectContaining({ refetchInterval: 60_000 }),
     );
   });
 
@@ -547,15 +577,32 @@ describe("war field objectives", () => {
     const view = mount(<ObjectiveWarPanel warId="war-1" />);
     openTab(view, "Missions");
     fireEvent.click(view.getByRole("button", { name: "Start sabotage" }));
-    await act(() => start.respond({ success: false, message: actionStatusMessage("HOSPITALIZED") }));
-    expect(view.getByRole("alert").textContent).toContain(actionStatusMessage("HOSPITALIZED"));
-    expect(view.getByRole("link", { name: "Go to hospital" }).getAttribute("href")).toBe("/hospital");
-    expect((view.getByRole("button", { name: "Start sabotage" }) as HTMLButtonElement).disabled).toBe(false);
+    await act(() =>
+      start.respond({ success: false, message: actionStatusMessage("HOSPITALIZED") }),
+    );
+    expect(view.getByRole("alert").textContent).toContain(
+      actionStatusMessage("HOSPITALIZED"),
+    );
+    expect(
+      view.getByRole("link", { name: "Go to hospital" }).getAttribute("href"),
+    ).toBe("/hospital");
+    expect(
+      (view.getByRole("button", { name: "Start sabotage" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
     expect(invalidateUser).not.toHaveBeenCalled();
     fireEvent.click(view.getByRole("button", { name: "Start sabotage" }));
     expect(view.queryByRole("link", { name: "Go to hospital" })).toBeNull();
-    await act(() => start.respond({ success: false, message: `Return to your village first ${AUTO_WAKE_MESSAGE}`, actionNotice: AUTO_WAKE_MESSAGE }));
-    expect(view.getByRole("alert").textContent).toBe(`Return to your village first ${AUTO_WAKE_MESSAGE}`);
+    await act(() =>
+      start.respond({
+        success: false,
+        message: `Return to your village first ${AUTO_WAKE_MESSAGE}`,
+        actionNotice: AUTO_WAKE_MESSAGE,
+      }),
+    );
+    expect(view.getByRole("alert").textContent).toBe(
+      `Return to your village first ${AUTO_WAKE_MESSAGE}`,
+    );
     expect(view.queryByRole("link", { name: "Go to hospital" })).toBeNull();
   });
 
@@ -621,7 +668,8 @@ describe("war field objectives", () => {
     expect(updateUser).toHaveBeenCalledWith(
       { success: true, message: "Battle ready", battleId: "battle-1" },
       { revision: 7, refetch: false },
-    );    expect(routing.pushToCombat).not.toHaveBeenCalled();
+    );
+    expect(routing.pushToCombat).not.toHaveBeenCalled();
     await act(async () => {
       publishUser();
       await response;
@@ -656,7 +704,9 @@ describe("war field objectives", () => {
     expect(view.getByText("Notice period")).toBeDefined();
     expect(view.queryByRole("button", { name: "Attack guardian" })).toBeNull();
     openTab(view, "Missions");
-    expect(view.getByText("Espionage and sabotage missions unlock when combat begins.")).toBeDefined();
+    expect(
+      view.getByText("Espionage and sabotage missions unlock when combat begins."),
+    ).toBeDefined();
     expect(
       (view.getByRole("button", { name: "Start sabotage" }) as HTMLButtonElement)
         .disabled,

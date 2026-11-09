@@ -13,46 +13,47 @@ import { deferred as createDeferred } from "../../../setup/deferred";
 
 const startedAt = new Date(Date.now() - 60_000);
 const deferred: Array<() => unknown> = [];
-const user = () => ({
-  userId: "bookkeeping-user",
-  username: "BookkeepingUser",
-  updatedAt: new Date(),
-  status: "AWAKE",
-  rank: "JONIN",
-  level: 50,
-  isBanned: false,
-  isOutlaw: true,
-  villageId: null,
-  sector: 1,
-  longitude: 0,
-  latitude: 0,
-  curEnergy: 100,
-  maxEnergy: 100,
-  curHealth: 100,
-  maxHealth: 1000,
-  curChakra: 8000,
-  maxChakra: 8000,
-  curStamina: 1000,
-  maxStamina: 1000,
-  regeneration: 0,
-  regenAt: new Date(),
-  medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY,
-  offence: 10,
-  trainingSpeed: "15min",
-  dailyTrainings: 0,
-  currentlyTrainingMastery: "ninjutsuMastery",
-  masteryTrainingStartedAt: startedAt,
-  ninjutsuMastery: 10,
-  genjutsuMastery: 10,
-  taijutsuMastery: 10,
-  bukijutsuMastery: 10,
-  bloodlineMastery: 10,
-  sageMastery: 10,
-  elementalMastery: {},
-  masteryRanks: {},
-  questData: [],
-  userQuests: [],
-}) as unknown as NonNullable<UserWithRelations>;
+const user = () =>
+  ({
+    userId: "bookkeeping-user",
+    username: "BookkeepingUser",
+    updatedAt: new Date(),
+    status: "AWAKE",
+    rank: "JONIN",
+    level: 50,
+    isBanned: false,
+    isOutlaw: true,
+    villageId: null,
+    sector: 1,
+    longitude: 0,
+    latitude: 0,
+    curEnergy: 100,
+    maxEnergy: 100,
+    curHealth: 100,
+    maxHealth: 1000,
+    curChakra: 8000,
+    maxChakra: 8000,
+    curStamina: 1000,
+    maxStamina: 1000,
+    regeneration: 0,
+    regenAt: new Date(),
+    medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY,
+    offence: 10,
+    trainingSpeed: "15min",
+    dailyTrainings: 0,
+    currentlyTrainingMastery: "ninjutsuMastery",
+    masteryTrainingStartedAt: startedAt,
+    ninjutsuMastery: 10,
+    genjutsuMastery: 10,
+    taijutsuMastery: 10,
+    bukijutsuMastery: 10,
+    bloodlineMastery: 10,
+    sageMastery: 10,
+    elementalMastery: {},
+    masteryRanks: {},
+    questData: [],
+    userQuests: [],
+  }) as unknown as NonNullable<UserWithRelations>;
 
 const database = () => {
   const where = vi.fn().mockResolvedValue({ rowsAffected: 1 });
@@ -65,10 +66,15 @@ const database = () => {
 
 beforeEach(() => {
   deferred.length = 0;
-  stubProfile("fetchUpdatedUser", vi.fn().mockResolvedValue({
-    user: user(), settings: [], requiresProgressionRefresh: true,
-    publishedAchievementIds: [],
-  }) as never);
+  stubProfile(
+    "fetchUpdatedUser",
+    vi.fn().mockResolvedValue({
+      user: user(),
+      settings: [],
+      requiresProgressionRefresh: true,
+      publishedAchievementIds: [],
+    }) as never,
+  );
   vi.spyOn(nextServer, "after").mockImplementation((callback) => {
     deferred.push(callback as () => unknown);
   });
@@ -86,20 +92,36 @@ afterEach(() => {
 });
 
 const trainingCases = [
-  { name: "startTraining", invoke: (db: ReturnType<typeof database>) =>
-    callerForDatabase(trainRouter, "bookkeeping-user", db as never)
-      .startTraining({ stat: "offence", energy: 10 }) },
-  { name: "stopMasteryTraining", invoke: (db: ReturnType<typeof database>) =>
-    callerForDatabase(trainRouter, "bookkeeping-user", db as never)
-      .stopMasteryTraining({ stat: "ninjutsuMastery", startedAt }) },
+  {
+    name: "startTraining",
+    invoke: (db: ReturnType<typeof database>) =>
+      callerForDatabase(trainRouter, "bookkeeping-user", db as never).startTraining({
+        stat: "offence",
+        energy: 10,
+      }),
+  },
+  {
+    name: "stopMasteryTraining",
+    invoke: (db: ReturnType<typeof database>) =>
+      callerForDatabase(
+        trainRouter,
+        "bookkeeping-user",
+        db as never,
+      ).stopMasteryTraining({ stat: "ninjutsuMastery", startedAt }),
+  },
 ] as const;
 
 describe.each(trainingCases)("$name history", ({ name, invoke }) => {
   it("responds after claiming gains without starting the history write", async () => {
     const db = database();
     const { promise: claimed, resolve: reachedClaim } = createDeferred<void>();
-    const { promise: committed, resolve: commit } = createDeferred<{ rowsAffected: number }>();
-    db.where.mockImplementationOnce(() => { reachedClaim(); return committed; });
+    const { promise: committed, resolve: commit } = createDeferred<{
+      rowsAffected: number;
+    }>();
+    db.where.mockImplementationOnce(() => {
+      reachedClaim();
+      return committed;
+    });
     const response = invoke(db);
     await claimed;
     expect(deferred).toHaveLength(0);
@@ -111,7 +133,9 @@ describe.each(trainingCases)("$name history", ({ name, invoke }) => {
     await deferred[0]?.();
     expect(db.values).toHaveBeenCalledTimes(1);
     expect(db.values.mock.calls[0]?.[0]).toMatchObject({ userId: "bookkeeping-user" });
-    const entry = db.values.mock.calls[0]?.[0] as unknown as { trainingFinishedAt: Date };
+    const entry = db.values.mock.calls[0]?.[0] as unknown as {
+      trainingFinishedAt: Date;
+    };
     expect(entry.trainingFinishedAt.getTime()).toBeLessThanOrEqual(respondedAt);
     expect(Sentry.flush).not.toHaveBeenCalled();
   });
@@ -132,11 +156,17 @@ describe.each(trainingCases)("$name history", ({ name, invoke }) => {
     expect(Sentry.flush).not.toHaveBeenCalled();
     let release!: (result: boolean) => void;
     vi.spyOn(Sentry, "flush").mockReturnValue(
-      new Promise<boolean>((resolve) => { release = resolve; }),
+      new Promise<boolean>((resolve) => {
+        release = resolve;
+      }),
     );
     let settled = false;
-    const callback = Promise.resolve(deferred[0]?.()).finally(() => { settled = true; });
-    await new Promise<void>((resolve) => { setImmediate(resolve); });
+    const callback = Promise.resolve(deferred[0]?.()).finally(() => {
+      settled = true;
+    });
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
     expect(Sentry.captureException).toHaveBeenCalledWith(failure, {
       tags: { source: `train.${name}.trainingLog` },
     });
@@ -157,15 +187,18 @@ describe.each(trainingCases)("$name history", ({ name, invoke }) => {
     await deferred[0]?.();
     expect(Sentry.flush).toHaveBeenCalledWith(5000);
     expect(console.error).toHaveBeenCalledWith(
-      "[flushSafe] An exception was thrown while running Sentry.flush()", failure,
+      "[flushSafe] An exception was thrown while running Sentry.flush()",
+      failure,
     );
   });
 });
 
 describe("healing student shares", () => {
   const heal = (db: ReturnType<typeof database>) =>
-    callerForDatabase(hospitalRouter, "bookkeeping-user", db as never)
-      .userHeal({ userId: "bookkeeping-user", healPercentage: 100 });
+    callerForDatabase(hospitalRouter, "bookkeeping-user", db as never).userHeal({
+      userId: "bookkeeping-user",
+      healPercentage: 100,
+    });
 
   it("responds after the heal without starting the atomic student increment", async () => {
     const db = database();
@@ -188,9 +221,12 @@ describe("healing student shares", () => {
   });
 
   it("skips the share when no medical experience was earned", async () => {
-    stubProfile("fetchUpdatedUser", vi.fn().mockResolvedValue({
-      user: { ...user(), medicalExperience: MEDNIN_EXP_CAP },
-    }) as never);
+    stubProfile(
+      "fetchUpdatedUser",
+      vi.fn().mockResolvedValue({
+        user: { ...user(), medicalExperience: MEDNIN_EXP_CAP },
+      }) as never,
+    );
     const db = database();
     expect((await heal(db)).success).toBe(true);
     // Only the map broadcast is deferred.
@@ -206,11 +242,17 @@ describe("healing student shares", () => {
     expect(Sentry.flush).not.toHaveBeenCalled();
     let release!: (result: boolean) => void;
     vi.spyOn(Sentry, "flush").mockReturnValue(
-      new Promise<boolean>((resolve) => { release = resolve; }),
+      new Promise<boolean>((resolve) => {
+        release = resolve;
+      }),
     );
     let settled = false;
-    const callback = Promise.resolve(deferred[0]?.()).finally(() => { settled = true; });
-    await new Promise<void>((resolve) => { setImmediate(resolve); });
+    const callback = Promise.resolve(deferred[0]?.()).finally(() => {
+      settled = true;
+    });
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
     expect(Sentry.captureException).toHaveBeenCalledWith(failure, {
       tags: { source: "hospital.userHeal.studentShare" },
     });
@@ -223,7 +265,9 @@ describe("healing student shares", () => {
 
   it("contains a flush failure after the committed heal", async () => {
     const db = database();
-    db.where.mockResolvedValueOnce({ rowsAffected: 1 }).mockRejectedValueOnce(new Error("share unavailable"));
+    db.where
+      .mockResolvedValueOnce({ rowsAffected: 1 })
+      .mockRejectedValueOnce(new Error("share unavailable"));
     const failure = new Error("telemetry unavailable");
     vi.spyOn(Sentry, "flush").mockRejectedValue(failure);
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -231,7 +275,8 @@ describe("healing student shares", () => {
     await deferred[0]?.();
     expect(Sentry.flush).toHaveBeenCalledWith(5000);
     expect(console.error).toHaveBeenCalledWith(
-      "[flushSafe] An exception was thrown while running Sentry.flush()", failure,
+      "[flushSafe] An exception was thrown while running Sentry.flush()",
+      failure,
     );
   });
 });

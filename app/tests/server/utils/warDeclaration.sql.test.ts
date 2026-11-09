@@ -4,7 +4,11 @@ import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import type { DrizzleClient } from "@/server/db";
 import { rejectWarDeclaration, startClaimedWarDeclaration } from "@/server/utils/war";
 import { insertUsers } from "../../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../setup/testDatabase";
 
 const now = new Date("2026-10-12T12:00:00.000Z");
 
@@ -79,7 +83,12 @@ describeWithDatabase("war declaration settlement", () => {
     const vote = await insertVote("APPROVED", now);
     const db = (await getTestDatabase()) as unknown as DrizzleClient;
     const activeWars = [
-      { attackerVillageId: "defender", defenderVillageId: "third", type: "VILLAGE_WAR", warAllies: [] },
+      {
+        attackerVillageId: "defender",
+        defenderVillageId: "third",
+        type: "VILLAGE_WAR",
+        warAllies: [],
+      },
     ] as unknown as FetchActiveWarsReturnType[];
     const result = await startClaimedWarDeclaration(db, vote, {
       attackerVillage: { name: "Attacker" },

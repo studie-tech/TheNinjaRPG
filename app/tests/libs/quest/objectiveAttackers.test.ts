@@ -52,8 +52,23 @@ describe("rollObjectiveAttackers", () => {
       attackers: [{ ids: ["bandit"], number: 100, quantity: 1 }],
     });
     const actor = {
-      userQuests: [{ quest: { id: "q", consecutiveObjectives: false, content: { objectives: [encounter] } } }],
-      questData: [{ id: "q", goals: [{ id: "encounter", done: false, sector: 7, longitude: 0, latitude: 0 }] }],
+      userQuests: [
+        {
+          quest: {
+            id: "q",
+            consecutiveObjectives: false,
+            content: { objectives: [encounter] },
+          },
+        },
+      ],
+      questData: [
+        {
+          id: "q",
+          goals: [
+            { id: "encounter", done: false, sector: 7, longitude: 0, latitude: 0 },
+          ],
+        },
+      ],
     } as unknown as NonNullable<UserWithRelations>;
     const objectives = getActiveObjectives(actor);
     expect(objectives[0]).toMatchObject({ sector: 7, longitude: 0, latitude: 0 });
@@ -84,8 +99,8 @@ describe("rollObjectiveAttackers", () => {
       task: "move_to_location",
       attackers: [{ ids: ["other"], number: 100, quantity: 1 }],
     });
-    expect(rollObjectiveAttackers([ambushMove, second], 1, fixedRandom(0))?.ids).toEqual([
-      "enemy-chunin",
-    ]);
+    expect(
+      rollObjectiveAttackers([ambushMove, second], 1, fixedRandom(0))?.ids,
+    ).toEqual(["enemy-chunin"]);
   });
 });

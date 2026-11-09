@@ -22,7 +22,9 @@ const forms: SageMode[] = [];
 
 beforeEach(() => {
   forms.length = 0;
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
+    <div>{children}</div>
+  ));
   vi.spyOn(EffectTagListEditor, "EffectTagListEditor").mockImplementation(() => null);
   vi.spyOn(requireRole, "useRequireRole").mockReturnValue({
     userData: { role: "CONTENT-ADMIN" },

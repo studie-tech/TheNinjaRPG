@@ -1,4 +1,3 @@
-
 import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
 import { userData, userLiveActivity } from "@/drizzle/schema";

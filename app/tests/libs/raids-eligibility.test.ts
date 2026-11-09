@@ -13,8 +13,12 @@ describe("raidCaptureClosedMessage", () => {
 
   it("stays open before the deadline or without one", () => {
     const open = { raidGracePeriodEnd: null };
-    expect(raidCaptureClosedMessage({ ...open, raidCaptureDeadline: null }, now)).toBeNull();
-    expect(raidCaptureClosedMessage({ ...open, raidCaptureDeadline: future }, now)).toBeNull();
+    expect(
+      raidCaptureClosedMessage({ ...open, raidCaptureDeadline: null }, now),
+    ).toBeNull();
+    expect(
+      raidCaptureClosedMessage({ ...open, raidCaptureDeadline: future }, now),
+    ).toBeNull();
   });
 
   it("stays open during the grace period", () => {
@@ -28,10 +32,16 @@ describe("raidCaptureClosedMessage", () => {
 
   it("closes after the deadline and after the grace period", () => {
     expect(
-      raidCaptureClosedMessage({ raidCaptureDeadline: past, raidGracePeriodEnd: null }, now),
+      raidCaptureClosedMessage(
+        { raidCaptureDeadline: past, raidGracePeriodEnd: null },
+        now,
+      ),
     ).toBe("This raid's capture deadline has passed");
     expect(
-      raidCaptureClosedMessage({ raidCaptureDeadline: past, raidGracePeriodEnd: past }, now),
+      raidCaptureClosedMessage(
+        { raidCaptureDeadline: past, raidGracePeriodEnd: past },
+        now,
+      ),
     ).toBe("This raid's capture deadline and grace period have ended");
   });
 });

@@ -59,25 +59,21 @@ describeWithDatabase("staff LPC item assignments", () => {
     await insertUserItems([
       { id: "lpc-worn", itemId: "lpc-coat", userId: "lpc-staff", equipped: "CHEST" },
     ]);
-    await database
-      .insert(craftingRequirement)
-      .values({
-        id: "lpc-recipe",
-        craftItemId: "lpc-coat",
-        requirementItemId: "lpc-thread",
-        quantity: 2,
-      });
-    await database
-      .insert(itemVariant)
-      .values({
-        id: "lpc-variant",
-        itemId: "lpc-coat",
-        name: "Original variant",
-        image: "https://example.com/original.png",
-        costType: "MONEY",
-        cost: 5,
-        order: 1,
-      });
+    await database.insert(craftingRequirement).values({
+      id: "lpc-recipe",
+      craftItemId: "lpc-coat",
+      requirementItemId: "lpc-thread",
+      quantity: 2,
+    });
+    await database.insert(itemVariant).values({
+      id: "lpc-variant",
+      itemId: "lpc-coat",
+      name: "Original variant",
+      image: "https://example.com/original.png",
+      costType: "MONEY",
+      cost: 5,
+      order: 1,
+    });
   });
 
   afterEach(() => vi.restoreAllMocks());

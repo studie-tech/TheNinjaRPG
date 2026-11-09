@@ -65,9 +65,15 @@ describe("raid list and action snapshots", () => {
     const findFirst = vi.fn().mockResolvedValue(null);
     await fetchRaidJoinUser({ query: { userData: { findFirst } } } as never, "user-1");
     expect(findFirst).toHaveBeenCalledTimes(1);
-    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      with: expect.objectContaining({ village: expect.objectContaining({ with: expect.objectContaining({ structures: true }) }) }),
-    }));
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        with: expect.objectContaining({
+          village: expect.objectContaining({
+            with: expect.objectContaining({ structures: true }),
+          }),
+        }),
+      }),
+    );
     expect(findFirst.mock.calls[0]?.[0]?.columns).toBeUndefined();
   });
 });
@@ -89,30 +95,48 @@ describe("isRaidListedForVillage", () => {
   });
 
   it("lists open raids without village membership", () => {
-    expect(isRaidListedForVillage(raid("open_raid", 3), null, new Set(), new Set(), now)).toBe(
-      true,
-    );
+    expect(
+      isRaidListedForVillage(raid("open_raid", 3), null, new Set(), new Set(), now),
+    ).toBe(true);
   });
 
   it("lists exclusive raids the village owns", () => {
-    expect(isRaidListedForVillage(raid("exclusive_raid", 7), villageId, owned, attacker, now)).toBe(
-      true,
-    );
-    expect(isRaidListedForVillage(raid("exclusive_raid", 9), villageId, owned, attacker, now)).toBe(
-      false,
-    );
+    expect(
+      isRaidListedForVillage(
+        raid("exclusive_raid", 7),
+        villageId,
+        owned,
+        attacker,
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      isRaidListedForVillage(
+        raid("exclusive_raid", 9),
+        villageId,
+        owned,
+        attacker,
+        now,
+      ),
+    ).toBe(false);
   });
 
   it("lists exclusive raids for attackers after the shrine falls", () => {
     expect(
-      isRaidListedForVillage(raid("exclusive_raid", 12), villageId, new Set(), attacker, now),
+      isRaidListedForVillage(
+        raid("exclusive_raid", 12),
+        villageId,
+        new Set(),
+        attacker,
+        now,
+      ),
     ).toBe(true);
   });
 
   it("hides exclusive raids with no villageId", () => {
-    expect(isRaidListedForVillage(raid("exclusive_raid", 7), null, owned, attacker, now)).toBe(
-      false,
-    );
+    expect(
+      isRaidListedForVillage(raid("exclusive_raid", 7), null, owned, attacker, now),
+    ).toBe(false);
   });
 
   it("hides exclusive raids after the capture deadline when there is no grace period", () => {

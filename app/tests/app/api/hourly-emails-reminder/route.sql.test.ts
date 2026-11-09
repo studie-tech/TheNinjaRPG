@@ -57,7 +57,8 @@ describeWithDatabase("hourly email reminders", () => {
     expect((await GET(request())).status).toBe(200);
     const [message] = send.mock.calls[0] ?? [];
     const url = new URL(
-      (Array.isArray(message) ? message[0] : message)?.dynamicTemplateData?.unsubscribeUrl,
+      (Array.isArray(message) ? message[0] : message)?.dynamicTemplateData
+        ?.unsubscribeUrl,
     );
     expect(url.searchParams.get("email")).toBe(email);
     expect(url.searchParams.get("secret")).toBe("secret+/=");

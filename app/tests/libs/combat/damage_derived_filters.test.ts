@@ -126,7 +126,11 @@ describe("damage-derived tag filters", () => {
     lockElement: "Fire" | "Water",
   ) => {
     const damage = makeDamageEffect({ elements: ["Fire"] });
-    const effect = makeEffect(type, { power: 20, elements: [lockElement] }, { targetId });
+    const effect = makeEffect(
+      type,
+      { power: 20, elements: [lockElement] },
+      { targetId },
+    );
     const consequence: Consequence = {
       userId: "attacker",
       targetId: "defender",
@@ -178,14 +182,39 @@ describe("damage-derived tag filters", () => {
 });
 
 describe("damage modifier selectors", () => {
-  it.each(["increasedamagegiven", "decreasedamagegiven", "increasedamagetaken", "decreasedamagetaken"] as const)("%s preserves elements and ignores stat and general selectors", (type) => {
-    const old = { ...makeEffect(type), statTypes: ["Taijutsu"], generalTypes: ["Speed"], elements: ["Wind"] } as UserEffect;
-    const schema = getTagSchema(type);
-    expect(schema.parse(old)).not.toHaveProperty("statTypes");
-    expect(schema.parse(old)).not.toHaveProperty("generalTypes");
-    expect(schema.parse(old)).toHaveProperty("elements", ["Wind"]);
-    expect(getEfficiencyRatio(makeDamageEffect({ statTypes: ["Ninjutsu"], elements: ["Fire"] }), old)).toBe(0);
-    expect(getEfficiencyRatio(makeDamageEffect({ statTypes: ["Ninjutsu"], elements: ["Wind"] }), old)).toBe(1);
-    expect(getEfficiencyRatio(makeDamageEffect({ elements: ["Fire"] }), makeEffect(type))).toBe(1);
-  });
+  it.each([
+    "increasedamagegiven",
+    "decreasedamagegiven",
+    "increasedamagetaken",
+    "decreasedamagetaken",
+  ] as const)(
+    "%s preserves elements and ignores stat and general selectors",
+    (type) => {
+      const old = {
+        ...makeEffect(type),
+        statTypes: ["Taijutsu"],
+        generalTypes: ["Speed"],
+        elements: ["Wind"],
+      } as UserEffect;
+      const schema = getTagSchema(type);
+      expect(schema.parse(old)).not.toHaveProperty("statTypes");
+      expect(schema.parse(old)).not.toHaveProperty("generalTypes");
+      expect(schema.parse(old)).toHaveProperty("elements", ["Wind"]);
+      expect(
+        getEfficiencyRatio(
+          makeDamageEffect({ statTypes: ["Ninjutsu"], elements: ["Fire"] }),
+          old,
+        ),
+      ).toBe(0);
+      expect(
+        getEfficiencyRatio(
+          makeDamageEffect({ statTypes: ["Ninjutsu"], elements: ["Wind"] }),
+          old,
+        ),
+      ).toBe(1);
+      expect(
+        getEfficiencyRatio(makeDamageEffect({ elements: ["Fire"] }), makeEffect(type)),
+      ).toBe(1);
+    },
+  );
 });

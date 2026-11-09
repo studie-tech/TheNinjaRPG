@@ -81,8 +81,11 @@ describe("random assignment reads", () => {
       return refresh.promise;
     }) as never);
     const { client, findVillage, candidates } = makeClient();
-    const pending = callerForDatabase(questsRouter, user.userId, client as never)
-      .startRandom(input);
+    const pending = callerForDatabase(
+      questsRouter,
+      user.userId,
+      client as never,
+    ).startRandom(input);
 
     await started.promise;
     const villageReads = findVillage.mock.calls.length;
@@ -103,19 +106,25 @@ describe("random assignment reads", () => {
     { requiredSageModeId: "other-mode" },
     { requiredSageRank: "MASTER" as const },
     { requiredFarmingLevel: 2 },
-  ])("rejects an ineligible candidate from the widened pool: %j", async (requirement) => {
-    // The baseline is available, so each requirement is what prevents assignment.
-    expect(isAvailableUserQuests(candidate, user).check).toBe(true);
-    stubProfile("fetchUpdatedUser", (async () => ({ user })) as never);
-    const { client, update, insert } = makeClient([{ ...candidate, ...requirement }]);
-    const result = await callerForDatabase(questsRouter, user.userId, client as never)
-      .startRandom(input);
+  ])(
+    "rejects an ineligible candidate from the widened pool: %j",
+    async (requirement) => {
+      // The baseline is available, so each requirement is what prevents assignment.
+      expect(isAvailableUserQuests(candidate, user).check).toBe(true);
+      stubProfile("fetchUpdatedUser", (async () => ({ user })) as never);
+      const { client, update, insert } = makeClient([{ ...candidate, ...requirement }]);
+      const result = await callerForDatabase(
+        questsRouter,
+        user.userId,
+        client as never,
+      ).startRandom(input);
 
-    expect(result).toEqual({
-      success: false,
-      message: "No assignments at this level could be found",
-    });
-    expect(update).not.toHaveBeenCalled();
-    expect(insert).not.toHaveBeenCalled();
-  });
+      expect(result).toEqual({
+        success: false,
+        message: "No assignments at this level could be found",
+      });
+      expect(update).not.toHaveBeenCalled();
+      expect(insert).not.toHaveBeenCalled();
+    },
+  );
 });

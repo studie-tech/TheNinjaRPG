@@ -28,7 +28,12 @@ import {
   lockWaitObserved,
 } from "../../../setup/testDatabase";
 import { deferred } from "../../../setup/deferred";
-import { interceptExecute, withoutTransactions, inTransactions, overrideQuery } from "../../../setup/statements";
+import {
+  interceptExecute,
+  withoutTransactions,
+  inTransactions,
+  overrideQuery,
+} from "../../../setup/statements";
 
 const sectorId = 205;
 const leader = "defender-kage";
@@ -57,7 +62,9 @@ const releaseClient = (
 
 /** Observe the contested parent row, rather than relying on a timing delay. */
 const expectVillageLockWait = async (requestedMode: "S" | "X") => {
-  expect(await lockWaitObserved({ table: getTableName(village), requestedMode })).toBe(true);
+  expect(await lockWaitObserved({ table: getTableName(village), requestedMode })).toBe(
+    true,
+  );
 };
 
 const seed = async () => {
@@ -89,7 +96,9 @@ const seed = async () => {
 };
 
 const release = (database: DrizzleClient) =>
-  callerForDatabase(villageRouter, leader, database).releaseSector({ sector: sectorId });
+  callerForDatabase(villageRouter, leader, database).releaseSector({
+    sector: sectorId,
+  });
 
 const enableObjectives = (database: DrizzleClient) =>
   database.insert(gameSetting).values({
@@ -102,68 +111,116 @@ const enableObjectives = (database: DrizzleClient) =>
 describeWithDatabase("guarded sector release", () => {
   beforeEach(async () => {
     await resetTables(
-      actionLog, notification, gameSetting, sector, userData,
-      villageStructure, warAlly, war, village,
+      actionLog,
+      notification,
+      gameSetting,
+      sector,
+      userData,
+      villageStructure,
+      warAlly,
+      war,
+      village,
     );
   });
   afterEach(resetServerModuleStubs);
 
   it.each([
     { name: "active defending objective", blocked: true },
-    { name: "active attacking objective", blocked: true, attackerVillageId: "defender", defenderVillageId: "attacker" },
+    {
+      name: "active attacking objective",
+      blocked: true,
+      attackerVillageId: "defender",
+      defenderVillageId: "attacker",
+    },
     { name: "destroyed objective", blocked: false, destroyed: true },
     { name: "ended war", blocked: false, endedAt: new Date() },
     { name: "terminal war", blocked: false, status: "DRAW" as const },
     { name: "legacy war", blocked: false, legacy: true },
     { name: "other sector", blocked: false, objectiveSector: 206 },
     { name: "other objective owner", blocked: false, objectiveVillageId: "attacker" },
-    { name: "unrelated war", blocked: false, attackerVillageId: "other", defenderVillageId: "another" },
-  ])("checks the current $name and logs only a successful release", async (scenario) => {
-    const database = await seed();
-    await database.insert(war).values({
-      id: "release-war",
-      type: "VILLAGE_WAR",
-      attackerVillageId: scenario.attackerVillageId ?? "attacker",
-      defenderVillageId: scenario.defenderVillageId ?? "defender",
-      status: scenario.status ?? "ACTIVE",
-      endedAt: scenario.endedAt ?? null,
-      rules: scenario.legacy ? null : { ...defaultWarRules, enabled: true },
-      objectiveState: {
-        attackerEspionage: 0,
-        defenderEspionage: 0,
-        objectives: [{
-          sector: scenario.objectiveSector ?? sectorId,
-          villageId: scenario.objectiveVillageId ?? "defender",
-          hp: defaultWarRules.shrineHp,
-          maxHp: defaultWarRules.shrineHp,
-          isReserve: false,
-          destroyed: scenario.destroyed ?? false,
-        }],
-      },
-    });
-    const { result, statements } = await recordQueries(() => release(releaseClient(database)));
-    expect(result.success).toBe(!scenario.blocked);
-    if (scenario.blocked) expect(result.message).toBe(rejection);
-    expect(Boolean(await database.query.sector.findFirst({ where: eq(sector.sector, sectorId) }))).toBe(scenario.blocked);
-    expect(await database.query.actionLog.findMany()).toHaveLength(scenario.blocked ? 0 : 1);
-    expect(statements.filter((query) => /^\s*DELETE /i.test(query))).toHaveLength(1);
-    expect(statements.some((query) => /^(begin|start transaction|commit)\b/i.test(query.trim()))).toBe(false);
-  });
+    {
+      name: "unrelated war",
+      blocked: false,
+      attackerVillageId: "other",
+      defenderVillageId: "another",
+    },
+  ])(
+    "checks the current $name and logs only a successful release",
+    async (scenario) => {
+      const database = await seed();
+      await database.insert(war).values({
+        id: "release-war",
+        type: "VILLAGE_WAR",
+        attackerVillageId: scenario.attackerVillageId ?? "attacker",
+        defenderVillageId: scenario.defenderVillageId ?? "defender",
+        status: scenario.status ?? "ACTIVE",
+        endedAt: scenario.endedAt ?? null,
+        rules: scenario.legacy ? null : { ...defaultWarRules, enabled: true },
+        objectiveState: {
+          attackerEspionage: 0,
+          defenderEspionage: 0,
+          objectives: [
+            {
+              sector: scenario.objectiveSector ?? sectorId,
+              villageId: scenario.objectiveVillageId ?? "defender",
+              hp: defaultWarRules.shrineHp,
+              maxHp: defaultWarRules.shrineHp,
+              isReserve: false,
+              destroyed: scenario.destroyed ?? false,
+            },
+          ],
+        },
+      });
+      const { result, statements } = await recordQueries(() =>
+        release(releaseClient(database)),
+      );
+      expect(result.success).toBe(!scenario.blocked);
+      if (scenario.blocked) expect(result.message).toBe(rejection);
+      expect(
+        Boolean(
+          await database.query.sector.findFirst({ where: eq(sector.sector, sectorId) }),
+        ),
+      ).toBe(scenario.blocked);
+      expect(await database.query.actionLog.findMany()).toHaveLength(
+        scenario.blocked ? 0 : 1,
+      );
+      expect(statements.filter((query) => /^\s*DELETE /i.test(query))).toHaveLength(1);
+      expect(
+        statements.some((query) =>
+          /^(begin|start transaction|commit)\b/i.test(query.trim()),
+        ),
+      ).toBe(false);
+    },
+  );
 
-  it.each(["leadership", "ownership"] as const)("rechecks %s changed after the initial reads", async (change) => {
-    const database = await seed();
-    const client = releaseClient(database, async (_query, execute) => {
-      if (change === "leadership") {
-        await database.update(village).set({ kageId: "replacement-kage" }).where(eq(village.id, "defender"));
-      } else {
-        await database.update(sector).set({ villageId: "other" }).where(eq(sector.sector, sectorId));
-      }
-      return execute();
-    });
-    expect(await release(client)).toMatchObject({ success: false, message: rejection });
-    expect(await database.query.sector.findFirst({ where: eq(sector.sector, sectorId) })).toBeDefined();
-    expect(await database.query.actionLog.findMany()).toHaveLength(0);
-  });
+  it.each(["leadership", "ownership"] as const)(
+    "rechecks %s changed after the initial reads",
+    async (change) => {
+      const database = await seed();
+      const client = releaseClient(database, async (_query, execute) => {
+        if (change === "leadership") {
+          await database
+            .update(village)
+            .set({ kageId: "replacement-kage" })
+            .where(eq(village.id, "defender"));
+        } else {
+          await database
+            .update(sector)
+            .set({ villageId: "other" })
+            .where(eq(sector.sector, sectorId));
+        }
+        return execute();
+      });
+      expect(await release(client)).toMatchObject({
+        success: false,
+        message: rejection,
+      });
+      expect(
+        await database.query.sector.findFirst({ where: eq(sector.sector, sectorId) }),
+      ).toBeDefined();
+      expect(await database.query.actionLog.findMany()).toHaveLength(0);
+    },
+  );
 
   it("retries a deadlocked delete without repeating its action log", async () => {
     const database = await seed();
@@ -174,7 +231,9 @@ describeWithDatabase("guarded sector release", () => {
     });
     expect((await release(client)).success).toBe(true);
     expect(attempts).toBe(2);
-    expect(await database.query.sector.findFirst({ where: eq(sector.sector, sectorId) })).toBeUndefined();
+    expect(
+      await database.query.sector.findFirst({ where: eq(sector.sector, sectorId) }),
+    ).toBeUndefined();
     expect(await database.query.actionLog.findMany()).toHaveLength(1);
   });
 
@@ -183,13 +242,15 @@ describeWithDatabase("guarded sector release", () => {
     await enableObjectives(database);
     const locked = deferred<void>();
     const resume = deferred<void>();
-    const declarationClient = inTransactions(database, (tx) => overrideQuery(tx, "war", {
-      findMany: async (read, ...args) => {
-        locked.resolve();
-        await resume.promise;
-        return read(...args);
-      },
-    }));
+    const declarationClient = inTransactions(database, (tx) =>
+      overrideQuery(tx, "war", {
+        findMany: async (read, ...args) => {
+          locked.resolve();
+          await resume.promise;
+          return read(...args);
+        },
+      }),
+    );
     const started = startDeclaredWar(declarationClient, declaration);
     let released: ReturnType<typeof release> | undefined;
     try {
@@ -200,8 +261,16 @@ describeWithDatabase("guarded sector release", () => {
       expect(await started).toBe(true);
       expect(await released).toMatchObject({ success: false, message: rejection });
       const current = await database.query.war.findFirst();
-      expect(current?.objectiveState?.objectives).toContainEqual(expect.objectContaining({ sector: sectorId, villageId: "defender", destroyed: false }));
-      expect(await database.query.sector.findFirst({ where: eq(sector.sector, sectorId) })).toBeDefined();
+      expect(current?.objectiveState?.objectives).toContainEqual(
+        expect.objectContaining({
+          sector: sectorId,
+          villageId: "defender",
+          destroyed: false,
+        }),
+      );
+      expect(
+        await database.query.sector.findFirst({ where: eq(sector.sector, sectorId) }),
+      ).toBeDefined();
       expect(await database.query.actionLog.findMany()).toHaveLength(0);
     } finally {
       resume.resolve();
@@ -219,11 +288,16 @@ describeWithDatabase("guarded sector release", () => {
       // Keep this real procedure statement uncommitted only to observe the declaration's wait.
       await connection.beginTransaction();
       const compiled = dialect.sqlToQuery(query as SQL);
-      const [result] = await connection.query<mysql.ResultSetHeader>(compiled.sql, compiled.params);
+      const [result] = await connection.query<mysql.ResultSetHeader>(
+        compiled.sql,
+        compiled.params,
+      );
       deleted.resolve();
       await resume.promise;
       await connection.commit();
-      return { rowsAffected: result.affectedRows } as Awaited<ReturnType<DrizzleClient["execute"]>>;
+      return { rowsAffected: result.affectedRows } as Awaited<
+        ReturnType<DrizzleClient["execute"]>
+      >;
     });
     const released = release(client);
     let started: ReturnType<typeof startDeclaredWar> | undefined;
@@ -234,9 +308,14 @@ describeWithDatabase("guarded sector release", () => {
       resume.resolve();
       expect((await released).success).toBe(true);
       expect(await started).toBe(false);
-      expect(await database.query.sector.findFirst({ where: eq(sector.sector, sectorId) })).toBeUndefined();
+      expect(
+        await database.query.sector.findFirst({ where: eq(sector.sector, sectorId) }),
+      ).toBeUndefined();
       expect(await database.query.war.findMany()).toHaveLength(0);
-      expect((await database.query.village.findFirst({ where: eq(village.id, "attacker") }))?.tokens).toBe(defaultWarRules.declarationCost * 2);
+      expect(
+        (await database.query.village.findFirst({ where: eq(village.id, "attacker") }))
+          ?.tokens,
+      ).toBe(defaultWarRules.declarationCost * 2);
       expect(await database.query.actionLog.findMany()).toHaveLength(1);
     } finally {
       resume.resolve();

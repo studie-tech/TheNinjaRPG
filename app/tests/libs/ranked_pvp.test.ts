@@ -18,7 +18,16 @@ import {
 
 const sanninThreshold = 950;
 const sanninTopPlayersLP = [
-  2000, 1800, 1600, 1400, 1300, 1200, 1100, 1050, 1000, sanninThreshold,
+  2000,
+  1800,
+  1600,
+  1400,
+  1300,
+  1200,
+  1100,
+  1050,
+  1000,
+  sanninThreshold,
 ];
 
 describe("getRankedRank", () => {
@@ -90,12 +99,24 @@ describe("calculateLpEloChange", () => {
 
   it("adds the upset bonus per rank when a lower rank wins", () => {
     // Wood beats Master: Elo 37.2 plus two ranks of upset bonus
-    expect(calculateLpEloChange({ rankedLp: 150, rankedStreak: 0 }, { rankedLp: 600 }, true, [])).toBe(57);
+    expect(
+      calculateLpEloChange(
+        { rankedLp: 150, rankedStreak: 0 },
+        { rankedLp: 600 },
+        true,
+        [],
+      ),
+    ).toBe(57);
   });
 
   describe("loss protection", () => {
     const loss = (playerLp: number, opponentLp: number) =>
-      calculateLpEloChange({ rankedLp: playerLp, rankedStreak: 0 }, { rankedLp: opponentLp }, false, []);
+      calculateLpEloChange(
+        { rankedLp: playerLp, rankedStreak: 0 },
+        { rankedLp: opponentLp },
+        false,
+        [],
+      );
 
     it("softens a loss to an opponent exactly the protection gap above the loser", () => {
       expect(RANKED_LOSS_PROTECTION_RANK_GAP).toBe(2);
@@ -151,11 +172,14 @@ describe("getRankedRadius", () => {
 
 describe("ranked jutsu category caps", () => {
   it("allows one Parry jutsu and rejects a second", () => {
-    const parryJutsus = ["first", "second"].map((name) => ({
-      name,
-      jutsuType: "NORMAL",
-      effects: [{ type: "parry" }],
-    }) as Jutsu);
+    const parryJutsus = ["first", "second"].map(
+      (name) =>
+        ({
+          name,
+          jutsuType: "NORMAL",
+          effects: [{ type: "parry" }],
+        }) as Jutsu,
+    );
 
     expect(validateJutsuLoadout(parryJutsus.slice(0, 1))).toEqual({
       check: true,
@@ -223,4 +247,6 @@ describe("ranked skill-tree restrictions", () => {
   });
 });
 
-const validateJutsuLoadout = (jutsus: Parameters<typeof validateJutsuLoadoutWithCaps>[0]) => validateJutsuLoadoutWithCaps(jutsus, rankedCaps);
+const validateJutsuLoadout = (
+  jutsus: Parameters<typeof validateJutsuLoadoutWithCaps>[0],
+) => validateJutsuLoadoutWithCaps(jutsus, rankedCaps);

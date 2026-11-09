@@ -14,6 +14,8 @@ describe("statistics date filters", () => {
 
   it("leaves the empty end date out of the request", () => {
     const { result } = renderHook(() => useFiltering());
-    expect(getFilter(result.current)).toEqual({ startDate: getLocalDateStringMonthsAgo(1) });
+    expect(getFilter(result.current)).toEqual({
+      startDate: getLocalDateStringMonthsAgo(1),
+    });
   });
 });

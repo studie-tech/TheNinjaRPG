@@ -10,9 +10,15 @@ import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as toast from "@/libs/toast";
 import * as search from "@/utils/search";
 import * as UserContext from "@/utils/UserContext";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
-type Options = { onSuccess: (data: { success: boolean; message: string }) => Promise<void> };
+type Options = {
+  onSuccess: (data: { success: boolean; message: string }) => Promise<void>;
+};
 const captured: Record<string, Options> = {};
 const invalidateRequests = vi.fn(async () => undefined);
 const invalidateStudents = vi.fn(async () => undefined);
@@ -42,8 +48,13 @@ beforeEach(() => {
   ));
   vi.spyOn(UserSearchSelect, "default").mockImplementation((() => null) as never);
   vi.spyOn(UserRequestSystem, "default").mockImplementation((() => null) as never);
-  vi.spyOn(search, "useUserPicker").mockReturnValue({ methods: {}, user: undefined } as never);
-  vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({ currentStep: undefined } as never);
+  vi.spyOn(search, "useUserPicker").mockReturnValue({
+    methods: {},
+    user: undefined,
+  } as never);
+  vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
+    currentStep: undefined,
+  } as never);
   vi.spyOn(UserContext, "useRequireInVillage").mockReturnValue({
     userData: user,
     timeDiff: 0,
@@ -64,7 +75,10 @@ beforeEach(() => {
     new Proxy(overrides, { get: (target, name) => target[name as string] ?? idle });
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({
-      sensei: { getRequests: { invalidate: invalidateRequests }, getStudents: { invalidate: invalidateStudents } },
+      sensei: {
+        getRequests: { invalidate: invalidateRequests },
+        getStudents: { invalidate: invalidateStudents },
+      },
     }),
     profile: routerOf({}),
     stealth: routerOf({}),

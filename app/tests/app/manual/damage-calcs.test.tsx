@@ -1,4 +1,9 @@
-import { QueryClient, QueryClientProvider, useMutation, type UseMutationOptions } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useMutation,
+  type UseMutationOptions,
+} from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { Suspense } from "react";
@@ -7,13 +12,21 @@ import Simulator from "@/app/[shell]/manual/damage_calcs/[[...damageSimulationId
 import * as ContentBox from "@/layout/ContentBox";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 type Result = { success: boolean; message: string };
 
 let queryClient: QueryClient;
 let resolveSave: (result: Result) => void;
-const save = vi.fn((_input: unknown) => new Promise<Result>((resolve) => { resolveSave = resolve; }));
+const save = vi.fn(
+  (_input: unknown) =>
+    new Promise<Result>((resolve) => {
+      resolveSave = resolve;
+    }),
+);
 const refetch = vi.fn(async () => undefined);
 const noMutation = () => ({ mutate: vi.fn(), isPending: false });
 
@@ -21,17 +34,27 @@ beforeEach(() => {
   installBrowserGlobals({ resizeObserver: true });
   vi.clearAllMocks();
   queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children, topRightContent }) => (
-    <div>{topRightContent}{children}</div>
-  ));
+  vi.spyOn(ContentBox, "default").mockImplementation(
+    ({ children, topRightContent }) => (
+      <div>
+        {topRightContent}
+        {children}
+      </div>
+    ),
+  );
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { userId: "u", role: "USER" } } as never);
+  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    data: { userId: "u", role: "USER" },
+  } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     misc: { getDmgConfig: { useQuery: () => ({ data: undefined }) } },
     simulator: {
       getDamageSimulations: { useQuery: () => ({ data: [], refetch }) },
       getDamageSimulation: { useQuery: () => ({ data: undefined }) },
-      createDamageSimulation: { useMutation: (options: UseMutationOptions<Result, Error, unknown>) => useMutation({ ...options, mutationFn: save }) },
+      createDamageSimulation: {
+        useMutation: (options: UseMutationOptions<Result, Error, unknown>) =>
+          useMutation({ ...options, mutationFn: save }),
+      },
       updateDamageSimulation: { useMutation: noMutation },
       deleteDamageSimulation: { useMutation: noMutation },
     },
@@ -60,7 +83,9 @@ it("reports the outcome of saving a calculation and refreshes the history on suc
   fireEvent.click(view!.getByRole("button", { name: "Save Calculation" }));
   await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
   const saved = { success: true, message: "Damage simulation saved" };
-  await act(async () => { resolveSave(saved); });
+  await act(async () => {
+    resolveSave(saved);
+  });
   await waitFor(() => expect(toast.showMutationToast).toHaveBeenCalledWith(saved));
   expect(refetch).toHaveBeenCalledTimes(1);
 });

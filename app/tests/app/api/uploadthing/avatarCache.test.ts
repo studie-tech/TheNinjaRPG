@@ -49,7 +49,14 @@ describeWithDatabase("uploaded avatar cache responses", () => {
       }),
     ).toString("base64");
     await resetTables(historicalAvatar, historicalSoundEffect, userData);
-    await insertUsers([{ userId, username: "UploadAvatarCache", staffAccount: false, federalStatus: "NORMAL" }]);
+    await insertUsers([
+      {
+        userId,
+        username: "UploadAvatarCache",
+        staffAccount: false,
+        federalStatus: "NORMAL",
+      },
+    ]);
     vi.spyOn(clerk, "auth").mockResolvedValue({ userId } as never);
     vi.spyOn(moderator, "classifyNsfwImage").mockResolvedValue({
       isNsfw: false,
@@ -71,30 +78,58 @@ describeWithDatabase("uploaded avatar cache responses", () => {
     else Reflect.deleteProperty(globalThis, "window");
   });
 
-  it.each([true, false])("enforces the independent tavern upload budget (allowed: %s)", async (allowed) => {
-    stubDatabase(await getTestDatabase());
-    const claim = vi.spyOn(tavernUploads, "claimTavernImageUpload").mockResolvedValue(allowed);
-    const args = { files: [{ name: "image.png", type: "image/png", size: 100, lastModified: 0 }] } as Parameters<typeof ourFileRouter.tavernUploader.middleware>[0];
-    if (allowed) expect(await ourFileRouter.tavernUploader.middleware(args)).toMatchObject({ userId });
-    else await expect(ourFileRouter.tavernUploader.middleware(args)).rejects.toThrow("tavern image upload attempts per day");
-    expect(claim).toHaveBeenCalledWith(userId);
-    claim.mockClear();
-    expect(await ourFileRouter.avatarNormalUploader.middleware(args)).toMatchObject({ userId });
-    expect(claim).not.toHaveBeenCalled();
-  });
+  it.each([true, false])(
+    "enforces the independent tavern upload budget (allowed: %s)",
+    async (allowed) => {
+      stubDatabase(await getTestDatabase());
+      const claim = vi
+        .spyOn(tavernUploads, "claimTavernImageUpload")
+        .mockResolvedValue(allowed);
+      const args = {
+        files: [{ name: "image.png", type: "image/png", size: 100, lastModified: 0 }],
+      } as Parameters<typeof ourFileRouter.tavernUploader.middleware>[0];
+      if (allowed)
+        expect(await ourFileRouter.tavernUploader.middleware(args)).toMatchObject({
+          userId,
+        });
+      else
+        await expect(ourFileRouter.tavernUploader.middleware(args)).rejects.toThrow(
+          "tavern image upload attempts per day",
+        );
+      expect(claim).toHaveBeenCalledWith(userId);
+      claim.mockClear();
+      expect(await ourFileRouter.avatarNormalUploader.middleware(args)).toMatchObject({
+        userId,
+      });
+      expect(claim).not.toHaveBeenCalled();
+    },
+  );
 
   it("does not charge tavern uploads against the avatar allowance", async () => {
     const database = await getTestDatabase();
     stubDatabase(database);
-    await database.insert(historicalAvatar).values(Array.from({ length: 51 }, (_, index) => ({
-      userId, avatar: `https://example.com/avatar-${index}.png`, done: true, status: "succeeded",
-    })));
-    const claim = vi.spyOn(tavernUploads, "claimTavernImageUpload").mockResolvedValue(true);
-    const args = { files: [{ name: "image.png", type: "image/png", size: 100, lastModified: 0 }] } as Parameters<typeof ourFileRouter.tavernUploader.middleware>[0];
-    expect(await ourFileRouter.tavernUploader.middleware(args)).toMatchObject({ userId });
+    await database.insert(historicalAvatar).values(
+      Array.from({ length: 51 }, (_, index) => ({
+        userId,
+        avatar: `https://example.com/avatar-${index}.png`,
+        done: true,
+        status: "succeeded",
+      })),
+    );
+    const claim = vi
+      .spyOn(tavernUploads, "claimTavernImageUpload")
+      .mockResolvedValue(true);
+    const args = {
+      files: [{ name: "image.png", type: "image/png", size: 100, lastModified: 0 }],
+    } as Parameters<typeof ourFileRouter.tavernUploader.middleware>[0];
+    expect(await ourFileRouter.tavernUploader.middleware(args)).toMatchObject({
+      userId,
+    });
     expect(claim).toHaveBeenCalledWith(userId);
     const rejection = ourFileRouter.avatarNormalUploader.middleware(args);
-    await expect(rejection).rejects.toThrow(`Can only upload ${AVATAR_UPLOAD_DAILY_LIMIT} files per day`);
+    await expect(rejection).rejects.toThrow(
+      `Can only upload ${AVATAR_UPLOAD_DAILY_LIMIT} files per day`,
+    );
     // UploadThing replaces any other middleware error with a generic message.
     await expect(rejection).rejects.toBeInstanceOf(UploadThingError);
   });
@@ -110,27 +145,38 @@ describeWithDatabase("uploaded avatar cache responses", () => {
     ["audioMusicUploader", "audio", "4MB"],
   ] as const;
 
-  it.each(repeatedRoutes)("%s accepts %s files up to %s", (endpoint, kind, maxFileSize) => {
-    const [route] = extractRouterConfig({ [endpoint]: ourFileRouter[endpoint] });
-    expect(route?.config).toMatchObject({ [kind]: { maxFileSize } });
-  });
+  it.each(repeatedRoutes)(
+    "%s accepts %s files up to %s",
+    (endpoint, kind, maxFileSize) => {
+      const [route] = extractRouterConfig({ [endpoint]: ourFileRouter[endpoint] });
+      expect(route?.config).toMatchObject({ [kind]: { maxFileSize } });
+    },
+  );
 
   const middlewareArgs = {
     files: [{ name: "image.png", type: "image/png", size: 100, lastModified: 0 }],
     input: { relationId: "relation" },
   } as never;
   const runMiddleware = (endpoint: (typeof repeatedRoutes)[number][0]) =>
-    (ourFileRouter[endpoint].middleware as (args: never) => Promise<unknown>)(middlewareArgs);
+    (ourFileRouter[endpoint].middleware as (args: never) => Promise<unknown>)(
+      middlewareArgs,
+    );
 
-  it.each(repeatedRoutes)("%s rejects signed-out and banned users", async (endpoint) => {
-    const database = await getTestDatabase();
-    stubDatabase(database);
-    vi.spyOn(clerk, "auth").mockResolvedValue({ userId: null } as never);
-    await expect(runMiddleware(endpoint)).rejects.toThrow("Unauthorized");
-    vi.spyOn(clerk, "auth").mockResolvedValue({ userId } as never);
-    await database.update(userData).set({ isBanned: true }).where(eq(userData.userId, userId));
-    await expect(runMiddleware(endpoint)).rejects.toThrow("You are banned");
-  });
+  it.each(repeatedRoutes)(
+    "%s rejects signed-out and banned users",
+    async (endpoint) => {
+      const database = await getTestDatabase();
+      stubDatabase(database);
+      vi.spyOn(clerk, "auth").mockResolvedValue({ userId: null } as never);
+      await expect(runMiddleware(endpoint)).rejects.toThrow("Unauthorized");
+      vi.spyOn(clerk, "auth").mockResolvedValue({ userId } as never);
+      await database
+        .update(userData)
+        .set({ isBanned: true })
+        .where(eq(userData.userId, userId));
+      await expect(runMiddleware(endpoint)).rejects.toThrow("You are banned");
+    },
+  );
 
   it("gates each avatar size on its own federal tier", async () => {
     const database = await getTestDatabase();
@@ -140,14 +186,21 @@ describeWithDatabase("uploaded avatar cache responses", () => {
       ["SILVER", "avatarSilverUploader"],
       ["GOLD", "avatarGoldUploader"],
     ] as const) {
-      await database.update(userData).set({ federalStatus }).where(eq(userData.userId, userId));
+      await database
+        .update(userData)
+        .set({ federalStatus })
+        .where(eq(userData.userId, userId));
       for (const [endpoint, tier] of [
         ["avatarNormalUploader", "NORMAL"],
         ["avatarSilverUploader", "SILVER"],
         ["avatarGoldUploader", "GOLD"],
       ] as const) {
-        if (endpoint === allowed) expect(await runMiddleware(endpoint)).toMatchObject({ userId });
-        else await expect(runMiddleware(endpoint)).rejects.toThrow(`You must be ${tier} to upload this avatar`);
+        if (endpoint === allowed)
+          expect(await runMiddleware(endpoint)).toMatchObject({ userId });
+        else
+          await expect(runMiddleware(endpoint)).rejects.toThrow(
+            `You must be ${tier} to upload this avatar`,
+          );
       }
     }
   });
@@ -157,12 +210,22 @@ describeWithDatabase("uploaded avatar cache responses", () => {
     async (endpoint) => {
       const database = await getTestDatabase();
       stubDatabase(database);
-      await database.update(userData).set({ federalStatus: "NONE" }).where(eq(userData.userId, userId));
+      await database
+        .update(userData)
+        .set({ federalStatus: "NONE" })
+        .where(eq(userData.userId, userId));
       expect(await runMiddleware(endpoint)).toMatchObject({ userId });
-      await database.insert(historicalAvatar).values(Array.from({ length: 51 }, (_, index) => ({
-        userId, avatar: `https://example.com/limit-${index}.png`, done: true, status: "succeeded",
-      })));
-      await expect(runMiddleware(endpoint)).rejects.toThrow(`Can only upload ${AVATAR_UPLOAD_DAILY_LIMIT} files per day`);
+      await database.insert(historicalAvatar).values(
+        Array.from({ length: 51 }, (_, index) => ({
+          userId,
+          avatar: `https://example.com/limit-${index}.png`,
+          done: true,
+          status: "succeeded",
+        })),
+      );
+      await expect(runMiddleware(endpoint)).rejects.toThrow(
+        `Can only upload ${AVATAR_UPLOAD_DAILY_LIMIT} files per day`,
+      );
     },
   );
 
@@ -171,14 +234,31 @@ describeWithDatabase("uploaded avatar cache responses", () => {
     async (endpoint) => {
       const database = await getTestDatabase();
       stubDatabase(database);
-      await expect(runMiddleware(endpoint)).rejects.toThrow("You do not have permission to upload content files");
-      await database.update(userData).set({ role: "CONTENT-ADMIN" }).where(eq(userData.userId, userId));
-      expect(await runMiddleware(endpoint)).toMatchObject({ userId, relationId: "relation" });
-      const complete = ourFileRouter[endpoint].onUploadComplete as (args: never) => Promise<unknown>;
-      const result = await complete({ file, metadata: { userId, relationId: "relation" } } as never);
+      await expect(runMiddleware(endpoint)).rejects.toThrow(
+        "You do not have permission to upload content files",
+      );
+      await database
+        .update(userData)
+        .set({ role: "CONTENT-ADMIN" })
+        .where(eq(userData.userId, userId));
+      expect(await runMiddleware(endpoint)).toMatchObject({
+        userId,
+        relationId: "relation",
+      });
+      const complete = ourFileRouter[endpoint].onUploadComplete as (
+        args: never,
+      ) => Promise<unknown>;
+      const result = await complete({
+        file,
+        metadata: { userId, relationId: "relation" },
+      } as never);
       expect(result).toEqual({ fileUrl: servedUfsUrl(file), userId });
       const [sound] = await database.select().from(historicalSoundEffect);
-      expect(sound).toMatchObject({ userId, relationId: "relation", url: servedUfsUrl(file) });
+      expect(sound).toMatchObject({
+        userId,
+        relationId: "relation",
+        url: servedUfsUrl(file),
+      });
     },
   );
 

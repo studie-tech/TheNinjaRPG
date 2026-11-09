@@ -82,17 +82,23 @@ beforeEach(() => {
     },
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
+  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+    data: { role: "CONTENT-ADMIN" },
+  } as never);
   vi.spyOn(ais, "useAiEditForm").mockImplementation((user) => {
     editor = useAiEditForm(user);
     return editor;
   });
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }: { children: ReactNode }) => <div>{children}</div>);
+  vi.spyOn(ContentBox, "default").mockImplementation(
+    ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  );
   vi.spyOn(EditContent, "EditContent").mockImplementation(() => <></>);
   vi.spyOn(ContentHelp, "AiHelper").mockImplementation(() => null);
   vi.spyOn(AiProfileEdit, "default").mockImplementation(() => null);
   vi.spyOn(AiSpriteAnimations, "AiSpriteAnimations").mockImplementation(() => <></>);
-  vi.spyOn(AiTransformationEdit, "AiTransformationEdit").mockImplementation(() => <></>);
+  vi.spyOn(AiTransformationEdit, "AiTransformationEdit").mockImplementation(() => (
+    <></>
+  ));
   vi.spyOn(NindoChange, "default").mockImplementation(() => null);
   vi.spyOn(StatusBar, "default").mockImplementation(() => null);
   vi.spyOn(SuggestChange, "SuggestChange").mockImplementation(() => null);
@@ -109,29 +115,43 @@ const mount = async () => {
   const params = Promise.resolve({ aiid: ai.userId });
   let view: ReturnType<typeof render>;
   await act(async () => {
-    view = render(<Suspense fallback={null}><ManualAisEdit params={params} /></Suspense>);
+    view = render(
+      <Suspense fallback={null}>
+        <ManualAisEdit params={params} />
+      </Suspense>,
+    );
   });
   await waitFor(() => expect(editor.processedUser.userId).toBe(ai.userId));
   return view!;
 };
 
 describe("manual AI editing", () => {
-  it.each([null, "Fire"] as const)("saves with activeTrainedElement=%s without mutating the fetched record", async (element) => {
-    ai.activeTrainedElement = element;
-    const original = structuredClone(ai);
-    await mount();
-    await act(async () => {
-      editor.form.setValue("npcTitle", "Updated title");
-      await editor.handleUserSubmit();
-    });
-    expect(save).toHaveBeenCalledTimes(1);
-    expect(save.mock.calls[0]?.[0]).toMatchObject({
-      id: ai.userId,
-      data: { npcTitle: "Updated title", activeTrainedElement: element, preferredGeneral1: null, preferredGeneral2: null, primaryElement: null, secondaryElement: null },
-    });
-    expect(ai).toEqual(original);
-    expect(toast.showFormErrorsToast).not.toHaveBeenCalled();
-  });
+  it.each([null, "Fire"] as const)(
+    "saves with activeTrainedElement=%s without mutating the fetched record",
+    async (element) => {
+      ai.activeTrainedElement = element;
+      const original = structuredClone(ai);
+      await mount();
+      await act(async () => {
+        editor.form.setValue("npcTitle", "Updated title");
+        await editor.handleUserSubmit();
+      });
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(save.mock.calls[0]?.[0]).toMatchObject({
+        id: ai.userId,
+        data: {
+          npcTitle: "Updated title",
+          activeTrainedElement: element,
+          preferredGeneral1: null,
+          preferredGeneral2: null,
+          primaryElement: null,
+          secondaryElement: null,
+        },
+      });
+      expect(ai).toEqual(original);
+      expect(toast.showFormErrorsToast).not.toHaveBeenCalled();
+    },
+  );
 
   it("retains validation and allows correcting invalid edits", async () => {
     await mount();
@@ -147,7 +167,9 @@ describe("manual AI editing", () => {
       await editor.handleUserSubmit();
     });
     expect(save).toHaveBeenCalledTimes(1);
-    expect(save.mock.calls[0]?.[0]).toMatchObject({ data: { level: 101, primaryElement: "", activeTrainedElement: null } });
+    expect(save.mock.calls[0]?.[0]).toMatchObject({
+      data: { level: 101, primaryElement: "", activeTrainedElement: null },
+    });
   });
 
   it("clears nullable dropdowns and saves their unset values", async () => {
@@ -155,21 +177,33 @@ describe("manual AI editing", () => {
     ai.preferredGeneral2 = "Strength";
     ai.primaryElement = "Fire";
     vi.spyOn(EditContent, "EditContent").mockImplementation((props) => (
-      <ActualEditContent {...props} formData={props.formData.filter(({ id }) => ["preferredGeneral1", "preferredGeneral2", "primaryElement"].includes(id))} />
+      <ActualEditContent
+        {...props}
+        formData={props.formData.filter(({ id }) =>
+          ["preferredGeneral1", "preferredGeneral2", "primaryElement"].includes(id),
+        )}
+      />
     ));
     const view = await mount();
     for (const field of ["preferredGeneral1", "preferredGeneral2", "primaryElement"]) {
       fireEvent.click(view.getByRole("button", { name: `Clear ${field}` }));
-      expect(view.getByRole("combobox", { name: field }).textContent).toContain("Select option");
+      expect(view.getByRole("combobox", { name: field }).textContent).toContain(
+        "Select option",
+      );
     }
     fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(save.mock.calls[0]?.[0]).toMatchObject({ data: { preferredGeneral1: null, preferredGeneral2: null, primaryElement: null } });
+    expect(save.mock.calls[0]?.[0]).toMatchObject({
+      data: { preferredGeneral1: null, preferredGeneral2: null, primaryElement: null },
+    });
   });
   it("saves large pool modifiers and permits correcting values above the pool cap", async () => {
     ai.level = 99;
     vi.spyOn(EditContent, "EditContent").mockImplementation((props) => (
-      <ActualEditContent {...props} formData={props.formData.filter(({ id }) => id === "poolsMultiplier")} />
+      <ActualEditContent
+        {...props}
+        formData={props.formData.filter(({ id }) => id === "poolsMultiplier")}
+      />
     ));
     const view = await mount();
     const input = view.getByRole("spinbutton", { name: /Pool Modifier/ });

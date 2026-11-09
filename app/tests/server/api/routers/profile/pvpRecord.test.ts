@@ -31,12 +31,28 @@ describeWithDatabase("public profile privacy", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(["viewer", "signed-out"])("does not expose private furniture placements through public profiles to %s", async (viewer) => {
-    await insertItems([{ id: "private-chair", name: "Private chair", itemType: "FURNITURE" }]);
-    await insertUserItems([{ id: "private-placement", userId: "owner", itemId: "private-chair", homeX: 50, homeY: 50, homeRoom: "main" }]);
-    const result = await (await callerFor(profileRouter, viewer)).getPublicUser({ userId: "owner" });
-    expect(result?.items).toEqual([]);
-  });
+  it.each(["viewer", "signed-out"])(
+    "does not expose private furniture placements through public profiles to %s",
+    async (viewer) => {
+      await insertItems([
+        { id: "private-chair", name: "Private chair", itemType: "FURNITURE" },
+      ]);
+      await insertUserItems([
+        {
+          id: "private-placement",
+          userId: "owner",
+          itemId: "private-chair",
+          homeX: 50,
+          homeY: 50,
+          homeRoom: "main",
+        },
+      ]);
+      const result = await (await callerFor(profileRouter, viewer)).getPublicUser({
+        userId: "owner",
+      });
+      expect(result?.items).toEqual([]);
+    },
+  );
 
   it.each(["viewer", "signed-out"])("hides private records from %s", async (viewer) => {
     const profile = await (await callerFor(profileRouter, viewer)).getPublicUser({
@@ -55,7 +71,11 @@ describeWithDatabase("public profile privacy", () => {
   });
 
   it("publishes the record only after its owner opts in", async () => {
-    expect(await (await callerFor(profileRouter, "owner")).updatePreferences({ showPvpRecord: true })).toMatchObject({ success: true, userPatch: { showPvpRecord: true } });
+    expect(
+      await (await callerFor(profileRouter, "owner")).updatePreferences({
+        showPvpRecord: true,
+      }),
+    ).toMatchObject({ success: true, userPatch: { showPvpRecord: true } });
     const profile = await (await callerFor(profileRouter, "viewer")).getPublicUser({
       userId: "owner",
     });

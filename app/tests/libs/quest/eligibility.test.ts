@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from "bun:test";
 import { QUESTS_CONCURRENT_LIMIT } from "@/drizzle/constants";
 import { questTypeConcurrentBlockMessage } from "@/libs/quest/missionHall";

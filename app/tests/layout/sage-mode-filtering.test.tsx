@@ -11,7 +11,9 @@ describe("sage mode filter", () => {
     act(() => result.current.cf.setters.level("3"));
     expect(getFilter(result.current)).toEqual(expect.objectContaining({ level: 3 }));
     act(() => result.current.cf.setters.village("village-1" as never));
-    expect(Object.entries(getFilter(result.current)).filter(([key]) => key !== "hidden")).toEqual([
+    expect(
+      Object.entries(getFilter(result.current)).filter(([key]) => key !== "hidden"),
+    ).toEqual([
       ["level", 3],
       ["village", "village-1"],
     ]);

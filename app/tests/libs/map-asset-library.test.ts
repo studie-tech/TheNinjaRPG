@@ -7,7 +7,10 @@ import {
 } from "@/libs/sector-map/decorations";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import { normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
-import { addDecorationTileset, type SpriteFile } from "@/libs/sector-map/tiled-download";
+import {
+  addDecorationTileset,
+  type SpriteFile,
+} from "@/libs/sector-map/tiled-download";
 
 const sprite = (key: string, width = 64, height = 96): SpriteFile => ({
   key,
@@ -41,7 +44,9 @@ describe("decoration asset registry merge", () => {
     ]);
     expect(merged.get(builtin.key)?.filepath).toBe("https://cdn.example/reskinned.png");
     expect(merged.get(builtin.key)?.randomRotation).toBe(true);
-    expect(merged.get("custom.statue")?.filepath).toBe("https://cdn.example/statue.png");
+    expect(merged.get("custom.statue")?.filepath).toBe(
+      "https://cdn.example/statue.png",
+    );
     // Untouched built-ins remain
     expect(merged.size).toBe(DECORATION_ASSETS_BY_KEY.size + 1);
     const other = DECORATION_ASSETS[1]!;
@@ -59,10 +64,12 @@ describe("decoration asset registry merge", () => {
         renderScale: 1,
       },
     ]);
-    expect(resolveDecorationAsset({ assetKey: "custom.statue" }, registry)).toMatchObject(
-      { filepath: "https://cdn.example/statue.png", windAffected: true },
-    );
-    expect(resolveDecorationAsset({ assetKey: "no.such.key" }, registry)).toBeUndefined();
+    expect(
+      resolveDecorationAsset({ assetKey: "custom.statue" }, registry),
+    ).toMatchObject({ filepath: "https://cdn.example/statue.png", windAffected: true });
+    expect(
+      resolveDecorationAsset({ assetKey: "no.such.key" }, registry),
+    ).toBeUndefined();
   });
 });
 

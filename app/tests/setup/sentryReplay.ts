@@ -1,5 +1,10 @@
 import { vi } from "bun:test";
-import { BrowserClient, defaultStackParser, type Event, type EventHint } from "@sentry/browser";
+import {
+  BrowserClient,
+  defaultStackParser,
+  type Event,
+  type EventHint,
+} from "@sentry/browser";
 import * as Sentry from "@sentry/nextjs";
 // @ts-expect-error The client integration the Next.js SDK installs; it is neither exported nor typed.
 import { nextjsClientStackFrameNormalizationIntegration } from "../../node_modules/@sentry/nextjs/build/esm/client/clientNormalizationIntegration.js";

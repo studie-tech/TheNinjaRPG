@@ -34,7 +34,9 @@ describeWithDatabase("tower defense session definitions", () => {
   });
 
   it("signs enemy definitions under the canonical field order", async () => {
-    const session = await (await callerFor(towerDefenseRouter, "guest")).initiateGuestSession();
+    const session = await (
+      await callerFor(towerDefenseRouter, "guest")
+    ).initiateGuestSession();
     expect(session.enemyDefinitions).toEqual([
       {
         id: "enemy",

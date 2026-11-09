@@ -131,10 +131,12 @@ describeWithDatabase("quest battle entry item identity", () => {
       // The transaction begins after battle and entry inventory have been preloaded.
       const raced = beforeTransaction(client, async () => {
         expect(
-          (await caller.evolveItem({
-            userItemId: "b",
-            evolutionItemId: "evolved",
-          })).success,
+          (
+            await caller.evolveItem({
+              userItemId: "b",
+              evolutionItemId: "evolved",
+            })
+          ).success,
         ).toBe(true);
         expect(
           await client.query.userItem.findFirst({ where: eq(userItem.id, "b") }),

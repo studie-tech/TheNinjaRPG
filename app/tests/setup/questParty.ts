@@ -9,7 +9,10 @@ type QuestRow = Partial<typeof quest.$inferInsert> & Record<string, unknown>;
 type Objectives = (typeof quest.$inferInsert)["content"]["objectives"];
 
 /** Veteran of the home village, close enough to its Administrative Building to form a team. */
-export const questTeamMember = (userId: string, overrides: Record<string, unknown> = {}) => ({
+export const questTeamMember = (
+  userId: string,
+  overrides: Record<string, unknown> = {},
+) => ({
   userId,
   username: userId,
   status: "AWAKE" as const,
@@ -32,7 +35,9 @@ export const insertQuestTeamWorld = async ({
   ...member
 }: { sector?: number; members?: string[] } & Record<string, unknown> = {}) => {
   const database = await getTestDatabase();
-  await database.insert(village).values({ id: "home", name: "Home", kageId: "leader", sector });
+  await database
+    .insert(village)
+    .values({ id: "home", name: "Home", kageId: "leader", sector });
   await database.insert(villageStructure).values({
     id: "admin",
     villageId: "home",
@@ -40,7 +45,9 @@ export const insertQuestTeamWorld = async ({
     route: "/adminbuilding",
     image: "",
   });
-  await insertUsers(members.map((userId) => questTeamMember(userId, { sector, ...member })));
+  await insertUsers(
+    members.map((userId) => questTeamMember(userId, { sector, ...member })),
+  );
 };
 
 /** Team-enabled quest with immediate retries; attempt limits stay with each test. */
@@ -65,7 +72,9 @@ export const insertTeamQuest = (objectives: Objectives, overrides: QuestRow = {}
 export const formQuestTeam = async () => {
   const database = await getTestDatabase();
   const leader = await callerFor(questPartyRouter, "leader");
-  expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(true);
+  expect((await leader.create({ questId: "team-quest", isPublic: true })).success).toBe(
+    true,
+  );
   const party = (await database.query.questParty.findFirst())!;
   const helper = await callerFor(questPartyRouter, "helper");
   expect((await helper.join({ partyId: party.id })).success).toBe(true);

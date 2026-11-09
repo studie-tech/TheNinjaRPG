@@ -64,6 +64,9 @@ describeWithDatabase("profile.updateAi username uniqueness", () => {
       data: await editData({ username: "Guardian Bot", jutsus: ["ai-jutsu"] }),
     });
     expect(result.success).toBe(true);
-    expect(await aiState()).toEqual({ username: "Guardian Bot", jutsuIds: ["ai-jutsu"] });
+    expect(await aiState()).toEqual({
+      username: "Guardian Bot",
+      jutsuIds: ["ai-jutsu"],
+    });
   });
 });

@@ -1,8 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  STORE_FEDERAL_PRODUCTS,
-  STORE_REP_PRODUCTS,
-} from "@/drizzle/constants";
+import { STORE_FEDERAL_PRODUCTS, STORE_REP_PRODUCTS } from "@/drizzle/constants";
 import { dollars2reps } from "@/utils/paypal";
 import {
   classifyEvent,
@@ -27,7 +24,9 @@ describe("store catalogue", () => {
     // absorbed rather than passed on. If this fails, either the pricing formula moved or
     // a tier was edited without recomputing its reputation.
     for (const product of STORE_REP_PRODUCTS) {
-      expect(product.reputationPoints).toBe<number | null | undefined>(dollars2reps(product.usd));
+      expect(product.reputationPoints).toBe<number | null | undefined>(
+        dollars2reps(product.usd),
+      );
     }
   });
 
@@ -49,12 +48,10 @@ describe("store catalogue", () => {
 
 describe("revenuecat webhook classification", () => {
   it("infers a storeless transfer platform from its dashboard app id", () => {
-    expect(storePlatformFromAppId("ios-app", "ios-app", "android-app")).toBe(
-      "APPLE",
+    expect(storePlatformFromAppId("ios-app", "ios-app", "android-app")).toBe("APPLE");
+    expect(storePlatformFromAppId("android-app", "ios-app", "android-app")).toBe(
+      "GOOGLE",
     );
-    expect(
-      storePlatformFromAppId("android-app", "ios-app", "android-app"),
-    ).toBe("GOOGLE");
     expect(storePlatformFromAppId("unknown", "ios-app", "android-app")).toBeUndefined();
     expect(
       resolveTransferStore(undefined, "ios-app", "ios-app", "android-app"),
@@ -101,7 +98,9 @@ describe("revenuecat webhook classification", () => {
       id: "e",
       expiration_at_ms: 1_701_000_000_000,
     } as Parameters<typeof expirationAt>[0];
-    expect(expirationAt(event)?.getTime()).toBe<typeof event.expiration_at_ms>(event.expiration_at_ms);
+    expect(expirationAt(event)?.getTime()).toBe<typeof event.expiration_at_ms>(
+      event.expiration_at_ms,
+    );
     expect(expirationAt({ ...event, expiration_at_ms: null })).toBeNull();
   });
 
@@ -132,10 +131,19 @@ describe("revenuecat webhook classification", () => {
     // receipt for a subscription the player has since bought back.
     const at = 1_700_000_000_000;
     expect(
-      occurredAt({ type: "EXPIRATION", id: "e", app_user_id: "u", event_timestamp_ms: at } as Parameters<typeof occurredAt>[0]).getTime(),
+      occurredAt({
+        type: "EXPIRATION",
+        id: "e",
+        app_user_id: "u",
+        event_timestamp_ms: at,
+      } as Parameters<typeof occurredAt>[0]).getTime(),
     ).toBe(at);
     // Absent only in hand-made payloads; falling back to now keeps the caller simple.
-    const fallback = occurredAt({ type: "EXPIRATION", id: "e", app_user_id: "u" } as Parameters<typeof occurredAt>[0]);
+    const fallback = occurredAt({
+      type: "EXPIRATION",
+      id: "e",
+      app_user_id: "u",
+    } as Parameters<typeof occurredAt>[0]);
     expect(Math.abs(fallback.getTime() - Date.now())).toBeLessThan(5000);
   });
 
@@ -148,8 +156,10 @@ describe("revenuecat webhook classification", () => {
     } as Parameters<typeof transferOccurredAt>[0];
     expect(transferOccurredAt(event)).toBeNull();
     expect(
-      transferOccurredAt({ ...event, event_timestamp_ms: 1_700_000_000_000 })
-        ?.getTime(),
+      transferOccurredAt({
+        ...event,
+        event_timestamp_ms: 1_700_000_000_000,
+      })?.getTime(),
     ).toBe(1_700_000_000_000);
   });
 
@@ -162,8 +172,12 @@ describe("revenuecat webhook classification", () => {
       purchased_at_ms: 1_699_000_000_000,
       expiration_at_ms: 1_701_000_000_000,
     } as Parameters<typeof occurredAt>[0];
-    expect(purchasedAt(event).getTime()).toBe<typeof event.purchased_at_ms>(event.purchased_at_ms);
-    expect(occurredAt(event).getTime()).toBe<typeof event.expiration_at_ms>(event.expiration_at_ms);
+    expect(purchasedAt(event).getTime()).toBe<typeof event.purchased_at_ms>(
+      event.purchased_at_ms,
+    );
+    expect(occurredAt(event).getTime()).toBe<typeof event.expiration_at_ms>(
+      event.expiration_at_ms,
+    );
   });
 
   it("tells a refund apart from an ordinary cancellation", () => {

@@ -8,12 +8,14 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as UserContext from "@/utils/UserContext";
 
 beforeEach(() => {
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children, topRightContent }) => (
-    <div>
-      {topRightContent}
-      {children}
-    </div>
-  ));
+  vi.spyOn(ContentBox, "default").mockImplementation(
+    ({ children, topRightContent }) => (
+      <div>
+        {topRightContent}
+        {children}
+      </div>
+    ),
+  );
 });
 
 afterEach(() => {
@@ -87,7 +89,9 @@ it("links each balance data source from its content row and column", () => {
 
 it("creates a backup of the content type named on each button", () => {
   const createBackup = vi.fn();
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "OWNER" } } as never);
+  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    data: { role: "OWNER" },
+  } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
     staff: {

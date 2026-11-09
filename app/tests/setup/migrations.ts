@@ -55,7 +55,9 @@ export const withMigrationSandbox = async (
       if (!table) throw new Error(`${name} missing from the ${snapshot} snapshot`);
       await query(baselineTableSql(table));
       if (!secondaryIndexes) continue;
-      for (const index of Object.values(table.indexes).filter((entry) => !entry.isUnique)) {
+      for (const index of Object.values(table.indexes).filter(
+        (entry) => !entry.isUnique,
+      )) {
         await query(
           `CREATE INDEX ${quoteIdentifier(index.name)} ON ${name} (${index.columns.map(quoteIdentifier).join(", ")})`,
         );

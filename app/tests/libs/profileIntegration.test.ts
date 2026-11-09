@@ -2,7 +2,12 @@ import { describe, expect, it } from "bun:test";
 import { getUserCaps } from "@/drizzle/constants";
 import { bankAccessBlockMessage } from "@/libs/bank";
 import { calcLevelRequirements, levelUpBlockMessage } from "@/libs/profile";
-import { questAlreadyActiveBlockMessage, questRequiresTravel, questTypeConcurrentBlockMessage, questUiAccessBlockMessage } from "@/libs/quest/missionHall";
+import {
+  questAlreadyActiveBlockMessage,
+  questRequiresTravel,
+  questTypeConcurrentBlockMessage,
+  questUiAccessBlockMessage,
+} from "@/libs/quest/missionHall";
 import { raidRewardBlockMessage } from "@/libs/raids";
 import { statTrainingBlockMessage } from "@/libs/train";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -71,7 +76,7 @@ describe("shared profile system contracts", () => {
   });
 
   it("rejects Energy spending for banned users", () => {
-    expect(statTrainingBlockMessage({...user, isBanned: true})).toContain("banned");
+    expect(statTrainingBlockMessage({ ...user, isBanned: true })).toContain("banned");
   });
 
   it("recognizes allied structure access instead of sending every visitor home", () => {

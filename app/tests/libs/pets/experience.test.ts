@@ -2,8 +2,15 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { PET_MAX_GENERATION_ATTEMPTS } from "@/drizzle/constants";
 import {
-  gameSetting, quest, questHistory, trainingLog, userData, userPet, petSpecies,
-  userQueue, userVote,
+  gameSetting,
+  quest,
+  questHistory,
+  trainingLog,
+  userData,
+  userPet,
+  petSpecies,
+  userQueue,
+  userVote,
 } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
 import { calcBattleResult } from "@/libs/combat/settlement";
@@ -23,7 +30,10 @@ import {
 } from "../../setup/factories";
 import { queueEnergy } from "../../setup/queues";
 import {
-  callerFor, describeWithDatabase, getTestDatabase, resetTables,
+  callerFor,
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
 } from "../../setup/testDatabase";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
@@ -31,8 +41,12 @@ const userId = "pet-owner";
 const petId = "owned-pet";
 /** The pet task that keeps the companion away on a contract. */
 const awayTask = {
-  petId, questId: "contract", questHistoryId: "attempt", startedAt: 1,
-  questVersion: 1, finishesAt: 2,
+  petId,
+  questId: "contract",
+  questHistoryId: "attempt",
+  startedAt: 1,
+  questVersion: 1,
+  finishesAt: 2,
 };
 const readUser = async () => {
   const user = await (await getTestDatabase()).query.userData.findFirst({
@@ -42,35 +56,61 @@ const readUser = async () => {
   return user;
 };
 const insertPet = async (patch: Partial<typeof userPet.$inferInsert> = {}) => {
-  await insertUserPets([{
-    id: petId,
-    userId,
-    name: "Nami",
-    rank: 1,
-    artRank: 1,
-    avatar: "/pet.png",
-    generationStatus: "READY",
-    ...patch,
-  }]);
-  await (await getTestDatabase()).update(userData).set({ activePetId: patch.id ?? petId }).where(eq(userData.userId, userId));
+  await insertUserPets([
+    {
+      id: petId,
+      userId,
+      name: "Nami",
+      rank: 1,
+      artRank: 1,
+      avatar: "/pet.png",
+      generationStatus: "READY",
+      ...patch,
+    },
+  ]);
+  await (await getTestDatabase())
+    .update(userData)
+    .set({ activePetId: patch.id ?? petId })
+    .where(eq(userData.userId, userId));
 };
 const grantExperience = async (amount: number, identity?: string | null) => {
-  await (await getTestDatabase()).update(userData).set({
-    earnedExperience: sql`${userData.earnedExperience} + ${amount}`,
-    petExperience: petExperienceGainSql(amount, identity),
-  }).where(eq(userData.userId, userId));
+  await (await getTestDatabase())
+    .update(userData)
+    .set({
+      earnedExperience: sql`${userData.earnedExperience} + ${amount}`,
+      petExperience: petExperienceGainSql(amount, identity),
+    })
+    .where(eq(userData.userId, userId));
 };
 
 describeWithDatabase("accompanying pet experience against real MySQL", () => {
   beforeEach(async () => {
-    await resetTables(petSpecies, userPet, userQueue, userVote, trainingLog, questHistory,
-      quest, userData, gameSetting);
+    await resetTables(
+      petSpecies,
+      userPet,
+      userQueue,
+      userVote,
+      trainingLog,
+      questHistory,
+      quest,
+      userData,
+      gameSetting,
+    );
     await insertPetSpecies(initialPetSpecies);
-    await insertUsers([{
-      userId, username: "PetOwner", rank: "GENIN", status: "AWAKE",
-      isOutlaw: true, curEnergy: 100, regeneration: 0, trainingSpeed: "15min",
-      petExperience: 23, earnedExperience: 0,
-    }]);
+    await insertUsers([
+      {
+        userId,
+        username: "PetOwner",
+        rank: "GENIN",
+        status: "AWAKE",
+        isOutlaw: true,
+        curEnergy: 100,
+        regeneration: 0,
+        trainingSpeed: "15min",
+        petExperience: 23,
+        earnedExperience: 0,
+      },
+    ]);
     await insertUserVotes([{ userId }]);
   });
 
@@ -82,9 +122,14 @@ describeWithDatabase("accompanying pet experience against real MySQL", () => {
   });
 
   it.each([
-    { battleEnabled: false }, { generationStatus: "PENDING" },
-    { generationStatus: "GENERATING", artRank: 0 }, { generationStatus: "FAILED" },
-    { artRank: 0 }, { avatar: null }, { avatar: "" }, { rank: 4, artRank: 4 },
+    { battleEnabled: false },
+    { generationStatus: "PENDING" },
+    { generationStatus: "GENERATING", artRank: 0 },
+    { generationStatus: "FAILED" },
+    { artRank: 0 },
+    { avatar: null },
+    { avatar: "" },
+    { rank: 4, artRank: 4 },
   ] satisfies Partial<typeof userPet.$inferInsert>[])(
     "grants normal player XP without pet XP when the pet is unavailable: %j",
     async (patch) => {
@@ -96,7 +141,11 @@ describeWithDatabase("accompanying pet experience against real MySQL", () => {
   );
 
   it("keeps earning XP from accepted art during an abandoned redraw with no attempts left", async () => {
-    await insertPet({ generationStatus: "GENERATING", generationStartedAt: new Date(0), generationAttempts: PET_MAX_GENERATION_ATTEMPTS });
+    await insertPet({
+      generationStatus: "GENERATING",
+      generationStartedAt: new Date(0),
+      generationAttempts: PET_MAX_GENERATION_ATTEMPTS,
+    });
     await grantExperience(17);
     expect((await readUser()).petExperience).toBe(40);
   });
@@ -105,9 +154,15 @@ describeWithDatabase("accompanying pet experience against real MySQL", () => {
     const database = await getTestDatabase();
     await insertPet({ rank: 3, artRank: 3 });
     await grantExperience(7);
-    await database.update(userData).set({ rank: "STUDENT" }).where(eq(userData.userId, userId));
+    await database
+      .update(userData)
+      .set({ rank: "STUDENT" })
+      .where(eq(userData.userId, userId));
     await grantExperience(11);
-    await database.update(userData).set({ rank: "NONE" }).where(eq(userData.userId, userId));
+    await database
+      .update(userData)
+      .set({ rank: "NONE" })
+      .where(eq(userData.userId, userId));
     await grantExperience(13);
     expect((await readUser()).petExperience).toBe(30);
     expect((await readUser()).earnedExperience).toBe(31);
@@ -116,10 +171,16 @@ describeWithDatabase("accompanying pet experience against real MySQL", () => {
   it("withholds accompanying XP while the active pet is away and resumes on its return", async () => {
     const database = await getTestDatabase();
     await insertPet();
-    await database.update(userData).set({ petTask: awayTask }).where(eq(userData.userId, userId));
+    await database
+      .update(userData)
+      .set({ petTask: awayTask })
+      .where(eq(userData.userId, userId));
     await grantExperience(17);
     expect((await readUser()).petExperience).toBe(23);
-    await database.update(userData).set({ petTask: null }).where(eq(userData.userId, userId));
+    await database
+      .update(userData)
+      .set({ petTask: null })
+      .where(eq(userData.userId, userId));
     await grantExperience(11);
     expect((await readUser()).petExperience).toBe(34);
     expect((await readUser()).earnedExperience).toBe(28);
@@ -129,7 +190,10 @@ describeWithDatabase("accompanying pet experience against real MySQL", () => {
     const database = await getTestDatabase();
     await insertPet();
     await database.delete(userPet).where(eq(userPet.id, petId));
-    await database.update(userData).set({ petExperience: 0 }).where(eq(userData.userId, userId));
+    await database
+      .update(userData)
+      .set({ petExperience: 0 })
+      .where(eq(userData.userId, userId));
     await grantExperience(5, petId);
     await insertPet({ id: "replacement-pet" });
     await grantExperience(11, petId);
@@ -144,21 +208,32 @@ describeWithDatabase("accompanying pet experience against real MySQL", () => {
     await insertPet();
     const before = await readUser();
     const caller = await callerFor(trainRouter, userId);
-    expect((await caller.startTraining({ stat: "offence", energy: 10 })).success).toBe(true);
+    expect((await caller.startTraining({ stat: "offence", energy: 10 })).success).toBe(
+      true,
+    );
     const after = await readUser();
-    expect(after.petExperience - before.petExperience).toBeCloseTo(after.experience - before.experience);
-    expect((await caller.startTraining({ stat: "offence", energy: 100 })).success).toBe(false);
+    expect(after.petExperience - before.petExperience).toBeCloseTo(
+      after.experience - before.experience,
+    );
+    expect((await caller.startTraining({ stat: "offence", energy: 100 })).success).toBe(
+      false,
+    );
     expect((await readUser()).petExperience).toBe(after.petExperience);
   });
 
   it("settles queued training once and awards only the newly trained XP", async () => {
     await insertPet();
-    await queueEnergy(userId, [{ stat: "offence", energy: 10 }, { stat: "speed", energy: 20 }]);
+    await queueEnergy(userId, [
+      { stat: "offence", energy: 10 },
+      { stat: "speed", energy: 20 },
+    ]);
     const before = await readUser();
     const database = await getTestDatabase();
     await fetchUpdatedUser({ client: database, userId, forceRegen: true });
     const after = await readUser();
-    expect(after.petExperience - before.petExperience).toBeCloseTo(after.experience - before.experience);
+    expect(after.petExperience - before.petExperience).toBeCloseTo(
+      after.experience - before.experience,
+    );
     expect(after.petExperience).toBeGreaterThan(before.petExperience);
     await fetchUpdatedUser({ client: database, userId, forceRegen: true });
     expect((await readUser()).petExperience).toBe(after.petExperience);
@@ -167,7 +242,9 @@ describeWithDatabase("accompanying pet experience against real MySQL", () => {
   it("awards quest XP immediately without awarding it again when assigned to stats", async () => {
     await insertPet();
     await updateRewards({
-      client: await getTestDatabase(), user: await readUser(), reason: "Quest complete",
+      client: await getTestDatabase(),
+      user: await readUser(),
+      reason: "Quest complete",
       rewards: PostProcessedRewardSchema.parse({ reward_exp: 100 }),
     });
     const rewarded = await readUser();
@@ -188,10 +265,13 @@ describeWithDatabase("accompanying pet experience against real MySQL", () => {
     await insertPet();
     const before = await readUser();
     const client = await getTestDatabase();
-    const grant = (rewards: object) => updateRewards({
-      client, user: before, reason: "Quest complete",
-      rewards: PostProcessedRewardSchema.parse(rewards),
-    });
+    const grant = (rewards: object) =>
+      updateRewards({
+        client,
+        user: before,
+        reason: "Quest complete",
+        rewards: PostProcessedRewardSchema.parse(rewards),
+      });
     await Promise.all([
       grant({ reward_pet_experience: 100 }),
       grant({ reward_pet_experience: 50 }),
@@ -214,9 +294,16 @@ describeWithDatabase("accompanying pet experience against real MySQL", () => {
     async (state) => {
       const client = await getTestDatabase();
       if (state !== "missing") await insertPet({ battleEnabled: state !== "disabled" });
-      if (state === "away") await client.update(userData).set({ petTask: awayTask }).where(eq(userData.userId, userId));
+      if (state === "away")
+        await client
+          .update(userData)
+          .set({ petTask: awayTask })
+          .where(eq(userData.userId, userId));
       const before = await readUser();
-      await updateRewards({ client, user: before, reason: "Quest complete",
+      await updateRewards({
+        client,
+        user: before,
+        reason: "Quest complete",
         rewards: PostProcessedRewardSchema.parse({ reward_pet_experience: 100 }),
       });
       const after = await readUser();
@@ -229,15 +316,31 @@ describeWithDatabase("accompanying pet experience against real MySQL", () => {
   it("settles both combat XP kinds once against the frozen accompanying pet", async () => {
     const database = await getTestDatabase();
     await insertPet();
-    await database.update(userData).set({ battleId: "pet-fight", status: "BATTLE" })
+    await database
+      .update(userData)
+      .set({ battleId: "pet-fight", status: "BATTLE" })
       .where(eq(userData.userId, userId));
     const state = makeCompleteBattle({
-      id: "pet-fight", battleType: "QUEST", rewardScaling: 1,
+      id: "pet-fight",
+      battleType: "QUEST",
+      rewardScaling: 1,
       usersState: [
-        makeBattleUser(userId, { ...await readUser(), villageId: "owner-village", direction: "left", isAi: false,
-          isSummon: false, curHealth: 100, sector: 1 }),
-        makeBattleUser("enemy", { direction: "right", isAi: true,
-          curHealth: 0, leftBattle: true, sector: 1 }),
+        makeBattleUser(userId, {
+          ...(await readUser()),
+          villageId: "owner-village",
+          direction: "left",
+          isAi: false,
+          isSummon: false,
+          curHealth: 100,
+          sector: 1,
+        }),
+        makeBattleUser("enemy", {
+          direction: "right",
+          isAi: true,
+          curHealth: 0,
+          leftBattle: true,
+          sector: 1,
+        }),
       ],
       extraState: { petIdsByOwner: { [userId]: petId } },
     });

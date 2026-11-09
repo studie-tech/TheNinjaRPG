@@ -9,16 +9,21 @@ import * as UserContext from "@/utils/UserContext";
 
 let query: { data: unknown; isFetching: boolean };
 const refetch = vi.fn(async () => undefined);
-const useQuery = vi.fn((_input: unknown, _options: { enabled: boolean }) => ({ ...query, refetch }));
+const useQuery = vi.fn((_input: unknown, _options: { enabled: boolean }) => ({
+  ...query,
+  refetch,
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
   query = { data: undefined, isFetching: false };
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
   vi.spyOn(Avatar, "default").mockImplementation(() => null);
-  vi.spyOn(ContentBox, "default").mockImplementation(({ title, subtitle, children }) => (
-    <section aria-label={`${title}: ${subtitle}`}>{children}</section>
-  ));
+  vi.spyOn(ContentBox, "default").mockImplementation(
+    ({ title, subtitle, children }) => (
+      <section aria-label={`${title}: ${subtitle}`}>{children}</section>
+    ),
+  );
   Object.assign(vi.spyOn(client, "api" as never), {
     reports: { getReportStatistics: { useQuery } },
   });
@@ -30,7 +35,9 @@ afterEach(() => {
 });
 
 const signIn = (role: string) =>
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ data: { userId: "u", role } } as never);
+  vi
+    .spyOn(UserContext, "useRequiredUserData")
+    .mockReturnValue({ data: { userId: "u", role } } as never);
 
 it("tells players the statistics are staff-only instead of loading forever", () => {
   signIn("USER");

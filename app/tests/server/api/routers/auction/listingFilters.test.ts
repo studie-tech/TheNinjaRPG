@@ -2,7 +2,12 @@ import { beforeEach, expect, it } from "bun:test";
 import { auctionBid, auctionListing, item, userData, userItem } from "@/drizzle/schema";
 import { auctionRouter } from "@/server/api/routers/auction";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import {
+  callerFor,
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../../setup/testDatabase";
 
 /** The listing browser's price bounds are inclusive on both ends. */
 describeWithDatabase("auction listing price filters", () => {
@@ -14,7 +19,12 @@ describeWithDatabase("auction listing price filters", () => {
     ]);
     await insertItems([{ id: "lot", name: "Auction lot", canBeTraded: true }]);
     await insertUserItems(
-      ["cheap", "middle", "dear"].map((id) => ({ id: `${id}-instance`, itemId: "lot", userId: "seller", isInAuction: true })),
+      ["cheap", "middle", "dear"].map((id) => ({
+        id: `${id}-instance`,
+        itemId: "lot",
+        userId: "seller",
+        isInAuction: true,
+      })),
     );
     await (await getTestDatabase()).insert(auctionListing).values(
       [
@@ -34,7 +44,11 @@ describeWithDatabase("auction listing price filters", () => {
   });
 
   const listed = async (bounds: { minPrice?: number; maxPrice?: number }) =>
-    (await (await callerFor(auctionRouter, "browser")).getAuctionListings({ limit: 10, ...bounds })).data
+    (
+      await (
+        await callerFor(auctionRouter, "browser")
+      ).getAuctionListings({ limit: 10, ...bounds })
+    ).data
       .map((listing) => listing.id)
       .sort();
 

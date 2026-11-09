@@ -7,18 +7,34 @@ import { BattleSettingsEdit } from "@/layout/profileEdit/BattleSettingsEdit";
 import * as UserContext from "@/utils/UserContext";
 
 beforeEach(() => {
-  const mutation = { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) };
+  const mutation = {
+    useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+  };
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
     profile: {
-      getPublicUser: { useQuery: () => ({ data: { aiProfileId: "ai", jutsus: [], items: [] }, isPending: false }) },
+      getPublicUser: {
+        useQuery: () => ({
+          data: { aiProfileId: "ai", jutsus: [], items: [] },
+          isPending: false,
+        }),
+      },
       updateBattleDescription: mutation,
       updatePreferences: mutation,
     },
     ai: { updateAiProfile: mutation },
   });
   vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
-    () => ({ data: { userId: "actor", showBattleDescription: false, showPvpRecord: false, primaryElement: "Fire" }, updateUser: vi.fn() }) as never,
+    () =>
+      ({
+        data: {
+          userId: "actor",
+          showBattleDescription: false,
+          showPvpRecord: false,
+          primaryElement: "Fire",
+        },
+        updateUser: vi.fn(),
+      }) as never,
   );
   vi.spyOn(combat, "useAutoCombatSetting").mockImplementation(() => [false, vi.fn()]);
   vi.spyOn(AiProfileEdit, "default").mockImplementation(() => <p>AI profile editor</p>);

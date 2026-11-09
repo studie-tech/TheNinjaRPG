@@ -40,11 +40,17 @@ export const runInScope = (code: string, scope: object) =>
   new Function("scope", `with (scope) { ${transpiler.transformSync(code)} }`)(scope);
 
 /** Transpile a TypeScript expression and return its value, with `bindings` as free variables. */
-export const evaluateExpression = (expression: string, bindings: Record<string, unknown> = {}) => {
-  const code = transpiler.transformSync(`export const __value = (${expression});`)
+export const evaluateExpression = (
+  expression: string,
+  bindings: Record<string, unknown> = {},
+) => {
+  const code = transpiler
+    .transformSync(`export const __value = (${expression});`)
     .replace(/export\s*\{[^}]*\};?/, "")
     .replace(/export\s+(const|var|let)\s+__value/, "$1 __value");
-  return new Function(...Object.keys(bindings), `${code}\nreturn __value;`)(...Object.values(bindings));
+  return new Function(...Object.keys(bindings), `${code}\nreturn __value;`)(
+    ...Object.values(bindings),
+  );
 };
 
 const closers: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
@@ -86,7 +92,8 @@ const templateEnd = (source: string, start: number) => {
   for (let index = start + 1; index < source.length; index++) {
     if (source[index] === "\\") index++;
     else if (source[index] === "`") return index;
-    else if (source[index] === "$" && source[index + 1] === "{") index = closingIndex(source, index + 1);
+    else if (source[index] === "$" && source[index + 1] === "{")
+      index = closingIndex(source, index + 1);
   }
   throw new Error(`Unclosed template at ${start}`);
 };

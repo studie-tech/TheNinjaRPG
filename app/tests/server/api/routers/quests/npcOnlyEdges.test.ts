@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi } from "bun:test";
 import { restrictedNewQuestEdgeError } from "@/server/api/routers/quests";
 
@@ -19,12 +18,28 @@ const makeClient = (...results: { id: string; name: string }[][]) => {
 describe("restrictedNewQuestEdgeError", () => {
   it("blocks retyping a linked quest to Special", async () => {
     const { client } = makeClient([{ id: "quest-a", name: "Quest A" }]);
-    expect(await restrictedNewQuestEdgeError(client, { questId: "quest-b", questName: "Quest B", currentType: "mission", nextType: "special", objectives: [] })).toContain("Cannot change this quest to special");
+    expect(
+      await restrictedNewQuestEdgeError(client, {
+        questId: "quest-b",
+        questName: "Quest B",
+        currentType: "mission",
+        nextType: "special",
+        objectives: [],
+      }),
+    ).toContain("Cannot change this quest to special");
   });
 
   it("blocks a new_quest edge targeting a Special quest", async () => {
     const { client } = makeClient([{ id: "special", name: "Special Quest" }]);
-    expect(await restrictedNewQuestEdgeError(client, { questId: "quest-a", questName: "Quest A", currentType: "mission", nextType: "mission", objectives: [newQuestObjective("objective", ["special"])] as never })).toContain("item-only quests cannot be started");
+    expect(
+      await restrictedNewQuestEdgeError(client, {
+        questId: "quest-a",
+        questName: "Quest A",
+        currentType: "mission",
+        nextType: "mission",
+        objectives: [newQuestObjective("objective", ["special"])] as never,
+      }),
+    ).toContain("item-only quests cannot be started");
   });
   it("blocks retyping a quest to overworld while another quest still starts it", async () => {
     // Quest A already starts Quest B; the only DB read is the inbound lookup, because Quest B's

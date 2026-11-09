@@ -15,17 +15,24 @@ beforeEach(() => {
     () => ({ data: { userId: "viewer", role: "MODERATOR" } }) as never,
   );
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 it("requests the open ticket statuses by default", () => {
   const { result } = renderHook(() => useFiltering());
-  expect(getFilter(result.current)).toEqual({ status: ["IN_PROGRESS", "OPEN", "WAITING_FOR_STAFF"] });
+  expect(getFilter(result.current)).toEqual({
+    status: ["IN_PROGRESS", "OPEN", "WAITING_FOR_STAFF"],
+  });
 });
 
 it("sends the viewer's own id for tickets created by me", () => {
   const { result } = renderHook(() => useFiltering());
   act(() => result.current.cf.setters.createdByUserId("me"));
-  expect(getFilter(result.current)).toEqual(expect.objectContaining({ createdByUserId: "viewer" }));
+  expect(getFilter(result.current)).toEqual(
+    expect.objectContaining({ createdByUserId: "viewer" }),
+  );
 });
 
 it("sends a chosen assignee and omits the None choices", () => {

@@ -58,7 +58,10 @@ describe("combat playback recording", () => {
   it("does not report a cue as new when effects clone fighters between actions", () => {
     const state = setup();
     user(state, "foe").spriteAction = slash;
-    user(state, "foe").spriteAnimationEvent = { id: "event", actionKey: "basic:attack" };
+    user(state, "foe").spriteAnimationEvent = {
+      id: "event",
+      actionKey: "basic:attack",
+    };
     const recorder = createCombatPlaybackRecorder(state);
     const cloned = structuredClone(state);
     user(cloned, "foe").curHealth = 90;
@@ -154,7 +157,11 @@ describe("combat playback frames", () => {
     const previous = setup();
     const before = structuredClone(previous);
     const recorder = createCombatPlaybackRecorder(previous);
-    for (const [version, longitude] of [[10, 4], [11, 3], [12, 2]] as const) {
+    for (const [version, longitude] of [
+      [10, 4],
+      [11, 3],
+      [12, 2],
+    ] as const) {
       user(previous, "foe").longitude = longitude;
       recorder.record(previous, version, "foe");
     }
@@ -182,7 +189,9 @@ describe("combat playback frames", () => {
     recorder.record(previous, 12, "foe");
     const next = asReturned({ ...previous, version: 13 });
     next.playback = recorder.steps;
-    expect(buildPlaybackFrames(asReturned(before), next).map(({ actorId }) => actorId)).toEqual(["foe", "hero", "foe"]);
+    expect(
+      buildPlaybackFrames(asReturned(before), next).map(({ actorId }) => actorId),
+    ).toEqual(["foe", "hero", "foe"]);
   });
 
   it("does not join a move that reveals something on the field", () => {
@@ -190,7 +199,9 @@ describe("combat playback frames", () => {
     const before = structuredClone(previous);
     const recorder = createCombatPlaybackRecorder(previous);
     user(previous, "foe").longitude = 4;
-    previous.groundEffects = [{ id: "trap" } as CompleteBattle["groundEffects"][number]];
+    previous.groundEffects = [
+      { id: "trap" } as CompleteBattle["groundEffects"][number],
+    ];
     recorder.record(previous, 10, "foe");
     user(previous, "foe").longitude = 3;
     recorder.record(previous, 11, "foe");

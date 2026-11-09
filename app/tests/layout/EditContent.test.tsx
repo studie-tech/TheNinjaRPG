@@ -1,5 +1,12 @@
 import * as useSize from "@radix-ui/react-use-size";
-import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
@@ -17,7 +24,11 @@ import { EffectFieldInputGeneric, MassEffectEditor } from "@/layout/MassEffectEd
 import { RewardEditor, RewardFormWrapper } from "@/layout/RewardEditor";
 import { ObjectiveReward } from "@/validators/rewards";
 import { QuestReward, type QuestRewardType } from "@/validators/rewardPackages";
-import { type AllObjectivesType, getObjectiveSchema, QuestValidator } from "@/validators/objectives";
+import {
+  type AllObjectivesType,
+  getObjectiveSchema,
+  QuestValidator,
+} from "@/validators/objectives";
 import * as toastHelpers from "@/libs/toast";
 import * as errorUtils from "@/utils/error";
 import * as UserContext from "@/utils/UserContext";
@@ -43,12 +54,34 @@ const pending = vi.fn();
 const toast = vi.fn();
 const saveQuest = vi.fn(async (_input: unknown) => ({ success: true }));
 const names = { useQuery: () => ({ data: [] }) };
-let rewardCatalog: { packages: []; nodes: { id: string; name: string; fields: string[] }[] } | undefined;
-const rewardCatalogQuery = { useQuery: (_input?: unknown, _options?: { enabled: boolean; retryOnMount?: boolean }) => ({ data: rewardCatalog, isFetched: !!rewardCatalog, isError: false, refetch: vi.fn() }) };
-const update: { useMutation: () => { mutateAsync: (...args: Parameters<typeof save>) => ReturnType<typeof save>; isPending?: boolean } } = { useMutation: () => ({ mutateAsync: save }) };
+let rewardCatalog:
+  | { packages: []; nodes: { id: string; name: string; fields: string[] }[] }
+  | undefined;
+const rewardCatalogQuery = {
+  useQuery: (
+    _input?: unknown,
+    _options?: { enabled: boolean; retryOnMount?: boolean },
+  ) => ({
+    data: rewardCatalog,
+    isFetched: !!rewardCatalog,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+};
+const update: {
+  useMutation: () => {
+    mutateAsync: (...args: Parameters<typeof save>) => ReturnType<typeof save>;
+    isPending?: boolean;
+  };
+} = { useMutation: () => ({ mutateAsync: save }) };
 
 const api = {
-  useUtils: () => ({ item: { getAllNames: { invalidate: async () => undefined }, getVariantNames: { invalidate: async () => undefined } } }),
+  useUtils: () => ({
+    item: {
+      getAllNames: { invalidate: async () => undefined },
+      getVariantNames: { invalidate: async () => undefined },
+    },
+  }),
   profile: { getAllAiNames: names, getUser: { useQuery: () => ({ data: undefined }) } },
   item: { getVariantNames: names, getAllNames: names, update },
   jutsu: { getAllNames: names, update },
@@ -61,7 +94,11 @@ const api = {
   title: { getAllNames: names },
   misc: { getAllGameAssetNames: names },
   village: { getAllNames: names },
-  quests: { getAllNames: names, getPublicLocations: names, update: { useMutation: () => ({ mutateAsync: saveQuest }) } },
+  quests: {
+    getAllNames: names,
+    getPublicLocations: names,
+    update: { useMutation: () => ({ mutateAsync: saveQuest }) },
+  },
   worldMap: { getSectorWindow: { useQuery: () => ({ data: undefined }) } },
   mapTerrain: { getAll: names },
   overworldAi: { getAllPlacementNames: names },
@@ -78,7 +115,9 @@ const api = {
 beforeEach(() => {
   vi.clearAllMocks();
   Object.assign(vi.spyOn(client, "api" as never), api);
-  vi.spyOn(navigation, "useRouter").mockImplementation(() => ({ push: vi.fn() }) as never);
+  vi.spyOn(navigation, "useRouter").mockImplementation(
+    () => ({ push: vi.fn() }) as never,
+  );
   spyOnToasts();
   vi.spyOn(toastHelpers, "showMutationToast").mockImplementation(toast);
   vi.spyOn(ContentImageSelector, "default").mockImplementation(() => null);
@@ -180,7 +219,13 @@ describe("grouped material rewards", () => {
 });
 
 /** Exercise saved groups through the shared editor used by quests and package payloads. */
-const SavedRewardForm = ({ allowPackages = true, optionalExperience }: { allowPackages?: boolean; optionalExperience?: number }) => {
+const SavedRewardForm = ({
+  allowPackages = true,
+  optionalExperience,
+}: {
+  allowPackages?: boolean;
+  optionalExperience?: number;
+}) => {
   const form = useForm({
     defaultValues: ObjectiveReward.parse({
       reward_money: 100,
@@ -198,14 +243,23 @@ const SavedRewardForm = ({ allowPackages = true, optionalExperience }: { allowPa
         { id: "reward_tokens", label: "Tokens", type: "number" },
         { id: "reward_prestige", label: "Prestige", type: "number" },
         { id: "reward_exp", label: "Experience", type: "number" },
-        { id: "reward_ninjutsu_experience", label: "Ninjutsu Experience", type: "number" },
+        {
+          id: "reward_ninjutsu_experience",
+          label: "Ninjutsu Experience",
+          type: "number",
+        },
       ]}
     />
   );
 };
 
 /** Keep nested snapshot edits in the same parent form and validation lifecycle as quests. */
-const SnapshotRewardForm = ({ packageId, onUpdate, onSave, onInvalid }: {
+const SnapshotRewardForm = ({
+  packageId,
+  onUpdate,
+  onSave,
+  onInvalid,
+}: {
   packageId?: string;
   onUpdate: () => void;
   onSave: (data: QuestRewardType) => void;
@@ -213,75 +267,142 @@ const SnapshotRewardForm = ({ packageId, onUpdate, onSave, onInvalid }: {
 }) => {
   const form = useForm<any>({
     defaultValues: QuestReward.parse({
-      reward_packages: [{
-        id: "snapshot", packageId, name: "Saved rewards",
-        rewards: { reward_money: 100, reward_ninjutsu_experience: 100 },
-      }],
+      reward_packages: [
+        {
+          id: "snapshot",
+          packageId,
+          name: "Saved rewards",
+          rewards: { reward_money: 100, reward_ninjutsu_experience: 100 },
+        },
+      ],
     }),
     resolver: zodResolver(QuestReward),
   });
   const values = useWatch({ control: form.control });
-  return <>
-    <RewardEditor form={{ ...form, setValue: (...args) => {
-      onUpdate();
-      form.setValue(...args);
-    } }} formData={[]} />
-    <output data-testid="snapshot-money">{String(values.reward_packages?.[0]?.rewards?.reward_money)}</output>
-    <output data-testid="snapshot-experience">{String(values.reward_packages?.[0]?.rewards?.reward_ninjutsu_experience)}</output>
-    <button type="button" onClick={() => void form.handleSubmit(onSave, onInvalid)()}>Save rewards</button>
-  </>;
+  return (
+    <>
+      <RewardEditor
+        form={{
+          ...form,
+          setValue: (...args) => {
+            onUpdate();
+            form.setValue(...args);
+          },
+        }}
+        formData={[]}
+      />
+      <output data-testid="snapshot-money">
+        {String(values.reward_packages?.[0]?.rewards?.reward_money)}
+      </output>
+      <output data-testid="snapshot-experience">
+        {String(values.reward_packages?.[0]?.rewards?.reward_ninjutsu_experience)}
+      </output>
+      <button type="button" onClick={() => void form.handleSubmit(onSave, onInvalid)()}>
+        Save rewards
+      </button>
+    </>
+  );
 };
 
 const savedObjectiveQuest = {
   ...QuestValidator.parse({
-    name: "Objective rewards", description: "Complete the objective", successDescription: "Done",
-    questType: "story", hidden: false, consecutiveObjectives: false,
-    endsAt: null, startsAt: null, tierLevel: null,
+    name: "Objective rewards",
+    description: "Complete the objective",
+    successDescription: "Done",
+    questType: "story",
+    hidden: false,
+    consecutiveObjectives: false,
+    endsAt: null,
+    startsAt: null,
+    tierLevel: null,
     content: {
-      objectives: [getObjectiveSchema("pvp_kills").parse({
-        id: "objective", task: "pvp_kills", reward_money: 100, reward_ninjutsu_experience: 100,
-      })],
+      objectives: [
+        getObjectiveSchema("pvp_kills").parse({
+          id: "objective",
+          task: "pvp_kills",
+          reward_money: 100,
+          reward_ninjutsu_experience: 100,
+        }),
+      ],
       reward: {},
     },
   }),
-  id: "quest", createdAt: new Date(), updatedAt: new Date(),
+  id: "quest",
+  createdAt: new Date(),
+  updatedAt: new Date(),
 } as Quest;
 
 /** Exercise direct objectives through the quest editor's real content setter and save validator. */
 const ObjectiveRewardForm = ({ onUpdate }: { onUpdate: () => void }) => {
-  const { objectives, setObjectives, handleQuestSubmit } = useQuestEditForm(savedObjectiveQuest, async () => undefined);
-  return <>
-    <ObjectiveFormWrapper
-      idx={0} quest={savedObjectiveQuest} availableTags={["pvp_kills"]} hideTagType
-      objective={objectives[0]!} objectives={objectives}
-      setObjectives={(next) => { onUpdate(); setObjectives(next); }}
-    />
-    <output data-testid="objective-money">{String(objectives[0]?.reward_money)}</output>
-    <output data-testid="objective-experience">{String(objectives[0]?.reward_ninjutsu_experience)}</output>
-    <button type="button" onClick={() => void handleQuestSubmit()}>Save objective</button>
-  </>;
+  const { objectives, setObjectives, handleQuestSubmit } = useQuestEditForm(
+    savedObjectiveQuest,
+    async () => undefined,
+  );
+  return (
+    <>
+      <ObjectiveFormWrapper
+        idx={0}
+        quest={savedObjectiveQuest}
+        availableTags={["pvp_kills"]}
+        hideTagType
+        objective={objectives[0]!}
+        objectives={objectives}
+        setObjectives={(next) => {
+          onUpdate();
+          setObjectives(next);
+        }}
+      />
+      <output data-testid="objective-money">
+        {String(objectives[0]?.reward_money)}
+      </output>
+      <output data-testid="objective-experience">
+        {String(objectives[0]?.reward_ninjutsu_experience)}
+      </output>
+      <button type="button" onClick={() => void handleQuestSubmit()}>
+        Save objective
+      </button>
+    </>
+  );
 };
 
 const savedStructureQuest = {
   ...savedObjectiveQuest,
   content: {
     ...savedObjectiveQuest.content,
-    objectives: [getObjectiveSchema("move_to_location").parse({
-      id: "structure", task: "move_to_location", structureAssetId: "tower",
-      locationName: "Watchtower", locationDescription: "An old tower", structureScale: 1,
-    })],
+    objectives: [
+      getObjectiveSchema("move_to_location").parse({
+        id: "structure",
+        task: "move_to_location",
+        structureAssetId: "tower",
+        locationName: "Watchtower",
+        locationDescription: "An old tower",
+        structureScale: 1,
+      }),
+    ],
   },
 } as Quest;
 
 const StructureObjectiveForm = () => {
-  const { objectives, setObjectives, handleQuestSubmit } = useQuestEditForm(savedStructureQuest, async () => undefined);
-  return <>
-    <ObjectiveFormWrapper
-      idx={0} quest={savedStructureQuest} availableTags={["move_to_location"]} hideTagType
-      objective={objectives[0]!} objectives={objectives} setObjectives={setObjectives}
-    />
-    <button type="button" onClick={() => void handleQuestSubmit()}>Save objective</button>
-  </>;
+  const { objectives, setObjectives, handleQuestSubmit } = useQuestEditForm(
+    savedStructureQuest,
+    async () => undefined,
+  );
+  return (
+    <>
+      <ObjectiveFormWrapper
+        idx={0}
+        quest={savedStructureQuest}
+        availableTags={["move_to_location"]}
+        hideTagType
+        objective={objectives[0]!}
+        objectives={objectives}
+        setObjectives={setObjectives}
+      />
+      <button type="button" onClick={() => void handleQuestSubmit()}>
+        Save objective
+      </button>
+    </>
+  );
 };
 
 describe("quest structure drafts", () => {
@@ -289,104 +410,213 @@ describe("quest structure drafts", () => {
     ["structureScale", "6", "2"],
     ["locationName", "N".repeat(101), "Repaired tower"],
     ["locationDescription", "D".repeat(2001), "Repaired description"],
-  ])("keeps an invalid %s draft repairable after clearing artwork", async (field, invalid, repaired) => {
-    const view = render(<StructureObjectiveForm />);
-    const input = view.container.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${field}"]`)!;
-    await act(async () => { fireEvent.input(input, { target: { value: invalid } }); });
-    fireEvent.click(view.getByRole("button", { name: "Clear Map structure (optional)" }));
-    await waitFor(() => expect(view.container.querySelector(`[name="${field}"]`)).toBe(input));
-    fireEvent.click(view.getByRole("button", { name: "Save objective" }));
-    await waitFor(() => expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledTimes(1));
-    expect(saveQuest).not.toHaveBeenCalled();
-    await act(async () => { input.focus(); fireEvent.input(input, { target: { value: repaired } }); });
-    expect(view.container.querySelector(`[name="${field}"]`)).toBe(input);
-    expect(document.activeElement).toBe(input);
-    fireEvent.blur(input);
-    fireEvent.click(view.getByRole("button", { name: "Save objective" }));
-    await waitFor(() => expect(saveQuest).toHaveBeenCalledTimes(1));
-    expect(saveQuest.mock.calls[0]?.[0]).toMatchObject({ data: { content: { objectives: [{
-      structureAssetId: "", [field!]: field === "structureScale" ? Number(repaired) : repaired,
-    }] } } });
-  });
+  ])(
+    "keeps an invalid %s draft repairable after clearing artwork",
+    async (field, invalid, repaired) => {
+      const view = render(<StructureObjectiveForm />);
+      const input = view.container.querySelector<
+        HTMLInputElement | HTMLTextAreaElement
+      >(`[name="${field}"]`)!;
+      await act(async () => {
+        fireEvent.input(input, { target: { value: invalid } });
+      });
+      fireEvent.click(
+        view.getByRole("button", { name: "Clear Map structure (optional)" }),
+      );
+      await waitFor(() =>
+        expect(view.container.querySelector(`[name="${field}"]`)).toBe(input),
+      );
+      fireEvent.click(view.getByRole("button", { name: "Save objective" }));
+      await waitFor(() =>
+        expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledTimes(1),
+      );
+      expect(saveQuest).not.toHaveBeenCalled();
+      await act(async () => {
+        input.focus();
+        fireEvent.input(input, { target: { value: repaired } });
+      });
+      expect(view.container.querySelector(`[name="${field}"]`)).toBe(input);
+      expect(document.activeElement).toBe(input);
+      fireEvent.blur(input);
+      fireEvent.click(view.getByRole("button", { name: "Save objective" }));
+      await waitFor(() => expect(saveQuest).toHaveBeenCalledTimes(1));
+      expect(saveQuest.mock.calls[0]?.[0]).toMatchObject({
+        data: {
+          content: {
+            objectives: [
+              {
+                structureAssetId: "",
+                [field!]: field === "structureScale" ? Number(repaired) : repaired,
+              },
+            ],
+          },
+        },
+      });
+    },
+  );
 
   it("keeps valid cleared artwork drafts compact and preserves their values on save", async () => {
     const view = render(<StructureObjectiveForm />);
-    fireEvent.click(view.getByRole("button", { name: "Clear Map structure (optional)" }));
-    await waitFor(() => expect(view.queryByLabelText("Structure size multiplier")).toBeNull());
+    fireEvent.click(
+      view.getByRole("button", { name: "Clear Map structure (optional)" }),
+    );
+    await waitFor(() =>
+      expect(view.queryByLabelText("Structure size multiplier")).toBeNull(),
+    );
     expect(view.queryByLabelText("Location name")).toBeNull();
     expect(view.queryByLabelText("Location description (Inspect)")).toBeNull();
     fireEvent.click(view.getByRole("button", { name: "Save objective" }));
     await waitFor(() => expect(saveQuest).toHaveBeenCalledTimes(1));
-    expect(saveQuest.mock.calls[0]?.[0]).toMatchObject({ data: { content: { objectives: [{
-      structureAssetId: "", locationName: "Watchtower", locationDescription: "An old tower", structureScale: 1,
-    }] } } });
+    expect(saveQuest.mock.calls[0]?.[0]).toMatchObject({
+      data: {
+        content: {
+          objectives: [
+            {
+              structureAssetId: "",
+              locationName: "Watchtower",
+              locationDescription: "An old tower",
+              structureScale: 1,
+            },
+          ],
+        },
+      },
+    });
   });
 });
 
 describe("reward node editing", () => {
-  it.each(["button", "selector"])("validates drafts before copying a reward group via the %s", async (control) => {
-    const view = render(<SavedRewardForm />);
-    const ryo = view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!;
-    const currency = ryo.closest("details")!;
-    const initialOrder = [...view.container.querySelectorAll("summary")].map((node) => node.textContent);
-    const copy = () => control === "button"
-      ? fireEvent.click(within(currency).getByRole("button", { name: "Add Another Node" }))
-      : fireEvent.change(view.getByRole("combobox", { name: "Add reward node" }), { target: { value: "currency" } });
-    await act(async () => { ryo.focus(); fireEvent.input(ryo, { target: { value: "" } }); });
-    copy();
-    await waitFor(() => expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledTimes(1));
-    expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledWith({
-      reward_money: { type: "invalid_type", message: expect.stringContaining("number") },
-    });
-    expect(view.queryByRole("button", { name: "Remove Node" })).toBeNull();
-    expect(view.container.querySelector('input[name="reward_money"]')).toBe(ryo);
-    expect(ryo.value).toBe("");
-    expect([...view.container.querySelectorAll("summary")].map((node) => node.textContent)).toEqual(initialOrder);
-    await act(async () => { fireEvent.input(ryo, { target: { value: "350" } }); });
-    copy();
-    await waitFor(() => expect(view.getAllByRole("button", { name: "Remove Node" })).toHaveLength(1));
-    const snapshot = view.getByRole("button", { name: "Remove Node" }).closest("details")!;
-    const copiedRyo = snapshot.querySelector<HTMLInputElement>('input[name="reward_money"]')!;
-    expect(copiedRyo.value).toBe("350");
-    expect(copiedRyo).not.toBe(ryo);
-    fireEvent.input(ryo, { target: { value: "400" } });
-    expect(copiedRyo.value).toBe("350");
-    expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledTimes(1);
-  });
+  it.each(["button", "selector"])(
+    "validates drafts before copying a reward group via the %s",
+    async (control) => {
+      const view = render(<SavedRewardForm />);
+      const ryo = view.container.querySelector<HTMLInputElement>(
+        'input[name="reward_money"]',
+      )!;
+      const currency = ryo.closest("details")!;
+      const initialOrder = [...view.container.querySelectorAll("summary")].map(
+        (node) => node.textContent,
+      );
+      const copy = () =>
+        control === "button"
+          ? fireEvent.click(
+              within(currency).getByRole("button", { name: "Add Another Node" }),
+            )
+          : fireEvent.change(view.getByRole("combobox", { name: "Add reward node" }), {
+              target: { value: "currency" },
+            });
+      await act(async () => {
+        ryo.focus();
+        fireEvent.input(ryo, { target: { value: "" } });
+      });
+      copy();
+      await waitFor(() =>
+        expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledTimes(1),
+      );
+      expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledWith({
+        reward_money: {
+          type: "invalid_type",
+          message: expect.stringContaining("number"),
+        },
+      });
+      expect(view.queryByRole("button", { name: "Remove Node" })).toBeNull();
+      expect(view.container.querySelector('input[name="reward_money"]')).toBe(ryo);
+      expect(ryo.value).toBe("");
+      expect(
+        [...view.container.querySelectorAll("summary")].map((node) => node.textContent),
+      ).toEqual(initialOrder);
+      await act(async () => {
+        fireEvent.input(ryo, { target: { value: "350" } });
+      });
+      copy();
+      await waitFor(() =>
+        expect(view.getAllByRole("button", { name: "Remove Node" })).toHaveLength(1),
+      );
+      const snapshot = view
+        .getByRole("button", { name: "Remove Node" })
+        .closest("details")!;
+      const copiedRyo = snapshot.querySelector<HTMLInputElement>(
+        'input[name="reward_money"]',
+      )!;
+      expect(copiedRyo.value).toBe("350");
+      expect(copiedRyo).not.toBe(ryo);
+      fireEvent.input(ryo, { target: { value: "400" } });
+      expect(copiedRyo.value).toBe("350");
+      expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledTimes(1);
+    },
+  );
   it("keeps direct objective drafts editable and validates the current values on save", async () => {
     const onUpdate = vi.fn(() => {
       // Bound a reset/update regression before it can hang the test process.
-      if (onUpdate.mock.calls.length > 20) throw new Error("Repeated objective updates");
+      if (onUpdate.mock.calls.length > 20)
+        throw new Error("Repeated objective updates");
     });
     const view = render(<ObjectiveRewardForm onUpdate={onUpdate} />);
-    const initialOrder = [...view.container.querySelectorAll("summary")].map((node) => node.textContent);
-    const ryo = view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!;
-    await act(async () => { ryo.focus(); fireEvent.input(ryo, { target: { value: "" } }); });
-    await waitFor(() => expect(view.getByTestId("objective-money").textContent).toBe("NaN"));
+    const initialOrder = [...view.container.querySelectorAll("summary")].map(
+      (node) => node.textContent,
+    );
+    const ryo = view.container.querySelector<HTMLInputElement>(
+      'input[name="reward_money"]',
+    )!;
+    await act(async () => {
+      ryo.focus();
+      fireEvent.input(ryo, { target: { value: "" } });
+    });
+    await waitFor(() =>
+      expect(view.getByTestId("objective-money").textContent).toBe("NaN"),
+    );
     expect(ryo.value).toBe("");
     expect(document.activeElement).toBe(ryo);
     expect(view.container.querySelector('input[name="reward_money"]')).toBe(ryo);
     expect(onUpdate.mock.calls.length).toBeLessThan(10);
     fireEvent.click(view.getByRole("button", { name: "Save objective" }));
-    await waitFor(() => expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledTimes(1),
+    );
     expect(saveQuest).not.toHaveBeenCalled();
-    const experience = view.container.querySelector<HTMLInputElement>('input[name="reward_ninjutsu_experience"]')!;
-    await act(async () => { experience.focus(); fireEvent.input(experience, { target: { value: "" } }); });
-    await waitFor(() => expect(view.getByTestId("objective-experience").textContent).toBe("undefined"));
+    const experience = view.container.querySelector<HTMLInputElement>(
+      'input[name="reward_ninjutsu_experience"]',
+    )!;
+    await act(async () => {
+      experience.focus();
+      fireEvent.input(experience, { target: { value: "" } });
+    });
+    await waitFor(() =>
+      expect(view.getByTestId("objective-experience").textContent).toBe("undefined"),
+    );
     expect(experience.value).toBe("");
     expect(document.activeElement).toBe(experience);
-    expect(view.container.querySelector('input[name="reward_ninjutsu_experience"]')).toBe(experience);
-    await act(async () => { ryo.focus(); fireEvent.input(ryo, { target: { value: "300" } }); });
-    await waitFor(() => expect(view.getByTestId("objective-money").textContent).toBe("300"));
+    expect(
+      view.container.querySelector('input[name="reward_ninjutsu_experience"]'),
+    ).toBe(experience);
+    await act(async () => {
+      ryo.focus();
+      fireEvent.input(ryo, { target: { value: "300" } });
+    });
+    await waitFor(() =>
+      expect(view.getByTestId("objective-money").textContent).toBe("300"),
+    );
     expect(document.activeElement).toBe(ryo);
     expect(view.container.querySelector('input[name="reward_money"]')).toBe(ryo);
-    expect([...view.container.querySelectorAll("summary")].map((node) => node.textContent)).toEqual(initialOrder);
+    expect(
+      [...view.container.querySelectorAll("summary")].map((node) => node.textContent),
+    ).toEqual(initialOrder);
     expect(onUpdate.mock.calls.length).toBeLessThan(10);
     fireEvent.click(view.getByRole("button", { name: "Save objective" }));
     await waitFor(() => expect(saveQuest).toHaveBeenCalledTimes(1));
-    expect(saveQuest.mock.calls[0]?.[0]).toMatchObject({ data: { content: { objectives: [{
-      id: "objective", task: "pvp_kills", reward_money: 300, reward_ninjutsu_experience: undefined,
-    }] } } });
+    expect(saveQuest.mock.calls[0]?.[0]).toMatchObject({
+      data: {
+        content: {
+          objectives: [
+            {
+              id: "objective",
+              task: "pvp_kills",
+              reward_money: 300,
+              reward_ninjutsu_experience: undefined,
+            },
+          ],
+        },
+      },
+    });
   });
   it.each([undefined, "catalog-package"])(
     "retains invalid and optional drafts in a nested snapshot (package: %s)",
@@ -395,13 +625,25 @@ describe("reward node editing", () => {
       const onInvalid = vi.fn();
       const onUpdate = vi.fn(() => {
         // Bound a regression before React's repeated reset/update cycle can hang the suite.
-        if (onUpdate.mock.calls.length > 20) throw new Error("Repeated snapshot updates");
+        if (onUpdate.mock.calls.length > 20)
+          throw new Error("Repeated snapshot updates");
       });
-      const view = render(<SnapshotRewardForm packageId={packageId} onUpdate={onUpdate} onSave={onSave} onInvalid={onInvalid} />);
-      const input = view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!;
+      const view = render(
+        <SnapshotRewardForm
+          packageId={packageId}
+          onUpdate={onUpdate}
+          onSave={onSave}
+          onInvalid={onInvalid}
+        />,
+      );
+      const input = view.container.querySelector<HTMLInputElement>(
+        'input[name="reward_money"]',
+      )!;
       input.focus();
       fireEvent.input(input, { target: { value: "" } });
-      await waitFor(() => expect(view.getByTestId("snapshot-money").textContent).toBe("NaN"));
+      await waitFor(() =>
+        expect(view.getByTestId("snapshot-money").textContent).toBe("NaN"),
+      );
       expect(input.value).toBe("");
       expect(document.activeElement).toBe(input);
       expect(view.container.querySelector('input[name="reward_money"]')).toBe(input);
@@ -409,90 +651,169 @@ describe("reward node editing", () => {
       fireEvent.click(view.getByRole("button", { name: "Save rewards" }));
       await waitFor(() => expect(onInvalid).toHaveBeenCalledTimes(1));
       expect(onSave).not.toHaveBeenCalled();
-      const experience = view.container.querySelector<HTMLInputElement>('input[name="reward_ninjutsu_experience"]')!;
+      const experience = view.container.querySelector<HTMLInputElement>(
+        'input[name="reward_ninjutsu_experience"]',
+      )!;
       fireEvent.input(experience, { target: { value: "" } });
-      await waitFor(() => expect(view.getByTestId("snapshot-experience").textContent).toBe("undefined"));
+      await waitFor(() =>
+        expect(view.getByTestId("snapshot-experience").textContent).toBe("undefined"),
+      );
       expect(experience.value).toBe("");
       fireEvent.input(input, { target: { value: "300" } });
-      await waitFor(() => expect(view.getByTestId("snapshot-money").textContent).toBe("300"));
+      await waitFor(() =>
+        expect(view.getByTestId("snapshot-money").textContent).toBe("300"),
+      );
       fireEvent.click(view.getByRole("button", { name: "Save rewards" }));
       await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
       expect(onSave.mock.calls[0]?.[0].reward_packages[0].rewards).toMatchObject({
-        reward_money: 300, reward_ninjutsu_experience: undefined,
+        reward_money: 300,
+        reward_ninjutsu_experience: undefined,
       });
     },
   );
   it("preserves an optional saved number when cleared and replaced", () => {
     const view = render(<SavedRewardForm optionalExperience={100} />);
-    const input = view.container.querySelector<HTMLInputElement>('input[name="reward_ninjutsu_experience"]')!;
+    const input = view.container.querySelector<HTMLInputElement>(
+      'input[name="reward_ninjutsu_experience"]',
+    )!;
     fireEvent.input(input, { target: { value: "" } });
     expect(input.value).toBe("");
-    expect(view.container.querySelector('input[name="reward_ninjutsu_experience"]')).toBe(input);
+    expect(
+      view.container.querySelector('input[name="reward_ninjutsu_experience"]'),
+    ).toBe(input);
     fireEvent.input(input, { target: { value: "250" } });
     expect(input.value).toBe("250");
   });
-  it.each([undefined, "CONTENT-ADMIN"])("waits for custom catalog groups before exposing saved controls (role: %s)", async (role) => {
-    const user = vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: role ? { role } : undefined } as never);
-    try {
-      rewardCatalog = undefined;
-      const view = render(<SavedRewardForm optionalExperience={100} />);
-      expect(view.getByText("Loading rewards")).toBeDefined();
-      expect(view.queryByRole("spinbutton")).toBeNull();
-      expect(view.queryByRole("combobox", { name: "Add reward node" })).toBeNull();
-      user.mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
-      rewardCatalog = {
-        packages: [],
-        nodes: [{ id: "custom-money", name: "Custom Money", fields: ["reward_money"] }],
-      };
-      view.rerender(<SavedRewardForm optionalExperience={100} />);
-      expect(view.queryByText("Loading rewards")).toBeNull();
-      expect([...view.container.querySelectorAll("summary")].map((node) => node.textContent)).toEqual(["Organization", "Custom Money", "Progression"]);
-      const ryo = view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!;
-      await act(async () => { ryo.focus(); fireEvent.input(ryo, { target: { value: "0" } }); });
-      expect(view.container.querySelector('input[name="reward_money"]')).toBe(ryo);
-      expect(document.activeElement).toBe(ryo);
-      const experience = view.container.querySelector<HTMLInputElement>('input[name="reward_ninjutsu_experience"]')!;
-      await act(async () => { experience.focus(); fireEvent.input(experience, { target: { value: "" } }); });
-      expect(view.container.querySelector('input[name="reward_ninjutsu_experience"]')).toBe(experience);
-      expect(document.activeElement).toBe(experience);
-    } finally {
-      user.mockRestore();
-    }
-  });
+  it.each([undefined, "CONTENT-ADMIN"])(
+    "waits for custom catalog groups before exposing saved controls (role: %s)",
+    async (role) => {
+      const user = vi
+        .spyOn(UserContext, "useUserData")
+        .mockReturnValue({ data: role ? { role } : undefined } as never);
+      try {
+        rewardCatalog = undefined;
+        const view = render(<SavedRewardForm optionalExperience={100} />);
+        expect(view.getByText("Loading rewards")).toBeDefined();
+        expect(view.queryByRole("spinbutton")).toBeNull();
+        expect(view.queryByRole("combobox", { name: "Add reward node" })).toBeNull();
+        user.mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
+        rewardCatalog = {
+          packages: [],
+          nodes: [
+            { id: "custom-money", name: "Custom Money", fields: ["reward_money"] },
+          ],
+        };
+        view.rerender(<SavedRewardForm optionalExperience={100} />);
+        expect(view.queryByText("Loading rewards")).toBeNull();
+        expect(
+          [...view.container.querySelectorAll("summary")].map(
+            (node) => node.textContent,
+          ),
+        ).toEqual(["Organization", "Custom Money", "Progression"]);
+        const ryo = view.container.querySelector<HTMLInputElement>(
+          'input[name="reward_money"]',
+        )!;
+        await act(async () => {
+          ryo.focus();
+          fireEvent.input(ryo, { target: { value: "0" } });
+        });
+        expect(view.container.querySelector('input[name="reward_money"]')).toBe(ryo);
+        expect(document.activeElement).toBe(ryo);
+        const experience = view.container.querySelector<HTMLInputElement>(
+          'input[name="reward_ninjutsu_experience"]',
+        )!;
+        await act(async () => {
+          experience.focus();
+          fireEvent.input(experience, { target: { value: "" } });
+        });
+        expect(
+          view.container.querySelector('input[name="reward_ninjutsu_experience"]'),
+        ).toBe(experience);
+        expect(document.activeElement).toBe(experience);
+      } finally {
+        user.mockRestore();
+      }
+    },
+  );
   it("keeps a failed catalog stable with nested snapshots and recovers on explicit retry", async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
     const read = vi.fn(async (): Promise<NonNullable<typeof rewardCatalog>> => {
       // Bound a mount/refetch regression before repeated nested mounts can hang the suite.
       if (read.mock.calls.length > 3) return new Promise(() => {});
       throw new Error("Catalog unavailable");
     });
-    const query = vi.spyOn(rewardCatalogQuery, "useQuery").mockImplementation((_input, options) => useQuery({ queryKey: ["reward-catalog"], queryFn: read, ...options }) as never);
-    const user = vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
+    const query = vi.spyOn(rewardCatalogQuery, "useQuery").mockImplementation(
+      (_input, options) =>
+        useQuery({
+          queryKey: ["reward-catalog"],
+          queryFn: read,
+          ...options,
+        }) as never,
+    );
+    const user = vi
+      .spyOn(UserContext, "useUserData")
+      .mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
     try {
-      const view = render(<QueryClientProvider client={client}><SnapshotRewardForm onUpdate={vi.fn()} onSave={vi.fn()} onInvalid={vi.fn()} /></QueryClientProvider>);
+      const view = render(
+        <QueryClientProvider client={client}>
+          <SnapshotRewardForm onUpdate={vi.fn()} onSave={vi.fn()} onInvalid={vi.fn()} />
+        </QueryClientProvider>,
+      );
       await waitFor(() => expect(view.getAllByRole("alert")).toHaveLength(2));
       expect(read).toHaveBeenCalledTimes(1);
-      expect(view.getAllByRole("alert")[0]!.textContent).toContain("Could not load reward packages and nodes.");
-      const ryo = view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!;
-      await act(async () => { ryo.focus(); fireEvent.input(ryo, { target: { value: "0" } }); });
+      expect(view.getAllByRole("alert")[0]!.textContent).toContain(
+        "Could not load reward packages and nodes.",
+      );
+      const ryo = view.container.querySelector<HTMLInputElement>(
+        'input[name="reward_money"]',
+      )!;
+      await act(async () => {
+        ryo.focus();
+        fireEvent.input(ryo, { target: { value: "0" } });
+      });
       expect(view.container.querySelector('input[name="reward_money"]')).toBe(ryo);
       expect(document.activeElement).toBe(ryo);
-      const experience = view.container.querySelector<HTMLInputElement>('input[name="reward_ninjutsu_experience"]')!;
-      await act(async () => { experience.focus(); fireEvent.input(experience, { target: { value: "" } }); });
-      expect(view.container.querySelector('input[name="reward_ninjutsu_experience"]')).toBe(experience);
+      const experience = view.container.querySelector<HTMLInputElement>(
+        'input[name="reward_ninjutsu_experience"]',
+      )!;
+      await act(async () => {
+        experience.focus();
+        fireEvent.input(experience, { target: { value: "" } });
+      });
+      expect(
+        view.container.querySelector('input[name="reward_ninjutsu_experience"]'),
+      ).toBe(experience);
       expect(document.activeElement).toBe(experience);
       expect(read).toHaveBeenCalledTimes(1);
-      let resolveCatalog: (catalog: NonNullable<typeof rewardCatalog>) => void = () => {};
-      read.mockImplementation(() => new Promise((resolve) => { resolveCatalog = resolve; }));
-      await act(async () => { fireEvent.click(view.getAllByRole("button", { name: "Retry" })[0]!); });
+      let resolveCatalog: (catalog: NonNullable<typeof rewardCatalog>) => void =
+        () => {};
+      read.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveCatalog = resolve;
+          }),
+      );
+      await act(async () => {
+        fireEvent.click(view.getAllByRole("button", { name: "Retry" })[0]!);
+      });
       await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
       expect(view.queryByText("Loading rewards")).toBeNull();
-      expect(view.container.querySelector('input[name="reward_ninjutsu_experience"]')).toBe(experience);
-      await act(async () => { resolveCatalog({ packages: [], nodes: [] }); });
-      await waitFor(() => expect(client.getQueryState(["reward-catalog"])?.status).toBe("success"));
+      expect(
+        view.container.querySelector('input[name="reward_ninjutsu_experience"]'),
+      ).toBe(experience);
+      await act(async () => {
+        resolveCatalog({ packages: [], nodes: [] });
+      });
+      await waitFor(() =>
+        expect(client.getQueryState(["reward-catalog"])?.status).toBe("success"),
+      );
       expect(view.queryByRole("alert")).toBeNull();
       expect(read).toHaveBeenCalledTimes(2);
-      expect(view.container.querySelector('input[name="reward_ninjutsu_experience"]')).toBe(experience);
+      expect(
+        view.container.querySelector('input[name="reward_ninjutsu_experience"]'),
+      ).toBe(experience);
       expect(experience.value).toBe("");
       expect(view.container.querySelector('input[name="reward_money"]')).toBe(ryo);
       expect(ryo.value).toBe("0");
@@ -507,24 +828,37 @@ describe("reward node editing", () => {
     "keeps saved nodes mounted and ordered while editing (packages: %s)",
     (allowPackages) => {
       const view = render(<SavedRewardForm allowPackages={allowPackages} />);
-      const ryo = view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!;
-      const tokens = view.container.querySelector<HTMLInputElement>('input[name="reward_tokens"]')!;
-      const prestige = view.container.querySelector<HTMLInputElement>('input[name="reward_prestige"]')!;
-      const summaries = () => [...view.container.querySelectorAll("summary")].map((node) => node.textContent);
+      const ryo = view.container.querySelector<HTMLInputElement>(
+        'input[name="reward_money"]',
+      )!;
+      const tokens = view.container.querySelector<HTMLInputElement>(
+        'input[name="reward_tokens"]',
+      )!;
+      const prestige = view.container.querySelector<HTMLInputElement>(
+        'input[name="reward_prestige"]',
+      )!;
+      const summaries = () =>
+        [...view.container.querySelectorAll("summary")].map((node) => node.textContent);
       const initialOrder = summaries();
       ryo.focus();
       fireEvent.input(ryo, { target: { value: "0" } });
-      expect(view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!).toBe(ryo);
+      expect(
+        view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!,
+      ).toBe(ryo);
       expect(document.activeElement).toBe(ryo);
       expect(summaries()).toEqual(initialOrder);
       fireEvent.input(ryo, { target: { value: "250" } });
       fireEvent.input(tokens, { target: { value: "0" } });
       fireEvent.input(prestige, { target: { value: "0" } });
       expect(summaries()).toEqual(initialOrder);
-      expect(view.container.querySelector<HTMLInputElement>('input[name="reward_tokens"]')!).toBe(tokens);
+      expect(
+        view.container.querySelector<HTMLInputElement>('input[name="reward_tokens"]')!,
+      ).toBe(tokens);
       fireEvent.input(ryo, { target: { value: "" } });
       expect(ryo.value).toBe("");
-      expect(view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!).toBe(ryo);
+      expect(
+        view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!,
+      ).toBe(ryo);
       fireEvent.input(ryo, { target: { value: "350" } });
       expect(ryo.value).toBe("350");
     },
@@ -532,20 +866,33 @@ describe("reward node editing", () => {
 
   it("appends newly opened nodes and removes a saved node only on Clear Node", async () => {
     const view = render(<SavedRewardForm />);
-    const initialOrder = [...view.container.querySelectorAll("summary")].map((node) => node.textContent);
+    const initialOrder = [...view.container.querySelectorAll("summary")].map(
+      (node) => node.textContent,
+    );
     fireEvent.change(view.getByRole("combobox", { name: "Add reward node" }), {
       target: { value: "progression" },
     });
-    expect([...view.container.querySelectorAll("summary")].map((node) => node.textContent)).toEqual([...initialOrder, "Progression"]);
-    const ryo = view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!;
+    expect(
+      [...view.container.querySelectorAll("summary")].map((node) => node.textContent),
+    ).toEqual([...initialOrder, "Progression"]);
+    const ryo = view.container.querySelector<HTMLInputElement>(
+      'input[name="reward_money"]',
+    )!;
     const currency = ryo.closest("details")!;
     fireEvent.click(within(currency).getByRole("button", { name: "Clear Node" }));
-    await waitFor(() => expect(view.container.querySelector('input[name="reward_money"]')).toBeNull());
+    await waitFor(() =>
+      expect(view.container.querySelector('input[name="reward_money"]')).toBeNull(),
+    );
     fireEvent.change(view.getByRole("combobox", { name: "Add reward node" }), {
       target: { value: "currency" },
     });
-    expect((view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!).value).toBe("0");
-    expect([...view.container.querySelectorAll("summary")].at(-1)?.textContent).toBe("Currency");
+    expect(
+      view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!
+        .value,
+    ).toBe("0");
+    expect([...view.container.querySelectorAll("summary")].at(-1)?.textContent).toBe(
+      "Currency",
+    );
   });
 });
 
@@ -701,7 +1048,11 @@ const CoordinateDraftForm = () => {
 /** Radix selects and popovers need these browser APIs; installs them around each test of a describe. */
 const withRadixBrowserGlobals = () => {
   beforeEach(() => {
-    installBrowserGlobals({ resizeObserver: true, scrollIntoView: true, animationFrame: true });
+    installBrowserGlobals({
+      resizeObserver: true,
+      scrollIntoView: true,
+      animationFrame: true,
+    });
   });
   afterEach(() => {
     cleanup();
@@ -767,7 +1118,14 @@ describe("effect drafts", () => {
       render(
         <MassEffectEditor
           kind="item"
-          entries={[{ id: "first", name: "First", effects: [DamageTag.parse({})], updatedAt: new Date() }]}
+          entries={[
+            {
+              id: "first",
+              name: "First",
+              effects: [DamageTag.parse({})],
+              updatedAt: new Date(),
+            },
+          ]}
           selectedFields={selectedFields}
         />,
       );
@@ -777,11 +1135,17 @@ describe("effect drafts", () => {
       fireEvent.click(view.getByRole("combobox", { name: "target" }));
       const search = await view.findByPlaceholderText("Search target...");
       fireEvent.change(search, { target: { value: "self" } });
-      await waitFor(() => expect(view.queryByRole("option", { name: "OPPONENT" })).toBeNull());
+      await waitFor(() =>
+        expect(view.queryByRole("option", { name: "OPPONENT" })).toBeNull(),
+      );
       fireEvent.click(view.getByRole("option", { name: "SELF" }));
       expect(view.queryByRole("option", { name: "SELF" })).toBeNull();
-      expect(view.getByRole("combobox", { name: "target" }).textContent).toContain("SELF");
-      fireEvent.click(view.getByRole("button", { name: "Save item effects for First" }));
+      expect(view.getByRole("combobox", { name: "target" }).textContent).toContain(
+        "SELF",
+      );
+      fireEvent.click(
+        view.getByRole("button", { name: "Save item effects for First" }),
+      );
       await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
       expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({ target: "SELF" });
     });
@@ -870,7 +1234,9 @@ describe("effect drafts", () => {
       expect(
         save.mock.calls[0]?.[0].data.effects[0]?.coordinateTargeting?.coordinates[0],
       ).toEqual(
-        axis === "column" ? { longitude: 4, latitude: 1 } : { longitude: 1, latitude: 4 },
+        axis === "column"
+          ? { longitude: 4, latitude: 1 }
+          : { longitude: 1, latitude: 4 },
       );
     },
   );
@@ -878,23 +1244,74 @@ describe("effect drafts", () => {
 
 const CacheDraftForm = () => {
   const [effects, setEffects] = useState<ZodAllTags[]>([
-    NonCombatConsumeRewardTag.parse({ reward_money: 17, rewardMode: "weightedCache", weightedCache: {
-      version: 1, displayName: "Pill Cache", rolls: [{ count: 1, probability: 5000 }, { count: 2, probability: 5000 }],
-      tiers: [{ name: "Common", probability: 10_000, entries: [{ items: [{ itemId: "pill", quantity: 2 }] }] }],
-    } }),
+    NonCombatConsumeRewardTag.parse({
+      reward_money: 17,
+      rewardMode: "weightedCache",
+      weightedCache: {
+        version: 1,
+        displayName: "Pill Cache",
+        rolls: [
+          { count: 1, probability: 5000 },
+          { count: 2, probability: 5000 },
+        ],
+        tiers: [
+          {
+            name: "Common",
+            probability: 10_000,
+            entries: [{ items: [{ itemId: "pill", quantity: 2 }] }],
+          },
+        ],
+      },
+    }),
   ]);
-  return <>
-    <EffectFormWrapper type="item" idx={0} tag={effects[0]!} effects={effects} setEffects={setEffects} availableTags={["noncombatconsumereward"]} />
-    <button type="button" onClick={() => { if (NonCombatConsumeRewardTag.safeParse(effects[0]).success) void save({ id: "cache", data: { effects } }); }}>Save cache effects</button>
-  </>;
+  return (
+    <>
+      <EffectFormWrapper
+        type="item"
+        idx={0}
+        tag={effects[0]!}
+        effects={effects}
+        setEffects={setEffects}
+        availableTags={["noncombatconsumereward"]}
+      />
+      <button
+        type="button"
+        onClick={() => {
+          if (NonCombatConsumeRewardTag.safeParse(effects[0]).success)
+            void save({ id: "cache", data: { effects } });
+        }}
+      >
+        Save cache effects
+      </button>
+    </>
+  );
 };
 
 const CompanionRewardDraftForm = () => {
-  const [effects, setEffects] = useState<ZodAllTags[]>([NonCombatConsumeRewardTag.parse({})]);
-  return <>
-    <EffectFormWrapper type="item" idx={0} tag={effects[0]!} effects={effects} setEffects={setEffects} availableTags={["noncombatconsumereward"]} />
-    <button type="button" onClick={() => { if (NonCombatConsumeRewardTag.safeParse(effects[0]).success) void save({ id: "companion-contract", data: { effects } }); }}>Save companion reward</button>
-  </>;
+  const [effects, setEffects] = useState<ZodAllTags[]>([
+    NonCombatConsumeRewardTag.parse({}),
+  ]);
+  return (
+    <>
+      <EffectFormWrapper
+        type="item"
+        idx={0}
+        tag={effects[0]!}
+        effects={effects}
+        setEffects={setEffects}
+        availableTags={["noncombatconsumereward"]}
+      />
+      <button
+        type="button"
+        onClick={() => {
+          if (NonCombatConsumeRewardTag.safeParse(effects[0]).success)
+            void save({ id: "companion-contract", data: { effects } });
+        }}
+      >
+        Save companion reward
+      </button>
+    </>
+  );
 };
 
 describe("companion reward editing", () => {
@@ -903,38 +1320,56 @@ describe("companion reward editing", () => {
   it.each([
     ["Fox", "fox-id"],
     ["Gift Fox", "gift-id"],
-  ])("saves %s as a companion reward regardless of daily-offer availability", async (name, id) => {
-    vi.spyOn(names, "useQuery").mockReturnValue({ data: [
-      { id: "fox-id", name: "Fox", isActive: true },
-      { id: "gift-id", name: "Gift Fox", isActive: false },
-    ] } as never);
-    const view = render(<CompanionRewardDraftForm />);
-    const field = view.getByText("Companion species").closest<HTMLElement>('[data-slot="form-item"]');
-    if (!field) throw new Error("Missing companion species field");
-    fireEvent.click(within(field).getByRole("combobox"));
-    expect(await view.findByRole("option", { name: "Fox" })).toBeDefined();
-    expect(view.getByRole("option", { name: "Gift Fox" })).toBeDefined();
-    fireEvent.click(view.getByRole("option", { name }));
-    fireEvent.click(view.getByRole("button", { name: "Save companion reward" }));
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({ reward_pets: [id] });
-  });
+  ])(
+    "saves %s as a companion reward regardless of daily-offer availability",
+    async (name, id) => {
+      vi.spyOn(names, "useQuery").mockReturnValue({
+        data: [
+          { id: "fox-id", name: "Fox", isActive: true },
+          { id: "gift-id", name: "Gift Fox", isActive: false },
+        ],
+      } as never);
+      const view = render(<CompanionRewardDraftForm />);
+      const field = view
+        .getByText("Companion species")
+        .closest<HTMLElement>('[data-slot="form-item"]');
+      if (!field) throw new Error("Missing companion species field");
+      fireEvent.click(within(field).getByRole("combobox"));
+      expect(await view.findByRole("option", { name: "Fox" })).toBeDefined();
+      expect(view.getByRole("option", { name: "Gift Fox" })).toBeDefined();
+      fireEvent.click(view.getByRole("option", { name }));
+      fireEvent.click(view.getByRole("button", { name: "Save companion reward" }));
+      await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+      expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({
+        reward_pets: [id],
+      });
+    },
+  );
 });
 
 /** Hold rewards the way the wrapper's owners do, so its draft sync settles. */
 const VillageRewardForm = () => {
   const [rewards, setRewards] = useState([ObjectiveReward.parse({})]);
-  return <>
-    <RewardFormWrapper idx={0} reward={rewards[0]!} rewards={rewards} setRewards={setRewards} />
-    <output data-testid="village">{rewards[0]!.reward_village_membership}</output>
-  </>;
+  return (
+    <>
+      <RewardFormWrapper
+        idx={0}
+        reward={rewards[0]!}
+        rewards={rewards}
+        setRewards={setRewards}
+      />
+      <output data-testid="village">{rewards[0]!.reward_village_membership}</output>
+    </>
+  );
 };
 
 describe("village membership reward", () => {
   withRadixBrowserGlobals();
   it("offers the starter villages as a selector and keeps the chosen key", async () => {
     const view = render(<VillageRewardForm />);
-    const field = view.getByText("Village Membership").closest<HTMLElement>('[data-slot="form-item"]');
+    const field = view
+      .getByText("Village Membership")
+      .closest<HTMLElement>('[data-slot="form-item"]');
     if (!field) throw new Error("Missing village membership field");
     expect(field.querySelector("input[type=text]")).toBeNull();
     fireEvent.click(within(field).getByRole("combobox"));
@@ -945,12 +1380,28 @@ describe("village membership reward", () => {
 });
 
 /** Exercise the effect form's nullable database choice through real form controls. */
-const VariantTokenDraftForm =({ variantId }: { variantId: string | null }) => {
-  const [effects, setEffects] = useState<ZodAllTags[]>([UnlockItemVariantTag.parse({ variantId })]);
-  return <>
-    <EffectFormWrapper type="item" idx={0} tag={effects[0]!} effects={effects} setEffects={setEffects} availableTags={["unlockitemvariant"]} />
-    <button type="button" onClick={() => void save({ id: "variant-token", data: { effects } })}>Save token effects</button>
-  </>;
+const VariantTokenDraftForm = ({ variantId }: { variantId: string | null }) => {
+  const [effects, setEffects] = useState<ZodAllTags[]>([
+    UnlockItemVariantTag.parse({ variantId }),
+  ]);
+  return (
+    <>
+      <EffectFormWrapper
+        type="item"
+        idx={0}
+        tag={effects[0]!}
+        effects={effects}
+        setEffects={setEffects}
+        availableTags={["unlockitemvariant"]}
+      />
+      <button
+        type="button"
+        onClick={() => void save({ id: "variant-token", data: { effects } })}
+      >
+        Save token effects
+      </button>
+    </>
+  );
 };
 
 describe("variant token effect drafts", () => {
@@ -959,66 +1410,163 @@ describe("variant token effect drafts", () => {
   it.each([
     ["Any variant", "red-variant", null],
     ["Sword: Red", null, "red-variant"],
-  ] as const)("saves %s as the token's variant binding", async (label, initial, expected) => {
-    vi.spyOn(names, "useQuery").mockReturnValue({ data: [{ id: "red-variant", name: "Sword: Red" }] } as never);
-    const view = render(<VariantTokenDraftForm variantId={initial} />);
-    const field = view.getByText("Variant", { exact: true }).closest<HTMLElement>('[data-slot="form-item"]')!;
-    expect(within(field).getByRole("combobox").textContent).toContain(initial ? "Sword: Red" : "Any variant");
-    fireEvent.click(within(field).getByRole("combobox"));
-    fireEvent.click(await view.findByRole("option", { name: label }));
-    await waitFor(() => expect(within(field).getByRole("combobox").textContent).toContain(label));
-    fireEvent.click(view.getByRole("button", { name: "Save token effects" }));
-    expect(save.mock.calls.at(-1)?.[0].data.effects[0]).toMatchObject({ type: "unlockitemvariant", variantId: expected });
-  });
+  ] as const)(
+    "saves %s as the token's variant binding",
+    async (label, initial, expected) => {
+      vi.spyOn(names, "useQuery").mockReturnValue({
+        data: [{ id: "red-variant", name: "Sword: Red" }],
+      } as never);
+      const view = render(<VariantTokenDraftForm variantId={initial} />);
+      const field = view
+        .getByText("Variant", { exact: true })
+        .closest<HTMLElement>('[data-slot="form-item"]')!;
+      expect(within(field).getByRole("combobox").textContent).toContain(
+        initial ? "Sword: Red" : "Any variant",
+      );
+      fireEvent.click(within(field).getByRole("combobox"));
+      fireEvent.click(await view.findByRole("option", { name: label }));
+      await waitFor(() =>
+        expect(within(field).getByRole("combobox").textContent).toContain(label),
+      );
+      fireEvent.click(view.getByRole("button", { name: "Save token effects" }));
+      expect(save.mock.calls.at(-1)?.[0].data.effects[0]).toMatchObject({
+        type: "unlockitemvariant",
+        variantId: expected,
+      });
+    },
+  );
 });
 
 const cacheItem = {
   ...ItemValidator.parse({
-    name: "Cache item", image: "cache.webp", description: "Cache", battleDescription: "",
-    stackSize: 10, chakraCost: 0, healthCost: 0, staminaCost: 0,
-    healthCostReducePerLvl: 0, chakraCostReducePerLvl: 0, staminaCostReducePerLvl: 0,
-    actionCostPerc: 100, maxImbueNumber: 1, maxDurability: 100, hidden: false,
-    cooldown: 0, cost: 1, repsCost: 0, seichiSilverCost: 0, range: 0, maxEquips: 0,
-    method: "SINGLE", target: "SELF", itemType: "CONSUMABLE", weaponType: "NONE",
-    destroyOnUse: true, preventBattleUsage: true,
-    rarity: "COMMON", slot: "NONE", expireFromStoreAt: null, bloodlineId: null,
-    farmYieldItemId: null, farmExtractSeedItemId: null, crystalTargetTypes: null,
-    effects: [NonCombatConsumeRewardTag.parse({ reward_money: 17, rewardMode: "weightedCache", weightedCache: {
-      version: 1, displayName: "Pill Cache", rolls: [{ count: 1, probability: 5000 }, { count: 2, probability: 5000 }],
-      tiers: [{ name: "Common", probability: 10_000, entries: [{ items: [{ itemId: "pill", quantity: 2 }] }] }],
-    } })],
+    name: "Cache item",
+    image: "cache.webp",
+    description: "Cache",
+    battleDescription: "",
+    stackSize: 10,
+    chakraCost: 0,
+    healthCost: 0,
+    staminaCost: 0,
+    healthCostReducePerLvl: 0,
+    chakraCostReducePerLvl: 0,
+    staminaCostReducePerLvl: 0,
+    actionCostPerc: 100,
+    maxImbueNumber: 1,
+    maxDurability: 100,
+    hidden: false,
+    cooldown: 0,
+    cost: 1,
+    repsCost: 0,
+    seichiSilverCost: 0,
+    range: 0,
+    maxEquips: 0,
+    method: "SINGLE",
+    target: "SELF",
+    itemType: "CONSUMABLE",
+    weaponType: "NONE",
+    destroyOnUse: true,
+    preventBattleUsage: true,
+    rarity: "COMMON",
+    slot: "NONE",
+    expireFromStoreAt: null,
+    bloodlineId: null,
+    farmYieldItemId: null,
+    farmExtractSeedItemId: null,
+    crystalTargetTypes: null,
+    effects: [
+      NonCombatConsumeRewardTag.parse({
+        reward_money: 17,
+        rewardMode: "weightedCache",
+        weightedCache: {
+          version: 1,
+          displayName: "Pill Cache",
+          rolls: [
+            { count: 1, probability: 5000 },
+            { count: 2, probability: 5000 },
+          ],
+          tiers: [
+            {
+              name: "Common",
+              probability: 10_000,
+              entries: [{ items: [{ itemId: "pill", quantity: 2 }] }],
+            },
+          ],
+        },
+      }),
+    ],
   }),
-  id: "cache", craftingRequirements: [],
+  id: "cache",
+  craftingRequirements: [],
 } as unknown as Item & { craftingRequirements: [] };
 
 const ItemCacheDraftForm = ({ item = cacheItem }: { item?: typeof cacheItem }) => {
-  const { effects, setEffects, handleItemSubmit, isUpdating } = useItemEditForm(item, async () => undefined);
-  const validEffects = (effects?.filter((effect): effect is ZodAllTags => effect !== undefined) ?? []) as ZodAllTags[];
-  return <>
-    <EffectFormWrapper type="item" idx={0} tag={validEffects[0]!} effects={validEffects} setEffects={setEffects} availableTags={["noncombatconsumereward"]} submitLoading={isUpdating} />
-    <button type="button" onClick={() => void handleItemSubmit()}>Save item</button>
-  </>;
+  const { effects, setEffects, handleItemSubmit, isUpdating } = useItemEditForm(
+    item,
+    async () => undefined,
+  );
+  const validEffects = (effects?.filter(
+    (effect): effect is ZodAllTags => effect !== undefined,
+  ) ?? []) as ZodAllTags[];
+  return (
+    <>
+      <EffectFormWrapper
+        type="item"
+        idx={0}
+        tag={validEffects[0]!}
+        effects={validEffects}
+        setEffects={setEffects}
+        availableTags={["noncombatconsumereward"]}
+        submitLoading={isUpdating}
+      />
+      <button type="button" onClick={() => void handleItemSubmit()}>
+        Save item
+      </button>
+    </>
+  );
 };
 
 const ItemQuestDraftForm = ({ initial }: { initial: ZodAllTags }) => {
   const [item] = useState(() => ({ ...cacheItem, effects: [initial] }));
-  const { effects, setEffects, handleItemSubmit, isUpdating } = useItemEditForm(item, async () => undefined);
+  const { effects, setEffects, handleItemSubmit, isUpdating } = useItemEditForm(
+    item,
+    async () => undefined,
+  );
   const validEffects = effects as ZodAllTags[];
   const tag = validEffects[0]!;
-  return <>
-    <EffectFormWrapper key={tag.type} type="item" idx={0} tag={tag} effects={validEffects} setEffects={setEffects} availableTags={["heal", "noncombatquest"]} submitLoading={isUpdating} />
-    <button type="button" onClick={() => void handleItemSubmit()}>Save item</button>
-    <button type="button" onClick={() => setEffects([{ ...tag, questId: "" } as ZodAllTags])}>Clear quest draft</button>
-  </>;
+  return (
+    <>
+      <EffectFormWrapper
+        key={tag.type}
+        type="item"
+        idx={0}
+        tag={tag}
+        effects={validEffects}
+        setEffects={setEffects}
+        availableTags={["heal", "noncombatquest"]}
+        submitLoading={isUpdating}
+      />
+      <button type="button" onClick={() => void handleItemSubmit()}>
+        Save item
+      </button>
+      <button
+        type="button"
+        onClick={() => setEffects([{ ...tag, questId: "" } as ZodAllTags])}
+      >
+        Clear quest draft
+      </button>
+    </>
+  );
 };
 
 describe("Special quest item drafts", () => {
   withRadixBrowserGlobals();
   beforeEach(() => {
-    vi.spyOn(names, "useQuery").mockReturnValue({ data: [
-      { id: "special-quest", name: "Special contract", questType: "special" },
-      { id: "mission", name: "Ordinary mission", questType: "mission" },
-    ] } as never);
+    vi.spyOn(names, "useQuery").mockReturnValue({
+      data: [
+        { id: "special-quest", name: "Special contract", questType: "special" },
+        { id: "mission", name: "Ordinary mission", questType: "mission" },
+      ],
+    } as never);
     vi.spyOn(toastHelpers, "showFormErrorsToast");
   });
   afterEach(() => vi.restoreAllMocks());
@@ -1026,167 +1574,288 @@ describe("Special quest item drafts", () => {
   it.each([
     ["a new quest effect", NonCombatQuestTag.parse({})],
     ["a Heal effect", HealTag.parse({})],
-  ] as const)("saves the first quest selection immediately from %s", async (_name, initial) => {
-    const view = render(<ItemQuestDraftForm initial={initial} />);
-    if (initial.type === "heal") {
-      fireEvent.click(view.getByRole("combobox", { name: "type" }));
-      fireEvent.click(await view.findByRole("option", { name: "noncombatquest" }));
-    }
-    const field = view.getByText("Special quest").closest<HTMLElement>('[data-slot="form-item"]')!;
-    fireEvent.click(within(field).getByRole("combobox"));
-    expect(view.queryByRole("option", { name: "Ordinary mission" })).toBeNull();
-    fireEvent.click(await view.findByRole("option", { name: "Special contract" }));
-    fireEvent.click(view.getByRole("button", { name: "Save item" }));
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({
-      type: "noncombatquest", questId: "special-quest",
-    });
-    expect(toastHelpers.showFormErrorsToast).not.toHaveBeenCalled();
-  });
+  ] as const)(
+    "saves the first quest selection immediately from %s",
+    async (_name, initial) => {
+      const view = render(<ItemQuestDraftForm initial={initial} />);
+      if (initial.type === "heal") {
+        fireEvent.click(view.getByRole("combobox", { name: "type" }));
+        fireEvent.click(await view.findByRole("option", { name: "noncombatquest" }));
+      }
+      const field = view
+        .getByText("Special quest")
+        .closest<HTMLElement>('[data-slot="form-item"]')!;
+      fireEvent.click(within(field).getByRole("combobox"));
+      expect(view.queryByRole("option", { name: "Ordinary mission" })).toBeNull();
+      fireEvent.click(await view.findByRole("option", { name: "Special contract" }));
+      fireEvent.click(view.getByRole("button", { name: "Save item" }));
+      await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+      expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({
+        type: "noncombatquest",
+        questId: "special-quest",
+      });
+      expect(toastHelpers.showFormErrorsToast).not.toHaveBeenCalled();
+    },
+  );
 
   it("rejects a quest draft without a selection", async () => {
     const view = render(<ItemQuestDraftForm initial={NonCombatQuestTag.parse({})} />);
     fireEvent.click(view.getByRole("button", { name: "Save item" }));
-    await waitFor(() => expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledTimes(1),
+    );
     expect(save).not.toHaveBeenCalled();
   });
 
   it("rejects a cleared quest draft and saves its replacement", async () => {
-    const view = render(<ItemQuestDraftForm initial={NonCombatQuestTag.parse({ questId: "previous-quest" })} />);
+    const view = render(
+      <ItemQuestDraftForm
+        initial={NonCombatQuestTag.parse({ questId: "previous-quest" })}
+      />,
+    );
     fireEvent.click(view.getByRole("button", { name: "Clear quest draft" }));
     fireEvent.click(view.getByRole("button", { name: "Save item" }));
-    await waitFor(() => expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledTimes(1),
+    );
     expect(save).not.toHaveBeenCalled();
-    const field = view.getByText("Special quest").closest<HTMLElement>('[data-slot="form-item"]')!;
+    const field = view
+      .getByText("Special quest")
+      .closest<HTMLElement>('[data-slot="form-item"]')!;
     fireEvent.click(within(field).getByRole("combobox"));
     fireEvent.click(await view.findByRole("option", { name: "Special contract" }));
     fireEvent.click(view.getByRole("button", { name: "Save item" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({ questId: "special-quest" });
+    expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({
+      questId: "special-quest",
+    });
   });
 });
 
 describe("weighted cache effect drafts", () => {
   withRadixBrowserGlobals();
   beforeEach(() => {
-    vi.spyOn(names, "useQuery").mockReturnValue({ data: [{ id: "pill", name: "Chakra Pill" }] } as never);
+    vi.spyOn(names, "useQuery").mockReturnValue({
+      data: [{ id: "pill", name: "Chakra Pill" }],
+    } as never);
   });
   afterEach(() => vi.restoreAllMocks());
   it("propagates invalid probability totals to the parent and allows correction", async () => {
     const view = render(<CacheDraftForm />);
     const probabilities = view.getAllByRole("spinbutton", { name: "Probability (%)" });
     fireEvent.input(probabilities[0]!, { target: { value: "49" } });
-    await waitFor(() => expect(view.getByText("Roll probability total: 99% / 100%")).toBeTruthy());
+    await waitFor(() =>
+      expect(view.getByText("Roll probability total: 99% / 100%")).toBeTruthy(),
+    );
     fireEvent.click(view.getByRole("button", { name: "Save cache effects" }));
     expect(save).not.toHaveBeenCalled();
     fireEvent.input(probabilities[0]!, { target: { value: "50" } });
-    await waitFor(() => expect(view.getByText("Roll probability total: 100% / 100%")).toBeTruthy());
+    await waitFor(() =>
+      expect(view.getByText("Roll probability total: 100% / 100%")).toBeTruthy(),
+    );
     fireEvent.click(view.getByRole("button", { name: "Save cache effects" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({ reward_money: 17, weightedCache: { displayName: "Pill Cache" } });
+    expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({
+      reward_money: 17,
+      weightedCache: { displayName: "Pill Cache" },
+    });
   });
   it("retains a blank quantity draft instead of silently saving the previous quantity", async () => {
     const view = render(<CacheDraftForm />);
-    fireEvent.input(view.getByRole("spinbutton", { name: /quantity/ }), { target: { value: "" } });
+    fireEvent.input(view.getByRole("spinbutton", { name: /quantity/ }), {
+      target: { value: "" },
+    });
     fireEvent.click(view.getByRole("button", { name: "Save cache effects" }));
     expect(save).not.toHaveBeenCalled();
-    await waitFor(() => expect(view.getByRole("alert").textContent).toBe("Common · Entry 1 · Item 1: Enter a valid number"));
+    await waitFor(() =>
+      expect(view.getByRole("alert").textContent).toBe(
+        "Common · Entry 1 · Item 1: Enter a valid number",
+      ),
+    );
   });
 
   it("locks cache controls and closes an open item picker throughout a pending save", async () => {
     let finishSave: (value: { success: boolean; message: string }) => void;
-    save.mockImplementationOnce(() => new Promise((resolve) => { finishSave = resolve; }));
+    save.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishSave = resolve;
+        }),
+    );
     vi.spyOn(update, "useMutation").mockImplementation(() => {
       const [isPending, setIsPending] = useState(false);
-      return { isPending, mutateAsync: async (input: Parameters<typeof save>[0]) => {
-        setIsPending(true);
-        try { return await save(input); }
-        finally { setIsPending(false); }
-      } };
+      return {
+        isPending,
+        mutateAsync: async (input: Parameters<typeof save>[0]) => {
+          setIsPending(true);
+          try {
+            return await save(input);
+          } finally {
+            setIsPending(false);
+          }
+        },
+      };
     });
     const view = render(<ItemCacheDraftForm />);
-    fireEvent.change(view.getByRole("textbox", { name: "Cache display name" }), { target: { value: "Saved Cache" } });
-    const picker = view.container.querySelector<HTMLElement>('[role="combobox"][aria-disabled]')!;
+    fireEvent.change(view.getByRole("textbox", { name: "Cache display name" }), {
+      target: { value: "Saved Cache" },
+    });
+    const picker = view.container.querySelector<HTMLElement>(
+      '[role="combobox"][aria-disabled]',
+    )!;
     fireEvent.click(picker);
     expect(await view.findByPlaceholderText("Search ...")).toBeTruthy();
     fireEvent.click(view.getByRole("button", { name: "Save item" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(view.getByRole("combobox", { name: "Reward mode" }).matches(":disabled")).toBe(true);
+    expect(
+      view.getByRole("combobox", { name: "Reward mode" }).matches(":disabled"),
+    ).toBe(true);
     const editor = view.getByRole("region", { name: "Weighted Cache editor" });
-    for (const control of editor.querySelectorAll("input, button")) expect(control.matches(":disabled")).toBe(true);
+    for (const control of editor.querySelectorAll("input, button"))
+      expect(control.matches(":disabled")).toBe(true);
     expect(picker.getAttribute("aria-disabled")).toBe("true");
     await waitFor(() => expect(view.queryByPlaceholderText("Search ...")).toBeNull());
     fireEvent.click(picker);
     expect(view.queryByPlaceholderText("Search ...")).toBeNull();
     await act(async () => finishSave!({ success: true, message: "Saved" }));
-    await waitFor(() => expect(view.getByRole("combobox", { name: "Reward mode" }).matches(":disabled")).toBe(false));
-    expect((view.getByRole("textbox", { name: "Cache display name" }) as HTMLInputElement).value).toBe("Saved Cache");
+    await waitFor(() =>
+      expect(
+        view.getByRole("combobox", { name: "Reward mode" }).matches(":disabled"),
+      ).toBe(false),
+    );
+    expect(
+      (view.getByRole("textbox", { name: "Cache display name" }) as HTMLInputElement)
+        .value,
+    ).toBe("Saved Cache");
   });
 
   it("reveals a hidden invalid cache on failed save and repairs it without changing Standard mode", async () => {
     const view = render(<ItemCacheDraftForm />);
-    fireEvent.input(view.getByRole("spinbutton", { name: /quantity/ }), { target: { value: "" } });
+    fireEvent.input(view.getByRole("spinbutton", { name: /quantity/ }), {
+      target: { value: "" },
+    });
     fireEvent.click(view.getByRole("combobox", { name: "Reward mode" }));
     fireEvent.click(await view.findByRole("option", { name: "Standard rewards" }));
-    const inactive = view.getByText("Inactive Weighted Cache · Needs attention").closest("details")!;
+    const inactive = view
+      .getByText("Inactive Weighted Cache · Needs attention")
+      .closest("details")!;
     expect(inactive.open).toBe(false);
-    await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("Reward mode"));
+    await waitFor(() =>
+      expect(document.activeElement?.getAttribute("aria-label")).toBe("Reward mode"),
+    );
     fireEvent.click(view.getByRole("button", { name: "Save item" }));
     await waitFor(() => expect(inactive.open).toBe(true));
     const error = view.getByRole("alert");
     await waitFor(() => expect(document.activeElement === error).toBe(true));
     expect(error.textContent).toBe("Common · Entry 1 · Item 1: Enter a valid number");
-    expect(toast).toHaveBeenCalledWith({ success: false, message: `Cannot save. ${error.textContent}` });
+    expect(toast).toHaveBeenCalledWith({
+      success: false,
+      message: `Cannot save. ${error.textContent}`,
+    });
     expect(save).not.toHaveBeenCalled();
-    const quantity = within(inactive).getByRole("spinbutton", { name: /quantity/ }) as HTMLInputElement;
+    const quantity = within(inactive).getByRole("spinbutton", {
+      name: /quantity/,
+    }) as HTMLInputElement;
     expect(quantity.value).toBe("");
     fireEvent.input(quantity, { target: { value: "3" } });
-    await waitFor(() => expect(view.queryByText("Inactive Weighted Cache · Needs attention")).toBeNull());
-    expect(view.getByRole("combobox", { name: "Reward mode" }).textContent).toBe("Standard rewards");
+    await waitFor(() =>
+      expect(view.queryByText("Inactive Weighted Cache · Needs attention")).toBeNull(),
+    );
+    expect(view.getByRole("combobox", { name: "Reward mode" }).textContent).toBe(
+      "Standard rewards",
+    );
     fireEvent.click(view.getByRole("button", { name: "Save item" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({ rewardMode: "standard", reward_money: 17, weightedCache: { tiers: [{ entries: [{ items: [{ itemId: "pill", quantity: 3 }] }] }] } });
+    expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({
+      rewardMode: "standard",
+      reward_money: 17,
+      weightedCache: {
+        tiers: [{ entries: [{ items: [{ itemId: "pill", quantity: 3 }] }] }],
+      },
+    });
   });
 
   it("keeps incomplete inactive probability totals saveable without a repair section", async () => {
     const view = render(<ItemCacheDraftForm />);
-    fireEvent.input(view.getAllByRole("spinbutton", { name: "Probability (%)" })[0]!, { target: { value: "49" } });
+    fireEvent.input(view.getAllByRole("spinbutton", { name: "Probability (%)" })[0]!, {
+      target: { value: "49" },
+    });
     fireEvent.click(view.getByRole("combobox", { name: "Reward mode" }));
     fireEvent.click(await view.findByRole("option", { name: "Standard rewards" }));
     expect(view.queryByText("Inactive Weighted Cache · Needs attention")).toBeNull();
     fireEvent.click(view.getByRole("button", { name: "Save item" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({ rewardMode: "standard", weightedCache: { rolls: [{ count: 1, probability: 4900 }, { count: 2, probability: 5000 }] } });
+    expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({
+      rewardMode: "standard",
+      weightedCache: {
+        rolls: [
+          { count: 1, probability: 4900 },
+          { count: 2, probability: 5000 },
+        ],
+      },
+    });
   });
 
   it("reveals and replaces missing rewards in a saved Standard cache without enforcing active totals", async () => {
-    vi.spyOn(names, "useQuery").mockReturnValue({ data: [{ id: "replacement", name: "Replacement Pill" }] } as never);
-    const effect = NonCombatConsumeRewardTag.parse({ ...cacheItem.effects[0], rewardMode: "standard" });
+    vi.spyOn(names, "useQuery").mockReturnValue({
+      data: [{ id: "replacement", name: "Replacement Pill" }],
+    } as never);
+    const effect = NonCombatConsumeRewardTag.parse({
+      ...cacheItem.effects[0],
+      rewardMode: "standard",
+    });
     effect.weightedCache!.rolls[0]!.probability = 4900;
-    const view = render(<ItemCacheDraftForm item={{ ...cacheItem, effects: [effect] }} />);
-    const inactive = view.getByText("Inactive Weighted Cache · Needs attention").closest("details")!;
+    const view = render(
+      <ItemCacheDraftForm item={{ ...cacheItem, effects: [effect] }} />,
+    );
+    const inactive = view
+      .getByText("Inactive Weighted Cache · Needs attention")
+      .closest("details")!;
     expect(inactive.open).toBe(false);
     fireEvent.click(view.getByRole("button", { name: "Save item" }));
     await waitFor(() => expect(inactive.open).toBe(true));
     const error = view.getByRole("alert");
-    expect(error.textContent).toBe("Common · Entry 1 · Item 1: Remove or replace missing item: pill");
+    expect(error.textContent).toBe(
+      "Common · Entry 1 · Item 1: Remove or replace missing item: pill",
+    );
     expect(document.activeElement).toBe(error);
-    expect(toast).toHaveBeenCalledWith({ success: false, message: `Cannot save. ${error.textContent}` });
+    expect(toast).toHaveBeenCalledWith({
+      success: false,
+      message: `Cannot save. ${error.textContent}`,
+    });
     expect(save).not.toHaveBeenCalled();
     fireEvent.click(within(inactive).getByRole("combobox"));
     fireEvent.click(await view.findByRole("option", { name: "Replacement Pill" }));
     fireEvent.click(view.getByRole("button", { name: "Remove pill" }));
-    await waitFor(() => expect(view.queryByText("Inactive Weighted Cache · Needs attention")).toBeNull());
-    expect(view.getByRole("combobox", { name: "Reward mode" }).textContent).toBe("Standard rewards");
+    await waitFor(() =>
+      expect(view.queryByText("Inactive Weighted Cache · Needs attention")).toBeNull(),
+    );
+    expect(view.getByRole("combobox", { name: "Reward mode" }).textContent).toBe(
+      "Standard rewards",
+    );
     fireEvent.click(view.getByRole("button", { name: "Save item" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({ rewardMode: "standard", reward_money: 17, weightedCache: { rolls: [{ count: 1, probability: 4900 }, { count: 2, probability: 5000 }], tiers: [{ entries: [{ items: [{ itemId: "replacement", quantity: 1 }] }] }] } });
+    expect(save.mock.calls[0]?.[0].data.effects[0]).toMatchObject({
+      rewardMode: "standard",
+      reward_money: 17,
+      weightedCache: {
+        rolls: [
+          { count: 1, probability: 4900 },
+          { count: 2, probability: 5000 },
+        ],
+        tiers: [{ entries: [{ items: [{ itemId: "replacement", quantity: 1 }] }] }],
+      },
+    });
   });
 });
 
 describe("schema-derived field visibility", () => {
   beforeEach(() => {
-    installBrowserGlobals({ resizeObserver: true, scrollIntoView: true, animationFrame: true });
+    installBrowserGlobals({
+      resizeObserver: true,
+      scrollIntoView: true,
+      animationFrame: true,
+    });
   });
   afterEach(() => {
     cleanup();
@@ -1197,19 +1866,120 @@ describe("schema-derived field visibility", () => {
     [...container.querySelectorAll("label")].map((label) => label.textContent);
 
   it.each([
-    ["damage", "jutsu", ["type", "staticAssetPath", "staticAnimation", "appearAnimation", "disappearAnimation", "appearSfx", "disappearSfx", "rounds", "power", "powerPerLevel", "target", "friendlyFire", "calculation", "statTypes", "generalTypes", "elements", "residualModifier", "dmgModifier", "allowBloodlineDamageIncrease", "allowBloodlineDamageDecrease", "description"]],
-    ["heal", "bloodline", ["type", "staticAssetPath", "staticAnimation", "appearAnimation", "disappearAnimation", "appearSfx", "disappearSfx", "power", "powerPerLevel", "target", "calculation", "poolsAffected", "description"]],
-    ["noncombatgainskill", "item", ["type", "appearSfx", "disappearSfx", "Skill Unlocked by Consumption", "description"]],
-    ["noncombatquest", "item", ["type", "appearSfx", "disappearSfx", "Special quest", "description"]],
-    ["repair", "item", ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"]],
-    ["rollbloodline", "item", ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "rank", "description"]],
-    ["rollsagemode", "item", ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"]],
-    ["removebloodline", "item", ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"]],
-    ["marriageslotincrease", "item", ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "rank", "description"]],
+    [
+      "damage",
+      "jutsu",
+      [
+        "type",
+        "staticAssetPath",
+        "staticAnimation",
+        "appearAnimation",
+        "disappearAnimation",
+        "appearSfx",
+        "disappearSfx",
+        "rounds",
+        "power",
+        "powerPerLevel",
+        "target",
+        "friendlyFire",
+        "calculation",
+        "statTypes",
+        "generalTypes",
+        "elements",
+        "residualModifier",
+        "dmgModifier",
+        "allowBloodlineDamageIncrease",
+        "allowBloodlineDamageDecrease",
+        "description",
+      ],
+    ],
+    [
+      "heal",
+      "bloodline",
+      [
+        "type",
+        "staticAssetPath",
+        "staticAnimation",
+        "appearAnimation",
+        "disappearAnimation",
+        "appearSfx",
+        "disappearSfx",
+        "power",
+        "powerPerLevel",
+        "target",
+        "calculation",
+        "poolsAffected",
+        "description",
+      ],
+    ],
+    [
+      "noncombatgainskill",
+      "item",
+      [
+        "type",
+        "appearSfx",
+        "disappearSfx",
+        "Skill Unlocked by Consumption",
+        "description",
+      ],
+    ],
+    [
+      "noncombatquest",
+      "item",
+      ["type", "appearSfx", "disappearSfx", "Special quest", "description"],
+    ],
+    [
+      "repair",
+      "item",
+      ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"],
+    ],
+    [
+      "rollbloodline",
+      "item",
+      [
+        "type",
+        "appearSfx",
+        "disappearSfx",
+        "power",
+        "powerPerLevel",
+        "rank",
+        "description",
+      ],
+    ],
+    [
+      "rollsagemode",
+      "item",
+      ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"],
+    ],
+    [
+      "removebloodline",
+      "item",
+      ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"],
+    ],
+    [
+      "marriageslotincrease",
+      "item",
+      [
+        "type",
+        "appearSfx",
+        "disappearSfx",
+        "power",
+        "powerPerLevel",
+        "rank",
+        "description",
+      ],
+    ],
   ] as const)("shows the %s tag fields for a %s", (type, wrapper, expected) => {
     const tag = getTagSchema(type).parse({ type }) as ZodAllTags;
     const view = render(
-      <EffectFormWrapper type={wrapper} idx={0} tag={tag} effects={[tag]} setEffects={vi.fn()} availableTags={[type]} />,
+      <EffectFormWrapper
+        type={wrapper}
+        idx={0}
+        tag={tag}
+        effects={[tag]}
+        setEffects={vi.fn()}
+        availableTags={[type]}
+      />,
     );
     expect(labels(view.container)).toEqual([...expected]);
   });
@@ -1220,59 +1990,124 @@ describe("schema-derived field visibility", () => {
     ["random", false, false],
     ["user_village", false, false],
     ["current_sector", false, false],
-  ] as const)("shows location fields for the %s sector type", (sectorType, showsSector, showsSectorList) => {
-    const objective = getObjectiveSchema("move_to_location").parse({ id: "travel", task: "move_to_location", sectorType });
-    const view = render(
-      <ObjectiveFormWrapper
-        idx={0} quest={{ consecutiveObjectives: true }} availableTags={["move_to_location"]}
-        objective={objective} objectives={[objective]} setObjectives={vi.fn()}
-      />,
-    );
-    expect(labels(view.container).includes("sector")).toBe(showsSector);
-    expect(labels(view.container).includes("sectorList")).toBe(showsSectorList);
-    expect(labels(view.container).includes("sectorType")).toBe(true);
-  });
+  ] as const)(
+    "shows location fields for the %s sector type",
+    (sectorType, showsSector, showsSectorList) => {
+      const objective = getObjectiveSchema("move_to_location").parse({
+        id: "travel",
+        task: "move_to_location",
+        sectorType,
+      });
+      const view = render(
+        <ObjectiveFormWrapper
+          idx={0}
+          quest={{ consecutiveObjectives: true }}
+          availableTags={["move_to_location"]}
+          objective={objective}
+          objectives={[objective]}
+          setObjectives={vi.fn()}
+        />,
+      );
+      expect(labels(view.container).includes("sector")).toBe(showsSector);
+      expect(labels(view.container).includes("sectorList")).toBe(showsSectorList);
+      expect(labels(view.container).includes("sectorType")).toBe(true);
+    },
+  );
 
   it.each([
     ["defeat_opponents", ["Next Objective ID", "If fail, go to objective"]],
     ["reset_quest", ["Reset to specific objective"]],
-  ] as const)("offers every objective id in the %s objective links", async (task, links) => {
-    const parsed = getObjectiveSchema(task).safeParse({ id: "fight", task });
-    const objective = (parsed.success ? parsed.data : { id: "fight", task }) as AllObjectivesType;
-    const objectives = [objective, { ...objective, id: "retry" }, { ...objective, id: "done" }] as AllObjectivesType[];
-    const view = render(
-      <ObjectiveFormWrapper
-        idx={0} quest={{ consecutiveObjectives: true }} availableTags={[task]}
-        objective={objective} objectives={objectives} setObjectives={vi.fn()}
-      />,
-    );
-    expect(labels(view.container).filter((label) => /Objective ID|objective$/.test(label ?? ""))).toEqual([...links]);
-    for (const label of links) {
-      const trigger = view.getByText(label).closest("div")!.querySelector<HTMLElement>('[role="combobox"]')!;
-      fireEvent.click(trigger);
-      for (const id of ["fight", "retry", "done"]) expect(await view.findByRole("option", { name: id })).toBeTruthy();
-      fireEvent.click(trigger);
-      await waitFor(() => expect(view.queryByRole("option", { name: "retry" })).toBeNull());
-    }
-  });
+  ] as const)(
+    "offers every objective id in the %s objective links",
+    async (task, links) => {
+      const parsed = getObjectiveSchema(task).safeParse({ id: "fight", task });
+      const objective = (
+        parsed.success ? parsed.data : { id: "fight", task }
+      ) as AllObjectivesType;
+      const objectives = [
+        objective,
+        { ...objective, id: "retry" },
+        { ...objective, id: "done" },
+      ] as AllObjectivesType[];
+      const view = render(
+        <ObjectiveFormWrapper
+          idx={0}
+          quest={{ consecutiveObjectives: true }}
+          availableTags={[task]}
+          objective={objective}
+          objectives={objectives}
+          setObjectives={vi.fn()}
+        />,
+      );
+      expect(
+        labels(view.container).filter((label) =>
+          /Objective ID|objective$/.test(label ?? ""),
+        ),
+      ).toEqual([...links]);
+      for (const label of links) {
+        const trigger = view
+          .getByText(label)
+          .closest("div")!
+          .querySelector<HTMLElement>('[role="combobox"]')!;
+        fireEvent.click(trigger);
+        for (const id of ["fight", "retry", "done"])
+          expect(await view.findByRole("option", { name: id })).toBeTruthy();
+        fireEvent.click(trigger);
+        await waitFor(() =>
+          expect(view.queryByRole("option", { name: "retry" })).toBeNull(),
+        );
+      }
+    },
+  );
 });
 
 describe("MassEffectEditor save failures", () => {
   for (const kind of ["item", "jutsu", "bloodline"] as const) {
     it(`reports ${kind} save failures and releases the pending state`, async () => {
-      const retryable = vi.spyOn(errorUtils, "isRetryableTrpcError").mockImplementation((error) => error.message === "Network down");
-      for (const failure of [new Error("Server rejected"), new Error("Network down"), "opaque"]) {
-        save.mockImplementationOnce(async () => { throw failure; });
+      const retryable = vi
+        .spyOn(errorUtils, "isRetryableTrpcError")
+        .mockImplementation((error) => error.message === "Network down");
+      for (const failure of [
+        new Error("Server rejected"),
+        new Error("Network down"),
+        "opaque",
+      ]) {
+        save.mockImplementationOnce(async () => {
+          throw failure;
+        });
       }
-      const entries = [{ id: "first", name: "First", effects: [DamageTag.parse({})], updatedAt: new Date() }];
-      const view = render(<MassEffectEditor kind={kind} entries={entries} selectedFields={["power"]} onPendingChange={pending} />);
+      const entries = [
+        {
+          id: "first",
+          name: "First",
+          effects: [DamageTag.parse({})],
+          updatedAt: new Date(),
+        },
+      ];
+      const view = render(
+        <MassEffectEditor
+          kind={kind}
+          entries={entries}
+          selectedFields={["power"]}
+          onPendingChange={pending}
+        />,
+      );
       for (let attempt = 1; attempt <= 3; attempt++) {
-        fireEvent.click(view.getByRole("button", { name: `Save ${kind} effects for First` }));
+        fireEvent.click(
+          view.getByRole("button", { name: `Save ${kind} effects for First` }),
+        );
         await waitFor(() => expect(save).toHaveBeenCalledTimes(attempt));
         await waitFor(() => expect(pending).toHaveBeenLastCalledWith(false));
         await waitFor(() => expect(view.queryByRole("status")).toBeNull());
       }
-      expect(pending.mock.calls).toEqual([[true], [false], [true], [false], [true], [false]]);
+      expect(pending.mock.calls).toEqual([
+        [true],
+        [false],
+        [true],
+        [false],
+        [true],
+        [false],
+      ]);
       expect(toast.mock.calls).toEqual(
         kind === "item"
           ? [

@@ -66,19 +66,21 @@ describe("user request status", () => {
       statusBoxes[status] ? cell.innerHTML.includes(statusBoxes[status]) : false,
     );
     if (statusBoxes[status]) expect(statusCell?.innerHTML).toBe(statusBoxes[status]);
-    else
-      expect(view.container.innerHTML).not.toMatch(/Expired|border-2 border-/);
+    else expect(view.container.innerHTML).not.toMatch(/Expired|border-2 border-/);
   });
 
   it("renders only the tables that have requests", () => {
     expect(mount([]).container.querySelectorAll("table")).toHaveLength(0);
     cleanup();
-    expect(mount([request("sent", "PENDING", "me")]).container.querySelectorAll("table")).toHaveLength(1);
+    expect(
+      mount([request("sent", "PENDING", "me")]).container.querySelectorAll("table"),
+    ).toHaveLength(1);
     cleanup();
     expect(
-      mount([request("sent", "PENDING", "me"), request("received", "PENDING", "other")]).container.querySelectorAll(
-        "table",
-      ),
+      mount([
+        request("sent", "PENDING", "me"),
+        request("received", "PENDING", "other"),
+      ]).container.querySelectorAll("table"),
     ).toHaveLength(2);
   });
 });

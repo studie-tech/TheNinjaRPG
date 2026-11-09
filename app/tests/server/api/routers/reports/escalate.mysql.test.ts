@@ -20,7 +20,10 @@ const escalation = {
 };
 
 /** Store one report against `subject`, filed by `reporter`. */
-const insertReport = async (status: BanState, overrides: Partial<typeof userReport.$inferInsert> = {}) =>
+const insertReport = async (
+  status: BanState,
+  overrides: Partial<typeof userReport.$inferInsert> = {},
+) =>
   (await getTestDatabase()).insert(userReport).values({
     id: "case",
     reporterUserId: "reporter",
@@ -35,9 +38,13 @@ const insertReport = async (status: BanState, overrides: Partial<typeof userRepo
   });
 
 const storedReport = async () =>
-  (await getTestDatabase()).query.userReport.findFirst({ where: eq(userReport.id, "case") });
+  (await getTestDatabase()).query.userReport.findFirst({
+    where: eq(userReport.id, "case"),
+  });
 const storedSubject = async () =>
-  (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, "subject") });
+  (await getTestDatabase()).query.userData.findFirst({
+    where: eq(userData.userId, "subject"),
+  });
 
 /**
  * Escalation is the banned user's appeal of their own active ban: only they may file it, and
@@ -62,11 +69,14 @@ describeWithDatabase("ban escalation", () => {
       message: "Report escalated",
     });
     expect(await storedReport()).toMatchObject({ status: "BAN_ESCALATED" });
-    expect(
-      await (await getTestDatabase()).query.userReportComment.findMany(),
-    ).toEqual([expect.objectContaining({ userId: "subject", decision: "BAN_ESCALATED" })]);
+    expect(await (await getTestDatabase()).query.userReportComment.findMany()).toEqual([
+      expect.objectContaining({ userId: "subject", decision: "BAN_ESCALATED" }),
+    ]);
     // Loading the ban screen must not lift a ban that is waiting for an admin.
-    expect(await subject.getBan()).toMatchObject({ id: "case", status: "BAN_ESCALATED" });
+    expect(await subject.getBan()).toMatchObject({
+      id: "case",
+      status: "BAN_ESCALATED",
+    });
     expect(await storedSubject()).toMatchObject({ isBanned: true });
   });
 
@@ -83,7 +93,9 @@ describeWithDatabase("ban escalation", () => {
       message: "You cannot escalate",
     });
     expect(await storedReport()).toMatchObject({ status });
-    expect(await (await getTestDatabase()).query.userReportComment.findMany()).toEqual([]);
+    expect(await (await getTestDatabase()).query.userReportComment.findMany()).toEqual(
+      [],
+    );
   });
 
   it.each([

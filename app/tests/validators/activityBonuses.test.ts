@@ -25,7 +25,8 @@ describe("activity tag contracts", () => {
     IncreaseGatheringYield,
   ]) {
     const name = schema.parse({}).type;
-    const isYield = name === "increasehuntingyield" || name === "increasegatheringyield";
+    const isYield =
+      name === "increasehuntingyield" || name === "increasegatheringyield";
     const calculation = isYield ? "static" : "percentage";
     it(`${name} stores power and self-only calculation defaults`, () => {
       expect(AllTags.parse({ type: name, power: 10 })).toMatchObject({

@@ -42,13 +42,27 @@ const user = { anbuId: null } as never;
 describe("bulkSellBlockReason", () => {
   it("blocks equipped, home, auction, crafting and unaffordable farm seeds", () => {
     expect(bulkSellBlockReason(row("a"), 0, NOW)).toBeNull();
-    expect(bulkSellBlockReason(row("a", { equipped: "HAND_1" }), 0, NOW)).toBe("is equipped");
-    expect(bulkSellBlockReason(row("a", { storedAtHome: true }), 0, NOW)).toBe("is stored at home");
-    expect(bulkSellBlockReason(row("a", { isInAuction: true }), 0, NOW)).toBe("is in auction");
+    expect(bulkSellBlockReason(row("a", { equipped: "HAND_1" }), 0, NOW)).toBe(
+      "is equipped",
+    );
+    expect(bulkSellBlockReason(row("a", { storedAtHome: true }), 0, NOW)).toBe(
+      "is stored at home",
+    );
+    expect(bulkSellBlockReason(row("a", { isInAuction: true }), 0, NOW)).toBe(
+      "is in auction",
+    );
     expect(
-      bulkSellBlockReason(row("a", { craftingFinishedAt: new Date("2026-11-06") }), 0, NOW),
+      bulkSellBlockReason(
+        row("a", { craftingFinishedAt: new Date("2026-11-06") }),
+        0,
+        NOW,
+      ),
     ).toBe("is being crafted");
-    const seed = row("seed", {}, { isFarmSeed: true, inShop: false, farmSellValue: 50 });
+    const seed = row(
+      "seed",
+      {},
+      { isFarmSeed: true, inShop: false, farmSellValue: 50 },
+    );
     expect(bulkSellBlockReason(seed, 10, NOW)).toBe("needs 50 farm coins to buy back");
     expect(bulkSellBlockReason(seed, 50, NOW)).toBeNull();
   });
@@ -94,7 +108,11 @@ describe("warnedItems", () => {
     const items = ["COMMON", "RARE", "EPIC", "LEGENDARY"].map((rarity) =>
       row(rarity, {}, { rarity: rarity as never }),
     );
-    expect(warnedItems(items).map((item) => item.id)).toEqual(["RARE", "EPIC", "LEGENDARY"]);
+    expect(warnedItems(items).map((item) => item.id)).toEqual([
+      "RARE",
+      "EPIC",
+      "LEGENDARY",
+    ]);
   });
 });
 
@@ -103,21 +121,34 @@ describe("bulkSellMessage", () => {
     expect(bulkSellMessage([], [], [{ name: "Blade" }])).toBe(
       "No sales were confirmed. Could not confirm Blade. Your inventory and ryo will be refreshed.",
     );
-    expect(bulkSellMessage([60], [{ name: "Seed", reason: "is equipped" }], [{ name: "Blade" }])).toBe(
+    expect(
+      bulkSellMessage(
+        [60],
+        [{ name: "Seed", reason: "is equipped" }],
+        [{ name: "Blade" }],
+      ),
+    ).toBe(
       "Sold 1 item for 60 ryo. 1 stayed: Seed is equipped. Could not confirm Blade. Your inventory and ryo will be refreshed.",
     );
   });
   it("says what sold, what dropped and what stayed", () => {
-    expect(bulkSellMessage([60, 200, 0], [])).toBe("Sold 2 items for 260 ryo and dropped 1.");
+    expect(bulkSellMessage([60, 200, 0], [])).toBe(
+      "Sold 2 items for 260 ryo and dropped 1.",
+    );
     expect(bulkSellMessage([0], [])).toBe("Dropped 1 item.");
     expect(bulkSellMessage([60], [{ name: "Blade", reason: "is equipped" }])).toBe(
       "Sold 1 item for 60 ryo. 1 stayed: Blade is equipped.",
     );
     expect(
-      bulkSellMessage([], [
-        { name: "Blade", reason: "is in auction" },
-        { name: "Seed", reason: "needs 50 farm coins to buy back" },
-      ]),
-    ).toBe("Nothing was sold. 2 stayed: Blade is in auction; Seed needs 50 farm coins to buy back.");
+      bulkSellMessage(
+        [],
+        [
+          { name: "Blade", reason: "is in auction" },
+          { name: "Seed", reason: "needs 50 farm coins to buy back" },
+        ],
+      ),
+    ).toBe(
+      "Nothing was sold. 2 stayed: Blade is in auction; Seed needs 50 farm coins to buy back.",
+    );
   });
 });

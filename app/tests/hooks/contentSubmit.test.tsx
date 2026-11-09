@@ -44,7 +44,9 @@ describe("content editor rejected saves", () => {
   it("keeps the draft by refetching only after a confirmed update", async () => {
     type Result = { success: boolean; message: string };
     const refetch = vi.fn(async () => undefined);
-    const save = vi.fn(async (): Promise<Result> => ({ success: false, message: "Rejected" }));
+    const save = vi.fn(
+      async (): Promise<Result> => ({ success: false, message: "Rejected" }),
+    );
     Object.assign(vi.spyOn(client, "api" as never), {
       village: { getAllNames: { useQuery: () => ({ data: [], isPending: false }) } },
       bloodline: {
@@ -62,9 +64,17 @@ describe("content editor rejected saves", () => {
     });
     vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
     const bloodline = {
-      id: "bloodline", name: "Sharingan", image: "https://example.com/b.webp",
-      description: "Eyes", regenIncrease: 0, villageId: null, hidden: false, rank: "D",
-      effects: [], createdAt: new Date(0), updatedAt: new Date(0),
+      id: "bloodline",
+      name: "Sharingan",
+      image: "https://example.com/b.webp",
+      description: "Eyes",
+      regenIncrease: 0,
+      villageId: null,
+      hidden: false,
+      rank: "D",
+      effects: [],
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
     } as unknown as Bloodline;
     const { result } = renderHook(() => useBloodlineEditForm(bloodline, refetch));
 

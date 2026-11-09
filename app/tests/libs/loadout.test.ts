@@ -78,7 +78,9 @@ describe("buildMissingLoadouts", () => {
   const base = new Date("2026-06-17T00:00:00Z");
 
   it("returns nothing when already at the allowance", () => {
-    expect(buildMissingLoadouts("u1", "item", 3, 3, { itemData: [] }, base)).toEqual([]);
+    expect(buildMissingLoadouts("u1", "item", 3, 3, { itemData: [] }, base)).toEqual(
+      [],
+    );
   });
 
   it("creates deterministic ids only for the missing indices", () => {

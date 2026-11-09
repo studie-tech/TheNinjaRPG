@@ -32,7 +32,10 @@ beforeEach(() => {
     { id: "global-id", title: "Global" },
     { id: "konoki-id", title: "Konoki" },
   ]);
-  vi.spyOn(localStorage, "useLocalStorage").mockReturnValue(["Konoki", vi.fn()] as never);
+  vi.spyOn(localStorage, "useLocalStorage").mockReturnValue([
+    "Konoki",
+    vi.fn(),
+  ] as never);
   vi.spyOn(mutes, "useChatMutes").mockImplementation(
     () =>
       ({

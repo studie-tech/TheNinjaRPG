@@ -29,9 +29,7 @@ const EXCLUDED_TAG_TYPES = new Set([
 
 describe("OBJECTIVE_TAG_TYPES", () => {
   it("is exactly the combat-applicable subset of the canonical effect filters", () => {
-    const expected = [...tagTypes]
-      .filter((t) => !EXCLUDED_TAG_TYPES.has(t))
-      .sort();
+    const expected = [...tagTypes].filter((t) => !EXCLUDED_TAG_TYPES.has(t)).sort();
     expect([...OBJECTIVE_TAG_TYPES].sort()).toEqual<typeof expected>(expected);
   });
 

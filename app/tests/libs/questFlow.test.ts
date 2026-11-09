@@ -2,10 +2,11 @@ import { describe, expect, it } from "bun:test";
 import cytoscape from "cytoscape";
 import { getQuestFlowPositions, restoreQuestFlowPositions } from "@/libs/questFlow";
 
-const graph = (ids: string[]) => cytoscape({
-  headless: true,
-  elements: ids.map((id) => ({ data: { id } })),
-});
+const graph = (ids: string[]) =>
+  cytoscape({
+    headless: true,
+    elements: ids.map((id) => ({ data: { id } })),
+  });
 
 describe("quest designer layout", () => {
   it("restores shared coordinates exactly after serializing and reopening", () => {
@@ -40,7 +41,10 @@ describe("quest designer layout", () => {
   it("drops deleted nodes and saves model coordinates independently of the viewport", () => {
     const cy = graph(["start", "end"]);
     try {
-      restoreQuestFlowPositions(cy, { start: { x: 20, y: 70 }, end: { x: 200, y: 500 } });
+      restoreQuestFlowPositions(cy, {
+        start: { x: 20, y: 70 },
+        end: { x: 200, y: 500 },
+      });
       cy.getElementById("end").remove();
       cy.zoom(2);
       cy.pan({ x: 100, y: 200 });

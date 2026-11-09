@@ -7,9 +7,17 @@ import {
   resetTables,
 } from "../setup/testDatabase";
 
-const insertVillages = async (rows: [string, number, (typeof village.$inferInsert)["type"]][]) => {
+const insertVillages = async (
+  rows: [string, number, (typeof village.$inferInsert)["type"]][],
+) => {
   await (await getTestDatabase()).insert(village).values(
-    rows.map(([id, sector, type]) => ({ id, name: id, sector, type, kageId: `${id}-kage` })),
+    rows.map(([id, sector, type]) => ({
+      id,
+      name: id,
+      sector,
+      type,
+      kageId: `${id}-kage`,
+    })),
   );
 };
 

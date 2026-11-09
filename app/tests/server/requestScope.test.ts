@@ -95,8 +95,14 @@ describe("scopedRead", () => {
       },
     };
     await withRequestScope(async () => {
-      const first = await scopedRead("k", () => builder as unknown as Promise<{ n: number }>);
-      const second = await scopedRead("k", () => builder as unknown as Promise<{ n: number }>);
+      const first = await scopedRead(
+        "k",
+        () => builder as unknown as Promise<{ n: number }>,
+      );
+      const second = await scopedRead(
+        "k",
+        () => builder as unknown as Promise<{ n: number }>,
+      );
       expect(first).toEqual({ n: 1 });
       expect(second).toEqual({ n: 1 });
     });

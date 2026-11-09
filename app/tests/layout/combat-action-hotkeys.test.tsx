@@ -13,7 +13,8 @@ afterEach(() => {
   cleanup();
   document.body.innerHTML = "";
   vi.restoreAllMocks();
-  if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
+  if (originalMatchMedia)
+    Object.defineProperty(window, "matchMedia", originalMatchMedia);
   else Reflect.deleteProperty(window, "matchMedia");
 });
 
@@ -39,8 +40,12 @@ const renderActions = () => {
   );
   const target = view.getByText("Fireball");
   const openContextMenu = (pointerType?: string) => {
-    const event = new window.MouseEvent("contextmenu", { bubbles: true, cancelable: true });
-    if (pointerType) Object.defineProperty(event, "pointerType", { value: pointerType });
+    const event = new window.MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+    });
+    if (pointerType)
+      Object.defineProperty(event, "pointerType", { value: pointerType });
     fireEvent(target, event);
     return event;
   };

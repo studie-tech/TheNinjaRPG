@@ -2,9 +2,17 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { item, userData } from "@/drizzle/schema";
 import { itemRouter } from "@/server/api/routers/item";
-import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS } from "@/validators/itemFurniture";
+import {
+  DEFAULT_FURNITURE_DATA,
+  FURNITURE_ITEM_DEFAULTS,
+} from "@/validators/itemFurniture";
 import { insertUsers } from "../../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import {
+  callerFor,
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../setup/testDatabase";
 
 const staffId = "item-creator";
 const playerId = "item-player";
@@ -19,9 +27,13 @@ describeWithDatabase("item.create", () => {
   });
 
   it("creates hidden furniture with the furniture defaults and no effects", async () => {
-    const result = await (await callerFor(itemRouter, staffId)).create({ type: "FURNITURE" });
+    const result = await (await callerFor(itemRouter, staffId)).create({
+      type: "FURNITURE",
+    });
     expect(result.success).toBe(true);
-    const created = await (await getTestDatabase()).query.item.findFirst({ where: eq(item.id, result.message) });
+    const created = await (await getTestDatabase()).query.item.findFirst({
+      where: eq(item.id, result.message),
+    });
     expect(created).toMatchObject({
       itemType: "FURNITURE",
       hidden: true,
@@ -37,7 +49,9 @@ describeWithDatabase("item.create", () => {
   });
 
   it("rejects players without content permissions and writes nothing", async () => {
-    const result = await (await callerFor(itemRouter, playerId)).create({ type: "WEAPON" });
+    const result = await (await callerFor(itemRouter, playerId)).create({
+      type: "WEAPON",
+    });
     expect(result).toEqual({ success: false, message: "Not allowed to create item" });
     expect(await (await getTestDatabase()).query.item.findMany()).toHaveLength(0);
   });

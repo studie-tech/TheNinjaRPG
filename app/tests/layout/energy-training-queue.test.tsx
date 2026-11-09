@@ -5,7 +5,10 @@ import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from "bun:
 import * as client from "@/app/_trpc/client";
 import { getUserCaps } from "@/drizzle/constants";
 import * as ContentBox from "@/layout/ContentBox";
-import { EnergyTrainingQueue, useEnergyTrainingQueue } from "@/layout/EnergyTrainingQueue";
+import {
+  EnergyTrainingQueue,
+  useEnergyTrainingQueue,
+} from "@/layout/EnergyTrainingQueue";
 import type { UserWithRelations } from "@/routers/profile";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
@@ -25,7 +28,13 @@ type QueueCallbacks = {
   ) => Promise<void>;
 };
 type QueueMocks = {
-  invalidate: Mock<(input?: undefined, filters?: undefined, options?: { cancelRefetch?: boolean }) => Promise<void>>;
+  invalidate: Mock<
+    (
+      input?: undefined,
+      filters?: undefined,
+      options?: { cancelRefetch?: boolean },
+    ) => Promise<void>
+  >;
   mutate: ReturnType<typeof vi.fn>;
   updateUser: Mock<(patch: unknown, options?: unknown) => Promise<void>>;
   callbacks: QueueCallbacks | null;
@@ -36,16 +45,23 @@ const mocks: QueueMocks = {
   invalidate: vi.fn(async () => undefined),
   mutate: vi.fn(),
   updateUser: vi.fn(async (patch: unknown) => {
-    if (!patch || (typeof patch === "object" && "success" in patch && !("userPatch" in patch))) await mocks.invalidate();
+    if (
+      !patch ||
+      (typeof patch === "object" && "success" in patch && !("userPatch" in patch))
+    )
+      await mocks.invalidate();
   }),
   callbacks: null,
 };
 const profileKey = [["profile", "getUser"], { type: "query" }];
 const utils = {
-  profile: { getUser: {
-    invalidate: (...args: Parameters<QueueMocks["invalidate"]>) => mocks.invalidate(...args),
-    getData: () => mocks.client?.getQueryData<{ serverTime: number }>(profileKey),
-  } },
+  profile: {
+    getUser: {
+      invalidate: (...args: Parameters<QueueMocks["invalidate"]>) =>
+        mocks.invalidate(...args),
+      getData: () => mocks.client?.getQueryData<{ serverTime: number }>(profileKey),
+    },
+  },
 };
 const api = {
   useUtils: () => utils,
@@ -65,13 +81,22 @@ beforeEach(() => {
   mocks.client = undefined;
   mocks.timeDiff = 0;
   Object.assign(vi.spyOn(client, "api" as never), api);
-  vi.spyOn(ContentBox, "default").mockImplementation((({ children }: { children: ReactNode }) => <div>{children}</div>) as never);
+  vi.spyOn(ContentBox, "default").mockImplementation((({
+    children,
+  }: {
+    children: ReactNode;
+  }) => <div>{children}</div>) as never);
   spyOnToasts();
-  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(() => ({
-    prepareUserUpdate: () => 7,
-    updateUser: mocks.updateUser,
-  }) as never);
-  vi.spyOn(userContext, "useUserInfo").mockImplementation(() => ({ timeDiff: mocks.timeDiff ?? 0 }) as never);
+  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
+    () =>
+      ({
+        prepareUserUpdate: () => 7,
+        updateUser: mocks.updateUser,
+      }) as never,
+  );
+  vi.spyOn(userContext, "useUserInfo").mockImplementation(
+    () => ({ timeDiff: mocks.timeDiff ?? 0 }) as never,
+  );
 });
 afterEach(() => {
   cleanup();
@@ -113,7 +138,16 @@ const QueueImageAction = ({
   const { saveQueue, error } = useEnergyTrainingQueue(refreshCaptcha);
   return (
     <>
-      <button type="button" onClick={() => saveQueue({ expectedEntries: [], entries: [{ stat: "offence", energy: user.maxEnergy }], guess: getGuess() })}>
+      <button
+        type="button"
+        onClick={() =>
+          saveQueue({
+            expectedEntries: [],
+            entries: [{ stat: "offence", energy: user.maxEnergy }],
+            guess: getGuess(),
+          })
+        }
+      >
         Add to queue
       </button>
       {error && <p role="alert">{error}</p>}
@@ -123,7 +157,11 @@ const QueueImageAction = ({
 
 describe("Energy queue captcha recovery", () => {
   it.each([
-    { success: true, message: "Training queue saved", userPatch: { energyQueueTail: 1, queue: queuedOffence, curEnergy: 50 } },
+    {
+      success: true,
+      message: "Training queue saved",
+      userPatch: { energyQueueTail: 1, queue: queuedOffence, curEnergy: 50 },
+    },
     { success: false, message: "Invalid captcha" },
   ])(
     "refreshes a consumed captcha after $message so another edit can proceed",
@@ -145,10 +183,18 @@ describe("Energy queue captcha recovery", () => {
       );
       await act(async () => {
         mocks.callbacks?.onSuccess(result);
-        await mocks.callbacks?.onSettled(result, null, mocks.mutate.mock.lastCall?.[0], mocks.callbacks?.onMutate());
+        await mocks.callbacks?.onSettled(
+          result,
+          null,
+          mocks.mutate.mock.lastCall?.[0],
+          mocks.callbacks?.onMutate(),
+        );
       });
       expect(refreshCaptcha).toHaveBeenCalledTimes(1);
-      expect(mocks.updateUser).toHaveBeenCalledWith(result, expect.objectContaining({ revision: 7 }));
+      expect(mocks.updateUser).toHaveBeenCalledWith(
+        result,
+        expect.objectContaining({ revision: 7 }),
+      );
       expect(mocks.invalidate).toHaveBeenCalledTimes(result.success ? 0 : 1);
       fireEvent.click(view.getByRole("button", { name: "Add to queue" }));
       expect(mocks.mutate).toHaveBeenLastCalledWith(
@@ -194,32 +240,70 @@ describe("Energy queue captcha recovery", () => {
     fireEvent.click(view.getByRole("button", { name: "Clear queue" }));
     await act(async () => {
       await mocks.callbacks?.onSettled(
-        { success: true, message: "Training queue cleared", userPatch: { energyQueueHead: 1, energyQueueTail: 1, queue: [] } },
+        {
+          success: true,
+          message: "Training queue cleared",
+          userPatch: { energyQueueHead: 1, energyQueueTail: 1, queue: [] },
+        },
         null,
         mocks.mutate.mock.lastCall?.[0],
         mocks.callbacks?.onMutate(),
       );
     });
     expect(refreshCaptcha).not.toHaveBeenCalled();
-    expect(mocks.updateUser).toHaveBeenCalledWith({ success: true, message: "Training queue cleared", userPatch: { energyQueueHead: 1, energyQueueTail: 1, queue: [] } }, expect.objectContaining({ revision: 7 }));
+    expect(mocks.updateUser).toHaveBeenCalledWith(
+      {
+        success: true,
+        message: "Training queue cleared",
+        userPatch: { energyQueueHead: 1, energyQueueTail: 1, queue: [] },
+      },
+      expect.objectContaining({ revision: 7 }),
+    );
     expect(mocks.invalidate).not.toHaveBeenCalled();
   });
   it("refreshes when a successful save requires broader automatic reconciliation", async () => {
-    render(<EnergyTrainingQueue user={user} availableEnergy={100} refreshCaptcha={async () => {}} />);
+    render(
+      <EnergyTrainingQueue
+        user={user}
+        availableEnergy={100}
+        refreshCaptcha={async () => {}}
+      />,
+    );
     await act(async () => {
-      await mocks.callbacks?.onSettled({ success: true, message: "Training queue saved" }, null, { entries: [] }, mocks.callbacks?.onMutate());
+      await mocks.callbacks?.onSettled(
+        { success: true, message: "Training queue saved" },
+        null,
+        { entries: [] },
+        mocks.callbacks?.onMutate(),
+      );
     });
-    expect(mocks.updateUser).toHaveBeenCalledWith({ success: true, message: "Training queue saved" }, expect.objectContaining({ revision: 7 }));
+    expect(mocks.updateUser).toHaveBeenCalledWith(
+      { success: true, message: "Training queue saved" },
+      expect.objectContaining({ revision: 7 }),
+    );
     expect(mocks.invalidate).toHaveBeenCalledTimes(1);
   });
-
 });
-
 
 describe("Energy queue capped stats", () => {
   it("keeps queue removal available when all stats cap", () => {
     const { stats_cap, gens_cap } = getUserCaps(user.rank);
-    const view = render(<EnergyTrainingQueue user={{ ...user, offence: stats_cap, defence: stats_cap, strength: gens_cap, intelligence: gens_cap, speed: gens_cap, willpower: gens_cap, queue: queuedOffence }} availableEnergy={0} refreshCaptcha={async () => {}} />);
+    const view = render(
+      <EnergyTrainingQueue
+        user={{
+          ...user,
+          offence: stats_cap,
+          defence: stats_cap,
+          strength: gens_cap,
+          intelligence: gens_cap,
+          speed: gens_cap,
+          willpower: gens_cap,
+          queue: queuedOffence,
+        }}
+        availableEnergy={0}
+        refreshCaptcha={async () => {}}
+      />,
+    );
     fireEvent.click(view.getByRole("button", { name: "Clear queue" }));
     expect(mocks.mutate).toHaveBeenCalledWith(expect.objectContaining({ entries: [] }));
   });
@@ -252,34 +336,54 @@ describe("Energy queue profile recovery", () => {
     mocks.timeDiff = timeDiff;
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     mocks.client = client;
-    const snapshot = () => ({ serverTime: now - timeDiff, userData: { ...user, queue: queuedOffence } });
+    const snapshot = () => ({
+      serverTime: now - timeDiff,
+      userData: { ...user, queue: queuedOffence },
+    });
     const read = vi.fn(async () => snapshot());
     client.setQueryData(profileKey, snapshot());
-    const observer = new QueryObserver(client, { queryKey: profileKey, queryFn: read, staleTime: Infinity });
+    const observer = new QueryObserver(client, {
+      queryKey: profileKey,
+      queryFn: read,
+      staleTime: Infinity,
+    });
     subscriptions.push(observer.subscribe(() => {}));
-    mocks.invalidate.mockImplementation((_input, _filters, options) => client.invalidateQueries({ queryKey: profileKey }, options));
-    const props = { user: snapshot().userData, availableEnergy: 0, refreshCaptcha: async () => {} };
+    mocks.invalidate.mockImplementation((_input, _filters, options) =>
+      client.invalidateQueries({ queryKey: profileKey }, options),
+    );
+    const props = {
+      user: snapshot().userData,
+      availableEnergy: 0,
+      refreshCaptcha: async () => {},
+    };
     const view = render(<EnergyTrainingQueue {...props} />);
     return { client, read, snapshot, props, view };
   };
 
-  it.each([0, 5_000, -5_000])("waits one minute after a completed canonical read with %i ms clock offset", async (timeDiff) => {
-    const test = mount(timeDiff);
-    await advance(50_000);
-    await act(async () => { await test.client.refetchQueries({ queryKey: profileKey }); });
-    await advance(10_000);
-    expect(test.read).toHaveBeenCalledTimes(1);
-    await advance(49_999);
-    expect(test.read).toHaveBeenCalledTimes(1);
-    await advance(1);
-    expect(test.read).toHaveBeenCalledTimes(2);
-  });
+  it.each([0, 5_000, -5_000])(
+    "waits one minute after a completed canonical read with %i ms clock offset",
+    async (timeDiff) => {
+      const test = mount(timeDiff);
+      await advance(50_000);
+      await act(async () => {
+        await test.client.refetchQueries({ queryKey: profileKey });
+      });
+      await advance(10_000);
+      expect(test.read).toHaveBeenCalledTimes(1);
+      await advance(49_999);
+      expect(test.read).toHaveBeenCalledTimes(1);
+      await advance(1);
+      expect(test.read).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it("performs only the canonical reads when other recovery paths settle every 50 seconds", async () => {
     const test = mount();
     for (let count = 1; count <= 3; count++) {
       await advance(count === 1 ? 50_000 : 40_000);
-      await act(async () => { await test.client.refetchQueries({ queryKey: profileKey }); });
+      await act(async () => {
+        await test.client.refetchQueries({ queryKey: profileKey });
+      });
       await advance(10_000);
       expect(test.read).toHaveBeenCalledTimes(count);
     }
@@ -291,17 +395,27 @@ describe("Energy queue profile recovery", () => {
   it("joins a pending profile read without canceling it and keeps the next recovery scheduled", async () => {
     const test = mount();
     let complete!: (result: ReturnType<typeof test.snapshot>) => void;
-    test.read.mockImplementationOnce(() => new Promise((resolve) => { complete = resolve; }));
+    test.read.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
     await advance(59_000);
     const pending = test.client.refetchQueries({ queryKey: profileKey });
     await advance(1_000);
     expect(test.read).toHaveBeenCalledTimes(1);
-    expect(mocks.invalidate).toHaveBeenLastCalledWith(undefined, undefined, { cancelRefetch: false });
+    expect(mocks.invalidate).toHaveBeenLastCalledWith(undefined, undefined, {
+      cancelRefetch: false,
+    });
     // A slow request does not stop attempts while it remains pending.
     await advance(60_000);
     expect(mocks.invalidate).toHaveBeenCalledTimes(2);
     expect(test.read).toHaveBeenCalledTimes(1);
-    await act(async () => { complete(test.snapshot()); await pending; });
+    await act(async () => {
+      complete(test.snapshot());
+      await pending;
+    });
     await advance(60_000);
     expect(test.read).toHaveBeenCalledTimes(2);
   });
@@ -311,7 +425,14 @@ describe("Energy queue profile recovery", () => {
     await advance(50_000);
     const revision = prepareUserUpdate(test.client, profileKey);
     await act(async () => {
-      expect(await updateUserCache(test.client, profileKey, { curEnergy: 25, updatedAt: new Date(now) }, { revision })).toBe(true);
+      expect(
+        await updateUserCache(
+          test.client,
+          profileKey,
+          { curEnergy: 25, updatedAt: new Date(now) },
+          { revision },
+        ),
+      ).toBe(true);
     });
     await advance(10_000);
     expect(test.read).toHaveBeenCalledTimes(1);
@@ -325,7 +446,9 @@ describe("Energy queue profile recovery", () => {
     });
     await advance(50_000);
     await act(async () => {
-      expect(await updateUserCache(test.client, profileKey, { curEnergy: 10 }, { revision })).toBe(false);
+      expect(
+        await updateUserCache(test.client, profileKey, { curEnergy: 10 }, { revision }),
+      ).toBe(false);
     });
     expect(test.read).toHaveBeenCalledTimes(1);
     await advance(10_000);
@@ -356,11 +479,17 @@ describe("Energy queue profile recovery", () => {
     expect(test.client.getQueryState(profileKey)?.status).toBe("success");
   });
 
-  it.each(["remove", "unmount"])("stops polling when the queue is removed or the account surface unmounts: %s", async (action) => {
-    const test = mount();
-    if (action === "remove") test.view.rerender(<EnergyTrainingQueue {...test.props} user={{ ...user, queue: [] }} />);
-    else test.view.unmount();
-    await advance(180_000);
-    expect(test.read).not.toHaveBeenCalled();
-  });
+  it.each(["remove", "unmount"])(
+    "stops polling when the queue is removed or the account surface unmounts: %s",
+    async (action) => {
+      const test = mount();
+      if (action === "remove")
+        test.view.rerender(
+          <EnergyTrainingQueue {...test.props} user={{ ...user, queue: [] }} />,
+        );
+      else test.view.unmount();
+      await advance(180_000);
+      expect(test.read).not.toHaveBeenCalled();
+    },
+  );
 });

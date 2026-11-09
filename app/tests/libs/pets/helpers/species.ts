@@ -67,13 +67,26 @@ const entries = [
   ["Dragonfly", "A dragonfly with four delicate wings", "COMMON"],
   ["Mantis", "A poised mantis with folded front limbs", "UNCOMMON"],
   ["Crab", "A little crab with rounded claws", "COMMON"],
-  ["Dragon", "A dragon with a long scaled body, four clawed legs, swept horns and flowing whiskers", "LEGENDARY"],
-  ["Kitsune", "A mythical fox spirit with pointed ears and a fan of multiple distinct bushy tails attached to one body", "LEGENDARY"],
-  ["Phoenix", "A mythical phoenix bird with a swept feather crest, broad feathered wings and long flame-shaped tail plumes", "LEGENDARY"],
+  [
+    "Dragon",
+    "A dragon with a long scaled body, four clawed legs, swept horns and flowing whiskers",
+    "LEGENDARY",
+  ],
+  [
+    "Kitsune",
+    "A mythical fox spirit with pointed ears and a fan of multiple distinct bushy tails attached to one body",
+    "LEGENDARY",
+  ],
+  [
+    "Phoenix",
+    "A mythical phoenix bird with a swept feather crest, broad feathered wings and long flame-shaped tail plumes",
+    "LEGENDARY",
+  ],
 ] as const;
 
 /** Stable IDs mirror the initial database catalogue seeded by the migration; art overrides start unset. */
-export const initialPetSpecies: (PetSpeciesOption & Pick<PetSpecies, "artDirection" | "rankConcepts">)[] = entries.map(
+export const initialPetSpecies: (PetSpeciesOption &
+  Pick<PetSpecies, "artDirection" | "rankConcepts">)[] = entries.map(
   ([name, description, rarity], index) => ({
     id: `pet-species-${index}`,
     name,
@@ -87,7 +100,15 @@ export const initialPetSpecies: (PetSpeciesOption & Pick<PetSpecies, "artDirecti
 
 /** Complete authored species for loadout, grant and battle tests. */
 export const petSpeciesFixture = (patch: Partial<PetSpecies> = {}): PetSpecies => ({
-  ...initialPetSpecies[0]!, rarity: "COMMON", role: "ASSAULT", preferredDamageElement: null, defaultJutsuIds: [],
-  aiRules: [], includeDefaultRules: true, effects: [],
-  createdAt: new Date(0), updatedAt: new Date(0), ...patch,
+  ...initialPetSpecies[0]!,
+  rarity: "COMMON",
+  role: "ASSAULT",
+  preferredDamageElement: null,
+  defaultJutsuIds: [],
+  aiRules: [],
+  includeDefaultRules: true,
+  effects: [],
+  createdAt: new Date(0),
+  updatedAt: new Date(0),
+  ...patch,
 });

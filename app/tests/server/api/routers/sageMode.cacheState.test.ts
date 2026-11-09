@@ -28,13 +28,11 @@ describe("sage removal cache response", () => {
   afterEach(() => resetServerModuleStubs());
   for (const pendingQueue of [false, true]) {
     it(`returns a confirmed charge without a post-read, pending queue=${pendingQueue}`, async () => {
-      const read = vi
-        .fn()
-        .mockResolvedValue({
-          ...snapshot,
-          energyQueueHead: 0,
-          energyQueueTail: pendingQueue ? 1 : 0,
-        });
+      const read = vi.fn().mockResolvedValue({
+        ...snapshot,
+        energyQueueHead: 0,
+        energyQueueTail: pendingQueue ? 1 : 0,
+      });
       const db = {
         query: { userData: { findFirst: read } },
         update: () => ({ set: () => ({ where: async () => ({ rowsAffected: 1 }) }) }),
@@ -65,7 +63,9 @@ describe("sage removal cache response", () => {
   });
   it("does not charge a player who has no sage mode", async () => {
     const db = {
-      query: { userData: { findFirst: async () => ({ ...snapshot, sageModeId: null }) } },
+      query: {
+        userData: { findFirst: async () => ({ ...snapshot, sageModeId: null }) },
+      },
       update: vi.fn(),
       insert: vi.fn(),
     };
@@ -85,11 +85,19 @@ describeWithDatabase("sage removal committed balances", () => {
   afterEach(() => resetServerModuleStubs());
   it("clears the mode and charges exactly the response cost while retaining an independent grant", async () => {
     const db = await getTestDatabase();
-    const raced = beforeStatements(db, userData, [async () => {
-      await db.update(userData).set({ reputationPoints: sql`${userData.reputationPoints} + 7` })
-        .where(eq(userData.userId, userId));
-    }]);
-    const result = await callerForDatabase(sageModeRouter, userId, raced).removeSageMode();
+    const raced = beforeStatements(db, userData, [
+      async () => {
+        await db
+          .update(userData)
+          .set({ reputationPoints: sql`${userData.reputationPoints} + 7` })
+          .where(eq(userData.userId, userId));
+      },
+    ]);
+    const result = await callerForDatabase(
+      sageModeRouter,
+      userId,
+      raced,
+    ).removeSageMode();
     const stored = await db.query.userData.findFirst({
       where: eq(userData.userId, userId),
     });

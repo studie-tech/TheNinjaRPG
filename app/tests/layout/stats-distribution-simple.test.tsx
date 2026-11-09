@@ -1,6 +1,10 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { ELEMENTAL_MASTERY_CAP, getCombatStatCap, getUserCaps } from "@/drizzle/constants";
+import {
+  ELEMENTAL_MASTERY_CAP,
+  getCombatStatCap,
+  getUserCaps,
+} from "@/drizzle/constants";
 import * as tutorial from "@/hooks/tutorial";
 import * as Modal from "@/layout/Modal";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
@@ -72,7 +76,9 @@ const mount = (onAccept = vi.fn(), userData = trainee, includeMasteries = false)
   return view;
 };
 const preset = (view: ReturnType<typeof render>, name: string) =>
-  view.getAllByRole("button").find((button) => button.querySelector("p")?.textContent === name)!;
+  view
+    .getAllByRole("button")
+    .find((button) => button.querySelector("p")?.textContent === name)!;
 
 describe("simple experience presets", () => {
   it("disables a preset only when every one of its stats is capped", () => {
@@ -113,10 +119,16 @@ describe("simple experience presets", () => {
   it("labels elemental presets that cannot take points", () => {
     const view = mount(vi.fn(), trainee, true);
     expect(preset(view, "Lightning Mastery").textContent).toContain("Fully mastered");
-    expect(preset(view, "Lightning Mastery").getAttribute("aria-disabled")).toBe("true");
+    expect(preset(view, "Lightning Mastery").getAttribute("aria-disabled")).toBe(
+      "true",
+    );
     expect(preset(view, "Water Mastery").getAttribute("aria-disabled")).toBe("false");
     cleanup();
-    const asleep = mount(vi.fn(), { ...trainee, status: "BATTLE" } as typeof trainee, true);
+    const asleep = mount(
+      vi.fn(),
+      { ...trainee, status: "BATTLE" } as typeof trainee,
+      true,
+    );
     expect(preset(asleep, "Water Mastery").textContent).toContain("Must be awake");
     expect(preset(asleep, "Mind").getAttribute("aria-disabled")).toBe("false");
   });

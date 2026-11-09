@@ -146,9 +146,7 @@ describe("shared filter fields", () => {
   });
 
   it("starts battle types from the given selection", () => {
-    const { result } = renderHook(() =>
-      useContentFiltering(stableBattleSchema),
-    );
+    const { result } = renderHook(() => useContentFiltering(stableBattleSchema));
     expect(result.current.values.battleTypes).toEqual(["COMBAT"]);
     expect(buildFilter(result.current, stableBattleSchema)).toEqual({
       battleTypes: ["COMBAT"],

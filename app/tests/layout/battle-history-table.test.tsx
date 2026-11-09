@@ -27,11 +27,19 @@ beforeEach(() => {
   vi.spyOn(Avatar, "default").mockImplementation(() => <span>Avatar</span>);
 });
 
-afterEach(() => { cleanup(); queryClient.clear(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+  vi.restoreAllMocks();
+});
 
 const row = (id: number): Row => ({
-  id, createdAt: new Date("2026-01-01T12:00:00.123Z"), battleId: `battle-${id}`,
-  attackedId: "deleted", defenderId: "actor", battleType: "COMBAT",
+  id,
+  createdAt: new Date("2026-01-01T12:00:00.123Z"),
+  battleId: `battle-${id}`,
+  attackedId: "deleted",
+  defenderId: "actor",
+  battleType: "COMBAT",
   // A deleted relation is null at runtime despite Drizzle inferring a required attacker.
   attacker: null as unknown as Row["attacker"],
   defender: { userId: "actor", username: "Actor", avatar: null },
@@ -42,11 +50,21 @@ const mount = (props: Parameters<typeof BattleHistoryTable>[0] = {}) => {
     const input = request as Input;
     requests.push(input);
     if (fail) throw new Error("Connection failed");
-    if (input.cursor) await new Promise<void>((resolve) => { delay = resolve; });
+    if (input.cursor)
+      await new Promise<void>((resolve) => {
+        delay = resolve;
+      });
     const data = input.cursor ? [row(1)] : [row(3), row(2)];
-    return { data, nextCursor: input.cursor ? undefined : { createdAt: data[1]!.createdAt, id: 2 } };
+    return {
+      data,
+      nextCursor: input.cursor ? undefined : { createdAt: data[1]!.createdAt, id: 2 },
+    };
   });
-  const screen = (current: typeof props) => <TrpcTestProviders client={trpcClient} queryClient={queryClient}><BattleHistoryTable {...current} /></TrpcTestProviders>;
+  const screen = (current: typeof props) => (
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+      <BattleHistoryTable {...current} />
+    </TrpcTestProviders>
+  );
   const view = render(screen(props));
   return { ...view, change: (current: typeof props) => view.rerender(screen(current)) };
 };
@@ -56,10 +74,16 @@ it("fetches older rows only on demand, keeps links, and disables repeated reques
   fireEvent.click(await view.findByText("battle-3"));
   expect(push).toHaveBeenCalledWith("/battlelog/battle-3");
   expect(requests).toHaveLength(1);
-  expect(requests[0]).toMatchObject({ userId: "profile", combatTypes: ["RANKED_PVP"], limit: 20 });
+  expect(requests[0]).toMatchObject({
+    userId: "profile",
+    combatTypes: ["RANKED_PVP"],
+    limit: 20,
+  });
   fireEvent.click(view.getByRole("button", { name: "Load more" }));
   await waitFor(() => expect(requests).toHaveLength(2));
-  expect(view.getByRole("button", { name: "Loading battles..." }).hasAttribute("disabled")).toBe(true);
+  expect(
+    view.getByRole("button", { name: "Loading battles..." }).hasAttribute("disabled"),
+  ).toBe(true);
   expect(requests[1]?.cursor).toEqual({ createdAt: row(2).createdAt, id: 2 });
   delay!();
   await view.findByText("battle-1");

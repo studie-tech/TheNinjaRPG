@@ -21,9 +21,14 @@ const member = (userId: string, username: string) => ({
 });
 
 beforeEach(() => {
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children, topRightContent }) => (
-    <div>{topRightContent}{children}</div>
-  ));
+  vi.spyOn(ContentBox, "default").mockImplementation(
+    ({ children, topRightContent }) => (
+      <div>
+        {topRightContent}
+        {children}
+      </div>
+    ),
+  );
   const mutation = { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) };
   const clanData = {
     id: "clan",
@@ -34,7 +39,11 @@ beforeEach(() => {
     assassin1: "assassin",
     assassin2: null,
     assassin3: null,
-    members: [member("leader", "Leader"), member("assassin", "Shade"), member("plain", "Plain")],
+    members: [
+      member("leader", "Leader"),
+      member("assassin", "Shade"),
+      member("plain", "Plain"),
+    ],
   };
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
@@ -46,16 +55,33 @@ beforeEach(() => {
     },
   });
   vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
-    () => ({ data: { userId: "leader", role: "USER", isOutlaw: false }, updateUser: vi.fn(), prepareUserUpdate: vi.fn() }) as never,
+    () =>
+      ({
+        data: { userId: "leader", role: "USER", isOutlaw: false },
+        updateUser: vi.fn(),
+        prepareUserUpdate: vi.fn(),
+      }) as never,
   );
-  vi.spyOn(Table, "default").mockImplementation((({ data }: { data: { userId: string; actions: ReactNode }[] }) => (
-    <div>{data.map((row) => <div key={row.userId}>{row.actions}</div>)}</div>
-  )) as never);
-  vi.spyOn(Modal, "default").mockImplementation(({ isOpen, title, setIsOpen }) => isOpen ? (
-    <div role="dialog" aria-label={title}>
-      <button type="button" onClick={() => setIsOpen(false)}>Close</button>
+  vi.spyOn(Table, "default").mockImplementation((({
+    data,
+  }: {
+    data: { userId: string; actions: ReactNode }[];
+  }) => (
+    <div>
+      {data.map((row) => (
+        <div key={row.userId}>{row.actions}</div>
+      ))}
     </div>
-  ) : null);
+  )) as never);
+  vi.spyOn(Modal, "default").mockImplementation(({ isOpen, title, setIsOpen }) =>
+    isOpen ? (
+      <div role="dialog" aria-label={title}>
+        <button type="button" onClick={() => setIsOpen(false)}>
+          Close
+        </button>
+      </div>
+    ) : null,
+  );
 });
 
 afterEach(() => {

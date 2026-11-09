@@ -16,7 +16,9 @@ const cohort = {
 
 describe("experiment exposure cohorts", () => {
   it("allocates each distinct village and seasonal image once", () => {
-    expect(new Set(Object.values(WALLPAPER_IMAGES)).size).toBe(WALLPAPER_VARIANTS.length);
+    expect(new Set(Object.values(WALLPAPER_IMAGES)).size).toBe(
+      WALLPAPER_VARIANTS.length,
+    );
   });
 
   it("includes all candidates and sums weighted exposure cohorts", () => {
@@ -27,13 +29,19 @@ describe("experiment exposure cohorts", () => {
     ]);
     expect(result[0]?.variants).toHaveLength(WALLPAPER_VARIANTS.length);
     expect(result[0]?.variants.find((arm) => arm.variant === "summer")).toEqual({
-      variant: "summer", loaded: 7, register: 3,
+      variant: "summer",
+      loaded: 7,
+      register: 3,
     });
     expect(result[0]?.variants.find((arm) => arm.variant === "winter")).toEqual({
-      variant: "winter", loaded: 2, register: 0,
+      variant: "winter",
+      loaded: 2,
+      register: 0,
     });
     expect(result[0]?.variants.find((arm) => arm.variant === "spring")).toEqual({
-      variant: "spring", loaded: 0, register: 0,
+      variant: "spring",
+      loaded: 0,
+      register: 0,
     });
   });
 
@@ -50,9 +58,15 @@ describe("experiment exposure cohorts", () => {
       { ...cohort, userAgent: null, loaded: 2, register: 1 },
     ];
     const summer = (devices?: ("desktop" | "mobile" | "unknown")[]) =>
-      aggregateExperiments(rows, devices)[0]?.variants.find((arm) => arm.variant === "summer");
+      aggregateExperiments(rows, devices)[0]?.variants.find(
+        (arm) => arm.variant === "summer",
+      );
     expect(summer(["desktop"])).toEqual({ variant: "summer", loaded: 9, register: 5 });
-    expect(summer(["mobile", "unknown"])).toEqual({ variant: "summer", loaded: 5, register: 2 });
+    expect(summer(["mobile", "unknown"])).toEqual({
+      variant: "summer",
+      loaded: 5,
+      register: 2,
+    });
     expect(summer([])).toEqual({ variant: "summer", loaded: 14, register: 7 });
   });
 });

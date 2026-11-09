@@ -36,8 +36,11 @@ describe("summon actions in auto-resolved battle types", () => {
 });
 
 describe("every other battle type keeps summon actions", () => {
-  it.each(BattleTypes.filter((t) => !AutoBattleTypes.includes(t)))("keeps summon actions in %s", (t) => {
-    expect(isSummonActionCastable(summonAction, bt(t))).toBe(true);
-    expect(isSummonActionCastable(mixedAction, bt(t))).toBe(true);
-  });
+  it.each(BattleTypes.filter((t) => !AutoBattleTypes.includes(t)))(
+    "keeps summon actions in %s",
+    (t) => {
+      expect(isSummonActionCastable(summonAction, bt(t))).toBe(true);
+      expect(isSummonActionCastable(mixedAction, bt(t))).toBe(true);
+    },
+  );
 });

@@ -22,13 +22,15 @@ describeWithDatabase("clan donation integer treasury projection", () => {
         isOutlaw: true,
       },
     ]);
-    await insertClans([{
-      id: "fractional-faction",
-      name: "Fractional Faction",
-      leaderId: "fractional-donor",
-      villageId: "fractional-village",
-      repTreasury: 0,
-    }]);
+    await insertClans([
+      {
+        id: "fractional-faction",
+        name: "Fractional Faction",
+        leaderId: "fractional-donor",
+        villageId: "fractional-village",
+        repTreasury: 0,
+      },
+    ]);
   });
 
   it.each([0.4, 0.5, 1.5])(

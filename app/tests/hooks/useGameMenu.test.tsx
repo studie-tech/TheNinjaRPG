@@ -16,7 +16,9 @@ beforeEach(() => {
   unmutedTavernIds = ["global", "akikaze"];
   store.set(chatMentionsAtom, {});
   store.set(chatTavernActivityAtom, {});
-  vi.spyOn(context, "useUserDataSelector").mockImplementation(((select: (user: unknown) => unknown) => ({
+  vi.spyOn(context, "useUserDataSelector").mockImplementation(((
+    select: (user: unknown) => unknown,
+  ) => ({
     data: select({
       sector: 1,
       village: { sector: 1 },
@@ -32,7 +34,10 @@ beforeEach(() => {
   })) as never);
   vi.spyOn(context, "useUserInfo").mockReturnValue({ notifications: [] } as never);
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/profile");
-  vi.spyOn(sector, "useSectorVillage").mockReturnValue({ sectorVillage: undefined, isLoading: false } as never);
+  vi.spyOn(sector, "useSectorVillage").mockReturnValue({
+    sectorVillage: undefined,
+    isLoading: false,
+  } as never);
 });
 
 afterEach(() => {
@@ -44,7 +49,8 @@ afterEach(() => {
 
 const tavernCount = () => {
   const { result } = renderHook(() => useGameMenu());
-  return result.current.systems.find((link) => link.href === "/tavern")?.notificationCount;
+  return result.current.systems.find((link) => link.href === "/tavern")
+    ?.notificationCount;
 };
 
 it("counts new tavern messages on the menu's Tavern entry", () => {

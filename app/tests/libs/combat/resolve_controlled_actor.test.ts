@@ -6,8 +6,11 @@ import type { BattleUserState, ReturnedBattle } from "@/libs/combat/types";
 // isAi matters here: resolveControlledActorId projects getTurnControl, and a
 // summon is isAi=true, so it only reaches the human action set when isPiloted
 // is also true. That is the whole point of routing through one predicate.
-const mk = (userId: string, controllerId: string, over: Partial<BattleUserState> = {}) =>
-  makeBattleUser(userId, { controllerId, ...over });
+const mk = (
+  userId: string,
+  controllerId: string,
+  over: Partial<BattleUserState> = {},
+) => makeBattleUser(userId, { controllerId, ...over });
 
 const battle = (activeUserId: string | null, usersState: BattleUserState[]) =>
   ({ activeUserId, usersState }) as unknown as Pick<

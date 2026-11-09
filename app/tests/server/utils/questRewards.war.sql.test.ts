@@ -4,7 +4,11 @@ import { userData, village, villageStructure, war } from "@/drizzle/schema";
 import { updateRewards } from "@/server/utils/questRewards";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { insertUsers } from "../../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../setup/testDatabase";
 
 const warRow = (patch: Partial<typeof war.$inferInsert> = {}) => ({
   id: "war",
@@ -57,7 +61,9 @@ describeWithDatabase("updateRewards war health", () => {
     inTransaction = false,
   ) => {
     const client = await getTestDatabase();
-    const user = await client.query.userData.findFirst({ where: eq(userData.userId, userId) });
+    const user = await client.query.userData.findFirst({
+      where: eq(userData.userId, userId),
+    });
     await updateRewards({
       client,
       user: user!,
@@ -79,7 +85,10 @@ describeWithDatabase("updateRewards war health", () => {
     ["defending", { reward_war_healing: 500 }, 100, 120],
   ])("%s with %j", async (userId, rewards, attackerWarHealth, defenderWarHealth) => {
     await (await getTestDatabase()).insert(war).values(warRow());
-    expect(await payOut(userId, rewards)).toMatchObject({ attackerWarHealth, defenderWarHealth });
+    expect(await payOut(userId, rewards)).toMatchObject({
+      attackerWarHealth,
+      defenderWarHealth,
+    });
   });
 
   it("leaves a finished war untouched", async () => {

@@ -17,7 +17,13 @@ const character = { userId: "player" } as NonNullable<UserWithRelations>;
 beforeEach(() => {
   push.mockClear();
   referral.mockClear();
-  session = { isClerkLoaded: true, isSignedIn: false, userId: undefined, data: undefined, status: "success" } as typeof session;
+  session = {
+    isClerkLoaded: true,
+    isSignedIn: false,
+    userId: undefined,
+    data: undefined,
+    status: "success",
+  } as typeof session;
   vi.spyOn(UserContext, "useUserData").mockImplementation(() => session);
   vi.spyOn(clerk, "useClerk").mockReturnValue({ signOut: vi.fn() } as never);
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
@@ -26,7 +32,9 @@ beforeEach(() => {
     useUtils: () => ({ profile: { getUser: { invalidate: vi.fn(async () => {}) } } }),
   });
   vi.spyOn(Welcome, "default").mockImplementation(() => <p>Public welcome</p>);
-  vi.spyOn(Loader, "default").mockImplementation(({ explanation }) => <p>{explanation}</p>);
+  vi.spyOn(Loader, "default").mockImplementation(({ explanation }) => (
+    <p>{explanation}</p>
+  ));
 });
 
 afterEach(() => {
@@ -35,13 +43,16 @@ afterEach(() => {
 });
 
 describe("landing page session navigation", () => {
-  it.each([undefined, character])("leaves a signed-out visitor on the welcome page with cached character %j", (cached) => {
-    session = { ...session, data: cached };
-    const view = render(<HomeLanding />);
-    expect(view.getByText("Public welcome")).toBeTruthy();
-    expect(push).not.toHaveBeenCalled();
-    expect(referral).not.toHaveBeenCalled();
-  });
+  it.each([undefined, character])(
+    "leaves a signed-out visitor on the welcome page with cached character %j",
+    (cached) => {
+      session = { ...session, data: cached };
+      const view = render(<HomeLanding />);
+      expect(view.getByText("Public welcome")).toBeTruthy();
+      expect(push).not.toHaveBeenCalled();
+      expect(referral).not.toHaveBeenCalled();
+    },
+  );
 
   it("stops forwarding immediately when the user signs out before cached data clears", () => {
     session = { ...session, isSignedIn: true, userId: "player", data: character };
@@ -56,7 +67,13 @@ describe("landing page session navigation", () => {
   });
 
   it("waits for Clerk before using an initially signed-in character snapshot", () => {
-    session = { ...session, isClerkLoaded: false, isSignedIn: true, userId: "player", data: character };
+    session = {
+      ...session,
+      isClerkLoaded: false,
+      isSignedIn: true,
+      userId: "player",
+      data: character,
+    };
     render(<HomeLanding />);
     expect(push).not.toHaveBeenCalled();
   });

@@ -26,33 +26,54 @@ const damageJutsu = makeJutsu({
   battleDescription: "%user strikes %target",
   range: 5,
   staminaCost: 10,
-  effects: [makeTag("damage", {
-    power: 20, powerPerLevel: 0,
-    calculation: "formula", statTypes: ["Ninjutsu"], generalTypes: [], elements: [],
-    rounds: 0, target: "INHERIT", friendlyFire: "ENEMIES", description: "dmg",
-  })],
+  effects: [
+    makeTag("damage", {
+      power: 20,
+      powerPerLevel: 0,
+      calculation: "formula",
+      statTypes: ["Ninjutsu"],
+      generalTypes: [],
+      elements: [],
+      rounds: 0,
+      target: "INHERIT",
+      friendlyFire: "ENEMIES",
+      description: "dmg",
+    }),
+  ],
 });
 
 const mkBattle = (human: BattleUserState): CompleteBattle =>
   makeAiBattle({
-    battleType: "ARENA", activeUserId: human.userId, width: 10, height: 10,
+    battleType: "ARENA",
+    activeUserId: human.userId,
+    width: 10,
+    height: 10,
     usersState: [
       human,
-      mkUser({ userId: "foe", username: "Foe", controllerId: "foe",
-        longitude: 3, latitude: 3 }),
+      mkUser({
+        userId: "foe",
+        username: "Foe",
+        controllerId: "foe",
+        longitude: 3,
+        latitude: 3,
+      }),
     ],
     extraState: {
       jutsus: { [DAMAGE_JUTSU]: damageJutsu },
       aiProfiles: {
         [PROFILE]: {
-          id: PROFILE, name: "always strike", includeDefaultRules: false,
-          rules: [{
-            conditions: [],
-            action: ActionUseSpecificJutsu.parse({
-              jutsuId: DAMAGE_JUTSU,
-              target: "CLOSEST_OPPONENT",
-            }),
-          }],
+          id: PROFILE,
+          name: "always strike",
+          includeDefaultRules: false,
+          rules: [
+            {
+              conditions: [],
+              action: ActionUseSpecificJutsu.parse({
+                jutsuId: DAMAGE_JUTSU,
+                target: "CLOSEST_OPPONENT",
+              }),
+            },
+          ],
         },
       } as unknown as ExtraState["aiProfiles"],
     },
@@ -60,10 +81,25 @@ const mkBattle = (human: BattleUserState): CompleteBattle =>
 
 const mkHuman = (over: Partial<BattleUserState> = {}): BattleUserState =>
   mkUser({
-    userId: "user_h1", username: "Human", controllerId: "user_h1",
-    isAi: false, direction: "left", aiProfileId: PROFILE, longitude: 2, latitude: 2,
-    jutsus: [{ id: "uj1", jutsuId: DAMAGE_JUTSU, level: 1, experience: 0,
-               equipped: true, lastUsedRound: -99, originalCooldown: 0 }],
+    userId: "user_h1",
+    username: "Human",
+    controllerId: "user_h1",
+    isAi: false,
+    direction: "left",
+    aiProfileId: PROFILE,
+    longitude: 2,
+    latitude: 2,
+    jutsus: [
+      {
+        id: "uj1",
+        jutsuId: DAMAGE_JUTSU,
+        level: 1,
+        experience: 0,
+        equipped: true,
+        lastUsedRound: -99,
+        originalCooldown: 0,
+      },
+    ],
     ...over,
   });
 
@@ -83,7 +119,8 @@ describe("performAIaction auto combat", () => {
     battle.extraState.jutsus[DAMAGE_JUTSU]!.range = 1;
     Object.assign(battle.usersState[1]!, { longitude: 7, latitude: 2 });
     battle.extraState.aiProfiles[PROFILE]!.rules.push({
-      conditions: [], action: ActionEndTurn.parse({}),
+      conditions: [],
+      action: ActionEndTurn.parse({}),
     });
 
     const { nextBattle, nextActionId, aiDescriptions } = performAIaction(
@@ -97,7 +134,9 @@ describe("performAIaction auto combat", () => {
     ]);
     expect(nextBattle.extraState.revealedActions).toBeUndefined();
     for (const viewer of ["foe", "spectator"]) {
-      expect(maskBattle(nextBattle, viewer).extraState.jutsus).not.toHaveProperty(DAMAGE_JUTSU);
+      expect(maskBattle(nextBattle, viewer).extraState.jutsus).not.toHaveProperty(
+        DAMAGE_JUTSU,
+      );
     }
     const actor = nextBattle.usersState.find((u) => u.userId === "user_h1")!;
     expect(actor.usedActions).toEqual([{ id: "wait", type: "basic" }]);
@@ -118,17 +157,24 @@ describe("performAIaction auto combat", () => {
     const { nextBattle, nextActionId } = performAIaction(battle, grid, "user_h1");
     expect(nextActionId).toBe(DAMAGE_JUTSU);
     expect(nextBattle.extraState.revealedActions).toEqual({
-      jutsuIds: [DAMAGE_JUTSU], itemIds: [],
+      jutsuIds: [DAMAGE_JUTSU],
+      itemIds: [],
     });
     const actor = nextBattle.usersState.find((u) => u.userId === "user_h1")!;
-    expect(actor.usedActions).toEqual([{
-      id: DAMAGE_JUTSU, type: "jutsu", masteryTypes: ["Ninjutsu"],
-    }]);
+    expect(actor.usedActions).toEqual([
+      {
+        id: DAMAGE_JUTSU,
+        type: "jutsu",
+        masteryTypes: ["Ninjutsu"],
+      },
+    ]);
     expect(actor.usedMasteries).toEqual({ ninjutsuMastery: 1 });
     expect(actor.jutsus[0]?.lastUsedRound).toBe(nextBattle.round);
     expect(actor.curStamina).toBeLessThan(5000);
     for (const viewer of ["foe", "spectator"]) {
-      expect(maskBattle(nextBattle, viewer).extraState.jutsus).toHaveProperty(DAMAGE_JUTSU);
+      expect(maskBattle(nextBattle, viewer).extraState.jutsus).toHaveProperty(
+        DAMAGE_JUTSU,
+      );
     }
   });
 
@@ -161,7 +207,11 @@ describe("performAIaction auto combat", () => {
       curChakra: 0,
       curStamina: 0,
     });
-    const { nextBattle, nextActionId } = performAIaction(mkBattle(human), grid, "user_h1");
+    const { nextBattle, nextActionId } = performAIaction(
+      mkBattle(human),
+      grid,
+      "user_h1",
+    );
     const after = nextBattle.usersState.find((u) => u.userId === "user_h1");
     expect(nextActionId).toBe("meditate");
     expect(after?.curChakra).toBeGreaterThan(0);
@@ -188,7 +238,9 @@ describe("performAIaction auto combat", () => {
     const human = mkHuman({
       isAutoCombat: true,
       jutsus: [],
-      curChakra: 0, curStamina: 0, curHealth: 50,
+      curChakra: 0,
+      curStamina: 0,
+      curHealth: 50,
       aiProfileId: "missing-profile",
     });
     const { nextBattle } = performAIaction(mkBattle(human), grid, "user_h1");

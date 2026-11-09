@@ -102,9 +102,9 @@ describeWithDatabase("ANBU squad upgrades", () => {
       // The loser read the squad below the cap, so only the write can stop it.
       const raced = beforeStatements(db, anbuSquad, [
         async () =>
-          (await callerFor(anbuRouter, "leader"))[upgrade.procedure](input).then(
-            (result) => expect(result.success).toBe(true),
-          ),
+          (await callerFor(anbuRouter, "leader"))
+            [upgrade.procedure](input)
+            .then((result) => expect(result.success).toBe(true)),
       ]);
       const result = await callerForDatabase(anbuRouter, "leader", raced)[
         upgrade.procedure

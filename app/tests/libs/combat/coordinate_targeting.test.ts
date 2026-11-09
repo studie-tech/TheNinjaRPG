@@ -249,7 +249,13 @@ describe("coordinate pattern resolution", () => {
   });
   it("permits the full grid for CHARACTER actions with the ALL method", () => {
     const { grid, origin } = scenario();
-    expect(getPossibleActionTiles(action({ target: "CHARACTER", method: "ALL", range: 0 }), origin, grid)).toBe(grid);
+    expect(
+      getPossibleActionTiles(
+        action({ target: "CHARACTER", method: "ALL", range: 0 }),
+        origin,
+        grid,
+      ),
+    ).toBe(grid);
   });
   it("restricts clicked target anchors but permits global and caster patterns", () => {
     const { grid, origin, clicked, battle } = scenario();
@@ -395,11 +401,16 @@ describe("coordinate casts and preview", () => {
           action({
             target,
             coordinateTargeting: pattern({ selection: "EXCLUDE", coordinates: [] }),
-            effects: [DamageTag.parse({}), HealTag.parse({ target: "SELF", friendlyFire: "ENEMIES" })],
+            effects: [
+              DamageTag.parse({}),
+              HealTag.parse({ target: "SELF", friendlyFire: "ENEMIES" }),
+            ],
           }),
         ),
       ).toBe(true);
-      expect(battle.usersEffects.filter((effect) => effect.type === "heal")).toEqual([]);
+      expect(battle.usersEffects.filter((effect) => effect.type === "heal")).toEqual(
+        [],
+      );
     },
   );
   it.each(["GROUND", "OPPONENT"] as const)(
@@ -436,7 +447,10 @@ describe("coordinate casts and preview", () => {
       expect(battle.usersEffects).toHaveLength(1);
       expect(
         battle.groundEffects.map((effect) => [effect.longitude, effect.latitude]),
-      ).toEqual([[3, 3], [4, 4]]);
+      ).toEqual([
+        [3, 3],
+        [4, 4],
+      ]);
       expect(actor.curChakra).toBe(before.chakra - 10);
       expect(actor.actionPoints).toBe(before.ap - 10);
       expect(actor.usedActions).toHaveLength(1);
@@ -566,7 +580,9 @@ describe("coordinate casts and preview", () => {
       actor,
       battle,
     );
-    expect(jutsuAction.coordinateTargeting).toEqual(ability.coordinateTargeting ?? null);
+    expect(jutsuAction.coordinateTargeting).toEqual(
+      ability.coordinateTargeting ?? null,
+    );
     expect(jutsuAction.methodSize).toEqual(ability.methodSize ?? null);
     expect(itemAction.methodSize).toEqual(ability.methodSize ?? null);
     expect(itemAction.coordinateTargeting).toEqual(ability.coordinateTargeting ?? null);

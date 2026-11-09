@@ -10,7 +10,12 @@ import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 
 let settle: (value: { success: boolean; message: string }) => void = () => undefined;
-const toggle = vi.fn(() => new Promise<{ success: boolean; message: string }>((resolve) => { settle = resolve; }));
+const toggle = vi.fn(
+  () =>
+    new Promise<{ success: boolean; message: string }>((resolve) => {
+      settle = resolve;
+    }),
+);
 const invalidate = vi.fn(async () => undefined);
 
 beforeEach(() => {
@@ -19,16 +24,45 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({ conceptart: { get: { invalidate } } }),
     conceptart: {
-      get: { useQuery: () => ({ data: { id: "art", image: "/art.webp", mediaType: "image", prompt: "Art" }, isLoading: false, isError: false }) },
+      get: {
+        useQuery: () => ({
+          data: { id: "art", image: "/art.webp", mediaType: "image", prompt: "Art" },
+          isLoading: false,
+          isError: false,
+        }),
+      },
       toggleEmotion: { useMutation: () => ({ mutateAsync: toggle }) },
     },
   });
-  vi.spyOn(UserContext, "useUserData").mockImplementation(() => ({ data: { userId: "viewer" } }) as never);
+  vi.spyOn(UserContext, "useUserData").mockImplementation(
+    () => ({ data: { userId: "viewer" } }) as never,
+  );
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(Image, "default").mockImplementation((({ alt }: { alt: string }) => <img alt={alt} />) as never);
-  vi.spyOn(Link, "default").mockImplementation((({ children }: { children: ReactNode }) => <span>{children}</span>) as never);
-  vi.spyOn(ConceptReactions, "ConceptReactions").mockImplementation((({ pendingEmotion, disabled, onToggle }: { pendingEmotion?: string | null; disabled?: boolean; onToggle: (type: "like") => void }) => (
-    <button type="button" disabled={disabled} data-pending={pendingEmotion ?? "none"} onClick={() => onToggle("like")}>Like</button>
+  vi.spyOn(Image, "default").mockImplementation((({ alt }: { alt: string }) => (
+    <img alt={alt} />
+  )) as never);
+  vi.spyOn(Link, "default").mockImplementation((({
+    children,
+  }: {
+    children: ReactNode;
+  }) => <span>{children}</span>) as never);
+  vi.spyOn(ConceptReactions, "ConceptReactions").mockImplementation((({
+    pendingEmotion,
+    disabled,
+    onToggle,
+  }: {
+    pendingEmotion?: string | null;
+    disabled?: boolean;
+    onToggle: (type: "like") => void;
+  }) => (
+    <button
+      type="button"
+      disabled={disabled}
+      data-pending={pendingEmotion ?? "none"}
+      onClick={() => onToggle("like")}
+    >
+      Like
+    </button>
   )) as never);
 });
 

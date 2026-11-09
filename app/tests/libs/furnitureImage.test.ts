@@ -5,7 +5,8 @@ import { furnitureGeometrySchema } from "@/validators/itemFurniture";
 describe("furniture cutout geometry", () => {
   it("uses visible alpha for tight selection and leaves faint shadows outside it", () => {
     const pixels = new Uint8Array(8 * 6 * 4);
-    for (let y = 1; y < 5; y++) for (let x = 2; x < 6; x++) pixels[(y * 8 + x) * 4 + 3] = 255;
+    for (let y = 1; y < 5; y++)
+      for (let x = 2; x < 6; x++) pixels[(y * 8 + x) * 4 + 3] = 255;
     pixels[3] = 16;
     const geometry = furnitureGeometryFromPixels(pixels, 8, 6, 4, false);
     expect(geometry.aspectRatio).toBe(8 / 6);
@@ -29,6 +30,8 @@ describe("furniture cutout geometry", () => {
   });
 
   it("rejects cutouts with no visible furniture", () => {
-    expect(() => furnitureGeometryFromPixels(new Uint8Array(16), 2, 2, 4, false)).toThrow("empty");
+    expect(() =>
+      furnitureGeometryFromPixels(new Uint8Array(16), 2, 2, 4, false),
+    ).toThrow("empty");
   });
 });

@@ -10,7 +10,9 @@ describe("downloadBlob", () => {
   it("clicks a named anchor, removes it and releases the object URL", () => {
     const blob = new Blob(["data"]);
     const created = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:file");
-    const revoked = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const revoked = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => undefined);
     const clicked: { href: string; download: string; connected: boolean }[] = [];
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
       this: HTMLAnchorElement,

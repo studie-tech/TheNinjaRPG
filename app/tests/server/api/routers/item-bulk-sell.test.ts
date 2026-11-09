@@ -57,7 +57,13 @@ describeWithDatabase("bulk selling and dropping", () => {
       userData,
     );
     await insertUsers([
-      { userId: seller, username: seller, status: "AWAKE", money: startMoney, farmCurrency: 0 },
+      {
+        userId: seller,
+        username: seller,
+        status: "AWAKE",
+        money: startMoney,
+        farmCurrency: 0,
+      },
       { userId: "other-player", username: "other-player", status: "AWAKE" },
     ]);
     await insertItems([
@@ -65,7 +71,13 @@ describeWithDatabase("bulk selling and dropping", () => {
       { id: "blade", name: "Blade", cost: 1_000, rarity: "RARE", inShop: true },
       { id: "token", name: "Token", cost: 500, isEventItem: true },
       { id: "seed", name: "Seed", isFarmSeed: true, inShop: false, farmSellValue: 50 },
-      { id: "relic", name: "Relic", cost: 3_000_000, rarity: "LEGENDARY", inShop: true },
+      {
+        id: "relic",
+        name: "Relic",
+        cost: 3_000_000,
+        rarity: "LEGENDARY",
+        inShop: true,
+      },
     ]);
     await insertUserItems([
       { id: "potion-row", userId: seller, itemId: "potion", quantity: 3 },
@@ -98,7 +110,11 @@ describeWithDatabase("bulk selling and dropping", () => {
     expect(result.success).toBe(true);
     // Selling pays 20% of the cost for each stack: 3 potions (60) and a blade (200).
     expect(result.ryo).toBe(260);
-    expect(result.soldUserItemIds.sort()).toEqual(["blade-row", "potion-row", "token-row"]);
+    expect(result.soldUserItemIds.sort()).toEqual([
+      "blade-row",
+      "potion-row",
+      "token-row",
+    ]);
     expect(result.refused).toEqual([]);
     expect(result.userDelta).toEqual({ money: 260 });
     expect(await money()).toBe(startMoney + 260);
@@ -111,12 +127,18 @@ describeWithDatabase("bulk selling and dropping", () => {
     const result = await sell(["relic-row"]);
     expect(result.ryo).toBe(600_000);
     const database = await getTestDatabase();
-    const logs = await database.select().from(actionLog).where(eq(actionLog.userId, seller));
+    const logs = await database
+      .select()
+      .from(actionLog)
+      .where(eq(actionLog.userId, seller));
     expect(logs.map((log) => log.relatedMsg)).toEqual(["Sold item: Relic"]);
   });
 
   it("sells the maximum batch, pays every stack and removes the paid rows", async () => {
-    const ids = Array.from({ length: MAX_BULK_SELL_ITEMS }, (_, index) => `batch-${index}`);
+    const ids = Array.from(
+      { length: MAX_BULK_SELL_ITEMS },
+      (_, index) => `batch-${index}`,
+    );
     await insertUserItems(ids.map((id) => ({ id, userId: seller, itemId: "potion" })));
     const result = await sell(ids);
     expect(result.success).toBe(true);
@@ -140,7 +162,11 @@ describeWithDatabase("bulk selling and dropping", () => {
     const result = await sell(["potion-row", ...refusedIds]);
     expect(result.soldUserItemIds).toEqual(["potion-row"]);
     expect(result.ryo).toBe(60);
-    expect(Object.fromEntries(result.refused.map((entry) => [entry.userItemId, entry.reason]))).toEqual({
+    expect(
+      Object.fromEntries(
+        result.refused.map((entry) => [entry.userItemId, entry.reason]),
+      ),
+    ).toEqual({
       "foreign-row": "is not in your inventory",
       "equipped-row": "is equipped",
       "home-row": "is stored at home",
@@ -150,7 +176,9 @@ describeWithDatabase("bulk selling and dropping", () => {
       "missing-row": "is not in your inventory",
     });
     expect(await money()).toBe(startMoney + 60);
-    expect(await remaining(refusedIds)).toEqual(refusedIds.filter((id) => id !== "missing-row").sort());
+    expect(await remaining(refusedIds)).toEqual(
+      refusedIds.filter((id) => id !== "missing-row").sort(),
+    );
   });
 
   it("pays nothing for a stack the guarded sale cannot consume", async () => {
@@ -168,11 +196,17 @@ describeWithDatabase("bulk selling and dropping", () => {
     expect(result.success).toBe(false);
     expect(result.soldUserItemIds).toEqual([]);
     expect(result.ryo).toBe(0);
-    expect(result.refused.map((entry) => entry.userItemId).sort()).toEqual(["blade-row", "potion-row"]);
+    expect(result.refused.map((entry) => entry.userItemId).sort()).toEqual([
+      "blade-row",
+      "potion-row",
+    ]);
     expect(result.userDelta).toEqual({ money: 0 });
     expect(result.message).toContain("Nothing was sold.");
     expect(await money()).toBe(startMoney);
-    expect(await remaining(["potion-row", "blade-row"])).toEqual(["blade-row", "potion-row"]);
+    expect(await remaining(["potion-row", "blade-row"])).toEqual([
+      "blade-row",
+      "potion-row",
+    ]);
   });
 
   it("leaves a stack equipped or stored at home after it was checked", async () => {
@@ -192,28 +226,53 @@ describeWithDatabase("bulk selling and dropping", () => {
       "home-row",
     ]);
     expect(await money()).toBe(startMoney + 60);
-    expect(await remaining(["equipped-row", "home-row"])).toEqual(["equipped-row", "home-row"]);
+    expect(await remaining(["equipped-row", "home-row"])).toEqual([
+      "equipped-row",
+      "home-row",
+    ]);
   });
 
   it("refuses snapshots after quantity, auction, crafting or farm funds change", async () => {
     const database = await getTestDatabase();
-    await database.update(userData).set({ farmCurrency: 50 }).where(eq(userData.userId, seller));
+    await database
+      .update(userData)
+      .set({ farmCurrency: 50 })
+      .where(eq(userData.userId, seller));
     const snapshots = await itemQueries.listUserItemsForSellUserItems(
-      database, { userId: seller }, ["potion-row", "blade-row", "token-row", "seed-row"],
+      database,
+      { userId: seller },
+      ["potion-row", "blade-row", "token-row", "seed-row"],
     );
     await Promise.all([
-      database.update(userItem).set({ quantity: 2 }).where(eq(userItem.id, "potion-row")),
-      database.update(userItem).set({ isInAuction: true }).where(eq(userItem.id, "blade-row")),
-      database.update(userItem).set({ craftingFinishedAt: new Date(Date.now() + 3_600_000) }).where(eq(userItem.id, "token-row")),
-      database.update(userData).set({ farmCurrency: 0 }).where(eq(userData.userId, seller)),
+      database
+        .update(userItem)
+        .set({ quantity: 2 })
+        .where(eq(userItem.id, "potion-row")),
+      database
+        .update(userItem)
+        .set({ isInAuction: true })
+        .where(eq(userItem.id, "blade-row")),
+      database
+        .update(userItem)
+        .set({ craftingFinishedAt: new Date(Date.now() + 3_600_000) })
+        .where(eq(userItem.id, "token-row")),
+      database
+        .update(userData)
+        .set({ farmCurrency: 0 })
+        .where(eq(userData.userId, seller)),
     ]);
-    const sales = await Promise.all(snapshots.map((snapshot) =>
-      itemQueries.sellUserItemAtomically(database, { userId: seller }, snapshot, 200),
-    ));
+    const sales = await Promise.all(
+      snapshots.map((snapshot) =>
+        itemQueries.sellUserItemAtomically(database, { userId: seller }, snapshot, 200),
+      ),
+    );
     expect(sales.map((sale) => sale.rowsAffected)).toEqual([0, 0, 0, 0]);
     expect(await money()).toBe(startMoney);
     expect(await remaining(snapshots.map((snapshot) => snapshot.id))).toEqual([
-      "blade-row", "potion-row", "seed-row", "token-row",
+      "blade-row",
+      "potion-row",
+      "seed-row",
+      "token-row",
     ]);
   });
 
@@ -238,31 +297,48 @@ describeWithDatabase("bulk selling and dropping", () => {
     expect(await remaining(["potion-row", "blade-row"])).toEqual(["blade-row"]);
   });
 
-  it.each([false, true])("withholds the profile projection when a committed sale loses its acknowledgement (other confirmed sale=%s)", async (includeConfirmed) => {
-    const execute = itemQueries.sellUserItemAtomically;
-    vi.spyOn(itemQueries, "sellUserItemAtomically").mockImplementation(async (...args) => {
-      const result = await execute(...args);
-      if (args[2].id === "blade-row") throw new Error("Connection lost after commit");
-      return result;
-    });
-    const result = await sell(includeConfirmed ? ["potion-row", "blade-row"] : ["blade-row"]);
-    expect(result.soldUserItemIds).toEqual(includeConfirmed ? ["potion-row"] : []);
-    expect(result.ryo).toBe(includeConfirmed ? 60 : 0);
-    expect(result.userDelta).toBeUndefined();
-    expect(result.refused).toEqual([{
-      userItemId: "blade-row", name: "Blade", reason: "sale could not be confirmed",
-    }]);
-    expect(result.message).toContain("Could not confirm Blade.");
-    expect(result.message).not.toContain("Nothing was sold");
-    expect(result.message).not.toContain("stayed");
-    expect(await money()).toBe(startMoney + 200 + (includeConfirmed ? 60 : 0));
-    const database = await getTestDatabase();
-    const [stack] = await database.select().from(userItem).where(eq(userItem.id, "blade-row"));
-    expect(stack?.quantity).toBe(0);
-  });
+  it.each([false, true])(
+    "withholds the profile projection when a committed sale loses its acknowledgement (other confirmed sale=%s)",
+    async (includeConfirmed) => {
+      const execute = itemQueries.sellUserItemAtomically;
+      vi.spyOn(itemQueries, "sellUserItemAtomically").mockImplementation(
+        async (...args) => {
+          const result = await execute(...args);
+          if (args[2].id === "blade-row")
+            throw new Error("Connection lost after commit");
+          return result;
+        },
+      );
+      const result = await sell(
+        includeConfirmed ? ["potion-row", "blade-row"] : ["blade-row"],
+      );
+      expect(result.soldUserItemIds).toEqual(includeConfirmed ? ["potion-row"] : []);
+      expect(result.ryo).toBe(includeConfirmed ? 60 : 0);
+      expect(result.userDelta).toBeUndefined();
+      expect(result.refused).toEqual([
+        {
+          userItemId: "blade-row",
+          name: "Blade",
+          reason: "sale could not be confirmed",
+        },
+      ]);
+      expect(result.message).toContain("Could not confirm Blade.");
+      expect(result.message).not.toContain("Nothing was sold");
+      expect(result.message).not.toContain("stayed");
+      expect(await money()).toBe(startMoney + 200 + (includeConfirmed ? 60 : 0));
+      const database = await getTestDatabase();
+      const [stack] = await database
+        .select()
+        .from(userItem)
+        .where(eq(userItem.id, "blade-row"));
+      expect(stack?.quantity).toBe(0);
+    },
+  );
 
   it("preserves the stack and its imbuements when payment is rejected", async () => {
-    await runRawSql("CREATE TRIGGER reject_bulk_sale_payment BEFORE UPDATE ON UserData FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Payment rejected'");
+    await runRawSql(
+      "CREATE TRIGGER reject_bulk_sale_payment BEFORE UPDATE ON UserData FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Payment rejected'",
+    );
     try {
       const result = await sell(["blade-row"]);
       expect(result.success).toBe(false);
@@ -270,7 +346,10 @@ describeWithDatabase("bulk selling and dropping", () => {
       expect(result.ryo).toBe(0);
       expect(await money()).toBe(startMoney);
       const database = await getTestDatabase();
-      const [stack] = await database.select().from(userItem).where(eq(userItem.id, "blade-row"));
+      const [stack] = await database
+        .select()
+        .from(userItem)
+        .where(eq(userItem.id, "blade-row"));
       expect(stack?.quantity).toBe(1);
       const imbuements = await database.select().from(userItemImbuement);
       expect(imbuements.map((row) => row.id)).toEqual(["blade-imbuement"]);
@@ -288,7 +367,9 @@ describeWithDatabase("bulk selling and dropping", () => {
       sell(["potion-row", "blade-row", "token-row"]),
     ]);
     expect(results.flatMap((result) => result.soldUserItemIds).sort()).toEqual([
-      "blade-row", "potion-row", "token-row",
+      "blade-row",
+      "potion-row",
+      "token-row",
     ]);
     expect(results.reduce((sum, result) => sum + result.ryo, 0)).toBe(260);
     const replay = await sell(["potion-row", "blade-row", "token-row"]);
@@ -300,7 +381,9 @@ describeWithDatabase("bulk selling and dropping", () => {
   it("rejects repeated ids and more than the bulk limit", async () => {
     await expect(sell(["potion-row", "potion-row"])).rejects.toThrow();
     await expect(
-      sell(Array.from({ length: MAX_BULK_SELL_ITEMS + 1 }, (_, index) => `row-${index}`)),
+      sell(
+        Array.from({ length: MAX_BULK_SELL_ITEMS + 1 }, (_, index) => `row-${index}`),
+      ),
     ).rejects.toThrow();
     expect(await money()).toBe(startMoney);
   });

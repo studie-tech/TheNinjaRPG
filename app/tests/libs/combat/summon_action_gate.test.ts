@@ -24,8 +24,11 @@ const player = () => makeBattleUser(P, { curHealth: 100, isAi: false });
 // Minimal action shapes: only `effects` is read.
 const action = (...effects: unknown[]) =>
   ({ effects }) as unknown as Pick<CombatAction, "effects">;
-const summonTag = (aiId: string, playerControlled = false) =>
-  ({ type: "summon", aiId, playerControlled });
+const summonTag = (aiId: string, playerControlled = false) => ({
+  type: "summon",
+  aiId,
+  playerControlled,
+});
 
 describe("actions carrying no summon tag are never blocked", () => {
   const state = [player(), template(DEMON, "Demon"), spawned("s1", DEMON)];
@@ -49,9 +52,7 @@ describe("actions carrying no summon tag are never blocked", () => {
     // aiId matches the live summon's source and the action is wrongly refused --
     // which is how a dropped guard would break every action carrying an aiId.
     const cloneWithAiId = action({ type: "clone", aiId: DEMON });
-    expect(
-      summonActionBlockedReason(cloneWithAiId, player(), state),
-    ).toBeNull();
+    expect(summonActionBlockedReason(cloneWithAiId, player(), state)).toBeNull();
   });
 });
 
@@ -72,23 +73,25 @@ describe("actions carrying a summon tag go through the caps", () => {
 
   it("blocks a second piloted summon of a different creature", () => {
     const state = [
-      player(), template(DEMON, "Demon"), template(TIGER, "Tiger"),
+      player(),
+      template(DEMON, "Demon"),
+      template(TIGER, "Tiger"),
       spawned("s1", DEMON, { isPiloted: true }),
     ];
     expect(
-      summonActionBlockedReason(
-        action(summonTag(TIGER, true)), player(), state),
+      summonActionBlockedReason(action(summonTag(TIGER, true)), player(), state),
     ).toContain("only control one summon");
   });
 
   it("allows a non-piloted summon of a different creature", () => {
     const state = [
-      player(), template(DEMON, "Demon"), template(TIGER, "Tiger"),
+      player(),
+      template(DEMON, "Demon"),
+      template(TIGER, "Tiger"),
       spawned("s1", DEMON, { isPiloted: true }),
     ];
     expect(
-      summonActionBlockedReason(
-        action(summonTag(TIGER, false)), player(), state),
+      summonActionBlockedReason(action(summonTag(TIGER, false)), player(), state),
     ).toBeNull();
   });
 
@@ -103,8 +106,14 @@ describe("actions carrying a summon tag go through the caps", () => {
   it("does not pilot-block an AI caster (it can never be piloted)", () => {
     const ai = makeBattleUser("ai-caster", { isAi: true, curHealth: 100 });
     const aiSummon = makeBattleUser("s9", {
-      controllerId: "ai-caster", username: "Demon", isAi: true, isSummon: true,
-      isOriginal: true, summonSourceId: DEMON, curHealth: 500, isPiloted: true,
+      controllerId: "ai-caster",
+      username: "Demon",
+      isAi: true,
+      isSummon: true,
+      isOriginal: true,
+      summonSourceId: DEMON,
+      curHealth: 500,
+      isPiloted: true,
     });
     const state = [ai, template(DEMON, "Demon"), template(TIGER, "Tiger"), aiSummon];
     // wantsPilot resolves false for an AI caster, so the piloted cap cannot trip.

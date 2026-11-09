@@ -131,7 +131,11 @@ describe("PlanetScale aggregate counts", () => {
       throw new Error(`Unexpected query: ${query}`);
     });
     expect(
-      await callerForDatabase(bloodlineRouter, userId, database).getNaturalRollStatistics(),
+      await callerForDatabase(
+        bloodlineRouter,
+        userId,
+        database,
+      ).getNaturalRollStatistics(),
     ).toEqual({ D: 0, C: 0, B: 0, A: 0, S: 2, H: 0, none: 3 });
   });
 

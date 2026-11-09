@@ -39,13 +39,11 @@ describe("native release configuration", () => {
     const android = readRepoFile(
       "mobile/android/app/src/main/java/com/theninjarpg/app/TNRLiveUpdatesPlugin.java",
     );
-    const ios = readRepoFile(
-      "mobile/ios/App/App/Plugins/TNRLiveActivityPlugin.swift",
-    );
+    const ios = readRepoFile("mobile/ios/App/App/Plugins/TNRLiveActivityPlugin.swift");
 
     expect(bridge).toContain('invokeSafe(PLUGIN, "endKind", { kind })');
     expect(android).toContain("public void endKind(PluginCall call)");
-    expect(ios).toContain('@objc func endKind(_ call: CAPPluginCall)');
+    expect(ios).toContain("@objc func endKind(_ call: CAPPluginCall)");
   });
 
   it("stops the audio service after a rebuilt Activity is finally destroyed", () => {
@@ -64,7 +62,9 @@ describe("native release configuration", () => {
     );
 
     expect(controller).toContain('from "@/layout/GlobalAudioProvider"');
-    expect(settings).toContain('import { NativeSettingsEntry } from "@/components/native/NativeSettingsEntry"');
+    expect(settings).toContain(
+      'import { NativeSettingsEntry } from "@/components/native/NativeSettingsEntry"',
+    );
     expect(audio).toContain('from "@/libs/native"');
     expect(settings).toContain("<NativeSettingsEntry");
     const devicePage = readRepoFile("app/src/app/[shell]/settings/device/page.tsx");

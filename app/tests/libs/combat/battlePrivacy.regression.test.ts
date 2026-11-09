@@ -5,36 +5,79 @@ import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import type { BattleWar, ReturnedBattle } from "@/libs/combat/types";
 import { hasNoAvailableActions } from "@/libs/combat/turn";
 import { maskBattle } from "@/libs/combat/masking";
-import { flatCombatStats, makeBattleUser, makeCompleteBattle, makeEffect, makeTag } from "../../setup/combat";
+import {
+  flatCombatStats,
+  makeBattleUser,
+  makeCompleteBattle,
+  makeEffect,
+  makeTag,
+} from "../../setup/combat";
 import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
 const now = new Date("2026-10-11T12:00:00Z");
 
-const battleWithPrivateAction = (isAi: boolean) => makeCompleteBattle({
-  usersState: [
-    makeBattleUser("foe", {
-      isAi,
-      actionPoints: isAi ? 100 : 10,
-      jutsus: [{ id: "owned-attack", jutsuId: "attack", level: 1, experience: 0,
-        equipped: true, lastUsedRound: -1, originalCooldown: 0 }],
-    }),
-    makeBattleUser("me"),
-  ],
-  activeUserId: "foe",
-  createdAt: now,
-  roundStartAt: now,
-  usersEffects: [makeEffect("moveprevent", { power: 100, rounds: 3 }, {
-    creatorId: "me", targetId: "foe", isNew: false, castThisRound: false,
-  })],
-  extraState: { jutsus: { attack: {
-    id: "attack", name: "Attack", image: "/attack.png", effects: [], cooldown: 0,
-    target: "OPPONENT", method: "SINGLE", range: 5, actionCostPerc: 10,
-    healthCost: 0, chakraCost: 0, staminaCost: 0,
-    healthCostReducePerLvl: 0, chakraCostReducePerLvl: 0, staminaCostReducePerLvl: 0,
-    jutsuWeapon: "NONE", requiredMastery: 0, battleUsageType: "BOTH",
-    battleDescription: "attack", elementClassification: "None",
-  } as unknown as Jutsu } },
-});
+const battleWithPrivateAction = (isAi: boolean) =>
+  makeCompleteBattle({
+    usersState: [
+      makeBattleUser("foe", {
+        isAi,
+        actionPoints: isAi ? 100 : 10,
+        jutsus: [
+          {
+            id: "owned-attack",
+            jutsuId: "attack",
+            level: 1,
+            experience: 0,
+            equipped: true,
+            lastUsedRound: -1,
+            originalCooldown: 0,
+          },
+        ],
+      }),
+      makeBattleUser("me"),
+    ],
+    activeUserId: "foe",
+    createdAt: now,
+    roundStartAt: now,
+    usersEffects: [
+      makeEffect(
+        "moveprevent",
+        { power: 100, rounds: 3 },
+        {
+          creatorId: "me",
+          targetId: "foe",
+          isNew: false,
+          castThisRound: false,
+        },
+      ),
+    ],
+    extraState: {
+      jutsus: {
+        attack: {
+          id: "attack",
+          name: "Attack",
+          image: "/attack.png",
+          effects: [],
+          cooldown: 0,
+          target: "OPPONENT",
+          method: "SINGLE",
+          range: 5,
+          actionCostPerc: 10,
+          healthCost: 0,
+          chakraCost: 0,
+          staminaCost: 0,
+          healthCostReducePerLvl: 0,
+          chakraCostReducePerLvl: 0,
+          staminaCostReducePerLvl: 0,
+          jutsuWeapon: "NONE",
+          requiredMastery: 0,
+          battleUsageType: "BOTH",
+          battleDescription: "attack",
+          elementClassification: "None",
+        } as unknown as Jutsu,
+      },
+    },
+  });
 
 describe("battle privacy regressions", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -48,38 +91,102 @@ describe("battle privacy regressions", () => {
     ["HUNTING", true, "Player", "Player", "profile-avatar"],
     ["COMBAT", false, "Player", "ANBU Member", "squad-avatar"],
     ["COMBAT", false, "Mercenary", "ANBU Member", "squad-avatar"],
-  ] as const)("preserves %s anonymity for mercenary %s named %s", async (battleType, isMercenary, username, expectedName, expectedAvatar) => {
-    const user = makeCombatQueryUser("fighter", {
-      username, avatar: "profile-avatar", avatarLight: "profile-avatar", regenAt: now,
-      bloodlineId: null, anbuId: "squad", anbuSquad: { id: "squad", image: "squad-avatar" },
-    });
-    const processed = await preloadBattle([user], {
-      battleType, leftSideUserIds: ["attacker"], width: 13, height: 9,
-      defaultProfile: { id: "Default" } as AiProfile,
-      wars: [{ id: "w", warMercenaries: isMercenary ? [{ userId: "fighter", sideVillageId: "a" }] : [] }] as unknown as BattleWar[],
-    });
-    expect(processed.usersState[0]).toMatchObject({ username: expectedName, avatar: expectedAvatar });
-    expect(processed.usersState[0]?.isMasked === true).toBe(expectedName === "Mercenary");
-  });
+  ] as const)(
+    "preserves %s anonymity for mercenary %s named %s",
+    async (battleType, isMercenary, username, expectedName, expectedAvatar) => {
+      const user = makeCombatQueryUser("fighter", {
+        username,
+        avatar: "profile-avatar",
+        avatarLight: "profile-avatar",
+        regenAt: now,
+        bloodlineId: null,
+        anbuId: "squad",
+        anbuSquad: { id: "squad", image: "squad-avatar" },
+      });
+      const processed = await preloadBattle([user], {
+        battleType,
+        leftSideUserIds: ["attacker"],
+        width: 13,
+        height: 9,
+        defaultProfile: { id: "Default" } as AiProfile,
+        wars: [
+          {
+            id: "w",
+            warMercenaries: isMercenary
+              ? [{ userId: "fighter", sideVillageId: "a" }]
+              : [],
+          },
+        ] as unknown as BattleWar[],
+      });
+      expect(processed.usersState[0]).toMatchObject({
+        username: expectedName,
+        avatar: expectedAvatar,
+      });
+      expect(processed.usersState[0]?.isMasked === true).toBe(
+        expectedName === "Mercenary",
+      );
+    },
+  );
 
   it("strips private stat metadata from realized public catalogs without mutating battle state", async () => {
     const authored = makeTag("increasedamagegiven", { power: 12 });
     const user = makeCombatQueryUser("foe", {
-      ...flatCombatStats(100), villageId: "village", level: 50, regenAt: now, longitude: 0, latitude: 0,
-      curHealth: 1000, maxHealth: 1000, curChakra: 1000, maxChakra: 1000,
-      curStamina: 1000, maxStamina: 1000,
-      speed: 70, intelligence: 80, willpower: 90,
-      preferredGeneral1: "Speed", preferredGeneral2: "Willpower",
+      ...flatCombatStats(100),
+      villageId: "village",
+      level: 50,
+      regenAt: now,
+      longitude: 0,
+      latitude: 0,
+      curHealth: 1000,
+      maxHealth: 1000,
+      curChakra: 1000,
+      maxChakra: 1000,
+      curStamina: 1000,
+      maxStamina: 1000,
+      speed: 70,
+      intelligence: 80,
+      willpower: 90,
+      preferredGeneral1: "Speed",
+      preferredGeneral2: "Willpower",
       bloodlineId: "line",
-      cookingJobs: [{ id: "pending-meal", userId: "foe", experience: 250, finishesAt: new Date(now.getTime() + 60000) }],
-      bloodline: { id: "line", name: "Visible bloodline", effects: [structuredClone(authored)], bloodrightTiers: [] },
-      items: [{
-        id: "keystone-row", userId: "foe", itemId: "keystone", equipped: "KEYSTONE",
-        durability: 100, level: 1, quantity: 1, imbuements: [], dropChancePerc: 0,
-        item: { id: "keystone", name: "Visible keystone", itemType: "KEYSTONE",
-          maxDurability: 100, bloodlineId: null, canBeImbued: false,
-          battleUsageType: "BOTH", cooldown: 0, effects: [structuredClone(authored)] },
-      }],
+      cookingJobs: [
+        {
+          id: "pending-meal",
+          userId: "foe",
+          experience: 250,
+          finishesAt: new Date(now.getTime() + 60000),
+        },
+      ],
+      bloodline: {
+        id: "line",
+        name: "Visible bloodline",
+        effects: [structuredClone(authored)],
+        bloodrightTiers: [],
+      },
+      items: [
+        {
+          id: "keystone-row",
+          userId: "foe",
+          itemId: "keystone",
+          equipped: "KEYSTONE",
+          durability: 100,
+          level: 1,
+          quantity: 1,
+          imbuements: [],
+          dropChancePerc: 0,
+          item: {
+            id: "keystone",
+            name: "Visible keystone",
+            itemType: "KEYSTONE",
+            maxDurability: 100,
+            bloodlineId: null,
+            canBeImbued: false,
+            battleUsageType: "BOTH",
+            cooldown: 0,
+            effects: [structuredClone(authored)],
+          },
+        },
+      ],
     });
     const processed = await preloadBattle([user]);
     // A selected item can share the passive template stored in keystoneItems.
@@ -97,15 +204,23 @@ describe("battle privacy regressions", () => {
     expect(battle.extraState.items.keystone?.effects[0]).toMatchObject({
       highestGenerals: ["speed", "willpower"],
     });
-    for (const definition of [battle.extraState.bloodlines.line, battle.extraState.items.keystone,
-      battle.extraState.keystoneItems.keystone]) {
-      Object.assign(definition!.effects[0]!, { targetHighestGenerals: ["speed", "willpower"] });
+    for (const definition of [
+      battle.extraState.bloodlines.line,
+      battle.extraState.items.keystone,
+      battle.extraState.keystoneItems.keystone,
+    ]) {
+      Object.assign(definition!.effects[0]!, {
+        targetHighestGenerals: ["speed", "willpower"],
+      });
     }
     const before = structuredClone(battle);
     for (const viewer of ["me", "spectator"]) {
       const response = maskBattle(battle, viewer);
-      const catalogs = [response.extraState.bloodlines.line, response.extraState.items.keystone,
-        response.extraState.keystoneItems.keystone];
+      const catalogs = [
+        response.extraState.bloodlines.line,
+        response.extraState.items.keystone,
+        response.extraState.keystoneItems.keystone,
+      ];
       for (const definition of catalogs) {
         expect(definition?.effects).toHaveLength(1);
         expect(definition?.effects[0]).toMatchObject(authored);
@@ -157,7 +272,11 @@ describe("battle privacy regressions", () => {
   });
 
   it("still treats dead, fled and departed actors with hidden loadouts as exhausted", () => {
-    for (const overrides of [{ curHealth: 0 }, { fledBattle: true }, { leftBattle: true }]) {
+    for (const overrides of [
+      { curHealth: 0 },
+      { fledBattle: true },
+      { leftBattle: true },
+    ]) {
       const battle = battleWithPrivateAction(false);
       Object.assign(battle.usersState[0]!, overrides);
       expect(hasNoAvailableActions(maskBattle(battle, "me"), "foe")).toBe(true);

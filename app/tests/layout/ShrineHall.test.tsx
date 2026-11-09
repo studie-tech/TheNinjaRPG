@@ -32,14 +32,16 @@ describe("ShrineHall reserve boost locks", () => {
     { name: "expired reserve lock", lockDays: -1, canActivate: true },
     { name: "unlocked shrine", lockDays: 0, canActivate: true },
   ])("shows the effective bonus and activation availability with $name", (fixture) => {
-    const shrines = [{
-      sector: 100,
-      villageId: "reserve-village",
-      shrineLevel: 3,
-      boostLockedUntil: fixture.lockDays
-        ? new Date(Date.now() + fixture.lockDays * 86400000)
-        : null,
-    }];
+    const shrines = [
+      {
+        sector: 100,
+        villageId: "reserve-village",
+        shrineLevel: 3,
+        boostLockedUntil: fixture.lockDays
+          ? new Date(Date.now() + fixture.lockDays * 86400000)
+          : null,
+      },
+    ];
     const view = renderShrineHall(shrines);
     fireEvent.mouseDown(view.getByRole("tab", { name: "Boosts" }), {
       button: 0,
@@ -55,7 +57,9 @@ describe("ShrineHall reserve boost locks", () => {
       expect(activation.disabled).toBe(false);
     } else {
       expect(view.queryByRole("button", { name: /Activate Now/ })).toBeNull();
-      expect(view.getByText("Need at least one Level 3 shrine to activate boosts")).toBeTruthy();
+      expect(
+        view.getByText("Need at least one Level 3 shrine to activate boosts"),
+      ).toBeTruthy();
     }
   });
 
@@ -74,7 +78,9 @@ describe("ShrineHall reserve boost locks", () => {
 
   it("judges maintenance due dates against the server clock", () => {
     // The device runs two hours ahead of the server, so an hour-old due date is still upcoming.
-    vi.spyOn(UserContext, "useUserInfo").mockReturnValue({ timeDiff: 2 * 3600000 } as never);
+    vi.spyOn(UserContext, "useUserInfo").mockReturnValue({
+      timeDiff: 2 * 3600000,
+    } as never);
     const view = renderShrineHall([
       {
         id: 1,

@@ -1,4 +1,9 @@
-import { QueryClient, QueryClientProvider, useMutation, type UseMutationOptions } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useMutation,
+  type UseMutationOptions,
+} from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { Suspense } from "react";
@@ -12,28 +17,52 @@ import * as UserContext from "@/utils/UserContext";
 
 type Result = { success: boolean; message: string };
 
-const title = { id: "title-1", name: "Hero", description: "", effects: [], archived: false };
+const title = {
+  id: "title-1",
+  name: "Hero",
+  description: "",
+  effects: [],
+  archived: false,
+};
 let queryClient: QueryClient;
 let resolveSave: (result: Result) => void;
-const save = vi.fn((_input: unknown) => new Promise<Result>((resolve) => { resolveSave = resolve; }));
+const save = vi.fn(
+  (_input: unknown) =>
+    new Promise<Result>((resolve) => {
+      resolveSave = resolve;
+    }),
+);
 const refetch = vi.fn(async () => undefined);
 const invalidate = vi.fn(async () => undefined);
 
 beforeEach(() => {
   vi.clearAllMocks();
   queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
-  vi.spyOn(EditContent, "EditContent").mockImplementation(({ onAccept }) => (
-    <button type="button" onClick={(e) => onAccept?.(e)}>Save to Database</button>
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
+    <div>{children}</div>
   ));
-  vi.spyOn(SuggestChange, "SuggestChange").mockImplementation(({ label }) => <span>{label}</span>);
+  vi.spyOn(EditContent, "EditContent").mockImplementation(({ onAccept }) => (
+    <button type="button" onClick={(e) => onAccept?.(e)}>
+      Save to Database
+    </button>
+  ));
+  vi.spyOn(SuggestChange, "SuggestChange").mockImplementation(({ label }) => (
+    <span>{label}</span>
+  ));
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { userId: "u", role: "CONTENT-ADMIN" } } as never);
+  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    data: { userId: "u", role: "CONTENT-ADMIN" },
+  } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({ title: { invalidate } }),
     title: {
-      get: { useQuery: () => ({ data: title, isPending: false, isError: false, refetch }) },
-      update: { useMutation: (options: UseMutationOptions<Result, Error, unknown>) => useMutation({ ...options, mutationFn: save }) },
+      get: {
+        useQuery: () => ({ data: title, isPending: false, isError: false, refetch }),
+      },
+      update: {
+        useMutation: (options: UseMutationOptions<Result, Error, unknown>) =>
+          useMutation({ ...options, mutationFn: save }),
+      },
     },
   });
 });
@@ -60,7 +89,9 @@ it("refreshes the saved title once and offers its editors a suggestion instead",
   fireEvent.click(view!.getByRole("button", { name: "Save to Database" }));
   await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
   const saved = { success: true, message: "Title updated" };
-  await act(async () => { resolveSave(saved); });
+  await act(async () => {
+    resolveSave(saved);
+  });
   await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(1));
   expect(refetch).not.toHaveBeenCalled();
   expect(toast.showMutationToast).toHaveBeenCalledWith(saved);

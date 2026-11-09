@@ -2,14 +2,29 @@ import { describe, expect, it } from "bun:test";
 import { computeDamagePacket } from "@/libs/combat/damagePipeline";
 import { cleanse, clear } from "@/libs/combat/tags";
 import type { UserEffect } from "@/libs/combat/types";
-import { gearMods, makeBattleUser, makeDamageEffect, makeEffect } from "../../setup/combat";
+import {
+  gearMods,
+  makeBattleUser,
+  makeDamageEffect,
+  makeEffect,
+} from "../../setup/combat";
 
 describe("Clear/Cleanse damage modifier regressions", () => {
   it("clear removes temporary DR but preserves village DR and base DR", () => {
-    const villageDr = { type: "decreasedamagetaken", id: "village-dr", power: 15, fromType: "village" } as const;
+    const villageDr = {
+      type: "decreasedamagetaken",
+      id: "village-dr",
+      power: 15,
+      fromType: "village",
+    } as const;
     const effects = [
       damageTaken(villageDr),
-      damageTaken({ type: "decreasedamagetaken", id: "jutsu-dr", power: 25, fromType: "jutsu" }),
+      damageTaken({
+        type: "decreasedamagetaken",
+        id: "jutsu-dr",
+        power: 25,
+        fromType: "jutsu",
+      }),
     ];
 
     applyBasicEffect("clear", effects);
@@ -25,15 +40,27 @@ describe("Clear/Cleanse damage modifier regressions", () => {
   });
 
   it("cleanse removes temporary damage-taken debuffs but preserves village debuffs", () => {
-    const villageDebuff = { type: "increasedamagetaken", id: "village-inc-taken", power: 15, fromType: "village" } as const;
+    const villageDebuff = {
+      type: "increasedamagetaken",
+      id: "village-inc-taken",
+      power: 15,
+      fromType: "village",
+    } as const;
     const effects = [
       damageTaken(villageDebuff),
-      damageTaken({ type: "increasedamagetaken", id: "jutsu-inc-taken", power: 25, fromType: "jutsu" }),
+      damageTaken({
+        type: "increasedamagetaken",
+        id: "jutsu-inc-taken",
+        power: 25,
+        fromType: "jutsu",
+      }),
     ];
 
     applyBasicEffect("cleanse", effects);
 
-    expect(effects.find((effect) => effect.id === "village-inc-taken")?.rounds).toBe(10);
+    expect(effects.find((effect) => effect.id === "village-inc-taken")?.rounds).toBe(
+      10,
+    );
     expect(effects.find((effect) => effect.id === "jutsu-inc-taken")?.rounds).toBe(0);
 
     const noStatusDamage = damageUnder([]);

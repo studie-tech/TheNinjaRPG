@@ -18,7 +18,6 @@ const mk = (over: Partial<BattleUserState>): BattleUserState =>
     ...over,
   }) as unknown as BattleUserState;
 
-
 describe("isOrphanedSummon", () => {
   const summon = mk({ userId: "s1", controllerId: "p1", isSummon: true });
 
@@ -127,7 +126,12 @@ describe("hasLiveSummon one-per-controller cap", () => {
   });
 
   it("false once the prior summon has left (allows re-summon)", () => {
-    const left = mk({ userId: "s1", controllerId: "p1", isSummon: true, leftBattle: true });
+    const left = mk({
+      userId: "s1",
+      controllerId: "p1",
+      isSummon: true,
+      leftBattle: true,
+    });
     expect(hasLiveSummon([player, left], "p1")).toBe(false);
   });
 

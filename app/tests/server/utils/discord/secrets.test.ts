@@ -37,7 +37,13 @@ describe("OAuth state", () => {
 
   it("verifies for the same user, nonce and secret before expiry", () => {
     const { state, nonce } = createLinkState("user-1", SECRET, now);
-    expect(verifyLinkState(state, { userId: "user-1", nonce, clientSecret: SECRET }, now + 1000)).toBe(true);
+    expect(
+      verifyLinkState(
+        state,
+        { userId: "user-1", nonce, clientSecret: SECRET },
+        now + 1000,
+      ),
+    ).toBe(true);
   });
 
   it("rejects expiry, another user, another browser, another secret and tampering", () => {
@@ -45,14 +51,20 @@ describe("OAuth state", () => {
     const expected = { userId: "user-1", nonce, clientSecret: SECRET };
     expect(verifyLinkState(state, expected, now + LINK_STATE_TTL_MS + 1)).toBe(false);
     expect(verifyLinkState(state, { ...expected, userId: "user-2" }, now)).toBe(false);
-    expect(verifyLinkState(state, { ...expected, nonce: "other-nonce" }, now)).toBe(false);
+    expect(verifyLinkState(state, { ...expected, nonce: "other-nonce" }, now)).toBe(
+      false,
+    );
     expect(verifyLinkState(state, { ...expected, nonce: undefined }, now)).toBe(false);
-    expect(verifyLinkState(state, { ...expected, clientSecret: "other" }, now)).toBe(false);
+    expect(verifyLinkState(state, { ...expected, clientSecret: "other" }, now)).toBe(
+      false,
+    );
     const [body, signature] = state.split(".");
     const forged = Buffer.from(
       JSON.stringify({ u: "user-2", n: nonce, e: now + LINK_STATE_TTL_MS }),
     ).toString("base64url");
-    expect(verifyLinkState(`${forged}.${signature}`, { ...expected, userId: "user-2" }, now)).toBe(false);
+    expect(
+      verifyLinkState(`${forged}.${signature}`, { ...expected, userId: "user-2" }, now),
+    ).toBe(false);
     expect(verifyLinkState(body, expected, now)).toBe(false);
     expect(verifyLinkState(null, expected, now)).toBe(false);
   });

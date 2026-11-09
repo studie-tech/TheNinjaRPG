@@ -9,15 +9,21 @@ const container = {
   animationStatus: true,
   destroyed: false,
   particles: { count: 200 },
-  pause: vi.fn(function pause() { container.animationStatus = false; }),
-  play: vi.fn(function play() { container.animationStatus = true; }),
+  pause: vi.fn(function pause() {
+    container.animationStatus = false;
+  }),
+  play: vi.fn(function play() {
+    container.animationStatus = true;
+  }),
 };
 let frame: FrameRequestCallback = () => {};
 const scene = {};
 
 mock.module("@tsparticles/react", () => ({
   default: ({ particlesLoaded }: { particlesLoaded: (value: unknown) => void }) => {
-    useEffect(() => { particlesLoaded(container); }, [particlesLoaded]);
+    useEffect(() => {
+      particlesLoaded(container);
+    }, [particlesLoaded]);
     return createElement("div", { id: "particles" });
   },
   ParticlesProvider: ({ children }: { children: unknown }) => children,
@@ -25,16 +31,25 @@ mock.module("@tsparticles/react", () => ({
 
 const mountParticles = async () => {
   render(<LayoutParticles />);
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
 };
-const nextFrame = () => { act(() => frame(performance.now())); };
+const nextFrame = () => {
+  act(() => frame(performance.now()));
+};
 
 beforeEach(() => {
   container.animationStatus = true;
   container.pause.mockClear();
   container.play.mockClear();
-  spyOn(mediaQuery, "useMediaQuery").mockImplementation((query) => query.includes("min-width"));
-  spyOn(window, "requestAnimationFrame").mockImplementation((callback) => { frame = callback; return 1; });
+  spyOn(mediaQuery, "useMediaQuery").mockImplementation((query) =>
+    query.includes("min-width"),
+  );
+  spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    frame = callback;
+    return 1;
+  });
 });
 
 afterEach(() => {

@@ -60,10 +60,27 @@ const questFight = async () =>
 describeWithDatabase("creator trial admission", () => {
   beforeEach(async () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    await resetTables(battle, aiProfile, aiTransformation, badge, quest, questHistory, userBadge, userData, userJutsu);
+    await resetTables(
+      battle,
+      aiProfile,
+      aiTransformation,
+      badge,
+      quest,
+      questHistory,
+      userBadge,
+      userData,
+      userJutsu,
+    );
     await insertDefaultAiProfile({ userId: IDS[0] });
     await insertUsers([
-      { userId: HERO, username: HERO, level: 8, rank: "STUDENT", villageId: "village", ...SPOT },
+      {
+        userId: HERO,
+        username: HERO,
+        level: 8,
+        rank: "STUDENT",
+        villageId: "village",
+        ...SPOT,
+      },
       {
         userId: CREATOR,
         username: CREATOR_USERNAME,
@@ -98,7 +115,9 @@ describeWithDatabase("creator trial admission", () => {
 
     const created = (await client.query.battle.findFirst())!;
     expect(created.battleType).toBe("OVERWORLD");
-    const enemies = created.usersState.filter((user) => user.direction === "right" && !user.isSummon);
+    const enemies = created.usersState.filter(
+      (user) => user.direction === "right" && !user.isSummon,
+    );
     expect(enemies.map((user) => user.controllerId)).toEqual([IDS[0]!]);
     expect(enemies[0]?.username).toBe(CREATOR_USERNAME);
     expect(
@@ -120,7 +139,8 @@ describeWithDatabase("creator trial admission", () => {
     });
     expect(creator).toMatchObject({ status: "AWAKE", battleId: null });
     expect(
-      (await client.query.userData.findFirst({ where: eq(userData.userId, HERO) }))?.battleId,
+      (await client.query.userData.findFirst({ where: eq(userData.userId, HERO) }))
+        ?.battleId,
     ).toBe(created.id);
   });
 
@@ -134,7 +154,9 @@ describeWithDatabase("creator trial admission", () => {
       questId: "kill-the-creator",
       objectiveId: "objective",
     });
-    const enemies = created.usersState.filter((user) => user.direction === "right" && !user.isSummon);
+    const enemies = created.usersState.filter(
+      (user) => user.direction === "right" && !user.isSummon,
+    );
     expect(enemies.map((user) => user.controllerId)).toEqual([IDS[0]!]);
     expect(created.extraState.encounter?.pendingWaves).toHaveLength(IDS.length - 1);
     expect(
@@ -165,66 +187,69 @@ describeWithDatabase("creator trial admission", () => {
   it.each([
     ["an attack", attack],
     ["the quest's own fight", questFight],
-  ])("credits the creator's achievement when the last form falls after %s", async (_, start) => {
-    const client = await getTestDatabase();
-    await client.insert(badge).values({
-      id: "creator-badge",
-      name: "Killed the Creator",
-      image: "image",
-      description: "",
-    });
-    await client.insert(quest).values({
-      id: "kill-the-creator",
-      name: "Kill the Creator",
-      image: "image",
-      description: "",
-      successDescription: "",
-      questType: "achievement",
-      requiredRank: "STUDENT",
-      content: {
-        reward: {},
-        objectives: [
-          {
-            id: "objective",
-            task: "defeat_opponents",
-            sector: 0,
-            longitude: 0,
-            latitude: 0,
-            opponentAIs: [{ ids: [CREATOR], number: 1 }],
-            completionOutcome: "Win",
-            successDescription: "You did it",
-            reward_badges: ["creator-badge"],
-          },
-        ],
-        sceneBackground: "",
-        sceneCharacters: [],
-      },
-    } as never);
-    await start();
-    const created = (await client.query.battle.findFirst())!;
-    const usersState = created.usersState.map((user) =>
-      user.controllerId === IDS[0] ? { ...user, curHealth: 0 } : user,
-    );
-    const { encounter, ...extraState } = created.extraState;
-    await client
-      .update(battle)
-      .set({
-        usersState,
-        extraState: { ...extraState, encounter: { ...encounter!, pendingWaves: [] } },
-      })
-      .where(eq(battle.id, created.id));
+  ])(
+    "credits the creator's achievement when the last form falls after %s",
+    async (_, start) => {
+      const client = await getTestDatabase();
+      await client.insert(badge).values({
+        id: "creator-badge",
+        name: "Killed the Creator",
+        image: "image",
+        description: "",
+      });
+      await client.insert(quest).values({
+        id: "kill-the-creator",
+        name: "Kill the Creator",
+        image: "image",
+        description: "",
+        successDescription: "",
+        questType: "achievement",
+        requiredRank: "STUDENT",
+        content: {
+          reward: {},
+          objectives: [
+            {
+              id: "objective",
+              task: "defeat_opponents",
+              sector: 0,
+              longitude: 0,
+              latitude: 0,
+              opponentAIs: [{ ids: [CREATOR], number: 1 }],
+              completionOutcome: "Win",
+              successDescription: "You did it",
+              reward_badges: ["creator-badge"],
+            },
+          ],
+          sceneBackground: "",
+          sceneCharacters: [],
+        },
+      } as never);
+      await start();
+      const created = (await client.query.battle.findFirst())!;
+      const usersState = created.usersState.map((user) =>
+        user.controllerId === IDS[0] ? { ...user, curHealth: 0 } : user,
+      );
+      const { encounter, ...extraState } = created.extraState;
+      await client
+        .update(battle)
+        .set({
+          usersState,
+          extraState: { ...extraState, encounter: { ...encounter!, pendingWaves: [] } },
+        })
+        .where(eq(battle.id, created.id));
 
-    const caller = await callerFor(combatRouter, HERO);
-    const outcome = await caller.getBattle({ battleId: created.id });
-    expect(outcome.result?.outcome).toBe("Won");
-    expect(outcome.result?.notifications).toContain("You did it");
+      const caller = await callerFor(combatRouter, HERO);
+      const outcome = await caller.getBattle({ battleId: created.id });
+      expect(outcome.result?.outcome).toBe("Won");
+      expect(outcome.result?.notifications).toContain("You did it");
 
-    const quests = await callerFor(questsRouter, HERO);
-    expect(await quests.checkRewards({ questId: "kill-the-creator" })).toMatchObject({
-      success: true,
-    });
-    expect(
-      await client.query.userBadge.findFirst({ where: eq(userBadge.userId, HERO) }),
-    ).toMatchObject({ badgeId: "creator-badge" });
-  });
+      const quests = await callerFor(questsRouter, HERO);
+      expect(await quests.checkRewards({ questId: "kill-the-creator" })).toMatchObject({
+        success: true,
+      });
+      expect(
+        await client.query.userBadge.findFirst({ where: eq(userBadge.userId, HERO) }),
+      ).toMatchObject({ badgeId: "creator-badge" });
+    },
+  );
 });

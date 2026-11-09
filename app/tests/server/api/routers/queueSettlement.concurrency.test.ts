@@ -22,7 +22,13 @@ import {
   settleCraftingQueue,
   settleJutsuTrainingQueue,
 } from "@/server/utils/userQueue";
-import { insertItems, insertJutsus, insertUsers, insertUserVotes, jutsuRow } from "../../../setup/factories";
+import {
+  insertItems,
+  insertJutsus,
+  insertUsers,
+  insertUserVotes,
+  jutsuRow,
+} from "../../../setup/factories";
 import {
   callerFor,
   callerForDatabase,
@@ -88,10 +94,15 @@ const delayQueueRead = (database: DrizzleClient) => {
 
 const gateEnqueueWrites = (database: DrizzleClient) => {
   const bothArrived = barrier(2);
-  return aroundStatements(database, userData, async (run) => {
-    await bothArrived();
-    return run();
-  }, { operations: ["update"] });
+  return aroundStatements(
+    database,
+    userData,
+    async (run) => {
+      await bothArrived();
+      return run();
+    },
+    { operations: ["update"] },
+  );
 };
 
 const readUser = async () => {
@@ -223,7 +234,9 @@ describeWithDatabase("Queue settlement concurrency and caps", () => {
     ]);
     const before = await fetchJutsuTrainingQueue(database, userId);
     expect(results.filter((result) => result.success)).toHaveLength(1);
-    expect(before.map((row) => row.reservedRyo)).toEqual<Array<number | undefined>>([costs[0]]);
+    expect(before.map((row) => row.reservedRyo)).toEqual<Array<number | undefined>>([
+      costs[0],
+    ]);
     expect((await readUser()).money).toBe(initialMoney - costs[0]!);
   });
 

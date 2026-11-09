@@ -9,7 +9,6 @@ import { DecreaseFarmingTime } from "@/validators/combat";
 import * as userContext from "@/utils/UserContext";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 
-
 const plot = (patch: Partial<FarmPlotState> = {}): FarmPlotState => ({
   id: "plot-1",
   slotIndex: 0,
@@ -75,8 +74,13 @@ describe("FarmPlotInspector", () => {
   });
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({ timeDiff: 0 } as never);
-    vi.spyOn(Image, "default").mockImplementation(((props: { src: string; alt: string }) => (
+    vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+      timeDiff: 0,
+    } as never);
+    vi.spyOn(Image, "default").mockImplementation(((props: {
+      src: string;
+      alt: string;
+    }) => (
       // biome-ignore lint/performance/noImgElement: isolated component test stub
       <img src={props.src} alt={props.alt} />
     )) as never);
@@ -111,18 +115,20 @@ describe("FarmPlotInspector", () => {
       ...farmState,
       farmCurrency: 100,
       availableSeeds: [seed],
-      shopEntries: [{
-        type: "SEED" as const,
-        label: seed.name,
-        cost: 10,
-        minLevel: seed.minLevel,
-        itemId: seed.itemId,
-        canAfford: true,
-        canPurchase: true,
-        growTimeSeconds,
-        yieldQuantity: seed.yieldQuantity,
-        yieldName: seed.yieldName,
-      }],
+      shopEntries: [
+        {
+          type: "SEED" as const,
+          label: seed.name,
+          cost: 10,
+          minLevel: seed.minLevel,
+          itemId: seed.itemId,
+          canAfford: true,
+          canPurchase: true,
+          growTimeSeconds,
+          yieldQuantity: seed.yieldQuantity,
+          yieldName: seed.yieldName,
+        },
+      ],
     };
     const inspector = render(
       <FarmPlotInspector
@@ -186,7 +192,10 @@ describe("FarmPlotInspector", () => {
     expect(document.activeElement).toBe(seed);
     expect(handlers.onPlant).not.toHaveBeenCalled();
     fireEvent.click(getByRole("button", { name: "Plant" }));
-    expect(handlers.onPlant).toHaveBeenCalledWith(expect.objectContaining({ id: "plot-1" }), "seed-1");
+    expect(handlers.onPlant).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "plot-1" }),
+      "seed-1",
+    );
   });
 
   it("focuses its close control after canvas selection so Escape dismisses it", () => {
@@ -226,9 +235,9 @@ describe("FarmPlotInspector", () => {
       />,
     );
     expect(getByText("50% grown")).toBeTruthy();
-    expect(
-      getByRole("button", { name: "Working…" }).hasAttribute("disabled"),
-    ).toBe(true);
+    expect(getByRole("button", { name: "Working…" }).hasAttribute("disabled")).toBe(
+      true,
+    );
   });
 
   it("requires an explicit harvest action for ready plots", () => {

@@ -11,10 +11,15 @@ import * as PublicUser from "@/layout/PublicUser";
 import * as UserRequestSystem from "@/layout/UserRequestSystem";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 import { actualImage } from "../../setup/preload";
 
-type Options = { onSuccess: (data: { success: boolean; message: string }) => Promise<void> };
+type Options = {
+  onSuccess: (data: { success: boolean; message: string }) => Promise<void>;
+};
 const captured: Record<string, Options> = {};
 const invalidate = vi.fn(async () => undefined);
 const idle = {
@@ -35,7 +40,15 @@ const village = (id: string, name: string, extra: object = {}) => ({
 const mount = (tab: string, user: object) => {
   vi.spyOn(localstorage, "useLocalStorage").mockReturnValue([tab, vi.fn()] as never);
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
-    data: { userId: "viewer", villageId: "home", isBanned: false, isOutlaw: false, role: "USER", village: { kageId: "someone" }, ...user },
+    data: {
+      userId: "viewer",
+      villageId: "home",
+      isBanned: false,
+      isOutlaw: false,
+      role: "USER",
+      village: { kageId: "someone" },
+      ...user,
+    },
     timeDiff: 0,
   } as never);
   return render(
@@ -67,7 +80,12 @@ beforeEach(() => {
   const api = {
     useUtils: () => ({ village: { getAlliances: { invalidate } } }),
     village: {
-      get: { useQuery: () => ({ data: { villageData: { kageId: "someone" } }, isPending: false }) },
+      get: {
+        useQuery: () => ({
+          data: { villageData: { kageId: "someone" } },
+          isPending: false,
+        }),
+      },
       getAlliances: {
         useQuery: () => ({
           isPending: false,
@@ -118,7 +136,14 @@ it("lists other alliance members, villages first, and refreshes alliances after 
     .filter((alt) => ["Home", "Leaf", "Closed", "Band"].includes(alt ?? ""));
   expect(names).toEqual(["Leaf", "Band"]);
 
-  const procedures = ["acceptRequest", "rejectRequest", "cancelRequest", "createRequest", "leaveAlliance", "declareEnemy"];
+  const procedures = [
+    "acceptRequest",
+    "rejectRequest",
+    "cancelRequest",
+    "createRequest",
+    "leaveAlliance",
+    "declareEnemy",
+  ];
   for (const name of procedures) {
     await act(() => captured[name]!.onSuccess({ success: false, message: "No" }));
   }

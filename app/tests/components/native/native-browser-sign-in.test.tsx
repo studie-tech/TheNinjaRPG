@@ -11,11 +11,21 @@ const flowId = "a".repeat(43);
 const callbackUrl = `tnr://oauth-callback?flow=${flowId}&code=${"c".repeat(43)}`;
 
 beforeEach(() => {
-  approve.mockReset().mockResolvedValue({ success: true, message: "Sign-in approved", callbackUrl });
+  approve
+    .mockReset()
+    .mockResolvedValue({ success: true, message: "Sign-in approved", callbackUrl });
   signOut.mockReset().mockResolvedValue(undefined);
-  vi.spyOn(navigation, "useSearchParams").mockReturnValue(new URLSearchParams({ flow: flowId }) as never);
-  vi.spyOn(navigation, "useRouter").mockReturnValue({ back: vi.fn(), push: vi.fn() } as never);
-  vi.spyOn(clerk, "useUser").mockReturnValue({ isLoaded: true, user: { username: "browser-player" } } as never);
+  vi.spyOn(navigation, "useSearchParams").mockReturnValue(
+    new URLSearchParams({ flow: flowId }) as never,
+  );
+  vi.spyOn(navigation, "useRouter").mockReturnValue({
+    back: vi.fn(),
+    push: vi.fn(),
+  } as never);
+  vi.spyOn(clerk, "useUser").mockReturnValue({
+    isLoaded: true,
+    user: { username: "browser-player" },
+  } as never);
   vi.spyOn(clerk, "useClerk").mockReturnValue({ signOut } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     nativeAuth: {
@@ -24,7 +34,10 @@ beforeEach(() => {
     },
   });
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 it("replaces approval with its callback so a consumed flow cannot be approved again", async () => {
   const view = render(<NativeBrowserSignIn />);
@@ -39,7 +52,8 @@ it("replaces approval with its callback so a consumed flow cannot be approved ag
 });
 
 it("shows an expired approval and keeps the flow recoverable", async () => {
-  const message = "Sign-in expired or was already used. Return to the app and try again.";
+  const message =
+    "Sign-in expired or was already used. Return to the app and try again.";
   approve.mockResolvedValue({ success: false, message });
   const view = render(<NativeBrowserSignIn />);
   fireEvent.click(view.getByRole("button", { name: "Continue to the app" }));
@@ -53,8 +67,14 @@ it("keeps account recovery available when approval fails", async () => {
   approve.mockRejectedValue(new Error("Flow expired"));
   const view = render(<NativeBrowserSignIn />);
   fireEvent.click(view.getByRole("button", { name: "Continue to the app" }));
-  await waitFor(() => expect(view.getByRole("alert").textContent).toContain("Sign-in expired"));
+  await waitFor(() =>
+    expect(view.getByRole("alert").textContent).toContain("Sign-in expired"),
+  );
   expect(view.queryByRole("link", { name: "Open the app" })).toBeNull();
   fireEvent.click(view.getByRole("button", { name: "Use another account" }));
-  await waitFor(() => expect(signOut).toHaveBeenCalledWith({ redirectUrl: `/native-sign-in?flow=${flowId}` }));
+  await waitFor(() =>
+    expect(signOut).toHaveBeenCalledWith({
+      redirectUrl: `/native-sign-in?flow=${flowId}`,
+    }),
+  );
 });

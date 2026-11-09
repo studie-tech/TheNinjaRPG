@@ -45,8 +45,12 @@ describe("social posting under the test runner", () => {
 
   beforeEach(() => {
     Object.assign(env, FAKE_ENV);
-    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((async () =>
-      new Response(JSON.stringify({ id: "x", access_token: "x" }))) as never);
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(
+        (async () =>
+          new Response(JSON.stringify({ id: "x", access_token: "x" }))) as never,
+      );
   });
 
   afterEach(() => {

@@ -4,11 +4,7 @@ import type { AiProfile } from "@/drizzle/schema";
 import { availableUserActions, performBattleAction } from "@/libs/combat/actions";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { mergeLoadoutParticipants } from "@/libs/combat/summon";
-import type {
-  CombatQueryUser,
-  CompleteBattle,
-  ExtraState,
-} from "@/libs/combat/types";
+import type { CombatQueryUser, CompleteBattle, ExtraState } from "@/libs/combat/types";
 import { mergeExtraState } from "@/libs/combat/util";
 import { TerrainHex } from "@/libs/hexgrid";
 import type { DrizzleClient } from "@/server/db";
@@ -36,80 +32,190 @@ const WIDTH = 12;
 const HEIGHT = 10;
 
 const jutsu = (id: string, over: Record<string, unknown>) => ({
-  id, name: id, image: "", description: "", battleDescription: `%user uses ${id}`,
-  jutsuType: "AI", jutsuRank: "D", requiredRank: "STUDENT", requiredLevel: 1,
-  target: "OTHER_USER", range: 5, method: "SINGLE", cooldown: 0,
-  actionCostPerc: 40, staminaCost: 0, chakraCost: 0, healthCost: 0,
-  staminaCostReducePerLvl: 0, chakraCostReducePerLvl: 0, healthCostReducePerLvl: 0,
-  extraBaseCost: 0, jutsuWeapon: "NONE", bloodlineId: "", villageId: "",
-  hidden: false, injectableInBattle: false, battleUsageType: "BOTH",
-  elementClassification: "None", requiredSkillId: null,
+  id,
+  name: id,
+  image: "",
+  description: "",
+  battleDescription: `%user uses ${id}`,
+  jutsuType: "AI",
+  jutsuRank: "D",
+  requiredRank: "STUDENT",
+  requiredLevel: 1,
+  target: "OTHER_USER",
+  range: 5,
+  method: "SINGLE",
+  cooldown: 0,
+  actionCostPerc: 40,
+  staminaCost: 0,
+  chakraCost: 0,
+  healthCost: 0,
+  staminaCostReducePerLvl: 0,
+  chakraCostReducePerLvl: 0,
+  healthCostReducePerLvl: 0,
+  extraBaseCost: 0,
+  jutsuWeapon: "NONE",
+  bloodlineId: "",
+  villageId: "",
+  hidden: false,
+  injectableInBattle: false,
+  battleUsageType: "BOTH",
+  elementClassification: "None",
+  requiredSkillId: null,
   ...over,
 });
 
 const summonTag = (aiId: string, aiHp: number, rounds: number) => ({
-  type: "summon", aiId, aiHp, power: 50, rounds, powerPerLevel: 0,
-  calculation: "percentage", target: "INHERIT", friendlyFire: "FRIENDLY",
-  description: "summon", direction: "offence",
+  type: "summon",
+  aiId,
+  aiHp,
+  power: 50,
+  rounds,
+  powerPerLevel: 0,
+  calculation: "percentage",
+  target: "INHERIT",
+  friendlyFire: "FRIENDLY",
+  description: "summon",
+  direction: "offence",
 });
 
 const zoo = jutsu(ZOO, {
-  target: "EMPTY_GROUND", range: 2, jutsuType: "NORMAL", battleUsageType: "PVP",
+  target: "EMPTY_GROUND",
+  range: 2,
+  jutsuType: "NORMAL",
+  battleUsageType: "PVP",
   effects: [
     summonTag(TOR_AI, 3000, 3),
-    { type: "injectjutsus", power: 100, rounds: 2, target: "SELF", jutsuIds: [KING_SUMMON],
-      powerPerLevel: 0, calculation: "static", friendlyFire: "ALL",
-      description: "inject", direction: "offence" },
+    {
+      type: "injectjutsus",
+      power: 100,
+      rounds: 2,
+      target: "SELF",
+      jutsuIds: [KING_SUMMON],
+      powerPerLevel: 0,
+      calculation: "static",
+      friendlyFire: "ALL",
+      description: "inject",
+      direction: "offence",
+    },
   ],
 });
 const kingSummon = jutsu(KING_SUMMON, {
-  target: "EMPTY_GROUND", range: 2, jutsuType: "SPECIAL", battleUsageType: "PVP",
-  injectableInBattle: true, effects: [summonTag(KING_AI, 2000, 4)],
+  target: "EMPTY_GROUND",
+  range: 2,
+  jutsuType: "SPECIAL",
+  battleUsageType: "PVP",
+  injectableInBattle: true,
+  effects: [summonTag(KING_AI, 2000, 4)],
 });
 const shell = jutsu(SHELL, {
-  target: "ALLY", method: "ALL", actionCostPerc: 60, cooldown: 6,
-  effects: [{ type: "decreasedamagetaken", power: 20, powerPerLevel: 0, rounds: 2,
-    calculation: "percentage", target: "INHERIT", friendlyFire: "ALL",
-    statTypes: ["Ninjutsu"], description: "shell", direction: "offence" }],
+  target: "ALLY",
+  method: "ALL",
+  actionCostPerc: 60,
+  cooldown: 6,
+  effects: [
+    {
+      type: "decreasedamagetaken",
+      power: 20,
+      powerPerLevel: 0,
+      rounds: 2,
+      calculation: "percentage",
+      target: "INHERIT",
+      friendlyFire: "ALL",
+      statTypes: ["Ninjutsu"],
+      description: "shell",
+      direction: "offence",
+    },
+  ],
 });
 const sword = jutsu(SWORD, {
-  effects: [{ type: "damage", power: 45, powerPerLevel: 0, calculation: "formula",
-    statTypes: ["Highest"], generalTypes: ["Highest"], elements: [], rounds: 0,
-    target: "INHERIT", friendlyFire: "ENEMIES", description: "dmg", direction: "offence" }],
+  effects: [
+    {
+      type: "damage",
+      power: 45,
+      powerPerLevel: 0,
+      calculation: "formula",
+      statTypes: ["Highest"],
+      generalTypes: ["Highest"],
+      elements: [],
+      rounds: 0,
+      target: "INHERIT",
+      friendlyFire: "ENEMIES",
+      description: "dmg",
+      direction: "offence",
+    },
+  ],
 });
 
 const rule = (r: unknown) => AiRule.parse(r);
 const torProfile = {
-  id: "profile-tor", userId: TOR_AI, includeDefaultRules: true,
-  rules: [rule({ conditions: [],
-    action: { type: "use_combo_action", target: "CLOSEST_ALLY", comboIds: [SHELL] } })],
+  id: "profile-tor",
+  userId: TOR_AI,
+  includeDefaultRules: true,
+  rules: [
+    rule({
+      conditions: [],
+      action: { type: "use_combo_action", target: "CLOSEST_ALLY", comboIds: [SHELL] },
+    }),
+  ],
 } as unknown as AiProfile;
 const kingProfile = {
-  id: "profile-king", userId: KING_AI, includeDefaultRules: true,
-  rules: [rule({ conditions: [{ type: "distance_lower_than", value: 5, target: "RANDOM_OPPONENT" }],
-    action: { type: "use_specific_jutsu", target: "RANDOM_OPPONENT", jutsuId: SWORD } })],
+  id: "profile-king",
+  userId: KING_AI,
+  includeDefaultRules: true,
+  rules: [
+    rule({
+      conditions: [
+        { type: "distance_lower_than", value: 5, target: "RANDOM_OPPONENT" },
+      ],
+      action: { type: "use_specific_jutsu", target: "RANDOM_OPPONENT", jutsuId: SWORD },
+    }),
+  ],
 } as unknown as AiProfile;
-const defaultProfile = { id: "Default", rules: [], includeDefaultRules: true } as unknown as AiProfile;
+const defaultProfile = {
+  id: "Default",
+  rules: [],
+  includeDefaultRules: true,
+} as unknown as AiProfile;
 
 const userJutsu = (owner: string, j: ReturnType<typeof jutsu>) => ({
-  id: `${owner}-${j.id}`, userId: owner, jutsuId: j.id, level: 1, experience: 0,
-  equipped: true, jutsu: j,
+  id: `${owner}-${j.id}`,
+  userId: owner,
+  jutsuId: j.id,
+  level: 1,
+  experience: 0,
+  equipped: true,
+  jutsu: j,
 });
 
 const queryUser = (id: string, over: Record<string, unknown> = {}): CombatQueryUser =>
   makeCombatQueryUser(id, {
-    ...flatCombatStats(100), villageId: "village", rank: "JONIN", isAi: false, isSummon: false,
-    bloodlineId: null, longitude: 0, latitude: 0,
+    ...flatCombatStats(100),
+    villageId: "village",
+    rank: "JONIN",
+    isAi: false,
+    isSummon: false,
+    bloodlineId: null,
+    longitude: 0,
+    latitude: 0,
     ...over,
   });
 
 const torTemplate = queryUser(TOR_AI, {
-  username: "Tor Tor", isAi: true, level: 30, aiProfileId: torProfile.id, aiProfile: torProfile,
+  username: "Tor Tor",
+  isAi: true,
+  level: 30,
+  aiProfileId: torProfile.id,
+  aiProfile: torProfile,
   jutsus: [userJutsu(TOR_AI, shell), userJutsu(TOR_AI, kingSummon)],
 });
 const kingTemplate = queryUser(KING_AI, {
-  username: "Reptile King", isAi: true, isSummon: true, level: 75,
-  aiProfileId: kingProfile.id, aiProfile: kingProfile, jutsus: [userJutsu(KING_AI, sword)],
+  username: "Reptile King",
+  isAi: true,
+  isSummon: true,
+  level: 75,
+  aiProfileId: kingProfile.id,
+  aiProfile: kingProfile,
+  jutsus: [userJutsu(KING_AI, sword)],
 });
 
 /** Serves the summon template lookups processUsersForBattle issues, in call order. */
@@ -122,7 +228,11 @@ const templateClient = () => {
 
 const process = (client: DrizzleClient, users: CombatQueryUser[], left?: string[]) =>
   preloadBattle(users, {
-    client, defaultProfile, width: WIDTH, height: HEIGHT, leftSideUserIds: left,
+    client,
+    defaultProfile,
+    width: WIDTH,
+    height: HEIGHT,
+    leftSideUserIds: left,
   });
 
 /**
@@ -137,10 +247,22 @@ const battleAfterLoadoutSwap = async () => {
   const init = await process(templateClient(), [luka, thabiento], ["user_luka"]);
   expect(init.extraState.aiProfiles[torProfile.id]).toBeUndefined();
   const battle = {
-    id: "b1", battleType: "COMBAT", round: 1, version: 1, activeUserId: "user_thab",
-    createdAt: new Date(0), updatedAt: new Date(0), roundStartAt: new Date(),
-    background: "", width: WIDTH, height: HEIGHT, rewardScaling: 1, forceKeepPools: false,
-    usersState: init.usersState, usersEffects: init.userEffects, groundEffects: [],
+    id: "b1",
+    battleType: "COMBAT",
+    round: 1,
+    version: 1,
+    activeUserId: "user_thab",
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+    roundStartAt: new Date(),
+    background: "",
+    width: WIDTH,
+    height: HEIGHT,
+    rewardScaling: 1,
+    forceKeepPools: false,
+    usersState: init.usersState,
+    usersEffects: init.userEffects,
+    groundEffects: [],
     extraState: init.extraState,
   } as unknown as CompleteBattle;
 
@@ -148,7 +270,9 @@ const battleAfterLoadoutSwap = async () => {
   const swapped = await process(templateClient(), [
     queryUser("user_thab", { jutsus: [userJutsu("user_thab", zoo)] }),
   ]);
-  const otherUserState = battle.usersState.filter((u) => u.controllerId !== "user_thab");
+  const otherUserState = battle.usersState.filter(
+    (u) => u.controllerId !== "user_thab",
+  );
   const original = battle.usersState.find((u) => u.userId === "user_thab");
   if (swapped.usersState[0] && original) {
     swapped.usersState[0].direction = original.direction;
@@ -160,7 +284,12 @@ const battleAfterLoadoutSwap = async () => {
   return { battle, swapped };
 };
 
-const place = (battle: CompleteBattle, userId: string, longitude: number, latitude: number) => {
+const place = (
+  battle: CompleteBattle,
+  userId: string,
+  longitude: number,
+  latitude: number,
+) => {
   const user = battle.usersState.find((u) => u.userId === userId);
   if (!user) throw new Error(`missing ${userId}`);
   user.longitude = longitude;
@@ -173,7 +302,9 @@ describe("summons from a loadout swapped in mid-lobby", () => {
     expect(battle.extraState.aiProfiles[torProfile.id]).toBeDefined();
     expect(battle.extraState.aiProfiles[kingProfile.id]).toBeDefined();
     const templates = battle.usersState.filter((u) => u.isSummonTemplate);
-    expect(templates.map((t) => t.controllerId).sort()).toEqual([KING_AI, TOR_AI].sort());
+    expect(templates.map((t) => t.controllerId).sort()).toEqual(
+      [KING_AI, TOR_AI].sort(),
+    );
   });
 
   it("does not duplicate templates the battle already holds on a second swap", async () => {
@@ -198,8 +329,12 @@ describe("summons from a loadout swapped in mid-lobby", () => {
       );
       if (!action) throw new Error(`missing ${actionId}`);
       battle = performBattleAction({
-        battle, action, grid, actorId: "user_thab",
-        longitude, latitude,
+        battle,
+        action,
+        grid,
+        actorId: "user_thab",
+        longitude,
+        latitude,
       }).newBattle;
     };
     cast(ZOO, 5, 5);
@@ -222,17 +357,36 @@ describe("mergeExtraState", () => {
   it("copies every static lookup map and initializes missing ones", () => {
     const target = { jutsus: { a: { id: "a" } } } as unknown as Partial<ExtraState>;
     const source = {
-      jutsus: { b: { id: "b" } }, jutsuReskins: { r: {} }, items: { i: {} },
-      bloodlines: { bl: {} }, enemySkills: { s: [] }, sageModes: { sm: {} },
-      villages: { v: {} }, anbuSquads: { an: {} }, keystoneItems: { k: {} },
-      wars: { w: {} }, aiProfiles: { p: {} }, relations: { rel: {} }, clans: { c: {} },
+      jutsus: { b: { id: "b" } },
+      jutsuReskins: { r: {} },
+      items: { i: {} },
+      bloodlines: { bl: {} },
+      enemySkills: { s: [] },
+      sageModes: { sm: {} },
+      villages: { v: {} },
+      anbuSquads: { an: {} },
+      keystoneItems: { k: {} },
+      wars: { w: {} },
+      aiProfiles: { p: {} },
+      relations: { rel: {} },
+      clans: { c: {} },
       questData: { u: [] },
     } as unknown as Partial<ExtraState>;
     mergeExtraState(target, source);
     expect(Object.keys(target.jutsus ?? {}).sort()).toEqual(["a", "b"]);
     for (const key of [
-      "jutsuReskins", "items", "bloodlines", "enemySkills", "sageModes", "villages",
-      "anbuSquads", "keystoneItems", "wars", "aiProfiles", "relations", "clans",
+      "jutsuReskins",
+      "items",
+      "bloodlines",
+      "enemySkills",
+      "sageModes",
+      "villages",
+      "anbuSquads",
+      "keystoneItems",
+      "wars",
+      "aiProfiles",
+      "relations",
+      "clans",
     ] as const) {
       expect(Object.keys(target[key] ?? {})).toHaveLength(1);
     }

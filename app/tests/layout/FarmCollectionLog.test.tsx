@@ -8,7 +8,9 @@ import { stubDialog } from "../setup/dialog";
 let restoreDialog: () => void;
 beforeEach(() => {
   restoreDialog = stubDialog();
-  vi.spyOn(Image, "default").mockImplementation(((props: ComponentProps<"img">) => <img {...props} />) as never);
+  vi.spyOn(Image, "default").mockImplementation(((props: ComponentProps<"img">) => (
+    <img {...props} />
+  )) as never);
 });
 afterEach(() => {
   restoreDialog();

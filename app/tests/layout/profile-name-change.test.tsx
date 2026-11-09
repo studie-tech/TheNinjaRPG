@@ -8,7 +8,10 @@ import * as UserContext from "@/utils/UserContext";
 
 let resolveUpdate: (value: { success: boolean; message: string }) => void;
 const updateUsername = vi.fn(
-  () => new Promise<{ success: boolean; message: string }>((resolve) => { resolveUpdate = resolve; }),
+  () =>
+    new Promise<{ success: boolean; message: string }>((resolve) => {
+      resolveUpdate = resolve;
+    }),
 );
 
 beforeEach(() => {
@@ -20,15 +23,29 @@ beforeEach(() => {
     },
   });
   vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
-    () => ({ data: { reputationPoints: 1000 }, updateUser: vi.fn(), prepareUserUpdate: vi.fn() }) as never,
+    () =>
+      ({
+        data: { reputationPoints: 1000 },
+        updateUser: vi.fn(),
+        prepareUserUpdate: vi.fn(),
+      }) as never,
   );
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(Modal, "default").mockImplementation(({ isOpen, title, children, onAccept, isLoading }) => isOpen ? (
-    <div role="dialog" aria-label={title}>
-      {children}
-      <button type="button" disabled={isLoading} onClick={(event) => onAccept?.(event as never)}>Proceed</button>
-    </div>
-  ) : null);
+  vi.spyOn(Modal, "default").mockImplementation(
+    ({ isOpen, title, children, onAccept, isLoading }) =>
+      isOpen ? (
+        <div role="dialog" aria-label={title}>
+          {children}
+          <button
+            type="button"
+            disabled={isLoading}
+            onClick={(event) => onAccept?.(event as never)}
+          >
+            Proceed
+          </button>
+        </div>
+      ) : null,
+  );
 });
 
 afterEach(() => {
@@ -39,7 +56,9 @@ afterEach(() => {
 const typeAndConfirm = async (username: string) => {
   const view = render(<NameChange />);
   const input = view.getByPlaceholderText("Search user") as HTMLInputElement;
-  const submit = view.getByRole("button", { name: "Update Username" }) as HTMLButtonElement;
+  const submit = view.getByRole("button", {
+    name: "Update Username",
+  }) as HTMLButtonElement;
   expect(submit.disabled).toBe(true);
   fireEvent.change(input, { target: { value: username } });
   expect(input.value).toBe(username);
@@ -58,7 +77,9 @@ it("submits the typed name and keeps it editable after a rejection", async () =>
   resolveUpdate({ success: false, message: "Taken" });
   await waitFor(() => expect(input.readOnly).toBe(false));
   expect(input.value).toBe("NewName");
-  expect(view.getByRole("dialog", { name: "Confirm New Username" }).textContent).toContain("change your username to NewName?");
+  expect(
+    view.getByRole("dialog", { name: "Confirm New Username" }).textContent,
+  ).toContain("change your username to NewName?");
   fireEvent.change(input, { target: { value: "OtherName" } });
   expect(input.value).toBe("OtherName");
 });
@@ -72,6 +93,10 @@ it("closes the confirmation once the paid change commits", async () => {
 
 it("does not open the confirmation for an empty name", () => {
   const view = render(<NameChange />);
-  fireEvent.submit(view.getByRole("button", { name: "Update Username" }).closest("form") as HTMLFormElement);
+  fireEvent.submit(
+    view
+      .getByRole("button", { name: "Update Username" })
+      .closest("form") as HTMLFormElement,
+  );
   expect(view.queryByRole("dialog")).toBeNull();
 });

@@ -4,9 +4,31 @@ import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
 
-function Controlled({ initial = 1, ...props }: { initial?: number; min?: number; max?: number; step?: number | "any"; emptyFallback?: number }) {
+function Controlled({
+  initial = 1,
+  ...props
+}: {
+  initial?: number;
+  min?: number;
+  max?: number;
+  step?: number | "any";
+  emptyFallback?: number;
+}) {
   const [value, setValue] = useState(initial);
-  return <><NumberInput aria-label="Amount" value={value} onValueChange={setValue} {...props} /><output>{Number.isNaN(value) ? "invalid" : value}</output><button type="button" onClick={() => setValue(4)}>Reset</button></>;
+  return (
+    <>
+      <NumberInput
+        aria-label="Amount"
+        value={value}
+        onValueChange={setValue}
+        {...props}
+      />
+      <output>{Number.isNaN(value) ? "invalid" : value}</output>
+      <button type="button" onClick={() => setValue(4)}>
+        Reset
+      </button>
+    </>
+  );
 }
 
 describe("NumberInput", () => {
@@ -47,7 +69,9 @@ describe("NumberInput", () => {
 
   it("keeps optional empty values absent without confusing zero with empty", () => {
     const changed = mock();
-    const { getByRole } = render(<NumberInput optional value={2} onOptionalValueChange={changed} />);
+    const { getByRole } = render(
+      <NumberInput optional value={2} onOptionalValueChange={changed} />,
+    );
     const input = getByRole("spinbutton") as HTMLInputElement;
     fireEvent.input(input, { target: { value: "" } });
     expect(changed).toHaveBeenLastCalledWith(undefined);
@@ -58,7 +82,15 @@ describe("NumberInput", () => {
 
   it("keeps invalid nonempty optional values invalid", () => {
     const changed = mock();
-    const { getByRole } = render(<NumberInput optional min={1} max={5} value={2} onOptionalValueChange={changed} />);
+    const { getByRole } = render(
+      <NumberInput
+        optional
+        min={1}
+        max={5}
+        value={2}
+        onOptionalValueChange={changed}
+      />,
+    );
     fireEvent.input(getByRole("spinbutton"), { target: { value: "6" } });
     expect(changed).toHaveBeenLastCalledWith(Number.NaN);
   });
@@ -66,7 +98,20 @@ describe("NumberInput", () => {
   it("clears an invalid optional draft when its external value is reset", () => {
     function Optional() {
       const [value, setValue] = useState<number | undefined>(2);
-      return <><NumberInput optional min={1} max={5} value={value} onOptionalValueChange={setValue} /><button type="button" onClick={() => setValue(undefined)}>Clear</button></>;
+      return (
+        <>
+          <NumberInput
+            optional
+            min={1}
+            max={5}
+            value={value}
+            onOptionalValueChange={setValue}
+          />
+          <button type="button" onClick={() => setValue(undefined)}>
+            Clear
+          </button>
+        </>
+      );
     }
     const { getByRole } = render(<Optional />);
     const input = getByRole("spinbutton") as HTMLInputElement;
@@ -78,7 +123,9 @@ describe("NumberInput", () => {
   });
 
   it("supports decimal and negative values and enforces integer steps", () => {
-    const { getByRole, container, unmount } = render(<Controlled step="any" initial={0} />);
+    const { getByRole, container, unmount } = render(
+      <Controlled step="any" initial={0} />,
+    );
     fireEvent.input(getByRole("spinbutton"), { target: { value: "-2.75" } });
     expect(container.querySelector("output")?.textContent).toBe("-2.75");
     expect(getByRole("spinbutton").getAttribute("inputmode")).toBe("decimal");
@@ -114,15 +161,22 @@ describe("NumberInput", () => {
   it("forwards composing Enter without blocking confirmation or triggering validation", () => {
     const keyDown = mock();
     const invalid = mock();
-    const { getByRole } = render(<NumberInput value="" onKeyDown={keyDown} onInvalid={invalid} />);
-    expect(fireEvent.keyDown(getByRole("spinbutton"), { key: "Enter", isComposing: true })).toBe(true);
+    const { getByRole } = render(
+      <NumberInput value="" onKeyDown={keyDown} onInvalid={invalid} />,
+    );
+    expect(
+      fireEvent.keyDown(getByRole("spinbutton"), { key: "Enter", isComposing: true }),
+    ).toBe(true);
     expect(keyDown).toHaveBeenCalledTimes(1);
     expect(keyDown.mock.calls[0]?.[0].nativeEvent.isComposing).toBe(true);
     expect(invalid).not.toHaveBeenCalled();
   });
 
   it("supports string-backed values without parsing in callers", () => {
-    function StringValue() { const [value, setValue] = useState("1"); return <NumberInput value={value} onTextChange={setValue} />; }
+    function StringValue() {
+      const [value, setValue] = useState("1");
+      return <NumberInput value={value} onTextChange={setValue} />;
+    }
     const { getByRole } = render(<StringValue />);
     const input = getByRole("spinbutton") as HTMLInputElement;
     fireEvent.input(input, { target: { value: "" } });
@@ -140,7 +194,10 @@ describe("NumberInput", () => {
           optional
           min={2}
           value={value}
-          onTextChange={(next) => { changed(next); setValue(next); }}
+          onTextChange={(next) => {
+            changed(next);
+            setValue(next);
+          }}
           emptyFallback={1}
         />
       );
@@ -169,7 +226,10 @@ describe("NumberInput", () => {
           min={2}
           value={value}
           onValueChange={requiredChanged}
-          onOptionalValueChange={(next) => { optionalChanged(next); setValue(next); }}
+          onOptionalValueChange={(next) => {
+            optionalChanged(next);
+            setValue(next);
+          }}
           emptyFallback={1}
           onInput={onInput}
           onBlur={onBlur}
@@ -193,7 +253,15 @@ describe("NumberInput", () => {
 
   it("forwards registered field events and refs without taking over uncontrolled values", async () => {
     const submitted = mock();
-    function Registered() { const form = useForm({ defaultValues: { amount: 2 } }); return <form onSubmit={form.handleSubmit(submitted)}><NumberInput {...form.register("amount", { valueAsNumber: true })} /><button type="submit">Save</button></form>; }
+    function Registered() {
+      const form = useForm({ defaultValues: { amount: 2 } });
+      return (
+        <form onSubmit={form.handleSubmit(submitted)}>
+          <NumberInput {...form.register("amount", { valueAsNumber: true })} />
+          <button type="submit">Save</button>
+        </form>
+      );
+    }
     const { getByRole } = render(<Registered />);
     const input = getByRole("spinbutton") as HTMLInputElement;
     expect(input.value).toBe("2");
@@ -204,7 +272,21 @@ describe("NumberInput", () => {
 
   it("sends numeric controller values once instead of overwriting them with strings", async () => {
     const submitted = mock();
-    function ControlledForm() { const form = useForm({ defaultValues: { amount: 1 } }); return <form onSubmit={form.handleSubmit(submitted)}><Controller control={form.control} name="amount" render={({ field }) => <NumberInput {...field} onValueChange={field.onChange} />} /><button type="submit">Save</button></form>; }
+    function ControlledForm() {
+      const form = useForm({ defaultValues: { amount: 1 } });
+      return (
+        <form onSubmit={form.handleSubmit(submitted)}>
+          <Controller
+            control={form.control}
+            name="amount"
+            render={({ field }) => (
+              <NumberInput {...field} onValueChange={field.onChange} />
+            )}
+          />
+          <button type="submit">Save</button>
+        </form>
+      );
+    }
     const { getByRole } = render(<ControlledForm />);
     fireEvent.input(getByRole("spinbutton"), { target: { value: "3" } });
     fireEvent.click(getByRole("button"));

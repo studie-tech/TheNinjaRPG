@@ -24,7 +24,12 @@ import { profileRouter } from "@/server/api/routers/profile";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { insertUsers, insertClans } from "../../../../setup/factories";
-import { beforeStatements, failStatements, pollUntil, overrideQuery } from "../../../../setup/statements";
+import {
+  beforeStatements,
+  failStatements,
+  pollUntil,
+  overrideQuery,
+} from "../../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -57,7 +62,14 @@ describeWithDatabase("clan queue claim ownership", () => {
       })),
     );
     const db = await getTestDatabase();
-    await insertClans(["a", "b"].map((id) => ({ id, villageId: "v", leaderId: id === "a" ? "leader" : "enemy", leaderOrderId: id })));
+    await insertClans(
+      ["a", "b"].map((id) => ({
+        id,
+        villageId: "v",
+        leaderId: id === "a" ? "leader" : "enemy",
+        leaderOrderId: id,
+      })),
+    );
     await db.insert(mpvpBattleQueue).values(
       ["old", "new"].map((id) => ({
         id,
@@ -86,95 +98,221 @@ describeWithDatabase("clan queue claim ownership", () => {
     });
   };
 
-  it.each(["before", "after", "lost", "disconnected", "reconnected"] as const)("recovers clan deletion once and preserves other sockets (%s)", async (delivery) => {
-    const db = await getTestDatabase();
-    await oldMembership();
-    await db.insert(mpvpBattleUser).values({ id: "enemy-old", clanBattleId: "old", userId: "enemy", side: "DEFENDER", slot: 0 });
-    await db.update(userData).set({ status: "QUEUED" });
-    const key = [["profile", "getUser"], { type: "query" }];
-    for (const userId of ["leader", "enemy"]) await callerForDatabase(profileRouter, userId, db).getUser();
-    const tabs = await Promise.all(["leader", "leader", "enemy"].map(async (userId, index) => {
-      const profile = callerForDatabase(profileRouter, userId, db);
-      const initial = await profile.getUser();
-      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-      client.setQueryData(key, initial);
-      const read = vi.fn(() => profile.getUser());
-      const observer = new QueryObserver(client, { queryKey: key, queryFn: read, staleTime: Infinity });
-      const stop = observer.subscribe(() => {});
-      return { userId, client, read, stop, connection: { socket_id: delivery === "disconnected" && index === 0 ? undefined : `${index + 1}.1` } };
-    }));
-    const actor = tabs[0]!;
-    const source = readFileSync(join(import.meta.dirname, "../../../../../src/layout/clan/ClanBattles.tsx"), "utf8");
-    const callbacks = source.slice(source.indexOf("api.clan.deleteClanBattle.useMutation(")).match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
-    const action = source.match(/const onDeleteBattle = (async [\s\S]*?\n  \});/)?.[1];
-    if (!callbacks || !action) throw new Error("Clan deletion callbacks were not found");
-    const utilsFor = (tab: typeof actor) => ({ profile: { getUser: {
-      cancel: () => tab.client.cancelQueries({ queryKey: key, exact: true }),
-      invalidate: () => tab.client.invalidateQueries({ queryKey: key, exact: true }),
-    } }, clan: { getClanBattles: { invalidate: vi.fn() } }, combat: { getBattle: { invalidate: vi.fn() } } });
-    const options = new Function("prepareUserUpdate", "updateUser", "utils", `return (${callbacks});`)(
-      () => prepareUserUpdate(actor.client, key),
-      (patch: UserPatch | undefined, update: UserUpdateOptions) => updateUserCache(actor.client, key, patch, update),
-      utilsFor(actor),
-    ) as { onMutate?: () => number | undefined; onSuccess: (data: unknown, input: unknown, revision: number | undefined) => Promise<void>; onSettled: (data: unknown, error: unknown) => Promise<unknown> | undefined };
-    const handlerSource = readFileSync(join(import.meta.dirname, "../../../../../src/layout/PusherHandler.tsx"), "utf8");
-    const callback = handlerSource.match(/channel.bind\("event", (async [\s\S]*?\n      \})\);/)?.[1];
-    if (!callback) throw new Error("User event callback was not found");
-    const transpiler = new (require("bun").Transpiler)({ loader: "tsx", tsconfig: { compilerOptions: { jsx: "react" } } }) as { transformSync(source: string): string };
-    const factory = transpiler.transformSync(`function createHandler() { return (${callback}); }`);
-    const receivers = tabs.map((tab) => new Function("utils", "pusher", `${factory}\nreturn createHandler();`)(utilsFor(tab), { connection: tab.connection }) as (event: { type: string; originSocketId?: string }) => Promise<void>);
-    const trigger = vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    const deliver = async () => {
-      for (const [index, tab] of tabs.entries()) {
-        if (delivery === "disconnected" && index === 0) continue;
-        const event = trigger.mock.calls.find(([recipient]) => recipient === tab.userId)?.[2];
-        if (event) await receivers[index]!(event as { type: string; originSocketId?: string });
+  it.each(["before", "after", "lost", "disconnected", "reconnected"] as const)(
+    "recovers clan deletion once and preserves other sockets (%s)",
+    async (delivery) => {
+      const db = await getTestDatabase();
+      await oldMembership();
+      await db.insert(mpvpBattleUser).values({
+        id: "enemy-old",
+        clanBattleId: "old",
+        userId: "enemy",
+        side: "DEFENDER",
+        slot: 0,
+      });
+      await db.update(userData).set({ status: "QUEUED" });
+      const key = [["profile", "getUser"], { type: "query" }];
+      for (const userId of ["leader", "enemy"])
+        await callerForDatabase(profileRouter, userId, db).getUser();
+      const tabs = await Promise.all(
+        ["leader", "leader", "enemy"].map(async (userId, index) => {
+          const profile = callerForDatabase(profileRouter, userId, db);
+          const initial = await profile.getUser();
+          const client = new QueryClient({
+            defaultOptions: { queries: { retry: false } },
+          });
+          client.setQueryData(key, initial);
+          const read = vi.fn(() => profile.getUser());
+          const observer = new QueryObserver(client, {
+            queryKey: key,
+            queryFn: read,
+            staleTime: Infinity,
+          });
+          const stop = observer.subscribe(() => {});
+          return {
+            userId,
+            client,
+            read,
+            stop,
+            connection: {
+              socket_id:
+                delivery === "disconnected" && index === 0
+                  ? undefined
+                  : `${index + 1}.1`,
+            },
+          };
+        }),
+      );
+      const actor = tabs[0]!;
+      const source = readFileSync(
+        join(import.meta.dirname, "../../../../../src/layout/clan/ClanBattles.tsx"),
+        "utf8",
+      );
+      const callbacks = source
+        .slice(source.indexOf("api.clan.deleteClanBattle.useMutation("))
+        .match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+      const action = source.match(
+        /const onDeleteBattle = (async [\s\S]*?\n  \});/,
+      )?.[1];
+      if (!callbacks || !action)
+        throw new Error("Clan deletion callbacks were not found");
+      const utilsFor = (tab: typeof actor) => ({
+        profile: {
+          getUser: {
+            cancel: () => tab.client.cancelQueries({ queryKey: key, exact: true }),
+            invalidate: () =>
+              tab.client.invalidateQueries({ queryKey: key, exact: true }),
+          },
+        },
+        clan: { getClanBattles: { invalidate: vi.fn() } },
+        combat: { getBattle: { invalidate: vi.fn() } },
+      });
+      const options = new Function(
+        "prepareUserUpdate",
+        "updateUser",
+        "utils",
+        `return (${callbacks});`,
+      )(
+        () => prepareUserUpdate(actor.client, key),
+        (patch: UserPatch | undefined, update: UserUpdateOptions) =>
+          updateUserCache(actor.client, key, patch, update),
+        utilsFor(actor),
+      ) as {
+        onMutate?: () => number | undefined;
+        onSuccess: (
+          data: unknown,
+          input: unknown,
+          revision: number | undefined,
+        ) => Promise<void>;
+        onSettled: (data: unknown, error: unknown) => Promise<unknown> | undefined;
+      };
+      const handlerSource = readFileSync(
+        join(import.meta.dirname, "../../../../../src/layout/PusherHandler.tsx"),
+        "utf8",
+      );
+      const callback = handlerSource.match(
+        /channel.bind\("event", (async [\s\S]*?\n      \})\);/,
+      )?.[1];
+      if (!callback) throw new Error("User event callback was not found");
+      const transpiler = new (require("bun").Transpiler)({
+        loader: "tsx",
+        tsconfig: { compilerOptions: { jsx: "react" } },
+      }) as { transformSync(source: string): string };
+      const factory = transpiler.transformSync(
+        `function createHandler() { return (${callback}); }`,
+      );
+      const receivers = tabs.map(
+        (tab) =>
+          new Function("utils", "pusher", `${factory}\nreturn createHandler();`)(
+            utilsFor(tab),
+            { connection: tab.connection },
+          ) as (event: { type: string; originSocketId?: string }) => Promise<void>,
+      );
+      const trigger = vi
+        .spyOn(Pusher.prototype, "trigger")
+        .mockResolvedValue(undefined);
+      const deliver = async () => {
+        for (const [index, tab] of tabs.entries()) {
+          if (delivery === "disconnected" && index === 0) continue;
+          const event = trigger.mock.calls.find(
+            ([recipient]) => recipient === tab.userId,
+          )?.[2];
+          if (event)
+            await receivers[index]!(event as { type: string; originSocketId?: string });
+        }
+      };
+      const defaultError = vi.fn();
+      const removeBattle = vi.fn(
+        async (input: { clanBattleId: string; originSocketId?: string }) => {
+          const revision = options.onMutate?.();
+          const result = await callerForDatabase(
+            clanRouter,
+            "leader",
+            db,
+          ).deleteClanBattle(input);
+          expect(result.success).toBe(true);
+          expect(result).not.toHaveProperty("userPatch");
+          if (delivery === "before" || delivery === "lost") await deliver();
+          if (delivery === "lost") {
+            const error = new Error("Response lost after deletion");
+            defaultError(error);
+            await options.onSettled(undefined, error);
+            throw error;
+          }
+          await options.onSuccess(result, input, revision);
+          await options.onSettled(result, undefined);
+          return result;
+        },
+      );
+      // Read the mutable connection at submission, including a newly connected socket.
+      if (delivery !== "disconnected") actor.connection.socket_id = "4.1";
+      const setDeleteError = vi.fn();
+      const invoke = new Function(
+        "deletingBattleId",
+        "deleteFlight",
+        "setDeleteError",
+        "removeBattle",
+        "pusher",
+        "showMutationToast",
+        "setDeletedBattleIds",
+        "setDeletingBattleId",
+        "joinedBattleId",
+        "setJoinedBattleId",
+        "utils",
+        `return (${action});`,
+      )(
+        "old",
+        { run: (_request: unknown, task: () => Promise<void>) => task() },
+        setDeleteError,
+        removeBattle,
+        { connection: actor.connection },
+        vi.fn(),
+        vi.fn(),
+        vi.fn(),
+        "old",
+        vi.fn(),
+        utilsFor(actor),
+      ) as () => Promise<void>;
+      try {
+        await invoke();
+        expect(removeBattle).toHaveBeenCalledWith({
+          clanBattleId: "old",
+          originSocketId: delivery === "disconnected" ? undefined : "4.1",
+        });
+        expect(actor.read).toHaveBeenCalledTimes(1);
+        if (["after", "disconnected", "reconnected"].includes(delivery)) {
+          if (delivery === "reconnected") actor.connection.socket_id = "5.1";
+          await deliver();
+        }
+        expect(actor.read).toHaveBeenCalledTimes(delivery === "reconnected" ? 2 : 1);
+        for (const tab of tabs.slice(1)) expect(tab.read).toHaveBeenCalledTimes(1);
+        for (const tab of tabs)
+          expect(
+            tab.client.getQueryData<{ userData: { status: string } }>(key)?.userData
+              .status,
+          ).toBe("AWAKE");
+        expect(defaultError).toHaveBeenCalledTimes(delivery === "lost" ? 1 : 0);
+        if (delivery === "lost")
+          expect(setDeleteError).toHaveBeenCalledWith("Response lost after deletion");
+      } finally {
+        for (const tab of tabs) {
+          tab.stop();
+          tab.client.clear();
+        }
       }
-    };
-    const defaultError = vi.fn();
-    const removeBattle = vi.fn(async (input: { clanBattleId: string; originSocketId?: string }) => {
-      const revision = options.onMutate?.();
-      const result = await callerForDatabase(clanRouter, "leader", db).deleteClanBattle(input);
-      expect(result.success).toBe(true);
-      expect(result).not.toHaveProperty("userPatch");
-      if (delivery === "before" || delivery === "lost") await deliver();
-      if (delivery === "lost") {
-        const error = new Error("Response lost after deletion");
-        defaultError(error);
-        await options.onSettled(undefined, error);
-        throw error;
-      }
-      await options.onSuccess(result, input, revision);
-      await options.onSettled(result, undefined);
-      return result;
-    });
-    // Read the mutable connection at submission, including a newly connected socket.
-    if (delivery !== "disconnected") actor.connection.socket_id = "4.1";
-    const setDeleteError = vi.fn();
-    const invoke = new Function("deletingBattleId", "deleteFlight", "setDeleteError", "removeBattle", "pusher", "showMutationToast", "setDeletedBattleIds", "setDeletingBattleId", "joinedBattleId", "setJoinedBattleId", "utils", `return (${action});`)(
-      "old", { run: (_request: unknown, task: () => Promise<void>) => task() }, setDeleteError, removeBattle, { connection: actor.connection }, vi.fn(), vi.fn(), vi.fn(), "old", vi.fn(), utilsFor(actor),
-    ) as () => Promise<void>;
-    try {
-      await invoke();
-      expect(removeBattle).toHaveBeenCalledWith({ clanBattleId: "old", originSocketId: delivery === "disconnected" ? undefined : "4.1" });
-      expect(actor.read).toHaveBeenCalledTimes(1);
-      if (["after", "disconnected", "reconnected"].includes(delivery)) {
-        if (delivery === "reconnected") actor.connection.socket_id = "5.1";
-        await deliver();
-      }
-      expect(actor.read).toHaveBeenCalledTimes(delivery === "reconnected" ? 2 : 1);
-      for (const tab of tabs.slice(1)) expect(tab.read).toHaveBeenCalledTimes(1);
-      for (const tab of tabs) expect(tab.client.getQueryData<{ userData: { status: string } }>(key)?.userData.status).toBe("AWAKE");
-      expect(defaultError).toHaveBeenCalledTimes(delivery === "lost" ? 1 : 0);
-      if (delivery === "lost") expect(setDeleteError).toHaveBeenCalledWith("Response lost after deletion");
-    } finally { for (const tab of tabs) { tab.stop(); tab.client.clear(); } }
-  });
+    },
+  );
 
   it("returns the guarded wake outcome without a confirmation read", async () => {
     const db = await getTestDatabase();
     await oldMembership();
-    await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "leader"));
-    const result = await callerForDatabase(clanRouter, "leader", db).leaveClanBattle({ clanBattleId: "old" });
+    await db
+      .update(userData)
+      .set({ status: "QUEUED" })
+      .where(eq(userData.userId, "leader"));
+    const result = await callerForDatabase(clanRouter, "leader", db).leaveClanBattle({
+      clanBattleId: "old",
+    });
     expect(result.success).toBe(true);
     expect(result.userPatch).toEqual({ status: "AWAKE" });
     expect(result.userDelta).toBeUndefined();
@@ -410,55 +548,110 @@ describeWithDatabase("clan queue claim ownership", () => {
       expect(await db.query.mpvpBattleQueue.findMany()).toHaveLength(2);
     });
 
-    it.each([false, true])(`reports only confirmed recovery when ${operation}'s lobby reserves combat, started=%s`, async (started) => {
-      const db = await getTestDatabase();
-      await db.update(userData).set({ status: "ASLEEP", regeneration: 0 }).where(eq(userData.userId, "leader"));
-      const client = beforeStatements(db, mpvpBattleUser, [
-        async () => {
-          if (operation === "challenge") {
-            // Wait for the parallel challenge-lobby insert before reserving it.
-            await pollUntil(async () => (await db.query.mpvpBattleQueue.findMany()).length === 3);
-          }
-          const lobbies = await db.query.mpvpBattleQueue.findMany();
-          const lobby = lobbies.find((q) =>
-            operation === "challenge" ? !["old", "new"].includes(q.id) : q.id === "new",
-          );
-          expect(lobby).toBeDefined();
-          if (!lobby) throw new Error("Challenge lobby was not published");
-          await db
-            .update(mpvpBattleQueue)
-            .set({ battleId: "reserved-combat" })
-            .where(eq(mpvpBattleQueue.id, lobby.id));
-          if (started) await db.update(userData).set({ status: "BATTLE", battleId: "reserved-combat" }).where(eq(userData.userId, "leader"));
-        },
-      ]);
-      const result = await join(client);
-      expect(result).toMatchObject({ success: false, actionNotice: AUTO_WAKE_MESSAGE });
-      if (started) expect(result.userRecovery).toEqual({ userId: "leader", requiresUserRefresh: true });
-      else expect(result.userRecovery?.activity).toMatchObject({ status: "AWAKE", battleId: null });
-      expect(await storedUser()).toEqual({ status: started ? "BATTLE" : "AWAKE", battleId: started ? "reserved-combat" : null });
-      expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(0);
-      expect(
-        await db.query.mpvpBattleQueue.findMany({
-          where: eq(mpvpBattleQueue.battleId, "reserved-combat"),
-        }),
-      ).toHaveLength(1);
-    });
+    it.each([false, true])(
+      `reports only confirmed recovery when ${operation}'s lobby reserves combat, started=%s`,
+      async (started) => {
+        const db = await getTestDatabase();
+        await db
+          .update(userData)
+          .set({ status: "ASLEEP", regeneration: 0 })
+          .where(eq(userData.userId, "leader"));
+        const client = beforeStatements(db, mpvpBattleUser, [
+          async () => {
+            if (operation === "challenge") {
+              // Wait for the parallel challenge-lobby insert before reserving it.
+              await pollUntil(
+                async () => (await db.query.mpvpBattleQueue.findMany()).length === 3,
+              );
+            }
+            const lobbies = await db.query.mpvpBattleQueue.findMany();
+            const lobby = lobbies.find((q) =>
+              operation === "challenge"
+                ? !["old", "new"].includes(q.id)
+                : q.id === "new",
+            );
+            expect(lobby).toBeDefined();
+            if (!lobby) throw new Error("Challenge lobby was not published");
+            await db
+              .update(mpvpBattleQueue)
+              .set({ battleId: "reserved-combat" })
+              .where(eq(mpvpBattleQueue.id, lobby.id));
+            if (started)
+              await db
+                .update(userData)
+                .set({ status: "BATTLE", battleId: "reserved-combat" })
+                .where(eq(userData.userId, "leader"));
+          },
+        ]);
+        const result = await join(client);
+        expect(result).toMatchObject({
+          success: false,
+          actionNotice: AUTO_WAKE_MESSAGE,
+        });
+        if (started)
+          expect(result.userRecovery).toEqual({
+            userId: "leader",
+            requiresUserRefresh: true,
+          });
+        else
+          expect(result.userRecovery?.activity).toMatchObject({
+            status: "AWAKE",
+            battleId: null,
+          });
+        expect(await storedUser()).toEqual({
+          status: started ? "BATTLE" : "AWAKE",
+          battleId: started ? "reserved-combat" : null,
+        });
+        expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(0);
+        expect(
+          await db.query.mpvpBattleQueue.findMany({
+            where: eq(mpvpBattleQueue.battleId, "reserved-combat"),
+          }),
+        ).toHaveLength(1);
+      },
+    );
   }
 
-  it.each([false, true])("reports only confirmed recovery after a duplicate clan join, started=%s", async (started) => {
-    const db = await getTestDatabase();
-    await db.update(userData).set({ status: "ASLEEP", regeneration: 0 }).where(eq(userData.userId, "leader"));
-    const client = beforeStatements(db, mpvpBattleUser, [async () => {
-      if (started) await db.update(userData).set({ status: "BATTLE", battleId: "newer-combat" }).where(eq(userData.userId, "leader"));
-      throw new Error("Duplicate entry for MpvpBattleUser_userId_key");
-    }]);
-    const result = await callerForDatabase(clanRouter, "leader", client).joinClanBattle({ clanBattleId: "new" });
-    expect(result).toMatchObject({ success: false, actionNotice: AUTO_WAKE_MESSAGE });
-    if (started) expect(result.userRecovery).toEqual({ userId: "leader", requiresUserRefresh: true });
-    else expect(result.userRecovery?.activity).toMatchObject({ status: "AWAKE", battleId: null });
-    expect(await storedUser()).toEqual({ status: started ? "BATTLE" : "AWAKE", battleId: started ? "newer-combat" : null });
-  });
+  it.each([false, true])(
+    "reports only confirmed recovery after a duplicate clan join, started=%s",
+    async (started) => {
+      const db = await getTestDatabase();
+      await db
+        .update(userData)
+        .set({ status: "ASLEEP", regeneration: 0 })
+        .where(eq(userData.userId, "leader"));
+      const client = beforeStatements(db, mpvpBattleUser, [
+        async () => {
+          if (started)
+            await db
+              .update(userData)
+              .set({ status: "BATTLE", battleId: "newer-combat" })
+              .where(eq(userData.userId, "leader"));
+          throw new Error("Duplicate entry for MpvpBattleUser_userId_key");
+        },
+      ]);
+      const result = await callerForDatabase(
+        clanRouter,
+        "leader",
+        client,
+      ).joinClanBattle({ clanBattleId: "new" });
+      expect(result).toMatchObject({ success: false, actionNotice: AUTO_WAKE_MESSAGE });
+      if (started)
+        expect(result.userRecovery).toEqual({
+          userId: "leader",
+          requiresUserRefresh: true,
+        });
+      else
+        expect(result.userRecovery?.activity).toMatchObject({
+          status: "AWAKE",
+          battleId: null,
+        });
+      expect(await storedUser()).toEqual({
+        status: started ? "BATTLE" : "AWAKE",
+        battleId: started ? "newer-combat" : null,
+      });
+    },
+  );
 
   it("settles a delayed challenge-lobby insert before compensating a lost membership", async () => {
     const db = await getTestDatabase();
@@ -544,10 +737,12 @@ describeWithDatabase("clan queue claim ownership", () => {
           }),
       ]),
     );
-    await expect(caller.joinClanBattle({ clanBattleId: "old" })).resolves.toMatchObject({
-      success: false,
-      message: "Slot was taken. Please try again.",
-    });
+    await expect(caller.joinClanBattle({ clanBattleId: "old" })).resolves.toMatchObject(
+      {
+        success: false,
+        message: "Slot was taken. Please try again.",
+      },
+    );
     expect(await storedUser()).toEqual({ status: "AWAKE", battleId: null });
   });
 });

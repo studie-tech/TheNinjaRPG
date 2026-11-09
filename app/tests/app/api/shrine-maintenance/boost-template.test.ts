@@ -2,7 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { computeTemplateActivations } from "@/server/utils/shrineMaintenance";
 
 /** A UTC time on Monday 2024-01-01, the day every template row below targets (dayOfWeek 1). */
-const monday = (hour: number, minute = 0) => new Date(Date.UTC(2024, 0, 1, hour, minute));
+const monday = (hour: number, minute = 0) =>
+  new Date(Date.UTC(2024, 0, 1, hour, minute));
 
 const TRAINING_SLOT_2 = { boostType: "Training", dayOfWeek: 1, slotIndex: 2 } as const;
 
@@ -36,7 +37,10 @@ describe("computeTemplateActivations", () => {
   it("skips boost already active with future expiry", () => {
     const futureExpiry = new Date(monday(4).getTime() + 60 * 60 * 1000).toISOString();
     const result = activations({
-      shrineSettings: { activeBoosts: { Training: futureExpiry }, boostTemplate: [TRAINING_SLOT_2] },
+      shrineSettings: {
+        activeBoosts: { Training: futureExpiry },
+        boostTemplate: [TRAINING_SLOT_2],
+      },
     });
     expect(result).toHaveLength(0);
   });
@@ -44,7 +48,10 @@ describe("computeTemplateActivations", () => {
   it("activates boost whose stored expiry has already passed", () => {
     const pastExpiry = new Date(monday(4).getTime() - 1000).toISOString();
     const result = activations({
-      shrineSettings: { activeBoosts: { Training: pastExpiry }, boostTemplate: [TRAINING_SLOT_2] },
+      shrineSettings: {
+        activeBoosts: { Training: pastExpiry },
+        boostTemplate: [TRAINING_SLOT_2],
+      },
     });
     expect(result).toHaveLength(1);
   });

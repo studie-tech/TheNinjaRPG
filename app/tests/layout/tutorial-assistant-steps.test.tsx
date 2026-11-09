@@ -91,31 +91,99 @@ beforeEach(() => {
   localStorage.clear();
   installBrowserGlobals({ resizeObserver: true, animationFrame: () => 0 });
   getDefaultStore().set(chatPanelAtom, { owner: null, tab: "tavern" });
-  for (const fn of [state.push, state.replace, state.updateUser, state.updateStep, state.saveStep, state.disable, state.sceneAssets, state.checkRewards, state.setRightSideBarOpen]) fn.mockClear();
+  for (const fn of [
+    state.push,
+    state.replace,
+    state.updateUser,
+    state.updateStep,
+    state.saveStep,
+    state.disable,
+    state.sceneAssets,
+    state.checkRewards,
+    state.setRightSideBarOpen,
+  ])
+    fn.mockClear();
   state.pathname = "/profile";
-  spies.push(vi.spyOn(UserContext, "useUserData").mockImplementation(() => ({ data: state.profile }) as never));
-  spies.push(vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
-    const data = state.profile;
-    const selected = useMemo(() => (data ? select(data as never) : undefined), [data]);
-    return { data: selected, updateUser: state.updateUser, timeDiff: 0 } as never;
-  }));
-  spies.push(vi.spyOn(routing, "usePublicPathname").mockImplementation(() => state.pathname));
-  spies.push(vi.spyOn(navigation, "useRouter").mockImplementation(() => ({ push: state.push, replace: state.replace }) as never));
-  spies.push(vi.spyOn(abVariant, "useAbVariant").mockReturnValue({ variant: "A" } as never));
+  spies.push(
+    vi
+      .spyOn(UserContext, "useUserData")
+      .mockImplementation(() => ({ data: state.profile }) as never),
+  );
+  spies.push(
+    vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
+      const data = state.profile;
+      const selected = useMemo(
+        () => (data ? select(data as never) : undefined),
+        [data],
+      );
+      return { data: selected, updateUser: state.updateUser, timeDiff: 0 } as never;
+    }),
+  );
+  spies.push(
+    vi.spyOn(routing, "usePublicPathname").mockImplementation(() => state.pathname),
+  );
+  spies.push(
+    vi
+      .spyOn(navigation, "useRouter")
+      .mockImplementation(
+        () => ({ push: state.push, replace: state.replace }) as never,
+      ),
+  );
+  spies.push(
+    vi.spyOn(abVariant, "useAbVariant").mockReturnValue({ variant: "A" } as never),
+  );
   spies.push(vi.spyOn(image, "default").mockImplementation((() => null) as never));
-  spies.push(vi.spyOn(logbook, "QuestObjectives").mockImplementation((({ quest }: { quest: { name: string } }) => <p>Objectives of {quest.name}</p>) as never));
-  spies.push(vi.spyOn(logbook, "useCheckRewards").mockImplementation(() => ({ checkRewards: state.checkRewards, isCheckingRewards: false }) as never));
-  spies.push(vi.spyOn(sortableList, "SortableList").mockImplementation((({ items }: { items: { id: string; label: string }[] }) => <ol>{items.map((item) => <li key={item.id}>{item.label}</li>)}</ol>) as never));
+  spies.push(
+    vi
+      .spyOn(logbook, "QuestObjectives")
+      .mockImplementation((({ quest }: { quest: { name: string } }) => (
+        <p>Objectives of {quest.name}</p>
+      )) as never),
+  );
+  spies.push(
+    vi
+      .spyOn(logbook, "useCheckRewards")
+      .mockImplementation(
+        () => ({ checkRewards: state.checkRewards, isCheckingRewards: false }) as never,
+      ),
+  );
+  spies.push(
+    vi.spyOn(sortableList, "SortableList").mockImplementation((({
+      items,
+    }: {
+      items: { id: string; label: string }[];
+    }) => (
+      <ol>
+        {items.map((item) => (
+          <li key={item.id}>{item.label}</li>
+        ))}
+      </ol>
+    )) as never),
+  );
   const api = Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
     profile: {
       updatePreferences: { useMutation: () => ({ mutateAsync: state.disable }) },
-      updateTutorialStep: { useMutation: () => ({ mutate: state.updateStep, mutateAsync: state.saveStep, isPending: false }) },
+      updateTutorialStep: {
+        useMutation: () => ({
+          mutate: state.updateStep,
+          mutateAsync: state.saveStep,
+          isPending: false,
+        }),
+      },
     },
-    gameAsset: { getSceneAssets: { useQuery: (input: unknown, options: unknown) => {
-      state.sceneAssets(input, options);
-      return { data: [{ type: "SCENE_CHARACTER", image: "https://example.com/proctor.png" }] };
-    } } },
+    gameAsset: {
+      getSceneAssets: {
+        useQuery: (input: unknown, options: unknown) => {
+          state.sceneAssets(input, options);
+          return {
+            data: [
+              { type: "SCENE_CHARACTER", image: "https://example.com/proctor.png" },
+            ],
+          };
+        },
+      },
+    },
   });
   spies.push(api as never);
   restoreDialogs = stubDialog();
@@ -130,98 +198,189 @@ afterEach(() => {
 });
 
 const assistant = (sidebarBreakpoint = 768, rightSideBarOpen = false) => (
-  <TutorialAssistant sidebarBreakpoint={sidebarBreakpoint} rightSideBarOpen={rightSideBarOpen} setRightSideBarOpen={state.setRightSideBarOpen} rightSideBarRef={{ current: null }} />
+  <TutorialAssistant
+    sidebarBreakpoint={sidebarBreakpoint}
+    rightSideBarOpen={rightSideBarOpen}
+    setRightSideBarOpen={state.setRightSideBarOpen}
+    rightSideBarRef={{ current: null }}
+  />
 );
 
 /** A visible element the assistant can measure, standing in for the page's control. */
-const Target = ({ id, box = new DOMRect(40, 300, 160, 48) }: { id: string; box?: DOMRect }) => (
-  <div id={id} ref={(element) => { if (element) element.getBoundingClientRect = () => box; }} />
+const Target = ({
+  id,
+  box = new DOMRect(40, 300, 160, 48),
+}: {
+  id: string;
+  box?: DOMRect;
+}) => (
+  <div
+    id={id}
+    ref={(element) => {
+      if (element) element.getBoundingClientRect = () => box;
+    }}
+  />
 );
 
-const show = (step: number, values: Partial<Profile> = {}, pathname?: string, extra?: ReactNode, breakpoint?: number) => {
+const show = (
+  step: number,
+  values: Partial<Profile> = {},
+  pathname?: string,
+  extra?: ReactNode,
+  breakpoint?: number,
+) => {
   state.profile = makeProfile(step, values);
-  state.pathname = pathname ?? (TUTORIAL_STEPS[step]?.page.split(/[?#]/)[0] ?? "/profile");
-  return render(<>{extra}{assistant(breakpoint)}</>);
+  state.pathname =
+    pathname ?? TUTORIAL_STEPS[step]?.page.split(/[?#]/)[0] ?? "/profile";
+  return render(
+    <>
+      {extra}
+      {assistant(breakpoint)}
+    </>,
+  );
 };
 
-const textOf = (node: ReactNode) => render(<div>{node}</div>).container.textContent ?? "";
+const textOf = (node: ReactNode) =>
+  render(<div>{node}</div>).container.textContent ?? "";
 
-const lesson = (view: ReturnType<typeof render>, title: string) => view.getByRole("region", { name: `Tutorial: ${title}` });
+const lesson = (view: ReturnType<typeof render>, title: string) =>
+  view.getByRole("region", { name: `Tutorial: ${title}` });
 
-const overlay = () => document.body.querySelector<HTMLElement>("div[data-battle-focus-layer].inset-0");
+const overlay = () =>
+  document.body.querySelector<HTMLElement>("div[data-battle-focus-layer].inset-0");
 
 describe("each tutorial step", () => {
   it("covers every defined step", () => {
     expect(TUTORIAL_STEPS).toHaveLength(TUTORIAL_STEPS_COUNT);
   });
 
-  it.each(TUTORIAL_STEPS.map((step, index) => [index, step.id] as const))("step %i (%s) shows its lesson, highlight and advance controls", async (index) => {
-    const step = TUTORIAL_STEPS[index]!;
-    const target = step.elementIds?.[0];
-    const view = show(index, {}, undefined, target ? <Target id={target} /> : null);
-    const region = lesson(view, step.title);
-    expect(region.getAttribute("data-tutorial-step")).toBe(step.id);
+  it.each(TUTORIAL_STEPS.map((step, index) => [index, step.id] as const))(
+    "step %i (%s) shows its lesson, highlight and advance controls",
+    async (index) => {
+      const step = TUTORIAL_STEPS[index]!;
+      const target = step.elementIds?.[0];
+      const view = show(index, {}, undefined, target ? <Target id={target} /> : null);
+      const region = lesson(view, step.title);
+      expect(region.getAttribute("data-tutorial-step")).toBe(step.id);
 
-    const description = textOf(typeof step.description === "string" ? parseHtml(step.description) : step.description);
-    expect(region.textContent).toContain(description);
-    const progress = getTutorialChapterProgress(TUTORIAL_STEPS, index)!;
-    const chapterIndex = TUTORIAL_CHAPTERS.findIndex((chapter) => chapter.id === progress.chapter);
-    expect(region.textContent).toContain(`Chapter ${chapterIndex + 1} of ${TUTORIAL_CHAPTERS.length} · ${TUTORIAL_CHAPTERS[chapterIndex]?.title}`);
-    expect(view.getByRole("progressbar", { name: "Chapter progress" }).getAttribute("aria-valuenow")).toBe(String(progress.position));
-    if (step.action) expect(region.textContent).toContain(step.action);
+      const description = textOf(
+        typeof step.description === "string"
+          ? parseHtml(step.description)
+          : step.description,
+      );
+      expect(region.textContent).toContain(description);
+      const progress = getTutorialChapterProgress(TUTORIAL_STEPS, index)!;
+      const chapterIndex = TUTORIAL_CHAPTERS.findIndex(
+        (chapter) => chapter.id === progress.chapter,
+      );
+      expect(region.textContent).toContain(
+        `Chapter ${chapterIndex + 1} of ${TUTORIAL_CHAPTERS.length} · ${TUTORIAL_CHAPTERS[chapterIndex]?.title}`,
+      );
+      expect(
+        view
+          .getByRole("progressbar", { name: "Chapter progress" })
+          .getAttribute("aria-valuenow"),
+      ).toBe(String(progress.position));
+      if (step.action) expect(region.textContent).toContain(step.action);
 
-    // The highlight surrounds the step's first target and only captures clicks that advance.
-    const highlightButton = target ? view.getByRole("button", { name: step.action ?? "Continue tutorial" }) : null;
-    if (target) {
-      const hole = highlightButton!.parentElement!.parentElement!;
-      expect(hole.style.transform).toBe("translate(32px, 292px)");
-      expect(highlightButton!.className.includes("pointer-events-auto")).toBe(!!step.proceedOnHighlightClick);
-      expect(!!overlay()?.querySelector(".animate-ping")).toBe(!!step.action || !!step.proceedOnHighlightClick);
-    } else {
-      expect(overlay() === null).toBe(true);
-    }
-
-    const nextLabel = step.nextLabel ?? (index === TUTORIAL_STEPS.length - 1 ? "Finish" : "Next");
-    expect(!!view.queryByRole("button", { name: nextLabel })).toBe(!!step.showNextButton);
-
-    // Each way of advancing is tried on a fresh lesson: the last one hides on advance.
-    const advance = async (press: (view: ReturnType<typeof render>) => void, advances: boolean) => {
-      cleanup();
-      state.saveStep.mockClear();
-      state.updateUser.mockClear();
-      const fresh = show(index, {}, undefined, target ? <Target id={target} /> : null);
-      press(fresh);
-      if (advances) {
-        await waitFor(() => expect(state.saveStep).toHaveBeenCalledWith({ step: index + 1 }));
-        expect(state.updateUser).toHaveBeenCalledWith({ tutorialStep: index + 1 });
+      // The highlight surrounds the step's first target and only captures clicks that advance.
+      const highlightButton = target
+        ? view.getByRole("button", { name: step.action ?? "Continue tutorial" })
+        : null;
+      if (target) {
+        const hole = highlightButton!.parentElement!.parentElement!;
+        expect(hole.style.transform).toBe("translate(32px, 292px)");
+        expect(highlightButton!.className.includes("pointer-events-auto")).toBe(
+          !!step.proceedOnHighlightClick,
+        );
+        expect(!!overlay()?.querySelector(".animate-ping")).toBe(
+          !!step.action || !!step.proceedOnHighlightClick,
+        );
       } else {
-        await act(async () => {});
-        expect(state.saveStep).not.toHaveBeenCalled();
+        expect(overlay() === null).toBe(true);
       }
-    };
-    // Enter advances exactly the steps that offer Next or a pressable highlight.
-    await advance(() => fireEvent.keyDown(window, { key: "Enter" }), !!step.showNextButton || !!step.proceedOnHighlightClick);
-    if (step.showNextButton) await advance((fresh) => fireEvent.click(fresh.getByRole("button", { name: nextLabel })), true);
-    if (target) await advance((fresh) => fireEvent.click(fresh.getByRole("button", { name: step.action ?? "Continue tutorial" })), !!step.proceedOnHighlightClick);
-    expect(state.push).not.toHaveBeenCalled();
-    expect(state.replace).not.toHaveBeenCalled();
-    expect(state.updateStep).not.toHaveBeenCalled();
-  });
+
+      const nextLabel =
+        step.nextLabel ?? (index === TUTORIAL_STEPS.length - 1 ? "Finish" : "Next");
+      expect(!!view.queryByRole("button", { name: nextLabel })).toBe(
+        !!step.showNextButton,
+      );
+
+      // Each way of advancing is tried on a fresh lesson: the last one hides on advance.
+      const advance = async (
+        press: (view: ReturnType<typeof render>) => void,
+        advances: boolean,
+      ) => {
+        cleanup();
+        state.saveStep.mockClear();
+        state.updateUser.mockClear();
+        const fresh = show(
+          index,
+          {},
+          undefined,
+          target ? <Target id={target} /> : null,
+        );
+        press(fresh);
+        if (advances) {
+          await waitFor(() =>
+            expect(state.saveStep).toHaveBeenCalledWith({ step: index + 1 }),
+          );
+          expect(state.updateUser).toHaveBeenCalledWith({ tutorialStep: index + 1 });
+        } else {
+          await act(async () => {});
+          expect(state.saveStep).not.toHaveBeenCalled();
+        }
+      };
+      // Enter advances exactly the steps that offer Next or a pressable highlight.
+      await advance(
+        () => fireEvent.keyDown(window, { key: "Enter" }),
+        !!step.showNextButton || !!step.proceedOnHighlightClick,
+      );
+      if (step.showNextButton)
+        await advance(
+          (fresh) => fireEvent.click(fresh.getByRole("button", { name: nextLabel })),
+          true,
+        );
+      if (target)
+        await advance(
+          (fresh) =>
+            fireEvent.click(
+              fresh.getByRole("button", { name: step.action ?? "Continue tutorial" }),
+            ),
+          !!step.proceedOnHighlightClick,
+        );
+      expect(state.push).not.toHaveBeenCalled();
+      expect(state.replace).not.toHaveBeenCalled();
+      expect(state.updateStep).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("step overrides", () => {
   it("shows the hospital lesson over any step while hospitalized", () => {
-    const view = show(5, { status: "HOSPITALIZED" }, "/hospital", <Target id="tutorial-hospital-buttons" />);
+    const view = show(
+      5,
+      { status: "HOSPITALIZED" },
+      "/hospital",
+      <Target id="tutorial-hospital-buttons" />,
+    );
     const region = lesson(view, TUTORIAL_HOSPITALIZED_STEP.title);
     expect(region.getAttribute("data-tutorial-step")).toBe("hospitalized");
     expect(region.textContent).toContain(TUTORIAL_HOSPITALIZED_STEP.action!);
-    expect(view.getByRole("button", { name: TUTORIAL_HOSPITALIZED_STEP.action! })).toBeTruthy();
+    expect(
+      view.getByRole("button", { name: TUTORIAL_HOSPITALIZED_STEP.action! }),
+    ).toBeTruthy();
     expect(state.push).not.toHaveBeenCalled();
   });
 
   it("celebrates a formed bond and points at the new companion", () => {
     const index = TUTORIAL_STEPS.findIndex((step) => step.advanceOn === "petAdopt");
-    const view = show(index, { petAcquisitions: 1 }, "/pets", <Target id="tutorial-pet-acquisition" />);
+    const view = show(
+      index,
+      { petAcquisitions: 1 },
+      "/pets",
+      <Target id="tutorial-pet-acquisition" />,
+    );
     const region = lesson(view, "A bond is formed");
     expect(region.textContent).toContain("The Bondkeepers bless your new bond.");
     expect(view.getByRole("button", { name: "Continue tutorial" })).toBeTruthy();
@@ -237,15 +396,31 @@ describe("step overrides", () => {
   });
 
   it.each([
-    ["spending experience the player does not have", "needsUnassignedExperience", { earnedExperience: 0 }, undefined],
-    ["adopting after a bond already formed", "petAdopt", { petAcquisitions: 1 }, "/profile"],
+    [
+      "spending experience the player does not have",
+      "needsUnassignedExperience",
+      { earnedExperience: 0 },
+      undefined,
+    ],
+    [
+      "adopting after a bond already formed",
+      "petAdopt",
+      { petAcquisitions: 1 },
+      "/profile",
+    ],
     ["travelling to the sector the player stands in", "travelArrive", {}, undefined],
   ] as const)("skips %s", async (_name, kind, values, pathname) => {
-    const index = TUTORIAL_STEPS.findIndex((step) => kind === "needsUnassignedExperience" ? step.needsUnassignedExperience : step.advanceOn === kind);
+    const index = TUTORIAL_STEPS.findIndex((step) =>
+      kind === "needsUnassignedExperience"
+        ? step.needsUnassignedExperience
+        : step.advanceOn === kind,
+    );
     const step = TUTORIAL_STEPS[index]!;
     const sector = kind === "travelArrive" ? Number(step.relatedValue) : -1;
     show(index, { ...values, sector }, pathname);
-    await waitFor(() => expect(state.saveStep).toHaveBeenCalledWith({ step: index + 1 }));
+    await waitFor(() =>
+      expect(state.saveStep).toHaveBeenCalledWith({ step: index + 1 }),
+    );
   });
 });
 
@@ -256,13 +431,17 @@ describe("routing", () => {
     const view = show(index, {}, "/profile");
     expect(state.push).toHaveBeenCalledWith("/village");
     expect(state.setRightSideBarOpen).toHaveBeenCalledWith(false);
-    expect(view.queryByRole("region", { name: `Tutorial: ${TUTORIAL_STEPS[index]!.title}` })).toBeNull();
+    expect(
+      view.queryByRole("region", { name: `Tutorial: ${TUTORIAL_STEPS[index]!.title}` }),
+    ).toBeNull();
     act(() => vi.advanceTimersByTime(1500));
     expect(state.push).toHaveBeenCalledTimes(2);
   });
 
   it("returns a player to their abandoned tutorial fight", () => {
-    const index = TUTORIAL_STEPS.findIndex((step) => step.onCombatWin && step.page === "/combat");
+    const index = TUTORIAL_STEPS.findIndex(
+      (step) => step.onCombatWin && step.page === "/combat",
+    );
     show(index, { status: "BATTLE", battleId: "fight" }, "/profile");
     expect(state.replace).toHaveBeenCalledWith("/combat");
     expect(state.push).not.toHaveBeenCalled();
@@ -275,15 +454,28 @@ describe("routing", () => {
 });
 
 describe("highlight placement", () => {
-  const index = TUTORIAL_STEPS.findIndex((step) => step.id === "student-academy-building");
+  const index = TUTORIAL_STEPS.findIndex(
+    (step) => step.id === "student-academy-building",
+  );
   const target = () => TUTORIAL_STEPS[index]!.elementIds![0]!;
 
   it("scrolls an off-screen target towards the middle, a bounded number of times", async () => {
     const scrollBy = vi.fn();
-    Object.defineProperty(document, "scrollingElement", { configurable: true, value: { scrollBy } });
+    Object.defineProperty(document, "scrollingElement", {
+      configurable: true,
+      value: { scrollBy },
+    });
     try {
-      show(index, {}, "/village", <Target id={target()} box={new DOMRect(40, 2000, 160, 48)} />);
-      expect(scrollBy).toHaveBeenCalledWith({ top: 2024 - (80 + window.innerHeight) / 2, behavior: "auto" });
+      show(
+        index,
+        {},
+        "/village",
+        <Target id={target()} box={new DOMRect(40, 2000, 160, 48)} />,
+      );
+      expect(scrollBy).toHaveBeenCalledWith({
+        top: 2024 - (80 + window.innerHeight) / 2,
+        behavior: "auto",
+      });
       await waitFor(() => expect(scrollBy).toHaveBeenCalledTimes(5), { timeout: 3000 });
       await new Promise((done) => setTimeout(done, 600));
       expect(scrollBy).toHaveBeenCalledTimes(5);
@@ -294,23 +486,46 @@ describe("highlight placement", () => {
 
   it("leaves a visible, well-placed target alone", async () => {
     const scrollBy = vi.fn();
-    Object.defineProperty(document, "scrollingElement", { configurable: true, value: { scrollBy } });
+    Object.defineProperty(document, "scrollingElement", {
+      configurable: true,
+      value: { scrollBy },
+    });
     try {
       const middle = (80 + window.innerHeight) / 2;
-      const view = show(index, {}, "/village", <Target id={target()} box={new DOMRect(40, middle - 24, 160, 48)} />);
+      const view = show(
+        index,
+        {},
+        "/village",
+        <Target id={target()} box={new DOMRect(40, middle - 24, 160, 48)} />,
+      );
       await new Promise((done) => setTimeout(done, 600));
       expect(scrollBy).not.toHaveBeenCalled();
-      expect(lesson(view, TUTORIAL_STEPS[index]!.title).getAttribute("data-dodge-highlight")).toBeNull();
+      expect(
+        lesson(view, TUTORIAL_STEPS[index]!.title).getAttribute("data-dodge-highlight"),
+      ).toBeNull();
     } finally {
       Reflect.deleteProperty(document, "scrollingElement");
     }
   });
 
   it("moves the lesson aside when scrolling cannot uncover the target", async () => {
-    const view = show(index, {}, "/village", <Target id={target()} box={new DOMRect(40, 600, 160, 48)} />);
+    const view = show(
+      index,
+      {},
+      "/village",
+      <Target id={target()} box={new DOMRect(40, 600, 160, 48)} />,
+    );
     const dock = view.container.querySelector<HTMLElement>("[data-activity-dock]")!;
     dock.getBoundingClientRect = () => new DOMRect(0, 500, 420, 300);
-    await waitFor(() => expect(lesson(view, TUTORIAL_STEPS[index]!.title).getAttribute("data-dodge-highlight")).toBe("true"), { timeout: 3000 });
+    await waitFor(
+      () =>
+        expect(
+          lesson(view, TUTORIAL_STEPS[index]!.title).getAttribute(
+            "data-dodge-highlight",
+          ),
+        ).toBe("true"),
+      { timeout: 3000 },
+    );
   });
 });
 
@@ -318,11 +533,21 @@ describe("mobile game menu", () => {
   const index = TUTORIAL_STEPS.findIndex((step) => step.requiresGameMenu);
 
   it("highlights the menu button until the drawer opens", async () => {
-    const view = show(index, {}, undefined, <Target id="tutorial-gameBtn" box={new DOMRect(700, 10, 40, 40)} />, 4000);
+    const view = show(
+      index,
+      {},
+      undefined,
+      <Target id="tutorial-gameBtn" box={new DOMRect(700, 10, 40, 40)} />,
+      4000,
+    );
     const region = await waitFor(() => lesson(view, TUTORIAL_STEPS[index]!.title));
-    expect(region.getAttribute("data-tutorial-step")).toBe(`menu-${TUTORIAL_STEPS[index]!.id}`);
+    expect(region.getAttribute("data-tutorial-step")).toBe(
+      `menu-${TUTORIAL_STEPS[index]!.id}`,
+    );
     expect(region.textContent).toContain("Tap the highlighted menu button.");
-    expect(region.textContent).toContain("On phones, the location and main menus live in the game menu.");
+    expect(region.textContent).toContain(
+      "On phones, the location and main menus live in the game menu.",
+    );
     fireEvent.click(view.getByRole("button", { name: "Open menu" }));
     expect(state.setRightSideBarOpen).toHaveBeenCalledWith(true);
     state.setRightSideBarOpen.mockClear();
@@ -352,50 +577,122 @@ it("offers a way past a step whose action never lands", async () => {
 });
 
 describe("quest steps", () => {
-  const dialogQuest = (questId: string, objectiveId: string, questType = "starter") => ({
-    userQuests: [{
-      id: `attempt-${questId}`, questId, endAt: null, completed: 0,
-      quest: {
-        id: questId, name: `Quest ${questId}`, questType, description: `About ${questId}`, consecutiveObjectives: true,
-        content: {
-          sceneCharacters: ["scene-character"], reward: { reward_rank: "NONE", reward_exp: 0, reward_money: 0 },
-          objectives: [{ id: objectiveId, task: "dialog", description: `Say yes to ${questId}`, sceneCharacters: [], nextObjectiveId: [{ text: "Yes", nextObjectiveId: "after" }, { text: "Leave" }] }],
+  const dialogQuest = (
+    questId: string,
+    objectiveId: string,
+    questType = "starter",
+  ) => ({
+    userQuests: [
+      {
+        id: `attempt-${questId}`,
+        questId,
+        endAt: null,
+        completed: 0,
+        quest: {
+          id: questId,
+          name: `Quest ${questId}`,
+          questType,
+          description: `About ${questId}`,
+          consecutiveObjectives: true,
+          content: {
+            sceneCharacters: ["scene-character"],
+            reward: { reward_rank: "NONE", reward_exp: 0, reward_money: 0 },
+            objectives: [
+              {
+                id: objectiveId,
+                task: "dialog",
+                description: `Say yes to ${questId}`,
+                sceneCharacters: [],
+                nextObjectiveId: [
+                  { text: "Yes", nextObjectiveId: "after" },
+                  { text: "Leave" },
+                ],
+              },
+            ],
+          },
         },
       },
-    }],
+    ],
     questData: [{ id: questId, goals: [] }],
   });
 
   it("answers the related quest's dialog from the lesson", () => {
     const index = TUTORIAL_STEPS.findIndex((step) => step.advanceOn === "questDialog");
     const step = TUTORIAL_STEPS[index]!;
-    const view = show(index, dialogQuest(String(step.relatedValue), String(step.objectiveId)));
+    const view = show(
+      index,
+      dialogQuest(String(step.relatedValue), String(step.objectiveId)),
+    );
     expect(view.getByText("Your answer")).toBeTruthy();
     fireEvent.click(view.getByRole("button", { name: "Leave" }));
-    expect(state.checkRewards).toHaveBeenCalledWith({ questId: step.relatedValue, nextObjectiveId: dialogChoiceContentId(undefined, String(step.objectiveId)) });
+    expect(state.checkRewards).toHaveBeenCalledWith({
+      questId: step.relatedValue,
+      nextObjectiveId: dialogChoiceContentId(undefined, String(step.objectiveId)),
+    });
     fireEvent.click(view.getByRole("button", { name: "Yes" }));
-    expect(state.checkRewards).toHaveBeenLastCalledWith({ questId: step.relatedValue, nextObjectiveId: "after" });
+    expect(state.checkRewards).toHaveBeenLastCalledWith({
+      questId: step.relatedValue,
+      nextObjectiveId: "after",
+    });
   });
 
   it("claims a finished objective's reward from the lesson", () => {
-    const index = TUTORIAL_STEPS.findIndex((step) => step.advanceOn === "questReward" && typeof step.objectiveId === "string");
+    const index = TUTORIAL_STEPS.findIndex(
+      (step) =>
+        step.advanceOn === "questReward" && typeof step.objectiveId === "string",
+    );
     const step = TUTORIAL_STEPS[index]!;
     const questId = String(step.relatedValue);
     const objectiveId = String(step.objectiveId);
     const quest = (task: string, done: boolean) => ({
-      userQuests: [{ id: "attempt", questId, endAt: null, quest: { id: questId, name: "Trials", questType: "starter", consecutiveObjectives: true, content: { reward: { reward_rank: "NONE", reward_exp: 0, reward_money: 0 }, objectives: [{ id: objectiveId, task, description: "Train a <b>jutsu</b>", reward_rank: "GENIN", reward_exp: 1200, reward_money: 300 }] } } }],
-      questData: [{ id: questId, goals: [{ id: objectiveId, done, collected: false }] }],
+      userQuests: [
+        {
+          id: "attempt",
+          questId,
+          endAt: null,
+          quest: {
+            id: questId,
+            name: "Trials",
+            questType: "starter",
+            consecutiveObjectives: true,
+            content: {
+              reward: { reward_rank: "NONE", reward_exp: 0, reward_money: 0 },
+              objectives: [
+                {
+                  id: objectiveId,
+                  task,
+                  description: "Train a <b>jutsu</b>",
+                  reward_rank: "GENIN",
+                  reward_exp: 1200,
+                  reward_money: 300,
+                },
+              ],
+            },
+          },
+        },
+      ],
+      questData: [
+        { id: questId, goals: [{ id: objectiveId, done, collected: false }] },
+      ],
     });
     const view = show(index, quest("train_jutsu", true));
-    fireEvent.click(view.getByRole("button", { name: "Claim Genin rank + 1,200 XP + 300 ryo" }));
+    fireEvent.click(
+      view.getByRole("button", { name: "Claim Genin rank + 1,200 XP + 300 ryo" }),
+    );
     expect(state.checkRewards).toHaveBeenCalledWith({ questId });
     cleanup();
     // Winning pays the quest's own reward, here nothing beyond the finished quest.
-    fireEvent.click(show(index, quest("win_quest", true)).getByRole("button", { name: "Claim reward" }));
+    fireEvent.click(
+      show(index, quest("win_quest", true)).getByRole("button", {
+        name: "Claim reward",
+      }),
+    );
     expect(state.checkRewards).toHaveBeenLastCalledWith({ questId });
     cleanup();
     const pending = show(index, quest("train_jutsu", false));
-    expect(pending.getByText("Objective:", { exact: false }).textContent).toBe("Objective: Train a jutsu");
+    expect(pending.getByText("Objective:", { exact: false }).textContent).toBe(
+      "Objective: Train a jutsu",
+    );
     expect(pending.queryByRole("button", { name: /^Claim/ })).toBeNull();
   });
 
@@ -410,11 +707,15 @@ describe("quest steps", () => {
       const [first, second] = OrderedQuestTypesInTutorial;
       const low = dialogQuest("low", "low-objective", second);
       const high = dialogQuest("high", "high-objective", first);
-      const view = show(TUTORIAL_STEPS_COUNT, {
-        rank: "GENIN",
-        userQuests: [...low.userQuests, ...high.userQuests],
-        questData: [...low.questData, ...high.questData],
-      }, "/profile");
+      const view = show(
+        TUTORIAL_STEPS_COUNT,
+        {
+          rank: "GENIN",
+          userQuests: [...low.userQuests, ...high.userQuests],
+          questData: [...low.questData, ...high.questData],
+        },
+        "/profile",
+      );
       const region = await waitFor(() => lesson(view, "Quest high"));
       expect(region.getAttribute("data-tutorial-step")).toBe("quest-high");
       expect(region.textContent).toContain("Active quest");
@@ -422,8 +723,14 @@ describe("quest steps", () => {
       expect(region.textContent).toContain("Objectives of Quest high");
       expect(view.queryByRole("progressbar")).toBeNull();
       fireEvent.click(view.getByRole("button", { name: "Yes" }));
-      expect(state.checkRewards).toHaveBeenCalledWith({ questId: "high", nextObjectiveId: "after" });
-      expect(state.sceneAssets).toHaveBeenLastCalledWith({ assetIds: first === "starter" ? [] : ["scene-character"] }, { enabled: first !== "starter" });
+      expect(state.checkRewards).toHaveBeenCalledWith({
+        questId: "high",
+        nextObjectiveId: "after",
+      });
+      expect(state.sceneAssets).toHaveBeenLastCalledWith(
+        { assetIds: first === "starter" ? [] : ["scene-character"] },
+        { enabled: first !== "starter" },
+      );
 
       fireEvent.click(view.getByTitle("Sort quest priorities"));
       expect(view.getByText("Quest Priority Order")).toBeTruthy();
@@ -438,37 +745,79 @@ describe("quest steps", () => {
     it("collects a finished quest's reward while awake", async () => {
       openLesson();
       const quest = dialogQuest("done", "done-objective", "mission");
-      quest.questData = [{ id: "done", goals: [{ id: "done-objective", done: true }] }] as never;
+      quest.questData = [
+        { id: "done", goals: [{ id: "done-objective", done: true }] },
+      ] as never;
       const view = show(TUTORIAL_STEPS_COUNT, { rank: "GENIN", ...quest }, "/profile");
       await waitFor(() => lesson(view, "Quest done"));
       fireEvent.click(view.getByRole("button", { name: "Collect Reward" }));
       expect(state.checkRewards).toHaveBeenCalledWith({ questId: "done" });
-      expect(state.sceneAssets).toHaveBeenLastCalledWith({ assetIds: ["scene-character"] }, { enabled: true });
+      expect(state.sceneAssets).toHaveBeenLastCalledWith(
+        { assetIds: ["scene-character"] },
+        { enabled: true },
+      );
     });
 
     it.each([
-      ["the active objective's scene", true, ["objective-character"], ["objective-character"]],
+      [
+        "the active objective's scene",
+        true,
+        ["objective-character"],
+        ["objective-character"],
+      ],
       ["the quest's scene when the objective has none", true, [], ["scene-character"]],
-      ["the quest's scene for a quest without an objective order", false, ["objective-character"], ["scene-character"]],
-    ] as const)("shows %s", async (_name, consecutiveObjectives, objectiveCharacters, assetIds) => {
-      openLesson();
-      const quest = dialogQuest("cast", "cast-objective", "mission");
-      const [entry] = quest.userQuests as { quest: { consecutiveObjectives: boolean; description: string; content: { objectives: { sceneCharacters: readonly string[] }[] } } }[];
-      entry!.quest.consecutiveObjectives = consecutiveObjectives;
-      entry!.quest.content.objectives[0]!.sceneCharacters = objectiveCharacters;
-      const view = show(TUTORIAL_STEPS_COUNT, { rank: "GENIN", ...quest }, "/profile");
-      const region = await waitFor(() => lesson(view, "Quest cast"));
-      expect(region.textContent).toContain(consecutiveObjectives ? "Say yes to cast" : "About cast");
-      expect(state.sceneAssets).toHaveBeenLastCalledWith({ assetIds }, { enabled: true });
-    });
+      [
+        "the quest's scene for a quest without an objective order",
+        false,
+        ["objective-character"],
+        ["scene-character"],
+      ],
+    ] as const)(
+      "shows %s",
+      async (_name, consecutiveObjectives, objectiveCharacters, assetIds) => {
+        openLesson();
+        const quest = dialogQuest("cast", "cast-objective", "mission");
+        const [entry] = quest.userQuests as {
+          quest: {
+            consecutiveObjectives: boolean;
+            description: string;
+            content: { objectives: { sceneCharacters: readonly string[] }[] };
+          };
+        }[];
+        entry!.quest.consecutiveObjectives = consecutiveObjectives;
+        entry!.quest.content.objectives[0]!.sceneCharacters = objectiveCharacters;
+        const view = show(
+          TUTORIAL_STEPS_COUNT,
+          { rank: "GENIN", ...quest },
+          "/profile",
+        );
+        const region = await waitFor(() => lesson(view, "Quest cast"));
+        expect(region.textContent).toContain(
+          consecutiveObjectives ? "Say yes to cast" : "About cast",
+        );
+        expect(state.sceneAssets).toHaveBeenLastCalledWith(
+          { assetIds },
+          { enabled: true },
+        );
+      },
+    );
 
     it("steps aside for a quest already shown in the logbook", async () => {
       openLesson();
       const quest = dialogQuest("listed", "listed-objective", "mission");
-      const view = show(TUTORIAL_STEPS_COUNT, { rank: "GENIN", ...quest }, "/profile", <div id="logbook-entry-listed" />);
+      const view = show(
+        TUTORIAL_STEPS_COUNT,
+        { rank: "GENIN", ...quest },
+        "/profile",
+        <div id="logbook-entry-listed" />,
+      );
       await act(async () => {});
       expect(view.queryByRole("region", { name: "Tutorial: Quest listed" })).toBeNull();
-      expect(view.getByText("Tutorial complete. Quest guidance will appear here when available.")).toBeTruthy();
+      expect(
+        view.getByText(
+          "Tutorial complete. Quest guidance will appear here when available.",
+        ),
+      ).toBeTruthy();
     });
   });
 });

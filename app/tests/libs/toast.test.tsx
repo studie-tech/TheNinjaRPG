@@ -16,7 +16,9 @@ const toastCalls = () => {
 };
 
 beforeEach(() => {
-  vi.spyOn(uiToast, "toast").mockImplementation((() => "id") as unknown as typeof uiToast.toast);
+  vi.spyOn(uiToast, "toast").mockImplementation(
+    (() => "id") as unknown as typeof uiToast.toast,
+  );
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -50,7 +52,11 @@ describe("showMutationToast", () => {
   it("reports a failure with a red mark and no stable id of its own", () => {
     actualShowMutationToast({ success: false, message: "Nope" });
     const options = toastCalls()[0]!;
-    expect(options).toMatchObject({ title: "Error", description: "Nope", variant: "default" });
+    expect(options).toMatchObject({
+      title: "Error",
+      description: "Nope",
+      variant: "default",
+    });
     const action = (options.action as ReactElement<ActionProps>).props;
     expect(action.className).toBe("h-5 bg-red-600 md:h-10");
   });
@@ -68,7 +74,11 @@ describe("showMutationToast", () => {
       });
     }
     for (const options of toastCalls()) {
-      expect(options).toMatchObject({ title: "Title", id: "stable", variant: "destructive" });
+      expect(options).toMatchObject({
+        title: "Title",
+        id: "stable",
+        variant: "destructive",
+      });
       expect(options.action).toBe(action);
     }
   });

@@ -69,7 +69,13 @@ describeWithDatabase("challengeShrine on reserved sectors", () => {
       .values({ id: "enemy", villageIdA: "a", villageIdB: "b", status: "ENEMY" });
     await db.insert(sector).values({ sector: RESERVED, villageId: "b" });
     await insertUsers([
-      { userId: "hero", username: "hero", villageId: "a", status: "AWAKE", sector: RESERVED },
+      {
+        userId: "hero",
+        username: "hero",
+        villageId: "a",
+        status: "AWAKE",
+        sector: RESERVED,
+      },
     ]);
   });
   afterEach(() => vi.restoreAllMocks());
@@ -83,7 +89,9 @@ describeWithDatabase("challengeShrine on reserved sectors", () => {
     await (await getTestDatabase()).insert(war).values(objectiveWar(RESERVED));
     const result = await challenge();
     expect(result.success, result.message).toBe(true);
-    expect(await (await getTestDatabase()).query.mpvpBattleQueue.findMany()).toHaveLength(1);
+    expect(
+      await (await getTestDatabase()).query.mpvpBattleQueue.findMany(),
+    ).toHaveLength(1);
   });
 
   it.each([
@@ -100,6 +108,8 @@ describeWithDatabase("challengeShrine on reserved sectors", () => {
       success: false,
       message: "This sector is reserved and cannot be attacked",
     });
-    expect(await (await getTestDatabase()).query.mpvpBattleQueue.findMany()).toHaveLength(0);
+    expect(
+      await (await getTestDatabase()).query.mpvpBattleQueue.findMany(),
+    ).toHaveLength(0);
   });
 });

@@ -48,12 +48,8 @@ describe("PvP reset crons", () => {
   });
 
   beforeEach(() => {
-    vi.spyOn(gameSettings, "lockWithDailyTimer").mockImplementation(
-      mocks.dailyLock,
-    );
-    vi.spyOn(gameSettings, "lockWithWeeklyTimer").mockImplementation(
-      mocks.weeklyLock,
-    );
+    vi.spyOn(gameSettings, "lockWithDailyTimer").mockImplementation(mocks.dailyLock);
+    vi.spyOn(gameSettings, "lockWithWeeklyTimer").mockImplementation(mocks.weeklyLock);
     vi.spyOn(gameSettings, "handleEndpointError").mockImplementation(mocks.handleError);
     vi.spyOn(gameSettings, "getGameSetting").mockImplementation(mocks.getSetting);
     stubCronAuth(() => null);
@@ -88,12 +84,14 @@ describe("PvP reset crons", () => {
     });
     mocks.dailyLock.mockResolvedValue({
       release: mocks.rollback,
-      isClaimed: true, isNewDay: true,
+      isClaimed: true,
+      isNewDay: true,
       prevTime: 1,
     });
     mocks.weeklyLock.mockResolvedValue({
       release: mocks.rollback,
-      isClaimed: true, isNewWeek: true,
+      isClaimed: true,
+      isNewWeek: true,
       prevTime: 1,
     });
     // Bulk updates are awaited either directly or after .where().

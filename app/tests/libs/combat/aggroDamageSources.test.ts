@@ -1,11 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
 import type { CompleteBattle, UserEffect } from "@/libs/combat/types";
-import {
-  makeBattleUser,
-  makeCompleteBattle,
-  makeEffect,
-} from "../../setup/combat";
+import { makeBattleUser, makeCompleteBattle, makeEffect } from "../../setup/combat";
 
 const hit = (creatorId = "attacker", residual = false) =>
   makeEffect(

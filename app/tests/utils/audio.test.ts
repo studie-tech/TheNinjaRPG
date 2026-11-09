@@ -28,10 +28,14 @@ describe("toPrivacyEnhancedEmbedUrl", () => {
 
 describe("getIframeProviderName", () => {
   it("names providers by exact domain or subdomain only", () => {
-    expect(getIframeProviderName("https://www.youtube-nocookie.com/embed/a")).toBe("YouTube");
+    expect(getIframeProviderName("https://www.youtube-nocookie.com/embed/a")).toBe(
+      "YouTube",
+    );
     expect(getIframeProviderName("https://player.vimeo.com/video/1")).toBe("Vimeo");
     expect(getIframeProviderName("https://w.soundcloud.com/player")).toBe("SoundCloud");
-    expect(getIframeProviderName("https://evilvimeo.com/video/1")).toBe("an external site");
+    expect(getIframeProviderName("https://evilvimeo.com/video/1")).toBe(
+      "an external site",
+    );
     expect(getIframeProviderName("https://youtube.com.example.org/")).toBe(
       "an external site",
     );

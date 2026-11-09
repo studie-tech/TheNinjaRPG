@@ -1,7 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { Container, Sprite } from "pixi.js";
 
-import { boundsOverlap, isObjectChainVisible, worldSpriteBounds } from "@/libs/rendering/visibility";
+import {
+  boundsOverlap,
+  isObjectChainVisible,
+  worldSpriteBounds,
+} from "@/libs/rendering/visibility";
 
 /** Builds a scene-like chain: root -> group -> sprite, returning all three. */
 const buildChain = () => {
@@ -40,15 +44,27 @@ describe("isObjectChainVisible", () => {
 });
 
 describe("scenery viewport bounds", () => {
-  const artwork = { x: 10, y: 20, width: 100, height: 200, anchorX: 0.5, anchorY: 0.85, rotation: 0 };
+  const artwork = {
+    x: 10,
+    y: 20,
+    width: 100,
+    height: 200,
+    anchorX: 0.5,
+    anchorY: 0.85,
+    rotation: 0,
+  };
   it("keeps the visible part of tall artwork whose ground contact is outside the viewport", () => {
     const bounds = worldSpriteBounds(artwork);
     expect(bounds.minX).toBe(-40);
     expect(bounds.maxX).toBe(60);
     expect(bounds.minY).toBeCloseTo(-10);
     expect(bounds.maxY).toBe(190);
-    expect(boundsOverlap(bounds, { minX: 0, maxX: 20, minY: 170, maxY: 210 })).toBe(true);
-    expect(boundsOverlap(bounds, { minX: 0, maxX: 20, minY: 200, maxY: 210 })).toBe(false);
+    expect(boundsOverlap(bounds, { minX: 0, maxX: 20, minY: 170, maxY: 210 })).toBe(
+      true,
+    );
+    expect(boundsOverlap(bounds, { minX: 0, maxX: 20, minY: 200, maxY: 210 })).toBe(
+      false,
+    );
   });
   it("includes rotated corners rather than culling by the unrotated footprint", () => {
     const bounds = worldSpriteBounds({ ...artwork, rotation: Math.PI / 2 });
@@ -56,7 +72,9 @@ describe("scenery viewport bounds", () => {
     expect(bounds.maxX).toBeCloseTo(40);
     expect(bounds.minY).toBeCloseTo(-30);
     expect(bounds.maxY).toBeCloseTo(70);
-    expect(boundsOverlap(bounds, { minX: -150, maxX: -140, minY: 0, maxY: 10 })).toBe(true);
+    expect(boundsOverlap(bounds, { minX: -150, maxX: -140, minY: 0, maxY: 10 })).toBe(
+      true,
+    );
   });
   it("retains sheared wall tops and bases at the viewport edge", () => {
     const bounds = worldSpriteBounds({ ...artwork, shearY: 0.5 });
@@ -64,12 +82,18 @@ describe("scenery viewport bounds", () => {
     expect(bounds.maxX).toBe(60);
     expect(bounds.minY).toBeCloseTo(-35);
     expect(bounds.maxY).toBeCloseTo(215);
-    expect(boundsOverlap(bounds, { minX: 50, maxX: 65, minY: 210, maxY: 225 })).toBe(true);
+    expect(boundsOverlap(bounds, { minX: 50, maxX: 65, minY: 210, maxY: 225 })).toBe(
+      true,
+    );
   });
   it("retains edge pixels and wind padding while rejecting distant artwork", () => {
     const bounds = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
     expect(boundsOverlap(bounds, { minX: 10, minY: 0, maxX: 20, maxY: 10 })).toBe(true);
-    expect(boundsOverlap(bounds, { minX: 12, minY: 0, maxX: 20, maxY: 10 }, 3)).toBe(true);
-    expect(boundsOverlap(bounds, { minX: 14, minY: 0, maxX: 20, maxY: 10 }, 3)).toBe(false);
+    expect(boundsOverlap(bounds, { minX: 12, minY: 0, maxX: 20, maxY: 10 }, 3)).toBe(
+      true,
+    );
+    expect(boundsOverlap(bounds, { minX: 14, minY: 0, maxX: 20, maxY: 10 }, 3)).toBe(
+      false,
+    );
   });
 });

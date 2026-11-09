@@ -7,7 +7,10 @@ export const conversationQueryOptions = <TPage>(file: string) => {
     readSource(`layout/${file}`),
     /api\.comments\.getConversationComments\.useInfiniteQuery\(\s*queryKey\s*,\s*/,
   );
-  return evaluateExpression(expression, { props: { convo_id: "chat" }, conversationId: "chat" }) as Omit<
+  return evaluateExpression(expression, {
+    props: { convo_id: "chat" },
+    conversationId: "chat",
+  }) as Omit<
     InfiniteQueryObserverOptions<TPage, Error, InfiniteData<TPage>>,
     "queryKey" | "queryFn" | "initialPageParam"
   >;

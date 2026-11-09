@@ -50,9 +50,7 @@ describe("hex map proportions", () => {
   });
 
   it("includes the two border rows in the height ratio", () => {
-    expect(hexGridHeightRatio(3, 4)).toBe(
-      (6 * HEX_ASPECT_RATIO) / stackedHexWidths(3),
-    );
+    expect(hexGridHeightRatio(3, 4)).toBe((6 * HEX_ASPECT_RATIO) / stackedHexWidths(3));
   });
 });
 
@@ -62,9 +60,7 @@ describe("oddQHexDistance", () => {
     const hexes = grid.toArray();
     for (const a of hexes) {
       for (const b of hexes) {
-        expect(oddQHexDistance(a.col, a.row, b.col, b.row)).toBe(
-          grid.distance(a, b),
-        );
+        expect(oddQHexDistance(a.col, a.row, b.col, b.row)).toBe(grid.distance(a, b));
       }
     }
   });

@@ -15,7 +15,9 @@ beforeEach(() => {
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
     <div>{children}</div>
   ));
-  vi.spyOn(Link, "default").mockImplementation(({ children }) => <span>{children}</span>);
+  vi.spyOn(Link, "default").mockImplementation(({ children }) => (
+    <span>{children}</span>
+  ));
   vi.spyOn(BattleLengthHistogram, "BattleLengthHistogram").mockImplementation(
     () => null,
   );
@@ -44,7 +46,8 @@ it("states the initiative modifiers from the combat constants", () => {
     `If outside own territory, initiative is reduced by ${percent(INITIATIVE_TERRITORY_BONUS)}`,
   );
   const steps = INITIATIVE_PVP_STREAK_BONUSES.slice(0, -1);
-  const tail = INITIATIVE_PVP_STREAK_BONUSES[INITIATIVE_PVP_STREAK_BONUSES.length - 1] ?? 0;
+  const tail =
+    INITIATIVE_PVP_STREAK_BONUSES[INITIATIVE_PVP_STREAK_BONUSES.length - 1] ?? 0;
   expect(text).toContain(
     `the streak adds ${steps.map(percent).join(", ")} for the first ${steps.length} kills, then ${percent(tail)} for each further kill`,
   );

@@ -115,7 +115,6 @@ describe("increaseStats", () => {
   });
 });
 
-
 const GATED_JUTSU = "gated-jutsu";
 const GATED_BLADE = "gated-blade";
 

@@ -99,7 +99,9 @@ export const loadCombatant = async (
   const jutsus = await fetchUserJutsus(db, userId, undefined, { applyReskins });
   return {
     ...row,
-    items: equippedItemsOnly ? items.filter((owned) => owned.equipped !== "NONE") : items,
+    items: equippedItemsOnly
+      ? items.filter((owned) => owned.equipped !== "NONE")
+      : items,
     jutsus: unequippedJutsus ? jutsus : jutsus.filter((owned) => owned.equipped),
     userSkills: [],
     bloodline: null,
@@ -163,7 +165,9 @@ export const insertSnapshotLobby = async (
 };
 
 /** Character row with empty relations, as `initiateBattle` reads it back. */
-export const makeInitiationUser = (overrides: { userId: string } & Record<string, unknown>) => ({
+export const makeInitiationUser = (
+  overrides: { userId: string } & Record<string, unknown>,
+) => ({
   ...tableDefaults(userData),
   ...makeUser({
     username: overrides.userId,
@@ -239,7 +243,8 @@ export const fakeInitiationClient = (
             if (table === battleHistory) onHistoryRead?.(predicate);
             return builder;
           },
-          then: (resolve: (value: unknown) => unknown) => Promise.resolve(rows).then(resolve),
+          then: (resolve: (value: unknown) => unknown) =>
+            Promise.resolve(rows).then(resolve),
         };
         return builder;
       },
@@ -253,7 +258,9 @@ export const fakeInitiationClient = (
     }),
     update: () => ({
       set: () => ({
-        where: async () => ({ rowsAffected: users.filter((user) => !user.isAi).length }),
+        where: async () => ({
+          rowsAffected: users.filter((user) => !user.isAi).length,
+        }),
       }),
     }),
   } as unknown as DrizzleClient;

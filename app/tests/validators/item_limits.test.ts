@@ -8,8 +8,7 @@ import { ItemValidatorRawSchema } from "@/validators/combat";
 
 describe("item quantity limits", () => {
   const stackSizeSchema = ItemValidatorRawSchema.shape.stackSize;
-  const craftingRequirementsSchema =
-    ItemValidatorRawSchema.shape.craftingRequirements;
+  const craftingRequirementsSchema = ItemValidatorRawSchema.shape.craftingRequirements;
 
   it("accepts COOKING as a persisted item type", () => {
     expect(ItemTypes).toContain("COOKING");

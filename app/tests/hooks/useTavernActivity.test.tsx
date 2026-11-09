@@ -3,7 +3,14 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { getDefaultStore } from "jotai";
 import type Pusher from "pusher-js";
 import * as client from "@/app/_trpc/client";
-import { conversation, conversationComment, parentalControl, user2conversation, userBlackList, userData } from "@/drizzle/schema";
+import {
+  conversation,
+  conversationComment,
+  parentalControl,
+  user2conversation,
+  userBlackList,
+  userData,
+} from "@/drizzle/schema";
 import { useConversationViewing } from "@/hooks/useConversationViewing";
 import * as taverns from "@/hooks/useTaverns";
 import { useTavernActivity } from "@/hooks/useTavernActivity";
@@ -15,9 +22,18 @@ import {
 } from "@/libs/chatPanel";
 import { commentsRouter } from "@/server/api/routers/comments";
 import { insertUsers } from "../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../setup/testDatabase";
+import {
+  callerFor,
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../setup/testDatabase";
 
-type Handler = (event: { message: string; fromId?: string; commentId?: string }) => void;
+type Handler = (event: {
+  message: string;
+  fromId?: string;
+  commentId?: string;
+}) => void;
 let handlers: Record<string, Handler>;
 let hiddenCommentIds: string[];
 let fetchComment: ReturnType<typeof vi.fn>;
@@ -34,7 +50,10 @@ const pusher = {
   },
 } as unknown as Pusher;
 
-const player = (unmutedTavernIds: string[] = ["global", "akikaze"], chatMuted = false) =>
+const player = (
+  unmutedTavernIds: string[] = ["global", "akikaze"],
+  chatMuted = false,
+) =>
   ({
     userId: "me",
     level: 50,
@@ -84,7 +103,8 @@ afterEach(() => {
   store.set(chatViewedConversationsAtom, {});
   store.set(chatMentionsAtom, {});
   store.set(chatPanelAtom, { owner: null, tab: "tavern" });
-  if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
+  if (originalMatchMedia)
+    Object.defineProperty(window, "matchMedia", originalMatchMedia);
   else Reflect.deleteProperty(window, "matchMedia");
   vi.restoreAllMocks();
 });
@@ -114,7 +134,10 @@ it("follows no tavern until the player unmutes one", () => {
 });
 
 it("follows no tavern for a profile without the unmute list", () => {
-  const { unmutedTavernIds: _, ...profile } = player() as unknown as Record<string, unknown>;
+  const { unmutedTavernIds: _, ...profile } = player() as unknown as Record<
+    string,
+    unknown
+  >;
   renderHook(() => useTavernActivity(pusher, profile as never));
   expect(Object.keys(handlers)).toEqual([]);
 });
@@ -206,7 +229,9 @@ it("discards messages read before lookup settles while retaining other and later
 it("skips the message when the comment lookup fails", async () => {
   fetchComment.mockRejectedValue(new Error("Comment unavailable"));
   renderHook(() => useTavernActivity(pusher, player()));
-  await act(async () => handlers.global?.({ message: "new", fromId: "troll", commentId: "troll" }));
+  await act(async () =>
+    handlers.global?.({ message: "new", fromId: "troll", commentId: "troll" }),
+  );
   expect(activity()).toEqual({});
 });
 
@@ -251,7 +276,9 @@ it.each([{ level: 1 }, { isBanned: true }, { isSilenced: true }])(
     const { rerender } = renderHook(({ user }) => useTavernActivity(pusher, user), {
       initialProps: { user: player() },
     });
-    await act(async () => handlers.global?.({ message: "new", fromId: "sora", commentId: "sora" }));
+    await act(async () =>
+      handlers.global?.({ message: "new", fromId: "sora", commentId: "sora" }),
+    );
     expect(activity()).toEqual({ global: 1 });
     rerender({ user: { ...(player() as object), ...restriction } as never });
     expect(Object.keys(handlers)).toEqual([]);
@@ -261,7 +288,14 @@ it.each([{ level: 1 }, { isBanned: true }, { isSilenced: true }])(
 
 describeWithDatabase("authorized tavern activity", () => {
   beforeEach(async () => {
-    await resetTables(conversationComment, user2conversation, conversation, parentalControl, userBlackList, userData);
+    await resetTables(
+      conversationComment,
+      user2conversation,
+      conversation,
+      parentalControl,
+      userBlackList,
+      userData,
+    );
   });
 
   it.each([
@@ -269,34 +303,49 @@ describeWithDatabase("authorized tavern activity", () => {
     { readerRole: "USER", senderRole: "USER", blockedBy: "sender", visible: false },
     { readerRole: "USER", senderRole: "MODERATOR", blockedBy: "me", visible: true },
     { readerRole: "MODERATOR", senderRole: "USER", blockedBy: "sender", visible: true },
-  ] as const)("matches public comment visibility for %j", async ({ readerRole, senderRole, blockedBy, visible }) => {
-    await insertUsers([
-      { userId: "me", role: readerRole },
-      { userId: "sender", role: senderRole },
-    ]);
-    const db = await getTestDatabase();
-    await db.insert(conversation).values({ id: "global", title: "Global", isPublic: true });
-    await db.insert(conversationComment).values({
-      id: "message",
-      conversationId: "global",
-      userId: "sender",
-      authorId: "sender",
-      content: "A tavern message",
-    });
-    await db.insert(userBlackList).values({
-      creatorUserId: blockedBy,
-      targetUserId: blockedBy === "me" ? "sender" : "me",
-    });
-    const caller = await callerFor(commentsRouter, "me");
-    const comments = await caller.getConversationComments({ convo_id: "global", limit: 10 });
-    expect(comments.data.map((comment) => comment.id)).toEqual(visible ? ["message"] : []);
-    fetchComment.mockImplementation((input) => caller.fetchConversationComment(input));
-    renderHook(() => useTavernActivity(pusher, player()));
-    await act(async () => {
-      handlers.global?.({ message: "new", fromId: "sender", commentId: "message" });
-    });
-    await fetchComment.mock.results[0]?.value;
-    await waitFor(() => expect(activity()).toEqual(visible ? { global: 1 } : {}));
-    expect(fetchComment).toHaveBeenCalledWith({ commentId: "message", conversationId: "global" });
-  });
+  ] as const)(
+    "matches public comment visibility for %j",
+    async ({ readerRole, senderRole, blockedBy, visible }) => {
+      await insertUsers([
+        { userId: "me", role: readerRole },
+        { userId: "sender", role: senderRole },
+      ]);
+      const db = await getTestDatabase();
+      await db
+        .insert(conversation)
+        .values({ id: "global", title: "Global", isPublic: true });
+      await db.insert(conversationComment).values({
+        id: "message",
+        conversationId: "global",
+        userId: "sender",
+        authorId: "sender",
+        content: "A tavern message",
+      });
+      await db.insert(userBlackList).values({
+        creatorUserId: blockedBy,
+        targetUserId: blockedBy === "me" ? "sender" : "me",
+      });
+      const caller = await callerFor(commentsRouter, "me");
+      const comments = await caller.getConversationComments({
+        convo_id: "global",
+        limit: 10,
+      });
+      expect(comments.data.map((comment) => comment.id)).toEqual(
+        visible ? ["message"] : [],
+      );
+      fetchComment.mockImplementation((input) =>
+        caller.fetchConversationComment(input),
+      );
+      renderHook(() => useTavernActivity(pusher, player()));
+      await act(async () => {
+        handlers.global?.({ message: "new", fromId: "sender", commentId: "message" });
+      });
+      await fetchComment.mock.results[0]?.value;
+      await waitFor(() => expect(activity()).toEqual(visible ? { global: 1 } : {}));
+      expect(fetchComment).toHaveBeenCalledWith({
+        commentId: "message",
+        conversationId: "global",
+      });
+    },
+  );
 });

@@ -2,12 +2,25 @@ import { act, cleanup, render } from "@testing-library/react";
 import * as clerk from "@clerk/nextjs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as trpc from "@trpc/react-query";
-import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+  vi,
+} from "bun:test";
 import { type ContextType, type ReactNode, useContext, useState } from "react";
 import * as client from "@/app/_trpc/client";
 import * as pusher from "@/layout/PusherHandler";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
-import { UserContextProvider, useUserData, useUserInfo, useUserDataSelector } from "@/utils/UserContext";
+import {
+  UserContextProvider,
+  useUserData,
+  useUserInfo,
+  useUserDataSelector,
+} from "@/utils/UserContext";
 
 const BASE = Date.UTC(2026, 9, 24, 12);
 const refetch = vi.fn();
@@ -45,7 +58,12 @@ const mount = (
     serverTime: BASE - 2000,
     notifications: [
       otherBoostNotice,
-      { href: "/territory-war", name: "Territory War bonus", group: "Active boosts", color: "green" },
+      {
+        href: "/territory-war",
+        name: "Territory War bonus",
+        group: "Active boosts",
+        color: "green",
+      },
     ],
     userData: {
       userId: "crafter",
@@ -58,10 +76,15 @@ const mount = (
     useUtils: () => ({}),
     profile: {
       getUser: {
-        useQuery: (_input: unknown, options: { select?: (value: typeof response) => unknown }) => {
+        useQuery: (
+          _input: unknown,
+          options: { select?: (value: typeof response) => unknown },
+        ) => {
           const [notifications, setNotifications] = useState(response.notifications);
           return {
-            data: options?.select ? options.select({ ...response, notifications }) : { ...response, notifications },
+            data: options?.select
+              ? options.select({ ...response, notifications })
+              : { ...response, notifications },
             status: "success",
             refetch: () => {
               refetch();

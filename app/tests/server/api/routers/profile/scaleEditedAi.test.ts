@@ -1,6 +1,9 @@
-
 import { describe, expect, it } from "bun:test";
-import { CombatStatNames, MAX_STORED_POOL, SCALED_AI_STAT_BUDGET_SHARE } from "@/drizzle/constants";
+import {
+  CombatStatNames,
+  MAX_STORED_POOL,
+  SCALED_AI_STAT_BUDGET_SHARE,
+} from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { calcLevelRequirements } from "@/libs/profile";
 import { scaleEditedAi } from "@/server/api/routers/profile";
@@ -121,9 +124,15 @@ describe("scaleEditedAi", () => {
     const stored = makeClown();
     const edited = { ...stored, level: 99, poolsMultiplier: 1000 };
     scaleEditedAi(stored, edited);
-    for (const pool of [edited.curHealth, edited.maxHealth, edited.curChakra, edited.maxChakra, edited.curStamina, edited.maxStamina]) {
+    for (const pool of [
+      edited.curHealth,
+      edited.maxHealth,
+      edited.curChakra,
+      edited.maxChakra,
+      edited.curStamina,
+      edited.maxStamina,
+    ]) {
       expect(pool).toBe(5_000_000);
     }
   });
-
 });

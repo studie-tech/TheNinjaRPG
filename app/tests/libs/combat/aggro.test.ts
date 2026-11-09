@@ -10,11 +10,7 @@ import { z } from "zod";
 import { clone } from "@/libs/combat/tags";
 import { maskBattle } from "@/libs/combat/masking";
 import type { GroundEffect } from "@/libs/combat/types";
-import {
-  makeBattleUser,
-  makeCompleteBattle,
-  makeEffect,
-} from "../../setup/combat";
+import { makeBattleUser, makeCompleteBattle, makeEffect } from "../../setup/combat";
 
 const damage = (power = 100) =>
   makeEffect(

@@ -7,11 +7,7 @@ import { applyPoolAdjustmentsToBase } from "@/libs/combat/util";
 import { alignBattle } from "@/libs/combat/turn";
 import type { CompleteBattle, UserEffect } from "@/libs/combat/types";
 import { CurseTag } from "@/validators/combat";
-import {
-  makeBattleUser,
-  makeCompleteBattle,
-  makeEffect,
-} from "../../setup/combat";
+import { makeBattleUser, makeCompleteBattle, makeEffect } from "../../setup/combat";
 
 const mark = (
   power = 50,
@@ -677,11 +673,13 @@ it("pays expiry healing before the next encounter wave spawns", () => {
   battle.extraState.encounter = {
     wave: 1,
     waveStartedRound: 1,
-    pendingWaves: [{
-      users: [makeBattleUser("next-enemy")],
-      effects: [],
-      delayRounds: 0,
-    }],
+    pendingWaves: [
+      {
+        users: [makeBattleUser("next-enemy")],
+        effects: [],
+        delayRounds: 0,
+      },
+    ],
   };
 
   const transition = expire(battle);

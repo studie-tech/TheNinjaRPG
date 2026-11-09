@@ -21,17 +21,25 @@ afterEach(() => {
 });
 
 describe("native web isolation", () => {
-  it.each([undefined, true, false])("loads marketing only for a confirmed web client (%s)", (isNative) => {
-    vi.spyOn(NativeShell, "useNativeShell").mockReturnValue(isNative);
-    const loadAnalytics = vi.spyOn(Google, "GoogleTagManager").mockReturnValue(<div />);
-    render(<WebAnalytics gtmId="GTM-TEST" />);
-    expect(loadAnalytics).toHaveBeenCalledTimes(isNative === false ? 1 : 0);
-  });
+  it.each([undefined, true, false])(
+    "loads marketing only for a confirmed web client (%s)",
+    (isNative) => {
+      vi.spyOn(NativeShell, "useNativeShell").mockReturnValue(isNative);
+      const loadAnalytics = vi
+        .spyOn(Google, "GoogleTagManager")
+        .mockReturnValue(<div />);
+      render(<WebAnalytics gtmId="GTM-TEST" />);
+      expect(loadAnalytics).toHaveBeenCalledTimes(isNative === false ? 1 : 0);
+    },
+  );
 
   it("blocks marketing when the native bridge is unavailable", () => {
     vi.spyOn(NativeShell, "useNativeShell").mockReturnValue(false);
     const loadAnalytics = vi.spyOn(Google, "GoogleTagManager").mockReturnValue(<div />);
-    Object.defineProperty(navigator, "userAgent", { configurable: true, value: "TNR-Native/1.0.0 (android)" });
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value: "TNR-Native/1.0.0 (android)",
+    });
     render(<WebAnalytics gtmId="GTM-TEST" />);
     expect(loadAnalytics).not.toHaveBeenCalled();
   });
@@ -40,14 +48,23 @@ describe("native web isolation", () => {
     const removeOwn = vi.fn().mockResolvedValue(true);
     const removeOther = vi.fn().mockResolvedValue(true);
     const register = vi.fn();
-    Object.defineProperty(navigator, "userAgent", { configurable: true, value: "TNR-Native/1.0.0 (android)" });
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value: "TNR-Native/1.0.0 (android)",
+    });
     Object.defineProperty(navigator, "serviceWorker", {
       configurable: true,
       value: {
         register,
         getRegistrations: vi.fn().mockResolvedValue([
-          { active: { scriptURL: new URL("/sw.js", location.origin).href }, unregister: removeOwn },
-          { active: { scriptURL: new URL("/other-worker.js", location.origin).href }, unregister: removeOther },
+          {
+            active: { scriptURL: new URL("/sw.js", location.origin).href },
+            unregister: removeOwn,
+          },
+          {
+            active: { scriptURL: new URL("/other-worker.js", location.origin).href },
+            unregister: removeOther,
+          },
         ]),
       },
     });
@@ -59,9 +76,17 @@ describe("native web isolation", () => {
 
   it("preserves web worker registration", async () => {
     const register = vi.fn().mockResolvedValue({ addEventListener: vi.fn() });
-    Object.defineProperty(navigator, "userAgent", { configurable: true, value: "Mozilla/5.0" });
-    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { register } });
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0",
+    });
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: { register },
+    });
     render(<PWAManager />);
-    await waitFor(() => expect(register).toHaveBeenCalledWith("/sw.js", { scope: "/" }));
+    await waitFor(() =>
+      expect(register).toHaveBeenCalledWith("/sw.js", { scope: "/" }),
+    );
   });
 });

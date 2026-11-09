@@ -19,7 +19,6 @@ import {
 } from "../../setup/testDatabase";
 import { fetchQuestDiscoverySummaryCandidates } from "@/queries/quests";
 
-
 const USER_ID = "mastery-concurrency";
 const readPlayer = async () =>
   (
@@ -159,23 +158,43 @@ describeWithDatabase("atomic mastery caps and promotion discovery", () => {
     ).toBe(false);
   });
   it("preserves choice mode so compact and full promotion eligibility agree", async () => {
-    await insertUsers([{ userId: USER_ID, masteryRanks: { genjutsuMastery: "NOVICE" } }]);
+    await insertUsers([
+      { userId: USER_ID, masteryRanks: { genjutsuMastery: "NOVICE" } },
+    ]);
     const db = await getTestDatabase();
     const template = masteryQuestTemplates()[1]!;
-    const chosen = { ...template, hidden: false, questType: "event" as const, requiredNinjutsuMastery: 0,
-      content: { ...template.content, rewardMode: "choose" as const, reward: QuestReward.parse({
-        reward_packages: ["genjutsuMastery", "ninjutsuMastery"].map((stat) => ({
-          id: stat, packageId: stat, name: stat, description: "",
-          rewards: ObjectiveReward.parse({ reward_mastery_stat: stat, reward_mastery_rank: "ADEPT" }),
-        })),
-      }) },
+    const chosen = {
+      ...template,
+      hidden: false,
+      questType: "event" as const,
+      requiredNinjutsuMastery: 0,
+      content: {
+        ...template.content,
+        rewardMode: "choose" as const,
+        reward: QuestReward.parse({
+          reward_packages: ["genjutsuMastery", "ninjutsuMastery"].map((stat) => ({
+            id: stat,
+            packageId: stat,
+            name: stat,
+            description: "",
+            rewards: ObjectiveReward.parse({
+              reward_mastery_stat: stat,
+              reward_mastery_rank: "ADEPT",
+            }),
+          })),
+        }),
+      },
     };
     await db.insert(quest).values(chosen);
-    const candidates = await fetchQuestDiscoverySummaryCandidates(db, USER_ID, { questTypes: ["event"] });
+    const candidates = await fetchQuestDiscoverySummaryCandidates(db, USER_ID, {
+      questTypes: ["event"],
+    });
     expect(candidates[0]?.content.rewardMode).toBe("choose");
     expect(candidates[0]!.content).not.toHaveProperty("objectives");
     const player = { ...(await readPlayer()), completedQuests: [] };
     expect(isAvailableUserQuests(chosen, player).check).toBe(true);
-    expect(isAvailableUserQuests(candidates[0]!, player)).toEqual(isAvailableUserQuests(chosen, player));
+    expect(isAvailableUserQuests(candidates[0]!, player)).toEqual(
+      isAvailableUserQuests(chosen, player),
+    );
   });
 });

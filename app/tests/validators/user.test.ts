@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { BasicElementName, ELEMENTAL_MASTERY_CAP, GeneralTypes, TavernColorPresets } from "@/drizzle/constants";
+import {
+  BasicElementName,
+  ELEMENTAL_MASTERY_CAP,
+  GeneralTypes,
+  TavernColorPresets,
+} from "@/drizzle/constants";
 import type { UserWithRelations } from "@/routers/profile";
 import { AllTags } from "@/validators/combat";
 import { getSearchValidator } from "@/validators/register";
@@ -23,11 +28,26 @@ describe("createAssignedExperienceSchema", () => {
 
   it("limits provided and capped elements while allowing a whole point to finish timed progress", () => {
     const { schema, maxValues } = createAssignedExperienceSchema({
-      rank: "GENIN", primaryElement: "Fire", secondaryElement: "Water",
-      bloodline: { effects: [AllTags.parse({ type: "increasedamagegiven", elements: ["Wind"], power: 40 })] },
-      elementalMastery: { Earth: ELEMENTAL_MASTERY_CAP - 0.5, Lightning: ELEMENTAL_MASTERY_CAP },
+      rank: "GENIN",
+      primaryElement: "Fire",
+      secondaryElement: "Water",
+      bloodline: {
+        effects: [
+          AllTags.parse({ type: "increasedamagegiven", elements: ["Wind"], power: 40 }),
+        ],
+      },
+      elementalMastery: {
+        Earth: ELEMENTAL_MASTERY_CAP - 0.5,
+        Lightning: ELEMENTAL_MASTERY_CAP,
+      },
     } as NonNullable<UserWithRelations>);
-    expect(maxValues).toMatchObject({ Fire: ELEMENTAL_MASTERY_CAP, Water: ELEMENTAL_MASTERY_CAP, Wind: 0, Earth: 1, Lightning: 0 });
+    expect(maxValues).toMatchObject({
+      Fire: ELEMENTAL_MASTERY_CAP,
+      Water: ELEMENTAL_MASTERY_CAP,
+      Wind: 0,
+      Earth: 1,
+      Lightning: 0,
+    });
     expect(schema.safeParse({ Fire: 1, Water: 1 }).success).toBe(true);
     expect(schema.safeParse({ Earth: 1 }).success).toBe(true);
     expect(schema.safeParse({ Earth: 2 }).success).toBe(false);
@@ -80,35 +100,45 @@ describe("getSearchValidator", () => {
 });
 
 describe("tavernColorChangeSchema", () => {
-  it.each([...TavernColorPresets])("accepts the %s preset for both targets", (color) => {
-    expect(
-      tavernColorChangeSchema.parse({
-        target: "username",
-        color,
-        currentColor: "DEFAULT",
-      }),
-    ).toEqual({ target: "username", color, currentColor: "DEFAULT" });
-    expect(
-      tavernColorChangeSchema.parse({
-        target: "title",
-        color,
-        currentColor: "DEFAULT",
-      }),
-    ).toEqual({ target: "title", color, currentColor: "DEFAULT" });
-  });
-
-  it.each(["#1e3a8a", "RED", "GREEN", "EMERALD", "PINK", "ORANGE", "SKY", "PURPLE", "ROSE"])(
-    "rejects arbitrary or staff-associated value %s",
+  it.each([...TavernColorPresets])(
+    "accepts the %s preset for both targets",
     (color) => {
       expect(
-        tavernColorChangeSchema.safeParse({
+        tavernColorChangeSchema.parse({
           target: "username",
           color,
           currentColor: "DEFAULT",
-        }).success,
-      ).toBe(false);
+        }),
+      ).toEqual({ target: "username", color, currentColor: "DEFAULT" });
+      expect(
+        tavernColorChangeSchema.parse({
+          target: "title",
+          color,
+          currentColor: "DEFAULT",
+        }),
+      ).toEqual({ target: "title", color, currentColor: "DEFAULT" });
     },
   );
+
+  it.each([
+    "#1e3a8a",
+    "RED",
+    "GREEN",
+    "EMERALD",
+    "PINK",
+    "ORANGE",
+    "SKY",
+    "PURPLE",
+    "ROSE",
+  ])("rejects arbitrary or staff-associated value %s", (color) => {
+    expect(
+      tavernColorChangeSchema.safeParse({
+        target: "username",
+        color,
+        currentColor: "DEFAULT",
+      }).success,
+    ).toBe(false);
+  });
 
   it("rejects unsupported targets", () => {
     expect(
@@ -168,7 +198,8 @@ describe("updateUserPreferencesSchema", () => {
     [null, undefined],
   ])("accepts %p and %p", (preferredGeneral1, preferredGeneral2) => {
     expect(
-      updateUserPreferencesSchema.safeParse({ preferredGeneral1, preferredGeneral2 }).success,
+      updateUserPreferencesSchema.safeParse({ preferredGeneral1, preferredGeneral2 })
+        .success,
     ).toBe(true);
   });
 });

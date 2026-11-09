@@ -46,7 +46,10 @@ beforeEach(() => {
       onBack = undefined;
     };
   });
-  vi.spyOn(native.appEvents, "onUrlOpen").mockImplementation((callback) => { onUrl = callback; return () => {}; });
+  vi.spyOn(native.appEvents, "onUrlOpen").mockImplementation((callback) => {
+    onUrl = callback;
+    return () => {};
+  });
   vi.spyOn(native.appEvents, "exitApp").mockImplementation(exit);
 });
 afterEach(() => {
@@ -99,7 +102,9 @@ describe("native viewport lifecycle", () => {
       appearance.matches = false;
       events.dispatchEvent(new Event("change"));
       expect(fit).toHaveBeenCalledTimes(count);
-    } finally { window.matchMedia = previous; }
+    } finally {
+      window.matchMedia = previous;
+    }
   });
   it("fits Android on mount and foreground only, and releases its state listener", () => {
     let onState: undefined | ((active: boolean) => void);
@@ -128,7 +133,6 @@ describe("native viewport lifecycle", () => {
     expect(fit).not.toHaveBeenCalled();
   });
 });
-
 
 describe("browser-owned authentication routes", () => {
   it("keeps the auth screen mounted while ordinary app links still navigate", () => {

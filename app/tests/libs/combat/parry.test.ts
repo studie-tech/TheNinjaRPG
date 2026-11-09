@@ -2,11 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
 import { parry } from "@/libs/combat/tags";
 import type { Consequence } from "@/libs/combat/types";
-import {
-  makeBattleUser,
-  makeCompleteBattle,
-  makeEffect,
-} from "../../setup/combat";
+import { makeBattleUser, makeCompleteBattle, makeEffect } from "../../setup/combat";
 
 const defense = (power: number, targetId = "defender", id = `parry-${power}`) =>
   makeEffect(
@@ -270,7 +266,7 @@ it.each([30, 100])("does not parry piercing hits at %i percent power", (power) =
   expect(10000 - hp(mixed, "defender")).toBeCloseTo(
     incoming + direct * (1 - power / 100),
   );
-  expect(10000 - hp(mixed, "attacker")).toBeCloseTo(direct * power / 100);
+  expect(10000 - hp(mixed, "attacker")).toBeCloseTo((direct * power) / 100);
 });
 
 it("parries damage despite an earlier Buff Prevent", () => {
@@ -292,7 +288,9 @@ it("parries damage despite an earlier Buff Prevent", () => {
 
   expect(10000 - hp(result, "defender")).toBeCloseTo(incoming * 0.7);
   expect(10000 - hp(result, "attacker")).toBeCloseTo(incoming * 0.3);
-  expect(result.usersEffects.some((e) => e.id === effect.id && e.rounds! > 0)).toBe(true);
+  expect(result.usersEffects.some((e) => e.id === effect.id && e.rounds! > 0)).toBe(
+    true,
+  );
 });
 
 it("can still be cleared before damage is parried", () => {
@@ -314,7 +312,9 @@ it("can still be cleared before damage is parried", () => {
 
   expect(10000 - hp(result, "defender")).toBeCloseTo(incoming);
   expect(hp(result, "attacker")).toBe(10000);
-  expect(result.usersEffects.some((e) => e.id === effect.id && e.rounds! > 0)).toBe(false);
+  expect(result.usersEffects.some((e) => e.id === effect.id && e.rounds! > 0)).toBe(
+    false,
+  );
 });
 
 it("splits a 1000 incoming hit into 700 received and 300 returned", () => {

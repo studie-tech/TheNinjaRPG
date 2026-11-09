@@ -164,7 +164,13 @@ test("seichi silver + bloodline-pool admin actions gate to their own admin role 
 });
 
 test("moderation roles cannot suggest content while other staff retain access", () => {
-  const denied: UserRole[] = ["USER", "MODERATOR", "MODERATOR-ADMIN", "HEAD_MODERATOR", "JR_MODERATOR"];
+  const denied: UserRole[] = [
+    "USER",
+    "MODERATOR",
+    "MODERATOR-ADMIN",
+    "HEAD_MODERATOR",
+    "JR_MODERATOR",
+  ];
   for (const role of UserRoles) {
     expect(canSuggestContent(role)).toBe(!denied.includes(role));
   }
@@ -199,14 +205,27 @@ test("trade bans can be managed and cleared by the roles that impose them", () =
 test("report moderation follows the role table for every report state", () => {
   const reportAdmins = ["MODERATOR-ADMIN", "OWNER", "CODING-ADMIN"];
   const expected: Record<BanState, string[]> = {
-    UNVIEWED: [...reportAdmins, "CONTENT-ADMIN", "EVENT-ADMIN", "HEAD_MODERATOR", "MODERATOR", "JR_MODERATOR"],
+    UNVIEWED: [
+      ...reportAdmins,
+      "CONTENT-ADMIN",
+      "EVENT-ADMIN",
+      "HEAD_MODERATOR",
+      "MODERATOR",
+      "JR_MODERATOR",
+    ],
     OFFICIAL_WARNING: [...reportAdmins, "MODERATOR"],
     BAN_ACTIVATED: [...reportAdmins, "HEAD_MODERATOR"],
     BAN_ESCALATED: [...reportAdmins, "HEAD_MODERATOR"],
     TRADE_BAN_ACTIVATED: [...reportAdmins, "HEAD_MODERATOR", "MODERATOR"],
     SILENCE_ACTIVATED: [...reportAdmins, "HEAD_MODERATOR", "MODERATOR"],
     SILENCE_ESCALATED: [...reportAdmins, "HEAD_MODERATOR"],
-    TIMEOUT_ACTIVATED: [...reportAdmins, "CONTENT-ADMIN", "EVENT-ADMIN", "HEAD_MODERATOR", "MODERATOR"],
+    TIMEOUT_ACTIVATED: [
+      ...reportAdmins,
+      "CONTENT-ADMIN",
+      "EVENT-ADMIN",
+      "HEAD_MODERATOR",
+      "MODERATOR",
+    ],
     REPORT_CLEARED: [],
   };
   for (const status of BanStates) {
@@ -215,7 +234,9 @@ test("report moderation follows the role table for every report state", () => {
       canModerateReports({ role, userId: "moderator" } as UserData, report),
     );
     expect([...allowed].sort()).toEqual([...expected[status]].sort() as UserRole[]);
-    expect(canModerateReports({ role: "OWNER", userId: "reported" } as UserData, report)).toBe(false);
+    expect(
+      canModerateReports({ role: "OWNER", userId: "reported" } as UserData, report),
+    ).toBe(false);
   }
 });
 
@@ -236,7 +257,9 @@ test("conversation compose restriction lets banned users reply to their own tick
   expect(compose(banned, publicConvo, "me")).toBe(getMessagingRestriction(banned));
   expect(compose(lowLevel, staffConvo, "me")).toBe(getMessagingRestriction(lowLevel));
   expect(compose(banned, staffConvo, "me")).toBeNull();
-  expect(compose(banned, staffConvo, "other")).toBe(RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE);
+  expect(compose(banned, staffConvo, "other")).toBe(
+    RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE,
+  );
   expect(compose(banned, staffConvo, null)).toBe(RESTRICTED_STAFF_CONVERSATION_MESSAGE);
 });
 

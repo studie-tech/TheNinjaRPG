@@ -1,11 +1,14 @@
-
 import { eq, inArray } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
 import { questHistory, userData } from "@/drizzle/schema";
 import { QuestTracker } from "@/validators/objectives";
 import { upsertQuestEntries } from "@/server/utils/questAssignment";
 import { insertQuestHistory, insertUsers } from "../../../../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../../setup/testDatabase";
 
 /**
  * The bulk daily reset clears a tracker with raw JSON surgery (JSON_SEARCH + JSON_REMOVE). The
@@ -63,7 +66,14 @@ describeWithDatabase("bulk daily reset against a real MySQL", () => {
       { userId: "goalcollision", questData: [tracker("other", false, "q_b")] },
     ]);
 
-    await reset("q_b", ["mixed", "wildcard", "empty", "sqlnull", "deep", "goalcollision"]);
+    await reset("q_b", [
+      "mixed",
+      "wildcard",
+      "empty",
+      "sqlnull",
+      "deep",
+      "goalcollision",
+    ]);
 
     expect(await trackerIds("mixed")).toEqual(["q_a"]);
     expect(await trackerIds("wildcard")).toEqual(["qxb"]);
@@ -102,17 +112,28 @@ describeWithDatabase("bulk daily reset against a real MySQL", () => {
       { userId: "norow", questData: [] },
     ]);
     await insertQuestHistory([
-      { id: "h1", userId: "hasrow", questId: "q_b", questType: "daily", completed: 1, endAt: new Date() },
+      {
+        id: "h1",
+        userId: "hasrow",
+        questId: "q_b",
+        questType: "daily",
+        completed: 1,
+        endAt: new Date(),
+      },
     ]);
 
     await reset("q_b", ["hasrow", "norow"]);
 
     const rows = await database
-      .select({ userId: questHistory.userId, completed: questHistory.completed, endAt: questHistory.endAt })
+      .select({
+        userId: questHistory.userId,
+        completed: questHistory.completed,
+        endAt: questHistory.endAt,
+      })
       .from(questHistory)
       .where(eq(questHistory.questId, "q_b"))
       .orderBy(questHistory.userId);
     expect(rows.map((row) => row.userId)).toEqual(["hasrow", "norow"]);
     expect(rows.every((row) => row.completed === 0 && row.endAt === null)).toBe(true);
   });
-})
+});

@@ -14,7 +14,9 @@ const map: GlobalMapData = {
   columns: 1,
   rows: 1,
   latitudeLimit: 65,
-  tiles: [{ b: [{ x: 1, y: 0, z: 0 }], c: { x: 1, y: 0, z: 0 }, t: 1, vc: [0, 0, 0, 0] }],
+  tiles: [
+    { b: [{ x: 1, y: 0, z: 0 }], c: { x: 1, y: 0, z: 0 }, t: 1, vc: [0, 0, 0, 0] },
+  ],
 };
 
 describe("map topology cache", () => {
@@ -33,7 +35,9 @@ describe("map topology cache", () => {
       JSON.stringify({ version: cacheVersion, data: map }),
     );
     const request = vi.fn();
-    vi.spyOn(globalThis, "fetch").mockImplementation(request as unknown as typeof fetch);
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      request as unknown as typeof fetch,
+    );
     expect(await fetchMap()).toEqual(map);
     expect(request).not.toHaveBeenCalled();
   });
@@ -47,7 +51,9 @@ describe("map topology cache", () => {
     const request = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
       Response.json(map),
     );
-    vi.spyOn(globalThis, "fetch").mockImplementation(request as unknown as typeof fetch);
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      request as unknown as typeof fetch,
+    );
     expect(await fetchMap()).toEqual(map);
     expect(request).toHaveBeenCalledTimes(1);
     expect(request.mock.calls[0]?.[0]).toBe(`/api/map/topology?v=${cacheVersion}`);
@@ -68,7 +74,9 @@ describe("map topology cache", () => {
       throw new DOMException("Blocked", "SecurityError");
     });
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    vi.spyOn(globalThis, "fetch").mockImplementation(vi.fn(async () => Response.json(map)) as unknown as typeof fetch);
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      vi.fn(async () => Response.json(map)) as unknown as typeof fetch,
+    );
     expect(await fetchMap()).toEqual(map);
   });
 });

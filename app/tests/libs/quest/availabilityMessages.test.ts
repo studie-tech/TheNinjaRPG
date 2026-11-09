@@ -40,10 +40,10 @@ const available = (
   questPatch: Partial<QuestAvailability> = {},
   userPatch: Record<string, unknown> = {},
 ) =>
-  isAvailableUserQuests(
-    { ...quest, ...questPatch },
-    { ...user, ...userPatch } as never,
-  );
+  isAvailableUserQuests({ ...quest, ...questPatch }, {
+    ...user,
+    ...userPatch,
+  } as never);
 
 describe("isAvailableUserQuests rejection messages", () => {
   it("passes with an empty message when every rule holds", () => {
@@ -52,24 +52,84 @@ describe("isAvailableUserQuests rejection messages", () => {
 
   it.each<[string, Partial<QuestAvailability>, Record<string, unknown>, string]>([
     ["hidden", { hidden: true }, {}, "Quest is hidden\n"],
-    ["future start", { startsAt: "2999-01-01T00:00:00.000Z" }, {}, "Quest starts in the future\n"],
+    [
+      "future start",
+      { startsAt: "2999-01-01T00:00:00.000Z" },
+      {},
+      "Quest starts in the future\n",
+    ],
     ["ended", { endsAt: "2000-01-01T00:00:00.000Z" }, {}, "Quest has expired\n"],
-    ["completions", { previousCompletes: 2 }, {}, "Quest has been completed too many times\n"],
-    ["attempts", { previousAttempts: 3 }, {}, "Quest has been attempted too many times\n"],
+    [
+      "completions",
+      { previousCompletes: 2 },
+      {},
+      "Quest has been completed too many times\n",
+    ],
+    [
+      "attempts",
+      { previousAttempts: 3 },
+      {},
+      "Quest has been attempted too many times\n",
+    ],
     [
       "period",
-      { retryDelay: "daily", maxCompletes: 1, periodCompletes: 1, periodStartAt: new Date() },
+      {
+        retryDelay: "daily",
+        maxCompletes: 1,
+        periodCompletes: 1,
+        periodStartAt: new Date(),
+      },
       {},
       "Quest limit for this period reached\n",
     ],
-    ["village", { requiredVillage: "other" }, {}, "Quest is not available in your village\n"],
-    ["bloodline", { requiredBloodlineId: "other" }, {}, "Quest requires a specific bloodline\n"],
-    ["sage mode", { requiredSageModeId: "other" }, {}, "Quest requires a specific sage mode\n"],
-    ["prerequisite", { prerequisiteQuestId: "other" }, {}, "You must complete the prerequisite quest first\n"],
-    ["medical rank", { medicalRank: "MASTER" }, {}, "Quest requires medical rank Master\n"],
-    ["hunting rank", { huntingRank: "A RANK" }, {}, "Quest requires hunting rank A rank\n"],
-    ["gathering rank", { gatheringRank: "A RANK" }, {}, "Quest requires gathering rank A rank\n"],
-    ["farming level", { requiredFarmingLevel: 5 }, {}, "Quest requires farming level 5\n"],
+    [
+      "village",
+      { requiredVillage: "other" },
+      {},
+      "Quest is not available in your village\n",
+    ],
+    [
+      "bloodline",
+      { requiredBloodlineId: "other" },
+      {},
+      "Quest requires a specific bloodline\n",
+    ],
+    [
+      "sage mode",
+      { requiredSageModeId: "other" },
+      {},
+      "Quest requires a specific sage mode\n",
+    ],
+    [
+      "prerequisite",
+      { prerequisiteQuestId: "other" },
+      {},
+      "You must complete the prerequisite quest first\n",
+    ],
+    [
+      "medical rank",
+      { medicalRank: "MASTER" },
+      {},
+      "Quest requires medical rank Master\n",
+    ],
+    [
+      "hunting rank",
+      { huntingRank: "A RANK" },
+      {},
+      "Quest requires hunting rank A rank\n",
+    ],
+    [
+      "gathering rank",
+      { gatheringRank: "A RANK" },
+      {},
+      "Quest requires gathering rank A rank\n",
+    ],
+    [
+      "farming level",
+      { requiredFarmingLevel: 5 },
+      {},
+      "Quest requires farming level 5\n",
+    ],
     ["required level", { requiredLevel: 31 }, {}, "Quest requires level 31\n"],
     ["maximum level", { maxLevel: 29 }, {}, "Quest is only available up to level 29\n"],
   ])("explains one failed %s rule", (_name, questPatch, userPatch, message) => {
@@ -115,7 +175,10 @@ describe("isAvailableUserQuests rejection messages", () => {
   it("names the authored cap of a legacy quest whose required level is also unmet", () => {
     const level = MAX_EXPERIENCE_LEVEL + 1;
     expect(
-      available({ requiredLevel: level + 1, maxLevel: MAX_EXPERIENCE_LEVEL }, { level }),
+      available(
+        { requiredLevel: level + 1, maxLevel: MAX_EXPERIENCE_LEVEL },
+        { level },
+      ),
     ).toEqual({
       check: false,
       message: `Quest requires level ${level + 1}\nQuest is only available up to level ${MAX_EXPERIENCE_LEVEL}\n`,
@@ -124,7 +187,10 @@ describe("isAvailableUserQuests rejection messages", () => {
 
   it("extends a legacy cap without a message when the required level is met", () => {
     expect(
-      available({ maxLevel: MAX_EXPERIENCE_LEVEL }, { level: MAX_EXPERIENCE_LEVEL + 1 }),
+      available(
+        { maxLevel: MAX_EXPERIENCE_LEVEL },
+        { level: MAX_EXPERIENCE_LEVEL + 1 },
+      ),
     ).toEqual({ check: true, message: "" });
   });
 

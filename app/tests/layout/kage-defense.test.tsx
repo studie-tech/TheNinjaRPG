@@ -6,7 +6,9 @@ import { KageDefense } from "@/layout/KageDefense";
 import { pushToCombat } from "@/utils/routing";
 import * as UserContext from "@/utils/UserContext";
 
-type Options = { onSuccess: (result: object, input?: undefined, revision?: number) => Promise<void> };
+type Options = {
+  onSuccess: (result: object, input?: undefined, revision?: number) => Promise<void>;
+};
 
 const updateUser = vi.fn(async () => undefined);
 const push = vi.fn();

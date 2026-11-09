@@ -18,7 +18,12 @@ import { testApi, TrpcTestProviders } from "../setup/trpc";
 
 const store = getDefaultStore();
 const clients: QueryClient[] = [];
-type Handler = (event: { type?: string; message?: string; fromId?: string; commentId?: string }) => void;
+type Handler = (event: {
+  type?: string;
+  message?: string;
+  fromId?: string;
+  commentId?: string;
+}) => void;
 
 beforeEach(() => {
   installBrowserGlobals({ resizeObserver: true });
@@ -77,7 +82,8 @@ for (const source of ["save", "event"] as const) {
               observable((observer) => {
                 let data: unknown;
                 if (op.path === "comments.getTavernIds") data = readTaverns();
-                else if (op.path === "comments.fetchConversationComment") data = { id: "new" };
+                else if (op.path === "comments.fetchConversationComment")
+                  data = { id: "new" };
                 else if (op.path === "parentalControls.get") {
                   data = {
                     enabled: true,
@@ -103,7 +109,8 @@ for (const source of ["save", "event"] as const) {
         isBanned: false,
         isSilenced: false,
         chatMuted: false,
-        mutedConversationIds: [], unmutedTavernIds: ["global"],
+        mutedConversationIds: [],
+        unmutedTavernIds: ["global"],
       } as never;
       const LiveTab = () => {
         const pusher = usePusherHandler("me");
@@ -118,25 +125,47 @@ for (const source of ["save", "event"] as const) {
       await waitFor(() => expect(readTaverns).toHaveBeenCalledTimes(1));
       await waitFor(() => expect(handlers.has("global")).toBe(!startingBlocked));
       if (!startingBlocked) {
-        await act(async () => handlers.get("global")?.({ message: "new", fromId: "other", commentId: "new" }));
-        await waitFor(() => expect(store.get(chatTavernActivityAtom)).toEqual({ global: 1 }));
+        await act(async () =>
+          handlers.get("global")?.({
+            message: "new",
+            fromId: "other",
+            commentId: "new",
+          }),
+        );
+        await waitFor(() =>
+          expect(store.get(chatTavernActivityAtom)).toEqual({ global: 1 }),
+        );
       }
 
       if (source === "save") {
-        fireEvent.click(await view.findByRole("switch", { name: "Disable tavern access" }));
-        fireEvent.change(view.getByLabelText("Parent PIN"), { target: { value: "123456" } });
+        fireEvent.click(
+          await view.findByRole("switch", { name: "Disable tavern access" }),
+        );
+        fireEvent.change(view.getByLabelText("Parent PIN"), {
+          target: { value: "123456" },
+        });
         fireEvent.click(view.getByRole("button", { name: "Save parental controls" }));
         await waitFor(() => expect(blocked).toBe(!startingBlocked));
       } else {
         blocked = !startingBlocked;
-        await act(async () => handlers.get("me")?.({ type: "parentalControlsChanged" }));
+        await act(async () =>
+          handlers.get("me")?.({ type: "parentalControlsChanged" }),
+        );
       }
       await waitFor(() => expect(readTaverns).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(handlers.has("global")).toBe(startingBlocked));
       expect(store.get(chatTavernActivityAtom)).toEqual({});
       if (startingBlocked) {
-        await act(async () => handlers.get("global")?.({ message: "new", fromId: "other", commentId: "new" }));
-        await waitFor(() => expect(store.get(chatTavernActivityAtom)).toEqual({ global: 1 }));
+        await act(async () =>
+          handlers.get("global")?.({
+            message: "new",
+            fromId: "other",
+            commentId: "new",
+          }),
+        );
+        await waitFor(() =>
+          expect(store.get(chatTavernActivityAtom)).toEqual({ global: 1 }),
+        );
       }
     },
   );

@@ -91,10 +91,12 @@ describe("filterMissionHallQuests", () => {
   });
 
   it("notes when the best available medical rank is below the player's", () => {
-    expect(filterMissionHallQuests([medical("novice", "NOVICE")], user, "medical").rankInfo).toBe(
-      " (showing missions up to Novice rank)",
-    );
-    expect(filterMissionHallQuests([medical("master", "MASTER")], user, "medical").rankInfo).toBe("");
+    expect(
+      filterMissionHallQuests([medical("novice", "NOVICE")], user, "medical").rankInfo,
+    ).toBe(" (showing missions up to Novice rank)");
+    expect(
+      filterMissionHallQuests([medical("master", "MASTER")], user, "medical").rankInfo,
+    ).toBe("");
     expect(filterMissionHallQuests([], user, "medical").rankInfo).toBe("");
   });
 
@@ -110,7 +112,12 @@ describe("filterMissionHallQuests", () => {
 describe("isQuestRankAllowed", () => {
   it.each([
     [{ questType: "village_mission", questRank: "D" }, "JONIN", "ui", false],
-    [{ questType: "village_mission", questRank: "D" }, "JONIN", "random_assignment", false],
+    [
+      { questType: "village_mission", questRank: "D" },
+      "JONIN",
+      "random_assignment",
+      false,
+    ],
     [{ questType: "mission", questRank: "S" }, "ELDER", "ui", false],
     [{ questType: "mission", questRank: "S" }, "ELDER", "random_assignment", false],
     [{ questType: "crime", questRank: "S" }, "GENIN", "random_assignment", true],
@@ -123,6 +130,8 @@ describe("isQuestRankAllowed", () => {
   });
 
   it("defaults to the UI source", () => {
-    expect(isQuestRankAllowed({ questType: "crime", questRank: "S" }, { rank: "GENIN" })).toBe(false);
+    expect(
+      isQuestRankAllowed({ questType: "crime", questRank: "S" }, { rank: "GENIN" }),
+    ).toBe(false);
   });
 });

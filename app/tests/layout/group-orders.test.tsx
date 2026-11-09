@@ -9,20 +9,62 @@ import * as modal from "@/layout/Modal";
 import * as richInput from "@/layout/RichInput";
 import type { MutateContentSchema } from "@/validators/comments";
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 beforeEach(() => {
-  vi.spyOn(contentBox, "default").mockImplementation((({ topRightContent, children }: { topRightContent: ReactNode; children: ReactNode }) =>
-    <>{topRightContent}{children}</>) as never);
+  vi.spyOn(contentBox, "default").mockImplementation((({
+    topRightContent,
+    children,
+  }: {
+    topRightContent: ReactNode;
+    children: ReactNode;
+  }) => (
+    <>
+      {topRightContent}
+      {children}
+    </>
+  )) as never);
 });
 
-const Draft = ({ control, error }: { control: Control<MutateContentSchema>; error?: string }) => {
+const Draft = ({
+  control,
+  error,
+}: {
+  control: Control<MutateContentSchema>;
+  error?: string;
+}) => {
   const { field } = useController({ control, name: "content" });
-  return <><textarea aria-label="Draft" {...field} />{error && <p role="alert">{error}</p>}</>;
+  return (
+    <>
+      <textarea aria-label="Draft" {...field} />
+      {error && <p role="alert">{error}</p>}
+    </>
+  );
 };
 
-const setup = (props: Partial<ComponentProps<typeof GroupOrders>> & Pick<ComponentProps<typeof GroupOrders>, "onSubmit">) => {
-  vi.spyOn(modal, "default").mockImplementation((({ isOpen, onAccept, children }: { isOpen: boolean; onAccept: () => void; children: ReactNode }) =>
-    isOpen ? <div role="dialog">{children}<button type="button" onClick={onAccept}>Submit</button></div> : null) as never);
+const setup = (
+  props: Partial<ComponentProps<typeof GroupOrders>> &
+    Pick<ComponentProps<typeof GroupOrders>, "onSubmit">,
+) => {
+  vi.spyOn(modal, "default").mockImplementation((({
+    isOpen,
+    onAccept,
+    children,
+  }: {
+    isOpen: boolean;
+    onAccept: () => void;
+    children: ReactNode;
+  }) =>
+    isOpen ? (
+      <div role="dialog">
+        {children}
+        <button type="button" onClick={onAccept}>
+          Submit
+        </button>
+      </div>
+    ) : null) as never);
   vi.spyOn(richInput, "default").mockImplementation(Draft as never);
   const view = render(
     <GroupOrders
@@ -31,7 +73,11 @@ const setup = (props: Partial<ComponentProps<typeof GroupOrders>> & Pick<Compone
       content="<p>Current orders</p>"
       canPost
       isPending={false}
-      renderTrigger={(open) => <button type="button" onClick={open}>Edit</button>}
+      renderTrigger={(open) => (
+        <button type="button" onClick={open}>
+          Edit
+        </button>
+      )}
       {...props}
     />,
   );
@@ -41,7 +87,8 @@ const setup = (props: Partial<ComponentProps<typeof GroupOrders>> & Pick<Compone
 };
 
 it("keeps the dialog and draft after a refused or failed submission", async () => {
-  const onSubmit = vi.fn()
+  const onSubmit = vi
+    .fn()
     .mockResolvedValueOnce({ success: false })
     .mockRejectedValueOnce(new Error("Lost"))
     .mockResolvedValueOnce({ success: true });
@@ -49,13 +96,23 @@ it("keeps the dialog and draft after a refused or failed submission", async () =
   fireEvent.change(draft, { target: { value: "New orders" } });
   fireEvent.click(view.getByRole("button", { name: "Submit" }));
   await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-  await waitFor(() => expect((view.getByRole("button", { name: "Submit" }) as HTMLButtonElement).disabled).toBe(false));
-  expect(view.getByRole("textbox", { name: "Draft" })).toHaveProperty("value", "New orders");
+  await waitFor(() =>
+    expect(
+      (view.getByRole("button", { name: "Submit" }) as HTMLButtonElement).disabled,
+    ).toBe(false),
+  );
+  expect(view.getByRole("textbox", { name: "Draft" })).toHaveProperty(
+    "value",
+    "New orders",
+  );
 
   fireEvent.click(view.getByRole("button", { name: "Submit" }));
   await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
   await new Promise((resolve) => setTimeout(resolve));
-  expect(view.getByRole("textbox", { name: "Draft" })).toHaveProperty("value", "New orders");
+  expect(view.getByRole("textbox", { name: "Draft" })).toHaveProperty(
+    "value",
+    "New orders",
+  );
 
   fireEvent.click(view.getByRole("button", { name: "Submit" }));
   await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
@@ -64,7 +121,12 @@ it("keeps the dialog and draft after a refused or failed submission", async () =
 
 it("submits one draft at a time", async () => {
   let finish: (value: { success: boolean }) => void = () => undefined;
-  const onSubmit = vi.fn(() => new Promise<{ success: boolean }>((resolve) => { finish = resolve; }));
+  const onSubmit = vi.fn(
+    () =>
+      new Promise<{ success: boolean }>((resolve) => {
+        finish = resolve;
+      }),
+  );
   const { view } = setup({ onSubmit });
   fireEvent.click(view.getByRole("button", { name: "Submit" }));
   await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));

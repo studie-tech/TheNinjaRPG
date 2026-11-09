@@ -9,17 +9,44 @@ const assets = {
 
 describe("quest review scene composition", () => {
   it("uses quest-level fallbacks independently for empty objective fields", () => {
-    expect(questSceneOf({ description: "Quest text", content: {
-      sceneBackground: "forest", sceneCharacters: ["ninja"],
-      objectives: [{ sceneBackground: "", sceneCharacters: [], description: "Objective text" }],
-    } }, assets, 0)).toEqual({
-      background: "forest.webp", characters: ["ninja.webp"], description: "Objective text", missing: [],
+    expect(
+      questSceneOf(
+        {
+          description: "Quest text",
+          content: {
+            sceneBackground: "forest",
+            sceneCharacters: ["ninja"],
+            objectives: [
+              {
+                sceneBackground: "",
+                sceneCharacters: [],
+                description: "Objective text",
+              },
+            ],
+          },
+        },
+        assets,
+        0,
+      ),
+    ).toEqual({
+      background: "forest.webp",
+      characters: ["ninja.webp"],
+      description: "Objective text",
+      missing: [],
     });
   });
 
   it("reports missing assets and removed objectives without using IDs as URLs", () => {
-    expect(questSceneOf({ content: { sceneBackground: "missing", sceneCharacters: ["missing"] } }, assets)).toEqual({
-      background: IMG_SCENE_BACKGROUND, characters: [], description: undefined, missing: ["missing", "missing"],
+    expect(
+      questSceneOf(
+        { content: { sceneBackground: "missing", sceneCharacters: ["missing"] } },
+        assets,
+      ),
+    ).toEqual({
+      background: IMG_SCENE_BACKGROUND,
+      characters: [],
+      description: undefined,
+      missing: ["missing", "missing"],
     });
     expect(questSceneOf({ content: { objectives: [] } }, assets, 0)).toBeNull();
   });

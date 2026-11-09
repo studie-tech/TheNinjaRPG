@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, expect, it, setSystemTime } from "bun:test";
 import { abEvent, userData } from "@/drizzle/schema";
 import { WALLPAPER_EXPERIMENT } from "@/libs/wallpaperExperiment";
@@ -106,9 +105,9 @@ describeWithDatabase("experiment analytics activity and first-visit cohorts", ()
       "boundary-test",
       "completed-test",
     ]);
-    expect(result.find((test) => test.experiment === "completed-test")?.variants).toEqual([
-      { variant: "control", loaded: 1, register: 1 },
-    ]);
+    expect(
+      result.find((test) => test.experiment === "completed-test")?.variants,
+    ).toEqual([{ variant: "control", loaded: 1, register: 1 }]);
   });
 
   it("preserves source, variant and exposure-device cohorts across the full test history", async () => {
@@ -213,7 +212,9 @@ describeWithDatabase("experiment analytics activity and first-visit cohorts", ()
     ] as const) {
       const result = await caller.getAbTests({ deviceType: [...deviceType] });
       expect(result[0]?.variants.find((arm) => arm.variant === "control")).toEqual({
-        variant: "control", loaded, register,
+        variant: "control",
+        loaded,
+        register,
       });
     }
   });
@@ -222,20 +223,37 @@ describeWithDatabase("experiment analytics activity and first-visit cohorts", ()
     const database = await getTestDatabase();
     await database.insert(abEvent).values([
       {
-        ...visit, id: "uppercase-visit", ipHash: "uppercase",
-        experiment: "Case-test", variant: "Arm", createdAt: now,
+        ...visit,
+        id: "uppercase-visit",
+        ipHash: "uppercase",
+        experiment: "Case-test",
+        variant: "Arm",
+        createdAt: now,
       },
       {
-        ...visit, id: "uppercase-success", ipHash: "uppercase",
-        experiment: "Case-test", variant: "Arm", event: "success", createdAt: now,
+        ...visit,
+        id: "uppercase-success",
+        ipHash: "uppercase",
+        experiment: "Case-test",
+        variant: "Arm",
+        event: "success",
+        createdAt: now,
       },
       {
-        ...visit, id: "lowercase-arm", ipHash: "lowercase-arm",
-        experiment: "Case-test", variant: "arm", createdAt: now,
+        ...visit,
+        id: "lowercase-arm",
+        ipHash: "lowercase-arm",
+        experiment: "Case-test",
+        variant: "arm",
+        createdAt: now,
       },
       {
-        ...visit, id: "lowercase-test", ipHash: "lowercase-test",
-        experiment: "case-test", variant: "Arm", createdAt: now,
+        ...visit,
+        id: "lowercase-test",
+        ipHash: "lowercase-test",
+        experiment: "case-test",
+        variant: "Arm",
+        createdAt: now,
       },
     ]);
 
@@ -248,7 +266,9 @@ describeWithDatabase("experiment analytics activity and first-visit cohorts", ()
         { variant: "arm", loaded: 1, register: 0 },
       ]),
     );
-    expect(result.find((test) => test.experiment === "Case-test")?.variants).toHaveLength(2);
+    expect(
+      result.find((test) => test.experiment === "Case-test")?.variants,
+    ).toHaveLength(2);
     expect(result.find((test) => test.experiment === "case-test")?.variants).toEqual([
       { variant: "Arm", loaded: 1, register: 0 },
     ]);
@@ -271,7 +291,9 @@ describeWithDatabase("experiment analytics activity and first-visit cohorts", ()
     const caller = await callerFor(dataRouter, "analyst");
     const result = await caller.getAbTests({});
     expect(result[0]?.variants.find((arm) => arm.variant === "control")).toEqual({
-      variant: "control", loaded: 5, register: 1,
+      variant: "control",
+      loaded: 5,
+      register: 1,
     });
   });
 });

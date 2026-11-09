@@ -14,8 +14,12 @@ import {
 describeWithDatabase("jutsu clone audit atomicity", () => {
   beforeEach(async () => {
     await resetTables(actionLog, jutsu, userData);
-    await insertUsers([{ userId: "clone-editor", username: "Editor", role: "CONTENT" }]);
-    await insertJutsus([{ id: "clone-source", name: "Fireball", requiredRank: "GENIN" }]);
+    await insertUsers([
+      { userId: "clone-editor", username: "Editor", role: "CONTENT" },
+    ]);
+    await insertJutsus([
+      { id: "clone-source", name: "Fireball", requiredRank: "GENIN" },
+    ]);
   });
 
   it("rolls back the copy when its audit fails, then allows one clean retry", async () => {
@@ -58,9 +62,14 @@ describeWithDatabase("jutsu clone audit atomicity", () => {
     const second = await caller.clone({ id: "clone-source" });
     expect(first.success && second.success).toBe(true);
     expect(first.message).not.toBe(second.message);
-    const copies = await database.select({ name: jutsu.name }).from(jutsu).where(ne(jutsu.id, "clone-source"));
+    const copies = await database
+      .select({ name: jutsu.name })
+      .from(jutsu)
+      .where(ne(jutsu.id, "clone-source"));
     expect(copies).toHaveLength(2);
-    expect(copies.every(({ name }) => name.length <= 191 && name.includes(" - copy "))).toBe(true);
+    expect(
+      copies.every(({ name }) => name.length <= 191 && name.includes(" - copy ")),
+    ).toBe(true);
     const logs = await database.select().from(actionLog);
     expect(logs).toHaveLength(2);
     expect(logs.every((log) => log.relatedMsg?.length === 191)).toBe(true);

@@ -138,7 +138,8 @@ describe("daily-quest cron", () => {
     mocks.lock.mockResolvedValue({
       release: mocks.rollback,
       update: mocks.rollback,
-      isClaimed: true, isNewDay: true,
+      isClaimed: true,
+      isNewDay: true,
       prevTime: 1,
     });
   });
@@ -247,7 +248,11 @@ describe("daily-quest cron", () => {
   });
 
   it("skips the reset when the daily timer says it is not a new day", async () => {
-    mocks.lock.mockResolvedValue({ isClaimed: false, isNewDay: false, response: new Response("locked") });
+    mocks.lock.mockResolvedValue({
+      isClaimed: false,
+      isNewDay: false,
+      response: new Response("locked"),
+    });
 
     await GET(cronRequest());
 
@@ -327,7 +332,8 @@ describe("daily-quest cron", () => {
       mocks.lock.mockResolvedValue({
         release: mocks.rollback,
         update: mocks.rollback,
-        isClaimed: true, isNewDay: true,
+        isClaimed: true,
+        isNewDay: true,
         prevTime: time,
         prevValue: value,
       });
@@ -360,7 +366,8 @@ describe("daily-quest cron", () => {
     mocks.lock.mockResolvedValue({
       release: mocks.rollback,
       update: mocks.rollback,
-      isClaimed: true, isNewDay: true,
+      isClaimed: true,
+      isNewDay: true,
       prevTime: new Date(Date.UTC(2020, 0, 1) - 1),
       prevValue: 1,
     });

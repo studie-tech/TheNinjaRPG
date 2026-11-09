@@ -11,7 +11,9 @@ const unlinkedAt = new Date("2026-05-06T12:00:00Z");
 
 beforeEach(() => {
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
+    <div>{children}</div>
+  ));
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
     data: { userId: "mod", role: "MODERATOR" },
   } as never);
@@ -52,14 +54,14 @@ it("lists ended links with their character, Discord account, dates and reason", 
   const view = render(<DiscordLinksStaffPage />);
   expect(view.getByText("Link history (1)")).toBeDefined();
   const table = view.getByRole("table");
-  expect(within(table).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual([
-    "Character",
-    "Discord",
-    "Linked",
-    "Unlinked",
-    "Reason",
-  ]);
-  const cells = within(table).getAllByRole("cell").map((cell) => cell.textContent);
+  expect(
+    within(table)
+      .getAllByRole("columnheader")
+      .map((cell) => cell.textContent),
+  ).toEqual(["Character", "Discord", "Linked", "Unlinked", "Reason"]);
+  const cells = within(table)
+    .getAllByRole("cell")
+    .map((cell) => cell.textContent);
   expect(cells).toEqual([
     "Ninja",
     "ninja#1123456789",

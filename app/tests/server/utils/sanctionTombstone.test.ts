@@ -30,8 +30,19 @@ import {
 } from "@/server/utils/sanctionTombstone";
 import { insertUsers } from "../../setup/factories";
 import { insertRegistrationContent, registerCharacter } from "../../setup/registration";
-import { insertSanctionReports, sanctionIdentity, stubClerkUsers } from "../../setup/sanctions";
-import { beforeStatements, failStatements, interceptExecute, sqlText, overrideQuery, aroundStatements } from "../../setup/statements";
+import {
+  insertSanctionReports,
+  sanctionIdentity,
+  stubClerkUsers,
+} from "../../setup/sanctions";
+import {
+  beforeStatements,
+  failStatements,
+  interceptExecute,
+  sqlText,
+  overrideQuery,
+  aroundStatements,
+} from "../../setup/statements";
 import {
   callerFor,
   describeWithDatabase,
@@ -101,17 +112,27 @@ const pauseWebDeletion = async () => {
 
 describe("sanction identifier normalization", () => {
   it("matches equivalent IPv6 and mapped IPv4 addresses without retaining plain IPs", () => {
-    expect(hashSanctionIp(" 2001:0DB8:0:0:0:0:0:1 ")).toBe(hashSanctionIp("2001:db8::1"));
+    expect(hashSanctionIp(" 2001:0DB8:0:0:0:0:0:1 ")).toBe(
+      hashSanctionIp("2001:db8::1"),
+    );
     expect(hashSanctionIp("::ffff:192.0.2.1")).toBe(hashSanctionIp("192.0.2.1"));
     expect(hashSanctionIp("192.0.2.1")).toMatch(/^[a-f0-9]{64}$/);
     expect(hashSanctionIp("192.0.2.1")).not.toBe(hashSanctionIp("192.0.2.2"));
   });
 
-  it.each([undefined, null, "", "unknown", "hidden", "Proxied", "ai-test-broker", "192.0.2.999", "fe80::1%eth0"])(
-    "does not match placeholder or invalid address %s", (ip) => {
-      expect(hashSanctionIp(ip)).toBeNull();
-    },
-  );
+  it.each([
+    undefined,
+    null,
+    "",
+    "unknown",
+    "hidden",
+    "Proxied",
+    "ai-test-broker",
+    "192.0.2.999",
+    "fe80::1%eth0",
+  ])("does not match placeholder or invalid address %s", (ip) => {
+    expect(hashSanctionIp(ip)).toBeNull();
+  });
 
   it("folds Gmail aliases and preserves distinct local parts at other providers", () => {
     expect(normalizeEmail(" J.Doe+alt@GoogleMail.com ")).toBe("jdoe@gmail.com");
@@ -181,10 +202,12 @@ describeWithDatabase("sanction tombstones", () => {
       });
       const { promise: ipEntered, resolve: enterIp } = deferred<void>();
       const { promise: ipGate, resolve: releaseIp } = deferred<void>();
-      const profileClient = beforeStatements(database, historicalIp, [async () => {
-        enterIp();
-        await ipGate;
-      }]);
+      const profileClient = beforeStatements(database, historicalIp, [
+        async () => {
+          enterIp();
+          await ipGate;
+        },
+      ]);
       const profile = profileRouter
         .createCaller({
           drizzle: profileClient,
@@ -212,11 +235,16 @@ describeWithDatabase("sanction tombstones", () => {
                 },
               })
             : boundary === "history removed"
-              ? aroundStatements(database, historicalIp, async (run) => {
-                  const result = await run();
-                  await pauseDeletion();
-                  return result;
-                }, { operations: ["delete"] })
+              ? aroundStatements(
+                  database,
+                  historicalIp,
+                  async (run) => {
+                    const result = await run();
+                    await pauseDeletion();
+                    return result;
+                  },
+                  { operations: ["delete"] },
+                )
               : database;
       const capture = sanctions.recordSanctionTombstone;
       if (boundary === "captured")
@@ -229,7 +257,10 @@ describeWithDatabase("sanction tombstones", () => {
         );
       const deleting = profileRouter
         .createCaller({ drizzle: deletionClient, userId: SANCTIONED } as never)
-        .confirmDeletion({ userId: SANCTIONED, confirmation: CHARACTER_DELETION_CONFIRMATION });
+        .confirmDeletion({
+          userId: SANCTIONED,
+          confirmation: CHARACTER_DELETION_CONFIRMATION,
+        });
       await deletionEntered;
       try {
         if (decision !== "unchanged")
@@ -428,7 +459,9 @@ describeWithDatabase("sanction tombstones", () => {
     expect(await register("otherip", database, "192.0.2.2")).toMatchObject({
       success: true,
     });
-    expect(await register("noip", database, "unknown")).toMatchObject({ success: true });
+    expect(await register("noip", database, "unknown")).toMatchObject({
+      success: true,
+    });
     await database
       .update(sanctionTombstone)
       .set({ sanctionEndsAt: new Date(Date.now() - 1) });
@@ -465,7 +498,9 @@ describeWithDatabase("sanction tombstones", () => {
       success: true,
     });
     expect(
-      await database.query.userData.findFirst({ where: eq(userData.userId, "retryip") }),
+      await database.query.userData.findFirst({
+        where: eq(userData.userId, "retryip"),
+      }),
     ).toMatchObject({ isBanned: true });
   });
 
@@ -643,10 +678,12 @@ describeWithDatabase("sanction tombstones", () => {
         const revised = await database.query.userReport.findFirst({
           where: eq(userReport.id, "original-case"),
         });
-        expect(revised).toEqual(expect.objectContaining({
-          status: decision === "clear" ? "REPORT_CLEARED" : "BAN_ACTIVATED",
-          banEnd: originalEnd,
-        }));
+        expect(revised).toEqual(
+          expect.objectContaining({
+            status: decision === "clear" ? "REPORT_CLEARED" : "BAN_ACTIVATED",
+            banEnd: originalEnd,
+          }),
+        );
       } finally {
         release();
         await deleting;
@@ -664,10 +701,12 @@ describeWithDatabase("sanction tombstones", () => {
       const original = sources.find((source) => source.sourceId === "original-case");
       if (decision === "clear") expect(original).toBeUndefined();
       else
-        expect(original).toEqual(expect.objectContaining({
-          sanction: "BAN",
-          sanctionEndsAt: originalEnd,
-        }));
+        expect(original).toEqual(
+          expect.objectContaining({
+            sanction: "BAN",
+            sanctionEndsAt: originalEnd,
+          }),
+        );
       for (const source of sources) {
         expect(source).toMatchObject({
           emailHash: hashSanctionIdentifier("email", "capture@example.com"),
@@ -928,7 +967,12 @@ describeWithDatabase("sanction tombstones", () => {
     stubClerk({ [SANCTIONED]: sanctionIdentity("silenced@example.com") });
     const caller = await callerFor(profileRouter, SANCTIONED);
 
-    expect(await caller.toggleDeletionTimer({ userId: SANCTIONED, confirmation: CHARACTER_DELETION_CONFIRMATION })).toMatchObject({
+    expect(
+      await caller.toggleDeletionTimer({
+        userId: SANCTIONED,
+        confirmation: CHARACTER_DELETION_CONFIRMATION,
+      }),
+    ).toMatchObject({
       success: true,
     });
     const database = await getTestDatabase();
@@ -936,7 +980,12 @@ describeWithDatabase("sanction tombstones", () => {
       .update(userData)
       .set({ deletionAt: new Date(Date.now() - 1000) })
       .where(eq(userData.userId, SANCTIONED));
-    expect(await caller.confirmDeletion({ userId: SANCTIONED, confirmation: CHARACTER_DELETION_CONFIRMATION })).toMatchObject({
+    expect(
+      await caller.confirmDeletion({
+        userId: SANCTIONED,
+        confirmation: CHARACTER_DELETION_CONFIRMATION,
+      }),
+    ).toMatchObject({
       success: true,
     });
 
@@ -1190,7 +1239,9 @@ describeWithDatabase("sanction tombstones", () => {
         await database.query.userReport.findMany({
           where: eq(userReport.reportedUserId, "user_revised"),
         }),
-      ).toEqual([expect.objectContaining({ status: "BAN_ACTIVATED", banEnd: independentEnd })]);
+      ).toEqual([
+        expect.objectContaining({ status: "BAN_ACTIVATED", banEnd: independentEnd }),
+      ]);
       expect(
         await database.query.userData.findFirst({
           where: eq(userData.userId, "user_revised"),
@@ -1359,7 +1410,9 @@ describeWithDatabase("sanction tombstones", () => {
       expect.objectContaining({ sanction: "SILENCE", sanctionEndsAt: silenceEnd }),
     ]);
     expect(retained.map((source) => source.sanctionEndsAt)).toEqual([
-      silenceEnd, silenceEnd, silenceEnd,
+      silenceEnd,
+      silenceEnd,
+      silenceEnd,
     ]);
     clerkUsers[previousUserId] = sanctionIdentity("original@example.com");
     await deleteUser(database, previousUserId);
@@ -1373,7 +1426,9 @@ describeWithDatabase("sanction tombstones", () => {
       await database.query.userReport.findMany({
         where: eq(userReport.reportedUserId, previousUserId),
       }),
-    ).toEqual([expect.objectContaining({ status: "SILENCE_ACTIVATED", banEnd: silenceEnd })]);
+    ).toEqual([
+      expect.objectContaining({ status: "SILENCE_ACTIVATED", banEnd: silenceEnd }),
+    ]);
   });
 
   it.each(["ban", "silence"] as const)(

@@ -65,7 +65,9 @@ describeWithDatabase("profile updates preserve ownership lists", () => {
       },
     ]);
     await insertItems([{ id: "inventory-item" }]);
-    await insertJutsus([{ id: "inventory-jutsu", name: "Inventory Jutsu", requiredRank: "GENIN" }]);
+    await insertJutsus([
+      { id: "inventory-jutsu", name: "Inventory Jutsu", requiredRank: "GENIN" },
+    ]);
     await database.insert(userItem).values({
       id: "owned-item",
       userId: OWNER,

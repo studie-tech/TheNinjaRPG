@@ -8,7 +8,9 @@ import type { ZodAllTags } from "@/validators/combat";
 // The equip path only builds its writes; nothing here awaits them.
 const client = {
   select: () => ({ from: () => ({ where: () => ({}) }) }),
-  update: () => ({ set: () => ({ where: () => Promise.resolve({ rowsAffected: 1 }) }) }),
+  update: () => ({
+    set: () => ({ where: () => Promise.resolve({ rowsAffected: 1 }) }),
+  }),
 } as unknown as DrizzleClient;
 
 const ninjutsuBuff = (power: number) =>
@@ -92,13 +94,24 @@ describe("toggleEquipItem mastery gate", () => {
     const helm = { ...chestArmor("helm", { effects: [ninjutsuBuff(400)] }) };
     helm.equipped = "HEAD";
     helm.item = { ...helm.item, slot: "HEAD" };
-    const result = await equip([helm, chestArmor("gated", { required: 500 })], "gated", 100);
+    const result = await equip(
+      [helm, chestArmor("gated", { required: 500 })],
+      "gated",
+      100,
+    );
     expect(result).toMatchObject({ success: true, message: "Equipped gated" });
   });
 
   it("ignores the buff of the gear the swap unequips", async () => {
-    const worn = chestArmor("worn", { equipped: "CHEST", effects: [ninjutsuBuff(400)] });
-    const result = await equip([worn, chestArmor("gated", { required: 500 })], "gated", 100);
+    const worn = chestArmor("worn", {
+      equipped: "CHEST",
+      effects: [ninjutsuBuff(400)],
+    });
+    const result = await equip(
+      [worn, chestArmor("gated", { required: 500 })],
+      "gated",
+      100,
+    );
     expect(result).toMatchObject({ success: false });
   });
 });
@@ -133,7 +146,12 @@ describe("toggleEquipItem slot choice", () => {
   });
 
   it("unequips into any requested slot it already occupies", async () => {
-    const result = await equip([chestArmor("armor", { equipped: "CHEST" })], "armor", 100, "CHEST");
+    const result = await equip(
+      [chestArmor("armor", { equipped: "CHEST" })],
+      "armor",
+      100,
+      "CHEST",
+    );
     expect(result).toMatchObject({ success: true, message: "Unequipped armor" });
   });
 });

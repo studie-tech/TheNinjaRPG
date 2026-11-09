@@ -258,7 +258,10 @@ describe("battleClaimRollbackStatus", () => {
   const qb = new QueryBuilder();
   const render = (expr: ReturnType<typeof battleClaimRollbackStatus>) => {
     if (typeof expr === "string") throw new Error("expected a SQL expression");
-    return qb.select({ status: expr as SQL }).from(userData).toSQL();
+    return qb
+      .select({ status: expr as SQL })
+      .from(userData)
+      .toSQL();
   };
 
   it("restores scheduled Kage participants to ordinary play", () => {

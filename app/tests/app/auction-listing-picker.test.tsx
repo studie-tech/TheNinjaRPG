@@ -15,7 +15,6 @@ const row = (name: string, patch: object = {}) => ({
   ...patch,
 });
 
-
 beforeEach(() => {
   installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
   Object.assign(vi.spyOn(client, "api" as never), {
@@ -74,5 +73,8 @@ it("clears the picked item and search when the listing is cancelled", async () =
   await waitFor(() => expect(screen.getByText("Available Sword")).toBeTruthy());
   expect(picker().value).toBe("");
   expect(picker().getAttribute("aria-expanded")).toBe("true");
-  expect((screen.getAllByPlaceholderText("Search your items...")[1] as HTMLInputElement).value).toBe("");
+  expect(
+    (screen.getAllByPlaceholderText("Search your items...")[1] as HTMLInputElement)
+      .value,
+  ).toBe("");
 });

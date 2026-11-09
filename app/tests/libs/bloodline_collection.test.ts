@@ -75,8 +75,20 @@ describe("bloodline collection achievements", () => {
         bloodlineRanks: ["X"],
       }).success,
     ).toBe(false);
-    expect(BloodlineCollection.safeParse({ id: "c", task: "bloodline_collection", bloodlineRanks: [] }).success).toBe(false);
-    expect(BloodlineCollection.safeParse({ id: "c", task: "bloodline_collection", bloodlineRanks: ["ALL"] }).success).toBe(false);
+    expect(
+      BloodlineCollection.safeParse({
+        id: "c",
+        task: "bloodline_collection",
+        bloodlineRanks: [],
+      }).success,
+    ).toBe(false);
+    expect(
+      BloodlineCollection.safeParse({
+        id: "c",
+        task: "bloodline_collection",
+        bloodlineRanks: ["ALL"],
+      }).success,
+    ).toBe(false);
   });
 
   it("counts distinct visible ownership per rank and ignores hidden/deleted IDs", () => {
@@ -171,9 +183,16 @@ describe("bloodline collection achievements", () => {
 
   it("counts only selected ranks, without credit for excluded S or H ownership", () => {
     const user = makeUser(["D", "C", "B", "A"]);
-    user.bloodlineCollectionProgress = buildBloodlineCollectionProgress(catalogue, ["a1", "s1", "h1"]);
+    user.bloodlineCollectionProgress = buildBloodlineCollectionProgress(catalogue, [
+      "a1",
+      "s1",
+      "h1",
+    ]);
     expect(goal(user).goal).toMatchObject({ value: 1, target: 2, done: false });
-    user.bloodlineCollectionProgress = buildBloodlineCollectionProgress(catalogue, ["a1", "a2"]);
+    user.bloodlineCollectionProgress = buildBloodlineCollectionProgress(catalogue, [
+      "a1",
+      "a2",
+    ]);
     expect(goal(user).goal).toMatchObject({ value: 2, target: 2, done: true });
 
     const inclusive = makeUser(["D", "C", "B", "A", "S"]);
@@ -183,10 +202,15 @@ describe("bloodline collection achievements", () => {
 
   it("allows S-only goals and cannot complete an excluded-only catalogue", () => {
     const user = makeUser(["S"]);
-    user.bloodlineCollectionProgress = buildBloodlineCollectionProgress(catalogue, ["s1"]);
+    user.bloodlineCollectionProgress = buildBloodlineCollectionProgress(catalogue, [
+      "s1",
+    ]);
     expect(goal(user).goal).toMatchObject({ value: 1, target: 1, done: true });
     const all = makeUser(["A"]);
-    all.bloodlineCollectionProgress = buildBloodlineCollectionProgress([line("s1", "S"), line("h1", "H")], ["s1", "h1"]);
+    all.bloodlineCollectionProgress = buildBloodlineCollectionProgress(
+      [line("s1", "S"), line("h1", "H")],
+      ["s1", "h1"],
+    );
     expect(goal(all).goal).toMatchObject({ value: 0, target: 0, done: false });
   });
 
@@ -203,15 +227,25 @@ describe("bloodline collection achievements", () => {
     ]);
     expect(goal(user).goal).toMatchObject({ value: 1, target: 1, done: true });
     const mixed = makeUser(["A", "H"]);
-    mixed.bloodlineCollectionProgress = buildBloodlineCollectionProgress(catalogue, ["a1", "a2"]);
+    mixed.bloodlineCollectionProgress = buildBloodlineCollectionProgress(catalogue, [
+      "a1",
+      "a2",
+    ]);
     expect(goal(mixed).goal).toMatchObject({ value: 2, target: 3, done: false });
-    mixed.bloodlineCollectionProgress = buildBloodlineCollectionProgress(catalogue, ["a1", "a2", "h1"]);
+    mixed.bloodlineCollectionProgress = buildBloodlineCollectionProgress(catalogue, [
+      "a1",
+      "a2",
+      "h1",
+    ]);
     expect(goal(mixed).goal).toMatchObject({ value: 3, target: 3, done: true });
   });
 
   it("does not double-count duplicate selected ranks", () => {
     const user = makeUser(["A", "A"]);
-    user.bloodlineCollectionProgress = buildBloodlineCollectionProgress(catalogue, ["a1", "a2"]);
+    user.bloodlineCollectionProgress = buildBloodlineCollectionProgress(catalogue, [
+      "a1",
+      "a2",
+    ]);
     expect(goal(user).goal).toMatchObject({ value: 2, target: 2, done: true });
   });
 

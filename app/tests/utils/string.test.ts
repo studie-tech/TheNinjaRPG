@@ -9,9 +9,9 @@ describe("stripHtmlPreview", () => {
   });
 
   it("decodes the entities sanitized content carries", () => {
-    expect(stripHtmlPreview("Rock&nbsp;&amp;&nbsp;roll &lt;3 &quot;it&#39;s&quot;")).toBe(
-      `Rock & roll <3 "it's"`,
-    );
+    expect(
+      stripHtmlPreview("Rock&nbsp;&amp;&nbsp;roll &lt;3 &quot;it&#39;s&quot;"),
+    ).toBe(`Rock & roll <3 "it's"`);
   });
 
   it("decodes once, so escaped entities stay literal", () => {

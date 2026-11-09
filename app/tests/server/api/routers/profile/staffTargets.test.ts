@@ -21,24 +21,35 @@ describeWithDatabase("staff actions on other accounts", () => {
     await resetTables(actionLog, huntingHabitat, userData);
     await insertUsers([
       { userId: STAFF, username: "TargetOwner", role: "OWNER" },
-      { userId: BANNED, username: "TargetBanned", role: "CONTENT-ADMIN", isBanned: true },
+      {
+        userId: BANNED,
+        username: "TargetBanned",
+        role: "CONTENT-ADMIN",
+        isBanned: true,
+      },
       { userId: AI, username: "TargetBandit", isAi: true },
     ]);
   });
 
   it("answers awarding experience to a missing account", async () => {
     const caller = await callerFor(profileRouter, STAFF);
-    expect(await caller.awardExperience({ targetUserId: MISSING, amount: 10 })).toEqual({
-      success: false,
-      message: "User not found",
-    });
+    expect(await caller.awardExperience({ targetUserId: MISSING, amount: 10 })).toEqual(
+      {
+        success: false,
+        message: "User not found",
+      },
+    );
     expect(await (await getTestDatabase()).select().from(actionLog)).toHaveLength(0);
   });
 
   it("answers adjusting Seichi Silver of a missing account", async () => {
     const caller = await callerFor(profileRouter, STAFF);
     expect(
-      await caller.adjustSeichiSilver({ userId: MISSING, delta: 5, reason: "Event prize" }),
+      await caller.adjustSeichiSilver({
+        userId: MISSING,
+        delta: 5,
+        reason: "Event prize",
+      }),
     ).toEqual({ success: false, message: "User not found" });
     expect(await (await getTestDatabase()).select().from(actionLog)).toHaveLength(0);
   });
@@ -62,7 +73,9 @@ describeWithDatabase("staff actions on other accounts", () => {
       message: "You are banned and cannot perform this action",
     });
     const database = await getTestDatabase();
-    expect(await database.query.userData.findFirst({ where: eq(userData.userId, AI) })).toBeDefined();
+    expect(
+      await database.query.userData.findFirst({ where: eq(userData.userId, AI) }),
+    ).toBeDefined();
   });
 
   it("rejects a banned editor cloning an AI", async () => {
@@ -72,6 +85,8 @@ describeWithDatabase("staff actions on other accounts", () => {
       message: "You are banned and cannot perform this action",
     });
     const database = await getTestDatabase();
-    expect(await database.query.userData.findMany({ where: eq(userData.isAi, true) })).toHaveLength(1);
+    expect(
+      await database.query.userData.findMany({ where: eq(userData.isAi, true) }),
+    ).toHaveLength(1);
   });
 });

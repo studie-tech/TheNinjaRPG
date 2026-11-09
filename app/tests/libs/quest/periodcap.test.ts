@@ -5,19 +5,69 @@ const NOW = new Date("2026-06-19T12:00:00Z"); // Fri; week start Mon 2026-06-15
 
 describe("periodCapReached", () => {
   it("none → never capped", () => {
-    expect(periodCapReached({ retryDelay: "none", maxCompletes: 1, periodCompletes: 99, periodStartAt: NOW }, NOW)).toBe(false);
+    expect(
+      periodCapReached(
+        {
+          retryDelay: "none",
+          maxCompletes: 1,
+          periodCompletes: 99,
+          periodStartAt: NOW,
+        },
+        NOW,
+      ),
+    ).toBe(false);
   });
   it("maxCompletes<=0 with a real retry period fails closed", () => {
-    expect(periodCapReached({ retryDelay: "weekly", maxCompletes: 0, periodCompletes: 5, periodStartAt: NOW }, NOW)).toBe(true);
+    expect(
+      periodCapReached(
+        {
+          retryDelay: "weekly",
+          maxCompletes: 0,
+          periodCompletes: 5,
+          periodStartAt: NOW,
+        },
+        NOW,
+      ),
+    ).toBe(true);
   });
   it("weekly, completes in current period >= max → capped", () => {
-    expect(periodCapReached({ retryDelay: "weekly", maxCompletes: 1, periodCompletes: 1, periodStartAt: new Date("2026-06-15T00:00:00Z") }, NOW)).toBe(true);
+    expect(
+      periodCapReached(
+        {
+          retryDelay: "weekly",
+          maxCompletes: 1,
+          periodCompletes: 1,
+          periodStartAt: new Date("2026-06-15T00:00:00Z"),
+        },
+        NOW,
+      ),
+    ).toBe(true);
   });
   it("weekly, completes from a PRIOR period → not capped (stale count ignored)", () => {
-    expect(periodCapReached({ retryDelay: "weekly", maxCompletes: 1, periodCompletes: 5, periodStartAt: new Date("2026-06-08T00:00:00Z") }, NOW)).toBe(false);
+    expect(
+      periodCapReached(
+        {
+          retryDelay: "weekly",
+          maxCompletes: 1,
+          periodCompletes: 5,
+          periodStartAt: new Date("2026-06-08T00:00:00Z"),
+        },
+        NOW,
+      ),
+    ).toBe(false);
   });
   it("null periodStartAt → not capped", () => {
-    expect(periodCapReached({ retryDelay: "daily", maxCompletes: 1, periodCompletes: 0, periodStartAt: null }, NOW)).toBe(false);
+    expect(
+      periodCapReached(
+        {
+          retryDelay: "daily",
+          maxCompletes: 1,
+          periodCompletes: 0,
+          periodStartAt: null,
+        },
+        NOW,
+      ),
+    ).toBe(false);
   });
 });
 
@@ -54,7 +104,12 @@ describe("isAvailableUserQuests — period cap vs lifetime cap", () => {
     // a prior period — the period cap should govern, not the lifetime cap.
     expect(
       isAvailableUserQuests(
-        { ...repeatable, previousCompletes: 1, periodCompletes: 1, periodStartAt: priorPeriod },
+        {
+          ...repeatable,
+          previousCompletes: 1,
+          periodCompletes: 1,
+          periodStartAt: priorPeriod,
+        },
         user,
       ).check,
     ).toBe(true);
@@ -63,7 +118,12 @@ describe("isAvailableUserQuests — period cap vs lifetime cap", () => {
   it("repeatable quest is still capped within the current period", () => {
     expect(
       isAvailableUserQuests(
-        { ...repeatable, previousCompletes: 1, periodCompletes: 1, periodStartAt: new Date() },
+        {
+          ...repeatable,
+          previousCompletes: 1,
+          periodCompletes: 1,
+          periodStartAt: new Date(),
+        },
         user,
       ).check,
     ).toBe(false);
@@ -78,14 +138,47 @@ describe("isAvailableUserQuests — period cap vs lifetime cap", () => {
     ).toBe(false);
   });
 
-  it.each(["none", "daily", "weekly", "monthly"] as const)("Special quests ignore completion and attempt caps with %s retries", (retryDelay) => {
-    expect(isAvailableUserQuests({ ...repeatable, questType: "special", retryDelay, maxAttempts: 0, maxCompletes: 0, previousCompletes: 1000, previousAttempts: 1000, periodCompletes: 1000, periodStartAt: new Date() }, user).check).toBe(true);
-  });
+  it.each(["none", "daily", "weekly", "monthly"] as const)(
+    "Special quests ignore completion and attempt caps with %s retries",
+    (retryDelay) => {
+      expect(
+        isAvailableUserQuests(
+          {
+            ...repeatable,
+            questType: "special",
+            retryDelay,
+            maxAttempts: 0,
+            maxCompletes: 0,
+            previousCompletes: 1000,
+            previousAttempts: 1000,
+            periodCompletes: 1000,
+            periodStartAt: new Date(),
+          },
+          user,
+        ).check,
+      ).toBe(true);
+    },
+  );
 
   it("Special quests still require prerequisites and respect dates", () => {
-    expect(isAvailableUserQuests({ ...repeatable, questType: "special", prerequisiteQuestId: "missing" }, user)).toMatchObject({ check: false, message: expect.stringContaining("prerequisite") });
-    expect(isAvailableUserQuests({ ...repeatable, questType: "special", startsAt: "2999-01-01T00:00:00Z" }, user).check).toBe(false);
-    expect(isAvailableUserQuests({ ...repeatable, questType: "special", endsAt: "2000-01-01T00:00:00Z" }, user).check).toBe(false);
+    expect(
+      isAvailableUserQuests(
+        { ...repeatable, questType: "special", prerequisiteQuestId: "missing" },
+        user,
+      ),
+    ).toMatchObject({ check: false, message: expect.stringContaining("prerequisite") });
+    expect(
+      isAvailableUserQuests(
+        { ...repeatable, questType: "special", startsAt: "2999-01-01T00:00:00Z" },
+        user,
+      ).check,
+    ).toBe(false);
+    expect(
+      isAvailableUserQuests(
+        { ...repeatable, questType: "special", endsAt: "2000-01-01T00:00:00Z" },
+        user,
+      ).check,
+    ).toBe(false);
   });
 
   it("does not expose a quest before its configured start date", () => {
@@ -108,16 +201,12 @@ describe("isAvailableUserQuests — period cap vs lifetime cap", () => {
 
   it("allows a quest before its end date and rejects it afterwards", () => {
     expect(
-      isAvailableUserQuests(
-        { ...repeatable, endsAt: "2999-01-01T00:00:00.000Z" },
-        user,
-      ).check,
+      isAvailableUserQuests({ ...repeatable, endsAt: "2999-01-01T00:00:00.000Z" }, user)
+        .check,
     ).toBe(true);
     expect(
-      isAvailableUserQuests(
-        { ...repeatable, endsAt: "2000-01-01T00:00:00.000Z" },
-        user,
-      ).check,
+      isAvailableUserQuests({ ...repeatable, endsAt: "2000-01-01T00:00:00.000Z" }, user)
+        .check,
     ).toBe(false);
   });
 });

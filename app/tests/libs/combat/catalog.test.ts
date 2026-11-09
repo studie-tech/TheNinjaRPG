@@ -5,7 +5,10 @@ import type { CombatQueryUser, ExtraState } from "@/libs/combat/types";
 import { applyLinkedJutsuReskin } from "@/libs/jutsu/reskins";
 import { hasMasteryRequirements, MASTERY_REQUIREMENT_FIELDS } from "@/libs/mastery";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
-import { battleJutsuGateFailure, checkJutsuBloodlineItem } from "@/libs/jutsuRequirements";
+import {
+  battleJutsuGateFailure,
+  checkJutsuBloodlineItem,
+} from "@/libs/jutsuRequirements";
 import { getStrucBoost, type StructureAttribute } from "@/utils/village";
 
 const jutsu = (overrides: Partial<Jutsu> = {}) =>
@@ -203,9 +206,14 @@ describe("requirements on compact catalogs", () => {
   });
 
   it("still enforces skill and bloodline item requirements", () => {
-    const row = jutsu({ requiredSkillId: "skill", requiredBloodlineItemId: "blood-item" });
+    const row = jutsu({
+      requiredSkillId: "skill",
+      requiredBloodlineItemId: "blood-item",
+    });
     expect(hasRequiredSkill(compactJutsu(row), gates.skills)).toBe(false);
-    expect(checkJutsuBloodlineItem(compactJutsu(row) as Jutsu, gates.items)).toBe(false);
+    expect(checkJutsuBloodlineItem(compactJutsu(row) as Jutsu, gates.items)).toBe(
+      false,
+    );
   });
 
   it.each([

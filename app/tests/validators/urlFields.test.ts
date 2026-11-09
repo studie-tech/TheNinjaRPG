@@ -19,7 +19,10 @@ const firstIssue = (result: { error?: { issues: { message: string }[] } }) =>
 
 const fields = {
   "map asset image": { schema: mapAssetValidator.shape.imageUrl, nullable: false },
-  "map terrain texture": { schema: mapTerrainValidator.shape.textureUrl, nullable: true },
+  "map terrain texture": {
+    schema: mapTerrainValidator.shape.textureUrl,
+    nullable: true,
+  },
 };
 
 describe("URL fields", () => {
@@ -50,6 +53,8 @@ describe("URL fields", () => {
     expect(parse(null).data?.clans[0]).toEqual({ id: "a", name: "Clan", image: null });
     expect(parse("https://a.b/c.webp").success).toBe(true);
     expect(firstIssue(parse("x"))).toBe("Invalid URL");
-    expect(firstIssue(parse(1))).toBe("Invalid input: expected string, received number");
+    expect(firstIssue(parse(1))).toBe(
+      "Invalid input: expected string, received number",
+    );
   });
 });

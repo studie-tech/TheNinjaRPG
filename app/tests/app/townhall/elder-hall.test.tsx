@@ -20,9 +20,17 @@ const router = (overrides: object = {}) =>
   });
 
 beforeEach(() => {
-  vi.spyOn(localstorage, "useLocalStorage").mockReturnValue(["Elders", vi.fn()] as never);
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
-  vi.spyOn(search, "useUserPicker").mockReturnValue({ methods: {}, user: undefined } as never);
+  vi.spyOn(localstorage, "useLocalStorage").mockReturnValue([
+    "Elders",
+    vi.fn(),
+  ] as never);
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
+    <div>{children}</div>
+  ));
+  vi.spyOn(search, "useUserPicker").mockReturnValue({
+    methods: {},
+    user: undefined,
+  } as never);
 });
 
 afterEach(() => {
@@ -34,8 +42,16 @@ it("counts the kage's protected tenure on the server clock", () => {
   // The client clock runs two days behind the server; one server day of tenure remains.
   const timeDiff = -2 * DAY_MS;
   const serverNow = Date.now() - timeDiff;
-  const leaderUpdatedAt = new Date(serverNow - KAGE_ELDER_REMOVAL_LOCK_SECS * 1000 + DAY_MS);
-  const elder = { userId: "elder", villageId: "village", rank: "ELDER", isBanned: false, isOutlaw: false };
+  const leaderUpdatedAt = new Date(
+    serverNow - KAGE_ELDER_REMOVAL_LOCK_SECS * 1000 + DAY_MS,
+  );
+  const elder = {
+    userId: "elder",
+    villageId: "village",
+    rank: "ELDER",
+    isBanned: false,
+    isOutlaw: false,
+  };
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
     data: elder,
     timeDiff,
@@ -44,12 +60,20 @@ it("counts the kage's protected tenure on the server clock", () => {
   } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => router(),
-    kage: router({ getElders: { useQuery: () => ({ data: [elder], isPending: false }) } }),
+    kage: router({
+      getElders: { useQuery: () => ({ data: [elder], isPending: false }) },
+    }),
     clan: router({ getAll: { useQuery: () => ({ data: [], isPending: false }) } }),
     village: router({
-      get: { useQuery: () => ({ data: { villageData: { kageId: "kage", leaderUpdatedAt } } }) },
+      get: {
+        useQuery: () => ({
+          data: { villageData: { kageId: "kage", leaderUpdatedAt } },
+        }),
+      },
     }),
-    war: router({ getElderVotes: { useQuery: () => ({ data: [], refetch: vi.fn() }) } }),
+    war: router({
+      getElderVotes: { useQuery: () => ({ data: [], refetch: vi.fn() }) },
+    }),
   });
   const view = render(<TownHall />);
   expect(view.getByText(/The kage is protected for/).textContent).toContain(

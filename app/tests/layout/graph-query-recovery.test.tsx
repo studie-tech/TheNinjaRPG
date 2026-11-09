@@ -33,9 +33,9 @@ beforeEach(() => {
     blackmarket: { getGraph },
     combat: { getGraph },
   });
-  graphMock = vi.spyOn(graph, "default").mockReturnValue(
-    <div data-testid="graph">Graph</div>,
-  );
+  graphMock = vi
+    .spyOn(graph, "default")
+    .mockReturnValue(<div data-testid="graph">Graph</div>);
 });
 
 afterEach(() => {

@@ -207,7 +207,15 @@ describe("buildDamageModifierEligibilityById", () => {
     );
 
     const baseline = packetDamage([], { battleRound: 3 });
-    const withExpired = packetDamage([expiredDr], { battleRound: 3, modifierLists: buildDamagePacketModifierLists([expiredDr], "attacker", "defender", eligibility) });
+    const withExpired = packetDamage([expiredDr], {
+      battleRound: 3,
+      modifierLists: buildDamagePacketModifierLists(
+        [expiredDr],
+        "attacker",
+        "defender",
+        eligibility,
+      ),
+    });
 
     expect(eligibility.has("expired-dr")).toBe(false);
     expect(withExpired).toBeCloseTo(baseline, 2);
@@ -264,7 +272,14 @@ describe("buildDamageModifierEligibilityById", () => {
     });
     activeInc.createdRound = 0;
 
-    const withInc = packetDamage([activeInc], { modifierLists: buildDamagePacketModifierLists([activeInc], "attacker", "defender", buildDamageModifierEligibilityById([activeInc], 1, usersStateById)) });
+    const withInc = packetDamage([activeInc], {
+      modifierLists: buildDamagePacketModifierLists(
+        [activeInc],
+        "attacker",
+        "defender",
+        buildDamageModifierEligibilityById([activeInc], 1, usersStateById),
+      ),
+    });
 
     const prevented = packetDamage([inc, prevent], { modifierLists: lists });
 
@@ -298,9 +313,13 @@ describe("computeDamagePacket", () => {
       power: 10,
     });
 
-    const gearOnly = packetDamage([], { gear: { attacker: gearMods(), defender: gearMods({ drTakenFromGear: 30 }) } });
+    const gearOnly = packetDamage([], {
+      gear: { attacker: gearMods(), defender: gearMods({ drTakenFromGear: 30 }) },
+    });
 
-    const withSkillDr = packetDamage([skillDr], { gear: { attacker: gearMods(), defender: gearMods({ drTakenFromGear: 30 }) } });
+    const withSkillDr = packetDamage([skillDr], {
+      gear: { attacker: gearMods(), defender: gearMods({ drTakenFromGear: 30 }) },
+    });
 
     expect(gearOnly).toBeCloseTo(32, 2);
     expect(withSkillDr).toBeCloseTo(gearOnly * 0.9, 2);
@@ -315,7 +334,12 @@ describe("computeDamagePacket", () => {
       power: 10,
     });
 
-    const damage = packetDamage([skillInc], { gear: { attacker: gearMods({ incDamageGivenFromGear: 10 }), defender: gearMods() } });
+    const damage = packetDamage([skillInc], {
+      gear: {
+        attacker: gearMods({ incDamageGivenFromGear: 10 }),
+        defender: gearMods(),
+      },
+    });
 
     const expected =
       100 *
@@ -334,7 +358,9 @@ describe("computeDamagePacket", () => {
       power: 50,
     });
 
-    const damage = packetDamage([blBoost], { gear: { attacker: gearMods(), defender: gearMods({ drTakenFromKeystone: 150 }) } });
+    const damage = packetDamage([blBoost], {
+      gear: { attacker: gearMods(), defender: gearMods({ drTakenFromKeystone: 150 }) },
+    });
 
     const boosted = 100 * (1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100);
     const floor =
@@ -345,7 +371,12 @@ describe("computeDamagePacket", () => {
   });
 
   it("applies keystone inc after % mitigation and before bloodline", () => {
-    const damage = packetDamage([], { gear: { attacker: gearMods({ incDamageGivenFromKeystone: 10 }), defender: gearMods() } });
+    const damage = packetDamage([], {
+      gear: {
+        attacker: gearMods({ incDamageGivenFromKeystone: 10 }),
+        defender: gearMods(),
+      },
+    });
 
     const afterEarlyPools =
       100 *
@@ -362,13 +393,22 @@ describe("computeDamagePacket", () => {
   });
 
   it("applies gear inc and DR points additively into base pools", () => {
-    const damage = packetDamage([], { rawDamage: 505, gear: defaultTestGearModifiers() });
+    const damage = packetDamage([], {
+      rawDamage: 505,
+      gear: defaultTestGearModifiers(),
+    });
 
     expect(damage).toBeCloseTo(406.55, 2);
   });
 
   it("applies defender stage-1 increasedamagetaken in pre-battle inc pool", () => {
-    const damage = packetDamage([], { rawDamage: 505, gear: { attacker: gearMods(), defender: gearMods({ incDamageTakenFromGear: 10 }) } });
+    const damage = packetDamage([], {
+      rawDamage: 505,
+      gear: {
+        attacker: gearMods(),
+        defender: gearMods({ incDamageTakenFromGear: 10 }),
+      },
+    });
 
     const expected =
       505 *
@@ -381,7 +421,13 @@ describe("computeDamagePacket", () => {
   it("does not apply attacker increasedamagetaken to outgoing damage", () => {
     const baseline = packetDamage([], { rawDamage: 505 });
 
-    const damage = packetDamage([], { rawDamage: 505, gear: { attacker: gearMods({ incDamageTakenFromGear: 20 }), defender: gearMods() } });
+    const damage = packetDamage([], {
+      rawDamage: 505,
+      gear: {
+        attacker: gearMods({ incDamageTakenFromGear: 20 }),
+        defender: gearMods(),
+      },
+    });
 
     expect(damage).toBeCloseTo(baseline, 2);
   });
@@ -428,9 +474,15 @@ describe("computeDamagePacket", () => {
       },
     );
 
-    const baseline = packetDamage([], { rawDamage: 505, gear: defaultTestGearModifiers() });
+    const baseline = packetDamage([], {
+      rawDamage: 505,
+      gear: defaultTestGearModifiers(),
+    });
 
-    const damage = packetDamage([blBoost, seal], { rawDamage: 505, gear: defaultTestGearModifiers() });
+    const damage = packetDamage([blBoost, seal], {
+      rawDamage: 505,
+      gear: defaultTestGearModifiers(),
+    });
 
     expect(damage).toBeCloseTo(baseline, 2);
   });
@@ -444,7 +496,10 @@ describe("computeDamagePacket", () => {
       power: 40,
     });
 
-    const damage = packetDamage([blBoost], { rawDamage: 505, gear: defaultTestGearModifiers() });
+    const damage = packetDamage([blBoost], {
+      rawDamage: 505,
+      gear: defaultTestGearModifiers(),
+    });
 
     expect(damage).toBeCloseTo(569.17, 2);
   });
@@ -582,9 +637,15 @@ describe("computeDamagePacket", () => {
       tag: { statTypes: ["Bukijutsu", "Genjutsu", "Ninjutsu", "Taijutsu"] },
     });
 
-    const beforeBreakpointDamage = packetDamage([...incEffects, ...drEffectsBeforeBreakpoint], { rawDamage, damageEffect, battleRound: 2 });
+    const beforeBreakpointDamage = packetDamage(
+      [...incEffects, ...drEffectsBeforeBreakpoint],
+      { rawDamage, damageEffect, battleRound: 2 },
+    );
 
-    const afterBreakpointDamage = packetDamage([...incEffects, ...drEffectsBeforeBreakpoint, smokeDamageGivenDr], { rawDamage, damageEffect, battleRound: 2 });
+    const afterBreakpointDamage = packetDamage(
+      [...incEffects, ...drEffectsBeforeBreakpoint, smokeDamageGivenDr],
+      { rawDamage, damageEffect, battleRound: 2 },
+    );
 
     // The Wind-only Gust Armor bonus does not affect this Fire packet.
     const boostedDamage = [30, 35, 35, 15].reduce(
@@ -598,16 +659,10 @@ describe("computeDamagePacket", () => {
     const expectedAfterBreakpointDamage = expectedBeforeBreakpointDamage * 0.3;
     const oldFloor = boostedDamage * (1 - DMG_REDUCTION_CAP);
 
-    expect(beforeBreakpointDamage).toBeCloseTo(
-      expectedBeforeBreakpointDamage,
-      2,
-    );
+    expect(beforeBreakpointDamage).toBeCloseTo(expectedBeforeBreakpointDamage, 2);
     expect(beforeBreakpointDamage).toBeGreaterThan(oldFloor);
     expect(expectedAfterBreakpointDamage).toBeLessThan(oldFloor);
-    expect(afterBreakpointDamage).toBeCloseTo(
-      expectedAfterBreakpointDamage,
-      2,
-    );
+    expect(afterBreakpointDamage).toBeCloseTo(expectedAfterBreakpointDamage, 2);
     expect(afterBreakpointDamage).toBeCloseTo(beforeBreakpointDamage * 0.3, 2);
   });
 
@@ -634,7 +689,10 @@ describe("computeDamagePacket", () => {
       }),
     );
 
-    const damage = packetDamage([...incEffects, ...drEffects], { rawDamage, battleRound: 2 });
+    const damage = packetDamage([...incEffects, ...drEffects], {
+      rawDamage,
+      battleRound: 2,
+    });
 
     const boostedDamage = incPowers.reduce(
       (total, power) => total * (1 + power / 100),
@@ -682,7 +740,11 @@ describe("computeDamagePacket", () => {
       }),
     );
 
-    const damage = packetDamage([...incEffects, ...drEffects], { rawDamage, damageEffect: makeDamageEffect({ power: 50 }), battleRound: 3 });
+    const damage = packetDamage([...incEffects, ...drEffects], {
+      rawDamage,
+      damageEffect: makeDamageEffect({ power: 50 }),
+      battleRound: 3,
+    });
 
     const boostedDamage = incPowers.reduce(
       (total, power) => total * (1 + power / 100),
@@ -739,19 +801,19 @@ describe("computeDamagePacket", () => {
       power: smokeDamageGivenDrPower,
     });
 
-    const damage = packetDamage([...incEffects, ...defenderDrEffects, smokeDamageGivenDr], { rawDamage, damageEffect: makeDamageEffect({ power: 50 }), battleRound: 4 });
+    const damage = packetDamage(
+      [...incEffects, ...defenderDrEffects, smokeDamageGivenDr],
+      { rawDamage, damageEffect: makeDamageEffect({ power: 50 }), battleRound: 4 },
+    );
 
     const boostedDamage = incPowers.reduce(
       (total, power) => total * (1 + power / 100),
       reportedNoTagDamage,
     );
-    const expectedDamage = [
-      25,
-      15,
-      smokeDamageGivenDrPower,
-      25,
-      15,
-    ].reduce((total, power) => total * (1 - power / 100), boostedDamage);
+    const expectedDamage = [25, 15, smokeDamageGivenDrPower, 25, 15].reduce(
+      (total, power) => total * (1 - power / 100),
+      boostedDamage,
+    );
     const oldFloor =
       rawDamage *
       (1 + OUT_OF_COMBAT_BASE_DAMAGE_INCREASE / 100) *
@@ -907,7 +969,10 @@ describe("computeDamagePacket", () => {
       calculation: "static",
       power: 50,
     });
-    const packet = (damageEffect: ReturnType<typeof makeDamageEffect>, withDr: boolean) =>
+    const packet = (
+      damageEffect: ReturnType<typeof makeDamageEffect>,
+      withDr: boolean,
+    ) =>
       packetDamage(withDr ? [staticBloodlineDr] : [], { rawDamage: 505, damageEffect });
 
     const allowed = makeDamageEffect({ allowBloodlineDamageDecrease: true });
@@ -919,24 +984,33 @@ describe("computeDamagePacket", () => {
   it.each([
     ["bloodline", 0],
     ["jutsu", 50],
-  ] as const)("gates only bloodline static increases on the damage tag (%s)", (fromType, gain) => {
-    const staticIncrease = makeModifierEffect({
-      id: "static-inc",
-      type: "increasedamagegiven",
-      targetId: "attacker",
-      fromType,
-      calculation: "static",
-      power: 50,
-    });
-    const packet = (usersEffects: UserEffect[]) =>
-      packetDamage(usersEffects, { rawDamage: 505, damageEffect: makeDamageEffect({ allowBloodlineDamageIncrease: false }) });
-    expect(packet([staticIncrease])).toBeCloseTo(packet([]) + gain, 2);
-  });
+  ] as const)(
+    "gates only bloodline static increases on the damage tag (%s)",
+    (fromType, gain) => {
+      const staticIncrease = makeModifierEffect({
+        id: "static-inc",
+        type: "increasedamagegiven",
+        targetId: "attacker",
+        fromType,
+        calculation: "static",
+        power: 50,
+      });
+      const packet = (usersEffects: UserEffect[]) =>
+        packetDamage(usersEffects, {
+          rawDamage: 505,
+          damageEffect: makeDamageEffect({ allowBloodlineDamageIncrease: false }),
+        });
+      expect(packet([staticIncrease])).toBeCloseTo(packet([]) + gain, 2);
+    },
+  );
 });
 
 describe("element-scoped damage modifiers", () => {
   it("describes scoped modifiers with their elements rather than all damage", () => {
-    const universal = makeModifierEffect({ type: "increasedamagegiven", targetId: "attacker" });
+    const universal = makeModifierEffect({
+      type: "increasedamagegiven",
+      targetId: "attacker",
+    });
     const scoped = makeModifierEffect({
       type: "increasedamagegiven",
       targetId: "attacker",
@@ -960,7 +1034,11 @@ describe("element-scoped damage modifiers", () => {
       const { filteredEffects, preBattleGearModifiers } =
         consolidatePreBattleDamageModifiers([effect], ["attacker", "defender"]);
       const damage = (elements: ("Fire" | "Water")[], effects = filteredEffects) =>
-        packetDamage(effects, { damageEffect: makeDamageEffect({ elements }), battleRound: 2, gear: preBattleGearModifiers });
+        packetDamage(effects, {
+          damageEffect: makeDamageEffect({ elements }),
+          battleRound: 2,
+          gear: preBattleGearModifiers,
+        });
       expect(filteredEffects).toContain(effect);
       const factor =
         fromType === "armor" || fromType === "accessory"
@@ -988,7 +1066,10 @@ describe("element-scoped damage modifiers", () => {
       tag: { elements: ["Fire"] },
     });
     const damage = (element: "Fire" | "Water", effects = [effect]) =>
-      packetDamage(effects, { damageEffect: makeDamageEffect({ elements: [element] }), battleRound: 2 });
+      packetDamage(effects, {
+        damageEffect: makeDamageEffect({ elements: [element] }),
+        battleRound: 2,
+      });
     expect(damage("Water")).toBeCloseTo(damage("Water", []));
     expect(damage("Fire")).toBeCloseTo(
       damage("Fire", []) * (type.startsWith("increase") ? 1.2 : 0.8),

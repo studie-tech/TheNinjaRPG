@@ -45,9 +45,9 @@ describe("AllObjectives discriminated union", () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(
-        result.error.issues.some((i) => i.path[0] === "collectItemIds"),
-      ).toBe(true);
+      expect(result.error.issues.some((i) => i.path[0] === "collectItemIds")).toBe(
+        true,
+      );
     }
   });
 

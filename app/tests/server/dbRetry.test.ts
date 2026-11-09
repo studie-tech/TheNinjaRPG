@@ -51,7 +51,10 @@ const postInTransaction = (query: string) => ({
   method: "POST",
   body: JSON.stringify({
     query,
-    session: { signature: "sig", vitessSession: { inTransaction: true, autocommit: true } },
+    session: {
+      signature: "sig",
+      vitessSession: { inTransaction: true, autocommit: true },
+    },
   }),
 });
 
@@ -73,7 +76,9 @@ describe("isReadOnlyQuery", () => {
   });
 
   it("rejects anything that can mutate data", () => {
-    expect(isReadOnlyQuery("update `UserData` set `money` = `money` + 100")).toBe(false);
+    expect(isReadOnlyQuery("update `UserData` set `money` = `money` + 100")).toBe(
+      false,
+    );
     expect(isReadOnlyQuery("insert into `UserData` (id) values (1)")).toBe(false);
     expect(isReadOnlyQuery("delete from `UserData`")).toBe(false);
     // A CTE may precede UPDATE/DELETE in MySQL 8, so WITH is never retried
@@ -226,7 +231,10 @@ describe("createRetryingFetch", () => {
   it("retries a write that lost a deadlock", async () => {
     // Unambiguous, unlike a reset: InnoDB rolled the statement back in full, so
     // re-issuing cannot double-apply the increment.
-    const baseFetch = failsOnce(() => new Response(DEADLOCK_BODY, { status: 200 }), '{"result":{"rowsAffected":"1"}}');
+    const baseFetch = failsOnce(
+      () => new Response(DEADLOCK_BODY, { status: 200 }),
+      '{"result":{"rowsAffected":"1"}}',
+    );
     const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
 
     const response = await retrying(
@@ -272,7 +280,10 @@ describe("createRetryingFetch", () => {
     const retrying = createRetryingFetch(baseFetch as unknown as typeof fetch, FAST);
 
     await expect(
-      retrying("https://db.test", post("update `UserData` set `money` = `money` + 100")),
+      retrying(
+        "https://db.test",
+        post("update `UserData` set `money` = `money` + 100"),
+      ),
     ).rejects.toThrow(TypeError);
     expect(baseFetch).toHaveBeenCalledTimes(1);
   });

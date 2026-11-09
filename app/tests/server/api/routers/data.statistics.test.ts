@@ -7,7 +7,11 @@ import {
 import { dataRouter } from "@/routers/data";
 import { insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../setup/testDatabase";
 
 /** Call the router as a signed-out visitor. */
 const anonymousCaller = async () =>
@@ -26,19 +30,31 @@ describeWithDatabase("public content statistics", () => {
     await resetTables(userItem, userData);
     await insertUsers([
       { userId: "ai", username: "Bandit", isAi: true },
-      { userId: "player", username: "Player", lastIp: "203.0.113.7", money: 123456, bank: 987654 },
+      {
+        userId: "player",
+        username: "Player",
+        lastIp: "203.0.113.7",
+        money: 123456,
+        bank: 987654,
+      },
       { userId: "owner" },
     ]);
   });
   afterEach(() => vi.restoreAllMocks());
 
   it("returns only the public name of an AI", async () => {
-    const result = await (await anonymousCaller()).getStatistics({ id: "ai", type: "ai" });
+    const result = await (await anonymousCaller()).getStatistics({
+      id: "ai",
+      type: "ai",
+    });
     expect(result.info).toEqual({ userId: "ai", username: "Bandit" });
   });
 
   it("returns nothing about a player requested as an AI", async () => {
-    const result = await (await anonymousCaller()).getStatistics({ id: "player", type: "ai" });
+    const result = await (await anonymousCaller()).getStatistics({
+      id: "player",
+      type: "ai",
+    });
     expect(result.info).toBeUndefined();
   });
 
@@ -50,9 +66,13 @@ describeWithDatabase("public content statistics", () => {
       { id: "c", userId: "owner", itemId: "sword", equipped: "HEAD" },
       { id: "d", userId: "owner", itemId: "shield", equipped: "NONE" },
     ]);
-    expect(await selectUserItemForGetStatistics(db, { id: "sword" })).toEqual([{ count: 2 }]);
+    expect(await selectUserItemForGetStatistics(db, { id: "sword" })).toEqual([
+      { count: 2 },
+    ]);
     const equipped = await selectUserItemForGetItemBalanceStatistics(db);
-    expect(Object.fromEntries(equipped.map((row) => [row.itemId, row.equippedCount]))).toEqual({
+    expect(
+      Object.fromEntries(equipped.map((row) => [row.itemId, row.equippedCount])),
+    ).toEqual({
       sword: 2,
       shield: 0,
     });

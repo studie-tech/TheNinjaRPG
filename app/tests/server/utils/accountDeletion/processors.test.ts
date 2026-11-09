@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as uploadthing from "uploadthing/server";
-import {
-  resetServerModuleStubs,
-  stubDatabase,
-} from "../../../setup/serverModules";
+import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
 import { removeAccountProcessorData } from "@/server/utils/accountDeletion/processors";
 
 const originalEnv = { ...process.env };
@@ -35,7 +32,12 @@ describe("owned upload cleanup", () => {
     const customIds = ["", "preview-", "pet-", "content-"].map(
       (prefix) => `${prefix}abcdefghijklmnopqrstu.png`,
     );
-    const fileKeys = ["a", "b", "pet-raw-file-key.png", "other-abcdefghijklmnopqrstu.png"];
+    const fileKeys = [
+      "a",
+      "b",
+      "pet-raw-file-key.png",
+      "other-abcdefghijklmnopqrstu.png",
+    ];
     findMany.mockResolvedValue(
       [...fileKeys, ...customIds].map((key, index) => ({
         imageUrl: `https://${index % 2 ? "uploadthing.b-cdn.net" : "ui0arpl8sm.ufs.sh"}/f/${key}`,
@@ -66,11 +68,14 @@ describe("owned upload cleanup", () => {
     "https://ui0arpl8sm.ufs.sh/other/a",
     "https://ui0arpl8sm.ufs.sh/f/a/extra",
     "https://ui0arpl8sm.ufs.sh/f/a%2Fextra",
-  ])("does not delete any batch when an owned URL cannot be safely mapped: %s", async (imageUrl) => {
-    findMany.mockResolvedValue([{ imageUrl }]);
-    await expect(removeAccountProcessorData("owner")).rejects.toThrow(
-      "manual storage cleanup",
-    );
-    expect(deletion).not.toHaveBeenCalled();
-  });
+  ])(
+    "does not delete any batch when an owned URL cannot be safely mapped: %s",
+    async (imageUrl) => {
+      findMany.mockResolvedValue([{ imageUrl }]);
+      await expect(removeAccountProcessorData("owner")).rejects.toThrow(
+        "manual storage cleanup",
+      );
+      expect(deletion).not.toHaveBeenCalled();
+    },
+  );
 });

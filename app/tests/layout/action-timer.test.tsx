@@ -1,13 +1,18 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { Profiler, type ProfilerOnRenderCallback } from "react";
-import { afterEach, beforeEach, describe, expect, it, setSystemTime, vi } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+  vi,
+} from "bun:test";
 import ActionTimer from "@/layout/ActionTimer";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import * as userContext from "@/utils/UserContext";
-import {
-  makeBattleUser,
-  makeCompleteBattle,
-} from "../setup/combat";
+import { makeBattleUser, makeCompleteBattle } from "../setup/combat";
 
 const FROZEN_NOW = Date.UTC(2026, 0, 1, 12, 0, 0);
 let isHidden = false;
@@ -67,7 +72,10 @@ beforeEach(() => {
   setSystemTime(FROZEN_NOW);
   vi.spyOn(document, "hasFocus").mockReturnValue(true);
   isHidden = false;
-  Object.defineProperty(document, "hidden", { configurable: true, get: () => isHidden });
+  Object.defineProperty(document, "hidden", {
+    configurable: true,
+    get: () => isHidden,
+  });
 });
 
 afterEach(() => {
@@ -107,7 +115,6 @@ describe("ActionTimer interval commits", () => {
   });
 
   it("pauses hidden timers and catches up when visible again", () => {
-
     const { commits, getByText } = renderTimer(countdownBattle());
     act(() => {
       isHidden = true;

@@ -27,7 +27,8 @@ import * as userContext from "@/utils/UserContext";
 import {
   DecreaseCookingTime,
   DecreaseCraftingTime,
-  IncreaseRegenerationTag } from "@/validators/combat";
+  IncreaseRegenerationTag,
+} from "@/validators/combat";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
 import { insertItems, insertUserItems, insertUsers } from "../setup/factories";
 import {
@@ -151,7 +152,9 @@ describeWithDatabase("Kitchen shrine duration preview", () => {
       fetchUserItems(db, "kitchen-cook"),
     ]);
     if (!user || !recipe) throw new Error("Missing cooking fixture");
-    vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({ data: user } as never);
+    vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+      data: user,
+    } as never);
     const query = <T,>(data: T) => ({ data, isPending: false, isError: false });
     Object.assign(vi.spyOn(client, "api" as never), {
       useUtils: () => ({}),
@@ -172,7 +175,11 @@ describeWithDatabase("Kitchen shrine duration preview", () => {
     fireEvent.click(recipeCard);
 
     const startedAt = Date.now();
-    const result = await callerForDatabase(occupationRouter, "kitchen-cook", db).craftItem({
+    const result = await callerForDatabase(
+      occupationRouter,
+      "kitchen-cook",
+      db,
+    ).craftItem({
       itemId: "meal",
       quantity: 1,
     });
@@ -184,7 +191,8 @@ describeWithDatabase("Kitchen shrine duration preview", () => {
     if (!saved?.craftingFinishedAt) throw new Error("Cooking output was not persisted");
     const seconds = Math.ceil(
       Math.round(
-        recipe.cookingTimeSeconds * (fixture.hasBoost ? 1 + SHRINE_BOOST_BASE_PERC / 100 : 1),
+        recipe.cookingTimeSeconds *
+          (fixture.hasBoost ? 1 + SHRINE_BOOST_BASE_PERC / 100 : 1),
       ) * 0.9,
     );
     expect(saved.craftingFinishedAt.getTime()).toBeGreaterThanOrEqual(

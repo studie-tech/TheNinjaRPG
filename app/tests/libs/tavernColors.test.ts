@@ -1,9 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { TavernColorPresets } from "@/drizzle/constants";
-import {
-  resolveTavernColorClasses,
-  TAVERN_COLOR_STYLES,
-} from "@/libs/tavernColors";
+import { resolveTavernColorClasses, TAVERN_COLOR_STYLES } from "@/libs/tavernColors";
 import { contrastRatio, parseHexColor, relativeLuminance } from "@/utils/color";
 
 const isStrongUsernameColor = (className: string) =>
@@ -52,10 +49,7 @@ describe("tavern color styling", () => {
     expect(background).not.toBeNull();
     expect(foreground).not.toBeNull();
     expect(
-      contrastRatio(
-        relativeLuminance(background!),
-        relativeLuminance(foreground!),
-      ),
+      contrastRatio(relativeLuminance(background!), relativeLuminance(foreground!)),
     ).toBeGreaterThanOrEqual(4.5);
     expect(style.titleClass).toContain(
       style.titleForeground === "#000000" ? "text-black" : "text-white",

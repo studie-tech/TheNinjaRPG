@@ -60,7 +60,9 @@ export const tableDefaults = (table: Table) =>
   Object.fromEntries(
     Object.entries(getTableColumns(table)).map(([key, column]) => [
       key,
-      column.default && typeof column.default === "object" && "queryChunks" in column.default
+      column.default &&
+      typeof column.default === "object" &&
+      "queryChunks" in column.default
         ? new Date()
         : (column.default ?? null),
     ]),
@@ -151,14 +153,16 @@ const battleUserSchema = z
     highestGenerals: z.array(genNameSchema).prefault(["strength", "intelligence"]),
     usedGenerals: z.record(genNameSchema, num()).prefault(usedGeneralDefaults),
     usedStats: z.record(statNameSchema, num()).prefault(usedStatDefaults),
-    usedActions: z.array(
-      z
-        .object({
-          id: z.string(),
-          type: z.enum(["jutsu", "item", "basic", "bloodline"]),
-        })
-        .passthrough(),
-    ).prefault([]),
+    usedActions: z
+      .array(
+        z
+          .object({
+            id: z.string(),
+            type: z.enum(["jutsu", "item", "basic", "bloodline"]),
+          })
+          .passthrough(),
+      )
+      .prefault([]),
     usedTagTypes: z.array(z.string()).prefault([]),
     damageDealt: num(),
     basicActions: z.array(z.custom<BattleBasicAction>()).prefault([]),
@@ -270,9 +274,7 @@ export const makeEffect = <T extends TagType>(
  * Overrides may include either tag fields, such as `power` or `statTypes`, or
  * runtime fields, such as `creatorId`, `targetId`, and `castThisRound`.
  */
-export const makeDamageEffect = (
-  overrides: Partial<UserEffect> = {},
-): UserEffect =>
+export const makeDamageEffect = (overrides: Partial<UserEffect> = {}): UserEffect =>
   makeEffect(
     "damage",
     {
@@ -339,7 +341,11 @@ export const makeDamageModifierEffect = (params: {
   rounds?: number;
   power?: number;
   calculation?: "static" | "percentage";
-  tag?: TagFields<DamageModifierType> & { statTypes?: string[]; generalTypes?: string[]; elements?: string[] };
+  tag?: TagFields<DamageModifierType> & {
+    statTypes?: string[];
+    generalTypes?: string[];
+    elements?: string[];
+  };
   runtime?: EffectRuntimeOverrides;
 }): UserEffect =>
   makeEffect(
@@ -375,10 +381,7 @@ export const gearMods = (
 /**
  * Standard attacker/defender gear fixture used by damage modifier tests.
  */
-export const defaultTestGearModifiers = (): Record<
-  string,
-  PreBattleGearModifiers
-> => ({
+export const defaultTestGearModifiers = (): Record<string, PreBattleGearModifiers> => ({
   attacker: gearMods({ incDamageGivenFromGear: 18.9 }),
   defender: gearMods({ drTakenFromGear: 5 }),
 });
@@ -469,9 +472,7 @@ export const makeCombatAction = (
 });
 
 /** Creates the basic attack action; pass the `range` the scenario needs. */
-export const makeBasicAttack = (
-  overrides: Partial<CombatAction> = {},
-): CombatAction =>
+export const makeBasicAttack = (overrides: Partial<CombatAction> = {}): CombatAction =>
   makeCombatAction({
     id: "basicAttack",
     name: "Attack",
@@ -525,11 +526,13 @@ export const makeWeapon = (
   }) as unknown as Item;
 
 /** Creates a battle fixture with one `makeWeapon` row in `extraState.items`. */
-export const makeBattleWithWeapon = (params: {
-  itemId?: string;
-  damage?: TagFields<"damage">;
-  item?: Record<string, unknown>;
-} = {}): ReturnedBattle => {
+export const makeBattleWithWeapon = (
+  params: {
+    itemId?: string;
+    damage?: TagFields<"damage">;
+    item?: Record<string, unknown>;
+  } = {},
+): ReturnedBattle => {
   const weapon = makeWeapon(
     { id: params.itemId ?? "weapon-1", ...params.item },
     params.damage,

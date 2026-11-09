@@ -27,7 +27,9 @@ const makeUser = (
 describe("getOwnSectorVillage", () => {
   it("returns the user's village while they stand in its sector", () => {
     const user = makeUser();
-    expect(getOwnSectorVillage(user)).toBe<NonNullable<UserWithRelations>["village"] | undefined>(user?.village);
+    expect(getOwnSectorVillage(user)).toBe<
+      NonNullable<UserWithRelations>["village"] | undefined
+    >(user?.village);
   });
 
   it("returns undefined outside the village sector", () => {
@@ -45,7 +47,9 @@ describe("getOwnSectorVillage", () => {
   });
 
   it("returns undefined without the relations the checks read", () => {
-    expect(getOwnSectorVillage(makeUser({}, { structures: undefined }))).toBeUndefined();
+    expect(
+      getOwnSectorVillage(makeUser({}, { structures: undefined })),
+    ).toBeUndefined();
     expect(
       getOwnSectorVillage(makeUser({}, { relationshipA: undefined })),
     ).toBeUndefined();

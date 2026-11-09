@@ -23,7 +23,13 @@ const configId = "event-pass-cache-config";
 
 describeWithDatabase("event pass cache balances", () => {
   beforeEach(async () => {
-    await resetTables(userQueue, userStreakProgress, activityStreakConfig, actionLog, userData);
+    await resetTables(
+      userQueue,
+      userStreakProgress,
+      activityStreakConfig,
+      actionLog,
+      userData,
+    );
     await insertUsers([{ userId, money: 100, reputationPoints: 50, seichiSilver: 25 }]);
     const db = await getTestDatabase();
     await db.insert(activityStreakConfig).values({

@@ -92,10 +92,12 @@ describe("calcHospitalHealPools", () => {
       curStamina: 100,
       maxStamina: 100,
     } as UserData;
-    expect(calcHowMuchToHeal(target, 100, calcMedninHealablePool(legendary))).toBe(4000);
-    expect(
-      calcHowMuchToHeal(target, 100, calcHospitalHealPools(legendary, true)),
-    ).toBe(0);
+    expect(calcHowMuchToHeal(target, 100, calcMedninHealablePool(legendary))).toBe(
+      4000,
+    );
+    expect(calcHowMuchToHeal(target, 100, calcHospitalHealPools(legendary, true))).toBe(
+      0,
+    );
   });
 });
 
@@ -129,6 +131,8 @@ describe("mednin rank tables", () => {
     ["MASTER", 0.5 - 0.25],
     ["LEGENDARY", 0.5 - 0.35],
   ] as const)("gives a %s healer the exact chakra factor %d", (rank, factor) => {
-    expect(calcUserHealFactor(healer(rank) as Parameters<typeof calcUserHealFactor>[0])).toBe(factor);
+    expect(
+      calcUserHealFactor(healer(rank) as Parameters<typeof calcUserHealFactor>[0]),
+    ).toBe(factor);
   });
 });

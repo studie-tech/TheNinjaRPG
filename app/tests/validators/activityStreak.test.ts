@@ -12,11 +12,11 @@ describe("claimStreakDaySchema", () => {
     expect(
       claimStreakDaySchema.parse({ configId: "a", payCatchUp: undefined, reset: true }),
     ).toEqual(expect.objectContaining({ payCatchUp: false, reset: true }));
-    expect(firstIssue(claimStreakDaySchema.safeParse({ configId: "a", payCatchUp: null }))).toBe(
-      "Invalid input: expected boolean, received null",
-    );
-    expect(firstIssue(claimStreakDaySchema.safeParse({ configId: "a", reset: null }))).toBe(
-      "Invalid input: expected boolean, received null",
-    );
+    expect(
+      firstIssue(claimStreakDaySchema.safeParse({ configId: "a", payCatchUp: null })),
+    ).toBe("Invalid input: expected boolean, received null");
+    expect(
+      firstIssue(claimStreakDaySchema.safeParse({ configId: "a", reset: null })),
+    ).toBe("Invalid input: expected boolean, received null");
   });
 });

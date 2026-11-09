@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi } from "bun:test";
 import { updateBloodline } from "@/server/api/routers/bloodline";
 
@@ -8,12 +7,21 @@ import { updateBloodline } from "@/server/api/routers/bloodline";
  * function) - no need to stub the query builder for this path.
  */
 const bloodlineClient = (userDataRowsAffected: number) => {
-  const userDataWhere = vi.fn().mockResolvedValue({ rowsAffected: userDataRowsAffected });
+  const userDataWhere = vi
+    .fn()
+    .mockResolvedValue({ rowsAffected: userDataRowsAffected });
   const userDataSet = vi.fn().mockReturnValue({ where: userDataWhere });
   const update = vi.fn().mockReturnValue({ set: userDataSet });
   const values = vi.fn().mockResolvedValue({ rowsAffected: 1 });
   const insert = vi.fn().mockReturnValue({ values });
-  return { client: { update, insert } as never, update, userDataSet, userDataWhere, insert, values };
+  return {
+    client: { update, insert } as never,
+    update,
+    userDataSet,
+    userDataWhere,
+    insert,
+    values,
+  };
 };
 
 const baseUser = {
@@ -27,7 +35,9 @@ const baseUser = {
 describe("updateBloodline", () => {
   it("reports a rejection and skips the actionLog write when the CAS matches zero rows", async () => {
     const { client, insert } = bloodlineClient(0);
-    expect(await updateBloodline(client, baseUser, null, 50, "Bloodline Removed")).toEqual({
+    expect(
+      await updateBloodline(client, baseUser, null, 50, "Bloodline Removed"),
+    ).toEqual({
       granted: false,
       message: "Bloodline or battle status changed. Refresh and try again",
     });
@@ -36,7 +46,9 @@ describe("updateBloodline", () => {
 
   it("runs the actionLog side-effect write once the CAS succeeds", async () => {
     const { client, insert } = bloodlineClient(1);
-    expect((await updateBloodline(client, baseUser, null, 50, "Bloodline Removed")).granted).toBe(true);
+    expect(
+      (await updateBloodline(client, baseUser, null, 50, "Bloodline Removed")).granted,
+    ).toBe(true);
     expect(insert).toHaveBeenCalledTimes(1);
   });
 });

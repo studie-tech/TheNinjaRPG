@@ -35,7 +35,11 @@ describe("getKageSetupDeadline", () => {
     expect(
       getKageSetupDeadline({
         ...base,
-        kageSchedule: { ...schedule, kageId: "old", setupDueAt: "2026-10-01T00:00:00.000Z" },
+        kageSchedule: {
+          ...schedule,
+          kageId: "old",
+          setupDueAt: "2026-10-01T00:00:00.000Z",
+        },
       }),
     ).toEqual(new Date("2026-10-21T10:00:00.000Z"));
     expect(

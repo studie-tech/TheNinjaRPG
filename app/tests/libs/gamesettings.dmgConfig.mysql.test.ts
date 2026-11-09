@@ -3,7 +3,11 @@ import { DMG_SETTING_DEFAULTS } from "@/drizzle/constants";
 import { gameSetting } from "@/drizzle/schema";
 import { dmgConfig } from "@/libs/combat/constants";
 import { fetchDmgConfig } from "@/libs/gamesettings";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../setup/testDatabase";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../setup/testDatabase";
 
 describeWithDatabase("fetchDmgConfig", () => {
   beforeEach(() => resetTables(gameSetting));

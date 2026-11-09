@@ -15,15 +15,30 @@ const render = (role: string) => {
   }));
   Object.assign(vi.spyOn(client, "api" as never), {
     village: { getAll: { useQuery: villageQuery } },
-    misc: { getGlobalTavernEnabled: { useQuery: () => ({ data: true, isPending: false }) } },
+    misc: {
+      getGlobalTavernEnabled: { useQuery: () => ({ data: true, isPending: false }) },
+    },
   });
-  vi.spyOn(sector, "useSectorVillage").mockReturnValue({ sectorVillage: undefined, isLoading: false } as never);
-  const user = { role, village: { type: "VILLAGE", name: "Akikaze" }, villageId: "v1" } as never;
+  vi.spyOn(sector, "useSectorVillage").mockReturnValue({
+    sectorVillage: undefined,
+    isLoading: false,
+  } as never);
+  const user = {
+    role,
+    village: { type: "VILLAGE", name: "Akikaze" },
+    villageId: "v1",
+  } as never;
   const { result } = renderHook(() => useTaverns(user));
-  return { taverns: result.current.availTaverns, enabled: villageQuery.mock.calls[0]?.[1].enabled };
+  return {
+    taverns: result.current.availTaverns,
+    enabled: villageQuery.mock.calls[0]?.[1].enabled,
+  };
 };
 
 it("loads the village list only for staff, who can open every village tavern", () => {
   expect(render("USER")).toEqual({ taverns: ["Global", "Akikaze"], enabled: false });
-  expect(render("MODERATOR")).toEqual({ taverns: ["Global", "Akikaze", "Hyorin"], enabled: true });
+  expect(render("MODERATOR")).toEqual({
+    taverns: ["Global", "Akikaze", "Hyorin"],
+    enabled: true,
+  });
 });

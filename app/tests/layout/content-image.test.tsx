@@ -4,9 +4,15 @@ import * as NextImage from "@/layout/Image";
 import ContentImage from "@/layout/ContentImage";
 
 beforeEach(() => {
-  vi.spyOn(NextImage, "default").mockImplementation((({ src, alt, className }: { src: string; alt: string; className?: string }) => (
-    <img src={src} alt={alt} className={className} />
-  )) as never);
+  vi.spyOn(NextImage, "default").mockImplementation((({
+    src,
+    alt,
+    className,
+  }: {
+    src: string;
+    alt: string;
+    className?: string;
+  }) => <img src={src} alt={alt} className={className} />) as never);
 });
 afterEach(() => {
   cleanup();
@@ -19,7 +25,12 @@ const art = (view: ReturnType<typeof render>) =>
 it("keeps item art inside its frame's border when the caller sets a size", () => {
   const view = render(
     <span className="relative h-11 w-11">
-      <ContentImage image="/art.webp" alt="Sword" rarity="LEGENDARY" className="h-11 w-11" />
+      <ContentImage
+        image="/art.webp"
+        alt="Sword"
+        rarity="LEGENDARY"
+        className="h-11 w-11"
+      />
     </span>,
   );
   const classes = art(view)?.className.split(" ") ?? [];
@@ -33,7 +44,12 @@ it("keeps item art inside its frame's border when the caller sets a size", () =>
 
 it("keeps the caller's other classes on the art, such as its rounding", () => {
   const view = render(
-    <ContentImage image="/art.webp" alt="Sword" hideBorder className="h-12 w-12 rounded-lg" />,
+    <ContentImage
+      image="/art.webp"
+      alt="Sword"
+      hideBorder
+      className="h-12 w-12 rounded-lg"
+    />,
   );
   expect(art(view)?.className.split(" ")).toContain("rounded-lg");
 });

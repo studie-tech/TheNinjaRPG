@@ -39,10 +39,16 @@ describe("isPvpEnergyRewardBattle", () => {
 
   it("does not treat a PvP battle type against AI or summons as PvP", () => {
     expect(
-      isPvpEnergyRewardBattle(battle("COMBAT", fighter("ai", "right", { isAi: true })), "me"),
+      isPvpEnergyRewardBattle(
+        battle("COMBAT", fighter("ai", "right", { isAi: true })),
+        "me",
+      ),
     ).toBe(false);
     expect(
-      isPvpEnergyRewardBattle(battle("KAGE_AI", fighter("ai", "right", { isAi: true })), "me"),
+      isPvpEnergyRewardBattle(
+        battle("KAGE_AI", fighter("ai", "right", { isAi: true })),
+        "me",
+      ),
     ).toBe(false);
     expect(
       isPvpEnergyRewardBattle(
@@ -53,8 +59,8 @@ describe("isPvpEnergyRewardBattle", () => {
   });
 
   it("ignores human allies on the same side", () => {
-    expect(isPvpEnergyRewardBattle(battle("COMBAT", fighter("ally", "left")), "me")).toBe(
-      false,
-    );
+    expect(
+      isPvpEnergyRewardBattle(battle("COMBAT", fighter("ally", "left")), "me"),
+    ).toBe(false);
   });
 });

@@ -10,7 +10,14 @@ import { CDN_CACHED_QUERY_PATHS } from "@/api/root";
  * query that needs one belongs on the session endpoint instead.
  */
 const SOURCE_ROOT = join(import.meta.dirname, "../../../src");
-const CACHE_VERBS = ["invalidate", "refetch", "reset", "setData", "fetch", "ensureData"];
+const CACHE_VERBS = [
+  "invalidate",
+  "refetch",
+  "reset",
+  "setData",
+  "fetch",
+  "ensureData",
+];
 
 /** Every regex metacharacter, so a router path is matched literally. */
 const escapeForRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

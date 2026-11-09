@@ -72,7 +72,9 @@ describe("support chat prompt", () => {
       const { seconds, efficiency } = TRAINING_SPEED_CONFIG[speed];
       const hours = seconds / 3600;
       const length =
-        seconds < 3600 ? `${seconds / 60} minutes` : `${hours} hour${hours === 1 ? "" : "s"}`;
+        seconds < 3600
+          ? `${seconds / 60} minutes`
+          : `${hours} hour${hours === 1 ? "" : "s"}`;
       expect(prompt).toContain(`- ${length}: ${efficiency}% efficiency.`);
     }
     expect(prompt).toContain(`up to ${ERRANDS_PER_DAY} per day`);
@@ -81,8 +83,13 @@ describe("support chat prompt", () => {
 
   it("states basic action costs from the combat definitions", () => {
     const actions = getDefaultBasicActions({ rank: "GENIN" });
-    const { basicAttack, basicOffensiveStance, basicCleanse, basicClear, basicMeditate } =
-      actions;
+    const {
+      basicAttack,
+      basicOffensiveStance,
+      basicCleanse,
+      basicClear,
+      basicMeditate,
+    } = actions;
     expect(prompt).toContain(`${COMBAT_SECONDS}-second turn timer`);
     expect(prompt).toContain(
       `Costs ${basicAttack.actionCostPerc} AP and ${basicAttack.staminaCost} SP; has a ${basicAttack.cooldown}-round cooldown`,

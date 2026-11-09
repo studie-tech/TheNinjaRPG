@@ -19,7 +19,10 @@ type Snapshot = {
   userData: { userId: string } | null;
 };
 
-const key: ReturnType<typeof trpc.getQueryKey> = [["profile", "getUser"], { type: "query" }];
+const key: ReturnType<typeof trpc.getQueryKey> = [
+  ["profile", "getUser"],
+  { type: "query" },
+];
 const clients: QueryClient[] = [];
 const push = vi.fn();
 

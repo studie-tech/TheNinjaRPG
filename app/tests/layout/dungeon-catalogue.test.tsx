@@ -6,22 +6,63 @@ import { DungeonCatalogue } from "@/layout/DungeonCatalogue";
 import * as modal from "@/layout/Modal";
 import * as userContext from "@/utils/UserContext";
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 it("opens reward chances in a modal and paginates the dungeon list", () => {
   vi.spyOn(userContext, "useUserData").mockReturnValue({ timeDiff: 0 } as never);
-  vi.spyOn(contentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
+  vi.spyOn(contentBox, "default").mockImplementation(({ children }) => (
+    <div>{children}</div>
+  ));
   vi.spyOn(modal, "default").mockImplementation(({ title, children, setIsOpen }) => (
-    <section role="dialog" aria-label={title}>{children}<button type="button" onClick={() => setIsOpen(false)}>Close</button></section>
+    <section role="dialog" aria-label={title}>
+      {children}
+      <button type="button" onClick={() => setIsOpen(false)}>
+        Close
+      </button>
+    </section>
   ));
   const data = Array.from({ length: 11 }, (_, index) => ({
-    id: String(index), name: `Dungeon ${index + 1}`, sector: 301, longitude: 12, latitude: 7,
-    expiresAt: null, description: "Explore the ruins.", requiredLevel: 10,
-    rewards: { money: 100, experience: 10, tokens: 5, prestige: 2,
-      drops: [{ id: "reward", name: "Reward scroll", type: "jutsu", quantity: 1, chance: 15, onlyOnce: true }] },
+    id: String(index),
+    name: `Dungeon ${index + 1}`,
+    sector: 301,
+    longitude: 12,
+    latitude: 7,
+    expiresAt: null,
+    description: "Explore the ruins.",
+    requiredLevel: 10,
+    rewards: {
+      money: 100,
+      experience: 10,
+      tokens: 5,
+      prestige: 2,
+      drops: [
+        {
+          id: "reward",
+          name: "Reward scroll",
+          type: "jutsu",
+          quantity: 1,
+          chance: 15,
+          onlyOnce: true,
+        },
+      ],
+    },
   }));
   Object.assign(vi.spyOn(client, "api" as never), {
-    coop: { dungeon: { getCatalogue: { useQuery: () => ({ data, refetch: vi.fn(), isPending: false, isError: false }) } } },
+    coop: {
+      dungeon: {
+        getCatalogue: {
+          useQuery: () => ({
+            data,
+            refetch: vi.fn(),
+            isPending: false,
+            isError: false,
+          }),
+        },
+      },
+    },
   });
   const view = render(<DungeonCatalogue />);
   expect(view.queryByRole("dialog")).toBeNull();

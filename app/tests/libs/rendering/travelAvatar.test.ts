@@ -36,7 +36,11 @@ describe("travelAvatar", () => {
 
   it("falls back to avatarLight for an NPC when avatar is missing", () => {
     expect(
-      travelAvatar({ isNpc: true, avatar: null, avatarLight: "https://cdn/thumb.webp" }),
+      travelAvatar({
+        isNpc: true,
+        avatar: null,
+        avatarLight: "https://cdn/thumb.webp",
+      }),
     ).toBe("https://cdn/thumb.webp");
   });
 

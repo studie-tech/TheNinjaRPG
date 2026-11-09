@@ -1,12 +1,6 @@
-
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "bun:test";
-import {
-  notification,
-  quest,
-  raidParticipation,
-  userData,
-} from "@/drizzle/schema";
+import { notification, quest, raidParticipation, userData } from "@/drizzle/schema";
 import { updateRaidProgress } from "@/libs/combat/database";
 import type { CompleteBattle } from "@/libs/combat/types";
 import { insertQuests, insertUsers } from "../../setup/factories";

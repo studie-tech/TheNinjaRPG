@@ -16,7 +16,9 @@ let attempts: number;
 let failAt: number | undefined;
 const statistics = { S: 20, none: 80 };
 const user = {
-  ...Object.fromEntries([...CombatStatNames, ...MasteryNames].map((name) => [name, 100])),
+  ...Object.fromEntries(
+    [...CombatStatNames, ...MasteryNames].map((name) => [name, 100]),
+  ),
   rank: "JONIN",
   primaryElement: null,
   secondaryElement: null,
@@ -29,20 +31,24 @@ beforeEach(() => {
   charts = [];
   attempts = 0;
   failAt = undefined;
-  const constructor = vi.spyOn(chartLibrary, "Chart").mockImplementation(
-    function () {
-      attempts += 1;
-      if (attempts === failAt) throw new Error("Chart initialization failed");
-      const chart = { destroy: vi.fn() };
-      charts.push(chart);
-      return chart as unknown as Chart;
-    } as never,
-  );
+  const constructor = vi.spyOn(chartLibrary, "Chart").mockImplementation(function () {
+    attempts += 1;
+    if (attempts === failAt) throw new Error("Chart initialization failed");
+    const chart = { destroy: vi.fn() };
+    charts.push(chart);
+    return chart as unknown as Chart;
+  } as never);
   Object.assign(constructor, { defaults: { ...chartDefaults } });
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => ({}) as never);
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+    () => ({}) as never,
+  );
   vi.spyOn(console, "error").mockImplementation(() => undefined);
   Object.assign(vi.spyOn(client, "api" as never), {
-    bloodline: { getNaturalRollStatistics: { useQuery: () => ({ data: statistics, isLoading: false }) } },
+    bloodline: {
+      getNaturalRollStatistics: {
+        useQuery: () => ({ data: statistics, isLoading: false }),
+      },
+    },
   });
 });
 
@@ -68,7 +74,9 @@ describe("profile chart lifetime", () => {
   it("does not create charts if the tab unmounts before the import resolves", async () => {
     const view = render(<GraphsTab userData={user} />);
     view.unmount();
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(charts).toHaveLength(0);
   });
 
@@ -100,7 +108,10 @@ describe("profile chart lifetime", () => {
 });
 
 describe("statistics popover chart lifetime", () => {
-  const mount = () => render(<BloodlineStatistics trigger={<button type="button">Roll Statistics</button>} />);
+  const mount = () =>
+    render(
+      <BloodlineStatistics trigger={<button type="button">Roll Statistics</button>} />,
+    );
 
   it("draws only while open, survives debug toggles, and redraws after reopening", async () => {
     const view = mount();
@@ -111,7 +122,9 @@ describe("statistics popover chart lifetime", () => {
     const debug = view.getByRole("dialog").querySelector("button");
     expect(debug).not.toBeNull();
     fireEvent.click(debug!);
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(charts).toHaveLength(1);
     fireEvent.click(trigger);
     await waitFor(() => expect(charts[0]?.destroy).toHaveBeenCalledTimes(1));
@@ -135,7 +148,9 @@ describe("statistics popover chart lifetime", () => {
     const view = mount();
     fireEvent.click(view.getByRole("button", { name: "Roll Statistics" }));
     await waitFor(() => expect(charts).toHaveLength(1));
-    expect(view.getByText("Total bloodline rolls:").nextElementSibling?.textContent).toBe("200");
+    expect(
+      view.getByText("Total bloodline rolls:").nextElementSibling?.textContent,
+    ).toBe("200");
     const config = (chartLibrary.Chart as unknown as ReturnType<typeof vi.fn>).mock
       .calls[0]?.[1] as {
       data: { labels: string[]; datasets: Record<string, unknown>[] };
@@ -176,7 +191,9 @@ describe("statistics popover chart lifetime", () => {
     const trigger = view.getByRole("button", { name: "Roll Statistics" });
     fireEvent.click(trigger);
     fireEvent.click(trigger);
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(charts).toHaveLength(0);
   });
 

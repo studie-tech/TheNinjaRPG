@@ -9,12 +9,28 @@ import {
   queueHeadAfter,
 } from "@/libs/queue";
 
-const row = (kind: UserQueue["kind"], position: number, patch: Partial<UserQueue> = {}) =>
-  ({ kind, position, stat: "offence", energy: 10, speed: "1hr", ...patch }) as UserQueue;
+const row = (
+  kind: UserQueue["kind"],
+  position: number,
+  patch: Partial<UserQueue> = {},
+) =>
+  ({
+    kind,
+    position,
+    stat: "offence",
+    energy: 10,
+    speed: "1hr",
+    ...patch,
+  }) as UserQueue;
 
 describe("queue rows", () => {
   it("keeps the live rows of one kind in position order", () => {
-    const rows = [row("ENERGY", 3), row("MASTERY", 1), row("ENERGY", 1), row("ENERGY", 2)];
+    const rows = [
+      row("ENERGY", 3),
+      row("MASTERY", 1),
+      row("ENERGY", 1),
+      row("ENERGY", 2),
+    ];
     expect(liveQueueRows(rows, "ENERGY", 1).map((r) => r.position)).toEqual([2, 3]);
     expect(liveQueueRows(rows, "MASTERY").map((r) => r.position)).toEqual([1]);
   });
@@ -37,7 +53,9 @@ describe("queue rows", () => {
       ],
     };
     expect(getEnergyQueue(user)).toEqual([{ stat: "speed", energy: 25 }]);
-    expect(getMasteryQueue(user)).toEqual([{ stat: "genjutsuMastery", speed: "15min" }]);
+    expect(getMasteryQueue(user)).toEqual([
+      { stat: "genjutsuMastery", speed: "15min" },
+    ]);
   });
 
   it("guards Energy settlement from UserData columns alone", () => {

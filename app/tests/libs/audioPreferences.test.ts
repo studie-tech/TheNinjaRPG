@@ -9,7 +9,10 @@ import * as native from "@/libs/native";
 const originalWindow = window;
 
 afterEach(() => {
-  Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: originalWindow,
+  });
   vi.restoreAllMocks();
   localStorage.removeItem("musicOn");
 });
@@ -47,10 +50,13 @@ describe("audio preference origins", () => {
     },
   );
 
-  it.each(["ios", "android"] as const)("retains %s shell audio on localhost", (platform) => {
-    vi.spyOn(native, "platform").mockReturnValue(platform);
-    expect(isLocalAudioSession()).toBe(false);
-    expect(getAudioPreference("musicOn", true)).toBe(true);
-    expect(getAudioPreference("sfxOn", false)).toBe(false);
-  });
+  it.each(["ios", "android"] as const)(
+    "retains %s shell audio on localhost",
+    (platform) => {
+      vi.spyOn(native, "platform").mockReturnValue(platform);
+      expect(isLocalAudioSession()).toBe(false);
+      expect(getAudioPreference("musicOn", true)).toBe(true);
+      expect(getAudioPreference("sfxOn", false)).toBe(false);
+    },
+  );
 });

@@ -22,7 +22,11 @@ import {
   InstantStartBattleObjective,
 } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertUsers, insertQuests, insertQuestHistory } from "../../../../setup/factories";
+import {
+  insertUsers,
+  insertQuests,
+  insertQuestHistory,
+} from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -42,7 +46,10 @@ describeWithDatabase("Pyramid entry recovery", () => {
       overworldAiPlacementQuest,
     );
   });
-  afterEach(async () => { vi.restoreAllMocks(); await resetTables(questHistory); });
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await resetTables(questHistory);
+  });
   for (const [source, isolated, alreadySettled] of [
     ["npc", true, false],
     ["npc", false, false],
@@ -303,20 +310,29 @@ describeWithDatabase("Pyramid entry recovery", () => {
           where: eq(questHistory.id, "open-pyramid"),
         }),
       ]);
-      expect(stored).toEqual(expect.objectContaining({
-        curHealth: 500,
-        curChakra: 990,
-        curStamina: 1,
-        curEnergy: 10,
-        regenAt: prior,
-      }));
-      expect(attempt).toEqual(expect.objectContaining({ entryPaid, isolated: true, questVersion: version }));
-      expect(stored?.questData?.find((tracker) => tracker.id === "pool-pyramid")?.startAt)
-        .toBe(prior.toISOString());
+      expect(stored).toEqual(
+        expect.objectContaining({
+          curHealth: 500,
+          curChakra: 990,
+          curStamina: 1,
+          curEnergy: 10,
+          regenAt: prior,
+        }),
+      );
+      expect(attempt).toEqual(
+        expect.objectContaining({ entryPaid, isolated: true, questVersion: version }),
+      );
+      expect(
+        stored?.questData?.find((tracker) => tracker.id === "pool-pyramid")?.startAt,
+      ).toBe(prior.toISOString());
     });
   }
 
-  for (const scenario of ["pools changed", "already recovered", "deadlock retry"] as const) {
+  for (const scenario of [
+    "pools changed",
+    "already recovered",
+    "deadlock retry",
+  ] as const) {
     it(`settles fresh isolation safely after ${scenario}`, async () => {
       const client = await getTestDatabase();
       const prior = new Date(Date.now() - 125_000);
@@ -349,7 +365,11 @@ describeWithDatabase("Pyramid entry recovery", () => {
         client.query.quest.findFirst({ where: eq(quest.id, "pool-pyramid") }),
       ]);
       if (!user || !pyramid) throw new Error("Missing fixture");
-      const retrying = failCommits(client, scenario === "deadlock retry" ? 1 : 0, "Deadlock found when trying to get lock");
+      const retrying = failCommits(
+        client,
+        scenario === "deadlock retry" ? 1 : 0,
+        "Deadlock found when trying to get lock",
+      );
       if (scenario !== "deadlock retry")
         await client
           .update(userData)
@@ -364,11 +384,15 @@ describeWithDatabase("Pyramid entry recovery", () => {
       await upsertQuestEntry(retrying.client, user, pyramid, "quest_objective", null);
       expect(await client.query.questHistory.findMany()).toHaveLength(1);
       expect(
-        await client.query.userData.findFirst({ where: eq(userData.userId, user.userId) }),
-      ).toEqual(expect.objectContaining({
-        curHealth: scenario === "pools changed" ? 720 : 520,
-        regenAt: new Date(prior.getTime() + 120_000),
-      }));
+        await client.query.userData.findFirst({
+          where: eq(userData.userId, user.userId),
+        }),
+      ).toEqual(
+        expect.objectContaining({
+          curHealth: scenario === "pools changed" ? 720 : 520,
+          regenAt: new Date(prior.getTime() + 120_000),
+        }),
+      );
       expect(user.userQuests).toHaveLength(1);
       expect(typeof user.curHealth).toBe("number");
       expect(user.regenAt).toBeInstanceOf(Date);

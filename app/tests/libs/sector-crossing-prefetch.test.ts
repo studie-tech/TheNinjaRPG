@@ -29,15 +29,17 @@ describe("publishedMapsToPrefetchForMove", () => {
   });
 
   it("includes the east neighbour when dest is the default map width", () => {
-    expect(
-      publishedMapsToPrefetchForMove(sector, { x: SECTOR_WIDTH, y: 5 }),
-    ).toEqual([sector, neighbors.east]);
+    expect(publishedMapsToPrefetchForMove(sector, { x: SECTOR_WIDTH, y: 5 })).toEqual([
+      sector,
+      neighbors.east,
+    ]);
   });
 
   it("includes the north neighbour when dest is the default map height", () => {
-    expect(
-      publishedMapsToPrefetchForMove(sector, { x: 5, y: SECTOR_HEIGHT }),
-    ).toEqual([sector, neighbors.north]);
+    expect(publishedMapsToPrefetchForMove(sector, { x: 5, y: SECTOR_HEIGHT })).toEqual([
+      sector,
+      neighbors.north,
+    ]);
   });
 
   it("does not prefetch a diagonal step beyond two borders", () => {

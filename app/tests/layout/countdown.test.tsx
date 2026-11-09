@@ -25,8 +25,17 @@ afterEach(() => {
 
 describe("Countdown completion", () => {
   it("updates clock text without React renders and reconciles the completion UI once", () => {
-    const rendered = vi.fn(), finished = vi.fn();
-    const view = render(<Profiler id="countdown" onRender={rendered}><Countdown targetDate={new Date(BASE + 3000)} onFinish={finished} onEndShow="Ready" /></Profiler>);
+    const rendered = vi.fn(),
+      finished = vi.fn();
+    const view = render(
+      <Profiler id="countdown" onRender={rendered}>
+        <Countdown
+          targetDate={new Date(BASE + 3000)}
+          onFinish={finished}
+          onEndShow="Ready"
+        />
+      </Profiler>,
+    );
     const label = view.container.querySelector("span")!;
     const initial = label.textContent;
     rendered.mockClear();
@@ -40,7 +49,9 @@ describe("Countdown completion", () => {
     expect(finished).toHaveBeenCalledTimes(1);
   });
   it("renders the time left through a custom format until the deadline", () => {
-    const view = render(<Countdown targetDate={new Date(BASE + 3000)} format={(ms) => `[${ms}]`} />);
+    const view = render(
+      <Countdown targetDate={new Date(BASE + 3000)} format={(ms) => `[${ms}]`} />,
+    );
     const label = view.container.querySelector("span")!;
     expect(label.textContent).toBe("[3000]");
     advance(1000);
@@ -56,7 +67,9 @@ describe("Countdown completion", () => {
     const view = render(<Countdown targetDate={targetDate} onFinish={previous} />);
     advance(500);
     expect(previous).not.toHaveBeenCalled();
-    view.rerender(<Countdown targetDate={targetDate} onFinish={latest} onEndShow="Ready" />);
+    view.rerender(
+      <Countdown targetDate={targetDate} onFinish={latest} onEndShow="Ready" />,
+    );
     advance(500);
     expect(view.getByText("Ready")).toBeTruthy();
     expect(previous).not.toHaveBeenCalled();
@@ -68,25 +81,45 @@ describe("Countdown completion", () => {
   it("does not finish the same deadline twice after clock recalibration or Strict Mode effects", () => {
     const onFinish = vi.fn();
     const targetDate = new Date(BASE - 1_000);
-    const view = render(<StrictMode><Countdown targetDate={targetDate} onFinish={onFinish} /></StrictMode>);
+    const view = render(
+      <StrictMode>
+        <Countdown targetDate={targetDate} onFinish={onFinish} />
+      </StrictMode>,
+    );
     expect(onFinish).toHaveBeenCalledTimes(1);
-    view.rerender(<StrictMode><Countdown targetDate={targetDate} timeDiff={2_000} onFinish={onFinish} /></StrictMode>);
+    view.rerender(
+      <StrictMode>
+        <Countdown targetDate={targetDate} timeDiff={2_000} onFinish={onFinish} />
+      </StrictMode>,
+    );
     advance(1_000);
     expect(onFinish).toHaveBeenCalledTimes(1);
   });
 
   it("recognizes a new raw deadline even if its adjusted time is unchanged", () => {
     const onFinish = vi.fn();
-    const view = render(<Countdown targetDate={new Date(BASE - 1_000)} onFinish={onFinish} />);
+    const view = render(
+      <Countdown targetDate={new Date(BASE - 1_000)} onFinish={onFinish} />,
+    );
     expect(onFinish).toHaveBeenCalledTimes(1);
-    view.rerender(<Countdown targetDate={new Date(BASE - 2_000)} timeDiff={1_000} onFinish={onFinish} />);
+    view.rerender(
+      <Countdown
+        targetDate={new Date(BASE - 2_000)}
+        timeDiff={1_000}
+        onFinish={onFinish}
+      />,
+    );
     expect(onFinish).toHaveBeenCalledTimes(2);
   });
 
   it("starts a replacement countdown and clears its interval on unmount", () => {
     const onFinish = vi.fn();
-    const view = render(<Countdown targetDate={new Date(BASE - 1_000)} onFinish={onFinish} />);
-    view.rerender(<Countdown targetDate={new Date(BASE + 2_000)} onFinish={onFinish} />);
+    const view = render(
+      <Countdown targetDate={new Date(BASE - 1_000)} onFinish={onFinish} />,
+    );
+    view.rerender(
+      <Countdown targetDate={new Date(BASE + 2_000)} onFinish={onFinish} />,
+    );
     expect(view.queryByText("Done")).toBeNull();
     advance(1_000);
     expect(onFinish).toHaveBeenCalledTimes(1);

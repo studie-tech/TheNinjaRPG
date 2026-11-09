@@ -26,7 +26,10 @@ describe("ItemVariantValidator", () => {
   // ── name ──────────────────────────────────────────────────────────────────
 
   it("trims leading/trailing whitespace from name", () => {
-    const result = ItemVariantValidator.safeParse({ ...valid, name: "  Red Edition  " });
+    const result = ItemVariantValidator.safeParse({
+      ...valid,
+      name: "  Red Edition  ",
+    });
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.name).toBe("Red Edition");
   });
@@ -34,7 +37,13 @@ describe("ItemVariantValidator", () => {
   // ── costType ──────────────────────────────────────────────────────────────
 
   it("accepts all valid costType values", () => {
-    const types = ["MONEY", "REPUTATION", "SEICHI_SILVER", "VILLAGE_PRESTIGE", "VARIANT_TOKEN"] as const;
+    const types = [
+      "MONEY",
+      "REPUTATION",
+      "SEICHI_SILVER",
+      "VILLAGE_PRESTIGE",
+      "VARIANT_TOKEN",
+    ] as const;
     for (const costType of types) {
       const result = ItemVariantValidator.safeParse({ ...valid, costType });
       expect(result.success, `costType "${costType}" should be valid`).toBe(true);
@@ -57,7 +66,10 @@ describe("ItemVariantValidator", () => {
   // ── order ─────────────────────────────────────────────────────────────────
 
   it(`accepts order ${MAX_ITEM_VARIANTS} (maximum)`, () => {
-    const result = ItemVariantValidator.safeParse({ ...valid, order: MAX_ITEM_VARIANTS });
+    const result = ItemVariantValidator.safeParse({
+      ...valid,
+      order: MAX_ITEM_VARIANTS,
+    });
     expect(result.success).toBe(true);
   });
 
@@ -75,7 +87,10 @@ describe("ItemVariantValidator", () => {
     { title: "rejects negative cost", patch: { cost: -1 } },
     { title: "rejects non-integer cost", patch: { cost: 9.5 } },
     { title: "rejects order 0 (below minimum)", patch: { order: 0 } },
-    { title: `rejects order ${MAX_ITEM_VARIANTS + 1} (above maximum)`, patch: { order: MAX_ITEM_VARIANTS + 1 } },
+    {
+      title: `rejects order ${MAX_ITEM_VARIANTS + 1} (above maximum)`,
+      patch: { order: MAX_ITEM_VARIANTS + 1 },
+    },
     { title: "rejects non-integer order", patch: { order: 1.5 } },
   ])("$title", ({ patch }) => {
     expect(ItemVariantValidator.safeParse({ ...valid, ...patch }).success).toBe(false);
@@ -90,9 +105,13 @@ describe("ItemVariantValidator", () => {
     });
 
     it("accepts a non-empty description", () => {
-      const result = ItemVariantValidator.safeParse({ ...valid, description: "Crimson flame edition." });
+      const result = ItemVariantValidator.safeParse({
+        ...valid,
+        description: "Crimson flame edition.",
+      });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.description).toBe("Crimson flame edition.");
+      if (result.success)
+        expect(result.data.description).toBe("Crimson flame edition.");
     });
   });
 
@@ -100,7 +119,10 @@ describe("ItemVariantValidator", () => {
 
   describe("battleDescription field", () => {
     it("accepts an empty string battleDescription", () => {
-      const result = ItemVariantValidator.safeParse({ ...valid, battleDescription: "" });
+      const result = ItemVariantValidator.safeParse({
+        ...valid,
+        battleDescription: "",
+      });
       expect(result.success).toBe(true);
     });
 
@@ -111,7 +133,9 @@ describe("ItemVariantValidator", () => {
       });
       expect(result.success).toBe(true);
       if (result.success)
-        expect(result.data.battleDescription).toBe("%user strikes with the Crimson Blade");
+        expect(result.data.battleDescription).toBe(
+          "%user strikes with the Crimson Blade",
+        );
     });
   });
 });

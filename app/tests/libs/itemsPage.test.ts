@@ -53,7 +53,12 @@ describe("backpack sorting", () => {
     userItem({ id: "Common100", rarity: "COMMON", durability: 50, maxDurability: 50 }),
     userItem({ id: "Epic60", rarity: "EPIC", durability: 30, maxDurability: 50 }),
     userItem({ id: "EpicNoDur", rarity: "EPIC" }),
-    userItem({ id: "Legendary40", rarity: "LEGENDARY", durability: 20, maxDurability: 50 }),
+    userItem({
+      id: "Legendary40",
+      rarity: "LEGENDARY",
+      durability: 20,
+      maxDurability: 50,
+    }),
     userItem({ id: "Epic100", rarity: "EPIC", durability: 50, maxDurability: 50 }),
   ];
 
@@ -69,16 +74,43 @@ describe("backpack sorting", () => {
 
   it("sorts by each key", () => {
     const mixed = [
-      userItem({ id: "b-scroll", itemType: "CONSUMABLE", slot: "ITEM", createdAt: new Date("2026-03-01") }),
-      userItem({ id: "a-vest", itemType: "ARMOR", slot: "CHEST", durability: 10, maxDurability: 50, createdAt: new Date("2026-01-01") }),
-      userItem({ id: "c-sword", itemType: "WEAPON", slot: "HAND", durability: 40, maxDurability: 50, createdAt: new Date("2026-02-01") }),
+      userItem({
+        id: "b-scroll",
+        itemType: "CONSUMABLE",
+        slot: "ITEM",
+        createdAt: new Date("2026-03-01"),
+      }),
+      userItem({
+        id: "a-vest",
+        itemType: "ARMOR",
+        slot: "CHEST",
+        durability: 10,
+        maxDurability: 50,
+        createdAt: new Date("2026-01-01"),
+      }),
+      userItem({
+        id: "c-sword",
+        itemType: "WEAPON",
+        slot: "HAND",
+        durability: 40,
+        maxDurability: 50,
+        createdAt: new Date("2026-02-01"),
+      }),
     ];
     expect(ids(sortBackpack(mixed, "name"))).toEqual(["a-vest", "b-scroll", "c-sword"]);
     expect(ids(sortBackpack(mixed, "type"))).toEqual(["c-sword", "b-scroll", "a-vest"]);
     expect(ids(sortBackpack(mixed, "slot"))).toEqual(["a-vest", "c-sword", "b-scroll"]);
-    expect(ids(sortBackpack(mixed, "newest"))).toEqual(["b-scroll", "c-sword", "a-vest"]);
+    expect(ids(sortBackpack(mixed, "newest"))).toEqual([
+      "b-scroll",
+      "c-sword",
+      "a-vest",
+    ]);
     // Most worn first, so repairs are easy to find; items that never wear come last.
-    expect(ids(sortBackpack(mixed, "durability"))).toEqual(["a-vest", "c-sword", "b-scroll"]);
+    expect(ids(sortBackpack(mixed, "durability"))).toEqual([
+      "a-vest",
+      "c-sword",
+      "b-scroll",
+    ]);
   });
 
   it("does not reorder the input", () => {
@@ -95,40 +127,70 @@ describe("backpack sorting", () => {
         activeVariantId: "active",
         item: {
           ...base.item,
-          variants: [{ id: "active", image: "/blade.webp", name: index === 0 ? "Zebra Blade" : "Alpha Blade" }],
+          variants: [
+            {
+              id: "active",
+              image: "/blade.webp",
+              name: index === 0 ? "Zebra Blade" : "Alpha Blade",
+            },
+          ],
         },
       } as UserItemWithRelations;
     });
-    for (const sort of ["name", "rarity", "type", "slot", "newest", "durability"] as const) {
+    for (const sort of [
+      "name",
+      "rarity",
+      "type",
+      "slot",
+      "newest",
+      "durability",
+    ] as const) {
       expect(ids(sortBackpack(swords, sort))).toEqual(["Zebra Blade", "Alpha Blade"]);
     }
   });
 
-  it.each([null, "missing", "unnamed"])("sorts by the base name when the active variant is %j", (activeVariantId) => {
-    const base = userItem({ id: "Alpha Blade" });
-    const sword = {
-      ...base,
-      activeVariantId,
-      item: {
-        ...base.item,
-        variants: [{ id: "unnamed", image: "/blade.webp", name: null }],
-      },
-    } as unknown as UserItemWithRelations;
-    expect(ids(sortBackpack([userItem({ id: "Zebra Blade" }), sword], "name"))).toEqual(["Alpha Blade", "Zebra Blade"]);
-  });
+  it.each([null, "missing", "unnamed"])(
+    "sorts by the base name when the active variant is %j",
+    (activeVariantId) => {
+      const base = userItem({ id: "Alpha Blade" });
+      const sword = {
+        ...base,
+        activeVariantId,
+        item: {
+          ...base.item,
+          variants: [{ id: "unnamed", image: "/blade.webp", name: null }],
+        },
+      } as unknown as UserItemWithRelations;
+      expect(
+        ids(sortBackpack([userItem({ id: "Zebra Blade" }), sword], "name")),
+      ).toEqual(["Alpha Blade", "Zebra Blade"]);
+    },
+  );
 });
 
 describe("backpack filtering", () => {
   const rows = [
     userItem({ id: "Storm Shuriken", itemType: "WEAPON", slot: "THROWN" }),
     userItem({ id: "Healing Salve", itemType: "CONSUMABLE", slot: "ITEM" }),
-    userItem({ id: "Worn Vest", itemType: "ARMOR", slot: "CHEST", durability: 10, maxDurability: 50 }),
+    userItem({
+      id: "Worn Vest",
+      itemType: "ARMOR",
+      slot: "CHEST",
+      durability: 10,
+      maxDurability: 50,
+    }),
   ];
 
   it("filters by query and type and needs repair", () => {
-    expect(ids(filterBackpack(rows, { query: "  salve ", type: "ALL" }))).toEqual(["Healing Salve"]);
-    expect(ids(filterBackpack(rows, { query: "", type: "WEAPON" }))).toEqual(["Storm Shuriken"]);
-    expect(ids(filterBackpack(rows, { query: "", type: "NEEDS_REPAIR" }))).toEqual(["Worn Vest"]);
+    expect(ids(filterBackpack(rows, { query: "  salve ", type: "ALL" }))).toEqual([
+      "Healing Salve",
+    ]);
+    expect(ids(filterBackpack(rows, { query: "", type: "WEAPON" }))).toEqual([
+      "Storm Shuriken",
+    ]);
+    expect(ids(filterBackpack(rows, { query: "", type: "NEEDS_REPAIR" }))).toEqual([
+      "Worn Vest",
+    ]);
     expect(filterBackpack(rows, { query: "kunai", type: "ALL" })).toEqual([]);
   });
 
@@ -145,26 +207,37 @@ describe("backpack filtering", () => {
         ],
       },
     } as UserItemWithRelations;
-    expect(filterBackpack([sword], { query: "  BLUE sword ", type: "ALL" })).toEqual([sword]);
-    expect(filterBackpack([sword], { query: "Base Sword", type: "WEAPON" })).toEqual([sword]);
+    expect(filterBackpack([sword], { query: "  BLUE sword ", type: "ALL" })).toEqual([
+      sword,
+    ]);
+    expect(filterBackpack([sword], { query: "Base Sword", type: "WEAPON" })).toEqual([
+      sword,
+    ]);
     expect(filterBackpack([sword], { query: "Red Sword", type: "ALL" })).toEqual([]);
     expect(filterBackpack([sword], { query: "Blue Sword", type: "ARMOR" })).toEqual([]);
-    expect(filterBackpack([sword], { query: "Blue Sword", type: "NEEDS_REPAIR" })).toEqual([]);
+    expect(
+      filterBackpack([sword], { query: "Blue Sword", type: "NEEDS_REPAIR" }),
+    ).toEqual([]);
   });
 
-  it.each([null, "missing"])("finds only the base name when the active variant is %j", (activeVariantId) => {
-    const base = userItem({ id: "Base Sword" });
-    const sword = {
-      ...base,
-      activeVariantId,
-      item: {
-        ...base.item,
-        variants: [{ id: "blue", image: "/blue.webp", name: "Blue Sword" }],
-      },
-    } as UserItemWithRelations;
-    expect(filterBackpack([sword], { query: "Base Sword", type: "ALL" })).toEqual([sword]);
-    expect(filterBackpack([sword], { query: "Blue Sword", type: "ALL" })).toEqual([]);
-  });
+  it.each([null, "missing"])(
+    "finds only the base name when the active variant is %j",
+    (activeVariantId) => {
+      const base = userItem({ id: "Base Sword" });
+      const sword = {
+        ...base,
+        activeVariantId,
+        item: {
+          ...base.item,
+          variants: [{ id: "blue", image: "/blue.webp", name: "Blue Sword" }],
+        },
+      } as UserItemWithRelations;
+      expect(filterBackpack([sword], { query: "Base Sword", type: "ALL" })).toEqual([
+        sword,
+      ]);
+      expect(filterBackpack([sword], { query: "Blue Sword", type: "ALL" })).toEqual([]);
+    },
+  );
 
   it("builds chips from present types only", () => {
     expect(backpackFilterChips(rows)).toEqual([
@@ -174,15 +247,18 @@ describe("backpack filtering", () => {
       { value: "ARMOR", label: "Armor", count: 1 },
       { value: "NEEDS_REPAIR", label: "Needs repair", count: 1 },
     ]);
-    expect(backpackFilterChips(rows.slice(0, 2)).map((chip) => chip.value)).not.toContain(
-      "NEEDS_REPAIR",
-    );
+    expect(
+      backpackFilterChips(rows.slice(0, 2)).map((chip) => chip.value),
+    ).not.toContain("NEEDS_REPAIR");
   });
 });
 
 describe("slot rules", () => {
   it("lists the fitting slots of hand and item gear", () => {
-    expect(fittingSlots({ slot: "HAND", itemType: "WEAPON" } as never)).toEqual(["HAND_1", "HAND_2"]);
+    expect(fittingSlots({ slot: "HAND", itemType: "WEAPON" } as never)).toEqual([
+      "HAND_1",
+      "HAND_2",
+    ]);
     expect(fittingSlots({ slot: "ITEM", itemType: "CONSUMABLE" } as never)).toEqual([
       "ITEM_1",
       "ITEM_2",
@@ -191,7 +267,9 @@ describe("slot rules", () => {
       "ITEM_5",
       "ITEM_6",
     ]);
-    expect(fittingSlots({ slot: "HEAD", itemType: "ARMOR" } as never)).toEqual(["HEAD"]);
+    expect(fittingSlots({ slot: "HEAD", itemType: "ARMOR" } as never)).toEqual([
+      "HEAD",
+    ]);
     expect(fittingSlots({ slot: "NONE", itemType: "MATERIAL" } as never)).toEqual([]);
     expect(fittingSlots({ slot: "ITEM", itemType: "MEAL" } as never)).toEqual([]);
     expect(fittingSlots({ slot: "ITEM", itemType: "FURNITURE" } as never)).toEqual([]);
@@ -200,11 +278,26 @@ describe("slot rules", () => {
   it("ranks candidates with mastery-blocked last and marks items equipped elsewhere", () => {
     const rows = [
       userItem({ id: "Current", rarity: "LEGENDARY", equipped: "HAND_1" }),
-      userItem({ id: "Common100", rarity: "COMMON", durability: 50, maxDurability: 50 }),
-      userItem({ id: "EpicBlocked", rarity: "EPIC", durability: 50, maxDurability: 50 }),
+      userItem({
+        id: "Common100",
+        rarity: "COMMON",
+        durability: 50,
+        maxDurability: 50,
+      }),
+      userItem({
+        id: "EpicBlocked",
+        rarity: "EPIC",
+        durability: 50,
+        maxDurability: 50,
+      }),
       userItem({ id: "Epic60", rarity: "EPIC", durability: 30, maxDurability: 50 }),
       userItem({ id: "OtherHand", rarity: "RARE", equipped: "HAND_2" }),
-      userItem({ id: "Legendary40", rarity: "LEGENDARY", durability: 20, maxDurability: 50 }),
+      userItem({
+        id: "Legendary40",
+        rarity: "LEGENDARY",
+        durability: 20,
+        maxDurability: 50,
+      }),
       userItem({ id: "Helmet", rarity: "LEGENDARY", slot: "HEAD", itemType: "ARMOR" }),
     ];
     const candidates = rankSlotCandidates(rows, "HAND_1", (ui) =>
@@ -217,7 +310,9 @@ describe("slot rules", () => {
       "Common100",
       "EpicBlocked",
     ]);
-    expect(candidates.find((c) => c.userItem.id === "OtherHand")?.equippedIn).toBe("HAND_2");
+    expect(candidates.find((c) => c.userItem.id === "OtherHand")?.equippedIn).toBe(
+      "HAND_2",
+    );
     expect(candidates.find((c) => c.userItem.id === "Epic60")?.equippedIn).toBeNull();
     expect(candidates.at(-1)?.blockedReason).toBe("Needs 500 Taijutsu");
   });
@@ -226,8 +321,17 @@ describe("slot rules", () => {
     const worn = userItem({ id: "Katana", equipped: "HAND_1" });
     expect(dropTargetsFor(worn, () => null)).toEqual(["HAND_2"]);
     const loose = userItem({ id: "Tanto" });
-    expect(dropTargetsFor(loose, (_ui, slot) => (slot === "HAND_2" ? "Needs 500 Bukijutsu" : null))).toEqual(["HAND_1"]);
-    expect(dropTargetsFor(userItem({ id: "Ore", itemType: "MATERIAL", slot: "NONE" }), () => null)).toEqual([]);
+    expect(
+      dropTargetsFor(loose, (_ui, slot) =>
+        slot === "HAND_2" ? "Needs 500 Bukijutsu" : null,
+      ),
+    ).toEqual(["HAND_1"]);
+    expect(
+      dropTargetsFor(
+        userItem({ id: "Ore", itemType: "MATERIAL", slot: "NONE" }),
+        () => null,
+      ),
+    ).toEqual([]);
   });
 
   it("names slots as players read them", () => {
@@ -238,12 +342,18 @@ describe("slot rules", () => {
 
   it("blocks gear already at its equip limit, as the server does", () => {
     const worn = userItem({ id: "Katana", equipped: "HAND_1" });
-    const copy = { ...userItem({ id: "Katana copy" }), itemId: worn.itemId } as UserItemWithRelations;
-    const limitOne = (ui: UserItemWithRelations) => ({ ...ui, item: { ...ui.item, maxEquips: 1 } }) as UserItemWithRelations;
+    const copy = {
+      ...userItem({ id: "Katana copy" }),
+      itemId: worn.itemId,
+    } as UserItemWithRelations;
+    const limitOne = (ui: UserItemWithRelations) =>
+      ({ ...ui, item: { ...ui.item, maxEquips: 1 } }) as UserItemWithRelations;
     const all = [limitOne(worn), limitOne(copy)];
     expect(equipLimitReason(all[0]!, all)).toBe("Unequip from Hand 1 first");
     expect(equipLimitReason(all[1]!, all)).toBe("Already equipped in Hand 1");
-    const limitTwo = all.map((ui) => ({ ...ui, item: { ...ui.item, maxEquips: 2 } }) as UserItemWithRelations);
+    const limitTwo = all.map(
+      (ui) => ({ ...ui, item: { ...ui.item, maxEquips: 2 } }) as UserItemWithRelations,
+    );
     expect(equipLimitReason(limitTwo[1]!, limitTwo)).toBeNull();
     const loose = limitOne(userItem({ id: "Tanto" }));
     expect(equipLimitReason(loose, [loose])).toBeNull();

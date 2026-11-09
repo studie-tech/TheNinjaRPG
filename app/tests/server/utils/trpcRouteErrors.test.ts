@@ -12,7 +12,8 @@ describe("isExpectedTrpcRouteError", () => {
         isExpectedTrpcRouteError({
           ...base,
           code: "METHOD_NOT_SUPPORTED",
-          message: "Unsupported POST-request to query procedure at path \"profile.getUser\"",
+          message:
+            'Unsupported POST-request to query procedure at path "profile.getUser"',
           userId,
           method: "POST",
         }),
@@ -45,27 +46,34 @@ describe("isExpectedTrpcRouteError", () => {
   it("ignores auth and rate-limit rejections and reports everything else", () => {
     expect(isExpectedTrpcRouteError({ ...base, code: "UNAUTHORIZED" })).toBe(true);
     expect(isExpectedTrpcRouteError({ ...base, code: "TOO_MANY_REQUESTS" })).toBe(true);
-    expect(isExpectedTrpcRouteError({ ...base, code: "INTERNAL_SERVER_ERROR" })).toBe(false);
-    expect(isExpectedTrpcRouteError({ ...base, code: "BAD_REQUEST", method: "POST" })).toBe(
+    expect(isExpectedTrpcRouteError({ ...base, code: "INTERNAL_SERVER_ERROR" })).toBe(
       false,
     );
+    expect(
+      isExpectedTrpcRouteError({ ...base, code: "BAD_REQUEST", method: "POST" }),
+    ).toBe(false);
   });
 
   it("ignores a BotID block, which is recorded with its verdict, but no other FORBIDDEN", () => {
     const forbidden = { ...base, code: "FORBIDDEN", method: "POST" };
-    expect(isExpectedTrpcRouteError({ ...forbidden, message: BOTID_BLOCKED_MESSAGE })).toBe(
-      true,
+    expect(
+      isExpectedTrpcRouteError({ ...forbidden, message: BOTID_BLOCKED_MESSAGE }),
+    ).toBe(true);
+    expect(isExpectedTrpcRouteError({ ...forbidden, message: "Not your clan" })).toBe(
+      false,
     );
-    expect(isExpectedTrpcRouteError({ ...forbidden, message: "Not your clan" })).toBe(false);
   });
 
   it("ignores a protected mutation without a BotID challenge, but no other precondition", () => {
     const precondition = { ...base, code: "PRECONDITION_FAILED", method: "POST" };
     expect(
-      isExpectedTrpcRouteError({ ...precondition, message: BOTID_RELOAD_REQUIRED_MESSAGE }),
+      isExpectedTrpcRouteError({
+        ...precondition,
+        message: BOTID_RELOAD_REQUIRED_MESSAGE,
+      }),
     ).toBe(true);
-    expect(isExpectedTrpcRouteError({ ...precondition, message: "Quest changed" })).toBe(
-      false,
-    );
+    expect(
+      isExpectedTrpcRouteError({ ...precondition, message: "Quest changed" }),
+    ).toBe(false);
   });
 });

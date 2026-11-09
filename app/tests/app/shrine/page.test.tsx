@@ -176,9 +176,9 @@ describe("shrine page war affiliation", () => {
     it("stays protected outside an objective", () => {
       objectiveOn(101);
       const view = mount();
-      expect(
-        view.queryByRole("button", { name: "Create Shrine Attack Party" }),
-      ).toBe(null);
+      expect(view.queryByRole("button", { name: "Create Shrine Attack Party" })).toBe(
+        null,
+      );
       expect(
         view.queryAllByText("This sector is reserved and cannot be attacked.").length,
       ).toBeGreaterThan(0);
@@ -255,9 +255,9 @@ describe("shrine page war affiliation", () => {
         ctrlKey: false,
       });
       expect(view.queryByRole("button", { name: "Attack shrine" })).toBeNull();
-      expect(view.queryAllByText(/Form a team to attack this shrine together!/)).toHaveLength(
-        side === "attacker" ? 1 : 0,
-      );
+      expect(
+        view.queryAllByText(/Form a team to attack this shrine together!/),
+      ).toHaveLength(side === "attacker" ? 1 : 0);
       fireEvent.click(view.getByRole("button", { name: "Create Shrine Attack Party" }));
       expect(challenge).toHaveBeenCalledWith({ sectorNumber });
     },

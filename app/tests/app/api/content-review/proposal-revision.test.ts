@@ -5,24 +5,45 @@ import { restoreEnvAfterEach } from "../../../setup/env";
 
 restoreEnvAfterEach("CRON_SECRET");
 const context = { params: Promise.resolve({ id: "proposal-id" }) };
-afterEach(() => { resetServerModuleStubs(); });
+afterEach(() => {
+  resetServerModuleStubs();
+});
 it("authenticates before reading a proposal or parsing a revision", async () => {
   process.env.CRON_SECRET = "test-secret";
   const read = vi.fn();
   stubDatabase({ query: { contentProposal: { findFirst: read } } });
   expect((await GET(new Request("https://example.com"), context)).status).toBe(401);
-  expect((await PATCH(new Request("https://example.com", { method: "PATCH", body: "bad JSON" }), context)).status).toBe(401);
+  expect(
+    (
+      await PATCH(
+        new Request("https://example.com", { method: "PATCH", body: "bad JSON" }),
+        context,
+      )
+    ).status,
+  ).toBe(401);
   expect(read).not.toHaveBeenCalled();
 });
 it("returns the current token with no-store and refuses malformed revisions", async () => {
   process.env.CRON_SECRET = "test-secret";
   const headers = { authorization: "Bearer test-secret" };
-  const read = vi.fn().mockResolvedValue({ id: "proposal-id", statusChangedAt: new Date("2026-10-02T00:00:00.000Z") });
+  const read = vi.fn().mockResolvedValue({
+    id: "proposal-id",
+    statusChangedAt: new Date("2026-10-02T00:00:00.000Z"),
+  });
   stubDatabase({ query: { contentProposal: { findFirst: read } } });
   const result = await GET(new Request("https://example.com", { headers }), context);
   expect(result.headers.get("Cache-Control")).toBe("no-store");
-  expect(await result.json()).toMatchObject({ statusChangedAt: "2026-10-02T00:00:00.000Z" });
+  expect(await result.json()).toMatchObject({
+    statusChangedAt: "2026-10-02T00:00:00.000Z",
+  });
   read.mockClear();
-  expect((await PATCH(new Request("https://example.com", { headers, method: "PATCH", body: "{}" }), context)).status).toBe(400);
+  expect(
+    (
+      await PATCH(
+        new Request("https://example.com", { headers, method: "PATCH", body: "{}" }),
+        context,
+      )
+    ).status,
+  ).toBe(400);
   expect(read).not.toHaveBeenCalled();
 });

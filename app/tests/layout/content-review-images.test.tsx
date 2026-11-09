@@ -1,4 +1,8 @@
-import { cleanup, fireEvent, render as renderInteractive } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render as renderInteractive,
+} from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
@@ -26,7 +30,11 @@ let undoResult: { success: boolean; message: string } | undefined;
 const approve = vi.fn();
 const unreject = vi.fn();
 
-const sceneCandidate = (id: string, externalId: string | null = null, chosen = false) => ({
+const sceneCandidate = (
+  id: string,
+  externalId: string | null = null,
+  chosen = false,
+) => ({
   id,
   path: "content.sceneCharacters.0",
   kind: "IMAGE",
@@ -61,32 +69,37 @@ const api = {
             next: { name: "New character", image: "https://example.com/new.webp" },
             background: { name: "Forest", image: "https://example.com/forest.webp" },
           },
-          changes: [{
-            id: "change",
-            entityType: "QUEST",
-            operation: "UPDATE",
-            label: "Quest",
-            name: "Scene quest",
-            ...state,
-          }],
+          changes: [
+            {
+              id: "change",
+              entityType: "QUEST",
+              operation: "UPDATE",
+              label: "Quest",
+              name: "Scene quest",
+              ...state,
+            },
+          ],
         },
       }),
     },
     approve: { useMutation: () => ({ isPending: false, mutate: approve }) },
     reject: { useMutation: () => ({ isPending: false }) },
-    unreject: { useMutation: () => ({ isPending: isUndoing, mutate: unreject, data: undoResult }) },
+    unreject: {
+      useMutation: () => ({ isPending: isUndoing, mutate: unreject, data: undoResult }),
+    },
     revert: { useMutation: () => ({ isPending: false }) },
   },
 };
 
-const render = () => renderToStaticMarkup(
-  <ContentReviewDetail
-    id="proposal"
-    position={{ index: 0, total: 1 }}
-    onMove={vi.fn()}
-    onDecided={vi.fn()}
-  />,
-);
+const render = () =>
+  renderToStaticMarkup(
+    <ContentReviewDetail
+      id="proposal"
+      position={{ index: 0, total: 1 }}
+      onMove={vi.fn()}
+      onDecided={vi.fn()}
+    />,
+  );
 
 describe("proposal review detail", () => {
   afterEach(() => {
@@ -98,12 +111,23 @@ describe("proposal review detail", () => {
     vi.spyOn(battlefieldPreview, "BattlefieldPreview").mockImplementation(() => null);
     vi.spyOn(ItemWithEffects, "default").mockImplementation(() => null);
     spyOnToasts();
-    vi.spyOn(ContentImage, "default").mockImplementation((({ image, alt }: { image: string; alt: string }) => (
-      <img src={image} alt={alt} />
-    )) as never);
-    vi.spyOn(logbook, "QuestDialogScene").mockImplementation(({ background, characters }) => (
-      <div data-scene="true"><img src={background} alt="Background" />{characters.map((image) => <img key={image} src={image} alt="Character" />)}</div>
-    ));
+    vi.spyOn(ContentImage, "default").mockImplementation((({
+      image,
+      alt,
+    }: {
+      image: string;
+      alt: string;
+    }) => <img src={image} alt={alt} />) as never);
+    vi.spyOn(logbook, "QuestDialogScene").mockImplementation(
+      ({ background, characters }) => (
+        <div data-scene="true">
+          <img src={background} alt="Background" />
+          {characters.map((image) => (
+            <img key={image} src={image} alt="Character" />
+          ))}
+        </div>
+      ),
+    );
     vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
       prepareUserUpdate: vi.fn(),
       updateUser: vi.fn(),
@@ -125,9 +149,19 @@ describe("proposal review detail", () => {
   it("lets reviewers undo a rejection of the revision they are viewing", () => {
     canReview = true;
     status = "REJECTED";
-    const view = renderInteractive(<ContentReviewDetail id="proposal" position={{ index: 0, total: 1 }} onMove={vi.fn()} onDecided={vi.fn()} />);
+    const view = renderInteractive(
+      <ContentReviewDetail
+        id="proposal"
+        position={{ index: 0, total: 1 }}
+        onMove={vi.fn()}
+        onDecided={vi.fn()}
+      />,
+    );
     fireEvent.click(view.getByRole("button", { name: "Undo rejection" }));
-    expect(unreject).toHaveBeenCalledWith({ id: "proposal", expectedStatusChangedAt: revision.toISOString() });
+    expect(unreject).toHaveBeenCalledWith({
+      id: "proposal",
+      expectedStatusChangedAt: revision.toISOString(),
+    });
     expect(view.queryByRole("button", { name: /Approve and apply/ })).toBeNull();
   });
 
@@ -145,13 +179,36 @@ describe("proposal review detail", () => {
     canReview = true;
     status = "REJECTED";
     isUndoing = true;
-    const view = renderInteractive(<ContentReviewDetail id="proposal" position={{ index: 0, total: 1 }} onMove={vi.fn()} onDecided={vi.fn()} />);
-    expect((view.getByRole("button", { name: /Undo rejection/ }) as HTMLButtonElement).disabled).toBe(true);
+    const view = renderInteractive(
+      <ContentReviewDetail
+        id="proposal"
+        position={{ index: 0, total: 1 }}
+        onMove={vi.fn()}
+        onDecided={vi.fn()}
+      />,
+    );
+    expect(
+      (view.getByRole("button", { name: /Undo rejection/ }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
     isUndoing = false;
-    undoResult = { success: false, message: "This suggestion changed. Reload before undoing its rejection." };
-    view.rerender(<ContentReviewDetail id="proposal" position={{ index: 0, total: 1 }} onMove={vi.fn()} onDecided={vi.fn()} />);
+    undoResult = {
+      success: false,
+      message: "This suggestion changed. Reload before undoing its rejection.",
+    };
+    view.rerender(
+      <ContentReviewDetail
+        id="proposal"
+        position={{ index: 0, total: 1 }}
+        onMove={vi.fn()}
+        onDecided={vi.fn()}
+      />,
+    );
     expect(view.getByRole("alert").textContent).toBe(undoResult.message);
-    expect((view.getByRole("button", { name: "Undo rejection" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(
+      (view.getByRole("button", { name: "Undo rejection" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
   });
 
   it("shows both character images when a quest scene changes", () => {
@@ -166,7 +223,9 @@ describe("proposal review detail", () => {
 
   it("shows additions and removals in nested objective scenes", () => {
     state.before = { content: { objectives: [{ sceneCharacters: ["old"] }] } };
-    state.after = { content: { objectives: [{ sceneCharacters: [], sceneBackground: "background" }] } };
+    state.after = {
+      content: { objectives: [{ sceneCharacters: [], sceneBackground: "background" }] },
+    };
     const html = render();
     expect(html).toContain('src="https://example.com/old.webp"');
     expect(html).toContain('src="https://example.com/forest.webp"');
@@ -191,7 +250,11 @@ describe("proposal review detail", () => {
   });
 
   it("previews nested image URLs while keeping unrelated IDs as text", () => {
-    state.after = { content: { objectives: [{ image: "https://example.com/image.webp", targetId: "next" }] } };
+    state.after = {
+      content: {
+        objectives: [{ image: "https://example.com/image.webp", targetId: "next" }],
+      },
+    };
     const html = render();
     expect(html).toContain('src="https://example.com/image.webp"');
     expect(html).not.toContain('src="https://example.com/new.webp"');
@@ -199,7 +262,9 @@ describe("proposal review detail", () => {
 
   it("renders the proposed scene below the quest diff", () => {
     state.before = { content: { sceneCharacters: ["old"] } };
-    state.after = { content: { sceneBackground: "background", sceneCharacters: ["next"] } };
+    state.after = {
+      content: { sceneBackground: "background", sceneCharacters: ["next"] },
+    };
     const html = render();
     expect(html).toContain("Quest scene");
     expect(html).toContain('data-scene="true"');
@@ -210,7 +275,14 @@ describe("proposal review detail", () => {
     state.payload = { content: { sceneCharacters: ["old"] } };
     state.after = { content: { sceneCharacters: ["media:first"] } };
     state.media = [sceneCandidate("first"), sceneCandidate("second", null, true)];
-    const view = renderInteractive(<ContentReviewDetail id="proposal" position={{ index: 0, total: 1 }} onMove={vi.fn()} onDecided={vi.fn()} />);
+    const view = renderInteractive(
+      <ContentReviewDetail
+        id="proposal"
+        position={{ index: 0, total: 1 }}
+        onMove={vi.fn()}
+        onDecided={vi.fn()}
+      />,
+    );
     const scene = () => view.container.querySelector('[data-scene="true"]');
     expect(scene()?.innerHTML).toContain("https://example.com/second.webp");
     fireEvent.click(view.getAllByRole("radio")[0]!);
@@ -222,9 +294,19 @@ describe("proposal review detail", () => {
 
   it("clears media picks, exclusions and approval confirmation on a refined revision", () => {
     canReview = true;
-    state.after = { description: "Proposed description", content: { sceneCharacters: ["media:first"] } };
+    state.after = {
+      description: "Proposed description",
+      content: { sceneCharacters: ["media:first"] },
+    };
     state.media = [sceneCandidate("first"), sceneCandidate("second")];
-    const detail = <ContentReviewDetail id="proposal" position={{ index: 0, total: 1 }} onMove={vi.fn()} onDecided={vi.fn()} />;
+    const detail = (
+      <ContentReviewDetail
+        id="proposal"
+        position={{ index: 0, total: 1 }}
+        onMove={vi.fn()}
+        onDecided={vi.fn()}
+      />
+    );
     const view = renderInteractive(detail);
     fireEvent.click(view.getByRole("button", { name: /Edit/ }));
     fireEvent.change(view.getByRole("textbox"), { target: { value: "Staff wording" } });
@@ -234,13 +316,31 @@ describe("proposal review detail", () => {
     expect(view.getByText("Press A again to apply")).toBeTruthy();
 
     revision = new Date("2026-10-02T10:01:00.000Z");
-    view.rerender(<ContentReviewDetail id="proposal" position={{ index: 0, total: 1 }} onMove={vi.fn()} onDecided={vi.fn()} />);
-    expect(view.getAllByRole("checkbox").every((input) => (input as HTMLInputElement).checked)).toBe(true);
+    view.rerender(
+      <ContentReviewDetail
+        id="proposal"
+        position={{ index: 0, total: 1 }}
+        onMove={vi.fn()}
+        onDecided={vi.fn()}
+      />,
+    );
+    expect(
+      view
+        .getAllByRole("checkbox")
+        .every((input) => (input as HTMLInputElement).checked),
+    ).toBe(true);
     expect((view.getAllByRole("radio")[0] as HTMLInputElement).checked).toBe(true);
     expect(view.queryByText("Press A again to apply")).toBeNull();
     fireEvent.keyDown(document.body, { key: "a" });
     expect(approve).not.toHaveBeenCalled();
     fireEvent.keyDown(document.body, { key: "a" });
-    expect(approve).toHaveBeenCalledWith(expect.objectContaining({ expectedStatusChangedAt: revision.toISOString(), exclude: [], edits: [], media: [] }));
+    expect(approve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedStatusChangedAt: revision.toISOString(),
+        exclude: [],
+        edits: [],
+        media: [],
+      }),
+    );
   });
 });

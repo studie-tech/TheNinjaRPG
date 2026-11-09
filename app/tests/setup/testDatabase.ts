@@ -12,7 +12,11 @@
  */
 import { execFileSync } from "node:child_process";
 import { describe } from "bun:test";
-import type { AnyProcedure, inferProcedureInput, inferProcedureOutput } from "@trpc/server";
+import type {
+  AnyProcedure,
+  inferProcedureInput,
+  inferProcedureOutput,
+} from "@trpc/server";
 import { getTableName, type Table } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
@@ -51,7 +55,10 @@ const wrapWriteBuilder = <T extends object>(builder: T): T =>
   new Proxy(builder, {
     get(target, property, receiver) {
       if (property === "then") {
-        return (onFulfilled?: (value: unknown) => unknown, onRejected?: () => unknown) =>
+        return (
+          onFulfilled?: (value: unknown) => unknown,
+          onRejected?: () => unknown,
+        ) =>
           Promise.resolve(target as PromiseLike<unknown>).then(
             (value) => onFulfilled?.(normalize(value)),
             onRejected,
@@ -61,7 +68,9 @@ const wrapWriteBuilder = <T extends object>(builder: T): T =>
       if (typeof value !== "function") return value;
       return (...args: unknown[]) => {
         const next = (value as (...a: unknown[]) => unknown).apply(target, args);
-        return next && typeof next === "object" ? wrapWriteBuilder(next as object) : next;
+        return next && typeof next === "object"
+          ? wrapWriteBuilder(next as object)
+          : next;
       };
     },
   });
@@ -70,16 +79,23 @@ const wrapWriteBuilder = <T extends object>(builder: T): T =>
 const normalizeWrites = <T extends object>(database: T): T =>
   new Proxy(database, {
     get(target, property, receiver) {
-      const value = Reflect.get(target, property, receiver) as (...args: unknown[]) => unknown;
+      const value = Reflect.get(target, property, receiver) as (
+        ...args: unknown[]
+      ) => unknown;
       if (property === "execute") {
         return async (...args: unknown[]) => normalize(await value.apply(target, args));
       }
       if (property === "insert" || property === "update" || property === "delete") {
-        return (...args: unknown[]) => wrapWriteBuilder(value.apply(target, args) as object);
+        return (...args: unknown[]) =>
+          wrapWriteBuilder(value.apply(target, args) as object);
       }
       if (property === "transaction") {
         return (callback: (tx: unknown) => Promise<unknown>, ...rest: unknown[]) =>
-          value.call(target, async (tx: object) => callback(normalizeWrites(tx)), ...rest);
+          value.call(
+            target,
+            async (tx: object) => callback(normalizeWrites(tx)),
+            ...rest,
+          );
       }
       return value;
     },
@@ -116,7 +132,9 @@ const truncateEveryTable = async () => {
       "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE()",
     );
     if (tables.length === 0) return;
-    const truncations = tables.map((row) => `TRUNCATE TABLE \`${row.name}\`;`).join(" ");
+    const truncations = tables
+      .map((row) => `TRUNCATE TABLE \`${row.name}\`;`)
+      .join(" ");
     await active.query(
       `SET FOREIGN_KEY_CHECKS = 0; ${truncations} SET FOREIGN_KEY_CHECKS = 1;`,
     );
@@ -138,16 +156,24 @@ const truncateEveryTable = async () => {
  */
 export const getTestDatabase = async (): Promise<DrizzleClient> => {
   if (!client) {
-    pool = mysql.createPool({ uri: url, multipleStatements: true, connectionLimit: 10 });
+    pool = mysql.createPool({
+      uri: url,
+      multipleStatements: true,
+      connectionLimit: 10,
+    });
     instrumentQueries(pool as unknown as Parameters<typeof instrumentQueries>[0]);
     const getConnection = pool.getConnection.bind(pool);
     pool.getConnection = async () => {
       const connection = await getConnection();
-      instrumentQueries(connection as unknown as Parameters<typeof instrumentQueries>[0]);
+      instrumentQueries(
+        connection as unknown as Parameters<typeof instrumentQueries>[0],
+      );
       return connection;
     };
     // Production's PlanetScale driver builds relational queries without lateral joins.
-    client = normalizeWrites(drizzle(pool, { schema, mode: "planetscale" })) as unknown as DrizzleClient;
+    client = normalizeWrites(
+      drizzle(pool, { schema, mode: "planetscale" }),
+    ) as unknown as DrizzleClient;
   }
   return client;
 };
@@ -219,7 +245,10 @@ export const indexColumns = async (table: string, keyName: string) => {
     "SELECT COLUMN_NAME AS col, NON_UNIQUE AS nonUnique FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? ORDER BY SEQ_IN_INDEX",
     [table, keyName],
   )) as [{ col: string; nonUnique: number }[], unknown];
-  return { columns: rows.map((row) => row.col), unique: rows.every((row) => !row.nonUnique) };
+  return {
+    columns: rows.map((row) => row.col),
+    unique: rows.every((row) => !row.nonUnique),
+  };
 };
 
 /**
@@ -227,7 +256,11 @@ export const indexColumns = async (table: string, keyName: string) => {
  * row's LOCK_DATA or the requested LOCK_MODE. Returning false lets a caller settle its in-flight
  * work before asserting.
  */
-export const lockWaitObserved = async ({ table, heldLockData, requestedMode }: {
+export const lockWaitObserved = async ({
+  table,
+  heldLockData,
+  requestedMode,
+}: {
   table: string;
   heldLockData?: string;
   requestedMode?: "S" | "X";
@@ -243,9 +276,10 @@ export const lockWaitObserved = async ({ table, heldLockData, requestedMode }: {
     ...(heldLockData ? [`%${heldLockData}%`] : []),
     ...(requestedMode ? [`${requestedMode}%`] : []),
   ];
-  return pollUntil(async () => {
-    const [rows] = (await pool?.query(
-      `SELECT COUNT(*) AS waiting FROM performance_schema.data_lock_waits AS waits
+  return pollUntil(
+    async () => {
+      const [rows] = (await pool?.query(
+        `SELECT COUNT(*) AS waiting FROM performance_schema.data_lock_waits AS waits
        INNER JOIN performance_schema.data_locks AS requested
          ON requested.ENGINE_LOCK_ID = waits.REQUESTING_ENGINE_LOCK_ID
        INNER JOIN performance_schema.data_locks AS blocking
@@ -253,10 +287,12 @@ export const lockWaitObserved = async ({ table, heldLockData, requestedMode }: {
        WHERE requested.OBJECT_SCHEMA = DATABASE() AND requested.OBJECT_NAME = ?
          AND blocking.OBJECT_SCHEMA = DATABASE() AND blocking.OBJECT_NAME = ?
          ${filters.join(" ")}`,
-      params,
-    )) as [{ waiting: number }[], unknown];
-    return Number(rows[0]?.waiting) > 0;
-  }, { attempts: 200, intervalMs: 10 });
+        params,
+      )) as [{ waiting: number }[], unknown];
+      return Number(rows[0]?.waiting) > 0;
+    },
+    { attempts: 200, intervalMs: 10 },
+  );
 };
 
 type QueryRecorder = { statements: string[]; roundTrips: number; inFlight: number };
@@ -276,13 +312,21 @@ const instrumentQueries = (connection: {
       const active = recorder;
       if (!active) return original(...args);
       const [first, values] = args;
-      const options = typeof first === "string" ? undefined : first as { sql?: string; values?: unknown };
+      const options =
+        typeof first === "string"
+          ? undefined
+          : (first as { sql?: string; values?: unknown });
       const statement = typeof first === "string" ? first : String(options?.sql);
       // mysql2 prefers execute's embedded values, but query's separate argument wins.
-      const bindValues = method === "execute"
-        ? options?.values || values
-        : values === undefined ? options?.values : values;
-      active.statements.push(mysql.format(statement, bindValues as Parameters<typeof mysql.format>[1]));
+      const bindValues =
+        method === "execute"
+          ? options?.values || values
+          : values === undefined
+            ? options?.values
+            : values;
+      active.statements.push(
+        mysql.format(statement, bindValues as Parameters<typeof mysql.format>[1]),
+      );
       if (active.inFlight === 0) active.roundTrips += 1;
       active.inFlight += 1;
       try {
@@ -345,17 +389,29 @@ export const callerFor = async <Context, Caller>(
   router: { createCaller: (context: Context) => Caller },
   userId: string,
 ): Promise<Caller> =>
-  withAfterTasks(router.createCaller({ drizzle: await getTestDatabase(), userId } as Context));
+  withAfterTasks(
+    router.createCaller({ drizzle: await getTestDatabase(), userId } as Context),
+  );
 
 export const callerForDatabase = <Context, Caller>(
   router: { createCaller: (context: Context) => Caller },
   userId: string,
   database: DrizzleClient,
-): Caller => withAfterTasks(router.createCaller({ drizzle: withEmptyIsolationHistory(database), userId } as Context));
+): Caller =>
+  withAfterTasks(
+    router.createCaller({
+      drizzle: withEmptyIsolationHistory(database),
+      userId,
+    } as Context),
+  );
 
 /** Partial test clients default to no isolated run; supplied history stubs and real clients stay intact. */
-export const withEmptyIsolationHistory = <Client extends object>(database: Client): Client => {
-  const partial = database as Client & { query?: { questHistory?: { findFirst?: unknown } } };
+export const withEmptyIsolationHistory = <Client extends object>(
+  database: Client,
+): Client => {
+  const partial = database as Client & {
+    query?: { questHistory?: { findFirst?: unknown } };
+  };
   if (typeof partial.query?.questHistory?.findFirst === "function") return database;
   return {
     ...database,

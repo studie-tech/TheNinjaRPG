@@ -215,19 +215,24 @@ describe("checkEquipConstraints", () => {
     const current: EquippedAssignment[] = [
       { slot: "ITEM_1", info: info({ itemId: "i1", maxEquips: 1 }) },
     ];
-    expect(checkEquipConstraints(info({ itemId: "i1", maxEquips: 1 }), current)).toMatch(
-      /No more than 1/,
-    );
+    expect(
+      checkEquipConstraints(info({ itemId: "i1", maxEquips: 1 }), current),
+    ).toMatch(/No more than 1/);
   });
   it("allows a second instance up to maxEquips", () => {
     const current: EquippedAssignment[] = [
       { slot: "ITEM_1", info: info({ itemId: "i1", maxEquips: 2 }) },
     ];
-    expect(checkEquipConstraints(info({ itemId: "i1", maxEquips: 2 }), current)).toBeNull();
+    expect(
+      checkEquipConstraints(info({ itemId: "i1", maxEquips: 2 }), current),
+    ).toBeNull();
   });
   it("delegates category limits to canEquipAdditional", () => {
     const current: EquippedAssignment[] = [
-      { slot: "ITEM_1", info: info({ itemId: "acc1", itemType: "ACCESSORY", slot: "ITEM" }) },
+      {
+        slot: "ITEM_1",
+        info: info({ itemId: "acc1", itemType: "ACCESSORY", slot: "ITEM" }),
+      },
     ];
     expect(
       checkEquipConstraints(
@@ -319,7 +324,10 @@ describe("computeLoadoutAssignments", () => {
       ui({ id: "armor-row", itemId: "armor", itemType: "ARMOR", slotType: "HEAD" }),
     ];
     const out = computeLoadoutAssignments(
-      [{ itemId: "chair", slot: "HEAD" }, { itemId: "armor", slot: "HEAD" }],
+      [
+        { itemId: "chair", slot: "HEAD" },
+        { itemId: "armor", slot: "HEAD" },
+      ],
       items,
       USER,
       NOW,
@@ -751,8 +759,20 @@ describe("computeLoadoutAssignments", () => {
 describe("computeAutoEquipAssignments", () => {
   it("does not let costly furniture occupy an equipment slot", () => {
     const items = [
-      ui({ id: "chair-row", itemId: "chair", itemType: "FURNITURE", slotType: "HEAD", cost: 999 }),
-      ui({ id: "armor-row", itemId: "armor", itemType: "ARMOR", slotType: "HEAD", cost: 10 }),
+      ui({
+        id: "chair-row",
+        itemId: "chair",
+        itemType: "FURNITURE",
+        slotType: "HEAD",
+        cost: 999,
+      }),
+      ui({
+        id: "armor-row",
+        itemId: "armor",
+        itemType: "ARMOR",
+        slotType: "HEAD",
+        cost: 10,
+      }),
     ];
     const out = computeAutoEquipAssignments(items, USER, NOW);
     expect(out.assignments).toEqual([{ userItemId: "armor-row", slot: "HEAD" }]);
@@ -828,7 +848,13 @@ describe("computeAutoEquipAssignments", () => {
         cost: 999,
         requirements: { requiredTaijutsuMastery: 50_000 },
       }),
-      ui({ id: "usable", itemId: "usable", slotType: "CHEST", itemType: "ARMOR", cost: 1 }),
+      ui({
+        id: "usable",
+        itemId: "usable",
+        slotType: "CHEST",
+        itemType: "ARMOR",
+        cost: 1,
+      }),
     ];
     const out = computeAutoEquipAssignments(items, USER, NOW);
     expect(out.assignments).toEqual([{ userItemId: "usable", slot: "CHEST" }]);
@@ -911,9 +937,7 @@ describe("computeAutoEquipAssignments", () => {
   });
 
   it("reports no unequipped items when everything is already worn", () => {
-    const items = [
-      ui({ id: "r1", itemId: "i1", slotType: "HEAD", equipped: "HEAD" }),
-    ];
+    const items = [ui({ id: "r1", itemId: "i1", slotType: "HEAD", equipped: "HEAD" })];
     const out = computeAutoEquipAssignments(items, USER, NOW);
     expect(out.hasUnequipped).toBe(false);
     expect(out.assignments).toEqual([]);
@@ -962,7 +986,11 @@ describe("FURNITURE item type", () => {
     expect(getInventoryBucket(furniture)).toBe("normal");
     expect(getHomeStorageBucket(furniture)).toBe("furniture");
     expect(showsItemLevelBadge(furniture)).toBe(false);
-    expect(userItemActionBadges([{ id: "chair-row", quantity: 2, level: 20, item: furniture }])).toEqual({
+    expect(
+      userItemActionBadges([
+        { id: "chair-row", quantity: 2, level: 20, item: furniture },
+      ]),
+    ).toEqual({
       counts: [{ id: "chair-row", quantity: 2 }],
       levels: [],
     });
@@ -983,13 +1011,22 @@ describe("COOKING item type", () => {
 });
 
 describe("backpack storage usage", () => {
-  it.each(ItemSlots.filter((slot) => slot !== "NONE"))("excludes stacks equipped in %s", (equipped) => {
-    expect(countsTowardInventoryStorage({ storedAtHome: false, equipped })).toBe(false);
-  });
+  it.each(ItemSlots.filter((slot) => slot !== "NONE"))(
+    "excludes stacks equipped in %s",
+    (equipped) => {
+      expect(countsTowardInventoryStorage({ storedAtHome: false, equipped })).toBe(
+        false,
+      );
+    },
+  );
 
   it("counts unequipped carried stacks and excludes home storage", () => {
-    expect(countsTowardInventoryStorage({ storedAtHome: false, equipped: "NONE" })).toBe(true);
-    expect(countsTowardInventoryStorage({ storedAtHome: true, equipped: "NONE" })).toBe(false);
+    expect(
+      countsTowardInventoryStorage({ storedAtHome: false, equipped: "NONE" }),
+    ).toBe(true);
+    expect(countsTowardInventoryStorage({ storedAtHome: true, equipped: "NONE" })).toBe(
+      false,
+    );
   });
 });
 
@@ -1056,9 +1093,7 @@ describe("cooking capacity", () => {
   });
 
   it("reports cooking-specific full messages and capacity", () => {
-    expect(getInventoryBucketFullMessage("cooking")).toBe(
-      "Cooking inventory is full",
-    );
+    expect(getInventoryBucketFullMessage("cooking")).toBe("Cooking inventory is full");
     expect(getInventoryBucketCapacity("cooking", user({ federalStatus: "GOLD" }))).toBe(
       COOKING_BASE_SLOTS + FED_COOKING_SLOTS.GOLD,
     );
@@ -1080,9 +1115,13 @@ describe("cooking capacity", () => {
   });
 });
 
-
 describe("getItemStackMergeBucketKey", () => {
-  const row = { storedAtHome: false, equipped: "NONE" as const, activeVariantId: null, level: 1 };
+  const row = {
+    storedAtHome: false,
+    equipped: "NONE" as const,
+    activeVariantId: null,
+    level: 1,
+  };
 
   it("groups consumables across ownership levels", () => {
     const item = { itemType: "CONSUMABLE" as const };
@@ -1120,7 +1159,10 @@ describe("userItemDisplay", () => {
     experience: 40,
     imbuements: [
       { craftingFinishedAt: null, item: { name: "Fire Seal" } },
-      { craftingFinishedAt: new Date(NOW.getTime() + 1000), item: { name: "Water Seal" } },
+      {
+        craftingFinishedAt: new Date(NOW.getTime() + 1000),
+        item: { name: "Water Seal" },
+      },
     ],
   };
 
@@ -1135,13 +1177,18 @@ describe("userItemDisplay", () => {
   });
 
   it("shows a variant in place of the base item", () => {
-    expect(userItemDisplay(ui, { name: "Gilded Blade" }, NOW).name).toBe("Gilded Blade");
+    expect(userItemDisplay(ui, { name: "Gilded Blade" }, NOW).name).toBe(
+      "Gilded Blade",
+    );
   });
 });
 
 describe("finishedImbuements", () => {
   it("keeps the rows finished at or before now", () => {
-    const row = (id: string, craftingFinishedAt: Date | null) => ({ id, craftingFinishedAt });
+    const row = (id: string, craftingFinishedAt: Date | null) => ({
+      id,
+      craftingFinishedAt,
+    });
     const ui = {
       imbuements: [
         row("done", new Date(NOW.getTime() - 1)),
@@ -1150,11 +1197,17 @@ describe("finishedImbuements", () => {
         row("active", new Date(NOW.getTime() + 1)),
       ],
     };
-    expect(finishedImbuements(ui, NOW).map((i) => i.id)).toEqual(["done", "boundary", "legacy"]);
+    expect(finishedImbuements(ui, NOW).map((i) => i.id)).toEqual([
+      "done",
+      "boundary",
+      "legacy",
+    ]);
   });
 
   it("counts an item as imbuing only while an imbuement finishes after now", () => {
-    const at = (craftingFinishedAt: Date | null) => ({ imbuements: [{ craftingFinishedAt }] });
+    const at = (craftingFinishedAt: Date | null) => ({
+      imbuements: [{ craftingFinishedAt }],
+    });
     expect(isImbuing(at(new Date(NOW.getTime() + 1)), NOW)).toBe(true);
     expect(isImbuing(at(NOW), NOW)).toBe(false);
     expect(isImbuing(at(null), NOW)).toBe(false);
@@ -1167,8 +1220,14 @@ describe("finishedImbuementItems", () => {
     const ui = {
       imbuements: [
         { craftingFinishedAt: null, item: { name: "Fire Seal" } },
-        { craftingFinishedAt: new Date(NOW.getTime() - 1000), item: { name: "Wind Seal" } },
-        { craftingFinishedAt: new Date(NOW.getTime() + 1000), item: { name: "Water Seal" } },
+        {
+          craftingFinishedAt: new Date(NOW.getTime() - 1000),
+          item: { name: "Wind Seal" },
+        },
+        {
+          craftingFinishedAt: new Date(NOW.getTime() + 1000),
+          item: { name: "Water Seal" },
+        },
       ],
     };
     expect(finishedImbuementItems(ui, NOW).map((i) => i.name)).toEqual([
@@ -1202,7 +1261,9 @@ describe("item economy values", () => {
 
   it("sells at the 80% base discount, capped at 95%", () => {
     expect(calcItemSellingPrice(user, owned({}), undefined)).toBe(200);
-    expect(calcItemSellingPrice(user, owned({ effects: [{ type: "heal" }] }), undefined)).toBe(50);
+    expect(
+      calcItemSellingPrice(user, owned({ effects: [{ type: "heal" }] }), undefined),
+    ).toBe(50);
   });
 
   it.each([

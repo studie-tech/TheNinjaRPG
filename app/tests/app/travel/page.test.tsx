@@ -19,10 +19,16 @@ import * as TravelPosition from "@/layout/TravelPositionLabel";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { useGameMenu } from "@/hooks/useGameMenu";
 import type { BaseServerResponse } from "@/validators/base";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 const sensoryCapture = vi.spyOn(client, "api" as never);
-const sensoryEndpoint = { useMutation: (_options: unknown) => ({ mutate: vi.fn(), isPending: false }) };
+const sensoryEndpoint = {
+  useMutation: (_options: unknown) => ({ mutate: vi.fn(), isPending: false }),
+};
 Object.assign(sensoryCapture, {
   stealth: {
     useSensory: sensoryEndpoint,
@@ -238,56 +244,96 @@ it("keeps Quick Travel disabled for the current sector", async () => {
 });
 
 for (const procedure of ["activateStealth", "useSensory"] as const)
-  it.each([true, false])(`projects confirmed recovery for ${procedure} without action data (success=%p)`, async (success) => {
-    const cache = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-    const key = ["profile", "actor"];
-    actor.status = "ASLEEP";
-    const initial = { userData: { ...actor, curHealth: 5, curChakra: 6, curStamina: 7 } };
-    cache.setQueryData(key, initial);
-    const read = vi.fn(async () => initial);
-    const observer = new QueryObserver(cache, { queryKey: key, queryFn: read, staleTime: Infinity });
-    const unsubscribe = observer.subscribe(() => {});
-    vi.spyOn(UserContext, "useRequiredUserDataSelector").mockReturnValue({
-      data: actor,
-      timeDiff: 0,
-      prepareUserUpdate: () => prepareUserUpdate(cache, key),
-      updateUser: (patch: UserUpdate | undefined, options?: UserUpdateOptions) => updateUserCache(cache, key, patch, options),
-    } as never);
-    let callbacks: {
-      onMutate: () => number | undefined;
-      onSuccess: (result: BaseServerResponse, input: undefined, revision: number | undefined) => void | Promise<void>;
-    };
-    Object.assign(client.api, {
-      stealth: new Proxy({}, { get: (_target, name) => ({
-        useMutation: (options: typeof callbacks) => {
-          if (name === procedure) callbacks = options;
+  it.each([true, false])(
+    `projects confirmed recovery for ${procedure} without action data (success=%p)`,
+    async (success) => {
+      const cache = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+      });
+      const key = ["profile", "actor"];
+      actor.status = "ASLEEP";
+      const initial = {
+        userData: { ...actor, curHealth: 5, curChakra: 6, curStamina: 7 },
+      };
+      cache.setQueryData(key, initial);
+      const read = vi.fn(async () => initial);
+      const observer = new QueryObserver(cache, {
+        queryKey: key,
+        queryFn: read,
+        staleTime: Infinity,
+      });
+      const unsubscribe = observer.subscribe(() => {});
+      vi.spyOn(UserContext, "useRequiredUserDataSelector").mockReturnValue({
+        data: actor,
+        timeDiff: 0,
+        prepareUserUpdate: () => prepareUserUpdate(cache, key),
+        updateUser: (patch: UserUpdate | undefined, options?: UserUpdateOptions) =>
+          updateUserCache(cache, key, patch, options),
+      } as never);
+      let callbacks: {
+        onMutate: () => number | undefined;
+        onSuccess: (
+          result: BaseServerResponse,
+          input: undefined,
+          revision: number | undefined,
+        ) => void | Promise<void>;
+      };
+      Object.assign(client.api, {
+        stealth: new Proxy(
+          {},
+          {
+            get: (_target, name) => ({
+              useMutation: (options: typeof callbacks) => {
+                if (name === procedure) callbacks = options;
+                return mutation;
+              },
+            }),
+          },
+        ),
+      });
+      if (procedure === "useSensory")
+        vi.spyOn(sensoryEndpoint, "useMutation").mockImplementation((options) => {
+          callbacks = options as typeof callbacks;
           return mutation;
-        },
-      }) }),
-    });
-    if (procedure === "useSensory")
-      vi.spyOn(sensoryEndpoint, "useMutation").mockImplementation((options) => {
-        callbacks = options as typeof callbacks;
-        return mutation;
-      });
-    try {
-      render(<TravelPage />);
-      await act(async () => {
-        await callbacks.onSuccess({ success, message: "Recovery confirmed", userRecovery: {
-          userId: String(actor.userId), activity: { status: "AWAKE" },
-          userPatch: { status: "AWAKE", curHealth: 100, curChakra: 100, curStamina: 100 },
-        } }, undefined, callbacks.onMutate());
-      });
-      expect(cache.getQueryData(key)).toMatchObject({ userData: {
-        status: "AWAKE", curHealth: 5, curChakra: 6, curStamina: 7,
-      } });
-      expect(read).not.toHaveBeenCalled();
-      expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
-    } finally {
-      unsubscribe();
-      cache.clear();
-    }
-  });
+        });
+      try {
+        render(<TravelPage />);
+        await act(async () => {
+          await callbacks.onSuccess(
+            {
+              success,
+              message: "Recovery confirmed",
+              userRecovery: {
+                userId: String(actor.userId),
+                activity: { status: "AWAKE" },
+                userPatch: {
+                  status: "AWAKE",
+                  curHealth: 100,
+                  curChakra: 100,
+                  curStamina: 100,
+                },
+              },
+            },
+            undefined,
+            callbacks.onMutate(),
+          );
+        });
+        expect(cache.getQueryData(key)).toMatchObject({
+          userData: {
+            status: "AWAKE",
+            curHealth: 5,
+            curChakra: 6,
+            curStamina: 7,
+          },
+        });
+        expect(read).not.toHaveBeenCalled();
+        expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
+      } finally {
+        unsubscribe();
+        cache.clear();
+      }
+    },
+  );
 
 for (const outcome of ["transport error", "success", "rejected"] as const)
   it.each([
@@ -296,119 +342,157 @@ for (const outcome of ["transport error", "success", "rejected"] as const)
     "missing snapshot",
     "missing revision",
     "superseded snapshot",
-  ] as const)(`reconciles global journey ${outcome} from %s without a profile read`, async (initialStatus) => {
-    const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const key = ["profile", "actor"];
-    actor.status = initialStatus === "HOSPITALIZED" ? "HOSPITALIZED" : "ASLEEP";
-    actor.travelFinishAt = null;
-    const initial = {
-      userData: { ...actor, curHealth: 5, curChakra: 6, curStamina: 7 },
-      notifications: initialStatus === "HOSPITALIZED"
-        ? [{ color: "red", href: "/hospital", name: "In hospital" }]
-        : [],
-    };
-    const canonical = {
-      ...initial,
-      notifications: [],
-      userData: {
-        ...initial.userData,
-        status: "TRAVEL" as const,
-        travelFinishAt: new Date(Date.now() + 10000),
-        curHealth: 100,
-        curChakra: 100,
-        curStamina: 100,
-      },
-    };
-    cache.setQueryData(key, initial);
-    const read = vi.fn(async () => canonical);
-    const observer = new QueryObserver(cache, {
-      queryKey: key,
-      staleTime: Infinity,
-      queryFn: read,
-    });
-    const unsubscribe = observer.subscribe(() => {});
-    const updateUser = (patch: UserUpdate | undefined, options?: UserUpdateOptions) =>
-      updateUserCache(cache, key, patch, options);
-    vi.spyOn(UserContext, "useRequiredUserDataSelector").mockReturnValue({
-      data: actor,
-      timeDiff: 0,
-      prepareUserUpdate: () => prepareUserUpdate(cache, key),
-      updateUser,
-    } as never);
-    type Previous = {
-      status: typeof actor.status;
-      travelFinishAt: Date | null;
-      revision: number | undefined;
-    } | undefined;
-    const recovery = {
-      userId: String(actor.userId),
-      userPatch: {
-        status: "AWAKE" as const,
-        curHealth: 100,
-        curChakra: 100,
-        curStamina: 100,
-      },
-    };
-    let callbacks: {
-      onMutate: (input: { sector: number }) => Promise<Previous>;
-      onError: (error: Error, input: { sector: number }, previous: Previous) => Promise<void>;
-      onSuccess: (
-        result: {
-          success: boolean;
-          message: string;
-          actionNotice?: string;
-          userRecovery?: typeof recovery;
-          data?: typeof canonical.userData;
+  ] as const)(
+    `reconciles global journey ${outcome} from %s without a profile read`,
+    async (initialStatus) => {
+      const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const key = ["profile", "actor"];
+      actor.status = initialStatus === "HOSPITALIZED" ? "HOSPITALIZED" : "ASLEEP";
+      actor.travelFinishAt = null;
+      const initial = {
+        userData: { ...actor, curHealth: 5, curChakra: 6, curStamina: 7 },
+        notifications:
+          initialStatus === "HOSPITALIZED"
+            ? [{ color: "red", href: "/hospital", name: "In hospital" }]
+            : [],
+      };
+      const canonical = {
+        ...initial,
+        notifications: [],
+        userData: {
+          ...initial.userData,
+          status: "TRAVEL" as const,
+          travelFinishAt: new Date(Date.now() + 10000),
+          curHealth: 100,
+          curChakra: 100,
+          curStamina: 100,
         },
-        input: { sector: number },
-        previous: Previous,
-      ) => Promise<void>;
-    };
-    const endpoint = { useQuery: () => query, useMutation: () => mutation };
-    Object.assign(client.api, {
-      useUtils: () => stableUtils,
-      travel: new Proxy({}, {
-        get: (_target, name) => name === "startGlobalMove"
-          ? { useMutation: (options: typeof callbacks) => { callbacks = options; return mutation; } }
-          : endpoint,
-      }),
-    });
-    try {
-      render(<TravelPage />);
-      let preserved: unknown;
-      await act(async () => {
-        const previous = await callbacks.onMutate({ sector: 1539 });
-        expect(cache.getQueryData<typeof initial>(key)?.userData.status).toBe("TRAVEL");
-        const context = initialStatus === "missing snapshot" ? undefined : previous;
-        if (context && initialStatus === "missing revision") context.revision = undefined;
-        if (initialStatus === "superseded snapshot") {
-          cache.setQueryData<typeof initial>(key, (current) => current && {
-            ...current,
-            userData: { ...current.userData, money: 73 },
-          });
-        }
-        preserved = cache.getQueryData(key);
-        if (outcome === "transport error") {
-          await callbacks.onError(new Error("Response lost after commit"), { sector: 1539 }, context);
-        } else {
-          await callbacks.onSuccess(
-            outcome === "success"
-              ? { success: true, message: "Journey started", actionNotice: "Recovered", userRecovery: recovery, data: canonical.userData }
-              : { success: false, message: "Your status changed. Please try again." },
-            { sector: 1539 },
-            context,
-          );
-        }
+      };
+      cache.setQueryData(key, initial);
+      const read = vi.fn(async () => canonical);
+      const observer = new QueryObserver(cache, {
+        queryKey: key,
+        staleTime: Infinity,
+        queryFn: read,
       });
-      expect(read).not.toHaveBeenCalled();
-      if (initialStatus === "ASLEEP" || initialStatus === "HOSPITALIZED") {
-        expect(cache.getQueryData(key)).toMatchObject(outcome === "success" ? canonical : initial);
-      } else {
-        expect(cache.getQueryData(key)).toEqual(preserved);
+      const unsubscribe = observer.subscribe(() => {});
+      const updateUser = (patch: UserUpdate | undefined, options?: UserUpdateOptions) =>
+        updateUserCache(cache, key, patch, options);
+      vi.spyOn(UserContext, "useRequiredUserDataSelector").mockReturnValue({
+        data: actor,
+        timeDiff: 0,
+        prepareUserUpdate: () => prepareUserUpdate(cache, key),
+        updateUser,
+      } as never);
+      type Previous =
+        | {
+            status: typeof actor.status;
+            travelFinishAt: Date | null;
+            revision: number | undefined;
+          }
+        | undefined;
+      const recovery = {
+        userId: String(actor.userId),
+        userPatch: {
+          status: "AWAKE" as const,
+          curHealth: 100,
+          curChakra: 100,
+          curStamina: 100,
+        },
+      };
+      let callbacks: {
+        onMutate: (input: { sector: number }) => Promise<Previous>;
+        onError: (
+          error: Error,
+          input: { sector: number },
+          previous: Previous,
+        ) => Promise<void>;
+        onSuccess: (
+          result: {
+            success: boolean;
+            message: string;
+            actionNotice?: string;
+            userRecovery?: typeof recovery;
+            data?: typeof canonical.userData;
+          },
+          input: { sector: number },
+          previous: Previous,
+        ) => Promise<void>;
+      };
+      const endpoint = { useQuery: () => query, useMutation: () => mutation };
+      Object.assign(client.api, {
+        useUtils: () => stableUtils,
+        travel: new Proxy(
+          {},
+          {
+            get: (_target, name) =>
+              name === "startGlobalMove"
+                ? {
+                    useMutation: (options: typeof callbacks) => {
+                      callbacks = options;
+                      return mutation;
+                    },
+                  }
+                : endpoint,
+          },
+        ),
+      });
+      try {
+        render(<TravelPage />);
+        let preserved: unknown;
+        await act(async () => {
+          const previous = await callbacks.onMutate({ sector: 1539 });
+          expect(cache.getQueryData<typeof initial>(key)?.userData.status).toBe(
+            "TRAVEL",
+          );
+          const context = initialStatus === "missing snapshot" ? undefined : previous;
+          if (context && initialStatus === "missing revision")
+            context.revision = undefined;
+          if (initialStatus === "superseded snapshot") {
+            cache.setQueryData<typeof initial>(
+              key,
+              (current) =>
+                current && {
+                  ...current,
+                  userData: { ...current.userData, money: 73 },
+                },
+            );
+          }
+          preserved = cache.getQueryData(key);
+          if (outcome === "transport error") {
+            await callbacks.onError(
+              new Error("Response lost after commit"),
+              { sector: 1539 },
+              context,
+            );
+          } else {
+            await callbacks.onSuccess(
+              outcome === "success"
+                ? {
+                    success: true,
+                    message: "Journey started",
+                    actionNotice: "Recovered",
+                    userRecovery: recovery,
+                    data: canonical.userData,
+                  }
+                : { success: false, message: "Your status changed. Please try again." },
+              { sector: 1539 },
+              context,
+            );
+          }
+        });
+        expect(read).not.toHaveBeenCalled();
+        if (initialStatus === "ASLEEP" || initialStatus === "HOSPITALIZED") {
+          expect(cache.getQueryData(key)).toMatchObject(
+            outcome === "success" ? canonical : initial,
+          );
+        } else {
+          expect(cache.getQueryData(key)).toEqual(preserved);
+        }
+        expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
+      } finally {
+        unsubscribe();
+        cache.clear();
       }
-      expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
-    } finally {
-      unsubscribe();
-      cache.clear();
-    }
-  });
+    },
+  );

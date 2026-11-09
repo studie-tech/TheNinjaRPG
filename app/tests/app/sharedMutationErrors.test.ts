@@ -33,8 +33,11 @@ const mutationOptions = (file: string, path: string) => {
   return lines.slice(start, end + 1).join("\n");
 };
 
-it.each(mutations)("$path leaves thrown errors to the shared handler", ({ file, path }) => {
-  const options = mutationOptions(file, path);
-  expect(options).toContain("onSuccess");
-  expect(options).not.toContain("onError");
-});
+it.each(mutations)(
+  "$path leaves thrown errors to the shared handler",
+  ({ file, path }) => {
+    const options = mutationOptions(file, path);
+    expect(options).toContain("onSuccess");
+    expect(options).not.toContain("onError");
+  },
+);

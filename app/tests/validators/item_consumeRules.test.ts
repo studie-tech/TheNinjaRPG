@@ -2,7 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { getTagSchema, ItemValidator } from "@/validators/combat";
 import { validItemInput } from "../setup/items";
 
-const tag = (type: Parameters<typeof getTagSchema>[0]) => getTagSchema(type).parse({ type });
+const tag = (type: Parameters<typeof getTagSchema>[0]) =>
+  getTagSchema(type).parse({ type });
 
 const consumable = {
   itemType: "CONSUMABLE",
@@ -18,7 +19,12 @@ const rule = (input: object) => {
 };
 
 /** Shared item shape that fails each of the three consume-on-self conditions. */
-const misconfigured = { ...consumable, itemType: "WEAPON", target: "CHARACTER", method: "ALL" };
+const misconfigured = {
+  ...consumable,
+  itemType: "WEAPON",
+  target: "CHARACTER",
+  method: "ALL",
+};
 
 describe("self-consumable item rules", () => {
   it.each([
@@ -39,15 +45,23 @@ describe("self-consumable item rules", () => {
   });
 
   it("reports each broken condition on its own, in order", () => {
-    const effects = [tag("noncombatconsumereward"), tag("rollbloodline"), tag("unlockitemvariant")];
+    const effects = [
+      tag("noncombatconsumereward"),
+      tag("rollbloodline"),
+      tag("unlockitemvariant"),
+    ];
     const messages = rule({ ...consumable, target: "CHARACTER", effects });
     expect(messages.filter((message) => message.includes("must target self"))).toEqual([
       "Non-combat consume reward must target self",
       "Items with bloodline/sage roll must target self",
       "Items with unlockitemvariant must target self",
     ]);
-    expect(messages.some((message) => message.endsWith("must be consumable."))).toBe(false);
-    expect(messages.some((message) => message.endsWith("must have single method"))).toBe(false);
+    expect(messages.some((message) => message.endsWith("must be consumable."))).toBe(
+      false,
+    );
+    expect(
+      messages.some((message) => message.endsWith("must have single method")),
+    ).toBe(false);
   });
 
   it("keeps the extra unlockitemvariant requirements", () => {

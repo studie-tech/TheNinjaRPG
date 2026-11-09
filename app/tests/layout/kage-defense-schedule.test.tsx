@@ -33,7 +33,9 @@ beforeEach(() => {
       vacancy: null,
     },
   };
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
+    <div>{children}</div>
+  ));
   const mutation = { useMutation: () => ({ mutate: vi.fn(), isPending: false }) };
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({ kage: { getDefenses: {} }, village: { get: {} } }),
@@ -85,20 +87,33 @@ describe("kage defense schedule editor", () => {
   });
 
   it("keeps the editor from Kage-less viewers", () => {
-    const view = render(<KageDefense user={{ userId: "visitor", villageId: "village" } as never} />);
+    const view = render(
+      <KageDefense user={{ userId: "visitor", villageId: "village" } as never} />,
+    );
     expect(view.queryByRole("button", { name: "Publish schedule" })).toBeNull();
   });
 
-  it.each([false, true])("explains who starts the match when the Kage is AI: %s", (isAi) => {
-    hall.kage = { isAi };
-    const view = render(<KageDefense user={kage} />);
-    const rules = view.getByText(new RegExp(`Challengers may fight ${KAGE_CHALLENGER_DAILY_LIMIT} time`)).parentElement!;
-    expect(rules.className).toBe("space-y-2 border-t pt-3 text-muted-foreground text-sm");
-    expect(rules.children).toHaveLength(4);
-    expect(rules.children[1]!.textContent).toContain(
-      `${isAi ? "The challenger" : "The Kage"} starts at the appointed time with a ${KAGE_DEFENSE_GRACE_MINUTES}-minute grace period.`,
-    );
-    expect(rules.children[2]!.textContent).toContain(`after ${KAGE_DEFENSE_INSTANT_REQUEST_MINUTES} minutes`);
-    expect(rules.children[3]!.textContent).toContain(`${KAGE_PRESTIGE_COST.toLocaleString()} prestige`);
-  });
+  it.each([false, true])(
+    "explains who starts the match when the Kage is AI: %s",
+    (isAi) => {
+      hall.kage = { isAi };
+      const view = render(<KageDefense user={kage} />);
+      const rules = view.getByText(
+        new RegExp(`Challengers may fight ${KAGE_CHALLENGER_DAILY_LIMIT} time`),
+      ).parentElement!;
+      expect(rules.className).toBe(
+        "space-y-2 border-t pt-3 text-muted-foreground text-sm",
+      );
+      expect(rules.children).toHaveLength(4);
+      expect(rules.children[1]!.textContent).toContain(
+        `${isAi ? "The challenger" : "The Kage"} starts at the appointed time with a ${KAGE_DEFENSE_GRACE_MINUTES}-minute grace period.`,
+      );
+      expect(rules.children[2]!.textContent).toContain(
+        `after ${KAGE_DEFENSE_INSTANT_REQUEST_MINUTES} minutes`,
+      );
+      expect(rules.children[3]!.textContent).toContain(
+        `${KAGE_PRESTIGE_COST.toLocaleString()} prestige`,
+      );
+    },
+  );
 });

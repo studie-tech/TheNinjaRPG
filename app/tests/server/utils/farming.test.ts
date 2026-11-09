@@ -42,25 +42,23 @@ describe("farm collection catalog", () => {
       [{ itemId: "crop-carrot", firstHarvestedAt: harvestedAt }],
     );
 
-    expect(result.items.map((entry) => entry.name)).toEqual([
-      "Apple",
-      "Carrot",
-    ]);
+    expect(result.items.map((entry) => entry.name)).toEqual(["Apple", "Carrot"]);
     expect(result).toMatchObject({ collected: 1, total: 2 });
-    expect(result.items[1]).toEqual(expect.objectContaining({
-      itemId: "crop-carrot",
-      harvested: true,
-      firstHarvestedAt: harvestedAt,
-    }));
+    expect(result.items[1]).toEqual(
+      expect.objectContaining({
+        itemId: "crop-carrot",
+        harvested: true,
+        firstHarvestedAt: harvestedAt,
+      }),
+    );
   });
 });
 
 describe("recordFirstFarmHarvests", () => {
   it("deduplicates bulk crops and never updates the original harvest timestamp", async () => {
-    const onDuplicateKeyUpdate = vi
-      .fn((_update: { set: Record<string, unknown> }) =>
-        Promise.resolve({ rowsAffected: 0 }),
-      );
+    const onDuplicateKeyUpdate = vi.fn((_update: { set: Record<string, unknown> }) =>
+      Promise.resolve({ rowsAffected: 0 }),
+    );
     const values = vi.fn(
       (
         _rows: { itemId: string; firstHarvestedAt: Date }[],

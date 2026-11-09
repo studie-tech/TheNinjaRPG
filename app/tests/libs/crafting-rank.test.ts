@@ -103,9 +103,7 @@ describe("getImbueBlockedMessage", () => {
   it("names the Apprentice rank and its experience for Novices", () => {
     const message = getImbueBlockedMessage("NOVICE", 2, 2, 2);
     expect(message).toContain("Apprentice rank");
-    expect(message).toContain(
-      CRAFTING_REQUIRED_EXP.APPRENTICE.toLocaleString("en-US"),
-    );
+    expect(message).toContain(CRAFTING_REQUIRED_EXP.APPRENTICE.toLocaleString("en-US"));
   });
 
   it("points at the Can be Imbued property when no owned item has it", () => {

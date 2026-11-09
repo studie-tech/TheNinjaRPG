@@ -5,7 +5,10 @@ import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import { createTowerDefenseEffects } from "@/libs/rendering/scenes/towerDefenseEffects";
 import { prepareTowerDefenseTerrain } from "@/libs/rendering/scenes/towerDefenseTerrain";
 import { calculateHexDistance } from "@/libs/towerDefense/game";
-import type { TowerDefenseAbility, TowerDefenseProjectile } from "@/validators/towerDefense";
+import type {
+  TowerDefenseAbility,
+  TowerDefenseProjectile,
+} from "@/validators/towerDefense";
 
 const disposers: (() => void)[] = [];
 beforeEach(() => {
@@ -53,10 +56,12 @@ const reference = (
   ability: Pick<TowerDefenseAbility, "critChance" | "damagePerTile"> | undefined,
 ) => {
   const distanceBonus = Math.floor(
-    calculateHexDistance(projectile.origin, projectile.target) * (ability?.damagePerTile ?? 0),
+    calculateHexDistance(projectile.origin, projectile.target) *
+      (ability?.damagePerTile ?? 0),
   );
   const critical =
-    projectile.critRoll !== undefined && projectile.critRoll < (ability?.critChance ?? 0);
+    projectile.critRoll !== undefined &&
+    projectile.critRoll < (ability?.critChance ?? 0);
   const value = (projectile.damage + distanceBonus) * (critical ? 2 : 1);
   return { text: `${Math.round(value)}${critical ? "!" : ""}`.slice(0, 12), critical };
 };
@@ -86,7 +91,12 @@ describe("tower defense damage numbers", () => {
   const cases = [0, 1, 7, 99, 12345].flatMap((damage) =>
     targets.flatMap((target) =>
       abilities.flatMap((ability) =>
-        [undefined, 0, 0.29, 0.3, 0.5, 0.99].map((critRoll) => ({ damage, target, ability, critRoll })),
+        [undefined, 0, 0.29, 0.3, 0.5, 0.99].map((critRoll) => ({
+          damage,
+          target,
+          ability,
+          critRoll,
+        })),
       ),
     ),
   );
@@ -106,20 +116,42 @@ describe("tower defense damage numbers", () => {
         damage,
         ...(critRoll === undefined ? {} : { critRoll }),
       };
-      const fullAbility = ability && ({ id: "a", name: "A", damage, range: 3, cooldownMs: 0, ...ability } as TowerDefenseAbility);
-      effects.update([projectile], [], grid, fullAbility, frame, undefined, vi.fn(), vi.fn());
+      const fullAbility =
+        ability &&
+        ({
+          id: "a",
+          name: "A",
+          damage,
+          range: 3,
+          cooldownMs: 0,
+          ...ability,
+        } as TowerDefenseAbility);
+      effects.update(
+        [projectile],
+        [],
+        grid,
+        fullAbility,
+        frame,
+        undefined,
+        vi.fn(),
+        vi.fn(),
+      );
       effects.update([], [], grid, fullAbility, frame, undefined, vi.fn(), vi.fn());
       const expected = reference(projectile, fullAbility);
       const actual = shown(effects);
       expect(actual.text).toBe(expected.text);
       expect(actual.tints).toEqual([expected.critical ? 0xff4444 : 0xffffff]);
-      expect(actual.scale).toBeCloseTo(((TD_HEX_SIZE * 0.3) / 64) * (expected.critical ? 1 : 29 / 38));
+      expect(actual.scale).toBeCloseTo(
+        ((TD_HEX_SIZE * 0.3) / 64) * (expected.critical ? 1 : 29 / 38),
+      );
       expect(actual.flipped).toBe(true);
       if (expected.critical) landed++;
       // Free the pooled number for the next projectile.
       for (const root of effects.container.children[2]!.children) root.visible = false;
     }
-    expect(effects.container.children[2]!.children).toHaveLength(TD_DAMAGE_NUMBER_POOL_SIZE);
+    expect(effects.container.children[2]!.children).toHaveLength(
+      TD_DAMAGE_NUMBER_POOL_SIZE,
+    );
     // The grid includes both critical and ordinary hits.
     expect(landed).toBeGreaterThan(0);
     expect(landed).toBeLessThan(cases.length);

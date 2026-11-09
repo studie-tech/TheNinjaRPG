@@ -27,12 +27,23 @@ describe("AutoAttackModal", () => {
       expect(localStorage.getItem("autoAttackMinLevel")).toBe("3");
       expect(localStorage.getItem("autoAttackDelay")).toBe("2");
     });
-    const { getByRole } = render(<AutoAttackModal isOpen setIsOpen={vi.fn()} onEnable={enabled} />);
-    fireEvent.input(getByRole("spinbutton", { name: "Minimum Level to Attack" }), { target: { value: "" } });
+    const { getByRole } = render(
+      <AutoAttackModal isOpen setIsOpen={vi.fn()} onEnable={enabled} />,
+    );
+    fireEvent.input(getByRole("spinbutton", { name: "Minimum Level to Attack" }), {
+      target: { value: "" },
+    });
     expect(localStorage.getItem("autoAttackMinLevel")).toBe("1");
-    expect((getByRole("button", { name: "Enable Auto Attack" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.input(getByRole("spinbutton", { name: "Minimum Level to Attack" }), { target: { value: "3" } });
-    fireEvent.input(getByRole("spinbutton", { name: "Attack Delay (seconds)" }), { target: { value: "2" } });
+    expect(
+      (getByRole("button", { name: "Enable Auto Attack" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    fireEvent.input(getByRole("spinbutton", { name: "Minimum Level to Attack" }), {
+      target: { value: "3" },
+    });
+    fireEvent.input(getByRole("spinbutton", { name: "Attack Delay (seconds)" }), {
+      target: { value: "2" },
+    });
     fireEvent.click(getByRole("button", { name: "Enable Auto Attack" }));
     expect(enabled).toHaveBeenCalledTimes(1);
   });

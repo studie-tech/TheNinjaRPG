@@ -94,7 +94,9 @@ for (const history of histories) {
         { cursor: -1 },
         { cursor: 1.5 },
       ]) {
-        await expect(history.page(input)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        await expect(history.page(input)).rejects.toMatchObject({
+          code: "BAD_REQUEST",
+        });
       }
     });
 
@@ -141,11 +143,13 @@ for (const history of histories) {
       await seedHistory([1100, 1050]);
       const second = await history.page({ limit: 2, cursor: first.nextCursor! });
       const third = await history.page({ limit: 2, cursor: second.nextCursor! });
-      expect([...first.data, ...second.data, ...third.data].map((row) => row.id))
-        .toEqual([1000, 900, 800, 700, 600]);
+      expect(
+        [...first.data, ...second.data, ...third.data].map((row) => row.id),
+      ).toEqual([1000, 900, 800, 700, 600]);
       expect(third.nextCursor).toBeUndefined();
-      expect((await history.page({ limit: 2 })).data.map((row) => row.id))
-        .toEqual([1100, 1050]);
+      expect((await history.page({ limit: 2 })).data.map((row) => row.id)).toEqual([
+        1100, 1050,
+      ]);
     });
 
     it("continues past a deleted lookahead row", async () => {

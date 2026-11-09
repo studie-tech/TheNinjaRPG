@@ -11,7 +11,10 @@ let rules: WarRules | undefined;
 let isPending: boolean;
 const save = vi.fn();
 const refetch = vi.fn();
-let onSuccess: (result: { success: boolean; message: string }, values: WarRules) => void;
+let onSuccess: (
+  result: { success: boolean; message: string },
+  values: WarRules,
+) => void;
 
 beforeEach(() => {
   installBrowserGlobals();
@@ -58,7 +61,8 @@ describe("village war settings", () => {
     rules = { ...defaultWarRules, enabled: true };
     view.rerender(<WarRulesForm />);
     expect(
-      view.getByRole("checkbox", { name: "Enable objective village wars" })
+      view
+        .getByRole("checkbox", { name: "Enable objective village wars" })
         .getAttribute("aria-checked"),
     ).toBe("true");
   });
@@ -67,14 +71,20 @@ describe("village war settings", () => {
     rules = { ...defaultWarRules, enabled: true };
     isPending = false;
     const view = render(<WarRulesForm />);
-    const townhall = view.getByRole("spinbutton", { name: "Town hall HP" }) as HTMLInputElement;
+    const townhall = view.getByRole("spinbutton", {
+      name: "Town hall HP",
+    }) as HTMLInputElement;
     fireEvent.input(townhall, { target: { value: "12345" } });
 
     rules = { ...rules, townhallHp: 9000, declarationCost: 600000 };
     view.rerender(<WarRulesForm />);
     expect(townhall.value).toBe("12345");
     expect(
-      (view.getByRole("spinbutton", { name: "Declaration cost (tokens)" }) as HTMLInputElement).value,
+      (
+        view.getByRole("spinbutton", {
+          name: "Declaration cost (tokens)",
+        }) as HTMLInputElement
+      ).value,
     ).toBe("600000");
 
     fireEvent.click(view.getByRole("button", { name: "Save war settings" }));
@@ -84,7 +94,8 @@ describe("village war settings", () => {
     await act(() => onSuccess({ success: true, message: "Saved" }, saved));
     expect(view.getByRole("status").textContent).toBe("Saved");
     expect(
-      (view.getByRole("button", { name: "Save war settings" }) as HTMLButtonElement).disabled,
+      (view.getByRole("button", { name: "Save war settings" }) as HTMLButtonElement)
+        .disabled,
     ).toBe(true);
   });
 
@@ -92,9 +103,13 @@ describe("village war settings", () => {
     rules = { ...defaultWarRules, enabled: true };
     isPending = false;
     const view = render(<WarRulesForm />);
-    const button = view.getByRole("button", { name: "Save war settings" }) as HTMLButtonElement;
+    const button = view.getByRole("button", {
+      name: "Save war settings",
+    }) as HTMLButtonElement;
     const notice = view.getByRole("spinbutton", { name: "Notice period (hours)" });
-    const enabled = view.getByRole("checkbox", { name: "Enable objective village wars" });
+    const enabled = view.getByRole("checkbox", {
+      name: "Enable objective village wars",
+    });
 
     expect(button.disabled).toBe(true);
     fireEvent.input(notice, { target: { value: String(rules.noticeHours + 1) } });

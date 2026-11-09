@@ -31,31 +31,36 @@ const trainee = (regeneration: number, boostStart = 1) =>
     regeneration,
     regenAt: start,
     strength: getUserCaps("JONIN").gens_cap - room,
-    territoryWarBoostWindows: [{
-      startsAt: after(boostStart).toISOString(),
-      endsAt: after(boostStart + 60).toISOString(),
-    }],
+    territoryWarBoostWindows: [
+      {
+        startsAt: after(boostStart).toISOString(),
+        endsAt: after(boostStart + 60).toISOString(),
+      },
+    ],
   }) as unknown as NonNullable<UserWithRelations>;
 
 it.each([
   { regeneration: 10, ticks: 9 },
   { regeneration: 11, ticks: 10 },
   { regeneration: 1.5, ticks: 70 },
-])("settles capped Energy training across victory at $regeneration Energy per tick after $ticks ticks", ({ regeneration, ticks }) => {
-  const user = trainee(regeneration);
-  const offline = settleEnergyTrainingQueue(user, queue, [], ticks);
-  const first = settleEnergyTrainingQueue(user, queue, [], 1);
-  const refreshed = settleEnergyTrainingQueue(
-    { ...user, regenAt: after(1), curEnergy: first.curEnergy },
-    first.remaining,
-    [],
-    ticks - 1,
-  );
-  expect(offline.consumed).toBe(1);
-  expect(offline.gains.strength).toBeCloseTo(room);
-  expect(offline.curEnergy).toBeCloseTo(ticks * regeneration - 100 / boostedRate);
-  expect(offline).toEqual(refreshed);
-});
+])(
+  "settles capped Energy training across victory at $regeneration Energy per tick after $ticks ticks",
+  ({ regeneration, ticks }) => {
+    const user = trainee(regeneration);
+    const offline = settleEnergyTrainingQueue(user, queue, [], ticks);
+    const first = settleEnergyTrainingQueue(user, queue, [], 1);
+    const refreshed = settleEnergyTrainingQueue(
+      { ...user, regenAt: after(1), curEnergy: first.curEnergy },
+      first.remaining,
+      [],
+      ticks - 1,
+    );
+    expect(offline.consumed).toBe(1);
+    expect(offline.gains.strength).toBeCloseTo(room);
+    expect(offline.curEnergy).toBeCloseTo(ticks * regeneration - 100 / boostedRate);
+    expect(offline).toEqual(refreshed);
+  },
+);
 
 it("requires the unboosted cost when Energy first becomes affordable on the expiry tick", () => {
   const user = trainee(10, -51);

@@ -1,7 +1,24 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { FARM_MAX_PLOTS, FARM_PLOT_PURCHASE_COST, FARM_STARTING_PLOTS, FARM_WATER_EXPERIENCE } from "@/drizzle/constants";
-import { farmCollectionLog, farmExtraction, farmPlot, item, quest, questHistory, skillTree, userData, userItem, userQueue, userSkill } from "@/drizzle/schema";
+import {
+  FARM_MAX_PLOTS,
+  FARM_PLOT_PURCHASE_COST,
+  FARM_STARTING_PLOTS,
+  FARM_WATER_EXPERIENCE,
+} from "@/drizzle/constants";
+import {
+  farmCollectionLog,
+  farmExtraction,
+  farmPlot,
+  item,
+  quest,
+  questHistory,
+  skillTree,
+  userData,
+  userItem,
+  userQueue,
+  userSkill,
+} from "@/drizzle/schema";
 import { getFarmBulkMutationUpdate } from "@/deltas/farming";
 import { setSystemTime } from "bun:test";
 import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
@@ -11,7 +28,11 @@ import { farmingRouter } from "@/server/api/routers/farming";
 import { itemRouter } from "@/server/api/routers/item";
 import { DecreaseFarmingTime } from "@/validators/combat";
 import { queueEnergy } from "../../../setup/queues";
-import { beforeStatements, failStatements, overrideQuery } from "../../../setup/statements";
+import {
+  beforeStatements,
+  failStatements,
+  overrideQuery,
+} from "../../../setup/statements";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import {
   callerFor,
@@ -71,14 +92,22 @@ const cropItemRow = (overrides: Record<string, unknown> = {}) => ({
 
 const farmer = async (patch: Record<string, unknown> = {}) => {
   const [row] = await insertUsers([
-    { userId: "farm-user", username: "farmer", status: "AWAKE", farmCurrency: 1000, ...patch } as never,
+    {
+      userId: "farm-user",
+      username: "farmer",
+      status: "AWAKE",
+      farmCurrency: 1000,
+      ...patch,
+    } as never,
   ]);
   return row as { userId: string };
 };
 
 const giveItem = async (id: string, itemId: string, quantity: number) => {
   const database = await getTestDatabase();
-  await database.insert(userItem).values({ id, userId: "farm-user", itemId, quantity, equipped: "NONE" } as never);
+  await database
+    .insert(userItem)
+    .values({ id, userId: "farm-user", itemId, quantity, equipped: "NONE" } as never);
 };
 
 const insertFinishedExtraction = async (patch: Record<string, unknown> = {}) => {
@@ -105,114 +134,241 @@ const activateFarmQuest = async (task: string, value = 10) => {
     name: "Work the field",
     questType: "event",
     content: {
-      objectives: [{ id: "farm-goal", task, value, description: "", successDescription: "" }],
-      reward: {}, sceneBackground: "", sceneCharacters: [],
+      objectives: [
+        { id: "farm-goal", task, value, description: "", successDescription: "" },
+      ],
+      reward: {},
+      sceneBackground: "",
+      sceneCharacters: [],
     },
   } as never);
   await database.insert(questHistory).values({
-    id: "farm-quest-history", userId: "farm-user", questId: "farm-quest", questType: "event",
+    id: "farm-quest-history",
+    userId: "farm-user",
+    questId: "farm-quest",
+    questType: "event",
   } as never);
 };
 
 const readFarmGoal = async () => {
   const database = await getTestDatabase();
-  const row = await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") });
-  return row?.questData?.find((tracker) => tracker.id === "farm-quest")
+  const row = await database.query.userData.findFirst({
+    where: eq(userData.userId, "farm-user"),
+  });
+  return row?.questData
+    ?.find((tracker) => tracker.id === "farm-quest")
     ?.goals.find((goal) => goal.id === "farm-goal");
 };
 
 describeWithDatabase("farming router guards against a real MySQL", () => {
   beforeEach(async () => {
-    await resetTables(userSkill, skillTree, userQueue, farmCollectionLog, farmExtraction, farmPlot, userItem, item, questHistory, quest, userData);
+    await resetTables(
+      userSkill,
+      skillTree,
+      userQueue,
+      farmCollectionLog,
+      farmExtraction,
+      farmPlot,
+      userItem,
+      item,
+      questHistory,
+      quest,
+      userData,
+    );
     const database = await getTestDatabase();
     await database.insert(item).values([cropItemRow(), seedItemRow()] as never);
   });
 
-  it.each(["AWAKE", "ASLEEP"] as const)("preserves crops and coins when %s loses sale eligibility", async (status) => {
-    await farmer({ status, autoWakeUp: true });
-    await giveItem("sale-stack", "crop-1", 3);
-    const database = await getTestDatabase();
-    const guarded = beforeStatements(database, userData, [async () => {
-      await database.update(userData).set({ status: "BATTLE", battleId: "sale-battle" })
-        .where(eq(userData.userId, "farm-user"));
-    }]);
-    const result = await callerForDatabase(farmingRouter, "farm-user", guarded)
-      .sellCrop({ userItemId: "sale-stack", quantity: 1 });
-    expect(result.success).toBe(false);
-    expect(result.actionNotice).toBeUndefined();
-    expect(await database.query.userItem.findFirst({ where: eq(userItem.id, "sale-stack") }))
-      .toMatchObject({ quantity: 3 });
-    expect(await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))
-      .toMatchObject({ status: "BATTLE", battleId: "sale-battle", farmCurrency: 1000 });
-  });
-
-  it.each(["AWAKE", "ASLEEP", "HOSPITALIZED"] as const)("atomically sells the last %s crop stack with its recovery", async (status) => {
-    await farmer({ status, autoWakeUp: true, curHealth: 100, maxHealth: 100 });
-    await giveItem("sale-stack", "crop-1", 3);
-    const database = await getTestDatabase();
-    const measured = await recordQueries(() => callerForDatabase(farmingRouter, "farm-user", database)
-      .sellCrop({ userItemId: "sale-stack", quantity: 3 }));
-    expect(measured.result.success).toBe(true);
-    expect(measured.result.userDelta).toEqual({ farmCurrency: 120 });
-    expect(measured.result.actionNotice).toBe(status === "ASLEEP" ? AUTO_WAKE_MESSAGE
-      : status === "HOSPITALIZED" ? AUTO_CHECKOUT_MESSAGE : undefined);
-    expect(measured.statements.filter((statement) => /^\s*(update|delete)/i.test(statement))).toHaveLength(1);
-    expect(await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))
-      .toMatchObject({ status: "AWAKE", farmCurrency: 1120 });
-    expect(await database.query.userItem.findFirst({ where: eq(userItem.id, "sale-stack") }))
-      .toMatchObject({ quantity: 0 });
-    expect(await callerForDatabase(farmingRouter, "farm-user", database)
-      .sellCrop({ userItemId: "sale-stack", quantity: 1 })).toMatchObject({ success: false });
-  });
-
-  for (const bulk of [false, true]) {
-    it.each(["AWAKE", "ASLEEP"] as const)(`preserves ${bulk ? "all" : "one"} ready plot when %s loses harvest eligibility`, async (status) => {
+  it.each(["AWAKE", "ASLEEP"] as const)(
+    "preserves crops and coins when %s loses sale eligibility",
+    async (status) => {
       await farmer({ status, autoWakeUp: true });
+      await giveItem("sale-stack", "crop-1", 3);
       const database = await getTestDatabase();
-      await database.insert(farmPlot).values({ id: "claim-plot", userId: "farm-user", slotIndex: 0,
-        seedItemId: "seed-1", plantedAt: new Date(Date.now() - 120_000), finishAt: new Date(Date.now() - 60_000) });
-      const guarded = beforeStatements(database, farmPlot, [async () => {
-        await database.update(userData).set({ status: "BATTLE", battleId: "harvest-battle" })
-          .where(eq(userData.userId, "farm-user"));
-      }]);
-      const api = callerForDatabase(farmingRouter, "farm-user", guarded);
-      const result = bulk ? await api.harvestAll() : await api.harvestPlot({ plotId: "claim-plot" });
+      const guarded = beforeStatements(database, userData, [
+        async () => {
+          await database
+            .update(userData)
+            .set({ status: "BATTLE", battleId: "sale-battle" })
+            .where(eq(userData.userId, "farm-user"));
+        },
+      ]);
+      const result = await callerForDatabase(
+        farmingRouter,
+        "farm-user",
+        guarded,
+      ).sellCrop({ userItemId: "sale-stack", quantity: 1 });
       expect(result.success).toBe(false);
       expect(result.actionNotice).toBeUndefined();
-      expect(await database.query.farmPlot.findFirst({ where: eq(farmPlot.id, "claim-plot") }))
-        .toMatchObject({ seedItemId: "seed-1" });
-      expect(await database.query.userItem.findMany()).toHaveLength(0);
-      expect(await database.query.farmCollectionLog.findMany()).toHaveLength(0);
-      expect(await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))
-        .toMatchObject({ status: "BATTLE", battleId: "harvest-battle", farmingExperience: 0 });
-    });
+      expect(
+        await database.query.userItem.findFirst({
+          where: eq(userItem.id, "sale-stack"),
+        }),
+      ).toMatchObject({ quantity: 3 });
+      expect(
+        await database.query.userData.findFirst({
+          where: eq(userData.userId, "farm-user"),
+        }),
+      ).toMatchObject({
+        status: "BATTLE",
+        battleId: "sale-battle",
+        farmCurrency: 1000,
+      });
+    },
+  );
+
+  it.each(["AWAKE", "ASLEEP", "HOSPITALIZED"] as const)(
+    "atomically sells the last %s crop stack with its recovery",
+    async (status) => {
+      await farmer({ status, autoWakeUp: true, curHealth: 100, maxHealth: 100 });
+      await giveItem("sale-stack", "crop-1", 3);
+      const database = await getTestDatabase();
+      const measured = await recordQueries(() =>
+        callerForDatabase(farmingRouter, "farm-user", database).sellCrop({
+          userItemId: "sale-stack",
+          quantity: 3,
+        }),
+      );
+      expect(measured.result.success).toBe(true);
+      expect(measured.result.userDelta).toEqual({ farmCurrency: 120 });
+      expect(measured.result.actionNotice).toBe(
+        status === "ASLEEP"
+          ? AUTO_WAKE_MESSAGE
+          : status === "HOSPITALIZED"
+            ? AUTO_CHECKOUT_MESSAGE
+            : undefined,
+      );
+      expect(
+        measured.statements.filter((statement) =>
+          /^\s*(update|delete)/i.test(statement),
+        ),
+      ).toHaveLength(1);
+      expect(
+        await database.query.userData.findFirst({
+          where: eq(userData.userId, "farm-user"),
+        }),
+      ).toMatchObject({ status: "AWAKE", farmCurrency: 1120 });
+      expect(
+        await database.query.userItem.findFirst({
+          where: eq(userItem.id, "sale-stack"),
+        }),
+      ).toMatchObject({ quantity: 0 });
+      expect(
+        await callerForDatabase(farmingRouter, "farm-user", database).sellCrop({
+          userItemId: "sale-stack",
+          quantity: 1,
+        }),
+      ).toMatchObject({ success: false });
+    },
+  );
+
+  for (const bulk of [false, true]) {
+    it.each(["AWAKE", "ASLEEP"] as const)(
+      `preserves ${bulk ? "all" : "one"} ready plot when %s loses harvest eligibility`,
+      async (status) => {
+        await farmer({ status, autoWakeUp: true });
+        const database = await getTestDatabase();
+        await database.insert(farmPlot).values({
+          id: "claim-plot",
+          userId: "farm-user",
+          slotIndex: 0,
+          seedItemId: "seed-1",
+          plantedAt: new Date(Date.now() - 120_000),
+          finishAt: new Date(Date.now() - 60_000),
+        });
+        const guarded = beforeStatements(database, farmPlot, [
+          async () => {
+            await database
+              .update(userData)
+              .set({ status: "BATTLE", battleId: "harvest-battle" })
+              .where(eq(userData.userId, "farm-user"));
+          },
+        ]);
+        const api = callerForDatabase(farmingRouter, "farm-user", guarded);
+        const result = bulk
+          ? await api.harvestAll()
+          : await api.harvestPlot({ plotId: "claim-plot" });
+        expect(result.success).toBe(false);
+        expect(result.actionNotice).toBeUndefined();
+        expect(
+          await database.query.farmPlot.findFirst({
+            where: eq(farmPlot.id, "claim-plot"),
+          }),
+        ).toMatchObject({ seedItemId: "seed-1" });
+        expect(await database.query.userItem.findMany()).toHaveLength(0);
+        expect(await database.query.farmCollectionLog.findMany()).toHaveLength(0);
+        expect(
+          await database.query.userData.findFirst({
+            where: eq(userData.userId, "farm-user"),
+          }),
+        ).toMatchObject({
+          status: "BATTLE",
+          battleId: "harvest-battle",
+          farmingExperience: 0,
+        });
+      },
+    );
 
     it(`retains earned ${bulk ? "bulk" : "single"} harvest XP after a committed recovery enters battle`, async () => {
-      await farmer({ status: "ASLEEP", autoWakeUp: true, isOutlaw: true, curEnergy: 50, regeneration: 0, regenAt: new Date() });
+      await farmer({
+        status: "ASLEEP",
+        autoWakeUp: true,
+        isOutlaw: true,
+        curEnergy: 50,
+        regeneration: 0,
+        regenAt: new Date(),
+      });
       await queueEnergy("farm-user", [{ stat: "offence", energy: 40 }]);
       await activateFarmQuest("plants_harvested");
       const database = await getTestDatabase();
       const plotCount = bulk ? 2 : 1;
-      await database.insert(farmPlot).values(Array.from({ length: plotCount }, (_, slotIndex) => ({
-        id: `claim-plot-${slotIndex}`, userId: "farm-user", slotIndex, seedItemId: "seed-1",
-        plantedAt: new Date(Date.now() - 120_000), finishAt: new Date(Date.now() - 60_000),
-      })));
+      await database.insert(farmPlot).values(
+        Array.from({ length: plotCount }, (_, slotIndex) => ({
+          id: `claim-plot-${slotIndex}`,
+          userId: "farm-user",
+          slotIndex,
+          seedItemId: "seed-1",
+          plantedAt: new Date(Date.now() - 120_000),
+          finishAt: new Date(Date.now() - 60_000),
+        })),
+      );
       let experienceAfterClaim = 0;
-      const guarded = beforeStatements(database, userData, [async () => {}, async () => {
-        experienceAfterClaim = (await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))!.experience;
-        await database.update(userData).set({ status: "BATTLE", battleId: "harvest-battle" })
-          .where(eq(userData.userId, "farm-user"));
-      }]);
+      const guarded = beforeStatements(database, userData, [
+        async () => {},
+        async () => {
+          experienceAfterClaim = (await database.query.userData.findFirst({
+            where: eq(userData.userId, "farm-user"),
+          }))!.experience;
+          await database
+            .update(userData)
+            .set({ status: "BATTLE", battleId: "harvest-battle" })
+            .where(eq(userData.userId, "farm-user"));
+        },
+      ]);
       const api = callerForDatabase(farmingRouter, "farm-user", guarded);
-      const result = bulk ? await api.harvestAll() : await api.harvestPlot({ plotId: "claim-plot-0" });
+      const result = bulk
+        ? await api.harvestAll()
+        : await api.harvestPlot({ plotId: "claim-plot-0" });
       expect(result).toMatchObject({ success: true, actionNotice: AUTO_WAKE_MESSAGE });
-      expect(await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))
-        .toMatchObject({ status: "BATTLE", battleId: "harvest-battle", farmingExperience: 10 * plotCount,
-          curEnergy: 10, energyQueueHead: 1, experience: experienceAfterClaim });
+      expect(
+        await database.query.userData.findFirst({
+          where: eq(userData.userId, "farm-user"),
+        }),
+      ).toMatchObject({
+        status: "BATTLE",
+        battleId: "harvest-battle",
+        farmingExperience: 10 * plotCount,
+        curEnergy: 10,
+        energyQueueHead: 1,
+        experience: experienceAfterClaim,
+      });
       expect(experienceAfterClaim).toBeGreaterThan(0);
       expect((await readFarmGoal())?.value).toBe(plotCount);
-      expect(await database.query.farmPlot.findFirst({ where: eq(farmPlot.id, "claim-plot-0") }))
-        .toMatchObject({ seedItemId: null });
+      expect(
+        await database.query.farmPlot.findFirst({
+          where: eq(farmPlot.id, "claim-plot-0"),
+        }),
+      ).toMatchObject({ seedItemId: null });
       const crops = await database.query.userItem.findMany();
       expect(crops.reduce((sum, stack) => sum + stack.quantity, 0)).toBe(plotCount);
       expect(await database.query.farmCollectionLog.findMany()).toHaveLength(1);
@@ -220,21 +376,50 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
   }
 
   it("reports confirmed recovery when a partial bulk harvest claim rejects", async () => {
-    await farmer({ status: "ASLEEP", autoWakeUp: true, isOutlaw: true, curEnergy: 50, regeneration: 0, regenAt: new Date() });
+    await farmer({
+      status: "ASLEEP",
+      autoWakeUp: true,
+      isOutlaw: true,
+      curEnergy: 50,
+      regeneration: 0,
+      regenAt: new Date(),
+    });
     await queueEnergy("farm-user", [{ stat: "offence", energy: 40 }]);
     const database = await getTestDatabase();
-    await database.insert(farmPlot).values([0, 1].map((slotIndex) => ({
-      id: `partial-harvest-${slotIndex}`, userId: "farm-user", slotIndex, seedItemId: "seed-1",
-      plantedAt: new Date(Date.now() - 120_000), finishAt: new Date(Date.now() - 60_000),
-    })));
-    const guarded = beforeStatements(database, farmPlot, [async () => {
-      await database.update(farmPlot).set({ finishAt: new Date(Date.now() + 3_600_000) })
-        .where(eq(farmPlot.id, "partial-harvest-0"));
-    }]);
-    const result = await callerForDatabase(farmingRouter, "farm-user", guarded).harvestAll();
+    await database.insert(farmPlot).values(
+      [0, 1].map((slotIndex) => ({
+        id: `partial-harvest-${slotIndex}`,
+        userId: "farm-user",
+        slotIndex,
+        seedItemId: "seed-1",
+        plantedAt: new Date(Date.now() - 120_000),
+        finishAt: new Date(Date.now() - 60_000),
+      })),
+    );
+    const guarded = beforeStatements(database, farmPlot, [
+      async () => {
+        await database
+          .update(farmPlot)
+          .set({ finishAt: new Date(Date.now() + 3_600_000) })
+          .where(eq(farmPlot.id, "partial-harvest-0"));
+      },
+    ]);
+    const result = await callerForDatabase(
+      farmingRouter,
+      "farm-user",
+      guarded,
+    ).harvestAll();
     expect(result).toMatchObject({ success: false, actionNotice: AUTO_WAKE_MESSAGE });
-    expect(await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))
-      .toMatchObject({ status: "AWAKE", curEnergy: 10, energyQueueHead: 1, farmingExperience: 0 });
+    expect(
+      await database.query.userData.findFirst({
+        where: eq(userData.userId, "farm-user"),
+      }),
+    ).toMatchObject({
+      status: "AWAKE",
+      curEnergy: 10,
+      energyQueueHead: 1,
+      farmingExperience: 0,
+    });
     expect(await database.query.userItem.findMany()).toHaveLength(0);
   });
 
@@ -243,48 +428,105 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       await farmer({ status: "ASLEEP", autoWakeUp: true });
       const database = await getTestDatabase();
       const finishAt = new Date(Date.now() + 3_600_000);
-      await database.insert(farmPlot).values({ id: "water-claim", userId: "farm-user", slotIndex: 0,
-        seedItemId: "seed-1", plantedAt: new Date(), finishAt });
-      const guarded = beforeStatements(database, farmPlot, [async () => {
-        await database.update(userData).set({ status: "BATTLE", battleId: "water-battle" })
-          .where(eq(userData.userId, "farm-user"));
-      }]);
+      await database.insert(farmPlot).values({
+        id: "water-claim",
+        userId: "farm-user",
+        slotIndex: 0,
+        seedItemId: "seed-1",
+        plantedAt: new Date(),
+        finishAt,
+      });
+      const guarded = beforeStatements(database, farmPlot, [
+        async () => {
+          await database
+            .update(userData)
+            .set({ status: "BATTLE", battleId: "water-battle" })
+            .where(eq(userData.userId, "farm-user"));
+        },
+      ]);
       const api = callerForDatabase(farmingRouter, "farm-user", guarded);
-      const result = bulk ? await api.waterAll() : await api.waterPlot({ plotId: "water-claim" });
+      const result = bulk
+        ? await api.waterAll()
+        : await api.waterPlot({ plotId: "water-claim" });
       expect(result.success).toBe(false);
       expect(result.actionNotice).toBeUndefined();
-      expect(await database.query.farmPlot.findFirst({ where: eq(farmPlot.id, "water-claim") }))
-        .toMatchObject({ finishAt, lastWateredAt: null });
-      expect(await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))
-        .toMatchObject({ status: "BATTLE", battleId: "water-battle", farmingExperience: 0 });
+      expect(
+        await database.query.farmPlot.findFirst({
+          where: eq(farmPlot.id, "water-claim"),
+        }),
+      ).toMatchObject({ finishAt, lastWateredAt: null });
+      expect(
+        await database.query.userData.findFirst({
+          where: eq(userData.userId, "farm-user"),
+        }),
+      ).toMatchObject({
+        status: "BATTLE",
+        battleId: "water-battle",
+        farmingExperience: 0,
+      });
     });
 
     it(`retains earned ${bulk ? "bulk" : "single"} watering XP after committed recovery enters battle`, async () => {
-      await farmer({ status: "ASLEEP", autoWakeUp: true, isOutlaw: true, curEnergy: 50, regeneration: 0, regenAt: new Date() });
+      await farmer({
+        status: "ASLEEP",
+        autoWakeUp: true,
+        isOutlaw: true,
+        curEnergy: 50,
+        regeneration: 0,
+        regenAt: new Date(),
+      });
       await queueEnergy("farm-user", [{ stat: "offence", energy: 40 }]);
       await activateFarmQuest("plants_watered");
       const database = await getTestDatabase();
       const plotCount = bulk ? 2 : 1;
-      await database.insert(farmPlot).values(Array.from({ length: plotCount }, (_, slotIndex) => ({
-        id: `water-claim-${slotIndex}`, userId: "farm-user", slotIndex, seedItemId: "seed-1",
-        plantedAt: new Date(), finishAt: new Date(Date.now() + (slotIndex + 1) * 3_600_000),
-      })));
+      await database.insert(farmPlot).values(
+        Array.from({ length: plotCount }, (_, slotIndex) => ({
+          id: `water-claim-${slotIndex}`,
+          userId: "farm-user",
+          slotIndex,
+          seedItemId: "seed-1",
+          plantedAt: new Date(),
+          finishAt: new Date(Date.now() + (slotIndex + 1) * 3_600_000),
+        })),
+      );
       let experienceAfterClaim = 0;
-      const guarded = beforeStatements(database, userData, [async () => {}, async () => {
-        const claimedUser = (await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))!;
-        experienceAfterClaim = claimedUser.experience;
-        // Battle admission advances the account revision together with its activity.
-        await database.update(userData).set({ status: "BATTLE", battleId: "water-battle", updatedAt: new Date(claimedUser.updatedAt.getTime() + 1) })
-          .where(eq(userData.userId, "farm-user"));
-      }]);
+      const guarded = beforeStatements(database, userData, [
+        async () => {},
+        async () => {
+          const claimedUser = (await database.query.userData.findFirst({
+            where: eq(userData.userId, "farm-user"),
+          }))!;
+          experienceAfterClaim = claimedUser.experience;
+          // Battle admission advances the account revision together with its activity.
+          await database
+            .update(userData)
+            .set({
+              status: "BATTLE",
+              battleId: "water-battle",
+              updatedAt: new Date(claimedUser.updatedAt.getTime() + 1),
+            })
+            .where(eq(userData.userId, "farm-user"));
+        },
+      ]);
       const api = callerForDatabase(farmingRouter, "farm-user", guarded);
-      const result = bulk ? await api.waterAll() : await api.waterPlot({ plotId: "water-claim-0" });
+      const result = bulk
+        ? await api.waterAll()
+        : await api.waterPlot({ plotId: "water-claim-0" });
       expect(result).toMatchObject({ success: true, actionNotice: AUTO_WAKE_MESSAGE });
       expect(result.userPatch).toBeUndefined();
       expect(result.userDelta).toBeUndefined();
-      expect(await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))
-        .toMatchObject({ status: "BATTLE", battleId: "water-battle", farmingExperience: FARM_WATER_EXPERIENCE * plotCount,
-          curEnergy: 10, energyQueueHead: 1, experience: experienceAfterClaim });
+      expect(
+        await database.query.userData.findFirst({
+          where: eq(userData.userId, "farm-user"),
+        }),
+      ).toMatchObject({
+        status: "BATTLE",
+        battleId: "water-battle",
+        farmingExperience: FARM_WATER_EXPERIENCE * plotCount,
+        curEnergy: 10,
+        energyQueueHead: 1,
+        experience: experienceAfterClaim,
+      });
       expect(experienceAfterClaim).toBeGreaterThan(0);
       expect((await readFarmGoal())?.value).toBe(plotCount);
       const plots = await database.query.farmPlot.findMany();
@@ -292,111 +534,278 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     });
   }
 
-  it.each(["harvest", "water"] as const)("checks out for free with the %s plot claim", async (action) => {
-    await farmer({ status: "HOSPITALIZED", autoWakeUp: false, curHealth: 100, maxHealth: 100 });
-    const database = await getTestDatabase();
-    await database.insert(farmPlot).values({ id: "free-claim", userId: "farm-user", slotIndex: 0,
-      seedItemId: "seed-1", plantedAt: new Date(Date.now() - 120_000),
-      finishAt: new Date(Date.now() + (action === "water" ? 3_600_000 : -60_000)) });
-    const api = callerForDatabase(farmingRouter, "farm-user", database);
-    expect(action === "water" ? await api.waterPlot({ plotId: "free-claim" })
-      : await api.harvestPlot({ plotId: "free-claim" }))
-      .toMatchObject({ success: true, actionNotice: AUTO_CHECKOUT_MESSAGE });
-    expect(await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))
-      .toMatchObject({ status: "AWAKE", money: expect.any(Number), farmCurrency: 1000 });
-  });
+  it.each(["harvest", "water"] as const)(
+    "checks out for free with the %s plot claim",
+    async (action) => {
+      await farmer({
+        status: "HOSPITALIZED",
+        autoWakeUp: false,
+        curHealth: 100,
+        maxHealth: 100,
+      });
+      const database = await getTestDatabase();
+      await database.insert(farmPlot).values({
+        id: "free-claim",
+        userId: "farm-user",
+        slotIndex: 0,
+        seedItemId: "seed-1",
+        plantedAt: new Date(Date.now() - 120_000),
+        finishAt: new Date(Date.now() + (action === "water" ? 3_600_000 : -60_000)),
+      });
+      const api = callerForDatabase(farmingRouter, "farm-user", database);
+      expect(
+        action === "water"
+          ? await api.waterPlot({ plotId: "free-claim" })
+          : await api.harvestPlot({ plotId: "free-claim" }),
+      ).toMatchObject({ success: true, actionNotice: AUTO_CHECKOUT_MESSAGE });
+      expect(
+        await database.query.userData.findFirst({
+          where: eq(userData.userId, "farm-user"),
+        }),
+      ).toMatchObject({
+        status: "AWAKE",
+        money: expect.any(Number),
+        farmCurrency: 1000,
+      });
+    },
+  );
 
   it("retains queued training goals when recovery and watering advance the same quest", async () => {
-    await farmer({ status: "ASLEEP", autoWakeUp: true, isOutlaw: true, curEnergy: 50, regeneration: 0, regenAt: new Date() });
+    await farmer({
+      status: "ASLEEP",
+      autoWakeUp: true,
+      isOutlaw: true,
+      curEnergy: 50,
+      regeneration: 0,
+      regenAt: new Date(),
+    });
     const database = await getTestDatabase();
     await queueEnergy("farm-user", [{ stat: "offence", energy: 40 }]);
-    await database.insert(quest).values({ id: "recovery-goals", name: "Training and watering", questType: "event",
-      content: { objectives: [
-        { id: "training-goal", task: "stats_trained", value: 1, nextObjectiveId: "watering-goal", description: "", successDescription: "" },
-        { id: "watering-goal", task: "plants_watered", value: 10, description: "", successDescription: "" },
-      ], reward: {}, sceneBackground: "", sceneCharacters: [] } } as never);
-    await database.insert(questHistory).values({ id: "recovery-history", userId: "farm-user", questId: "recovery-goals", questType: "event" } as never);
-    await database.insert(farmPlot).values({ id: "recovery-plot", userId: "farm-user", slotIndex: 0,
-      seedItemId: "seed-1", plantedAt: new Date(), finishAt: new Date(Date.now() + 3_600_000) });
-    const result = await callerForDatabase(farmingRouter, "farm-user", database).waterPlot({ plotId: "recovery-plot" });
+    await database.insert(quest).values({
+      id: "recovery-goals",
+      name: "Training and watering",
+      questType: "event",
+      content: {
+        objectives: [
+          {
+            id: "training-goal",
+            task: "stats_trained",
+            value: 1,
+            nextObjectiveId: "watering-goal",
+            description: "",
+            successDescription: "",
+          },
+          {
+            id: "watering-goal",
+            task: "plants_watered",
+            value: 10,
+            description: "",
+            successDescription: "",
+          },
+        ],
+        reward: {},
+        sceneBackground: "",
+        sceneCharacters: [],
+      },
+    } as never);
+    await database.insert(questHistory).values({
+      id: "recovery-history",
+      userId: "farm-user",
+      questId: "recovery-goals",
+      questType: "event",
+    } as never);
+    await database.insert(farmPlot).values({
+      id: "recovery-plot",
+      userId: "farm-user",
+      slotIndex: 0,
+      seedItemId: "seed-1",
+      plantedAt: new Date(),
+      finishAt: new Date(Date.now() + 3_600_000),
+    });
+    const result = await callerForDatabase(
+      farmingRouter,
+      "farm-user",
+      database,
+    ).waterPlot({ plotId: "recovery-plot" });
     expect(result).toMatchObject({ success: true, actionNotice: AUTO_WAKE_MESSAGE });
-    const stored = (await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))!;
-    expect(stored).toMatchObject({ status: "AWAKE", curEnergy: 10, energyQueueHead: 1 });
-    const goals = stored.questData?.find((entry) => entry.id === "recovery-goals")?.goals;
-    expect(goals?.find((goal) => goal.id === "training-goal")?.value).toBeGreaterThan(0);
+    const stored = (await database.query.userData.findFirst({
+      where: eq(userData.userId, "farm-user"),
+    }))!;
+    expect(stored).toMatchObject({
+      status: "AWAKE",
+      curEnergy: 10,
+      energyQueueHead: 1,
+    });
+    const goals = stored.questData?.find(
+      (entry) => entry.id === "recovery-goals",
+    )?.goals;
+    expect(goals?.find((goal) => goal.id === "training-goal")?.value).toBeGreaterThan(
+      0,
+    );
     expect(goals?.find((goal) => goal.id === "watering-goal")?.value).toBe(1);
     expect(result.userPatch?.questData).toEqual(stored.questData);
     expect(result.userPatch?.updatedAt).toEqual(stored.updatedAt);
-    expect(result.userDelta).toEqual({ farmingExperience: result.farmingExperienceDelta });
-    expect(result.userRecovery?.userPatch).toMatchObject({ status: "AWAKE", curEnergy: 10 });
+    expect(result.userDelta).toEqual({
+      farmingExperience: result.farmingExperienceDelta,
+    });
+    expect(result.userRecovery?.userPatch).toMatchObject({
+      status: "AWAKE",
+      curEnergy: 10,
+    });
   });
 
-  it.each(["ASLEEP", "HOSPITALIZED"] as const)("recovers %s in the guarded farm purchase", async (status) => {
-    await farmer({ status, autoWakeUp: true, curHealth: 100, maxHealth: 100, regenAt: new Date(), farmingExperience: 100_000_000 });
-    const database = await getTestDatabase();
-    const executed = await recordQueries(() => callerForDatabase(farmingRouter, "farm-user", database)
-      .buyShopItem({ type: "PLOT", quantity: 1 }));
-    expect(executed.result).toMatchObject({ success: true,
-      actionNotice: status === "ASLEEP" ? AUTO_WAKE_MESSAGE : AUTO_CHECKOUT_MESSAGE });
-    expect(executed.statements.filter((statement) => /^\s*update /i.test(statement))).toHaveLength(1);
-    const stored = await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") });
-    expect(stored).toMatchObject({ status: "AWAKE", farmPlotsPurchased: 1,
-      farmCurrency: 1000 - FARM_PLOT_PURCHASE_COST });
-  });
+  it.each(["ASLEEP", "HOSPITALIZED"] as const)(
+    "recovers %s in the guarded farm purchase",
+    async (status) => {
+      await farmer({
+        status,
+        autoWakeUp: true,
+        curHealth: 100,
+        maxHealth: 100,
+        regenAt: new Date(),
+        farmingExperience: 100_000_000,
+      });
+      const database = await getTestDatabase();
+      const executed = await recordQueries(() =>
+        callerForDatabase(farmingRouter, "farm-user", database).buyShopItem({
+          type: "PLOT",
+          quantity: 1,
+        }),
+      );
+      expect(executed.result).toMatchObject({
+        success: true,
+        actionNotice: status === "ASLEEP" ? AUTO_WAKE_MESSAGE : AUTO_CHECKOUT_MESSAGE,
+      });
+      expect(
+        executed.statements.filter((statement) => /^\s*update /i.test(statement)),
+      ).toHaveLength(1);
+      const stored = await database.query.userData.findFirst({
+        where: eq(userData.userId, "farm-user"),
+      });
+      expect(stored).toMatchObject({
+        status: "AWAKE",
+        farmPlotsPurchased: 1,
+        farmCurrency: 1000 - FARM_PLOT_PURCHASE_COST,
+      });
+    },
+  );
 
   it.each([
     { status: "ASLEEP", autoWakeUp: false, curHealth: 100 },
     { status: "HOSPITALIZED", autoWakeUp: true, curHealth: 1 },
-  ] as const)("rejects an unavailable farm actor before purchases: %j", async (patch) => {
-    await farmer({ ...patch, maxHealth: 100, regenAt: new Date() });
-    const database = await getTestDatabase();
-    const result = await callerForDatabase(farmingRouter, "farm-user", database)
-      .buyShopItem({ type: "PLOT", quantity: 1 });
-    expect(result.success).toBe(false);
-    expect(result.actionNotice).toBeUndefined();
-    expect(await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))
-      .toMatchObject({ status: patch.status, farmPlotsPurchased: 0, farmCurrency: 1000 });
-  });
+  ] as const)(
+    "rejects an unavailable farm actor before purchases: %j",
+    async (patch) => {
+      await farmer({ ...patch, maxHealth: 100, regenAt: new Date() });
+      const database = await getTestDatabase();
+      const result = await callerForDatabase(
+        farmingRouter,
+        "farm-user",
+        database,
+      ).buyShopItem({ type: "PLOT", quantity: 1 });
+      expect(result.success).toBe(false);
+      expect(result.actionNotice).toBeUndefined();
+      expect(
+        await database.query.userData.findFirst({
+          where: eq(userData.userId, "farm-user"),
+        }),
+      ).toMatchObject({
+        status: patch.status,
+        farmPlotsPurchased: 0,
+        farmCurrency: 1000,
+      });
+    },
+  );
 
-  it.each(["water", "harvest", "first collection", "new stack"] as const)("reconciles bulk %s against the canonical farm view", async (action) => {
-    const now = new Date("2026-11-02T12:00:00Z");
-    setSystemTime(now);
-    try {
-      await farmer({ farmingExperience: 1000 });
-      const db = await getTestDatabase();
-      await giveItem("existing-crop", "crop-1", action === "new stack" ? 50 : 2);
-      if (action !== "first collection") await db.insert(farmCollectionLog).values({ id: "collected-crop", userId: "farm-user", itemId: "crop-1", firstHarvestedAt: now });
-      await db.insert(farmPlot).values([0, 1].map(slotIndex => ({
-        id: `bulk-${slotIndex}`, userId: "farm-user", slotIndex, seedItemId: "seed-1",
-        plantedAt: new Date(now.getTime() - 120000),
-        finishAt: new Date(now.getTime() + (action === "water" ? 3600000 : -60000)),
-      })));
-      const api = await caller("farm-user"), before = await api.getFarmState();
-      const result = action === "water" ? await api.waterAll() : await api.harvestAll();
-      expect(result.success, result.message).toBe(true);
-      const next = getFarmBulkMutationUpdate(before, result, action === "water" ? "water" : "harvest");
-      if (action === "first collection" || action === "new stack") expect(next).toBeUndefined();
-      else {
-        const canonical = await api.getFarmState();
-        expect(next).toEqual(canonical);
+  it.each(["water", "harvest", "first collection", "new stack"] as const)(
+    "reconciles bulk %s against the canonical farm view",
+    async (action) => {
+      const now = new Date("2026-11-02T12:00:00Z");
+      setSystemTime(now);
+      try {
+        await farmer({ farmingExperience: 1000 });
+        const db = await getTestDatabase();
+        await giveItem("existing-crop", "crop-1", action === "new stack" ? 50 : 2);
+        if (action !== "first collection")
+          await db.insert(farmCollectionLog).values({
+            id: "collected-crop",
+            userId: "farm-user",
+            itemId: "crop-1",
+            firstHarvestedAt: now,
+          });
+        await db.insert(farmPlot).values(
+          [0, 1].map((slotIndex) => ({
+            id: `bulk-${slotIndex}`,
+            userId: "farm-user",
+            slotIndex,
+            seedItemId: "seed-1",
+            plantedAt: new Date(now.getTime() - 120000),
+            finishAt: new Date(now.getTime() + (action === "water" ? 3600000 : -60000)),
+          })),
+        );
+        const api = await caller("farm-user"),
+          before = await api.getFarmState();
+        const result =
+          action === "water" ? await api.waterAll() : await api.harvestAll();
+        expect(result.success, result.message).toBe(true);
+        const next = getFarmBulkMutationUpdate(
+          before,
+          result,
+          action === "water" ? "water" : "harvest",
+        );
+        if (action === "first collection" || action === "new stack")
+          expect(next).toBeUndefined();
+        else {
+          const canonical = await api.getFarmState();
+          expect(next).toEqual(canonical);
+        }
+      } finally {
+        setSystemTime();
       }
-    } finally { setSystemTime(); }
-  });
+    },
+  );
 
-  it.each(["AWAKE", "ASLEEP"] as const)("withholds bulk watering metadata when one plot loses its timeline CAS for %s", async (status) => {
-    await farmer({ status, autoWakeUp: true });
-    const db = await getTestDatabase(), finishAt = new Date(Date.now() + 3600000);
-    await db.insert(farmPlot).values([0, 1].map(slotIndex => ({ id: `partial-${slotIndex}`, slotIndex, userId: "farm-user", seedItemId: "seed-1", plantedAt: new Date(), finishAt })));
-    const client = beforeStatements(db, farmPlot, [async () => {
-      await db.update(farmPlot).set({ finishAt: new Date(finishAt.getTime() + 60000) }).where(eq(farmPlot.id, "partial-0"));
-    }]);
-    const result = await callerForDatabase(farmingRouter, "farm-user", client).waterAll();
-    expect(result.success).toBe(true);
-    expect(result.updatedPlots).toBeUndefined();
-    expect(result.farmingExperienceDelta).toBeGreaterThan(0);
-  });
+  it.each(["AWAKE", "ASLEEP"] as const)(
+    "withholds bulk watering metadata when one plot loses its timeline CAS for %s",
+    async (status) => {
+      await farmer({ status, autoWakeUp: true });
+      const db = await getTestDatabase(),
+        finishAt = new Date(Date.now() + 3600000);
+      await db.insert(farmPlot).values(
+        [0, 1].map((slotIndex) => ({
+          id: `partial-${slotIndex}`,
+          slotIndex,
+          userId: "farm-user",
+          seedItemId: "seed-1",
+          plantedAt: new Date(),
+          finishAt,
+        })),
+      );
+      const client = beforeStatements(db, farmPlot, [
+        async () => {
+          await db
+            .update(farmPlot)
+            .set({ finishAt: new Date(finishAt.getTime() + 60000) })
+            .where(eq(farmPlot.id, "partial-0"));
+        },
+      ]);
+      const result = await callerForDatabase(
+        farmingRouter,
+        "farm-user",
+        client,
+      ).waterAll();
+      expect(result.success).toBe(true);
+      expect(result.updatedPlots).toBeUndefined();
+      expect(result.farmingExperienceDelta).toBeGreaterThan(0);
+    },
+  );
 
-  for (const action of ["plantSeed", "plantAllEmpty", "applyFertilizer", "fertilizeAll"] as const) {
+  for (const action of [
+    "plantSeed",
+    "plantAllEmpty",
+    "applyFertilizer",
+    "fertilizeAll",
+  ] as const) {
     it(`${action} advances its own claimed quest snapshot without a guaranteed retry`, async () => {
       await farmer();
       const database = await getTestDatabase();
@@ -404,90 +813,202 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       const isBulk = action === "plantAllEmpty" || action === "fertilizeAll";
       await activateFarmQuest(isPlanting ? "seeds_planted" : "plants_fertilized");
       await giveItem("ui-seed", "seed-1", 5);
-      await database.insert(item).values(seedItemRow({
-        id: "fert-1", name: "Compost", isFarmSeed: false, isFarmFertilizer: true,
-        farmTimeReductionSeconds: 60, farmYieldItemId: null,
-      }) as never);
+      await database.insert(item).values(
+        seedItemRow({
+          id: "fert-1",
+          name: "Compost",
+          isFarmSeed: false,
+          isFarmFertilizer: true,
+          farmTimeReductionSeconds: 60,
+          farmYieldItemId: null,
+        }) as never,
+      );
       await giveItem("ui-fert", "fert-1", 5);
-      await database.insert(farmPlot).values([0, 1].map((slotIndex) => ({
-        id: `plot-${slotIndex}`, userId: "farm-user", slotIndex,
-        ...(!isPlanting ? {
-          seedItemId: "seed-1", plantedAt: new Date(), finishAt: new Date(Date.now() + 3_600_000),
-        } : {}),
-      })) as never);
+      await database.insert(farmPlot).values(
+        [0, 1].map((slotIndex) => ({
+          id: `plot-${slotIndex}`,
+          userId: "farm-user",
+          slotIndex,
+          ...(!isPlanting
+            ? {
+                seedItemId: "seed-1",
+                plantedAt: new Date(),
+                finishAt: new Date(Date.now() + 3_600_000),
+              }
+            : {}),
+        })) as never,
+      );
       const api = await caller("farm-user");
       const recorded = await recordQueries(() => {
         switch (action) {
-          case "plantSeed": return api.plantSeed({ plotId: "plot-0", seedItemId: "seed-1" });
-          case "plantAllEmpty": return api.plantAllEmpty({ seedItemId: "seed-1" });
-          case "applyFertilizer": return api.applyFertilizer({ plotId: "plot-0", userItemId: "ui-fert" });
-          case "fertilizeAll": return api.fertilizeAll({ userItemId: "ui-fert" });
+          case "plantSeed":
+            return api.plantSeed({ plotId: "plot-0", seedItemId: "seed-1" });
+          case "plantAllEmpty":
+            return api.plantAllEmpty({ seedItemId: "seed-1" });
+          case "applyFertilizer":
+            return api.applyFertilizer({ plotId: "plot-0", userItemId: "ui-fert" });
+          case "fertilizeAll":
+            return api.fertilizeAll({ userItemId: "ui-fert" });
         }
       });
       expect(recorded.result.success).toBe(true);
       expect((await readFarmGoal())?.value).toBe(isBulk ? 2 : 1);
       // A same-snapshot claim must not invalidate the quest JSON it just protected.
-      const userReads = recorded.statements.filter((statement) =>
-        statement.startsWith("select") && statement.includes("from `UserData`") && !/\bavg\s*\(/i.test(statement));
+      const userReads = recorded.statements.filter(
+        (statement) =>
+          statement.startsWith("select") &&
+          statement.includes("from `UserData`") &&
+          !/\bavg\s*\(/i.test(statement),
+      );
       expect(userReads).toHaveLength(1);
     });
   }
 
-  for (const action of ["plantSeed", "plantAllEmpty", "applyFertilizer", "fertilizeAll"] as const) {
-    it.each([false, true])(`${action} uses activated skill requirements from the actor (activated=%s)`, async (activated) => {
-      await farmer();
-      const db = await getTestDatabase();
-      const isPlanting = action === "plantSeed" || action === "plantAllEmpty";
-      await db.insert(skillTree).values({ id: "farm-required", name: "Farm Requirement", image: "/skill.png", description: "Farm requirement", effects: [] });
-      await db.insert(userSkill).values({ id: "farm-required-owned", userId: "farm-user", skillId: "farm-required", activated });
-      await db.update(item).set({ requiredSkillId: "farm-required" }).where(eq(item.id, "seed-1"));
-      await db.insert(item).values(seedItemRow({
-        id: "fert-required", name: "Required Compost", isFarmSeed: false, isFarmFertilizer: true,
-        requiredSkillId: "farm-required", farmTimeReductionSeconds: 60, farmYieldItemId: null,
-      }) as never);
-      await giveItem("required-seed", "seed-1", 2);
-      await giveItem("required-fertilizer", "fert-required", 2);
-      await db.insert(farmPlot).values({ id: "required-plot", userId: "farm-user", slotIndex: 0,
-        ...(!isPlanting ? { seedItemId: "seed-1", plantedAt: new Date(), finishAt: new Date(Date.now() + 3_600_000) } : {}),
-      });
-      const api = callerForDatabase(farmingRouter, "farm-user", db);
-      const result = await recordQueries(() => {
-        switch (action) {
-          case "plantSeed": return api.plantSeed({ plotId: "required-plot", seedItemId: "seed-1" });
-          case "plantAllEmpty": return api.plantAllEmpty({ seedItemId: "seed-1" });
-          case "applyFertilizer": return api.applyFertilizer({ plotId: "required-plot", userItemId: "required-fertilizer" });
-          case "fertilizeAll": return api.fertilizeAll({ userItemId: "required-fertilizer" });
-        }
-      });
-      expect(result.result.success).toBe(activated);
-      expect(result.statements.filter((statement) => statement.startsWith("select") && statement.includes("from `UserSkill`") && !statement.includes("from `UserData`"))).toHaveLength(0);
-      const stack = await db.query.userItem.findFirst({ where: eq(userItem.id, isPlanting ? "required-seed" : "required-fertilizer") });
-      expect(stack?.quantity).toBe(activated ? 1 : 2);
-      if (!activated) expect(result.result.message).toContain("Activate the required skill");
-    });
+  for (const action of [
+    "plantSeed",
+    "plantAllEmpty",
+    "applyFertilizer",
+    "fertilizeAll",
+  ] as const) {
+    it.each([false, true])(
+      `${action} uses activated skill requirements from the actor (activated=%s)`,
+      async (activated) => {
+        await farmer();
+        const db = await getTestDatabase();
+        const isPlanting = action === "plantSeed" || action === "plantAllEmpty";
+        await db.insert(skillTree).values({
+          id: "farm-required",
+          name: "Farm Requirement",
+          image: "/skill.png",
+          description: "Farm requirement",
+          effects: [],
+        });
+        await db.insert(userSkill).values({
+          id: "farm-required-owned",
+          userId: "farm-user",
+          skillId: "farm-required",
+          activated,
+        });
+        await db
+          .update(item)
+          .set({ requiredSkillId: "farm-required" })
+          .where(eq(item.id, "seed-1"));
+        await db.insert(item).values(
+          seedItemRow({
+            id: "fert-required",
+            name: "Required Compost",
+            isFarmSeed: false,
+            isFarmFertilizer: true,
+            requiredSkillId: "farm-required",
+            farmTimeReductionSeconds: 60,
+            farmYieldItemId: null,
+          }) as never,
+        );
+        await giveItem("required-seed", "seed-1", 2);
+        await giveItem("required-fertilizer", "fert-required", 2);
+        await db.insert(farmPlot).values({
+          id: "required-plot",
+          userId: "farm-user",
+          slotIndex: 0,
+          ...(!isPlanting
+            ? {
+                seedItemId: "seed-1",
+                plantedAt: new Date(),
+                finishAt: new Date(Date.now() + 3_600_000),
+              }
+            : {}),
+        });
+        const api = callerForDatabase(farmingRouter, "farm-user", db);
+        const result = await recordQueries(() => {
+          switch (action) {
+            case "plantSeed":
+              return api.plantSeed({ plotId: "required-plot", seedItemId: "seed-1" });
+            case "plantAllEmpty":
+              return api.plantAllEmpty({ seedItemId: "seed-1" });
+            case "applyFertilizer":
+              return api.applyFertilizer({
+                plotId: "required-plot",
+                userItemId: "required-fertilizer",
+              });
+            case "fertilizeAll":
+              return api.fertilizeAll({ userItemId: "required-fertilizer" });
+          }
+        });
+        expect(result.result.success).toBe(activated);
+        expect(
+          result.statements.filter(
+            (statement) =>
+              statement.startsWith("select") &&
+              statement.includes("from `UserSkill`") &&
+              !statement.includes("from `UserData`"),
+          ),
+        ).toHaveLength(0);
+        const stack = await db.query.userItem.findFirst({
+          where: eq(userItem.id, isPlanting ? "required-seed" : "required-fertilizer"),
+        });
+        expect(stack?.quantity).toBe(activated ? 1 : 2);
+        if (!activated)
+          expect(result.result.message).toContain("Activate the required skill");
+      },
+    );
   }
 
   it("preserves quest progress when planting loses its actor snapshot", async () => {
-    await farmer({ questData: [{ id: "farm-quest", goals: [{ id: "farm-goal", task: "seeds_planted", value: 1, done: false }] }] });
+    await farmer({
+      questData: [
+        {
+          id: "farm-quest",
+          goals: [{ id: "farm-goal", task: "seeds_planted", value: 1, done: false }],
+        },
+      ],
+    });
     await activateFarmQuest("seeds_planted");
     await giveItem("ui-seed", "seed-1", 5);
     const database = await getTestDatabase();
-    await database.insert(farmPlot).values({ id: "plot-0", userId: "farm-user", slotIndex: 0 } as never);
-    const client = beforeStatements(database, userData, [async () => {
-      const current = (await database.query.userData.findFirst({ where: eq(userData.userId, "farm-user") }))!;
-      await database.update(userData).set({
-        updatedAt: new Date(current.updatedAt.getTime() + 1),
-        questData: [{ id: "farm-quest", startAt: new Date().toISOString(), goals: [{ id: "farm-goal", value: 2, done: false, collected: false, recentlyDied: false }] }],
-      }).where(eq(userData.userId, "farm-user"));
-    }]);
-    const result = await callerForDatabase(farmingRouter, "farm-user", client)
-      .plantSeed({ plotId: "plot-0", seedItemId: "seed-1" });
+    await database
+      .insert(farmPlot)
+      .values({ id: "plot-0", userId: "farm-user", slotIndex: 0 } as never);
+    const client = beforeStatements(database, userData, [
+      async () => {
+        const current = (await database.query.userData.findFirst({
+          where: eq(userData.userId, "farm-user"),
+        }))!;
+        await database
+          .update(userData)
+          .set({
+            updatedAt: new Date(current.updatedAt.getTime() + 1),
+            questData: [
+              {
+                id: "farm-quest",
+                startAt: new Date().toISOString(),
+                goals: [
+                  {
+                    id: "farm-goal",
+                    value: 2,
+                    done: false,
+                    collected: false,
+                    recentlyDied: false,
+                  },
+                ],
+              },
+            ],
+          })
+          .where(eq(userData.userId, "farm-user"));
+      },
+    ]);
+    const result = await callerForDatabase(
+      farmingRouter,
+      "farm-user",
+      client,
+    ).plantSeed({ plotId: "plot-0", seedItemId: "seed-1" });
     expect(result.success).toBe(false);
     expect((await readFarmGoal())?.value).toBe(2);
-    expect(await database.query.farmPlot.findFirst({ where: eq(farmPlot.id, "plot-0") }))
-      .toMatchObject({ seedItemId: null });
-    expect(await database.query.userItem.findFirst({ where: eq(userItem.id, "ui-seed") }))
-      .toMatchObject({ quantity: 5 });
+    expect(
+      await database.query.farmPlot.findFirst({ where: eq(farmPlot.id, "plot-0") }),
+    ).toMatchObject({ seedItemId: null });
+    expect(
+      await database.query.userItem.findFirst({ where: eq(userItem.id, "ui-seed") }),
+    ).toMatchObject({ quantity: 5 });
   });
 
   for (const isBulk of [false, true]) {
@@ -495,14 +1016,24 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       await farmer();
       const database = await getTestDatabase();
       await database.insert(farmPlot).values({
-        id: "plot-harvest", userId: "farm-user", slotIndex: 0, seedItemId: "seed-1",
-        plantedAt: new Date(Date.now() - 120_000), finishAt: new Date(Date.now() - 60_000),
+        id: "plot-harvest",
+        userId: "farm-user",
+        slotIndex: 0,
+        seedItemId: "seed-1",
+        plantedAt: new Date(Date.now() - 120_000),
+        finishAt: new Date(Date.now() - 60_000),
       } as never);
       const api = await caller("farm-user");
-      const recorded = await recordQueries(() => isBulk ? api.harvestAll() : api.harvestPlot({ plotId: "plot-harvest" }));
+      const recorded = await recordQueries(() =>
+        isBulk ? api.harvestAll() : api.harvestPlot({ plotId: "plot-harvest" }),
+      );
       expect(recorded.result.success).toBe(true);
-      expect(recorded.statements.filter((statement) =>
-        statement.startsWith("select") && statement.includes("FarmCollectionLog"))).toHaveLength(0);
+      expect(
+        recorded.statements.filter(
+          (statement) =>
+            statement.startsWith("select") && statement.includes("FarmCollectionLog"),
+        ),
+      ).toHaveLength(0);
       expect(await database.select().from(farmCollectionLog)).toHaveLength(1);
     });
   }
@@ -511,16 +1042,27 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     await farmer();
     await activateFarmQuest("farming_collection_log", 2);
     const database = await getTestDatabase();
-    await database.insert(item).values([
-      cropItemRow({ id: "crop-2", name: "Second Crop" }),
-      seedItemRow({ id: "seed-2", name: "Second Seed", farmYieldItemId: "crop-2" }),
-    ] as never);
-    await database.insert(farmPlot).values([0, 1].map((slotIndex) => ({
-      id: `plot-${slotIndex}`, userId: "farm-user", slotIndex, seedItemId: `seed-${slotIndex + 1}`,
-      plantedAt: new Date(Date.now() - 120_000), finishAt: new Date(Date.now() - 60_000),
-    })) as never);
+    await database
+      .insert(item)
+      .values([
+        cropItemRow({ id: "crop-2", name: "Second Crop" }),
+        seedItemRow({ id: "seed-2", name: "Second Seed", farmYieldItemId: "crop-2" }),
+      ] as never);
+    await database.insert(farmPlot).values(
+      [0, 1].map((slotIndex) => ({
+        id: `plot-${slotIndex}`,
+        userId: "farm-user",
+        slotIndex,
+        seedItemId: `seed-${slotIndex + 1}`,
+        plantedAt: new Date(Date.now() - 120_000),
+        finishAt: new Date(Date.now() - 60_000),
+      })) as never,
+    );
     const api = await caller("farm-user");
-    const results = await Promise.all([api.harvestPlot({ plotId: "plot-0" }), api.harvestPlot({ plotId: "plot-1" })]);
+    const results = await Promise.all([
+      api.harvestPlot({ plotId: "plot-0" }),
+      api.harvestPlot({ plotId: "plot-1" }),
+    ]);
     expect(results.every((result) => result.success)).toBe(true);
     expect((await readFarmGoal())?.value).toBe(2);
     expect((await readFarmGoal())?.done).toBe(true);
@@ -528,18 +1070,37 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
   });
 
   it("skips the collection recount after its objective is complete", async () => {
-    await farmer({ questData: [{ id: "farm-quest", goals: [{ id: "farm-goal", task: "farming_collection_log", value: 1, done: true }] }] });
+    await farmer({
+      questData: [
+        {
+          id: "farm-quest",
+          goals: [
+            { id: "farm-goal", task: "farming_collection_log", value: 1, done: true },
+          ],
+        },
+      ],
+    });
     await activateFarmQuest("farming_collection_log", 1);
     const database = await getTestDatabase();
     await database.insert(farmPlot).values({
-      id: "plot-harvest", userId: "farm-user", slotIndex: 0, seedItemId: "seed-1",
-      plantedAt: new Date(Date.now() - 120_000), finishAt: new Date(Date.now() - 60_000),
+      id: "plot-harvest",
+      userId: "farm-user",
+      slotIndex: 0,
+      seedItemId: "seed-1",
+      plantedAt: new Date(Date.now() - 120_000),
+      finishAt: new Date(Date.now() - 60_000),
     } as never);
     const api = await caller("farm-user");
-    const recorded = await recordQueries(() => api.harvestPlot({ plotId: "plot-harvest" }));
+    const recorded = await recordQueries(() =>
+      api.harvestPlot({ plotId: "plot-harvest" }),
+    );
     expect(recorded.result.success).toBe(true);
-    expect(recorded.statements.filter((statement) =>
-      statement.startsWith("select") && statement.includes("FarmCollectionLog"))).toHaveLength(0);
+    expect(
+      recorded.statements.filter(
+        (statement) =>
+          statement.startsWith("select") && statement.includes("FarmCollectionLog"),
+      ),
+    ).toHaveLength(0);
     expect((await readFarmGoal())?.done).toBe(true);
     expect(await database.select().from(farmCollectionLog)).toHaveLength(1);
   });
@@ -551,9 +1112,15 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     const result = await api.sellCrop({ userItemId: "ui-seed", quantity: 1 });
     expect(result.success).toBe(false);
     const database = await getTestDatabase();
-    const [stack] = await database.select().from(userItem).where(eq(userItem.id, "ui-seed"));
+    const [stack] = await database
+      .select()
+      .from(userItem)
+      .where(eq(userItem.id, "ui-seed"));
     expect(stack?.quantity).toBe(3);
-    const [user] = await database.select().from(userData).where(eq(userData.userId, "farm-user"));
+    const [user] = await database
+      .select()
+      .from(userData)
+      .where(eq(userData.userId, "farm-user"));
     expect(user?.farmCurrency).toBe(1000);
   });
 
@@ -562,7 +1129,11 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     const database = await getTestDatabase();
     await database.update(item).set({ hidden: true }).where(eq(item.id, "seed-1"));
     const api = await caller("farm-user");
-    const result = await api.buyShopItem({ type: "SEED", itemId: "seed-1", quantity: 1 });
+    const result = await api.buyShopItem({
+      type: "SEED",
+      itemId: "seed-1",
+      quantity: 1,
+    });
     expect(result.success).toBe(false);
     const rows = await database.select().from(userItem);
     expect(rows).toHaveLength(0);
@@ -579,7 +1150,10 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     const last = await api.buyShopItem({ type: "PLOT", quantity: 1 });
     expect(last.success).toBe(true);
     const database = await getTestDatabase();
-    const [user] = await database.select().from(userData).where(eq(userData.userId, "farm-user"));
+    const [user] = await database
+      .select()
+      .from(userData)
+      .where(eq(userData.userId, "farm-user"));
     expect(FARM_STARTING_PLOTS + (user?.farmPlotsPurchased ?? 0)).toBe(FARM_MAX_PLOTS);
     const beyond = await api.buyShopItem({ type: "PLOT", quantity: 1 });
     expect(beyond.success).toBe(false);
@@ -604,7 +1178,10 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       api.harvestPlot({ plotId: "plot-1" }),
     ]);
     expect([first.success, second.success].filter(Boolean)).toHaveLength(1);
-    const crops = await database.select().from(userItem).where(eq(userItem.itemId, "crop-1"));
+    const crops = await database
+      .select()
+      .from(userItem)
+      .where(eq(userItem.itemId, "crop-1"));
     expect(crops.reduce((sum, row) => sum + row.quantity, 0)).toBe(1);
   });
 
@@ -613,40 +1190,71 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     await giveItem("ui-seed", "seed-1", 2);
     const database = await getTestDatabase();
     await database.insert(farmPlot).values(
-      [4, 2, 0, 3, 1].map((slotIndex) => ({ id: `plot-${slotIndex}`, userId: "farm-user", slotIndex })) as never,
+      [4, 2, 0, 3, 1].map((slotIndex) => ({
+        id: `plot-${slotIndex}`,
+        userId: "farm-user",
+        slotIndex,
+      })) as never,
     );
     const api = await caller("farm-user");
     const result = await api.plantAllEmpty({ seedItemId: "seed-1" });
     expect(result.success).toBe(true);
     expect(result.inventoryDeltas).toEqual([{ itemId: "seed-1", quantityDelta: -2 }]);
-    const plots = await database.select().from(farmPlot).where(eq(farmPlot.userId, "farm-user"));
+    const plots = await database
+      .select()
+      .from(farmPlot)
+      .where(eq(farmPlot.userId, "farm-user"));
     expect(
-      plots.filter((plot) => plot.seedItemId).map((plot) => plot.slotIndex).sort(),
+      plots
+        .filter((plot) => plot.seedItemId)
+        .map((plot) => plot.slotIndex)
+        .sort(),
     ).toEqual([0, 1]);
-    const seeds = await database.select().from(userItem).where(eq(userItem.itemId, "seed-1"));
+    const seeds = await database
+      .select()
+      .from(userItem)
+      .where(eq(userItem.itemId, "seed-1"));
     expect(seeds.reduce((sum, row) => sum + row.quantity, 0)).toBe(0);
   });
 
   it("fertilizes the first growing plots the fertilizer stack covers when it cannot cover all", async () => {
     await farmer();
     const database = await getTestDatabase();
-    await database.insert(item).values(seedItemRow({
-      id: "fert-1", name: "Compost", isFarmSeed: false, isFarmFertilizer: true,
-      farmTimeReductionSeconds: 60, farmYieldItemId: null,
-    }) as never);
+    await database.insert(item).values(
+      seedItemRow({
+        id: "fert-1",
+        name: "Compost",
+        isFarmSeed: false,
+        isFarmFertilizer: true,
+        farmTimeReductionSeconds: 60,
+        farmYieldItemId: null,
+      }) as never,
+    );
     await giveItem("ui-fert", "fert-1", 1);
-    await database.insert(farmPlot).values([2, 0, 1].map((slotIndex) => ({
-      id: `plot-${slotIndex}`, userId: "farm-user", slotIndex,
-      seedItemId: "seed-1", plantedAt: new Date(), finishAt: new Date(Date.now() + 3_600_000),
-    })) as never);
+    await database.insert(farmPlot).values(
+      [2, 0, 1].map((slotIndex) => ({
+        id: `plot-${slotIndex}`,
+        userId: "farm-user",
+        slotIndex,
+        seedItemId: "seed-1",
+        plantedAt: new Date(),
+        finishAt: new Date(Date.now() + 3_600_000),
+      })) as never,
+    );
     const api = await caller("farm-user");
     const result = await api.fertilizeAll({ userItemId: "ui-fert" });
     expect(result.success).toBe(true);
-    const plots = await database.select().from(farmPlot).where(eq(farmPlot.userId, "farm-user"));
+    const plots = await database
+      .select()
+      .from(farmPlot)
+      .where(eq(farmPlot.userId, "farm-user"));
     expect(
       plots.filter((plot) => plot.fertilizerApplied).map((plot) => plot.slotIndex),
     ).toEqual([0]);
-    const fertilizer = await database.select().from(userItem).where(eq(userItem.itemId, "fert-1"));
+    const fertilizer = await database
+      .select()
+      .from(userItem)
+      .where(eq(userItem.itemId, "fert-1"));
     expect(fertilizer.reduce((sum, row) => sum + row.quantity, 0)).toBe(0);
   });
 
@@ -655,8 +1263,19 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     async (mode) => {
       await farmer({ federalStatus: "GOLD" });
       const db = await getTestDatabase();
-      await db.insert(skillTree).values({ id: "farm-skill", name: "Farm Skill", image: "/skill.png", description: "Farm skill", effects: [DecreaseFarmingTime.parse({ power: 5 })] });
-      await db.insert(userSkill).values({ id: "farm-skill-owned", userId: "farm-user", skillId: "farm-skill", activated: true });
+      await db.insert(skillTree).values({
+        id: "farm-skill",
+        name: "Farm Skill",
+        image: "/skill.png",
+        description: "Farm skill",
+        effects: [DecreaseFarmingTime.parse({ power: 5 })],
+      });
+      await db.insert(userSkill).values({
+        id: "farm-skill-owned",
+        userId: "farm-user",
+        skillId: "farm-skill",
+        activated: true,
+      });
       await giveItem("ui-seed", "seed-1", 10);
       // Farm-shop seeds are excluded from the regular item shop.
       await db.update(item).set({ inShop: false }).where(eq(item.id, "seed-1"));
@@ -709,7 +1328,8 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
         expect(refreshed.plots.find((entry) => entry.id === plot.id)?.finishAt).toEqual(
           plot.finishAt,
         );
-  });
+    },
+  );
 
   it("plants a seed and returns the prefetched yield on the updated plot", async () => {
     await farmer();
@@ -727,9 +1347,15 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     expect(result.updatedPlot?.cropImage).toBe("/crop.png");
     expect(result.updatedPlot?.harvestExperience).toBe(10);
     expect(result.updatedPlot?.seedItemId).toBe("seed-1");
-    const [stack] = await database.select().from(userItem).where(eq(userItem.id, "ui-seed"));
+    const [stack] = await database
+      .select()
+      .from(userItem)
+      .where(eq(userItem.id, "ui-seed"));
     expect(stack?.quantity).toBe(1);
-    const [plot] = await database.select().from(farmPlot).where(eq(farmPlot.id, "plot-plant"));
+    const [plot] = await database
+      .select()
+      .from(farmPlot)
+      .where(eq(farmPlot.id, "plot-plant"));
     expect(plot?.seedItemId).toBe("seed-1");
     expect(plot?.finishAt).toBeTruthy();
   });
@@ -738,48 +1364,58 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     await farmer();
     await giveItem("ui-seed", "seed-1", 1);
     const database = await getTestDatabase();
-    await database.insert(farmPlot).values(Array.from({ length: FARM_STARTING_PLOTS }, (_, slotIndex) => ({
-      id: `plot-${slotIndex}`,
-      userId: "farm-user",
-      slotIndex,
-      seedItemId: "seed-1",
-      plantedAt: new Date(),
-      finishAt: new Date(Date.now() + 60_000),
-    })) as never);
+    await database.insert(farmPlot).values(
+      Array.from({ length: FARM_STARTING_PLOTS }, (_, slotIndex) => ({
+        id: `plot-${slotIndex}`,
+        userId: "farm-user",
+        slotIndex,
+        seedItemId: "seed-1",
+        plantedAt: new Date(),
+        finishAt: new Date(Date.now() + 60_000),
+      })) as never,
+    );
     const api = await caller("farm-user");
     const recorded = await recordQueries(() => api.getFarmState());
     const state = recorded.result;
-    expect(state.plots.find((plot) => plot.id === "plot-0")?.cropName).toBe("Test Crop");
-    expect(state.availableSeeds.find((seed) => seed.itemId === "seed-1")?.yieldName).toBe(
+    expect(state.plots.find((plot) => plot.id === "plot-0")?.cropName).toBe(
       "Test Crop",
     );
+    expect(
+      state.availableSeeds.find((seed) => seed.itemId === "seed-1")?.yieldName,
+    ).toBe("Test Crop");
     expect(recorded.statements).toHaveLength(11);
   });
 
   it("completes yields changed after the catalog read before clearing orphaned crops", async () => {
     await farmer();
     const database = await getTestDatabase();
-    await database.insert(item).values([
-      cropItemRow({ id: "crop-2", name: "Planted Crop" }),
-      cropItemRow({ id: "crop-3", name: "Inventory Crop" }),
-      cropItemRow({ id: "crop-4", name: "Shop Crop" }),
-      seedItemRow({ id: "seed-inventory", name: "Inventory Seed" }),
-      seedItemRow({ id: "seed-shop", name: "Shop Seed", inShop: false }),
-      seedItemRow({ id: "seed-missing", name: "Missing Yield Seed" }),
-    ] as never);
+    await database
+      .insert(item)
+      .values([
+        cropItemRow({ id: "crop-2", name: "Planted Crop" }),
+        cropItemRow({ id: "crop-3", name: "Inventory Crop" }),
+        cropItemRow({ id: "crop-4", name: "Shop Crop" }),
+        seedItemRow({ id: "seed-inventory", name: "Inventory Seed" }),
+        seedItemRow({ id: "seed-shop", name: "Shop Seed", inShop: false }),
+        seedItemRow({ id: "seed-missing", name: "Missing Yield Seed" }),
+      ] as never);
     await giveItem("ui-inventory", "seed-inventory", 2);
     const plantedAt = new Date(Date.now() - 30_000);
     const finishAt = new Date(Date.now() + 30_000);
-    await database.insert(farmPlot).values(Array.from({ length: FARM_STARTING_PLOTS }, (_, slotIndex) => ({
-      id: `plot-${slotIndex}`,
-      userId: "farm-user",
-      slotIndex,
-      ...(slotIndex < 2 ? {
-        seedItemId: slotIndex === 0 ? "seed-1" : "seed-missing",
-        plantedAt,
-        finishAt,
-      } : {}),
-    })) as never);
+    await database.insert(farmPlot).values(
+      Array.from({ length: FARM_STARTING_PLOTS }, (_, slotIndex) => ({
+        id: `plot-${slotIndex}`,
+        userId: "farm-user",
+        slotIndex,
+        ...(slotIndex < 2
+          ? {
+              seedItemId: slotIndex === 0 ? "seed-1" : "seed-missing",
+              plantedAt,
+              finishAt,
+            }
+          : {}),
+      })) as never,
+    );
 
     const { promise: catalogUpdated, resolve: releaseReads } = deferred<void>();
     let catalogRead = false;
@@ -797,14 +1433,19 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
               // staff's reassignment. None of the new crops has another seed reference.
               const catalog = await read(args);
               catalogRead = true;
-              await Promise.all(Object.entries({
-                "seed-1": "crop-2",
-                "seed-inventory": "crop-3",
-                "seed-shop": "crop-4",
-                "seed-missing": "missing-crop",
-              }).map(([seedId, yieldId]) => database.update(item)
-                .set({ farmYieldItemId: yieldId })
-                .where(eq(item.id, seedId))));
+              await Promise.all(
+                Object.entries({
+                  "seed-1": "crop-2",
+                  "seed-inventory": "crop-3",
+                  "seed-shop": "crop-4",
+                  "seed-missing": "missing-crop",
+                }).map(([seedId, yieldId]) =>
+                  database
+                    .update(item)
+                    .set({ farmYieldItemId: yieldId })
+                    .where(eq(item.id, seedId)),
+                ),
+              );
               releaseReads();
               return catalog;
             }
@@ -823,12 +1464,24 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     const recorded = await recordQueries(() => api.getFarmState());
     const state = recorded.result;
     expect(catalogRead).toBe(true);
-    expect(state.plots.find((plot) => plot.id === "plot-0")?.cropName).toBe("Planted Crop");
-    expect(state.availableSeeds.find((seed) => seed.itemId === "seed-inventory")?.yieldName).toBe("Inventory Crop");
-    expect(state.shopEntries.find((entry) => entry.itemId === "seed-shop")?.yieldName).toBe("Shop Crop");
+    expect(state.plots.find((plot) => plot.id === "plot-0")?.cropName).toBe(
+      "Planted Crop",
+    );
+    expect(
+      state.availableSeeds.find((seed) => seed.itemId === "seed-inventory")?.yieldName,
+    ).toBe("Inventory Crop");
+    expect(
+      state.shopEntries.find((entry) => entry.itemId === "seed-shop")?.yieldName,
+    ).toBe("Shop Crop");
     expect(completionReads).toBe(1);
-    expect(recorded.statements.filter((statement) => statement.startsWith("update `FarmPlot`"))).toHaveLength(1);
-    const plots = await database.query.farmPlot.findMany({ where: eq(farmPlot.userId, "farm-user") });
+    expect(
+      recorded.statements.filter((statement) =>
+        statement.startsWith("update `FarmPlot`"),
+      ),
+    ).toHaveLength(1);
+    const plots = await database.query.farmPlot.findMany({
+      where: eq(farmPlot.userId, "farm-user"),
+    });
     const planted = plots.find((plot) => plot.id === "plot-0");
     expect(planted?.seedItemId).toBe("seed-1");
     expect(planted?.plantedAt?.getTime()).toBe(plantedAt.getTime());
@@ -844,10 +1497,12 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     await farmer();
     const database = await getTestDatabase();
     // A second seed/crop pair so harvestAll has to fan out over two different stacks.
-    await database.insert(item).values([
-      cropItemRow({ id: "crop-2", name: "Second Crop" }),
-      seedItemRow({ id: "seed-2", name: "Second Seed", farmYieldItemId: "crop-2" }),
-    ] as never);
+    await database
+      .insert(item)
+      .values([
+        cropItemRow({ id: "crop-2", name: "Second Crop" }),
+        seedItemRow({ id: "seed-2", name: "Second Seed", farmYieldItemId: "crop-2" }),
+      ] as never);
     const ripe = (id: string, slotIndex: number, seedItemId: string) => ({
       id,
       userId: "farm-user",
@@ -856,20 +1511,26 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       plantedAt: new Date(Date.now() - 120_000),
       finishAt: new Date(Date.now() - 60_000),
     });
-    await database.insert(farmPlot).values([
-      ripe("plot-a", 0, "seed-1"),
-      ripe("plot-b", 1, "seed-1"),
-      ripe("plot-c", 2, "seed-2"),
-    ] as never);
+    await database
+      .insert(farmPlot)
+      .values([
+        ripe("plot-a", 0, "seed-1"),
+        ripe("plot-b", 1, "seed-1"),
+        ripe("plot-c", 2, "seed-2"),
+      ] as never);
     const api = await caller("farm-user");
     const result = await api.harvestAll();
     expect(result.success).toBe(true);
     const totalFor = async (itemId: string) =>
-      (await database.select().from(userItem).where(eq(userItem.itemId, itemId)))
-        .reduce((sum, row) => sum + row.quantity, 0);
+      (
+        await database.select().from(userItem).where(eq(userItem.itemId, itemId))
+      ).reduce((sum, row) => sum + row.quantity, 0);
     expect(await totalFor("crop-1")).toBe(2);
     expect(await totalFor("crop-2")).toBe(1);
-    const plots = await database.select().from(farmPlot).where(eq(farmPlot.userId, "farm-user"));
+    const plots = await database
+      .select()
+      .from(farmPlot)
+      .where(eq(farmPlot.userId, "farm-user"));
     expect(plots.every((plot) => plot.seedItemId === null)).toBe(true);
   });
 
@@ -878,9 +1539,16 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     const database = await getTestDatabase();
     // A crop priced in farm coins but flagged for the ryo shop: buying it for ryo and
     // selling it at the farm would mint farm currency out of the ryo economy.
-    await database.update(item).set({ inShop: true, cost: 1 }).where(eq(item.id, "crop-1"));
+    await database
+      .update(item)
+      .set({ inShop: true, cost: 1 })
+      .where(eq(item.id, "crop-1"));
     const shop = await callerFor(itemRouter, "farm-user");
-    const result = await shop.buy({ itemId: "crop-1", stack: 1, villageId: null } as never);
+    const result = await shop.buy({
+      itemId: "crop-1",
+      stack: 1,
+      villageId: null,
+    } as never);
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/farm/i);
   });
@@ -889,24 +1557,47 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     await farmer();
     const database = await getTestDatabase();
     await database.insert(item).values(
-      seedItemRow({ id: "fert-1", name: "Compost", isFarmSeed: false, isFarmFertilizer: true,
-        farmTimeReductionSeconds: 600, farmYieldItemId: null }) as never,
+      seedItemRow({
+        id: "fert-1",
+        name: "Compost",
+        isFarmSeed: false,
+        isFarmFertilizer: true,
+        farmTimeReductionSeconds: 600,
+        farmYieldItemId: null,
+      }) as never,
     );
     await database.insert(userItem).values({
-      id: "ui-fert", userId: "farm-user", itemId: "fert-1", quantity: 2,
-      equipped: "NONE", storedAtHome: true,
+      id: "ui-fert",
+      userId: "farm-user",
+      itemId: "fert-1",
+      quantity: 2,
+      equipped: "NONE",
+      storedAtHome: true,
     } as never);
     const finishAt = new Date(Date.now() + 3_600_000);
     await database.insert(farmPlot).values({
-      id: "plot-f", userId: "farm-user", slotIndex: 0, seedItemId: "seed-1",
-      plantedAt: new Date(Date.now() - 60_000), finishAt,
+      id: "plot-f",
+      userId: "farm-user",
+      slotIndex: 0,
+      seedItemId: "seed-1",
+      plantedAt: new Date(Date.now() - 60_000),
+      finishAt,
     } as never);
     const api = await caller("farm-user");
-    const result = await api.applyFertilizer({ plotId: "plot-f", userItemId: "ui-fert" });
+    const result = await api.applyFertilizer({
+      plotId: "plot-f",
+      userItemId: "ui-fert",
+    });
     expect(result.success).toBe(false);
-    const [stack] = await database.select().from(userItem).where(eq(userItem.id, "ui-fert"));
+    const [stack] = await database
+      .select()
+      .from(userItem)
+      .where(eq(userItem.id, "ui-fert"));
     expect(stack?.quantity).toBe(2);
-    const [plot] = await database.select().from(farmPlot).where(eq(farmPlot.id, "plot-f"));
+    const [plot] = await database
+      .select()
+      .from(farmPlot)
+      .where(eq(farmPlot.id, "plot-f"));
     expect(plot?.fertilizerApplied).toBe(false);
     expect(plot?.finishAt?.getTime()).toBe(finishAt.getTime());
   });
@@ -949,7 +1640,10 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
 
     // The reduction was derived from `original`; applying it would resurrect the longer timer.
     expect(result.success).toBe(false);
-    const [plot] = await database.select().from(farmPlot).where(eq(farmPlot.id, "plot-w"));
+    const [plot] = await database
+      .select()
+      .from(farmPlot)
+      .where(eq(farmPlot.id, "plot-w"));
     expect(plot?.finishAt?.getTime()).toBe(moved.getTime());
     expect(plot?.lastWateredAt).toBeNull();
   });
@@ -1021,7 +1715,9 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       .select()
       .from(userData)
       .where(eq(userData.userId, "farm-user"));
-    const goal = (row?.questData as { id: string; goals: { id: string; value: number }[] }[])
+    const goal = (
+      row?.questData as { id: string; goals: { id: string; value: number }[] }[]
+    )
       ?.find((tracker) => tracker.id === "farm-quest")
       ?.goals.find((entry) => entry.id === "water-goal");
     expect(goal?.value).toBe(2);
@@ -1053,7 +1749,9 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     const settled = await (await caller("farm-user")).getFarmState();
     expect(settled).toBeTruthy();
     if (!("availableSeeds" in settled)) throw new Error("Expected farm state");
-    expect(settled.availableSeeds.find((seed) => seed.itemId === "seed-1")?.quantity).toBe(50);
+    expect(
+      settled.availableSeeds.find((seed) => seed.itemId === "seed-1")?.quantity,
+    ).toBe(50);
 
     // A concurrent request that read the extraction before the settling delete removed it.
     const staleClient = overrideQuery(database, "farmExtraction", {
@@ -1126,17 +1824,42 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
       .set({ farmExtractSeedItemId: "seed-1", farmExtractSeedCount: 1 })
       .where(eq(item.id, "crop-1"));
     await giveItem("ui-crop", "crop-1", 2);
-    const rival = { id: "rival-extraction", userId: "farm-user", extractorSlot: 0, cropItemId: "crop-1",
-      seedItemId: "seed-1", cropQuantity: 1, seedQuantity: 1, startedAt: new Date(), finishAt: new Date(Date.now() + 60_000) };
-    const raced = beforeStatements(database, farmExtraction, [() => database.insert(farmExtraction).values(rival)], { operations: ["insert"] });
-    const result = await callerForDatabase(farmingRouter, "farm-user", raced).extractSeeds({
+    const rival = {
+      id: "rival-extraction",
+      userId: "farm-user",
+      extractorSlot: 0,
+      cropItemId: "crop-1",
+      seedItemId: "seed-1",
+      cropQuantity: 1,
+      seedQuantity: 1,
+      startedAt: new Date(),
+      finishAt: new Date(Date.now() + 60_000),
+    };
+    const raced = beforeStatements(
+      database,
+      farmExtraction,
+      [() => database.insert(farmExtraction).values(rival)],
+      { operations: ["insert"] },
+    );
+    const result = await callerForDatabase(
+      farmingRouter,
+      "farm-user",
+      raced,
+    ).extractSeeds({
       extractorSlot: 0,
       userItemId: "ui-crop",
       quantity: 1,
     });
-    expect(result).toMatchObject({ success: false, message: "Seed extractor 1 is already processing crops" });
-    expect(await database.select({ id: farmExtraction.id }).from(farmExtraction)).toEqual([{ id: "rival-extraction" }]);
-    expect(await database.query.userItem.findFirst({ where: eq(userItem.id, "ui-crop") })).toMatchObject({ quantity: 2 });
+    expect(result).toMatchObject({
+      success: false,
+      message: "Seed extractor 1 is already processing crops",
+    });
+    expect(
+      await database.select({ id: farmExtraction.id }).from(farmExtraction),
+    ).toEqual([{ id: "rival-extraction" }]);
+    expect(
+      await database.query.userItem.findFirst({ where: eq(userItem.id, "ui-crop") }),
+    ).toMatchObject({ quantity: 2 });
   });
 
   it("merges two extractions of the same seed into one stack", async () => {
@@ -1271,7 +1994,9 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     } as never);
 
     // The seed grant commits, then the delete of the settled row fails transiently.
-    const failingDelete = failStatements(database, farmExtraction, Infinity, { operations: ["delete"] });
+    const failingDelete = failStatements(database, farmExtraction, Infinity, {
+      operations: ["delete"],
+    });
     await callerForDatabase(farmingRouter, "farm-user", failingDelete).getFarmState();
 
     const [afterGrant] = await database.select().from(farmExtraction);
@@ -1313,7 +2038,9 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     } as never);
 
     // Stand in for the item write failing after the extraction has been claimed.
-    const failingClient = failStatements(database, userItem, Infinity, { operations: ["insert"] });
+    const failingClient = failStatements(database, userItem, Infinity, {
+      operations: ["insert"],
+    });
     await callerForDatabase(farmingRouter, "farm-user", failingClient).getFarmState();
 
     // The reward must not go down with the row: the claim is released and the next
@@ -1339,10 +2066,12 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
     const database = await insertFinishedExtraction();
 
     let competed = false;
-    const holdingClaim = beforeStatements(database, userItem, [async () => {
-      await (await caller("farm-user")).getFarmState();
-      competed = true;
-    }]);
+    const holdingClaim = beforeStatements(database, userItem, [
+      async () => {
+        await (await caller("farm-user")).getFarmState();
+        competed = true;
+      },
+    ]);
     await callerForDatabase(farmingRouter, "farm-user", holdingClaim).getFarmState();
 
     expect(competed).toBe(true);
@@ -1354,7 +2083,9 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
 
   it("takes over a stale claim left by a request that died before paying", async () => {
     await farmer();
-    const database = await insertFinishedExtraction({ claimedAt: new Date(Date.now() - 3_600_000) });
+    const database = await insertFinishedExtraction({
+      claimedAt: new Date(Date.now() - 3_600_000),
+    });
 
     await (await caller("farm-user")).getFarmState();
 
@@ -1366,14 +2097,18 @@ describeWithDatabase("farming router guards against a real MySQL", () => {
 
   it("does not take over a stale claim that settled after the read", async () => {
     await farmer();
-    const database = await insertFinishedExtraction({ claimedAt: new Date(Date.now() - 3_600_000) });
+    const database = await insertFinishedExtraction({
+      claimedAt: new Date(Date.now() - 3_600_000),
+    });
 
     // The slow request's seeds land and its settledAt commits just before this claim runs.
     let settled = false;
-    const racing = beforeStatements(database, farmExtraction, [async () => {
-      await database.update(farmExtraction).set({ settledAt: new Date() });
-      settled = true;
-    }]);
+    const racing = beforeStatements(database, farmExtraction, [
+      async () => {
+        await database.update(farmExtraction).set({ settledAt: new Date() });
+        settled = true;
+      },
+    ]);
     await callerForDatabase(farmingRouter, "farm-user", racing).getFarmState();
 
     expect(settled).toBe(true);

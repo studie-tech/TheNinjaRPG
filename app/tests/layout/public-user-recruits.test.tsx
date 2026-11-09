@@ -11,24 +11,43 @@ import * as UserContext from "@/utils/UserContext";
 const remove = vi.fn(async () => ({ success: true, message: "Removed" }));
 const invalidate = vi.fn(async () => undefined);
 const recruit = (userId: string, username: string) => ({
-  userId, username, rank: "GENIN" as const, isOutlaw: false, level: 10, avatar: null,
+  userId,
+  username,
+  rank: "GENIN" as const,
+  isOutlaw: false,
+  level: 10,
+  avatar: null,
 });
 
 beforeEach(() => {
   remove.mockClear();
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({ profile: { getPublicUser: { invalidate }, getPublicUsers: { invalidate } } }),
+    useUtils: () => ({
+      profile: { getPublicUser: { invalidate }, getPublicUsers: { invalidate } },
+    }),
     staff: { deleteReferral: { useMutation: () => ({ mutateAsync: remove }) } },
   });
-  vi.spyOn(UserContext, "useUserData").mockImplementation(() => ({ data: { role: "OWNER" } }) as never);
+  vi.spyOn(UserContext, "useUserData").mockImplementation(
+    () => ({ data: { role: "OWNER" } }) as never,
+  );
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
-  vi.spyOn(UserAvatarTile, "UserAvatarTile").mockImplementation((({ user }: { user: { username: string } }) => <span>{user.username}</span>) as never);
-  vi.spyOn(Modal, "default").mockImplementation(({ isOpen, title, onAccept }) => isOpen ? (
-    <div role="dialog" aria-label={title}>
-      <button type="button" onClick={(event) => onAccept?.(event as never)}>Proceed</button>
-    </div>
-  ) : null);
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
+    <div>{children}</div>
+  ));
+  vi.spyOn(UserAvatarTile, "UserAvatarTile").mockImplementation((({
+    user,
+  }: {
+    user: { username: string };
+  }) => <span>{user.username}</span>) as never);
+  vi.spyOn(Modal, "default").mockImplementation(({ isOpen, title, onAccept }) =>
+    isOpen ? (
+      <div role="dialog" aria-label={title}>
+        <button type="button" onClick={(event) => onAccept?.(event as never)}>
+          Proceed
+        </button>
+      </div>
+    ) : null,
+  );
 });
 
 afterEach(() => {

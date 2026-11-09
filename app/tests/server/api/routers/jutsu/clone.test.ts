@@ -27,7 +27,9 @@ const setup = (
   user = { role: "CONTENT", isBanned: false },
 ) => {
   const values = vi.fn(async (_row: Record<string, unknown>) => ({ rowsAffected: 1 }));
-  const logValues = vi.fn(async (_row: Record<string, unknown>) => ({ rowsAffected: 1 }));
+  const logValues = vi.fn(async (_row: Record<string, unknown>) => ({
+    rowsAffected: 1,
+  }));
   const insert = vi.fn((table: object) => ({
     values: table === actionLog ? logValues : values,
   }));

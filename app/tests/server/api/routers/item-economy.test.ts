@@ -29,7 +29,12 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { beforeTransaction, inTransactions, failStatements, overrideQuery } from "../../../setup/statements";
+import {
+  beforeTransaction,
+  inTransactions,
+  failStatements,
+  overrideQuery,
+} from "../../../setup/statements";
 
 describeWithDatabase("item purchase quotas", () => {
   beforeEach(async () => {
@@ -149,15 +154,13 @@ describeWithDatabase("item purchase quotas", () => {
     async (purchaseLimitPeriod) => {
       const db = await getTestDatabase();
       await db.update(item).set({ purchaseLimitPeriod }).where(eq(item.id, "limited"));
-      await db
-        .insert(itemPurchaseCounter)
-        .values({
-          userId: "buyer",
-          itemId: "limited",
-          period: purchaseLimitPeriod,
-          periodStart: new Date("2000-01-01T00:00:00Z"),
-          quantity: 5,
-        });
+      await db.insert(itemPurchaseCounter).values({
+        userId: "buyer",
+        itemId: "limited",
+        period: purchaseLimitPeriod,
+        periodStart: new Date("2000-01-01T00:00:00Z"),
+        quantity: 5,
+      });
       const api = await callerFor(itemRouter, "buyer");
       expect(
         await api.buy({ itemId: "limited", villageId: "home", stack: 5 }),
@@ -176,12 +179,21 @@ describeWithDatabase("item purchase quotas", () => {
       quantity: 5,
     });
     const api = await callerFor(itemRouter, "buyer");
-    expect(await api.getPurchaseAllowance({ id: "limited" })).toMatchObject({ remaining: 5 });
-    expect(await api.buy({ itemId: "limited", villageId: "home", stack: 5 })).toMatchObject({ success: true });
+    expect(await api.getPurchaseAllowance({ id: "limited" })).toMatchObject({
+      remaining: 5,
+    });
+    expect(
+      await api.buy({ itemId: "limited", villageId: "home", stack: 5 }),
+    ).toMatchObject({ success: true });
     const { counters } = await snapshot();
     expect(counters).toHaveLength(2);
-    expect(counters.map((counter) => counter.period).sort()).toEqual(["DAILY", "WEEKLY"]);
-    expect(await api.getPurchaseAllowance({ id: "limited" })).toMatchObject({ remaining: 0 });
+    expect(counters.map((counter) => counter.period).sort()).toEqual([
+      "DAILY",
+      "WEEKLY",
+    ]);
+    expect(await api.getPurchaseAllowance({ id: "limited" })).toMatchObject({
+      remaining: 0,
+    });
   });
 
   it("does not consume quota or advance quests when funds are insufficient", async () => {

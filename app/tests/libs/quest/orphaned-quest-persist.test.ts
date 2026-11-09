@@ -6,7 +6,12 @@ import { trackerQuest, trackerUser } from "../../setup/quest";
 // An orphaned QuestHistory row (its quest was deleted) resolves `uq.quest` to null.
 // filterQuestTrackersForDbPersist must not dereference `uq.quest.questType` for it; the guard is
 // a backstop for every caller that loads user quests without dropping null quests.
-const orphanUserQuest = { id: "uq-orphan", questId: "deleted-quest", completed: 0, quest: null };
+const orphanUserQuest = {
+  id: "uq-orphan",
+  questId: "deleted-quest",
+  completed: 0,
+  quest: null,
+};
 
 const achievementMockUserQuest = (questId: string) => ({
   // Mock achievement rows use id === questId (see mockAchievementHistoryEntries); these must be

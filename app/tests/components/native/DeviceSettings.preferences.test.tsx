@@ -6,7 +6,10 @@ import DeviceSettings from "@/components/native/DeviceSettings";
 import * as permission from "@/hooks/useNativePush";
 import * as shell from "@/hooks/useNativeShell";
 import * as toast from "@/libs/toast";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 import { deferred } from "../../setup/deferred";
 
 type Preferences = { categories: { category: string; enabled: boolean }[] };
@@ -25,7 +28,11 @@ beforeEach(() => {
   write = deferred();
   setPreference.mockClear();
   Object.assign(window, {
-    Capacitor: { isNativePlatform: () => true, getPlatform: () => "android", Plugins: {} },
+    Capacitor: {
+      isNativePlatform: () => true,
+      getPlatform: () => "android",
+      Plugins: {},
+    },
   });
   vi.spyOn(clerk, "useUser").mockReturnValue({
     isLoaded: true,
@@ -47,7 +54,10 @@ beforeEach(() => {
     useUtils: () => ({
       push: {
         getPreferences: {
-          setData: (_input: undefined, update: (current: Preferences) => Preferences) => {
+          setData: (
+            _input: undefined,
+            update: (current: Preferences) => Preferences,
+          ) => {
             preferences = update(preferences);
           },
         },
@@ -94,7 +104,10 @@ it("keeps a confirmed preference and writes it into the cached list", async () =
 it("restores the cached value and reports a rejected preference", async () => {
   const view = startWrite();
   await act(async () => write.resolve({ success: false, message: "Nope" }));
-  expect(toast.showMutationToast).toHaveBeenCalledWith({ success: false, message: "Nope" });
+  expect(toast.showMutationToast).toHaveBeenCalledWith({
+    success: false,
+    message: "Nope",
+  });
   expect(preferences.categories[0]).toEqual({ category: "combat", enabled: false });
   expect(combatSwitch(view).getAttribute("aria-checked")).toBe("false");
   expect((combatSwitch(view) as HTMLButtonElement).disabled).toBe(false);
