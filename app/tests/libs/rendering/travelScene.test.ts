@@ -3,7 +3,7 @@ import {
   Assets,
   BufferImageSource,
   Container,
-  Graphics,
+  type Graphics,
   RenderLayer,
   Texture,
 } from "pixi.js";
@@ -923,6 +923,18 @@ describe("travel scene ground depth", () => {
     expect(built.sourceKey).not.toBe(retained.sourceKey);
     expect(retained.data.segments).toEqual(built.data.segments);
     expect(retained.data.surface).toEqual(built.data.surface);
+  });
+
+  it("draws no outline between neighbouring sectors, including on edge-only rebuilds", async () => {
+    const { scene, state } = await sceneFixture();
+    state.window.push(windowEntry(725, 1));
+    await scene.updateWindow();
+    state.window.push({ ...windowEntry(726, 1), dx: 1 });
+    await scene.updateWindow();
+    const builds = (terrain.createHexTerrain as unknown as ReturnType<typeof vi.fn>)
+      .mock.calls;
+    expect(builds.length).toBeGreaterThan(2);
+    expect(builds.every((call) => call[2] === false)).toBe(true);
   });
 
   it("settles an edge-only rebuild cancelled by disposal without rejecting the window update", async () => {

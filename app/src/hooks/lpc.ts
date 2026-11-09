@@ -36,8 +36,12 @@ export const useLpcCatalogLoader = ({
     const cached = revalidateInBackground
       ? utils.gameAsset.getLpcSceneCatalog.getData()
       : undefined;
+    // The catalog is slow to build and loads beside a scene's other data, not inside its batch.
+    // It has no observers, so it is kept for the page's lifetime for the next scene to reuse.
     const fresh = utils.gameAsset.getLpcSceneCatalog.fetch(undefined, {
       staleTime: 0,
+      gcTime: Infinity,
+      trpc: { context: { skipBatch: true } },
     });
     if (cached) {
       // Cached artwork remains usable if revalidation fails; a later scene retries.

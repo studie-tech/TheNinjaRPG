@@ -174,7 +174,7 @@ const profileRecoveryCallbacks = ({
   if (!callbacks) throw new Error(`${procedure} callbacks were not found`);
   const recover =
     file === "RaidBrowser.tsx"
-      ? source.match(/const recoverUser = [\s\S]*?\n  };/)?.[0]
+      ? source.match(/const recoverUser = [\s\S]*?\n {2}};/)?.[0]
       : "";
   // Run the production callback options and shared recovery with the real provider defaults.
   const transpiler = new (require("bun").Transpiler)({ loader: "ts" }) as {
@@ -651,6 +651,33 @@ const holdBatchedFetch = (data: unknown) => {
   return releases;
 };
 
+it("sends a skipBatch read on its own while reads issued beside it share one batch", async () => {
+  const urls: string[] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    const url = String(input);
+    urls.push(url);
+    expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer a");
+    const data = { result: { data: superjson.serialize({ ok: true }) } };
+    const paths = url.split("?")[0]!.split("/").pop()!.split(",");
+    return Response.json(url.includes("batch=1") ? paths.map(() => data) : data);
+  });
+  const { trpc } = mountProvider(session("a"));
+  await Promise.all([
+    trpc.misc.getSetting.query({ name: "a" }),
+    trpc.misc.getSetting.query({ name: "b" }),
+    trpc.gameAsset.getLpcSceneCatalog.query(undefined, {
+      context: { skipBatch: true },
+    }),
+  ]);
+  expect(urls).toHaveLength(2);
+  const alone = urls.find((url) => url.includes("gameAsset.getLpcSceneCatalog"))!;
+  expect(alone).not.toContain("batch=1");
+  expect(alone).not.toContain("misc.getSetting");
+  expect(urls.find((url) => url !== alone)).toContain(
+    "misc.getSetting,misc.getSetting?batch=1",
+  );
+});
+
 const fetchFailure = (message = "Failed to fetch") => {
   const error = new TypeError(message);
   error.stack = `${message}\n    at fetch (fetch:1:1)`;
@@ -659,8 +686,8 @@ const fetchFailure = (message = "Failed to fetch") => {
 
 it.each([
   "Failed to fetch",
-  '\"Offline\" is not valid JSON',
-  '\"<!DOCTYPE \"... is not valid JSON',
+  '"Offline" is not valid JSON',
+  '"<!DOCTYPE "... is not valid JSON',
 ])(
   "settles a mutation with uncertain-outcome feedback and no retry for %s",
   async (message) => {

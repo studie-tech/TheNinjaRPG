@@ -62,7 +62,9 @@ const NO_HITS: CombatHit[] = [];
 const PRESENTATION_STALL_MS = 500;
 
 /**
- * Owns a battle canvas and awaits its initial terrain, actors and known effects.
+ * Owns a battle canvas and awaits its initial actors and first effect synchronization,
+ * which follows the battle's asset names. The field draws
+ * from its first frame, with tinted terrain and fighter markers filling in as artwork arrives.
  * Reads live snapshots; refresh invalidates a paused scene after external changes.
  * Construction inputs (battle geometry, seed, viewport) require a new scene.
  */
@@ -124,7 +126,7 @@ export const createCombatScene = async (options: {
       depthLayer = new RenderLayer({ sortableChildren: true }),
       uiLayer = new RenderLayer();
     const [terrain, emptyArt] = await Promise.all([
-      createHexTerrain(game, data.terrain, false),
+      createHexTerrain(game, data.terrain, false, { deferTextures: true }),
       createWorldSprites(game, [], shadows),
     ]);
     let art = emptyArt;
@@ -222,9 +224,18 @@ export const createCombatScene = async (options: {
       followedPosition = "";
     let clock = 0,
       dirty = true,
-      initialized = false,
-      rendered = false;
+      fightersSettled = false,
+      effectsKnown = false,
+      effectsShown = false,
+      effectArtPreloaded = false;
     let effectsReady: Promise<unknown> = Promise.resolve();
+    /** Settles with the first effect synchronization, which needs the battle's asset names. */
+    let settleFirstEffects: (ready: Promise<unknown>) => void = () => {};
+    const firstEffectsReady = new Promise<unknown>((resolve) => {
+      settleFirstEffects = resolve;
+    });
+    // A scene closed before its asset names arrive still settles.
+    game.own(() => settleFirstEffects(Promise.resolve()));
     let wasMoving = false;
     let previous: CombatSceneSnapshot | null = null,
       highlightKey = "",
@@ -299,7 +310,20 @@ export const createCombatScene = async (options: {
     const playback = createCombatPlayback(initial.battle);
     let lastFrameAt = 0;
     let lastPresented: CombatPresented = { battle: initial.battle };
-    const sync = (snapshot: CombatSceneSnapshot, isInitial: boolean) => {
+    /** Future effect art downloads behind the fighters and effects already on the field. */
+    const preloadEffectArt = () => {
+      const snapshot = previous;
+      if (effectArtPreloaded || !fightersSettled || !effectsKnown || !snapshot) return;
+      effectArtPreloaded = true;
+      const preloads = createRenderScope(game);
+      const textureIds = new Set(snapshot.battle.extraState.textureAssets ?? []);
+      void Promise.allSettled(
+        snapshot.assets
+          .filter((asset) => textureIds.has(asset.id) && asset.image)
+          .map((asset) => preloads.assets.texture(asset.image)),
+      ).then(() => preloads.dispose());
+    };
+    const sync = (snapshot: CombatSceneSnapshot) => {
       actors.sync({
         battle: snapshot.battle,
         viewer: snapshot.viewer,
@@ -316,20 +340,33 @@ export const createCombatScene = async (options: {
         ...(snapshot.battle.extraState.textureAssets ?? []),
         ...(snapshot.battle.extraState.sfxAssets ?? []),
       ].every((id) => snapshot.requestedIds.has(id));
-      if (known)
+      // Effects present before their first painted frame appear without replaying their arrival,
+      // including those whose asset list reaches the scene after it has started drawing.
+      if (known) {
         effectsReady = effects.sync(
           { ...snapshot, sound: snapshot.active && snapshot.sound },
-          isInitial && !options.showInitialAppearance,
+          !effectsShown && !options.showInitialAppearance,
         );
+        if (!effectsKnown) settleFirstEffects(effectsReady);
+        effectsKnown = true;
+      }
       dirty = false;
       previous = snapshot;
       highlightKey = "";
+      preloadEffectArt();
     };
-    sync(initial, true);
-    await Promise.all([actors.ready(), effectsReady]);
-    initialized = true;
-    // Fighters and active effects become usable before optional border scenery and future effect art.
-    const sceneryReady = createWorldSprites(game, data.scenery, shadows)
+    sync(initial);
+    const fightersReady = Promise.all([actors.ready(), firstEffectsReady]);
+    void fightersReady.then(
+      () => {
+        fightersSettled = true;
+        preloadEffectArt();
+      },
+      () => undefined,
+    );
+    // Optional border scenery downloads after the fighters and active effects it would delay.
+    const sceneryReady = fightersReady
+      .then(() => createWorldSprites(game, data.scenery, shadows))
       .then((next) => {
         if (game.isDisposed()) return;
         const position = world.getChildIndex(art.container);
@@ -345,13 +382,6 @@ export const createCombatScene = async (options: {
         if (!game.isDisposed())
           console.warn("Combat scenery unavailable; fighters remain usable", error);
       });
-    const preloads = createRenderScope(game);
-    const textureIds = new Set(initial.battle.extraState.textureAssets ?? []);
-    void Promise.allSettled(
-      initial.assets
-        .filter((asset) => textureIds.has(asset.id) && asset.image)
-        .map((asset) => preloads.assets.texture(asset.image)),
-    ).then(() => preloads.dispose());
 
     game.own(() => {
       if (zoomTimer !== null) clearTimeout(zoomTimer);
@@ -417,7 +447,6 @@ export const createCombatScene = async (options: {
       const frame = game.visualEffects.spriteAnimations
         ? sourceFrame
         : { ...sourceFrame, reducedMotion: true };
-      if (!initialized) return;
       const snapshot = options.getSnapshot();
       clock =
         !capture && options.advance
@@ -474,7 +503,7 @@ export const createCombatScene = async (options: {
         snapshot.sound !== previous.sound ||
         snapshot.volume !== previous.volume
       )
-        sync(view, !rendered);
+        sync(view);
       if (arrival) transformation.start(arrival);
       for (const { userId, amount, severity } of hits) {
         const head = actors.headPosition(userId);
@@ -612,12 +641,15 @@ export const createCombatScene = async (options: {
         hoverKey = nextHover;
         options.onHover(hover);
       }
-      rendered = true;
+      if (effectsKnown) effectsShown = true;
       game.setAnimating(snapshot.active);
     };
     game.setUpdate(updateFrame);
     game.setAnimating(initial.active);
     game.invalidate();
+    // Autonomous turns wait for the scene, so it resolves once its fighters and active effects
+    // can be seen; a turn landing earlier would lose its effects' arrival.
+    await fightersReady;
     return {
       dispose: game.dispose,
       grid: data.grid,
@@ -626,7 +658,7 @@ export const createCombatScene = async (options: {
       renderAt: async (timeMs: number) => {
         if (game.isDisposed()) return;
         clock = Math.max(0, timeMs);
-        sync(options.getSnapshot(), !rendered);
+        sync(options.getSnapshot());
         await Promise.all([actors.ready(), effectsReady, sceneryReady]);
         if (game.isDisposed()) return;
         updateFrame({ now: clock, delta: 0, reducedMotion: false }, true);

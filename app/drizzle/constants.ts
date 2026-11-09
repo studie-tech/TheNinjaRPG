@@ -3681,7 +3681,7 @@ export const MUSIC_BLUE_BLADE_THEME =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIvdW2M4xfOewksxBoS1HQCihpL7c42Ky9uUF";
 /** Cartoon, Musical, Success, Fanfare (Epidemic Sound a7890bad-75d0-415f-b721-e31c7b87fd6f). */
 export const CONFETTI_SFX_URL =
-  "https://ui0arpl8sm.ufs.sh/f/confetti-success-fanfare-b859237a-db7f-425e-9228-3465d2152e6b.mp3";
+  "https://uploadthing.b-cdn.net/f/confetti-success-fanfare-b859237a-db7f-425e-9228-3465d2152e6b.mp3";
 /** Xevan's attack notification sound, played for background battle admissions. */
 export const BATTLE_ALERT_SFX_URL =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEETUvSLfKL5D7TAFe29bymSaPCIQ846MdzGg";

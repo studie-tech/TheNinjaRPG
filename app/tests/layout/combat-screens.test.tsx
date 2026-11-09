@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import * as combatHooks from "@/hooks/combat";
 import * as gameScene from "@/hooks/game-scene";
-import * as lpc from "@/hooks/lpc";
 import * as navigation from "@/hooks/navigation";
 import * as tutorialHooks from "@/hooks/tutorial";
 import * as inventoryCache from "@/hooks/useInventoryCacheUpdate";
@@ -129,7 +128,6 @@ beforeEach(() => {
     isReady: true,
     error: false,
   }));
-  stub(lpc, "useLpcCatalogLoader", () => async () => ({}));
   stub(combatHooks, "useCombatUpdates", () => ({
     updateLogs: async () => {},
     startAction: () => true,
@@ -280,6 +278,7 @@ const mount = (battleState: BattleState, extra: { arenaActions?: ReactNode } = {
         }
         endTurnKey="w"
         arenaActions={extra.arenaActions}
+        loadLpcCatalog={async () => ({}) as never}
       />
     </QueryClientProvider>
   );

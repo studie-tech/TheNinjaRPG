@@ -353,6 +353,51 @@ describe("physical world lighting", () => {
       f.dispose();
     }
   });
+  it("installs a catalogue caster's own frame topology before its material is used", async () => {
+    const f = fixture();
+    const material = { surfaceFrames: [] } as unknown as worldMaterials.WorldMaterial;
+    const frames = { frames: [], bytes: 0 };
+    const releaseSurfaces = vi.fn();
+    const acquireMaterial = vi
+      .spyOn(worldMaterials, "acquireWorldMaterial")
+      .mockReturnValue({ resource: Promise.resolve(material), release: vi.fn() });
+    const acquire = vi
+      .spyOn(worldMaterials, "acquireWorldSurfaceFrame")
+      .mockReturnValue({ resource: Promise.resolve(frames), release: releaseSurfaces });
+    const install = vi.spyOn(worldMaterials, "installAuthoredFrames");
+    try {
+      const sprite = new Sprite(Texture.WHITE);
+      f.parent.addChild(sprite);
+      const description = {
+        id: "catalogue-pine",
+        kind: "decoration",
+        image: "/world-art/woodland-village.webp",
+        frame: { x: 22.5, y: 38, width: 124.5, height: 138 },
+        size: 40,
+        x: 40,
+        y: 40,
+        groundY: 30,
+        shadowCaster: "conifer",
+      } as const;
+      const registration = f.shadows.register(sprite, description);
+      // The sprite's own frame selects the topology the draw code will look up.
+      expect(acquire).toHaveBeenCalledWith(
+        description.image,
+        description.frame,
+        sprite.texture,
+      );
+      await registration.ready;
+      expect(install).toHaveBeenCalledWith(material, frames);
+      registration();
+      f.dispose();
+      expect(releaseSurfaces).toHaveBeenCalled();
+    } finally {
+      f.dispose();
+      acquireMaterial.mockRestore();
+      acquire.mockRestore();
+      install.mockRestore();
+    }
+  });
   it("disables sun and local occlusion work while retaining illuminated materials", async () => {
     const f = fixture(),
       source = materialSourceFixture();

@@ -34,7 +34,8 @@ export const animationTextureUrl = (
   cellSize: number,
 ) => {
   // Prepared raw sheets bypass the CDN's asynchronous image optimizer.
-  if (animation.smallUrl && cellSize === 128) return animation.smallUrl;
+  if (animation.smallUrl && cellSize === 128)
+    return textureImageUrl(animation.smallUrl, 0);
   if (animation.smallUrl && cellSize === 256) return textureImageUrl(animation.url, 0);
   const url = new URL(textureImageUrl(animation.url, animation.columns * cellSize));
   if (url.hostname === "uploadthing.b-cdn.net") {
@@ -83,7 +84,9 @@ export const acquireAnimationTexture = (
       reservedBytes() + bytes > MAX_BYTES
     )
       return;
-    const url = animationTextureUrl(animation, cellSize);
+    // Pixi caches by source; a fragment keeps these nearest atlases apart from linear scene
+    // loads of the same file (travel loops), which the HTTP cache still shares.
+    const url = `${animationTextureUrl(animation, cellSize)}#tnr-animation`;
     const resource = Promise.resolve(unloading.get(url))
       .then(() =>
         Assets.load<Texture>({

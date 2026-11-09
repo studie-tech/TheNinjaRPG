@@ -1,5 +1,10 @@
-import { describe, expect, it } from "bun:test";
-import { getIframeProviderName, toPrivacyEnhancedEmbedUrl } from "@/utils/audio";
+import { describe, expect, it, vi } from "bun:test";
+import {
+  getIframeProviderName,
+  playPreloadedAudio,
+  preloadAudioBuffers,
+  toPrivacyEnhancedEmbedUrl,
+} from "@/utils/audio";
 
 describe("toPrivacyEnhancedEmbedUrl", () => {
   it("moves bare youtube-nocookie.com embeds to the www host the CSP allows", () => {
@@ -39,5 +44,58 @@ describe("getIframeProviderName", () => {
     expect(getIframeProviderName("https://youtube.com.example.org/")).toBe(
       "an external site",
     );
+  });
+});
+
+describe("preloaded sound effects", () => {
+  it("load uploads from the CDN and play them from the preloaded buffer", async () => {
+    const started = vi.fn();
+    const buffer = { duration: 1 } as AudioBuffer;
+    const context = {
+      state: "running",
+      resume: async () => {},
+      destination: {},
+      decodeAudioData: (_data: ArrayBuffer, resolve: (decoded: AudioBuffer) => void) =>
+        resolve(buffer),
+      createGain: () => ({
+        gain: { value: 0 },
+        connect: (next: unknown) => next,
+        disconnect() {},
+      }),
+      createBufferSource: () => {
+        const source = {
+          buffer: null as AudioBuffer | null,
+          playbackRate: { value: 1 },
+          connect: (next: unknown) => next,
+          disconnect() {},
+          start: () => started(source.buffer),
+          onended: null,
+        };
+        return source;
+      },
+    };
+    Object.assign(window, { __sharedAudioContext: context });
+    const fetched = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async () => new Response(new ArrayBuffer(8)));
+    try {
+      const upload = "https://ui0arpl8sm.ufs.sh/f/sound-effect.mp3";
+      await preloadAudioBuffers([upload]);
+      expect(fetched).toHaveBeenCalledTimes(1);
+      expect(String(fetched.mock.calls[0]?.[0])).toBe(
+        "https://uploadthing.b-cdn.net/f/sound-effect.mp3",
+      );
+      // Playback by the stored upload address finds the buffer without another download.
+      await playPreloadedAudio(upload);
+      expect(fetched).toHaveBeenCalledTimes(1);
+      expect(started).toHaveBeenCalledWith(buffer);
+    } finally {
+      fetched.mockRestore();
+      Object.assign(window, {
+        __sharedAudioContext: undefined,
+        __audioBufferCache: undefined,
+        __audioBufferPending: undefined,
+      });
+    }
   });
 });

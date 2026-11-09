@@ -19,6 +19,7 @@ import {
   useCombatPreferences,
 } from "@/hooks/combat";
 import { useLocalStorage } from "@/hooks/localstorage";
+import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useBattleHotkeys } from "@/hooks/useBattleHotkeys";
@@ -125,6 +126,12 @@ export default function CombatPage() {
     if (userData?.battleId) setLastBattleId(userData.battleId);
   }, [userData?.battleId]);
   const requestedBattleId = userData?.battleId ?? lastBattleId;
+  // The battlefield reuses the catalog travel already holds, refreshing it for later scenes;
+  // a cold cache loads it alongside the battle rather than after it.
+  const loadLpcCatalog = useLpcCatalogLoader({
+    revalidateInBackground: true,
+    preload: !!requestedBattleId,
+  });
   const { data, isLoading, isSuccess, isError, isFetching, refetch } =
     api.combat.getBattle.useQuery(
       { battleId: requestedBattleId },
@@ -486,6 +493,7 @@ export default function CombatPage() {
           config={config}
           endTurnKey={hotkeys.byAction.wait}
           arenaActions={arenaActions}
+          loadLpcCatalog={loadLpcCatalog}
         />
       )
     );
@@ -499,6 +507,7 @@ export default function CombatPage() {
     actions,
     hotkeys.byAction.wait,
     arenaActions,
+    loadLpcCatalog,
   ]);
 
   // Battle hotkeys select actions by id. A bound action that is unavailable

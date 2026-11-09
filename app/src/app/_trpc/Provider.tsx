@@ -10,6 +10,7 @@ import {
 } from "@tanstack/react-query";
 import {
   httpBatchLink,
+  httpLink,
   loggerLink,
   retryLink,
   splitLink,
@@ -140,6 +141,16 @@ const TrpcClientProvider = (props: {
   });
   const [trpcClient] = useState(() => {
     const cdnCachedQueries = new Set(props.cdnCachedQueryPaths);
+    const apiLinkOptions = {
+      url: `${getBaseUrl()}/api/trpc`,
+      transformer: superjson,
+      // Only uncached responses name the current deploy; a CDN copy can predate it.
+      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+        const response = await fetch(input, init);
+        noteServerBuild(response.headers.get(BUILD_ID_HEADER));
+        return response;
+      },
+    };
     return api.createClient({
       links: [
         queryMetricsLink(queryMetricsTracker),
@@ -177,20 +188,25 @@ const TrpcClientProvider = (props: {
             url: `${getBaseUrl()}/api/trpc/cdn`,
             transformer: superjson,
           }),
-          false: httpBatchLink({
-            url: `${getBaseUrl()}/api/trpc`,
-            transformer: superjson,
-            // Cookies are shared by tabs; the token belongs to this tab's active session.
-            headers: async ({ opList }) => ({
-              ...(await session.headers()),
-              ...queryMetricsHeaders(opList),
+          // Batches answer together, so a slow independent read (`skipBatch`) travels
+          // alone instead of holding up the requests issued beside it.
+          false: splitLink({
+            condition: (op) => op.context.skipBatch === true,
+            true: httpLink({
+              ...apiLinkOptions,
+              headers: async ({ op }) => ({
+                ...(await session.headers()),
+                ...queryMetricsHeaders([op]),
+              }),
             }),
-            // Only uncached responses name the current deploy; a CDN copy can predate it.
-            fetch: async (input, init) => {
-              const response = await fetch(input, init);
-              noteServerBuild(response.headers.get(BUILD_ID_HEADER));
-              return response;
-            },
+            false: httpBatchLink({
+              ...apiLinkOptions,
+              // Cookies are shared by tabs; the token belongs to this tab's active session.
+              headers: async ({ opList }) => ({
+                ...(await session.headers()),
+                ...queryMetricsHeaders(opList),
+              }),
+            }),
           }),
         }),
       ],

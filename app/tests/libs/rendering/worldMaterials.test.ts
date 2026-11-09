@@ -15,14 +15,17 @@ import {
 import {
   WORLD_ASSET_SOURCES,
   worldAssetSource,
+  worldSurfaceFrameUrl,
 } from "@/libs/rendering/worldAssetSources";
 import {
   type AuthoredMaterialFrame,
   acquireCharacterFrameMaterial,
   acquireWorldMaterial,
+  acquireWorldSurfaceFrame,
   canopyShadowFrame,
   createCharacterMaterialFrame,
   encodeWorldNormal,
+  installAuthoredFrames,
   type WorldMaterial,
   worldMaterialFrame,
 } from "@/libs/rendering/worldMaterials";
@@ -524,6 +527,12 @@ describe("sampled world material fallback", () => {
   });
 });
 
+/** Persisted structure materials still load an atlas's whole topology with the material. */
+const persisted = (image: string) => {
+  const source = worldAssetSource(image);
+  return source && { material: source.material, surfaces: source.surfaces };
+};
+
 describe("world material loading", () => {
   it.each([
     ["unknown", "/fallback-avatar-plane.png", 128, 128, [0, 0, 128, 128]],
@@ -573,7 +582,7 @@ describe("world material loading", () => {
               ]),
             ),
         );
-      const lease = acquireWorldMaterial(image, "column");
+      const lease = acquireWorldMaterial(image, "column", 128, persisted(image));
       try {
         const loaded = await lease.resource;
         expect(request).toHaveBeenCalledTimes(failure === "unknown" ? 0 : 1);
@@ -707,12 +716,81 @@ describe("world material loading", () => {
     };
   };
 
+  it("downloads only a catalogue frame's own topology and installs it before its geometry is built", async () => {
+    const image = "/world-art/woodland-village.webp";
+    const published = worldAssetSource(image)!;
+    const rect = published.frames[0]!;
+    const own = { ...definition, frame: rect as [number, number, number, number] };
+    const frameUrl = worldSurfaceFrameUrl(published.surfaces, rect)!;
+    const fixture = loadingFixture(() => new Response(JSON.stringify([own])));
+    const area = { x: rect[0]!, y: rect[1]!, width: rect[2]!, height: rect[3]! };
+    const material = acquireWorldMaterial(image, "canopy"),
+      surfaces = acquireWorldSurfaceFrame(image, area)!,
+      repeated = acquireWorldSurfaceFrame(image, area)!;
+    try {
+      const [source, frames] = await Promise.all([
+        material.resource,
+        surfaces.resource,
+      ]);
+      expect(await repeated.resource).toBe(frames);
+      // The material lease no longer downloads the whole atlas, only this frame's copy.
+      expect(fixture.request).toHaveBeenCalledTimes(1);
+      expect(fixture.request).toHaveBeenCalledWith(transformImageUrl(frameUrl));
+      expect(source.isBillboard).toBe(false);
+      expect(source.surfaceFrames).toEqual([]);
+      installAuthoredFrames(source, frames);
+      installAuthoredFrames(source, frames);
+      expect(source.surfaceFrames).toEqual([own]);
+      const frame = worldMaterialFrame(source, new Rectangle(...rect));
+      expect(frame.volumes).toHaveLength(1);
+      expect(frame.points).toHaveLength(0);
+      expect(
+        acquireWorldSurfaceFrame(image, { x: 1, y: 2, width: 3, height: 4 }),
+      ).toBeUndefined();
+    } finally {
+      material.release();
+      surfaces.release();
+      repeated.release();
+      fixture.restore();
+    }
+  });
+
+  it("keeps a catalogue frame on a sampled fallback when its own topology is unavailable", async () => {
+    const image = "/world-art/biome-scenery.webp";
+    const rect = worldAssetSource(image)!.frames[1]!;
+    const fixture = loadingFixture(() => new Response("", { status: 404 }));
+    const material = acquireWorldMaterial(image, "column"),
+      surfaces = acquireWorldSurfaceFrame(image, {
+        x: rect[0]!,
+        y: rect[1]!,
+        width: rect[2]!,
+        height: rect[3]!,
+      })!;
+    try {
+      const [source, frames] = await Promise.all([
+        material.resource,
+        surfaces.resource,
+      ]);
+      expect(frames).toBeNull();
+      installAuthoredFrames(source, frames);
+      // Other frames of the atlas keep their authored material; this one samples its pixels.
+      expect(source.isBillboard).toBe(false);
+      const frame = worldMaterialFrame(source, new Rectangle(0, 0, 4, 4));
+      expect(frame.volumes).toBeUndefined();
+      expect(frame.points.length).toBeGreaterThan(0);
+    } finally {
+      material.release();
+      surfaces.release();
+      fixture.restore();
+    }
+  });
+
   it("loads a registered atlas's surface array once through its shared material lease", async () => {
     const image = "/world-art/ground-details.webp",
       text = JSON.stringify([definition]);
     const fixture = loadingFixture(() => new Response(text));
-    const first = acquireWorldMaterial(image, "canopy"),
-      second = acquireWorldMaterial(image, "building");
+    const first = acquireWorldMaterial(image, "canopy", 128, persisted(image)),
+      second = acquireWorldMaterial(image, "building", 128, persisted(image));
     try {
       const [source, repeated] = await Promise.all([first.resource, second.resource]);
       expect(source).toBe(repeated);
@@ -741,8 +819,8 @@ describe("world material loading", () => {
     const { promise: pending, resolve: complete } = deferred<Response>();
     const fixture = loadingFixture(() => pending),
       image = "/world-art/oasis-village.webp";
-    const first = acquireWorldMaterial(image, "column"),
-      second = acquireWorldMaterial(image, "character");
+    const first = acquireWorldMaterial(image, "column", 128, persisted(image)),
+      second = acquireWorldMaterial(image, "character", 128, persisted(image));
     first.release();
     second.release();
     try {
@@ -756,7 +834,7 @@ describe("world material loading", () => {
       expect(source.surfaceFrames).toEqual([definition]);
       expect(source.texture.destroyed).toBe(false);
       expect(fixture.dispose).toHaveBeenCalledTimes(1);
-      const next = acquireWorldMaterial(image, "column");
+      const next = acquireWorldMaterial(image, "column", 128, persisted(image));
       try {
         expect(await next.resource).toBe(source);
       } finally {
@@ -779,7 +857,7 @@ describe("world material loading", () => {
       "persisted-structure.webp",
       "building",
       128,
-      published,
+      persisted("/world-art/ground-details.webp"),
     );
     try {
       const source = await lease.resource;
@@ -823,7 +901,7 @@ describe("world material loading", () => {
     "uses one physical billboard when a registered atlas's metadata is %s",
     async (_failure, image, text, status) => {
       const fixture = loadingFixture(() => new Response(text, { status }));
-      const lease = acquireWorldMaterial(image, "column");
+      const lease = acquireWorldMaterial(image, "column", 128, persisted(image));
       try {
         const source = await lease.resource;
         expect(fixture.request).toHaveBeenCalledWith(
