@@ -13,31 +13,23 @@ type TestWindow = { Capacitor?: unknown };
 
 const setWindow = (value: TestWindow | undefined) => {
   if (value === undefined) {
-    delete (globalThis as { window?: unknown }).window;
+    Reflect.deleteProperty(globalThis, "window");
     return;
   }
-  (globalThis as { window?: unknown }).window = value;
+  Object.defineProperty(globalThis, "window", { configurable: true, writable: true, value });
 };
 
-// Put the realm back exactly as each test found it, rather than leaving it cleared. These
-// files share one process and must return the DOM globals to the next suite.
-let saved: { present: boolean; value: unknown };
+// The preload installs jsdom's `window` as a configurable, non-writable property, so tests
+// redefine it and each test restores the captured descriptor for the next suite.
+let saved: PropertyDescriptor | undefined;
 
 beforeEach(() => {
-  saved = {
-    present: "window" in globalThis,
-    value: (globalThis as { window?: unknown }).window,
-  };
+  saved = Object.getOwnPropertyDescriptor(globalThis, "window");
 });
 
 afterEach(() => {
-  if (saved.present) {
-    // Assignment, not defineProperty: the property these tests overwrite is an ordinary
-    // writable one, and restoring a captured descriptor would freeze it for the next test.
-    (globalThis as { window?: unknown }).window = saved.value;
-  } else {
-    delete (globalThis as { window?: unknown }).window;
-  }
+  if (saved) Object.defineProperty(globalThis, "window", saved);
+  else Reflect.deleteProperty(globalThis, "window");
 });
 
 describe("isNative", () => {
