@@ -153,7 +153,7 @@ makemigrations: ensure-env # Create database migration file
 	cd app && node ../scripts/dev-bun.mjs makemigrations
 
 .PHONY: emptymigration
-emptymigration: ensure-env # Create database migration file
+emptymigration: ensure-env # Create an empty custom migration file
 	@echo "${YELLOW}Create empty migrations file ${RESET}"
 	cd app && node ../scripts/dev-bun.mjs emptymigration
 	
@@ -281,7 +281,7 @@ squash: # Squash the last N commits into one, usage: make squash N
 	git reset --soft HEAD~$(ARGS) && git commit --edit -m"$(shell git log --format=%B --reverse HEAD..HEAD@{1})"
 
 .PHONY: git-branch-uncommit
-git-branch-uncommit: # Undo the last N commits (keeping changes staged), usage: make uncommit N
+git-branch-uncommit: # Reset to origin/main and reapply this branch's changes as unstaged edits
 	@echo "${YELLOW}Uncommitting branch commits${RESET}"
 	git diff --binary --ignore-space-at-eol origin/main...HEAD > branch.patch
 	git reset --hard origin/main
