@@ -39,8 +39,6 @@ afterEach(() => {
   restoreDialog();
 });
 
-// THENINJARPG-33K: a 9-character rationale ("BL Rework") reached the server, which
-// rejected it and the staffer saw the raw Zod issue JSON.
 const openModal = () => {
   const view = render(
     <SuggestChange entityType="JUTSU" entityId="jutsu" getData={() => ({ name: "A" })} />,

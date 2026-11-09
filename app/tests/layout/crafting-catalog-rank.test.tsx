@@ -35,7 +35,7 @@ const userItems = [
   { id: "owned", itemId: material.id, quantity: 10, item: material },
 ] as unknown as UserItemWithRelations[];
 
-// Experience of the support-ticket player (Apprentice crafter)
+// Crafting experience at the Apprentice rank
 const apprentice = {
   craftingExperience: 1_175_305,
   village: null,

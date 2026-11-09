@@ -159,8 +159,8 @@ describe("daily-quest cron", () => {
   });
 
   it("closes only dailies that are still open, leaving earlier days' rows untouched", async () => {
-    // Every closed attempt already has an endAt; rewriting it each night rewrote the whole
-    // daily history and misdated when those attempts ended.
+    // Closed attempts already carry their endedAt; the nightly close touches only open
+    // dailies so earlier attempts keep their end dates.
     seedHappyPath();
     const wheres: SQL[] = [];
     mocks.update.mockImplementation(() => ({
