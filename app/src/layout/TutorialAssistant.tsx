@@ -397,7 +397,7 @@ const PlayerTutorialAssistant: React.FC<
         )
       )
         return;
-      // Check for Enter key or ArrowLeft key
+      // Check for Enter key or ArrowRight key
       if (event.key === "Enter" || event.key === "ArrowRight") {
         if (isDisablingTutorial) return;
         if (showGameMenuTutorial) {
