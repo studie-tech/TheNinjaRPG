@@ -139,7 +139,7 @@ describe("WYSIWYG decoration tileset export", () => {
     // height = scale (2) x hex height (56); square like the game renders
     expect(treeObject?.height).toBe(112);
     expect(treeObject?.width).toBe(112);
-    // grounded on the hex: y dropped by half a hex from the centre
+    // grounded on the hex: y dropped from the centre by half a hex minus the 0.1 x scale lift
     expect(treeObject?.y).toBeCloseTo(84 + 56 * (0.5 - 0.2), 1);
     // anchors untouched
     const anchor = objects.find((object) => object.type === "anchor");

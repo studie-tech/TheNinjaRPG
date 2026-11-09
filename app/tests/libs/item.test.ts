@@ -617,11 +617,10 @@ describe("computeLoadoutAssignments", () => {
   });
 
   it("does not resolve a NONE slot type to the NONE sentinel slot", () => {
-    // Legacy/invalid saved slot forces the fallback resolver; an item whose
+    // An invalid saved slot forces the fallback resolver; an item whose
     // slot type is NONE must be rejected, never assigned the NONE sentinel.
     const items = [ui({ id: "r1", itemId: "i1", name: "Junk", slotType: "NONE" })];
     const out = computeLoadoutAssignments(
-      // Legacy/removed saved slot value forces the fallback resolver.
       [{ itemId: "i1", slot: "ITEM_99" as unknown as ItemSlot }],
       items,
       USER,

@@ -162,8 +162,7 @@ describe("getUnique", () => {
   });
 
   it("handles array with undefined/null elements", () => {
-    // This will throw at runtime, so we check for error
-    // Cast to any[] to match function signature and avoid type errors
+    // getUnique skips null and undefined elements.
     const arr = [undefined, { id: 1 }, null, { id: 1 }] as { id: number }[];
     const result = getUnique(arr, "id");
     expect(result).toEqual([{ id: 1 }]);
