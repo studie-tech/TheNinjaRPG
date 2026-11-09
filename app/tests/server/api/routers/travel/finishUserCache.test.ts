@@ -249,7 +249,14 @@ describeWithDatabase("confirmed arrival profile updates", () => {
       }
       expect(
         getSectorUserUpdate(
-          { users: [], village: null, sectorData: null, warData: null },
+          {
+            users: [],
+            village: null,
+            sectorData: null,
+            warData: null,
+            overworldAis: [],
+            questPlacements: [],
+          },
           user ?? undefined,
         ),
       ).toBeUndefined();

@@ -279,6 +279,8 @@ describe("travel.getSectorData query scheduling", () => {
         village: null,
         sectorData: null,
         warData: null,
+        overworldAis: [],
+        questPlacements: [],
       });
       expect(test.history).not.toHaveBeenCalled();
       expect(test.reads.sector).toHaveBeenCalledTimes(1);

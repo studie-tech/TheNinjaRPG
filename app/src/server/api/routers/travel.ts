@@ -384,7 +384,14 @@ export const travelRouter = createTRPCRouter({
       // Guard: Only awake/travel/queued users can scout
       // QUEUED is included so users in raid queues can still see war/sector data
       if (!["AWAKE", "TRAVEL", "QUEUED"].includes(user.status)) {
-        return { users: [], village: null, sectorData: null, warData: null };
+        return {
+          users: [],
+          village: null,
+          sectorData: null,
+          warData: null,
+          overworldAis: [],
+          questPlacements: [],
+        };
       }
       // Crossings can leave a stale query key. Never return another sector's data.
       const [users, villageData, sectorData, placements] =
