@@ -1737,7 +1737,9 @@ export const combatEnergyRecoverySql = (
   const regeneration =
     (userId ? snapshot?.extraState.energyRegeneration?.[userId] : undefined) ??
     userData.regeneration;
-  // Orphaned battles released by the cleaner have no snapshot; do not erase stored Energy.
+  // Without a captured capacity for this user (no snapshot, e.g. the cleaner's orphan
+  // release or an expired dungeon whose battle is gone), cap at the larger of
+  // maxEnergy and the stored balance so Energy is never erased.
   const capacity =
     (userId ? snapshot?.extraState.energyCapacity?.[userId] : undefined) ??
     sql`GREATEST(${userData.maxEnergy}, ${userData.curEnergy})`;

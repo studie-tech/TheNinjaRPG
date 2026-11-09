@@ -82,7 +82,8 @@ export const getBattleSpawnLocations = (
   const max = direction === "left" ? halfWidth : width - 3;
   const firstX = min + COMBAT_BORDER_LEFT;
   const lastX = max - COMBAT_BORDER_RIGHT;
-  // Preserve the small-field columns produced by the existing random bounds.
+  // When the borders leave no column on a narrow field (firstX > lastX), use the
+  // columns from lastX + 1 to firstX.
   const minX = Math.min(firstX, lastX + 1);
   const maxX = Math.max(firstX, lastX);
   const locations: { x: number; y: number }[] = [];

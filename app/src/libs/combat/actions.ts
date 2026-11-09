@@ -232,9 +232,9 @@ export const availableUserActions = (
               );
               if (hasMoveTag) return false;
             }
-            // Elemental Seal affects only elemental jutsu costing exactly
-            // ELEMENTAL_SEAL_AP_COST, regardless of the element lists retained in
-            // older content/battle payloads.
+            // Elemental Seal hides jutsu costing exactly ELEMENTAL_SEAL_AP_COST that
+            // are elemental by classification, an elementaldamage tag or any
+            // non-None tag element.
             if (!elementalSeal || jutsu.actionCostPerc !== ELEMENTAL_SEAL_AP_COST)
               return true;
             const isElemental =
