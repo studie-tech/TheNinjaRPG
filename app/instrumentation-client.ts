@@ -43,7 +43,10 @@ Sentry.init({
   routeProvider: createPublicBrowserRouteProvider(() => window.location.href),
   integrations: [publicBfcacheRouteIntegration()],
 
-  // Which errors to ignore from frontend
+  // Errors to ignore from the frontend. The SDK matches each string as a substring (and
+  // each regex) against the main exception's value and its "type: value" form before
+  // beforeSend runs, so an event matched here is dropped whatever its stack, and the
+  // scoped checks in beforeSend never see it.
   ignoreErrors: [
     "window.ethereum",
     "Cannot redefine property: walletRouter", // Cryptocurrency wallet extension error - occurs when wallet extensions (MetaMask, Coinbase Wallet, etc.) conflict or reinitialize
@@ -107,14 +110,14 @@ Sentry.init({
     "undefined is not an object (evaluating 'window.webkit.messageHandlers')", // iOS WebKit bridge error - third-party scripts attempting to use iOS native bridge APIs that aren't available in web browser context
     "TransformStream is not defined", // Older browser compatibility error (Firefox Mobile <102, some Android browsers) - AI chat feature uses @ai-sdk/react which requires TransformStream for SSE parsing. Users see fallback UX (chat unavailable).
     /No ack for postMessage .* in \d+ms/, // Third-party SDK postMessage timeout - occurs when Clerk or similar services fail to receive acknowledgment for cross-origin frame communication
-    "Jsloader error", // Google Maps JS API loader error - occurs when the @googlemaps/js-api-loader script fails to load (network issues, ad blockers, or Google CDN outages). Users see map not loading but the rest of the app works normally.
+    "Jsloader error", // Google JS API loader error. The app loads no Google API loader of its own, so the failing loader belongs to a third-party script and no game screen waits on it.
     "Attempt to use history.pushState() more than 100 times per 10 seconds", // Browser security limit on history API - occurs when third-party analytics scripts (Speed Insights, GTM, i18n pixel) exceed rate limit during rapid navigation. Users can navigate normally; only analytics logging is rate-limited.
     "window.setDgResult is not a function", // Third-party bot detection/anti-fraud script error (likely DataDome) - occurs when bot detection services attempt to call undefined callback function on mobile WebView with strict security policies. Users continue signup flow normally; error is isolated to third-party script context.
-    /SyntaxError.*Unexpected EOF/, // Next.js chunk truncation errors (network issues on mobile) - captured by isNextJsChunkSyntaxError for precise filtering
+    /SyntaxError.*Unexpected EOF/, // Truncated script downloads (network issues on mobile). Drops every SyntaxError whose message contains "Unexpected EOF", wherever it was raised; isNextJsChunkSyntaxError handles the other truncation messages from our chunks.
     "JSON.parse: unexpected character at line 1 column 1 of the JSON data", // Firefox JSON parsing error - occurs when tRPC receives non-JSON responses (network issues, CDN outages). Equivalent to Chrome's '"Offline" is not valid JSON' or '"<!DOCTYPE "... is not valid JSON'. Handled by tRPC retry logic in Provider.tsx.
     "Error in input stream", // Firefox stream error - occurs when Firefox's fetch implementation encounters errors reading response streams during Next.js RSC (React Server Components) navigation/prefetch. Common causes: network interruption mid-stream, corrupted CDN response, incomplete RSC payload, browser abort during navigation. This is Firefox's equivalent to Chrome's "Failed to fetch" or Safari's "Load failed". UX: Handled gracefully by Next.js internal retry logic and Firefox's fetch error recovery (marked as handled:yes in Sentry). Users see normal navigation; failed streams fall back to fresh server requests. Detection: handled=yes, no stack trace (browser-level error before JS execution), Firefox browser tag, RSC navigation with _rsc query param.
     "failed to decode cache", // Next.js RSC (React Server Components) cache decoding error - occurs when browser cache contains stale, corrupted, or incomplete RSC payload data from prefetch requests. Common causes: browser cache inconsistency after deployments, network issues during RSC payload download, memory pressure during cleanup, Firefox-specific cache validation. UX: Handled gracefully by Next.js internal retry logic - failed cache reads fall back to fresh server requests. Users may experience slightly slower navigation but no visible error. Detection: minimal stack trace, global error handler mechanism, recent RSC prefetch breadcrumbs (_rsc query param).
-    /NS_ERROR_/, // Firefox internal error codes (NS_ERROR_FAILURE, NS_ERROR_NOT_AVAILABLE, etc.) from third-party scripts (ads/pixel.js, tracking pixels, browser extensions). These are Firefox XPCOM errors that occur when third-party code encounters browser-level failures. Not actionable from application code. UX: No user-visible impact - errors occur in isolated third-party script contexts.
+    /NS_ERROR_/, // Firefox internal error codes (NS_ERROR_FAILURE, NS_ERROR_NOT_AVAILABLE, etc.), mostly from third-party scripts (ads/pixel.js, tracking pixels, browser extensions). Drops every event whose main exception is an NS_ERROR, including ones raised in our own frames. UX: No user-visible impact for the third-party sources - errors occur in isolated third-party script contexts.
     "Should not already be working.", // React internal scheduler error - occurs when React's concurrent rendering scheduler detects re-entrant scheduling during complex navigation patterns. Not actionable at application level. UX: No user-visible impact - React's error recovery handles scheduler assertions gracefully.
     "feature named `pageObserver` was not found", // DuckDuckGo browser internal error - occurs when DuckDuckGo's privacy/tracker blocking features attempt to register a page observer during Next.js RSC navigation but the feature registration fails. Browser-specific to DuckDuckGo 26.3 on Mac. UX: No user-visible impact - Next.js navigation completes successfully via fallback mechanisms. Detection: no stack trace (browser-internal error), DuckDuckGo browser tag, handled=no, RSC navigation with _rsc query param.
   ],
@@ -149,7 +152,7 @@ Sentry.init({
       return null; // Drop Replicate API gateway errors (502/503/504)
     }
     if (isNetworkLoadError(event)) {
-      return null; // Drop iOS Safari network errors (Load failed, Failed to fetch)
+      return null; // Drop stackless network errors that ignoreErrors does not match
     }
     if (isHtmlResponseError(event)) {
       return null; // Drop HTML response parsing errors (CDN/proxy outages)
@@ -191,7 +194,7 @@ Sentry.init({
       return null; // Drop userscript errors from browser extensions
     }
     if (isGoogleApiLoaderError(event)) {
-      return null; // Drop Google Maps API loader errors (network/CDN failures)
+      return null; // Drop third-party Google API loader errors
     }
     if (isHistoryPushStateRateLimitError(event)) {
       return null; // Drop history.pushState rate limit errors from third-party scripts
@@ -314,9 +317,8 @@ const extractStackFramesFromSentryEvent = (
  * or the request is aborted during navigation. The "Load failed" message may
  * include a domain suffix like "(uploadthing.b-cdn.net)" for CDN requests.
  *
- * Note: This is a legacy function for unhandledrejection handler.
- * For Sentry beforeSend filtering, use isNetworkLoadError() which leverages
- * the shared error patterns from errors.ts.
+ * Used by the unhandledrejection handler, which receives raw errors without Sentry
+ * stack frames; beforeSend uses isNetworkLoadError.
  */
 const isNetworkFetchError = (err: unknown): boolean => {
   if (!(err instanceof Error)) return false;
@@ -586,8 +588,8 @@ const isReplicateApiError = (event: Sentry.ErrorEvent): boolean => {
 };
 
 /**
- * Check if an error is an iOS Safari "Load failed" network error.
- * These occur on Mobile Safari when network requests fail due to:
+ * Check if an error is a stackless network error ("Load failed", "NetworkError", etc.).
+ * These occur when network requests fail due to:
  * - Device going to sleep during a fetch request
  * - Network connectivity changes (WiFi to cellular)
  * - CDN/network requests failing transiently
@@ -598,7 +600,11 @@ const isReplicateApiError = (event: Sentry.ErrorEvent): boolean => {
  * - Silent ignore in tRPC onError prevents alarming toast notifications
  * - Users only see errors if the request fails after all retries for other reasons
  *
- * Uses shared error patterns from errors.ts to ensure consistency with retry logic.
+ * The "Failed to fetch", "network error" and /^Load failed/ ignoreErrors entries drop
+ * those messages whatever their stack, so the shape check here applies only to the
+ * other wordings (for example Firefox's "NetworkError when attempting to fetch resource.").
+ *
+ * Uses shared error patterns from @/utils/error to ensure consistency with retry logic.
  */
 const isNetworkLoadError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
@@ -606,7 +612,7 @@ const isNetworkLoadError = (event: Sentry.ErrorEvent): boolean => {
   const hasStackTrace =
     (event.exception?.values?.[0]?.stacktrace?.frames?.length ?? 0) > 0;
 
-  // Use shared pattern matcher from errors.ts
+  // Use shared pattern matcher from @/utils/error
   const stackFrames = extractStackFramesFromSentryEvent(event);
   const matchesPattern = isNetworkErrorPattern(message, stackFrames);
 
@@ -627,13 +633,13 @@ const isNetworkLoadError = (event: Sentry.ErrorEvent): boolean => {
  * - Silent ignore in tRPC onError prevents alarming toast notifications
  * - Users only see errors if the request fails after all retries
  *
- * Uses shared error patterns from errors.ts to ensure consistency with retry logic.
+ * Uses shared error patterns from @/utils/error to ensure consistency with retry logic.
  */
 const isHtmlResponseError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const errorType = event.exception?.values?.[0]?.type ?? "";
 
-  // Use shared pattern matcher from errors.ts
+  // Use shared pattern matcher from @/utils/error
   const stackFrames = extractStackFramesFromSentryEvent(event);
   const matchesPattern = isHtmlResponseErrorPattern(message, stackFrames);
 
@@ -654,13 +660,13 @@ const isHtmlResponseError = (event: Sentry.ErrorEvent): boolean => {
  * - Silent ignore in tRPC onError prevents alarming toast notifications
  * - Users only see errors if the request fails after all retries
  *
- * Uses shared error patterns from errors.ts to ensure consistency with retry logic.
+ * Uses shared error patterns from @/utils/error to ensure consistency with retry logic.
  */
 const isProxyError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const errorType = event.exception?.values?.[0]?.type ?? "";
 
-  // Use shared pattern matcher from errors.ts
+  // Use shared pattern matcher from @/utils/error
   const stackFrames = extractStackFramesFromSentryEvent(event);
   const matchesPattern = isProxyErrorPattern(message, stackFrames);
 
@@ -736,13 +742,13 @@ const isInjectedJsonParseError = (event: Sentry.ErrorEvent): boolean => {
  * - Silent ignore in tRPC onError prevents alarming toast notifications
  * - Users only see errors if the request fails after all retries for other reasons
  *
- * Uses shared error patterns from errors.ts to ensure consistency with retry logic.
+ * Uses shared error patterns from @/utils/error to ensure consistency with retry logic.
  */
 const isFirefoxJsonParseError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const errorType = event.exception?.values?.[0]?.type ?? "";
 
-  // Use shared pattern matcher from errors.ts
+  // Use shared pattern matcher from @/utils/error
   const stackFrames = extractStackFramesFromSentryEvent(event);
   const matchesPattern = isFirefoxJsonErrorPattern(message, stackFrames);
 
@@ -769,7 +775,7 @@ const isSafariJsonParseError = (event: Sentry.ErrorEvent): boolean => {
   const message = event.exception?.values?.[0]?.value ?? "";
   const errorType = event.exception?.values?.[0]?.type ?? "";
 
-  // Use shared pattern matcher from errors.ts
+  // Use shared pattern matcher from @/utils/error
   const stackFrames = extractStackFramesFromSentryEvent(event);
   const matchesPattern = isSafariJsonErrorPattern(message, stackFrames);
 
@@ -849,8 +855,10 @@ const isNavigationAbortError = (event: Sentry.ErrorEvent): boolean => {
  * UX note: no user-visible impact. Touch is a heartbeat that only updates
  * "last active at"; it does not mint or refresh the session token, so a failed
  * touch never signs the user out or blocks a request. Clerk simply retries on
- * its next poll. This is deliberately scoped to the touch endpoint - failures on
- * token or sign-in endpoints DO affect the user and must keep reporting.
+ * its next poll. This check is scoped to the touch endpoint because failures on
+ * token or sign-in endpoints affect the user. The "Failed to fetch" and "network
+ * error" ignoreErrors entries still drop every Clerk network error with those causes,
+ * whatever the endpoint; only the Safari and Firefox wordings reach this check.
  *
  * Detection pattern:
  * - Message begins with "ClerkJS: Network error at"
@@ -921,7 +929,7 @@ const isClerkSessionTouchNetworkError = (event: Sentry.ErrorEvent): boolean => {
  * - Mechanism: unhandledrejection (not caught by Clerk SDK)
  *
  * This is Clerk's equivalent to other filtered Clerk errors:
- * - "ClerkJS: Token refresh failed" (line 22 in ignoreErrors)
+ * - "ClerkJS: Token refresh failed" (ignoreErrors)
  * - Clerk storage access errors (isClerkStorageError)
  * - Clerk script load errors (isClerkScriptLoadError)
  */
@@ -1181,7 +1189,7 @@ const isWalletExtensionError = (event: Sentry.ErrorEvent): boolean => {
  *   requests or revalidations receive 403 after the session is invalidated. This is expected
  *   behavior during the sign-out transition and does not affect functionality.
  * - Rate limiting: Users already see appropriate toast messages from the tRPC error handler
- *   (handled in _trpc/Provider.tsx lines 143-165 and 200-204). The Next.js server action
+ *   (the TOO_MANY_REQUESTS branch of handleTrpcError in _trpc/Provider.tsx). The Next.js server action
  *   error is redundant and adds Sentry noise without providing actionable information.
  *
  * Detection pattern:
@@ -1200,7 +1208,7 @@ const isServerActionError = (event: Sentry.ErrorEvent): boolean => {
     return false;
   }
 
-  // Check if on SSO callback URL path (original filter logic)
+  // Check if on SSO callback URL path
   const isSsoCallbackUrl =
     url.includes("/signup/sso-callback") || url.includes("/signin/sso-callback");
 
@@ -1328,8 +1336,7 @@ const isWebKitMessageHandlersError = (event: Sentry.ErrorEvent): boolean => {
  * UX note: These errors are transient and handled gracefully:
  * - The useTowerDefense hook shows a "Connecting..." state during connection
  * - Connection errors trigger a mode change back to "lobby" with an error message
- * - Users can retry by clicking the "Start Game" button again
- * - The SpacetimeDB client has waitForWebSocketReady() checks for critical operations
+ * - Users can retry with the "Start New Run" or "Resume" button
  *
  * We cannot fix this in the SpacetimeDB SDK itself as it's a third-party library.
  * The error originates from the SDK's websocket_decompress_adapter.ts send() method.
@@ -1468,13 +1475,11 @@ const isUserscriptError = (event: Sentry.ErrorEvent): boolean => {
 };
 
 /**
- * Check if an error is from the Google Maps JS API loader (@googlemaps/js-api-loader).
- * These errors occur when the Google Maps script fails to load due to network issues,
- * ad blockers, or Google CDN outages. The loader retries internally and then rejects
- * with a non-Error object that Sentry captures.
+ * Check if an error is from a Google JS API loader (maps.googleapis.com, jsapi_compiled).
+ * The app loads no Google Maps or JS API loader of its own; these come from third-party
+ * scripts whose loader fails on network issues, ad blockers or Google CDN outages.
  *
- * UX note: Users see the map area fail to load, but the rest of the application
- * continues to work normally. The map component shows appropriate fallback UI.
+ * UX note: no game screen or loading state depends on these scripts.
  *
  * Common patterns:
  * - "Jsloader error" message (caught by ignoreErrors, but some slip through as
@@ -1549,8 +1554,8 @@ const isHistoryPushStateRateLimitError = (event: Sentry.ErrorEvent): boolean => 
   // Check all exception values, not just the first one
   const exceptionValues = event.exception?.values ?? [];
 
-  // This is a very specific browser security error that will never be actionable.
-  // However, we only filter it when it comes from third-party scripts, not our app.
+  // The ignoreErrors entry drops every event whose main exception carries this message.
+  // This check covers the other exception values, and only when no frame is ours.
   return exceptionValues.some((exception) => {
     const message = exception.value ?? "";
     if (!message.includes("Attempt to use history.pushState() more than 100 times per 10 seconds")) {
@@ -1779,6 +1784,9 @@ const isClipboardPermissionError = (event: Sentry.ErrorEvent): boolean => {
  * - Often has empty or minimal error messages
  * - Anonymous/minified function names in stack (cross-origin restrictions)
  *
+ * The /NS_ERROR_/ ignoreErrors entry drops every event whose main exception is an
+ * NS_ERROR, own frames or not, so this third-party scoping applies only to NS_ERRORs
+ * among the event's other exception values.
  */
 const isFirefoxNSError = (event: Sentry.ErrorEvent): boolean => {
   const exceptionValues = event.exception?.values ?? [];
@@ -1850,7 +1858,6 @@ const isFirefoxNSError = (event: Sentry.ErrorEvent): boolean => {
 
 /**
  * Shared utility to check if a function name matches userscript-specific patterns.
- * Extracted to avoid duplication between isUserscriptError and isUserscriptRawError.
  *
  * Important: anonymous function placeholders like "?" are intentionally excluded.
  * Sentry commonly uses "?" for anonymous Firefox frames, and treating that as a
@@ -1961,7 +1968,6 @@ const checkHasUserscriptBreadcrumb = (
 /**
  * Shared utility to check if a message contains single-letter variable error patterns.
  * These errors are typical of minified userscripts (e.g., "d is not defined").
- * Extracted to avoid duplication across multiple userscript detection functions.
  */
 const isSingleLetterVarErrorMessage = (message: string): boolean => {
   // Handle error type prefixes like "ReferenceError: d is not defined"
@@ -2044,17 +2050,12 @@ const isUserscriptRawError = (err: unknown): boolean => {
 /**
  * Check if an error is a Response.json() body stream already read error.
  * These can occur when:
- * 1. fetch-retry library consumes response body during retry logic
- * 2. Browser extensions intercept fetch requests and read body multiple times
- * 3. Code accidentally calls .json()/.text()/.blob() multiple times without cloning
+ * 1. Browser extensions intercept fetch requests and read body multiple times
+ * 2. Code calls .json()/.text()/.blob() multiple times without cloning
  *
- * The globe.ts implementation uses response.clone() to prevent this error.
- * This filter serves as defense-in-depth for any similar errors elsewhere.
- *
- * UX note: When this error occurs, users may see map loading failures or similar
- * fetch-dependent features fail. The application's retry logic attempts to recover
- * automatically. If the error persists, investigate other fetch usage patterns in
- * the codebase.
+ * UX note: only events without meaningful frames are dropped, so the failed read
+ * happened outside our code. A body read twice by our own code carries our frames and
+ * keeps reporting.
  *
  * Common patterns:
  * - Minimal or anonymous stack traces (native browser API errors)
@@ -2084,9 +2085,8 @@ const isResponseBodyAlreadyReadError = (event: Sentry.ErrorEvent): boolean => {
         frame.filename === "<anonymous>"
     );
 
-  // Only filter if it has the minimal stack trace pattern.
-  // If we have meaningful stack traces pointing to our code, let it through
-  // for investigation (in case the fix didn't work or there are other instances).
+  // Only filter if it has the minimal stack trace pattern; events with meaningful
+  // frames pointing to our code stay reportable.
   return hasMinimalStackTrace;
 };
 
