@@ -2,13 +2,16 @@
 
 import { Button } from "@/components/ui/button";
 import { RESOURCE_SILO_RESPAWN_COST } from "@/drizzle/constants";
-import { useWarTornRevival } from "@/hooks/useResourceSilos";
+import type { useWarTornRevival } from "@/hooks/useResourceSilos";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /** A defeated fighter can pay for immediate shrine recovery or keep their village treatment. */
-export const WarTornRevival = () => {
+export const WarTornRevival = ({
+  revival,
+}: {
+  revival: ReturnType<typeof useWarTornRevival>;
+}) => {
   const { data: user } = useRequiredUserData();
-  const revival = useWarTornRevival();
   if (!user?.warTornRespawn || user.status !== "HOSPITALIZED") return null;
   return (
     <div className="space-y-3 border-b p-3">
@@ -40,9 +43,6 @@ export const WarTornRevival = () => {
         </p>
       )}
       {revival.isPending && <p role="status">Resolving revival…</p>}
-      {(revival.error || revival.data) && (
-        <p role="alert">{revival.error?.message ?? revival.data?.message}</p>
-      )}
     </div>
   );
 };

@@ -55,17 +55,19 @@ describe("Resource Silo", () => {
   });
 });
 
+const Revival = () => <WarTornRevival revival={hooks.useWarTornRevival()} />;
+
 describe("War-Torn revival", () => {
   it("keeps ordinary tutorial hospitalization controls free of a revival offer", () => {
     user.status = "HOSPITALIZED";
-    expect(render(<WarTornRevival />).container.textContent).toBe("");
+    expect(render(<Revival />).container.textContent).toBe("");
   });
   it("offers village treatment when shrine revival is unaffordable", () => {
     user = { status: "HOSPITALIZED", money: 39999, warTornRespawn: true };
-    const view = render(<WarTornRevival />);
+    const view = render(<Revival />);
     expect(view.getByRole("button", { name: /Revive at Shrine/ }).hasAttribute("disabled")).toBe(true);
     fireEvent.click(view.getByRole("button", { name: "Return to Village" })); expect(respawn).toHaveBeenCalledWith({ destination: "village" });
-    user.money = 40000; view.rerender(<WarTornRevival />);
+    user.money = 40000; view.rerender(<Revival />);
     fireEvent.click(view.getByRole("button", { name: /Revive at Shrine/ })); expect(respawn).toHaveBeenCalledWith({ destination: "shrine" });
   });
 });

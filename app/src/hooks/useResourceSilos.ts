@@ -6,6 +6,7 @@ import {
 } from "@/deltas/resourceSilos";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
+import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /** Bind shrine claims to their spawn and reconcile arbitrary package effects authoritatively. */
@@ -89,6 +90,7 @@ export const useWarTornRevival = () => {
   return api.resourceSilos.respawn.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (result, _input, revision) => {
+      showMutationToast(result);
       if (!result.success) {
         await updateUser(undefined, { revision });
         return;
@@ -97,7 +99,8 @@ export const useWarTornRevival = () => {
       await updateUser(undefined, { revision });
       await utils.travel.getSectorData.invalidate();
     },
-    onError: async (_error, _input, revision) => {
+    onError: async (error, _input, revision) => {
+      showMutationToast({ success: false, message: error.message });
       await updateUser(undefined, { revision });
     },
   });

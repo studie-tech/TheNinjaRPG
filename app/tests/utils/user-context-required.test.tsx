@@ -10,13 +10,16 @@ import { act, cleanup, render, waitFor } from "@testing-library/react";
 import * as trpc from "@trpc/react-query";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
+import * as sector from "@/hooks/useSectorVillage";
 import * as pusher from "@/layout/PusherHandler";
-import { UserContextProvider, useRequiredUserDataSelector } from "@/utils/UserContext";
+import * as userContext from "@/utils/UserContext";
+import { UserContextProvider, useRequiredUserDataSelector, useRequireInVillage } from "@/utils/UserContext";
+import { actualUserContext } from "../setup/preload";
 
 type Snapshot = {
   serverTime: number;
   notifications: never[];
-  userData: { userId: string } | null;
+  userData: { userId: string; isOutlaw?: boolean } | null;
 };
 
 const key: ReturnType<typeof trpc.getQueryKey> = [
@@ -28,6 +31,10 @@ const push = vi.fn();
 
 beforeEach(() => {
   push.mockClear();
+  // Bun retains partial module mocks from UI suites; access checks need real profile observers.
+  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(actualUserContext.useRequiredUserData);
+  vi.spyOn(userContext, "useRequiredUserDataSelector").mockImplementation(actualUserContext.useRequiredUserDataSelector);
+  vi.spyOn(userContext, "useUserDataSelector").mockImplementation(actualUserContext.useUserDataSelector);
   vi.spyOn(trpc, "getQueryKey").mockReturnValue(key);
   vi.spyOn(pusher, "usePusherHandler").mockReturnValue(undefined);
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
@@ -49,6 +56,7 @@ const mount = async (
   cached?: Snapshot,
   response: Promise<Snapshot> = new Promise(() => undefined),
   initialIsSignedIn = true,
+  consumer = <Consumer />,
 ) => {
   vi.spyOn(clerk, "useUser").mockReturnValue({
     ...session,
@@ -69,16 +77,18 @@ const mount = async (
       },
     },
   });
+  let view!: ReturnType<typeof render>;
   await act(async () => {
-    render(
+    view = render(
       <QueryClientProvider client={queryClient}>
         <UserContextProvider initialIsSignedIn={initialIsSignedIn}>
-          <Consumer />
+          {consumer}
         </UserContextProvider>
       </QueryClientProvider>,
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+  return view;
 };
 
 describe("useRequiredUserDataSelector", () => {
@@ -117,5 +127,35 @@ describe("useRequiredUserDataSelector", () => {
       { serverTime: 0, notifications: [], userData: { userId: "required-test" } },
     );
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe("useRequireInVillage", () => {
+  const VillageConsumer = ({ enabled = true, redirectTo }: { enabled?: boolean; redirectTo?: string }) => {
+    const { access } = useRequireInVillage("/hospital", { enabled, redirectTo });
+    return <span>{access ? "Allowed" : "Waiting"}</span>;
+  };
+
+  it.each([false, true])("preserves ordinary hospital access for outlaw=%s", async isOutlaw => {
+    vi.spyOn(sector, "useSectorVillage").mockReturnValue({ sectorVillage: undefined, isLoading: false } as never);
+    const view = await mount({ isLoaded: true, isSignedIn: true }, { serverTime: 0, notifications: [], userData: { userId: "required-test", isOutlaw } }, undefined, true, <VillageConsumer />);
+    if (isOutlaw) {
+      await waitFor(() => expect(view.getByText("Allowed")).toBeDefined());
+      expect(push).not.toHaveBeenCalled();
+    } else {
+      expect(push).toHaveBeenCalledWith("/");
+    }
+  });
+
+  it.each([false, true])("waits for recovery then prioritizes confirmed relocation for outlaw=%s", async isOutlaw => {
+    vi.spyOn(sector, "useSectorVillage").mockReturnValue({ sectorVillage: undefined, isLoading: false } as never);
+    let enabled = false;
+    const Relocation = () => <VillageConsumer enabled={enabled} redirectTo={enabled ? "/shrine" : undefined} />;
+    const view = await mount({ isLoaded: true, isSignedIn: true }, { serverTime: 0, notifications: [], userData: { userId: "required-test", isOutlaw } }, undefined, true, <Relocation />);
+    expect(push).not.toHaveBeenCalled();
+    enabled = true;
+    view.rerender(<QueryClientProvider client={clients[clients.length - 1]!}><UserContextProvider initialIsSignedIn><Relocation /></UserContextProvider></QueryClientProvider>);
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/shrine"));
+    expect(push).not.toHaveBeenCalledWith("/");
   });
 });

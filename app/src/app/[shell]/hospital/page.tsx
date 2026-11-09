@@ -6,6 +6,7 @@ import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { IMG_BUILDING_HOSPITAL, MEDNIN_MIN_RANK } from "@/drizzle/constants";
+import { useWarTornRevival } from "@/hooks/useResourceSilos";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import {
@@ -36,8 +37,15 @@ import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 
 export default function Hospital() {
   // Settings
+  const revival = useWarTornRevival();
   const { userData, access, timeDiff, prepareUserUpdate, updateUser } =
-    useRequireInVillage("/hospital");
+    useRequireInVillage("/hospital", {
+      enabled: !revival.isPending,
+      redirectTo:
+        revival.data?.success && revival.variables?.destination === "shrine"
+          ? "/shrine"
+          : undefined,
+    });
   const isHospitalized = userData?.status === "HOSPITALIZED";
 
   // Mutations
@@ -98,7 +106,7 @@ export default function Hospital() {
         className="w-full"
         priority={true}
       />
-      <WarTornRevival />
+      <WarTornRevival revival={revival} />
       {!isPending && isHospitalized && userData && healFinishAt && (
         <div className="p-3">
           <p>
