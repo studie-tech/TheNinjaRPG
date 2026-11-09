@@ -163,10 +163,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                 </Button>
               }
               isValid={createForm.formState.isValid}
-              onAccept={(e) => {
-                e.preventDefault();
-                createTournament(createForm.getValues());
-              }}
+              onAccept={onSubmit}
             >
               <Form {...createForm}>
                 <form className="grid grid-cols-2 space-y-2" onSubmit={onSubmit}>
