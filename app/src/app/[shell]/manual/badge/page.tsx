@@ -11,6 +11,7 @@ import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
+import { useInfinitePagination } from "@/libs/pagination";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -19,12 +20,17 @@ export default function ManualBadges() {
   const { data: userData } = useUserData();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [badge, setBadge] = useState<Badge | undefined>(undefined);
+  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // Query data
   const {
     data: badges,
     isFetching,
+    isError,
+    isFetchNextPageError,
     refetch,
+    fetchNextPage,
+    hasNextPage,
   } = api.badge.getAll.useInfiniteQuery(
     { limit: 50 },
     {
@@ -33,6 +39,11 @@ export default function ManualBadges() {
     },
   );
   const allBadges = badges?.pages.flatMap((page) => page.data);
+  useInfinitePagination({
+    fetchNextPage,
+    hasNextPage,
+    lastElement,
+  });
 
   const { onCreated, onDeleted } = useContentListActions(refetch, "/manual/badge/edit");
 
@@ -46,7 +57,7 @@ export default function ManualBadges() {
   });
 
   // Derived
-  const isPending = isFetching || load1 || load2;
+  const isPending = load1 || load2;
 
   // Return JSX
   return (
@@ -66,7 +77,7 @@ export default function ManualBadges() {
       <p className="mb-2">
         Completing quests, reaching milestones, or assisting in the development of TNR
         can earn you badges. Badges are displayed on your profile, and can be used to
-        show off your accomplishments. All badges and details sorrounding them can be
+        show off your accomplishments. All badges and details surrounding them can be
         found below.
       </p>
       <ActionSelector
@@ -81,7 +92,24 @@ export default function ManualBadges() {
         hideBorder={true}
         showLabels={true}
         emptyText="No badges exist yet."
+        setLastElement={setLastElement}
       />
+      <div className="flex min-h-[64px] items-center justify-center" aria-live="polite">
+        {isFetching ? (
+          <Loader noPadding explanation="Loading badges" />
+        ) : isError ? (
+          <div role="alert" className="text-center">
+            <p>Could not load {isFetchNextPageError ? "more badges" : "badges"}.</p>
+            <Button
+              onClick={() => void (isFetchNextPageError ? fetchNextPage() : refetch())}
+            >
+              Try again
+            </Button>
+          </div>
+        ) : hasNextPage ? (
+          <Button onClick={() => void fetchNextPage()}>Load more badges</Button>
+        ) : null}
+      </div>
       {isOpen && userData && badge && (
         <Modal
           title="Badge Details"

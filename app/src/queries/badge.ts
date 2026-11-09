@@ -69,7 +69,7 @@ export const listBadgeForGetAll = (
   client.query.badge.findMany({
     offset: skip,
     limit: limit,
-    orderBy: asc(badge.name),
+    orderBy: [asc(badge.name), asc(badge.id)],
   });
 
 /** Build the `badge` lookup for `update`, selecting only `name` and `id`, using predicates on `name`. */
