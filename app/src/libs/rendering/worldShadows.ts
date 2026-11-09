@@ -33,8 +33,10 @@ import {
 import {
   acquireCharacterFrameMaterial,
   acquireWorldMaterial,
+  acquireWorldSurfaceFrame,
   canopyShadowFrame,
   createCharacterMaterialFrame,
+  installAuthoredFrames,
   type MaterialFrame,
   updateCharacterFrameMaterial,
   type WorldMaterial,
@@ -386,6 +388,9 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
     ) => {
       const id = String(++serial);
       const leases = acquireCasterMaterials(description, !!character);
+      const surfaces = character
+        ? undefined
+        : acquireCasterSurfaces(description, sprite.texture);
       const record: Caster = {
         id,
         sprite,
@@ -437,9 +442,14 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       }
       records.add(record);
       invalidate();
-      const ready = Promise.all(leases.map((lease) => lease.resource))
-        .then((materials) => {
+      const ready = Promise.all([
+        Promise.all(leases.map((lease) => lease.resource)),
+        surfaces?.resource,
+      ])
+        .then(([materials, frames]) => {
           if (!record.active || disposed) return;
+          const [still] = materials;
+          if (still && frames !== undefined) installAuthoredFrames(still, frames);
           record.materials = materials;
           invalidate();
         })
@@ -456,7 +466,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
           retired.push(() => material.texture.destroy(true));
         }
         records.delete(record);
-        for (const lease of leases) {
+        for (const lease of surfaces ? [...leases, surfaces] : leases) {
           if (disposed) lease.release();
           else retired.push(lease.release);
         }
@@ -1876,6 +1886,17 @@ export const acquireCasterMaterials = (
       description.worldMaterial,
     ),
   );
+/**
+ * Leases the authored topology of a catalogue caster's frame; registration reuses it.
+ * Persisted materials (`worldMaterial`) load their whole atlas with the material.
+ */
+export const acquireCasterSurfaces = (
+  description: WorldSpriteDescription,
+  texture?: Texture,
+) =>
+  description.worldMaterial
+    ? undefined
+    : acquireWorldSurfaceFrame(description.image, description.frame, texture);
 /** Common registration/update contract for physical, projected and prebaked scene lighting. */
 export type WorldShadows =
   | ReturnType<typeof createWorldShadows>

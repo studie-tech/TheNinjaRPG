@@ -6,8 +6,10 @@ import {
 } from "@/libs/rendering/assets";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
 import {
+  hasWorldSurfaceFrames,
   type WorldAssetSource,
   worldAssetSource,
+  worldSurfaceFrameUrl,
 } from "@/libs/rendering/worldAssetSources";
 import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import type { WorldShadowShape } from "@/libs/rendering/worldShadows";
@@ -25,7 +27,7 @@ const materials = createLeaseCache<WorldMaterial>({
       image: string;
       shape: WorldShadowShape;
       rendition?: number;
-      source?: Pick<WorldAssetSource, "material" | "surfaces">;
+      source?: Pick<WorldAssetSource, "material" | "surfaces"> & { framed?: true };
     };
     const assets = createSceneAssets();
     try {
@@ -40,7 +42,12 @@ const materials = createLeaseCache<WorldMaterial>({
               return null;
             })
           : null,
-        source ? readAuthoredSurfaces(source.surfaces) : null,
+        // Per-frame topology arrives with each caster (acquireWorldSurfaceFrame).
+        source?.framed
+          ? { frames: [], bytes: 0 }
+          : source
+            ? readAuthoredSurfaces(source.surfaces)
+            : null,
       ]);
       const width = albedo.source.pixelWidth,
         height = albedo.source.pixelHeight;
@@ -122,11 +129,64 @@ export const acquireWorldMaterial = (
 ) => {
   const published = materialSource ?? worldAssetSource(image);
   const source = published
-    ? { material: published.material, surfaces: published.surfaces }
+    ? {
+        material: published.material,
+        surfaces: published.surfaces,
+        // Catalogue atlases resolve per-frame topology by image; persisted sources load whole.
+        ...(!materialSource && hasWorldSurfaceFrames(published.surfaces)
+          ? { framed: true as const }
+          : {}),
+      }
     : undefined;
   return materials.acquire(
     JSON.stringify({ image, shape: source ? "column" : shape, rendition, source }),
   );
+};
+
+const surfaceFiles = createLeaseCache<AuthoredSurfaces | null>({
+  load: (url) => readAuthoredSurfaces(url),
+  unload: async () => {},
+  bytes: (surfaces) => surfaces?.bytes ?? 0,
+  idleBudget: 4 * 1024 * 1024,
+});
+
+/**
+ * Leases the authored topology of one published atlas frame, which downloads alongside its
+ * material; installAuthoredFrames hands it to the material once both arrive. Undefined
+ * when the artwork publishes no per-frame topology (its material then loads the whole atlas).
+ */
+export const acquireWorldSurfaceFrame = (
+  image: string,
+  frame?: { x: number; y: number; width: number; height: number },
+  /** A loaded texture's frame, measured in the atlas pixels its material samples. */
+  texture?: Texture,
+) => {
+  const published = worldAssetSource(image);
+  if (!published || !hasWorldSurfaceFrames(published.surfaces)) return undefined;
+  const scaleX = texture ? published.width / texture.source.pixelWidth : 1,
+    scaleY = texture ? published.height / texture.source.pixelHeight : 1;
+  const area = texture?.frame ?? frame;
+  const rect = area
+    ? [area.x * scaleX, area.y * scaleY, area.width * scaleX, area.height * scaleY]
+    : [0, 0, published.width, published.height];
+  const url = worldSurfaceFrameUrl(published.surfaces, rect);
+  return url ? surfaceFiles.acquire(url) : undefined;
+};
+
+/** Adds frame topology to an authored material before any of its frames are built. */
+export const installAuthoredFrames = (
+  material: WorldMaterial,
+  surfaces: AuthoredSurfaces | null,
+) => {
+  const installed = material.surfaceFrames;
+  if (!installed || !surfaces) return;
+  for (const frame of surfaces.frames)
+    if (
+      !installed.some((entry) =>
+        entry.frame.every((value, i) => value === frame.frame[i]),
+      )
+    )
+      installed.push(frame);
 };
 
 const characterMaterials = new Map<string, WorldMaterial>();
@@ -723,7 +783,7 @@ export const encodeWorldNormal = (x: number, y: number, z: number) => {
 };
 
 /** Atlas geometry loads on demand and shares its material lease and idle-cache lifetime. */
-const readAuthoredSurfaces = async (url: string) => {
+const readAuthoredSurfaces = async (url: string): Promise<AuthoredSurfaces | null> => {
   try {
     const response = await fetch(transformImageUrl(url));
     if (!response.ok)
@@ -747,7 +807,7 @@ const readAuthoredSurfaces = async (url: string) => {
     )
       throw new Error("Invalid authored world surface frames");
     return {
-      frames: frames as readonly AuthoredMaterialFrame[],
+      frames: frames as AuthoredMaterialFrame[],
       // Reserve parsed numbers and lazily compiled geometry in the existing idle-cache budget.
       bytes: text.length * 4,
     };
@@ -765,7 +825,8 @@ export type WorldMaterial = {
   shape: WorldShadowShape;
   /** Generated fallback uses an analytic upright plane local to each atlas frame. */
   isBillboard?: boolean;
-  surfaceFrames?: readonly AuthoredMaterialFrame[];
+  /** Framed sources receive entries as their casters register (installAuthoredFrames). */
+  surfaceFrames?: AuthoredMaterialFrame[];
   /** Conservative reservation for parsed metadata and frame buffers compiled during this lease. */
   surfaceBytes?: number;
   frames: Map<string, MaterialFrame>;
@@ -784,6 +845,7 @@ export type MaterialVolume = {
   vertices: Float32Array;
   indices: Uint16Array;
 };
+type AuthoredSurfaces = { frames: AuthoredMaterialFrame[]; bytes: number };
 export type AuthoredMaterialFrame = {
   /** Thin leaf backing retains every nonzero Float32 closure face. */
   thinBacking?: true;

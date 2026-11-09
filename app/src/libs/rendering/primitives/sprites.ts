@@ -47,6 +47,7 @@ import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import {
   acquireCasterMaterials,
+  acquireCasterSurfaces,
   type WorldShadows,
 } from "@/libs/rendering/worldShadows";
 import {
@@ -98,7 +99,8 @@ export const createWorldSprites = async (
   const masked: ReturnType<typeof acquireMaskedTexture>[] = [];
   const views: Texture[] = [];
   const materials: ReturnType<WorldShadows["register"]>[] = [];
-  // Physical shadow materials download beside their artwork; registration reuses these leases.
+  // Physical shadow materials and frame topology download beside their artwork;
+  // registration reuses these leases.
   const preparedMaterials =
     worldShadows?.kind === "physical"
       ? descriptions
@@ -106,7 +108,11 @@ export const createWorldSprites = async (
             (description) =>
               !description.character && !description.mask && !description.unlit,
           )
-          .flatMap((description) => acquireCasterMaterials(description))
+          .flatMap((description) => {
+            const surfaces = acquireCasterSurfaces(description);
+            const leases = acquireCasterMaterials(description);
+            return surfaces ? [...leases, surfaces] : leases;
+          })
       : [];
   const releasePreparedMaterials = () => {
     for (const lease of preparedMaterials.splice(0)) lease.release();

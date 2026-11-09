@@ -2,6 +2,7 @@ import { expect, it } from "bun:test";
 import lightFields from "@/libs/rendering/bakedVillageLightFields.json";
 import bakedSources from "@/libs/rendering/bakedWorldSources.json";
 import worldSources from "@/libs/rendering/worldAssetSources.json";
+import surfaceFrames from "@/libs/rendering/worldSurfaceFrames.json";
 import { isBunnyCdnUrl, textureImageUrl } from "@/utils/image";
 
 it("serves published world textures through Bunny without modifying packed pixels", () => {
@@ -16,6 +17,9 @@ it("serves published world textures through Bunny without modifying packed pixel
       source.material,
       source.surfaces,
     ]),
+    ...Object.values(surfaceFrames).flatMap((frames) =>
+      frames.map((frame) => frame.url),
+    ),
   ];
   expect(images.length).toBeGreaterThan(0);
   for (const image of images) {
@@ -26,5 +30,19 @@ it("serves published world textures through Bunny without modifying packed pixel
     expect(url.pathname).toMatch(/^\/f\/[a-zA-Z0-9_-]+$/);
     expect(url.search).toBe("");
     expect(url.hash).toBe("");
+  }
+});
+
+it("splits every published atlas's surfaces into one copy per published frame", () => {
+  expect(Object.keys(surfaceFrames).sort()).toEqual(
+    Object.values(worldSources)
+      .map((source) => source.surfaces)
+      .sort(),
+  );
+  for (const source of Object.values(worldSources)) {
+    const frames = surfaceFrames[source.surfaces as keyof typeof surfaceFrames];
+    expect(frames.map((entry) => entry.frame)).toEqual(source.frames);
+    expect(new Set(frames.map((entry) => entry.url)).size).toBe(frames.length);
+    for (const entry of frames) expect(entry.sha256).toMatch(/^[0-9a-f]{64}$/);
   }
 });
