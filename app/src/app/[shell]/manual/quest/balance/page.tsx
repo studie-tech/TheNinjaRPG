@@ -18,7 +18,9 @@ import QuestRewardBalanceFiltering, {
 export default function ManualQuestBalance() {
   const availableTabs = ["Rewards"] as const;
   type Tab = (typeof availableTabs)[number];
-  const [tab, setTab] = useLocalStorage<Tab>("questBalanceTab", "Rewards", true);
+  const [storedTab, setTab] = useLocalStorage<Tab>("questBalanceTab", "Rewards", true);
+  // A URL fragment or stored value naming no tab opens the default tab.
+  const tab: Tab = availableTabs.includes(storedTab) ? storedTab : "Rewards";
 
   const NavBarBlock = (
     <NavTabs current={tab} options={[...availableTabs]} setValue={setTab} />
