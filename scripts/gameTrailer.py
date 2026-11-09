@@ -25,6 +25,8 @@ CLIPS_DIR = "clips"  # Directory containing the recorded video clips
 VIDEO_SIZE = (1920, 1080)  # Target resolution
 FPS = 30
 TEXT_DURATION = 3  # Seconds of each segment spent on its text screen
+INTRO_DURATION = 0.5  # Seconds of the fade in from black
+OUTRO_DURATION = 8  # Seconds of the closing logo and call to action
 
 # Background music (located in clips directory)
 BACKGROUND_MUSIC = os.path.join(CLIPS_DIR, "xevan_welcome_to_seichi_compressed.m4a")
@@ -313,15 +315,16 @@ def load_and_prepare_clip(clip_name, target_duration, size=VIDEO_SIZE, scale_dur
         clip = clip.without_audio()
     
     # Handle duration based on scale_duration parameter
+    original_duration = clip.duration
     if scale_duration:
         # Calculate speed factor to fit the entire clip within target_duration
         # If clip is longer than target, speed it up. If shorter, slow it down.
         calculated_speed_factor = clip.duration / target_duration
-        
+
         # Apply the calculated speed factor
         if calculated_speed_factor != 1.0:
             clip = clip.with_effects([vfx.MultiplySpeed(calculated_speed_factor)])
-            print(f"  → Scaling {clip_name} speed by {calculated_speed_factor:.2f}x to fit {target_duration:.1f}s (original: {clip.duration:.1f}s)")
+            print(f"  → Scaling {clip_name} speed by {calculated_speed_factor:.2f}x to fit {target_duration:.1f}s (original: {original_duration:.1f}s)")
         
         # Set clip to exact target duration (should already match after speed adjustment)
         clip = clip.with_duration(target_duration)
@@ -329,11 +332,11 @@ def load_and_prepare_clip(clip_name, target_duration, size=VIDEO_SIZE, scale_dur
         # Cut off the clip after target_duration
         if clip.duration > target_duration:
             clip = clip.subclipped(0, target_duration)
-            print(f"  → Cutting {clip_name} at {target_duration:.1f}s (original: {clip.duration:.1f}s)")
+            print(f"  → Cutting {clip_name} at {target_duration:.1f}s (original: {original_duration:.1f}s)")
         else:
             # If clip is shorter than target, set to target duration (will pad with black)
             clip = clip.with_duration(target_duration)
-            print(f"  → Extending {clip_name} to {target_duration:.1f}s (original: {clip.duration:.1f}s)")
+            print(f"  → Extending {clip_name} to {target_duration:.1f}s (original: {original_duration:.1f}s)")
     
     # Calculate aspect ratios
     target_aspect = size[0] / size[1]  # e.g., 16:9 = 1.778
@@ -553,7 +556,7 @@ def create_variable_volume_background_music(base_audio, timeline_segments):
     return variable_audio
 
 
-def create_outro(duration=4, video_size=VIDEO_SIZE, wallpaper=None, narration=None, mobile_mode=False):
+def create_outro(duration=OUTRO_DURATION, video_size=VIDEO_SIZE, wallpaper=None, narration=None, mobile_mode=False):
     """Create the final outro segment with logo and call-to-action"""
     # Auto-scale font sizes based on resolution
     base_cta_font_size = int(video_size[1] / 10)   # CTA text
@@ -710,7 +713,7 @@ def create_trailer(preview_mode=False, mobile_mode=False):
     
     # Calculate total duration from segments
     total_segment_duration = sum(item["duration"] for item in TIMELINE)
-    total_with_intro_outro = 0.5 + total_segment_duration + 4  # fade-in + segments + outro
+    total_with_intro_outro = INTRO_DURATION + total_segment_duration + OUTRO_DURATION
     
     print(f"Target duration: ~{int(total_with_intro_outro)} seconds ({total_segment_duration}s content + intro/outro)")
     print(f"Resolution: {video_size[0]}x{video_size[1]}")
@@ -724,11 +727,10 @@ def create_trailer(preview_mode=False, mobile_mode=False):
     current_time = 0
     
     # Fade in from black
-    fade_in_duration = 0.5
-    fade_in = ColorClip(size=video_size, color=(0, 0, 0), duration=fade_in_duration)
-    fade_in = fade_in.with_effects([vfx.FadeOut(0.5)])
+    fade_in = ColorClip(size=video_size, color=(0, 0, 0), duration=INTRO_DURATION)
+    fade_in = fade_in.with_effects([vfx.FadeOut(INTRO_DURATION)])
     segments.append(fade_in)
-    current_time += fade_in_duration
+    current_time += INTRO_DURATION
     
     # Create timeline segments and track their timing
     for i, timeline_item in enumerate(TIMELINE):
@@ -752,7 +754,7 @@ def create_trailer(preview_mode=False, mobile_mode=False):
     
     # Create outro
     print("Creating outro segment...")
-    outro = create_outro(duration=8, video_size=video_size, narration=OUTRO_NARRATION, mobile_mode=mobile_mode)
+    outro = create_outro(video_size=video_size, narration=OUTRO_NARRATION, mobile_mode=mobile_mode)
     segments.append(outro)
     
     # Concatenate all segments
