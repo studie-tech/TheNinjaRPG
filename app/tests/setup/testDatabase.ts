@@ -146,7 +146,8 @@ export const getTestDatabase = async (): Promise<DrizzleClient> => {
       instrumentQueries(connection as unknown as Parameters<typeof instrumentQueries>[0]);
       return connection;
     };
-    client = normalizeWrites(drizzle(pool, { schema, mode: "default" })) as unknown as DrizzleClient;
+    // Production's PlanetScale driver builds relational queries without lateral joins.
+    client = normalizeWrites(drizzle(pool, { schema, mode: "planetscale" })) as unknown as DrizzleClient;
   }
   return client;
 };

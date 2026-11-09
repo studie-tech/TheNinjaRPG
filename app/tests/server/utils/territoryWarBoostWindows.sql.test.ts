@@ -1,9 +1,7 @@
-import { afterAll, beforeAll, beforeEach, expect, it } from "bun:test";
+import { beforeEach, expect, it } from "bun:test";
 import { Client } from "@planetscale/database";
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
 import { drizzle as planetScaleDrizzle } from "drizzle-orm/planetscale-serverless";
-import mysql from "mysql2/promise";
 import { TERRITORY_WAR_BOOST_PERCENT, TERRITORY_WAR_TARGET_POINTS, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import * as schema from "@/drizzle/schema";
 import { clan, notification, territoryWar, territoryWarScore, userData, village } from "@/drizzle/schema";
@@ -25,8 +23,6 @@ const subjects = [
   { userId: "outlaw-clanless", villageId: VILLAGE_SYNDICATE_ID, isOutlaw: true, clanId: null },
 ] as const;
 
-// Production's subquery relations rewrite extras differently from default-mode lateral joins.
-const createReadDatabase = (pool: mysql.Pool) => drizzle(pool, { schema, mode: "planetscale" });
 // Generate the actual production adapter's SQL without ever making a network request.
 const productionDatabase = planetScaleDrizzle(new Client({
   host: "unused.invalid", username: "unused", password: "unused",
@@ -34,13 +30,6 @@ const productionDatabase = planetScaleDrizzle(new Client({
 }), { schema });
 
 describeWithDatabase("Territory War bonus history competitor scope", () => {
-  let pool: mysql.Pool;
-  let readDatabase: ReturnType<typeof createReadDatabase>;
-  beforeAll(() => {
-    pool = mysql.createPool({ uri: process.env.TEST_MYSQL_URL });
-    readDatabase = createReadDatabase(pool);
-  });
-  afterAll(async () => { await pool.end(); });
   beforeEach(async () => {
     await resetTables(territoryWarScore, territoryWar, notification, clan, userData, village);
     const db = await getTestDatabase();
@@ -69,7 +58,7 @@ describeWithDatabase("Territory War bonus history competitor scope", () => {
       with: { village: true, clan: true } as const,
       extras: (table: Parameters<typeof territoryWarBoostWindowsSql>[0]) => ({ territoryWarBoostWindows: territoryWarBoostWindowsSql(table, since).as("territoryWarBoostWindows") }),
     };
-    const query = readDatabase.query.userData.findFirst(config);
+    const query = (await getTestDatabase()).query.userData.findFirst(config);
     expect(query.toSQL()).toEqual(productionDatabase.query.userData.findFirst(config).toSQL());
     return (await query)!;
   };
@@ -89,7 +78,7 @@ describeWithDatabase("Territory War bonus history competitor scope", () => {
 
   it("preserves competitor scope in the combat findMany preload", async () => {
     await seedWinner("village");
-    const users = await readDatabase.query.userData.findMany({
+    const users = await (await getTestDatabase()).query.userData.findMany({
       with: { village: true, clan: true },
       extras: table => ({ territoryWarBoostWindows: territoryWarBoostWindowsSql(table).as("territoryWarBoostWindows") }),
     });
