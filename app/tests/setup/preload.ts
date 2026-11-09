@@ -11,7 +11,6 @@ import { useAbVariant } from "@/hooks/useAbVariant";
 import Link from "@/layout/Link";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
-import * as gamesettings from "@/libs/gamesettings";
 import { resetPvpExperienceAverageCache } from "@/server/utils/pvpExperience";
 import {
   closeTestDatabase,
@@ -30,9 +29,6 @@ export const actualImage = Image;
 export const actualShowMutationToast = toast.showMutationToast;
 export const actualUserContext = { ...userContext };
 export const actualUseAbVariant = useAbVariant;
-
-// Cron SQL suites restore real timers after unit suites replace the module exports.
-export const actualGameSettings = { ...gamesettings };
 
 // Suites seed their own player populations, so none may read another suite's cached average.
 beforeEach(() => {

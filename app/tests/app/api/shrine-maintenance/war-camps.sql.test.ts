@@ -17,7 +17,6 @@ import * as villageRouter from "@/queries/village";
 import * as objectiveWar from "@/server/utils/objectiveWar";
 import { defaultWarRules } from "@/validators/war";
 import { insertUsers } from "../../../setup/factories";
-import { actualGameSettings } from "../../../setup/preload";
 import { resetServerModuleStubs } from "../../../setup/serverModules";
 import {
   describeWithDatabase,
@@ -59,15 +58,7 @@ describeWithDatabase("shrine minute scheduler war camps", () => {
       userData,
       village,
     );
-    vi.spyOn(gamesettings, "getGameSetting").mockImplementation(actualGameSettings.getGameSetting);
-    vi.spyOn(gamesettings, "lockWithMinuteTimer")
-      .mockImplementation(actualGameSettings.lockWithMinuteTimer);
-    vi.spyOn(gamesettings, "lockWithDailyTimer")
-      .mockImplementation(actualGameSettings.lockWithDailyTimer);
-    vi.spyOn(gamesettings, "updateGameSetting")
-      .mockImplementation(actualGameSettings.updateGameSetting);
-    vi.spyOn(gamesettings, "handleEndpointError")
-      .mockImplementation(actualGameSettings.handleEndpointError);
+    vi.spyOn(gamesettings, "handleEndpointError");
 
     const db = await getTestDatabase();
     const combatStartedAt = new Date(now.getTime() - 10 * 60000);

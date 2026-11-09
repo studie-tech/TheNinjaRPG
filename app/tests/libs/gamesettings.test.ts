@@ -4,9 +4,7 @@ import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { PET_ART_PROVIDER_SETTING, PetArtProviders } from "@/drizzle/constants";
 import type { GameSetting } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import { actualGameSettings } from "../setup/preload";
-
-const {
+import {
   getPetArtProvider,
   lockWithDailyTimer,
   lockWithHourlyTimer,
@@ -14,7 +12,7 @@ const {
   lockWithMonthlyTimer,
   lockWithWeeklyTimer,
   lockWithGameTimer,
-} = actualGameSettings;
+} from "@/libs/gamesettings";
 const now = new Date("2026-10-21T10:30:10.000Z");
 const oldTime = new Date("2026-09-01T00:00:00.000Z");
 const dialect = new MySqlDialect();

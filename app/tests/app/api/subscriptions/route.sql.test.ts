@@ -1,17 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { GET } from "@/app/api/subscriptions/route";
 import { paypalSubscription, storePurchase, stripePayment, userData } from "@/drizzle/schema";
-import * as gamesettings from "@/libs/gamesettings";
 import { insertUsers } from "../../../setup/factories";
-import { actualGameSettings } from "../../../setup/preload";
 import { resetServerModuleStubs, stubCronAuth } from "../../../setup/serverModules";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 
 /** Transient provider failures must not masquerade as confirmed subscription termination. */
 describeWithDatabase("PayPal renewal lookup failures", () => {
   beforeEach(async () => {
-    // Cron unit suites replace this module for the whole Bun process.
-    vi.spyOn(gamesettings, "handleEndpointError").mockImplementation(actualGameSettings.handleEndpointError);
     await resetTables(paypalSubscription, storePurchase, stripePayment, userData);
     await insertUsers([{ userId: "renewal-buyer", username: "RenewalBuyer", federalStatus: "GOLD" }]);
     await (await getTestDatabase()).insert(paypalSubscription).values({

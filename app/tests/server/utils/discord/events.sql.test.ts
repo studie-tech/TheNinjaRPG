@@ -14,7 +14,7 @@ import { updateQuestForUpdate } from "@/queries/quests";
 import { questsRouter } from "@/server/api/routers/quests";
 import { QuestValidator, RaidObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { actualGameSettings } from "../../../setup/preload";
+import { lockWithMinuteTimer } from "@/libs/gamesettings";
 import { restoreEnvAfterEach } from "../../../setup/env";
 import { deferred } from "../../../setup/deferred";
 
@@ -98,7 +98,7 @@ describeWithDatabase("Discord event delivery receipts", () => {
       return new Response('{"id":"confirmed"}');
     });
     const tick = async () => {
-      expect((await actualGameSettings.lockWithMinuteTimer(db, "territory-war-maintenance")).isNewMinute).toBe(true);
+      expect((await lockWithMinuteTimer(db, "territory-war-maintenance")).isNewMinute).toBe(true);
       await syncDiscordEvents(db);
     };
     const first = tick();
