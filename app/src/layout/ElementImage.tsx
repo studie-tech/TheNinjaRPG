@@ -137,6 +137,7 @@ const ICON_BADGES: Partial<
   Stamina: { Icon: BatteryMedium, background: "bg-green-600" },
 };
 
+/** Display element artwork or combat badges, retaining labels for unsupported tags. */
 const ElementImage: React.FC<ElementImageProps> = (props) => {
   // Destructure
   const { element, hoverText } = props;
@@ -170,6 +171,7 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
         />
       );
     } else {
+      // Unknown tags and inherited object keys keep the label-only fallback.
       const badge = Object.hasOwn(ICON_BADGES, element)
         ? ICON_BADGES[element]
         : undefined;
