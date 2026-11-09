@@ -466,7 +466,6 @@ export const commentsRouter = createTRPCRouter({
           ? [updateUserConversationReadAt(ctx.drizzle, ctx, convo, lastReadAt)]
           : []),
       ]);
-      // Fetch
       const nextCursor = cursorAfter(comments);
       return {
         restrictionMessage: null,
@@ -535,11 +534,10 @@ export const commentsRouter = createTRPCRouter({
         if (restriction) return errorResponse(restriction);
       }
 
-      // Update conversation & update user notifications
       const commentId = nanoid();
       const pusher = getServerPusher();
 
-      // For staff accounts, verify the language is appropriate
+      // Reject offensive language
       if (!moderationResult.success) return moderationResult;
 
       // Sanitize authored content before attaching trusted quote metadata.
@@ -934,12 +932,8 @@ const updateSupportTicketStatusAfterComment = async (
 };
 
 /**
- * Creates a conversation with the given parameters and performs necessary database operations.
- * @param client - The DrizzleClient instance used for database operations.
- * @param senderUserId - The ID of the user who is creating the conversation.
- * @param receiverUserIds - An array of user IDs who will receive the conversation.
- * @param title - The title of the conversation.
- * @param content - The content of the first comment in the conversation.
+ * Creates a conversation with its first message, adds the sender, author and receivers as
+ * members, and notifies the receivers. Returns the conversation ID.
  */
 export const createConvo = async (info: {
   client: DrizzleClient;

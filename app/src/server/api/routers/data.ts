@@ -578,7 +578,7 @@ export const dataRouter = createTRPCRouter({
         parseRecruitmentSources(input.sources);
       const dayExpr = sql<string>`CAST(${userData.createdAt} AS DATE)`;
 
-      // No selection: only users with any referral source (historical behavior)
+      // No selection: only users with a referral source
       const rows = await selectUserDataForGetRecruitmentDailyLevelStats(
         ctx.drizzle,
         dayExpr,
@@ -818,7 +818,7 @@ export const dataRouter = createTRPCRouter({
       // Build where conditions
       const whereConditions = contentBalanceConditions("jutsu", input);
 
-      // Perform the filter by jutsu effects directly in the main query using JSON_SEARCH in the WHERE clause if needed
+      // Keep only actions used at least minCount times
       const havingClause = gte(sql`SUM(${dataBattleAction.count})`, input.minCount);
 
       // Build effect filter if needed
@@ -1056,7 +1056,7 @@ export const dataRouter = createTRPCRouter({
       // Build where conditions
       const whereConditions = contentBalanceConditions("item", input);
 
-      // Perform the filter by item types directly in the main query
+      // Keep only actions used at least minCount times
       const havingClause = gte(sql`SUM(${dataBattleAction.count})`, input.minCount);
 
       // Build item type filter if needed
@@ -1105,7 +1105,7 @@ export const dataRouter = createTRPCRouter({
         whereConditions.push(inArray(dataBattleAction.battleType, input.battleTypes));
       }
 
-      // Perform the filter by user ranks, villages, and level range directly in the main query
+      // Keep only actions used at least minCount times
       const havingClause = gte(sql`SUM(${dataBattleAction.count})`, input.minCount);
 
       // Build user rank filter if needed
@@ -1123,7 +1123,6 @@ export const dataRouter = createTRPCRouter({
         and(gte(userData.level, input.minLevel), lte(userData.level, input.maxLevel)),
       );
 
-      // Run battleCounts and usage queries in parallel for efficiency
       const [usage] = await Promise.all([
         selectDataBattleActionForGetAiBalanceStatistics(
           ctx.drizzle,
@@ -1132,7 +1131,6 @@ export const dataRouter = createTRPCRouter({
         ),
       ]);
 
-      // Add battle count to each result
       return usage;
     }),
   getBattleLengthStatistics: publicProcedure
