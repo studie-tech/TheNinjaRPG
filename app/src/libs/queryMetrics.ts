@@ -19,7 +19,10 @@ import {
   UNKNOWN_QUERY_ATTRIBUTION,
 } from "@/libs/queryTelemetry";
 
-/** Instrument one account's cache once; feature callers keep ordinary tRPC/TanStack APIs. */
+/**
+ * Instrument one account's cache once; feature callers keep ordinary tRPC/TanStack APIs.
+ * docs/Observability.md describes the triggers and the mutation-context window.
+ */
 export const createQueryMetricsTracker = (
   client: QueryClient,
   metrics: Pick<typeof Sentry.metrics, "count"> = Sentry.metrics,
@@ -226,6 +229,8 @@ export const queryMetricsHeaders = (
     : {};
 };
 
+// tRPC infinite-query keys store the input without cursor/direction, which the client
+// adds to every page request (direction even when the input is undefined).
 const matchesInput = (query: Query, input: unknown) => {
   const details = query.queryKey[1] as { input?: unknown; type?: string } | undefined;
   let compared = input;
