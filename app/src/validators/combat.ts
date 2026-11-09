@@ -98,8 +98,8 @@ const tagType = <T extends string>(tag: T) => z.literal(tag).prefault(tag);
  * Battle Descriptions use the following variables:
  * https://www.scribbr.com/nouns-and-pronouns/pronouns/
  *
- * %user - the name of the one who is affected by the effect
- * %target - the name of the one who is affected by the effect
+ * %user - the acting user's name
+ * %target - the targets' names, comma-joined
  * %user_subject - he/she
  * %target_subject - he/she
  * %user_object - him/her
@@ -108,12 +108,10 @@ const tagType = <T extends string>(tag: T) => z.literal(tag).prefault(tag);
  * %target_posessive - his/hers
  * %user_reflexive - himself/herself
  * %target_reflexive - himself/herself
- * %attacker - a character attacking the target
- * %rounds - the number of rounds the effect will last
- * %amount - the amount of the effect
- * %affected - the stats or pools that are affected by the effect
- * %changetype - the type of change (increased or decreased)
- * %location - the location of the action
+ * %location - the location of the action, as [row, col]
+ *
+ * Target pronouns take the plural forms (they/them/theirs/themselves) when several
+ * users are targeted; substitution happens in actions.ts.
  */
 
 /******************** */
@@ -133,7 +131,10 @@ const BaseAttributes = {
   // Timing controls
   rounds: z.coerce.number().int().min(0).max(100).optional(),
   timeTracker: z.record(z.string(), z.coerce.number()).optional(),
-  // Power controls. Has different meanings depending on calculation
+  // Power controls. Power's meaning depends on calculation:
+  // static: directly equates to the amount returned
+  // percentage: power is returned as a percentage
+  // formula: power is used in stats-based formula to calculate return value
   power: z.coerce.number().min(-100).max(100).prefault(1),
   powerPerLevel: z.coerce.number().min(-1).max(1).prefault(0),
   // Used for indicating offensive / defensive effect
@@ -283,10 +284,6 @@ const statTypesField = z.array(
 );
 
 const IncludeStats = {
-  // Power has the following meaning depending on calculation
-  // static: directly equates to the amount returned
-  // percentage: power is returned as a percentage
-  // formula: power is used in stats-based formula to calculate return value
   statTypes: statTypesField.optional(),
   ...IncludeGeneralsAndElements,
 };
@@ -1386,7 +1383,8 @@ export const getTagSchema = (type: ZodAllTags["type"]) => {
 };
 
 /**
- * Refiner object, which is used to refine the data in the battle object
+ * Fields shared by jutsu and item validators for cross-field targeting checks in
+ * SuperRefineBase.
  */
 interface ContentBaseValidatorType {
   target: AttackTarget;

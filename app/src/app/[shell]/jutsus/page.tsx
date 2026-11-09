@@ -1088,8 +1088,11 @@ export default function MyJutsu() {
                   <br />
                   <ul className="list-disc pl-6">
                     <li>
-                      <code>%user</code> or <code>%target</code>: The acting user&apos;s
-                      username.
+                      <code>%user</code>: The acting user&apos;s username.
+                    </li>
+                    <li>
+                      <code>%target</code>: The targets&apos; usernames, separated by
+                      commas.
                     </li>
                     <li>
                       <code>%user_subject</code> or <code>%target_subject</code>: (
