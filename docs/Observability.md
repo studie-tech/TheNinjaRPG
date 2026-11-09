@@ -1,8 +1,8 @@
 # Query and mutation load attribution
 
 The shared tRPC provider instruments its QueryClient and query/mutation caches once.
-Existing and future callers use the ordinary tRPC/TanStack APIs without adding labels
-at invalidation sites. Sentry Application Metrics are independent of trace sampling.
+Callers use the ordinary tRPC/TanStack APIs without adding labels at invalidation
+sites. Sentry Application Metrics are independent of trace sampling.
 All four metrics use a uniform 2% event sample, identified by `sample_rate:0.02`.
 
 | Metric | Emitted by | Attributes | Meaning |
@@ -12,9 +12,9 @@ All four metrics use a uniform 2% event sample, identified by `sample_rate:0.02`
 | `trpc.query.fetch` | Server | `procedure`, `trigger`, `mutation_context` | Estimated actual query invocations reaching middleware, including retries, for every procedure. Cache hits and invalidations that reuse unfinished reads add no server execution. |
 | `trpc.query.duration` | Server | `procedure`, `trigger`, `mutation_context`, `outcome` | Procedure wall time in milliseconds, including application work and database latency; not SQL CPU time or the sum of SQL durations. |
 
-The existing Sentry Next.js request wrapper flushes server metrics after the response
+The Sentry Next.js request wrapper flushes server metrics after the response
 through the platform's `waitUntil`; game logic does not await a telemetry request.
-Client metrics use the existing browser SDK and can be absent when telemetry is blocked.
+Client metrics use the browser SDK and can be absent when telemetry is blocked.
 CDN cache hits do not reach server middleware and produce no server execution metric.
 
 ## Finding optimization opportunities
@@ -77,7 +77,8 @@ trace sampling rate.
 - `refetch`: an explicit QueryClient/tRPC utility refetch outside invalidation.
 - `refresh`: other fetches of existing data, including polling, focus/reconnect,
   observer refetches and imperative fetches.
-- `unknown`: older clients, direct callers or missing/unmatchable attribution.
+- `unknown`: requests without the attribution header (such as tabs running an older
+  bundle), direct callers or missing/unmatchable attribution.
 - `mixed`: duplicate procedure calls in one batch have conflicting attribution.
 
 `mutation_context` records a single procedure whose success/error callbacks are
@@ -94,7 +95,7 @@ The tracker scopes scheduling per QueryClient, retains pending invalidations and
 snapshots attribution into each tRPC operation before retrying and batching. Cache
 matching includes query inputs and handles infinite-query cursors, but inputs and
 query-key hashes are never sent to metrics. Router/global invalidations require no
-special handling at call sites. Predicates retain their existing evaluation behavior.
+special handling at call sites. Predicates are evaluated exactly as TanStack evaluates them.
 
 A bounded diagnostic header carries attribution for batched query paths. Server
 validation uses the registered router's procedure types, with no manual allowlist.
@@ -102,7 +103,7 @@ Unknown query names, mutation names, triggers and oversized/malformed headers ca
 create arbitrary server metric labels or reject game requests. Attribution grants
 no authority and includes no player identifiers or request/response payloads.
 
-Delivery remains best effort. Unsampled server calls bypass metric recording and
-timing; sampled calls buffer records through the existing SDK. Client attribution
-continues for all queries, but only sampled invalidations incur metric serialization
+Delivery is best effort. Unsampled server calls bypass metric recording and
+timing; sampled calls buffer records through the Sentry SDK. Client attribution
+covers all queries, but only sampled invalidations incur metric serialization
 and upload.
