@@ -592,7 +592,7 @@ const calcWarDamage = ({
   battle: CompleteBattle;
   user: BattleUserState;
   targets: BattleUserState[];
-  /** Human opponents; the level normalisation ignores AI. */
+  /** Human opponents; only they drive the level normalisation. */
   targetUsers: BattleUserState[];
   village: CompleteBattle["extraState"]["villages"][string] | undefined;
   userClan: CompleteBattle["extraState"]["clans"][string] | undefined;
@@ -811,9 +811,13 @@ const calcWarDamage = ({
   // Shrine HP changes are a strategic war mechanic and should not be reduced
   // by anti-farming scaling, ensuring consistent war progress per kill.
 
-  // Adjust shrine & townhall damage based on level difference
+  // Adjust shrine & townhall damage based on the level difference to human opponents;
+  // fights against AI alone keep their full damage.
   const maxHumanTargetLevel = Math.max(...targetUsers.map((t) => t.level), 0);
-  if (Math.abs(user.level - maxHumanTargetLevel) > STREAK_LEVEL_DIFF) {
+  if (
+    targetUsers.length > 0 &&
+    Math.abs(user.level - maxHumanTargetLevel) > STREAK_LEVEL_DIFF
+  ) {
     // Check if any kage was killed in this battle
     const targetKageLost =
       targets.some((target) => {
