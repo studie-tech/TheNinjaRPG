@@ -537,5 +537,3 @@ const variantLabel = (experiment: string, variant: string) => {
 type VariantAgg = { variant: string; loaded: number; register: number };
 
 type ExperimentAgg = { experiment: string; variants: VariantAgg[] };
-
-// statistical helpers are imported from @/libs/statistics
