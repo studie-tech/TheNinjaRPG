@@ -9,12 +9,7 @@ import { authenticateCronRequest } from "@/server/utils/cron";
 
 const TIMER_NAME = "timer-720h";
 
-/**
- * DANGER ZONE
- * This function is responsible for the daily update of the game state.
- * It is a critical function that should be handled with care!!!
- * @returns
- */
+/** Sends each staff member an AI summary of the reviews they received in the last 30 days. */
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
@@ -32,7 +27,7 @@ export async function GET(request: Request) {
     // Get all staff
     const staff = await listUserDataForGET(drizzleDB);
 
-    // Query all user review from the last 7 days
+    // Summarize each staff member's reviews from the timer window (30 days)
     await Promise.all(
       staff.map(async (user) => {
         const results = await listUserReviewForGET(drizzleDB, frequency, user);
@@ -66,7 +61,7 @@ export async function GET(request: Request) {
           senderUserId: TERR_BOT_ID,
           receiverUserIds: [user.userId],
           title: `Staff Review: ${now.toLocaleString()}`,
-          content: `Hey ${user.username}, here is a summary of your recent reviews from the last 7 days. This is an auto-generated message, and everything has been written by an AI based on the reviews, in order to keep the original messages annonymized:
+          content: `Hey ${user.username}, here is a summary of your recent reviews from the last 30 days. This is an auto-generated message, and everything has been written by an AI based on the reviews, in order to keep the original messages annonymized:
         <br /><br />${text.replace("```html", "").replace("```", "")}`,
           isStaffAvailable: false,
         });
