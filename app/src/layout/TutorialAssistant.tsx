@@ -91,6 +91,9 @@ const STUCK_STEP_SECONDS = 60;
 /** Gap between Lemu and the end of the dock she stands at. */
 const PORTRAIT_INSET_PX = 16;
 
+/** Delay before a tutorial redirect is sent a second time. */
+const REDIRECT_RETRY_MS = 1500;
+
 /**
  * Tutorial assistant component
  * @param rightSideBarOpen - Whether the right side bar is open
@@ -268,8 +271,7 @@ const PlayerTutorialAssistant: React.FC<
         isActiveStep &&
         isBattleStep
       ) {
-        router.replace("/combat");
-        return;
+        return navigateWithRetry(() => router.replace("/combat"));
       }
 
       // Show the menu prompt when on mobile, the drawer is closed, and the step
@@ -305,12 +307,7 @@ const PlayerTutorialAssistant: React.FC<
           (!onBattlePage && !toBattlePage) || // Unrelated to battle
           (inBattle && toBattlePage); // In battle and going to battle page
         if (battleCheck) {
-          router.push(currentStepConfig.page);
-          // A page rewriting its own URL while it mounts (the profile's tab
-          // query) can cancel a navigation already under way; try once more if
-          // the player is still on the wrong page.
-          const retry = setTimeout(() => router.push(currentStepConfig.page), 1500);
-          return () => clearTimeout(retry);
+          return navigateWithRetry(() => router.push(currentStepConfig.page));
         }
       }
     }
@@ -1835,6 +1832,17 @@ const usePostTutorialQuest = (
     questTypePriority,
     setQuestTypePriority,
   };
+};
+
+/**
+ * Navigates now and once more after a delay. A page rewriting its own URL while
+ * it mounts (the profile's tab query) can cancel a navigation already under way;
+ * the returned cleanup drops the retry once the effect re-runs on the new page.
+ */
+const navigateWithRetry = (navigate: () => void) => {
+  navigate();
+  const retry = setTimeout(navigate, REDIRECT_RETRY_MS);
+  return () => clearTimeout(retry);
 };
 
 /** Include the Activity header when keeping highlighted controls clear of the dock. */
