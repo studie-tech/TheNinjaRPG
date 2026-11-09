@@ -23,6 +23,15 @@ describe("linked jutsu reskin inheritance", () => {
     effects: [DamageTag.parse({ power: 999, staticAnimation: "scarlet-animation" })],
   } as Jutsu;
 
+  it("keeps reskin animation sizing independent for legacy and scaled tags", () => {
+    const normal = DamageTag.parse({});
+    const large = DamageTag.parse({ animationScale: 2.5 });
+    const legacy = { ...normal };
+    delete (legacy as Partial<typeof normal>).animationScale;
+    expect(inheritJutsuReskinEffects([legacy], [large])[0]?.animationScale).toBe(2.5);
+    expect(inheritJutsuReskinEffects([large], [legacy])[0]?.animationScale).toBe(1);
+    expect(inheritJutsuReskinEffects([large], [])[0]?.animationScale).toBe(2.5);
+  });
   it("uses linked cosmetics without copying hidden status, rank, identity or mechanics", () => {
     const resolved = applyLinkedJutsuReskin(base, variant);
     expect(resolved).toMatchObject({ id: "base", hidden: false, jutsuRank: "C", cooldown: 4, chakraCost: 20, name: "Scarlet" });

@@ -185,6 +185,7 @@ const getVisualOrSound = (
   animation: string | undefined,
   sfx: string | undefined,
   round: number,
+  animationScale = 1,
 ): GroundEffect => {
   return {
     ...VisualTag.parse({
@@ -192,6 +193,7 @@ const getVisualOrSound = (
       rounds: 0,
       description: "N/A",
       appearAnimation: animation,
+      animationScale,
       appearSfx: sfx ?? "",
       createdAt: Date.now(),
     }),
@@ -294,6 +296,7 @@ export const expireGroundEffects = (battle: CompleteBattle, actionRounds: number
           effect.disappearAnimation,
           effect.disappearSfx,
           battle.round,
+          effect.animationScale,
         ),
       );
     return false;
@@ -781,6 +784,7 @@ const applyGroundEffects = ({
             e.appearAnimation,
             e.appearSfx,
             round,
+            e.animationScale,
           ),
         );
       }
@@ -797,6 +801,7 @@ const applyGroundEffects = ({
             e.disappearAnimation,
             e.disappearSfx,
             round,
+            e.animationScale,
           ),
         );
       }
@@ -1652,6 +1657,7 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
         effect.appearAnimation,
         effect.appearSfx,
         battle.round,
+        effect.animationScale,
       ),
     );
   }
@@ -1671,6 +1677,7 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
         effect.disappearAnimation,
         effect.disappearSfx,
         round,
+        effect.animationScale,
       ),
     );
   }

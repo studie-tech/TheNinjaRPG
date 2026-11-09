@@ -65,9 +65,34 @@ describe("Pixi combat effects", () => {
       }
     }
   });
+  it.each([24, 48])("scales only selected ground and fighter effects at %s world units", async (hexWidth) => {
+    const scene = setup(hexWidth);
+    scene.effect.animationScale = 2.5;
+    scene.effect.appearAnimation = "animation";
+    const target = makeBattleUser("target", { longitude: 4, latitude: 3 });
+    const attached = makeEffect("visual", { appearAnimation: "animation", staticAnimation: "animation", animationScale: 2.5 }, { id: "attached", creatorId: target.userId, targetId: target.userId, targetType: "user" });
+    const legacy = { ...scene.effect, id: "legacy", longitude: 5 };
+    delete (legacy as Partial<GroundEffect>).animationScale;
+    scene.snapshot.battle = makeCompleteBattle({ usersState: [target], groundEffects: [scene.effect, legacy], usersEffects: [attached] }) as unknown as ReturnedBattle;
+    await scene.effects.sync(scene.snapshot);
+    for (const zoom of [1, 2]) {
+      scene.stage.scale.set(zoom, -zoom);
+      scene.effects.animate(0, true, false, null);
+      for (const [id, scale, position] of [[scene.effect.id, 2.5, scene.effect], [legacy.id, 1, legacy], [attached.id, 2.5, target]] as const) {
+        const tile = scene.grid.getHex({ col: position.longitude, row: position.latitude })!;
+        const root = scene.effects.container.getChildByLabel(id)!;
+        for (const clip of root.children as Sprite[]) {
+          expect(clip.getBounds().width).toBeCloseTo(tile.height * scale * zoom);
+          expect(clip.getBounds().height).toBeCloseTo(tile.height * scale * zoom);
+          expect(clip.position.x).toBeCloseTo(tile.width / 2);
+          expect(clip.position.y).toBeCloseTo(tile.height / 2);
+        }
+      }
+    }
+  });
   it("keeps static barrier artwork below overlays with shared position, visibility and lifetime", async () => {
     const scene = setup();
-    Object.assign(scene.effect, { type: "barrier", staticAssetPath: "obstacle", staticAnimation: "", appearAnimation: "animation", curHealth: 25, maxHealth: 50 });
+    Object.assign(scene.effect, { type: "barrier", animationScale: 2.5, staticAssetPath: "obstacle", staticAnimation: "", appearAnimation: "animation", curHealth: 25, maxHealth: 50 });
     scene.snapshot.assets.push({ id: "obstacle", image: "https://example.com/barrier.png" } as GameAsset);
     await scene.effects.sync(scene.snapshot);
     scene.effects.animate(0, false, false, null);
@@ -79,6 +104,7 @@ describe("Pixi combat effects", () => {
     scene.effects.animate(40, false, false, null);
     expect(overlay.children).toHaveLength(1);
     const bounds = art.getBounds();
+    expect(bounds.width).toBeCloseTo(scene.grid.getHex({ col: 3, row: 1 })!.width);
     expect(scene.effects.hit(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)?.id).toBe(scene.effect.id);
     scene.effect.latitude = 2;
     await scene.effects.sync(scene.snapshot);
@@ -181,7 +207,7 @@ describe("authoritative combat effect transitions", () => {
   });
   it("renders the disappearance visual created by authoritative ground-effect expiry once", async () => {
     const scene = setup();
-    const battle = makeCompleteBattle({ round: 2, groundEffects: [makeEffect("shield", { power: 1, health: 1, rounds: 1, disappearAnimation: "animation", disappearSfx: "disappear" }, { longitude: 3, latitude: 1, targetType: "barrier", isNew: false })] });
+    const battle = makeCompleteBattle({ round: 2, groundEffects: [makeEffect("shield", { power: 1, health: 1, rounds: 1, animationScale: 2.5, disappearAnimation: "animation", disappearSfx: "disappear" }, { longitude: 3, latitude: 1, targetType: "barrier", isNew: false })] });
     battle.groundEffects[0]!.rounds = 0;
     expireGroundEffects(battle, []);
     scene.snapshot.battle = battle as unknown as ReturnedBattle;
@@ -191,8 +217,8 @@ describe("authoritative combat effect transitions", () => {
     const end = scene.snapshot.battle.groundEffects[0]!;
     const tile = scene.grid.getHex({ col: end.longitude, row: end.latitude })!;
     const clip = scene.effects.container.children[0]!.children[0] as Sprite;
-    expect(clip.width).toBeCloseTo(tile.height);
-    expect(clip.height).toBeCloseTo(tile.height);
+    expect(clip.width).toBeCloseTo(tile.height * 2.5);
+    expect(clip.height).toBeCloseTo(tile.height * 2.5);
     for (let frame = 1; frame <= 60; frame++) scene.effects.animate(frame, false, false, null);
     expect(scene.play.mock.calls).toEqual([["disappear.wav", 0.4]]);
   });

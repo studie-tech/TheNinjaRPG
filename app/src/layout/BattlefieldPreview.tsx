@@ -203,12 +203,13 @@ export const BattlefieldPreview: React.FC<BattlefieldPreviewProps> = (props) => 
       />
       <p className="text-xs opacity-70">
         Drawn by the combat renderer at {viewport === "desktop" ? "desktop" : "phone"}{" "}
-        size: hexes are {Math.round(previewHexWidth(viewport))} px wide and animations{" "}
+        size: hexes are {Math.round(previewHexWidth(viewport))} px wide and 1×
+        animations{" "}
         {Math.round(
           previewHexWidth(viewport) * HEX_ASPECT_RATIO * EFFECT_ANIMATION_HEX_RATIO,
         )}{" "}
-        px. Caster on the left, target on the right, ground effects on the tile between
-        them.
+        px tall, multiplied by each effect’s animation scale. Caster on the left, target
+        on the right, ground effects on the tile between them.
       </p>
     </div>
   );

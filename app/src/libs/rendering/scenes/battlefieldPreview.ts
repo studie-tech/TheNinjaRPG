@@ -147,6 +147,7 @@ export const createBattlefieldPreview = async (
               `${id}-${cycle}-end-${index}`,
               TILES[effect.placement],
               {
+                animationScale: effect.animationScale,
                 appearAnimation: effect.disappearAnimation,
                 appearSfx: effect.disappearSfx,
               },
@@ -503,6 +504,7 @@ const visualEffect = (
     description: "N/A",
     staticAssetPath: visuals.staticAssetPath ?? "",
     staticAnimation: visuals.staticAnimation ?? "",
+    animationScale: visuals.animationScale,
     appearAnimation: visuals.appearAnimation ?? "",
     disappearAnimation: visuals.disappearAnimation ?? "",
     appearSfx: visuals.appearSfx ?? "",

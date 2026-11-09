@@ -26,7 +26,14 @@ export const battlefieldSceneOf = (
         disappearSfx: text(tag.disappearSfx),
       };
       if (!Object.values(media).some(Boolean)) return [];
-      return [{ ...media, placement: placementOf(text(tag.target) || "INHERIT") }];
+      return [
+        {
+          ...media,
+          animationScale:
+            typeof tag.animationScale === "number" ? tag.animationScale : 1,
+          placement: placementOf(text(tag.target) || "INHERIT"),
+        },
+      ];
     },
   );
   const targetAvatar = entityType === "AI" ? text(fields.avatar) || null : null;
@@ -141,6 +148,7 @@ export type BattlefieldEffect = {
   /** Sounds combat plays as the effect appears and as it ends. */
   appearSfx: string;
   disappearSfx: string;
+  animationScale?: number;
   placement: BattlefieldPlacement;
 };
 

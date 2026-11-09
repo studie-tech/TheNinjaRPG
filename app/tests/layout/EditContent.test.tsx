@@ -74,7 +74,7 @@ vi.mock("@radix-ui/react-use-size", () => ({
   useSize: () => ({ width: 0, height: 0 }),
 }));
 
-const { MassEffectEditor, EffectFormWrapper, ObjectiveFormWrapper, RewardFormWrapper } = await import("@/layout/EditContent");
+const { MassEffectEditor, EffectFieldInputGeneric, EffectFormWrapper, ObjectiveFormWrapper, RewardFormWrapper } = await import("@/layout/EditContent");
 const { useItemEditForm } = await import("@/hooks/item");
 const { useQuestEditForm } = await import("@/hooks/quest");
 
@@ -699,6 +699,50 @@ describe("effect drafts", () => {
   afterEach(() => {
     cleanup();
     restoreBrowserGlobals();
+  });
+
+  it("shows normal size for a legacy effect in the mass editor", () => {
+    const legacy = DamageTag.parse({});
+    delete (legacy as Partial<typeof legacy>).animationScale;
+    const onChange = vi.fn();
+    const view = render(<EffectFieldInputGeneric effect={legacy} field="animationScale" onChange={onChange} />);
+    const input = view.getByRole("spinbutton") as HTMLInputElement;
+    expect(input.value).toBe("1");
+    fireEvent.input(input, { target: { value: "2.5" } });
+    expect(onChange).toHaveBeenLastCalledWith(2.5);
+  });
+
+  it("edits one tag's animation scale without changing its sibling", async () => {
+    const onChange = vi.fn();
+    const initial = [DamageTag.parse({}), HealTag.parse({})];
+    const Fixture = () => {
+      const [effects, setEffects] = useState<ZodAllTags[]>(initial);
+      return <>
+        <EffectFormWrapper type="jutsu" idx={0} tag={effects[0]!} effects={effects} setEffects={(next) => { onChange(next); setEffects(next); }} availableTags={["damage"]} />
+        <button type="button" onClick={() => {
+          if (JutsuValidatorRawSchema.shape.effects.safeParse(effects).success) void save({ id: "sizes", data: { effects } });
+        }}>Save sizes</button>
+      </>;
+    };
+    const view = render(<Fixture />);
+    const input = view.getByLabelText("Animation scale (1 = normal, 2.5 = large)");
+    expect((input as HTMLInputElement).value).toBe("1");
+    fireEvent.input(input, { target: { value: "2.5" } });
+    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ animationScale: 2.5 }),
+      initial[1],
+    ]));
+    fireEvent.input(input, { target: { value: "0" } });
+    await waitFor(() => expect(onChange.mock.calls.at(-1)?.[0][0]?.animationScale).toBe(0));
+    fireEvent.click(view.getByRole("button", { name: "Save sizes" }));
+    expect(save).not.toHaveBeenCalled();
+    fireEvent.input(input, { target: { value: "" } });
+    await waitFor(() => expect(onChange.mock.calls.at(-1)?.[0][0]?.animationScale).toBeNaN());
+    fireEvent.click(view.getByRole("button", { name: "Save sizes" }));
+    expect(save).not.toHaveBeenCalled();
+    fireEvent.input(input, { target: { value: "2.5" } });
+    fireEvent.click(view.getByRole("button", { name: "Save sizes" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
   });
 
   describe("MassEffectEditor selects", () => {
