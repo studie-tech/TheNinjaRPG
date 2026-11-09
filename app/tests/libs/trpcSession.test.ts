@@ -1,5 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
-import type { Clerk } from "@clerk/shared/types";
+import type { Clerk } from "@clerk/nextjs/types";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
 import type { AppRouter } from "@/api/root";

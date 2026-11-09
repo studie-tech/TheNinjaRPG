@@ -1,4 +1,4 @@
-import type { Clerk } from "@clerk/shared/types";
+import type { Clerk } from "@clerk/nextjs/types";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";

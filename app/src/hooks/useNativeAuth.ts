@@ -1,7 +1,7 @@
 "use client";
 
 import { useClerk } from "@clerk/nextjs";
-import type { SignInResource } from "@clerk/shared/types";
+import type { SignInResource } from "@clerk/nextjs/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNativeAuthHandoff } from "@/hooks/useNativeAuthHandoff";
 import { appEvents, appleAuth, isNative, oauthBrowser, platform } from "@/libs/native";

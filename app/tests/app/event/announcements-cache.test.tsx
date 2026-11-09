@@ -1,5 +1,5 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import type { Clerk } from "@clerk/shared/types";
+import type { Clerk } from "@clerk/nextjs/types";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";

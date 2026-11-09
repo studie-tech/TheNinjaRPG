@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as clerk from "@clerk/nextjs";
 import * as Sentry from "@sentry/nextjs";
-import type { Clerk } from "@clerk/shared/types";
+import type { Clerk } from "@clerk/nextjs/types";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import {
   type MutationOptions,
