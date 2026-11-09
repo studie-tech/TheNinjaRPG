@@ -123,7 +123,8 @@ export const createCombatEffects = (
             animationScope,
             assetAnimationClip(asset, loop),
             {
-              size: tile.height * EFFECT_ANIMATION_HEX_RATIO,
+              size:
+                tile.height * EFFECT_ANIMATION_HEX_RATIO * (effect.animationScale ?? 1),
             },
           );
           if (scope.isDisposed()) return;

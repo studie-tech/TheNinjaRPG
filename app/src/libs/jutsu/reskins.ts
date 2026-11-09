@@ -63,6 +63,7 @@ export const JUTSU_EFFECT_COSMETICS = [
   "disappearSfx",
   "staticAssetPath",
   "staticAnimation",
+  "animationScale",
 ] as const;
 
 /**
@@ -80,7 +81,9 @@ export const inheritJutsuReskinEffects = (
     const cosmetic = index >= 0 ? remaining.splice(index, 1)[0] : undefined;
     const inherited = { ...effect };
     for (const key of JUTSU_EFFECT_COSMETICS) {
-      if (key in inherited && cosmetic && key in cosmetic) {
+      if (key === "animationScale" && cosmetic) {
+        inherited.animationScale = cosmetic.animationScale ?? 1;
+      } else if (key in inherited && cosmetic && key in cosmetic) {
         Object.assign(inherited, { [key]: cosmetic[key as keyof typeof cosmetic] });
       }
     }

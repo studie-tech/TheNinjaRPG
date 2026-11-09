@@ -20,7 +20,7 @@ describe("applySingleEffect lifecycle visuals", () => {
     const battle = makeCompleteBattle({ usersState: [caster], round: 3 });
     const effect = makeEffect(
       "increasestat",
-      { rounds: 0, generalTypes: ["Strength"], power: 10, disappearAnimation: "smoke" },
+      { rounds: 0, generalTypes: ["Strength"], power: 10, animationScale: 2.5, disappearAnimation: "smoke" },
       {
         creatorId: "caster",
         targetId: "caster",
@@ -48,6 +48,7 @@ describe("applySingleEffect lifecycle visuals", () => {
     expect(newGroundEffects[0]).toMatchObject({
       type: "visual",
       appearAnimation: "smoke",
+      animationScale: 2.5,
       longitude,
       latitude,
     });

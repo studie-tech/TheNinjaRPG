@@ -291,7 +291,10 @@ const effectsWith = (effects: unknown, keep: (key: string) => boolean) =>
 
 /** Effect keys that decide how an effect plays, leaving out media, text and battle state. */
 const isMechanicKey = (key: string) =>
-  !MEDIA_KEYS.includes(key) && key !== "description" && key !== "timeTracker";
+  !MEDIA_KEYS.includes(key) &&
+  key !== "animationScale" &&
+  key !== "description" &&
+  key !== "timeTracker";
 
 /** Text leaves of a quest's content; objects and list positions stay addressable. */
 const textOnly = (node: unknown): unknown => {
@@ -401,6 +404,7 @@ const VIEWS: Record<ContentAuditFocus, View> = {
           "target",
           "appearAnimation",
           "staticAnimation",
+          "animationScale",
           "disappearAnimation",
           "staticAssetPath",
           "elements",

@@ -172,6 +172,7 @@ export const SAGE_MODE_ACTIVATION_JUTSU: Jutsu = {
       rounds: 0,
       staticAssetPath: "",
       staticAnimation: "",
+      animationScale: 1,
       appearAnimation: "",
       disappearAnimation: "",
       appearSfx: "",

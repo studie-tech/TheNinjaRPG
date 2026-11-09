@@ -122,6 +122,7 @@ const BaseAttributes = {
   staticAnimation: z.string().prefault(""),
   appearAnimation: z.string().prefault(""),
   disappearAnimation: z.string().prefault(""),
+  animationScale: z.coerce.number().min(1).max(3).prefault(1),
   // SFX controls
   appearSfx: z.string().prefault(""),
   disappearSfx: z.string().prefault(""),

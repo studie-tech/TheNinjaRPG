@@ -1738,6 +1738,11 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     const hasItemDraft = ["noncombatconsumereward", "noncombatquest"].includes(
       watchType,
     );
+    // Scale drafts reach the parent so Save validates the visible size, including invalid input.
+    const hasAnimationScaleDraft = !Object.is(
+      watchAll.animationScale,
+      tag.animationScale ?? 1,
+    );
     const leftCoordinateTarget = tag.target === "COORDINATES" && !hasCoordinateDraft;
     const draft = leftCoordinateTarget
       ? { ...watchAll, coordinateTargeting: null }
@@ -1745,7 +1750,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
     const parsedTag = tagSchema.safeParse(draft);
     const shownTag = parsedTag.success
       ? parsedTag.data
-      : hasCoordinateDraft || hasItemDraft
+      : hasCoordinateDraft || hasItemDraft || hasAnimationScaleDraft
         ? draft
         : tag;
     newEffects[idx] = shownTag;
@@ -1758,11 +1763,12 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         if (
           hasCoordinateDraft ||
           hasItemDraft ||
+          hasAnimationScaleDraft ||
           (leftCoordinateTarget && parsedTag.success) ||
           form.formState.isValid
         ) {
           setEffects(newEffects);
-          if (parsedTag.success) form.reset(draft);
+          if (parsedTag.success && !hasAnimationScaleDraft) form.reset(draft);
         }
       }
     }
@@ -1821,6 +1827,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         ) ||
         ![
           "staticAnimation",
+          "animationScale",
           "staticAssetPath",
           "appearAnimation",
           "disappearAnimation",
@@ -1838,6 +1845,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         !["repair"].includes(watchType) ||
         ![
           "staticAnimation",
+          "animationScale",
           "staticAssetPath",
           "appearAnimation",
           "disappearAnimation",
@@ -1858,6 +1866,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         ].includes(watchType) ||
         ![
           "staticAnimation",
+          "animationScale",
           "staticAssetPath",
           "appearAnimation",
           "disappearAnimation",
@@ -3091,6 +3100,7 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   tagType: "Combat Tag Type",
   singleBattle: "Track best single-battle only (else cumulative)",
   bloodlineRanks: "Bloodline ranks to include",
+  animationScale: "Animation scale (1–3×)",
   shieldRounds: "Shield Rounds",
   delayRounds: "Diffuse Repayment Turns",
 };
@@ -3149,7 +3159,10 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
   // Primitives
   if (inner instanceof z.ZodNumber) {
     const value = eff[field];
-    const numVal = typeof value === "number" ? value : Number(value ?? 0);
+    const numVal =
+      typeof value === "number"
+        ? value
+        : Number(value ?? (field === "animationScale" ? 1 : 0));
     return (
       <NumberInput
         value={numVal}
