@@ -72,9 +72,9 @@ const mkBattle = (battleType: BattleType): CompleteBattle =>
 /**
  * Assert on what the AI SELECTED, not on the resulting ground effect. Counting
  * summon ground effects looks equivalent but is not: performBattleAction runs
- * applyEffects (actions.ts:1373), so summon()'s own auto-battle backstop sweeps
- * the effect in the same pass -- the count is 0 in KAGE_AI whether or not the
- * candidate filter exists, which makes that assertion blind to this filter.
+ * applyEffects in the same pass, so summon()'s own auto-battle backstop sweeps
+ * the effect -- the count is 0 in KAGE_AI whether or not the candidate filter
+ * exists, which makes that assertion blind to this filter.
  */
 const actionPickedByAi = (battleType: BattleType) => {
   const grid = new Grid(TerrainHex, rectangle({ width: 10, height: 10 }));

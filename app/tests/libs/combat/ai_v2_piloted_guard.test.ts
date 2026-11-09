@@ -2,19 +2,11 @@ import { describe, it, expect } from "bun:test";
 import { Grid, rectangle } from "honeycomb-grid";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import type { CompleteBattle, BattleUserState } from "@/libs/combat/types";
-
-/**
- * Do NOT mock @/libs/hexgrid here. Under `bun test` vi.mock replaces the module
- * process-globally, so a lossy stub (e.g. getPossibleActionTiles returning a Set
- * instead of a Grid) leaks into sibling suites that need the real thing --
- * barrier_aoe.test.ts calls restrictGrid.getHex and crashes. The real module
- * works fine here: the summons below have no jutsu/item and empty pools, so
- * performAIaction reaches the no-action branch without any pathfinding stub.
- */
-
-// Avoid loading the real DB/env when transitive imports touch @/server/db.
 import { TerrainHex } from "@/libs/hexgrid";
 import { makeAiBattle, makeAiUser } from "./helpers/aiScenario";
+
+// The summons below have no jutsu/item and empty pools, so performAIaction reaches
+// the no-action branch with the real hexgrid module and no pathfinding stub.
 
 /** Summon-shaped AI with empty pools, so nothing is affordable. */
 const mkUser = (over: Partial<BattleUserState>): BattleUserState =>
