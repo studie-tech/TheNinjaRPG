@@ -23,7 +23,6 @@ concurrency:
 
 defaults:
   run:
-    # change this if your nextjs app does not live at the root of the repo
     working-directory: ./app/
 
 permissions:
@@ -76,14 +75,12 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-bundle-build-${{ hashFiles('app/bun.lock', 'app/next.config.mjs') }}-
 
       - name: Build next.js app
-        # change this if your site requires a custom build command
         run: ./node_modules/.bin/next build
         env:
           CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
           NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
 
-      # Here's the first place where next-bundle-analysis' own script is used
-      # This step pulls the raw bundle stats for the current bundle
+      # Collects the raw bundle stats for the current build
       - name: Analyze bundle
         run: bun run bundle:report
 
@@ -102,19 +99,8 @@ jobs:
           branch: ${{ github.event.pull_request.base.ref }}
           path: ./app/.next/analyze/base
 
-      # And here's the second place - this runs after we have both the current and
-      # base branch bundle stats, and will compare them to determine what changed.
-      # There are two configurable arguments that come from package.json:
-      #
-      # - budget: optional, set a budget (bytes) against which size changes are measured
-      #           it's set to 350kb here by default, as informed by the following piece:
-      #           https://infrequently.org/2021/03/the-performance-inequality-gap/
-      #
-      # - red-status-percentage: sets the percent size increase where you get a red
-      #                          status indicator, defaults to 20%
-      #
-      # Either of these arguments can be changed or removed by editing the `nextBundleAnalysis`
-      # entry in your package.json file.
+      # Compares the current and base branch bundle stats; thresholds come from
+      # `nextBundleAnalysis` in app/package.json.
       - name: Compare with base branch bundle
         if: success() && github.event.number
         run: bun run bundle:compare
