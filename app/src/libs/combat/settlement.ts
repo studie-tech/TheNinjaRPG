@@ -16,6 +16,7 @@ import {
   PVP_KILL_TOKEN_REWARD_ANBU,
   PVP_KILL_TOKEN_REWARD_ASSASSIN,
   PvpBattleTypes,
+  RANKED_DRAW_LP,
   SPARRING_BATTLE_TYPES,
   STREAK_LEVEL_DIFF,
   VILLAGE_WAR_TYPES,
@@ -210,8 +211,7 @@ export const calcBattleResult = (
       let lpDiff = 0;
       if (battleType === "RANKED_PVP" && targets[0]) {
         if (outcome === "Draw") {
-          // Both players gain 10 LP for draws
-          lpDiff = 10;
+          lpDiff = RANKED_DRAW_LP;
         } else {
           lpDiff = calculateLpEloChange(
             user,

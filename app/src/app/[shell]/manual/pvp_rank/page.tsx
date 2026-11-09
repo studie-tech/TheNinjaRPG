@@ -13,6 +13,7 @@ import {
   MAX_PLAYER_LEVEL,
   RANKED_BLOODLINE_EFFECT_MULT,
   RANKED_DIVISIONS,
+  RANKED_DRAW_LP,
   RANKED_LOADOUT_MAX_CONSUMABLES,
   RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
   RANKED_LOADOUT_MAX_JUTSUS,
@@ -250,7 +251,7 @@ export default function RankedManualPage() {
                 <div>
                   <h3 className="mb-2 font-semibold">LP Gains and Losses</h3>
                   <p className="text-muted-foreground text-sm">
-                    Each result moves your LP by an Elo calculation: the higher your
+                    A win or loss moves your LP by an Elo calculation: the higher your
                     opponent's LP compared to yours, the more a win gains and the less a
                     loss costs. The largest possible Elo change (K-factor) depends on
                     your division:
@@ -268,13 +269,15 @@ export default function RankedManualPage() {
                   <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground text-sm">
                     <li>
                       Beating a higher-ranked opponent adds{" "}
-                      {RANKED_UPSET_BONUS_PER_RANK} LP per rank between you
+                      {RANKED_UPSET_BONUS_PER_RANK} LP per rank the opponent is above
+                      you
                     </li>
                     <li>
                       Each win adds {RANKED_STREAK_BONUS} LP for every win already in
                       your current streak
                     </li>
                     <li>Every win gains at least {RANKED_MIN_LP_GAIN} LP</li>
+                    <li>A draw gives both players {RANKED_DRAW_LP} LP</li>
                     <li>
                       Losing to an opponent at least {RANKED_LOSS_PROTECTION_RANK_GAP}{" "}
                       ranks above you costs{" "}

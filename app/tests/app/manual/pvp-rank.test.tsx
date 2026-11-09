@@ -10,6 +10,7 @@ import {
   RANKED_MIN_LP_GAIN,
   RANKED_STREAK_BONUS,
   RANKED_UPSET_BONUS_PER_RANK,
+  RANKED_DRAW_LP,
 } from "@/drizzle/constants";
 import * as LocalStorage from "@/hooks/localstorage";
 import * as ContentBox from "@/layout/ContentBox";
@@ -70,8 +71,9 @@ it("states the LP rules from the ranked constants", () => {
   }
   expect(text).not.toContain("Sannin (");
   expect(text).toContain(
-    `adds ${RANKED_UPSET_BONUS_PER_RANK} LP per rank between you`,
+    `adds ${RANKED_UPSET_BONUS_PER_RANK} LP per rank the opponent is above you`,
   );
+  expect(text).toContain(`A draw gives both players ${RANKED_DRAW_LP} LP`);
   expect(text).toContain(`adds ${RANKED_STREAK_BONUS} LP for every win`);
   expect(text).toContain(`Every win gains at least ${RANKED_MIN_LP_GAIN} LP`);
   expect(text).toContain(

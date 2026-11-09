@@ -40,8 +40,8 @@ export default function ManualCombat() {
         user. The roll is then adjusted by these modifiers:
         <ul className="ml-5 list-disc">
           <li>
-            For each level above the opponents' average level, a bonus of{" "}
-            {formatPercent(INITIATIVE_LEVEL_BONUS)} is added
+            For each level above the average level of all combatants (including you), a
+            bonus of {formatPercent(INITIATIVE_LEVEL_BONUS)} is added
           </li>
           <li>
             If in own territory, a bonus of {formatPercent(INITIATIVE_TERRITORY_BONUS)}{" "}

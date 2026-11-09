@@ -56,7 +56,7 @@ export const COMBAT_BORDER_RIGHT = 2;
 export const COMBAT_BORDER_TOP = 2;
 export const COMBAT_BORDER_BOTTOM = 0;
 export const COMBAT_SECONDS = 60;
-/** Initiative multiplier gained per level above the opponents' average level. */
+/** Initiative multiplier gained per level above the average level of all combatants. */
 export const INITIATIVE_LEVEL_BONUS = 0.03;
 /** Initiative multiplier gained in the user's own village sector, and lost outside it. */
 export const INITIATIVE_TERRITORY_BONUS = 0.1;

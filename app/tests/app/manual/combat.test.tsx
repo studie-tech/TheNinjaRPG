@@ -35,7 +35,7 @@ it("states the initiative modifiers from the combat constants", () => {
     " ",
   );
   expect(text).toContain(
-    `For each level above the opponents' average level, a bonus of ${percent(INITIATIVE_LEVEL_BONUS)} is added`,
+    `For each level above the average level of all combatants (including you), a bonus of ${percent(INITIATIVE_LEVEL_BONUS)} is added`,
   );
   expect(text).toContain(
     `If in own territory, a bonus of ${percent(INITIATIVE_TERRITORY_BONUS)} is added`,

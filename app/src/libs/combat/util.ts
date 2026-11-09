@@ -855,7 +855,6 @@ export const calcEffectRoundInfo = (
   return { startRound: -1, curRound: battle.round };
 };
 
-/** Check whether a tag still has duration remaining. */
 /** Whether at least one effect carries both an appear animation and an appear sound. */
 export const hasAppearAnimation = (effects: ZodAllTags[]) =>
   effects.some(
@@ -866,6 +865,7 @@ export const hasAppearAnimation = (effects: ZodAllTags[]) =>
       effect.appearSfx,
   );
 
+/** Check whether a tag still has duration remaining. */
 export const isEffectActive = (effect: UserEffect | GroundEffect) => {
   if (
     "timedBuffExpiresAt" in effect &&
