@@ -5,7 +5,7 @@ import {
   Container,
   Rectangle,
   RenderLayer,
-  Sprite,
+  type Sprite,
   Texture,
 } from "pixi.js";
 import { WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS } from "@/drizzle/constants";
@@ -23,6 +23,7 @@ import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { WOODLAND_DECORATIONS } from "@/libs/rendering/worldArt";
 import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
+import * as worldMaterials from "@/libs/rendering/worldMaterials";
 import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import { sampleWorldWind } from "@/libs/rendering/worldWind";
 import { textureImageUrl } from "@/utils/image";
@@ -831,6 +832,75 @@ describe("world sprite atlas ownership", () => {
     expect(source.destroyed).toBe(false);
     original.destroy(true);
   });
+  it("requests physical shadow materials beside their artwork and hands them to registration", async () => {
+    const original = new Texture({
+      source: new BufferImageSource({
+        resource: new Uint8Array(16 * 16 * 4),
+        width: 16,
+        height: 16,
+      }),
+    });
+    let releaseArt!: (texture: Texture) => void;
+    const art = new Promise<Texture>((resolve) => {
+      releaseArt = resolve;
+    });
+    vi.spyOn(Assets, "load").mockImplementation(() => art as never);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    const released = vi.fn();
+    const acquire = vi
+      .spyOn(worldMaterials, "acquireWorldMaterial")
+      .mockImplementation(
+        () => ({ resource: new Promise(() => {}), release: released }) as never,
+      );
+    const ready = Object.assign(() => {}, { ready: Promise.resolve() });
+    const provider = {
+      kind: "physical",
+      register: vi.fn(() => ready),
+      contactShadowReplacement: () => "preserve",
+    } as unknown as WorldShadows;
+    const game = {
+      own() {},
+      signal: new AbortController().signal,
+    } as unknown as GameRenderer;
+    const loading = createWorldSprites(
+      game,
+      [
+        {
+          id: "pine",
+          kind: "decoration",
+          image: "prepared-pine.png",
+          size: 40,
+          x: 0,
+          y: 20,
+          groundY: 0,
+          shadow: 0.25,
+          shadowCaster: "conifer",
+        },
+      ],
+      provider,
+      true,
+    );
+    await Promise.resolve();
+    // The material download starts while the artwork itself is still loading.
+    expect(acquire).toHaveBeenCalledWith(
+      "prepared-pine.png",
+      "conifer",
+      128,
+      undefined,
+    );
+    expect(provider.register).not.toHaveBeenCalled();
+    releaseArt(original);
+    const sprites = await loading;
+    try {
+      expect(provider.register).toHaveBeenCalledTimes(1);
+      // Registration holds its own lease, so the early one is returned once registration is ready.
+      expect(released).toHaveBeenCalledTimes(1);
+    } finally {
+      sprites.dispose();
+      original.destroy(true);
+    }
+  });
+
   it.each(["baked", "physical"] as const)(
     "lets %s lighting own scenery footprints without an extra contact shadow",
     async (kind) => {

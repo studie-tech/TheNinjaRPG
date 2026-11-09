@@ -45,7 +45,10 @@ import {
 } from "@/libs/rendering/visibility";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
-import type { WorldShadows } from "@/libs/rendering/worldShadows";
+import {
+  acquireCasterMaterials,
+  type WorldShadows,
+} from "@/libs/rendering/worldShadows";
 import {
   MAX_SMALL_WORLD_WIND,
   MAX_WORLD_WIND,
@@ -95,6 +98,19 @@ export const createWorldSprites = async (
   const masked: ReturnType<typeof acquireMaskedTexture>[] = [];
   const views: Texture[] = [];
   const materials: ReturnType<WorldShadows["register"]>[] = [];
+  // Physical shadow materials download beside their artwork; registration reuses these leases.
+  const preparedMaterials =
+    worldShadows?.kind === "physical"
+      ? descriptions
+          .filter(
+            (description) =>
+              !description.character && !description.mask && !description.unlit,
+          )
+          .flatMap((description) => acquireCasterMaterials(description))
+      : [];
+  const releasePreparedMaterials = () => {
+    for (const lease of preparedMaterials.splice(0)) lease.release();
+  };
   let lightTexture: Texture | null = null,
     shadowLease: ReturnType<typeof acquireSoftShadowTexture> | null = null;
   const container = new Container();
@@ -122,6 +138,7 @@ export const createWorldSprites = async (
     disposed = true;
     for (const release of materials) release();
     materials.length = 0;
+    releasePreparedMaterials();
     pendingContacts.clear();
     if (!container.destroyed)
       container.destroy({ children: true, texture: false, textureSource: false });
@@ -517,6 +534,7 @@ export const createWorldSprites = async (
   }
   sourcePixels.clear();
   await Promise.all(materials.map((material) => material.ready));
+  releasePreparedMaterials();
   if (disposed || game.signal.aborted) {
     dispose();
     throw new DOMException("Scenery cancelled", "AbortError");

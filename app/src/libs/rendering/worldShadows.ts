@@ -385,15 +385,7 @@ export const createWorldShadows = (game: GameRenderer, world: Container) => {
       sceneryOwner?: Container,
     ) => {
       const id = String(++serial);
-      const images = [description.image, ...(description.motion?.clip.images ?? [])];
-      const leases = images.map((image) =>
-        acquireWorldMaterial(
-          image,
-          description.shadowCaster ?? "column",
-          character ? 0 : 128,
-          description.worldMaterial,
-        ),
-      );
+      const leases = acquireCasterMaterials(description, !!character);
       const record: Caster = {
         id,
         sprite,
@@ -1868,6 +1860,22 @@ export type WorldShadowShape =
   | "wall"
   | "character"
   | "column";
+/**
+ * Leases a physical caster's materials. Sprite loading acquires them beside its artwork,
+ * so registration reuses decoded materials instead of starting another download.
+ */
+export const acquireCasterMaterials = (
+  description: WorldSpriteDescription,
+  character = false,
+) =>
+  [description.image, ...(description.motion?.clip.images ?? [])].map((image) =>
+    acquireWorldMaterial(
+      image,
+      description.shadowCaster ?? "column",
+      character ? 0 : 128,
+      description.worldMaterial,
+    ),
+  );
 /** Common registration/update contract for physical, projected and prebaked scene lighting. */
 export type WorldShadows =
   | ReturnType<typeof createWorldShadows>
