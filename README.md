@@ -21,7 +21,7 @@ make start PORT=3000 # Start development server in the foreground
 ```
 
 - Go to `http://localhost:3000` to view the site (use `localhost`, not `127.0.0.1`, or Next.js chunks 403)
-- Go to `http://127.0.0.1:3001` to manage the database
+- Go to `http://127.0.0.1:3005` to manage the database
 
 For parallel Git worktrees, use `make dev-up` to allocate a port and start or reuse a
 background server. `make dev-status` prints its URL and live log path; `make dev-down`
