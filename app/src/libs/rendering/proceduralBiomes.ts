@@ -205,7 +205,7 @@ const GROUND_ASSETS_PROPS: AssetType[] = [
   },
 ];
 
-// Dessert assets settings default
+// Desert assets
 const DESSERT_ASSET_PROPS: AssetType[] = [
   ...groundDetailProps(WORLD_UNDERSTORY.dessert, 0.3),
   // Cactus
@@ -260,7 +260,7 @@ const DESSERT_ASSET_PROPS: AssetType[] = [
   },
 ];
 
-// Dessert assets settings default
+// Ice assets
 const ICE_ASSET_PROPS: AssetType[] = [
   {
     ...decorationArt("ice.floe"),
@@ -273,7 +273,7 @@ const ICE_ASSET_PROPS: AssetType[] = [
   },
 ];
 
-// Dessert assets settings default
+// Snow assets
 const SNOW_ASSET_PROPS: AssetType[] = [
   ...groundDetailProps(WORLD_UNDERSTORY.snow, 0.3),
   // Stones
@@ -293,7 +293,7 @@ const SNOW_ASSET_PROPS: AssetType[] = [
     posVariation: 0.25,
     small: true,
   },
-  // Green Trees
+  // Snow trees
   {
     ...decorationArt("tree.snow.pine"),
     chance: 0.4,
