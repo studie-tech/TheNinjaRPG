@@ -4,7 +4,8 @@ import { getQueryKey } from "@trpc/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { ReactNode } from "react";
 import * as appClient from "@/app/_trpc/client";
-import { useResourceSilo } from "@/hooks/useResourceSilos";
+import { useResourceSilo, useWarTornRevival } from "@/hooks/useResourceSilos";
+import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
@@ -96,4 +97,33 @@ it.each(["success", "uncertain response", "rejected"])("reconciles granted owner
     expect(profile.result.current.data).toMatchObject(beforePublic);
     expect(requests).toEqual(["resourceSilos.claim", "resourceSilos.getStatus"]);
   }
+});
+
+it.each(["shrine", "village", "stale", "uncertain"])("delivers revival feedback before profile reconciliation: %s", async outcome => {
+  const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  clients.push(client);
+  const showToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+  let finishRecovery!: () => void;
+  const recovery = new Promise<void>(resolve => { finishRecovery = resolve; });
+  const updateUser = vi.fn(() => {
+    expect(showToast).toHaveBeenCalledTimes(1);
+    return recovery;
+  });
+  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({ prepareUserUpdate: () => undefined, updateUser } as never);
+  const result = { success: outcome !== "stale", message: outcome === "stale" ? "This revival choice is no longer available" : "Revived" };
+  const trpc = fakeTrpcClient(path => {
+    if (path !== "resourceSilos.respawn") throw new Error(`Unexpected request: ${path}`);
+    if (outcome === "uncertain") throw new Error("Response lost");
+    return result;
+  });
+  const wrapper = ({ children }: { children: ReactNode }) => <TrpcTestProviders client={trpc} queryClient={client}>{children}</TrpcTestProviders>;
+  const revival = renderHook(useWarTornRevival, { wrapper });
+  let pending: Promise<unknown> | undefined;
+  await act(async () => { pending = revival.result.current.mutateAsync({ destination: outcome === "village" ? "village" : "shrine" }).catch(() => undefined); });
+  await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
+  expect(revival.result.current.isPending).toBe(true);
+  expect(showToast).toHaveBeenCalledWith(outcome === "uncertain" ? { success: false, message: "Response lost" } : result);
+  await act(async () => { finishRecovery(); await pending; });
+  await waitFor(() => expect(revival.result.current.isPending).toBe(false));
+  expect(showToast).toHaveBeenCalledTimes(1);
 });
