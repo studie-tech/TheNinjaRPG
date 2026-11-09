@@ -29,7 +29,9 @@ describe("createHexGrid", () => {
       expect(tile.center).toEqual(reference("center") as typeof tile.center);
       expect([tile.x, tile.y]).toEqual([reference("x"), reference("y")] as number[]);
       expect(tile.corners).toBe(tile.corners);
-      expect(Object.isFrozen(tile.corners) && Object.isFrozen(tile.corners[0])).toBe(true);
+      expect(Object.isFrozen(tile.corners) && Object.isFrozen(tile.corners[0])).toBe(
+        true,
+      );
     }
   });
 });
