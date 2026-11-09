@@ -85,7 +85,12 @@ export const findGlobalTravelDestination = (
     null,
   );
 
-// Calculate distance between two points on the hexasphere
+/**
+ * Travel seconds between two sectors on the hexasphere: half the great-circle distance
+ * between their centres (5 when that rounds down to 0), capped at
+ * MAP_GLOBAL_TRAVEL_TIME_CAP_SECS. Travel to Wake Island is instant; unknown tiles take
+ * the cap.
+ */
 export const calcGlobalTravelTime = (
   sectorA: number,
   sectorB: number,

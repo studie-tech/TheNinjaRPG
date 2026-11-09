@@ -1,8 +1,8 @@
 /**
  * Tower Defense Game Utilities
  *
- * This file contains client-side utilities for rendering and seed generation.
- * All game logic (spawning, combat, movement) is handled by SpacetimeDB.
+ * Hex geometry, projectile, direction and upgrade-cost helpers shared by the client and
+ * the tower-defense router. All game logic (spawning, combat, movement) is handled by SpacetimeDB.
  */
 
 import {
