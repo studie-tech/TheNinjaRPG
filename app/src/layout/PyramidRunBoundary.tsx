@@ -1,9 +1,9 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Loader from "@/layout/Loader";
-import { LogbookEntry } from "@/layout/Logbook";
 import {
   getIsolatedPyramid,
   getPyramidRunTracker,
@@ -11,6 +11,12 @@ import {
 } from "@/libs/questRun";
 import { usePublicPathname } from "@/utils/routing";
 import { useUserDataSelector } from "@/utils/UserContext";
+
+// Quest scenes are only needed for a paused run, so public pages need not load them.
+const LogbookEntry = dynamic(
+  () => import("@/layout/Logbook").then((module) => module.LogbookEntry),
+  { loading: () => <Loader explanation="Loading your Pyramid run" /> },
+);
 
 /** Keep isolated runs on combat while allowing authentication to finish on another device. */
 export const PyramidRunBoundary = ({ children }: { children: React.ReactNode }) => {

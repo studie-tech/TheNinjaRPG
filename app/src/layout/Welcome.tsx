@@ -24,6 +24,7 @@ import { useCookieConsent } from "@/hooks/useCookieConsent";
 import { IllustratedWelcome } from "@/layout/IllustratedWelcome";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
+import { WelcomeQuestions } from "@/layout/WelcomeQuestions";
 import { readCampaignSource, storeCampaignSource } from "@/libs/campaignSource";
 import { getGameLayout } from "@/libs/gameLayouts";
 import { LEGAL_LINKS } from "@/libs/legalLinks";
@@ -87,9 +88,9 @@ const Welcome: React.FC = () => {
           <Image
             className=""
             src={IMG_LAYOUT_WELCOME_IMG}
-            alt="TNR Logo"
-            width={1000}
-            height={181}
+            alt="TheNinja-RPG"
+            width={768}
+            height={139}
             priority
           />
 
@@ -98,6 +99,13 @@ const Welcome: React.FC = () => {
               "flex w-full flex-col items-center gap-0 px-4 py-4 text-center text-sm italic sm:text-md sm:text-xl md:text-md lg:text-xl"
             }
           >
+            <h1 className="mb-3 font-bold text-2xl not-italic md:text-4xl">
+              Free Ninja Browser RPG
+            </h1>
+            <p className="mb-3 not-italic">
+              Train your ninja, master jutsu and join a village in TheNinja-RPG.
+              Challenge other players in tactical combat, right in your browser.
+            </p>
             <p>
               More than <b>{TOTAL_PLAYERS_MILESTONE.toLocaleString("en-US")}</b> have
               played TheNinja-RPG!
@@ -115,6 +123,9 @@ const Welcome: React.FC = () => {
               </Button>
             </Link>
           </div>
+          <Link href="/guide/getting-started" className="mb-4 font-bold underline">
+            Learn how to play
+          </Link>
           <div className={"flex w-full flex-col items-center justify-center gap-4"}>
             <div className="mb-4 inline items-center gap-2 text-xl">
               Already have an account?{" "}
@@ -125,9 +136,9 @@ const Welcome: React.FC = () => {
           </div>
         </div>
       </div>
-      <div className={cn(backgroundClass, "pl-3 font-bold text-5xl text-foreground")}>
-        Game Features
-      </div>
+      <h2 className={cn(backgroundClass, "pl-3 font-bold text-5xl text-foreground")}>
+        Ninja RPG Features
+      </h2>
 
       {CLASSIC_FEATURES.map((feature, index) => (
         <div key={feature.title} className={backgroundClass}>
@@ -144,12 +155,19 @@ const Welcome: React.FC = () => {
                 {feature.paragraphs.map((paragraph) => (
                   <p key={paragraph}>{paragraph}</p>
                 ))}
-                <Image
-                  src={feature.image}
-                  {...FEATURE_SHOT}
-                  className="w-full rounded-xl"
-                  alt={feature.alt}
-                />
+                <picture>
+                  <source
+                    media="(max-width: 767px)"
+                    srcSet={bunnyImageUrl(feature.image, 512)}
+                  />
+                  <Image
+                    src={feature.image}
+                    {...FEATURE_SHOT}
+                    className="w-full rounded-xl"
+                    alt={feature.alt}
+                    loading="lazy"
+                  />
+                </picture>
               </div>
             </div>
           </div>
@@ -157,7 +175,10 @@ const Welcome: React.FC = () => {
       ))}
 
       <div className={backgroundClass}>
-        <div className={cn(contentClass, "p-3")}>{textSEO}</div>
+        <div className={cn(contentClass, "p-3")}>
+          {textSEO}
+          <WelcomeQuestions />
+        </div>
       </div>
 
       <Suspense>
@@ -235,7 +256,7 @@ const PixelWelcome: React.FC = () => {
             A Living Shinobi Realm
           </p>
           <h1 className="mt-4 max-w-[15ch] font-black font-serif text-4xl leading-[1.02] tracking-normal sm:text-5xl md:text-6xl">
-            Enter a world shaped by rivalry, growth, and legend
+            Free Ninja Browser RPG
           </h1>
           <p className="mt-6 max-w-2xl text-lg text-slate-100 sm:text-xl">
             In The Ninja RPG, every step draws you deeper into a living anime-inspired
@@ -499,6 +520,10 @@ const PixelWelcome: React.FC = () => {
         </div>
       </section>
 
+      <section className={sectionClass}>
+        <WelcomeQuestions />
+      </section>
+
       <footer className="border-sky-100/10 border-t bg-slate-950 py-12">
         <div
           className={cn(
@@ -753,11 +778,11 @@ const CLASSIC_FEATURES = [
 
 const textSEO = (
   <div>
-    <h1 className="px-2 text-left font-bold text-xl md:text-4xl">
-      Free Online Ninja Browser Game
-    </h1>
+    <h2 className="px-2 text-left font-bold text-xl md:text-4xl">
+      Explore the world of TheNinja-RPG
+    </h2>
     <p className="p-2">
-      <span className="font-bold">What is TheNinja-RPG?</span> our game is a
+      <span className="font-bold">What is TheNinja-RPG?</span> Our game is a
       browser-based online RPG set in the world of Seichi. Embark on an epic journey in
       this free ninja game where your path as a shinobi is yours to choose. Start as an
       Academy Student mastering powerful jutsu, and rise through the ranks in an

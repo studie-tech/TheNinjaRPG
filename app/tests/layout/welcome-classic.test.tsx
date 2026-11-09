@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
 import { cleanup, render } from "@testing-library/react";
 import * as navigation from "next/navigation";
+import { renderToStaticMarkup } from "react-dom/server";
 import * as client from "@/app/_trpc/client";
 import {
   IMG_FRONTPAGE_SCREENSHOT_COMBAT,
@@ -11,9 +12,13 @@ import {
   IMG_FRONTPAGE_SCREENSHOT_VILLAGE,
 } from "@/drizzle/constants";
 import * as cookieConsent from "@/hooks/useCookieConsent";
+import * as GameSettings from "@/layout/GameSettings";
 import * as Image from "@/layout/Image";
 import Welcome from "@/layout/Welcome";
+import { GAME_LAYOUTS } from "@/libs/gameLayouts";
+import { bunnyImageUrl } from "@/utils/image";
 import * as LayoutContext from "@/utils/LayoutContext";
+import * as UserContext from "@/utils/UserContext";
 
 beforeEach(() => {
   vi.spyOn(LayoutContext, "useActiveLayout").mockReturnValue("default" as never);
@@ -26,6 +31,8 @@ beforeEach(() => {
     new URLSearchParams() as never,
   );
   vi.spyOn(cookieConsent, "useCookieConsent").mockReturnValue(false);
+  vi.spyOn(GameSettings, "GameSettingsPopover").mockReturnValue(null);
+  vi.spyOn(UserContext, "useUserData").mockReturnValue({ notifications: [] } as never);
   vi.spyOn(Image, "default").mockImplementation(((props: Record<string, unknown>) => (
     <img
       alt={String(props.alt)}
@@ -45,6 +52,40 @@ afterEach(() => {
 });
 
 describe("classic welcome page", () => {
+  it.each(GAME_LAYOUTS)(
+    "includes readable beginner answers in the $id server markup",
+    ({ id }) => {
+      vi.spyOn(LayoutContext, "useActiveLayout").mockReturnValue(id as never);
+      vi.spyOn(LayoutContext, "useIsPixelLanding").mockReturnValue(id === "pixel");
+      const container = document.createElement("div");
+      container.innerHTML = renderToStaticMarkup(<Welcome />);
+      expect(container.querySelectorAll("h1").length).toBe(1);
+      expect(container.querySelector("h1,h2,h3")?.tagName).toBe("H1");
+      expect(container.querySelectorAll("#welcome-questions").length).toBe(1);
+      expect(container.querySelector('a[href="/signup"]')).not.toBeNull();
+      expect(container.textContent).toContain("No download is required.");
+    },
+  );
+
+  it("serves one descriptive H1 before the feature headings without running effects", () => {
+    const html = renderToStaticMarkup(<Welcome />);
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    expect(container.querySelectorAll("h1").length).toBe(1);
+    expect(container.querySelector("h1,h2,h3")?.textContent).toBe(
+      "Free Ninja Browser RPG",
+    );
+    expect(container.querySelector("#signup_btn")).not.toBeNull();
+    expect(container.querySelector('a[href="/guide/getting-started"]')).not.toBeNull();
+    expect(container.textContent).toContain("No download is required.");
+    expect(container.textContent).toContain("Lemu guides your first steps");
+    expect(container.querySelectorAll("img:not([alt])").length).toBe(0);
+    expect(container.querySelectorAll("picture source").length).toBe(5);
+    expect(container.querySelector("picture source")?.getAttribute("srcset")).toBe(
+      bunnyImageUrl(IMG_FRONTPAGE_SCREENSHOT_JUTSUS, 512),
+    );
+  });
+
   it("renders the snap sections and five feature sections with their screenshots", () => {
     const view = render(<Welcome />);
     const scroller = view.container.firstElementChild!;

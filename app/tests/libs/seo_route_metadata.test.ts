@@ -2,7 +2,14 @@ import { describe, expect, it } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { isProfileIndexable, profileIndexCutoff } from "@/libs/profileIndexing";
-import { buildMetadata, noindexMetadata, SITE_URL, stripSiteName } from "@/libs/seo";
+import {
+  buildMetadata,
+  noindexMetadata,
+  SITE_DESCRIPTION,
+  SITE_TITLE,
+  SITE_URL,
+  stripSiteName,
+} from "@/libs/seo";
 
 // Every page lives under the shell segment; what remains at the app root is route
 // handlers and metadata files, which have no metadata of their own to declare.
@@ -70,6 +77,16 @@ describe("route metadata coverage", () => {
       expect(existsSync(layout)).toBe(true);
       expect(readFileSync(layout, "utf8")).toContain("noindexMetadata");
     }
+  });
+});
+
+describe("homepage search snippet", () => {
+  it("describes the free ninja browser RPG consistently within the snippet budget", () => {
+    expect(SITE_TITLE).toContain("Free Ninja Browser RPG");
+    expect(SITE_DESCRIPTION).toContain("free ninja browser RPG");
+    expect(SITE_DESCRIPTION).toContain("tactical combat");
+    expect(SITE_DESCRIPTION.length).toBeGreaterThanOrEqual(120);
+    expect(SITE_DESCRIPTION.length).toBeLessThanOrEqual(160);
   });
 });
 

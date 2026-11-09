@@ -3,6 +3,7 @@
 import { UserButton } from "@clerk/nextjs";
 import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
 import { Bell, Bug, Eclipse, Link2 } from "lucide-react";
+import dynamic from "next/dynamic";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DISCORD_INVITE_URL,
   GITHUB_ISSUES_URL,
+  GITHUB_REPO_URL,
   IMG_ICON_DISCORD,
   IMG_ICON_FACEBOOK,
   IMG_ICON_GITHUB,
@@ -24,7 +26,6 @@ import AvatarImage from "@/layout/Avatar";
 import { GameSettingsPopover, type GameSettingsUser } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
-import MenuBoxCombat from "@/layout/MenuBoxCombat";
 import MenuBoxProfile from "@/layout/MenuBoxProfile";
 import { SideBannerTitle } from "@/layout/SideBannerTitle";
 import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
@@ -95,15 +96,19 @@ const SOCIAL_PROVIDERS = [
   { src: IMG_ICON_GITHUB, alt: "GithubProvider" },
 ];
 
+const MenuBoxCombat = dynamic(() => import("@/layout/MenuBoxCombat"), {
+  loading: () => <SidebarLoadingSkeleton />,
+});
+
 const GithubStar: React.FC = () => (
   <div className="flex justify-center pt-6 pl-2 align-center">
-    <iframe
-      suppressHydrationWarning
-      src="https://ghbtns.com/github-btn.html?user=studie-tech&repo=TheNinjaRPG&type=star&count=true"
-      width="90"
-      height="20"
-      title="GitHub"
-    ></iframe>
+    <Link
+      href={GITHUB_REPO_URL}
+      className="inline-flex min-h-10 items-center gap-2 font-bold hover:underline"
+    >
+      <SiGithub aria-hidden="true" className="h-4 w-4" />
+      Star on GitHub
+    </Link>
   </div>
 );
 

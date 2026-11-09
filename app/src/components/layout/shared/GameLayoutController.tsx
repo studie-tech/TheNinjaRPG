@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import React, {
   startTransition,
   useEffect,
@@ -16,7 +17,6 @@ import { usePageActive } from "@/hooks/usePageActive";
 import { useRankedQueueCount } from "@/hooks/useRankedQueueCount";
 import { useTerritoryWarNotice } from "@/hooks/useTerritoryWarNotice";
 import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
-import TutorialAssistant from "@/layout/TutorialAssistant";
 import { getGameLayout } from "@/libs/gameLayouts";
 import {
   LIGHT_LAYOUT_ATTRIBUTE,
@@ -47,6 +47,9 @@ import {
 import type { GameLayoutControllerProps, GameLayoutRenderProps } from "./layoutTypes";
 import { shouldCloseRightSidebar } from "./layoutUtils";
 import { getImageSet, layoutVariantClasses } from "./layoutVariants";
+
+// Lessons and quest scenes load once a character exists; visitors only need the welcome page.
+const TutorialAssistant = dynamic(() => import("@/layout/TutorialAssistant"));
 
 /** Share navigation, live notifications and sidebar state across layout variants. */
 const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
@@ -337,12 +340,14 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
 
   return (
     <GlobalAudioProvider userData={layoutUser}>
-      <TutorialAssistant
-        sidebarBreakpoint={getGameLayout(variant).sidebarBreakpoint}
-        rightSideBarOpen={rightSideBarOpen}
-        setRightSideBarOpen={setRightSideBarOpen}
-        rightSideBarRef={rightSideBarRef}
-      />
+      {layoutUser && (
+        <TutorialAssistant
+          sidebarBreakpoint={getGameLayout(variant).sidebarBreakpoint}
+          rightSideBarOpen={rightSideBarOpen}
+          setRightSideBarOpen={setRightSideBarOpen}
+          rightSideBarRef={rightSideBarRef}
+        />
+      )}
       <Renderer {...renderProps} />
     </GlobalAudioProvider>
   );

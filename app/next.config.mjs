@@ -93,6 +93,16 @@ const config = {
         destination: "/",
         permanent: true,
       },
+      {
+        source: "/register.php",
+        destination: "/signup",
+        permanent: true,
+      },
+      {
+        source: "/Manual/doku.php",
+        destination: "/manual",
+        permanent: true,
+      },
       // The PHP forum's thread and board URLs are still linked from off-site and were
       // reported as soft 404s. Point the whole family at the current forum rather than
       // letting them resolve to the 404 page. Note that Vercel's firewall answers some
