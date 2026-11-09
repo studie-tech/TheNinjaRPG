@@ -128,11 +128,19 @@ export const zoomHomeCameraTo = (
     homeType,
   );
 
-/** Keep saved room frames and physical scale while mapping all measured contours into them. */
 /** One room of a home, or undefined when the home lacks it. */
 export const getHomeRoom = (homeType: HomeType, id: HomeRoomId) =>
   getHomeRooms(homeType).find((room) => room.id === id);
 
+/**
+ * Keep saved room frames and physical scale while mapping all measured contours into them.
+ *
+ * Each room frame, and the shared yard frame, is derived from its measured floor rectangle
+ * (painting percentages scaled by `unit`): the floor spans 78% of the frame's width and 54%
+ * of its height, offset 12% of the frame width from its left edge and 26% of the frame
+ * height from its top. Contours are then expressed as percentages of that frame. These
+ * ratios are separate from HOME_FLOOR_PROJECTION.
+ */
 export const getHomeRooms = (homeType: HomeType): HomeRoom[] => {
   const plan = HOME_ART_PLANS[homeType];
   const unit = plan.size / 100;
