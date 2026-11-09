@@ -1,4 +1,5 @@
-import { createElement, Fragment, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { createElement, Fragment } from "react";
 import type { BattleUsageType } from "@/drizzle/constants";
 
 /** Swap whole words for components; each swap is keyed by position, so a word may repeat. */

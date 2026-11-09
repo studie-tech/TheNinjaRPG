@@ -1,5 +1,6 @@
 import type { UserData } from "@/drizzle/schema";
-import { type BoostStructure, getStrucBoost } from "@/utils/village";
+import type { BoostStructure } from "@/utils/village";
+import { getStrucBoost } from "@/utils/village";
 
 // Options in standard ramen shop
 export const ramenOptions = ["small", "medium", "large"] as const;

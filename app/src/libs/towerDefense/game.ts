@@ -12,13 +12,13 @@ import {
   type TDEnemyDirection,
 } from "@/drizzle/constants";
 import { oddQHexDistance } from "@/libs/hexgrid";
-import {
-  type HexPosition,
-  type SpriteDirection,
-  spriteDirections,
-  type TowerDefenseAbility,
-  type TowerDefenseProjectile,
+import type {
+  HexPosition,
+  SpriteDirection,
+  TowerDefenseAbility,
+  TowerDefenseProjectile,
 } from "@/validators/towerDefense";
+import { spriteDirections } from "@/validators/towerDefense";
 
 /**
  * Calculate axial distance between two hexes.

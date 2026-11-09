@@ -142,7 +142,7 @@ export const listUserDataForGET = (client: Pick<DrizzleClient, "query">) =>
     where: ne(userData.role, "USER"),
   });
 
-/** Build the `userReview` listing for `GET`, using predicates on `createdAt`, `review`, `targetUserId`. */
+/** List written reviews for one staff member after the previous monthly claim time. */
 export const listUserReviewForGET = (
   client: Pick<DrizzleClient, "query">,
   since: Date,

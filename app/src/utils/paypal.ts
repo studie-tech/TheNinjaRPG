@@ -26,8 +26,8 @@ export const getUserFederalStatus = (
 };
 
 /**
- * Why a monthly allowance use cost nothing. Staff come first; the federal tier is named only
- * when the use falls beyond what an account without supporter status gets.
+ * Explain a free monthly reset or swap. Staff take precedence; name the supporter tier
+ * only when its additional allowance applies.
  */
 export const freeAllowanceNote = (
   allowance: Record<FederalStatus, number>,

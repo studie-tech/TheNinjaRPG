@@ -49,6 +49,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   onDeleted?: (imageId: string) => void;
 }
 
+/** Display one image or video with serialized reactions and deletion; callers key by image ID. */
 const ConceptImage: React.FC<InputProps> = (props) => {
   // Destructure props & state
   const { image, showDetails } = props;
@@ -140,11 +141,12 @@ const ConceptImage: React.FC<InputProps> = (props) => {
     }
   }, [videoStatus, image?.id, utils, finalizeUpload, isFinalizingUpload]);
 
-  // Toggle an emotion on an image. Only one toggle may be in flight per card: the
-  // endpoint returns a success envelope rather than authoritative counters, so the
-  // UI remains response-driven and reconciles both query surfaces after success.
   const emotion = api.conceptart.toggleEmotion.useMutation();
 
+  /**
+   * Serialize reactions against deletion. The endpoint returns no authoritative counters,
+   * so reconcile both query surfaces after success before accepting another reaction.
+   */
   const toggleEmotion = async (type: ConceptEmotion) => {
     if (!user || !image || deleteFlight.current() || !emotionFlight.claim(type)) return;
 
@@ -170,10 +172,11 @@ const ConceptImage: React.FC<InputProps> = (props) => {
     }
   };
 
-  // Both flights are checked synchronously so reactions and deletion cannot overlap.
   const remove = api.conceptart.delete.useMutation();
 
+  /** Delete this art once, retaining its tombstone and navigating only while mounted. */
   const deleteImage = async (close: () => void) => {
+    // Same-tick clicks must see the other flight before React renders pending state.
     if (!image || emotionFlight.current() || !deleteFlight.claim()) return;
 
     const imageId = image.id;

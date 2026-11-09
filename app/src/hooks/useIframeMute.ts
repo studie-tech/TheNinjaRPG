@@ -66,9 +66,8 @@ export const useIframeMute = (): UseIframeMuteReturn => {
 };
 
 /**
- * Get initial mute state from user data or localStorage
- * @param userData
- * @returns boolean
+ * Prefer the signed-in account's mute setting, falling back to a locally saved `true`.
+ * Missing or malformed local values leave iframes unmuted.
  */
 const getInitialIframeMuteState = (
   userData: { iframesMuted?: boolean } | undefined,
