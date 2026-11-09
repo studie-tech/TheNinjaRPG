@@ -37,7 +37,13 @@ describe("travel actor snapshots", () => {
     expect(result.every((recipe) => !recipe.spread)).toBe(true);
     const parts = result[0]!.parts;
     expect(parts.map((part) => part.kind)).toEqual(["avatar"]);
-    expect(parts[0]).toMatchObject({ shadow: expect.any(Number), light: expect.any(Number), size: 10 * 1.3 * 0.5 });
+    expect(parts[0]).toMatchObject({ shadow: expect.any(Number), size: 10 * 1.3 * 0.5 });
+    // Wildlife casts shadows but carries no night light pool.
+    expect(parts[0]).not.toHaveProperty("light");
+    // Members sharing a sheet idle out of step.
+    const loops = result.map((recipe) => recipe.parts[0]?.loop);
+    expect(new Set(loops.map((loop) => loop?.offsetMs)).size).toBe(3);
+    expect(new Set(loops.map((loop) => loop?.clip.frameDurationMs)).size).toBeGreaterThan(1);
     expect(parts[0]?.loop).toMatchObject({ facing: "left", clip: { images: ["https://uploadthing.b-cdn.net/f/idle"] } });
     expect(parts[0]?.walk).toMatchObject({ facing: "left", clip: { images: ["https://uploadthing.b-cdn.net/f/move"] } });
     expect(recipes([deer(0), player()], { showAmbient: false }).map((recipe) => recipe.key)).toEqual(["user:other"]);

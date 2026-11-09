@@ -78,6 +78,14 @@ describe("wander spots", () => {
     expect(wanderSpots(map(), anchor, 0, true)).toEqual([anchor]);
   });
 
+  it("keeps clear of the stairs and plaza of the sector shrine", () => {
+    const withShrine = { ...map(), anchors: [{ key: "shrine.default", x: 6, y: 3 }], objects: [] };
+    const spots = wanderSpots(withShrine, { x: 6, y: 8 }, 5, true);
+    expect(spots.length).toBeGreaterThan(1);
+    for (const spot of spots.slice(1)) expect(Math.abs(spot.x - 6) <= 2 && spot.y >= 0 && spot.y <= 5).toBe(false);
+    expect(snapToWanderTile(withShrine, { x: 6, y: 4 }, true)).toEqual({ x: 6, y: 6 });
+  });
+
   it("snaps wild placements off villages and buildings onto the nearest wild tile", () => {
     const wild = snapToWanderTile(map(), { x: 1, y: 4 }, true)!;
     expect(wild.x).toBe(3);

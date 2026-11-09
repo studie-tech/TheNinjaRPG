@@ -20,7 +20,15 @@ const WANDER_FOLLOW_MS = 900;
 const MEMBER_SPREAD = [0.45, 0.9] as const;
 
 export type WanderTile = { x: number; y: number };
-type WanderMap = Pick<NormalizedSectorMap, "width" | "height" | "tiles">;
+type WanderMap = Pick<NormalizedSectorMap, "width" | "height" | "tiles"> &
+  Partial<Pick<NormalizedSectorMap, "anchors" | "objects">>;
+
+/**
+ * Columns either side of a structure and rows behind and in front of its entrance that roaming
+ * AIs keep clear of. Buildings are drawn as one plane at their entrance, so an AI on the
+ * stairs or plaza would be drawn behind the building it stands on.
+ */
+const STRUCTURE_CLEARANCE = { columns: 2, behind: 3, front: 2 } as const;
 
 /** An open tile a roaming AI may stand on; `wildOnly` keeps it out of villages and roads. */
 export const isWanderTile = (
@@ -34,6 +42,39 @@ export const isWanderTile = (
   tile.zone !== "shrine" &&
   (!wildOnly || tile.zone === "wilderness");
 
+const structureTileCache = new WeakMap<WanderMap, Set<number>>();
+/**
+ * Tiles around the map's buildings: the sector shrine and authored structures, located by the
+ * map alone so the server and every client derive the same wander spots.
+ */
+const structureTiles = (map: WanderMap) => {
+  let tiles = structureTileCache.get(map);
+  if (tiles) return tiles;
+  tiles = new Set();
+  const entrances = [
+    ...(map.anchors ?? []).filter(
+      (anchor) =>
+        anchor.key.startsWith("shrine.") || anchor.key.startsWith("structure."),
+    ),
+    ...(map.objects ?? []).filter((object) =>
+      ["shrine", "structure", "landmark"].includes(object.type),
+    ),
+  ];
+  const { columns, behind, front } = STRUCTURE_CLEARANCE;
+  for (const entrance of entrances)
+    for (let x = entrance.x - columns; x <= entrance.x + columns; x++)
+      for (let y = entrance.y - behind; y <= entrance.y + front; y++)
+        if (x >= 0 && y >= 0 && x < map.width && y < map.height)
+          tiles.add(y * map.width + x);
+  structureTileCache.set(map, tiles);
+  return tiles;
+};
+
+/** An open tile on this map that is clear of its buildings. */
+const isOpenWanderTile = (map: WanderMap, x: number, y: number, wildOnly: boolean) =>
+  isWanderTile(getSectorTile(map, { x, y }), wildOnly) &&
+  !structureTiles(map).has(y * map.width + x);
+
 /**
  * Tiles within `radius` of the anchor that are reachable from it in a straight line, so every
  * walk can pass through the anchor without crossing a building. The anchor comes first.
@@ -45,8 +86,7 @@ export const wanderSpots = (
   wildOnly: boolean,
 ): WanderTile[] => {
   const open = (x: number, y: number) =>
-    isWanderTile(getSectorTile(map, { x, y }), wildOnly) ||
-    (x === anchor.x && y === anchor.y);
+    isOpenWanderTile(map, x, y, wildOnly) || (x === anchor.x && y === anchor.y);
   const spots: WanderTile[] = [{ x: anchor.x, y: anchor.y }];
   if (radius < 1) return spots;
   for (let x = anchor.x - radius; x <= anchor.x + radius; x++)
@@ -68,7 +108,7 @@ export const wanderSpots = (
   return spots;
 };
 
-/** The nearest tile a roaming AI may stand on, or null when the map has none. */
+/** The nearest tile a roaming AI may stand on, clear of buildings, or null when the map has none. */
 export const snapToWanderTile = (
   map: WanderMap,
   position: WanderTile,
@@ -77,7 +117,7 @@ export const snapToWanderTile = (
   let best: WanderTile | null = null,
     bestDistance = Number.POSITIVE_INFINITY;
   for (const tile of map.tiles) {
-    if (!isWanderTile(tile, wildOnly)) continue;
+    if (!isOpenWanderTile(map, tile.x, tile.y, wildOnly)) continue;
     const distance = oddQHexDistance(position.x, position.y, tile.x, tile.y);
     if (distance < bestDistance) {
       best = { x: tile.x, y: tile.y };

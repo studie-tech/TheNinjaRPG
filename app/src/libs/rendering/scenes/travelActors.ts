@@ -977,6 +977,28 @@ const sheetLoop = (animation: CharacterAnimation): WorldLoop => ({
   },
   facing: animation.facing,
 });
+/**
+ * An NPC's idle and walk loops, each actor at its own point in the clip and idling at its own
+ * tempo, so a herd sharing one sheet never moves in lockstep.
+ */
+const npcLoops = (user: SectorUser) => {
+  let hash = 0x811c9dc5;
+  for (const char of travelActorKey(user))
+    hash = Math.imul(hash ^ char.charCodeAt(0), 0x01000193);
+  hash >>>= 0;
+  const offsetMs = hash % 10_000;
+  const tempo = 0.85 + ((hash >>> 14) % 301) / 1000;
+  const idle = user.npcSheets?.idle && sheetLoop(user.npcSheets.idle);
+  const walk = user.npcSheets?.move && sheetLoop(user.npcSheets.move);
+  return {
+    loop: idle && {
+      ...idle,
+      clip: { ...idle.clip, frameDurationMs: idle.clip.frameDurationMs * tempo },
+      offsetMs,
+    },
+    walk: walk && { ...walk, offsetMs },
+  };
+};
 const headingOf = (dx: number, previous?: AvatarFacing): AvatarFacing | undefined =>
   Math.abs(dx) < 0.001 ? previous : dx < 0 ? "left" : "right";
 /** Player control centers in tile units: x across the tile width, y up from the tile's foot. */
@@ -1080,18 +1102,18 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
               preserveAspect: true,
               nearest: !user.bodyArt,
               shadowCaster: "character",
-              // Body art and NPCs stand on the ground like players: grounded, lit and animated.
+              // Body art and NPCs stand on the ground like players: grounded and animated, and
+              // lit at night unless they are wildlife.
               shadow: PLAYER_TRAVEL_SHADOW,
-              light: PLAYER_TRAVEL_LIGHT,
+              ...(user.npcInteractionType === "AMBIENT"
+                ? {}
+                : { light: PLAYER_TRAVEL_LIGHT }),
               ...(user.bodyArt
                 ? {
                     loop: user.bodyIdle && sheetLoop(user.bodyIdle),
                     walk: user.bodyMove && sheetLoop(user.bodyMove),
                   }
-                : {
-                    loop: user.npcSheets?.idle && sheetLoop(user.npcSheets.idle),
-                    walk: user.npcSheets?.move && sheetLoop(user.npcSheets.move),
-                  }),
+                : npcLoops(user)),
             }
           : { mask: IMG_SECTOR_USER_SPRITE_MASK },
     ),
