@@ -414,14 +414,14 @@ export const getEffectiveCurPool = (
 /**
  * Apply pool adjustments to current values using delta-adjustment model.
  *
- * Delta-adjustment model (Option 3 - no max mutation):
+ * Delta-adjustment model:
  * - Max pool values (maxHealth, maxChakra, maxStamina) are NEVER mutated
  * - They always represent the original base values
  * - Frontend uses getEffectiveMaxPool() to calculate display max (base + adjustment)
  * - Only current values are adjusted by the delta between previous and next adjustments
  *
- * This prevents the double-application bug where max was mutated here and then
- * getEffectiveMaxPool added the adjustment again on the frontend.
+ * Applying the adjustment to max here as well would double-count it, because
+ * getEffectiveMaxPool adds it on read.
  */
 export const applyPoolAdjustmentsToBase = (
   target: BattleUserState,
@@ -948,9 +948,8 @@ export const getEffectStage = (effect: UserEffect | GroundEffect): 1 | 2 => {
 };
 
 /**
- * Get the appropriate base damage for a modifier calculation.
- * Damage reductions use the fully boosted damage.
- * Damage increases use staged base damage.
+ * Base for percentage damage modifiers: the staged pre-modifier damage when
+ * recorded, else the current damage or residual. The effect argument is unused.
  */
 export const getBaseDamageForModifier = (
   _effect: UserEffect,
@@ -1071,7 +1070,7 @@ const EFFECT_SORT_RANK = new Map<string, number>(
       "seal",
       "stun",
       "summon",
-      // Post-moodifiers before pierce
+      // Post-modifiers before pierce
       "decreasedamagegiven",
       "decreasedamagetaken",
       "increasedamagegiven",

@@ -88,7 +88,6 @@ export const calcBattleResult = (
 ): CombatResult | null => {
   if (battle.extraState.dungeon) return dungeonCombatResult(battle, userId);
   const battleType = battle.battleType;
-  // Use users directly from battle state - lookup functions get full data when needed
   const users = battle.usersState;
   const user = users.find((u) => u.userId === userId);
   if (user && !user.leftBattle) {
@@ -704,7 +703,7 @@ const calcWarDamage = ({
           }
         }
         // Village wars and raids - abstract shrine HP mechanic
-        // Track per-war to avoid accumulation bug when a user is in multiple wars
+        // Tracked per war so a user in several wars credits each war separately
         // Track attacker and defender shrine changes separately
         if (VILLAGE_WAR_TYPES.includes(war.type)) {
           ensureVillageWarShrine(war);
@@ -812,7 +811,7 @@ const calcWarDamage = ({
   // Shrine HP changes are a strategic war mechanic and should not be reduced
   // by anti-farming scaling, ensuring consistent war progress per kill.
 
-  // Adjust shrine & townhall datamage based on level different
+  // Adjust shrine & townhall damage based on level difference
   const maxHumanTargetLevel = Math.max(...targetUsers.map((t) => t.level), 0);
   if (Math.abs(user.level - maxHumanTargetLevel) > STREAK_LEVEL_DIFF) {
     // Check if any kage was killed in this battle
