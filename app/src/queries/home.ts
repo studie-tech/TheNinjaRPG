@@ -2,9 +2,21 @@
  * Database access for home; authorization and transaction scopes stay in callers.
  */
 import type { SQL } from "drizzle-orm";
-import { eq, gt, isNull, lte, or } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { HomeType } from "@/drizzle/constants";
-import { userData, userItem } from "@/drizzle/schema";
+import { item, userData, userHome, userItem, userRequest } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { getNextUserSnapshotAt } from "@/utils/time";
 
@@ -37,9 +49,6 @@ export const fetchHomeFurnitureUser = async (client: DrizzleClient, userId: stri
   // Deleted item definitions can leave inventory rows behind, as in fetchUserItems.
   return user && { ...user, items: user.items.filter((owned) => owned.item) };
 };
-
-import { and, gte, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
-import { item, userHome, userRequest } from "@/drizzle/schema";
 
 /**
  * Build the `userRequest` lookup for `getVisitedHome`, selecting only `id`, including

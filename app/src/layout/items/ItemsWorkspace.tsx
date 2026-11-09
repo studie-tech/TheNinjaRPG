@@ -159,21 +159,18 @@ export function ItemsWorkspace({
   // Equipment can be inspected from either list. Keep the opened storage side so a moved
   // stack closes its panel even when it appears in the other inventory immediately.
   const inspectable = [...userItems, ...(home?.items ?? [])];
-  const view: ItemsView =
-    opened.bag !== bag ||
-    (opened.view.kind === "item" &&
-      !inspectable.some(
-        (ui) =>
-          opened.view.kind === "item" &&
-          ui.id === opened.view.userItemId &&
-          ui.storedAtHome === opened.storedAtHome,
-      ))
-      ? { kind: "backpack" }
-      : opened.view;
+  const openedView = opened.view;
   const inspected =
-    view.kind === "item"
-      ? inspectable.find((ui) => ui.id === view.userItemId)
+    opened.bag === bag && openedView.kind === "item"
+      ? inspectable.find(
+          (ui) =>
+            ui.id === openedView.userItemId && ui.storedAtHome === opened.storedAtHome,
+        )
       : undefined;
+  const view: ItemsView =
+    opened.bag !== bag || (openedView.kind === "item" && !inspected)
+      ? { kind: "backpack" }
+      : openedView;
   const hasPanel = view.kind !== "backpack";
   // Hidden items show only to content staff, as everywhere else items are listed.
   const choosable = canChangeContent(userData.role)
