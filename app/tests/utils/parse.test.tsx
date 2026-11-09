@@ -1,18 +1,33 @@
-//
-// These run in the Node environment on purpose: `/news`, `/forum` and the
-// conversation pages are server-rendered, so `parseHtml` output has to survive
-// `renderToString` without any DOM globals.
+// `/news`, `/forum` and the conversation pages are server-rendered, so `parseHtml`
+// output has to survive `renderToString` without any DOM globals. The suite removes
+// the preloaded jsdom globals it would otherwise inherit and restores them afterwards.
 
-import { describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { renderToString } from "react-dom/server";
 import { Quote } from "@/components/ui/quote";
 import { parseHtml } from "@/utils/parse";
+
+const domGlobals = ["window", "document", "DOMParser"] as const;
+const savedGlobals = new Map<string, PropertyDescriptor>();
+
+beforeAll(() => {
+  for (const key of domGlobals) {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, key);
+    if (descriptor) savedGlobals.set(key, descriptor);
+    Reflect.deleteProperty(globalThis, key);
+  }
+});
+
+afterAll(() => {
+  for (const [key, descriptor] of savedGlobals) Object.defineProperty(globalThis, key, descriptor);
+});
 
 // parseHtml returns an array of nodes, so it needs a host element to render into.
 const render = (html: string) => renderToString(<div>{parseHtml(html)}</div>);
 
 describe("parseHtml during server rendering", () => {
   it("renders a blockquote without needing a DOM", () => {
+    expect([typeof window, typeof document, typeof DOMParser]).toEqual(["undefined", "undefined", "undefined"]);
     expect(() => render("<blockquote>hello</blockquote>")).not.toThrow();
   });
 
