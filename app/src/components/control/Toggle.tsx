@@ -1,6 +1,6 @@
 import { Check, Minus, X } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -19,6 +19,7 @@ interface ToggleProps {
 const Toggle: React.FC<ToggleProps> = (props) => {
   // Destructure
   const { id, disabled, value, labelActive, labelInactive, setShowActive } = props;
+  const switchId = useId();
 
   // Set state
   const setState = useCallback(
@@ -41,10 +42,11 @@ const Toggle: React.FC<ToggleProps> = (props) => {
   // Render
   return (
     <div className="flex flex-row items-center">
-      <Label htmlFor="tag_name" className="mr-2">
+      <Label htmlFor={switchId} className="mr-2">
         {value ? labelActive : labelInactive}
       </Label>
       <Switch
+        id={switchId}
         onCheckedChange={() => setState(!value)}
         checked={value}
         disabled={disabled}
