@@ -45,7 +45,7 @@ import {
   statSchema,
 } from "@/validators/combat";
 
-// Default user
+// Simulator form types
 type StatSchemaInput = z.input<typeof statSchema>;
 type StatSchemaOutput = z.infer<typeof statSchema>;
 type ActSchemaInput = z.input<typeof actSchema>;
@@ -149,7 +149,7 @@ export default function Simulator(props: {
       onSuccess: () => refetch(),
     });
 
-  // Mutation for editing entry
+  // Delete entry
   const { mutate: deleteEntry, isPending: isDeleting } =
     api.simulator.deleteDamageSimulation.useMutation({
       onSuccess: async (data) => {
@@ -160,9 +160,8 @@ export default function Simulator(props: {
 
   const isPending = isSaving || isUpdating || isDeleting;
 
-  // Calculate experience from stats. Every stat starts at 10, so the starting total is not
-  // earned experience — derive the baseline from the schema instead of hardcoding it, or the
-  // number goes negative whenever the number of stats changes.
+  // Calculate experience from stats. Every stat starts at 10, so the starting total of all
+  // schema stats is not earned experience.
   const calcExperience = (values: StatSchemaOutput) => {
     const assigned = statNames.map((k) => Number(values[k])).reduce((a, b) => a + b, 0);
     return assigned - statNames.length * 10;
@@ -177,7 +176,7 @@ export default function Simulator(props: {
   const defLevel = defProgress?.level ?? calcLevel(defExp);
   const defHp = calcHP(defLevel);
 
-  // Monkey-wrap the damage function
+  // Wraps damageUser for a single formula effect
   const getDamage = (
     attValues: StatSchemaOutput,
     defValues: StatSchemaOutput,
