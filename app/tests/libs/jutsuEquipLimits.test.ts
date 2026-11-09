@@ -3,13 +3,14 @@ import { buildJutsuEquipCaps, computeJutsuLoadoutCapAssignments } from "@/libs/j
 import { jutsuEquipLimitSchema } from "@/validators/jutsuEquipLimit";
 import { DamageTag, HealTag } from "@/validators/combat";
 import type { Jutsu } from "@/drizzle/schema";
+import { makeJutsu } from "./combat/helpers/battleScenario";
 
 describe("configurable equipment limits", () => {
   it("limits only exact 40 AP costs, preserves order, and supports overrides", () => {
-    const definitions = Array.from({ length: 10 }, (_, index) => ({
-      id: `j${index}`, name: `Jutsu ${index}`, effects: [], jutsuType: "NORMAL",
+    const definitions = Array.from({ length: 10 }, (_, index) => makeJutsu({
+      id: `j${index}`, name: `Jutsu ${index}`,
       actionCostPerc: index === 8 ? 60 : 40,
-    })) as Jutsu[];
+    }));
     const select = (limit: number | null, mode: "ranked" | "unranked") =>
       computeJutsuLoadoutCapAssignments({
         caps: buildJutsuEquipCaps([{ category: "40 AP", unrankedMaxEquipped: limit, rankedMaxEquipped: limit }], mode),

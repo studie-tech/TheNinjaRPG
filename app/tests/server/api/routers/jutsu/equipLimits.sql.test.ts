@@ -50,12 +50,17 @@ describeWithDatabase("configured equipment limits", () => {
     await db.insert(jutsuEquipLimit).values({ category: "40 AP", unrankedMaxEquipped: 8, rankedMaxEquipped: 8 });
     const ids = Array.from({ length: 10 }, (_, index) => `ap-${index}`);
     await insertJutsus(ids.map((id, index) => ({ id, actionCostPerc: index === 9 ? 60 : 40, requiredRank: "GENIN" as const })));
-    await db.insert(userJutsu).values(ids.map((id) => ({ id, userId: "player", jutsuId: id, equipped: false })));
+    await db.insert(userJutsu).values(ids.map((id, index) => ({ id, userId: "player", jutsuId: id, equipped: index < 7 })));
     const caps = await fetchJutsuEquipCaps(db);
-    await Promise.all(ids.map((userJutsuId, index) => tryEquipUserJutsuAtomically({
+    // Compete for the last 40 AP slot, then equip another cost while the cap is full.
+    await Promise.all(ids.slice(7, 9).map((userJutsuId) => tryEquipUserJutsuAtomically({
       client: db, userId: "player", userJutsuId, maxEquip: 15, caps,
-      flags: getJutsuCapFlags({ effects: [], jutsuType: "NORMAL", actionCostPerc: index === 9 ? 60 : 40 }),
+      flags: getJutsuCapFlags({ effects: [], jutsuType: "NORMAL", actionCostPerc: 40 }),
     })));
+    expect(await tryEquipUserJutsuAtomically({
+      client: db, userId: "player", userJutsuId: "ap-9", maxEquip: 15, caps,
+      flags: getJutsuCapFlags({ effects: [], jutsuType: "NORMAL", actionCostPerc: 60 }),
+    })).toBe("equipped");
     const equipped = await db.query.userJutsu.findMany();
     expect(equipped.filter((entry) => entry.equipped)).toHaveLength(9);
     expect(equipped.find((entry) => entry.jutsuId === "ap-9")?.equipped).toBe(true);
