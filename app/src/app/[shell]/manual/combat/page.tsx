@@ -4,7 +4,12 @@ import { BattleLengthHistogram } from "@/layout/BattleLengthHistogram";
 import ContentBox from "@/layout/ContentBox";
 import { DmgConfigDialog } from "@/layout/DmgConfigDialog";
 import Link from "@/layout/Link";
-import { COMBAT_SECONDS } from "@/libs/combat/constants";
+import {
+  COMBAT_SECONDS,
+  INITIATIVE_LEVEL_BONUS,
+  INITIATIVE_PVP_STREAK_BONUSES,
+  INITIATIVE_TERRITORY_BONUS,
+} from "@/libs/combat/constants";
 import { canModifyCombatSettings } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -32,12 +37,26 @@ export default function ManualCombat() {
         </Link>
         .<h2 className="mt-5 font-bold text-xl">Initiative</h2>
         Initiative is calculated by rolling a random number between 1 and 20 for each
-        user. Several modifiers are added to this number:
+        user. The roll is then adjusted by these modifiers:
         <ul className="ml-5 list-disc">
-          <li>For each lvl above defender, a bonus of 3% is added</li>
-          <li>If in own territory, a bonus of 10% is added</li>
-          <li>If outside own territory, initiative is reduced by 10%</li>
-          <li>For consecutive PVP kills, stacking bonus of 5-0.25% are added</li>
+          <li>
+            For each level above the opponents' average level, a bonus of{" "}
+            {formatPercent(INITIATIVE_LEVEL_BONUS)} is added
+          </li>
+          <li>
+            If in own territory, a bonus of {formatPercent(INITIATIVE_TERRITORY_BONUS)}{" "}
+            is added
+          </li>
+          <li>
+            If outside own territory, initiative is reduced by{" "}
+            {formatPercent(INITIATIVE_TERRITORY_BONUS)}
+          </li>
+          <li>
+            For consecutive PvP kills, the streak adds{" "}
+            {streakSteps.map(formatPercent).join(", ")} for the first{" "}
+            {streakSteps.length} kills, then {formatPercent(streakTail)} for each
+            further kill
+          </li>
         </ul>
       </ContentBox>
 
@@ -45,3 +64,9 @@ export default function ManualCombat() {
     </>
   );
 }
+
+const streakSteps = INITIATIVE_PVP_STREAK_BONUSES.slice(0, -1);
+const streakTail =
+  INITIATIVE_PVP_STREAK_BONUSES[INITIATIVE_PVP_STREAK_BONUSES.length - 1] ?? 0;
+
+const formatPercent = (fraction: number) => `${Number((fraction * 100).toFixed(2))}%`;

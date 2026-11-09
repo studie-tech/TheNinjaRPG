@@ -32,6 +32,9 @@ import {
   damageDerivedTagTypes,
   damageModifierTypes,
   GenNames,
+  INITIATIVE_LEVEL_BONUS,
+  INITIATIVE_PVP_STREAK_BONUSES,
+  INITIATIVE_TERRITORY_BONUS,
   POST_PIERCE_TAGS,
 } from "./constants";
 import type {
@@ -1228,26 +1231,29 @@ export const rollInitiative = (
   if (opponents) {
     const avgLevel =
       opponents.reduce((a, b) => a + (b.level ?? 1), 0) / opponents.length;
-    const levelBonus = Math.max(((user.level ?? 1) - avgLevel) * 0.03, 0);
+    const levelBonus = Math.max(
+      ((user.level ?? 1) - avgLevel) * INITIATIVE_LEVEL_BONUS,
+      0,
+    );
     roll = roll * (1 + levelBonus);
   }
   // Calculate territory bonus
   const ownTerritory = user.sector === villageSector;
-  const territoryBonus = ownTerritory ? 0.1 : -0.1;
+  const territoryBonus = ownTerritory
+    ? INITIATIVE_TERRITORY_BONUS
+    : -INITIATIVE_TERRITORY_BONUS;
   roll = roll * (1 + territoryBonus);
   // PvP bonus
   if ((user.pvpStreak ?? 0) > 0) {
     let pvpBonus = 0;
     for (let i = 1; i <= (user.pvpStreak ?? 0); i++) {
-      pvpBonus += PVP_STREAK_INITIATIVE_BONUS[i - 1] ?? 0.0025;
+      const step = Math.min(i, INITIATIVE_PVP_STREAK_BONUSES.length);
+      pvpBonus += INITIATIVE_PVP_STREAK_BONUSES[step - 1] ?? 0;
     }
     roll = roll * (1 + pvpBonus);
   }
   return roll;
 };
-
-/** Initiative bonus of each consecutive streak step; later steps add 0.25%. */
-const PVP_STREAK_INITIATIVE_BONUS = [0.02, 0.015, 0.01, 0.005];
 
 /**
  * Checks if a move is valid on the battlefield.

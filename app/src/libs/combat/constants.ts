@@ -56,6 +56,14 @@ export const COMBAT_BORDER_RIGHT = 2;
 export const COMBAT_BORDER_TOP = 2;
 export const COMBAT_BORDER_BOTTOM = 0;
 export const COMBAT_SECONDS = 60;
+/** Initiative multiplier gained per level above the opponents' average level. */
+export const INITIATIVE_LEVEL_BONUS = 0.03;
+/** Initiative multiplier gained in the user's own village sector, and lost outside it. */
+export const INITIATIVE_TERRITORY_BONUS = 0.1;
+/** Initiative bonus of each consecutive PvP streak step; later steps add the last entry. */
+export const INITIATIVE_PVP_STREAK_BONUSES = [
+  0.02, 0.015, 0.01, 0.005, 0.0025,
+] as const;
 export const COMBAT_LOBBY_SECONDS = 15;
 
 export const SPAR_EXPIRY_SECONDS = 120;
