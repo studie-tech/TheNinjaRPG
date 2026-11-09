@@ -9,6 +9,7 @@ import {
 } from "@/drizzle/constants";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
+import { WelcomeQuestions } from "@/layout/WelcomeQuestions";
 import { getGameLayout } from "@/libs/gameLayouts";
 import { useActiveLayout } from "@/utils/LayoutContext";
 
@@ -22,6 +23,7 @@ export function IllustratedWelcome() {
         <div className="theme-welcome-content">
           <div className="theme-welcome-copy" data-theme-id={theme.id}>
             <h1>{theme.welcomeTitle}</h1>
+            <p>Free ninja browser RPG with tactical combat and village communities.</p>
             <p>{theme.welcomeIntro}</p>
           </div>
           <div className="theme-welcome-actions">
@@ -156,6 +158,7 @@ export function IllustratedWelcome() {
           </Link>
         </div>
       </section>
+      <WelcomeQuestions />
     </>
   );
 }

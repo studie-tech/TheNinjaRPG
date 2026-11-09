@@ -8,9 +8,9 @@ export const SITE_NAME = "TheNinja-RPG";
 /** Route of the generated 1200x630 social card (app/opengraph-image.tsx). */
 export const OG_IMAGE_PATH = "/opengraph-image";
 
-export const SITE_TITLE = "TheNinja-RPG - Online RPG - Free Online Game for Ninjas";
+export const SITE_TITLE = "TheNinja-RPG | Free Ninja Browser RPG & Online Battles";
 export const SITE_DESCRIPTION =
-  "Play TheNinja-RPG free in your browser. Train your ninja, master jutsu, join a village and battle thousands of players in the world of Seichi. No download required.";
+  "Play TheNinja-RPG, a free ninja browser RPG. Master jutsu, join a village and battle other players in tactical combat. No download required.";
 
 /**
  * absoluteUrl

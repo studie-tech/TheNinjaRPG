@@ -15,8 +15,8 @@ let session: ReturnType<typeof UserContext.useUserData>;
 const character = { userId: "player" } as NonNullable<UserWithRelations>;
 
 beforeEach(() => {
-  push.mockClear();
-  referral.mockClear();
+  push.mockReset();
+  referral.mockReset();
   session = {
     isClerkLoaded: true,
     isSignedIn: false,
@@ -40,6 +40,9 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  window.localStorage.clear();
+  window.history.replaceState(null, "", "/");
+  delete window.Cookiebot;
 });
 
 describe("landing page session navigation", () => {
@@ -83,5 +86,37 @@ describe("landing page session navigation", () => {
     render(<HomeLanding />);
     expect(push).toHaveBeenCalledWith("/register");
     expect(referral).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([false, true])(
+    "captures the landing referral before registration with statistics consent %j",
+    (statistics) => {
+      session = { ...session, isSignedIn: true, userId: "player" };
+      window.Cookiebot = { consent: { statistics }, hasResponse: true };
+      window.localStorage.setItem("ref", "EarlierRecruiter");
+      window.history.replaceState(null, "", "/?ref=Recruiter&utm_source=legacy");
+      referral.mockImplementationOnce((input) => {
+        expect(input).toEqual({ utmSource: statistics ? "legacy" : undefined });
+        expect(window.localStorage.getItem("ref")).toBe("Recruiter");
+      });
+      push.mockImplementationOnce((path) => {
+        expect(path).toBe("/register");
+        expect(window.localStorage.getItem("ref")).toBe("Recruiter");
+        expect(window.localStorage.getItem("utm_source")).toBe(
+          statistics ? "legacy" : null,
+        );
+      });
+      render(<HomeLanding />);
+      expect(referral).toHaveBeenCalledTimes(1);
+      expect(push).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("keeps an earlier recruiter when the landing URL has no referral", () => {
+    session = { ...session, isSignedIn: true, userId: "player" };
+    window.localStorage.setItem("ref", "EarlierRecruiter");
+    render(<HomeLanding />);
+    expect(push).toHaveBeenCalledWith("/register");
+    expect(window.localStorage.getItem("ref")).toBe("EarlierRecruiter");
   });
 });

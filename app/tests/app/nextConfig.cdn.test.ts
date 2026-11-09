@@ -15,15 +15,18 @@ describe("next.config with a pull zone configured", () => {
   };
   let assetPrefix: string | undefined;
   let rules: { source: string; headers: { key: string; value: string }[] }[];
+  let redirects: { source: string; destination: string; permanent: boolean }[];
 
   beforeAll(async () => {
     Object.assign(process.env, overrides);
     const config = (await import("../../next.config.mjs")).default as {
       assetPrefix?: string;
       headers: () => Promise<typeof rules>;
+      redirects: () => Promise<typeof redirects>;
     };
     assetPrefix = config.assetPrefix;
     rules = await config.headers();
+    redirects = await config.redirects();
   });
 
   // The whole suite shares one process.
@@ -35,6 +38,13 @@ describe("next.config with a pull zone configured", () => {
 
   it("prefixes assets with the zone, normalising the trailing slash", () => {
     expect(assetPrefix).toBe("https://tnrprod.b-cdn.net");
+  });
+
+  it("routes legacy registration through the welcome page that captures attribution", () => {
+    expect(redirects.find((rule) => rule.source === "/register.php")).toMatchObject({
+      destination: "/",
+      permanent: true,
+    });
   });
 
   it("names that same origin in the policy the browser enforces", () => {
