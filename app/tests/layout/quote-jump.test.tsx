@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, expect, it, type Mock, vi } from "bun:test";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { QuoteJump } from "@/layout/QuoteJump";
-import { showMutationToast } from "@/libs/toast";
-import { createToastMock } from "../setup/toastMock";
+import * as toast from "@/libs/toast";
+import { spyOnToasts } from "../setup/toastMock";
 
-vi.mock("@/libs/toast", createToastMock);
-const toastMock = () => showMutationToast as unknown as Mock<typeof showMutationToast>;
+const toastMock = () =>
+  toast.showMutationToast as unknown as Mock<typeof toast.showMutationToast>;
 
 const scrollIntoView = vi.fn();
 let original: PropertyDescriptor | undefined;
 
 beforeEach(() => {
   scrollIntoView.mockReset();
-  toastMock().mockClear();
+  spyOnToasts();
   original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
     configurable: true,
