@@ -100,6 +100,7 @@ import {
 import { isTutorialActive } from "@/libs/tutorial";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { useAwake } from "@/utils/routing";
+import { MINUTE_S } from "@/utils/time";
 import {
   selectUserWithoutPosition,
   type useRequiredUserData,
@@ -118,6 +119,8 @@ import {
 
 const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
 const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
+/** Bootstrap sector windows stay cached this long after travel unmounts. */
+const BOOT_WINDOW_RETENTION_MS = 30 * MINUTE_S * 1000;
 // Start both renderers alongside hydration while the map queries load.
 if (typeof window !== "undefined") {
   // The dynamic component reports a failed chunk load when it renders.
@@ -276,10 +279,11 @@ function Travel() {
   } | null>(null);
   // Sector needing a full bootstrap window fetch (initial load, global travel)
   const [bootSector, setBootSector] = useState<number | null>(null);
-  // Kept for the session, so returning from a battle reassembles the window without a download.
+  // Outlives a typical battle, so returning reassembles the window without a download;
+  // older windows are released and refetched, which also picks up republished maps.
   const { data: bootWindow } = api.worldMap.getSectorWindow.useQuery(
     { sector: bootSector ?? 0 },
-    { enabled: bootSector !== null, gcTime: Infinity },
+    { enabled: bootSector !== null, gcTime: BOOT_WINDOW_RETENTION_MS },
   );
 
   // Ingest a bootstrap window: layouts + all its entries into the store
