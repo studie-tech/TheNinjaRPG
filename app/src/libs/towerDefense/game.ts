@@ -12,11 +12,12 @@ import {
   type TDEnemyDirection,
 } from "@/drizzle/constants";
 import { oddQHexDistance } from "@/libs/hexgrid";
-import type {
-  HexPosition,
-  SpriteDirection,
-  TowerDefenseAbility,
-  TowerDefenseProjectile,
+import {
+  type HexPosition,
+  type SpriteDirection,
+  spriteDirections,
+  type TowerDefenseAbility,
+  type TowerDefenseProjectile,
 } from "@/validators/towerDefense";
 
 /**
@@ -96,7 +97,33 @@ const DIRECTION_TO_SPRITE: Record<string, SpriteDirection> = {
  *    defined in spriteDirections (validators/towerDefense.ts).
  */
 export const directionToSpriteDirection = (dir: string): SpriteDirection => {
-  return DIRECTION_TO_SPRITE[dir.toLowerCase()] ?? "south";
+  return parseSpriteDirection(dir) ?? "south";
+};
+
+/** The sprite direction a short or full direction name denotes, if any. */
+const parseSpriteDirection = (dir: string): SpriteDirection | undefined => {
+  const key = dir.toLowerCase();
+  return Object.hasOwn(DIRECTION_TO_SPRITE, key) ? DIRECTION_TO_SPRITE[key] : undefined;
+};
+
+/**
+ * Key an imported per-direction map by sprite direction. Every sprite direction must
+ * appear exactly once, so an asset config built from it is complete.
+ */
+export const toSpriteDirectionRecord = <T>(
+  byDirection: Record<string, T>,
+): { record: Record<SpriteDirection, T> } | { error: string } => {
+  const record: Partial<Record<SpriteDirection, T>> = {};
+  for (const [dir, value] of Object.entries(byDirection)) {
+    const direction = parseSpriteDirection(dir);
+    if (!direction) return { error: `unknown direction "${dir}"` };
+    if (direction in record)
+      return { error: `direction "${direction}" is listed twice` };
+    record[direction] = value;
+  }
+  const missing = spriteDirections.filter((direction) => !(direction in record));
+  if (missing.length > 0) return { error: `missing directions ${missing.join(", ")}` };
+  return { record: record as Record<SpriteDirection, T> };
 };
 
 /**
