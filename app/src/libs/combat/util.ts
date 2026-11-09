@@ -1072,7 +1072,7 @@ const EFFECT_SORT_RANK = new Map<string, number>(
       "increasedamagetaken",
       // Piercing damage
       "pierce",
-      // Post-modifiers after pierce (uses shared constant from constants.ts)
+      // Post-modifiers after pierce
       ...(POST_PIERCE_TAGS as ZodAllTags["type"][]),
       "copy",
       "mirror",

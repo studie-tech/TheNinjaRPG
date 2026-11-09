@@ -245,9 +245,8 @@ export const damageDerivedTagTypes: string[] = [
 ];
 
 /**
- * Post-pierce tags that must run AFTER pierce effects (per sortEffects ordering).
- * These tags read damage consequences that pierce creates, so they must run after pierce.
- * This constant is shared between process.ts and util.ts (sortEffects) to ensure consistency.
+ * Tags that sortEffects orders after pierce, because they read the damage
+ * consequences pierce creates.
  */
 export const POST_PIERCE_TAGS: string[] = [
   "lifesteal",
