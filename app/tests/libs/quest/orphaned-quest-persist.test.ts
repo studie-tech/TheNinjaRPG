@@ -3,12 +3,9 @@ import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import { QuestTracker } from "@/validators/objectives";
 import { trackerQuest, trackerUser } from "../../setup/quest";
 
-// Regression: an orphaned QuestHistory row (its quest was deleted) resolves `uq.quest` to null.
-// filterQuestTrackersForDbPersist used to deref `uq.quest.questType` unguarded, throwing
-// "Cannot read properties of null (reading 'questType')" — the exact crash reported when buying
-// an item. Only item.ts's buy path leaks null quests here (its bespoke fetch skips the
-// `.filter((q) => q.quest)` convention that fetchUpdatedUser applies); the guard is a defensive
-// backstop for every caller.
+// An orphaned QuestHistory row (its quest was deleted) resolves `uq.quest` to null.
+// filterQuestTrackersForDbPersist must not dereference `uq.quest.questType` for it; the guard is
+// a backstop for every caller that loads user quests without dropping null quests.
 const orphanUserQuest = { id: "uq-orphan", questId: "deleted-quest", completed: 0, quest: null };
 
 const achievementMockUserQuest = (questId: string) => ({

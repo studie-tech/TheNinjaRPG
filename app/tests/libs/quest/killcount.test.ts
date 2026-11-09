@@ -121,7 +121,7 @@ describe("killObjectiveCountsForQuest", () => {
 });
 
 // ---------------------------------------------------------------------------
-// getNewTrackers — wiring of the gate (reproduces the reported bug)
+// getNewTrackers — wiring of the gate
 // ---------------------------------------------------------------------------
 
 describe("getNewTrackers pvp_kills gating", () => {

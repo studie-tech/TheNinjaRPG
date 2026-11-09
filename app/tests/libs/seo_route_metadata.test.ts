@@ -53,9 +53,8 @@ const uncoveredPages = (routeDir: string): string[] =>
 
 describe("route metadata coverage", () => {
   it("declares metadata for every top-level route", () => {
-    // Forty gated screens shipped without any, so Googlebot received the homepage's
-    // title, description and no canonical for each of them and Search Console filed the
-    // set under "Duplicate without user-selected canonical".
+    // A route without metadata hands Googlebot the homepage's title, description and no
+    // canonical, which Search Console files under "Duplicate without user-selected canonical".
     const uncovered = readdirSync(APP_DIR, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .flatMap((entry) => uncoveredPages(join(APP_DIR, entry.name)))
@@ -110,9 +109,8 @@ describe("buildMetadata", () => {
   it("names no canonical on a noindex page", () => {
     // Next resolves each metadata key against the nearest ancestor that declares it, so
     // leaving `alternates` off does not mean "no canonical" -- it inherits the parent
-    // segment's. That put 39 staff routes on `noindex` while pointing at an indexable
-    // page (/manual/logs at /manual, /manual/item/balance at /manual/item), the one
-    // pairing Google asks you not to ship. Only an explicit null replaces the inherited
+    // segment's, so a `noindex` route would point at an indexable page (/manual/logs at
+    // /manual), the one pairing Google asks you not to ship. Only an explicit null replaces the inherited
     // value; undefined would fall back to it again.
     expect(noindexMetadata("Content Log").alternates).toEqual({ canonical: null });
     expect(
@@ -128,8 +126,8 @@ describe("buildMetadata", () => {
 
 describe("stripSiteName", () => {
   // Guide articles store seoTitle as the whole browser-tab title, brand included, and
-  // buildMetadata appends the brand again. Every guide page read
-  // "Aerathiel TheNinja-RPG | TheNinja-RPG" until the edge was stripped first.
+  // buildMetadata appends the brand again, so the edge is stripped first; otherwise a guide
+  // page would read "Aerathiel TheNinja-RPG | TheNinja-RPG".
   it.each([
     ["Aerathiel TheNinja-RPG", "Aerathiel"],
     ["TheNinja-RPG Getting Started", "Getting Started"],
@@ -177,9 +175,8 @@ describe("isProfileIndexable", () => {
     expect(isProfileIndexable(active, now)).toBe(true);
   });
 
-  // The sitemap already declined to advertise these; the routes now answer noindex for
-  // the same set, so one that Google found before the floor existed does not stay
-  // indexed indefinitely on an old crawl.
+  // The sitemap does not advertise these, and the routes answer noindex for the same set,
+  // so one that Google found on an earlier crawl does not stay indexed indefinitely.
   it.each([
     ["below the level floor", { level: 13 }],
     ["inactive past the window", { updatedAt: new Date(now - 91 * 24 * 60 * 60 * 1000) }],

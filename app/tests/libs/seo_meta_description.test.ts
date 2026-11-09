@@ -2,9 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { metaDescription } from "@/libs/seo";
 
 /**
- * Stored content descriptions contain HTML. Stripping entities rather than decoding them
- * turned "Don&apos;t" into "Don t" in the search snippet, and numeric forms survived
- * verbatim.
+ * Stored content descriptions contain HTML. Named and numeric entities are decoded so the
+ * search snippet reads "Don't" rather than "Don t" or "Don&apos;t".
  */
 describe("metaDescription", () => {
   it("decodes named entities", () => {

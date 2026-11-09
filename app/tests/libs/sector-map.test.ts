@@ -135,8 +135,8 @@ describe("sector map normalization", () => {
   });
 
   it("rejects maps containing an exit with an invalid target sector", () => {
-    // The object-level error must reject the whole import - previously it was
-    // collected but dropped, silently importing the map without the exit
+    // The object-level error must reject the whole import rather than silently
+    // importing the map without the exit
     const result = normalizeTiledSectorMap({
       terrainRegistry: mergeTerrainSpecs([]),
       sector: 12,
@@ -954,7 +954,7 @@ describe("standard terrain palette", () => {
     // Plain ground already existed (1), and the rest of the palette is appended:
     // 11 more (built-in terrain variants + road + shore) -> 12 total.
     expect(count).toBe(12);
-    // Ocean water is now paintable in this dry sector
+    // Ocean water is paintable in this dry sector
     const water = tiles.find((tile) =>
       tile.properties?.some((p) => p.name === "zone" && p.value === "water"),
     );
@@ -997,8 +997,7 @@ describe("standard terrain palette", () => {
     ];
     ensureFullTerrainPalette(tiles, mergeTerrainSpecs([]));
     // The four seed tiles match palette entries and are deduped, so the total is
-    // the full palette (12), not 4 + a re-appended full palette (16). This is the
-    // guard against the battleBiome-mismatch that duplicated the whole palette.
+    // the full palette (12), not 4 + a re-appended full palette (16).
     expect(tiles.length).toBe(12);
     // and every resulting tile is a distinct terrain kind (no duplicates)
     expect(new Set(tiles.map(terrainSignature)).size).toBe(tiles.length);
