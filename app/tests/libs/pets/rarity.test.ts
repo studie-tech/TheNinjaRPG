@@ -38,6 +38,7 @@ describe("companion species rarity", () => {
   it("offers newly authored species, retires them without deleting identities and supports reactivation", () => {
     const authored = [
       {
+        ...initialPetSpecies[0]!,
         id: "new-fox",
         name: "Spirit fox",
         description: "A fox with translucent ears",
@@ -45,6 +46,7 @@ describe("companion species rarity", () => {
         isActive: true,
       },
       {
+        ...initialPetSpecies[0]!,
         id: "new-owl",
         name: "Moon owl",
         description: "An owl with silver plumage",

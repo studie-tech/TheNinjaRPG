@@ -4,6 +4,7 @@ import type { PetGender } from "@/drizzle/constants";
 import type { Jutsu, PetSpecies, UserData, UserPetInsert } from "@/drizzle/schema";
 import { selectPetBattleAbilities } from "@/libs/pets/abilities";
 import { PET_AURAS, PET_CHARACTERISTICS, PET_PALETTES } from "@/libs/pets/catalogue";
+import { getPetPotentialOdds, rollPetPotential } from "@/libs/pets/potential";
 import { randomInt } from "@/utils/math";
 import { petNameSchema } from "@/validators/pets";
 
@@ -41,6 +42,9 @@ export const createPetFromSpecies = ({
     id: nanoid(),
     userId: user.userId,
     speciesId: species.id,
+    potentialValue: rollPetPotential(species),
+    potentialChances: getPetPotentialOdds(species).map((tier) => tier.chance),
+    potentialRevealed: species.potentialMode !== "RANDOM",
     name: parsedName.success ? parsedName.data : "Companion",
     paletteIndex: appearance?.paletteIndex ?? randomInt(0, PET_PALETTES.length - 1),
     characteristicIndex:

@@ -28,6 +28,7 @@ import { PetAppearanceButton } from "@/layout/PetAppearanceButton";
 import { QueryError } from "@/layout/QueryError";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import type { PetAppearanceOption, PetSpeciesOption } from "@/libs/pets/catalogue";
+import { getPetPotentialOdds } from "@/libs/pets/potential";
 import {
   getPetPaymentOption,
   getPetRank,
@@ -337,7 +338,7 @@ export function PetAcquisition() {
         </div>
       )}
       {!acquiredPetId && unavailableReason && (
-        <p className="mb-4 text-muted-foreground text-sm" role="status">
+        <p className="text-muted-foreground mb-4 text-sm" role="status">
           {unavailableReason}
         </p>
       )}
@@ -359,13 +360,13 @@ export function PetAcquisition() {
               />
             ) : (
               <PawPrint
-                className="h-12 w-12 text-muted-foreground"
+                className="text-muted-foreground h-12 w-12"
                 aria-hidden="true"
               />
             )}
           </div>
           <div className="min-w-0 grow space-y-2">
-            <h3 className="break-words font-semibold">
+            <h3 className="font-semibold break-words">
               {pet.name} · {getPetRank(pet.rank).name}
             </h3>
             {!appearanceReady && (
@@ -502,11 +503,11 @@ export function PetAcquisition() {
                   <h3
                     ref={stageHeading}
                     tabIndex={-1}
-                    className="font-semibold text-lg"
+                    className="text-lg font-semibold"
                   >
                     {activeTrait?.title ?? "Name your companion"}
                   </h3>
-                  <span className="shrink-0 text-muted-foreground text-sm">
+                  <span className="text-muted-foreground shrink-0 text-sm">
                     Step {stage + 1} of {traitStages.length + 1}
                   </span>
                 </div>
@@ -538,7 +539,7 @@ export function PetAcquisition() {
                       className="max-w-md"
                     />
                     <fieldset className="pt-2" disabled={isBusy}>
-                      <legend className="mb-2 font-medium text-sm">Gender</legend>
+                      <legend className="mb-2 text-sm font-medium">Gender</legend>
                       <RadioGroup
                         aria-label="Companion gender"
                         value={gender ?? ""}
@@ -560,7 +561,7 @@ export function PetAcquisition() {
                           </div>
                         ))}
                       </RadioGroup>
-                      <p className="mt-2 text-muted-foreground text-sm">
+                      <p className="text-muted-foreground mt-2 text-sm">
                         Its artwork follows this choice, e.g. a male lion grows a mane.
                       </p>
                     </fieldset>
@@ -595,7 +596,7 @@ export function PetAcquisition() {
                             </Label>
                           </div>
                         </RadioGroup>
-                        <p className="mt-2 text-muted-foreground text-sm" role="status">
+                        <p className="text-muted-foreground mt-2 text-sm" role="status">
                           Balance: {paymentBalance.toLocaleString()} {paymentLabel}.
                           {!canAfford &&
                             " Choose another currency or earn more to adopt."}
@@ -608,7 +609,7 @@ export function PetAcquisition() {
                   <p
                     role="status"
                     aria-label="Selected traits"
-                    className="mt-3 text-muted-foreground text-sm"
+                    className="text-muted-foreground mt-3 text-sm"
                   >
                     {selectedTraits
                       .filter((trait) => trait !== undefined)
@@ -673,7 +674,7 @@ export function PetAcquisition() {
                   )}
                 </div>
               </form>
-              <details className="mt-4 text-muted-foreground text-sm">
+              <details className="text-muted-foreground mt-4 text-sm">
                 <summary className="cursor-pointer">About daily choices</summary>
                 <div className="mt-2 space-y-2">
                   <p>
@@ -743,7 +744,7 @@ function PetTraitChoices({
                 value={value}
                 checked={selected === value}
                 onChange={() => onSelect(value)}
-                className="mt-1 accent-primary"
+                className="accent-primary mt-1"
               />
               <span>
                 <span className="flex flex-wrap items-center gap-2">
@@ -752,9 +753,24 @@ function PetTraitChoices({
                     <Badge variant="outline">{option.rarity}</Badge>
                   )}
                 </span>
-                <span className="mt-1 block text-muted-foreground text-sm">
+                <span className="text-muted-foreground mt-1 block text-sm">
                   {option.description}
                 </span>
+                {"potentialMode" in option && (
+                  <span className="text-muted-foreground mt-1 block text-xs">
+                    {option.potentialMode === "RANDOM"
+                      ? "Random potential (revealed after adoption)"
+                      : "Fixed potential"}
+                    :{" "}
+                    {getPetPotentialOdds(option)
+                      .filter((tier) => tier.chance > 0)
+                      .map(
+                        (tier) =>
+                          `${tier.title} (${Number((tier.capMultiplier * 100).toFixed(2))}% stat caps, ${Number((tier.chance * 100).toFixed(2))}%)`,
+                      )
+                      .join(" · ")}
+                  </span>
+                )}
               </span>
             </label>
           );

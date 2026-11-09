@@ -21,6 +21,7 @@ import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import {
   BasicElementName,
+  CombatStatNames,
   ELEMENTAL_MASTERY_BOOST,
   ELEMENTAL_MASTERY_CAP,
   IMG_TRAIN_BUKI_OFF,
@@ -55,6 +56,8 @@ interface StatDistributionProps {
   id?: string;
   userData: NonNullable<UserWithRelations>;
   availableStats: number;
+  /** Absolute per-stat cap overrides; omitted stats retain their rank-based caps. */
+  statCaps?: Parameters<typeof createStatSchema>[3];
   /** Returning false preserves the draft after an expected server rejection. */
   onAccept: (
     data: AssignableUserStats,
@@ -84,6 +87,7 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
     isRedistribution,
     userData,
     availableStats,
+    statCaps,
     onAccept,
     showWrapper = true,
     title = "Distribute Stats",
@@ -152,7 +156,7 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
         <div className="mb-2 flex justify-end">{navTabs}</div>
       )}
       {includeMasteries && (
-        <p className="mb-3 text-muted-foreground text-sm">
+        <p className="text-muted-foreground mb-3 text-sm">
           Masteries and elements use unused XP without granting level XP. Elements have
           their own {ELEMENTAL_MASTERY_CAP.toLocaleString()} cap and unlock a{" "}
           {ELEMENTAL_MASTERY_BOOST}% damage boost at full mastery. Select one mastered
@@ -163,6 +167,7 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
         <SimpleDistribution
           includeMasteries={includeMasteries}
           userData={userData}
+          statCaps={statCaps}
           availableStats={availableStats}
           onAccept={handleAcceptWithTutorial}
           isPending={isPending}
@@ -171,6 +176,7 @@ const DistributeStatsForm: React.FC<StatDistributionProps> = (props) => {
       ) : (
         <AdvancedDistribution
           userData={userData}
+          statCaps={statCaps}
           availableStats={availableStats}
           onAccept={handleAcceptWithTutorial}
           includeMasteries={includeMasteries}
@@ -208,6 +214,8 @@ interface SimpleDistributionProps {
   includeMasteries?: boolean;
   userData: NonNullable<UserWithRelations>;
   availableStats: number;
+  /** Absolute per-stat cap overrides; omitted stats retain their rank-based caps. */
+  statCaps?: Parameters<typeof createStatSchema>[3];
   onAccept: StatDistributionProps["onAccept"];
   isPending: boolean;
   pendingLabel?: string;
@@ -219,6 +227,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
     includeMasteries = false,
     userData,
     availableStats,
+    statCaps,
     onAccept,
     isPending,
     pendingLabel = "Assigning",
@@ -232,7 +241,10 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
   }, [isPending]);
 
   // Caps as the room left above each stat, which the preset split fills
-  const { schema: statSchema, maxValues } = createAssignedExperienceSchema(userData);
+  const { schema: statSchema, maxValues } = createAssignedExperienceSchema(
+    userData,
+    statCaps,
+  );
   const defaultValues = statSchema.parse({});
 
   // Combat presets split points across four stats; mastery presets target one discipline.
@@ -380,10 +392,10 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
                   className="w-full rounded-lg"
                   priority={true}
                 />
-                <p className="mt-2 text-center font-bold text-sm">{option.name}</p>
+                <p className="mt-2 text-center text-sm font-bold">{option.name}</p>
                 {isAssigning ? (
                   <p
-                    className="mt-1 inline-flex items-center text-center font-semibold text-xs"
+                    className="mt-1 inline-flex items-center text-center text-xs font-semibold"
                     role="status"
                     aria-live="polite"
                   >
@@ -394,12 +406,12 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
                     {pendingLabel}
                   </p>
                 ) : (
-                  <p className="mt-1 text-center text-muted-foreground text-xs">
+                  <p className="text-muted-foreground mt-1 text-center text-xs">
                     {option.description}
                   </p>
                 )}
                 {isDisabled && (
-                  <p className="mt-1 text-center font-semibold text-red-500 text-xs">
+                  <p className="mt-1 text-center text-xs font-semibold text-red-500">
                     {isInArray(option.id, BasicElementName)
                       ? !canAttemptAwakeAction(userData)
                         ? "Must be awake"
@@ -444,7 +456,7 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
           </Confirm>
         );
       })}
-      <p className="col-span-2 mt-2 text-center text-muted-foreground text-xs sm:col-span-4">
+      <p className="text-muted-foreground col-span-2 mt-2 text-center text-xs sm:col-span-4">
         {includeMasteries
           ? "Use Advanced to split points across multiple stats, masteries and elements."
           : "Use Advanced to choose how many points go into each stat."}
@@ -456,6 +468,8 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
 interface AdvancedDistributionProps {
   userData: NonNullable<UserWithRelations>;
   availableStats: number;
+  /** Absolute per-stat cap overrides; omitted stats retain their rank-based caps. */
+  statCaps?: Parameters<typeof createStatSchema>[3];
   onAccept: StatDistributionProps["onAccept"];
   includeMasteries?: boolean;
   forceUseAll?: boolean;
@@ -472,6 +486,7 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
     isRedistribution,
     userData,
     availableStats,
+    statCaps,
     onAccept,
     isPending = false,
     pendingLabel = "Assigning",
@@ -485,13 +500,14 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
 
   // Stats Schema: redistribution works in absolute rank caps, assignment in remaining room.
   // Only a copy is capped, so the cached user keeps its stored values.
-  const cappedUser = withCappedStats(userData);
+  const cappedUser = statCaps ? userData : withCappedStats(userData);
   const { schema: statSchema, maxValues: caps } = includeMasteries
-    ? createAssignedExperienceSchema(userData)
+    ? createAssignedExperienceSchema(userData, statCaps)
     : createStatSchema(
         isRedistribution ? 10 : 0,
         isRedistribution ? 10 : 0,
         isRedistribution ? { rank: userData.rank } : cappedUser,
+        statCaps,
       );
   const defaultValues: Partial<
     z.output<ReturnType<typeof createAssignedExperienceSchema>["schema"]>
@@ -650,7 +666,10 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
                       ? providedElements(userData).includes(stat)
                         ? "Provided by innate elements or bloodline"
                         : "Fully mastered"
-                      : `- Max for ${capitalizeFirstLetter(userData.rank)}`}
+                      : isInArray(stat, CombatStatNames) &&
+                          statCaps?.[stat] !== undefined
+                        ? "- Max reached"
+                        : `- Max for ${capitalizeFirstLetter(userData.rank)}`}
                   </div>
                 </FormControl>
                 <FormMessage />

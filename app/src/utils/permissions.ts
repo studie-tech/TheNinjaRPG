@@ -264,6 +264,10 @@ export const canUnstuckVillage = (role: UserRole) => {
   return isStaffRole(role);
 };
 
+/** Content leadership can set an individual companion's permanent potential. */
+export const canEditPetPotential = (role: UserRole) =>
+  ["HEAD_CONTENT", "CONTENT-ADMIN", "CODING-ADMIN", "OWNER"].includes(role);
+
 /** Staff can restore image attempts when a companion generation needs support. */
 export const canResetPetImageGeneration = (role: UserRole) => isStaffRole(role);
 

@@ -1,5 +1,7 @@
 /** Pure progression and readiness rules shared by pet presentation and server guards. */
 import {
+  CombatStatNames,
+  getCombatStatCap,
   getUserCaps,
   PET_FED_COLLECTION_SLOTS,
   PET_GENERATION_LEASE_MS,
@@ -9,6 +11,7 @@ import {
   type UserRank,
 } from "@/drizzle/constants";
 import type { UserData, UserPet } from "@/drizzle/schema";
+import { getPetPotentialMultiplier } from "@/libs/pets/potential";
 import { calcLevelRequirements } from "@/libs/profile";
 import { hasRequiredRank } from "@/libs/rank";
 import { getUserFederalStatus } from "@/utils/paypal";
@@ -113,9 +116,22 @@ export const getPetLevel = (pet: Pick<UserPet, "rank" | "experience">) => {
   return level;
 };
 
-/** Reuse the stat caps of the character rank associated with this pet evolution. */
-export const getPetStatCaps = (pet: Pick<UserPet, "rank">) =>
-  getUserCaps(getPetRank(pet.rank).minUserRank);
+/** Preserve evolution rank limits and stat proportions while bounding potential's training advantage. */
+export const getPetStatCaps = (
+  pet: Pick<UserPet, "rank"> & {
+    potentialValue?: number | null;
+    potentialRevealed?: boolean;
+  },
+) => {
+  const caps = getUserCaps(getPetRank(pet.rank).minUserRank);
+  const multiplier = getPetPotentialMultiplier(pet);
+  return Object.fromEntries(
+    CombatStatNames.map((stat) => [
+      stat,
+      Math.floor(getCombatStatCap(caps, stat) * multiplier),
+    ]),
+  ) as Record<(typeof CombatStatNames)[number], number>;
+};
 
 /** Return the first progression prerequisite to show the owner, or null when met. */
 export const petRankUpBlockMessage = (

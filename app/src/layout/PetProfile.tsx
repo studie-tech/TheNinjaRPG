@@ -33,7 +33,6 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CombatStatNames,
-  getCombatStatCap,
   MAP_WAKE_ISLAND_SECTOR,
   PET_BATTLE_CONFIG,
   PET_FEED_COOLDOWN_HOURS,
@@ -62,6 +61,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { PetAppearanceButton } from "@/layout/PetAppearanceButton";
+import { PetPotential } from "@/layout/PetPotential";
 import { PetTasks } from "@/layout/PetTasks";
 import { QueryError } from "@/layout/QueryError";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
@@ -73,6 +73,7 @@ import {
 } from "@/libs/pets/abilities";
 import { PET_AURAS, PET_CHARACTERISTICS, PET_PALETTES } from "@/libs/pets/catalogue";
 import { isPetGenderEditable, PET_GENDER_EDIT_UNTIL_LABEL } from "@/libs/pets/gender";
+import { getPetPotentialTier } from "@/libs/pets/potential";
 import {
   canUsePet,
   getPetLevel,
@@ -517,7 +518,10 @@ export function PetProfile() {
                 <SelectContent>
                   {data.pets.map((entry) => (
                     <SelectItem key={entry.id} value={entry.id}>
-                      {entry.name}
+                      {entry.name} ·{" "}
+                      {entry.potentialValue === null
+                        ? "Unrevealed potential"
+                        : getPetPotentialTier(entry.potentialValue).title}
                       {entry.id === data.activePetId ? " · Active" : ""}
                     </SelectItem>
                   ))}
@@ -546,7 +550,7 @@ export function PetProfile() {
           <p className="mt-2 text-muted-foreground text-sm">{travelReason}</p>
         )}
         <details
-          className="mt-3 text-muted-foreground text-sm"
+          className="text-muted-foreground mt-3 text-sm"
           open={data.pets.length > data.slots}
         >
           <summary className="cursor-pointer">
@@ -651,7 +655,7 @@ export function PetProfile() {
         )}
         <ContentBox title="Pet" subtitle="Find a companion on Wake Island" initialBreak>
           <div className="flex flex-col items-center gap-4 py-8 text-center">
-            <PawPrint className="h-16 w-16 text-muted-foreground" aria-hidden="true" />
+            <PawPrint className="text-muted-foreground h-16 w-16" aria-hidden="true" />
             <p className="max-w-lg">
               The {PET_SANCTUARY_NAME} helps you form a bond with a unique creature.
               Choose its species, colours, characteristic and aura, then raise it
@@ -750,7 +754,7 @@ export function PetProfile() {
         </p>
       )}
       {generationMessages[pet.id] && (
-        <p role="alert" className="text-red-600 text-sm">
+        <p role="alert" className="text-sm text-red-600">
           {generationMessages[pet.id]}
         </p>
       )}
@@ -842,7 +846,7 @@ export function PetProfile() {
         initialBreak
       >
         <div className="flex items-start gap-4">
-          <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-lg border bg-muted/30 sm:h-36 sm:w-36">
+          <div className="bg-muted/30 flex h-24 w-24 shrink-0 items-center justify-center rounded-lg border sm:h-36 sm:w-36">
             {pet.avatar ? (
               <Image
                 src={pet.avatar}
@@ -853,7 +857,7 @@ export function PetProfile() {
               />
             ) : (
               <PawPrint
-                className="h-14 w-14 text-muted-foreground"
+                className="text-muted-foreground h-14 w-14"
                 aria-hidden="true"
               />
             )}
@@ -861,6 +865,11 @@ export function PetProfile() {
           <div className="min-w-0 grow space-y-2">
             <div className="flex flex-wrap gap-2">
               <Badge>{rank.name}</Badge>
+              <Badge variant="outline">
+                {pet.potentialValue === null
+                  ? "Unrevealed potential"
+                  : `${getPetPotentialTier(pet.potentialValue).title} · ${Number((getPetPotentialTier(pet.potentialValue).capMultiplier * 100).toFixed(2))}% caps`}
+              </Badge>
               <Badge variant="outline">
                 Level {level} / {rank.levelCap}
               </Badge>
@@ -908,9 +917,9 @@ export function PetProfile() {
               </dt>
               <dd className="font-semibold">
                 {formatStat(pet[stat])}
-                <span className="font-normal text-muted-foreground text-xs">
+                <span className="text-muted-foreground text-xs font-normal">
                   {" "}
-                  / {formatStat(getCombatStatCap(caps, stat))}
+                  / {formatStat(caps[stat])}
                 </span>
               </dd>
             </div>
@@ -961,7 +970,7 @@ export function PetProfile() {
             />
           </div>
         )}
-        <details className="mt-3 text-muted-foreground text-sm">
+        <details className="text-muted-foreground mt-3 text-sm">
           <summary className="cursor-pointer">
             How companion experience and battles work
           </summary>
@@ -976,7 +985,7 @@ export function PetProfile() {
           <p className="mt-2">Assigned experience: {formatStat(pet.experience)}.</p>
         </details>
         {!appearanceReady && (
-          <div className="mt-5 space-y-3 rounded border bg-muted/30 p-4">
+          <div className="bg-muted/30 mt-5 space-y-3 rounded border p-4">
             <p className="font-semibold">
               {!needsAppearanceSupport &&
               ((pet.generationStatus === "GENERATING" && !generationAbandoned) ||
@@ -1006,7 +1015,7 @@ export function PetProfile() {
           </div>
         )}
         {!rankAllowed && (
-          <p className="mt-4 rounded border bg-muted/30 p-3" role="status">
+          <p className="bg-muted/30 mt-4 rounded border p-3" role="status">
             {data.maxRank > 0
               ? `Your current shinobi rank supports companions up to ${getPetRank(data.maxRank).name}.`
               : "Your current shinobi rank does not support this companion rank."}{" "}
@@ -1022,7 +1031,7 @@ export function PetProfile() {
         )}
 
         {isAway && (
-          <p className="mt-3 rounded border bg-muted/30 p-3 text-sm" role="status">
+          <p className="bg-muted/30 mt-3 rounded border p-3 text-sm" role="status">
             {pet.name} is away on a task.{" "}
             <button
               type="button"
@@ -1051,7 +1060,7 @@ export function PetProfile() {
         >
           <TabsTrigger
             value="care"
-            className="min-h-9 whitespace-normal px-1 text-xs leading-tight sm:text-sm"
+            className="min-h-9 px-1 text-xs leading-tight whitespace-normal sm:text-sm"
           >
             Care
           </TabsTrigger>
@@ -1171,7 +1180,7 @@ export function PetProfile() {
                   </p>
                 </Confirm>
                 {!data.canFeed && (
-                  <p className="w-full text-muted-foreground text-sm">
+                  <p className="text-muted-foreground w-full text-sm">
                     {isAway
                       ? "Collect this companion's return in Tasks before feeding it."
                       : "Finish this companion's appearance, meet its shinobi rank requirement and return to the awake state to feed it."}
@@ -1182,10 +1191,12 @@ export function PetProfile() {
           </ContentBox>
         </TabsContent>
         <TabsContent value="training" forceMount hidden={activity !== "training"}>
+          <PetPotential pet={pet} pets={data.pets} disabled={settingsDisabled} />
           <div>
             <DistributeStatsForm
               key={`${pet.id}:${pet.rank}`}
               userData={statsUser}
+              statCaps={caps}
               availableStats={Math.floor(data.unusedExperience)}
               onAccept={assignExperience}
               includeMasteries={false}
@@ -1267,7 +1278,7 @@ export function PetProfile() {
                       >
                         <td className="p-2">{entry.rank}</td>
                         <td className="p-2">{entry.name}</td>
-                        <td className="whitespace-nowrap p-2">{entry.minUserRank}</td>
+                        <td className="p-2 whitespace-nowrap">{entry.minUserRank}</td>
                         <td className="p-2">{formatStat(entry.experienceRequired)}</td>
                         <td className="p-2">{entry.levelCap}</td>
                       </tr>
@@ -1304,15 +1315,15 @@ export function PetProfile() {
                 selection to remove them.
               </p>
             )}
-            <div className="rounded border bg-muted/30 p-3">
-              <p className="font-semibold text-sm">Selected loadout</p>
+            <div className="bg-muted/30 rounded border p-3">
+              <p className="text-sm font-semibold">Selected loadout</p>
               <p className="mt-1 text-sm">
                 {selectedAbilityChoices.length
                   ? selectedAbilityChoices.map((choice) => choice.item.name).join(" · ")
                   : "No abilities selected."}
               </p>
               {abilityError && (
-                <p role="alert" className="mt-3 text-red-600 text-sm">
+                <p role="alert" className="mt-3 text-sm text-red-600">
                   {abilityError}
                 </p>
               )}
@@ -1398,18 +1409,18 @@ export function PetProfile() {
                       />
                       <Label htmlFor={id} className="grow leading-snug">
                         {choice.item.name}{" "}
-                        <span className="mt-1 block font-normal text-muted-foreground text-xs">
+                        <span className="text-muted-foreground mt-1 block text-xs font-normal">
                           {choice.label} · {choice.cost} power
                         </span>
                       </Label>
                     </div>
                     <details className="mt-1 ml-7 text-xs">
-                      <summary className="cursor-pointer text-muted-foreground">
+                      <summary className="text-muted-foreground cursor-pointer">
                         Effects and requirements
                       </summary>
                       <div className="mt-2">
                         {!selected && blocked && (
-                          <p className="mb-2 text-muted-foreground">{blocked}</p>
+                          <p className="text-muted-foreground mb-2">{blocked}</p>
                         )}
                         <ItemWithEffects item={choice.item} hideDates />
                       </div>
@@ -1428,7 +1439,7 @@ export function PetProfile() {
               )}
             </fieldset>
             {data.abilityCapacity && (
-              <p className="mt-3 text-muted-foreground text-sm">
+              <p className="text-muted-foreground mt-3 text-sm">
                 {pet.species ? capitalizeFirstLetter(pet.species.rarity) : "These"}{" "}
                 companions have {data.abilityCapacity.maxSlots} slots from adoption.
                 Evolving increases the power budget.
@@ -1488,7 +1499,7 @@ export function PetProfile() {
             </div>
             <p
               id="pet-battle-availability"
-              className="mt-3 text-muted-foreground text-sm"
+              className="text-muted-foreground mt-3 text-sm"
             >
               {PET_BATTLE_CONFIG.enabled
                 ? "Companions join mission, event, story, Battle Pyramid and dungeon quest battles only. They do not participate in PvP, arena or automatically resolved challenges."
@@ -1508,7 +1519,7 @@ export function PetProfile() {
                 onSave: (profile) => updateAi.mutate({ ...profile, petId: pet.id }),
               }}
             />
-            <p className="mt-3 text-muted-foreground text-sm">
+            <p className="text-muted-foreground mt-3 text-sm">
               Pet rules control battle actions, including compatible equipped jutsu.
             </p>
           </div>

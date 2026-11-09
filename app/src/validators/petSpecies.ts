@@ -3,7 +3,9 @@ import {
   BasicElementName,
   PET_ABILITY_SLOTS_BY_RARITY,
   PET_MAX_ABILITY_SLOTS,
+  PET_POTENTIAL_TIERS,
   PET_RANKS,
+  PetPotentialModes,
   PetRarities,
   PetRoles,
   PetSkillTargets,
@@ -55,6 +57,14 @@ export const PetSpeciesValidator = z
         return kept;
       })
       .default([]),
+    potentialMode: z.enum(PetPotentialModes).default("FIXED"),
+    potentialValue: z.coerce.number().int().min(1).max(5).default(1),
+    potentialMin: z.coerce.number().int().min(1).max(5).default(1),
+    potentialMax: z.coerce.number().int().min(1).max(5).default(5),
+    potentialWeights: z
+      .array(z.coerce.number().min(0).max(1_000_000))
+      .length(5)
+      .default(PET_POTENTIAL_TIERS.map((tier) => tier.weight)),
     rarity: z.enum(PetRarities),
     role: z.enum(PetRoles).default("ASSAULT"),
     preferredDamageElement: z.enum(BasicElementName).nullable().default(null),
@@ -85,6 +95,22 @@ export const PetSpeciesValidator = z
       .default([]),
   })
   .superRefine((species, ctx) => {
+    if (
+      species.potentialMode === "RANDOM" &&
+      (species.potentialMin > species.potentialMax ||
+        !species.potentialWeights.some(
+          (weight, index) =>
+            weight > 0 &&
+            index + 1 >= species.potentialMin &&
+            index + 1 <= species.potentialMax,
+        ))
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["potentialMin"],
+        message:
+          "Choose an ordered potential range with at least one positive roll weight.",
+      });
     if (new Set(species.defaultJutsuIds).size !== species.defaultJutsuIds.length) {
       ctx.addIssue({
         code: "custom",

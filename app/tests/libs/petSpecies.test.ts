@@ -31,6 +31,11 @@ describe("authored companion species contracts", () => {
   it("defaults optional behavior without changing the author's species identity", () => {
     expect(PetSpeciesValidator.parse(species)).toEqual({
       ...species,
+      potentialMode: "FIXED",
+      potentialValue: 1,
+      potentialMin: 1,
+      potentialMax: 5,
+      potentialWeights: [70, 50, 20, 10, 2],
       artDirection: null,
       rankConcepts: [],
       preferredDamageElement: null,
@@ -66,7 +71,15 @@ describe("authored companion species contracts", () => {
         artDirection: "   ",
         rankConcepts: ["", " "],
       }),
-    ).toMatchObject({ artDirection: null, rankConcepts: [] });
+    ).toMatchObject({
+      potentialMode: "FIXED",
+      potentialValue: 1,
+      potentialMin: 1,
+      potentialMax: 5,
+      potentialWeights: [70, 50, 20, 10, 2],
+      artDirection: null,
+      rankConcepts: [],
+    });
     expect(
       PetSpeciesValidator.parse({
         ...species,
