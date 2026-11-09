@@ -134,7 +134,6 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
     }
   }, [userData, activeElement, props.questType, quests, currentStep, setActiveElement]);
 
-  // Filter for story quests only
   const availableQuests = quests ?? [];
 
   // Unfinished runs listed below that block the quest the user tried to start

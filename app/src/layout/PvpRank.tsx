@@ -56,7 +56,6 @@ interface RankedLoadoutSaveSnapshot {
 export const RankedLoadoutSelector: React.FC = () => {
   const limitsQuery = api.misc.getJutsuEquipLimits.useQuery();
   const caps = buildJutsuEquipCaps(limitsQuery.data ?? [], "ranked");
-  // Router for forwarding
   const utils = api.useUtils();
 
   // Two-level filtering for jutsu
@@ -175,8 +174,6 @@ export const RankedLoadoutSelector: React.FC = () => {
       saveFlight.release();
     }
   }, [rankedLoadout?.id, userData?.userId]);
-
-  // Get all jutsu and user jutsu data
 
   // Auto-paginate when the jutsu tab is active
   useEffect(() => {
