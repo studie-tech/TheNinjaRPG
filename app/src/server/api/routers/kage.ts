@@ -193,7 +193,6 @@ export const kageRouter = createTRPCRouter({
       // Guards
       if (!user) return errorResponse("User not found");
 
-      // Fetch village data for logging
       if (user.anbuId) return errorResponse("Cannot be kage while in ANBU");
       if (user.village?.type !== "VILLAGE") return errorResponse("Only for villages");
       if (!canTakeKage(user.role)) return errorResponse("Not staff");

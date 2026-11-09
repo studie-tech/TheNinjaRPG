@@ -557,11 +557,9 @@ export const jutsuRouter = createTRPCRouter({
     .input(idSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      // fetchUpdatedUser (not fetchUser) so the full relations canUseJutsu reads
-      // (bloodline/village/elements) are present for validation, mirroring
-      // toggleEquip. Note this makes the mutation no longer read-only on the user
-      // row: fetchUpdatedUser may persist the usual throttled regen/quest
-      // maintenance (never money/XP/loadout state).
+      // fetchUpdatedUser loads the relations canUseJutsu reads (bloodline/village/
+      // elements), as in toggleEquip. It may persist the usual throttled regen/quest
+      // maintenance on the user row, never money/XP/loadout state.
       const [caps, loadouts, data, userjutsus] = await Promise.all([
         fetchJutsuEquipCaps(ctx.drizzle),
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
@@ -2328,7 +2326,7 @@ export const jutsuRouter = createTRPCRouter({
         input,
       );
 
-      // Map back to the previous shape used by the frontend consumer
+      // Nest the joined jutsu, bloodline and user columns as the reskin list expects
       const results = rows
         .filter(
           (row) =>
@@ -2611,7 +2609,7 @@ export const fetchUserJutsus = async (
 };
 
 /**
- * Build the DB filtering array, including new EXCLUSIONS.
+ * Build the include and exclude filter conditions for jutsu queries.
  */
 export const jutsuDatabaseFilter = (
   input?: JutsuFilteringSchema,
@@ -2620,7 +2618,7 @@ export const jutsuDatabaseFilter = (
 ) => {
   return [
     // -----------------------------
-    // Existing "include" conditions
+    // Include conditions
     // -----------------------------
     ...(input?.name
       ? [
@@ -2913,6 +2911,8 @@ export const rollbackEquipIfOverCap = async (args: {
   return rollback.rowsAffected === 0;
 };
 
+export type TryEquipUserJutsuResult = "equipped" | "already-equipped" | "cap-reached";
+
 /**
  * Equip a single userJutsu row under live equip-cap guards.
  *
@@ -2923,8 +2923,6 @@ export const rollbackEquipIfOverCap = async (args: {
  * back only when it sits outside the first-N kept slots for an exceeded cap
  * (so one concurrent racer keeps the slot).
  */
-export type TryEquipUserJutsuResult = "equipped" | "already-equipped" | "cap-reached";
-
 export const tryEquipUserJutsuAtomically = async (args: {
   client: DrizzleClient;
   userId: string;

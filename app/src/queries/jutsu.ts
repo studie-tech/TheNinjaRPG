@@ -65,7 +65,7 @@ export const fetchJutsuLoadouts = async (client: DrizzleClient, userId: string) 
 };
 
 /**
- * Fetch a jutsu by id (for reskin update)
+ * Fetch a jutsu by id
  * @param client - The database client
  * @param id - The ID of the jutsu to fetch
  * @returns A promise that resolves to the result of the select
@@ -1641,8 +1641,8 @@ const activeJutsuLoadoutLacksJutsu = (
 
 /**
  * Rollback predicate: unequip this row only when it sits outside the first N
- * kept slots for an exceeded cap. Concurrent racers that both passed under-cap
- * then both equip no longer both lose — earlier (updatedAt, id) keeps the slot.
+ * kept slots for an exceeded cap. When concurrent equips both pass the under-cap
+ * check, the earlier (updatedAt, id) keeps the slot.
  */
 const equipCapRollbackGuardSql = (
   userId: string,

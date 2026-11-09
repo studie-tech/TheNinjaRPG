@@ -106,7 +106,7 @@ export const mapTerrainRouter = createTRPCRouter({
         createdByUserId: entry.createdByUserId,
         ...input.data,
       });
-      // Mutation: update + audit log in parallel (no transaction on PlanetScale)
+      // Mutation: independent update and audit log writes, issued in parallel
       await Promise.all([
         updateMapTerrainForUpdate(ctx.drizzle, input, entry),
         insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
