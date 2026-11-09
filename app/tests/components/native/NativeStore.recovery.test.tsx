@@ -1,11 +1,17 @@
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as client from "@/app/_trpc/client";
 import NativeStore from "@/components/native/NativeStore";
 import { STORE_FEDERAL_PRODUCTS } from "@/drizzle/constants";
+import { env } from "@/env/client.mjs";
+import * as contentBox from "@/layout/ContentBox";
+import * as loader from "@/layout/Loader";
 import { purchases as nativePurchases } from "@/libs/native";
 import type { StorePackage } from "@/libs/native/purchases";
-import { createToastMock } from "../../setup/toastMock";
+import * as toast from "@/libs/toast";
+import * as userContext from "@/utils/UserContext";
+import { spyOnToasts } from "../../setup/toastMock";
 import { capacitorWindow, installCapacitor, removeCapacitor } from "../../setup/native";
 
 type AsyncMock = ReturnType<
@@ -82,8 +88,17 @@ const testUtils = (() => {
   });
 })();
 
-vi.mock("@/app/_trpc/client", () => ({
-  api: {
+const revenueCatKeys = {
+  NEXT_PUBLIC_REVENUECAT_IOS_KEY: "test-key",
+  NEXT_PUBLIC_REVENUECAT_ANDROID_KEY: "test-key",
+};
+const savedEnv = Object.fromEntries(
+  Object.keys(revenueCatKeys).map((key) => [key, Object.getOwnPropertyDescriptor(env, key)]),
+);
+
+/** Spies and env patches rather than module mocks, so later suites get the real modules back. */
+const stubModules = () => {
+  Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => testUtils(),
     purchases: {
       catalogue: {
@@ -105,32 +120,23 @@ vi.mock("@/app/_trpc/client", () => ({
         }),
       },
     },
-  },
-}));
+  });
+  vi.spyOn(userContext, "useUserData").mockImplementation((() => ({
+    ...user, prepareUserUpdate: mocks.prepareUserUpdate, updateUser: mocks.updateUser,
+  })) as never);
+  Object.assign(env, revenueCatKeys);
+  spyOnToasts();
+  vi.spyOn(toast, "showMutationToast").mockImplementation((value) => { mocks.toast(value); });
+  vi.spyOn(contentBox, "default").mockImplementation((({ children }: { children: ReactNode }) => <div>{children}</div>) as never);
+  vi.spyOn(loader, "default").mockImplementation((({ explanation }: { explanation: string }) => <span>{explanation}</span>) as never);
+};
 
-vi.mock("@/utils/UserContext", () => ({
-  useUserData: () => ({ ...user, prepareUserUpdate: mocks.prepareUserUpdate, updateUser: mocks.updateUser }),
-}));
-
-vi.mock("@/env/client.mjs", () => ({
-  env: {
-    NEXT_PUBLIC_REVENUECAT_IOS_KEY: "test-key",
-    NEXT_PUBLIC_REVENUECAT_ANDROID_KEY: "test-key",
-  },
-}));
-
-vi.mock("@/libs/toast", () => ({
-  ...createToastMock(),
-  showMutationToast: (value: unknown) => mocks.toast(value),
-}));
-
-vi.mock("@/layout/ContentBox", () => ({
-  default: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-}));
-
-vi.mock("@/layout/Loader", () => ({
-  default: ({ explanation }: { explanation: string }) => <span>{explanation}</span>,
-}));
+const restoreEnv = () => {
+  for (const [key, descriptor] of Object.entries(savedEnv)) {
+    if (descriptor) Object.defineProperty(env, key, descriptor);
+    else Reflect.deleteProperty(env, key);
+  }
+};
 
 const STORAGE_KEY = "tnr:unsettled-store-purchases";
 type TestCustomerInfo = {
@@ -180,6 +186,7 @@ beforeEach(() => {
     data: { userId: "player-1", reputationPoints: 10 },
   });
   for (const mock of Object.values(mocks)) mock.mockReset();
+  stubModules();
   mocks.configure.mockResolvedValue(undefined);
   mocks.logIn.mockResolvedValue(undefined);
   mocks.logOut.mockResolvedValue(undefined);
@@ -244,6 +251,7 @@ afterEach(() => {
   cleanup();
   removeCapacitor();
   vi.restoreAllMocks();
+  restoreEnv();
 });
 
 describe("NativeStore purchase recovery", () => {

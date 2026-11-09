@@ -1,21 +1,13 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import { afterEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as navigation from "next/navigation";
+import * as merchCollection from "@/components/merch/MerchCollection";
 import { MerchProductPage } from "@/components/merch/MerchProductPage";
+import * as merchProvider from "@/components/merch/MerchProvider";
+import * as image from "@/layout/Image";
+import * as link from "@/layout/Link";
 import { merchProductSchema } from "@/validators/merch";
-
-vi.mock("@/layout/Image", () => ({ default: () => null }));
-vi.mock("@/layout/Link", () => ({
-  default: (props: ComponentProps<"a">) => <a {...props} />,
-}));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
-vi.mock("@/components/merch/MerchCollection", () => ({ MerchProductCard: () => null }));
-vi.mock("@/components/merch/MerchProvider", () => ({
-  useMerch: () => ({
-    products: [product], loading: false, error: false, retry: vi.fn(),
-    preview: false, busy: false, message: "", add: vi.fn(),
-  }),
-}));
 
 const product = merchProductSchema.parse({
   id: "shirt", handle: "shirt", title: "Shirt", designKey: "test",
@@ -33,7 +25,22 @@ const product = merchProductSchema.parse({
   ],
 });
 
-afterEach(cleanup);
+// Spies rather than module mocks, so later suites get the real modules back.
+beforeEach(() => {
+  vi.spyOn(image, "default").mockImplementation(() => null);
+  vi.spyOn(link, "default").mockImplementation(((props: ComponentProps<"a">) => <a {...props} />) as never);
+  vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
+  vi.spyOn(merchCollection, "MerchProductCard").mockImplementation(() => null);
+  vi.spyOn(merchProvider, "useMerch").mockReturnValue({
+    products: [product], loading: false, error: false, retry: vi.fn(),
+    preview: false, busy: false, message: "", add: vi.fn(),
+  } as never);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe("merch colour changes", () => {
   it("explains an incompatible size reset and requires another size before purchase", () => {
