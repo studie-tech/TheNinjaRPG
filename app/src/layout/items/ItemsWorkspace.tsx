@@ -180,8 +180,8 @@ export function ItemsWorkspace({
     ? userItems
     : userItems.filter((ui) => !ui.item.hidden);
   const choosableBag = canChangeContent(userData.role)
-    ? bagItems
-    : bagItems.filter((ui) => !ui.item.hidden);
+    ? listItems
+    : listItems.filter((ui) => !ui.item.hidden);
 
   // Panels sit beside the figure when there is room, else in a bottom sheet above the
   // layout's own navigation.
@@ -290,6 +290,7 @@ export function ItemsWorkspace({
             openView({ kind: "item", userItemId, slot: view.slot })
           }
           onShowInBackpack={() => {
+            switchPlace("backpack");
             setPhoneTab("backpack");
             returnFocusRef.current = backpackRef.current;
             closeView();
@@ -347,7 +348,9 @@ export function ItemsWorkspace({
         className="flex-nowrap gap-1.5 rounded-none bg-transparent px-3 pt-3 pb-0 @min-[600px]:hidden"
       >
         <PhoneTab value="equipment">Equipment</PhoneTab>
-        <PhoneTab value="backpack">Backpack · {choosableBag.length}</PhoneTab>
+        <PhoneTab value="backpack">
+          {isHome ? "Home" : "Backpack"} · {choosableBag.length}
+        </PhoneTab>
       </TabsList>
       <div className="grid @min-[600px]:grid-cols-[314px_minmax(0,1fr)]">
         {/* Keep both panels mounted for the wide layout and durable opener refs. */}

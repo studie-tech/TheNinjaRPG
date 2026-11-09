@@ -163,6 +163,18 @@ it("lists stored stacks with their bucket capacity at home", () => {
   expect(screen.getByText("Home bags")).toBeDefined();
 });
 
+it("labels the compact inventory tab with the active storage and its count", () => {
+  renderWorkspace({ place: "home", carried: [pill] });
+  expect(screen.queryByRole("tab", { name: "Home · 2" })).not.toBeNull();
+});
+
+it("shows the backpack when leaving an equipment picker from home storage", () => {
+  const { onPlaceChange } = renderWorkspace({ place: "home" });
+  act(() => fireEvent.click(document.querySelector<HTMLButtonElement>('[data-slot="HAND_1"]')!));
+  act(() => fireEvent.click(screen.getByRole("button", { name: "Show Backpack" })));
+  expect(onPlaceChange).toHaveBeenCalledWith("backpack");
+});
+
 it("takes several selected stacks out of home storage at once", () => {
   renderWorkspace({ place: "home" });
   startSelecting();
