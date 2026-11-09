@@ -85,8 +85,10 @@ const found = (path: TerrainHex[] | undefined) => {
 /** Fixed seed: a failure has to be reproducible to be worth anything. */
 const randomiser =
   (seed: number): (() => number) =>
-  () =>
-    (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
 
 describe("PathCalculator.minStepCost", () => {
   it("is twice the tile cost on a combat grid", () => {

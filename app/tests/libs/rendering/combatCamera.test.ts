@@ -117,8 +117,10 @@ const setup = async (
   const world = game.stage.children[0] as Container;
   let now = 0;
   const tick = (count = 1) => {
-    for (let i = 0; i < count; i++)
-      update({ now: (now += 1000 / 60), delta: 1 / 60, reducedMotion: false });
+    for (let i = 0; i < count; i++) {
+      now += 1000 / 60;
+      update({ now, delta: 1 / 60, reducedMotion: false });
+    }
   };
   const event = (type: string, x: number, y: number) => {
     const pointer = new window.MouseEvent(type, { button: 0, clientX: x, clientY: y });
