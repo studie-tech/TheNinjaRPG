@@ -487,6 +487,8 @@ export type ExtraState = {
     actorId?: string;
     slot: number;
   };
+  /** UTC silo window captured at admission; settlement performs no eligibility fetch. */
+  resourceSiloWindowId?: string;
   hunting?: HuntingBattleState;
   /** Durable scheduled defense and tenure; settlement never needs another fetch. */
   kageMatch?: {

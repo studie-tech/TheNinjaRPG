@@ -134,6 +134,7 @@ const AWAKE_ACTIONS = new Set([
   "pvpRank.queueForRankedPvp",
   "raids.readyToQueue",
   "raids.joinRaidQueue",
+  "resourceSilos.claim",
   "sageMode.removeSageMode",
   "shrine.challengeShrine",
   "shrine.joinShrineBattle",
