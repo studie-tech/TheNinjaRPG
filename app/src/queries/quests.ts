@@ -1602,7 +1602,7 @@ export const updateUserDataForUpsertQuestEntry = (
       ),
     );
 
-/** Used by checkRewards when claimUserSnapshot fails after questHistory was marked completed. */
+/** Used by commitQuestObjectiveRewards when its account claim fails after questHistory was marked completed. */
 export const revertQuestCompletionAfterFailedClaim = async (
   client: DrizzleClient,
   userId: string,

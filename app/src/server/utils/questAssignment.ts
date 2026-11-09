@@ -773,11 +773,11 @@ export const upsertQuestEntries = async (
   }
   // Users to update for (including those we just inserted for)
   if (candidates.length > 0) {
-    // One statement over every eligible user held hundreds of QuestHistory row locks
-    // while ordinary quest traffic wrote the same table through its unique key, and the
-    // daily reset lost the resulting lock cycle. Bounded batches run sequentially so the
-    // reset never contends with itself either, and share one timestamp so a batch that
-    // has to be retried still stamps what the rest of the reset did.
+    // Bounded batches cap the QuestHistory row locks one statement holds while ordinary
+    // quest traffic writes the same table through its unique key, shrinking the lock
+    // cycles the reset can form with it. Batches run sequentially so the reset never
+    // contends with itself, and share one timestamp so a retried batch stamps the same
+    // time as the rest of the reset.
     const startedAt = new Date();
     // Bound as a parameter, never interpolated: `quest` here is the row argument, not the table.
     const questId = quest.id;

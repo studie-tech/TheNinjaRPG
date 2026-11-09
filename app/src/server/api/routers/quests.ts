@@ -502,7 +502,7 @@ export const questsRouter = createTRPCRouter({
         }),
         fetchSectorVillage(ctx.drizzle, input.userSector),
         // Random missions/crimes/errands/medical/pvp all resolve the candidate pool the same
-        // way (same widened LEFT JOIN + filters); the quest type is already carried by the
+        // way (same LEFT JOIN + filters); the quest type is already carried by the
         // `eq(quest.questType, input.type)` predicate, so no per-type query branch is needed.
         // Farming, bloodline and sage requirements are checked by isAvailableUserQuests
         // after the user refresh, so this query can run alongside it.
@@ -583,7 +583,7 @@ export const questsRouter = createTRPCRouter({
         user,
         result,
         "random_assignment",
-        // The widened LEFT JOIN already loaded this row; a null is the idempotent insert branch.
+        // The LEFT JOIN already loaded this row; a null is the idempotent insert branch.
         result.history,
         false,
         quota ? undefined : readiness,
@@ -1602,7 +1602,6 @@ export const questsRouter = createTRPCRouter({
         };
       }
 
-      // Handle immidiate consequences first
       const finalNotifications = [...toastMessages, ...claim.postNotifications];
       if (claim.rewardChoicePending) {
         finalNotifications.push(REWARD_CHOICE_READY_MESSAGE);
