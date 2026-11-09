@@ -45,6 +45,8 @@ const reportRow = (
   ...patch,
 });
 
+// Tests that wrap the cached test client in an empty Proxy give it a new identity, so
+// reportSearch's per-client capability caches (WeakMaps keyed by client) start empty.
 describeWithDatabase("moderation retrieval against Community MySQL", () => {
   beforeEach(async () => {
     await resetTables(userReportEmbedding, userReportComment, userReport);
