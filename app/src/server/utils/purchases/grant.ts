@@ -69,7 +69,7 @@ export interface StoreGrant {
   transactionId: string;
   productId: string;
   store: StorePlatform;
-  /** Sandbox purchases are recorded but never granted. */
+  /** Sandbox receipts grant only for `isSandboxGrantee` accounts. */
   isSandbox: boolean;
   /** Start of the billing period/store transaction, not webhook delivery time. */
   purchasedAt: Date;
@@ -273,8 +273,9 @@ const applyStorePurchase = async (
     );
     if (storedOriginalUserId !== originalUserId) return { status: "duplicate" };
 
-    // This also repairs receipts inserted under a retired id by an older deployment. A
-    // duplicate retry must not acknowledge that orphan while its grant remains pending.
+    // Reconcile the owner before answering: a stored receipt can sit under a retired id the
+    // alias/transfer graph no longer resolves to, and it is re-homed here. A duplicate retry
+    // must not acknowledge that receipt while its grant remains pending.
     const owner = await reconcileStorePurchaseOwner(client, storedReceipt.id);
     recipientUserId = owner.userId;
     const receipt = await findStorePurchaseForApplyStorePurchase2(
@@ -440,7 +441,7 @@ const applyStoreExtension = async (
     // Nothing live to extend. Whether that is worth a retry depends on why.
     //
     // If a retired receipt for this period exists, the subscription has already ended and
-    // no retry can change that -- the same reasoning as the deleted-owner case above.
+    // no retry can change that.
     // BILLING_ISSUE routinely lands after EXPIRATION, and the exact-match return only
     // covers it when the payload's transaction id matches a stored receipt; without this
     // an event carrying no transaction id, or one naming a period we never stored, is
@@ -557,15 +558,6 @@ const applyFederalRevocation = async (
   // deliver out of order, so an expiry can easily arrive after the player has resubscribed
   // — and retiring the receipt for the subscription they are currently paying for would
   // take the tier away from someone who just bought it back.
-  // How far back this expiry reaches.
-  //
-  // A subscription group allows one active federal subscription per store, so everything on
-  // that store at or before the expiring subscription's latest receipt has been superseded
-  // by it — an upgrade leaves the receipt it was upgraded from sitting there, and letting
-  // that keep vouching would hand the player a free lower tier for the rest of the window.
-  // Anything bought after it is a resubscribe, and survives.
-  //
-  // The event's own timestamp is the fallback for a payload that names no product.
   const possibleOwners = await transferChainUserIds(client, userId, store, isSandbox);
   const candidates =
     !exact && productId
@@ -592,6 +584,12 @@ const applyFederalRevocation = async (
       break;
     }
   }
+  // How far back this expiry reaches. A subscription group allows one active federal
+  // subscription per store, so everything on that store at or before the expiring
+  // subscription's latest receipt has been superseded by it — an upgrade leaves the receipt
+  // it was upgraded from sitting there, and letting that keep vouching would hand the player
+  // a free lower tier for the rest of the window. Anything bought after it is a resubscribe,
+  // and survives. The event's own timestamp is the fallback for a payload that names no product.
   const cutoff = spent?.purchasedAt ?? (productId ? beforeExpiry : occurredAt);
   const applicableTransactionId = transactionId ?? spent?.transactionId ?? null;
   const receiptId = exact?.id ?? spent?.id ?? null;

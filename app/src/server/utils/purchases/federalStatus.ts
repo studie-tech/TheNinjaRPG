@@ -42,9 +42,9 @@ import { DAY_S } from "@/utils/time";
 /**
  * Whether sandbox receipts count for this account.
  *
- * Set STORE_SANDBOX_USER_IDS to the demo account App Review is given before submitting;
- * Set it as a release step. Unset, sandbox purchases grant
- * nothing at all, which is the safe default for an ordinary deployment.
+ * Set STORE_SANDBOX_USER_IDS, as a release step, to the demo account App Review is given
+ * before submitting. Unset, sandbox purchases grant nothing at all, which is the safe
+ * default for an ordinary deployment.
  */
 export const isSandboxGrantee = (userId: string): boolean =>
   sandboxGranteeUserIds().includes(userId);
