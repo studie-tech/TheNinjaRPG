@@ -366,7 +366,6 @@ export const staffRouter = createTRPCRouter({
       if (!canUnequipAllUsers(user)) {
         return errorResponse("You do not have permission to unequip all jutsus");
       }
-      // Non-AI only — AI opponents keep their equipped loadouts for combat.
       // Non-AI only — AI opponents keep equipped jutsu for combat.
       // Prefer NOT IN (isAi = true): AI accounts are few, so the subquery stays small;
       // IN (isAi = false) would materialize essentially every human userId.

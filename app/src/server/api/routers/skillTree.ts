@@ -542,7 +542,8 @@ export const skillTreeRouter = createTRPCRouter({
       // Guard
       if (!user) return errorResponse("User not found");
 
-      // Determine if this reset should be free (GOLD supporters get first two per month free)
+      // Determine if this reset is free: always for staff, otherwise within the monthly
+      // SKILL_TREE_RESET_FREE allowance every federal status has
       const federalStatus = getUserFederalStatus(user);
       const {
         isFree: isFreeReset,

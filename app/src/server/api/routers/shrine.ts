@@ -1060,7 +1060,6 @@ export const shrineRouter = createTRPCRouter({
     }),
 
   // Initiate shrine battle (start the battle after lobby time)
-  // Fixed double-start race with atomic claim BEFORE initiateBattle()
   initiateShrineBattle: protectedProcedure
     .meta({ mcp: { description: "Start a shrine battle" } })
     .input(z.object({ shrineBattleId: z.string() }))
