@@ -25,7 +25,7 @@ export default function Science() {
     enabled: !!userData,
   });
 
-  // Heal finish time
+  // Guards
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!access) return <Loader explanation="Accessing Science Building" />;
 

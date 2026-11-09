@@ -27,7 +27,7 @@ export default function SupportPage() {
   // State
   const { data: userData } = useRequiredUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
-  // Support ticket filtering state (replacing legacy filters)
+  // Support ticket filtering state
   const filterState = useSupportTicketFiltering();
 
   // Determine if user is staff
