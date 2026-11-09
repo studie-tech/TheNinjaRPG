@@ -6,7 +6,7 @@ import { drawLemuVariant, getLemuImage, LEMU_EXPERIMENT, normalizeLemuVariant } 
 afterEach(() => vi.restoreAllMocks());
 
 describe("Lemu experiment", () => {
-  it("records the new experiment and uses the promoted baseline", () => {
+  it("records the current experiment id and uses IMG_URL_ASSISTANT as the control portrait", () => {
     expect(getLemuImage("control")).toBe(IMG_URL_ASSISTANT);
     expect(IMG_URL_ASSISTANT).toBe("https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIG7HmDxfOewksxBoS1HQCihpL7c42Ky9uUFv.webp");
     expect(getExperimentAssignments({ abLemuReplacementVariant: "control" })).toEqual([{experiment:"ab_lemu_replacement_3",variant:"control"}]);

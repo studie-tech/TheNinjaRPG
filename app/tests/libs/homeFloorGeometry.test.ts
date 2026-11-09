@@ -34,7 +34,7 @@ describe("measured floor placement", () => {
     { room: "room-3", x: 36, y: 37 },
     { room: "room-5", x: 63, y: 57 },
     { room: "room-5", x: 60, y: 51 },
-  ] as const)("uses formerly blocked Mansion floor at $x,$y in every facing", ({ room: roomId, x, y }) => {
+  ] as const)("accepts measured Mansion floor at $x,$y in every facing", ({ room: roomId, x, y }) => {
     const room = getHomeRooms("MANSION").find(({ id }) => id === roomId)!;
     const local = { x: (x * 3.7 - room.x) * 100 / room.width, y: (y * 3.7 - room.y) * 100 / room.height };
     for (const rotation of [0, 1, 2, 3] as const) {
@@ -64,7 +64,7 @@ describe("measured floor placement", () => {
           const point = { x: footprint.x + footprint.width * dx, y: footprint.y + footprint.height * dy };
           expect(room.interior.some((polygon) => isPointInHomePolygon(point, polygon))).toBe(true);
         }
-        // Clamping does not change the historical coordinate-to-world projection.
+        // The clamped placement projects to a finite world coordinate.
         const anchor = projectHomePlacement(placement);
         expect(Number.isFinite(room.x + anchor.x * room.width / 100)).toBe(true);
       }

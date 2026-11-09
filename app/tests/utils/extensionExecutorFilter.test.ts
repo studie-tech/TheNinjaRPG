@@ -3,7 +3,7 @@ import { isExtensionExecutorEvent, isExtensionExecutorStack } from "@/utils/erro
 
 describe("isExtensionExecutorStack", () => {
   it("matches the real THENINJARPG-2QF stack", () => {
-    // Verbatim frames from the Sentry event: 858 occurrences, 2 users, no app frame.
+    // Verbatim frames from the Sentry event; no frame belongs to the app.
     expect(
       isExtensionExecutorStack(["app:///executors/200.js", "app:///executors/200.js"]),
     ).toBe(true);

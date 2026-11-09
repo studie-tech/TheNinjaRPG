@@ -291,7 +291,7 @@ describe("game crossing wrapper", () => {
     expect(checked).toBe((MAP_TOTAL_SECTORS * 4 - MAP_WORLD_COLUMNS * 2) * W);
   }, 20_000);
 
-  it("keeps Shirohana and the former 1620 seam in the same orientation", () => {
+  it("keeps Shirohana (1631) and sector 1620 on aligned grid neighbours", () => {
     expect(getSectorNeighborIds(1631)).toEqual({
       north: 1559,
       east: 1632,
