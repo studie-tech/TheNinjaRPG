@@ -271,7 +271,12 @@ describeWithDatabase("dungeon admission receipts and queue ownership", () => {
     const noTransactions = withoutTransactions(info.client);
     await info.client
       .update(dungeonRun)
-      .set({ status: "LOBBY", battleId: null, expiresAt: new Date(Date.now() - 1) });
+      // A minute in the past, so a database clock a few ms behind the host still sees it expired.
+      .set({
+        status: "LOBBY",
+        battleId: null,
+        expiresAt: new Date(Date.now() - 60_000),
+      });
     await info.client
       .update(userData)
       .set({ status: "BATTLE", battleId: "other" })
