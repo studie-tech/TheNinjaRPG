@@ -95,9 +95,9 @@ export const createGlobeScene = async (options: {
     game.stage.addChild(
       surfaceLayer,
       grid.mesh,
+      outline.mesh,
       stems.mesh,
       markers.container,
-      outline.mesh,
     );
     grid.setPoints(
       map.tiles.flatMap((tile) =>
