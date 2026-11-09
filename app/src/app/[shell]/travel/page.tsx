@@ -240,8 +240,8 @@ function Travel() {
     enabled: !!userData,
   });
   // Sector.tsx observes this same key on a 10s refetchInterval, and the payload carries Dates,
-  // which defeat structural sharing — so the whole page re-rendered on every poll for the one
-  // string it reads. Selecting that string keeps the poll inside the sector scene.
+  // which defeat structural sharing, so reading the whole payload would re-render the page on
+  // every poll. Selecting the one string it reads keeps the poll inside the sector scene.
   const { data: sectorVillageName } = api.travel.getSectorData.useQuery(
     { sector: userData?.sector ?? -1 },
     {
@@ -944,8 +944,8 @@ function Travel() {
   const joinVillageBtn = userData.isOutlaw && canJoin && sectorVillage?.joinable;
   // Compare against the stable Global label rather than sectorLink: the sector
   // tab's label mutates from "Sector N" to "You (x, y)" once the scene reports
-  // the player position, so a string match against it goes stale and the
-  // subtitle silently fell back to the world name while on the sector view.
+  // the player position, so a string match against it would go stale and drop
+  // the subtitle back to the world name while on the sector view.
   const subtitle =
     hasCurrentSector && userData && !isGlobal
       ? `Sector ${currentSector} ${sectorVillageName ? `(${sectorVillageName})` : ""}`

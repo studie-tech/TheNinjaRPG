@@ -36,7 +36,7 @@ function InboxContent() {
     setSelectedConvo(linkedConversationId);
   }, [linkedConversationId]);
   // Opening a thread or going back swaps the whole view, unmounting the clicked control;
-  // as a transition that render no longer blocks the click's next paint.
+  // as a transition, that render does not block the click's next paint.
   const selectConvo: React.Dispatch<React.SetStateAction<string | null>> = (value) =>
     startTransition(() => setSelectedConvo(value));
   if (!userData) return <Loader explanation="Loading userdata" />;

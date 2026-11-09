@@ -79,7 +79,7 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const [rightSideBarOpen, setRightSideBarOpen] = useState(false);
   const rightSideBarRef = React.useRef<HTMLDivElement | null>(null);
   // Opening or closing a sheet mounts or unmounts its whole menu; as a
-  // transition that render no longer blocks the tap's next paint. Links
+  // transition, that render does not block the tap's next paint. Links
   // inside a sheet close it directly instead: a close sharing a transition
   // with the navigation it starts would keep the sheet up until the page loads.
   const onLeftSideBarOpenChange = (open: boolean) =>

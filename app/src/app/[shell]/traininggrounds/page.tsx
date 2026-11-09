@@ -1289,7 +1289,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   ]);
 
   // Selecting a jutsu restyles every tile of the grid and mounts or unmounts the confirm
-  // modal; as a transition that render no longer blocks the tap's next paint.
+  // modal; as a transition, that render does not block the tap's next paint.
   const setJutsuConfirmOpen: Dispatch<SetStateAction<boolean>> = (open) => {
     const next = typeof open === "function" ? open(isOpen) : open;
     startTransition(() => {
