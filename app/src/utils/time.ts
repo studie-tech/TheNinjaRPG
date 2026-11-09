@@ -4,6 +4,8 @@ import {
   BANK_INTEREST_CLAIM_DAYS,
   PET_FEED_COOLDOWN_HOURS,
   REGEN_SECONDS,
+  RESOURCE_SILO_DURATION_HOURS,
+  RESOURCE_SILO_INTERVAL_HOURS,
   SHRINE_BOOST_DURATION_HOURS,
   SHRINE_BOOST_SLOTS_PER_DAY,
   STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
@@ -471,3 +473,23 @@ export const getCollectDeadline = (
 /** Always advances a millisecond-precision snapshot, even within the same clock tick. */
 export const getNextUserSnapshotAt = (updatedAt: Date, now = new Date()) =>
   new Date(Math.max(now.getTime(), updatedAt.getTime() + 1));
+
+/** UTC weekend silo windows begin every three hours and stay open for one hour. */
+export const getResourceSiloWindow = (now = new Date()) => {
+  const start = new Date(now);
+  start.setUTCMinutes(0, 0, 0);
+  start.setUTCHours(
+    Math.floor(start.getUTCHours() / RESOURCE_SILO_INTERVAL_HOURS) *
+      RESOURCE_SILO_INTERVAL_HOURS,
+  );
+  const end = new Date(start.getTime() + RESOURCE_SILO_DURATION_HOURS * 3600000);
+  const isWeekend = [5, 6, 0].includes(start.getUTCDay());
+  const active = isWeekend && now < end;
+  const next = new Date(start);
+  if (!active) {
+    do {
+      next.setUTCHours(next.getUTCHours() + RESOURCE_SILO_INTERVAL_HOURS);
+    } while (![5, 6, 0].includes(next.getUTCDay()));
+  }
+  return { active, id: start.toISOString(), start, end, next };
+};

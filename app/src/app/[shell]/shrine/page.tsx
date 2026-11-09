@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   MAP_RESERVED_SECTORS,
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   VILLAGE_SYNDICATE_ID,
   VILLAGE_WAR_TYPES,
   WAR_SHRINE_IMAGE,
@@ -18,6 +19,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import RaidBrowser from "@/layout/RaidBrowser";
 import RamenShop from "@/layout/RamenShop";
+import { ResourceSilo } from "@/layout/ResourceSilo";
 import ShrineBattleLobby from "@/layout/ShrineBattleLobby";
 import StatusBar from "@/layout/StatusBar";
 import { WarFieldActions } from "@/layout/WarFieldActions";
@@ -192,6 +194,7 @@ export default function Shrine() {
   if (showExclusiveRaidFlow) {
     return (
       <div>
+        {userData.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR && <ResourceSilo />}
         {activeExclusiveRaid ? (
           // Raid is active - show raid browser
           <RaidBrowser
@@ -252,6 +255,7 @@ export default function Shrine() {
 
   return (
     <div className="space-y-8">
+      {userData.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR && <ResourceSilo />}
       {hasNoActiveWars && (
         <ContentBox
           title={`Lvl. ${sectorData.sectorData?.shrineLevel || 1} Shrine`}

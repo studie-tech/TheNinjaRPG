@@ -63,7 +63,7 @@ const playerCards = [
   "title",
   "towerDefense",
 ];
-const moderatorCards = ["recruitment", "review", "rewards"];
+const moderatorCards = ["recruitment", "resource_silos", "review", "rewards"];
 const contentCards = [
   "dungeon",
   "hunting",

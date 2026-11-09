@@ -100,6 +100,7 @@ export default function ManualMain() {
     // Staff suggest content changes here; content staff review them.
     { name: "review", img: IMG_MANUAL_REVIEW, visible: isStaff },
     { name: "rewards", img: IMG_MANUAL_REWARDS, visible: isStaff },
+    { name: "resource_silos", img: IMG_MANUAL_REWARDS, visible: isStaff },
   ];
 
   return (
@@ -127,7 +128,11 @@ export default function ManualMain() {
           entries={entries
             .filter((page) => page.visible ?? true)
             .sort((a, b) => a.name.localeCompare(b.name))
-            .map(({ name, img }) => ({ name, img, href: `/manual/${name}` }))}
+            .map(({ name, img }) => ({
+              name: name === "resource_silos" ? "Resource Silos" : name,
+              img,
+              href: `/manual/${name}`,
+            }))}
         />
       </ContentBox>
     </>

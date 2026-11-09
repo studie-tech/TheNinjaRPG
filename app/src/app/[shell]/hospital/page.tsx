@@ -18,6 +18,7 @@ import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import StatusBar from "@/layout/StatusBar";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { WarTornRevival } from "@/layout/WarTornRevival";
 import {
   calcHealCost,
   calcMedninHealablePool,
@@ -97,6 +98,7 @@ export default function Hospital() {
         className="w-full"
         priority={true}
       />
+      <WarTornRevival />
       {!isPending && isHospitalized && userData && healFinishAt && (
         <div className="p-3">
           <p>

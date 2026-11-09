@@ -62,6 +62,7 @@ export const BOTID_PROTECTED_PROCEDURES = [
   // Daily and once-per-period rewards
   "profile.claimVotes",
   "activityStreak.claimStreakDay",
+  "resourceSilos.claim",
   "bank.claimInterest",
   "raids.claimDamageReward",
   "quests.collectPetTask",

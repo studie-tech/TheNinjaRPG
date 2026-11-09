@@ -1,3 +1,4 @@
+import { resourceSiloProgressUpdate } from "@/queries/resourceSilos";
 /**
  * Database access for combat; authorization and transaction scopes stay in callers.
  */
@@ -42,6 +43,7 @@ import {
   KAGE_MIN_DAYS_IN_VILLAGE,
   KAGE_PRESTIGE_REQUIREMENT,
   MAP_WAKE_ISLAND_SECTOR,
+  MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   MasteryNames,
   PoolTypes,
   PRACTICE_BATTLE_TYPES,
@@ -2515,6 +2517,7 @@ export const updateUserDataForUpdateUser2 = (
   client
     .update(userData)
     .set({
+      ...resourceSiloProgressUpdate(curBattle, userId, result, settledAt),
       // Settlement invalidates delayed passive-regeneration snapshots.
       updatedAt: nextSnapshotSql(userData.updatedAt),
       curEnergy: combatEnergyRecoverySql(
@@ -2698,9 +2701,11 @@ const hospitalPlacement = (
   fighter: { allyVillage: boolean; sector: number; villageId: null | string },
 ) => ({
   status: "HOSPITALIZED" as const,
+  warTornRespawn: fighter.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   longitude: HOSPITAL_LONG,
   latitude: HOSPITAL_LAT,
-  sector: fighter.allyVillage
-    ? fighter.sector
-    : getVillage(battle, fighter.villageId)?.sector,
+  sector:
+    fighter.allyVillage && fighter.sector !== MAP_WAR_TORN_BATTLEGROUND_SECTOR
+      ? fighter.sector
+      : getVillage(battle, fighter.villageId)?.sector,
 });
