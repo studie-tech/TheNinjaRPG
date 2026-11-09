@@ -271,7 +271,8 @@ export default function CombatPage() {
     router,
   ]);
 
-  // Redirect to profile if not in battle
+  // Mirror the fetched battle into local state (keeping held results for the same
+  // battle) and advance tutorial steps on a settled outcome.
   useEffect(() => {
     if (data?.battle) {
       // Share Combat's exact query key so the request starts before its mount.
