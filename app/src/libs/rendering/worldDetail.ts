@@ -8,4 +8,6 @@ export const WORLD_DETAIL = {
   routeMotes: 12,
   routeMoteSpacing: 1.1,
   travelCharacters: 100,
+  travelCharactersMin: 12,
+  travelCharactersMax: 100,
 };

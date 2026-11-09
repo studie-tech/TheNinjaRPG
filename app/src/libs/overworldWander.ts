@@ -76,7 +76,12 @@ const structureTiles = (map: WanderMap) => {
 };
 
 /** An open tile on this map that is clear of its buildings. */
-const isOpenWanderTile = (map: WanderMap, x: number, y: number, wildOnly: boolean) =>
+export const isOpenWanderTile = (
+  map: WanderMap,
+  x: number,
+  y: number,
+  wildOnly: boolean,
+) =>
   isWanderTile(getSectorTile(map, { x, y }), wildOnly) &&
   !structureTiles(map).has(y * map.width + x);
 
@@ -89,9 +94,12 @@ export const wanderSpots = (
   anchor: WanderTile,
   radius: number,
   wildOnly: boolean,
+  villageOnly = false,
 ): WanderTile[] => {
   const open = (x: number, y: number) =>
-    isOpenWanderTile(map, x, y, wildOnly) || (x === anchor.x && y === anchor.y);
+    (isOpenWanderTile(map, x, y, wildOnly) &&
+      (!villageOnly || getSectorTile(map, { x, y })?.zone === "village")) ||
+    (x === anchor.x && y === anchor.y);
   const spots: WanderTile[] = [{ x: anchor.x, y: anchor.y }];
   if (radius < 1) return spots;
   for (let x = anchor.x - radius; x <= anchor.x + radius; x++)

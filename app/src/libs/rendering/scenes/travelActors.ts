@@ -51,12 +51,12 @@ import type {
   WorldSpriteDescription,
 } from "@/libs/rendering/sectorSprites";
 import { standingOffset } from "@/libs/rendering/terrainElevation";
+import { createTravelCharacterBudget } from "@/libs/rendering/travelCharacterBudget";
 import {
   boundsOverlap,
   isObjectChainVisible,
   type WorldBounds,
 } from "@/libs/rendering/visibility";
-import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { CharacterAnimation } from "@/libs/spriteAnimations";
@@ -92,6 +92,7 @@ export const createTravelActors = (
     layers?.ground?.attach(ripples.container);
     return ripples;
   };
+  const characterBudget = createTravelCharacterBudget();
   const records = new Map<string, ActorRecord>();
   const byRoot = new Map<Container, ActorRecord>();
   const appearanceParts = new Map<
@@ -239,7 +240,7 @@ export const createTravelActors = (
       .join("|");
     if (key !== selectionKey || !characterKeys) {
       selectionKey = key;
-      if (candidates.length > WORLD_DETAIL.travelCharacters)
+      if (candidates.length > characterBudget.limit)
         candidates.sort((a, b) => {
           const ownA = a.user.userId === snapshot.viewer?.userId;
           const ownB = b.user.userId === snapshot.viewer?.userId;
@@ -253,6 +254,7 @@ export const createTravelActors = (
             // Visible quest/hostile NPCs retain their controls within the same body budget;
             // ambient wildlife yields to every player.
             ambientRank(a.user) - ambientRank(b.user) ||
+            Number(!!a.user.isVillageDuty) - Number(!!b.user.isVillageDuty) ||
             Number(Boolean(b.user.isNpc)) - Number(Boolean(a.user.isNpc)) ||
             (orderB?.order ?? 0) - (orderA?.order ?? 0) ||
             (orderB?.initialTime ?? 0) - (orderA?.initialTime ?? 0) ||
@@ -260,7 +262,7 @@ export const createTravelActors = (
           );
         });
       characterKeys = new Set(
-        candidates.slice(0, WORLD_DETAIL.travelCharacters).map((entry) => entry.key),
+        candidates.slice(0, characterBudget.limit).map((entry) => entry.key),
       );
     }
     return { ...snapshot, users: visibleUsers, characterKeys };
@@ -420,6 +422,22 @@ export const createTravelActors = (
         root.addChild(fallback);
         record.fallback = fallback;
       }
+      if (recipe.user?.isVillageDuty) {
+        const label = new Text({
+          text: "Protector",
+          style: {
+            fontFamily: "sans-serif",
+            fontSize: 24,
+            fill: "#deedc2",
+            stroke: { color: "#17261b", width: 3 },
+          },
+        });
+        label.anchor.set(0.5, 0);
+        label.position.set(recipe.tile.width * 0.5, recipe.tile.height * 1.5);
+        label.scale.set(recipe.tile.height / 80, -recipe.tile.height / 80);
+        root.addChild(label);
+        layers?.overlay.attach(label);
+      }
       records.set(recipe.key, record);
       byRoot.set(root, record);
       if (recipe.counter) {
@@ -532,7 +550,7 @@ export const createTravelActors = (
               isHovered &&
               (alone || target.username === CREATOR_USERNAME) &&
               actions.attack
-            : isHovered && alone && actions[kind];
+            : isHovered && (alone || (kind === "info" && target.isVillageDuty)) && actions[kind];
         showControl(record, entry.sprite, !!shown);
       }
     }
@@ -719,6 +737,10 @@ export const createTravelActors = (
     frame: GameFrame,
     movements?: ReadonlyMap<string, TravelActorMovement>,
   ) => {
+    if (characterBudget.sample(frame.now) && sourceSnapshot) {
+      selectionKey = null;
+      sync(sourceSnapshot);
+    }
     const angle = frame.reducedMotion ? 0 : (frame.now * Math.PI) / 5000;
     const cycle = frame.reducedMotion ? 0 : (frame.now / 1000) % 2;
     const wobble = cycle < 1 ? Math.sin(cycle * Math.PI * 4) * (1 - cycle) * 2 : 0;
@@ -1151,7 +1173,7 @@ export const travelActorRecipes = (
         tile,
         parts: partsFor(appearanceUser, tile),
         orbit: (index / shown.length) * Math.PI * 2,
-        spread: shown.length > 1,
+        spread: !user.npcWander && shown.length > 1,
       });
     });
     // Fights on the creator's tile are trials: a pin there would cover their attack control,
@@ -1242,6 +1264,7 @@ export const isAloneOnTile = (
   users.filter(
     (candidate) =>
       !candidate.isNpc &&
+      !candidate.isVillageDuty &&
       candidate.status === "AWAKE" &&
       candidate.userId !== viewerId &&
       candidate.longitude === target.longitude &&
@@ -1254,14 +1277,15 @@ export const travelActionAvailability = (
   friendlyAttack: boolean,
   wars: TravelActorsSnapshot["wars"],
 ) => {
-  const other = target.userId !== viewer.userId && !target.isNpc;
+  const other =
+    target.userId !== viewer.userId && !target.isNpc && !target.isVillageDuty;
   return {
     attack: !!other && canShowMapAttack(viewer, target, friendlyAttack, wars),
     heal:
       !!other &&
       target.curHealth < target.maxHealth &&
       hasRequiredRank(viewer.rank, MEDNIN_MIN_RANK),
-    info: !!other && !target.isMasked,
+    info: (!!other || !!target.isVillageDuty) && !target.isMasked,
   };
 };
 
@@ -1384,6 +1408,7 @@ const canShowUser = (snapshot: TravelActorsSnapshot, user: SectorUser) =>
   (snapshot.showAmbient !== false || user.npcInteractionType !== "AMBIENT") &&
   (user.isNpc ||
     user.userId === snapshot.viewer?.userId ||
+    user.isVillageDuty ||
     passesBracketFilter(user, snapshot.minBracket));
 
 const part = (
@@ -1494,14 +1519,17 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
     // Character sprites are narrower than portraits, so their controls tuck in around the body.
     const at = user.spriteAppearance ? SPRITE_CONTROLS : PORTRAIT_CONTROLS;
     if (
-      user.username === CREATOR_USERNAME ||
-      !RANKS_RESTRICTED_FROM_PVP.includes(user.rank)
+      !user.isVillageDuty &&
+      (user.username === CREATOR_USERNAME ||
+        !RANKS_RESTRICTED_FROM_PVP.includes(user.rank))
     )
       parts.push(
         part(tile, "attack", IMG_SECTOR_ATTACK, 0.8, at.attack[0], at.attack[1]),
       );
     parts.push(
-      part(tile, "heal", IMG_ICON_HEAL, 0.7, at.heal[0], at.heal[1]),
+      ...(!user.isVillageDuty
+        ? [part(tile, "heal", IMG_ICON_HEAL, 0.7, at.heal[0], at.heal[1])]
+        : []),
       part(tile, "info", IMG_SECTOR_INFO, 0.7, at.info[0], at.info[1]),
     );
   }

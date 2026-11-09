@@ -65,6 +65,9 @@ export interface SectorUser {
   bodyIdle?: CharacterAnimation;
   /** Walking sheet played in place of `bodyIdle` while the user moves. */
   bodyMove?: CharacterAnimation;
+  /** A village-duty copy has its own map identity and cannot be attacked or healed as a player. */
+  isVillageDuty?: boolean;
+  villageDutyUserId?: string;
   userId: string;
   username: string;
   /** Viewer-specific anonymity from the authenticated sector snapshot. */
@@ -109,6 +112,7 @@ export interface SectorUser {
     anchor: { x: number; y: number };
     radius: number;
     wildOnly: boolean;
+    villageOnly?: boolean;
   };
   /** Drawn height relative to the default NPC height. */
   npcScale?: number;

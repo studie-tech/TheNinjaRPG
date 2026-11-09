@@ -117,10 +117,12 @@ export const canShowMapAttack = (
     status: UserStatus;
     isBanned?: boolean;
     username?: string;
+    isVillageDuty?: boolean;
   },
   allyAttack: boolean,
   wars: Parameters<typeof mapAttackRelation>[2],
 ) =>
+  !target.isVillageDuty &&
   target.status === "AWAKE" &&
   !target.isBanned &&
   (target.username === CREATOR_USERNAME

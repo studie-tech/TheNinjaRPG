@@ -864,7 +864,7 @@ export const createTravelScene = async (options: {
         const { cycle, into } = wanderClock(wander, clock);
         let walk = wanderWalks.get(actorKey);
         if (walk?.seed !== wander.seed || walk.cycle !== cycle) {
-          const key = `${wander.seed}:${wander.radius}:${wander.wildOnly}`;
+          const key = `${wander.seed}:${wander.radius}:${wander.wildOnly}:${wander.villageOnly ?? false}`;
           let spots = wanderSpotCache.get(key);
           if (!spots) {
             spots = wanderSpots(
@@ -872,6 +872,7 @@ export const createTravelScene = async (options: {
               wander.anchor,
               wander.radius,
               wander.wildOnly,
+              wander.villageOnly,
             );
             wanderSpotCache.set(key, spots);
           }

@@ -36,6 +36,7 @@ import {
 import { SECTOR_BATTLE_STALE_SECONDS } from "@/libs/travel";
 import { spriteUserRelations } from "@/queries/lpc";
 import { fetchSector } from "@/queries/village";
+import { listVillageDutyPatrols } from "@/queries/villageDuty";
 import { activeWarAllyWhere, activeWarMercenaryWhere } from "@/queries/war";
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -165,6 +166,7 @@ export const fetchSectorWindowData = (
         },
       },
     }),
+    listVillageDutyPatrols(client, sector),
   ]);
 
 /**

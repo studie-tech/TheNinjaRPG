@@ -191,6 +191,35 @@ describe("travel actor artwork loading", () => {
     },
   );
 
+  it("budgets crowded patrol artwork while retaining the viewer and live players", () => {
+    const { actors, snapshot } = fixture();
+    const patrols = Array.from({ length: 100 }, (_, i) =>
+      player(i, { userId: `duty:${i}`, isVillageDuty: true }),
+    );
+    actors.sync(
+      snapshot([
+        ...patrols,
+        player(1, { userId: "active" }),
+        player(2, { userId: "viewer" }),
+      ]),
+    );
+    const bodies = () =>
+      actors.container.children.filter((child) => child.label.startsWith("user:"));
+    expect(bodies()).toHaveLength(20);
+    expect(bodies().map((child) => child.label)).toEqual(
+      expect.arrayContaining(["user:viewer", "user:active"]),
+    );
+    for (let now = 0; now < 50_000; now += 1000 / 60)
+      actors.animate({ now, delta: 1 / 60, reducedMotion: false });
+    expect(bodies()).toHaveLength(40);
+    for (let now = 50_000; now < 80_000; now += 1000 / 30)
+      actors.animate({ now, delta: 1 / 30, reducedMotion: false });
+    expect(bodies()).toHaveLength(12);
+    expect(bodies().map((child) => child.label)).toEqual(
+      expect.arrayContaining(["user:viewer", "user:active"]),
+    );
+  });
+
   it("stands characters on raised terraces and walks them up and down the steps", () => {
     const { actors, grid, snapshot } = fixture();
     const raised = grid.getHex({ col: 0, row: 0 })!,

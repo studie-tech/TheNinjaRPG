@@ -1943,6 +1943,12 @@ export const VILLAGE_REDUCED_GAINS_FACTOR = 0.5;
 // Highest level a Horizon user can reach before joining one of the main villages.
 export const HORIZON_MAX_LEVEL = 10;
 export const VILLAGE_SYNDICATE_ID = "ryBk0qD4EgvPPyav2K4OC";
+/** Village duty uses player copies without increasing encounters per enrolled defender. */
+export const VILLAGE_DUTY_RANKS = ["CHUNIN", "JONIN", "ELITE JONIN", "ELDER"] as const;
+export const VILLAGE_DUTY_MIN_RANK = VILLAGE_DUTY_RANKS[0];
+export const VILLAGE_DUTY_PATROL_CHANCE = 10;
+export const VILLAGE_DUTY_VISIBLE_LIMIT = 100;
+export const VILLAGE_DUTY_WANDER_RADIUS = 5;
 /** Guardian AI behind village protector encounters and the last-resort shrine defence. */
 export const VILLAGE_PROTECTOR_AI_ID = "MJMzOE67Cx2YP3NX8SAbh";
 /** Ascending, incremental milestones; repeated categories add percentage points. */

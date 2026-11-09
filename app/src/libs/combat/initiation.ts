@@ -10,6 +10,10 @@ import type { GameSetting, RankedLoadout, VillageAlliance } from "@/drizzle/sche
 import type { BattleUserState, GroundEffect } from "@/libs/combat/types";
 import { inertUserItemColumns } from "@/libs/combat/util";
 import type { CoopEncounter } from "@/libs/coop";
+import {
+  anonymousSpriteAppearance,
+  resolveSpriteAppearance,
+} from "@/libs/lpc/appearance";
 import { getWarRelationship, isWarMercenary } from "@/libs/objectiveWar";
 import {
   calcActiveUserRegen,
@@ -22,6 +26,7 @@ import { projectPartyTracker, questPartyHelperAttemptId } from "@/libs/questPart
 import { getTimedRegenerationGain } from "@/libs/timedBuffs";
 import { regenerationBuffs } from "@/libs/titles";
 import { applyMasteryTrainingGains, settleQueuedTraining } from "@/libs/train";
+import { isOnVillageDuty, villageDutyActorId } from "@/libs/villageDuty";
 import type {
   fetchBattleEssentials,
   listUserDataForQueryBattleUsers,
@@ -431,3 +436,52 @@ export const buildQueuedTrainingLogs = (claimed: QueuedBattleTraining[]) =>
       trainingFinishedAt: completed.finishedAt,
     })),
   ]);
+
+/** Snapshot an enrolled character as an isolated AI template before any settlement or participant claims. */
+export const prepareVillageDutyDefender = (
+  participant: BattleParticipant,
+  villageId: string,
+): (BattleParticipant & Pick<BattleUserState, "spriteAppearance">) | undefined => {
+  if (!isOnVillageDuty(participant, villageId)) return undefined;
+  const copy = structuredClone(participant);
+  const masked = !!copy.anbuId;
+  return {
+    ...copy,
+    userId: villageDutyActorId(copy.userId),
+    username: masked ? "ANBU Protector" : copy.username,
+    isAi: true,
+    status: "AWAKE",
+    battleId: null,
+    sector: copy.village?.sector ?? copy.sector,
+    curHealth: copy.maxHealth,
+    curChakra: copy.maxChakra,
+    curStamina: copy.maxStamina,
+    // Copies carry no receipts, rewards, summons from active pets, or transferable inventory.
+    activePetId: null,
+    petTask: null,
+    queue: [],
+    cookingJobs: [],
+    userQuests: [],
+    completedQuests: [],
+    questData: [],
+    bounties: [],
+    bountySignups: [],
+    raidBuffs: [],
+    items: copy.items.map((item) => ({
+      ...item,
+      id: `duty:${item.id}`,
+      userId: villageDutyActorId(copy.userId),
+      dropChancePerc: 0,
+    })),
+    ...(masked
+      ? {
+          avatar: copy.anbuSquad?.image ?? copy.avatar,
+          avatarLight: copy.anbuSquad?.image ?? copy.avatarLight,
+        }
+      : {}),
+    // AI templates keep this recipe through processUsersForBattle, without reading their owner again.
+    spriteAppearance: masked
+      ? anonymousSpriteAppearance(true)
+      : resolveSpriteAppearance(copy),
+  };
+};

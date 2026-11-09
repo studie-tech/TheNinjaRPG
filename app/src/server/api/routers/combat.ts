@@ -95,6 +95,7 @@ import {
   applyForcedLoadouts,
   buildQueuedTrainingLogs,
   getAttackRestriction,
+  prepareVillageDutyDefender,
   projectQuestParty,
   rollStartingGroundEffects,
   settleQueuedBattleTraining,
@@ -208,6 +209,7 @@ import { regenerationBuffs, titleCombatTag } from "@/libs/titles";
 import { isActiveEventEntrant } from "@/libs/tournament/events";
 import { getBiomeFromTileType } from "@/libs/travel";
 import { isTutorialGuidedBattle } from "@/libs/tutorial";
+import { villageDutyActorId } from "@/libs/villageDuty";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { listAiTransformations } from "@/queries/ai";
 import {
@@ -265,6 +267,7 @@ import { findSectorWithVillage } from "@/queries/shrine";
 import { fetchUserSkills } from "@/queries/skillTree";
 import { fetchActiveTerritoryWar } from "@/queries/territoryWar";
 import { fetchSectorVillage, findVillageBySector } from "@/queries/village";
+import { findVillageDutyDefender } from "@/queries/villageDuty";
 import { fetchActiveWars } from "@/routers/war";
 import {
   fetchUserItemsWithVariants,
@@ -1652,6 +1655,7 @@ export const combatRouter = createTRPCRouter({
         sectorData,
         shrineAis,
         isHome,
+        dutyDefender,
       ] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
@@ -1661,6 +1665,7 @@ export const combatRouter = createTRPCRouter({
         findSectorWithVillage(ctx.drizzle, input.sector),
         listUserDataForStartShrineBattle(ctx.drizzle),
         findVillageBySector(ctx.drizzle, input.sector),
+        findVillageDutyDefender(ctx.drizzle, input.sector),
       ]);
 
       // Check that user was found
@@ -1709,12 +1714,21 @@ export const combatRouter = createTRPCRouter({
           ? validAis.map((ai) => ai.userId)
           : [VILLAGE_PROTECTOR_AI_ID];
 
+      const duty =
+        isHome &&
+        dutyDefender &&
+        dutyDefender.villageId !== user.villageId &&
+        shrineOwnerVillageId &&
+        dutyDefender.villageId === shrineOwnerVillageId
+          ? { userId: dutyDefender.userId, villageId: shrineOwnerVillageId }
+          : undefined;
       // Return battle
       return await initiateBattle(
         {
           sector: input.sector,
           userIds: [user.userId],
-          targetIds: targetIds,
+          targetIds: duty ? [villageDutyActorId(duty.userId)] : targetIds,
+          villageDuty: duty,
           forceDefenderVillageId: shrineOwnerVillageId,
           client: ctx.drizzle,
           actionUserId: ctx.userId,
@@ -1915,6 +1929,8 @@ export const initiateBattle = async (
     /** Shared rules snapshot used for ranked loadout cleanup and battle admission. */
     jutsuEquipLimits?: JutsuEquipLimit[];
     forceDefenderVillageId?: string;
+    /** Enrolled owner loaded with the participants and converted to an isolated AI copy. */
+    villageDuty?: { userId: string; villageId: string };
     biome?: CombatBiome;
     forceKeepPools?: boolean;
     /** Replace the initiating players' HP/CP/SP with this percentage of effective maxima. */
@@ -2013,8 +2029,25 @@ export const initiateBattle = async (
     ]),
   ];
 
-  const queryBattleUsers = () =>
-    listUserDataForQueryBattleUsers(client, userIds, allyAiIds, targetIds);
+  const queryBattleUsers = async () => {
+    const duty = info.villageDuty;
+    const participants = await listUserDataForQueryBattleUsers(
+      client,
+      userIds,
+      allyAiIds,
+      duty
+        ? targetIds.map((id) =>
+            id === villageDutyActorId(duty.userId) ? duty.userId : id,
+          )
+        : targetIds,
+    );
+    if (!duty) return participants;
+    return participants.flatMap((participant) => {
+      if (participant.userId !== duty.userId) return [participant];
+      const copy = prepareVillageDutyDefender(participant, duty.villageId);
+      return copy ? [copy] : [];
+    });
+  };
 
   // Use Promise.all to fetch all independent data in parallel
   const [
@@ -2114,6 +2147,20 @@ export const initiateBattle = async (
       ? listAiTransformations(client)
       : null,
   ]);
+
+  const dutyEnrollment = info.villageDuty;
+  if (
+    dutyEnrollment &&
+    (!["SHRINE_WAR", "VILLAGE_PROTECTOR"].includes(battleType) ||
+      userIds.includes(dutyEnrollment.userId) ||
+      !preloadedUsers.some(
+        (user) =>
+          user.userId === villageDutyActorId(dutyEnrollment.userId) && user.isAi,
+      ))
+  )
+    return errorResponse(
+      "This protector has stood down or changed villages. Try again.",
+    );
 
   // A fight with the creator never reaches their account: an open-world attack, or quest
   // content naming them, opens the trial against their stand-in forms. An attack stays bound
@@ -3452,31 +3499,33 @@ export const initiateBattle = async (
     // not be broadcast. Auto-battles stay off this broadcast.
     if (!AutoBattleTypes.includes(battleType)) {
       await Promise.all(
-        users.map(async (user) => {
-          await Promise.all([
-            pusher.trigger(user.userId, "event", {
-              type: "battle",
-              battleId,
-              // Match push recipients; initiating fighters stay silent across their tabs.
-              isDefender: !user.isAi && !info.userIds.includes(user.userId),
-              ...(user.userId === actionActorId && info.originSocketId
-                ? { originSocketId: info.originSocketId }
-                : {}),
-              ...(user.userId === actionActorId && actionReadiness?.userRecovery
-                ? { userRecovery: superjson.serialize(actionReadiness.userRecovery) }
-                : {}),
-            }),
-            ...(!user.isAi
-              ? [
-                  updateUserOnMap(pusher, user.sector, {
-                    ...user,
-                    status: "BATTLE",
-                    battleId,
-                  }),
-                ]
-              : []),
-          ]);
-        }),
+        users
+          .filter((user) => !user.isAi)
+          .map(async (user) => {
+            await Promise.all([
+              pusher.trigger(user.userId, "event", {
+                type: "battle",
+                battleId,
+                // Match push recipients; initiating fighters stay silent across their tabs.
+                isDefender: !user.isAi && !info.userIds.includes(user.userId),
+                ...(user.userId === actionActorId && info.originSocketId
+                  ? { originSocketId: info.originSocketId }
+                  : {}),
+                ...(user.userId === actionActorId && actionReadiness?.userRecovery
+                  ? { userRecovery: superjson.serialize(actionReadiness.userRecovery) }
+                  : {}),
+              }),
+              ...(!user.isAi
+                ? [
+                    updateUserOnMap(pusher, user.sector, {
+                      ...user,
+                      status: "BATTLE",
+                      battleId,
+                    }),
+                  ]
+                : []),
+            ]);
+          }),
       );
     }
   } catch (error) {

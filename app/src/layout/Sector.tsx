@@ -418,8 +418,20 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             },
           ]
         : [];
-    return [...data.users, ...(data.overworldAis ?? []), ...viewer];
-  }, [data?.users, data?.viewer, data?.overworldAis, profile, sector]);
+    return [
+      ...data.users,
+      ...(data.overworldAis ?? []),
+      ...(data.protectors ?? []),
+      ...viewer,
+    ];
+  }, [
+    data?.users,
+    data?.viewer,
+    data?.overworldAis,
+    data?.protectors,
+    profile,
+    sector,
+  ]);
   const warData = data?.warData;
   const {
     data: sectorDungeons,

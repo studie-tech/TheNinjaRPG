@@ -17,6 +17,7 @@ import {
   TUTORIAL_GENIN_EXAM_QUEST_ID,
   TUTORIAL_STARTER_QUEST_ID,
   UserStatuses,
+  VILLAGE_DUTY_PATROL_CHANCE,
   VILLAGE_PROTECTOR_AI_ID,
 } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
@@ -73,6 +74,7 @@ import {
   findLandingNear,
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
+import { villageDutyActorId, villageDutyPatrols } from "@/libs/villageDuty";
 import { getMapDisguise } from "@/libs/war";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import {
@@ -103,6 +105,7 @@ import {
   updateUserDataForStartGlobalMove,
 } from "@/queries/travel";
 import { fetchSectorVillage, findVillageBySector } from "@/queries/village";
+import { findVillageDutyDefender } from "@/queries/villageDuty";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser, type UserWithRelations } from "@/routers/profile";
 import { breakStealth } from "@/routers/stealth";
@@ -394,7 +397,7 @@ export const travelRouter = createTRPCRouter({
         };
       }
       // Crossings can leave a stale query key. Never return another sector's data.
-      const [users, villageData, sectorData, placements] =
+      const [users, villageData, sectorData, placements, dutyUsers] =
         user.sector === input.sector
           ? sectorWindowData
           : await fetchSectorWindowData(ctx.drizzle, ctx.userId, user.sector);
@@ -485,6 +488,9 @@ export const travelRouter = createTRPCRouter({
         user.sector === input.sector
           ? requestedMap
           : await fetchPublishedSectorMap(ctx.drizzle, user.sector).catch(() => null);
+      const dutyPatrols = sectorMap
+        ? villageDutyPatrols(dutyUsers, sectorMap, user.sector, user.villageId)
+        : [];
       const overworldAis = placements.flatMap((p) => {
         if (!p.aiTemplate?.isAi) return [];
         const template = {
@@ -563,6 +569,7 @@ export const travelRouter = createTRPCRouter({
                 : u,
             )
           : processedUsers,
+        protectors: dutyPatrols,
         village: villageData,
         sectorData,
         warData: warData.map((w) =>
@@ -1103,6 +1110,9 @@ export const travelRouter = createTRPCRouter({
           readiness,
         ),
         isVillage ? findVillageForMoveInSector(ctx.drizzle, targetSector) : undefined,
+        isVillage && targetSector !== moveUser.village?.sector
+          ? findVillageDutyDefender(ctx.drizzle, targetSector)
+          : undefined,
       ]).catch((error: unknown) => {
         // The CAS guard makes a blind retry unsafe: a re-issue after the first
         // attempt already applied would match zero rows. Degrade to an ordinary
@@ -1113,7 +1123,7 @@ export const travelRouter = createTRPCRouter({
       if (!moveOutcome) {
         return errorResponse("Connection hiccup, please try moving again");
       }
-      const [result, sectorVillage] = moveOutcome;
+      const [result, sectorVillage, dutyDefender] = moveOutcome;
       const user = moveUser;
       // Check if move was successful
       if (result.rowsAffected === 1) {
@@ -1126,7 +1136,10 @@ export const travelRouter = createTRPCRouter({
           const relation = findRelationship(relations, villageId, sectorVillage.id);
           if (relation?.status === "ENEMY") {
             // Chance of getting attacked by village protector
-            const chance = getStrucBoost("patrolsPerLvl", sectorVillage.structures);
+            const chance = Math.max(
+              getStrucBoost("patrolsPerLvl", sectorVillage.structures),
+              dutyDefender ? VILLAGE_DUTY_PATROL_CHANCE : 0,
+            );
             if (Math.random() < (travelLength * chance) / 100) {
               // Chance of ANBU squad avoiding attack
               const anbuChance = user.anbuId
@@ -1149,9 +1162,14 @@ export const travelRouter = createTRPCRouter({
                   latitude: destination.y,
                   sector: targetSector,
                   userIds: [ctx.userId],
-                  targetIds: [VILLAGE_PROTECTOR_AI_ID],
+                  targetIds: dutyDefender
+                    ? [villageDutyActorId(dutyDefender.userId)]
+                    : [VILLAGE_PROTECTOR_AI_ID],
+                  villageDuty: dutyDefender?.villageId
+                    ? { userId: dutyDefender.userId, villageId: dutyDefender.villageId }
+                    : undefined,
                   client: ctx.drizzle,
-                  scaleTarget: true,
+                  scaleTarget: !dutyDefender,
                   biome: "default",
                   autoCombatUserIds: user.defaultAutoCombat ? [ctx.userId] : undefined,
                 },

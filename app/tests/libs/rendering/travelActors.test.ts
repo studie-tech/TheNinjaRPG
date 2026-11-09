@@ -52,6 +52,25 @@ const recipes = (users: SectorUser[], patch: Partial<TravelActorsSnapshot> = {})
   });
 
 describe("travel actor snapshots", () => {
+  it("shows duty copies across brackets with profile information but no combat or healing actions", () => {
+    const protector = player({
+      userId: "duty:owner",
+      isVillageDuty: true,
+      villageDutyUserId: "owner",
+      rank: "CHUNIN",
+      experience: 0,
+    });
+    const result = recipes([protector], { minBracket: 8 });
+    expect(result).toHaveLength(1);
+    expect(result[0]?.parts.map((part) => part.kind)).not.toContain("attack");
+    expect(result[0]?.parts.map((part) => part.kind)).not.toContain("heal");
+    expect(travelActionAvailability(viewer, protector, true, [])).toEqual({
+      attack: false,
+      heal: false,
+      info: true,
+    });
+    expect(isAloneOnTile([protector, player()], player(), "self")).toBe(true);
+  });
   it.each([-1, 2])(
     "keeps the own marker at bracket %s while filtering other players",
     (minBracket) => {

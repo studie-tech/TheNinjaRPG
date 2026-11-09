@@ -3127,6 +3127,8 @@ export const userData = mysqlTable(
     longitude: smallint("longitude", { unsigned: true }).default(10).notNull(),
     latitude: smallint("latitude", { unsigned: true }).default(7).notNull(),
     location: varchar("location", { length: 191 }).default(""),
+    villageDutyVillageId: varchar("villageDutyVillageId", { length: 191 }),
+    villageDutyStartedAt: datetime("villageDutyStartedAt", { mode: "date", fsp: 3 }),
     joinedVillageAt: datetime("joinedVillageAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3) - INTERVAL 7 DAY)`)
       .notNull(),
@@ -3393,6 +3395,9 @@ export const userData = mysqlTable(
       ),
       sageModeIdIdx: index("UserData_sageModeId_idx").on(table.sageModeId),
       villageIdIdx: index("UserData_villageId_idx").on(table.villageId),
+      villageDutyIdx: index("UserData_villageDutyVillageId_idx").on(
+        table.villageDutyVillageId,
+      ),
       battleIdIdx: index("UserData_battleId_idx").on(table.battleId),
       statusIdx: index("UserData_status_idx").on(table.status),
       sectorIdx: index("UserData_sector_idx").on(table.sector),

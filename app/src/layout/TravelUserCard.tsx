@@ -79,6 +79,9 @@ export const TravelUserCard: React.FC<{
               >
                 {relation.label}
               </Badge>
+              {user.isVillageDuty && (
+                <Badge variant="secondary">Village protector · AI patrol</Badge>
+              )}
               {user.status !== "AWAKE" && (
                 <Badge variant="secondary">{user.status.toLowerCase()}</Badge>
               )}
@@ -102,7 +105,7 @@ export const TravelUserCard: React.FC<{
           </p>
         </div>
         <Button asChild size="sm" className="mt-3 w-full">
-          <Link href={`/userid/${user.userId}`}>
+          <Link href={`/userid/${user.villageDutyUserId ?? user.userId}`}>
             View full profile
             <ChevronRight className="h-4 w-4" />
           </Link>

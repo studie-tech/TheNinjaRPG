@@ -42,6 +42,7 @@ import {
 } from "@/libs/objectiveWar";
 import { getServerPusher } from "@/libs/pusher";
 import { createBattleClaimId } from "@/libs/raids";
+import { villageDutyActorId } from "@/libs/villageDuty";
 import { fetchActiveUserMpvpBattles } from "@/queries/clan";
 import { listUserDataForStartShrineBattle } from "@/queries/combat";
 import {
@@ -94,6 +95,7 @@ import {
   findVillageById,
   findVillageBySector,
 } from "@/queries/village";
+import { findVillageDutyDefender } from "@/queries/villageDuty";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { fetchActiveWars } from "@/routers/war";
@@ -1158,13 +1160,17 @@ export const shrineRouter = createTRPCRouter({
       // Prepare attacker and defender IDs
       const attackerIds = attackers.map((a) => a.userId);
       let defenderIds: string[] = defenders.map((d) => d.userId);
+      let duty: { userId: string; villageId: string } | undefined;
 
       // If no player defenders, use AI defenders from the defender village
       if (defenderIds.length === 0) {
         // Use defenderEntityId directly - it's the village ID for shrine battles
-        const [defenderVillage, shrineAis] = await Promise.all([
+        const [defenderVillage, shrineAis, dutyDefender] = await Promise.all([
           findVillageById(ctx.drizzle, shrineBattle.defenderEntityId),
           listUserDataForStartShrineBattle(ctx.drizzle),
+          shrineBattle.sector != null
+            ? findVillageDutyDefender(ctx.drizzle, shrineBattle.sector)
+            : undefined,
         ]);
         const shrineAiIds = shrineAis.map((ai) => ai.userId);
         // Only shrine AIs defend, whatever the village has stored.
@@ -1176,6 +1182,16 @@ export const shrineRouter = createTRPCRouter({
           0,
           SHRINE_BATTLE_MAX_USERS_PER_SIDE,
         );
+        if (
+          dutyDefender?.villageId === shrineBattle.defenderEntityId &&
+          !attackerIds.includes(dutyDefender.userId)
+        ) {
+          duty = {
+            userId: dutyDefender.userId,
+            villageId: shrineBattle.defenderEntityId,
+          };
+          defenderIds = [villageDutyActorId(duty.userId)];
+        }
         // Final fallback: use the same hardcoded AI as solo shrine battles
         if (defenderIds.length === 0) {
           defenderIds = [VILLAGE_PROTECTOR_AI_ID];
@@ -1203,6 +1219,7 @@ export const shrineRouter = createTRPCRouter({
           {
             userIds: attackerIds,
             targetIds: defenderIds,
+            villageDuty: duty,
             client: ctx.drizzle,
             biome: "default",
             forceDefenderVillageId: shrineBattle.defenderEntityId,

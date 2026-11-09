@@ -666,6 +666,8 @@ const villageRelations = {
 
 /** A genin loses their sensei and an elder loses their seat when changing village. */
 const villageChangeFields = (user: { rank: UserRank }) => ({
+  villageDutyVillageId: null,
+  villageDutyStartedAt: null,
   ...(user.rank === "GENIN" && { senseiId: null }),
   ...(user.rank === "ELDER" && { rank: "JONIN" as const }),
 });

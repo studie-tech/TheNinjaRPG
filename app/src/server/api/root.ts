@@ -74,6 +74,7 @@ import { towerDefenseRouter } from "./routers/towerDefense";
 import { trainRouter } from "./routers/train";
 import { travelRouter } from "./routers/travel";
 import { villageRouter } from "./routers/village";
+import { villageDutyRouter } from "./routers/villageDuty";
 import { villageMissionRouter } from "./routers/villageMission";
 import { warRouter } from "./routers/war";
 import { worldMapRouter } from "./routers/worldMap";
@@ -145,6 +146,7 @@ export const appRouter = createTRPCRouter({
   tournament: tournamentRouter,
   village: villageRouter,
   villageMission: villageMissionRouter,
+  villageDuty: villageDutyRouter,
   marriage: marriageRouter,
   staff: staffRouter,
   linkPromotion: linkPromotionRouter,
