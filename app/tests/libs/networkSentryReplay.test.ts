@@ -43,6 +43,7 @@ describe("network failure Sentry filter", () => {
     ],
     ["sign-in", `${fapi}/sign_ins?__clerk_api_version=2025-11-10`],
     ["preview sign-in", "https://example-app.clerk.accounts.dev/v1/client/sign_ins"],
+    ["proxied token refresh", `${proxiedFapi}/sessions/sess_test/tokens`],
     ["proxied sign-in", `${proxiedFapi}/sign_ins?__clerk_api_version=2025-11-10`],
   ])("reports a failed Clerk %s request", async (_label, url) => {
     for (const cause of ["Failed to fetch", "network error"]) {
@@ -78,11 +79,22 @@ describe("network failure Sentry filter", () => {
     expect(await fromScript("Error", ownNonClerk, own)).toEqual([true, true]);
   });
 
-  it("keeps dropping a failed Clerk session touch", async () => {
-    const message = clerkNetworkError(
-      `${fapi}/sessions/sess_test/touch`,
-      "Failed to fetch",
-    );
-    expect(await fromScript("Error", message, clerkScript)).toEqual([true, true]);
+  it.each([
+    ["direct", fapi, clerkScript],
+    ["proxied", proxiedFapi, proxiedScript],
+  ])("drops a failed %s Clerk session touch", async (_label, api, script) => {
+    for (const cause of ["Failed to fetch", "network error"]) {
+      const message = clerkNetworkError(`${api}/sessions/sess_test/touch`, cause);
+      expect(await fromScript("Error", message, script)).toEqual([true, true]);
+    }
+  });
+
+  it.each([
+    "https://www.theninja-rpg.com.example.net/__clerk/v1/client/sessions/sess_test/touch",
+    `${proxiedFapi}/sessions/sess_test/touch/extra`,
+    "https://www.theninja-rpg.com/__clerk/__clerk/v1/client/sessions/sess_test/touch",
+  ])("reports a Clerk error outside the validated touch endpoint: %s", async (url) => {
+    const message = clerkNetworkError(url, "Failed to fetch");
+    expect(await fromScript("Error", message, proxiedScript)).toEqual([false, false]);
   });
 });

@@ -933,20 +933,20 @@ const isNavigationAbortError = (event: Sentry.ErrorEvent): boolean => {
 /**
  * Check if an error is a failed Clerk session "touch" request.
  *
- * Clerk periodically POSTs to /v1/client/sessions/<id>/touch to refresh the
+ * Clerk POSTs to /v1/client/sessions/<id>/touch on page focus to refresh the
  * session's last-active timestamp. On flaky mobile networks (device sleep, WiFi
  * to cellular handoff, tunnels) this background request fails and Clerk rejects
  * the promise, which our global handler reports.
  *
- * UX note: no user-visible impact. Touch is a heartbeat that only updates
- * "last active at"; it does not mint or refresh the session token, so a failed
- * touch never signs the user out or blocks a request. Clerk simply retries on
- * its next poll. This check is scoped to the touch endpoint because failures on
- * token or sign-in endpoints affect the user.
+ * UX note: this background heartbeat has no pending UI or user action to recover.
+ * A network failure leaves the displayed session usable, and a later page focus
+ * touches it again. The native /__clerk proxy only changes the transport URL.
+ * This check is scoped to the touch endpoint because failures on token or sign-in
+ * endpoints affect the user and must remain reportable.
  *
  * Detection pattern:
  * - Message begins with "ClerkJS: Network error at"
- * - The quoted URL is a Clerk host and a /v1/client/sessions/<id>/touch path
+ * - The quoted URL is a Clerk host or our proxy, with a session touch path
  * - The underlying cause is a network-level TypeError, whose wording differs per
  *   browser ("Load failed" on Safari, "NetworkError when attempting to fetch
  *   resource." on Firefox, "Failed to fetch" on Chrome)
@@ -960,8 +960,9 @@ const isClerkSessionTouchNetworkError = (event: Sentry.ErrorEvent): boolean => {
   // properly rather than substring-matched (a spoofed path could otherwise pass)
   const quotedUrl = CLERK_NETWORK_ERROR_URL.exec(message)?.[1];
   if (!quotedUrl || !isClerkHostUrl(quotedUrl)) return false;
+  const pathname = new URL(quotedUrl).pathname.replace(/^\/__clerk\//, "/");
   const isSessionTouchEndpoint = /^\/v1\/client\/sessions\/[^/]+\/touch$/.test(
-    new URL(quotedUrl).pathname,
+    pathname,
   );
   if (!isSessionTouchEndpoint) return false;
 
