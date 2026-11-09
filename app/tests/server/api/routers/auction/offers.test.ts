@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { CRAFTING_REQUIRED_EXP, HOME_FURNITURE_STORAGE_CAPACITY } from "@/drizzle/constants";
-import { actionLog, auctionOffer, craftingRequirement, farmCollectionLog, farmPlot, item, userData, userItem, userItemImbuement, userQueue, storeUserIdAlias } from "@/drizzle/schema";
+import { actionLog, auctionOffer, craftingRequirement, farmCollectionLog, farmPlot, item, userData, userItem, userItemImbuement, userQueue, storeUserIdAlias, village } from "@/drizzle/schema";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { auctionRouter } from "@/server/api/routers/auction";
 import { farmingRouter } from "@/server/api/routers/farming";
@@ -19,7 +19,7 @@ describeWithDatabase("Auction House fixed-term requests and trades", () => {
   beforeEach(async () => {
     queuePush.mockReset();
     vi.spyOn(nativePush, "deferPushToUsers").mockImplementation(queuePush);
-    await resetTables(storeUserIdAlias, actionLog, auctionOffer, farmCollectionLog, farmPlot, userQueue, craftingRequirement, userItemImbuement, userItem, item, userData);
+    await resetTables(storeUserIdAlias, actionLog, auctionOffer, farmCollectionLog, farmPlot, userQueue, craftingRequirement, userItemImbuement, userItem, item, userData, village);
     await insertUsers([
       { userId: "owner", username: "Requester", level: 50, bank: 1000 },
       { userId: "supplier", username: "Supplier", level: 50, bank: 100 },
@@ -38,6 +38,13 @@ describeWithDatabase("Auction House fixed-term requests and trades", () => {
       { id: "supplier-sword", userId: "supplier", itemId: "sword", level: 8, experience: 123, durability: 60, activeVariantId: "cosmetic" },
     ]);
   });
+
+  /** Home storage is reachable only in the player's own village. */
+  const placeOwnerAtHome = async () => {
+    const db = await getTestDatabase();
+    await db.insert(village).values({ id: "owner-village", name: "Owner Village", sector: 30, kageId: "kage" });
+    await db.update(userData).set({ homeType: "TOWN_HOUSE", villageId: "owner-village", sector: 30, status: "AWAKE" }).where(eq(userData.userId, "owner"));
+  };
 
   const postRequest = async (ryo = 300, quantity = 10) => {
     const api = await callerFor(auctionRouter, "owner");
@@ -255,7 +262,7 @@ describeWithDatabase("Auction House fixed-term requests and trades", () => {
 
   it("keeps reserved trade items out of home storage so the offer stays fulfillable", async () => {
     const db = await getTestDatabase();
-    await db.update(userData).set({ homeType: "TOWN_HOUSE" }).where(eq(userData.userId, "owner"));
+    await placeOwnerAtHome();
     const offer = await postTrade(50);
     const home = await callerFor(homeRouter, "owner");
     expect(await home.toggleStoreItem({ userItemId: "owner-gems" })).toMatchObject({ success: false, message: "This item is reserved in an auction or trade offer and can't be stored" });
@@ -266,7 +273,7 @@ describeWithDatabase("Auction House fixed-term requests and trades", () => {
 
   it("explains a stored reserved item on accept and lets its owner retrieve it to recover the offer", async () => {
     const db = await getTestDatabase();
-    await db.update(userData).set({ homeType: "TOWN_HOUSE" }).where(eq(userData.userId, "owner"));
+    await placeOwnerAtHome();
     const offer = await postTrade(50);
     // Rows stored before the escrow guard existed.
     await db.update(userItem).set({ storedAtHome: true }).where(eq(userItem.id, "owner-gems"));

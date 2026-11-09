@@ -1,4 +1,4 @@
-import type { ItemRarity, ItemSlot, ItemType } from "@/drizzle/constants";
+import type { ItemRarity, ItemSlot, ItemType, UserStatus } from "@/drizzle/constants";
 import {
   BULK_SELL_WARN_RARITIES,
   ItemRarities,
@@ -17,7 +17,14 @@ import {
   applyActiveVariant,
   byItemName,
   calcItemSellingPrice,
+  countsTowardInventoryStorage,
   getEquipBlockReason,
+  getHomeStorageBucket,
+  getHomeStorageBucketCapacity,
+  getHomeStorageBucketFullMessage,
+  getInventoryBucket,
+  getInventoryBucketCapacity,
+  getInventoryBucketFullMessage,
   isCompatibleEquipSlot,
 } from "@/libs/item";
 import { needsInventoryRepair } from "@/libs/repair";
@@ -239,20 +246,17 @@ export const bulkSellBlockReason = (
 };
 
 /**
- * Select every sellable shown stack of one rarity, or deselect them when all are already
- * selected. Stacks outside `shown` keep their selection.
+ * Select every shown stack of one rarity that `blockReason` allows, or deselect them when
+ * all are already selected. Stacks outside `shown` keep their selection.
  */
 export const toggleRarityPick = (
   shown: UserItemWithRelations[],
   rarity: ItemRarity,
   selected: string[],
-  farmCurrency: number,
+  blockReason: (userItem: UserItemWithRelations) => string | null,
 ): string[] => {
   const ids = shown
-    .filter(
-      (ui) =>
-        ui.item.rarity === rarity && bulkSellBlockReason(ui, farmCurrency) === null,
-    )
+    .filter((ui) => ui.item.rarity === rarity && blockReason(ui) === null)
     .map((ui) => ui.id);
   const allPicked = ids.length > 0 && ids.every((id) => selected.includes(id));
   return allPicked
@@ -309,4 +313,126 @@ export const bulkSellMessage = (
         ]
       : []),
   ].join(" ");
+};
+
+/**
+ * Why the player cannot reach their home storage, or null when they can: awake or asleep
+ * in their own village, as for furnishing the home.
+ */
+export const homeStorageBlockReason = (user: {
+  sector: number;
+  status: UserStatus;
+  village?: { sector: number } | null;
+}): string | null => {
+  if (!user.village || user.sector !== user.village.sector) {
+    return "Return to your own village to use your home storage";
+  }
+  // Sleeping at home is allowed, so this is not an awake-only action.
+  if (!["AWAKE", "ASLEEP"].includes(user.status)) {
+    return "You cannot use your home storage right now";
+  }
+  return null;
+};
+
+type HomeStorageRow = {
+  id: string;
+  equipped: ItemSlot;
+  storedAtHome: boolean;
+  isInAuction: boolean;
+  item: { name: string; itemType: ItemType; isEventItem: boolean };
+};
+
+/**
+ * Split the requested stacks into those that move between backpack and home storage and
+ * those that stay, in request order. Each accepted stack takes a slot in the destination
+ * bucket, so a later stack of a filled bucket stays. Furniture is managed from the home.
+ */
+export const planHomeStorageMove = <T extends HomeStorageRow>({
+  rows,
+  userItemIds,
+  toHome,
+  user,
+  homeStorage,
+}: {
+  rows: T[];
+  userItemIds: string[];
+  toHome: boolean;
+  user: UserData;
+  homeStorage: number;
+}) => {
+  const moving: T[] = [];
+  const refused: { userItemId: string; name: string; reason: string }[] = [];
+  const used = new Map<string, number>();
+  const bucketOf = (ui: T) =>
+    toHome ? getHomeStorageBucket(ui.item) : getInventoryBucket(ui.item);
+  for (const ui of rows) {
+    const counts = toHome ? ui.storedAtHome : countsTowardInventoryStorage(ui);
+    if (counts) used.set(bucketOf(ui), (used.get(bucketOf(ui)) ?? 0) + 1);
+  }
+  for (const userItemId of userItemIds) {
+    const ui = rows.find((row) => row.id === userItemId);
+    const reason = ((): string | null => {
+      if (!ui) return "is not in your inventory";
+      if (ui.item.itemType === "FURNITURE") {
+        return "is furniture; manage it from your home";
+      }
+      if (ui.equipped !== "NONE") return "is equipped";
+      if (ui.storedAtHome === toHome) {
+        return toHome
+          ? "is already in your home storage"
+          : "is already in your backpack";
+      }
+      if (toHome && ui.isInAuction) return "is reserved in an auction or trade offer";
+      if (toHome) {
+        const bucket = getHomeStorageBucket(ui.item);
+        if (
+          (used.get(bucket) ?? 0) >= getHomeStorageBucketCapacity(bucket, homeStorage)
+        ) {
+          return `does not fit: ${getHomeStorageBucketFullMessage(bucket)}`;
+        }
+      } else {
+        const bucket = getInventoryBucket(ui.item);
+        if ((used.get(bucket) ?? 0) >= getInventoryBucketCapacity(bucket, user)) {
+          return `does not fit: ${getInventoryBucketFullMessage(bucket)}`;
+        }
+      }
+      return null;
+    })();
+    if (ui && !reason) {
+      moving.push(ui);
+      used.set(bucketOf(ui), (used.get(bucketOf(ui)) ?? 0) + 1);
+    } else {
+      refused.push({ userItemId, name: ui?.item.name ?? "Item", reason: reason ?? "" });
+    }
+  }
+  return { moving, refused };
+};
+
+/** Why one stack cannot move to (`toHome`) or from home storage now, as a sentence. */
+export const homeStorageMoveBlockReason = <T extends HomeStorageRow>({
+  userItemId,
+  ...plan
+}: Omit<Parameters<typeof planHomeStorageMove<T>>[0], "userItemIds"> & {
+  userItemId: string;
+}) => {
+  const reason = planHomeStorageMove({ ...plan, userItemIds: [userItemId] }).refused[0]
+    ?.reason;
+  return reason ? reason.charAt(0).toUpperCase() + reason.slice(1) : null;
+};
+
+/** Summarize a home storage move: how many stacks moved and why the others stayed. */
+export const homeStorageMoveMessage = (
+  moved: number,
+  toHome: boolean,
+  refused: { name: string; reason: string }[],
+) => {
+  const items = `${moved} item${moved === 1 ? "" : "s"}`;
+  const done =
+    moved === 0
+      ? "Nothing was moved."
+      : toHome
+        ? `Stored ${items} in your home.`
+        : `Took ${items} out of your home.`;
+  const stayed = refused.map(({ name, reason }) => `${name} ${reason}`).join("; ");
+  return refused.length > 0 ? `${done} ${refused.length} stayed: ${stayed}.` : done;
 };

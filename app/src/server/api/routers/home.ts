@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 import type { UserRequestState, UserStatus } from "@/drizzle/constants";
 import {
   HOME_FURNITURE_STORAGE_CAPACITY,
@@ -7,6 +8,7 @@ import {
   HomeTypeDetails,
   HomeTypes,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  MAX_BULK_SELL_ITEMS,
 } from "@/drizzle/constants";
 import { userItem } from "@/drizzle/schema";
 import {
@@ -28,10 +30,16 @@ import {
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
 } from "@/libs/item";
+import {
+  homeStorageBlockReason,
+  homeStorageMoveMessage,
+  planHomeStorageMove,
+} from "@/libs/itemsPage";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { ISOLATED_PYRAMID_MESSAGE } from "@/libs/questRun";
 import { getBiomeFromTileType } from "@/libs/travel";
 import {
+  executeResultForMoveUserItems,
   executeResultForSetHomeSharing,
   executeResultForToggleStoreItem,
   executeResultForUpgradeHome,
@@ -558,6 +566,8 @@ export const homeRouter = createTRPCRouter({
       const userItemResult = useritems.find((ui) => ui.id === input.userItemId);
       // Guard
       if (!user) return errorResponse("User not found");
+      const blocked = homeStorageBlockReason(user);
+      if (blocked) return errorResponse(blocked);
       if (!userItemResult) return errorResponse("Item not found or is equipped");
       if (!userItemResult.item) return errorResponse("Item data not found");
       if (userItemResult.equipped !== "NONE") {
@@ -603,6 +613,80 @@ export const homeRouter = createTRPCRouter({
         message: userItemResult.storedAtHome
           ? "Item retrieved from your home."
           : "Item stored in your home.",
+      };
+    }),
+  moveUserItems: protectedProcedure
+    .meta({ mcp: { description: "Store or take out several items at home at once" } })
+    .input(
+      z.object({
+        userItemIds: z
+          .array(z.string())
+          .min(1)
+          .max(MAX_BULK_SELL_ITEMS)
+          .refine((ids) => new Set(ids).size === ids.length, "Each item can move once"),
+        toHome: z.boolean(),
+      }),
+    )
+    .output(
+      baseServerResponse.extend({
+        // Omitted when a stack changed during the move, so clients read the inventory again.
+        movedUserItemIds: z.array(z.string()).optional(),
+        refused: z.array(
+          z.object({ userItemId: z.string(), name: z.string(), reason: z.string() }),
+        ),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Query
+      // Read userData before inventory so the updatedAt CAS below
+      // detects any capacity mutation that commits between these snapshots.
+      const { user } = await fetchUpdatedUser({
+        client: ctx.drizzle,
+        userId: ctx.userId,
+      });
+      const useritems = await fetchUserItems(ctx.drizzle, ctx.userId);
+      // Guard
+      if (!user) return { ...errorResponse("User not found"), refused: [] };
+      if (user.isBanned) return { ...errorResponse("You are banned"), refused: [] };
+      const blocked = homeStorageBlockReason(user);
+      if (blocked) return { ...errorResponse(blocked), refused: [] };
+      const { moving, refused } = planHomeStorageMove({
+        rows: useritems.flatMap((ui) => (ui.item ? [{ ...ui, item: ui.item }] : [])),
+        userItemIds: input.userItemIds,
+        toHome: input.toHome,
+        user,
+        homeStorage: HomeTypeDetails[user.homeType].storage,
+      });
+      if (moving.length === 0) {
+        return {
+          ...errorResponse(homeStorageMoveMessage(0, input.toHome, refused)),
+          refused,
+        };
+      }
+      // Mutate
+      const movingIds = moving.map((ui) => ui.id);
+      const result = await retryOnDeadlock(() =>
+        executeResultForMoveUserItems(ctx.drizzle, user, movingIds, input.toHome),
+      );
+      if (result.rowsAffected === 0) {
+        return {
+          ...errorResponse("Inventory changed, please refresh and try again"),
+          refused,
+        };
+      }
+      // The profile row and every planned stack changed only when nothing moved meanwhile.
+      if (result.rowsAffected !== movingIds.length + 1) {
+        return {
+          success: true,
+          message: "Some items changed while moving. Your inventory will be refreshed.",
+          refused,
+        };
+      }
+      return {
+        success: true,
+        message: homeStorageMoveMessage(movingIds.length, input.toHome, refused),
+        movedUserItemIds: movingIds,
+        refused,
       };
     }),
 });

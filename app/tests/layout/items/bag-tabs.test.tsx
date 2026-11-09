@@ -47,6 +47,14 @@ it("reopens the remembered bag after mount", () => {
   expect(onChange).toHaveBeenCalledWith("cooking");
 });
 
+it("restores the home bag when the reused switcher changes inventories", () => {
+  window.localStorage.setItem("homeStorageSelection", "materials");
+  const onHomeChange = vi.fn();
+  const { rerender } = render(<BagTabs bags={bags} active="normal" onChange={vi.fn()} />);
+  rerender(<BagTabs bags={bags} active="all" onChange={onHomeChange} storageKey="homeStorageSelection" />);
+  expect(onHomeChange).toHaveBeenCalledWith("materials");
+});
+
 it("shows the bag's used and total slots", () => {
   render(<BagCapacity used={4} max={20} />);
   const capacity = screen.getByText("4 of 20 bag slots used").parentElement!;

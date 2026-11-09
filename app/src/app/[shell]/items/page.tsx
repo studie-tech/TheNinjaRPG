@@ -12,20 +12,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { COST_EXTRA_ITEM_SLOT, NonActionItemTypes } from "@/drizzle/constants";
+import {
+  COST_EXTRA_ITEM_SLOT,
+  HomeTypeDetails,
+  NonActionItemTypes,
+} from "@/drizzle/constants";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import ContentBox from "@/layout/ContentBox";
 import { LoadoutHotkeysPanel } from "@/layout/HotkeyControls";
 import { BagCapacity, BagTabs } from "@/layout/items/BagTabs";
 import { ItemsToolbar } from "@/layout/items/ItemsToolbar";
-import { ItemsWorkspace } from "@/layout/items/ItemsWorkspace";
+import { type ItemsPlace, ItemsWorkspace } from "@/layout/items/ItemsWorkspace";
 import Loader from "@/layout/Loader";
 import {
   countsTowardInventoryStorage,
+  getHomeStorageBucket,
+  getHomeStorageBucketCapacity,
   getInventoryBucket,
   getInventoryBucketCapacity,
   isEquippableUserItem,
 } from "@/libs/item";
+import { homeStorageBlockReason, homeStorageMoveBlockReason } from "@/libs/itemsPage";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -39,6 +46,8 @@ export default function MyItems() {
     timeDiff,
   } = useRequiredUserData();
   const [activeTab, setActiveTab] = useState("all");
+  const [place, setPlace] = useState<ItemsPlace>("backpack");
+  const [homeTab, setHomeTab] = useState("all");
   const [isBuyItemSlotOpen, setIsBuyItemSlotOpen] = useState(false);
   const buyItemSlotInFlight = useRef(false);
 
@@ -115,6 +124,34 @@ export default function MyItems() {
   });
   const selectedBag = bags.find((bag) => bag.value === activeTab);
 
+  // Home storage sits beside the backpack while the player can reach it. Furniture stays
+  // with the home's decorating.
+  const isHomeShown = !!userData && !homeStorageBlockReason(userData);
+  const shownPlace: ItemsPlace = isHomeShown ? place : "backpack";
+  const homeStorage = userData ? HomeTypeDetails[userData.homeType].storage : 0;
+  const storedItems =
+    userItems?.filter((ui) => ui.storedAtHome && ui.item.itemType !== "FURNITURE") ??
+    [];
+  const homeBags = (["normal", "materials", "cooking"] as const).map((value) => {
+    const count = storedItems.filter(
+      (ui) => getHomeStorageBucket(ui.item) === value,
+    ).length;
+    const max = getHomeStorageBucketCapacity(value, homeStorage);
+    return { value, count, max, over: count > max };
+  });
+  const selectedHomeBag = homeBags.find((bag) => bag.value === homeTab);
+  /** Why a stack cannot move to or from home storage now, using the server's own rules. */
+  const homeMoveBlockReason = (userItemId: string, toHome: boolean) =>
+    userData && userItems
+      ? homeStorageMoveBlockReason({
+          rows: userItems,
+          userItemId,
+          toHome,
+          user: userData,
+          homeStorage,
+        })
+      : null;
+
   // Loaders
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (isLoadingItems) return <Loader explanation="Loading items" />;
@@ -132,7 +169,38 @@ export default function MyItems() {
           <ItemsWorkspace
             userData={userData}
             userItems={availableItems ?? []}
-            bag={activeTab}
+            bag={shownPlace === "home" ? `home:${homeTab}` : activeTab}
+            home={
+              isHomeShown
+                ? {
+                    place: shownPlace,
+                    onPlaceChange: setPlace,
+                    items: storedItems.filter(
+                      (ui) =>
+                        homeTab === "all" || getHomeStorageBucket(ui.item) === homeTab,
+                    ),
+                    count: storedItems.length,
+                    blockReason: homeMoveBlockReason,
+                    status: selectedHomeBag && (
+                      <BagCapacity
+                        used={selectedHomeBag.count}
+                        max={selectedHomeBag.max}
+                      />
+                    ),
+                    bagTabs: (
+                      <BagTabs
+                        bags={[
+                          { value: "all", count: storedItems.length },
+                          ...homeBags,
+                        ]}
+                        active={homeTab}
+                        onChange={setHomeTab}
+                        storageKey="homeStorageSelection"
+                      />
+                    ),
+                  }
+                : undefined
+            }
             backpackStatus={
               <div className="flex items-center gap-1">
                 {selectedBag && (

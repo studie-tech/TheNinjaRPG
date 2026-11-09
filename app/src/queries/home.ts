@@ -2,9 +2,21 @@
  * Database access for home; authorization and transaction scopes stay in callers.
  */
 import type { SQL } from "drizzle-orm";
-import { eq, gt, isNull, lte, or } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { HomeType } from "@/drizzle/constants";
-import { userData, userItem } from "@/drizzle/schema";
+import { item, userData, userHome, userItem, userRequest } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { getNextUserSnapshotAt } from "@/utils/time";
 
@@ -37,9 +49,6 @@ export const fetchHomeFurnitureUser = async (client: DrizzleClient, userId: stri
   // Deleted item definitions can leave inventory rows behind, as in fetchUserItems.
   return user && { ...user, items: user.items.filter((owned) => owned.item) };
 };
-
-import { and, gte, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
-import { item, userHome, userRequest } from "@/drizzle/schema";
 
 /**
  * Build the `userRequest` lookup for `getVisitedHome`, selecting only `id`, including
@@ -229,6 +238,34 @@ export const executeResultForToggleStoreItem = (
             userItemResult.storedAtHome ? undefined : eq(userItem.isInAuction, false),
           )}
         `);
+
+/**
+ * Move the planned stacks between backpack and home storage in one statement. The profile
+ * snapshot CAS rejects the move when capacity changed since it was planned; each stack must
+ * still be unequipped, on the other side and, when stored, outside auctions and offers.
+ * A clean move changes the profile row plus one row per stack.
+ */
+export const executeResultForMoveUserItems = (
+  client: Pick<DrizzleClient, "execute">,
+  user: { userId: string; updatedAt: Date },
+  userItemIds: string[],
+  toHome: boolean,
+) =>
+  client.execute(sql`
+    UPDATE ${userData}
+    INNER JOIN ${userItem} ON ${userItem.userId} = ${userData.userId}
+    SET ${userData.updatedAt} = ${getNextUserSnapshotAt(user.updatedAt)},
+        ${userItem.storedAtHome} = ${toHome}
+    WHERE ${and(
+      eq(userData.userId, user.userId),
+      eq(userData.updatedAt, user.updatedAt),
+      inArray(userItem.id, userItemIds),
+      eq(userItem.storedAtHome, !toHome),
+      eq(userItem.equipped, "NONE"),
+      gt(userItem.quantity, 0),
+      toHome ? eq(userItem.isInAuction, false) : undefined,
+    )}
+  `);
 
 /** Execute the database statement for `publishHomeFurnitureLayout`. */
 export const executeRowsForPublishHomeFurnitureLayout = (
