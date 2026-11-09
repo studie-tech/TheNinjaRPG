@@ -88,6 +88,7 @@ beforeEach(() => {
   vi.spyOn(maskedTextures, "acquireMaskedTexture").mockImplementation(() => ({ resource: Promise.resolve(texture), release: () => {} }));
 });
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); });
+const standingOffsetFor = (tile: { height: number }, terrace: number) => terrace * terrainElevation.LAND_STEP * tile.height;
 
 describe("still travel rendering", () => {
   it("makes terrain ready while a published light-field request is still pending", async () => {
@@ -329,6 +330,27 @@ describe("travel scene ground depth", () => {
     depth.sortRenderLayerChildren();
     expect(depth.renderLayerChildren.indexOf(actor)).toBeGreaterThan(depth.renderLayerChildren.indexOf(building.sprite));
     expect(building.sprite).toMatchObject(placement);
+  });
+
+  it("stands roaming herds on the terrace beneath them", async () => {
+    const herdYs = async (terrace: number) => {
+      const state = snapshotFixture(), entry = state.window[0]!;
+      entry.map = { ...entry.map, objects: [] };
+      entry.structures = [];
+      const real = terrainElevation.createTerrainField;
+      const field = vi.spyOn(terrainElevation, "createTerrainField").mockImplementation((...args) => ({ ...real(...args), level: () => terrace }));
+      const deer = (member: number) => player({ userId: "deer", isNpc: true, npcPlacementId: "herd", npcCopy: 0, npcMember: member, npcInteractionType: "AMBIENT", longitude: 6, latitude: 5,
+        npcWander: { seed: "herd:hill", anchor: { x: 6, y: 5 }, radius: 0, wildOnly: true } });
+      state.users = [player(), ...Array.from({ length: 4 }, (_, member) => deer(member))];
+      const { scene, depth, advance } = await sceneFixture(state);
+      advance(); await settle(); advance();
+      field.mockRestore();
+      const tile = scene.sectors.get(724)!.grid.getHex({ col: 6, row: 5 })!;
+      return { tile, ys: depth.renderLayerChildren.filter((child) => child.label.startsWith("npc:herd")).map((child) => child.y) };
+    };
+    const level = await herdYs(0), raised = await herdYs(2);
+    expect(raised.ys).toHaveLength(4);
+    raised.ys.forEach((y, index) => expect(y - level.ys[index]!).toBeCloseTo(standingOffsetFor(raised.tile, 2)));
   });
 
   it("keeps every member of a shore herd on land, pulling offsets in from the water", async () => {

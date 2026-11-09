@@ -95,6 +95,8 @@ export const createTerrainField = (
   const toWater = flood(water, SHORE_REACH);
   const toFlat = flood(flat, SHORE_REACH);
   // Offshore distance carries the nearest coast's frost, so icy shores freeze their own water.
+  // Water equally near an icy and an open coast freezes, whatever order the tiles arrive in:
+  // every tile at one distance is expanded before any tile at the next.
   const offshore = new Map<TerrainHex, { distance: number; frozen: number }>();
   const queue = [...land];
   for (const tile of land)
@@ -103,11 +105,14 @@ export const createTerrainField = (
     const tile = queue[index];
     const value = tile && offshore.get(tile);
     if (!tile || !value || value.distance >= WATER_FIELD_REACH) continue;
-    for (const neighbor of around(tile))
-      if (!offshore.has(neighbor)) {
+    for (const neighbor of around(tile)) {
+      const reached = offshore.get(neighbor);
+      if (!reached) {
         offshore.set(neighbor, { distance: value.distance + 1, frozen: value.frozen });
         queue.push(neighbor);
-      }
+      } else if (reached.distance === value.distance + 1)
+        reached.frozen = Math.max(reached.frozen, value.frozen);
+    }
   }
   const levels = new Map<TerrainHex, number>();
   const caps = new Map<TerrainHex, number>();
@@ -178,6 +183,15 @@ export const createTerrainField = (
     },
   };
 };
+
+/**
+ * Exact key of a corner sample. Corners average the integer shore distances and frost of at
+ * most three tiles, so depth and frost are whole multiples of these steps.
+ */
+export const waterSampleKey = (sample: WaterSample) =>
+  String.fromCharCode(
+    97 + Math.round(sample.depth * SHORE_REACH * 6) * 7 + Math.round(sample.frozen * 6),
+  );
 
 /** Records each tile's terrace and whether its stock water is frozen over. */
 export const applyTerrainField = (

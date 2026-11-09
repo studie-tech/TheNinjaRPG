@@ -54,6 +54,7 @@ import {
   standingOffset,
   type TerrainCell,
   type TerrainField,
+  waterSampleKey,
 } from "@/libs/rendering/terrainElevation";
 import { planVillageLandscape } from "@/libs/rendering/villageLandscape";
 import { boundsOverlap, type WorldBounds } from "@/libs/rendering/visibility";
@@ -830,8 +831,10 @@ export const createTravelScene = async (options: {
           const point = (tile: WanderTile, offset: WanderTile) => {
             const hex = entry.grid.getHex({ col: tile.x, row: tile.y });
             if (!hex) return null;
-            // A herd member's offset from its leader's land spot pulls in rather than stand in water.
-            let share = 1;
+            // A herd member's offset from its leader's land spot pulls in rather than stand in
+            // water, and stands on the terrace of the tile it ends up on.
+            let share = 1,
+              ground = hex;
             for (; share > 0; share -= 0.5) {
               const under = entry.grid.pointToHex(
                 {
@@ -840,11 +843,14 @@ export const createTravelScene = async (options: {
                 },
                 { allowOutside: false },
               );
-              if (!under?.spec?.isWater) break;
+              if (!under?.spec?.isWater) {
+                ground = under ?? hex;
+                break;
+              }
             }
             return {
               x: -hex.center.x + offset.x * hex.width * share,
-              y: -hex.center.y + offset.y * hex.height * share,
+              y: -hex.center.y + offset.y * hex.height * share + standingOffset(ground),
             };
           };
           walk = {
@@ -1270,12 +1276,7 @@ const terrainResultKey = (
         row >= origin.row &&
         row < origin.row + map.height;
       if (inside && cell.isWater)
-        for (const corner of tile.corners) {
-          const sample = field.sample(corner);
-          key += String.fromCharCode(
-            97 + Math.round(sample.depth * 8) * 3 + Math.round(sample.frozen * 2),
-          );
-        }
+        for (const corner of tile.corners) key += waterSampleKey(field.sample(corner));
     }
     key += "/";
   }

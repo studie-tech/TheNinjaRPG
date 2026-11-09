@@ -16,7 +16,12 @@ import {
   project2DShader,
   waterUVShader,
 } from "@/libs/rendering/shaders";
-import { type HexTerrainData, KIND, LAND_SEGMENT } from "@/libs/rendering/terrainData";
+import {
+  emptySegment,
+  type HexTerrainData,
+  KIND,
+  LAND_SEGMENT,
+} from "@/libs/rendering/terrainData";
 
 /**
  * Owns meshes/shaders for immutable CPU terrain data. Resolves after texture attempts;
@@ -71,7 +76,14 @@ export const createHexTerrain = async (
     meshes.push({ mesh, order });
     container.addChild(mesh);
   };
-  const segments = data.segments.map((segment) =>
+  // Bridges and roads ride the land segment, which a sector that is all water does not have.
+  const landless =
+    data.surface.length > 0 &&
+    !data.segments.some((segment) => segment.order === LAND_SEGMENT);
+  const segments = [
+    ...data.segments,
+    ...(landless ? [emptySegment(LAND_SEGMENT)] : []),
+  ].map((segment) =>
     segment.order === LAND_SEGMENT && data.surface.length
       ? appendSurface(segment, data.surface, data.surfaceColors)
       : segment,

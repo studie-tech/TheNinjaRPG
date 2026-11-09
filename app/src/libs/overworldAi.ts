@@ -203,15 +203,14 @@ export const placementCopiesInSector = (
     return biomeCopiesInSector(placement, sector, map, pool);
   return placementCopyPositions(placement, pool).flatMap((position, copy) => {
     if (position.sector !== sector) return [];
-    // Wildlife copies always land in the wild, including a seeded first copy.
+    // Wildlife copies always land in the wild, including a seeded first copy. The stored copy
+    // stays on its tile when the sector has no land to roam, so a bound quest can still reach it.
+    const stored = { x: position.longitude, y: position.latitude };
     const anchor =
       copy === 0 && !placement.wildOnly
-        ? { x: position.longitude, y: position.latitude }
-        : snapToWanderTile(
-            map,
-            { x: position.longitude, y: position.latitude },
-            placement.wildOnly,
-          );
+        ? stored
+        : (snapToWanderTile(map, stored, placement.wildOnly) ??
+          (copy === 0 ? stored : null));
     if (!anchor) return [];
     const seed = wanderSeed(placement.id, placement.positionVersion, copy);
     return [

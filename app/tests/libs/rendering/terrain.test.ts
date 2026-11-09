@@ -6,7 +6,7 @@ import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { buildSectorTerrainData } from "@/libs/rendering/sectorData";
 import { resolveWorldTerrain } from "@/libs/rendering/worldArt";
-import { hexTerrainAt, KIND } from "@/libs/rendering/terrainData";
+import { hexTerrainAt, KIND, LAND_SEGMENT } from "@/libs/rendering/terrainData";
 import { textureRanges } from "@/libs/rendering/primitives/terrain";
 import { createTerrainField, LAND_STEP, liftSpritesToTerrain, MAX_SEABED_DEPTH, standingOffset, WATER_FIELD_REACH } from "@/libs/rendering/terrainElevation";
 import { linearRenderColor } from "@/libs/rendering/color";
@@ -256,6 +256,18 @@ describe("shared hex terrain data", () => {
     const paved = { ...map, tiles: map.tiles.map((tile) => ({ ...tile, zone: "road" as const })) };
     expect(prepare(paved).data.surface.length).toBeGreaterThan(0);
     expect(map).toEqual(before);
+  });
+
+  it("keeps a land segment for bridges and roads in a sector that is all water", async () => {
+    const map = mapOf(3, 2);
+    map.tiles = map.tiles.map((tile) => ({ ...tile, terrain: "ocean", battleBiome: "ocean", zone: tile.x === 1 ? "road" : "wilderness" }));
+    const { data } = prepare(map);
+    expect(data.surface.length).toBeGreaterThan(0);
+    expect(data.segments.some((segment) => segment.order === LAND_SEGMENT)).toBe(false);
+    const { game } = renderer(async () => Texture.WHITE);
+    const terrain = await createHexTerrain(game, data);
+    const meshes = (terrain.container.children as Mesh[]).filter((mesh) => mesh.geometry.attributes.aKind);
+    expect(meshes.some((mesh) => mesh.zIndex === LAND_SEGMENT)).toBe(true);
   });
 
   it("preserves positive fractional terrain costs in both navigation grids", () => {

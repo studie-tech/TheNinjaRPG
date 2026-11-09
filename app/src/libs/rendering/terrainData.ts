@@ -401,6 +401,9 @@ const pushVertex = (
   target.relief.push(depth, frozen);
 };
 
+/** A segment with no vertices, for geometry added after the terrain is built. */
+export const emptySegment = (order: number) => mergeItems(order, []);
+
 /** Concatenates painter-ordered items into one vertex stream, rebasing tile ranges. */
 const mergeItems = (order: number, entries: [number, TerrainItem][]) => {
   const merged = emptyItem();

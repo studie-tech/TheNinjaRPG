@@ -9,6 +9,7 @@ import {
   objectFootprints,
   sectorRelief,
   type TerrainCell,
+  waterSampleKey,
 } from "@/libs/rendering/terrainElevation";
 
 const grid = (width: number, height: number) => createHexGrid(40, width, height, { x: -20, y: -20 });
@@ -63,6 +64,24 @@ describe("terrain field", () => {
     expect(tiles.getHex({ col: 3, row: 1 })!.frozen).toBe(true);
     expect(tiles.getHex({ col: 11, row: 1 })!.frozen).toBe(false);
     expect(tiles.getHex({ col: 11, row: 1 })!.terrace).toBeLessThan(-1);
+  });
+
+  it("freezes water equally near an icy and an open coast whatever order the tiles arrive in", () => {
+    const tiles = grid(5, 4);
+    const cell = (tile: TerrainHex): TerrainCell =>
+      tile.col === 0 ? { frost: "snow" } : tile.col === 4 ? {} : { isWater: true };
+    const samples = (order: TerrainHex[]) => {
+      const field = createTerrainField(tiles, new Map(order.map((tile) => [tile, cell(tile)])));
+      return [...tiles].flatMap((tile) => tile.corners.map((corner) => field.sample(corner).frozen));
+    };
+    const forward = [...tiles];
+    expect(samples(forward)).toEqual(samples([...forward].reverse()));
+    expect(samples(forward)).toEqual(samples([...forward].sort((a, b) => b.col - a.col || a.row - b.row)));
+  });
+
+  it("keys corner samples exactly, so averaged frost and depth never collide", () => {
+    const keys = [0, 1 / 3, 1 / 2, 2 / 3, 1].flatMap((frozen) => [0, 1 / 12, 1 / 8, 1 / 6, 1].map((depth) => waterSampleKey({ depth, frozen })));
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
   it("samples relief deterministically and keeps unknown sectors flat", () => {
