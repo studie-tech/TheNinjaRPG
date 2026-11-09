@@ -58,7 +58,6 @@ describeWithDatabase("shrine minute scheduler war camps", () => {
       userData,
       village,
     );
-    vi.spyOn(gamesettings, "handleEndpointError");
 
     const db = await getTestDatabase();
     const combatStartedAt = new Date(now.getTime() - 10 * 60000);

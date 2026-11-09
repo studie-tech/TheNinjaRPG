@@ -1544,6 +1544,7 @@ describeWithDatabase("owned furniture persistence", () => {
       const api = await callerFor(homeRouter, userId);
       const home = await api.getUserHome();
       expect(home?.furniture.some(({ id }) => id === "cabinet-a")).toBe(false);
+      expect(home?.layout.some(({ id }) => id === "cabinet-a")).toBe(false);
       const before = await snapshot();
       expect(
         (
