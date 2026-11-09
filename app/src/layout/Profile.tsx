@@ -628,6 +628,6 @@ const ProfileSharing = lazy(() =>
   })),
 );
 
-/** Identify fixed profile tabs whose visible labels do not come from the tab value. */
+/** Identify profile tabs whose text labels become visible on wide layouts. */
 const isLabelledProfileTab = (option: string) =>
   (labelledProfileTabs as readonly string[]).includes(option);
