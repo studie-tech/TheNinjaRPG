@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { parse } from "@babel/parser";
 
 /**
  * Run hook bodies from a component without mounting it, so a suite can exercise effect and
@@ -54,46 +55,27 @@ export const evaluateExpression = (
 };
 
 const closers: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
+const tokenCache = new Map<string, ReturnType<typeof parse>["tokens"]>();
 
 const closingIndex = (source: string, open: number) => {
-  if (!(source[open]! in closers)) throw new Error(`No bracket at ${open}`);
-  const expected: string[] = [];
-  for (let index = open; index < source.length; index++) {
-    const char = source[index]!;
-    if (char === "/" && source[index + 1] === "/") {
-      index = source.indexOf("\n", index);
-      if (index < 0) break;
-    } else if (char === "/" && source[index + 1] === "*") {
-      index = source.indexOf("*/", index + 2) + 1;
-      if (index <= 0) break;
-    } else if (char === '"' || char === "'") {
-      index = quotedEnd(source, index, char);
-    } else if (char === "`") {
-      index = templateEnd(source, index);
-    } else if (char in closers) {
-      expected.push(closers[char]!);
-    } else if (char === ")" || char === "]" || char === "}") {
-      if (expected.pop() !== char) throw new Error(`Unbalanced ${char} at ${index}`);
-      if (expected.length === 0) return index;
-    }
+  const opening = source[open]!;
+  const closing = closers[opening];
+  if (!closing) throw new Error(`No bracket at ${open}`);
+  let tokens = tokenCache.get(source);
+  if (!tokens) {
+    tokens = parse(source, {
+      sourceType: "module",
+      plugins: ["typescript", "jsx"],
+      tokens: true,
+    }).tokens!;
+    tokenCache.set(source, tokens);
   }
-  throw new Error(`Unclosed ${source[open]} at ${open}`);
-};
-
-const quotedEnd = (source: string, start: number, quote: string) => {
-  for (let index = start + 1; index < source.length; index++) {
-    if (source[index] === "\\") index++;
-    else if (source[index] === quote) return index;
+  let depth = 0;
+  for (const token of tokens) {
+    if (token.start < open) continue;
+    const label = token.type.label;
+    if (label === opening || (opening === "{" && label === "${")) depth++;
+    else if (label === closing && --depth === 0) return token.end - 1;
   }
-  throw new Error(`Unclosed string at ${start}`);
-};
-
-const templateEnd = (source: string, start: number) => {
-  for (let index = start + 1; index < source.length; index++) {
-    if (source[index] === "\\") index++;
-    else if (source[index] === "`") return index;
-    else if (source[index] === "$" && source[index + 1] === "{")
-      index = closingIndex(source, index + 1);
-  }
-  throw new Error(`Unclosed template at ${start}`);
+  throw new Error(`Unclosed ${opening} at ${open}`);
 };

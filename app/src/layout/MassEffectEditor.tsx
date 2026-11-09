@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { MultiSelect, type OptionType } from "@/components/ui/multi-select";
 import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import { unwrapFieldSchema } from "@/layout/EditContent";
 import { SearchSelect } from "@/layout/SearchSelect";
 import type { ColumnDefinitionType } from "@/layout/Table";
@@ -50,9 +51,8 @@ export const MassEffectEditor = <
   const [committed, setCommitted] = useState<
     Record<string, { effects: ZodAllTags[]; baseUpdatedAt: number }>
   >({});
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const saveInFlight = useRef(false);
-  const editorPending = pendingId !== null;
+  const saveFlight = useSingleFlight<string>();
+  const { pending: pendingId, isPending: editorPending } = saveFlight;
 
   useEffect(
     () => () => {
@@ -190,9 +190,7 @@ export const MassEffectEditor = <
       });
       return;
     }
-    if (saveInFlight.current) return;
-    saveInFlight.current = true;
-    setPendingId(entry.id);
+    if (!saveFlight.claim(entry.id)) return;
     props.onPendingChange?.(true);
     try {
       const res =
@@ -249,8 +247,7 @@ export const MassEffectEditor = <
         });
       }
     } finally {
-      saveInFlight.current = false;
-      setPendingId(null);
+      saveFlight.release(entry.id);
       props.onPendingChange?.(false);
     }
   };
