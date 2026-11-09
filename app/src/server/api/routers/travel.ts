@@ -737,6 +737,12 @@ export const travelRouter = createTRPCRouter({
     .mutation(async ({ ctx }) => {
       const loaded = await findUserForGlobalTravelFinish(ctx.drizzle, ctx.userId);
       if (!loaded) return errorResponse("User not found");
+      if (
+        loaded.status === "TRAVEL" &&
+        loaded.travelFinishAt &&
+        loaded.travelFinishAt > new Date()
+      )
+        return errorResponse("You have not arrived yet");
       let user = loaded as NonNullable<UserWithRelations>;
       let canProject = true;
       if (hasEnergyQueue(user)) {
@@ -754,8 +760,6 @@ export const travelRouter = createTRPCRouter({
           `Cannot finish travel because your status is: ${user.status.toLowerCase()}`,
         );
       const wasTravelling = user.status === "TRAVEL";
-      if (wasTravelling && user.travelFinishAt && user.travelFinishAt > new Date())
-        return errorResponse("You have not arrived yet");
       // The cleaner can finish travel before profile hydration evaluates arrival goals.
       canProject &&= wasTravelling;
       const projectedQuests = user.userQuests.filter(
