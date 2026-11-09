@@ -32,6 +32,7 @@ import { passesBracketFilter } from "@/libs/profile";
 import { getActiveObjectives } from "@/libs/quest";
 import { hasRequiredRank } from "@/libs/rank";
 import { animationTextureUrl } from "@/libs/rendering/animationTextures";
+import { textureOpaqueFrame } from "@/libs/rendering/assets";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import {
   createWaterRipples,
@@ -345,6 +346,7 @@ export const createTravelActors = (
         contactY:
           recipe.tile.height *
           (recipe.user?.spriteAppearance ? LPC_TRAVEL_CONTACT_Y : 0.5),
+        footprint: null,
       };
       root.position.set(record.x, record.y);
       root.zIndex = -(record.y + record.contactY + container.y);
@@ -401,8 +403,10 @@ export const createTravelActors = (
           const avatar = art.entries.find(
             (entry) => entry.description.kind === "avatar",
           );
-          if (avatar?.description.shadowCaster === "character")
+          if (avatar?.description.shadowCaster === "character") {
             record.contactY = avatar.groundY;
+            record.footprint = artFootprint(avatar);
+          }
           // NPC art casts a sun silhouette on the ground, as fighters do in combat.
           if (recipe.user?.isNpc && avatar?.sprite instanceof Sprite) {
             const cast = new Sprite(avatar.sprite.texture);
@@ -695,7 +699,7 @@ export const createTravelActors = (
         if (record.ripple <= 0) {
           record.ripple = moving ? RIPPLE_INTERVAL.moving : RIPPLE_INTERVAL.idle;
           const feet = actorFeet(record);
-          waterRipples().emit(feet.x, feet.y, recipe.tile.width / 44);
+          waterRipples().emit(feet.x, feet.y, ringScale(record));
         }
       } else record.ripple = 0;
       // Contact uses the interpolated/orbiting position and the current sector origin.
@@ -845,8 +849,16 @@ export const createTravelActors = (
   };
 };
 
-/** Container-local contact point of an actor's body, or its tile center without one. */
+/**
+ * Container-local contact point of an actor: its art's solid feet once loaded, the LPC frame's
+ * foot row before that, or the tile center without a body.
+ */
 const actorFeet = (record: ActorRecord) => {
+  if (record.footprint)
+    return {
+      x: record.root.x + record.footprint.x,
+      y: record.root.y + record.footprint.y,
+    };
   const body = record.recipe.parts.find((part) => part.character);
   return {
     x: record.root.x + (body?.x ?? record.recipe.tile.width / 2),
@@ -878,6 +890,48 @@ const actorBody = (record: ActorRecord): WorldBounds => {
     minY: feet.y,
     maxY: feet.y + body.size * LPC_FIGURE_HEIGHT,
   };
+};
+
+/**
+ * Actor-local footprint of loaded avatar art, at its solid feet. Cutouts centre it under their
+ * visible figure, since the lowest solid row of a walking pose can be a single foot.
+ */
+const artFootprint = (avatar: {
+  sprite: Container;
+  character?: unknown;
+  description: WorldSpriteDescription;
+  groundY: number;
+}) => {
+  const { sprite, description, groundY } = avatar;
+  if (avatar.character || !(sprite instanceof Sprite))
+    return {
+      x: description.x,
+      y: groundY,
+      width: description.size * LPC_FIGURE_HALF_WIDTH * 2,
+    };
+  const { texture } = sprite;
+  const opaque = textureOpaqueFrame(texture);
+  const centre = sprite.localTransform.apply({
+    x:
+      opaque.x +
+      opaque.width / 2 -
+      texture.frame.x +
+      (texture.trim?.x ?? 0) -
+      sprite.anchor.x * texture.orig.width,
+    y: 0,
+  });
+  return { x: centre.x, y: groundY, width: opaque.width * Math.abs(sprite.scale.x) };
+};
+
+/** Water rings sized to the figure standing in them, relative to a walking LPC character. */
+const ringScale = (record: ActorRecord) => {
+  const tile = record.recipe.tile;
+  const figure = tile.height * LPC_TRAVEL_HEIGHT * LPC_FIGURE_HALF_WIDTH * 2;
+  const width = record.footprint?.width ?? figure;
+  return (
+    (tile.width / 44) *
+    Math.min(RING_MAX_SCALE, Math.max(RING_MIN_SCALE, width / figure))
+  );
 };
 
 /** Characters walk on unfrozen water; ice, bridges and foundations carry no rings. */
@@ -1055,6 +1109,9 @@ const LPC_TRAVEL_CONTACT_Y = LPC_TRAVEL_FOOT_Y + (LPC_TRAVEL_HEIGHT * 4) / 64;
 const LPC_FIGURE_HALF_WIDTH = 12 / 64;
 const LPC_FIGURE_HEIGHT = 48 / 64;
 const NPC_TRAVEL_HEIGHT = 1.3;
+/** Water rings follow a figure's width within this range of an LPC character's. */
+const RING_MIN_SCALE = 0.6;
+const RING_MAX_SCALE = 2.5;
 const PLAYER_TRAVEL_SHADOW = 0.16;
 const PLAYER_TRAVEL_LIGHT = 0.65;
 /** A sheet's cells share its still image's square framing, so frames swap in place. */
@@ -1313,6 +1370,8 @@ type ActorRecord = {
   castKey: string;
   /** Actor-local foot Y, updated when the visible avatar cutout finishes loading. */
   contactY: number;
+  /** Actor-local feet and visible figure width of the loaded avatar; rings and the route use it. */
+  footprint: { x: number; y: number; width: number } | null;
   tile: TerrainHex;
   path: TerrainHex[];
   x: number;

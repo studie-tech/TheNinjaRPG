@@ -1,6 +1,6 @@
 import { lpcCatalog } from "../../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { Assets, BufferImageSource, Container, Graphics, RenderLayer, type Sprite, Text, Texture } from "pixi.js";
+import { Assets, BufferImageSource, Container, Graphics, RenderLayer, Sprite, Text, Texture } from "pixi.js";
 import { getBattleGrid } from "@/libs/combat/util";
 import { anonymousSpriteAppearance, resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
@@ -105,6 +105,46 @@ describe("travel actor artwork loading", () => {
     expect(visible()).toHaveLength(1);
     actors.animate({ ...frame, reducedMotion: true, delta: 2 });
     expect(visible()).toHaveLength(0);
+  });
+
+  it.each(["body art", "NPC art"] as const)("rings %s at the visible figure's feet, sized to its width", async (kind) => {
+    // A figure off the frame's centre whose lowest solid row is a single, offset foot.
+    const width = 64, height = 128, pixels = new Uint8Array(width * height * 4);
+    const fill = (x0: number, x1: number, y0: number, y1: number) => {
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) pixels[(y * width + x) * 4 + 3] = 255;
+    };
+    fill(8, 40, 30, 118);
+    fill(30, 36, 118, 120);
+    const art = new Texture({ source: new BufferImageSource({ resource: pixels, width, height }) });
+    const blank = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4), width: 4096, height: 4096 }) });
+    vi.spyOn(Assets, "load").mockImplementation(async (input) => (JSON.stringify(input).includes("figure-art") ? art : blank));
+    const { actors, grid, snapshot, ground } = fixture();
+    for (const tile of grid) tile.spec = { isWater: true } as never;
+    const figure = kind === "body art"
+      ? player(0, { bodyArt: "figure-art.webp" })
+      : player(0, { isNpc: true, npcPlacementId: "guide", npcInteractionType: "FRIENDLY", avatar: "figure-art.webp", avatarLight: "figure-art.webp", spriteAppearance: undefined });
+    actors.sync(snapshot([figure, player(1)]));
+    await settle(); await settle();
+    actors.animate({ ...frame, reducedMotion: false });
+    const root = actors.container.children.find((child) => child.label === (kind === "body art" ? "user:loading-0" : "npc:guide:0:0"))!;
+    const sprites = (node: Container): Sprite[] => node.children.flatMap((child) => [...(child instanceof Sprite ? [child] : []), ...sprites(child)]);
+    const avatar = sprites(root).find((sprite) => sprite.texture.source === art.source && sprite.label !== "cast-shadow")!;
+    const rings = ground.renderLayerChildren.find((effect) => effect.label === "water-ripples")!;
+    const near = (point: { x: number; y: number }) => rings.children.filter((ring) => ring.alpha > 0).sort((a, b) =>
+      Math.hypot(a.getGlobalPosition().x - point.x, a.getGlobalPosition().y - point.y) - Math.hypot(b.getGlobalPosition().x - point.x, b.getGlobalPosition().y - point.y))[0]!;
+    // Under the figure's middle (x 24), not its lowest foot (x 33), on the solid bottom row.
+    // The avatar draws a trimmed view of the source; map source pixels into its local space.
+    const view = avatar.texture;
+    const feet = avatar.toGlobal({
+      x: 24 - view.frame.x + (view.trim?.x ?? 0) - avatar.anchor.x * view.orig.width,
+      y: 120 - view.frame.y + (view.trim?.y ?? 0) - avatar.anchor.y * view.orig.height,
+    });
+    const ring = near(feet);
+    expect(ring.getGlobalPosition().x).toBeCloseTo(feet.x);
+    expect(ring.getGlobalPosition().y).toBeCloseTo(feet.y);
+    const lpcRing = near(actors.container.toGlobal(actors.feet("loading-1")!));
+    const figureWidth = 32 * Math.abs(avatar.scale.x), lpcWidth = grid.getHex({ col: 0, row: 0 })!.height * 1.8 * 0.7 * 24 / 64;
+    expect(ring.scale.x / lpcRing.scale.x).toBeCloseTo(Math.min(2.5, Math.max(0.6, figureWidth / lpcWidth)));
   });
 
   it("keeps moving contact effects on the ground and batches emitter pools together", async () => {
