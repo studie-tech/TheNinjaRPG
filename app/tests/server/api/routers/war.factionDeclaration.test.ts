@@ -213,6 +213,34 @@ describeWithDatabase("faction war declarations", () => {
     expect(leaders.map((l) => l.unread)).toEqual([1, 1]);
   });
 
+  it("starts a raid while a war-only setting is out of range", async () => {
+    await seedWorld();
+    const database = await getTestDatabase();
+    await database.insert(gameSetting).values({
+      id: "OBJECTIVE_WAR_noticeHours",
+      name: "OBJECTIVE_WAR_noticeHours",
+      time: new Date(),
+      value: 999,
+    });
+    expect((await declare(LEADER, FACTION)).success).toBe(true);
+    expect(await database.select().from(war)).toMatchObject([{ type: "WAR_RAID" }]);
+  });
+
+  it("still refuses a village declaration while a war setting is out of range", async () => {
+    await seedWorld("VILLAGE");
+    const database = await getTestDatabase();
+    await seedElderVote();
+    await database.insert(gameSetting).values({
+      id: "OBJECTIVE_WAR_noticeHours",
+      name: "OBJECTIVE_WAR_noticeHours",
+      time: new Date(),
+      value: 999,
+    });
+    await expect(declare(LEADER, FACTION)).rejects.toThrow("noticeHours");
+    expect(await database.select().from(war)).toHaveLength(0);
+    expect((await readFaction())?.tokens).toBe(TOKENS);
+  });
+
   it("reports success when leader notifications fail after the war commits", async () => {
     await seedWorld();
     const database = await getTestDatabase();
