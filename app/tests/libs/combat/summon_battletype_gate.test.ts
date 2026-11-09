@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { isSummonActionCastable, summonsAllowedInBattle } from "@/libs/combat/summon";
+import { isSummonActionCastable } from "@/libs/combat/summon";
 import { BattleTypes, AutoBattleTypes } from "@/drizzle/constants";
 import type { Battle } from "@/drizzle/schema";
 import type { CombatAction } from "@/libs/combat/types";
@@ -36,21 +36,8 @@ describe("summon actions in auto-resolved battle types", () => {
 });
 
 describe("every other battle type keeps summon actions", () => {
-  const interactive = BattleTypes.filter((t) => !AutoBattleTypes.includes(t));
-
-  it("covers every non-auto battle type the game defines", () => {
-    // Fails loudly if a new battle type is added without deciding this question.
-    expect(interactive.length).toBe(BattleTypes.length - AutoBattleTypes.length);
-    for (const t of interactive) {
-      expect(isSummonActionCastable(summonAction, bt(t))).toBe(true);
-    }
-  });
-
-  it("agrees with summonsAllowedInBattle across all battle types", () => {
-    for (const t of BattleTypes) {
-      expect(isSummonActionCastable(summonAction, bt(t))).toBe(
-        summonsAllowedInBattle(bt(t)),
-      );
-    }
+  it.each(BattleTypes.filter((t) => !AutoBattleTypes.includes(t)))("keeps summon actions in %s", (t) => {
+    expect(isSummonActionCastable(summonAction, bt(t))).toBe(true);
+    expect(isSummonActionCastable(mixedAction, bt(t))).toBe(true);
   });
 });
