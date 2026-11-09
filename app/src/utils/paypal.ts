@@ -25,7 +25,6 @@ export const getUserFederalStatus = (
   }
 };
 
-/** One active entry plus the federal waiting-slot allowance. */
 /** Jobs that may wait behind the active one in each timed queue. */
 export const getQueueWaitingSlots = (
   user: Pick<UserData, "staffAccount" | "federalStatus">,

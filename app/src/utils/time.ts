@@ -81,7 +81,7 @@ export const secondsPassed = (date: Date | string, timeDiff?: number, floor = tr
 };
 
 /**
- * Current date plus the given number of seconds
+ * The given date plus the given number of seconds
  *
  * @param seconds - The number of seconds to add
  * @param date - The date to add the seconds to

@@ -129,12 +129,12 @@ export const canModerateReskin = (role: UserRole) => {
 
 export const canControlBackups = (role: UserRole) => SENIOR_ADMIN_ROLES.includes(role);
 
-// Recruitment analytics visibility (admins only)
+// Recruitment analytics visibility (any staff role)
 export const canViewRecruitmentAnalytics = (role: UserRole) => {
   return isStaffRole(role);
 };
 
-// Revenue analytics visibility (coding admin only)
+// Revenue analytics visibility (owner, coding and content admins)
 export const canViewRevenueAnalytics = (role: UserRole) => {
   return ["OWNER", "CODING-ADMIN", "CONTENT-ADMIN"].includes(role);
 };
@@ -438,18 +438,18 @@ export const getMessagingRestriction = (
   return null;
 };
 
-/**
- * Banned/silenced users may only reply to support tickets they created.
- * Staff applications and other people's tickets are not allowed.
- * Returns false unless the user is banned or silenced — callers must not
- * treat this as a general compose permission for unrestricted users.
- */
 export const RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE =
   "You can only reply to support tickets you created while banned or silenced";
 
 export const RESTRICTED_STAFF_CONVERSATION_MESSAGE =
   "You cannot participate in this conversation while banned or silenced";
 
+/**
+ * Banned/silenced users may only reply to support tickets they created.
+ * Staff applications and other people's tickets are not allowed.
+ * Returns false unless the user is banned or silenced — callers must not
+ * treat this as a general compose permission for unrestricted users.
+ */
 export const canReplyToStaffConversationWhileRestricted = (
   user: Pick<UserData, "userId" | "isBanned" | "isSilenced">,
   supportTicketCreatedByUserId: string | null | undefined,

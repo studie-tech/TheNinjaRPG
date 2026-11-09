@@ -121,12 +121,11 @@ export const getStrucBoost = (
 };
 
 /**
- * Calculates the boost factor for a given shrine boost type.
- * Uses base boost of 10% with 1+ shrines, plus ~3.33% per additional shrine
- * for a range of 10% (1 shrine) to 20% (4 shrines).
- * @param village - The village to calculate the boost for.
- * @param sectors - The number of sectors in the village.
+ * Calculates the boost factor for a given shrine boost type: 0 unless the village has
+ * that boost active, otherwise getShrineBoostPercentage(sectors) / 100.
+ * @param sectors - The number of boosting shrines (countBoostingShrines).
  * @param boostType - The type of boost to calculate.
+ * @param village - The village to calculate the boost for.
  * @returns The boost factor for the given shrine boost type.
  */
 export const getShrineBoost = (

@@ -39,7 +39,7 @@ import { withoutUserPosition } from "@/utils/userCacheSharing";
 import { canAccessStructure } from "@/utils/village";
 
 /**
- * Atom for storing combat action¨
+ * Atom for storing combat action
  */
 export const combatActionIdAtom = atom<string | undefined>(undefined);
 
@@ -150,7 +150,7 @@ const UserInfoContext =
 
 /**
  * UserContextProvider component provides a context for managing user-related data and functionality.
- * It includes features such as managing Clerk token, Pusher connection, current user battle, time difference between client and server, and user data retrieval.
+ * It includes the Pusher connection, the time difference between client and server, and user data retrieval.
  *
  * @param props - The component props.
  * @param props.children - The child components.
