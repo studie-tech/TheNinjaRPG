@@ -42,10 +42,12 @@ const CombatScene = (({
   battleState,
   arenaActions,
   loadLpcCatalog,
+  config,
 }: {
   battleState: BattleState;
   arenaActions?: ReactNode;
   loadLpcCatalog: () => Promise<unknown>;
+  config?: { showAggro?: boolean; resourceBarsVisibility?: string };
 }) => {
   loadingEvents.push(`scene:${battleState.battle?.id}`);
   sceneCatalogLoader = loadLpcCatalog;
@@ -56,6 +58,7 @@ const CombatScene = (({
           ? "Finished battle result"
           : `Active battle ${battleState.battle?.id}`}
       </p>
+      <p>{`Scene aggro ${config?.showAggro} bars ${config?.resourceBarsVisibility}`}</p>
       {arenaActions}
     </>
   );
@@ -425,6 +428,28 @@ it("clears shared combat handler snapshots on spectator exit without publishing 
   );
   view.unmount();
   expect(store.get(userContext.userBattleAtom)).toBeUndefined();
+});
+
+it("passes aggro and resource bar toggles to the spectated battle scene", async () => {
+  const battle = makeCompleteBattle({
+    id: "spectated",
+    usersState: [makeUser({ userId: "player" })],
+  });
+  let mounted!: ReturnType<typeof mount>;
+  await act(async () => {
+    mounted = mount(
+      battle.id,
+      async () => ({ battle, result: null }) as unknown as Response,
+      { showAggro: false, resourceBarsVisibility: "on" },
+      true,
+    );
+  });
+  const { view, changeLayout } = mounted;
+  await view.findByText("Scene aggro false bars on");
+  act(() => changeLayout({ showAggro: true }));
+  await view.findByText("Scene aggro true bars on");
+  act(() => changeLayout({ resourceBarsVisibility: "off" }));
+  await view.findByText("Scene aggro true bars off");
 });
 
 it("starts asset loading before mounting each new battle scene, preserving the query input order", async () => {

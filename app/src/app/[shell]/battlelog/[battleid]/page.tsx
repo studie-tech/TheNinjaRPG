@@ -101,7 +101,14 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
         />
       )
     );
-  }, [battleState, userId, config.showGridNumbers, loadLpcCatalog]);
+  }, [
+    battleState,
+    userId,
+    config.showGridNumbers,
+    config.showAggro,
+    config.resourceBarsVisibility,
+    loadLpcCatalog,
+  ]);
 
   // Render functions for layout components
   const renderTimer = useCallback(() => {
