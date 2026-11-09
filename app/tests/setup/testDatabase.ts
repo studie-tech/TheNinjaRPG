@@ -127,7 +127,8 @@ const truncateEveryTable = async () => {
 
 /**
  * Drizzle client against the shared test database, shaped like the app's `DrizzleClient` so
- * server functions can be called directly. The schema is pushed on first use.
+ * server functions can be called directly. The schema is pushed once per run by
+ * `prepareTestDatabase`, which `setup/preload.ts` registers.
  *
  * This is a pool, not a single connection. Production talks to PlanetScale over HTTP, so
  * every query in a `Promise.all` is an independent request. A lone mysql2 connection cannot
@@ -154,6 +155,10 @@ export const peekTestDatabase = (): DrizzleClient | null => client ?? null;
 
 /**
  * Empty the given tables. Call in `beforeEach` for the tables a suite writes.
+ *
+ * Suites that open isolated Pyramid runs also reset `questHistory` in `afterEach`:
+ * enforcePyramidIsolation rejects restricted mutations for any user with an open isolated
+ * row, so a leftover run would break later files that reuse the same user ids.
  *
  * Runs as one session with foreign-key checks off. Parallel drizzle `DELETE`s on
  * the pool race parent against child and leave rows behind (duplicate userId on
