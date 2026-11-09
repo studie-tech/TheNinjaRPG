@@ -10,7 +10,13 @@
     "ignoreUnknown": true,
     "includes": [
       "src/**/*.ts",
-      "src/**/*.tsx"
+      "src/**/*.tsx",
+      "tests/**/*.ts",
+      "tests/**/*.tsx",
+      "tests/**/*.mjs",
+      "drizzle/**/*.ts",
+      "!drizzle/migrations/**",
+      "drizzle.config.ts"
     ]
   },
   "formatter": {
