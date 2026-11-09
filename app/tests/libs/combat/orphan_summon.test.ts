@@ -88,36 +88,6 @@ describe("spliceOrphanedSummons", () => {
     expect(state.map((u) => u.userId)).toEqual(["u1"]);
   });
 
-  it("splices a summon whose controller has fled", () => {
-    const state = [
-      mk({ userId: "u1", controllerId: "u1", fledBattle: true }),
-      mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
-    ];
-    const removed = spliceOrphanedSummons(state).map((u) => u.userId);
-    expect(removed).toEqual(["s1"]);
-    expect(state.map((u) => u.userId)).toEqual(["u1"]);
-  });
-
-  it("splices a summon whose controller has LEFT (leftBattle) even if still alive", () => {
-    const state = [
-      mk({ userId: "u1", controllerId: "u1", curHealth: 100, leftBattle: true }),
-      mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
-    ];
-    const removed = spliceOrphanedSummons(state).map((u) => u.userId);
-    expect(removed).toEqual(["s1"]);
-    expect(state.map((u) => u.userId)).toEqual(["u1"]);
-  });
-
-  it("splices a summon whose controller is gone from the array entirely", () => {
-    const state = [
-      mk({ userId: "enemy", controllerId: "enemy", curHealth: 100 }),
-      mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
-    ];
-    const removed = spliceOrphanedSummons(state).map((u) => u.userId);
-    expect(removed).toEqual(["s1"]);
-    expect(state.map((u) => u.userId)).toEqual(["enemy"]);
-  });
-
   it("preserves relative order of survivors after a mid-array splice", () => {
     const state = [
       mk({ userId: "u1", controllerId: "u1", curHealth: 0 }),

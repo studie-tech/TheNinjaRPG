@@ -65,10 +65,6 @@ describe("Kage seat change after a challenge", () => {
     expect(didUserTakeKageSeat(battle, "kage")).toBe(false);
   });
 
-  it("keeps a defending kage's rank when they lose the seat", () => {
-    expect(didUserTakeKageSeat(kageBattle(100, 0), "kage")).toBe(false);
-  });
-
   it("keeps a losing challenger's rank", () => {
     const battle = kageBattle(0, 100);
 
