@@ -80,8 +80,9 @@ describeWithDatabase("travel.getSectorData player visibility", () => {
       "warRelationship", "isMasked", "spriteAppearance",
     ].sort());
     expect(self.anbuSquad).toEqual(SQUAD);
-    // The caller's relation is correlated into its existing read, not fetched separately.
-    expect(statements).toHaveLength(7);
+    // The caller's relation is correlated into its existing read, not fetched separately; the
+    // published map that anchors roaming NPC copies is read alongside the window.
+    expect(statements).toHaveLength(8);
   });
 
   it.each(["banned", "idle", "banned-and-idle"])(

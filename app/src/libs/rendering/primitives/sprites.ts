@@ -592,8 +592,9 @@ export const createWorldSprites = async (
         const texture =
           still || !views || !sheet
             ? entry.idleTexture
-            : (views.views[sampleAnimationClip(sheet.clip, frame.now).index] ??
-              entry.idleTexture);
+            : (views.views[
+                sampleAnimationClip(sheet.clip, frame.now + (sheet.offsetMs ?? 0)).index
+              ] ?? entry.idleTexture);
         const facing =
           !still && sheet && pose.heading
             ? sheet.facing === pose.heading

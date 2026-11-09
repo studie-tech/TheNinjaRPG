@@ -95,4 +95,18 @@ export interface SectorUser {
   npcInteractionType?: OverworldInteractionType;
   /** Optimistic concurrency version for interactions with a moving NPC placement. */
   npcPositionVersion?: number;
+  /** Which copy of the placement this is, and which member of its group. */
+  npcCopy?: number;
+  npcMember?: number;
+  /** Present while the NPC roams; `longitude`/`latitude` then hold its anchor tile. */
+  npcWander?: {
+    seed: string;
+    anchor: { x: number; y: number };
+    radius: number;
+    wildOnly: boolean;
+  };
+  /** Drawn height relative to the default NPC height. */
+  npcScale?: number;
+  /** Walk and idle sheets that replace the NPC's still artwork on the map. */
+  npcSheets?: { idle?: CharacterAnimation; move?: CharacterAnimation };
 }

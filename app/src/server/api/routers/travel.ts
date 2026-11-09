@@ -32,7 +32,7 @@ import {
   maskWarObjectives,
   withMercenaryParticipation,
 } from "@/libs/objectiveWar";
-import { placementToSectorUser } from "@/libs/overworldAi";
+import { placementCopiesInSector, placementToSectorUser } from "@/libs/overworldAi";
 import { calcActiveUserRegen, calcMaxEnergy, getEffectiveLevel } from "@/libs/profile";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { boostPvpGain, getPvpBoost } from "@/libs/pvpExperience";
@@ -125,6 +125,7 @@ import {
   fetchPublishedSectorMap,
   fetchPublishedSectorMaps,
   getSectorNeighborIds,
+  habitatSectorPool,
   publishedMapsToPrefetchForMove,
   resolveSectorCrossing,
 } from "@/server/utils/sectorMap";
@@ -361,15 +362,18 @@ export const travelRouter = createTRPCRouter({
     .input(z.object({ sector: sectorIdSchema }))
     .query(async ({ input, ctx }) => {
       // The client's sector usually matches; overlap its reads with the authoritative user lookup.
-      const [user, sectorWindowData, fetchedWarData, liveBattles] = await Promise.all([
-        findUserDataForGetSectorData(ctx.drizzle, ctx),
-        fetchSectorWindowData(ctx.drizzle, ctx.userId, input.sector),
-        listWarForGetSectorData(ctx.drizzle),
-        // All recently-advanced battles. The Battle table only holds a handful of rows
-        // (the cleaner drops them after a day), so this indexed range scan is cheaper than
-        // a second sequential round-trip filtered by the sector's battle ids.
-        selectBattleForGetSectorData(ctx.drizzle),
-      ]);
+      const [user, sectorWindowData, fetchedWarData, liveBattles, requestedMap] =
+        await Promise.all([
+          findUserDataForGetSectorData(ctx.drizzle, ctx),
+          fetchSectorWindowData(ctx.drizzle, ctx.userId, input.sector),
+          listWarForGetSectorData(ctx.drizzle),
+          // All recently-advanced battles. The Battle table only holds a handful of rows
+          // (the cleaner drops them after a day), so this indexed range scan is cheaper than
+          // a second sequential round-trip filtered by the sector's battle ids.
+          selectBattleForGetSectorData(ctx.drizzle),
+          // Roaming NPC copies anchor on this map; the published-map cache keeps it warm.
+          fetchPublishedSectorMap(ctx.drizzle, input.sector).catch(() => null),
+        ]);
 
       if (!user) {
         throw serverError("NOT_FOUND", missingUserMessage(ctx.userId));
@@ -468,9 +472,33 @@ export const travelRouter = createTRPCRouter({
           return participant;
         });
 
-      const overworldAis = placements
-        .filter((p) => p.sector === user.sector && p.aiTemplate?.isAi)
-        .map((p) => placementToSectorUser(p, p.aiTemplate!));
+      const sectorMap =
+        user.sector === input.sector
+          ? requestedMap
+          : await fetchPublishedSectorMap(ctx.drizzle, user.sector).catch(() => null);
+      const overworldAis = placements.flatMap((p) => {
+        if (!p.aiTemplate?.isAi) return [];
+        const template = {
+          ...p.aiTemplate,
+          sheets: snapshotSpriteAnimations(p.aiTemplate.spriteAnimationBindings),
+        };
+        // Without the map, only a placement's stored first copy can be placed safely; a biome
+        // placement's stored spot is only a sample, so it shows nothing.
+        if (!sectorMap)
+          return p.sectorType !== "biome" && p.sector === user.sector
+            ? [placementToSectorUser(p, template)]
+            : [];
+        return placementCopiesInSector(
+          p,
+          user.sector,
+          sectorMap,
+          habitatSectorPool(p.habitats),
+        ).flatMap((copy) =>
+          Array.from({ length: copy.groupSize }, (_, member) =>
+            placementToSectorUser(p, template, copy, member),
+          ),
+        );
+      });
 
       // Quest history can only affect placements backed by an AI template.
       const readsQuests = placements.some((p) => p.aiTemplate?.isAi);

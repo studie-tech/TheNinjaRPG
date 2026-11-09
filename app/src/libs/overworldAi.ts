@@ -1,3 +1,4 @@
+import alea from "alea";
 import type {
   OverworldInteractionType,
   OverworldLocationType,
@@ -7,9 +8,20 @@ import {
   MAP_TOTAL_SECTORS,
   MAP_WAKE_ISLAND_SECTOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  OVERWORLD_MAX_GROUPS_PER_SECTOR,
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
 } from "@/drizzle/constants";
+import { oddQHexDistance } from "@/libs/hexgrid";
+import {
+  snapToWanderTile,
+  type WanderTile,
+  wanderGroupSize,
+  wanderPose,
+  wanderPoseTile,
+  wanderSeed,
+  wanderSpots,
+} from "@/libs/overworldWander";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { findNearestWalkableCoordinate } from "@/libs/sector-map/validation";
 import type { SectorUser } from "@/libs/sector-map/world-types";
@@ -53,16 +65,26 @@ export interface OverworldPositionConfig {
 }
 
 /**
+ * Sectors a random placement may land in. An empty pool means every placeable sector; a habitat
+ * filter narrows it to the matching globe regions.
+ */
+export type OverworldSectorPool = readonly number[];
+
+/**
  * Resolves a placement configuration into concrete sector and tile coordinates.
  * Invalid or reserved configured sectors fall back to a randomly selected placeable sector.
  */
 export const resolveOverworldPosition = (
   cfg: OverworldPositionConfig,
   rng: () => number = Math.random,
+  pool: OverworldSectorPool = [],
 ): { sector: number; longitude: number; latitude: number } => {
   let sector = cfg.sector;
-  if (cfg.sectorType === "random") {
-    sector = pickPlaceableSector(rng);
+  // A biome placement stores one sample spot from its pool; its groups come from each sector.
+  if (cfg.sectorType === "random" || cfg.sectorType === "biome") {
+    sector = pool.length
+      ? (pool[randInt(pool.length, rng)] as number)
+      : pickPlaceableSector(rng);
   } else if (cfg.sectorType === "from_list") {
     const candidates = cfg.sectorList.filter(isPlaceableSector);
     if (candidates.length > 0) {
@@ -102,6 +124,196 @@ export const snapOverworldPositionToWalkable = (
     : null;
 };
 
+export type OverworldCopySource = OverworldPositionConfig & {
+  id: string;
+  positionVersion: number;
+  spawnCount: number;
+  groupMin: number;
+  groupMax: number;
+  wildOnly: boolean;
+};
+
+/** Seeded positions of later copies, keyed by everything that decides them. */
+const copyPositionCache = new Map<
+  string,
+  { sector: number; longitude: number; latitude: number }[]
+>();
+
+/**
+ * Unsnapped position of every copy. Copy 0 is the stored tile, which the daily reroll moves;
+ * later copies roll from a seed that changes with that reroll, so they move on the same day.
+ */
+export const placementCopyPositions = (
+  placement: OverworldCopySource,
+  pool: OverworldSectorPool = [],
+) => {
+  const key = [
+    placement.id,
+    placement.positionVersion,
+    placement.spawnCount,
+    placement.sectorType,
+    placement.locationType,
+    placement.sector,
+    placement.longitude,
+    placement.latitude,
+    placement.sectorList.join("."),
+    pool.length,
+    pool[0],
+  ].join(":");
+  let positions = copyPositionCache.get(key);
+  if (!positions) {
+    positions = Array.from({ length: Math.max(1, placement.spawnCount) }, (_, copy) =>
+      copy === 0
+        ? {
+            sector: placement.sector,
+            longitude: placement.longitude,
+            latitude: placement.latitude,
+          }
+        : resolveOverworldPosition(
+            placement,
+            alea(wanderSeed(placement.id, placement.positionVersion, copy)),
+            pool,
+          ),
+    );
+    if (copyPositionCache.size > 256) copyPositionCache.clear();
+    copyPositionCache.set(key, positions);
+  }
+  return positions;
+};
+
+export type OverworldCopy = {
+  copy: number;
+  sector: number;
+  anchor: WanderTile;
+  seed: string;
+  groupSize: number;
+};
+
+/**
+ * Copies standing in `sector`, anchored on tiles they can roam from. Copy 0 keeps its stored
+ * tile exactly unless it must stay wild, since staff may have placed it on a doorstep on purpose.
+ */
+export const placementCopiesInSector = (
+  placement: OverworldCopySource,
+  sector: number,
+  map: NormalizedSectorMap,
+  pool: OverworldSectorPool = [],
+): OverworldCopy[] => {
+  if (placement.sectorType === "biome")
+    return biomeCopiesInSector(placement, sector, map, pool);
+  return placementCopyPositions(placement, pool).flatMap((position, copy) => {
+    if (position.sector !== sector) return [];
+    // Wildlife copies always land in the wild, including a seeded first copy.
+    const anchor =
+      copy === 0 && !placement.wildOnly
+        ? { x: position.longitude, y: position.latitude }
+        : snapToWanderTile(
+            map,
+            { x: position.longitude, y: position.latitude },
+            placement.wildOnly,
+          );
+    if (!anchor) return [];
+    const seed = wanderSeed(placement.id, placement.positionVersion, copy);
+    return [
+      {
+        copy,
+        sector,
+        anchor,
+        seed,
+        groupSize: wanderGroupSize(seed, placement.groupMin, placement.groupMax),
+      },
+    ];
+  });
+};
+
+/**
+ * A biome placement's groups in one sector, rolled from the sector itself so every sector of
+ * the habitat is populated and no request enumerates the world. Copy numbers stay unique per
+ * placement: `sector * OVERWORLD_MAX_GROUPS_PER_SECTOR + slot`.
+ */
+const biomeCopiesInSector = (
+  placement: OverworldCopySource,
+  sector: number,
+  map: NormalizedSectorMap,
+  pool: OverworldSectorPool,
+): OverworldCopy[] => {
+  const inBiome = pool.length ? poolSet(pool).has(sector) : isPlaceableSector(sector);
+  if (!inBiome) return [];
+  const slots = Math.min(placement.spawnCount, OVERWORLD_MAX_GROUPS_PER_SECTOR);
+  return Array.from({ length: slots }).flatMap((_, slot) => {
+    const copy = sector * OVERWORLD_MAX_GROUPS_PER_SECTOR + slot;
+    const seed = wanderSeed(placement.id, placement.positionVersion, copy);
+    const rng = alea(seed);
+    const anchor = snapToWanderTile(
+      map,
+      { x: randInt(SECTOR_WIDTH, rng), y: randInt(SECTOR_HEIGHT, rng) },
+      placement.wildOnly,
+    );
+    if (!anchor) return [];
+    return [
+      {
+        copy,
+        sector,
+        anchor,
+        seed,
+        groupSize: wanderGroupSize(seed, placement.groupMin, placement.groupMax),
+      },
+    ];
+  });
+};
+
+/** Whether a placement shows more than its stored copy. */
+export const isMultiCopyPlacement = (placement: {
+  sectorType: OverworldSectorType;
+  spawnCount: number;
+}) => placement.sectorType === "biome" || placement.spawnCount > 1;
+
+const poolSets = new WeakMap<OverworldSectorPool, Set<number>>();
+const poolSet = (pool: OverworldSectorPool) => {
+  let set = poolSets.get(pool);
+  if (!set) {
+    set = new Set(pool);
+    poolSets.set(pool, set);
+  }
+  return set;
+};
+
+/**
+ * Whether a player on `player` can reach a copy at `timeMs`. A still NPC must share the player's
+ * tile; a roaming group is in reach from any tile next to a member's current or next spot, which
+ * absorbs the delay between a tap and the request.
+ */
+export const isOverworldCopyInReach = (args: {
+  placement: OverworldCopySource & { wanderRadius: number };
+  copy: number;
+  map: NormalizedSectorMap;
+  pool?: OverworldSectorPool;
+  player: { sector: number; longitude: number; latitude: number };
+  timeMs: number;
+}): boolean => {
+  const { placement, map, player } = args;
+  const entry = placementCopiesInSector(placement, player.sector, map, args.pool).find(
+    (candidate) => candidate.copy === args.copy,
+  );
+  if (!entry) return false;
+  const near = (tile: WanderTile | null, reach: number) =>
+    !!tile &&
+    oddQHexDistance(tile.x, tile.y, player.longitude, player.latitude) <= reach;
+  if (placement.wanderRadius < 1) return near(entry.anchor, 0);
+  const config = {
+    seed: entry.seed,
+    anchor: entry.anchor,
+    radius: placement.wanderRadius,
+    spots: wanderSpots(map, entry.anchor, placement.wanderRadius, placement.wildOnly),
+  };
+  for (let member = 0; member < entry.groupSize; member++) {
+    const pose = wanderPose(config, member, args.timeMs);
+    if ([pose.from, pose.to, pose.via, wanderPoseTile(pose)].some((t) => near(t, 1)))
+      return true;
+  }
+  return false;
+};
+
 type PlacementForRender = {
   id: string;
   aiTemplateUserId: string;
@@ -110,6 +322,9 @@ type PlacementForRender = {
   longitude: number;
   latitude: number;
   positionVersion: number;
+  wanderRadius: number;
+  wildOnly: boolean;
+  mapScale?: number;
 };
 
 type TemplateForRender = {
@@ -121,12 +336,18 @@ type TemplateForRender = {
   maxHealth: number;
   level: number;
   rank: SectorUser["rank"];
+  sheets?: SectorUser["npcSheets"];
 };
 
-/** Adapts a persisted overworld placement and AI template to the shared sector-user model. */
+/**
+ * Adapts an overworld placement copy and AI template to the shared sector-user model. Each member
+ * of a group is its own entry; a roaming one carries its anchor and wander seed.
+ */
 export const placementToSectorUser = (
   placement: PlacementForRender,
   template: TemplateForRender,
+  copy?: OverworldCopy,
+  member = 0,
 ): SectorUser => ({
   userId: template.userId,
   username: template.username,
@@ -134,9 +355,9 @@ export const placementToSectorUser = (
   maxHealth: template.maxHealth,
   avatar: template.avatar,
   avatarLight: template.avatarLight,
-  sector: placement.sector,
-  longitude: placement.longitude,
-  latitude: placement.latitude,
+  sector: copy?.sector ?? placement.sector,
+  longitude: copy?.anchor.x ?? placement.longitude,
+  latitude: copy?.anchor.y ?? placement.latitude,
   location: null,
   villageId: null,
   level: template.level,
@@ -153,14 +374,73 @@ export const placementToSectorUser = (
   npcPlacementId: placement.id,
   npcInteractionType: placement.interactionType,
   npcPositionVersion: placement.positionVersion,
+  ...(placement.mapScale && placement.mapScale !== 100
+    ? { npcScale: placement.mapScale / 100 }
+    : {}),
+  npcCopy: copy?.copy ?? 0,
+  npcMember: member,
+  ...(placement.wanderRadius > 0
+    ? {
+        npcWander: {
+          seed: copy?.seed ?? wanderSeed(placement.id, placement.positionVersion, 0),
+          anchor: copy?.anchor ?? { x: placement.longitude, y: placement.latitude },
+          radius: placement.wanderRadius,
+          wildOnly: placement.wildOnly,
+        },
+      }
+    : {}),
+  ...(template.sheets?.idle || template.sheets?.move
+    ? { npcSheets: template.sheets }
+    : {}),
 });
+
+/** One copy of a placement; members of a group share it. */
+export const npcCopyKey = (npc: {
+  npcPlacementId?: string | null;
+  npcCopy?: number;
+}) => (npc.npcPlacementId ? `${npc.npcPlacementId}:${npc.npcCopy ?? 0}` : null);
+
+/**
+ * NPCs with their current tile: a roaming one reports where its wander timeline has it at
+ * `timeMs` rather than its anchor. `spots` caches each anchor's reachable tiles.
+ */
+export const liveNpcTiles = <T extends SectorUser>(
+  npcs: readonly T[],
+  map: NormalizedSectorMap | undefined,
+  timeMs: number,
+  spots: Map<string, WanderTile[]>,
+): T[] =>
+  npcs.map((npc) => {
+    const wander = npc.npcWander;
+    if (!wander || !map) return npc;
+    const key = `${wander.seed}:${wander.radius}:${wander.wildOnly}`;
+    let reachable = spots.get(key);
+    if (!reachable) {
+      reachable = wanderSpots(map, wander.anchor, wander.radius, wander.wildOnly);
+      spots.set(key, reachable);
+    }
+    const tile = wanderPoseTile(
+      wanderPose({ ...wander, spots: reachable }, npc.npcMember ?? 0, timeMs),
+    );
+    return tile.x === npc.longitude && tile.y === npc.latitude
+      ? npc
+      : { ...npc, longitude: tile.x, latitude: tile.y };
+  });
+
+/** Tiles from which a player can address an NPC: its own, or a neighbour while it roams. */
+export const npcReach = (npc: { npcWander?: unknown }) => (npc.npcWander ? 1 : 0);
 
 /**
  * Selects the first NPC under the player that has not already prompted. Finding no NPC clears the
  * remembered placement so returning to the tile can prompt again.
  */
 export const arrivalPromptDecision = <
-  T extends { npcPlacementId?: string | null; longitude: number; latitude: number },
+  T extends {
+    npcPlacementId?: string | null;
+    npcCopy?: number;
+    longitude: number;
+    latitude: number;
+  },
 >(args: {
   playerLongitude: number;
   playerLatitude: number;
@@ -173,13 +453,14 @@ export const arrivalPromptDecision = <
       n.longitude === args.playerLongitude &&
       n.latitude === args.playerLatitude,
   );
-  if (!npcHere?.npcPlacementId) {
+  const key = npcHere ? npcCopyKey(npcHere) : null;
+  if (!npcHere || !key) {
     return { prompt: null, lastPromptedPlacementId: null };
   }
-  if (npcHere.npcPlacementId === args.lastPromptedPlacementId) {
+  if (key === args.lastPromptedPlacementId) {
     return { prompt: null, lastPromptedPlacementId: args.lastPromptedPlacementId };
   }
-  return { prompt: npcHere, lastPromptedPlacementId: npcHere.npcPlacementId };
+  return { prompt: npcHere, lastPromptedPlacementId: key };
 };
 
 /**
@@ -187,18 +468,28 @@ export const arrivalPromptDecision = <
  * Unknown player coordinates suspend only the tile comparison; a despawn still closes the prompt.
  */
 export const isArrivalPromptStale = (args: {
+  /** Copy key from {@link npcCopyKey}. */
   promptedPlacementId: string | null;
-  npcs: { npcPlacementId?: string | null; longitude: number; latitude: number }[];
+  npcs: {
+    npcPlacementId?: string | null;
+    npcCopy?: number;
+    npcWander?: unknown;
+    longitude: number;
+    latitude: number;
+  }[];
   playerLongitude: number | undefined;
   playerLatitude: number | undefined;
 }): boolean => {
   if (!args.promptedPlacementId) return false;
-  const live = args.npcs.find((n) => n.npcPlacementId === args.promptedPlacementId);
-  if (!live) return true;
-  if (args.playerLongitude === undefined || args.playerLatitude === undefined)
-    return false;
-  return (
-    live.longitude !== args.playerLongitude || live.latitude !== args.playerLatitude
+  const members = args.npcs.filter((n) => npcCopyKey(n) === args.promptedPlacementId);
+  if (members.length === 0) return true;
+  const { playerLongitude, playerLatitude } = args;
+  if (playerLongitude === undefined || playerLatitude === undefined) return false;
+  // A roaming group stays addressable while any member is next to the player.
+  return !members.some(
+    (n) =>
+      oddQHexDistance(n.longitude, n.latitude, playerLongitude, playerLatitude) <=
+      npcReach(n),
   );
 };
 
@@ -430,6 +721,20 @@ export const hasFriendlyBindingToPlacement = (
  * objectives optionally narrow the list to placements using the selected opponent AIs.
  */
 export const placementsForObjective = <
+  T extends { aiTemplateUserId: string; interactionType: string },
+>(
+  placements: T[],
+  args: { task: string; selectedAiIds: string[] },
+): T[] =>
+  !isSupportedOverworldBindingTask(args.task)
+    ? []
+    : // Ambient placements are scenery and cannot carry an objective.
+      placementsForInteractiveObjective(
+        placements.filter((p) => p.interactionType !== "AMBIENT"),
+        args,
+      );
+
+const placementsForInteractiveObjective = <
   T extends { aiTemplateUserId: string; interactionType: string },
 >(
   placements: T[],

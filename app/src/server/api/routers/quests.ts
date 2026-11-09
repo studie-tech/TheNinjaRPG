@@ -88,7 +88,7 @@ import {
   isManagedQuestRun,
   questAttemptBlockMessage,
 } from "@/libs/questRun";
-import { availableQuestLetterRanks, availableRanks } from "@/libs/rank";
+import { availableRanks } from "@/libs/rank";
 import {
   buildRewardChoiceCards,
   getUnavailableRewardCards,
@@ -2186,6 +2186,15 @@ const prepareOverworldBindings = async (
     return {
       success: false,
       message: `Bound overworld placement not found: ${missing.join(", ")}`,
+    };
+  }
+  const ambient = placements.filter(
+    (placement) => placement.interactionType === "AMBIENT",
+  );
+  if (ambient.length > 0) {
+    return {
+      success: false,
+      message: `Ambient overworld placements offer no interaction and cannot be bound: ${ambient.map((placement) => placement.id).join(", ")}`,
     };
   }
   const friendlyCheck = validateFriendlyPlacementBindings(

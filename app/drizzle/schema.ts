@@ -393,6 +393,27 @@ export const overworldAiPlacement = mysqlTable(
     longitude: tinyint("longitude").default(0).notNull(),
     latitude: tinyint("latitude").default(0).notNull(),
     positionVersion: int("positionVersion").default(0).notNull(),
+    /** Hexes the AI roams around its tile; 0 keeps it in place. */
+    wanderRadius: tinyint("wanderRadius", { unsigned: true })
+      .default(consts.OVERWORLD_DEFAULT_WANDER_RADIUS)
+      .notNull(),
+    /**
+     * Copies across the map; copies beyond the first derive their tile from the placement.
+     * A biome placement puts this many groups in each of its sectors instead.
+     */
+    spawnCount: smallint("spawnCount", { unsigned: true }).default(1).notNull(),
+    /** Each copy appears as a group of this many members, a herd when more than one. */
+    groupMin: tinyint("groupMin", { unsigned: true }).default(1).notNull(),
+    groupMax: tinyint("groupMax", { unsigned: true }).default(1).notNull(),
+    /** Globe regions random and biome sectors are drawn from; empty allows every land region. */
+    habitats: json("habitats")
+      .$type<consts.OverworldHabitat[]>()
+      .default(sql`(JSON_ARRAY())`)
+      .notNull(),
+    /** Keeps spawning and roaming on wilderness tiles, away from villages and roads. */
+    wildOnly: boolean("wildOnly").default(false).notNull(),
+    /** Percent of the default NPC height the AI is drawn at on the map. */
+    mapScale: smallint("mapScale", { unsigned: true }).default(100).notNull(),
   },
   (table) => {
     return {

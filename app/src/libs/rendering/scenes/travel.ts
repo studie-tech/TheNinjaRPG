@@ -6,6 +6,14 @@ import type { MapAsset, VillageStructure } from "@/drizzle/schema";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { hexGridHeightRatio } from "@/libs/hexgrid";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
+import {
+  type WanderLeg,
+  type WanderTile,
+  wanderClock,
+  wanderLeg,
+  wanderProgress,
+  wanderSpots,
+} from "@/libs/overworldWander";
 import { createBakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
 import { createMapControls } from "@/libs/rendering/mapControls";
@@ -18,6 +26,7 @@ import {
   type TravelActorHit,
   type TravelActorMovement,
   type TravelActorsSnapshot,
+  travelActorKey,
 } from "@/libs/rendering/scenes/travelActors";
 import { travelSectorKey } from "@/libs/rendering/scenes/travelData";
 import { createTravelPath } from "@/libs/rendering/scenes/travelPath";
@@ -76,7 +85,8 @@ export const createTravelScene = async (options: {
   onError: (error: unknown) => void;
   /** Runs when sector terrain is usable, possibly before scenery or this factory finishes. */
   onReady: () => void;
-  onTap: (hit: TravelPick) => void;
+  /** Client coordinates let DOM overlays open beside the tapped artwork. */
+  onTap: (hit: TravelPick, client: { x: number; y: number }) => void;
   onHover: (structureId: string | null, locationId: string | null) => void;
   onZoom: (zoom: number) => void;
   initialZoom: number;
@@ -185,6 +195,11 @@ export const createTravelScene = async (options: {
       lastPath: string | null = null,
       hover = "";
     let lastActorSnapshot: TravelSnapshot | null = null;
+    let lastShowAmbient: boolean | undefined;
+    const wanderSpotCache = new Map<string, WanderTile[]>();
+    /** Each roaming member's current walk in world points; rebuilt only when its cycle moves on. */
+    const wanderWalks = new Map<string, WanderWalk>();
+    let wanderSpotsSector: number | null = null;
     let isStill = false;
     let lastFrameInputs: ReturnType<typeof travelFrameInputs> | null = null;
     let zoomTimer: ReturnType<typeof setTimeout> | null = null;
@@ -249,7 +264,7 @@ export const createTravelScene = async (options: {
         const snapshot = options.getSnapshot();
         return snapshot.enabled && sectors.has(snapshot.sector);
       },
-      tap: (x, y) => options.onTap(pick(x, y)),
+      tap: (x, y, client) => options.onTap(pick(x, y), client),
       pan: (dx, dy) => {
         if (!camera) return;
         hasManualCamera = true;
@@ -684,6 +699,65 @@ export const createTravelScene = async (options: {
           facing: step.facing,
         });
       }
+      // Roaming NPCs follow the shared wander timeline on the server-corrected clock.
+      const wanderMap = snapshot.window.find((w) => w.sector === snapshot.sector)?.map;
+      if (wanderMap && wanderSpotsSector !== snapshot.sector) {
+        wanderSpotsSector = snapshot.sector;
+        wanderSpotCache.clear();
+        wanderWalks.clear();
+      }
+      const clock = snapshot.weatherTime ?? Date.now();
+      for (const user of wanderMap ? snapshot.users : []) {
+        const wander = user.npcWander;
+        if (!wander || !wanderMap) continue;
+        const actorKey = travelActorKey(user);
+        const { cycle, into } = wanderClock(wander, clock);
+        let walk = wanderWalks.get(actorKey);
+        if (walk?.seed !== wander.seed || walk.cycle !== cycle) {
+          const key = `${wander.seed}:${wander.radius}:${wander.wildOnly}`;
+          let spots = wanderSpotCache.get(key);
+          if (!spots) {
+            spots = wanderSpots(
+              wanderMap,
+              wander.anchor,
+              wander.radius,
+              wander.wildOnly,
+            );
+            wanderSpotCache.set(key, spots);
+          }
+          const leg = wanderLeg({ ...wander, spots }, user.npcMember ?? 0, cycle);
+          const point = (tile: WanderTile, offset: WanderTile) => {
+            const hex = entry.grid.getHex({ col: tile.x, row: tile.y });
+            return hex
+              ? {
+                  x: -hex.center.x + offset.x * hex.width,
+                  y: -hex.center.y + offset.y * hex.height,
+                }
+              : null;
+          };
+          walk = {
+            seed: wander.seed,
+            cycle,
+            leg,
+            from: point(leg.from, leg.fromOffset),
+            to: point(leg.to, leg.toOffset),
+            via: leg.via ? point(leg.via, { x: 0, y: 0 }) : null,
+          };
+          wanderWalks.set(actorKey, walk);
+        }
+        const { from, to, via } = walk;
+        if (!from || !to) continue;
+        const walked = wanderProgress(walk.leg, into);
+        const progress = frame.reducedMotion ? Math.round(walked) : walked;
+        const at = alongWalk(from, via, to, progress);
+        movements.set(actorKey, {
+          x: at.x,
+          y: at.y,
+          direction:
+            walked > 0 && walked < 1 && !frame.reducedMotion ? "horizontal" : null,
+          facing: to.x < from.x ? 1 : -1,
+        });
+      }
       const tile = entry.grid.getHex({ col: snapshot.col, row: snapshot.row });
       if (tile) {
         const movement = movements.get(snapshot.viewer?.userId ?? "");
@@ -713,7 +787,11 @@ export const createTravelScene = async (options: {
           minY: camera.y - halfHeight - entry.position.y,
           maxY: camera.y + halfHeight - entry.position.y,
         });
-      const actorSnapshot: TravelActorsSnapshot = { ...snapshot, grid: entry.grid };
+      const actorSnapshot: TravelActorsSnapshot = {
+        ...snapshot,
+        grid: entry.grid,
+        showAmbient: game.visualEffects.wildlife,
+      };
       if (
         actorsDirty ||
         !lastActorSnapshot ||
@@ -724,10 +802,12 @@ export const createTravelScene = async (options: {
         snapshot.minBracket !== lastActorSnapshot.minBracket ||
         snapshot.friendlyAttack !== lastActorSnapshot.friendlyAttack ||
         snapshot.wars !== lastActorSnapshot.wars ||
-        snapshot.structureObjectiveIds !== lastActorSnapshot.structureObjectiveIds
+        snapshot.structureObjectiveIds !== lastActorSnapshot.structureObjectiveIds ||
+        game.visualEffects.wildlife !== lastShowAmbient
       ) {
         actorsDirty = false;
         lastActorSnapshot = snapshot;
+        lastShowAmbient = game.visualEffects.wildlife;
         actors.sync(actorSnapshot);
       }
       const breeze = sampleWorldWind(sourceFrame, scale(), game.visualEffects.wind);
@@ -872,8 +952,13 @@ export const createTravelScene = async (options: {
       );
       // World lighting excludes the canvas UI and the actors' identity markers.
       bakedLighting?.blendSun(worldSunlight(snapshot.lightDate));
-      if (viewport)
-        shadows.update(worldSunlight(snapshot.lightDate, 60_000), viewport, breeze);
+      const sun = worldSunlight(snapshot.lightDate, 60_000);
+      if (viewport) shadows.update(sun, viewport, breeze);
+      actors.setSun(
+        game.visualEffects.sunlight && game.visualEffects.shadows && !bakedLighting
+          ? sun
+          : null,
+      );
       for (const rendered of sectors.values()) {
         rendered.art.setLighting(snapshot.brightness);
       }
@@ -957,6 +1042,39 @@ type TravelSector = {
   terrain: Awaited<ReturnType<typeof createHexTerrain>>;
   art: Awaited<ReturnType<typeof createWorldSprites>>;
   startScenery: () => Promise<void>;
+};
+
+type WanderPoint = { x: number; y: number };
+type WanderWalk = {
+  seed: string;
+  cycle: number;
+  leg: WanderLeg;
+  from: WanderPoint | null;
+  to: WanderPoint | null;
+  via: WanderPoint | null;
+};
+
+/** Position along a walk, through `via` when the direct line was blocked. */
+const alongWalk = (
+  from: { x: number; y: number },
+  via: { x: number; y: number } | null,
+  to: { x: number; y: number },
+  progress: number,
+) => {
+  if (!via)
+    return {
+      x: from.x + (to.x - from.x) * progress,
+      y: from.y + (to.y - from.y) * progress,
+    };
+  const first = Math.hypot(via.x - from.x, via.y - from.y),
+    second = Math.hypot(to.x - via.x, to.y - via.y);
+  const along = progress * (first + second);
+  if (along <= first || !second) {
+    const t = first ? along / first : 1;
+    return { x: from.x + (via.x - from.x) * t, y: from.y + (via.y - from.y) * t };
+  }
+  const t = (along - first) / second;
+  return { x: via.x + (to.x - via.x) * t, y: via.y + (to.y - via.y) * t };
 };
 
 /** Capture ref-driven changes that need a frame even when decorative animation and lighting are disabled. */

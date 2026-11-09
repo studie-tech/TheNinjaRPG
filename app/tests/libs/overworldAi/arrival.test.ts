@@ -17,7 +17,7 @@ describe("arrivalPromptDecision", () => {
       lastPromptedPlacementId: null,
     });
     expect(res.prompt?.npcPlacementId).toBe("A");
-    expect(res.lastPromptedPlacementId).toBe("A");
+    expect(res.lastPromptedPlacementId).toBe("A:0");
   });
 
   it("does not re-prompt while standing on the already-prompted NPC", () => {
@@ -25,10 +25,10 @@ describe("arrivalPromptDecision", () => {
       playerLongitude: 3,
       playerLatitude: 4,
       npcs: [npc("A", 3, 4)],
-      lastPromptedPlacementId: "A",
+      lastPromptedPlacementId: "A:0",
     });
     expect(res.prompt).toBeNull();
-    expect(res.lastPromptedPlacementId).toBe("A");
+    expect(res.lastPromptedPlacementId).toBe("A:0");
   });
 
   it("re-arms (clears) when no NPC is on the player's tile", () => {
@@ -36,7 +36,7 @@ describe("arrivalPromptDecision", () => {
       playerLongitude: 9,
       playerLatitude: 9,
       npcs: [npc("A", 3, 4)],
-      lastPromptedPlacementId: "A",
+      lastPromptedPlacementId: "A:0",
     });
     expect(res.prompt).toBeNull();
     expect(res.lastPromptedPlacementId).toBeNull();
@@ -72,10 +72,10 @@ describe("arrivalPromptDecision", () => {
       playerLongitude: 3,
       playerLatitude: 4,
       npcs: [npc("B", 3, 4)],
-      lastPromptedPlacementId: "A",
+      lastPromptedPlacementId: "A:0",
     });
     expect(res.prompt?.npcPlacementId).toBe("B");
-    expect(res.lastPromptedPlacementId).toBe("B");
+    expect(res.lastPromptedPlacementId).toBe("B:0");
   });
 
   it("with two NPCs on one tile, deterministically prompts the first and does not double-prompt", () => {
@@ -112,7 +112,7 @@ describe("isArrivalPromptStale", () => {
   it("keeps the prompt open while the player stands on its NPC", () => {
     expect(
       isArrivalPromptStale({
-        promptedPlacementId: "A",
+        promptedPlacementId: "A:0",
         npcs: [npc("A", 3, 4)],
         playerLongitude: 3,
         playerLatitude: 4,
@@ -125,7 +125,7 @@ describe("isArrivalPromptStale", () => {
     // then tripped the server's "You are not standing on the NPC's tile" guard.
     expect(
       isArrivalPromptStale({
-        promptedPlacementId: "A",
+        promptedPlacementId: "A:0",
         npcs: [npc("A", 3, 4)],
         playerLongitude: 5,
         playerLatitude: 4,
@@ -136,7 +136,7 @@ describe("isArrivalPromptStale", () => {
   it("goes stale when the NPC moves away from a stationary player", () => {
     expect(
       isArrivalPromptStale({
-        promptedPlacementId: "A",
+        promptedPlacementId: "A:0",
         npcs: [npc("A", 9, 9)],
         playerLongitude: 3,
         playerLatitude: 4,
@@ -147,7 +147,7 @@ describe("isArrivalPromptStale", () => {
   it("goes stale when the NPC despawns out of the sector data", () => {
     expect(
       isArrivalPromptStale({
-        promptedPlacementId: "A",
+        promptedPlacementId: "A:0",
         npcs: [],
         playerLongitude: 3,
         playerLatitude: 4,
@@ -161,7 +161,7 @@ describe("isArrivalPromptStale", () => {
     // strand the modal.
     expect(
       isArrivalPromptStale({
-        promptedPlacementId: "A",
+        promptedPlacementId: "A:0",
         npcs: [],
         playerLongitude: undefined,
         playerLatitude: undefined,
@@ -173,7 +173,7 @@ describe("isArrivalPromptStale", () => {
     // Unknown position suspends only the tile comparison — it must not be read as "walked off".
     expect(
       isArrivalPromptStale({
-        promptedPlacementId: "A",
+        promptedPlacementId: "A:0",
         npcs: [npc("A", 3, 4)],
         playerLongitude: undefined,
         playerLatitude: undefined,
@@ -200,12 +200,12 @@ describe("isArrivalPromptStale", () => {
       playerLongitude: 3,
       playerLatitude: 4,
       npcs: [npc("A", 3, 4)],
-      lastPromptedPlacementId: "A",
+      lastPromptedPlacementId: "A:0",
     });
     expect(armed.prompt).toBeNull();
     expect(
       isArrivalPromptStale({
-        promptedPlacementId: "A",
+        promptedPlacementId: "A:0",
         npcs: [npc("A", 3, 4)],
         playerLongitude: 3,
         playerLatitude: 4,

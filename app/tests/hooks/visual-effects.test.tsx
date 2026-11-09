@@ -15,9 +15,9 @@ describe("useVisualEffects", () => {
     window.localStorage.clear();
   });
 
-  it("enables all seven independent effects by default", () => {
+  it("enables all eight independent effects by default", () => {
     const { result } = renderHook(() => useVisualEffects());
-    expect(Object.keys(result.current.visualEffects)).toHaveLength(7);
+    expect(Object.keys(result.current.visualEffects)).toHaveLength(8);
     expect(Object.values(result.current.visualEffects).every(Boolean)).toBe(true);
   });
 
@@ -34,6 +34,7 @@ describe("useVisualEffects", () => {
         weather: group !== "spriteAnimations",
         wind: group !== "spriteAnimations",
         spriteAnimations: group !== "spriteAnimations",
+        wildlife: group !== "spriteAnimations",
       });
     },
   );
@@ -47,7 +48,7 @@ describe("useVisualEffects", () => {
       window.localStorage.setItem(VISUAL_EFFECT_KEYS[effect], "false");
     expect(readVisualEffects()).toEqual({
       sunlight: true, dayNight: enabled, localLights: false, shadows: true,
-      weather: true, wind: false, spriteAnimations: enabled,
+      weather: true, wind: false, spriteAnimations: enabled, wildlife: enabled,
     });
   });
 
@@ -66,7 +67,7 @@ describe("useVisualEffects", () => {
       const remounted = renderHook(() => useVisualEffects());
       expect(remounted.result.current.visualEffects).toEqual({
         sunlight: enabled, dayNight: !enabled, localLights: enabled, shadows: true,
-        weather: enabled, wind: enabled, spriteAnimations: !enabled,
+        weather: enabled, wind: enabled, spriteAnimations: !enabled, wildlife: enabled,
       });
       expect(changes).toEqual([["dayNight", !enabled], ["spriteAnimations", !enabled]]);
     } finally {
@@ -81,7 +82,7 @@ describe("useVisualEffects", () => {
     setVisualEffect("spriteAnimations", !enabled);
     expect(readVisualEffects()).toEqual({
       sunlight: enabled, dayNight: !enabled, localLights: enabled, shadows: true,
-      weather: enabled, wind: enabled, spriteAnimations: !enabled,
+      weather: enabled, wind: enabled, spriteAnimations: !enabled, wildlife: enabled,
     });
   });
 
@@ -90,7 +91,7 @@ describe("useVisualEffects", () => {
     setVisualEffect("spriteAnimations", false);
     expect(readVisualEffects()).toEqual({
       sunlight: true, dayNight: false, localLights: true, shadows: true,
-      weather: true, wind: true, spriteAnimations: false,
+      weather: true, wind: true, spriteAnimations: false, wildlife: true,
     });
   });
 

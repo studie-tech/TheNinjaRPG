@@ -43,6 +43,8 @@ const placement = (id: string, sector: number) => ({
   latitude: 2,
   sectorType: "specific",
   sectorList: [],
+  habitats: [],
+  wildOnly: false,
   locationType: "random",
 });
 

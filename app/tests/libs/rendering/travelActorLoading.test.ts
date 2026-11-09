@@ -65,9 +65,9 @@ describe("travel actor artwork loading", () => {
     users.push(player(99,{isNpc:true,npcPlacementId:"guide",npcInteractionType,longitude:4,latitude:4,updatedAt:new Date(0)}));
     actors.sync(snapshot(users));
     const roots=actors.container.children.filter(root=>root.label.startsWith("user:")||root.label.startsWith("npc:"));
-    expect(roots).toHaveLength(20); expect(roots.some(root=>root.label==="npc:guide")).toBe(true);
+    expect(roots).toHaveLength(20); expect(roots.some(root=>root.label==="npc:guide:0:0")).toBe(true);
     const recipes=travelActorRecipes({...snapshot(users),characterKeys:new Set(roots.map(root=>root.label))});
-    expect(recipes.find(recipe=>recipe.key==="npc:guide")?.parts.some(part=>part.kind===(npcInteractionType==="HOSTILE"?"attack":"talk"))).toBe(true);
+    expect(recipes.find(recipe=>recipe.key==="npc:guide:0:0")?.parts.some(part=>part.kind===(npcInteractionType==="HOSTILE"?"attack":"talk"))).toBe(true);
     expect(recipes.find(recipe=>recipe.counter)?.counter).toBe(31);
   });
 
@@ -212,6 +212,22 @@ describe("travel actor artwork loading", () => {
     fixed.zIndex = 27; check(28, 29);
     users = [users[0]!, player(2, { longitude: 5, latitude: 5 })]; actors.sync(snapshot(users)); check(-120, -90);
     actors.container.y += 500; check(-85, -115);
+  });
+  it("lets crossings caused only by wildlife wait for the next depth sort", () => {
+    holdCharacters();
+    const { actors, grid, stage, depth, snapshot } = fixture();
+    actors.sync(snapshot([player(0, { longitude: 4, latitude: 4, isNpc: true, npcPlacementId: "herd", npcInteractionType: "AMBIENT", avatar: "deer.png" })]));
+    const offset = grid.getHex({ col: 4, row: 4 })!.height * (0.1 + 1.8 * 0.7 * 4 / 64);
+    const fixed = new Container(); fixed.zIndex = -100; stage.addChild(fixed); depth.attach(fixed);
+    const root = actors.container.children[0]!;
+    const place = (now: number, contact: number) => actors.animate({ ...frame, now }, new Map([["npc:herd:0:0", { x: 100, y: -contact - offset - actors.container.y, direction: null, facing: 1 }]]));
+    const behindScenery = () => depth.renderLayerChildren.indexOf(root) < depth.renderLayerChildren.indexOf(fixed);
+    place(1000, -150);
+    expect(behindScenery()).toBe(true);
+    place(1100, -50);
+    expect(behindScenery()).toBe(true);
+    place(1300, -50);
+    expect(behindScenery()).toBe(false);
   });
   it("preserves a roaming NPC's rectangular artwork proportions", async () => {
     const texture = new Texture({ source: new BufferImageSource({ resource: new Uint8Array(4 * 8 * 4), width: 4, height: 8 }) });

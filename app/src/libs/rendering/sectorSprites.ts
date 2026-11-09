@@ -1041,4 +1041,9 @@ export type WorldSpriteDescription = {
 export type WorldMotionDirection = "horizontal" | "north" | "south";
 
 /** A looping sheet and the way its art faces, so it can be mirrored to a heading. */
-export type WorldLoop = { clip: AnimationClip; facing: AvatarFacing };
+export type WorldLoop = {
+  clip: AnimationClip;
+  facing: AvatarFacing;
+  /** Shifts this sprite's loop clock, so neighbours sharing a sheet play out of step. */
+  offsetMs?: number;
+};

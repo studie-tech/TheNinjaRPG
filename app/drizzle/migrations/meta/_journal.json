@@ -1030,6 +1030,20 @@
       "when": 1794080038542,
       "tag": "0147_ai_transformations",
       "breakpoints": false
+    },
+    {
+      "idx": 148,
+      "version": "5",
+      "when": 1794131688289,
+      "tag": "0148_overworld_ai_roaming",
+      "breakpoints": false
+    },
+    {
+      "idx": 149,
+      "version": "5",
+      "when": 1794131711417,
+      "tag": "0149_seed_wildlife",
+      "breakpoints": false
     }
   ]
 }

@@ -1,6 +1,13 @@
 import { z } from "zod";
 import {
   MAP_TOTAL_SECTORS,
+  OVERWORLD_DEFAULT_WANDER_RADIUS,
+  OVERWORLD_MAP_SCALE_RANGE,
+  OVERWORLD_MAX_GROUP_SIZE,
+  OVERWORLD_MAX_GROUPS_PER_SECTOR,
+  OVERWORLD_MAX_SPAWN_COUNT,
+  OVERWORLD_MAX_WANDER_RADIUS,
+  OverworldHabitats,
   OverworldInteractionTypes,
   OverworldLocationTypes,
   OverworldSectorTypes,
@@ -50,6 +57,28 @@ export const OverworldPlacementSchema = z
       )
       .prefault([]),
     isActive: z.coerce.boolean().prefault(true),
+    wanderRadius: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(OVERWORLD_MAX_WANDER_RADIUS)
+      .prefault(OVERWORLD_DEFAULT_WANDER_RADIUS),
+    spawnCount: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(OVERWORLD_MAX_SPAWN_COUNT)
+      .prefault(1),
+    groupMin: z.coerce.number().int().min(1).max(OVERWORLD_MAX_GROUP_SIZE).prefault(1),
+    groupMax: z.coerce.number().int().min(1).max(OVERWORLD_MAX_GROUP_SIZE).prefault(1),
+    habitats: z.array(z.enum(OverworldHabitats)).prefault([]),
+    wildOnly: z.coerce.boolean().prefault(false),
+    mapScale: z.coerce
+      .number()
+      .int()
+      .min(OVERWORLD_MAP_SCALE_RANGE[0])
+      .max(OVERWORLD_MAP_SCALE_RANGE[1])
+      .prefault(100),
   })
   .superRefine((val, ctx) => {
     if (val.interactionType !== "FRIENDLY" && val.quests.length > 0) {
@@ -65,6 +94,59 @@ export const OverworldPlacementSchema = z
         message: "Provide at least one sector when sector mode is 'from_list'",
         path: ["sectorList"],
       });
+    }
+    if (val.groupMin > val.groupMax) {
+      ctx.addIssue({
+        code: "custom",
+        message: "The smallest group cannot be larger than the largest",
+        path: ["groupMin"],
+      });
+    }
+    if (
+      val.spawnCount > 1 &&
+      val.sectorType === "specific" &&
+      val.locationType === "specific"
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Copies need a random sector or a random tile, or they all share one tile",
+        path: ["spawnCount"],
+      });
+    }
+    if (
+      val.habitats.length > 0 &&
+      val.sectorType !== "random" &&
+      val.sectorType !== "biome"
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Habitats only apply to random and biome sectors",
+        path: ["habitats"],
+      });
+    }
+    if (val.sectorType === "biome") {
+      if (val.habitats.length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Choose at least one biome to spawn in",
+          path: ["habitats"],
+        });
+      }
+      if (val.locationType !== "random") {
+        ctx.addIssue({
+          code: "custom",
+          message: "Biome placements roll their own tile in every sector",
+          path: ["locationType"],
+        });
+      }
+      if (val.spawnCount > OVERWORLD_MAX_GROUPS_PER_SECTOR) {
+        ctx.addIssue({
+          code: "custom",
+          message: `At most ${OVERWORLD_MAX_GROUPS_PER_SECTOR} groups per sector`,
+          path: ["spawnCount"],
+        });
+      }
     }
     const ids = val.quests.map((q) => q.questId);
     if (new Set(ids).size !== ids.length) {

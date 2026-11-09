@@ -53,13 +53,14 @@ import Modal from "@/layout/Modal";
 import RaidBrowser from "@/layout/RaidBrowser";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
 import SliderField from "@/layout/SliderField";
+import { TravelUserCard } from "@/layout/TravelUserCard";
 import WebGlError from "@/layout/WebGLError";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { getWorldCycleBrightness } from "@/libs/dayNight";
 import { expandedWorldAtom } from "@/libs/expandedWorld";
 import type { TerrainHex } from "@/libs/hexgrid";
-import { findHex, PathCalculator } from "@/libs/hexgrid";
+import { findHex, oddQHexDistance, PathCalculator } from "@/libs/hexgrid";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
@@ -69,8 +70,12 @@ import {
   arrivalPromptDecision,
   findActionableBoundObjective,
   isArrivalPromptStale,
+  liveNpcTiles,
+  npcCopyKey,
+  npcReach,
   resolveArrivalPromptCta,
 } from "@/libs/overworldAi";
+import type { WanderTile } from "@/libs/overworldWander";
 import {
   getKnownEffectiveLevel,
   getKnownExpBracket,
@@ -249,6 +254,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   // State pertaining to the sector
   const [targetUser, setTargetUser] = useState<SectorUser | null>(null);
   const [healTargetUser, setHealTargetUser] = useState<SectorUser | null>(null);
+  // Each tap opens a new card; the previous card's outside-tap dismissal can land after it.
+  const [profileCard, setProfileCard] = useState<{
+    user: SectorUser;
+    anchor: { x: number; y: number };
+    openedAt: number;
+  } | null>(null);
   const [sorrounding, setSorrounding] = useState<SectorUser[]>([]);
   const publishSurroundingsRef = useRef(false);
   publishSurroundingsRef.current =
@@ -353,7 +364,18 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const pendingNpcInteractRef = useRef<{
     placementId: string;
     positionVersion: number;
+    copy: number;
   } | null>(null);
+  /** Reachable tiles per roaming NPC anchor, for live tiles in prompts and taps. */
+  const wanderSpotsRef = useRef(new Map<string, WanderTile[]>());
+  /** Interactive NPCs where they stand now; ambient ones are scenery and never prompt. */
+  const liveNpcs = () =>
+    liveNpcTiles(
+      (data?.overworldAis ?? []).filter((npc) => npc.npcInteractionType !== "AMBIENT"),
+      sectorMap,
+      Date.now() - timeDiffRef.current,
+      wanderSpotsRef.current,
+    );
   // Mirror of `npcDialog` for the long-lived scene click closure, so a new NPC interaction can't
   // overwrite `pendingNpcInteractRef` (and mis-target the open dialog's next branch click) while a
   // dialog is up. Continuing the current dialog uses `interactNpc` directly, so it stays unblocked.
@@ -1607,10 +1629,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     pendingNpcInteractRef.current = {
       placementId: npc.npcPlacementId,
       positionVersion: npc.npcPositionVersion ?? 0,
+      copy: npc.npcCopy ?? 0,
     };
     interactNpc({
       placementId: npc.npcPlacementId,
       positionVersion: npc.npcPositionVersion ?? 0,
+      copy: npc.npcCopy ?? 0,
     });
     return true;
   };
@@ -1620,9 +1644,21 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
    * Returns whether the placement still resolves to a live NPC, allowing an attack-icon caller
    * to fall through to the normal player-interaction path when its sprite is stale.
    */
-  const handleNpcTileInteraction = (placementId: string | undefined): boolean => {
+  const handleNpcTileInteraction = (
+    placementId: string | undefined,
+    copy = 0,
+  ): boolean => {
     if (!placementId) return false;
-    const npc = usersRef.current?.find((u) => u.npcPlacementId === placementId);
+    const origin = originRef.current;
+    // A roaming group is addressed through whichever member is closest to the player.
+    const members = liveNpcs().filter(
+      (u) => u.npcPlacementId === placementId && (u.npcCopy ?? 0) === copy,
+    );
+    const distance = (u: SectorUser) =>
+      origin
+        ? oddQHexDistance(u.longitude, u.latitude, origin.col, origin.row)
+        : Number.POSITIVE_INFINITY;
+    const npc = members.sort((a, b) => distance(a) - distance(b))[0];
     if (!npc) {
       // Sprite is stale (placement despawned between scene build and click): refresh the sector so
       // the ghost sprite disappears, and report not-consumed so the caller isn't left with silent
@@ -1630,10 +1666,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       void utils.travel.getSectorData.invalidate();
       return false;
     }
-    if (
-      npc.longitude === originRef.current?.col &&
-      npc.latitude === originRef.current?.row
-    ) {
+    if (distance(npc) <= npcReach(npc)) {
       interactWithNpc(npc);
     } else {
       setTarget({ x: npc.longitude, y: npc.latitude });
@@ -1720,6 +1753,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const updatePositionActions = () => {
     const userData = userRef.current;
     if (!userData) return;
+    const live = liveNpcs();
     const arrived = locationGroups
       .filter(
         (entries) =>
@@ -1737,8 +1771,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     if (arrivalNpc) {
       if (
         isArrivalPromptStale({
-          promptedPlacementId: arrivalNpc.npcPlacementId ?? null,
-          npcs: data?.overworldAis ?? [],
+          promptedPlacementId: npcCopyKey(arrivalNpc),
+          npcs: live,
           playerLongitude: userData?.longitude,
           playerLatitude: userData?.latitude,
         })
@@ -1751,8 +1785,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       if (
         !pending ||
         isArrivalPromptStale({
-          promptedPlacementId: pending.placementId,
-          npcs: data?.overworldAis ?? [],
+          promptedPlacementId: npcCopyKey({
+            npcPlacementId: pending.placementId,
+            npcCopy: pending.copy,
+          }),
+          npcs: live,
           playerLongitude: userData?.longitude,
           playerLatitude: userData?.latitude,
         })
@@ -1777,7 +1814,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     const decision = arrivalPromptDecision({
       playerLongitude: longitude,
       playerLatitude: latitude,
-      npcs: data?.overworldAis ?? [],
+      npcs: live,
       lastPromptedPlacementId: lastPromptedPlacementIdRef.current,
     });
     lastPromptedPlacementIdRef.current = decision.lastPromptedPlacementId;
@@ -1787,6 +1824,15 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     updatePositionActions();
     updateCurrentStructure();
   };
+  // Roaming NPCs move without new data, so their prompts are rechecked while any are here.
+  const hasRoamingNpc = (data?.overworldAis ?? []).some(
+    (npc) => npc.npcWander && npc.npcInteractionType !== "AMBIENT",
+  );
+  useEffect(() => {
+    if (!hasRoamingNpc) return;
+    const timer = window.setInterval(() => positionChangedRef.current(), 1000);
+    return () => window.clearInterval(timer);
+  }, [hasRoamingNpc]);
   useEffect(() => {
     updatePositionActions();
   }, [
@@ -1997,7 +2043,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     }
   };
 
-  const onTravelTap = (hit: TravelPick) => {
+  const onTravelTap = (hit: TravelPick, client: { x: number; y: number }) => {
     if (
       showSorroundingRef.current ||
       performance.now() < ignoreMapClicksUntilRef.current
@@ -2020,6 +2066,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       longitude?: number;
       latitude?: number;
       npcPlacementId?: string;
+      npcCopy?: number;
       userId?: string;
       battleId?: string;
     }[] = [];
@@ -2088,12 +2135,16 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         // An NPC's body is a click target like its interaction icon;
         // without this, the click would fall through the sprite onto
         // the tile visually behind the NPC and walk the player there.
-        if (handleNpcTileInteraction(i.npcPlacementId as string | undefined)) {
+        if (
+          handleNpcTileInteraction(i.npcPlacementId as string | undefined, i.npcCopy)
+        ) {
           return false;
         }
         return true;
       } else if (showUsersRef.current && i.type === "talk") {
-        if (handleNpcTileInteraction(i.npcPlacementId as string | undefined)) {
+        if (
+          handleNpcTileInteraction(i.npcPlacementId as string | undefined, i.npcCopy)
+        ) {
           return false;
         }
         // Stale sprite (placement despawned): keep the tile clickable
@@ -2101,7 +2152,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       } else if (showUsersRef.current && i.type === "attack") {
         const npcPlacementId = i.npcPlacementId as string | undefined;
         if (npcPlacementId) {
-          if (handleNpcTileInteraction(npcPlacementId)) {
+          if (handleNpcTileInteraction(npcPlacementId, i.npcCopy)) {
             return false;
           }
           // Stale NPC sprite: fall through to the tile rather than
@@ -2146,8 +2197,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         }
         return false;
       } else if (showUsersRef.current && i.type === "info") {
-        const userId = i.userId as string;
-        void router.push(`/userid/${userId}`);
+        const target = usersRef.current?.find((u) => u.userId === i.userId);
+        if (target)
+          setProfileCard({ user: target, anchor: client, openedAt: performance.now() });
         return false;
       } else if (showUsersRef.current && i.type === "marker") {
         return true;
@@ -2256,7 +2308,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             brightness: getWorldCycleBrightness(lightDate),
           };
         },
-        onTap: (hit) => travelCallbacks.current.onTap(hit),
+        onTap: (hit, client) => travelCallbacks.current.onTap(hit, client),
         onReady: () => travelCallbacks.current.onReady(),
         onHover: (structureId, locationId) => {
           if (structureId !== hoveredStructureIdRef.current) {
@@ -2356,7 +2408,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         )}
         <aside
           aria-label="Map compass and neighboring sectors"
-          className="pointer-events-none absolute top-3 left-3 z-10 rounded-lg border bg-background/90 p-2 text-center text-xs shadow-md backdrop-blur-sm"
+          className="bg-background/90 pointer-events-none absolute top-3 left-3 z-10 rounded-lg border p-2 text-center text-xs shadow-md backdrop-blur-sm"
         >
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-2 gap-y-1 tabular-nums">
             <span className="col-span-3">
@@ -2365,14 +2417,14 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
                 ? "Polar boundary"
                 : sectorGridNeighbors(sector)[0]}
             </span>
-            <span className="whitespace-nowrap text-right">
+            <span className="text-right whitespace-nowrap">
               {sectorGridNeighbors(sector)[3]} · W
             </span>
-            <span className="min-w-8 rounded border border-foreground/20 bg-muted px-1.5 py-0.5 font-bold">
+            <span className="border-foreground/20 bg-muted min-w-8 rounded border px-1.5 py-0.5 font-bold">
               <span className="sr-only">Current sector </span>
               {sector}
             </span>
-            <span className="whitespace-nowrap text-left">
+            <span className="text-left whitespace-nowrap">
               E · {sectorGridNeighbors(sector)[1]}
             </span>
             <span className="col-span-3">
@@ -2382,13 +2434,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
                 : sectorGridNeighbors(sector)[2]}
             </span>
           </div>
-          <div className="mt-1 text-muted-foreground">
+          <div className="text-muted-foreground mt-1">
             Gold lines mark sector borders
           </div>
         </aside>
         <div className="absolute top-3 right-3 z-10 flex items-start gap-2">
           <DayNightIndicator
-            className="rounded-lg border bg-background/90 px-3 py-2 shadow-md backdrop-blur-sm"
+            className="bg-background/90 rounded-lg border px-3 py-2 shadow-md backdrop-blur-sm"
             previewDate={lightingPreviewDate}
             onPreviewDateChange={setLightingPreviewDate}
             previewWeather={weatherPreview}
@@ -2432,7 +2484,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       )}
       {currentStructure && (
         <div className="absolute bottom-3 left-3 z-20 max-w-[calc(50%-40px)] rounded-lg bg-black/80 p-3 text-white shadow-lg sm:bottom-4 sm:left-4 sm:max-w-xs">
-          <h3 className="font-semibold text-sm">
+          <h3 className="text-sm font-semibold">
             {currentServices.map((service) => service.name).join(" · ")}
           </h3>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -2463,7 +2515,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             <div className="flex items-center gap-3">
               <div className="min-w-0">
                 <h3
-                  className="truncate font-semibold text-sm"
+                  className="truncate text-sm font-semibold"
                   title={hoveredStructure.name}
                 >
                   {hoveredStructure.name}
@@ -2489,7 +2541,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             <div className="flex items-center gap-3">
               <Swords className="hidden h-6 w-6 shrink-0 text-red-500 sm:block" />
               <div className="min-w-0">
-                <h3 className="truncate font-semibold text-sm" title={activeRaid.name}>
+                <h3 className="truncate text-sm font-semibold" title={activeRaid.name}>
                   {activeRaid.name}
                 </h3>
                 <Button
@@ -2516,7 +2568,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
               />
               <div className="min-w-0">
                 <h3
-                  className="truncate font-semibold text-sm sm:text-lg"
+                  className="truncate text-sm font-semibold sm:text-lg"
                   title={dungeonStructures.length === 1 ? firstDungeon.name : undefined}
                 >
                   {dungeonStructures.length === 1
@@ -2525,7 +2577,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
                 </h3>
                 <Link
                   href="/dungeon"
-                  className="mt-2 inline-block rounded-md bg-blue-500 px-2 py-2 font-medium text-white text-xs transition-colors hover:bg-blue-600 sm:px-4 sm:text-sm"
+                  className="mt-2 inline-block rounded-md bg-blue-500 px-2 py-2 text-xs font-medium text-white transition-colors hover:bg-blue-600 sm:px-4 sm:text-sm"
                 >
                   {dungeonStructures.length === 1 ? "Enter Dungeon" : "View Dungeons"}
                 </Link>
@@ -2623,6 +2675,16 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           />
         </div>
       )}
+      {profileCard && (
+        <TravelUserCard
+          key={profileCard.openedAt}
+          user={profileCard.user}
+          anchor={profileCard.anchor}
+          onClose={() =>
+            setProfileCard((current) => (current === profileCard ? null : current))
+          }
+        />
+      )}
       {/* Hunting can receive focus later without dismissing this NPC arrival. */}
       {arrivalNpc && (
         <Modal
@@ -2687,13 +2749,14 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
                 type="button"
                 variant="info"
                 disabled={isInteracting}
-                className="h-auto w-full justify-start whitespace-normal text-left"
+                className="h-auto w-full justify-start text-left whitespace-normal"
                 onClick={() => {
                   const ctx = pendingNpcInteractRef.current;
                   if (ctx && !isInteracting) {
                     interactNpc({
                       placementId: ctx.placementId,
                       positionVersion: ctx.positionVersion,
+                      copy: ctx.copy,
                       dialogContentId: dialogChoiceContentId(
                         branch.nextObjectiveId,
                         npcDialog.objectiveId,
