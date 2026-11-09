@@ -89,3 +89,26 @@ it("reports the outcome of saving a calculation and refreshes the history on suc
   await waitFor(() => expect(toast.showMutationToast).toHaveBeenCalledWith(saved));
   expect(refetch).toHaveBeenCalledTimes(1);
 });
+
+it("recalculates the damage when formula parameters change, including a damage of 0", async () => {
+  const params = Promise.resolve({});
+  let view: ReturnType<typeof render>;
+  await act(async () => {
+    view = render(
+      <QueryClientProvider client={queryClient}>
+        <Suspense fallback={null}>
+          <Simulator params={params} />
+        </Suspense>
+      </QueryClientProvider>,
+    );
+  });
+  const damage = () => view!.queryByText(/^Damage: /)?.textContent;
+  const initial = damage();
+  expect(initial).not.toBe("Damage: 0");
+  fireEvent.input(view!.getByLabelText("base_hits"), { target: { value: "1" } });
+  await waitFor(() => expect(damage()).not.toBe(initial));
+  fireEvent.input(view!.getByLabelText("ep_normalization"), {
+    target: { value: "1000000000" },
+  });
+  await waitFor(() => expect(damage()).toBe("Damage: 0"));
+});
