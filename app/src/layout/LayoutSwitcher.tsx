@@ -64,9 +64,9 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   // The server picks the layout from the cookie; localStorage is only a recovery source
   // for when that cookie is lost (Safari caps JS-set cookies at 7 days, so it expires
   // for anyone who visits less often than weekly). Swapping the shell here after
-  // hydration replaced the entire viewport in one frame, which is among the largest
-  // layout-shift events on the site. The stored preference is re-synced to the cookie so
-  // the *next* request renders the right shell, and the current render is left alone.
+  // hydration would replace the entire viewport in one frame, a large layout shift, so
+  // the current render is left alone and the stored preference is only re-synced to the
+  // cookie for the *next* request.
   // When the stored choice differs from what the server rendered, pages the router has
   // already fetched or prefetched carry the wrong shell too, and navigating to them would
   // flip between layouts; a single refresh re-renders under the repaired cookie.

@@ -116,10 +116,8 @@ export const LogbookAchievements: React.FC = () => {
   // invisible to that check, which is what refetchInterval is for; staleTime covers the same case
   // on remount and refocus, since an interval only runs while this is mounted and focused.
   //
-  // Polling this costs less than the code it replaces rather than eating into the saving: it runs
-  // only while the Achievements tab is open, on the same cadence profile.getUser already polls at
-  // (UserContext), and that poll used to carry these very definitions for every player on every
-  // page. isLoading rather than isPending: a disabled query never stops being pending, which would
+  // The poll runs only while the Achievements tab is open, on the cadence profile.getUser polls at
+  // (UserContext). isLoading rather than isPending: a disabled query never stops being pending, which would
   // leave the tab on its spinner forever.
   const {
     data: catalogue,
@@ -537,10 +535,9 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
   const { checkRewards, isCheckingRewards } = useCheckRewards();
   const lastAchievementAutoClaimKeyRef = useRef<string | null>(null);
 
-  /** Auto-claim achievements when objectives are satisfied (same intent as the old effect).
+  /** Auto-claim achievements when objectives are satisfied.
    * Deduplicate by quest + completion state + history counters so `userData` refetches from
-   * `checkRewards` invalidation do not call `checkRewards` again in a tight loop.
-   * (Single-shot achievements resetting to incomplete after claim was fixed server-side.) */
+   * `checkRewards` invalidation do not call `checkRewards` again in a tight loop. */
   useEffect(() => {
     if (!allDone) {
       lastAchievementAutoClaimKeyRef.current = null;
@@ -704,7 +701,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
             <div className="font-bold text-sm">{quest.name}</div>
           </div>
         )}
-        {/* If we're not showing the scene, just show the text. Usefull when we're in the logbook */}
+        {/* If we're not showing the scene, just show the text. Useful when we're in the logbook */}
         {!showScene && (
           <>
             <div className="pt-2">
@@ -893,7 +890,7 @@ export const useCheckRewards = () => {
         quests: prepareQuestRewardUpdate(),
       }),
       onSuccess: async (data, variables, context) => {
-        // If a failutre, show a toast
+        // If a failure, show a toast
         if (!data.success && "message" in data) {
           showMutationToast({ success: data.success, message: data.message });
         }
