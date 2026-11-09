@@ -3,11 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "bun:test";
 import { parseHtml } from "@/utils/parse";
 
-/**
- * Images inside user-authored posts used to render with no width or height, so they
- * occupied zero pixels until their bytes arrived and then pushed the rest of the thread
- * down. Forum threads were the worst Cumulative Layout Shift group on the site.
- */
 const render = (html: string) => renderToStaticMarkup(parseHtml(html) as React.ReactNode);
 
 describe("parseHtml image dimensions", () => {

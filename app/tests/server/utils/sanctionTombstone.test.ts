@@ -504,7 +504,7 @@ describeWithDatabase("sanction tombstones", () => {
     expect(stored).not.toContain("Sanctioned");
     expect(stored).not.toContain("example.com");
     expect(stored).not.toContain("google-123");
-    // The original reports are removed with the account, as before.
+    // The original reports are removed with the account.
     expect(await (await getTestDatabase()).query.userReport.findMany()).toHaveLength(0);
   });
 
