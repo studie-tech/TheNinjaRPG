@@ -151,6 +151,7 @@ export const updateUserDataForNpcHeal = (
       regenAt: healedAt,
       updatedAt: nextSnapshotSql(userData.updatedAt),
       status: "AWAKE",
+      warTornRespawn: false,
     })
     .where(
       and(
