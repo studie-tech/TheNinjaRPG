@@ -513,15 +513,9 @@ export const getRolledElements = async (client: DrizzleClient, userId: string) =
 };
 
 /**
- * Rerolls an element type.
- *
- * @param {DrizzleClient} client - The Drizzle client used to make the query.
- * @param {string} userId - The ID of the user who rolled the element.
- * @param {string} elementType - The type of element rolled (primary or secondary).
- * @param currentElement
- * @param oppositeElement
- * @param rolledElements
- * @returns
+ * Picks a new basic element for the `elementType` slot, excluding the opposite slot's
+ * element, the current element and every element rolled since the last reset. When none
+ * remain, the rolls reset and any basic element except the opposite one can be picked.
  */
 const rerollElementType = (
   elementType: "primary" | "secondary",

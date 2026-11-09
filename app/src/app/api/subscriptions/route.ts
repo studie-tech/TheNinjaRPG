@@ -18,7 +18,6 @@ export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
 
-  // Create context and caller
   try {
     // Rows whose last payment is older than one billing period. PayPal subscriptions
     // have orderIds; reputation subscriptions do not.

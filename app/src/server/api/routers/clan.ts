@@ -214,7 +214,7 @@ export const clanRouter = createTRPCRouter({
       if (!available) {
         return errorResponse("This location is reserved or not possible to build on.");
       }
-      // New structures (same as syndicate, except without ANBU & Clan)
+      // New structures: the Syndicate's, except ANBU
       const newStructures = structures.filter((s) => s.route !== "/anbu");
 
       // Mutate step 1 - pay up
@@ -326,12 +326,8 @@ export const clanRouter = createTRPCRouter({
       if (user.reputationPoints < input.reputationPoints) {
         return errorResponse("You do not have enough reputation points");
       }
-      // Derived - prevent people over-donating reputation points
-      // TODO: Remove if these gain a permanent value for clans -
-      // right now its only purpose is hideouts. We should implement
-      // it so that users can do aesthetics for their hideouts/strongholds,
-      // e.g. move around building, change skins, etc.
-      // A treasury already past the limit takes nothing rather than a negative donation.
+      // Derived - donations stop at FACTION_REPUTATION_TREASURY_LIMIT; a treasury
+      // already past the limit takes nothing rather than a negative donation.
       const repsCost = Math.max(
         0,
         Math.min(
@@ -1303,7 +1299,7 @@ export const clanRouter = createTRPCRouter({
       if (nominee.anbuId) {
         return errorResponse("ANBU members cannot be nominated as elders");
       }
-      // Date validation - only allow nominations between 25th and 28th (UTC)
+      // Date validation - nominations open only within the monthly window (UTC)
       const now = new Date();
       const dayOfMonth = now.getUTCDate();
       if (
@@ -1891,7 +1887,7 @@ const undoClanBattleJoin = async (
 };
 
 /**
- * Removes a user from an clan.
+ * Removes a user from a clan.
  *
  * @param client - The DrizzleClient instance used for database operations.
  * @param clanData - The clan from which the user will be removed.

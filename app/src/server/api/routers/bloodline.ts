@@ -977,7 +977,7 @@ export const bloodlineRouter = createTRPCRouter({
 });
 
 /**
- * Update bloodline of user, ensuring the current blooline jutsus are unequipped. A rejection
+ * Update bloodline of user, ensuring the current bloodline jutsus are unequipped. A rejection
  * before the change returns `granted: false` with a user-facing message and writes nothing;
  * failures after the guarded write throw.
  */
