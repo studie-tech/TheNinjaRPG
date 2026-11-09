@@ -8,10 +8,9 @@ import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import { createGameRenderer } from "@/libs/rendering/runtime";
 import { buildSectorTerrainData } from "@/libs/rendering/sectorData";
 import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
-import { hexTerrainAt, terrainFrost } from "@/libs/rendering/terrainData";
+import { hexTerrainAt, sectorFieldCell } from "@/libs/rendering/terrainData";
 import {
   createTerrainField,
-  isFlatZone,
   liftSpritesToTerrain,
   objectFootprints,
   sectorRelief,
@@ -87,19 +86,12 @@ export const createSectorPreview = async (options: {
     const field = createTerrainField(
       grid,
       new Map(
-        grid.toArray().map((tile) => [
-          tile,
-          {
-            isWater: !!tile.spec?.isWater,
-            frost: terrainFrost(tile.spec?.key ?? ""),
-            flat:
-              settled ||
-              !!tile.hasStructure ||
-              isFlatZone(tile.zone) ||
-              footprints.has(tile),
-            relief: relief(tile.col, tile.row),
-          },
-        ]),
+        grid
+          .toArray()
+          .map((tile) => [
+            tile,
+            sectorFieldCell(tile, { settled, footprints, relief }),
+          ]),
       ),
     );
     const data = buildSectorTerrainData(grid, prng, false, {

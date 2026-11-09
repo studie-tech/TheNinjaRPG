@@ -211,8 +211,8 @@ export const resolveWorldDecoration = (
     woodlandByKey.get(stockDecorationArt[asset.key] ?? "");
   if (
     !replacement ||
-    decorationSourceKey(asset.filepath) !==
-      decorationSourceKey(DECORATION_ASSETS_BY_KEY.get(asset.key)?.filepath ?? "")
+    stockSourceKey(asset.filepath) !==
+      stockSourceKey(DECORATION_ASSETS_BY_KEY.get(asset.key)?.filepath ?? "")
   )
     return asset;
   return {
@@ -227,7 +227,7 @@ export const resolveWorldDecoration = (
 };
 
 /** Stock file keys identify the same upload across CDN aliases, renditions and optional image suffixes. */
-const decorationSourceKey = (image: string) => {
+const stockSourceKey = (image: string) => {
   const source = transformImageUrl(image).split(/[?#]/)[0] ?? image;
   return isBunnyCdnUrl(source)
     ? source.replace(/(\/f\/[a-zA-Z0-9_-]+)\.(?:webp|png|jpe?g)$/i, "$1")
@@ -249,11 +249,16 @@ const DECORATION_HEIGHTS: Record<string, number> = {
 };
 
 /** The shared depth material applies only to the bundled ocean palette and texture. */
-export const hasWorldWaterDepth = (spec: TerrainSpec | undefined) =>
-  !!spec &&
-  spec.key === "ocean" &&
-  spec.colors.join(",").toLowerCase() === STOCK_TERRAIN_COLORS.ocean?.source &&
-  spec.textureUrl === BUILTIN_TERRAINS_BY_KEY.get("ocean")?.textureUrl;
+export const hasWorldWaterDepth = (spec: TerrainSpec | undefined) => {
+  const stock = BUILTIN_TERRAINS_BY_KEY.get("ocean")?.textureUrl;
+  return (
+    !!spec?.textureUrl &&
+    !!stock &&
+    spec.key === "ocean" &&
+    spec.colors.join(",").toLowerCase() === STOCK_TERRAIN_COLORS.ocean?.source &&
+    stockSourceKey(spec.textureUrl) === stockSourceKey(stock)
+  );
+};
 
 /** Recess of the stock ocean's water surface, as a fraction of the tile edge. */
 export const STOCK_OCEAN_DEPRESSION = 0.18;
