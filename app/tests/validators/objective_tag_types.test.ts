@@ -3,13 +3,7 @@ import { z } from "zod";
 import { activityBonusTypes, tagTypes } from "@/validators/combat";
 import { OBJECTIVE_TAG_TYPES } from "@/validators/objectives";
 
-// Tag types excluded from OBJECTIVE_TAG_TYPES because they cannot produce a winnable
-// combat resolution. Covers two categories:
-//   1. Non-combat tags that only fire outside of battle (noncombat*, marriage, reskin,
-//      unlockitemvariant, repair, rollbloodline).
-//   2. Combat tags that never resolve on a user target (barrier, clone, summon, move —
-//      these are routed to ground effects / special handlers and therefore can never
-//      satisfy a tag_usage_win objective).
+// Tag types excluded from OBJECTIVE_TAG_TYPES, grouped by reason.
 const EXCLUDED_TAG_TYPES = new Set([
   // Authoring variants normalize before usage tracking and count as damage.
   "elementaldamage",
