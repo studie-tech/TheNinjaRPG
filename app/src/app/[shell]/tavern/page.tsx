@@ -110,6 +110,7 @@ export default function Tavern() {
               conversationId={tavernId}
               isTavern
               variant="default"
+              size="default"
             />
           )}
           <UserBlacklistPopover />
