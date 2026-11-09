@@ -51,6 +51,19 @@ import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
  * gets a new Clerk id and only the email, OAuth and IP hashes can match. A new character that
  * matches serves the remainder: it gets a new report with the same type and end date, so
  * the ordinary ban and silence screens, expiry and staff tools apply to it unchanged.
+ *
+ * Carryover on registration (`register.createCharacter`): `matchSanctionTombstones` finds the
+ * running sanctions, then `reapplySanctions`
+ *   1. discards records staged by earlier attempts whose decisions no longer match;
+ *   2. stages a report, comment and action log row per match, keyed by `carryoverReportId` so
+ *      retries are idempotent, each insert guarded on the character being absent and every
+ *      matched source being unchanged;
+ *   3. appends each report id to its sources' `carryoverReportIds`;
+ *   4. returns the guard for the character INSERT, which publishes the character only while
+ *      those records, links and sources still hold and no other running tombstone matches the
+ *      current identifiers.
+ * A failure before the character exists calls `discardUnpublishedSanctions`, which removes
+ * only records whose character is still absent.
  */
 
 /** The fields this module reads from a Clerk user. */
@@ -450,6 +463,8 @@ export const reapplySanctions = async (
         writable,
       );
       const reportExists = carryoverReportExists(userId, reportId, match);
+      // Both inserts settle before any rethrow, so the catch's discard cannot run while one
+      // is still in flight and land after the cleanup.
       const records = await Promise.allSettled([
         insertRecord(
           userReportComment,
