@@ -97,7 +97,6 @@ export default function MyItems() {
       },
     });
 
-  // Subtitle
   const availableItems = userItems
     ?.filter((ui) => isEquippableUserItem(ui, inventoryTime))
     .map((ui) => ({

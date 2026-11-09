@@ -433,7 +433,7 @@ const ReputationStore = () => {
 };
 
 /**
- * Subscript paypal button, which needs a subscription plan as input
+ * PayPal subscription button for one federal tier's subscription plan
  */
 const PayPalSubscriptionButton = (props: {
   subscriptionPlan: string;
@@ -507,7 +507,7 @@ const PayPalSubscriptionButton = (props: {
   // Loading status
   const isPending = isUpgrading || isSubscribing || isBuying;
 
-  // If not loaded yet, show loader
+  // Show a loader while a subscription or purchase mutation runs
   if (isPending) return <Loader explanation="Processing..." />;
 
   // Derived vars
@@ -842,7 +842,7 @@ const SubscriptionsOverview = () => {
 };
 
 /**
- * Lookup paypal subscription
+ * Lookup a PayPal transaction
  */
 const LookupTransaction = () => {
   // tRPC utility
