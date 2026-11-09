@@ -1,18 +1,17 @@
+import { describe, expect, it, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it, test } from "bun:test";
 import {
-  CombatStatNames,
-  getUserCaps,
   CLAN_BOOST_MAX_LEVEL,
   CLAN_BOOST_PERCENT_PER_LEVEL,
+  CombatStatNames,
+  getUserCaps,
   MAX_MASTERY_CAP,
   MAX_STORED_POOL,
   RANKED_PVP_STATS,
   SCALED_AI_STAT_BUDGET_SHARE,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
-import type { SectorUser } from "@/libs/sector-map/world-types";
 import {
   calcActiveUserRegen,
   calcLevel,
@@ -22,17 +21,18 @@ import {
   capUserStats,
   clampStoredPools,
   experienceToNextLevel,
+  formatPvpWinRate,
   getAssignedCombatStatTotal,
   getExpBracket,
+  getPvpWinRate,
   getScoutingUsers,
   levelExperienceProgress,
   manuallyAssignUserStats,
   passesBracketFilter,
   scaleUserStats,
   unassignedExperienceTowardLevel,
-  formatPvpWinRate,
-  getPvpWinRate,
 } from "@/libs/profile";
+import type { SectorUser } from "@/libs/sector-map/world-types";
 
 test("calcLevel lags stored level: the experience that leaves level L still derives L", () => {
   for (const level of [
@@ -269,14 +269,17 @@ test("manuallyAssignUserStats assigns the ranked combat stats and masteries", ()
 test.each([
   ["ai", 2_260],
   ["player", 4_510],
-] as const)("scaleUserStats spreads the %s budget evenly over base stats", (statScale, expected) => {
-  // A new AI or character: every stat at the base 10 and no experience.
-  const fresh = makeScalableUser({ level: 10, ...uniformCombatStats(10) });
-  scaleUserStats(fresh, statScale);
-  expect(fresh.offence).toBe(expected);
-  expect(fresh.speed).toBe(expected);
-  expect(fresh.ninjutsuMastery).toBe(10);
-});
+] as const)(
+  "scaleUserStats spreads the %s budget evenly over base stats",
+  (statScale, expected) => {
+    // A new AI or character: every stat at the base 10 and no experience.
+    const fresh = makeScalableUser({ level: 10, ...uniformCombatStats(10) });
+    scaleUserStats(fresh, statScale);
+    expect(fresh.offence).toBe(expected);
+    expect(fresh.speed).toBe(expected);
+    expect(fresh.ninjutsuMastery).toBe(10);
+  },
+);
 
 test("scaleUserStats rounds tiny positive allocated points without producing NaN", () => {
   const user = makeScalableUser({
@@ -326,7 +329,7 @@ test("scaleUserStats keeps the seeded Clown of Chaos AI row as a fixed point", (
   expect(clown).toEqual(stored);
 });
 
-test("scaleUserStats keeps every seeded AI row at its pre-#1277 values", () => {
+test("scaleUserStats keeps saved seeded AI rows fixed and spreads unsaved ones over the AI budget", () => {
   const rows = readSeededAiRows();
   expect(rows).toHaveLength(100);
   for (const row of rows) {
@@ -340,7 +343,7 @@ test("scaleUserStats keeps every seeded AI row at its pre-#1277 values", () => {
           0.005 * row.statsMultiplier + 1e-6,
         );
       } else {
-        // Never saved: base stats spread like the 12-stat formula spread them.
+        // Never saved: the AI budget share spread evenly over the six combat stats.
         expect(stored[stat]).toBe(10);
         expect(row[stat]).toBe((10 + budget / 12) * row.statsMultiplier);
       }
@@ -479,9 +482,9 @@ test("canAssignExperience stays true while any assignable mastery is below its c
   expect(canAssignExperience(oneMasteryLeft)).toBe(true);
 
   // Everything capped, including masteries: nowhere to put experience
-  expect(
-    canAssignExperience({ ...oneMasteryLeft, bukijutsuMastery: 375_000 }),
-  ).toBe(false);
+  expect(canAssignExperience({ ...oneMasteryLeft, bukijutsuMastery: 375_000 })).toBe(
+    false,
+  );
 
   // A single uncapped combat stat is enough as well
   expect(
@@ -498,16 +501,26 @@ describe("levelExperienceProgress", () => {
   const span = calcLevelRequirements(5) - start;
 
   it("measures from the start of the level", () => {
-    expect(levelExperienceProgress({ level: 5, experience: start + span / 2 })).toEqual({ earned: span / 2, required: span, percent: 50 });
+    expect(levelExperienceProgress({ level: 5, experience: start + span / 2 })).toEqual(
+      { earned: span / 2, required: span, percent: 50 },
+    );
   });
 
   it("starts level 1 at zero experience", () => {
-    expect(levelExperienceProgress({ level: 1, experience: 0 })).toEqual({ earned: 0, required: calcLevelRequirements(1), percent: 0 });
+    expect(levelExperienceProgress({ level: 1, experience: 0 })).toEqual({
+      earned: 0,
+      required: calcLevelRequirements(1),
+      percent: 0,
+    });
   });
 
   it("stays inside the level when stored level and experience disagree", () => {
-    expect(levelExperienceProgress({ level: 5, experience: start - 1 }).percent).toBe(0);
-    expect(levelExperienceProgress({ level: 5, experience: start + span * 2 })).toEqual({ earned: span, required: span, percent: 100 });
+    expect(levelExperienceProgress({ level: 5, experience: start - 1 }).percent).toBe(
+      0,
+    );
+    expect(levelExperienceProgress({ level: 5, experience: start + span * 2 })).toEqual(
+      { earned: span, required: span, percent: 100 },
+    );
   });
 
   it("leaves the same experience to go as the level-up rule", () => {
@@ -586,7 +599,9 @@ describe("PvP win rate", () => {
 });
 
 /** A scaleUserStats input with every stat and pool at zero unless overridden. */
-const makeScalableUser = (overrides: Partial<Parameters<typeof scaleUserStats>[0]>) => ({
+const makeScalableUser = (
+  overrides: Partial<Parameters<typeof scaleUserStats>[0]>,
+) => ({
   level: 1,
   poolsMultiplier: 1,
   statsMultiplier: 1,
@@ -632,7 +647,9 @@ const readSeededAiRows = () => {
       const numeric = Object.fromEntries(
         Object.keys(makeScalableUser({})).map((key) => [key, Number(row[key] ?? 0)]),
       );
-      rows.push(makeScalableUser({ ...numeric, statsMultiplier: numeric.statsMultiplier || 1 }));
+      rows.push(
+        makeScalableUser({ ...numeric, statsMultiplier: numeric.statsMultiplier || 1 }),
+      );
     } else if (columns && line.trim() === "") {
       columns = null;
     }
@@ -682,10 +699,12 @@ describe("calcActiveUserRegen clan boost", () => {
     expect(regen({ regenBoost: maxBoost }, true)).toBe(100);
   });
 
-  it.each([[null], [{ regenBoost: 0 }], [{ regenBoost: -1 }], [{ regenBoost: maxBoost + 1 }]])(
-    "ignores %j",
-    (clan) => {
-      expect(regen(clan)).toBe(100);
-    },
-  );
+  it.each([
+    [null],
+    [{ regenBoost: 0 }],
+    [{ regenBoost: -1 }],
+    [{ regenBoost: maxBoost + 1 }],
+  ])("ignores %j", (clan) => {
+    expect(regen(clan)).toBe(100);
+  });
 });

@@ -1,5 +1,5 @@
-import alea from "alea";
 import { describe, expect, it } from "bun:test";
+import alea from "alea";
 import {
   DECORATION_ASSETS_BY_KEY,
   generateDecorationPlacements,

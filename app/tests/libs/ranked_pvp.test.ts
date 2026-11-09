@@ -1,5 +1,12 @@
-import { rankedCaps } from "../setup/jutsuEquipLimits";
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
+import {
+  RANKED_LEGEND_LP_REQUIREMENT,
+  RANKED_LOSS_PROTECTION_RANK_GAP,
+  RANKED_MIN_LP_GAIN,
+  RANKED_QUEUE_MAX_WAIT_SECS,
+  RANKED_SANNIN_TOP_PLAYERS,
+} from "@/drizzle/constants";
+import type { Item, Jutsu } from "@/drizzle/schema";
 import {
   calculateLpEloChange,
   getRankedRadius,
@@ -7,17 +14,20 @@ import {
   validateItemLoadout,
   validateJutsuLoadout as validateJutsuLoadoutWithCaps,
 } from "@/libs/ranked_pvp";
-import type { Item, Jutsu } from "@/drizzle/schema";
-import {
-  RANKED_LEGEND_LP_REQUIREMENT,
-  RANKED_MIN_LP_GAIN,
-  RANKED_QUEUE_MAX_WAIT_SECS,
-  RANKED_SANNIN_TOP_PLAYERS,
-} from "@/drizzle/constants";
+import { rankedCaps } from "../setup/jutsuEquipLimits";
 
 const sanninThreshold = 950;
 const sanninTopPlayersLP = [
-  2000, 1800, 1600, 1400, 1300, 1200, 1100, 1050, 1000, sanninThreshold,
+  2000,
+  1800,
+  1600,
+  1400,
+  1300,
+  1200,
+  1100,
+  1050,
+  1000,
+  sanninThreshold,
 ];
 
 describe("getRankedRank", () => {
@@ -86,6 +96,53 @@ describe("calculateLpEloChange", () => {
     expect(withoutSanninContext).toBe(RANKED_MIN_LP_GAIN);
     expect(withSanninContext).toBeGreaterThan(withoutSanninContext);
   });
+
+  it("adds the upset bonus per rank when a lower rank wins", () => {
+    // Wood beats Master: Elo 37.2 plus two ranks of upset bonus
+    expect(
+      calculateLpEloChange(
+        { rankedLp: 150, rankedStreak: 0 },
+        { rankedLp: 600 },
+        true,
+        [],
+      ),
+    ).toBe(57);
+  });
+
+  describe("loss protection", () => {
+    const loss = (playerLp: number, opponentLp: number) =>
+      calculateLpEloChange(
+        { rankedLp: playerLp, rankedStreak: 0 },
+        { rankedLp: opponentLp },
+        false,
+        [],
+      );
+
+    it("softens a loss to an opponent exactly the protection gap above the loser", () => {
+      expect(RANKED_LOSS_PROTECTION_RANK_GAP).toBe(2);
+      // Wood loses to Master: Elo -6.0 halved
+      expect(loss(299, 600)).toBe(-3);
+      // Adept loses to Legend: Elo -4.8 halved
+      expect(loss(599, 900)).toBe(-2);
+    });
+
+    it("softens a loss to an opponent more than the protection gap above the loser", () => {
+      // Unranked loses to Master: Elo -2.8 halved
+      expect(loss(149, 600)).toBe(-1);
+    });
+
+    it("keeps the full loss to an opponent one rank above the loser", () => {
+      // Wood loses to Adept, Adept loses to Master
+      expect(loss(299, 300)).toBe(-20);
+      expect(loss(300, 600)).toBe(-5);
+    });
+
+    it("keeps the full loss to an opponent ranked below the loser", () => {
+      // Master loses to Adept (one rank below) and to Wood (two ranks below)
+      expect(loss(600, 300)).toBe(-20);
+      expect(loss(600, 299)).toBe(-20);
+    });
+  });
 });
 
 describe("getRankedRadius", () => {
@@ -99,6 +156,13 @@ describe("getRankedRadius", () => {
     expect(getRankedRadius(RANKED_QUEUE_MAX_WAIT_SECS - 1)).toBe(250);
   });
 
+  it("keeps step boundaries and the smallest radius for a skewed negative wait", () => {
+    expect(getRankedRadius(119)).toBe(100);
+    expect(getRankedRadius(239)).toBe(200);
+    expect(getRankedRadius(-1)).toBe(50);
+    expect(getRankedRadius(-120)).toBe(50);
+  });
+
   it("ignores rank (Infinity radius) once the max wait is reached", () => {
     expect(getRankedRadius(RANKED_QUEUE_MAX_WAIT_SECS)).toBe(Infinity);
     expect(getRankedRadius(600)).toBe(Infinity);
@@ -108,11 +172,14 @@ describe("getRankedRadius", () => {
 
 describe("ranked jutsu category caps", () => {
   it("allows one Parry jutsu and rejects a second", () => {
-    const parryJutsus = ["first", "second"].map((name) => ({
-      name,
-      jutsuType: "NORMAL",
-      effects: [{ type: "parry" }],
-    }) as Jutsu);
+    const parryJutsus = ["first", "second"].map(
+      (name) =>
+        ({
+          name,
+          jutsuType: "NORMAL",
+          effects: [{ type: "parry" }],
+        }) as Jutsu,
+    );
 
     expect(validateJutsuLoadout(parryJutsus.slice(0, 1))).toEqual({
       check: true,
@@ -180,4 +247,6 @@ describe("ranked skill-tree restrictions", () => {
   });
 });
 
-const validateJutsuLoadout = (jutsus: Parameters<typeof validateJutsuLoadoutWithCaps>[0]) => validateJutsuLoadoutWithCaps(jutsus, rankedCaps);
+const validateJutsuLoadout = (
+  jutsus: Parameters<typeof validateJutsuLoadoutWithCaps>[0],
+) => validateJutsuLoadoutWithCaps(jutsus, rankedCaps);

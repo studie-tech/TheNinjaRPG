@@ -68,7 +68,8 @@ export const buildModBotStats = (
             : "humanPending"
       ]++;
       if (!reviewed) continue;
-      // Legacy predictions were overwritten by the indexer, so cannot evaluate an original decision.
+      // Reports without a recorded original prediction (no predictedAt, promptVersion or
+      // predictedStatus, or still UNVIEWED) cannot be evaluated.
       if (
         !report.predictedAt ||
         !report.promptVersion ||

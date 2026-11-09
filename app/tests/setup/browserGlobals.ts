@@ -55,7 +55,9 @@ export const installBrowserGlobals = ({
     const stub = animationFrame === true ? timerFrame : animationFrame;
     restores.push(swapProperty(globalThis, "requestAnimationFrame", stub));
     restores.push(
-      swapProperty(globalThis, "cancelAnimationFrame", (id: number) => clearTimeout(id)),
+      swapProperty(globalThis, "cancelAnimationFrame", (id: number) =>
+        clearTimeout(id),
+      ),
     );
   }
   installed.push(() => {

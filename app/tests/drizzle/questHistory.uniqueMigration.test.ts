@@ -1,8 +1,7 @@
-
+import { afterEach, beforeEach, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { asc } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it } from "bun:test";
 import { questHistory } from "@/drizzle/schema";
 import { insertQuestHistory } from "../setup/factories";
 import {
@@ -52,8 +51,8 @@ const at = (iso: string) => new Date(iso);
 describeWithDatabase("QuestHistory unique (userId, questId) migration", () => {
   beforeEach(async () => {
     await resetTables(questHistory);
-    // The schema already carries the constraint, so drop it to reach the pre-migration shape
-    // the deployed database is in.
+    // The schema already carries the constraint; drop it to recreate the pre-0039 shape the
+    // migration expects.
     await runRawSql("ALTER TABLE `QuestHistory` DROP INDEX `uniqueUserIdQuestId`");
   });
 
@@ -211,4 +210,4 @@ describeWithDatabase("QuestHistory unique (userId, questId) migration", () => {
 
     expect((await survivors()).map((row) => row.id)).toEqual(["a", "b"]);
   });
-})
+});

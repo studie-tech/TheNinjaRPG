@@ -1,8 +1,7 @@
 "use client";
 
-import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,12 +13,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  PARENTAL_MAX_APPROVED_PLAYERS,
+  PARENTAL_PIN_MAX_ATTEMPTS,
+  PARENTAL_PIN_WINDOW_MINUTES,
+} from "@/drizzle/constants";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { QueryError } from "@/layout/QueryError";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
-import type { AppRouter } from "@/server/api/root";
 import { useUserPicker } from "@/utils/search";
 import { parentalSettingsSchema } from "@/validators/parentalControls";
 
@@ -53,7 +56,7 @@ function ParentalSettingsForm({
   settings,
   onSaved,
 }: {
-  settings: inferRouterOutputs<AppRouter>["parentalControls"]["get"];
+  settings: RouterOutputs["parentalControls"]["get"];
   onSaved: () => Promise<void>;
 }) {
   const [enabled, setEnabled] = useState(settings.enabled);
@@ -69,7 +72,10 @@ function ParentalSettingsForm({
   const [message, setMessage] = useState<{ success: boolean; message: string } | null>(
     null,
   );
-  const { methods: searchForm, users } = useUserPicker(50, settings.approvedPlayers);
+  const { methods: searchForm, users } = useUserPicker(
+    PARENTAL_MAX_APPROVED_PLAYERS,
+    settings.approvedPlayers,
+  );
   const utils = api.useUtils();
   const save = api.parentalControls.save.useMutation({
     onSuccess: async (result) => {
@@ -185,7 +191,7 @@ function ParentalSettingsForm({
                   label="Search players to approve"
                   showYourself={false}
                   showAi={false}
-                  maxUsers={50}
+                  maxUsers={PARENTAL_MAX_APPROVED_PLAYERS}
                 />
                 <p className="text-muted-foreground text-xs">
                   Only approve people you know. An empty list blocks all private
@@ -222,7 +228,8 @@ function ParentalSettingsForm({
               />
             )}
             <p className="text-muted-foreground text-xs">
-              Five PIN attempts are allowed every 15 minutes. Forgot the PIN?{" "}
+              {PARENTAL_PIN_MAX_ATTEMPTS} PIN attempts are allowed every{" "}
+              {PARENTAL_PIN_WINDOW_MINUTES} minutes. Forgot the PIN?{" "}
               <Link href="/support" className="underline">
                 Contact support
               </Link>

@@ -1,13 +1,12 @@
+import { useMemo } from "react";
 import { api } from "@/app/_trpc/client";
 import {
   SupportTicketCategories,
-  type SupportTicketCategory,
   SupportTicketPriorities,
-  type SupportTicketPriority,
-  type SupportTicketStatus,
   SupportTicketStatuses,
 } from "@/drizzle/constants";
 import {
+  buildFilter,
   ContentFiltering,
   defineFilteringSchema,
   toOptions,
@@ -20,9 +19,11 @@ interface SupportTicketFilteringProps {
   state: SupportTicketFilteringState;
 }
 
+/** Staff options load after mount, and "Me" resolves to the viewer's own id. */
 const makeSupportSchema = (
   staff: { userId: string; username: string }[],
   isStaff: boolean,
+  userId: string | undefined,
 ) =>
   defineFilteringSchema({
     fields: [
@@ -69,6 +70,7 @@ const makeSupportSchema = (
         includeNone: true,
         emptyValues: ["None"],
         options: [{ value: "me", label: "Me" }],
+        normalizeForFilter: (value) => (value === "me" ? userId : value),
         visibleIf: () => isStaff,
       },
       {
@@ -85,86 +87,41 @@ const makeSupportSchema = (
     ] as const,
   });
 
-const SupportTicketFiltering: React.FC<SupportTicketFilteringProps> = (props) => {
-  const { data: userData } = useUserData();
-  const isStaff = Boolean(userData?.role && canViewStaffOnlyComments(userData.role));
-  const { data } = api.profile.getPublicUsers.useQuery(
-    { orderBy: "Staff", isAi: false, limit: 50 },
-    { enabled: isStaff },
-  );
-  const staff = (data?.data || []).map((u) => ({
-    userId: u.userId,
-    username: u.username,
-  }));
-  const schema = makeSupportSchema(staff, isStaff);
-  return (
-    <ContentFiltering
-      schema={schema}
-      state={props.state.cf}
-      triggerButtonId="filter-support-tickets"
-    />
-  );
-};
+const SupportTicketFiltering: React.FC<SupportTicketFilteringProps> = (props) => (
+  <ContentFiltering
+    schema={props.state.schema}
+    state={props.state.cf}
+    triggerButtonId="filter-support-tickets"
+  />
+);
 
 export default SupportTicketFiltering;
 
-// Strongly-typed filter payload to satisfy consumers
-interface SupportTicketFilter {
-  search?: string;
-  status?: SupportTicketStatus[];
-  category?: SupportTicketCategory[];
-  priority?: SupportTicketPriority[];
-  assignedToUserId?: string;
-  createdByUserId?: string;
-  isPublic?: boolean;
-}
-
-export const getFilter = (state: SupportTicketFilteringState): SupportTicketFilter => {
-  const { debounced } = state.cf;
-  const createdByUserId = debounced.createdByUserId as string | undefined;
-  const assignedToUserId = debounced.assignedToUserId as string | undefined;
-  return {
-    search:
-      debounced.search && debounced.search.length > 0 ? debounced.search : undefined,
-    status:
-      Array.isArray(debounced.status) && debounced.status.length > 0
-        ? debounced.status
-        : undefined,
-    category:
-      Array.isArray(debounced.category) && debounced.category.length > 0
-        ? debounced.category
-        : undefined,
-    priority:
-      Array.isArray(debounced.priority) && debounced.priority.length > 0
-        ? debounced.priority
-        : undefined,
-    assignedToUserId:
-      assignedToUserId && assignedToUserId !== "None" ? assignedToUserId : undefined,
-    createdByUserId:
-      createdByUserId === "me"
-        ? "CURRENT_USER"
-        : createdByUserId && createdByUserId !== "None"
-          ? createdByUserId
-          : undefined,
-    isPublic: typeof debounced.isPublic === "boolean" ? debounced.isPublic : undefined,
-  };
-};
+export const getFilter = (state: SupportTicketFilteringState) =>
+  buildFilter(state.cf, state.schema);
 
 export const useFiltering = () => {
   const { data: userData } = useUserData();
   const isStaff = Boolean(userData?.role && canViewStaffOnlyComments(userData.role));
+  const userId = userData?.userId;
   const { data } = api.profile.getPublicUsers.useQuery(
     { orderBy: "Staff", isAi: false, limit: 50 },
     { enabled: isStaff },
   );
-  const staff = (data?.data || []).map((u) => ({
-    userId: u.userId,
-    username: u.username,
-  }));
-  const cf = useContentFiltering(makeSupportSchema(staff, isStaff));
+  const schema = useMemo(
+    () =>
+      makeSupportSchema(
+        (data?.data || []).map((u) => ({ userId: u.userId, username: u.username })),
+        isStaff,
+        userId,
+      ),
+    [data, isStaff, userId],
+  );
+  const cf = useContentFiltering(schema);
   return {
     ...cf.values,
     cf,
+    schema,
   };
 };
 

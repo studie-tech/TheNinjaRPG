@@ -1,11 +1,9 @@
 "use client";
-/**
- * This is a confirmation modal that is used to display a modal.
- */
+
 import type React from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import Modal from "@/layout/Modal";
 import { cn } from "@/libs/shadui";
-import Modal from "./Modal";
 
 interface ConfirmProps {
   id?: string;
@@ -37,7 +35,12 @@ interface ConfirmProps {
   onClose?: () => void;
 }
 
+/**
+ * Open a Modal and run onAccept once confirmed. The mounted trigger also restores
+ * keyboard focus on dismissal, including confirmations nested inside another Modal.
+ */
 export const Confirm: React.FC<ConfirmProps> = (props) => {
+  const triggerRef = useRef<HTMLDivElement>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const { onAccept } = props;
   const close = () => setShowModal(false);
@@ -49,6 +52,7 @@ export const Confirm: React.FC<ConfirmProps> = (props) => {
     <>
       {/* biome-ignore lint/a11y/useSemanticElements: wrapper for button children - using button would create invalid nested buttons */}
       <div
+        ref={triggerRef}
         role="button"
         tabIndex={props.disabled ? -1 : 0}
         aria-disabled={props.disabled}
@@ -78,6 +82,7 @@ export const Confirm: React.FC<ConfirmProps> = (props) => {
 
       <Modal
         id={props.id}
+        returnFocusRef={triggerRef}
         title={props.title}
         isOpen={showModal}
         setIsOpen={setShowModal}

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_LINK_PROMOTION_POINTS } from "@/drizzle/constants";
 
 export const linkPromotionSchema = z.object({
   url: z.url("Please enter a valid URL (with http/https protocol)"),
@@ -9,7 +10,10 @@ export const linkPromotionReviewSchema = z.object({
   points: z
     .int("Points must be a whole number")
     .min(0, "Points must be at least 0")
-    .max(500, "Points cannot exceed 500"),
+    .max(
+      MAX_LINK_PROMOTION_POINTS,
+      `Points cannot exceed ${MAX_LINK_PROMOTION_POINTS}`,
+    ),
 });
 
 export type LinkPromotionInput = z.infer<typeof linkPromotionSchema>;

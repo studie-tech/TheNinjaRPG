@@ -25,7 +25,7 @@ export const parseJsonSafe = (value: string): { data: unknown; error: string } =
   }
 };
 
-// Convert key null values to empty strings
+// Set a key on an object and return the object
 export const setValueOnObj = <T, K extends keyof T>(object: T, key: K, value: T[K]) => {
   object[key] = value;
   return object;

@@ -1,8 +1,8 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
+import { safeLocalStorageGetItem } from "@/utils/storage";
 
 /** Reads light mode immediately on client mounts while preserving server hydration. */
 export const useLightLayout = () =>

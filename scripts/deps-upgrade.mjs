@@ -16,7 +16,7 @@ const files = ["app/package.json", "mobile/package.json"];
 const updates = await Promise.all(files.map(async (file) => {
   const original = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
   const manifest = JSON.parse(original);
-  for (const group of ["dependencies", "devDependencies", "optionalDependencies", "overrides", "resolutions"]) {
+  for (const group of ["dependencies", "devDependencies", "optionalDependencies", "overrides"]) {
     const versions = Object.fromEntries(Object.entries(manifest[group] ?? {}).filter(
       ([, value]) => typeof value === "string" && !value.startsWith("$"),
     ));

@@ -32,12 +32,7 @@ import type { DrizzleClient } from "@/server/db";
 import { hashIp } from "@/server/utils/ipHash";
 import { DAY_S, secondsFromNow } from "@/utils/time";
 
-/**
- * Fetches game assets from the database.
- *
- * @param client - The DrizzleClient instance used to query the database.
- * @returns A promise that resolves to an array of game assets, each containing the id, name, and image.
- */
+/** Visible non-LPC game assets, optionally limited to `ids`, ordered by name descending. */
 export const fetchGameAssets = async (client: DrizzleClient, ids?: string[]) => {
   return await client.query.gameAsset.findMany({
     where: and(
@@ -171,9 +166,9 @@ export const updateUserDataForAwardReputation = (
   client
     .update(userData)
     .set({
-      reputationPoints: sql`reputationPoints + ${input.reputationAmount || 0}`,
-      reputationPointsTotal: sql`reputationPointsTotal + ${input.reputationAmount || 0}`,
-      money: sql`money + ${input.moneyAmount || 0}`,
+      reputationPoints: sql`${userData.reputationPoints} + ${input.reputationAmount || 0}`,
+      reputationPointsTotal: sql`${userData.reputationPointsTotal} + ${input.reputationAmount || 0}`,
+      money: sql`${userData.money} + ${input.moneyAmount || 0}`,
     })
     .where(inArray(userData.userId, input.userIds));
 

@@ -1,123 +1,62 @@
-import { Filter } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { MultiSelect } from "@/components/ui/multi-select";
-import { NumberInput } from "@/components/ui/number-input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import type { EffectType } from "@/validators/combat";
+import { SKILL_TREE_MAX_TIER } from "@/drizzle/constants";
+import {
+  buildFilter,
+  ContentFiltering,
+  defineFilteringSchema,
+  minCountField,
+  useContentFiltering,
+} from "@/layout/ContentFiltering";
 import { tagTypes } from "@/validators/combat";
-
-/**
- * STATE HOOK
- */
-export const useFiltering = () => {
-  const [minCount, setMinCount] = useState<number>(1);
-  const [skillEffects, setSkillEffects] = useState<EffectType[]>([]);
-  const [tiers, setTiers] = useState<number[]>([]);
-
-  return {
-    minCount,
-    skillEffects,
-    tiers,
-    setMinCount,
-    setSkillEffects,
-    setTiers,
-  };
-};
-
-export type SkillTreeBalanceFilteringState = ReturnType<typeof useFiltering>;
 
 interface SkillTreeBalanceFilteringProps {
   state: SkillTreeBalanceFilteringState;
 }
 
-/**
- * MAIN COMPONENT
- */
-const SkillTreeBalanceFiltering: React.FC<SkillTreeBalanceFilteringProps> = (props) => {
-  const { minCount, skillEffects, tiers, setMinCount, setSkillEffects, setTiers } =
-    props.state;
+/** Skill usage filters; multi-select values are strings, so tiers convert back to numbers. */
+const SKILL_TREE_BALANCE_FILTERING_SCHEMA = defineFilteringSchema({
+  fields: [
+    minCountField,
+    {
+      id: "skillEffects",
+      label: "Skill Effects",
+      type: "multi-select",
+      defaultValue: [],
+      options: tagTypes.map((effect) => ({ value: effect, label: effect })),
+    },
+    {
+      id: "tiers",
+      label: "Skill Tiers",
+      type: "multi-select",
+      defaultValue: [],
+      options: Array.from({ length: SKILL_TREE_MAX_TIER }, (_, i) => ({
+        value: (i + 1).toString(),
+        label: `Tier ${i + 1}`,
+      })),
+      normalizeForFilter: (tiers: string[]) => tiers.map(Number),
+    },
+  ] as const,
+});
 
-  // Count filters
-  const numSkillEffects = skillEffects.length;
-  const numTiers = tiers.length;
-  const numMinCount = minCount > 1 ? 1 : 0;
-  const numFilters = numSkillEffects + numTiers + numMinCount;
-
-  // Tier options (1-10)
-  const tierOptions = Array.from({ length: 10 }, (_, i) => i + 1);
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button count={numFilters}>
-          <Filter className="h-6 w-6 hover:text-orange-500 sm:mr-2" />
-          <p className="hidden sm:block">Filter</p>
-        </Button>
-      </PopoverTrigger>
-
-      <PopoverContent className="min-w-96">
-        <div className="grid grid-cols-1 gap-4">
-          {/* Minimum Count */}
-          <div>
-            <Label>Minimum Count</Label>
-            <NumberInput
-              placeholder="Minimum count"
-              min={1}
-              value={minCount}
-              onValueChange={setMinCount}
-              emptyFallback={1}
-            />
-          </div>
-
-          {/* Skill Effects */}
-          <div>
-            <Label>Skill Effects</Label>
-            <MultiSelect
-              selected={skillEffects}
-              options={tagTypes.map((effect) => ({
-                value: effect,
-                label: effect,
-              }))}
-              onChange={(e) => setSkillEffects(e as EffectType[])}
-            />
-          </div>
-
-          {/* Tiers */}
-          <div>
-            <Label>Skill Tiers</Label>
-            <MultiSelect
-              selected={tiers.map((tier) => tier.toString())}
-              options={tierOptions.map((tier) => ({
-                value: tier.toString(),
-                label: `Tier ${tier}`,
-              }))}
-              onChange={(selectedTiers) => {
-                const tiersArray =
-                  typeof selectedTiers === "function"
-                    ? selectedTiers(tiers.map((tier) => tier.toString()))
-                    : selectedTiers;
-                setTiers(tiersArray.map((tier) => parseInt(tier, 10)));
-              }}
-            />
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-};
+const SkillTreeBalanceFiltering: React.FC<SkillTreeBalanceFilteringProps> = (props) => (
+  <ContentFiltering
+    schema={SKILL_TREE_BALANCE_FILTERING_SCHEMA}
+    state={props.state.cf}
+    triggerButtonId="filter-skill-tree-balance"
+  />
+);
 
 export default SkillTreeBalanceFiltering;
 
-/**
- * Combine filters into final object
- */
-export const getFilter = (state: SkillTreeBalanceFilteringState) => {
+export const getFilter = (state: SkillTreeBalanceFilteringState) =>
+  buildFilter(state.cf, SKILL_TREE_BALANCE_FILTERING_SCHEMA);
+
+export const useFiltering = () => {
+  const cf = useContentFiltering(SKILL_TREE_BALANCE_FILTERING_SCHEMA);
   return {
-    minCount: Number.isFinite(state.minCount) ? state.minCount : 1,
-    skillEffects: state.skillEffects.length > 0 ? state.skillEffects : undefined,
-    tiers: state.tiers.length > 0 ? state.tiers : undefined,
+    ...cf.values,
+    cf,
   };
 };
+
+export type SkillTreeBalanceFilteringState = ReturnType<typeof useFiltering>;

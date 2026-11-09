@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   MAP_RESERVED_SECTORS,
   VILLAGE_SYNDICATE_ID,
+  VILLAGE_WAR_TYPES,
   WAR_SHRINE_IMAGE,
 } from "@/drizzle/constants";
 import type { War } from "@/drizzle/schema";
@@ -95,7 +96,7 @@ export default function Shrine() {
     if (war.type === "SECTOR_WAR") {
       return war.sector === userData.sector;
     }
-    if (["VILLAGE_WAR", "WAR_RAID"].includes(war.type)) {
+    if (VILLAGE_WAR_TYPES.includes(war.type)) {
       return (
         war.attackerVillage?.sector === userData.sector ||
         war.defenderVillage?.sector === userData.sector
@@ -230,6 +231,25 @@ export default function Shrine() {
     );
   }
 
+  const protectedNotice = isReserved
+    ? "This sector is reserved and cannot be attacked."
+    : "This is a village home sector and its shrine cannot be attacked.";
+  const teamPitch = (
+    <div className="mb-4 text-muted-foreground text-sm">
+      Form a team to attack this shrine together! Up to 3 attackers can join the
+      assault, and defenders from the owning village can queue to defend.
+    </div>
+  );
+  const lobby = (
+    <ShrineBattleLobby
+      sectorNumber={userData.sector}
+      userId={userData.userId}
+      sideVillageId={userSideVillageId}
+      defenderVillageId={sectorOwnerVillageId}
+      isProtected={isProtected}
+    />
+  );
+
   return (
     <div className="space-y-8">
       {hasNoActiveWars && (
@@ -259,29 +279,17 @@ export default function Shrine() {
                   </div>
                 ) : isProtected ? (
                   <div className="mb-4 font-semibold text-amber-600 text-sm">
-                    {isReserved
-                      ? "This sector is reserved and cannot be attacked."
-                      : "This is a village home sector and its shrine cannot be attacked."}
+                    {protectedNotice}
                   </div>
                 ) : canShowMpvpOption ? (
-                  <div className="mb-4 text-muted-foreground text-sm">
-                    Form a team to attack this shrine together! Up to 3 attackers can
-                    join the assault, and defenders from the owning village can queue to
-                    defend.
-                  </div>
+                  teamPitch
                 ) : isUserQueuedForThisSector ? (
                   <div className="mb-4 text-muted-foreground text-sm">
                     You are queued for a shrine battle. You can view your queue status
                     or leave the queue below.
                   </div>
                 ) : null}
-                <ShrineBattleLobby
-                  sectorNumber={userData.sector}
-                  userId={userData.userId}
-                  sideVillageId={userSideVillageId}
-                  defenderVillageId={sectorOwnerVillageId}
-                  isProtected={isProtected}
-                />
+                {lobby}
               </TabsContent>
               <TabsContent value="info" className="mt-4">
                 <div className="flex flex-col items-center">
@@ -301,11 +309,7 @@ export default function Shrine() {
                 isProtected={isProtected}
               />
               {isProtected && (
-                <p className="mt-2 font-semibold text-amber-600">
-                  {isReserved
-                    ? "This sector is reserved and cannot be attacked."
-                    : "This is a village home sector and its shrine cannot be attacked."}
-                </p>
+                <p className="mt-2 font-semibold text-amber-600">{protectedNotice}</p>
               )}
             </div>
           )}
@@ -352,49 +356,28 @@ export default function Shrine() {
               </div>
             </TabsContent>
             <TabsContent value="team">
-              {userWars.length > 0 && (
-                <div className="mb-6 divide-y rounded-lg border">
-                  {userWars.map((war) => (
-                    <WarCard
-                      key={war.id}
-                      war={war}
-                      sideVillageId={getWarSide(
-                        war,
-                        userData.villageId,
-                        userData.userId,
-                      )}
-                      sector={userData.sector}
-                      onAttack={() => {}}
-                      isAttacking={false}
-                      hideAttackButton={true}
-                      isProtected={isProtected}
-                      hasActiveExclusiveRaid={!!activeExclusiveRaid}
-                    />
-                  ))}
-                </div>
-              )}
+              <div className="mb-6 divide-y rounded-lg border">
+                {userWars.map((war) => (
+                  <WarCard
+                    key={war.id}
+                    war={war}
+                    sideVillageId={getWarSide(war, userData.villageId, userData.userId)}
+                    sector={userData.sector}
+                    isProtected={isProtected}
+                    hasActiveExclusiveRaid={!!activeExclusiveRaid}
+                  />
+                ))}
+              </div>
               {userIsAttacker ? (
                 <>
                   {isProtected ? (
                     <div className="mb-4 font-semibold text-amber-600 text-sm">
-                      {isReserved
-                        ? "This sector is reserved and cannot be attacked."
-                        : "This is a village home sector and its shrine cannot be attacked."}
+                      {protectedNotice}
                     </div>
                   ) : (
-                    <div className="mb-4 text-muted-foreground text-sm">
-                      Form a team to attack this shrine together! Up to 3 attackers can
-                      join the assault, and defenders from the owning village can queue
-                      to defend.
-                    </div>
+                    teamPitch
                   )}
-                  <ShrineBattleLobby
-                    sectorNumber={userData.sector}
-                    userId={userData.userId}
-                    sideVillageId={userSideVillageId}
-                    defenderVillageId={sectorOwnerVillageId}
-                    isProtected={isProtected}
-                  />
+                  {lobby}
                 </>
               ) : userIsDefender ? (
                 <>
@@ -402,13 +385,7 @@ export default function Shrine() {
                     Your village is defending this shrine. You can join as a defender
                     when attackers start a team battle.
                   </div>
-                  <ShrineBattleLobby
-                    sectorNumber={userData.sector}
-                    userId={userData.userId}
-                    sideVillageId={userSideVillageId}
-                    defenderVillageId={sectorOwnerVillageId}
-                    isProtected={isProtected}
-                  />
+                  {lobby}
                 </>
               ) : (
                 <div className="text-center text-muted-foreground">
@@ -433,13 +410,6 @@ export default function Shrine() {
                 war={war}
                 sideVillageId={getWarSide(war, userData.villageId, userData.userId)}
                 sector={userData.sector}
-                onAttack={() =>
-                  attack({
-                    sector: userData.sector,
-                    originSocketId: pusher?.connection.socket_id,
-                  })
-                }
-                isAttacking={isAttacking}
                 isProtected={isProtected}
                 hasActiveExclusiveRaid={!!activeExclusiveRaid}
               />
@@ -490,14 +460,13 @@ const SectorClaimDescription = ({
   );
 };
 
-// Component to render a single war
+// Component to render a single war; without onAttack it offers no attack or defence
 const WarCard = ({
   war,
   sideVillageId,
   sector,
   onAttack,
-  isAttacking,
-  hideAttackButton = false,
+  isAttacking = false,
   isProtected = false,
   hasActiveExclusiveRaid = false,
 }: {
@@ -508,15 +477,15 @@ const WarCard = ({
   };
   sideVillageId: string | null;
   sector: number;
-  onAttack: () => void;
-  isAttacking: boolean;
-  hideAttackButton?: boolean;
+  onAttack?: () => void;
+  isAttacking?: boolean;
   isProtected?: boolean;
   hasActiveExclusiveRaid?: boolean;
 }) => {
   const isUserAttacker = sideVillageId === war.attackerVillageId;
   const isUserDefender = sideVillageId === war.defenderVillageId;
-  const isVillageWar = ["VILLAGE_WAR", "WAR_RAID"].includes(war.type);
+  const isVillageWar = VILLAGE_WAR_TYPES.includes(war.type);
+  const hideAttackButton = !onAttack;
 
   // Determine which village's shrine we're at
   const atAttackerVillage = war.attackerVillage?.sector === sector;

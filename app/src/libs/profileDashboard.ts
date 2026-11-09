@@ -365,13 +365,23 @@ const occupationLines = {
   },
 } as const;
 
+/** Button labels of the occupation row; the dashboard maps each one to an icon. */
+export type OccupationAction =
+  | "Start a job"
+  | "Open"
+  | "View"
+  | "Start crafting"
+  | "View contract"
+  | "Pick a quest"
+  | "Open quest";
+
 type OccupationProgressLine = {
   label: string;
   title: string;
   detail: string | null;
   /** 0–100 when the current objective has a numeric target. */
   progress: number | null;
-  action: string;
+  action: OccupationAction;
   /** The crafting countdown belongs on this row, not on a second crafting row. */
   craftTimer: boolean;
 };

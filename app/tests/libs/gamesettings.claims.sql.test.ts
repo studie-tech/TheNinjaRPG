@@ -1,18 +1,22 @@
 import { afterEach, beforeEach, expect, it, setSystemTime } from "bun:test";
 import { eq } from "drizzle-orm";
 import { gameSetting } from "@/drizzle/schema";
-import { actualGameSettings } from "../setup/preload";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../setup/testDatabase";
+import * as gamesettings from "@/libs/gamesettings";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../setup/testDatabase";
 
 const now = new Date("2026-10-21T10:30:10.123Z");
 const previous = new Date("2026-09-01T00:00:00.456Z");
 const name = "claim-regression";
 const locks = [
-  actualGameSettings.lockWithMinuteTimer,
-  actualGameSettings.lockWithHourlyTimer,
-  actualGameSettings.lockWithDailyTimer,
-  actualGameSettings.lockWithWeeklyTimer,
-  actualGameSettings.lockWithMonthlyTimer,
+  gamesettings.lockWithMinuteTimer,
+  gamesettings.lockWithHourlyTimer,
+  gamesettings.lockWithDailyTimer,
+  gamesettings.lockWithWeeklyTimer,
+  gamesettings.lockWithMonthlyTimer,
 ];
 
 describeWithDatabase("periodic timer claims in MySQL", () => {
@@ -20,7 +24,9 @@ describeWithDatabase("periodic timer claims in MySQL", () => {
     setSystemTime(now);
     await resetTables(gameSetting);
     const db = await getTestDatabase();
-    await db.insert(gameSetting).values({ id: "claim-id", name, time: previous, value: 9 });
+    await db
+      .insert(gameSetting)
+      .values({ id: "claim-id", name, time: previous, value: 9 });
   });
   afterEach(() => setSystemTime());
 
@@ -33,29 +39,38 @@ describeWithDatabase("periodic timer claims in MySQL", () => {
       const loser = results.find((result) => !result.isClaimed)!;
       expect(await loser.release()).toBe(false);
       expect(await winner.release()).toBe(true);
-      expect(await db.query.gameSetting.findFirst()).toEqual(expect.objectContaining({ time: previous, value: 0 }));
+      expect(await db.query.gameSetting.findFirst()).toEqual(
+        expect.objectContaining({ time: previous, value: 0 }),
+      );
     });
   }
 
   it("a failed minute worker cannot reset a later minute's marker", async () => {
     const db = await getTestDatabase();
-    const first = await actualGameSettings.lockWithMinuteTimer(db, name);
+    const first = await gamesettings.lockWithMinuteTimer(db, name);
     const later = new Date(now.getTime() + 60_000);
     setSystemTime(later);
-    const second = await actualGameSettings.lockWithMinuteTimer(db, name);
+    const second = await gamesettings.lockWithMinuteTimer(db, name);
     expect(second.isClaimed).toBe(true);
     expect(await first.release()).toBe(false);
-    expect(await db.query.gameSetting.findFirst()).toEqual(expect.objectContaining({ time: later }));
+    expect(await db.query.gameSetting.findFirst()).toEqual(
+      expect.objectContaining({ time: later }),
+    );
     expect(await second.update(17, later)).toBe(true);
-    expect(await db.query.gameSetting.findFirst()).toEqual(expect.objectContaining({ time: later, value: 17 }));
+    expect(await db.query.gameSetting.findFirst()).toEqual(
+      expect.objectContaining({ time: later, value: 17 }),
+    );
   });
 
   it("the generic timer also admits one concurrent owner", async () => {
     const db = await getTestDatabase();
-    await db.update(gameSetting).set({ name: "timer-1h" }).where(eq(gameSetting.name, name));
+    await db
+      .update(gameSetting)
+      .set({ name: "timer-1h" })
+      .where(eq(gameSetting.name, name));
     const results = await Promise.all([
-      actualGameSettings.lockWithGameTimer(db, "timer-1h", 60 * 60_000),
-      actualGameSettings.lockWithGameTimer(db, "timer-1h", 60 * 60_000),
+      gamesettings.lockWithGameTimer(db, "timer-1h", 60 * 60_000),
+      gamesettings.lockWithGameTimer(db, "timer-1h", 60 * 60_000),
     ]);
     expect(results.filter((result) => result === false)).toHaveLength(1);
   });

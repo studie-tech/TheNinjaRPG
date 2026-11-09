@@ -23,9 +23,13 @@ import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
 import { UserContextProvider } from "@/utils/UserContext";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../setup/browserGlobals";
 import { actualUserContext } from "../setup/preload";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-import { testApi, TrpcTestProviders } from "../setup/trpc";
+import { TrpcTestProviders, testApi } from "../setup/trpc";
 
 const clients: QueryClient[] = [];
 const hiddenDescriptor = Object.getOwnPropertyDescriptor(document, "hidden");
@@ -137,7 +141,8 @@ function mount(
       clanId: null,
       villageId: null,
       chatMuted: false,
-      mutedConversationIds: [], unmutedTavernIds: [],
+      mutedConversationIds: [],
+      unmutedTavernIds: [],
     },
     notifications: [],
     serverTime: Date.now(),

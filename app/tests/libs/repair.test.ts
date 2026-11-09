@@ -13,28 +13,40 @@ import { RepairTag } from "@/validators/combat";
 describe("furniture repair exclusion", () => {
   it("does not include damaged furniture in bulk repair", () => {
     const row = {
-      storedAtHome: false, isInAuction: false, durability: 10,
+      storedAtHome: false,
+      isInAuction: false,
+      durability: 10,
       item: { itemType: "FURNITURE", maxDurability: 100 },
     };
     expect(needsInventoryRepair(row)).toBe(false);
-    expect(needsInventoryRepair({ ...row, item: { ...row.item, itemType: "ARMOR" } })).toBe(true);
+    expect(
+      needsInventoryRepair({ ...row, item: { ...row.item, itemType: "ARMOR" } }),
+    ).toBe(true);
   });
 
   it("does not consume furniture carrying a stale repair effect as a repair kit", () => {
     const row = {
-      id: "chair-row", quantity: 1, storedAtHome: false, isInAuction: false,
+      id: "chair-row",
+      quantity: 1,
+      storedAtHome: false,
+      isInAuction: false,
       craftingFinishedAt: null,
       item: { itemType: "FURNITURE", effects: [RepairTag.parse({ power: 100 })] },
     } as unknown as UserItemWithRelations;
     expect(getRepairKits([row])).toEqual([]);
-    expect(getRepairKits([{ ...row, item: { ...row.item, itemType: "CONSUMABLE" } }])).toHaveLength(1);
+    expect(
+      getRepairKits([{ ...row, item: { ...row.item, itemType: "CONSUMABLE" } }]),
+    ).toHaveLength(1);
   });
 });
 
 describe("repair all cost", () => {
   const row = (id: string, durability: number, patch: object = {}) =>
     ({
-      id, durability, storedAtHome: false, isInAuction: false,
+      id,
+      durability,
+      storedAtHome: false,
+      isInAuction: false,
       item: { itemType: "ARMOR", maxDurability: 100, rarity: "RARE" },
       ...patch,
     }) as unknown as UserItemWithRelations;
@@ -49,7 +61,10 @@ describe("repair all cost", () => {
   });
 
   it("covers nothing before the inventory has loaded", () => {
-    expect(calcRepairAllCost(undefined)).toEqual({ itemsNeedingRepair: [], totalCost: 0 });
+    expect(calcRepairAllCost(undefined)).toEqual({
+      itemsNeedingRepair: [],
+      totalCost: 0,
+    });
   });
 });
 
@@ -75,7 +90,11 @@ describe("repair kit selection", () => {
     expect(calculateKitsToUse(damagedItems, kits)).toEqual({
       kitsToUse: [
         { repairItemId: "small-first", repairItemName: "small-first", quantityUsed: 2 },
-        { repairItemId: "small-second", repairItemName: "small-second", quantityUsed: 3 },
+        {
+          repairItemId: "small-second",
+          repairItemName: "small-second",
+          quantityUsed: 3,
+        },
         { repairItemId: "medium", repairItemName: "medium", quantityUsed: 3 },
       ],
       totalDurabilityNeeded: 86,
@@ -121,10 +140,14 @@ describe("repair kit selection", () => {
 
   it("distinguishes no damage from no available kits", () => {
     expect(calculateKitsToUse([], [])).toEqual({
-      kitsToUse: [], totalDurabilityNeeded: 0, canRepairAll: true,
+      kitsToUse: [],
+      totalDurabilityNeeded: 0,
+      canRepairAll: true,
     });
     expect(calculateKitsToUse(damagedItems, [])).toEqual({
-      kitsToUse: [], totalDurabilityNeeded: 86, canRepairAll: false,
+      kitsToUse: [],
+      totalDurabilityNeeded: 86,
+      canRepairAll: false,
     });
   });
 });

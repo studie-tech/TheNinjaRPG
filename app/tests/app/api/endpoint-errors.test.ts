@@ -1,11 +1,10 @@
-import { timerClaimFixture } from "../../setup/gameTimers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
 import { TRPCError } from "@trpc/server";
 import { GET as clean } from "@/app/api/cleaner/route";
 import { GET as index } from "@/app/api/indexer/route";
 import * as settings from "@/libs/gamesettings";
-import { actualGameSettings } from "../../setup/preload";
+import { timerClaimFixture } from "../../setup/gameTimers";
 import {
   resetServerModuleStubs,
   stubCronAuth,
@@ -21,9 +20,6 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.spyOn(Sentry, "captureException").mockReturnValue("test-event");
   vi.spyOn(Sentry, "flush").mockResolvedValue(true);
-  vi.spyOn(settings, "handleEndpointError").mockImplementation(
-    actualGameSettings.handleEndpointError,
-  );
   vi.spyOn(settings, "lockWithGameTimer").mockResolvedValue(false);
   release.mockReset().mockResolvedValue(true);
   vi.spyOn(settings, "lockWithHourlyTimer").mockResolvedValue({

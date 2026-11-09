@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { NodeHtmlMarkdown } from "node-html-markdown";
+import { absoluteUrl } from "@/libs/seo";
 import { truncateString } from "@/utils/string";
 
 // Shared NodeHtmlMarkdown instance for converting HTML to Markdown across all social media integrations
@@ -279,7 +280,7 @@ export const callTwitterNews = async (title: string, content: string) => {
   const plainContent = nodeHtmlMarkdown.translate(content);
 
   // Twitter has 280 char limit - compose tweet with title and truncated content
-  const newsUrl = "https://www.theninja-rpg.com/news";
+  const newsUrl = absoluteUrl("/news");
   const suffix = `\n\n🔗 ${newsUrl}`;
   const maxContentLength =
     TWITTER_CHARACTER_LIMIT - title.length - suffix.length - TWITTER_FORMATTING_BUFFER;

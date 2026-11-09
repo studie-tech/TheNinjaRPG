@@ -40,8 +40,8 @@ const ActivityStreakPopup: React.FC = () => {
   // the profile route prevents the same reward appearing twice.
   const dashboardOwnsStreak = pathname === "/profile";
   const currentDateKey = getDateKey(new Date());
-  // Preserve the pre-overworld behavior: once opened, the popup stays mounted through reward
-  // refetches so the user can see the claimed state until they explicitly close it.
+  // Once opened, the popup stays mounted through reward refetches so the user can see the
+  // claimed state until they explicitly close it.
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   // A plain boolean would remain latched if this tab stays mounted across midnight.
   const [userClosedDateKey, setUserClosedDateKey] = useState<string | null>(null);

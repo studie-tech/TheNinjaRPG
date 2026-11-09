@@ -1,23 +1,14 @@
 "use client";
 
 import { createContext, type ReactNode, use, useEffect, useState } from "react";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { isNative } from "@/libs/native";
 import { isIOSInstallDevice } from "@/utils/hardware";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
 /** Delay before the prompt appears, so it never lands on top of a page still loading. */
 const AUTO_SHOW_DELAY_MS = 3000;
 const SHORT_DISMISSAL_MS = 7 * 24 * 60 * 60 * 1000;
 const LONG_DISMISSAL_MS = 60 * 24 * 60 * 60 * 1000;
-
-const isRecentlyDismissed = (): boolean => {
-  const longTerm = safeLocalStorageGetItem("pwa-install-dismissed-long");
-  if (longTerm && Date.now() - parseInt(longTerm, 10) < LONG_DISMISSAL_MS) return true;
-  const shortTerm = safeLocalStorageGetItem("pwa-install-dismissed");
-  return Boolean(
-    shortTerm && Date.now() - parseInt(shortTerm, 10) < SHORT_DISMISSAL_MS,
-  );
-};
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -88,8 +79,8 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleAppInstalled);
 
-    // Safari never fires beforeinstallprompt, so without its own trigger the iOS
-    // "Add to Home Screen" instructions in InstallPrompt were unreachable.
+    // Safari never fires beforeinstallprompt, so iOS schedules the prompt directly to
+    // show InstallPrompt's "Add to Home Screen" instructions.
     if (iOS) scheduleAutoShow();
 
     return () => {
@@ -132,3 +123,12 @@ export function useInstallPrompt() {
   }
   return context;
 }
+
+const isRecentlyDismissed = (): boolean => {
+  const longTerm = safeLocalStorageGetItem("pwa-install-dismissed-long");
+  if (longTerm && Date.now() - parseInt(longTerm, 10) < LONG_DISMISSAL_MS) return true;
+  const shortTerm = safeLocalStorageGetItem("pwa-install-dismissed");
+  return Boolean(
+    shortTerm && Date.now() - parseInt(shortTerm, 10) < SHORT_DISMISSAL_MS,
+  );
+};

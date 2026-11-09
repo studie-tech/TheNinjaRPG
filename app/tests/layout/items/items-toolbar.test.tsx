@@ -1,12 +1,16 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import type { UserItemWithRelations } from "@/drizzle/schema";
-import type { ItemsToolbar as ItemsToolbarComponent } from "@/layout/items/ItemsToolbar";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
+import type { ItemsToolbar as ItemsToolbarComponent } from "@/layout/items/ItemsToolbar";
 import * as mergeAll from "@/layout/MergeAllStacksButton";
 import * as userContext from "@/utils/UserContext";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 const mutation = () => ({ useMutation: () => ({ mutate: vi.fn(), isPending: false }) });
 let ItemsToolbar: typeof ItemsToolbarComponent;
@@ -35,7 +39,9 @@ beforeEach(() => {
     prepareUserUpdate: vi.fn(),
     updateUser: vi.fn(),
   } as never);
-  vi.spyOn(itemLoadout, "default").mockImplementation((() => <p>Item loadout</p>) as never);
+  vi.spyOn(itemLoadout, "default").mockImplementation((() => (
+    <p>Item loadout</p>
+  )) as never);
   vi.spyOn(mergeAll, "MergeAllStacksButton").mockImplementation(() => (
     <button type="button">Merge stacks</button>
   ));
@@ -59,7 +65,14 @@ const sword = (durability: number) =>
     storedAtHome: false,
     isInAuction: false,
     imbuements: [],
-    item: { id: "sword", name: "Sword", itemType: "WEAPON", maxDurability: 100, cost: 1000, effects: [] },
+    item: {
+      id: "sword",
+      name: "Sword",
+      itemType: "WEAPON",
+      maxDurability: 100,
+      cost: 1000,
+      effects: [],
+    },
   }) as unknown as UserItemWithRelations;
 
 const player = (occupation: string) =>
@@ -67,7 +80,9 @@ const player = (occupation: string) =>
 
 /** Confirm wraps its trigger in a second element with the button role; keep the real ones. */
 const buttons = (scope: Pick<typeof screen, "queryAllByRole">, name: string | RegExp) =>
-  scope.queryAllByRole("button", { name }).filter((element) => element.tagName === "BUTTON");
+  scope
+    .queryAllByRole("button", { name })
+    .filter((element) => element.tagName === "BUTTON");
 
 /** The actions a phone shows only after pressing ⋯. */
 const moreActions = () => {
@@ -103,12 +118,25 @@ it("keeps auto equip in view when damaged gear cannot be repaired here", () => {
 it.each([
   { initialDurability: 100, updatedDurability: 40, action: /Auto equip/ },
   { initialDurability: 40, updatedDurability: 100, action: /Repair all items/ },
-])("closes the $action confirmation when inventory changes the leading action", ({ initialDurability, updatedDurability, action }) => {
-  const view = render(<ItemsToolbar userData={player("CRAFTING")} userItems={[sword(initialDurability)]} />);
-  fireEvent.click(buttons(screen, action)[0]!);
-  expect(screen.getByRole("dialog")).toBeDefined();
+])(
+  "closes the $action confirmation when inventory changes the leading action",
+  ({ initialDurability, updatedDurability, action }) => {
+    const view = render(
+      <ItemsToolbar
+        userData={player("CRAFTING")}
+        userItems={[sword(initialDurability)]}
+      />,
+    );
+    fireEvent.click(buttons(screen, action)[0]!);
+    expect(screen.getByRole("dialog")).toBeDefined();
 
-  view.rerender(<ItemsToolbar userData={player("CRAFTING")} userItems={[sword(updatedDurability)]} />);
+    view.rerender(
+      <ItemsToolbar
+        userData={player("CRAFTING")}
+        userItems={[sword(updatedDurability)]}
+      />,
+    );
 
-  expect(screen.queryByRole("dialog")).toBeNull();
-});
+    expect(screen.queryByRole("dialog")).toBeNull();
+  },
+);

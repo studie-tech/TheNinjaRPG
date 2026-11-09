@@ -1,7 +1,6 @@
-
 import { describe, expect, it } from "bun:test";
 import { filterByEffectConstraints } from "@/server/api/routers/jutsu";
-import { makeTag } from "../../../../libs/combat/helpers/battleScenario";
+import { makeTag } from "../../../../setup/combat";
 
 describe("jutsu element filtering", () => {
   const classified = {

@@ -1,4 +1,5 @@
-import type { ReportAction } from "../../drizzle/schema";
+import { REPORT_TIMEOUT_HOURS } from "@/drizzle/constants";
+import type { ReportAction } from "@/drizzle/schema";
 
 export const reportCommentColor = (status: ReportAction | null) => {
   switch (status) {
@@ -33,7 +34,7 @@ export const reportCommentExplain = (status: ReportAction | null) => {
     case "SILENCE_ESCALATED":
       return "Silence Escalated to Admin";
     case "TIMEOUT_ACTIVATED":
-      return "User Timed Out (1h)";
+      return `User Timed Out (${REPORT_TIMEOUT_HOURS}h)`;
     case "OFFICIAL_WARNING":
       return "Official Warning";
     default:

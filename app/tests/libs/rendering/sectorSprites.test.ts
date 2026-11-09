@@ -2,42 +2,117 @@ import { describe, expect, it } from "bun:test";
 import type { VillageStructure } from "@/drizzle/schema";
 import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
 import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
-import { createGenericStructure, createShrineStructure } from "@/libs/sector-map/structures";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
+import {
+  createGenericStructure,
+  createShrineStructure,
+} from "@/libs/sector-map/structures";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import type { MapLocation } from "@/validators/mapLocation";
 
-const grid = { getHex: ({ col, row }: { col: number; row: number }) => {
-  if (!Number.isFinite(col) || !Number.isFinite(row)) throw new Error("Invalid coordinates");
-  return { col, row, x: col * 20, y: row * 20, width: 20, height: 20 };
-} } as never;
-const location: MapLocation = { id: "tower", sector: 724, longitude: 3, latitude: 4, name: "Tower", description: "A tower.", assetId: "art", scale: 1 };
+const grid = {
+  getHex: ({ col, row }: { col: number; row: number }) => {
+    if (!Number.isFinite(col) || !Number.isFinite(row))
+      throw new Error("Invalid coordinates");
+    return { col, row, x: col * 20, y: row * 20, width: 20, height: 20 };
+  },
+} as never;
+const location: MapLocation = {
+  id: "tower",
+  sector: 724,
+  longitude: 3,
+  latitude: 4,
+  name: "Tower",
+  description: "A tower.",
+  assetId: "art",
+  scale: 1,
+};
 const asset = { id: "art", imageUrl: "tower.png", renderScale: 2.4 };
 const objects = [{ id: "tree", type: "decoration", x: 3, y: 4, assetKey: "tree" }];
-const descriptions = (locations: MapLocation[], assets = [asset], mapObjects = objects, structures: VillageStructure[] = []) => sectorSpriteDescriptions({ grid, map: { sector: 0, objects: mapObjects } as NormalizedSectorMap,
-  structures, wall: null, lightLayout: false, locations, mapAssets: assets,
-  decorations: new Map([["tree", { key: "tree", filepath: "tree.png", renderScale: 2 } as DecorationAsset]]),
-});
+const descriptions = (
+  locations: MapLocation[],
+  assets = [asset],
+  mapObjects = objects,
+  structures: VillageStructure[] = [],
+) =>
+  sectorSpriteDescriptions({
+    grid,
+    map: { sector: 0, objects: mapObjects } as NormalizedSectorMap,
+    structures,
+    wall: null,
+    lightLayout: false,
+    locations,
+    mapAssets: assets,
+    decorations: new Map([
+      [
+        "tree",
+        { key: "tree", filepath: "tree.png", renderScale: 2 } as DecorationAsset,
+      ],
+    ]),
+  });
 
 describe("sector scenery recipes", () => {
   it("renders a synthetic wilderness shrine with its native artwork, physical materials and forecourt", () => {
-    const structure = createShrineStructure({
-      formatVersion: 1, sector: 90_000, name: "Wilderness", width: 0, height: 0,
-      anchors: [], tiles: [], objects: [], exits: [],
-      metadata: { importedAt: "2026-01-01T00:00:00Z", source: "tiled" },
-    }, 1);
+    const structure = createShrineStructure(
+      {
+        formatVersion: 1,
+        sector: 90_000,
+        name: "Wilderness",
+        width: 0,
+        height: 0,
+        anchors: [],
+        tiles: [],
+        objects: [],
+        exits: [],
+        metadata: { importedAt: "2026-01-01T00:00:00Z", source: "tiled" },
+      },
+      1,
+    );
     const art = WORLD_STRUCTURE_ART["akikaze/shrine"]!;
     const sprite = descriptions([], [], [], [structure])[0]!;
-    expect(sprite).toMatchObject({ id: "sector-shrine", structureId: "sector-shrine", image: art.filepath, frame: art.frame, rendition: 0, nearest: true, shadowCaster: "building" });
-    expect(sprite.worldMaterial).toEqual({ material: art.material, surfaces: art.surfaces });
-    expect(sprite.entrance).toMatchObject({ hasCourt: true, courtSlope: art.courtSlope });
+    expect(sprite).toMatchObject({
+      id: "sector-shrine",
+      structureId: "sector-shrine",
+      image: art.filepath,
+      frame: art.frame,
+      rendition: 0,
+      nearest: true,
+      shadowCaster: "building",
+    });
+    expect(sprite.worldMaterial).toEqual({
+      material: art.material,
+      surfaces: art.surfaces,
+    });
+    expect(sprite.entrance).toMatchObject({
+      hasCourt: true,
+      courtSlope: art.courtSlope,
+    });
   });
   it("gives imported faction buildings matched materials and paving outside themed settlements", () => {
-    const art = { ...WORLD_STRUCTURE_ART["syndicate/bank"]!, sourceImage: "uploaded-faction-bank.webp", filepath: "uploaded-faction-atlas.webp" };
-    const structure = { ...createGenericStructure({ name: "Bank", route: art.route, image: art.sourceImage, longitude: 3, latitude: 4 }), worldArt: art };
+    const art = {
+      ...WORLD_STRUCTURE_ART["syndicate/bank"]!,
+      sourceImage: "uploaded-faction-bank.webp",
+      filepath: "uploaded-faction-atlas.webp",
+    };
+    const structure = {
+      ...createGenericStructure({
+        name: "Bank",
+        route: art.route,
+        image: art.sourceImage,
+        longitude: 3,
+        latitude: 4,
+      }),
+      worldArt: art,
+    };
     const sprite = descriptions([], [], [], [structure])[0]!;
-    expect(sprite.worldMaterial).toEqual({ material: art.material, surfaces: art.surfaces });
-    expect(sprite.entrance).toMatchObject({ hasCourt: true, courtSlope: art.courtSlope });
+    expect(sprite.worldMaterial).toEqual({
+      material: art.material,
+      surfaces: art.surfaces,
+    });
+    expect(sprite.entrance).toMatchObject({
+      hasCourt: true,
+      courtSlope: art.courtSlope,
+    });
     expect(sprite.frame).toEqual(art.frame);
     expect(sprite).toMatchObject({ image: art.filepath, rendition: 0 });
   });
@@ -50,7 +125,8 @@ describe("sector scenery recipes", () => {
   });
   it("changes art without changing the authored entrance or mutating its source", () => {
     const before = structuredClone(location);
-    const first = descriptions([location]), second = descriptions([location], [{ ...asset, imageUrl: "replacement.png" }]);
+    const first = descriptions([location]),
+      second = descriptions([location], [{ ...asset, imageUrl: "replacement.png" }]);
     expect(first[0]?.image).toBe("tower.png");
     expect(second[0]?.image).toBe("replacement.png");
     expect(first[1]).toEqual(second[1]);
@@ -70,24 +146,45 @@ describe("sector scenery recipes", () => {
     expect(descriptions([draft, location])).toEqual(descriptions([location]));
   });
   it("orders scenery by its ground contact", () => {
-    const sprites = descriptions([], [asset], [objects[0]!, { ...objects[0]!, id: "far-tree", y: 9 }]);
+    const sprites = descriptions(
+      [],
+      [asset],
+      [objects[0]!, { ...objects[0]!, id: "far-tree", y: 9 }],
+    );
     expect(sprites.map((sprite) => sprite.id)).toEqual(["far-tree", "tree"]);
   });
   it("orders village buildings at their base without moving their centered artwork", () => {
-    const home = { id: "home", longitude: 3, latitude: 4, image: "home.png", hasPage: 1 } as VillageStructure;
+    const home = {
+      id: "home",
+      longitude: 3,
+      latitude: 4,
+      image: "home.png",
+      hasPage: 1,
+    } as VillageStructure;
     const sprite = descriptions([], [], [], [home])[0]!;
     expect(sprite).toMatchObject({ x: 60, y: 82, size: 60, structureId: "home" });
     expect(sprite.groundY).toBeCloseTo(61);
     expect(sprite.anchorY).toBeUndefined();
   });
-  it.each(["structure", "landmark"])("orders authored %s art at its base without moving it", (type) => {
-    const sprite = descriptions([], [], [{ id: type, type, x: 3, y: 4, assetKey: "building.png" }])[0]!;
-    expect(sprite).toMatchObject({ x: 60, y: 82.5, size: 48 });
-    expect(sprite.groundY).toBeCloseTo(65.7);
-    expect(sprite.anchorY).toBeUndefined();
-  });
+  it.each(["structure", "landmark"])(
+    "orders authored %s art at its base without moving it",
+    (type) => {
+      const sprite = descriptions(
+        [],
+        [],
+        [{ id: type, type, x: 3, y: 4, assetKey: "building.png" }],
+      )[0]!;
+      expect(sprite).toMatchObject({ x: 60, y: 82.5, size: 48 });
+      expect(sprite.groundY).toBeCloseTo(65.7);
+      expect(sprite.anchorY).toBeUndefined();
+    },
+  );
   it("retains the center contact for other authored object types", () => {
-    const sprite = descriptions([], [], [{ id: "shrine", type: "shrine", x: 3, y: 4, assetKey: "shrine.png" }])[0]!;
+    const sprite = descriptions(
+      [],
+      [],
+      [{ id: "shrine", type: "shrine", x: 3, y: 4, assetKey: "shrine.png" }],
+    )[0]!;
     expect(sprite).toMatchObject({ x: 60, y: 82.5, size: 24, groundY: 82.5 });
   });
 });

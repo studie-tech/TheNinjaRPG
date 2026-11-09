@@ -2,7 +2,7 @@
 
 import { BarChart3 } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { api } from "@/app/_trpc/client";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useContentDetails } from "@/hooks/useContentDetails";
@@ -158,37 +158,28 @@ const ItemUsageBalance: React.FC<ItemUsageBalanceProps> = (props) => {
 
   // Queries
   const { data, isPending } = api.data.getItemBalanceStatistics.useQuery(filter);
-  const { data: itemNames } = api.item.getAllNames.useQuery();
 
   const utils = api.useUtils();
-
-  // Create mapping from item names to IDs
-  const itemNameToId = useMemo(() => {
-    if (!itemNames) return new Map<string, string>();
-    return new Map(itemNames.map((item) => [item.name, item.id]));
-  }, [itemNames]);
 
   // Process data for table
   const tableData =
     data &&
     (() => {
-      const groups = groupBy(data, "name");
-      const rows = Array.from(groups.entries()).map(([name, entries]) => {
+      const groups = groupBy(data, "itemId");
+      const rows = Array.from(groups.entries()).map(([itemId, entries]) => {
+        const name = entries[0]?.name ?? itemId;
         const outcomes = summarizeBattleOutcomes(entries);
 
         // Get equipped count from the first entry (all entries for an item will have the same equipped count)
         const equippedCount = entries[0]?.equippedCount || 0;
 
-        const itemId = itemNameToId.get(name);
-        const nameWithIcon = itemId ? (
+        const nameWithIcon = (
           <div key={itemId} className="flex items-center gap-2">
             <span>{name}</span>
             <Link href={`/manual/item/statistics/${itemId}`}>
               <BarChart3 className="h-4 w-4 text-muted-foreground hover:text-primary" />
             </Link>
           </div>
-        ) : (
-          name
         );
 
         return {

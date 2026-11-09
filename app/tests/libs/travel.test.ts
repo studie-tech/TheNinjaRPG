@@ -8,7 +8,7 @@ import {
   optimisticGlobalTravelStart,
   SECTOR_BATTLE_STALE_SECONDS,
 } from "@/libs/travel";
-import { sectorMap, sectorTile as makeTile } from "../setup/sectorMap";
+import { sectorTile as makeTile, sectorMap } from "../setup/sectorMap";
 
 const makeMap = (width: number, height: number, blocked: Set<string> = new Set()) =>
   sectorMap(width, height, (x, y) =>
@@ -68,9 +68,7 @@ describe("getBiomeAtSectorAnchor", () => {
   });
 
   it("falls back to the globe biome when the anchor is absent", () => {
-    expect(getBiomeAtSectorAnchor(makeMap(3, 3), "shrine.default", 3)).toBe(
-      "ice",
-    );
+    expect(getBiomeAtSectorAnchor(makeMap(3, 3), "shrine.default", 3)).toBe("ice");
   });
 });
 
@@ -88,8 +86,6 @@ describe("optimisticGlobalTravelStart", () => {
     expect(patch.travelFinishAt?.getTime()).toBeLessThanOrEqual(Date.now() + 12_000);
   });
 });
-
-
 
 describe("filterLiveSectorBattleUsers", () => {
   const users = [
@@ -119,7 +115,14 @@ describe("filterLiveSectorBattleUsers", () => {
 
 describe("isTravelKeyBlocked", () => {
   const press = (target: EventTarget | null, extra: Partial<KeyboardEvent> = {}) =>
-    ({ key: "w", target, ctrlKey: false, metaKey: false, altKey: false, ...extra }) as KeyboardEvent;
+    ({
+      key: "w",
+      target,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      ...extra,
+    }) as KeyboardEvent;
 
   it("lets map keys through outside text fields", () => {
     expect(isTravelKeyBlocked(press(document.body))).toBe(false);
@@ -137,6 +140,8 @@ describe("isTravelKeyBlocked", () => {
 
   it("ignores browser shortcuts and keys another handler already used", () => {
     expect(isTravelKeyBlocked(press(document.body, { ctrlKey: true }))).toBe(true);
-    expect(isTravelKeyBlocked(press(document.body, { defaultPrevented: true }))).toBe(true);
+    expect(isTravelKeyBlocked(press(document.body, { defaultPrevented: true }))).toBe(
+      true,
+    );
   });
 });

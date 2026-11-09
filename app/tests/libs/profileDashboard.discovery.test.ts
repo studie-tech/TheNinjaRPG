@@ -84,11 +84,31 @@ const user = (patch: Partial<User> = {}): User =>
 
 describe("dashboard discovery from shared profile data", () => {
   it("matches the quest board's configured mastery minimum and next-rank eligibility", () => {
-    const candidates = [candidate({ requiredNinjutsuMastery: 500000, content: { reward: ObjectiveReward.parse({ reward_mastery_stat: "ninjutsuMastery", reward_mastery_rank: "ADEPT" }) } })];
-    const novice = user({ ninjutsuMastery: 599999.85, masteryRanks: { ninjutsuMastery: "NOVICE" } });
+    const candidates = [
+      candidate({
+        requiredNinjutsuMastery: 500000,
+        content: {
+          reward: ObjectiveReward.parse({
+            reward_mastery_stat: "ninjutsuMastery",
+            reward_mastery_rank: "ADEPT",
+          }),
+        },
+      }),
+    ];
+    const novice = user({
+      ninjutsuMastery: 599999.85,
+      masteryRanks: { ninjutsuMastery: "NOVICE" },
+    });
     expect(resolveDashboardContent(candidates, novice)).toHaveLength(1);
-    expect(resolveDashboardContent(candidates, { ...novice, ninjutsuMastery: 499999 })).toEqual([]);
-    expect(resolveDashboardContent(candidates, { ...novice, masteryRanks: { ninjutsuMastery: "ADEPT" } })).toEqual([]);
+    expect(
+      resolveDashboardContent(candidates, { ...novice, ninjutsuMastery: 499999 }),
+    ).toEqual([]);
+    expect(
+      resolveDashboardContent(candidates, {
+        ...novice,
+        masteryRanks: { ninjutsuMastery: "ADEPT" },
+      }),
+    ).toEqual([]);
   });
   it("unlocks cached candidates when getUser supplies a completed prerequisite", () => {
     const candidates = [candidate({ prerequisiteQuestId: "prerequisite" })];
@@ -171,56 +191,128 @@ describe("dashboard discovery from shared profile data", () => {
   });
 });
 
-
 it("marks a banned player's content as view-only and preserves location guidance away from it", () => {
-  expect(resolveDashboardContent([candidate()], user({ isBanned: true }))[0]).toMatchObject({ availability: "blocked", availabilityReason: "You are banned and cannot start quests" });
-  expect(resolveDashboardContent([candidate()], user({ isBanned: true, sector: -1 }))[0]).toMatchObject({ availability: "travel", availabilityReason: expect.stringContaining("You are banned") });
+  expect(
+    resolveDashboardContent([candidate()], user({ isBanned: true }))[0],
+  ).toMatchObject({
+    availability: "blocked",
+    availabilityReason: "You are banned and cannot start quests",
+  });
+  expect(
+    resolveDashboardContent([candidate()], user({ isBanned: true, sector: -1 }))[0],
+  ).toMatchObject({
+    availability: "travel",
+    availabilityReason: expect.stringContaining("You are banned"),
+  });
 });
-
 
 describe("dashboard auto-travel destinations", () => {
-  it.each(["story", "event"] as const)("targets Wake Island for remote %s content", (questType) => {
-    const [entry] = resolveDashboardContent([candidate({ questType })], user({ sector: 12, status: "AWAKE" }));
-    expect(entry).toMatchObject({ availability: "travel", travelSector: MAP_WAKE_ISLAND_SECTOR, availabilityReason: null });
-    expect(dashboardContentHref(entry!)).toBe(`/travel?sector=${MAP_WAKE_ISLAND_SECTOR}`);
-  });
+  it.each(["story", "event"] as const)(
+    "targets Wake Island for remote %s content",
+    (questType) => {
+      const [entry] = resolveDashboardContent(
+        [candidate({ questType })],
+        user({ sector: 12, status: "AWAKE" }),
+      );
+      expect(entry).toMatchObject({
+        availability: "travel",
+        travelSector: MAP_WAKE_ISLAND_SECTOR,
+        availabilityReason: null,
+      });
+      expect(dashboardContentHref(entry!)).toBe(
+        `/travel?sector=${MAP_WAKE_ISLAND_SECTOR}`,
+      );
+    },
+  );
 
-  it.each(["mission", "errand", "medical", "pvp", "battlepyramid"] as const)("targets the home village for remote %s assignments", (questType) => {
-    const [entry] = resolveDashboardContent([candidate({ questType })], user({ sector: 12, status: "AWAKE", village: { ...user().village!, sector: 40 } }));
-    expect(entry).toMatchObject({ availability: "travel", travelSector: 40, availabilityReason: null });
-    expect(dashboardContentHref(entry!)).toBe("/travel?sector=40");
-  });
+  it.each(["mission", "errand", "medical", "pvp", "battlepyramid"] as const)(
+    "targets the home village for remote %s assignments",
+    (questType) => {
+      const [entry] = resolveDashboardContent(
+        [candidate({ questType })],
+        user({
+          sector: 12,
+          status: "AWAKE",
+          village: { ...user().village!, sector: 40 },
+        }),
+      );
+      expect(entry).toMatchObject({
+        availability: "travel",
+        travelSector: 40,
+        availabilityReason: null,
+      });
+      expect(dashboardContentHref(entry!)).toBe("/travel?sector=40");
+    },
+  );
 
-  it.each(["ASLEEP", "BATTLE", "TRAVEL", "QUEUED"] as const)("blocks auto-travel while %s", (status) => {
-    const [entry] = resolveDashboardContent([candidate()], user({ sector: 12, status, autoWakeUp: false }));
-    expect(entry?.availabilityReason).toBe("Travel to Global ANBU HQ to begin. You must be awake to travel");
-  });
+  it.each(["ASLEEP", "BATTLE", "TRAVEL", "QUEUED"] as const)(
+    "blocks auto-travel while %s",
+    (status) => {
+      const [entry] = resolveDashboardContent(
+        [candidate()],
+        user({ sector: 12, status, autoWakeUp: false }),
+      );
+      expect(entry?.availabilityReason).toBe(
+        "Travel to Global ANBU HQ to begin. You must be awake to travel",
+      );
+    },
+  );
 
-  it.each(["AWAKE", "ASLEEP"] as const)("preserves the ban restriction for remote content while %s", (status) => {
-    const [entry] = resolveDashboardContent([candidate()], user({ sector: 12, status, isBanned: true, autoWakeUp: false }));
-    expect(entry?.availabilityReason).toBe(`Travel to Global ANBU HQ to begin. You are banned and cannot start quests${status !== "AWAKE" ? ". You must be awake to travel" : ""}`);
-  });
+  it.each(["AWAKE", "ASLEEP"] as const)(
+    "preserves the ban restriction for remote content while %s",
+    (status) => {
+      const [entry] = resolveDashboardContent(
+        [candidate()],
+        user({ sector: 12, status, isBanned: true, autoWakeUp: false }),
+      );
+      expect(entry?.availabilityReason).toBe(
+        `Travel to Global ANBU HQ to begin. You are banned and cannot start quests${status !== "AWAKE" ? ". You must be awake to travel" : ""}`,
+      );
+    },
+  );
 });
 
-for (const [status, autoWakeUp, expected] of [["AWAKE", true, true], ["ASLEEP", true, true], ["HOSPITALIZED", true, true], ["ASLEEP", false, false], ["BATTLE", true, false], ["TRAVEL", true, false], ["QUEUED", true, false]] as const) {
+for (const [status, autoWakeUp, expected] of [
+  ["AWAKE", true, true],
+  ["ASLEEP", true, true],
+  ["HOSPITALIZED", true, true],
+  ["ASLEEP", false, false],
+  ["BATTLE", true, false],
+  ["TRAVEL", true, false],
+  ["QUEUED", true, false],
+] as const) {
   it(`dashboard content travel ${status} auto=${autoWakeUp}`, () => {
     const actor = { ...user({ sector: 12, status }), autoWakeUp };
     const [entry] = resolveDashboardContent([candidate()], actor);
     expect(entry).toBeDefined();
     expect(!entry!.availabilityReason).toBe(expected);
-    expect(dashboardContentHref(entry!)).toBe(`/travel?sector=${MAP_WAKE_ISLAND_SECTOR}`);
+    expect(dashboardContentHref(entry!)).toBe(
+      `/travel?sector=${MAP_WAKE_ISLAND_SECTOR}`,
+    );
   });
 }
 
 describe("buildDashboardCatalogue", () => {
   it("orders the mission groups and keeps ungrouped missions behind them", () => {
     const activeWars = [
-      { status: "ACTIVE", attackerVillageId: "village", defenderVillageId: "enemy", warAllies: [] },
+      {
+        status: "ACTIVE",
+        attackerVillageId: "village",
+        defenderVillageId: "enemy",
+        warAllies: [],
+      },
     ] as unknown as User["activeWars"];
     const missions = ["war", "pvp", "medical", "errand", "mission"].map((questType) =>
-      candidate({ id: questType, name: questType, questType: questType as Candidate["questType"] }),
+      candidate({
+        id: questType,
+        name: questType,
+        questType: questType as Candidate["questType"],
+      }),
     );
-    const catalogue = buildDashboardCatalogue(missions, user({ activeWars, medicalExperience: 1 }));
+    const catalogue = buildDashboardCatalogue(
+      missions,
+      user({ activeWars, medicalExperience: 1 }),
+    );
     expect(catalogue.map((entry) => entry.questType)).toEqual([
       "mission",
       "errand",

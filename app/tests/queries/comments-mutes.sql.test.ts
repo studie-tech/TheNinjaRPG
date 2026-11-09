@@ -3,7 +3,11 @@ import { inArray } from "drizzle-orm";
 import { userData } from "@/drizzle/schema";
 import { updateUserDataForCreateConversationComment } from "@/queries/comments";
 import { insertUsers } from "../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../setup/testDatabase";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../setup/testDatabase";
 
 describeWithDatabase("inbox news for muted chats", () => {
   beforeEach(async () => {

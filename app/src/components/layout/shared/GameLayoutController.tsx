@@ -9,16 +9,13 @@ import React, {
 } from "react";
 import ReactDOM from "react-dom";
 import { api } from "@/app/_trpc/client";
-import {
-  safeLocalStorageGetItem,
-  safeLocalStorageSetItem,
-  useLocalStorage,
-} from "@/hooks/localstorage";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { FONT_SCALE_STORAGE_KEY } from "@/hooks/useFontScale";
+import { useGameMenu } from "@/hooks/useGameMenu";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useRankedQueueCount } from "@/hooks/useRankedQueueCount";
 import { useTerritoryWarNotice } from "@/hooks/useTerritoryWarNotice";
-import { GlobalAudioProvider } from "@/layout/GameSettings";
+import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
 import TutorialAssistant from "@/layout/TutorialAssistant";
 import { getGameLayout } from "@/libs/gameLayouts";
 import {
@@ -29,7 +26,7 @@ import {
   SWAP_SIDEBARS_STORAGE_KEY,
   toFontScale,
 } from "@/libs/layoutPreference";
-import { getMainNavbarLinks, useGameMenu } from "@/libs/menus";
+import { getMainNavbarLinks } from "@/libs/menus";
 import {
   DEFAULT_MOBILE_NAV_CONFIG,
   MOBILE_NAV_STORAGE_KEY,
@@ -37,6 +34,7 @@ import {
   normalizeMobileNavConfig,
 } from "@/libs/mobileNavConfig";
 import { usePublicPathname } from "@/utils/routing";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 import { getCurrentSeason } from "@/utils/time";
 import { useUserDataSelector } from "@/utils/UserContext";
 import {
@@ -57,8 +55,6 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   initialIsSignedIn = false,
   children,
 }) => {
-  ReactDOM.prefetchDNS("https://o4507797256601600.ingest.de.sentry.io");
-  ReactDOM.prefetchDNS("https://consentcdn.cookiebot.com");
   ReactDOM.prefetchDNS("https://region1.analytics.google.com");
   ReactDOM.prefetchDNS("https://connect.facebook.net");
   ReactDOM.prefetchDNS("https://api.github.com");
@@ -83,14 +79,13 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   const [rightSideBarOpen, setRightSideBarOpen] = useState(false);
   const rightSideBarRef = React.useRef<HTMLDivElement | null>(null);
   // Opening or closing a sheet mounts or unmounts its whole menu; as a
-  // transition that render no longer blocks the tap's next paint. Links
+  // transition, that render does not block the tap's next paint. Links
   // inside a sheet close it directly instead: a close sharing a transition
   // with the navigation it starts would keep the sheet up until the page loads.
   const onLeftSideBarOpenChange = (open: boolean) =>
     startTransition(() => setLeftSideBarOpen(open));
   const onRightSideBarOpenChange = (open: boolean) =>
     startTransition(() => setRightSideBarOpen(open));
-  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [lightLayout, setLightLayout] = useLocalStorage<boolean>(
     LIGHT_LAYOUT_STORAGE_KEY,
     false,
@@ -164,13 +159,6 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
   }, []);
 
   useEffect(() => {
-    if (getGameLayout(variant).supportsColorMode) {
-      const savedTheme = safeLocalStorageGetItem("theme");
-      if (savedTheme === "dark" || savedTheme === "light") {
-        setTheme(savedTheme);
-      }
-    }
-
     // The root layout's head script applies the scale from the cookie before first paint,
     // so this is only a recovery path for visitors with a stored preference but no cookie.
     // Restore the cookie for the next request without changing this document after
@@ -189,27 +177,15 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     setIsMounted(true);
   }, [variant]);
 
-  useEffect(() => {
-    if (!getGameLayout(variant).supportsColorMode || !isMounted) return;
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [theme, isMounted, variant]);
-
   const toggleLightLayout = () => {
     setLightLayout(!lightLayout);
   };
 
+  // The head script and applyGameLayout apply the stored theme; a toggle flips both.
   const toggleTheme = () => {
-    if (!theme || theme === "light") {
-      safeLocalStorageSetItem("theme", "dark");
-      setTheme("dark");
-    } else {
-      safeLocalStorageSetItem("theme", "light");
-      setTheme("light");
-    }
+    const dark = !document.documentElement.classList.contains("dark");
+    safeLocalStorageSetItem("theme", dark ? "dark" : "light");
+    document.documentElement.classList.toggle("dark", dark);
   };
 
   const navbarMenuItems = useMemo(

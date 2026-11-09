@@ -1,9 +1,9 @@
-import { timerClaimFixture } from "../../../setup/gameTimers";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { GET } from "@/app/api/territory-war-maintenance/route";
 import * as gamesettings from "@/libs/gamesettings";
 import * as discordEvents from "@/server/utils/discord/events";
 import * as territoryWar from "@/server/utils/territoryWar";
+import { timerClaimFixture } from "../../../setup/gameTimers";
 import { resetServerModuleStubs, stubCronAuth } from "../../../setup/serverModules";
 
 const request = () => new Request("https://example.com/api/territory-war-maintenance");

@@ -1,16 +1,16 @@
 import { describe, expect, it } from "bun:test";
+import type { UserData } from "@/drizzle/schema";
 import {
-  getSageMasteryRank,
-  getSageMasteryDisplayRank,
-  getSageDailyCap,
+  filterRollableSageModes,
   getActiveSageLevel,
+  getSageDailyCap,
+  getSageMasteryDisplayRank,
+  getSageMasteryRank,
   getSageModeActivationCost,
   getSageRankIndex,
   isSageRankAtLeast,
   sageRanksAtOrBelow,
-  filterRollableSageModes,
 } from "@/libs/sageMode";
-import type { UserData } from "@/drizzle/schema";
 import { makeSageMode } from "./combat/helpers/sageMode";
 
 describe("getSageMasteryRank", () => {

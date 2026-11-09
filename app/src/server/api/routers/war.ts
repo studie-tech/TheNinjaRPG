@@ -18,6 +18,7 @@ import {
   IMG_AVATAR_DEFAULT,
   MAP_RESERVED_SECTORS,
   VILLAGE_SYNDICATE_ID,
+  VILLAGE_WAR_TYPES,
   WAR_ALLY_MAX_PAYMENT_PERCENTAGE,
   WAR_DECLARATION_COOLDOWN_HOURS,
   WAR_DECLARATION_COST,
@@ -167,15 +168,30 @@ import {
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromNow } from "@/utils/time";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-import {
-  completeWarMissionSchema,
-  declareVillageWarSchema,
-  raidOptionsSchema,
-  startWarMissionSchema,
-  warCampSchema,
-  warIdSchema,
-  warRulesSchema,
-} from "@/validators/war";
+import { warRulesSchema } from "@/validators/war";
+
+const declareVillageWarSchema = z.object({
+  targetVillageId: z.string(),
+  targetStructureRoute: z.string(),
+  userVillageId: z.string(),
+});
+
+const raidOptionsSchema = z.object({
+  userVillageId: z.string(),
+  targetVillageId: z.string(),
+});
+
+/** Resource identifiers only; router guards enforce participation and current eligibility. */
+const warIdSchema = z.object({ warId: z.string().min(1) });
+
+const startWarMissionSchema = warIdSchema.extend({
+  questId: z.string().min(1),
+  objectiveId: z.string().min(1),
+});
+
+const completeWarMissionSchema = z.object({ attemptId: z.string().min(1) });
+
+const warCampSchema = z.object({ campId: z.string().min(1) });
 
 export const warRouter = createTRPCRouter({
   /** Return the caller's pending and accepted contracts in open wars, including notice. */
@@ -827,16 +843,13 @@ export const warRouter = createTRPCRouter({
       ]);
 
       // Guard
-      if (!user?.village) {
+      if (!user?.village || !user.villageId) {
         return errorResponse("You must be in a village to build a shrine");
       }
       if (isFactionVillage(user.village)) {
         return errorResponse("Factions cannot purchase sectors");
       }
-      if (!user?.villageId) {
-        return errorResponse("You must be in a village to build a shrine");
-      }
-      if (user.userId !== user.village.kageId) {
+      if (!isKage(user)) {
         return errorResponse("Only the Kage can build shrines");
       }
       if (!activeWar) {
@@ -932,7 +945,7 @@ export const warRouter = createTRPCRouter({
       );
       const sectorVillage = villages.find((v) => v.sector === input.sectorId);
       // Guard
-      if (!user?.village) {
+      if (!user?.village || !user.villageId) {
         return errorResponse("You must be in a village to declare war");
       }
       if (isFactionVillage(user.village)) {
@@ -946,10 +959,7 @@ export const warRouter = createTRPCRouter({
           "Your village does not seem to match that on your profile",
         );
       }
-      if (!user?.villageId) {
-        return errorResponse("You must be in a village to declare war");
-      }
-      if (user.userId !== user.village.kageId) {
+      if (!isKage(user)) {
         return errorResponse("Only the leader can declare sector wars");
       }
       if (user.village.tokens < WAR_DECLARATION_COST) {
@@ -1098,6 +1108,7 @@ export const warRouter = createTRPCRouter({
         existingPending,
         elders,
         attackerStructures,
+        warRules,
       ] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchActiveWars(ctx.drizzle),
@@ -1110,6 +1121,7 @@ export const warRouter = createTRPCRouter({
         findVillageElderVoteForDeclareVillageWarOrRaid2(ctx.drizzle, input),
         listUserDataForDeclareVillageWarOrRaid(ctx.drizzle, input),
         fetchStructures(ctx.drizzle, input.userVillageId),
+        fetchWarRules(ctx.drizzle),
       ]);
       // Derived
       const now = new Date();
@@ -1124,7 +1136,7 @@ export const warRouter = createTRPCRouter({
         defenderVillage?.type || "",
       );
       const isRaid = !!attackerVillage && isFactionVillage(attackerVillage);
-      const configuredRules = !isRaid ? await fetchWarRules(ctx.drizzle) : null;
+      const configuredRules = !isRaid ? warRules : null;
       const declarationCost = isRaid
         ? FACTION_RAID_COST
         : configuredRules?.enabled
@@ -1137,10 +1149,7 @@ export const warRouter = createTRPCRouter({
       const eligibleElders = elders.filter((e) => e.userId !== user?.userId);
 
       // Guard
-      if (!user?.village) {
-        return errorResponse("You must be in a village to declare war");
-      }
-      if (!user?.villageId) {
+      if (!user?.village || !user.villageId) {
         return errorResponse("You must be in a village to declare war");
       }
       if (user.villageId !== input.userVillageId) {
@@ -1149,7 +1158,7 @@ export const warRouter = createTRPCRouter({
       if (!structure) {
         return errorResponse("Structure not found");
       }
-      if (user.userId !== user.village.kageId) {
+      if (!isKage(user)) {
         return errorResponse("Only the leader can declare war");
       }
       if (!isRaid && recentRejection) {
@@ -1327,7 +1336,9 @@ export const warRouter = createTRPCRouter({
           `At least ${ELDER_MIN_VOTING_COUNT} elders must be in position before war can be declared`,
         );
 
-      // Insert vote — existingPending guard above prevents concurrent dupes
+      // Insert vote. existingPending is a plain read, so concurrent declarations by the
+      // same Kage against different targets can both insert; the active-pending unique
+      // index rejects only a same-target duplicate.
       const voteId = nanoid();
       const endsAt = secondsFromNow(ELDER_WAR_VOTE_HOURS * 3600);
       await insertVillageElderVoteForDeclareVillageWarOrRaid(
@@ -1389,7 +1400,7 @@ export const warRouter = createTRPCRouter({
       if (!user?.village || !user?.villageId) {
         return errorResponse("You must be in a village to create faction offers");
       }
-      if (user.userId !== user.village.kageId) {
+      if (!isKage(user)) {
         return errorResponse("Only the Kage can create faction offers");
       }
       if (!activeWar) {
@@ -1398,7 +1409,7 @@ export const warRouter = createTRPCRouter({
       if (activeWar.status !== "ACTIVE") {
         return errorResponse("War is not active");
       }
-      if (!["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) {
+      if (!VILLAGE_WAR_TYPES.includes(activeWar.type)) {
         return errorResponse(
           "War ally offers only available for village wars and raids",
         );
@@ -1497,14 +1508,13 @@ export const warRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchRequest(ctx.drizzle, input.id, "WAR_ALLY"),
+        fetchRequest(ctx.drizzle, input.id, "WAR_ALLY", { allowMissing: true }),
       ]);
 
       // Guards
       if (!user?.villageId) return errorResponse("Not in a village");
       if (!isKage(user)) return errorResponse("Not kage");
       if (!request) return errorResponse("Request not found");
-      if (request.type !== "WAR_ALLY") return errorResponse("Not a war ally request");
       if (request.status !== "PENDING") return errorResponse("Request not pending");
       if (request.receiverId !== user.userId) return errorResponse("Not your request");
 
@@ -1536,7 +1546,7 @@ export const warRouter = createTRPCRouter({
           client: ctx.drizzle,
           userId: ctx.userId,
         }),
-        fetchRequest(ctx.drizzle, input.offerId, "WAR_ALLY"),
+        fetchRequest(ctx.drizzle, input.offerId, "WAR_ALLY", { allowMissing: true }),
       ]);
 
       // Guard
@@ -1546,7 +1556,7 @@ export const warRouter = createTRPCRouter({
       if (!user?.village) {
         return errorResponse("You must be in a village to delist offers");
       }
-      if (user.userId !== user.village.kageId) {
+      if (!isKage(user)) {
         return errorResponse("Only the Kage can delist offers");
       }
       if (offer.senderId !== user.userId) {
@@ -1574,9 +1584,13 @@ export const warRouter = createTRPCRouter({
           userId: ctx.userId,
         }),
         fetchActiveWars(ctx.drizzle),
-        fetchRequest(ctx.drizzle, input.offerId, "WAR_ALLY"),
+        fetchRequest(ctx.drizzle, input.offerId, "WAR_ALLY", { allowMissing: true }),
         fetchAlliances(ctx.drizzle),
       ]);
+      // Guard
+      if (!request) {
+        return errorResponse("Offer not found");
+      }
       // Derived
       const warId = request.relatedId;
       const activeWar = activeWars.find(
@@ -1590,19 +1604,13 @@ export const warRouter = createTRPCRouter({
           ? activeWar?.attackerVillage
           : activeWar?.defenderVillage;
       // Guard
-      if (!request) {
-        return errorResponse("Offer not found");
-      }
       if (!senderVillage) {
         return errorResponse("Sender village not found");
       }
-      if (!user?.villageId) {
+      if (!user?.villageId || !user.village) {
         return errorResponse("You must be in a village or faction to accept offers");
       }
-      if (!user?.village) {
-        return errorResponse("You must be in a village or faction to accept offers");
-      }
-      if (user.userId !== user.village.kageId) {
+      if (!isKage(user)) {
         return errorResponse("Only the leader can accept offers");
       }
       if (!activeWar) {
@@ -1611,7 +1619,7 @@ export const warRouter = createTRPCRouter({
       if (activeWar.status !== "ACTIVE") {
         return errorResponse("War is not active");
       }
-      if (!["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) {
+      if (!VILLAGE_WAR_TYPES.includes(activeWar.type)) {
         return errorResponse(
           "War ally offers only available for village wars and raids",
         );
@@ -1668,13 +1676,10 @@ export const warRouter = createTRPCRouter({
         (f) => f.villageId === user?.villageId,
       );
       // Guard
-      if (!user?.village) {
+      if (!user?.village || !user.villageId) {
         return errorResponse("You must be in a village to surrender");
       }
-      if (!user?.villageId) {
-        return errorResponse("You must be in a village to surrender");
-      }
-      if (user.userId !== user.village.kageId) {
+      if (!isKage(user)) {
         return errorResponse("Only the Kage can surrender");
       }
       if (!activeWar) {
@@ -1683,7 +1688,7 @@ export const warRouter = createTRPCRouter({
       if (activeWar.status !== "ACTIVE") {
         return errorResponse("War is not active");
       }
-      if (!["WAR_RAID", "VILLAGE_WAR"].includes(activeWar.type)) {
+      if (!VILLAGE_WAR_TYPES.includes(activeWar.type)) {
         return errorResponse("Cannot surrender this type of war");
       }
       // Mutate
@@ -1818,7 +1823,7 @@ export const warRouter = createTRPCRouter({
       if (user.villageId !== input.userVillageId)
         return errorResponse("Village mismatch — please refresh and try again");
       if (!user.village) return errorResponse("Village not found");
-      if (user.village.kageId !== user.userId)
+      if (!isKage(user))
         return errorResponse("Only the Kage can cancel a war declaration");
       if (!voteRecord) return errorResponse("War declaration not found");
       if (voteRecord.villageId !== user.villageId)

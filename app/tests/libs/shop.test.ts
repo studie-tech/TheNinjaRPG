@@ -74,7 +74,9 @@ describe("shopItemDiscountFactor", () => {
   });
 
   it("stops at the price floor", () => {
-    expect(shopItemDiscountFactor([{ value: 100 }])).toBe(MIN_ITEM_SHOP_DISCOUNT_FACTOR);
+    expect(shopItemDiscountFactor([{ value: 100 }])).toBe(
+      MIN_ITEM_SHOP_DISCOUNT_FACTOR,
+    );
   });
 });
 
@@ -86,9 +88,14 @@ describe("canAffordShopPrice", () => {
     expect(canAffordShopPrice(balance, price)).toBe(true);
   });
 
-  it.each(["money", "reputationPoints", "seichiSilver"] as const)("needs enough %s", (key) => {
-    expect(canAffordShopPrice({ ...balance, [key]: balance[key] - 1 }, price)).toBe(false);
-  });
+  it.each(["money", "reputationPoints", "seichiSilver"] as const)(
+    "needs enough %s",
+    (key) => {
+      expect(canAffordShopPrice({ ...balance, [key]: balance[key] - 1 }, price)).toBe(
+        false,
+      );
+    },
+  );
 });
 
 describe("getShopStackPrice", () => {

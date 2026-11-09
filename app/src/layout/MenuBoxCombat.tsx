@@ -1,13 +1,13 @@
 import { useAtomValue } from "jotai";
 import { Link2 } from "lucide-react";
 import type React from "react";
-import { SideBannerTitle } from "@/components/layout/shared/LayoutSidebars";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
 import AvatarImage from "@/layout/Avatar";
 import { BattleUserTraits } from "@/layout/BattleUserTraits";
 import Link from "@/layout/Link";
-import { VisualizeEffects } from "@/layout/MenuBoxProfile";
 import { PoolStatusBars } from "@/layout/PoolStatusBars";
+import { SideBannerTitle } from "@/layout/SideBannerTitle";
+import { VisualizeEffects } from "@/layout/VisualizeEffects";
 import { findSidebarOpponent } from "@/libs/combat/actions";
 import {
   combatPresentedBattleAtom,
@@ -38,9 +38,8 @@ const MenuBoxCombat: React.FC = () => {
   return (
     <>
       <SideBannerTitle>
-        {/* AI combatants are given a synthetic id when the battle starts, so they have
-            no profile to link to. The link used to land on a "user does not exist" body
-            served with HTTP 200; it now resolves to a real 404, so do not offer it. */}
+        {/* AI combatants get a synthetic id when the battle starts and masked users
+            hide theirs, so neither has a profile to link to. */}
         {battleUser.isAi || battleUser.isMasked ? (
           battleUser.username
         ) : (
@@ -53,15 +52,24 @@ const MenuBoxCombat: React.FC = () => {
         )}
       </SideBannerTitle>
       <div className="grid grid-cols-2 items-center justify-center md:grid-cols-1">
-        <Link href="/profile">
+        {battleUser.isAi || battleUser.isMasked ? (
           <AvatarImage
             href={battleUser.avatar}
             alt={battleUser.username}
             size={100}
-            hover_effect={true}
             priority
           />
-        </Link>
+        ) : (
+          <Link href={`/userid/${battleUser.userId}`}>
+            <AvatarImage
+              href={battleUser.avatar}
+              alt={battleUser.username}
+              size={100}
+              hover_effect={true}
+              priority
+            />
+          </Link>
+        )}
 
         <div className="pt-5">
           <PoolStatusBars

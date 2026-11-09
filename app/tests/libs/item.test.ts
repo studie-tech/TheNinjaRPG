@@ -1,43 +1,49 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
+import type { ItemSlot, MasteryName } from "@/drizzle/constants";
 import {
   COOKING_BASE_SLOTS,
+  DURABILITY_POINT_PRICE_PERCENT,
   FED_COOKING_SLOTS,
-  ItemTypes,
+  FED_INVENTORY_SLOTS,
   ItemSlots,
+  ItemTypes,
   MATERIALS_BASE_SLOTS,
+  MasteryNames,
   NonActionItemTypes,
 } from "@/drizzle/constants";
+import type { UserData, UserItemWithRelations } from "@/drizzle/schema";
 import {
   buildItemLoadoutData,
+  calcItemRepairCost,
+  calcItemSellingPrice,
   calcMaxCookingItems,
   calcMaxHouseSpecialItems,
+  calcMaxItems,
   calcMaxMaterials,
   canEquipAdditional,
   checkEquipConstraints,
+  compatibleEquipSlots,
   computeAutoEquipAssignments,
   computeLoadoutAssignments,
+  countsTowardInventoryStorage,
   type EquipConstraintInfo,
   type EquippedAssignment,
   type EquippedConstraintState,
+  findFreeEquipSlot,
   finishedImbuementItems,
   finishedImbuements,
-  userItemDisplay,
-  getItemStackMergeBucketKey,
   getHomeStorageBucket,
   getHomeStorageBucketFullMessage,
-  countsTowardInventoryStorage,
   getInventoryBucket,
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
-  compatibleEquipSlots,
-  findFreeEquipSlot,
+  getItemStackMergeBucketKey,
   isEquippableUserItem,
+  isImbuing,
   showsItemLevelBadge,
   userItemActionBadges,
+  userItemDisplay,
 } from "@/libs/item";
-import type { ItemSlot, MasteryName } from "@/drizzle/constants";
-import { MasteryNames } from "@/drizzle/constants";
-import type { UserData, UserItemWithRelations } from "@/drizzle/schema";
 import type { MasteryRequirementFields } from "@/libs/mastery";
 import type { ZodAllTags } from "@/validators/combat";
 
@@ -209,19 +215,24 @@ describe("checkEquipConstraints", () => {
     const current: EquippedAssignment[] = [
       { slot: "ITEM_1", info: info({ itemId: "i1", maxEquips: 1 }) },
     ];
-    expect(checkEquipConstraints(info({ itemId: "i1", maxEquips: 1 }), current)).toMatch(
-      /No more than 1/,
-    );
+    expect(
+      checkEquipConstraints(info({ itemId: "i1", maxEquips: 1 }), current),
+    ).toMatch(/No more than 1/);
   });
   it("allows a second instance up to maxEquips", () => {
     const current: EquippedAssignment[] = [
       { slot: "ITEM_1", info: info({ itemId: "i1", maxEquips: 2 }) },
     ];
-    expect(checkEquipConstraints(info({ itemId: "i1", maxEquips: 2 }), current)).toBeNull();
+    expect(
+      checkEquipConstraints(info({ itemId: "i1", maxEquips: 2 }), current),
+    ).toBeNull();
   });
   it("delegates category limits to canEquipAdditional", () => {
     const current: EquippedAssignment[] = [
-      { slot: "ITEM_1", info: info({ itemId: "acc1", itemType: "ACCESSORY", slot: "ITEM" }) },
+      {
+        slot: "ITEM_1",
+        info: info({ itemId: "acc1", itemType: "ACCESSORY", slot: "ITEM" }),
+      },
     ];
     expect(
       checkEquipConstraints(
@@ -313,7 +324,10 @@ describe("computeLoadoutAssignments", () => {
       ui({ id: "armor-row", itemId: "armor", itemType: "ARMOR", slotType: "HEAD" }),
     ];
     const out = computeLoadoutAssignments(
-      [{ itemId: "chair", slot: "HEAD" }, { itemId: "armor", slot: "HEAD" }],
+      [
+        { itemId: "chair", slot: "HEAD" },
+        { itemId: "armor", slot: "HEAD" },
+      ],
       items,
       USER,
       NOW,
@@ -611,11 +625,10 @@ describe("computeLoadoutAssignments", () => {
   });
 
   it("does not resolve a NONE slot type to the NONE sentinel slot", () => {
-    // Legacy/invalid saved slot forces the fallback resolver; an item whose
+    // An invalid saved slot forces the fallback resolver; an item whose
     // slot type is NONE must be rejected, never assigned the NONE sentinel.
     const items = [ui({ id: "r1", itemId: "i1", name: "Junk", slotType: "NONE" })];
     const out = computeLoadoutAssignments(
-      // Legacy/removed saved slot value forces the fallback resolver.
       [{ itemId: "i1", slot: "ITEM_99" as unknown as ItemSlot }],
       items,
       USER,
@@ -746,8 +759,20 @@ describe("computeLoadoutAssignments", () => {
 describe("computeAutoEquipAssignments", () => {
   it("does not let costly furniture occupy an equipment slot", () => {
     const items = [
-      ui({ id: "chair-row", itemId: "chair", itemType: "FURNITURE", slotType: "HEAD", cost: 999 }),
-      ui({ id: "armor-row", itemId: "armor", itemType: "ARMOR", slotType: "HEAD", cost: 10 }),
+      ui({
+        id: "chair-row",
+        itemId: "chair",
+        itemType: "FURNITURE",
+        slotType: "HEAD",
+        cost: 999,
+      }),
+      ui({
+        id: "armor-row",
+        itemId: "armor",
+        itemType: "ARMOR",
+        slotType: "HEAD",
+        cost: 10,
+      }),
     ];
     const out = computeAutoEquipAssignments(items, USER, NOW);
     expect(out.assignments).toEqual([{ userItemId: "armor-row", slot: "HEAD" }]);
@@ -823,7 +848,13 @@ describe("computeAutoEquipAssignments", () => {
         cost: 999,
         requirements: { requiredTaijutsuMastery: 50_000 },
       }),
-      ui({ id: "usable", itemId: "usable", slotType: "CHEST", itemType: "ARMOR", cost: 1 }),
+      ui({
+        id: "usable",
+        itemId: "usable",
+        slotType: "CHEST",
+        itemType: "ARMOR",
+        cost: 1,
+      }),
     ];
     const out = computeAutoEquipAssignments(items, USER, NOW);
     expect(out.assignments).toEqual([{ userItemId: "usable", slot: "CHEST" }]);
@@ -906,9 +937,7 @@ describe("computeAutoEquipAssignments", () => {
   });
 
   it("reports no unequipped items when everything is already worn", () => {
-    const items = [
-      ui({ id: "r1", itemId: "i1", slotType: "HEAD", equipped: "HEAD" }),
-    ];
+    const items = [ui({ id: "r1", itemId: "i1", slotType: "HEAD", equipped: "HEAD" })];
     const out = computeAutoEquipAssignments(items, USER, NOW);
     expect(out.hasUnequipped).toBe(false);
     expect(out.assignments).toEqual([]);
@@ -957,11 +986,14 @@ describe("FURNITURE item type", () => {
     expect(getInventoryBucket(furniture)).toBe("normal");
     expect(getHomeStorageBucket(furniture)).toBe("furniture");
     expect(showsItemLevelBadge(furniture)).toBe(false);
-    expect(userItemActionBadges([{ id: "chair-row", quantity: 2, level: 20, item: furniture }])).toEqual({
+    expect(
+      userItemActionBadges([
+        { id: "chair-row", quantity: 2, level: 20, item: furniture },
+      ]),
+    ).toEqual({
       counts: [{ id: "chair-row", quantity: 2 }],
       levels: [],
     });
-    expect(isEquippableUserItem({ storedAtHome: false, isInAuction: false, craftingFinishedAt: null }, NOW)).toBe(true);
   });
 });
 
@@ -979,13 +1011,22 @@ describe("COOKING item type", () => {
 });
 
 describe("backpack storage usage", () => {
-  it.each(ItemSlots.filter((slot) => slot !== "NONE"))("excludes stacks equipped in %s", (equipped) => {
-    expect(countsTowardInventoryStorage({ storedAtHome: false, equipped })).toBe(false);
-  });
+  it.each(ItemSlots.filter((slot) => slot !== "NONE"))(
+    "excludes stacks equipped in %s",
+    (equipped) => {
+      expect(countsTowardInventoryStorage({ storedAtHome: false, equipped })).toBe(
+        false,
+      );
+    },
+  );
 
   it("counts unequipped carried stacks and excludes home storage", () => {
-    expect(countsTowardInventoryStorage({ storedAtHome: false, equipped: "NONE" })).toBe(true);
-    expect(countsTowardInventoryStorage({ storedAtHome: true, equipped: "NONE" })).toBe(false);
+    expect(
+      countsTowardInventoryStorage({ storedAtHome: false, equipped: "NONE" }),
+    ).toBe(true);
+    expect(countsTowardInventoryStorage({ storedAtHome: true, equipped: "NONE" })).toBe(
+      false,
+    );
   });
 });
 
@@ -1052,9 +1093,7 @@ describe("cooking capacity", () => {
   });
 
   it("reports cooking-specific full messages and capacity", () => {
-    expect(getInventoryBucketFullMessage("cooking")).toBe(
-      "Cooking inventory is full",
-    );
+    expect(getInventoryBucketFullMessage("cooking")).toBe("Cooking inventory is full");
     expect(getInventoryBucketCapacity("cooking", user({ federalStatus: "GOLD" }))).toBe(
       COOKING_BASE_SLOTS + FED_COOKING_SLOTS.GOLD,
     );
@@ -1076,9 +1115,13 @@ describe("cooking capacity", () => {
   });
 });
 
-
 describe("getItemStackMergeBucketKey", () => {
-  const row = { storedAtHome: false, equipped: "NONE" as const, activeVariantId: null, level: 1 };
+  const row = {
+    storedAtHome: false,
+    equipped: "NONE" as const,
+    activeVariantId: null,
+    level: 1,
+  };
 
   it("groups consumables across ownership levels", () => {
     const item = { itemType: "CONSUMABLE" as const };
@@ -1116,7 +1159,10 @@ describe("userItemDisplay", () => {
     experience: 40,
     imbuements: [
       { craftingFinishedAt: null, item: { name: "Fire Seal" } },
-      { craftingFinishedAt: new Date(NOW.getTime() + 1000), item: { name: "Water Seal" } },
+      {
+        craftingFinishedAt: new Date(NOW.getTime() + 1000),
+        item: { name: "Water Seal" },
+      },
     ],
   };
 
@@ -1131,13 +1177,18 @@ describe("userItemDisplay", () => {
   });
 
   it("shows a variant in place of the base item", () => {
-    expect(userItemDisplay(ui, { name: "Gilded Blade" }, NOW).name).toBe("Gilded Blade");
+    expect(userItemDisplay(ui, { name: "Gilded Blade" }, NOW).name).toBe(
+      "Gilded Blade",
+    );
   });
 });
 
 describe("finishedImbuements", () => {
   it("keeps the rows finished at or before now", () => {
-    const row = (id: string, craftingFinishedAt: Date | null) => ({ id, craftingFinishedAt });
+    const row = (id: string, craftingFinishedAt: Date | null) => ({
+      id,
+      craftingFinishedAt,
+    });
     const ui = {
       imbuements: [
         row("done", new Date(NOW.getTime() - 1)),
@@ -1146,7 +1197,21 @@ describe("finishedImbuements", () => {
         row("active", new Date(NOW.getTime() + 1)),
       ],
     };
-    expect(finishedImbuements(ui, NOW).map((i) => i.id)).toEqual(["done", "boundary", "legacy"]);
+    expect(finishedImbuements(ui, NOW).map((i) => i.id)).toEqual([
+      "done",
+      "boundary",
+      "legacy",
+    ]);
+  });
+
+  it("counts an item as imbuing only while an imbuement finishes after now", () => {
+    const at = (craftingFinishedAt: Date | null) => ({
+      imbuements: [{ craftingFinishedAt }],
+    });
+    expect(isImbuing(at(new Date(NOW.getTime() + 1)), NOW)).toBe(true);
+    expect(isImbuing(at(NOW), NOW)).toBe(false);
+    expect(isImbuing(at(null), NOW)).toBe(false);
+    expect(isImbuing({ imbuements: [] }, NOW)).toBe(false);
   });
 });
 
@@ -1155,8 +1220,14 @@ describe("finishedImbuementItems", () => {
     const ui = {
       imbuements: [
         { craftingFinishedAt: null, item: { name: "Fire Seal" } },
-        { craftingFinishedAt: new Date(NOW.getTime() - 1000), item: { name: "Wind Seal" } },
-        { craftingFinishedAt: new Date(NOW.getTime() + 1000), item: { name: "Water Seal" } },
+        {
+          craftingFinishedAt: new Date(NOW.getTime() - 1000),
+          item: { name: "Wind Seal" },
+        },
+        {
+          craftingFinishedAt: new Date(NOW.getTime() + 1000),
+          item: { name: "Water Seal" },
+        },
       ],
     };
     expect(finishedImbuementItems(ui, NOW).map((i) => i.name)).toEqual([
@@ -1167,5 +1238,44 @@ describe("finishedImbuementItems", () => {
 
   it("returns an empty list for items without imbuements", () => {
     expect(finishedImbuementItems({ imbuements: [] }, NOW)).toEqual([]);
+  });
+});
+
+describe("item economy values", () => {
+  const user = {
+    staffAccount: false,
+    federalStatus: "NONE",
+    extraItemSlots: 0,
+    anbuId: null,
+  } as unknown as UserData;
+  const owned = (item: Record<string, unknown>) =>
+    ({
+      quantity: 1,
+      durability: 0,
+      item: { cost: 1000, isEventItem: false, effects: [], maxDurability: 10, ...item },
+    }) as unknown as Parameters<typeof calcItemRepairCost>[0];
+
+  it("starts the carried inventory at 20 slots", () => {
+    expect(calcMaxItems(user)).toBe(20 + FED_INVENTORY_SLOTS.NONE);
+  });
+
+  it("sells at the 80% base discount, capped at 95%", () => {
+    expect(calcItemSellingPrice(user, owned({}), undefined)).toBe(200);
+    expect(
+      calcItemSellingPrice(user, owned({ effects: [{ type: "heal" }] }), undefined),
+    ).toBe(50);
+  });
+
+  it.each([
+    ["COMMON", 50],
+    ["RARE", 200],
+    ["EPIC", 400],
+    ["LEGENDARY", 800],
+    ["UNKNOWN", 0],
+    ["constructor", 0],
+  ])("prices %s repairs from their base cost", (rarity, base) => {
+    expect(calcItemRepairCost(owned({ rarity }))).toBe(
+      Math.ceil(base * 10 * DURABILITY_POINT_PRICE_PERCENT),
+    );
   });
 });

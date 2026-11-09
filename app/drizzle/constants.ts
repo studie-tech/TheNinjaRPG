@@ -51,6 +51,10 @@ export const CHARACTER_DELETION_DELAY_DAYS = 2;
 /** Verbatim confirmation for self-service timer creation and permanent deletion. */
 export const CHARACTER_DELETION_CONFIRMATION = "Delete my character";
 
+/** Parent PIN attempts allowed per window before parental-control saves lock. */
+export const PARENTAL_PIN_MAX_ATTEMPTS = 5;
+export const PARENTAL_PIN_WINDOW_MINUTES = 15;
+
 export const PollOptionTypes = ["text", "user"] as const;
 export type PollOptionType = (typeof PollOptionTypes)[number];
 
@@ -66,6 +70,8 @@ export type StarterVillage = (typeof STARTER_VILLAGES)[number];
 
 // bbogd.com stopped resolving (Oct 2026); its UserVote column is kept but no longer active
 export const ACTIVE_VOTING_SITES = ["mmoHub", "arenaTop100", "topWebGames"] as const;
+/** Reputation credited once a day for voting on every active site. */
+export const VOTE_REWARD_REPUTATION = 1;
 
 export const GameAssetTypes = [
   "STATIC",
@@ -170,8 +176,9 @@ export const MAP_WORLD_ROWS = 27;
 export const MAP_NAVIGABLE_LATITUDE_LIMIT = 65;
 export const MAP_TOTAL_SECTORS = MAP_WORLD_COLUMNS * MAP_WORLD_ROWS;
 export const MAP_SECTOR_ID_MAX = MAP_TOTAL_SECTORS - 1;
-// Saved travel pins kept per player.
+// Saved travel pins kept per player, and the length of their labels.
 export const MAX_TRAVEL_PINS = 20;
+export const MAX_TRAVEL_PIN_LABEL_LENGTH = 40;
 export const MAP_WAKE_ISLAND_SECTOR = 222;
 // When true, PvP combat attacks are blocked for everyone in the Wake Island sector.
 // Robbery, farming and crafting restrictions on Wake Island are independent of this.
@@ -196,8 +203,8 @@ export const MAX_PVP_BRACKET = ELITE_JONIN_BRACKET;
 // XP Bracket system — maps experience to protection tiers for PvP eligibility.
 // Bracket 0 is reserved for Academy students & Genin (RANKS_RESTRICTED_FROM_PVP).
 export const XP_BRACKETS = [
-  { bracket: 1, min: 0,         max: 500_000 },
-  { bracket: 2, min: 500_001,   max: 1_000_000 },
+  { bracket: 1, min: 0, max: 500_000 },
+  { bracket: 2, min: 500_001, max: 1_000_000 },
   { bracket: 3, min: 1_000_001, max: 1_500_000 },
   { bracket: 4, min: 1_500_001, max: 2_000_000 },
   { bracket: 5, min: 2_000_001, max: 2_500_000 },
@@ -213,6 +220,8 @@ export const BRACKET_IMMUNITY_LIFT_SECS = 1800;
 
 /** Seconds of war participation after starting a war mission, wartime PvP or a shrine attack. */
 export const WAR_PARTICIPANT_SECS = 7200; // 2 hours
+/** Days a war kill row is kept after its kill, regardless of the war's state. */
+export const WAR_KILL_RETENTION_DAYS = 30;
 
 export const CoreVillages = [
   "Shirohana",
@@ -222,12 +231,7 @@ export const CoreVillages = [
   "Akikaze",
 ] as const;
 
-export const LegacyVillageNames = [
-  "Shine",
-  "Glacier",
-  "Shroud",
-  "Current",
-] as const;
+export const LegacyVillageNames = ["Shine", "Glacier", "Shroud", "Current"] as const;
 
 export const BUILDING_UPGRADE_BASE_COST = 200_000;
 export const BUILDING_UPGRADE_PER_LEVEL_COST = 150_000;
@@ -235,8 +239,17 @@ export const VILLAGE_STRUCTURE_UPGRADE_BASE_COST = 100_000;
 export const VILLAGE_STRUCTURE_UPGRADE_PER_LEVEL_COST = 50_000;
 export const VILLAGE_STRUCTURE_MONTHLY_COST = 100_000;
 export const VILLAGE_MAINTAINED_STRUCTURE_ROUTES = [
-  "/anbu", "/bank", "/battlearena", "/clanhall", "/home", "/hospital",
-  "/itemshop", "/missionhall", "/ramenshop", "/townhall", "/traininggrounds",
+  "/anbu",
+  "/bank",
+  "/battlearena",
+  "/clanhall",
+  "/home",
+  "/hospital",
+  "/itemshop",
+  "/missionhall",
+  "/ramenshop",
+  "/townhall",
+  "/traininggrounds",
 ] as const;
 /** Shared-progress objectives only a village mission can carry. */
 export const VILLAGE_MISSION_ONLY_TASKS = [
@@ -244,8 +257,13 @@ export const VILLAGE_MISSION_ONLY_TASKS = [
   "combined_mission_effort",
 ] as const;
 export const VILLAGE_MISSION_TASKS = [
-  "pvp_kills", "siege_operation", "combined_mission_effort",
-  "d_missions_total", "c_missions_total", "b_missions_total", "a_missions_total",
+  "pvp_kills",
+  "siege_operation",
+  "combined_mission_effort",
+  "d_missions_total",
+  "c_missions_total",
+  "b_missions_total",
+  "a_missions_total",
 ] as const;
 export type VillageMissionTask = (typeof VILLAGE_MISSION_TASKS)[number];
 export const VILLAGE_MISSION_RANK_POINTS = { D: 1, C: 3, B: 7, A: 14 } as const;
@@ -323,7 +341,11 @@ export const ContentProposalOperations = ["UPDATE", "CREATE"] as const;
 /** TARGET entities are the ones a suggestion changes; CONTEXT entities only informed it. */
 export const ContentProposalBasisRoles = ["TARGET", "CONTEXT"] as const;
 /** Where a media candidate comes from: the asset library, Epidemic Sound or a generation. */
-export const ContentProposalMediaSources = ["CATALOG", "EPIDEMIC", "GENERATED"] as const;
+export const ContentProposalMediaSources = [
+  "CATALOG",
+  "EPIDEMIC",
+  "GENERATED",
+] as const;
 /** Sounds and animations fill a field with an asset id, images with an image URL. */
 export const ContentProposalMediaKinds = ["SFX", "ANIMATION", "IMAGE"] as const;
 export type ContentProposalMediaKind = (typeof ContentProposalMediaKinds)[number];
@@ -424,7 +446,11 @@ export type ItemRarity = (typeof ItemRarities)[number];
 /** Most backpack stacks one bulk sell or drop request may remove. */
 export const MAX_BULK_SELL_ITEMS = 100;
 /** Rarities a bulk sell names again in a second confirmation before they go. */
-export const BULK_SELL_WARN_RARITIES: readonly ItemRarity[] = ["RARE", "EPIC", "LEGENDARY"];
+export const BULK_SELL_WARN_RARITIES: readonly ItemRarity[] = [
+  "RARE",
+  "EPIC",
+  "LEGENDARY",
+];
 
 export const ItemSlotTypes = [
   "HEAD",
@@ -607,7 +633,11 @@ export const AvatarFacings = ["left", "right"] as const;
 export type AvatarFacing = (typeof AvatarFacings)[number];
 
 /** Bound character atlas downloads, decoded memory and loop duration. */
-export const SPRITE_ANIMATION_LIMITS = { frames: 192, cells: 192, seconds: 16 } as const;
+export const SPRITE_ANIMATION_LIMITS = {
+  frames: 192,
+  cells: 192,
+  seconds: 16,
+} as const;
 
 /** Life of a staff sprite request, from gameasset.dev's queue to the shared library. */
 export const SpriteGenerationStatuses = [
@@ -634,11 +664,26 @@ export const UserRanks = [
   "NONE",
 ] as const;
 export type UserRank = (typeof UserRanks)[number];
+/**
+ * The shinobi progression, lowest first. UserRanks keeps the stored enum order; Elders are
+ * chosen from Jonin and rank below Elite Jonin.
+ */
+export const USER_RANK_ORDER: UserRank[] = [
+  "STUDENT",
+  "GENIN",
+  "CHUNIN",
+  "JONIN",
+  "ELDER",
+  "ELITE JONIN",
+];
 
 export const EMAIL_REMINDER_EXPERIENCE_REWARD = 10_000;
 
 /** Shared availability gate for companion combat, including saved opt-in settings. */
-export const PET_BATTLE_CONFIG = { enabled: true, battleTypes: ["QUEST"] as readonly BattleType[] };
+export const PET_BATTLE_CONFIG = {
+  enabled: true,
+  battleTypes: ["QUEST"] as readonly BattleType[],
+};
 export const PET_BASE_STAT = 10;
 export const PET_REPLACEMENT_COST = 30;
 export const PET_MAX_COLLECTION_SLOTS = 6;
@@ -648,10 +693,15 @@ export const PetPaymentCurrencies = ["REPUTATION", "SEICHI_SILVER"] as const;
 export type PetPaymentCurrency = (typeof PetPaymentCurrencies)[number];
 /** Supporter capacity is temporary; purchased collection slots remain permanent. */
 export const PET_FED_COLLECTION_SLOTS: Record<FederalStatus, number> = {
-  NONE: 0, NORMAL: 1, SILVER: 2, GOLD: 3,
+  NONE: 0,
+  NORMAL: 1,
+  SILVER: 2,
+  GOLD: 3,
 };
 export const PET_MAX_ABILITY_SLOTS = 6;
 export const PET_MAX_CONSUME_PETS = 1;
+/** Longest companion name players can choose. */
+export const PET_NAME_MAX_LENGTH = 40;
 export const PET_TASK_MIN_RANK = 5;
 export const PET_TASK_MAX_MINUTES = 7 * 24 * 60;
 /** Rarity grants slots immediately; progression still controls the shared power budget. */
@@ -659,23 +709,38 @@ export const PET_ABILITY_POWER_BUDGET_BONUS = 1;
 export const PET_MIN_SKILL_POWER_COST = 1;
 /** H-rank techniques cannot fit a pet loadout, regardless of its power budget. */
 export const PET_JUTSU_POWER_COST_BY_RANK = {
-  D: 1, C: 2, B: 3, A: 4, S: 5, H: Number.POSITIVE_INFINITY,
+  D: 1,
+  C: 2,
+  B: 3,
+  A: 4,
+  S: 5,
+  H: Number.POSITIVE_INFINITY,
 } as const;
 export const PET_FEED_EXPERIENCE_BY_RARITY: Record<ItemRarity, number> = {
-  COMMON: 500, RARE: 750, EPIC: 1000, LEGENDARY: 1200,
+  COMMON: 500,
+  RARE: 750,
+  EPIC: 1000,
+  LEGENDARY: 1200,
 };
 /** Rolling cooldown between companion meals. */
 export const PET_FEED_COOLDOWN_HOURS = 3;
 export const PetRarities = ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"] as const;
 export type PetRarity = (typeof PetRarities)[number];
 export const PET_ABILITY_SLOTS_BY_RARITY: Record<PetRarity, number> = {
-  COMMON: 2, UNCOMMON: 3, RARE: 4, EPIC: 5, LEGENDARY: 6,
+  COMMON: 2,
+  UNCOMMON: 3,
+  RARE: 4,
+  EPIC: 5,
+  LEGENDARY: 6,
 };
 export const PetRoles = ["SUPPORT", "HEALER", "ASSAULT"] as const;
 /** Species passives either empower both bonded actors or trigger on their enemy hits. */
 export const PetSkillTargets = ["SELF", "ENEMIES"] as const;
 /** Later supporter choices use these rarity weights; earlier choices remain shared. */
-export const PET_SPECIES_RARITY_WEIGHTS: Record<FederalStatus, Record<PetRarity, number>> = {
+export const PET_SPECIES_RARITY_WEIGHTS: Record<
+  FederalStatus,
+  Record<PetRarity, number>
+> = {
   NONE: { COMMON: 7000, UNCOMMON: 2200, RARE: 600, EPIC: 170, LEGENDARY: 30 },
   NORMAL: { COMMON: 6000, UNCOMMON: 2500, RARE: 1000, EPIC: 400, LEGENDARY: 100 },
   SILVER: { COMMON: 5000, UNCOMMON: 2800, RARE: 1500, EPIC: 550, LEGENDARY: 150 },
@@ -698,15 +763,26 @@ export const PET_SANCTUARY_LATITUDE = 6;
 export const PET_SANCTUARY_LORE =
   "Beneath Wake Island's wind-bent cedars, the Bondkeepers shelter creatures touched by Seichi's wandering chakra. Their sanctuary was founded after the island's keepers learned that a willing pact could steady both shinobi and beast. No creature is bought or bound here: choose the signs of the companion you hope to meet, and the keepers will guide your first bond. A released companion returns to the sanctuary's wild groves.";
 export const PET_OPTION_COUNTS: Record<FederalStatus, number> = {
-  NONE: 3, NORMAL: 5, SILVER: 6, GOLD: 8,
+  NONE: 3,
+  NORMAL: 5,
+  SILVER: 6,
+  GOLD: 8,
 };
 export const PetSpawnPositions = ["BEHIND", "LEFT", "RIGHT", "FRONT"] as const;
 export type PetSpawnPosition = (typeof PetSpawnPositions)[number];
-export const PetGenerationStatuses = ["PENDING", "GENERATING", "READY", "FAILED"] as const;
+export const PetGenerationStatuses = [
+  "PENDING",
+  "GENERATING",
+  "READY",
+  "FAILED",
+] as const;
 /** Companion sex; drives sex-specific art (e.g. a lion's mane). Pets adopted before it existed store NULL. */
 export const PetGenders = ["MALE", "FEMALE"] as const;
 export type PetGender = (typeof PetGenders)[number];
-export const PET_GENDER_LABELS: Record<PetGender, string> = { MALE: "Male", FEMALE: "Female" };
+export const PET_GENDER_LABELS: Record<PetGender, string> = {
+  MALE: "Male",
+  FEMALE: "Female",
+};
 /**
  * Owners may set or change a companion's gender in its settings until this instant.
  * TODO: after this cutoff the gender edit control (PetProfile settings, updatePet gender
@@ -716,17 +792,83 @@ export const PET_GENDER_EDIT_UNTIL = new Date("2026-11-26T00:00:00Z");
 
 /** Pet progression follows the player experience curve at each previous rank's level cap. */
 export const PET_RANKS = [
-  { rank: 1, name: "Companion", minUserRank: "STUDENT", levelCap: 5, experienceRequired: 0 },
-  { rank: 2, name: "Scout", minUserRank: "GENIN", levelCap: 10, experienceRequired: 7500 },
-  { rank: 3, name: "Tracker", minUserRank: "GENIN", levelCap: 15, experienceRequired: 27500 },
-  { rank: 4, name: "Guardian", minUserRank: "CHUNIN", levelCap: 20, experienceRequired: 60000 },
-  { rank: 5, name: "Hunter", minUserRank: "CHUNIN", levelCap: 30, experienceRequired: 105000 },
-  { rank: 6, name: "Warden", minUserRank: "JONIN", levelCap: 40, experienceRequired: 232500 },
-  { rank: 7, name: "Sentinel", minUserRank: "JONIN", levelCap: 50, experienceRequired: 410000 },
-  { rank: 8, name: "Mythic", minUserRank: "ELITE JONIN", levelCap: 60, experienceRequired: 637500 },
-  { rank: 9, name: "Sovereign", minUserRank: "ELITE JONIN", levelCap: 80, experienceRequired: 915000 },
-  { rank: 10, name: "Celestial", minUserRank: "ELITE JONIN", levelCap: 100, experienceRequired: 1620000 },
-] as const satisfies readonly { rank: number; name: string; minUserRank: UserRank; levelCap: number; experienceRequired: number }[];
+  {
+    rank: 1,
+    name: "Companion",
+    minUserRank: "STUDENT",
+    levelCap: 5,
+    experienceRequired: 0,
+  },
+  {
+    rank: 2,
+    name: "Scout",
+    minUserRank: "GENIN",
+    levelCap: 10,
+    experienceRequired: 7500,
+  },
+  {
+    rank: 3,
+    name: "Tracker",
+    minUserRank: "GENIN",
+    levelCap: 15,
+    experienceRequired: 27500,
+  },
+  {
+    rank: 4,
+    name: "Guardian",
+    minUserRank: "CHUNIN",
+    levelCap: 20,
+    experienceRequired: 60000,
+  },
+  {
+    rank: 5,
+    name: "Hunter",
+    minUserRank: "CHUNIN",
+    levelCap: 30,
+    experienceRequired: 105000,
+  },
+  {
+    rank: 6,
+    name: "Warden",
+    minUserRank: "JONIN",
+    levelCap: 40,
+    experienceRequired: 232500,
+  },
+  {
+    rank: 7,
+    name: "Sentinel",
+    minUserRank: "JONIN",
+    levelCap: 50,
+    experienceRequired: 410000,
+  },
+  {
+    rank: 8,
+    name: "Mythic",
+    minUserRank: "ELITE JONIN",
+    levelCap: 60,
+    experienceRequired: 637500,
+  },
+  {
+    rank: 9,
+    name: "Sovereign",
+    minUserRank: "ELITE JONIN",
+    levelCap: 80,
+    experienceRequired: 915000,
+  },
+  {
+    rank: 10,
+    name: "Celestial",
+    minUserRank: "ELITE JONIN",
+    levelCap: 100,
+    experienceRequired: 1620000,
+  },
+] as const satisfies readonly {
+  rank: number;
+  name: string;
+  minUserRank: UserRank;
+  levelCap: number;
+  experienceRequired: number;
+}[];
 
 export const ItemTypes = [
   "WEAPON",
@@ -832,6 +974,16 @@ export type SkillTreeTarget = (typeof SkillTreeTargets)[number];
 export const DURABILITY_MAX_DEFAULT = 100;
 export const DURABILITY_USABILITY_THR = 0;
 export const DURABILITY_POINT_PRICE_PERCENT = 0.1;
+// Repair price per durability-point percent, by rarity.
+export const ITEM_REPAIR_BASE_COST: Record<ItemRarity, number> = {
+  COMMON: 50,
+  RARE: 200,
+  EPIC: 400,
+  LEGENDARY: 800,
+};
+// Selling discount off the item cost before other discounts, and the cap on all of them.
+export const ITEM_SELL_BASE_DISCOUNT_PERC = 80;
+export const ITEM_SELL_MAX_DISCOUNT_PERC = 95;
 
 // Skill Tree Entry Types
 export const SkillTreeEntryTypes = ["DEFAULT", "SPECIAL"] as const;
@@ -960,6 +1112,26 @@ export const HEX_STACKING_DISPLACEMENT = 0.25; // To compensate for how hexagons
 export const HEX_ASPECT_RATIO = 0.5; // To give perspective, make hex height smaller than width
 export const NO_DURABILITY_LOSS_COMBATS: BattleType[] = ["SPARRING"];
 
+/** Practice battles: consumables are kept, pools are not persisted and nobody is hospitalized. */
+export const PRACTICE_BATTLE_TYPES: BattleType[] = [
+  "SPARRING",
+  "RANKED_PVP",
+  "RANKED_SPARRING",
+];
+/** Battles that grant no money, mastery or other rewards: practice battles plus training. */
+export const NO_REWARD_BATTLE_TYPES: BattleType[] = [
+  ...PRACTICE_BATTLE_TYPES,
+  "TRAINING",
+];
+/** Spars, ranked or not: no PvP outcome and the loser stays on the map. */
+export const SPARRING_BATTLE_TYPES: BattleType[] = ["SPARRING", "RANKED_SPARRING"];
+/** Battles started from an MPvP queue, whose queue and battle-user rows are cleaned up after. */
+export const MPVP_QUEUE_BATTLE_TYPES: BattleType[] = [
+  "RAID",
+  "SHRINE_WAR",
+  "TERRITORY_WAR",
+];
+
 // Sector settings. Every sector uses the same unrotated local hex frame; the
 // cylindrical world grid only needs ordinary N/S and E/W edge stitching.
 export const SECTOR_WIDTH = 26;
@@ -993,7 +1165,7 @@ export const TournamentStates = ["OPEN", "IN_PROGRESS", "COMPLETED"] as const;
 export const TournamentMatchStates = ["WAITING", "PLAYED", "NO_SHOW"] as const;
 export type TournamentMatchState = (typeof TournamentMatchStates)[number];
 
-export const AutoBattleTypes = ["KAGE_AI", "CLAN_CHALLENGE"];
+export const AutoBattleTypes: readonly BattleType[] = ["KAGE_AI", "CLAN_CHALLENGE"];
 
 /**
  * Battle types that always start under manual control, whatever the player's
@@ -1081,7 +1253,9 @@ export const MISSION_HALL_QUEST_TYPES: readonly QuestType[] = [
   ...MISSION_HALL_SOLO_QUEST_TYPES,
   "war",
 ];
-export const NPC_ONLY_QUEST_TYPES = ["overworld"] as const satisfies readonly QuestType[];
+export const NPC_ONLY_QUEST_TYPES = [
+  "overworld",
+] as const satisfies readonly QuestType[];
 /** Quest types a regular player may abandon. */
 export const ABANDONABLE_QUEST_TYPES = [
   "mission",
@@ -1156,7 +1330,7 @@ export const QuestRewardMetrics = [
 ] as const;
 export type QuestRewardMetric = (typeof QuestRewardMetrics)[number];
 
-export const QuestTypesWithMaxAttempts = [
+export const QuestTypesWithMaxAttempts: readonly QuestType[] = [
   "mastery",
   "event",
   "story",
@@ -1177,7 +1351,18 @@ export const TrainingSpeeds = [
   "24hrs",
 ] as const;
 export type TrainingSpeed = (typeof TrainingSpeeds)[number];
-
+/** Duration, stat efficiency (%) and experience multiplier of each training interval. */
+export const TRAINING_SPEED_CONFIG: Record<
+  TrainingSpeed,
+  { seconds: number; efficiency: number; multiplier: number }
+> = {
+  "15min": { seconds: 15 * 60, efficiency: 100, multiplier: 0.01 },
+  "1hr": { seconds: 60 * 60, efficiency: 90, multiplier: 0.04 },
+  "4hrs": { seconds: 4 * 60 * 60, efficiency: 80, multiplier: 0.16 },
+  "8hrs": { seconds: 8 * 60 * 60, efficiency: 70, multiplier: 0.32 },
+  "12hrs": { seconds: 12 * 60 * 60, efficiency: 60, multiplier: 0.48 },
+  "24hrs": { seconds: 24 * 60 * 60, efficiency: 50, multiplier: 0.96 },
+};
 
 // Content difficulty ratings
 export const BloodlineDifficultyRatings = ["Easy", "Medium", "Hard", "Expert"] as const;
@@ -1267,7 +1452,10 @@ export const MASTERY_QUEUE_KIND_LABELS: Record<MasteryQueueKind, string> = {
 };
 export type QueueKind = (typeof QueueKinds)[number];
 /** Queue kinds started on a timer and settled in the database. */
-export const TimedQueueKinds = ["JUTSU", "CRAFT"] as const satisfies readonly QueueKind[];
+export const TimedQueueKinds = [
+  "JUTSU",
+  "CRAFT",
+] as const satisfies readonly QueueKind[];
 export type TimedQueueKind = (typeof TimedQueueKinds)[number];
 
 export const QUEUE_WAITING_SLOTS = { NONE: 1, NORMAL: 2, SILVER: 3, GOLD: 4 } as const;
@@ -1319,7 +1507,13 @@ export const MAX_MASTERY_CAP = 1500000;
 /** Shared ceiling for earned mastery; equipment and bloodline modifiers are excluded. */
 export const TOTAL_MASTERY_CAP = 4200000;
 /** Persisted progression order, independent of the character's ninja rank. */
-export const MASTERY_RANKS = ["NONE", "NOVICE", "ADEPT", "MASTER", "LEGENDARY"] as const;
+export const MASTERY_RANKS = [
+  "NONE",
+  "NOVICE",
+  "ADEPT",
+  "MASTER",
+  "LEGENDARY",
+] as const;
 export type MasteryRank = (typeof MASTERY_RANKS)[number];
 /** Gain ceiling at each current rank; the Legendary exam changes rank without raising it. */
 export const MASTERY_RANK_CAPS: Record<MasteryRank, number> = {
@@ -1392,7 +1586,7 @@ export const REMOVAL_COST = 5;
 export const Sentiment = ["POSITIVE", "NEGATIVE", "NEUTRAL"] as const;
 export type SentimentType = (typeof Sentiment)[number];
 
-// Starter quest used for recruitment analytics
+/** Tutorial assistant portrait; also the Lemu experiment's control image. */
 export const IMG_URL_ASSISTANT =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIG7HmDxfOewksxBoS1HQCihpL7c42Ky9uUFv.webp" as const;
 /** Tutorial experiment alternatives, in treatment assignment order. */
@@ -1431,6 +1625,8 @@ export const TUTORIAL_GENIN_EXAM_QUEST_ID = "9-t1rNWEzXbIfdUfxWrny";
 export const HEAVENLY_SONATA_BLOODLINE_ID = "clh4d6q6s000atb0h0qdqdh1z";
 export const BLUE_BLADE_EYES_BLOODLINE_ID = "clh4d6qo4000itb0hrx8t06wq";
 export const TUTORIAL_ARENA_DUMMY_ID = "ICXb49Z0Jle3GyJ-rosTi";
+/** The seeded training dummy fought from the arena. */
+export const TRAINING_ARENA_DUMMY_ID = "tra93opw09262024jut5ufa8f";
 
 // Recruitment analytics metric options (used by frontend and backend)
 export const RecruitmentMetrics = [
@@ -1485,6 +1681,15 @@ export const RECRUITMENT_REWARDS = [
   "RANK_MILESTONE",
 ] as const;
 
+/** Recruiters earn this many ryo times their recruit's new level cubed on each level-up. */
+export const RECRUITER_LEVEL_REWARD_FACTOR = 10;
+/** Share of a recruit's quest prestige passed to their recruiter. */
+export const RECRUIT_PRESTIGE_SHARE = 0.1;
+/** Most reputation a reviewer can grant for one promotion link. */
+export const MAX_LINK_PROMOTION_POINTS = 500;
+/** Largest experience amount staff can award to every player at once. */
+export const MAX_MASS_EXPERIENCE_AWARD = 100000;
+
 // Reputation points a recruiter receives the first time an eligible recruit reaches each rank,
 // in rank order. Reaching a rank also reaches every milestone below it. Elder is not on the
 // ladder: Elders are chosen from Jonin and rank below Elite Jonin (see hasRequiredRank), so an
@@ -1495,9 +1700,13 @@ export const RECRUIT_RANK_MILESTONES = [
   { rank: "JONIN", reputation: 10 },
   { rank: "ELITE JONIN", reputation: 10 },
 ] as const satisfies readonly { rank: RecruitMilestoneRank; reputation: number }[];
-export const RECRUIT_MILESTONE_RANKS = ["GENIN", "CHUNIN", "JONIN", "ELITE JONIN"] as const;
+export const RECRUIT_MILESTONE_RANKS = [
+  "GENIN",
+  "CHUNIN",
+  "JONIN",
+  "ELITE JONIN",
+] as const;
 export type RecruitMilestoneRank = (typeof RECRUIT_MILESTONE_RANKS)[number];
-
 // Outcome recorded for each (recruit, rank) milestone; only PAID moved reputation.
 // PRE_EXISTING: the rank was already held when milestones were introduced.
 // INELIGIBLE: the referral is ineligible, or has no eligibility record.
@@ -1585,6 +1794,8 @@ export const ROBBING_SUCCESS_CHANCE = 0.4;
 export const ROBBING_STOLLEN_AMOUNT = 0.3;
 export const ROBBING_VILLAGE_PRESTIGE_GAIN = 5;
 export const ROBBING_IMMUNITY_DURATION = 90;
+/** Robbing is limited to targets within this many effective levels, outside war-torn sectors. */
+export const ROBBING_MAX_LEVEL_DIFFERENCE = 15;
 export const KILLING_NOTORIETY_GAIN = 5;
 
 // Reputation cost config
@@ -1642,10 +1853,12 @@ export const BLOODLINE_ROLL_TYPES = [
 // Bloodline swap config
 export const BLOODLINE_SWAP_COOLDOWN_HOURS = 120;
 export const BLOODLINE_SWAP_FREE_DAYS = 30;
-export const BLOODLINE_SWAP_FREE_AMOUNT = 0;
-export const BLOODLINE_SWAP_FREE_NORMAL = 0;
-export const BLOODLINE_SWAP_FREE_SILVER = 0;
-export const BLOODLINE_SWAP_FREE_GOLD = 1;
+export const BLOODLINE_SWAP_FREE: Record<FederalStatus, number> = {
+  NONE: 0,
+  NORMAL: 0,
+  SILVER: 0,
+  GOLD: 1,
+};
 
 /** Provenance stored on `SageModeRolls.type`. There is no pity or swap path. */
 export const SAGE_MODE_ROLL_TYPES = ["ITEM", "QUEST"] as const;
@@ -1683,7 +1896,10 @@ export const SAGE_MASTERY_DAILY_ACTIVATIONS: Record<SAGE_MASTERY_RANK, number> =
 };
 
 /** Battle types that never offer or accept sage Activation. */
-export const SAGE_MODE_DISABLED_BATTLES: BattleType[] = ["RANKED_PVP", "RANKED_SPARRING"];
+export const SAGE_MODE_DISABLED_BATTLES: BattleType[] = [
+  "RANKED_PVP",
+  "RANKED_SPARRING",
+];
 
 /** Injectable jutsu that runs sage-mode activation (costs + effects come from `SageMode` row). */
 export const SAGE_MODE_ACTIVATION_JUTSU_ID = "cmj8sagemodeactivatejutsu000000";
@@ -1695,9 +1911,12 @@ export const SAGE_MODE_DEFAULT_ACTIVATION_MESSAGE = "%user enters sage mode!";
 export const SAGE_MODE_DEFAULT_ACTION_COST_PERC = 80;
 
 // Skill tree config
-export const SKILL_TREE_RESET_FREE_NORMAL = 1;
-export const SKILL_TREE_RESET_FREE_SILVER = 1;
-export const SKILL_TREE_RESET_FREE_GOLD = 2;
+export const SKILL_TREE_RESET_FREE: Record<FederalStatus, number> = {
+  NONE: 1,
+  NORMAL: 1,
+  SILVER: 1,
+  GOLD: 2,
+};
 
 // Jutsu level transfer config
 export const JUTSU_TRANSFER_DAYS = 20;
@@ -1705,7 +1924,10 @@ export const JUTSU_TRANSFER_COST = 20;
 export const JUTSU_TRANSFER_MAX_LEVEL = 25;
 export const JUTSU_TRANSFER_MINIMUM_LEVEL = 10;
 export const JUTSU_TRANSFER_FREE: Record<FederalStatus, number> = {
-  NONE: 2, NORMAL: 3, SILVER: 4, GOLD: 5,
+  NONE: 2,
+  NORMAL: 3,
+  SILVER: 4,
+  GOLD: 5,
 };
 
 // Jutsu reskin config
@@ -1715,6 +1937,10 @@ export const COST_RESKIN_JUTSU = 60;
 // Village config
 export const VILLAGE_LEAVE_REQUIRED_RANK = "CHUNIN";
 export const VILLAGE_REDUCED_GAINS_DAYS = 7;
+// Regeneration and training multiplier while village gains are reduced.
+export const VILLAGE_REDUCED_GAINS_FACTOR = 0.5;
+// Highest level a Horizon user can reach before joining one of the main villages.
+export const HORIZON_MAX_LEVEL = 10;
 export const VILLAGE_SYNDICATE_ID = "ryBk0qD4EgvPPyav2K4OC";
 /** Guardian AI behind village protector encounters and the last-resort shrine defence. */
 export const VILLAGE_PROTECTOR_AI_ID = "MJMzOE67Cx2YP3NX8SAbh";
@@ -1746,6 +1972,7 @@ export const ANBU_MAX_MEMBERS = 4;
 export const ANBU_HOSPITAL_DISCOUNT_PERC = 5;
 export const ANBU_ITEMSHOP_DISCOUNT_PERC = 5;
 export const ANBU_DELAY_SECS = 5 * 24 * 3600; // Delay before kage can disband ANBU squads (5 days)
+export const ANBU_REQUEST_EXPIRY_SECS = 12 * 3600; // Pending join requests stay listed and blocking this long
 export const ANBU_MAX_ESPIONAGE_LEVEL = 10;
 export const ANBU_ESPIONAGE_BASE_CHANCE_PERC = 10;
 export const ANBU_ESPIONAGE_CHANGE_PER_LEVEL = 5;
@@ -1762,6 +1989,7 @@ export const ANBU_STEALTH_UPGRADE_COST = 200;
 export const SENSEI_REQUIRED_RANK: UserRank = "JONIN";
 export const SENSEI_STUDENT_RYO_PER_MISSION = 100;
 export const SENSEI_GENIN_TRAIN_EXP_BOOST_PERC = 5; // % extra stat training experience for Genin
+export const SENSEI_JUTSU_TRAINING_BOOST_PERC = 5; // % faster jutsu training for Genin with a sensei
 export const SENSEI_GENIN_MED_EXP_SHARE_PERC = 5; // % of medical exp shared to Genin student when sensei heals
 export const SENSEI_STUDENT_MISSION_EXP_BOOST_PERC = 3; // % extra mission experience for Chunin (<= lvl 40)
 export const SENSEI_MAX_STUDENT_LEVEL = 40;
@@ -1792,10 +2020,35 @@ export const MEDNIN_EXP_CAP = 4000000; // 4 million medical experience cap
 export const MEDNIN_EXP_PER_IMPROVEMENT = 340000; // 340k exp per improvement
 export const MEDNIN_CHAKRA_REDUCTION_PER_IMPROVEMENT = 0.01; // 0.01 reduction per improvement
 export const MEDNIN_MIN_CHAKRA_FACTOR = 0.05; // Minimum chakra factor
+// Chakra paid per healed HP is MEDNIN_BASE_CHAKRA_FACTOR minus the rank's reduction;
+// unranked users cannot heal.
+export const MEDNIN_BASE_CHAKRA_FACTOR = 0.5;
+export const MEDNIN_CHAKRA_FACTOR_REDUCTION: Record<
+  Exclude<MEDNIN_RANK, "NONE">,
+  number
+> = {
+  NOVICE: 0.05,
+  APPRENTICE: 0.1,
+  MASTER: 0.25,
+  LEGENDARY: 0.35,
+};
+// Percentage of the target's pools a combat heal restores, by mednin rank.
+export const MEDNIN_COMBAT_HEAL_PERC: Record<MEDNIN_RANK, number> = {
+  NONE: 30,
+  NOVICE: 30,
+  APPRENTICE: 40,
+  MASTER: 50,
+  LEGENDARY: 60,
+};
 
 // Hunting config
 /** Staff-editor starting values; each saved contract supplies its own encounter rules. */
-export const HUNTING_CONTRACT_DEFAULTS = { preparationSeconds: 30, hunts: 3, cooldownSeconds: 3600, experience: 100 } as const;
+export const HUNTING_CONTRACT_DEFAULTS = {
+  preparationSeconds: 30,
+  hunts: 3,
+  cooldownSeconds: 3600,
+  experience: 100,
+} as const;
 export const HUNTING_RANKS = [
   "NONE",
   "D RANK",
@@ -2024,7 +2277,7 @@ export const SPARRING_NEAR_LEVEL_RANGE = 5;
 export const ONLINE_WINDOW_MINUTES = 30;
 export const BATTLE_ARENA_HEAL_COST = 500;
 export const BATTLE_TAG_STACKING = true;
-export const RANKS_RESTRICTED_FROM_PVP = ["STUDENT", "GENIN"];
+export const RANKS_RESTRICTED_FROM_PVP: readonly UserRank[] = ["STUDENT", "GENIN"];
 
 /**
  * The game's creator. Attacking them on the map, or a quest fight naming them, opens a PvE
@@ -2048,7 +2301,11 @@ export const BossFightBattleTypes: BattleType[] = [
 ];
 /** Intensity of an arrival cinematic, weakest first. */
 export const TRANSFORMATION_TIERS = [
-  { tier: 1, label: "Spark", description: "A quick flash: one ring and a light shake." },
+  {
+    tier: 1,
+    label: "Spark",
+    description: "A quick flash: one ring and a light shake.",
+  },
   {
     tier: 2,
     label: "Surge",
@@ -2096,40 +2353,71 @@ export const POST_DAMAGE_MODIFIER_TYPES: string[] = [
 export const RYO_FOR_REP_DAYS_FROZEN = 3;
 export const RYO_FOR_REP_MAX_LISTINGS = 5;
 export const RYO_FOR_REP_MIN_REPS = 10;
-/** Reputation points a seller keeps out of every ryo-for-rep listing. */
-export const RYO_FOR_REP_RESERVE = 5;
+/** Reputation points a seller must keep after every ryo-for-rep listing. */
+export const RYO_FOR_REP_RESERVE = 10;
 export const PITY_BLOODLINE_ROLLS = 200;
 
 // Reputation purchase config
 export const MAX_REPS_PER_MONTH = 4000;
 export const MAX_REPS_EXTRA_PER_MONTH = 250;
+/** Share of a referred player's purchased reputation paid to their recruiter. */
+export const REFERRAL_REPUTATION_SHARE = 0.1;
 
 // Federal config
 /** Days one PayPal or reputation payment keeps its federal tier. */
 export const PAYPAL_PAID_PERIOD_DAYS = 31;
 /** Days a store receipt with no expiry still vouches: a monthly cycle plus billing retry. */
 export const STORE_RECEIPT_FALLBACK_DAYS = 63;
-export const FED_NORMAL_REPS_COST = 15;
-export const FED_SILVER_REPS_COST = 35;
-export const FED_GOLD_REPS_COST = 50;
-export const FED_NORMAL_BANK_INTEREST = 2;
-export const FED_SILVER_BANK_INTEREST = 5;
-export const FED_GOLD_BANK_INTEREST = 8;
+export const FED_REPS_COST = {
+  NORMAL: 15,
+  SILVER: 35,
+  GOLD: 50,
+} as const satisfies Record<Exclude<FederalStatus, "NONE">, number>;
+/** Reputation charged to move a paid federal tier up to a higher one. */
+export const FED_UPGRADE_REPS_COST: Partial<
+  Record<FederalStatus, Partial<Record<FederalStatus, number>>>
+> = {
+  NORMAL: { SILVER: 20, GOLD: 40 },
+  SILVER: { GOLD: 20 },
+};
+/** Daily interest percentage points added to the village bank rate. */
+export const FED_BANK_INTEREST: Record<FederalStatus, number> = {
+  NONE: 0,
+  NORMAL: 2,
+  SILVER: 5,
+  GOLD: 8,
+};
+/** Most ryo one daily interest payment can credit, for every federal tier. */
+export const BANK_INTEREST_DAILY_CAP = 1_000_000;
 export const FED_INVENTORY_SLOTS: Record<FederalStatus, number> = {
-  NONE: 0, NORMAL: 2, SILVER: 5, GOLD: 10,
+  NONE: 0,
+  NORMAL: 2,
+  SILVER: 5,
+  GOLD: 10,
 };
 export const FED_JUTSU_SLOTS: Record<FederalStatus, number> = {
-  NONE: 0, NORMAL: 1, SILVER: 2, GOLD: 3,
+  NONE: 0,
+  NORMAL: 1,
+  SILVER: 2,
+  GOLD: 3,
 };
 export const FED_JUTSU_LOADOUTS_BASE = 2;
-export const FED_NORMAL_JUTSU_LOADOUTS = 1;
-export const FED_SILVER_JUTSU_LOADOUTS = 2;
-export const FED_GOLD_JUTSU_LOADOUTS = 3;
+/** Loadouts added to the base allowance. */
+export const FED_JUTSU_LOADOUTS: Record<FederalStatus, number> = {
+  NONE: 0,
+  NORMAL: 1,
+  SILVER: 2,
+  GOLD: 3,
+};
 
 export const FED_ITEM_LOADOUTS_BASE = 2;
-export const FED_NORMAL_ITEM_LOADOUTS = 1;
-export const FED_SILVER_ITEM_LOADOUTS = 2;
-export const FED_GOLD_ITEM_LOADOUTS = 3;
+/** Loadouts added to the base allowance. */
+export const FED_ITEM_LOADOUTS: Record<FederalStatus, number> = {
+  NONE: 0,
+  NORMAL: 1,
+  SILVER: 2,
+  GOLD: 3,
+};
 export const LOADOUT_NAME_MAX_LENGTH = 24;
 // Matches the `actionLog.relatedText` varchar column width; audit text must be
 // clamped to this before insert or a long reason fails the write.
@@ -2138,7 +2426,10 @@ export const ACTION_LOG_RELATED_MSG_MAX_LENGTH = 191;
 // schema and the client-side form validation so the bounds stay in sync).
 export const SEICHI_SILVER_ADJUST_LIMIT = 1_000_000;
 export const FED_EVENT_ITEMS: Record<FederalStatus, number> = {
-  NONE: 10, NORMAL: 15, SILVER: 20, GOLD: 25,
+  NONE: 10,
+  NORMAL: 15,
+  SILVER: 20,
+  GOLD: 25,
 };
 
 // Missions config
@@ -2152,9 +2443,9 @@ export const OVERWORLD_QUEST_ROLLS_PER_DAY = MISSIONS_PER_DAY;
  * a terminal dialog branch (a branch with no follow-up objective). The suffix is the dialog
  * objective's own id, so the server completes exactly that objective without routing onward.
  * The prefix distinguishes it from a real next-objective id (plain nanoids, never prefixed),
- * so it can never be mistaken for routing. Terminal branches are no longer saveable, but
- * already-saved legacy content can still contain them, so the runtime honours them instead of
- * re-opening the same dialog forever.
+ * so it can never be mistaken for routing. The quest editor rejects terminal branches; stored
+ * quest content may still contain them, and the runtime completes the objective rather than
+ * re-opening its dialog.
  */
 export const TERMINAL_DIALOG_PREFIX = "__terminal__:";
 
@@ -2163,7 +2454,12 @@ export const OverworldInteractionTypes = ["FRIENDLY", "HOSTILE", "AMBIENT"] as c
 export type OverworldInteractionType = (typeof OverworldInteractionTypes)[number];
 
 /** `biome` spawns its groups in every sector of the chosen habitats instead of one sector. */
-export const OverworldSectorTypes = ["specific", "random", "from_list", "biome"] as const;
+export const OverworldSectorTypes = [
+  "specific",
+  "random",
+  "from_list",
+  "biome",
+] as const;
 export type OverworldSectorType = (typeof OverworldSectorTypes)[number];
 
 export const OverworldLocationTypes = ["specific", "random"] as const;
@@ -2222,7 +2518,10 @@ export const FACTION_RAID_BOOST_HOURS = 24;
 export const FACTION_RAID_TARGET_COOLDOWN_HOURS = 48;
 export const FACTION_RAID_FAILURE_COOLDOWN_HOURS = 72;
 export const FACTION_RAID_STRUCTURE_ROUTES = [
-  "/missionhall", "/traininggrounds", "/itemshop", "/battlearena",
+  "/missionhall",
+  "/traininggrounds",
+  "/itemshop",
+  "/battlearena",
 ] as const;
 export const STRONGHOLD_MEMBER_GRACE_HOURS = 72;
 
@@ -2280,9 +2579,9 @@ export const SKILL_POINT_MAX_LEVEL =
   SKILL_POINT_MIN_LEVEL + MAX_SKILL_POINTS_FROM_LEVELING - 1; // Maximum level to gain skill points from leveling
 
 export const WAR_SECTORWAR_AI_SHRINE_REDUCE = 10; // KIlling AI shrine hp decrease
-export const WAR_SECTORWAR_AI_SHRINE_RECOVER = 3; // Shrine hp recover per day
+export const WAR_SECTORWAR_AI_SHRINE_RECOVER = 3; // Shrine HP regained per shrine (SHRINE_WAR) battle that goes the owner's way
 export const WAR_SECTORWAR_PVP_SHRINE_REDUCE = 20; // Killing a player in a sector war shrine hp decrease
-export const WAR_SECTORWAR_PVP_SHRINE_RECOVER = 7; // Shrine hp remove per day
+export const WAR_SECTORWAR_PVP_SHRINE_RECOVER = 7; // Shrine HP regained per PvP battle at a contested shrine that goes the owner's way
 export const WAR_RAID_SHRINE_HP = 500; // Fixed HP for Village Wars and Raids (abstract mechanic)
 export const WAR_SHRINE_CAPTURE_WARHEALTH_DMG = 200; // Damage to war health when shrine is captured (HP <= 0)
 export const WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL = 150; // Heal to war health when shrine is recaptured (HP > 25%)
@@ -2292,9 +2591,11 @@ export const WAR_SHRINE_IMAGE =
   "https://ui0arpl8sm.ufs.sh/f/world-shrine-akikaze-c1602b7764686d7d1bdf028f.webp";
 /** Shrine architecture follows the biome; map terrain supplies the ground beneath its foundation. */
 export const WAR_SHRINE_IMAGE_BY_BIOME: Record<CombatBiome, string> = {
-  ocean: "https://ui0arpl8sm.ufs.sh/f/world-shrine-horizon-e0f90ae3ed79479bc27838e4.webp",
+  ocean:
+    "https://ui0arpl8sm.ufs.sh/f/world-shrine-horizon-e0f90ae3ed79479bc27838e4.webp",
   ground: WAR_SHRINE_IMAGE,
-  dessert: "https://ui0arpl8sm.ufs.sh/f/world-shrine-shirohana-6f2547d00c466af2aa8d400c.webp",
+  dessert:
+    "https://ui0arpl8sm.ufs.sh/f/world-shrine-shirohana-6f2547d00c466af2aa8d400c.webp",
   ice: "https://ui0arpl8sm.ufs.sh/f/world-shrine-hyorin-577db546f0abfb28385b835d.webp",
   snow: "https://ui0arpl8sm.ufs.sh/f/world-shrine-hyorin-577db546f0abfb28385b835d.webp",
   arena: WAR_SHRINE_IMAGE,
@@ -2308,6 +2609,11 @@ export const WAR_STATES = [
 ] as const;
 export const WAR_SHRINE_MAINTENANCE_DAYS = 7;
 export const WAR_TYPES = ["VILLAGE_WAR", "SECTOR_WAR", "WAR_RAID"] as const;
+/** Wars fought between villages over their shrines, as opposed to sector wars. */
+export const VILLAGE_WAR_TYPES: (typeof WAR_TYPES)[number][] = [
+  "VILLAGE_WAR",
+  "WAR_RAID",
+];
 export const SHRINE_MAX_PER_VILLAGE = 4;
 export const SHRINE_BOOST_COST = 15_000;
 export const SHRINE_BOOST_BASE_PERC = 10; // Base shrine boost with 1+ shrines (10%)
@@ -2520,6 +2826,9 @@ export const SECTOR_TYPES = [
 
 // Conversation config
 export const CONVERSATION_PAUSE_HIDDEN_MINS = 5;
+/** Length bounds of a conversation or report comment. */
+export const COMMENT_MIN_LENGTH = 4;
+export const COMMENT_MAX_LENGTH = 5000;
 /** Conversations a player can mute individually in the chat panel. */
 export const MAX_MUTED_CONVERSATIONS = 100;
 export const MESSAGING_MIN_LEVEL = 3;
@@ -2532,7 +2841,14 @@ export const messagingLevelMessage = `You must reach level ${MESSAGING_MIN_LEVEL
 export const forumLevelMessage = `You must reach level ${FORUM_MIN_LEVEL} to post in the forum`;
 export const auctionHouseLevelMessage = `You must reach level ${AUCTION_HOUSE_MIN_LEVEL} to use the auction house`;
 export const repTradeLevelMessage = `You must reach level ${REP_TRADE_MIN_LEVEL} to buy or sell reputation with other players`;
+
+// Parental controls
+/** Players a parent can approve for private messages. */
+export const PARENTAL_MAX_APPROVED_PLAYERS = 50;
+
 export const REPORT_CONTEXT_WINDOW = 20;
+/** How long a report timeout silences the reported user. */
+export const REPORT_TIMEOUT_HOURS = 1;
 
 // Kage config
 export const FRIENDLY_PRESTIGE_COST = 10000; // Prestige cost of killing friendly
@@ -2546,9 +2862,9 @@ export const KAGE_MIN_PRESTIGE = 10000; // Remove kage if below
 export const KAGE_PRESTIGE_COST = 10000; // Cost of failed challenge
 export const KAGE_PRESTIGE_REQUIREMENT = 100000; // To challeng kage
 export const KAGE_RANK_REQUIREMENT = "JONIN";
-export const KAGE_WAR_DECLARE_COST = 10000; // Declare war cost
+export const KAGE_WAR_DECLARE_COST = 10000; // Kage prestige spent to declare an enemy
 export const KAGE_CHALLENGE_WIN_PRESTIGE = 5000; // Kage prestige gain of winning challenge
-export const WAR_FUNDS_COST = 10000; // Prestige cost of declaring war
+export const WAR_FUNDS_COST = 10000; // Village tokens spent to declare an enemy
 
 // Ranked PVP config
 export const RANKED_REQUIRED_RANK: UserRank = "CHUNIN";
@@ -2559,6 +2875,19 @@ export const RANKED_STREAK_BONUS = 2;
 export const RANKED_QUEUE_MAX_WAIT_SECS = 300;
 // Minimum LP a player gains from a ranked win, regardless of the Elo delta.
 export const RANKED_MIN_LP_GAIN = 18;
+// LP each player gains from a ranked draw, outside the Elo calculation.
+export const RANKED_DRAW_LP = 10;
+// LP added to a win per rank the opponent stands above the winner.
+export const RANKED_UPSET_BONUS_PER_RANK = 10;
+// A loss shrinks by RANKED_LOSS_PROTECTION_FACTOR when the opponent stands at least
+// RANKED_LOSS_PROTECTION_RANK_GAP ranks above the loser.
+export const RANKED_LOSS_PROTECTION_RANK_GAP = 2;
+export const RANKED_LOSS_PROTECTION_FACTOR = 0.5;
+// Matchmaking LP radius: RANKED_RADIUS_STEP_LP to start, one more step every
+// RANKED_RADIUS_STEP_SECS in queue, capped at RANKED_RADIUS_MAX_LP.
+export const RANKED_RADIUS_STEP_LP = 50;
+export const RANKED_RADIUS_STEP_SECS = 60;
+export const RANKED_RADIUS_MAX_LP = 250;
 export const RANKED_SANNIN_TOP_PLAYERS = 10;
 export const RANKED_RANKS = [
   "Unranked",
@@ -2570,12 +2899,23 @@ export const RANKED_RANKS = [
 ] as const;
 export type RankedRank = (typeof RANKED_RANKS)[number];
 export const RANKED_LEGEND_LP_REQUIREMENT = 900;
+/** LP a Legend player loses at each daily reset without a recent ranked battle. */
+export const RANKED_LP_DAILY_DECAY = 70;
+/** Days without a ranked battle, on either side, before a Legend player's LP decays. */
+export const RANKED_DECAY_INACTIVE_DAYS = 5;
+/** LP a player enters the ranked season with: the Wood division threshold. */
+export const RANKED_ENTRY_LP = 150;
 export const RANKED_DIVISIONS = [
   { key: "UNRANKED", name: "Unranked", rankedLp: 0, kFactor: 40 },
-  { key: "WOOD", name: "Wood", rankedLp: 150, kFactor: 40 },
+  { key: "WOOD", name: "Wood", rankedLp: RANKED_ENTRY_LP, kFactor: 40 },
   { key: "ADEPT", name: "Adept", rankedLp: 300, kFactor: 32 },
   { key: "MASTER", name: "Master", rankedLp: 600, kFactor: 24 },
-  { key: "LEGEND", name: "Legend", rankedLp: RANKED_LEGEND_LP_REQUIREMENT, kFactor: 16 },
+  {
+    key: "LEGEND",
+    name: "Legend",
+    rankedLp: RANKED_LEGEND_LP_REQUIREMENT,
+    kFactor: 16,
+  },
   { key: "SANNIN", name: "Sannin", rankedLp: Infinity, kFactor: 16 },
 ] as const satisfies readonly {
   key: string;
@@ -2634,7 +2974,7 @@ export const SITE_URL = "https://www.theninja-rpg.com";
 export const GITHUB_REPO_URL = "https://github.com/studie-tech/TheNinjaRPG";
 export const GITHUB_ISSUES_URL = `${GITHUB_REPO_URL}/issues`;
 
-// GitHub issue token
+// GitHub REST endpoint for this repository (support issue escalation)
 export const GITHUB_API_ENDPOINT =
   "https://api.github.com/repos/studie-tech/TheNinjaRPG";
 
@@ -2696,7 +3036,12 @@ export const FARM_LEVEL_EXTRACTOR_CAP: { level: number; max: number }[] = [
   { level: 100, max: 3 },
 ];
 
-export const FARM_SHOP_ENTRY_TYPES = ["PLOT", "EXTRACTOR", "SEED", "FERTILIZER"] as const;
+export const FARM_SHOP_ENTRY_TYPES = [
+  "PLOT",
+  "EXTRACTOR",
+  "SEED",
+  "FERTILIZER",
+] as const;
 export type FarmShopEntryType = (typeof FARM_SHOP_ENTRY_TYPES)[number];
 
 export const FARM_SHOP_ENTRIES: {
@@ -2735,8 +3080,10 @@ export const IMG_MERCH_ARTWORK = {
   blueblade: "https://uploadthing.b-cdn.net/f/5g1MOfv7TDgxsS_JiquKe.webp",
   buffpotatoes: "https://uploadthing.b-cdn.net/f/VIQBvqjHwOwVlf-IgYQWb.webp",
   buffsr: "https://uploadthing.b-cdn.net/f/Egfuy9wNzxbMXcXZVeF2T.webp",
-  core1: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJW22nAzvszvj71yaSYC0MDOmbko5q9JAGuLHf",
-  core3: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEJfoY9HLfKL5D7TAFe29bymSaPCIQ846MdzG",
+  core1:
+    "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJW22nAzvszvj71yaSYC0MDOmbko5q9JAGuLHf",
+  core3:
+    "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEJfoY9HLfKL5D7TAFe29bymSaPCIQ846MdzG",
   core2: "https://uploadthing.b-cdn.net/f/m7fO-lHKGjd8MlOc8Ax3F.webp",
   cosmic: "https://uploadthing.b-cdn.net/f/JjJQ23CUkXsdudyoBtyZ6.webp",
   duckcontent: "https://uploadthing.b-cdn.net/f/SUBLqCOioXWryLaJVbyN4.webp",
@@ -3004,8 +3351,7 @@ export const IMG_MANUAL_DAM_CALCS =
 export const IMG_MANUAL_BADGE =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOUM5LPVHevxIThUauQkGJEBY3D2cPqy8f5sp.webp";
 /** Honorary scroll representing collected titles in the manual. */
-export const IMG_MANUAL_TITLE =
-  "https://ui0arpl8sm.ufs.sh/f/manual-titles-1925.webp";
+export const IMG_MANUAL_TITLE = "https://ui0arpl8sm.ufs.sh/f/manual-titles-1925.webp";
 export const IMG_MANUAL_ASSET =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJaGvHErYYfKMcJ2B5EmWt6VsNgqxpG8OSXAQk.webp";
 export const IMG_MANUAL_OPINION =
@@ -3379,6 +3725,8 @@ export const HomeTypeDetails = {
   },
 } as const;
 export type HomeTypeDetails = (typeof HomeTypeDetails)[keyof typeof HomeTypeDetails];
+/** Share of the price difference returned when moving to a cheaper home. */
+export const HOME_DOWNGRADE_REFUND_PERCENT = 75;
 
 /** Furniture definitions choose only existing home actions; a null action is decorative. */
 export const HomeFurnitureActions = ["sleep", "storage", "kitchen", "farm"] as const;
@@ -3406,14 +3754,32 @@ export const HOME_FURNITURE_POSITION_MAX = 1000;
 export const HOME_FURNITURE_MIN_WIDTH = 6;
 export const HOME_FURNITURE_MAX_WIDTH = 40;
 export const HOME_FURNITURE_MAX_PLACEMENTS = 50;
-export const HOME_ROOM_IDS = ["main", "room-1", "room-2", "room-3", "room-4", "room-5", "room-6", "room-7", "room-8", "room-9", "yard"] as const;
+export const HOME_ROOM_IDS = [
+  "main",
+  "room-1",
+  "room-2",
+  "room-3",
+  "room-4",
+  "room-5",
+  "room-6",
+  "room-7",
+  "room-8",
+  "room-9",
+  "yard",
+] as const;
 /** A property's room limit includes its yard; room identities remain stable across tiers. */
 export const HOME_MAX_ROOMS = HOME_ROOM_IDS.length;
 export const HOME_MAX_INVITATIONS = 100;
 /** Pending home invitations follow the request cleaner’s one-day retention. */
 export const HOME_INVITATION_EXPIRY_SECONDS = 24 * 3600;
 /** Persist palette keys so editor choices and rendered wall finishes share one source. */
-export const HOME_WALL_PAINTS = { ivory: "#ddd0ac", sage: "#a9ba9a", indigo: "#8b96b7", rose: "#cfaaa3", charcoal: "#777b80" } as const;
+export const HOME_WALL_PAINTS = {
+  ivory: "#ddd0ac",
+  sage: "#a9ba9a",
+  indigo: "#8b96b7",
+  rose: "#cfaaa3",
+  charcoal: "#777b80",
+} as const;
 /** Complete property paintings share their source with every foreground depth mask. */
 export const IMG_HOME_PROPERTIES = {
   NONE: {
@@ -3442,17 +3808,20 @@ export const IMG_HOME_PROPERTIES = {
     snow: "https://ui0arpl8sm.ufs.sh/f/yB-Q_45IMvxLjRM_G4Xzl.webp",
   },
   MANSION: {
-    ground: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHezDBLQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
+    ground:
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHezDBLQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
     dessert: "https://uploadthing.b-cdn.net/f/N15VuvdnfDnk6D-Y7XQ6F.webp",
     snow: "https://uploadthing.b-cdn.net/f/PGX8lUT9xCDqtVNfkvrYx.webp",
   },
   PALACE: {
-    ground: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVlImyxF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    ground:
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVlImyxF2veAXohUuE59nTQHRJIYjtiG18aF4",
     dessert: "https://uploadthing.b-cdn.net/f/1G2_ZRwT_Ga0hEz-WEATu.webp",
     snow: "https://uploadthing.b-cdn.net/f/obq3x6kpj32siJee-a76a.webp",
   },
   MARSHMALLOWOPOLIS: {
-    ground: "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVlImyxF2veAXohUuE59nTQHRJIYjtiG18aF4",
+    ground:
+      "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVlImyxF2veAXohUuE59nTQHRJIYjtiG18aF4",
     dessert: "https://uploadthing.b-cdn.net/f/1G2_ZRwT_Ga0hEz-WEATu.webp",
     snow: "https://uploadthing.b-cdn.net/f/obq3x6kpj32siJee-a76a.webp",
   },
@@ -3466,7 +3835,8 @@ export const HOME_FLOOR_TILES = {
   terracotta: "https://ui0arpl8sm.ufs.sh/f/v2dMX-jt0CGomn1vHS12x.webp",
 } as const;
 /** Furniture storage is independent of item storage and can hold every room's display capacity. */
-export const HOME_FURNITURE_STORAGE_CAPACITY = HOME_FURNITURE_MAX_PLACEMENTS * HOME_MAX_ROOMS;
+export const HOME_FURNITURE_STORAGE_CAPACITY =
+  HOME_FURNITURE_MAX_PLACEMENTS * HOME_MAX_ROOMS;
 
 /** The fixed room camera foreshortens furniture facing along the front-to-back floor axis. */
 export const HOME_FURNITURE_FLOOR_DEPTH_RATIO = 0.7;
@@ -3638,16 +4008,25 @@ export const SUPPORT_TICKET_PRIORITY_DESCRIPTIONS: Record<
   URGENT: "Critical issue that prevents gameplay",
 } as const;
 
+// Carried inventory config
+export const INVENTORY_BASE_SLOTS = 20;
+
 // Materials inventory config
 export const MATERIALS_BASE_SLOTS = 25;
 export const FED_MATERIALS_SLOTS: Record<FederalStatus, number> = {
-  NONE: 0, NORMAL: 5, SILVER: 10, GOLD: 15,
+  NONE: 0,
+  NORMAL: 5,
+  SILVER: 10,
+  GOLD: 15,
 };
 
 // Cooking inventory config (mirrors materials)
 export const COOKING_BASE_SLOTS = 25;
 export const FED_COOKING_SLOTS: Record<FederalStatus, number> = {
-  NONE: 0, NORMAL: 5, SILVER: 10, GOLD: 15,
+  NONE: 0,
+  NORMAL: 5,
+  SILVER: 10,
+  GOLD: 15,
 };
 
 /**
@@ -3718,10 +4097,7 @@ export const TowerDefenseUpgradeTypes = [
 export type TowerDefenseUpgradeType = (typeof TowerDefenseUpgradeTypes)[number];
 
 // Upgrade categories for UI organization
-export const TowerDefenseUpgradeCategories: Record<
-  string,
-  readonly TowerDefenseUpgradeType[]
-> = {
+export const TowerDefenseUpgradeCategories = {
   ATTACK: ["DAMAGE", "ATTACK_SPEED", "RANGE", "CRIT_CHANCE", "DAMAGE_PER_TILE"],
   DEFENSE: [
     "HEALTH",
@@ -3739,7 +4115,7 @@ export const TowerDefenseUpgradeCategories: Record<
     "SKIP_ENEMY_CHANCE",
   ],
   ABILITIES: ["ABILITY_UNLOCK"],
-} as const;
+} as const satisfies Record<string, readonly TowerDefenseUpgradeType[]>;
 export type TowerDefenseUpgradeCategory = keyof typeof TowerDefenseUpgradeCategories;
 
 export const TowerDefenseRunStatuses = ["ACTIVE", "COMPLETED", "ABANDONED"] as const;
@@ -3756,6 +4132,7 @@ export const TD_SHURIKEN_BASE_RANGE = 2;
 export const TD_SHURIKEN_BASE_COOLDOWN = 500; // ms
 export const TD_BASE_CRIT_CHANCE = 0; // Base critical hit chance (0%)
 export const TD_BASE_DAMAGE_PER_TILE = 0; // Extra damage per tile distance traveled (0)
+export const TD_CRIT_DAMAGE_MULTIPLIER = 2; // Critical hit damage factor - must match the crit branch in lib.rs
 export const TD_RANGE_VISUAL_FACTOR = 0.85; // Range visual factor for ellipse-based range checking
 export const TD_PROJECTILE_SPEED = 5.0; // tiles/sec - must match PROJECTILE_SPEED in lib.rs
 export const TD_EXISTING_SESSION_CHECK_TIMEOUT_MS = 500; // Time to wait for SpacetimeDB to send existing session data
@@ -3815,6 +4192,7 @@ export const PARRY_MAX_PERCENTAGE = 100;
 export const DIFFUSE_MAX_PERCENTAGE = 99;
 export const DIFFUSE_DEFAULT_DELAY_ROUNDS = 3;
 export const TEMPORAL_AP_DELTA = 10; // AP added or removed by time compression / dilation
+export const ELEMENTAL_SEAL_AP_COST = 60; // AP cost of the elemental jutsu Elemental Seal blocks
 export const OUT_OF_COMBAT_BASE_DAMAGE_REDUCTION = 50; // Percentage points added to pre-battle DR pool
 
 /** Armor/accessory folded into early pre-battle inc/DR pools in the damage pipeline. */
@@ -3929,9 +4307,7 @@ export const MIRROR_EXCLUDED_EFFECT_TYPES: ReadonlySet<string> = new Set([
 const buildTagPriorityRank = (
   tiers: readonly (readonly string[])[],
 ): ReadonlyMap<string, number> =>
-  new Map(
-    tiers.flatMap((tier, index) => tier.map((type) => [type, index] as const)),
-  );
+  new Map(tiers.flatMap((tier, index) => tier.map((type) => [type, index] as const)));
 
 export const COPY_PRIORITY_RANK = buildTagPriorityRank(COPY_PRIORITY_TIERS);
 export const MIRROR_PRIORITY_RANK = buildTagPriorityRank(MIRROR_PRIORITY_TIERS);
@@ -4048,8 +4424,14 @@ export const STORE_FEDERAL_PRODUCTS = [
 ] as const;
 
 /** Tax-inclusive USD monthly prices shared by Stripe validation and federal support UI. */
-export const FEDERAL_MONTHLY_USD_CENTS = { NORMAL: 500, SILVER: 1000, GOLD: 1500 } as const;
+export const FEDERAL_MONTHLY_USD_CENTS = {
+  NORMAL: 500,
+  SILVER: 1000,
+  GOLD: 1500,
+} as const;
 export const SkillTreePathTypes = ["SKILL", "BLOODRIGHT"] as const;
+/** Highest tier a skill tree entry can sit on. */
+export const SKILL_TREE_MAX_TIER = 10;
 export const MAX_BLOODRIGHT_TIERS = 5;
 
 /** Defaults are snapshotted when an objective village war is approved. */
@@ -4064,12 +4446,18 @@ export const OBJECTIVE_WAR_DEFAULTS = {
   guardianDamage: 350,
   objectiveDamage: 1500,
   campDamage: 300,
-  regularDamage: 10, regularRecovery: 7,
-  anbuDamage: 15, anbuRecovery: 10,
-  assassinDamage: 15, assassinRecovery: 10,
-  elderDamage: 20, elderRecovery: 15,
-  coleaderDamage: 20, coleaderRecovery: 15,
-  leaderDamage: 40, leaderRecovery: 30,
+  regularDamage: 10,
+  regularRecovery: 7,
+  anbuDamage: 15,
+  anbuRecovery: 10,
+  assassinDamage: 15,
+  assassinRecovery: 10,
+  elderDamage: 20,
+  elderRecovery: 15,
+  coleaderDamage: 20,
+  coleaderRecovery: 15,
+  leaderDamage: 40,
+  leaderRecovery: 30,
 } as const;
 export const WAR_ESPIONAGE_TARGET = 100;
 export const WAR_PVP_ESPIONAGE_POINTS = 3;
@@ -4122,7 +4510,15 @@ export const KAGE_DEFENSE_PUBLIC_SYNC_SECONDS = 30;
 export const KAGE_CHALLENGER_DAILY_LIMIT = 1;
 export const KAGE_CHALLENGER_WEEKLY_LIMIT = 3;
 export const KAGE_REMOVAL_COOLDOWN_DAYS = 7;
-export const KAGE_MATCH_STATUSES = ["QUEUED", "SCHEDULED", "STARTING", "BATTLE", "COMPLETED", "CANCELLED", "FORFEITED"] as const;
+export const KAGE_MATCH_STATUSES = [
+  "QUEUED",
+  "SCHEDULED",
+  "STARTING",
+  "BATTLE",
+  "COMPLETED",
+  "CANCELLED",
+  "FORFEITED",
+] as const;
 
 /** Compressed environment paintings for the selectable game layouts. */
 export const IMG_LAYOUT_THEME_ART = {

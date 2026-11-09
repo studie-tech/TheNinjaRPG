@@ -1,20 +1,25 @@
-import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { eq } from "drizzle-orm";
 import { quest, questHistory, userData, userQueue, userVote } from "@/drizzle/schema";
 import { getMasteryQueue } from "@/libs/queue";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { trainRouter } from "@/server/api/routers/train";
 import type { DrizzleClient } from "@/server/db";
+import { deferred } from "../../../setup/deferred";
 import { insertUsers, insertUserVotes } from "../../../setup/factories";
+import {
+  aroundStatements,
+  beforeStatements,
+  beforeTransaction,
+  inTransactions,
+} from "../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
-  resetTables,
   recordQueries,
+  resetTables,
 } from "../../../setup/testDatabase";
-import { deferred } from "../../../setup/deferred";
-import { beforeTransaction, aroundStatements, inTransactions, beforeStatements } from "../../../setup/statements";
 
 const userId = "queue-publication";
 const genjutsu = { stat: "genjutsuMastery" as const, speed: "15min" as const };
@@ -39,10 +44,17 @@ const delayReplacementInsert = (database: DrizzleClient, fail = false) => {
 const delayFirstUserWrite = (database: DrizzleClient) => {
   const entered = deferred<void>();
   const release = deferred<void>();
-  const client = beforeStatements(database, userData, [async () => {
-    entered.resolve();
-    await release.promise;
-  }], { operations: ["update"] });
+  const client = beforeStatements(
+    database,
+    userData,
+    [
+      async () => {
+        entered.resolve();
+        await release.promise;
+      },
+    ],
+    { operations: ["update"] },
+  );
   return { client, entered: entered.promise, release: release.resolve };
 };
 
@@ -105,34 +117,74 @@ describeWithDatabase("Training queue atomic publication", () => {
     expect(getMasteryQueue(await readUser())).toEqual([]);
   });
 
-  it.each(["ENERGY", "MASTERY"] as const)("keeps %s removals passive and prepares recovery for additions", async (kind) => {
-    const database = await getTestDatabase();
-    const caller = callerForDatabase(trainRouter, userId, database);
-    const energy = [{ stat: "strength" as const, energy: 100 }, { stat: "offence" as const, energy: 100 }];
-    const mastery = [genjutsu, taijutsu];
-    const saved = kind === "ENERGY"
-      ? await caller.updateEnergyTrainingQueue({ expectedEntries: [], entries: energy })
-      : await caller.updateMasteryTrainingQueue({ expectedEntries: [], entries: mastery });
-    expect(saved.success).toBe(true);
-    await database.update(userData).set({ status: "ASLEEP", autoWakeUp: true, regeneration: 0 }).where(eq(userData.userId, userId));
-    const removed = kind === "ENERGY"
-      ? await caller.updateEnergyTrainingQueue({ expectedEntries: energy, entries: [energy[1]!] })
-      : await caller.updateMasteryTrainingQueue({ expectedEntries: mastery, entries: [taijutsu] });
-    expect(removed.success).toBe(true);
-    expect(removed.actionNotice).toBeUndefined();
-    expect((await readUser()).status).toBe("ASLEEP");
-    const cleared = kind === "ENERGY"
-      ? await caller.updateEnergyTrainingQueue({ expectedEntries: [energy[1]!], entries: [] })
-      : await caller.updateMasteryTrainingQueue({ expectedEntries: [taijutsu], entries: [] });
-    expect(cleared.success).toBe(true);
-    expect(cleared.actionNotice).toBeUndefined();
-    expect((await readUser()).status).toBe("ASLEEP");
-    const added = kind === "ENERGY"
-      ? await caller.updateEnergyTrainingQueue({ expectedEntries: [], entries: energy })
-      : await caller.updateMasteryTrainingQueue({ expectedEntries: [], entries: mastery });
-    expect(added).toMatchObject({ success: true, actionNotice: "This action woke you up." });
-    expect((await readUser()).status).toBe("AWAKE");
-  });
+  it.each(["ENERGY", "MASTERY"] as const)(
+    "keeps %s removals passive and prepares recovery for additions",
+    async (kind) => {
+      const database = await getTestDatabase();
+      const caller = callerForDatabase(trainRouter, userId, database);
+      const energy = [
+        { stat: "strength" as const, energy: 100 },
+        { stat: "offence" as const, energy: 100 },
+      ];
+      const mastery = [genjutsu, taijutsu];
+      const saved =
+        kind === "ENERGY"
+          ? await caller.updateEnergyTrainingQueue({
+              expectedEntries: [],
+              entries: energy,
+            })
+          : await caller.updateMasteryTrainingQueue({
+              expectedEntries: [],
+              entries: mastery,
+            });
+      expect(saved.success).toBe(true);
+      await database
+        .update(userData)
+        .set({ status: "ASLEEP", autoWakeUp: true, regeneration: 0 })
+        .where(eq(userData.userId, userId));
+      const removed =
+        kind === "ENERGY"
+          ? await caller.updateEnergyTrainingQueue({
+              expectedEntries: energy,
+              entries: [energy[1]!],
+            })
+          : await caller.updateMasteryTrainingQueue({
+              expectedEntries: mastery,
+              entries: [taijutsu],
+            });
+      expect(removed.success).toBe(true);
+      expect(removed.actionNotice).toBeUndefined();
+      expect((await readUser()).status).toBe("ASLEEP");
+      const cleared =
+        kind === "ENERGY"
+          ? await caller.updateEnergyTrainingQueue({
+              expectedEntries: [energy[1]!],
+              entries: [],
+            })
+          : await caller.updateMasteryTrainingQueue({
+              expectedEntries: [taijutsu],
+              entries: [],
+            });
+      expect(cleared.success).toBe(true);
+      expect(cleared.actionNotice).toBeUndefined();
+      expect((await readUser()).status).toBe("ASLEEP");
+      const added =
+        kind === "ENERGY"
+          ? await caller.updateEnergyTrainingQueue({
+              expectedEntries: [],
+              entries: energy,
+            })
+          : await caller.updateMasteryTrainingQueue({
+              expectedEntries: [],
+              entries: mastery,
+            });
+      expect(added).toMatchObject({
+        success: true,
+        actionNotice: "This action woke you up.",
+      });
+      expect((await readUser()).status).toBe("AWAKE");
+    },
+  );
 
   it("publishes an Energy entry with isolation validation in seven round trips", async () => {
     const normal = callerForDatabase(trainRouter, userId, await getTestDatabase());
@@ -146,24 +198,37 @@ describeWithDatabase("Training queue atomic publication", () => {
     expect(saved.roundTrips, saved.statements.join("\n")).toBe(7);
   });
 
-  it.each(["ENERGY", "MASTERY"] as const)("rejects a %s addition if the player falls asleep before publication", async (kind) => {
-    const database = await getTestDatabase();
-    // Sleep changes status without updating the snapshot timestamp.
-    const client = beforeTransaction(database, () =>
-      database.update(userData).set({ status: "ASLEEP" }).where(eq(userData.userId, userId)),
-    );
-    const caller = callerForDatabase(trainRouter, userId, client);
-    const result = kind === "ENERGY"
-      ? await caller.updateEnergyTrainingQueue({ expectedEntries: [], entries: [{ stat: "strength", energy: 100 }] })
-      : await caller.updateMasteryTrainingQueue({ expectedEntries: [], entries: [genjutsu] });
-    expect(result).toMatchObject({ success: false });
-    const user = await readUser();
-    expect(user.status).toBe("ASLEEP");
-    expect(user.queue).toEqual([]);
-    expect(user.energyQueueHead).toBe(0);
-    expect(user.energyQueueTail).toBe(0);
-    expect(user.masteryQueueHead).toBe(0);
-  });
+  it.each(["ENERGY", "MASTERY"] as const)(
+    "rejects a %s addition if the player falls asleep before publication",
+    async (kind) => {
+      const database = await getTestDatabase();
+      // Sleep changes status without updating the snapshot timestamp.
+      const client = beforeTransaction(database, () =>
+        database
+          .update(userData)
+          .set({ status: "ASLEEP" })
+          .where(eq(userData.userId, userId)),
+      );
+      const caller = callerForDatabase(trainRouter, userId, client);
+      const result =
+        kind === "ENERGY"
+          ? await caller.updateEnergyTrainingQueue({
+              expectedEntries: [],
+              entries: [{ stat: "strength", energy: 100 }],
+            })
+          : await caller.updateMasteryTrainingQueue({
+              expectedEntries: [],
+              entries: [genjutsu],
+            });
+      expect(result).toMatchObject({ success: false });
+      const user = await readUser();
+      expect(user.status).toBe("ASLEEP");
+      expect(user.queue).toEqual([]);
+      expect(user.energyQueueHead).toBe(0);
+      expect(user.energyQueueTail).toBe(0);
+      expect(user.masteryQueueHead).toBe(0);
+    },
+  );
 
   it("retains the old queue until replacement rows commit and rejects an overlapping add", async () => {
     const database = await getTestDatabase();

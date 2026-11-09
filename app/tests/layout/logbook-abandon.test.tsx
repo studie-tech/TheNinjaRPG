@@ -37,7 +37,13 @@ const renderEntry = (
   } as never);
   attempts += 1;
   const id = `attempt-${attempts}`;
-  const quest = { id, name: "Contract", questType, description: "", content: { objectives: [], reward: {} } };
+  const quest = {
+    id,
+    name: "Contract",
+    questType,
+    description: "",
+    content: { objectives: [], reward: {} },
+  };
   return render(
     <logbook.LogbookEntry
       userQuest={{ id, questId: id, quest, startedAt, completed: 0 } as never}
@@ -51,9 +57,21 @@ const abandonButton = () => screen.queryByRole("button", { name: "Abandon Contra
 
 beforeEach(() => {
   vi.clearAllMocks();
-  Object.assign(vi.spyOn(client, "api" as never), { useUtils: () => router(), gameAsset: router(), quests: router() });
-  vi.spyOn(logbook, "useCheckRewards").mockReturnValue({ checkRewards: vi.fn(), isCheckingRewards: false } as never);
-  vi.spyOn(Modal, "default").mockImplementation((({ isOpen, onAccept, proceed_label, children }: {
+  Object.assign(vi.spyOn(client, "api" as never), {
+    useUtils: () => router(),
+    gameAsset: router(),
+    quests: router(),
+  });
+  vi.spyOn(logbook, "useCheckRewards").mockReturnValue({
+    checkRewards: vi.fn(),
+    isCheckingRewards: false,
+  } as never);
+  vi.spyOn(Modal, "default").mockImplementation((({
+    isOpen,
+    onAccept,
+    proceed_label,
+    children,
+  }: {
     isOpen: boolean;
     onAccept?: (event: { preventDefault: () => void }) => void;
     proceed_label?: string;
@@ -75,10 +93,13 @@ afterEach(() => {
 });
 
 describe("logbook abandon control", () => {
-  it.each(QuestTypes)("offers a regular player abandon on %s per the shared rule", (questType) => {
-    renderEntry(questType);
-    expect(!!abandonButton()).toBe(canAbandonQuestType("USER", questType));
-  });
+  it.each(QuestTypes)(
+    "offers a regular player abandon on %s per the shared rule",
+    (questType) => {
+      renderEntry(questType);
+      expect(!!abandonButton()).toBe(canAbandonQuestType("USER", questType));
+    },
+  );
 
   it("keeps ANBU quests locked for regular players and open to staff", () => {
     const view = renderEntry("anbu");
@@ -100,7 +121,9 @@ describe("logbook abandon control", () => {
     renderEntry("mission");
     fireEvent.click(abandonButton() as HTMLElement);
     expect(abandon).not.toHaveBeenCalled();
-    expect(screen.getByText("This attempt still counts toward your daily limit.")).toBeTruthy();
+    expect(
+      screen.getByText("This attempt still counts toward your daily limit."),
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Abandon quest" }));
     await waitFor(() => expect(abandon).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(abandonButton()).toBeNull());

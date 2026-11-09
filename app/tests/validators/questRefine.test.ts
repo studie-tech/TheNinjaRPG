@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { getObjectiveSchema, QuestValidator, RaidObjective } from "@/validators/objectives";
+import {
+  getObjectiveSchema,
+  QuestValidator,
+  RaidObjective,
+} from "@/validators/objectives";
 
 const objective = (id: string) =>
   getObjectiveSchema("pvp_kills").parse({ id, task: "pvp_kills" });
@@ -25,7 +29,9 @@ describe("daily quest objectives", () => {
     quest({
       questType,
       content: {
-        objectives: Array.from({ length: count }, (_, index) => objective(`objective-${index}`)),
+        objectives: Array.from({ length: count }, (_, index) =>
+          objective(`objective-${index}`),
+        ),
         reward: {},
       },
     });
@@ -67,16 +73,18 @@ describe("raid boss health", () => {
 
   it("accepts current health up to the maximum, including zero", () => {
     for (const current of [0, 100]) {
-      const found = messages(raid({ raidBossMaxHealth: 100, raidBossCurrentHealth: current }));
+      const found = messages(
+        raid({ raidBossMaxHealth: 100, raidBossCurrentHealth: current }),
+      );
       expect(found).not.toContain(CURRENT_TOO_HIGH);
       expect(found).not.toContain(CURRENT_MISSING);
     }
   });
 
   it("rejects current health above the maximum", () => {
-    expect(messages(raid({ raidBossMaxHealth: 100, raidBossCurrentHealth: 101 }))).toContain(
-      CURRENT_TOO_HIGH,
-    );
+    expect(
+      messages(raid({ raidBossMaxHealth: 100, raidBossCurrentHealth: 101 })),
+    ).toContain(CURRENT_TOO_HIGH);
   });
 
   it("does not compare health while either side is missing", () => {

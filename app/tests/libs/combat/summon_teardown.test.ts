@@ -1,15 +1,19 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
 import { spliceOrphanedSummons } from "@/libs/combat/summon";
 import { clone, summon } from "@/libs/combat/tags";
-import type { CompleteBattle } from "@/libs/combat/types";
-import type { BattleUserState, GroundEffect, UserEffect } from "@/libs/combat/types";
-import { makeCompleteBattle } from "./helpers/battleScenario";
+import type {
+  BattleUserState,
+  CompleteBattle,
+  GroundEffect,
+  UserEffect,
+} from "@/libs/combat/types";
+import { makeCompleteBattle } from "../../setup/combat";
 
-// Drives the REAL applyEffects pipeline to settle whether a *blocked* summon
-// re-cast (player already has a live summon) can tear down the existing summon
-// on a later pass. The teardown path keys on controllerId, so the concern is a
-// genuine regression risk — this pins the actual behavior.
+// Drives the REAL applyEffects pipeline: a *blocked* summon re-cast (player
+// already has a live summon) must never tear down the existing summon on a later
+// pass. Teardown removes only the creature recorded in effect.summonedUserId,
+// which a blocked re-cast never sets.
 
 const AI_DB_ID = "ai-demon-db-id";
 const PLAYER_ID = "player1";
@@ -214,7 +218,7 @@ describe("summon expiry teardown targets the summon, not a clone", () => {
 describe("orphan cleanup vs clone lifecycle", () => {
   // clone() rebinds effect.creatorId to the spawned clone, so if orphan cleanup
   // removes the clone the effect can never be expired by its own tag function.
-  // clone() used to throw in that state, which failed every subsequent action in
+  // clone() must not throw in that state: a throw fails every subsequent action in
   // the battle for every participant.
   const mkCloner = (): BattleUserState =>
     ({

@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { COMMENT_MAX_LENGTH, COMMENT_MIN_LENGTH } from "@/drizzle/constants";
 import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import { subscribeConversation } from "@/libs/conversationEvents";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
+import { getMessagingRestriction } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /** Shared raid/quest chat using conversation permissions and live message invalidation. */
@@ -96,16 +98,17 @@ export const TeamChatPanel: React.FC<TeamChatPanelProps> = ({
   }, [commentsData?.pages]);
   const restrictionMessage =
     commentsData?.pages[0]?.restrictionMessage ??
-    commentsData?.pages[0]?.convo?.sendRestriction;
+    commentsData?.pages[0]?.convo?.sendRestriction ??
+    (userData ? getMessagingRestriction(userData) : null);
 
   /** Validate the draft while retaining it on failure; the conversation router enforces access. */
   const handleSendMessage = () => {
     if (!conversationId || restrictionMessage) return;
     const trimmedMessage = message.trim();
-    if (trimmedMessage.length < 4) {
+    if (trimmedMessage.length < COMMENT_MIN_LENGTH) {
       showMutationToast({
         success: false,
-        message: "Chat messages must be at least 4 characters long.",
+        message: `Chat messages must be at least ${COMMENT_MIN_LENGTH} characters long.`,
       });
       return;
     }
@@ -177,35 +180,27 @@ export const TeamChatPanel: React.FC<TeamChatPanelProps> = ({
           value={message}
           onChange={(event) => setMessage(event.target.value)}
           placeholder={
-            (restrictionMessage ? "Chat unavailable" : undefined) ??
-            (userData?.isBanned || userData?.isSilenced
-              ? "You cannot send messages while banned or silenced."
-              : "Write a message to your team...")
+            restrictionMessage ? "Chat unavailable" : "Write a message to your team..."
           }
-          disabled={
-            !!restrictionMessage ||
-            isSending ||
-            userData?.isBanned ||
-            userData?.isSilenced
-          }
+          disabled={!!restrictionMessage || isSending}
           className="max-h-40 min-h-16 resize-y"
-          maxLength={5000}
+          maxLength={COMMENT_MAX_LENGTH}
         />
         <Button
           onClick={handleSendMessage}
           disabled={
             !!restrictionMessage ||
             isSending ||
-            userData?.isBanned ||
-            userData?.isSilenced ||
-            message.trim().length < 4
+            message.trim().length < COMMENT_MIN_LENGTH
           }
         >
           {isSending ? "Sending..." : "Send"}
         </Button>
       </div>
-      {message.length > 0 && message.trim().length < 4 && (
-        <p className="text-muted-foreground text-xs">Minimum 4 characters.</p>
+      {message.length > 0 && message.trim().length < COMMENT_MIN_LENGTH && (
+        <p className="text-muted-foreground text-xs">
+          Minimum {COMMENT_MIN_LENGTH} characters.
+        </p>
       )}
     </div>
   );

@@ -1,6 +1,5 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { getMutationKey } from "@trpc/react-query";
 import type { Grid } from "honeycomb-grid";
 import { useAtomValue, useSetAtom } from "jotai";
@@ -9,24 +8,14 @@ import { useRouter } from "next/navigation";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useForm, useWatch } from "react-hook-form";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { getInventoryQuantities } from "@/deltas/item";
 import type { UserUpdateOptions } from "@/deltas/profile";
 import {
   IMG_AVATAR_DEFAULT,
-  IMG_ICON_MOVE,
   IMG_SCENE_BACKGROUND,
-  IMG_SECTOR_ATTACK,
-  IMG_SECTOR_INFO,
-  IMG_SECTOR_ROB,
-  MAX_PVP_BRACKET,
-  MEDNIN_MIN_RANK,
-  RANKS_RESTRICTED_FROM_PVP,
   SECTOR_WALK_STEP_MS,
   STRUCTURE_ADJACENTS,
   WAR_SHRINE_IMAGE_BY_BIOME,
@@ -52,7 +41,7 @@ import { MapLocationActions } from "@/layout/MapLocationActions";
 import Modal from "@/layout/Modal";
 import RaidBrowser from "@/layout/RaidBrowser";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
-import SliderField from "@/layout/SliderField";
+import { SorroundingUsers } from "@/layout/SorroundingUsers";
 import { TravelUserCard } from "@/layout/TravelUserCard";
 import WebGlError from "@/layout/WebGLError";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
@@ -65,7 +54,7 @@ import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { getQuestMapLocations, groupMapLocations } from "@/libs/mapLocations";
-import { dialogChoiceContentId, isQuestObjectiveAvailable } from "@/libs/objectives";
+import { dialogChoiceContentId } from "@/libs/objectives";
 import {
   arrivalPromptDecision,
   findActionableBoundObjective,
@@ -77,17 +66,11 @@ import {
 } from "@/libs/overworldAi";
 import type { WanderTile } from "@/libs/overworldWander";
 import {
-  getKnownEffectiveLevel,
-  getKnownExpBracket,
-  getScoutingUsers,
-} from "@/libs/profile";
-import {
   GATHERING_CANCEL_PREFIX,
+  getArrivalQuestTriggers,
   getBoundObjectiveCandidates,
-  isLocationObjective,
 } from "@/libs/quest";
 import { findConsecutiveQuestId } from "@/libs/questRun";
-import { hasRequiredRank } from "@/libs/rank";
 import {
   createTravelScene,
   type TravelPick,
@@ -123,14 +106,7 @@ import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
 import { isTravelKeyBlocked } from "@/libs/travel";
 import { isTutorialActive, isTutorialCaptureStep } from "@/libs/tutorial";
-import type { UserWithRelations } from "@/routers/profile";
-import {
-  canShowMapAttack,
-  getAllyStatus,
-  isAutoAttackTarget,
-  mapAttackRelation,
-} from "@/utils/alliance";
-import { round } from "@/utils/math";
+import { getAllyStatus, isAutoAttackTarget, mapAttackRelation } from "@/utils/alliance";
 import { isStaffRole } from "@/utils/permissions";
 import { sleep } from "@/utils/time";
 import {
@@ -141,42 +117,6 @@ import {
 } from "@/utils/UserContext";
 import { shareUserCache } from "@/utils/userCacheSharing";
 import type { MapLocation } from "@/validators/mapLocation";
-import { type BracketSliderSchema, bracketSliderSchema } from "@/validators/travel";
-
-type SectorWindowEntry =
-  RouterOutputs["worldMap"]["getSectorWindow"]["sectors"][number];
-
-/**
- * The assembled window the travel page passes in: the 3x3 sector entries
- * (assembled client-side from per-sector data so crossings need no refetch)
- * plus the session-cached asset/terrain libraries from mapAsset.getAll and
- * mapTerrain.getAll.
- */
-export interface SectorWindowData {
-  mapAssets: Omit<
-    RouterOutputs["mapAsset"]["getAll"][number],
-    "createdAt" | "updatedAt"
-  >[];
-  mapTerrains: RouterOutputs["mapTerrain"]["getAll"];
-  sectors: SectorWindowEntry[];
-}
-
-interface SectorProps {
-  loadLpcCatalog: () => Promise<LpcCatalog>;
-  sector: number;
-  tile: GlobalTile;
-  sectorWindow: SectorWindowData;
-  target: SectorPoint | null;
-  showSorrounding: boolean;
-  showActive: boolean;
-  autoAttackMode: boolean;
-  isWorldExpanded: boolean;
-  /** Re-selecting the player tab resumes camera follow without remounting the scene. */
-  cameraFocusRevision: number;
-  setWorldExpanded: React.Dispatch<React.SetStateAction<boolean>>;
-  setShowSorrounding: React.Dispatch<React.SetStateAction<boolean>>;
-  setPosition: (position: SectorPoint | null) => void;
-}
 
 /**
  * Renders the player's current sector plus its 8 neighbors (the sectorWindow
@@ -184,9 +124,6 @@ interface SectorProps {
  * crossings animate client-side and reconcile with the server afterwards;
  * window changes patch the live scene in place instead of rebuilding it.
  */
-/** Most zoomed-in the sector camera may go. */
-const SECTOR_MAX_ZOOM = 3;
-
 const Sector = (props: SectorProps) => {
   const centerEntry = props.sectorWindow.sectors.find(
     (entry) => entry.sector === props.sector,
@@ -289,13 +226,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   const [logbookModalQuestId, setLogbookModalQuestId] = useState<string | null>(null);
   const [showRaidModal, setShowRaidModal] = useState<boolean>(false);
-  const [npcDialog, setNpcDialog] = useState<{
-    objectiveId: string;
-    description: string;
-    sceneBackground: string;
-    sceneCharacters: string[];
-    branches: { text: string; nextObjectiveId?: string }[];
-  } | null>(null);
+  const [npcDialog, setNpcDialog] = useState<NpcDialog | null>(null);
   const [arrivalNpc, setArrivalNpc] = useState<SectorUser | null>(null);
   // A blocking global popup (e.g. daily rewards) is up or still loading — hold the arrival prompt.
   const isBlockingPopupOpen = useAtomValue(blockingPopupOpenAtom);
@@ -342,12 +273,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const pendingWorldTargetRef = useRef<{ sector: number; x: number; y: number } | null>(
     null,
   );
-  // Client-authoritative sector id: updated imperatively the moment a
-  // crossing commits (the prop lags a render behind), synced on prop change
   const walkAnimatingRef = useRef(false);
   const motionStepsRef = useRef(new Map<string, TravelMotionStep>());
   const movePendingRef = useRef(false);
   const mountedRef = useRef(true);
+  // Client-authoritative sector id: updated imperatively the moment a
+  // crossing commits (the prop lags a render behind), synced on prop change
   const sectorRef = useRef(sector);
   useEffect(() => {
     sectorRef.current = sector;
@@ -848,7 +779,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           }
         }
       } else if (data.userId !== userRef.current?.userId) {
-        // New user enters — do not invent experience; unknown XP fails closed in bracket filters
         // New identities come from the authenticated, masked sector snapshot. The viewer's
         // own marker comes from that snapshot's merge, which a refetch cannot change.
         void utils.travel.getSectorData.invalidate();
@@ -894,51 +824,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   ) => {
     const userData = userRef.current;
     if (!userData) return;
-    let shouldCheckQuest = false;
-    userData?.userQuests?.forEach((userquest) => {
-      const tracker = userData.questData?.find((q) => q.id === userquest.questId);
-      userquest.quest.content.objectives.forEach((objective, i) => {
-        const isOnLocation = isLocationObjective(
-          {
-            sector: data.sector,
-            longitude: data.longitude,
-            latitude: data.latitude,
-          },
-          objective,
-        );
-        if (
-          (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
-          (isOnLocation ||
-            // A masked target cannot be matched locally; the server owns its coordinates.
-            ("hideLocation" in objective && objective.hideLocation) ||
-            ("attackers" in objective &&
-              objective.attackers &&
-              objective.attackers.length > 0))
-        ) {
-          shouldCheckQuest = true;
-        }
-        const goal = tracker?.goals.find((g) => g.id === objective.id);
-        if (
-          (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
-          objective.task === "collect_item" &&
-          "collect_time_minutes" in objective &&
-          objective.collect_time_minutes &&
-          goal?.timestamp &&
-          !goal.done &&
-          !isOnLocation
-        ) {
-          shouldCheckQuest = true;
-        }
-        if (
-          objective.task === "dialog" &&
-          !objective.overworldPlacementId &&
-          isOnLocation &&
-          !isTutorialActive(userData)
-        ) {
-          setLogbookModalQuestId(userquest.questId);
-        }
-      });
-    });
+    const { shouldCheckQuest, dialogQuestIds } = getArrivalQuestTriggers(
+      userData,
+      data,
+    );
+    for (const questId of dialogQuestIds) setLogbookModalQuestId(questId);
     if (shouldCheckQuest || forceCheck) checkQuest();
   };
 
@@ -1445,9 +1335,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         { ...mutation, userRecovery: res.userRecovery ?? mutation.userRecovery },
       );
       publishSurroundings();
-      // runQuestTriggers with forceCheck already issues checkQuest(), so calling
-      // it here too fired the location-quest mutation twice per crossing (and,
-      // through its invalidation, refetched the user's items twice)
+      // runQuestTriggers(…, true) issues checkQuest itself
       runQuestTriggers(d, true);
     } else {
       // Attacked (success without data) or rejected: re-sync from the server
@@ -1632,6 +1520,17 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     },
   });
 
+  /** Start a battle with a user standing on the player's tile, in this tile's biome. */
+  const attackSectorUser = (target: SectorUser) =>
+    attack({
+      originSocketId: pusher?.connection.socket_id,
+      userId: target.userId,
+      longitude: target.longitude,
+      latitude: target.latitude,
+      sector: sectorRef.current,
+      asset: originRef.current?.battleBiome,
+    });
+
   const { mutate: interactNpc, isPending: isInteracting } =
     api.overworldAi.interactWithOverworldAi.useMutation({
       /** Applies battle/dialog results and refreshes state after an overworld NPC interaction. */
@@ -1714,8 +1613,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     return true;
   };
 
-  // Listening to webcket events
-  // Dispose the live scene when the component unmounts
+  // Track mount state and reset the cursor on unmount
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -1724,6 +1622,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     };
   }, []);
 
+  // Listen to websocket events for this sector
   useEffect(() => {
     if (pusher) {
       const channel = pusher.subscribe(props.sector.toString());
@@ -1933,14 +1832,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         ) {
           // Update last attack time and attack
           lastAutoAttackTimeRef.current = now;
-          attack({
-            originSocketId: pusher?.connection.socket_id,
-            userId: closestEnemy.userId,
-            longitude: closestEnemy.longitude,
-            latitude: closestEnemy.latitude,
-            sector: sectorRef.current,
-            asset: originRef.current?.battleBiome,
-          });
+          attackSectorUser(closestEnemy);
         } else {
           setTarget({ x: closestEnemy.longitude, y: closestEnemy.latitude });
         }
@@ -2209,14 +2101,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           ) {
             document.body.style.cursor = "wait";
             setTargetUser(target);
-            attack({
-              originSocketId: pusher?.connection.socket_id,
-              userId: target.userId,
-              longitude: target.longitude,
-              latitude: target.latitude,
-              sector: sectorRef.current,
-              asset: originRef.current?.battleBiome,
-            });
+            attackSectorUser(target);
           } else {
             setTarget({ x: target.longitude, y: target.latitude });
           }
@@ -2651,14 +2536,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           attackUser={(userId) => {
             const target = sorrounding.find((u) => u.userId === userId);
             if (target && !isAttacking && !movePendingRef.current) {
-              attack({
-                originSocketId: pusher?.connection.socket_id,
-                userId: target.userId,
-                longitude: target.longitude,
-                latitude: target.latitude,
-                sector: sectorRef.current,
-                asset: originRef.current?.battleBiome,
-              });
+              attackSectorUser(target);
             }
           }}
           robUser={(userId) => {
@@ -2820,6 +2698,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
 
 export default Sector;
 
+/** Most zoomed-in the sector camera may go. */
+const SECTOR_MAX_ZOOM = 3;
+
 /**
  * Mobile browsers synthesize a click on whatever sits under a dialog after the
  * overlay unmounts from the same tap. Keep the sector canvas deaf for that
@@ -2827,194 +2708,41 @@ export default Sector;
  */
 const MAP_CLICK_BLOCK_AFTER_MODAL_MS = 400;
 
-interface SorroundingUsersProps {
-  setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  userData: NonNullable<UserWithRelations>;
-  hex: TerrainHex;
-  users: SectorUser[];
-  allyAttack: boolean;
-  wars: Parameters<typeof canShowMapAttack>[3];
-  setAllyAttack: (newValue: boolean) => void;
-  storedBracket: number;
-  setStoredBracket: (newValue: number) => void;
-  attackUser: (userId: string) => void;
-  robUser: (userId: string) => void;
-  move: (longitude: number, latitude: number) => void;
+type SectorWindowEntry =
+  RouterOutputs["worldMap"]["getSectorWindow"]["sectors"][number];
+
+type NpcDialog = NonNullable<
+  RouterOutputs["overworldAi"]["interactWithOverworldAi"]["dialog"]
+>;
+
+/**
+ * The assembled window the travel page passes in: the 3x3 sector entries
+ * (assembled client-side from per-sector data so crossings need no refetch)
+ * plus the session-cached asset/terrain libraries from mapAsset.getAll and
+ * mapTerrain.getAll.
+ */
+export interface SectorWindowData {
+  mapAssets: Omit<
+    RouterOutputs["mapAsset"]["getAll"][number],
+    "createdAt" | "updatedAt"
+  >[];
+  mapTerrains: RouterOutputs["mapTerrain"]["getAll"];
+  sectors: SectorWindowEntry[];
 }
 
-export const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
-  // Destructure props
-  const { userData, storedBracket, setStoredBracket } = props;
-
-  // Query
-  const { data } = api.village.getAll.useQuery(undefined);
-
-  // Form control
-  const {
-    register,
-    setValue,
-    control,
-    formState: { errors },
-  } = useForm<BracketSliderSchema>({
-    resolver: zodResolver(bracketSliderSchema),
-    defaultValues: { value: storedBracket ?? -1 },
-  });
-  const watchedBracket = round(useWatch({ control, name: "value" }));
-  const isBracketFilterActive = watchedBracket >= 0;
-
-  const users = getScoutingUsers(props.users, userData.userId, watchedBracket);
-
-  // Update the localStorage whenever we change
-  useEffect(() => {
-    setStoredBracket(watchedBracket);
-  }, [watchedBracket]);
-
-  return (
-    <Modal
-      isOpen={userData.status === "AWAKE"}
-      title={`Scouting. Your position: [${props.hex.col}, ${props.hex.row}]`}
-      setIsOpen={props.setIsOpen}
-      isValid={false}
-      className="md:max-w-[calc(100%-2rem)]"
-    >
-      {users.length === 0 && (
-        <p className="text-red-500">
-          {isBracketFilterActive
-            ? `No awake users match your scouting filters (bracket ${watchedBracket})`
-            : "No awake users in this sector"}
-        </p>
-      )}
-      <div className="grid grid-cols-3 gap-4 pb-3 text-center sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 xl:grid-cols-14">
-        {users.map((user) => {
-          // Derived
-          const sameHex =
-            user.latitude === props.hex.row && user.longitude === props.hex.col;
-          const village = data?.find((v) => v.id === user.villageId);
-          const villageName = village ? village.name : "Unknown";
-          const villageColor = village ? village.hexColor : "gray";
-          const showAttack = canShowMapAttack(
-            userData,
-            user,
-            props.allyAttack,
-            props.wars,
-          );
-          const showRob =
-            !RANKS_RESTRICTED_FROM_PVP.includes(user.rank) &&
-            sameHex &&
-            userData.isOutlaw;
-          const userBracket = getKnownExpBracket(user);
-          const userLevel = getKnownEffectiveLevel(user);
-
-          // Show user
-          return (
-            <div key={`${user.userId}-sorrounding-${user.longitude}-${user.latitude}`}>
-              <div className="relative">
-                <div className="absolute top-0 right-0 z-50 max-w-1/3 hover:cursor-pointer hover:opacity-80">
-                  {showAttack && sameHex && (
-                    <Image
-                      src={IMG_SECTOR_ATTACK}
-                      onClick={() => props.attackUser(user.userId)}
-                      width={40}
-                      height={40}
-                      alt={`Attack-${user.userId}`}
-                    />
-                  )}
-
-                  {!sameHex && (
-                    <Image
-                      src={IMG_ICON_MOVE}
-                      onClick={() => props.move(user.longitude, user.latitude)}
-                      width={40}
-                      height={40}
-                      alt={`Move-${user.userId}`}
-                    />
-                  )}
-                </div>
-                {!user.isMasked && (
-                  <div className="absolute top-0 left-0 z-50 max-w-1/3 hover:cursor-pointer hover:opacity-80">
-                    <Link href={`/userid/${user.userId}`}>
-                      <Image
-                        src={IMG_SECTOR_INFO}
-                        width={40}
-                        height={40}
-                        alt={`Info-${user.userId}`}
-                      />
-                    </Link>
-                  </div>
-                )}
-                <div className="absolute bottom-0 left-0 z-50 max-w-1/3 hover:cursor-pointer hover:opacity-80">
-                  {user.curHealth < user.maxHealth &&
-                    hasRequiredRank(userData.rank, MEDNIN_MIN_RANK) && (
-                      <HealingPopover targetUser={user} side="top" />
-                    )}
-                </div>
-                <AvatarImage href={user.avatar} alt={user.username} size={512} />
-              </div>
-              <div className="relative">
-                {showRob && (
-                  <div className="absolute right-0 bottom-0 z-50 w-1/3 hover:cursor-pointer hover:opacity-80">
-                    <Image
-                      src={IMG_SECTOR_ROB}
-                      onClick={() => {
-                        if (
-                          user.robImmunityUntil &&
-                          user.robImmunityUntil > new Date()
-                        ) {
-                          showMutationToast({
-                            success: false,
-                            message: "Target is immune from being robbed",
-                          });
-                        } else {
-                          props.robUser(user.userId);
-                        }
-                      }}
-                      width={40}
-                      height={40}
-                      alt={`Rob-${user.userId}`}
-                      className={`ml-1 ${user.robImmunityUntil && user.robImmunityUntil > new Date() ? "opacity-50" : ""}`}
-                    />
-                  </div>
-                )}
-              </div>
-              <p>{user.username}</p>
-              <p className="text-xs">
-                Lvl. {userLevel ?? "?"} · Bracket{" "}
-                {userBracket == null ? "?" : `${userBracket}/${MAX_PVP_BRACKET}`} [
-                {user.longitude}, {user.latitude}]
-              </p>
-              <p style={{ color: villageColor }} className="font-bold">
-                {villageName}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-      <hr />
-      <div className="pt-3">
-        <SliderField
-          id="value"
-          default={-1}
-          min={-1}
-          max={MAX_PVP_BRACKET}
-          unit="bracket"
-          label="Select bracket to show"
-          register={register}
-          setValue={setValue}
-          watchedValue={watchedBracket}
-          formatWatchedValue={(value) =>
-            value < 0 ? "Selected: Off (no filter)" : `Selected: bracket ${value}`
-          }
-          error={errors.value?.message}
-        />
-        <div className="flex flex-row items-center">
-          <Checkbox
-            className="m-1 mr-3"
-            checked={props.allyAttack}
-            onCheckedChange={() => props.setAllyAttack(!props.allyAttack)}
-          />
-          <Label>Attack button on allies</Label>
-        </div>
-      </div>
-    </Modal>
-  );
-};
+interface SectorProps {
+  loadLpcCatalog: () => Promise<LpcCatalog>;
+  sector: number;
+  tile: GlobalTile;
+  sectorWindow: SectorWindowData;
+  target: SectorPoint | null;
+  showSorrounding: boolean;
+  showActive: boolean;
+  autoAttackMode: boolean;
+  isWorldExpanded: boolean;
+  /** Re-selecting the player tab resumes camera follow without remounting the scene. */
+  cameraFocusRevision: number;
+  setWorldExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+  setShowSorrounding: React.Dispatch<React.SetStateAction<boolean>>;
+  setPosition: (position: SectorPoint | null) => void;
+}

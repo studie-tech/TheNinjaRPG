@@ -161,7 +161,10 @@ describe("getUserFactionNotifications", () => {
           { raidType: "exclusive", sector: 7 },
         ],
       }),
-    ).toEqual(["Open Raid available (Sector 0)", "Village Raids active (Sectors 6, 7)"]);
+    ).toEqual([
+      "Open Raid available (Sector 0)",
+      "Village Raids active (Sectors 6, 7)",
+    ]);
     expect(
       names({
         activeRaids: [
@@ -170,17 +173,19 @@ describe("getUserFactionNotifications", () => {
           { raidType: "exclusive", sector: 6 },
         ],
       }),
-    ).toEqual(["Open Raids available (Sectors 1, 2)", "Village Raid active (Sector 6)"]);
+    ).toEqual([
+      "Open Raids available (Sectors 1, 2)",
+      "Village Raid active (Sector 6)",
+    ]);
   });
 
   it("orders shrine, war, village war and raid notices", () => {
     expect(
       names({
-        shrineBattles: [{ sector: 4, defenderEntityId: "home", attackerEntityId: "foe" }],
-        activeWars: [
-          war({ sector: 7 }),
-          war({ type: "VILLAGE_WAR", sector: 0 }),
+        shrineBattles: [
+          { sector: 4, defenderEntityId: "home", attackerEntityId: "foe" },
         ],
+        activeWars: [war({ sector: 7 }), war({ type: "VILLAGE_WAR", sector: 0 })],
         activeRaids: [{ raidType: "open", sector: 1 }],
       }),
     ).toEqual([

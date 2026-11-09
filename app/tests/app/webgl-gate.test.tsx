@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import LoginUser from "@/app/[shell]/login/[[...rest]]/page";
 import SignupUser from "@/app/[shell]/signup/[[...rest]]/page";
 import * as NativeSignIn from "@/components/native/NativeSignIn";

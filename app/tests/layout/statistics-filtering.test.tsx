@@ -1,5 +1,5 @@
-import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "bun:test";
+import { cleanup, renderHook } from "@testing-library/react";
 import { getFilter, useFiltering } from "@/layout/StatisticsFiltering";
 import { getLocalDateStringMonthsAgo } from "@/utils/time";
 
@@ -14,6 +14,8 @@ describe("statistics date filters", () => {
 
   it("leaves the empty end date out of the request", () => {
     const { result } = renderHook(() => useFiltering());
-    expect(getFilter(result.current)).toEqual({ startDate: getLocalDateStringMonthsAgo(1) });
+    expect(getFilter(result.current)).toEqual({
+      startDate: getLocalDateStringMonthsAgo(1),
+    });
   });
 });

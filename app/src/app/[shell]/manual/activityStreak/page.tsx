@@ -4,17 +4,6 @@ import { FilePlus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ActivityStreakType } from "@/drizzle/constants";
 import type { ActivityStreakConfig, ActivityStreakReward } from "@/drizzle/schema";
 import { useContentListActions } from "@/hooks/useContentListActions";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
@@ -287,34 +277,25 @@ export default function ActivityStreakListPage() {
                   >
                     Edit Configuration
                   </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
+                  <Confirm
+                    title="Delete Configuration"
+                    proceed_label="Delete"
+                    confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    button={
                       <Button variant="destructive">
                         <Trash2 className="mr-2 h-4 w-4" />
                         Delete
                       </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Configuration</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure you want to delete &quot;
-                          {selectedConfig.name}
-                          &quot;? This will also delete all user progress for this
-                          configuration. This action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => remove({ id: selectedConfig.id })}
-                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                    }
+                    onAccept={() => remove({ id: selectedConfig.id })}
+                  >
+                    <p className="text-muted-foreground text-sm">
+                      Are you sure you want to delete &quot;
+                      {selectedConfig.name}
+                      &quot;? This will also delete all user progress for this
+                      configuration. This action cannot be undone.
+                    </p>
+                  </Confirm>
                 </div>
               )}
             </div>

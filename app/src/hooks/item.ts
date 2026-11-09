@@ -23,7 +23,10 @@ import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import type { ZodAllTags, ZodItemInput, ZodItemType } from "@/validators/combat";
 import { IncreaseStatTag, ItemValidator } from "@/validators/combat";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
-import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS } from "@/validators/item";
+import {
+  DEFAULT_FURNITURE_DATA,
+  FURNITURE_ITEM_DEFAULTS,
+} from "@/validators/itemFurniture";
 
 /**
  * Hook used when creating frontend forms for editing items
@@ -46,7 +49,6 @@ export const useItemEditForm = (
     lpcColor: data.lpcColor || null,
     coordinateTargeting: data.coordinateTargeting || null,
     methodSize: data.methodSize || null,
-    effects: data.effects,
     expireFromStoreAt: expireFromStoreAt,
     crystalTargetTypes: data.crystalTargetTypes || null,
     furnitureData: data.furnitureData || null,
@@ -385,33 +387,8 @@ export const useItemEditForm = (
     });
   }
 
-  const mealFields = new Set([
-    "name",
-    "image",
-    "itemType",
-    "rarity",
-    "description",
-    "cost",
-    "repsCost",
-    "seichiSilverCost",
-    "stackSize",
-    "canStack",
-    "hidden",
-    "isEventItem",
-    "inShop",
-    "canBeCrafted",
-    "canBeTraded",
-    "auctionMinPrice",
-    "auctionMaxPrice",
-    "craftingRequirements",
-    "cookingMinLevel",
-    "cookingTimeSeconds",
-    "cookingOutputQuantity",
-    "cookingExperience",
-    "mealDurationSeconds",
-  ]);
   const visibleFormData = isMeal
-    ? formData.filter((field) => mealFields.has(field.id))
+    ? formData.filter((field) => MEAL_FORM_FIELDS.has(field.id))
     : isFurniture
       ? formData.filter((field) => FURNITURE_FORM_FIELDS.has(field.id))
       : formData;
@@ -444,6 +421,32 @@ export const useItemEditForm = (
     isUpdating,
   };
 };
+
+const MEAL_FORM_FIELDS = new Set<Path<ZodItemType>>([
+  "name",
+  "image",
+  "itemType",
+  "rarity",
+  "description",
+  "cost",
+  "repsCost",
+  "seichiSilverCost",
+  "stackSize",
+  "canStack",
+  "hidden",
+  "isEventItem",
+  "inShop",
+  "canBeCrafted",
+  "canBeTraded",
+  "auctionMinPrice",
+  "auctionMaxPrice",
+  "craftingRequirements",
+  "cookingMinLevel",
+  "cookingTimeSeconds",
+  "cookingOutputQuantity",
+  "cookingExperience",
+  "mealDurationSeconds",
+]);
 
 const FURNITURE_FORM_FIELDS = new Set<Path<ZodItemType>>([
   "name",

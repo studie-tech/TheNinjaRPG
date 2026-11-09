@@ -73,9 +73,6 @@ export default function Reports() {
 
       await utils.reports.getAll.invalidate();
     },
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
-    },
     onSettled: (_data, _error, variables) => clearing.end(variables.object_id),
   });
 

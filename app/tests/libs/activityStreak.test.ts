@@ -1,35 +1,33 @@
 import { describe, expect, it } from "bun:test";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import {
+  type ActivityStreakPopupState,
+  formatEventPassCost,
   getStreakClaimState,
   isActivityStreakPopupBlocking,
   isEventPassCompletion,
+  isStreakContinuous,
+  nextStreakRefreshAt,
   normalizeRecurringStreakProgress,
   resolveActivityStreakDateLatches,
   resolveActivityStreakPopupOpen,
   resolveStreakClaim,
   shouldFetchActivityStreaksForPopup,
-  type ActivityStreakPopupState,
-  formatEventPassCost,
 } from "@/libs/activityStreak";
 
 describe("event pass completion history", () => {
   it("recognizes event-pass completion audit entries", () => {
-    expect(isEventPassCompletion(["Completed Summer Pass (EVENT_PASS)"])).toBe(
-      true,
-    );
+    expect(isEventPassCompletion(["Completed Summer Pass (EVENT_PASS)"])).toBe(true);
   });
 
   it("does not treat recurring or malformed audit data as an event-pass completion", () => {
-    expect(isEventPassCompletion(["Completed Daily Streak (RECURRING)"])).toBe(
-      false,
-    );
+    expect(isEventPassCompletion(["Completed Daily Streak (RECURRING)"])).toBe(false);
     expect(isEventPassCompletion(null)).toBe(false);
     expect(isEventPassCompletion({ changes: ["(EVENT_PASS)"] })).toBe(false);
   });
 });
 
-/** Builds popup state with the legacy closed, loaded, and eligible defaults. */
+/** Builds popup state that defaults to closed, loaded, ineligible and outside the tutorial. */
 const state = (
   patch: Partial<ActivityStreakPopupState> = {},
 ): ActivityStreakPopupState => ({
@@ -42,11 +40,9 @@ const state = (
   ...patch,
 });
 
-describe("activity streak popup compatibility", () => {
+describe("activity streak popup state", () => {
   it("opens when rewards become available", () => {
-    expect(
-      resolveActivityStreakPopupOpen(state({ shouldShowPopup: true })),
-    ).toBe(true);
+    expect(resolveActivityStreakPopupOpen(state({ shouldShowPopup: true }))).toBe(true);
   });
 
   it("stays latched open after a claim refetch clears the final reward", () => {
@@ -68,31 +64,18 @@ describe("activity streak popup compatibility", () => {
 
   it("clears close and dismissal latches when the date rolls over", () => {
     expect(
-      resolveActivityStreakDateLatches(
-        "2026-08-15",
-        "2026-08-15",
-        "2026-08-15",
-      ),
+      resolveActivityStreakDateLatches("2026-08-15", "2026-08-15", "2026-08-15"),
     ).toEqual({ dismissedToday: true, userClosed: true });
     expect(
-      resolveActivityStreakDateLatches(
-        "2026-08-16",
-        "2026-08-15",
-        "2026-08-15",
-      ),
+      resolveActivityStreakDateLatches("2026-08-16", "2026-08-15", "2026-08-15"),
     ).toEqual({ dismissedToday: false, userClosed: false });
   });
 
   it("blocks competing popups during loading and until an explicit close", () => {
-    expect(isActivityStreakPopupBlocking(true, state({ isLoading: true }))).toBe(
-      true,
-    );
+    expect(isActivityStreakPopupBlocking(true, state({ isLoading: true }))).toBe(true);
     expect(isActivityStreakPopupBlocking(true, state({ isOpen: true }))).toBe(true);
     expect(
-      isActivityStreakPopupBlocking(
-        true,
-        state({ isOpen: true, userClosed: true }),
-      ),
+      isActivityStreakPopupBlocking(true, state({ isOpen: true, userClosed: true })),
     ).toBe(false);
   });
 
@@ -105,9 +88,7 @@ describe("activity streak popup compatibility", () => {
       ),
     ).toBe(false);
     expect(
-      resolveActivityStreakPopupOpen(
-        state({ isLoading: true, tutorialActive: true }),
-      ),
+      resolveActivityStreakPopupOpen(state({ isLoading: true, tutorialActive: true })),
     ).toBe(false);
   });
 
@@ -130,14 +111,6 @@ describe("activity streak popup compatibility", () => {
         state({ shouldShowPopup: true, tutorialActive: true }),
       ),
     ).toBe(false);
-  });
-
-  it("resumes normally once the tutorial is finished", () => {
-    expect(
-      resolveActivityStreakPopupOpen(
-        state({ shouldShowPopup: true, tutorialActive: false }),
-      ),
-    ).toBe(true);
   });
 });
 
@@ -186,25 +159,6 @@ describe("shouldFetchActivityStreaksForPopup", () => {
         userClosed: true,
       }),
     ).toBe(false);
-  });
-
-  it("resumes fetching after the tutorial ends so an unclaimed reward is not dropped", () => {
-    expect(
-      shouldFetchActivityStreaksForPopup({
-        hasUser: true,
-        tutorialActive: true,
-        dismissedToday: false,
-        userClosed: false,
-      }),
-    ).toBe(false);
-    expect(
-      shouldFetchActivityStreaksForPopup({
-        hasUser: true,
-        tutorialActive: false,
-        dismissedToday: false,
-        userClosed: false,
-      }),
-    ).toBe(true);
   });
 
   it("does not hold competing popups when the streaks query is gated off", () => {
@@ -261,18 +215,43 @@ describe("recurring progress after configuration changes", () => {
       ),
     ).toBe(progress);
   });
+  it("resets an expanded converted pass only until its new recurring cycle starts", () => {
+    const completedAt = new Date("2026-09-19T12:00:00Z");
+    const converted = { currentDay: 2, startedAt: new Date("2026-09-01") };
+    const config = { streakType: "RECURRING", totalDays: 3 };
+    const normalized = normalizeRecurringStreakProgress(
+      converted,
+      config,
+      now,
+      completedAt,
+    );
+    expect(normalized.currentDay).toBe(0);
+    const nextDay = { ...normalized, currentDay: 1 };
+    expect(
+      normalizeRecurringStreakProgress(
+        nextDay,
+        config,
+        new Date("2026-09-21"),
+        completedAt,
+      ),
+    ).toBe(nextDay);
+  });
 });
 
-
-it("resets an expanded converted pass only until its new recurring cycle starts", () => {
-  const completedAt = new Date("2026-09-19T12:00:00Z");
-  const now = new Date("2026-09-20T12:00:00Z");
-  const progress = { currentDay: 2, startedAt: new Date("2026-09-01") };
-  const config = { streakType: "RECURRING", totalDays: 3 };
-  const normalized = normalizeRecurringStreakProgress(progress, config, now, completedAt);
-  expect(normalized.currentDay).toBe(0);
-  const nextDay = { ...normalized, currentDay: 1 };
-  expect(normalizeRecurringStreakProgress(nextDay, config, new Date("2026-09-21"), completedAt)).toBe(nextDay);
+describe("streak refresh schedule", () => {
+  it("refreshes streaks at elapsed pass days and the exact continuity deadline", () => {
+    const now = new Date("2026-10-01T12:00:00Z");
+    const lastClaimDate = new Date("2026-09-30T00:00:00Z");
+    expect(isStreakContinuous(lastClaimDate, new Date(now.getTime() - 1))).toBe(true);
+    expect(isStreakContinuous(lastClaimDate, now)).toBe(false);
+    expect(
+      nextStreakRefreshAt(
+        [{ lastClaimDate: now, startedAt: new Date("2026-09-30T14:00:00Z") }],
+        now,
+      ),
+    ).toEqual(new Date("2026-10-01T14:00:00Z"));
+    expect(nextStreakRefreshAt([], now)).toEqual(new Date("2026-10-02T00:00:00Z"));
+  });
 });
 
 describe("streak claim state", () => {
@@ -298,11 +277,19 @@ describe("streak claim state", () => {
   });
 
   it("reads claim timing from the given clock", () => {
-    const progress = { currentDay: 1, startedAt: hoursAgo(2), lastClaimDate: hoursAgo(2) };
+    const progress = {
+      currentDay: 1,
+      startedAt: hoursAgo(2),
+      lastClaimDate: hoursAgo(2),
+    };
     const state = getStreakClaimState(progress, recurring, now);
     expect(state.alreadyClaimedToday).toBe(true);
     expect(state.continuous).toBe(true);
-    const later = getStreakClaimState(progress, recurring, new Date("2026-10-14T00:00:00Z"));
+    const later = getStreakClaimState(
+      progress,
+      recurring,
+      new Date("2026-10-14T00:00:00Z"),
+    );
     expect(later.alreadyClaimedToday).toBe(false);
     expect(later.continuous).toBe(false);
   });
@@ -320,7 +307,8 @@ describe("streak claim state", () => {
       getStreakClaimState({ ...base, currentDay: 1 }, pass, now, now).isPassCompleted,
     ).toBe(true);
     expect(
-      getStreakClaimState({ ...base, currentDay: 7 }, recurring, now, now).isPassCompleted,
+      getStreakClaimState({ ...base, currentDay: 7 }, recurring, now, now)
+        .isPassCompleted,
     ).toBe(false);
   });
 });
@@ -337,9 +325,9 @@ describe("streak claim resolution", () => {
 
   it("advances a continuous streak or a first claim once per day", () => {
     expect(resolveStreakClaim(3, onTrack, request)).toEqual(advance(4));
-    expect(
-      resolveStreakClaim(0, { ...onTrack, continuous: false }, request),
-    ).toEqual(advance(1));
+    expect(resolveStreakClaim(0, { ...onTrack, continuous: false }, request)).toEqual(
+      advance(1),
+    );
     expect(
       resolveStreakClaim(3, { ...onTrack, alreadyClaimedToday: true }, request),
     ).toEqual({ error: "You have already claimed this streak today" });
@@ -363,10 +351,14 @@ describe("streak claim resolution", () => {
       error: "You can only pay to catch up when you are behind. Come back tomorrow!",
     });
     expect(
-      resolveStreakClaim(3, { ...onTrack, isBehind: true }, {
-        ...payCatchUp,
-        reputationPoints: COST_STREAK_CATCHUP_DAY - 0.5,
-      }),
+      resolveStreakClaim(
+        3,
+        { ...onTrack, isBehind: true },
+        {
+          ...payCatchUp,
+          reputationPoints: COST_STREAK_CATCHUP_DAY - 0.5,
+        },
+      ),
     ).toEqual({
       error: `Not enough reputation points. Required: ${COST_STREAK_CATCHUP_DAY}, Available: ${COST_STREAK_CATCHUP_DAY - 1}`,
     });

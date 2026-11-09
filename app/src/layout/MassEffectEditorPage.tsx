@@ -2,8 +2,8 @@
 
 import { type ComponentProps, type ReactNode, type Ref, useState } from "react";
 import ContentBox from "@/layout/ContentBox";
-import { EffectFieldSelector, MassEffectEditor } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
+import { EffectFieldSelector, MassEffectEditor } from "@/layout/MassEffectEditor";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 

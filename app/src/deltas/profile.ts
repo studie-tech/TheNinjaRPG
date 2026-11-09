@@ -5,6 +5,7 @@ import {
   SAGE_MASTERY_EXP_CAP,
   SHRINE_BOOST_TYPES,
   UserRanks,
+  VOTE_REWARD_REPUTATION,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { activeDungeonNotification } from "@/libs/dungeon";
@@ -524,6 +525,19 @@ export const getUseUnusedExperiencePointsUserUpdate = ({
     },
   };
 };
+
+/** Credit the daily vote reward that `claimVotes` adds with its guarded increment. */
+export const getClaimVotesUserUpdate = () => ({
+  userDelta: {
+    reputationPoints: VOTE_REWARD_REPUTATION,
+    reputationPointsTotal: VOTE_REWARD_REPUTATION,
+  },
+});
+
+/** Mark the cached vote record claimed, keeping its other fields. */
+export const getClaimedVotesPatch = (user: Pick<User, "votes">) => ({
+  votes: user.votes && { ...user.votes, claimed: true },
+});
 
 /**
  * Project the deletion timer only when the caller is the target; this action has no balance

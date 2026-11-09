@@ -48,13 +48,13 @@ import { fetchQuest } from "@/queries/quests";
 import {
   claimBattleQueue,
   clearQueueBattleId,
+  deleteEmptyQueueById,
   deleteMpvpBattleQueueForCheckAndCleanupExpiredRaid,
   deleteMpvpBattleQueueForReadyToQueue,
   deleteMpvpBattleQueueForRollbackStartRaidBattle,
   deleteMpvpBattleUserForCheckAndCleanupExpiredRaid,
   deleteMpvpBattleUserForReadyToQueue,
   deleteMpvpBattleUserForRollbackJoinRaidQueue,
-  deleteQueueById,
   deleteRaidDamageThresholdForDeleteDamageThreshold,
   deleteUnclaimedBattleQueue,
   executeInsertResultForJoinRaidQueue,
@@ -66,7 +66,6 @@ import {
   findMpvpBattleUserForGetUserRaidQueue,
   findMpvpBattleUserForLeaveRaidQueue,
   findMpvpBattleUserForReadyToQueue,
-  findMpvpBattleUserForRollbackJoinRaidQueue,
   findQuestForCheckAndCleanupExpiredRaid,
   findQuestForGetRaidDetails,
   findQuestForGetUserRaidQueue,
@@ -126,7 +125,7 @@ import { notifyRankedQueueChanged } from "@/server/utils/rankedQueue";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { canChangeContent } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
-import { AllTags } from "@/validators/combat";
+import { AllTags, SuperRefinePassiveEffects } from "@/validators/combat";
 import type { RaidObjectiveType } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { userDeltaResponseSchema } from "@/validators/userCache";
@@ -134,7 +133,8 @@ import { userDeltaResponseSchema } from "@/validators/userCache";
 const damageThresholdFields = {
   damageRequired: z.number().min(1),
   rewards: ObjectiveReward,
-  effects: z.array(AllTags).prefault([]),
+  // Effects become passive user buffs at battle start, so they carry no tile.
+  effects: z.array(AllTags).superRefine(SuperRefinePassiveEffects).prefault([]),
   effectDurationMinutes: z.number().min(1).max(10080).prefault(60),
 };
 
@@ -740,7 +740,7 @@ export const raidsRouter = createTRPCRouter({
       const now = new Date();
       const raidValidation = validateRaidIsActive(raid, now);
       if (!raidValidation.isValid) {
-        if (raidValidation.error === "This raid has ended") {
+        if (raidValidation.reason === "ended") {
           await checkAndCleanupExpiredRaid(ctx.drizzle, raid.id);
           return errorResponse(raidValidation.error);
         }
@@ -980,16 +980,8 @@ export const raidsRouter = createTRPCRouter({
           : Promise.resolve(),
       ]);
 
-      // Query - check remaining members
-      const remainingMembers = await listQueueMembers(
-        ctx.drizzle,
-        queueEntry.clanBattleId,
-      );
-
-      // Mutation - clean up empty teams (removed battleId null check for robust cleanup)
-      if (remainingMembers.length === 0) {
-        await deleteQueueById(ctx.drizzle, queueEntry.clanBattleId);
-      }
+      // Mutation - clean up the team if it is now empty
+      await deleteEmptyQueueById(ctx.drizzle, queueEntry.clanBattleId);
 
       // Pusher - notify sector about team changes
       const pusher = getServerPusher();
@@ -1080,7 +1072,7 @@ export const raidsRouter = createTRPCRouter({
       const now = new Date();
       const raidValidation = validateRaidIsActive(raid, now);
       if (!raidValidation.isValid) {
-        if (raidValidation.error === "This raid has ended") {
+        if (raidValidation.reason === "ended") {
           await checkAndCleanupExpiredRaid(ctx.drizzle, raid.id);
           return errorResponse(raidValidation.error);
         }
@@ -1418,16 +1410,9 @@ const rollbackJoinRaidQueue = async ({
       : []),
     purgeRaidChatMembership(client, raidChatConversationId, userId),
   ]);
-  // Only delete the team if no other queue rows still reference it. A concurrent
-  // joiner could have inserted into mpvpBattleUser during the await window
-  // before this rollback fired; deleting the team unconditionally would orphan
-  // that joiner.
-  if (deleteTeam) {
-    const remaining = await findMpvpBattleUserForRollbackJoinRaidQueue(client, teamId);
-    if (!remaining) {
-      await deleteQueueById(client, teamId);
-    }
-  }
+  // A concurrent joiner may have inserted into mpvpBattleUser before this rollback
+  // fired; the team is deleted only if no member references it.
+  if (deleteTeam) await deleteEmptyQueueById(client, teamId);
   return wake;
 };
 

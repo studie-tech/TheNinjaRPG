@@ -8,21 +8,62 @@ afterEach(() => vi.restoreAllMocks());
 it("rolls once for the whole drop quantity and preserves package item chances", () => {
   const rewards = dungeonContent().rewards;
   rewards.drops = [
-    {type: "item", id: "hit", chance: 50, quantity: 4},
-    {type: "item", id: "miss", chance: 50, quantity: 4},
-    {type: "package", id: "pack", chance: 100, quantity: 2, package: {name: "Bundle", description: "", rewards: ObjectiveReward.parse({reward_money: 7, reward_items: [{ids: ["nested"], number: 50, quantity: 3}]})}},
+    { type: "item", id: "hit", chance: 50, quantity: 4 },
+    { type: "item", id: "miss", chance: 50, quantity: 4 },
+    {
+      type: "package",
+      id: "pack",
+      chance: 100,
+      quantity: 2,
+      package: {
+        name: "Bundle",
+        description: "",
+        rewards: ObjectiveReward.parse({
+          reward_money: 7,
+          reward_items: [{ ids: ["nested"], number: 50, quantity: 3 }],
+        }),
+      },
+    },
   ];
-  vi.spyOn(Math, "random").mockReturnValueOnce(0.49).mockReturnValueOnce(0.5).mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValueOnce(0.49).mockReturnValue(0.5);
+  vi.spyOn(Math, "random")
+    .mockReturnValueOnce(0.49)
+    .mockReturnValueOnce(0.5)
+    .mockReturnValueOnce(0)
+    .mockReturnValueOnce(0)
+    .mockReturnValueOnce(0.49)
+    .mockReturnValue(0.5);
   const rolled = rollDungeonRewards(rewards);
   expect(rolled.reward_money).toBe(114);
-  expect(rolled.reward_items).toEqual(["hit", "hit", "hit", "hit", "nested", "nested", "nested"]);
+  expect(rolled.reward_items).toEqual([
+    "hit",
+    "hit",
+    "hit",
+    "hit",
+    "nested",
+    "nested",
+    "nested",
+  ]);
 });
 
 it("bounds worst-case package quantities before expanding nested item rewards", () => {
   const rewards = dungeonContent().rewards;
-  rewards.drops = [{type: "package", id: "pack", chance: 1, quantity: 100, package: {name: "Bundle", description: "", rewards: ObjectiveReward.parse({reward_items: [{ids: ["item"], number: 1, quantity: 20}]})}}];
+  rewards.drops = [
+    {
+      type: "package",
+      id: "pack",
+      chance: 1,
+      quantity: 100,
+      package: {
+        name: "Bundle",
+        description: "",
+        rewards: ObjectiveReward.parse({
+          reward_items: [{ ids: ["item"], number: 1, quantity: 20 }],
+        }),
+      },
+    },
+  ];
   expect(dungeonRewardError(rewards)).toBeNull();
-  rewards.drops.push({type: "cache", id: "cache", chance: 1, quantity: 1});
+  rewards.drops.push({ type: "cache", id: "cache", chance: 1, quantity: 1 });
   expect(dungeonRewardError(rewards)).toContain("at most 2000 items");
   rewards.drops[0]!.package!.rewards.reward_items[0]!.quantity = 1e9;
   expect(dungeonRewardError(rewards)).toContain("at most 2000 items");
@@ -30,7 +71,19 @@ it("bounds worst-case package quantities before expanding nested item rewards", 
 
 it("rejects scalar overflow from multiplied packages and combined base rewards", () => {
   const rewards = dungeonContent().rewards;
-  rewards.drops = [{type: "package", id: "pack", chance: 1, quantity: 100, package: {name: "Bundle", description: "", rewards: ObjectiveReward.parse({reward_exp: 30000000})}}];
+  rewards.drops = [
+    {
+      type: "package",
+      id: "pack",
+      chance: 1,
+      quantity: 100,
+      package: {
+        name: "Bundle",
+        description: "",
+        rewards: ObjectiveReward.parse({ reward_exp: 30000000 }),
+      },
+    },
+  ];
   expect(dungeonRewardError(rewards)).toContain("per scalar reward");
   rewards.drops[0]!.package!.rewards.reward_exp = 10000000;
   rewards.experience = 0;
@@ -66,22 +119,27 @@ it("uses reward identity across row reorderings and suppresses duplicate one-tim
   const first = rollDungeonRewards(rewards);
   expect(first.reward_items).toEqual(["unique"]);
   rewards.drops.reverse();
-  expect(rollDungeonRewards(rewards, new Set(first.grantedDrops)).reward_items).toEqual([]);
+  expect(rollDungeonRewards(rewards, new Set(first.grantedDrops)).reward_items).toEqual(
+    [],
+  );
 });
 
-it.each([false, true])("grants repeatable and one-time rows sharing a key in either order (reverse: %s)", (reverse) => {
-  const rewards = dungeonContent().rewards;
-  rewards.drops = [
-    { type: "item", id: "shared", chance: 100, quantity: 2 },
-    { type: "item", id: "shared", chance: 100, quantity: 3, onlyOnce: true },
-    { type: "item", id: "shared", chance: 100, quantity: 3, onlyOnce: true },
-  ];
-  if (reverse) rewards.drops.reverse();
-  vi.spyOn(Math, "random").mockReturnValue(0);
-  const first = rollDungeonRewards(rewards);
-  expect(first.reward_items).toEqual(Array(5).fill("shared"));
-  expect(first.grantedDrops).toEqual([JSON.stringify(["item", "shared"])]);
-  const repeated = rollDungeonRewards(rewards, new Set(first.grantedDrops));
-  expect(repeated.reward_items).toEqual(["shared", "shared"]);
-  expect(repeated.grantedDrops).toEqual(first.grantedDrops);
-});
+it.each([false, true])(
+  "grants repeatable and one-time rows sharing a key in either order (reverse: %s)",
+  (reverse) => {
+    const rewards = dungeonContent().rewards;
+    rewards.drops = [
+      { type: "item", id: "shared", chance: 100, quantity: 2 },
+      { type: "item", id: "shared", chance: 100, quantity: 3, onlyOnce: true },
+      { type: "item", id: "shared", chance: 100, quantity: 3, onlyOnce: true },
+    ];
+    if (reverse) rewards.drops.reverse();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const first = rollDungeonRewards(rewards);
+    expect(first.reward_items).toEqual(Array(5).fill("shared"));
+    expect(first.grantedDrops).toEqual([JSON.stringify(["item", "shared"])]);
+    const repeated = rollDungeonRewards(rewards, new Set(first.grantedDrops));
+    expect(repeated.reward_items).toEqual(["shared", "shared"]);
+    expect(repeated.grantedDrops).toEqual(first.grantedDrops);
+  },
+);

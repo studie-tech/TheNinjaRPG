@@ -5,6 +5,7 @@
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   getTableColumns,
@@ -252,7 +253,7 @@ export const selectUserReportForGetRelatedReports2 = (
   client
     .select({ ...reportColumns(client), score })
     .from(userReport)
-    .where(and(eligible, sql`${score} > 0`))
+    .where(and(eligible, gt(score, 0)))
     .orderBy(desc(score), desc(userReport.createdAt), asc(userReport.id))
     .limit(10);
 
@@ -421,11 +422,11 @@ export const selectUserReportForGetReportStatistics = (
   client
     .select({
       userId: userData.userId,
-      count: sql`COUNT(${userReport.id})`.mapWith(Number),
+      count: count(userReport.id),
     })
     .from(userReport)
     .innerJoin(userData, eq(userData.userId, userReport.reportedUserId))
-    .groupBy(sql`${userReport.reportedUserId}`);
+    .groupBy(userReport.reportedUserId);
 
 /** Build the `userReport` selection for `getReportStatistics`. */
 export const selectUserReportForGetReportStatistics2 = (
@@ -434,11 +435,11 @@ export const selectUserReportForGetReportStatistics2 = (
   client
     .select({
       userId: userData.userId,
-      count: sql`COUNT(${userReport.id})`.mapWith(Number),
+      count: count(userReport.id),
     })
     .from(userReport)
     .innerJoin(userData, eq(userData.userId, userReport.reporterUserId))
-    .groupBy(sql`${userReport.reporterUserId}`);
+    .groupBy(userReport.reporterUserId);
 
 /** Build the `userReportComment` selection for `getReportStatistics`. */
 export const selectUserReportCommentForGetReportStatistics = (
@@ -447,11 +448,11 @@ export const selectUserReportCommentForGetReportStatistics = (
   client
     .select({
       userId: userReportComment.userId,
-      count: sql`COUNT(${userReportComment.id})`.mapWith(Number),
+      count: count(userReportComment.id),
       decision: userReportComment.decision,
     })
     .from(userReportComment)
-    .groupBy(sql`${userReportComment.userId}, ${userReportComment.decision}`);
+    .groupBy(userReportComment.userId, userReportComment.decision);
 
 /** Build the `userReport` selection for `getModBotPerformance`, using predicates on `createdAt`. */
 export const selectUserReportForGetModBotPerformance = (
@@ -483,7 +484,7 @@ export const selectModerationScanForGetModBotPerformance = (
       createdAt: sql<Date>`MIN(${moderationScan.createdAt})`.mapWith(
         moderationScan.createdAt,
       ),
-      count: sql`COUNT(*)`.mapWith(Number),
+      count: count(),
       relationType: moderationScan.relationType,
       outcome: moderationScan.outcome,
       flagged: moderationScan.flagged,
@@ -898,7 +899,7 @@ export const selectAutomatedModerationForGetUserModerationSummary = (
 ) =>
   client
     .select({
-      totalEntries: sql`COUNT(*)`.mapWith(Number),
+      totalEntries: count(),
       sexual:
         sql<number>`SUM(CASE WHEN ${automatedModeration.sexual} = true THEN 1 ELSE 0 END)`.mapWith(
           Number,

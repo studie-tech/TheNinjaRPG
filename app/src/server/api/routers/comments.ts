@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, like, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -11,7 +11,6 @@ import {
   type Conversation,
   conversationComment,
   type UserData,
-  user2conversation,
   userBlackList,
   userData,
 } from "@/drizzle/schema";
@@ -48,6 +47,7 @@ import {
   listNotificationUserCandidates,
   listPublicConversationsByTitle,
   listUserReportCommentForGetReportComments,
+  noConversationMembersLeft,
   selectConversationCommentForFetchConversationComment,
   selectConversationCommentForGetConversationComments,
   updateConversationCommentForEditConversationComment,
@@ -321,7 +321,7 @@ export const commentsRouter = createTRPCRouter({
         // which the awaited membership delete above already settled. Guarding
         // each one on that condition keeps a concurrent exit from wiping a
         // conversation someone still belongs to, without serializing them.
-        const noMembersLeft = sql`NOT EXISTS (SELECT 1 FROM ${user2conversation} WHERE ${user2conversation.conversationId} = ${convo.id})`;
+        const noMembersLeft = noConversationMembersLeft(ctx.drizzle, convo);
         await Promise.all([
           deleteConversationForExitConversation(ctx.drizzle, convo, noMembersLeft),
           deleteConversationCommentForExitConversation(
@@ -445,8 +445,8 @@ export const commentsRouter = createTRPCRouter({
         whereConditions = and(
           whereConditions,
           or(
-            sql`${conversationComment.content} LIKE ${`%${input.searchQuery}%`}`,
-            sql`${userData.username} LIKE ${`%${input.searchQuery}%`}`,
+            like(conversationComment.content, `%${input.searchQuery}%`),
+            like(userData.username, `%${input.searchQuery}%`),
           ),
         );
       }
@@ -466,7 +466,6 @@ export const commentsRouter = createTRPCRouter({
           ? [updateUserConversationReadAt(ctx.drizzle, ctx, convo, lastReadAt)]
           : []),
       ]);
-      // Fetch
       const nextCursor = cursorAfter(comments);
       return {
         restrictionMessage: null,
@@ -535,11 +534,10 @@ export const commentsRouter = createTRPCRouter({
         if (restriction) return errorResponse(restriction);
       }
 
-      // Update conversation & update user notifications
       const commentId = nanoid();
       const pusher = getServerPusher();
 
-      // For staff accounts, verify the language is appropriate
+      // Reject offensive language
       if (!moderationResult.success) return moderationResult;
 
       // Sanitize authored content before attaching trusted quote metadata.
@@ -934,12 +932,8 @@ const updateSupportTicketStatusAfterComment = async (
 };
 
 /**
- * Creates a conversation with the given parameters and performs necessary database operations.
- * @param client - The DrizzleClient instance used for database operations.
- * @param senderUserId - The ID of the user who is creating the conversation.
- * @param receiverUserIds - An array of user IDs who will receive the conversation.
- * @param title - The title of the conversation.
- * @param content - The content of the first comment in the conversation.
+ * Creates a conversation with its first message, adds the sender, author and receivers as
+ * members, and notifies the receivers. Returns the conversation ID.
  */
 export const createConvo = async (info: {
   client: DrizzleClient;

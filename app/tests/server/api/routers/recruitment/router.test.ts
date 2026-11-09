@@ -1,8 +1,8 @@
-
+import { beforeEach, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { asc, eq } from "drizzle-orm";
-import { beforeEach, expect, it } from "bun:test";
+import { HOME_FURNITURE_STARTERS } from "@/drizzle/constants";
 import {
   actionLog,
   bloodline,
@@ -17,13 +17,15 @@ import {
   userItem,
   village,
 } from "@/drizzle/schema";
-import { HOME_FURNITURE_STARTERS } from "@/drizzle/constants";
 import { profileRouter } from "@/routers/profile";
-import { updateRewards } from "@/server/utils/questRewards";
 import { hashIp } from "@/server/utils/ipHash";
+import { updateRewards } from "@/server/utils/questRewards";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { insertUsers } from "../../../../setup/factories";
-import { insertRegistrationContent, registerCharacter } from "../../../../setup/registration";
+import {
+  insertRegistrationContent,
+  registerCharacter,
+} from "../../../../setup/registration";
 import {
   callerFor,
   describeWithDatabase,
@@ -39,7 +41,10 @@ const FRESH_IP = "203.0.113.51";
 
 // The backfill is the data section of the recruit-milestone migration, after its marker.
 const backfill = readFileSync(
-  join(import.meta.dirname, "../../../../../drizzle/migrations/0054_concerned_plazm.sql"),
+  join(
+    import.meta.dirname,
+    "../../../../../drizzle/migrations/0054_concerned_plazm.sql",
+  ),
   "utf8",
 )
   .split("-- recruit-milestones-backfill:start")[1]!
@@ -114,12 +119,26 @@ describeWithDatabase("recruit rank milestones end to end", () => {
     });
     expect((await recruiterRep())?.nRecruited).toBe(1);
     const database = await getTestDatabase();
-    const starters = await database.query.userItem.findMany({ where: eq(userItem.userId, "recruit-shared") });
-    expect(starters.map(({ itemId }) => itemId).sort()).toEqual(HOME_FURNITURE_STARTERS.map(({ itemId }) => itemId).sort());
+    const starters = await database.query.userItem.findMany({
+      where: eq(userItem.userId, "recruit-shared"),
+    });
+    expect(starters.map(({ itemId }) => itemId).sort()).toEqual(
+      HOME_FURNITURE_STARTERS.map(({ itemId }) => itemId).sort(),
+    );
     for (const { itemId, x, y } of HOME_FURNITURE_STARTERS) {
-      expect(starters.find((piece) => piece.itemId === itemId)).toMatchObject({ quantity: 1, storedAtHome: true, homeX: x, homeY: y });
+      expect(starters.find((piece) => piece.itemId === itemId)).toMatchObject({
+        quantity: 1,
+        storedAtHome: true,
+        homeX: x,
+        homeY: y,
+      });
     }
-    expect(await database.query.userData.findFirst({ where: eq(userData.userId, "recruit-shared"), columns: { homeFurnitureRevision: true } })).toEqual({ homeFurnitureRevision: 0 });
+    expect(
+      await database.query.userData.findFirst({
+        where: eq(userData.userId, "recruit-shared"),
+        columns: { homeFurnitureRevision: true },
+      }),
+    ).toEqual({ homeFurnitureRevision: 0 });
   });
 
   it("marks a recruit from a fresh IP eligible, and one without an IP eligible but unchecked", async () => {
@@ -169,7 +188,9 @@ describeWithDatabase("recruit rank milestones end to end", () => {
     await promote("CHUNIN");
     expect((await recruiterRep())?.reputationPointsTotal).toBe(6);
 
-    const summary = await (await callerFor(profileRouter, RECRUITER)).getRecruitMilestones();
+    const summary = await (
+      await callerFor(profileRouter, RECRUITER)
+    ).getRecruitMilestones();
     expect(summary).toEqual([
       expect.objectContaining({
         recruitUserId: "recruit-fresh",
@@ -241,7 +262,9 @@ describeWithDatabase("recruit rank milestones end to end", () => {
       reason: "QUEST",
     });
     expect((await recruiterRep())?.reputationPointsTotal).toBe(0);
-    const summary = await (await callerFor(profileRouter, RECRUITER)).getRecruitMilestones();
+    const summary = await (
+      await callerFor(profileRouter, RECRUITER)
+    ).getRecruitMilestones();
     expect(summary[0]).toMatchObject({ eligibility: "SHARED_IP" });
     expect(summary[0]?.milestones[0]).toMatchObject({ reached: true, paid: false });
   });
@@ -257,16 +280,46 @@ describeWithDatabase("recruit referral backfill migration", () => {
       { userId: RECRUITER, username: "r", lastIp: "198.51.100.1", rank: "JONIN" },
       { userId: OTHER, username: "o", lastIp: "198.51.100.2" },
       // Shares its last IP with another account.
-      { userId: "b-last", username: "b1", recruiterId: RECRUITER, lastIp: "198.51.100.2", rank: "CHUNIN" },
+      {
+        userId: "b-last",
+        username: "b1",
+        recruiterId: RECRUITER,
+        lastIp: "198.51.100.2",
+        rank: "CHUNIN",
+      },
       // Its IP history overlaps another account's history.
-      { userId: "b-hist", username: "b2", recruiterId: RECRUITER, lastIp: "192.0.2.10", rank: "STUDENT" },
+      {
+        userId: "b-hist",
+        username: "b2",
+        recruiterId: RECRUITER,
+        lastIp: "192.0.2.10",
+        rank: "STUDENT",
+      },
       // Nothing shared.
-      { userId: "b-clean", username: "b3", recruiterId: RECRUITER, lastIp: "192.0.2.11", rank: "ELDER" },
+      {
+        userId: "b-clean",
+        username: "b3",
+        recruiterId: RECRUITER,
+        lastIp: "192.0.2.11",
+        rank: "ELDER",
+      },
       // No IP left to check; placeholders never match each other.
-      { userId: "b-none", username: "b4", recruiterId: RECRUITER, lastIp: "unknown", rank: "GENIN" },
+      {
+        userId: "b-none",
+        username: "b4",
+        recruiterId: RECRUITER,
+        lastIp: "unknown",
+        rank: "GENIN",
+      },
       { userId: "b-none-2", username: "b5", recruiterId: OTHER, lastIp: "unknown" },
       // Elite Jonin holds every milestone, Elite Jonin included.
-      { userId: "b-self", username: "b6", recruiterId: "b-self", lastIp: "192.0.2.12", rank: "ELITE JONIN" },
+      {
+        userId: "b-self",
+        username: "b6",
+        recruiterId: "b-self",
+        lastIp: "192.0.2.12",
+        rank: "ELITE JONIN",
+      },
     ]);
     const database = await getTestDatabase();
     await database.insert(historicalIp).values([
@@ -296,12 +349,36 @@ describeWithDatabase("recruit referral backfill migration", () => {
       .from(recruitReferral)
       .orderBy(asc(recruitReferral.recruitUserId));
     expect(referrals).toEqual([
-      { recruitUserId: "b-clean", isEligible: true, eligibilityReason: "BACKFILL_IP_NOT_SHARED" },
-      { recruitUserId: "b-hist", isEligible: false, eligibilityReason: "BACKFILL_SHARED_IP" },
-      { recruitUserId: "b-last", isEligible: false, eligibilityReason: "BACKFILL_SHARED_IP" },
-      { recruitUserId: "b-none", isEligible: false, eligibilityReason: "BACKFILL_UNVERIFIED" },
-      { recruitUserId: "b-none-2", isEligible: false, eligibilityReason: "BACKFILL_UNVERIFIED" },
-      { recruitUserId: "b-self", isEligible: false, eligibilityReason: "SELF_REFERRAL" },
+      {
+        recruitUserId: "b-clean",
+        isEligible: true,
+        eligibilityReason: "BACKFILL_IP_NOT_SHARED",
+      },
+      {
+        recruitUserId: "b-hist",
+        isEligible: false,
+        eligibilityReason: "BACKFILL_SHARED_IP",
+      },
+      {
+        recruitUserId: "b-last",
+        isEligible: false,
+        eligibilityReason: "BACKFILL_SHARED_IP",
+      },
+      {
+        recruitUserId: "b-none",
+        isEligible: false,
+        eligibilityReason: "BACKFILL_UNVERIFIED",
+      },
+      {
+        recruitUserId: "b-none-2",
+        isEligible: false,
+        eligibilityReason: "BACKFILL_UNVERIFIED",
+      },
+      {
+        recruitUserId: "b-self",
+        isEligible: false,
+        eligibilityReason: "SELF_REFERRAL",
+      },
     ]);
 
     const milestones = await database

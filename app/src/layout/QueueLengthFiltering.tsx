@@ -12,24 +12,23 @@ interface QueueLengthFilteringProps {
   state: QueueLengthFilteringState;
 }
 
-const makeSchema = () =>
-  defineFilteringSchema({
-    fields: [
-      {
-        id: "rankedRanks",
-        label: "Ranked Ranks",
-        type: "multi-select",
-        defaultValue: [],
-        options: toOptions(RANKED_RANKS),
-      },
-      minCountField,
-    ] as const,
-  });
+const QUEUE_LENGTH_FILTERING_SCHEMA = defineFilteringSchema({
+  fields: [
+    {
+      id: "rankedRanks",
+      label: "Ranked Ranks",
+      type: "multi-select",
+      defaultValue: [],
+      options: toOptions(RANKED_RANKS),
+    },
+    minCountField,
+  ] as const,
+});
 
 const QueueLengthFiltering: React.FC<QueueLengthFilteringProps> = (props) => {
   return (
     <ContentFiltering
-      schema={makeSchema()}
+      schema={QUEUE_LENGTH_FILTERING_SCHEMA}
       state={props.state.cf}
       triggerButtonId="filter-queue-length"
     />
@@ -39,10 +38,10 @@ const QueueLengthFiltering: React.FC<QueueLengthFilteringProps> = (props) => {
 export default QueueLengthFiltering;
 
 export const getFilter = (state: QueueLengthFilteringState) =>
-  buildFilter(state.cf, makeSchema());
+  buildFilter(state.cf, QUEUE_LENGTH_FILTERING_SCHEMA);
 
 export const useFiltering = () => {
-  const cf = useContentFiltering(makeSchema());
+  const cf = useContentFiltering(QUEUE_LENGTH_FILTERING_SCHEMA);
   return {
     ...cf.values,
     cf,

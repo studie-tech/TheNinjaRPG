@@ -15,119 +15,118 @@ interface UserFilteringProps {
 }
 
 // Single-source schema
-const makeUserFilteringSchema = () =>
-  defineFilteringSchema({
-    fields: [
-      {
-        id: "username",
-        label: "Username",
-        type: "text",
-        defaultValue: "",
-        filterKey: "username",
+const USER_FILTERING_SCHEMA = defineFilteringSchema({
+  fields: [
+    {
+      id: "username",
+      label: "Username",
+      type: "text",
+      defaultValue: "",
+      filterKey: "username",
+    },
+    {
+      id: "ip",
+      label: "Last IP",
+      type: "text",
+      defaultValue: "",
+      filterKey: "ip",
+      visibleIf: (ctx) =>
+        Boolean((ctx as { canSeeIps?: boolean } | undefined)?.canSeeIps),
+    },
+    {
+      id: "bloodline",
+      label: "Bloodline",
+      type: "single-select",
+      defaultValue: "None",
+      includeNone: true,
+      emptyValues: ["None"],
+      dataSource: "bloodlines",
+    },
+    {
+      id: "village",
+      label: "Village",
+      type: "single-select",
+      defaultValue: "None",
+      includeNone: true,
+      emptyValues: ["None"],
+      dataSource: "villages",
+    },
+    {
+      id: "effect",
+      label: "Effects",
+      type: "multi-select",
+      defaultValue: [],
+      options: tagTypes.map((ef) => ({ value: ef, label: ef })),
+      visibleIf: (ctx) =>
+        Boolean((ctx as { showEffects?: boolean } | undefined)?.showEffects),
+    },
+    {
+      id: "isEvent",
+      label: "Event Status",
+      type: "tri-state",
+      defaultValue: undefined,
+      triStateLabels: {
+        labelActive: "Event Only",
+        labelInactive: "Non-Event Only",
+        labelAll: "All Events",
       },
-      {
-        id: "ip",
-        label: "Last IP",
-        type: "text",
-        defaultValue: "",
-        filterKey: "ip",
-        visibleIf: (ctx) =>
-          Boolean((ctx as { canSeeIps?: boolean } | undefined)?.canSeeIps),
+      visibleIf: (ctx) =>
+        Boolean((ctx as { aiToggles?: boolean } | undefined)?.aiToggles),
+    },
+    {
+      id: "isWarCamp",
+      label: "War Camp Status",
+      type: "tri-state",
+      defaultValue: undefined,
+      triStateLabels: {
+        labelActive: "War Camp Only",
+        labelInactive: "Non-War Camp Only",
+        labelAll: "All War Camps",
       },
-      {
-        id: "bloodline",
-        label: "Bloodline",
-        type: "single-select",
-        defaultValue: "None",
-        includeNone: true,
-        emptyValues: ["None"],
-        dataSource: "bloodlines",
+      visibleIf: (ctx) =>
+        Boolean((ctx as { aiToggles?: boolean } | undefined)?.aiToggles),
+    },
+    {
+      id: "isSummon",
+      label: "Summon Status",
+      type: "tri-state",
+      defaultValue: undefined,
+      triStateLabels: {
+        labelActive: "Summon Only",
+        labelInactive: "Non-Summon Only",
+        labelAll: "All Summons",
       },
-      {
-        id: "village",
-        label: "Village",
-        type: "single-select",
-        defaultValue: "None",
-        includeNone: true,
-        emptyValues: ["None"],
-        dataSource: "villages",
+      visibleIf: (ctx) =>
+        Boolean((ctx as { aiToggles?: boolean } | undefined)?.aiToggles),
+    },
+    {
+      id: "inArena",
+      label: "Arena Status",
+      type: "tri-state",
+      defaultValue: undefined,
+      triStateLabels: {
+        labelActive: "Arena Only",
+        labelInactive: "Non-Arena Only",
+        labelAll: "All Arena",
       },
-      {
-        id: "effect",
-        label: "Effects",
-        type: "multi-select",
-        defaultValue: [],
-        options: (tagTypes ?? []).map((ef) => ({ value: ef, label: ef })),
-        visibleIf: (ctx) =>
-          Boolean((ctx as { showEffects?: boolean } | undefined)?.showEffects),
+      visibleIf: (ctx) =>
+        Boolean((ctx as { aiToggles?: boolean } | undefined)?.aiToggles),
+    },
+    {
+      id: "inShrines",
+      label: "Shrine Status",
+      type: "tri-state",
+      defaultValue: undefined,
+      triStateLabels: {
+        labelActive: "Shrine Only",
+        labelInactive: "Non-Shrine Only",
+        labelAll: "All Shrines",
       },
-      {
-        id: "isEvent",
-        label: "Event Status",
-        type: "tri-state",
-        defaultValue: undefined,
-        triStateLabels: {
-          labelActive: "Event Only",
-          labelInactive: "Non-Event Only",
-          labelAll: "All Events",
-        },
-        visibleIf: (ctx) =>
-          Boolean((ctx as { aiToggles?: boolean } | undefined)?.aiToggles),
-      },
-      {
-        id: "isWarCamp",
-        label: "War Camp Status",
-        type: "tri-state",
-        defaultValue: undefined,
-        triStateLabels: {
-          labelActive: "War Camp Only",
-          labelInactive: "Non-War Camp Only",
-          labelAll: "All War Camps",
-        },
-        visibleIf: (ctx) =>
-          Boolean((ctx as { aiToggles?: boolean } | undefined)?.aiToggles),
-      },
-      {
-        id: "isSummon",
-        label: "Summon Status",
-        type: "tri-state",
-        defaultValue: undefined,
-        triStateLabels: {
-          labelActive: "Summon Only",
-          labelInactive: "Non-Summon Only",
-          labelAll: "All Summons",
-        },
-        visibleIf: (ctx) =>
-          Boolean((ctx as { aiToggles?: boolean } | undefined)?.aiToggles),
-      },
-      {
-        id: "inArena",
-        label: "Arena Status",
-        type: "tri-state",
-        defaultValue: undefined,
-        triStateLabels: {
-          labelActive: "Arena Only",
-          labelInactive: "Non-Arena Only",
-          labelAll: "All Arena",
-        },
-        visibleIf: (ctx) =>
-          Boolean((ctx as { aiToggles?: boolean } | undefined)?.aiToggles),
-      },
-      {
-        id: "inShrines",
-        label: "Shrine Status",
-        type: "tri-state",
-        defaultValue: undefined,
-        triStateLabels: {
-          labelActive: "Shrine Only",
-          labelInactive: "Non-Shrine Only",
-          labelAll: "All Shrines",
-        },
-        visibleIf: (ctx) =>
-          Boolean((ctx as { aiToggles?: boolean } | undefined)?.aiToggles),
-      },
-    ] as const,
-  });
+      visibleIf: (ctx) =>
+        Boolean((ctx as { aiToggles?: boolean } | undefined)?.aiToggles),
+    },
+  ] as const,
+});
 
 const UserFiltering: React.FC<UserFilteringProps> = (props) => {
   const { data: userData } = useUserData();
@@ -138,7 +137,7 @@ const UserFiltering: React.FC<UserFilteringProps> = (props) => {
   };
   return (
     <ContentFiltering
-      schema={makeUserFilteringSchema()}
+      schema={USER_FILTERING_SCHEMA}
       state={props.state.cf}
       context={context}
       triggerButtonId="filter-user"
@@ -148,13 +147,13 @@ const UserFiltering: React.FC<UserFilteringProps> = (props) => {
 
 export default UserFiltering;
 
-/** tRPC filter to be used on api.jutsu.getAll */
+/** tRPC filter for api.profile.getPublicUsers */
 export const getFilter = (state: UserFilteringState) =>
-  buildFilter(state.cf, makeUserFilteringSchema());
+  buildFilter(state.cf, USER_FILTERING_SCHEMA);
 
 /** State for the User Filtering component */
 export const useFiltering = () => {
-  const cf = useContentFiltering(makeUserFilteringSchema());
+  const cf = useContentFiltering(USER_FILTERING_SCHEMA);
   return {
     ...cf.values,
     cf,

@@ -43,12 +43,6 @@ export const updatePollSchema = z.object({
 
 export type UpdatePollSchema = z.infer<typeof updatePollSchema>;
 
-// Schema for voting in a poll
-export const votePollSchema = z.object({
-  pollId: z.string(),
-  optionId: z.string(),
-});
-
 // Schema for adding a custom option to a poll
 export const addPollOptionSchema = z.discriminatedUnion("type", [
   z.object({
@@ -65,27 +59,3 @@ export const addPollOptionSchema = z.discriminatedUnion("type", [
 ]);
 
 export type AddPollOptionSchema = z.infer<typeof addPollOptionSchema>;
-
-// Schema for getting polls with pagination
-export const getPollsSchema = z.object({
-  cursor: z.number().nullish(),
-  limit: z.number().min(1).max(100).prefault(10),
-  includeInactive: z.boolean().prefault(false),
-});
-
-// Schema for retracting a vote from a poll
-export const retractVoteSchema = z.object({
-  pollId: z.string(),
-});
-
-// Schema for closing a poll
-export const closePollSchema = z.object({
-  id: z.string(),
-  isActive: z.boolean(),
-});
-
-// Schema for deleting a poll option
-export const deletePollOptionSchema = z.object({
-  pollId: z.string(),
-  optionId: z.string(),
-});

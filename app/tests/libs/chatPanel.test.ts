@@ -6,8 +6,8 @@ import {
   isConversationMuted,
   isConversationUnread,
   isTavernMuted,
-  unreadForTavern,
   toggleMutedConversation,
+  unreadForTavern,
 } from "@/libs/chatPanel";
 
 const user = (
@@ -35,13 +35,23 @@ describe("chat mutes", () => {
 describe("chat badge", () => {
   it("adds inbox news to tavern counts, keeping only pings from muted taverns", () => {
     expect(
-      countChatNotifications(user(false, [], ["tavern"]), 2, { tavern: 3, quiet: 4 }, { quiet: 9 }),
+      countChatNotifications(
+        user(false, [], ["tavern"]),
+        2,
+        { tavern: 3, quiet: 4 },
+        { quiet: 9 },
+      ),
     ).toBe(9);
   });
 
   it("keeps only pings while all chat is muted, and shows nothing without a player", () => {
     expect(
-      countChatNotifications(user(true, [], ["tavern"]), 2, { tavern: 3 }, { tavern: 8, other: 5 }),
+      countChatNotifications(
+        user(true, [], ["tavern"]),
+        2,
+        { tavern: 3 },
+        { tavern: 8, other: 5 },
+      ),
     ).toBe(3);
     expect(countChatNotifications(null, 2, { tavern: 3 }, {})).toBe(0);
   });
@@ -80,11 +90,31 @@ describe("tavern unread", () => {
 
   it("counts new messages only in unmuted taverns, and pings everywhere", () => {
     expect(
-      countTavernUnread(user(false, [], ["global"]), { global: 1, ally: 2 }, { global: 3, akikaze: 5, ally: 4 }),
+      countTavernUnread(
+        user(false, [], ["global"]),
+        { global: 1, ally: 2 },
+        { global: 3, akikaze: 5, ally: 4 },
+      ),
     ).toBe(5);
-    expect(unreadForTavern(user(false), "akikaze", { akikaze: 2 }, { akikaze: 7 })).toBe(2);
-    expect(unreadForTavern(user(false, [], ["akikaze"]), "akikaze", { akikaze: 2 }, { akikaze: 7 })).toBe(7);
-    expect(unreadForTavern(user(true, [], ["akikaze"]), "akikaze", { akikaze: 2 }, { akikaze: 7 })).toBe(2);
+    expect(
+      unreadForTavern(user(false), "akikaze", { akikaze: 2 }, { akikaze: 7 }),
+    ).toBe(2);
+    expect(
+      unreadForTavern(
+        user(false, [], ["akikaze"]),
+        "akikaze",
+        { akikaze: 2 },
+        { akikaze: 7 },
+      ),
+    ).toBe(7);
+    expect(
+      unreadForTavern(
+        user(true, [], ["akikaze"]),
+        "akikaze",
+        { akikaze: 2 },
+        { akikaze: 7 },
+      ),
+    ).toBe(2);
   });
 
   it("is zero without a player", () => {

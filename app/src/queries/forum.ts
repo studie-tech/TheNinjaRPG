@@ -267,7 +267,7 @@ export const listForumPosts = (
 /** Count visible posts only, matching the ordinary discussion-page query. */
 export const countForumPosts = (db: Client, threadId: string) =>
   db
-    .select({ count: sql<number>`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(forumPost)
     .where(
       and(
@@ -282,7 +282,7 @@ export const forumPostPosition = (
   post: { threadId: string; id: string; createdAt: Date },
 ) =>
   db
-    .select({ count: sql<number>`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(forumPost)
     .where(
       and(

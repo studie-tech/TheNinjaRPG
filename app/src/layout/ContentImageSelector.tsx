@@ -17,8 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ContentType, IMG_ORIENTATION } from "@/drizzle/constants";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
+import { HistoricalAiAvatar } from "@/layout/HistoricalAiAvatar";
 import Loader from "@/layout/Loader";
-import { HistoricalAiAvatar } from "@/layout/ProfileEdit";
 import RichInput from "@/layout/RichInput";
 import { getPrePrompts, REMOVE_BG_TYPES } from "@/libs/imagePrompts";
 import { showMutationToast } from "@/libs/toast";
@@ -77,15 +77,11 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   // Tracks the URL of the most recently uploaded image so the dialog preview
   // reflects the upload immediately (before the parent re-renders with the new prop).
+  // It applies only within the generation that wrote it, so a new identity drops it.
   const [localImage, setLocalImage] = useState<{
     url: string;
     generation: number;
   } | null>(null);
-
-  // Clear local override when the parent updates imageUrl (e.g. form reset or variant switch).
-  useEffect(() => {
-    setLocalImage(null);
-  }, [imageUrl, operationIdentity]);
 
   useEffect(
     () => () => {

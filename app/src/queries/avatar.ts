@@ -1,7 +1,7 @@
 /**
  * Database access for avatar; authorization and transaction scopes stay in callers.
  */
-import { and, desc, eq, gt, gte, isNotNull, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, isNotNull, lte, sql } from "drizzle-orm";
 import { COST_GENERATE_AVATAR } from "@/drizzle/constants";
 import { historicalAvatar, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
@@ -111,7 +111,7 @@ export const selectHistoricalAvatarForAvatarMiddleware = (
   user: { userId: string },
 ) =>
   client
-    .select({ count: sql`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(historicalAvatar)
     .where(
       and(
@@ -137,17 +137,18 @@ export const insertHistoricalAvatarForUploadHistoricalAvatar = (
     done: true,
   });
 
-/** Build the `historicalAvatar` listing for `createImg`, using predicates on `status`, `done`, `createdAt`. */
-export const listHistoricalAvatarForCreateImg = (
-  client: Pick<DrizzleClient, "query">,
+/** Build the `historicalAvatar` count for `createImg`, using predicates on `status`, `done`, `createdAt`. */
+export const countHistoricalAvatarForCreateImg = (
+  client: Pick<DrizzleClient, "$count">,
 ) =>
-  client.query.historicalAvatar.findMany({
-    where: and(
+  client.$count(
+    historicalAvatar,
+    and(
       eq(historicalAvatar.status, "content-success"),
       eq(historicalAvatar.done, true),
       gte(historicalAvatar.createdAt, sql`NOW() - INTERVAL 1 DAY`),
     ),
-  });
+  );
 
 /** Build the `historicalAvatar` insert for `createImg`. */
 export const insertHistoricalAvatarForCreateImg = (

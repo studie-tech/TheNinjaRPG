@@ -1,9 +1,9 @@
-import { Client } from "@planetscale/database";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { Client } from "@planetscale/database";
 import { staffRouter } from "@/server/api/routers/staff";
+import { restoreEnvAfterEach } from "../../../../setup/env";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { callerForDatabase } from "../../../../setup/testDatabase";
-import { restoreEnvAfterEach } from "../../../../setup/env";
 
 restoreEnvAfterEach("DEV_DATABASE_URL");
 
@@ -28,24 +28,33 @@ describe("development backup import", () => {
     vi.restoreAllMocks();
   });
 
-  it.each(["ai", "jutsu"] as const)("preflights a %s backup before replacing content without a transaction", async type => {
-    const saved = backup(type);
-    const execute = vi.spyOn(Client.prototype, "execute").mockResolvedValue({} as never);
-    const transaction = vi.spyOn(Client.prototype, "transaction").mockRejectedValue(new Error("Transactions are forbidden"));
-    const result = await caller(saved).pushBackupToDev({id: saved.id});
-    expect(result.success).toBe(true);
-    expect(execute.mock.calls.map(([query]) => query)).toEqual([
-      `EXPLAIN ${saved.sqlText}`,
-      type === "ai" ? "DELETE FROM `UserData` WHERE isAi = 1" : "DELETE FROM `Jutsu`",
-      saved.sqlText,
-    ]);
-    expect(transaction).not.toHaveBeenCalled();
-  });
+  it.each(["ai", "jutsu"] as const)(
+    "preflights a %s backup before replacing content without a transaction",
+    async (type) => {
+      const saved = backup(type);
+      const execute = vi
+        .spyOn(Client.prototype, "execute")
+        .mockResolvedValue({} as never);
+      const transaction = vi
+        .spyOn(Client.prototype, "transaction")
+        .mockRejectedValue(new Error("Transactions are forbidden"));
+      const result = await caller(saved).pushBackupToDev({ id: saved.id });
+      expect(result.success).toBe(true);
+      expect(execute.mock.calls.map(([query]) => query)).toEqual([
+        `EXPLAIN ${saved.sqlText}`,
+        type === "ai" ? "DELETE FROM `UserData` WHERE isAi = 1" : "DELETE FROM `Jutsu`",
+        saved.sqlText,
+      ]);
+      expect(transaction).not.toHaveBeenCalled();
+    },
+  );
 
   it("leaves content untouched when the backup is incompatible with the destination schema", async () => {
     const saved = backup();
-    const execute = vi.spyOn(Client.prototype, "execute").mockRejectedValue(new Error("Unknown column 'ninjutsuOffence'"));
-    const result = await caller(saved).pushBackupToDev({id: saved.id});
+    const execute = vi
+      .spyOn(Client.prototype, "execute")
+      .mockRejectedValue(new Error("Unknown column 'ninjutsuOffence'"));
+    const result = await caller(saved).pushBackupToDev({ id: saved.id });
     expect(result.success).toBe(false);
     expect(result.message).toContain("No content was changed");
     expect(execute).toHaveBeenCalledTimes(1);

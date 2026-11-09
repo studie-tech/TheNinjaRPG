@@ -1,10 +1,14 @@
 import { vi } from "bun:test";
-import { useState, type ComponentProps } from "react";
+import { type ComponentProps, useState } from "react";
 import * as select from "@/components/ui/select";
 
 type MutationCallbacks<Result> = {
   onMutate?: () => number | undefined;
-  onSuccess?: (result: Result, variables: unknown, revision: number | undefined) => void | Promise<void>;
+  onSuccess?: (
+    result: Result,
+    variables: unknown,
+    revision: number | undefined,
+  ) => void | Promise<void>;
   onError?: (error: Error) => void;
 };
 

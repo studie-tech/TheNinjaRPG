@@ -1,10 +1,12 @@
-import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 import { REMOVAL_COST } from "@/drizzle/constants";
 import { actionLog, userData, userQueue } from "@/drizzle/schema";
 import { sageModeRouter } from "@/server/api/routers/sageMode";
 import { insertUsers } from "../../../setup/factories";
+import { queueEnergy } from "../../../setup/queues";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
+import { beforeStatements } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -12,8 +14,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { beforeStatements } from "../../../setup/statements";
-import { queueEnergy } from "../../../setup/queues";
 
 const userId = "sage-cache-player";
 const snapshot = {
@@ -28,13 +28,11 @@ describe("sage removal cache response", () => {
   afterEach(() => resetServerModuleStubs());
   for (const pendingQueue of [false, true]) {
     it(`returns a confirmed charge without a post-read, pending queue=${pendingQueue}`, async () => {
-      const read = vi
-        .fn()
-        .mockResolvedValue({
-          ...snapshot,
-          energyQueueHead: 0,
-          energyQueueTail: pendingQueue ? 1 : 0,
-        });
+      const read = vi.fn().mockResolvedValue({
+        ...snapshot,
+        energyQueueHead: 0,
+        energyQueueTail: pendingQueue ? 1 : 0,
+      });
       const db = {
         query: { userData: { findFirst: read } },
         update: () => ({ set: () => ({ where: async () => ({ rowsAffected: 1 }) }) }),
@@ -58,9 +56,23 @@ describe("sage removal cache response", () => {
       update: () => ({ set: () => ({ where: async () => ({ rowsAffected: 0 }) }) }),
       insert: vi.fn(),
     };
-    await expect(
-      callerForDatabase(sageModeRouter, userId, db as never).removeSageMode(),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(
+      await callerForDatabase(sageModeRouter, userId, db as never).removeSageMode(),
+    ).toMatchObject({ success: false, message: "Unable to update sage mode" });
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+  it("does not charge a player who has no sage mode", async () => {
+    const db = {
+      query: {
+        userData: { findFirst: async () => ({ ...snapshot, sageModeId: null }) },
+      },
+      update: vi.fn(),
+      insert: vi.fn(),
+    };
+    expect(
+      await callerForDatabase(sageModeRouter, userId, db as never).removeSageMode(),
+    ).toMatchObject({ success: false, message: "You do not have a sage mode" });
+    expect(db.update).not.toHaveBeenCalled();
     expect(db.insert).not.toHaveBeenCalled();
   });
 });
@@ -73,11 +85,19 @@ describeWithDatabase("sage removal committed balances", () => {
   afterEach(() => resetServerModuleStubs());
   it("clears the mode and charges exactly the response cost while retaining an independent grant", async () => {
     const db = await getTestDatabase();
-    const raced = beforeStatements(db, userData, [async () => {
-      await db.update(userData).set({ reputationPoints: sql`${userData.reputationPoints} + 7` })
-        .where(eq(userData.userId, userId));
-    }]);
-    const result = await callerForDatabase(sageModeRouter, userId, raced).removeSageMode();
+    const raced = beforeStatements(db, userData, [
+      async () => {
+        await db
+          .update(userData)
+          .set({ reputationPoints: sql`${userData.reputationPoints} + 7` })
+          .where(eq(userData.userId, userId));
+      },
+    ]);
+    const result = await callerForDatabase(
+      sageModeRouter,
+      userId,
+      raced,
+    ).removeSageMode();
     const stored = await db.query.userData.findFirst({
       where: eq(userData.userId, userId),
     });

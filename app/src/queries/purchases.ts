@@ -710,7 +710,7 @@ export const insertStoreEntitlementStateForApplyFederalRevocation = (
     })
     .onDuplicateKeyUpdate({
       set: {
-        revokedThrough: sql`GREATEST(revokedThrough, ${cutoff})`,
+        revokedThrough: sql`GREATEST(${storeEntitlementState.revokedThrough}, ${cutoff})`,
         updatedAt: new Date(),
       },
     });
@@ -857,18 +857,12 @@ export const deleteStorePurchaseTransferForMigrateStorePurchaseTransfers2 = (
  * Build the `storeEntitlementState` lookup for `migrateStoreEntitlementStates`, using
  * predicates on `userId`, `store`, `isSandbox`.
  */
-export const findStoreEntitlementStateForMigrateStoreEntitlementStates = (
+export const listStoreEntitlementStateForMigrateStoreEntitlementStates = (
   client: Pick<DrizzleClient, "query">,
-  oldUserId: string,
-  store: "APPLE" | "GOOGLE",
-  isSandbox: false | true,
+  userIds: string[],
 ) =>
-  client.query.storeEntitlementState.findFirst({
-    where: and(
-      eq(storeEntitlementState.userId, oldUserId),
-      eq(storeEntitlementState.store, store),
-      eq(storeEntitlementState.isSandbox, isSandbox),
-    ),
+  client.query.storeEntitlementState.findMany({
+    where: inArray(storeEntitlementState.userId, userIds),
   });
 
 /**

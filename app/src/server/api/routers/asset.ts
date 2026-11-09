@@ -207,55 +207,54 @@ export const gameAssetRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchGameAsset(ctx.drizzle, input.id),
       ]);
-      if (entry && canChangeContent(user.role) && !user.isBanned) {
-        if (entry.type === "LPC" && input.data.type !== "LPC")
-          return errorResponse("LPC designs must remain LPC assets.");
-        if (input.data.type === "LPC" && entry.id.length > 32)
-          return errorResponse(
-            "LPC design IDs must be at most 32 characters. Create a new LPC asset instead.",
-          );
-        if (input.data.type === "LPC" && !input.data.lpcConfig)
-          return errorResponse("Configure both body styles before saving this design.");
-        if (input.data.type !== "LPC" && input.data.lpcConfig)
-          return errorResponse("LPC settings require an LPC asset.");
-        if (input.data.lpcConfig) {
-          try {
-            await validateLpcImages(input.data.lpcConfig, entry.lpcConfig);
-          } catch (error) {
-            return errorResponse(
-              error instanceof Error
-                ? error.message
-                : "Could not validate the sprite sheets.",
-            );
-          }
-        }
-        if (input.data.lpcConfig)
-          input.data.image =
-            input.data.lpcConfig.variants[
-              `male/${input.data.lpcConfig.defaultColor}/${input.data.lpcConfig.defaultEyes}`
-            ]![0]!.image;
-        // Calculate diff
-        const diff = calculateContentDiff(entry, {
-          id: entry.id,
-          createdAt: entry.createdAt,
-          ...input.data,
-        });
-        // Update database
-        await Promise.all([
-          updateGameAssetForUpdate(ctx.drizzle, input, entry),
-          insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
-        ]);
-        await outdateProposalsFor(
-          ctx.drizzle,
-          "GAME_ASSET",
-          [entry.id],
-          editedReason("GAME_ASSET", entry.name, user.username),
-        );
-        await callDiscordContent(user.username, entry.name, diff, entry.image);
-        return { success: true, message: `Data updated: ${diff.join(". ")}` };
-      } else {
-        return { success: false, message: `Not allowed to edit gameAsset` };
+      if (!entry || !canChangeContent(user.role) || user.isBanned) {
+        return errorResponse(`Not allowed to edit gameAsset`);
       }
+      if (entry.type === "LPC" && input.data.type !== "LPC")
+        return errorResponse("LPC designs must remain LPC assets.");
+      if (input.data.type === "LPC" && entry.id.length > 32)
+        return errorResponse(
+          "LPC design IDs must be at most 32 characters. Create a new LPC asset instead.",
+        );
+      if (input.data.type === "LPC" && !input.data.lpcConfig)
+        return errorResponse("Configure both body styles before saving this design.");
+      if (input.data.type !== "LPC" && input.data.lpcConfig)
+        return errorResponse("LPC settings require an LPC asset.");
+      if (input.data.lpcConfig) {
+        try {
+          await validateLpcImages(input.data.lpcConfig, entry.lpcConfig);
+        } catch (error) {
+          return errorResponse(
+            error instanceof Error
+              ? error.message
+              : "Could not validate the sprite sheets.",
+          );
+        }
+      }
+      if (input.data.lpcConfig)
+        input.data.image =
+          input.data.lpcConfig.variants[
+            `male/${input.data.lpcConfig.defaultColor}/${input.data.lpcConfig.defaultEyes}`
+          ]![0]!.image;
+      // Calculate diff
+      const diff = calculateContentDiff(entry, {
+        id: entry.id,
+        createdAt: entry.createdAt,
+        ...input.data,
+      });
+      // Update database
+      await Promise.all([
+        updateGameAssetForUpdate(ctx.drizzle, input, entry),
+        insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
+      ]);
+      await outdateProposalsFor(
+        ctx.drizzle,
+        "GAME_ASSET",
+        [entry.id],
+        editedReason("GAME_ASSET", entry.name, user.username),
+      );
+      await callDiscordContent(user.username, entry.name, diff, entry.image);
+      return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
   create: protectedProcedure
     // Preserve no-input placeholder creation alongside named library creation.
@@ -263,13 +262,12 @@ export const gameAssetRouter = createTRPCRouter({
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
-      if (canChangeContent(user.role) && !user.isBanned) {
-        const id = nanoid();
-        await insertGameAssetForCreate(ctx.drizzle, id, ctx, input ?? undefined);
-        return { success: true, message: id };
-      } else {
-        return { success: false, message: `Not allowed to create gameAsset` };
+      if (!canChangeContent(user.role) || user.isBanned) {
+        return errorResponse(`Not allowed to create gameAsset`);
       }
+      const id = nanoid();
+      await insertGameAssetForCreate(ctx.drizzle, id, ctx, input ?? undefined);
+      return { success: true, message: id };
     }),
   delete: protectedProcedure
     .input(idSchema)
@@ -279,55 +277,54 @@ export const gameAssetRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchGameAsset(ctx.drizzle, input.id),
       ]);
-      if (entry && canChangeContent(user.role) && !user.isBanned) {
-        if (entry.type === "LPC") {
-          if (
-            [
-              "body",
-              "head-hard",
-              "head-soft",
-              "head-sharp",
-              "hair-short",
-              "hair-long",
-              "beard-long",
-              "beard-full",
-              "beard-stubble",
-              "shirt",
-              "pants",
-              "sandals",
-              "hood",
-              "mask",
-              "glasses",
-              "piercing",
-              "bandana",
-              "tattoo",
-              "scar",
-            ].includes(entry.id)
-          )
-            return errorResponse(
-              "This design is required by character creation or masked identities and cannot be deleted.",
-            );
-          const deleted = await deleteUnreferencedLpcAsset(ctx.drizzle, entry.id);
-          if (!deleted.rowsAffected)
-            return errorResponse(
-              "This design is used by an item or variant. Reassign its appearances before deleting it.",
-            );
-          await insertActionLogForDelete(ctx.drizzle, ctx, entry);
-        } else {
-          await Promise.all([
-            deleteGameAssetForDelete(ctx.drizzle, input),
-            insertActionLogForDelete(ctx.drizzle, ctx, entry),
-          ]);
-        }
-        await outdateProposalsFor(
-          ctx.drizzle,
-          "GAME_ASSET",
-          [entry.id],
-          deletedReason("GAME_ASSET", entry.name, user.username),
-        );
-        return { success: true, message: `gameAsset deleted` };
-      } else {
-        return { success: false, message: `Not allowed to delete gameAsset` };
+      if (!entry || !canChangeContent(user.role) || user.isBanned) {
+        return errorResponse(`Not allowed to delete gameAsset`);
       }
+      if (entry.type === "LPC") {
+        if (
+          [
+            "body",
+            "head-hard",
+            "head-soft",
+            "head-sharp",
+            "hair-short",
+            "hair-long",
+            "beard-long",
+            "beard-full",
+            "beard-stubble",
+            "shirt",
+            "pants",
+            "sandals",
+            "hood",
+            "mask",
+            "glasses",
+            "piercing",
+            "bandana",
+            "tattoo",
+            "scar",
+          ].includes(entry.id)
+        )
+          return errorResponse(
+            "This design is required by character creation or masked identities and cannot be deleted.",
+          );
+        const deleted = await deleteUnreferencedLpcAsset(ctx.drizzle, entry.id);
+        if (!deleted.rowsAffected)
+          return errorResponse(
+            "This design is used by an item or variant. Reassign its appearances before deleting it.",
+          );
+        await insertActionLogForDelete(ctx.drizzle, ctx, entry);
+      } else {
+        await Promise.all([
+          deleteGameAssetForDelete(ctx.drizzle, input),
+          insertActionLogForDelete(ctx.drizzle, ctx, entry),
+        ]);
+      }
+      await outdateProposalsFor(
+        ctx.drizzle,
+        "GAME_ASSET",
+        [entry.id],
+        deletedReason("GAME_ASSET", entry.name, user.username),
+      );
+      return { success: true, message: `gameAsset deleted` };
     }),
 });

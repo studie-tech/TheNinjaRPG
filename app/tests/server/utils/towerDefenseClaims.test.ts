@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import { env } from "@/env/server.mjs";
 import {
   areTowerDefenseClaimsEnabled,
   fetchSpacetimeCompletedRun,
   parseSpacetimeSqlRows,
   towerDefenseClaimKey,
 } from "@/server/utils/towerDefenseClaims";
-import { restoreEnvAfterEach } from "../../setup/env";
 
 // Response shape recorded from a SpacetimeDB `/v1/database/:name/sql` call
 const sqlResponse = (row: unknown[] | null) => [
@@ -24,16 +24,19 @@ const sqlResponse = (row: unknown[] | null) => [
 ];
 
 describe("tower defense claim switch", () => {
-  restoreEnvAfterEach("TOWER_DEFENSE_CLAIMS_ENABLED");
+  const configured = env.TOWER_DEFENSE_CLAIMS_ENABLED;
+  const setSwitch = (value: string | undefined) =>
+    Object.assign(env, { TOWER_DEFENSE_CLAIMS_ENABLED: value });
+  afterEach(() => setSwitch(configured));
 
   it("is paused unless explicitly enabled", () => {
-    delete process.env.TOWER_DEFENSE_CLAIMS_ENABLED;
+    setSwitch(undefined);
     expect(areTowerDefenseClaimsEnabled()).toBe(false);
-    process.env.TOWER_DEFENSE_CLAIMS_ENABLED = "false";
+    setSwitch("false");
     expect(areTowerDefenseClaimsEnabled()).toBe(false);
-    process.env.TOWER_DEFENSE_CLAIMS_ENABLED = "1";
+    setSwitch("1");
     expect(areTowerDefenseClaimsEnabled()).toBe(false);
-    process.env.TOWER_DEFENSE_CLAIMS_ENABLED = "true";
+    setSwitch("true");
     expect(areTowerDefenseClaimsEnabled()).toBe(true);
   });
 });
@@ -90,7 +93,9 @@ describe("fetchSpacetimeCompletedRun", () => {
   });
 
   it("throws when SpacetimeDB is unreachable", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("down", { status: 502 }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("down", { status: 502 }),
+    );
     await expect(fetchSpacetimeCompletedRun("42")).rejects.toThrow();
   });
 });

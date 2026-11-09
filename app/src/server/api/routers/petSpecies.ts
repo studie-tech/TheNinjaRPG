@@ -25,7 +25,10 @@ import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import { idSchema } from "@/validators/misc";
-import { PetSpeciesValidator, updatePetSpeciesSchema } from "@/validators/petSpecies";
+import { PetSpeciesValidator } from "@/validators/petSpecies";
+
+/** IDs remain immutable when staff edit species content or retire an offering. */
+const updatePetSpeciesSchema = idSchema.extend({ data: PetSpeciesValidator });
 
 /** Manage authored species independently of each companion's generated artwork and progress. */
 export const petSpeciesRouter = createTRPCRouter({

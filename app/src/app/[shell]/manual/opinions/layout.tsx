@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { buildMetadata } from "@/libs/seo";
 
 export const metadata: Metadata = buildMetadata({
-  title: "Player Reviews",
+  title: "Staff Feedback",
   description:
-    "Read what players say about TheNinja-RPG, and leave your own review of the free browser-based ninja MMORPG.",
+    "Anonymously review the staff of TheNinja-RPG, the free browser-based ninja MMORPG. Only the game owner sees the reviews.",
   path: "/manual/opinions",
 });
 

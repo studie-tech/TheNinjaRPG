@@ -11,8 +11,7 @@
  *   bun run scripts/publish-sector-maps.ts --missing # preserve published maps
  *   bun run scripts/publish-sector-maps.ts --seed v2  # reroll layouts
  */
-import { createHash } from "node:crypto";
-import { and, eq, inArray, lt, sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { getFlagValue, parseIntList } from "./cli";
 import {
@@ -24,7 +23,9 @@ import {
 import { sectorMap, userData } from "@/drizzle/schema";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import { normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
+import { archiveOlderPublishedSectorMaps } from "@/queries/worldMap";
 import { drizzleDB } from "@/server/db";
+import { hashTiledJson } from "@/server/utils/sectorMap";
 import { chunkArray } from "@/utils/array";
 import { buildTiledJson } from "./generate-sector-map";
 
@@ -162,7 +163,7 @@ const main = async () => {
     const result = normalizeTiledSectorMap({
       sector,
       name: `Sector ${sector}`,
-      sourceHash: createHash("sha256").update(JSON.stringify(tiledJson)).digest("hex"),
+      sourceHash: hashTiledJson(tiledJson),
       tiledJson,
       terrainRegistry: mergeTerrainSpecs([]),
     });
@@ -171,9 +172,6 @@ const main = async () => {
     const now = new Date();
     const id = nanoid();
     const version = (latestVersion.get(sector) ?? 0) + 1;
-    // Insert the new PUBLISHED version FIRST, then archive the sector's prior
-    // published rows. If the insert fails the sector keeps its existing published
-    // map instead of being left all-archived.
     await drizzleDB.insert(sectorMap).values({
       id,
       sector,
@@ -189,16 +187,7 @@ const main = async () => {
       createdAt: now,
       updatedAt: now,
     });
-    await drizzleDB
-      .update(sectorMap)
-      .set({ status: "ARCHIVED", updatedAt: now })
-      .where(
-        and(
-          eq(sectorMap.sector, sector),
-          eq(sectorMap.status, "PUBLISHED"),
-          lt(sectorMap.version, version),
-        ),
-      );
+    await archiveOlderPublishedSectorMaps(drizzleDB, now, { sector }, version);
     published++;
     if (published % 50 === 0) console.log(`Published ${published} sectors...`);
   };

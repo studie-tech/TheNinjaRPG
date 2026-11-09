@@ -1,8 +1,7 @@
-import { canBootstrapQuestType } from "@/deltas/profile";
-
 import { beforeEach, expect, it } from "bun:test";
+import { canBootstrapQuestType } from "@/deltas/profile";
 import { quest, questHistory, type UserData } from "@/drizzle/schema";
-import { fetchQuestBootstrap } from "../../../../../src/server/api/routers/profile";
+import { fetchQuestBootstrap } from "@/server/api/routers/profile";
 import { fetchUncompletedQuests } from "@/server/utils/questAssignment";
 import { insertQuestHistory, insertQuests } from "../../../../setup/factories";
 import {
@@ -12,19 +11,16 @@ import {
 } from "../../../../setup/testDatabase";
 
 /**
- * `fetchUpdatedUser` used to call `insertNextQuest` for "tier" and "exam" on every request, and
- * that always begins with a `fetchUncompletedQuests` round-trip — which comes back empty for the
- * overwhelming majority of players. A JS guard now skips the call when nothing could possibly
- * match.
+ * `fetchUpdatedUser` skips `insertNextQuest` for "tier" and "exam" when `canBootstrapQuestType`
+ * rules out every candidate, saving a `fetchUncompletedQuests` round-trip that comes back empty
+ * for the overwhelming majority of players.
  *
  * The guard is only safe while it stays a strict SUBSET of that query's filters, so one direction
  * is what matters: whenever it says "impossible", the real query must genuinely return nothing.
  * These tests assert that against a real database rather than a mock.
  *
- * They call the shipped `canBootstrapQuestType`, deliberately. An earlier version of this file
- * re-implemented the predicate locally, which meant it went on passing while the real guard was
- * broken — tightening its level check to `>` would have denied every level-50 player their tier
- * quest with the suite still green.
+ * They call the production `canBootstrapQuestType`, so a change to the guard itself fails the
+ * suite: tightening its level check to `>` would deny every level-50 player their tier quest.
  *
  * Note which direction each assertion protects. A filter added to `fetchUncompletedQuests` makes
  * the query stricter, which keeps the guard a subset and is always safe. A filter added to the
@@ -70,7 +66,10 @@ describeWithDatabase("quest bootstrap guard", () => {
         sawPossible = true;
         // Only sound because this fixture clears the filters the guard does not look at; a new
         // filter on the query would legitimately break this without breaking the guard
-        expect(rows.length, `level ${level}: guard passed on an empty query`).toBeGreaterThan(0);
+        expect(
+          rows.length,
+          `level ${level}: guard passed on an empty query`,
+        ).toBeGreaterThan(0);
       } else {
         sawImpossible = true;
         // The direction that matters: skipping must never lose a startable quest
@@ -93,7 +92,11 @@ describeWithDatabase("quest bootstrap guard", () => {
 
     // In-band with nothing started: the call has to go through
     expect(
-      canBootstrapQuestType(await fetchQuestBootstrap(database, "user-guard"), "tier", 30),
+      canBootstrapQuestType(
+        await fetchQuestBootstrap(database, "user-guard"),
+        "tier",
+        30,
+      ),
     ).toBe(true);
 
     // A history row exists even when the quest was never finished, and
@@ -109,7 +112,7 @@ describeWithDatabase("quest bootstrap guard", () => {
     expect(await fetchUncompletedQuests(database, asUser(30), "tier")).toHaveLength(0);
   });
 
-  it("skips a type that has no quests at all, which is exam in production today", async () => {
+  it("skips a type that has no quests at all", async () => {
     await insertQuests([
       { id: "tier-1", questType: "tier", questRank: "D", tierLevel: 1, ...BAND },
     ]);

@@ -1,15 +1,45 @@
 import { describe, expect, it } from "bun:test";
 import { insertAction } from "@/libs/combat/actions";
-import { getBattleGrid } from "@/libs/combat/util";
-import { BarrierTag, CloneTag, DamageTag, HealTag, MoveTag, PoisonTag, StealthTag, SummonTag, VisualTag } from "@/validators/combat";
 import { applyEffects } from "@/libs/combat/process";
 import type { ReturnedBattle, UserEffect } from "@/libs/combat/types";
-import { makeBasicAttack, makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { getBattleGrid } from "@/libs/combat/util";
+import {
+  BarrierTag,
+  CloneTag,
+  DamageTag,
+  HealTag,
+  MoveTag,
+  PoisonTag,
+  StealthTag,
+  SummonTag,
+  VisualTag,
+} from "@/validators/combat";
+import {
+  makeBasicAttack,
+  makeBattleUser,
+  makeCompleteBattle,
+} from "../../setup/combat";
+
 const setup = () => {
   const stats = { curHealth: 1000, maxHealth: 1000, offence: 100, defence: 100 };
-  const actor = makeBattleUser("actor", { ...stats, direction: "left", longitude: 0, latitude: 0 });
-  const enemy = makeBattleUser("enemy", { ...stats, direction: "right", longitude: 1, latitude: 0 });
-  const ally = makeBattleUser("ally", { ...stats, direction: "left", longitude: 0, latitude: 1 });
+  const actor = makeBattleUser("actor", {
+    ...stats,
+    direction: "left",
+    longitude: 0,
+    latitude: 0,
+  });
+  const enemy = makeBattleUser("enemy", {
+    ...stats,
+    direction: "right",
+    longitude: 1,
+    latitude: 0,
+  });
+  const ally = makeBattleUser("ally", {
+    ...stats,
+    direction: "left",
+    longitude: 0,
+    latitude: 1,
+  });
   const battle = makeCompleteBattle({
     width: 5,
     height: 5,
@@ -24,7 +54,15 @@ const setup = () => {
     bloodright: [PoisonTag.parse({ power: 10, powerPerLevel: 0, rounds: 2 })],
   };
   const action = makeBasicAttack({ range: 3 });
-  const cast = (longitude = 1, latitude = 0) => insertAction({ battle, grid: getBattleGrid(20, battle as unknown as ReturnedBattle), action, actorId: "actor", longitude, latitude });
+  const cast = (longitude = 1, latitude = 0) =>
+    insertAction({
+      battle,
+      grid: getBattleGrid(20, battle as unknown as ReturnedBattle),
+      action,
+      actorId: "actor",
+      longitude,
+      latitude,
+    });
   const procs = () => battle.usersEffects.filter((e) => e.fromType === "skill");
   return { actor, battle, action, enemy, cast, procs };
 };
@@ -36,7 +74,15 @@ describe("enemy-targeted skill and bloodright effects", () => {
     expect(cast()).toBe(true);
     expect(procs()).toHaveLength(2);
     for (const effect of procs()) {
-      expect(effect).toMatchObject({ creatorId: "actor", targetId: "enemy", fromType: "skill", level: 100, createdRound: 1, isNew: true, castThisRound: true });
+      expect(effect).toMatchObject({
+        creatorId: "actor",
+        targetId: "enemy",
+        fromType: "skill",
+        level: 100,
+        createdRound: 1,
+        isNew: true,
+        castThisRound: true,
+      });
     }
     expect(procs().map((e) => e.actionId)).toEqual(["skill", "bloodright"]);
     expect(battle.extraState.enemySkills).toEqual(templates);
@@ -50,17 +96,32 @@ describe("enemy-targeted skill and bloodright effects", () => {
     expect(procs()).toHaveLength(0);
   });
 
-  it.each([SummonTag.parse({ aiId: "summoned-ai" }), CloneTag.parse({}), BarrierTag.parse({ staticAssetPath: "barrier" }), VisualTag.parse({})])("routes enemy $type tags to battlefield processing while preserving user passives", (tag) => {
-    const { battle, cast, procs } = setup();
-    battle.extraState.enemySkills!.skill = [tag];
-    expect(cast()).toBe(true);
-    expect(battle.groundEffects).toMatchObject([{
-      type: tag.type, creatorId: "actor", longitude: 1, latitude: 0,
-      fromType: "skill", createdRound: battle.round, isNew: true,
-    }]);
-    expect(procs().map((effect) => effect.type)).toEqual(["poison"]);
-    expect(battle.extraState.enemySkills!.skill).toEqual([tag]);
-  });
+  it.each([
+    SummonTag.parse({ aiId: "summoned-ai" }),
+    CloneTag.parse({}),
+    BarrierTag.parse({ staticAssetPath: "barrier" }),
+    VisualTag.parse({}),
+  ])(
+    "routes enemy $type tags to battlefield processing while preserving user passives",
+    (tag) => {
+      const { battle, cast, procs } = setup();
+      battle.extraState.enemySkills!.skill = [tag];
+      expect(cast()).toBe(true);
+      expect(battle.groundEffects).toMatchObject([
+        {
+          type: tag.type,
+          creatorId: "actor",
+          longitude: 1,
+          latitude: 0,
+          fromType: "skill",
+          createdRound: battle.round,
+          isNew: true,
+        },
+      ]);
+      expect(procs().map((effect) => effect.type)).toEqual(["poison"]);
+      expect(battle.extraState.enemySkills!.skill).toEqual([tag]);
+    },
+  );
 
   it("ignores enemy movement passives without suppressing other sources", () => {
     const { battle, cast, procs } = setup();
@@ -68,7 +129,10 @@ describe("enemy-targeted skill and bloodright effects", () => {
     expect(cast()).toBe(true);
     expect(battle.groundEffects).toEqual([]);
     expect(procs().map((effect) => effect.type)).toEqual(["poison"]);
-    expect(applyEffects(battle, "actor").newBattle.usersState[0]).toMatchObject({ longitude: 0, latitude: 0 });
+    expect(applyEffects(battle, "actor").newBattle.usersState[0]).toMatchObject({
+      longitude: 0,
+      latitude: 0,
+    });
   });
 
   it("does not trigger on self heals or movement", () => {
@@ -83,7 +147,13 @@ describe("enemy-targeted skill and bloodright effects", () => {
 
   it("does not trigger when the target is stealthed or the action is unaffordable", () => {
     const stealth = setup();
-    stealth.battle.usersEffects.push({ ...StealthTag.parse({}), id: "stealth", targetId: "enemy", isNew: false, rounds: 3 } as UserEffect);
+    stealth.battle.usersEffects.push({
+      ...StealthTag.parse({}),
+      id: "stealth",
+      targetId: "enemy",
+      isNew: false,
+      rounds: 3,
+    } as UserEffect);
     stealth.cast();
     expect(stealth.procs()).toHaveLength(0);
     const unaffordable = setup();

@@ -13,7 +13,7 @@ import * as preferences from "@/libs/audioPreferences";
 import * as audio from "@/utils/audio";
 import * as routing from "@/utils/routing";
 import { testRouter } from "../setup/router";
-import { testApi, TrpcTestProviders } from "../setup/trpc";
+import { TrpcTestProviders, testApi } from "../setup/trpc";
 
 const clients: QueryClient[] = [];
 const hiddenDescriptor = Object.getOwnPropertyDescriptor(document, "hidden");
@@ -27,7 +27,9 @@ beforeEach(() => {
   vi.spyOn(audio, "preloadAudioBuffers").mockResolvedValue(undefined);
   vi.spyOn(audio, "unlockAudioPlayback").mockImplementation(() => undefined);
   Object.assign(vi.spyOn(client, "api" as never), {
-    profile: testApi.profile, tournament: testApi.tournament, useUtils: testApi.useUtils,
+    profile: testApi.profile,
+    tournament: testApi.tournament,
+    useUtils: testApi.useUtils,
   });
   localStorage.setItem("sfxVolume", "0.35");
 });
@@ -48,7 +50,9 @@ it("preloads and unlocks the alert, plays once at saved volume, and enters comba
   await act(async () => Promise.all([test.receive(), test.receive()]));
   expect(test.play).toHaveBeenCalledTimes(1);
   expect(test.play).toHaveBeenCalledWith(BATTLE_ALERT_SFX_URL, 0.35);
-  expect(test.qc.getQueryData(test.key)).toMatchObject({ userData: { status: "BATTLE", battleId: "battle-one" } });
+  expect(test.qc.getQueryData(test.key)).toMatchObject({
+    userData: { status: "BATTLE", battleId: "battle-one" },
+  });
   expect(routing.pushToCombat).toHaveBeenCalled();
   test.view.rerender({ villageId: "another-village" });
   await act(async () => test.receive());
@@ -67,7 +71,9 @@ it.each([
   const test = mount(sfxOn);
   await act(async () => test.receive({ isDefender }));
   expect(test.play).not.toHaveBeenCalled();
-  expect(test.qc.getQueryData(test.key)).toMatchObject({ userData: { status: "BATTLE" } });
+  expect(test.qc.getQueryData(test.key)).toMatchObject({
+    userData: { status: "BATTLE" },
+  });
 });
 
 it("does not replay a foreground admission when its duplicate arrives in the background", async () => {
@@ -94,43 +100,73 @@ it("honors the local playback preference", async () => {
   expect(test.play).not.toHaveBeenCalled();
 });
 
-it.each(["unmount", "account switch"])("ignores stale admissions after %s", async (change) => {
-  const test = mount();
-  if (change === "unmount") test.view.unmount();
-  else test.setProfile(true, "another-player");
-  await act(async () => test.receive());
-  expect(test.play).not.toHaveBeenCalled();
-});
+it.each(["unmount", "account switch"])(
+  "ignores stale admissions after %s",
+  async (change) => {
+    const test = mount();
+    if (change === "unmount") test.view.unmount();
+    else test.setProfile(true, "another-player");
+    await act(async () => test.receive());
+    expect(test.play).not.toHaveBeenCalled();
+  },
+);
 
 /** Exercise live-event guards with an isolated profile cache and mocked transport/playback. */
 function mount(sfxOn = true) {
   let receive!: (data: UserEvent) => Promise<void>;
   vi.spyOn(Pusher, "default").mockImplementation((() => ({
-    subscribe: (channel: string) => ({ bind: (_event: string, handler: typeof receive) => {
-      if (channel === "player") receive = handler;
-    } }),
-    unsubscribe: vi.fn(), disconnect: vi.fn(), connection: { socket_id: "defender-tab" },
+    subscribe: (channel: string) => ({
+      bind: (_event: string, handler: typeof receive) => {
+        if (channel === "player") receive = handler;
+      },
+    }),
+    unsubscribe: vi.fn(),
+    disconnect: vi.fn(),
+    connection: { socket_id: "defender-tab" },
   })) as never);
-  vi.spyOn(preferences, "getAudioPreference").mockImplementation((_key, preference) => preference ?? true);
+  vi.spyOn(preferences, "getAudioPreference").mockImplementation(
+    (_key, preference) => preference ?? true,
+  );
   const play = vi.spyOn(audio, "playPreloadedAudio").mockResolvedValue(undefined);
   play.mockClear();
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(qc);
   const key = getQueryKey(testApi.profile.getUser, undefined, "query");
   /** Seed the current account snapshot read by notification guards at delivery time. */
-  const setProfile = (sfxOn: boolean, userId = "player") => qc.setQueryData(key, {
-    userData: { userId, sfxOn, status: "AWAKE", battleId: null, rank: "JONIN", titles: [], items: [] },
-    notifications: [],
-  });
+  const setProfile = (sfxOn: boolean, userId = "player") =>
+    qc.setQueryData(key, {
+      userData: {
+        userId,
+        sfxOn,
+        status: "AWAKE",
+        battleId: null,
+        rank: "JONIN",
+        titles: [],
+        items: [],
+      },
+      notifications: [],
+    });
   setProfile(sfxOn);
   const trpcClient = testApi.createClient({ links: [] });
   const wrapper = ({ children }: PropsWithChildren) => (
-    <TrpcTestProviders client={trpcClient} queryClient={qc}>{children}</TrpcTestProviders>
+    <TrpcTestProviders client={trpcClient} queryClient={qc}>
+      {children}
+    </TrpcTestProviders>
   );
-  const view = renderHook(({ villageId }) => usePusherHandler("player", { villageId, clanId: null }), {
-    wrapper, initialProps: { villageId: "village" },
-  });
-  return { qc, key, play, view, setProfile,
-    receive: (event: Partial<UserEvent> = {}) => receive({ type: "battle", battleId: "battle-one", isDefender: true, ...event }),
+  const view = renderHook(
+    ({ villageId }) => usePusherHandler("player", { villageId, clanId: null }),
+    {
+      wrapper,
+      initialProps: { villageId: "village" },
+    },
+  );
+  return {
+    qc,
+    key,
+    play,
+    view,
+    setProfile,
+    receive: (event: Partial<UserEvent> = {}) =>
+      receive({ type: "battle", battleId: "battle-one", isDefender: true, ...event }),
   };
 }

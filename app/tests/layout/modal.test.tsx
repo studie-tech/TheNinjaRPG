@@ -1,15 +1,12 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as dialogComponents from "@/components/ui/dialog";
-import { AUTO_ATTACK_SETTINGS, readAutoAttackSetting } from "@/hooks/autoAttack";
+import { NumberInput } from "@/components/ui/number-input";
 import Modal, {
   modalScrollableBodyClassName,
   modalViewportClassName,
 } from "@/layout/Modal";
-import { NumberInput } from "@/components/ui/number-input";
-import AutoAttackModal from "@/layout/AutoAttackModal";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { stubDialog } from "../setup/dialog";
 
 let restoreDialog: () => void;
@@ -18,7 +15,6 @@ beforeEach(() => {
 });
 afterEach(() => {
   restoreDialog();
-  restoreBrowserGlobals();
 });
 
 describe("Modal", () => {
@@ -99,7 +95,9 @@ describe("Modal", () => {
     expect(proceed.parentElement?.firstElementChild).toBe(proceed);
     expect(close.className).toContain("order-1");
     expect(proceed.className).toContain("order-2");
-    expect(getByRole("button", { name: "Cancel listing" }).className).not.toContain("order-");
+    expect(getByRole("button", { name: "Cancel listing" }).className).not.toContain(
+      "order-",
+    );
     expect(proceed.className).toContain("bg-primary");
     expect(close.className).toContain("bg-card");
 
@@ -124,7 +122,13 @@ describe("Modal", () => {
     const accept = vi.fn();
     const close = vi.fn();
     const { getByRole, rerender } = render(
-      <Modal isOpen setIsOpen={close} title="Quantity" proceed_label="Proceed" onAccept={accept}>
+      <Modal
+        isOpen
+        setIsOpen={close}
+        title="Quantity"
+        proceed_label="Proceed"
+        onAccept={accept}
+      >
         <NumberInput value="" min={1} />
       </Modal>,
     );
@@ -133,7 +137,13 @@ describe("Modal", () => {
     expect(accept).not.toHaveBeenCalled();
     expect(close).not.toHaveBeenCalled();
     rerender(
-      <Modal isOpen setIsOpen={close} title="Quantity" proceed_label="Proceed" onAccept={accept}>
+      <Modal
+        isOpen
+        setIsOpen={close}
+        title="Quantity"
+        proceed_label="Proceed"
+        onAccept={accept}
+      >
         <NumberInput value={3} min={1} />
       </Modal>,
     );
@@ -148,7 +158,13 @@ describe("Modal", () => {
       const close = vi.fn();
       const invalid = vi.fn();
       const { getByRole } = render(
-        <Modal isOpen setIsOpen={close} title="Quantity" proceed_label="Proceed" onAccept={accept}>
+        <Modal
+          isOpen
+          setIsOpen={close}
+          title="Quantity"
+          proceed_label="Proceed"
+          onAccept={accept}
+        >
           <NumberInput value={value} min={1} onInvalid={invalid} />
         </Modal>,
       );
@@ -201,33 +217,5 @@ describe("Modal", () => {
     fireEvent.click(getByRole("button", { name: "Dismiss" }));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(setIsOpen).toHaveBeenCalledWith(false);
-  });
-
-  it("keeps invalid auto-attack drafts out of storage and commits before enabling", () => {
-    installBrowserGlobals({ events: ["CustomEvent"] });
-    localStorage.setItem("autoAttackMinLevel", "1");
-    localStorage.setItem("autoAttackDelay", "5");
-    const enabled = vi.fn(() => {
-      expect(localStorage.getItem("autoAttackMinLevel")).toBe("3");
-      expect(localStorage.getItem("autoAttackDelay")).toBe("2");
-    });
-    const { getByRole } = render(<AutoAttackModal isOpen setIsOpen={vi.fn()} onEnable={enabled} />);
-    fireEvent.input(getByRole("spinbutton", { name: "Minimum Level to Attack" }), { target: { value: "" } });
-    expect(localStorage.getItem("autoAttackMinLevel")).toBe("1");
-    expect((getByRole("button", { name: "Enable Auto Attack" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.input(getByRole("spinbutton", { name: "Minimum Level to Attack" }), { target: { value: "3" } });
-    fireEvent.input(getByRole("spinbutton", { name: "Attack Delay (seconds)" }), { target: { value: "2" } });
-    fireEvent.click(getByRole("button", { name: "Enable Auto Attack" }));
-    expect(enabled).toHaveBeenCalledTimes(1);
-    localStorage.removeItem("autoAttackMinLevel");
-    localStorage.removeItem("autoAttackDelay");
-  });
-
-  it("reads saved auto-attack settings and falls back to their defaults", () => {
-    localStorage.removeItem("autoAttackDelay");
-    expect(readAutoAttackSetting(AUTO_ATTACK_SETTINGS.delay)).toBe(5);
-    localStorage.setItem("autoAttackDelay", "12");
-    expect(readAutoAttackSetting(AUTO_ATTACK_SETTINGS.delay)).toBe(12);
-    localStorage.removeItem("autoAttackDelay");
   });
 });

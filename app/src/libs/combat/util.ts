@@ -21,10 +21,10 @@ import { areBattleAllies } from "@/libs/combat/participants";
 import { getEffectPower } from "@/libs/combat/power";
 import { getTargetTiles } from "@/libs/combat/targeting";
 import type { BattleEffect, GroundEffect, UserEffect } from "@/libs/combat/types";
+import type { PathCalculator, TerrainHex } from "@/libs/hexgrid";
+import { createHexGrid, nameArenaTile, oddQHexDistance } from "@/libs/hexgrid";
 import { randomInt, secureRandomInt } from "@/utils/math";
 import type { EffectType, ZodAllTags } from "@/validators/combat";
-import type { PathCalculator, TerrainHex } from "../hexgrid";
-import { createHexGrid, nameArenaTile, oddQHexDistance } from "../hexgrid";
 import { stillInBattle } from "./actions";
 import type { GenName } from "./constants";
 import {
@@ -32,6 +32,9 @@ import {
   damageDerivedTagTypes,
   damageModifierTypes,
   GenNames,
+  INITIATIVE_LEVEL_BONUS,
+  INITIATIVE_PVP_STREAK_BONUSES,
+  INITIATIVE_TERRITORY_BONUS,
   POST_PIERCE_TAGS,
 } from "./constants";
 import type {
@@ -414,14 +417,14 @@ export const getEffectiveCurPool = (
 /**
  * Apply pool adjustments to current values using delta-adjustment model.
  *
- * Delta-adjustment model (Option 3 - no max mutation):
+ * Delta-adjustment model:
  * - Max pool values (maxHealth, maxChakra, maxStamina) are NEVER mutated
  * - They always represent the original base values
  * - Frontend uses getEffectiveMaxPool() to calculate display max (base + adjustment)
  * - Only current values are adjusted by the delta between previous and next adjustments
  *
- * This prevents the double-application bug where max was mutated here and then
- * getEffectiveMaxPool added the adjustment again on the frontend.
+ * Applying the adjustment to max here as well would double-count it, because
+ * getEffectiveMaxPool adds it on read.
  */
 export const applyPoolAdjustmentsToBase = (
   target: BattleUserState,
@@ -477,6 +480,10 @@ export const syncPoolAdjustments = (
     }
   });
 };
+
+/** Whether a battle's lobby countdown is still running, on the server-synced clock. */
+export const isBattleInLobby = (battle: { createdAt: Date }, timeDiff: number) =>
+  battle.createdAt.getTime() > Date.now() - timeDiff;
 
 /** Preserve lobby pools while tracking the complete effect list saved to battle state. */
 export const reconcileLobbyPools = (
@@ -708,7 +715,14 @@ export const isUserImmobilized = (
   userEffects: UserEffect[] | undefined,
 ) => hasActiveEffectOfType(userId, userEffects, "moveprevent");
 
-/** Get a copy of the barriers between two tiles on the grid, as well as the total absorbtion along that path */
+/**
+ * Get copies of the barriers on the shortest path between two tiles, and the total
+ * fraction of damage they absorb (0-1). Barriers are taken in path order; each copy's
+ * absorbPercentage is replaced by the 0-1 fraction of the hit it absorbs after the
+ * barriers before it (remaining × absorbPercentage / 100), not the schema's 1-100
+ * percentage. These fractions sum to the returned total.
+ * The caster's own barriers are skipped unless they sit on the target tile.
+ */
 export const getBarriersBetween = (
   userId: string,
   aStar: PathCalculator,
@@ -842,7 +856,6 @@ export const calcEffectRoundInfo = (
   return { startRound: -1, curRound: battle.round };
 };
 
-/** Check whether a tag still has duration remaining. */
 /** Whether at least one effect carries both an appear animation and an appear sound. */
 export const hasAppearAnimation = (effects: ZodAllTags[]) =>
   effects.some(
@@ -853,6 +866,7 @@ export const hasAppearAnimation = (effects: ZodAllTags[]) =>
       effect.appearSfx,
   );
 
+/** Check whether a tag still has duration remaining. */
 export const isEffectActive = (effect: UserEffect | GroundEffect) => {
   if (
     "timedBuffExpiresAt" in effect &&
@@ -938,9 +952,8 @@ export const getEffectStage = (effect: UserEffect | GroundEffect): 1 | 2 => {
 };
 
 /**
- * Get the appropriate base damage for a modifier calculation.
- * Damage reductions use the fully boosted damage.
- * Damage increases use staged base damage.
+ * Base for percentage damage modifiers: the staged pre-modifier damage when
+ * recorded, else the current damage or residual. The effect argument is unused.
  */
 export const getBaseDamageForModifier = (
   _effect: UserEffect,
@@ -1061,14 +1074,14 @@ const EFFECT_SORT_RANK = new Map<string, number>(
       "seal",
       "stun",
       "summon",
-      // Post-moodifiers before pierce
+      // Post-modifiers before pierce
       "decreasedamagegiven",
       "decreasedamagetaken",
       "increasedamagegiven",
       "increasedamagetaken",
       // Piercing damage
       "pierce",
-      // Post-modifiers after pierce (uses shared constant from constants.ts)
+      // Post-modifiers after pierce
       ...(POST_PIERCE_TAGS as ZodAllTags["type"][]),
       "copy",
       "mirror",
@@ -1219,26 +1232,29 @@ export const rollInitiative = (
   if (opponents) {
     const avgLevel =
       opponents.reduce((a, b) => a + (b.level ?? 1), 0) / opponents.length;
-    const levelBonus = Math.max(((user.level ?? 1) - avgLevel) * 0.03, 0);
+    const levelBonus = Math.max(
+      ((user.level ?? 1) - avgLevel) * INITIATIVE_LEVEL_BONUS,
+      0,
+    );
     roll = roll * (1 + levelBonus);
   }
   // Calculate territory bonus
   const ownTerritory = user.sector === villageSector;
-  const territoryBonus = ownTerritory ? 0.1 : -0.1;
+  const territoryBonus = ownTerritory
+    ? INITIATIVE_TERRITORY_BONUS
+    : -INITIATIVE_TERRITORY_BONUS;
   roll = roll * (1 + territoryBonus);
   // PvP bonus
   if ((user.pvpStreak ?? 0) > 0) {
     let pvpBonus = 0;
     for (let i = 1; i <= (user.pvpStreak ?? 0); i++) {
-      pvpBonus += PVP_STREAK_INITIATIVE_BONUS[i - 1] ?? 0.0025;
+      const step = Math.min(i, INITIATIVE_PVP_STREAK_BONUSES.length);
+      pvpBonus += INITIATIVE_PVP_STREAK_BONUSES[step - 1] ?? 0;
     }
     roll = roll * (1 + pvpBonus);
   }
   return roll;
 };
-
-/** Initiative bonus of each consecutive streak step; later steps add 0.25%. */
-const PVP_STREAK_INITIATIVE_BONUS = [0.02, 0.015, 0.01, 0.005];
 
 /**
  * Checks if a move is valid on the battlefield.

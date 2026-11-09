@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import LoadoutSelector from "@/layout/LoadoutSelector";
 import * as userContext from "@/utils/UserContext";
 
@@ -41,7 +41,9 @@ it("renames the selected loadout from the pencil beside the dropdown", () => {
   act(() => {
     fireEvent.click(screen.getByRole("button", { name: "Rename Loadout 2" }));
   });
-  const input = screen.getByRole("textbox", { name: "Rename Loadout 2" }) as HTMLInputElement;
+  const input = screen.getByRole("textbox", {
+    name: "Rename Loadout 2",
+  }) as HTMLInputElement;
   // An unnamed loadout shows the name it goes by.
   expect(input.placeholder).toBe("Loadout 2");
   act(() => {

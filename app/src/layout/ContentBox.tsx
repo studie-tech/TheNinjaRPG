@@ -10,7 +10,8 @@ export interface ContentBoxProps {
   title?: string;
   defaultBackHref?: string;
   subtitle?: string | React.ReactNode;
-  topRightCorntentBreakpoint?: "sm" | "md" | "lg" | "xl" | "2xl";
+  /** Stack the top-right content under the title on phones. */
+  stackTopRight?: boolean;
   topRightContent?: React.ReactNode;
   bottomRightContent?: React.ReactNode;
   padding?: boolean;
@@ -28,7 +29,7 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
   const router = useRouter();
   const [canGoBack, setCanGoBack] = useState(false);
 
-  // Handle back navigation
+  // Detect whether browser history has a previous page
   useEffect(() => {
     setCanGoBack(history.length > 1);
   }, []);
@@ -72,7 +73,7 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
       {props.initialBreak && <div className="h-4"></div>}
       <div className="sm:container" data-content-box id={props.id}>
         <div
-          className={`flex ${props.topRightCorntentBreakpoint ? `flex-col ${props.topRightCorntentBreakpoint}:flex-row ${props.topRightCorntentBreakpoint}:items-center` : "flex-row items-center"}`}
+          className={`flex ${props.stackTopRight ? "flex-col sm:flex-row sm:items-center" : "flex-row items-center"}`}
         >
           {props.title && (
             <div className="self-start">

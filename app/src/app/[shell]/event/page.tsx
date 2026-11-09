@@ -71,7 +71,7 @@ export default function NotifyUsers() {
   );
 }
 
-export const EventGainMultiplierPanel: React.FC<{
+const EventGainMultiplierPanel: React.FC<{
   setting: ChangeSettingSchema["setting"];
   title: string;
   subtitle: string;
@@ -229,7 +229,7 @@ const NotificationSystem: React.FC = () => {
     data,
     fetchNextPage,
     hasNextPage,
-    isPending: l1,
+    isPending: isLoadingNotifications,
   } = api.misc.getPreviousNotifications.useInfiniteQuery(
     { limit: 20 },
     {
@@ -240,7 +240,7 @@ const NotificationSystem: React.FC = () => {
   const notifications = data?.pages.flatMap((page) => page.data);
 
   // Mutations
-  const { mutate: submitNotification, isPending: l2 } =
+  const { mutate: submitNotification, isPending: isSubmitting } =
     api.misc.submitNotification.useMutation({
       onMutate: prepareUserUpdate,
       onSuccess: async (data, _variables, revision) => {
@@ -297,8 +297,8 @@ const NotificationSystem: React.FC = () => {
           subtitle="Push notifications to all users"
           initialBreak={true}
         >
-          {l2 && <Loader explanation="Submitting notification" />}
-          {!l2 && (
+          {isSubmitting && <Loader explanation="Submitting notification" />}
+          {!isSubmitting && (
             <div className="grid grid-cols-1">
               <form onSubmit={onSubmit}>
                 <UserSearchSelect
@@ -325,8 +325,8 @@ const NotificationSystem: React.FC = () => {
         subtitle="All Previous Notifications"
         initialBreak={true}
       >
-        {l1 && <Loader explanation="Submitting notification" />}
-        {!l1 && (
+        {isLoadingNotifications && <Loader explanation="Loading notifications" />}
+        {!isLoadingNotifications && (
           <div className="grid grid-cols-1">
             {notifications?.map((entry, idx) => {
               return (
@@ -364,5 +364,6 @@ const NotificationSystem: React.FC = () => {
   );
 };
 
+/** Whole days since `settingTime`; negative while that time is still ahead. */
 const remainingEventDays = (settingTime: Date, timeDiff?: number) =>
   Math.round(secondsPassed(settingTime, timeDiff) / DAY_S);

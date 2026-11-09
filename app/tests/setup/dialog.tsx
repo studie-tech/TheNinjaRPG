@@ -2,7 +2,11 @@ import { vi } from "bun:test";
 import type { HTMLAttributes, ReactNode } from "react";
 import * as dialogComponents from "@/components/ui/dialog";
 
-const Passthrough = ({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) => (
+const Passthrough = ({
+  className,
+  children,
+  ...props
+}: HTMLAttributes<HTMLDivElement>) => (
   <div className={className} {...props}>
     {children}
   </div>

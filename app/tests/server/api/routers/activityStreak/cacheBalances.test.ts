@@ -1,14 +1,15 @@
-import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 import {
   actionLog,
   activityStreakConfig,
   userData,
-  userStreakProgress,
   userQueue,
+  userStreakProgress,
 } from "@/drizzle/schema";
 import { activityStreakRouter } from "@/server/api/routers/activityStreak";
 import { insertUsers } from "../../../../setup/factories";
+import { queueEnergy } from "../../../../setup/queues";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import {
   callerFor,
@@ -16,14 +17,19 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { queueEnergy } from "../../../../setup/queues";
 
 const userId = "event-pass-cache-player";
 const configId = "event-pass-cache-config";
 
 describeWithDatabase("event pass cache balances", () => {
   beforeEach(async () => {
-    await resetTables(userQueue, userStreakProgress, activityStreakConfig, actionLog, userData);
+    await resetTables(
+      userQueue,
+      userStreakProgress,
+      activityStreakConfig,
+      actionLog,
+      userData,
+    );
     await insertUsers([{ userId, money: 100, reputationPoints: 50, seichiSilver: 25 }]);
     const db = await getTestDatabase();
     await db.insert(activityStreakConfig).values({

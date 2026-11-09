@@ -1,22 +1,19 @@
 import { and, eq, gte, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import type {
-  BattleType,
-  ItemType,
-  LetterRank,
-  RankedRank,
-  StatType,
-  UserRank,
-} from "@/drizzle/constants";
+import type { BattleType, RankedRank } from "@/drizzle/constants";
 import {
   BattleDataEntryType,
   BattleTypes,
+  ItemTypes,
+  LetterRanks,
   MAX_PLAYER_LEVEL,
   QuestRewardMetrics,
   QuestTypes,
   RANKED_RANKS,
   RecruitmentMetricMax,
   RecruitmentMetrics,
+  StatTypes,
+  UserRanks,
 } from "@/drizzle/constants";
 import {
   abEvent,
@@ -26,6 +23,7 @@ import {
   jutsu,
   logBattleLengths,
   logQueueLengths,
+  logRankedPicks,
   paypalTransaction,
   quest,
   skillTree,
@@ -39,6 +37,7 @@ import { isSkillVisible } from "@/libs/skillRequirements";
 import { summarizeBattleOutcomes } from "@/libs/statistics";
 import { fetchBloodline } from "@/queries/bloodline";
 import {
+  dateRangeConditions,
   deleteDataBattleActionForDeleteAllDataBattleAction,
   deleteDataBattleActionForDeleteSingleDataBattleAction,
   deleteLogBattleLengthsForClearAllBattleLengths,
@@ -85,12 +84,10 @@ import {
   selectUserDataForGetRecruitmentLevelDistribution3,
   selectUserDataForGetRecruitmentLevelDistribution4,
   selectUserDataForGetStatistics,
-  selectUserDataForGetStatistics2,
   selectUserItemForGetItemBalanceStatistics,
   selectUserItemForGetStatistics,
   selectUserJutsuForGetJutsuBalanceStatistics,
   selectUserJutsuForGetStatistics,
-  selectUserJutsuForGetStatistics2,
   selectUserSkillForGetSkillTreeBalanceStatistics,
   selectVisitorLogForGetRecruitmentMainMetrics,
   selectVisitorLogForGetRecruitmentMainMetrics2,
@@ -202,11 +199,7 @@ export const dataRouter = createTRPCRouter({
         );
       }
       // Filtering
-      const visitorWhere: QueryCondition[] = [];
-      if (input.startDate)
-        visitorWhere.push(gte(visitorLog.createdAt, new Date(input.startDate)));
-      if (input.endDate)
-        visitorWhere.push(lte(visitorLog.createdAt, new Date(input.endDate)));
+      const visitorWhere = dateRangeConditions(visitorLog.createdAt, input);
       if (input.utmSource) {
         visitorWhere.push(eq(visitorLog.utmSource, input.utmSource));
       } else {
@@ -395,13 +388,8 @@ export const dataRouter = createTRPCRouter({
       ];
       whereConditions.push(
         inArray(paypalTransaction.status, ["COMPLETED", "REVIEW_REQUIRED"]),
+        ...dateRangeConditions(paypalTransaction.createdAt, input),
       );
-      if (input.startDate)
-        whereConditions.push(
-          gte(paypalTransaction.createdAt, new Date(input.startDate)),
-        );
-      if (input.endDate)
-        whereConditions.push(lte(paypalTransaction.createdAt, new Date(input.endDate)));
 
       // Query revenue grouped by utmSource using visitorLog tracking
       const rows = await selectPaypalTransactionForGetRevenueByReferralSource(
@@ -590,7 +578,7 @@ export const dataRouter = createTRPCRouter({
         parseRecruitmentSources(input.sources);
       const dayExpr = sql<string>`CAST(${userData.createdAt} AS DATE)`;
 
-      // No selection: only users with any referral source (historical behavior)
+      // No selection: only users with a referral source
       const rows = await selectUserDataForGetRecruitmentDailyLevelStats(
         ctx.drizzle,
         dayExpr,
@@ -737,8 +725,8 @@ export const dataRouter = createTRPCRouter({
       z.object({
         battleTypes: z.array(z.enum(BattleTypes)).optional(),
         minCount: z.number().min(1).default(1),
-        bloodlineRanks: z.array(z.string()).optional(),
-        statClassifications: z.array(z.string()).optional(),
+        bloodlineRanks: z.array(z.enum(LetterRanks)).optional(),
+        statClassifications: z.array(z.enum(StatTypes)).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -755,18 +743,13 @@ export const dataRouter = createTRPCRouter({
       // Build bloodline rank filter if needed
       const bloodlineWhereConditions: QueryCondition[] = [];
       if (input.bloodlineRanks && input.bloodlineRanks.length > 0) {
-        bloodlineWhereConditions.push(
-          inArray(bloodline.rank, input.bloodlineRanks as LetterRank[]),
-        );
+        bloodlineWhereConditions.push(inArray(bloodline.rank, input.bloodlineRanks));
       }
 
       // Build stat classification filter if needed
       if (input.statClassifications && input.statClassifications.length > 0) {
         bloodlineWhereConditions.push(
-          inArray(
-            bloodline.statClassification,
-            input.statClassifications as StatType[],
-          ),
+          inArray(bloodline.statClassification, input.statClassifications),
         );
       }
 
@@ -835,7 +818,7 @@ export const dataRouter = createTRPCRouter({
       // Build where conditions
       const whereConditions = contentBalanceConditions("jutsu", input);
 
-      // Perform the filter by jutsu effects directly in the main query using JSON_SEARCH in the WHERE clause if needed
+      // Keep only actions used at least minCount times
       const havingClause = gte(sql`SUM(${dataBattleAction.count})`, input.minCount);
 
       // Build effect filter if needed
@@ -1065,7 +1048,7 @@ export const dataRouter = createTRPCRouter({
       z.object({
         battleTypes: z.array(z.enum(BattleTypes)).optional(),
         minCount: z.number().min(1).default(1),
-        itemTypes: z.array(z.string()).optional(),
+        itemTypes: z.array(z.enum(ItemTypes)).optional(),
         bloodlineIds: z.array(z.string()).optional(),
       }),
     )
@@ -1073,12 +1056,12 @@ export const dataRouter = createTRPCRouter({
       // Build where conditions
       const whereConditions = contentBalanceConditions("item", input);
 
-      // Perform the filter by item types directly in the main query
+      // Keep only actions used at least minCount times
       const havingClause = gte(sql`SUM(${dataBattleAction.count})`, input.minCount);
 
       // Build item type filter if needed
       if (input.itemTypes && input.itemTypes.length > 0) {
-        whereConditions.push(inArray(item.itemType, input.itemTypes as ItemType[]));
+        whereConditions.push(inArray(item.itemType, input.itemTypes));
       }
 
       // Run equippedCounts and usage queries in parallel for efficiency
@@ -1107,7 +1090,7 @@ export const dataRouter = createTRPCRouter({
       z.object({
         battleTypes: z.array(z.enum(BattleTypes)).optional(),
         minCount: z.number().min(1).default(1),
-        userRanks: z.array(z.string()).optional(),
+        userRanks: z.array(z.enum(UserRanks)).optional(),
         villages: z.array(z.string()).optional(),
         minLevel: z.number().min(1).default(1),
         maxLevel: z.number().max(MAX_PLAYER_LEVEL).default(MAX_PLAYER_LEVEL),
@@ -1122,12 +1105,12 @@ export const dataRouter = createTRPCRouter({
         whereConditions.push(inArray(dataBattleAction.battleType, input.battleTypes));
       }
 
-      // Perform the filter by user ranks, villages, and level range directly in the main query
+      // Keep only actions used at least minCount times
       const havingClause = gte(sql`SUM(${dataBattleAction.count})`, input.minCount);
 
       // Build user rank filter if needed
       if (input.userRanks && input.userRanks.length > 0) {
-        whereConditions.push(inArray(userData.rank, input.userRanks as UserRank[]));
+        whereConditions.push(inArray(userData.rank, input.userRanks));
       }
 
       // Build village filter if needed
@@ -1140,7 +1123,6 @@ export const dataRouter = createTRPCRouter({
         and(gte(userData.level, input.minLevel), lte(userData.level, input.maxLevel)),
       );
 
-      // Run battleCounts and usage queries in parallel for efficiency
       const [usage] = await Promise.all([
         selectDataBattleActionForGetAiBalanceStatistics(
           ctx.drizzle,
@@ -1149,7 +1131,6 @@ export const dataRouter = createTRPCRouter({
         ),
       ]);
 
-      // Add battle count to each result
       return usage;
     }),
   getBattleLengthStatistics: publicProcedure
@@ -1285,7 +1266,7 @@ export const dataRouter = createTRPCRouter({
       z.object({
         minCount: z.number().min(1).default(1),
         limit: z.number().min(1).max(100).default(50),
-        types: z.array(z.string()).optional(),
+        types: z.array(z.enum(logRankedPicks.type.enumValues)).optional(),
         name: z.string().optional(),
       }),
     )
@@ -1403,48 +1384,50 @@ export const dataRouter = createTRPCRouter({
     .input(
       z.object({
         id: z.string(),
-        type: z.enum(["jutsu", "item", "bloodline", "basic", "ai"]),
+        type: z.enum(["jutsu", "item", "bloodline", "ai"]),
         battleType: z.enum(BattleTypes).optional(),
         startDate: z.string().optional(),
         endDate: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      // General User Statistics
-      const usage = await selectDataBattleActionForGetStatistics(ctx.drizzle, input);
-      // Process different inputs
-      if (input.type === "jutsu") {
-        // Jutsu Statistics
-        const info = await fetchJutsu(ctx.drizzle, input.id);
-        const levelDistribution = await selectUserJutsuForGetStatistics(
-          ctx.drizzle,
-          input,
-        );
-        const total = await selectUserJutsuForGetStatistics2(ctx.drizzle, input);
-        const totalUsers = total?.[0]?.count || 0;
-        return { info, usage, totalUsers, levelDistribution };
-      } else if (input.type === "bloodline") {
-        // Bloodline Statistics
-        const info = await fetchBloodline(ctx.drizzle, input.id);
-        const levelDistribution = await selectUserDataForGetStatistics(
-          ctx.drizzle,
-          input,
-        );
-        const total = await selectUserDataForGetStatistics2(ctx.drizzle, input);
-        const totalUsers = total?.[0]?.count || 0;
-        return { info, usage, totalUsers, levelDistribution };
-      } else if (input.type === "item") {
-        // Item Statistics
-        const info = await fetchItem(ctx.drizzle, input.id);
-        const total = await selectUserItemForGetStatistics(ctx.drizzle, input);
-        const totalUsers = total?.[0]?.count || 0;
-        return { info, usage, totalUsers, levelDistribution: null };
-      } else if (input.type === "ai") {
-        // AI Statistics
-        const info = await findUserDataForGetStatistics(ctx.drizzle, input);
-        return { info, usage, totalUsers: null, levelDistribution: null };
-      } else {
-        throw serverError("BAD_REQUEST", `Invalid input type: ${input.type}`);
+      // General user statistics load with the type-specific queries
+      const usage = selectDataBattleActionForGetStatistics(ctx.drizzle, input);
+      switch (input.type) {
+        case "jutsu": {
+          const [info, levelDistribution, usageRows] = await Promise.all([
+            fetchJutsu(ctx.drizzle, input.id),
+            selectUserJutsuForGetStatistics(ctx.drizzle, input),
+            usage,
+          ]);
+          const totalUsers = levelDistribution.reduce((sum, row) => sum + row.count, 0);
+          return { info, usage: usageRows, totalUsers, levelDistribution };
+        }
+        case "bloodline": {
+          const [info, levelDistribution, usageRows] = await Promise.all([
+            fetchBloodline(ctx.drizzle, input.id),
+            selectUserDataForGetStatistics(ctx.drizzle, input),
+            usage,
+          ]);
+          const totalUsers = levelDistribution.reduce((sum, row) => sum + row.count, 0);
+          return { info, usage: usageRows, totalUsers, levelDistribution };
+        }
+        case "item": {
+          const [info, total, usageRows] = await Promise.all([
+            fetchItem(ctx.drizzle, input.id),
+            selectUserItemForGetStatistics(ctx.drizzle, input),
+            usage,
+          ]);
+          const totalUsers = total?.[0]?.count || 0;
+          return { info, usage: usageRows, totalUsers, levelDistribution: null };
+        }
+        case "ai": {
+          const [info, usageRows] = await Promise.all([
+            findUserDataForGetStatistics(ctx.drizzle, input),
+            usage,
+          ]);
+          return { info, usage: usageRows, totalUsers: null, levelDistribution: null };
+        }
       }
     }),
 });

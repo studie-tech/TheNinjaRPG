@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { assetAnimationClip, characterAnimationClip, sampleAnimationClip, walkDuration, walkProgress } from "@/libs/rendering/animation";
+import {
+  assetAnimationClip,
+  characterAnimationClip,
+  sampleAnimationClip,
+  walkDuration,
+  walkProgress,
+} from "@/libs/rendering/animation";
 import {
   type CharacterAssetConfig,
   type SpriteDirection,
@@ -14,21 +20,42 @@ const frames = (name: string, count: number) =>
   Object.fromEntries(
     spriteDirections.map((direction) => [
       direction,
-      Array.from({ length: count }, (_, index) => `${name}/${direction}/frame_00${index}.png`),
+      Array.from(
+        { length: count },
+        (_, index) => `${name}/${direction}/frame_00${index}.png`,
+      ),
     ]),
   ) as CharacterAssetConfig["animations"][number]["frames"];
 
 const PLAYER_ASSET_CONFIG: CharacterAssetConfig = {
   rotations: rotations(),
   animations: [
-    { name: "idle", state: "idle", frameDurationMs: 100, loop: true, frames: frames("idle", 8) },
-    { name: "throw", state: "throw", frameDurationMs: 60, loop: false, frames: frames("throw", 7) },
+    {
+      name: "idle",
+      state: "idle",
+      frameDurationMs: 100,
+      loop: true,
+      frames: frames("idle", 8),
+    },
+    {
+      name: "throw",
+      state: "throw",
+      frameDurationMs: 60,
+      loop: false,
+      frames: frames("throw", 7),
+    },
   ],
 };
 const LIGHT_ENEMY_ASSET_CONFIG: CharacterAssetConfig = {
   rotations: rotations(),
   animations: [
-    { name: "running", state: "moving", frameDurationMs: 80, loop: true, frames: frames("running", 6) },
+    {
+      name: "running",
+      state: "moving",
+      frameDurationMs: 80,
+      loop: true,
+      frames: frames("running", 6),
+    },
   ],
 };
 
@@ -42,7 +69,10 @@ describe("shared animation clips", () => {
     expect(sampleAnimationClip(clip, 480)).toEqual({ index: 7, finished: true });
   });
   it("catches up after a long frame and wraps looping clips without accumulating drift", () => {
-    const clip = assetAnimationClip({ image: "effect.png", frames: 8, speed: 60 }, true);
+    const clip = assetAnimationClip(
+      { image: "effect.png", frames: 8, speed: 60 },
+      true,
+    );
     expect(sampleAnimationClip(clip, 10_000)).toEqual({ index: 6, finished: false });
     expect(sampleAnimationClip(clip, -10)).toEqual({ index: 0, finished: false });
   });
@@ -52,7 +82,9 @@ describe("shared animation clips", () => {
     expect(sampleAnimationClip(clip, 480, true)).toEqual({ index: 0, finished: true });
   });
   it("keeps all eight authored directions and their phase when direction changes", () => {
-    for (const direction of Object.keys(PLAYER_ASSET_CONFIG.rotations) as SpriteDirection[]) {
+    for (const direction of Object.keys(
+      PLAYER_ASSET_CONFIG.rotations,
+    ) as SpriteDirection[]) {
       const clip = characterAnimationClip(PLAYER_ASSET_CONFIG, "idle", direction);
       expect(clip.frameCount).toBe(8);
       expect(clip.images[3]).toContain(`/${direction}/frame_003.png`);
@@ -62,22 +94,32 @@ describe("shared animation clips", () => {
   it("falls back to a rotation and keeps configured one-shot behavior", () => {
     const missing = characterAnimationClip(PLAYER_ASSET_CONFIG, "moving", "east");
     expect(missing.images).toEqual(["rotations/east.png"]);
-    expect(characterAnimationClip(LIGHT_ENEMY_ASSET_CONFIG, "moving", "south").frameDurationMs).toBe(80);
-    expect(characterAnimationClip(PLAYER_ASSET_CONFIG, "throw", "south").loop).toBe(false);
+    expect(
+      characterAnimationClip(LIGHT_ENEMY_ASSET_CONFIG, "moving", "south")
+        .frameDurationMs,
+    ).toBe(80);
+    expect(characterAnimationClip(PLAYER_ASSET_CONFIG, "throw", "south").loop).toBe(
+      false,
+    );
   });
 });
 
 describe("battlefield walking", () => {
   const samples = (duration: number, count = 200) =>
-    Array.from({ length: count + 1 }, (_, index) => walkProgress(index / count, duration));
+    Array.from({ length: count + 1 }, (_, index) =>
+      walkProgress(index / count, duration),
+    );
 
-  it.each([1, 3, 8])("covers exactly the whole %s-hex path without ever reversing", (tiles) => {
-    const points = samples(walkDuration(tiles));
-    expect(points[0]).toBe(0);
-    expect(points.at(-1)).toBeCloseTo(1);
-    for (let index = 1; index < points.length; index++)
-      expect(points[index]!).toBeGreaterThanOrEqual(points[index - 1]!);
-  });
+  it.each([1, 3, 8])(
+    "covers exactly the whole %s-hex path without ever reversing",
+    (tiles) => {
+      const points = samples(walkDuration(tiles));
+      expect(points[0]).toBe(0);
+      expect(points.at(-1)).toBeCloseTo(1);
+      for (let index = 1; index < points.length; index++)
+        expect(points[index]!).toBeGreaterThanOrEqual(points[index - 1]!);
+    },
+  );
 
   it("accelerates, cruises and brakes across a long path instead of each hex", () => {
     const points = samples(walkDuration(5));

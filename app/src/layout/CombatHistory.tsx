@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { BATTLE_LOG_DEFAULT_LIMIT, BATTLE_LOG_FULL_LIMIT } from "@/drizzle/constants";
 import ElementImage from "@/layout/ElementImage";
+import Loader from "@/layout/Loader";
 import { EFFECT_TEXT_COLORS } from "@/libs/combat/constants";
 import type { ActionEffect, CombatResult } from "@/libs/combat/types";
 import { cn } from "@/libs/shadui";
@@ -13,7 +14,6 @@ import { getUserFederalStatus } from "@/utils/paypal";
 import { canViewFullBattleLog } from "@/utils/permissions";
 import { insertComponentsIntoText } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
-import Loader from "./Loader";
 
 interface CombatHistoryProps {
   battleId: string;
@@ -95,8 +95,7 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
     }
   }, [maxRound]);
 
-  sortedGroups?.forEach((entries, roundKey) => {
-    const round = roundKey; // round is a meaningful identifier (round number), not just an index
+  sortedGroups?.forEach((entries, round) => {
     const isOpen = openRounds.includes(round);
     const roundTime = placeholderRounds.has(round) ? undefined : entries[0]?.createdAt;
     const timeString = roundTime
@@ -135,104 +134,58 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
       </button>
     );
 
-    const latestRoundBattleVersion = entries?.sort(
-      (a, b) => b.battleVersion - a.battleVersion,
-    )?.[0]?.battleVersion;
+    entries.sort((a, b) => b.battleVersion - a.battleVersion);
+    const latestRoundBattleVersion = entries[0]?.battleVersion;
 
     history.push(
       <li key={`r-${round}`} className="relative pl-2">
         {roundHeader}
         <div className="flex flex-col gap-1">
           {isOpen &&
-            entries
-              .sort((a, b) => b.battleVersion - a.battleVersion)
-              .map((entry) => {
-                const effects = entry.appliedEffects as ActionEffect[];
-                const isNewUser =
-                  entry.description.includes(". It is now ") ||
-                  entry.description.includes("End Turn: ");
-                const isLastEntry = entry.battleVersion === latestRoundBattleVersion;
-                return (
-                  <div
-                    key={`v-${entry.battleVersion}`}
-                    className="py-1 pl-4 font-normal text-gray-600 text-sm"
-                  >
-                    {isNewUser && !isLastEntry ? <hr className="mt-0 mb-3" /> : null}
-                    {userData?.showBattleDescription ? (
-                      <p>
-                        #{entry.battleVersion}: {parseHtml(entry.description)}
-                      </p>
-                    ) : (
-                      ""
-                    )}
-                    {effects?.map((effect, effectIdx) => {
-                      const effectKey = `${entry.battleVersion}-${effectIdx}`;
-                      const color = EFFECT_TEXT_COLORS[effect.color] ?? "text-black";
-                      const text = insertComponentsIntoText(effect.txt, {
-                        Highest: (
-                          <span key={`${effectKey}-H`} className="text-stone-500">
-                            Highest
-                          </span>
-                        ),
-                        Taijutsu: (
-                          <span key={`${effectKey}-T`} className="text-green-600">
-                            Taijutsu
-                          </span>
-                        ),
-                        Bukijutsu: (
-                          <span key={`${effectKey}-B`} className="text-red-600">
-                            Bukijutsu
-                          </span>
-                        ),
-                        Ninjutsu: (
-                          <span key={`${effectKey}-N`} className="text-blue-600">
-                            Ninjutsu
-                          </span>
-                        ),
-                        Genjutsu: (
-                          <span key={`${effectKey}-G`} className="text-purple-600">
-                            Genjutsu
-                          </span>
-                        ),
-                        Strength: (
-                          <span key={`${effectKey}-Str`} className="text-blue-800">
-                            Strength
-                          </span>
-                        ),
-                        Intelligence: (
-                          <span key={`${effectKey}-I`} className="text-teal-600">
-                            Intelligence
-                          </span>
-                        ),
-                        Willpower: (
-                          <span key={`${effectKey}-W`} className="text-orange-600">
-                            Willpower
-                          </span>
-                        ),
-                        Speed: (
-                          <span key={`${effectKey}-Spd`} className="text-cyan-600">
-                            Speed
-                          </span>
-                        ),
-                      });
-                      return (
-                        <div key={effectKey} className={cn(color)}>
-                          - {text}{" "}
-                          <div className="flex flex-row items-center gap-1 pl-2">
-                            {effect.types?.map((t, i) => (
-                              <ElementImage
-                                key={`${t}-${i}`}
-                                element={t}
-                                className="h-5 w-5"
-                              />
-                            ))}
-                          </div>
+            entries.map((entry) => {
+              const effects = entry.appliedEffects as ActionEffect[];
+              const isNewUser =
+                entry.description.includes(". It is now ") ||
+                entry.description.includes("End Turn: ");
+              const isLastEntry = entry.battleVersion === latestRoundBattleVersion;
+              return (
+                <div
+                  key={`v-${entry.battleVersion}`}
+                  className="py-1 pl-4 font-normal text-gray-600 text-sm"
+                >
+                  {isNewUser && !isLastEntry ? <hr className="mt-0 mb-3" /> : null}
+                  {userData?.showBattleDescription ? (
+                    <p>
+                      #{entry.battleVersion}: {parseHtml(entry.description)}
+                    </p>
+                  ) : (
+                    ""
+                  )}
+                  {effects?.map((effect, effectIdx) => {
+                    const effectKey = `${entry.battleVersion}-${effectIdx}`;
+                    const color = EFFECT_TEXT_COLORS[effect.color] ?? "text-black";
+                    const text = insertComponentsIntoText(
+                      effect.txt,
+                      STAT_KEYWORD_HIGHLIGHTS,
+                    );
+                    return (
+                      <div key={effectKey} className={cn(color)}>
+                        - {text}{" "}
+                        <div className="flex flex-row items-center gap-1 pl-2">
+                          {effect.types?.map((t, i) => (
+                            <ElementImage
+                              key={`${t}-${i}`}
+                              element={t}
+                              className="h-5 w-5"
+                            />
+                          ))}
                         </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
         </div>
       </li>,
     );
@@ -252,3 +205,23 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
 };
 
 export default CombatHistory;
+
+/** Stat words a battle log effect highlights wherever they appear. */
+const STAT_KEYWORD_HIGHLIGHTS: Record<string, React.ReactNode> = Object.fromEntries(
+  Object.entries({
+    Highest: "text-stone-500",
+    Taijutsu: "text-green-600",
+    Bukijutsu: "text-red-600",
+    Ninjutsu: "text-blue-600",
+    Genjutsu: "text-purple-600",
+    Strength: "text-blue-800",
+    Intelligence: "text-teal-600",
+    Willpower: "text-orange-600",
+    Speed: "text-cyan-600",
+  }).map(([word, className]) => [
+    word,
+    <span key={word} className={className}>
+      {word}
+    </span>,
+  ]),
+);

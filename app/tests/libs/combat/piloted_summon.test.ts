@@ -1,10 +1,10 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { availableUserActions } from "@/libs/combat/actions";
+import { maskBattle, maskUsersState } from "@/libs/combat/masking";
 import { shouldPilotSummon } from "@/libs/combat/summon";
 import { wantsHumanActionSet } from "@/libs/combat/turn";
-import { maskBattle, maskUsersState } from "@/libs/combat/masking";
 import type { BattleUserState } from "@/libs/combat/types";
-import { makeBattleUser, makeCompleteBattle, makeInjectBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 const P = "p1";
 
@@ -89,7 +89,10 @@ describe("isPiloted masking round-trip", () => {
       isPiloted: true,
       strength: 50, // privateState -> must be stripped for an opponent
     });
-    const masked = maskBattle(makeCompleteBattle({ usersState: [summon] }), "opponentX");
+    const masked = maskBattle(
+      makeCompleteBattle({ usersState: [summon] }),
+      "opponentX",
+    );
     expect(masked.usersState[0]).not.toHaveProperty("strength");
     expect(masked.usersState[0]).toHaveProperty("isPiloted", true);
   });
@@ -116,7 +119,12 @@ describe("piloted summons have no basic clear/cleanse", () => {
     });
 
   const actionIds = (users: BattleUserState[], actorId: string) =>
-    availableUserActions(makeInjectBattle(users), actorId, true, true).map((a) => a.id);
+    availableUserActions(
+      makeCompleteBattle({ usersState: users }),
+      actorId,
+      true,
+      true,
+    ).map((a) => a.id);
 
   it("excludes clear and cleanse for a piloted summon, keeping other basics", () => {
     const ids = actionIds([player(), summon({ isPiloted: true })], "s1");

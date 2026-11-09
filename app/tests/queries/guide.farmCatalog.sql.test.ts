@@ -2,7 +2,11 @@ import { beforeEach, expect, it } from "bun:test";
 import { item } from "@/drizzle/schema";
 import { fetchFarmCatalog } from "@/queries/guide";
 import { insertItems } from "../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../setup/testDatabase";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../setup/testDatabase";
 
 const seed = (id: string, patch: Record<string, unknown> = {}) => ({
   id,
@@ -26,7 +30,11 @@ describeWithDatabase("farm guide catalog", () => {
       { id: "herb", name: "Moon Herb" },
     ]);
     const catalog = await fetchFarmCatalog(await getTestDatabase());
-    expect(catalog.map((row) => row.name)).toEqual(["Alpha Seed", "Beta Seed", "Late Seed"]);
+    expect(catalog.map((row) => row.name)).toEqual([
+      "Alpha Seed",
+      "Beta Seed",
+      "Late Seed",
+    ]);
     expect(catalog[0]).toEqual({
       id: "alpha",
       name: "Alpha Seed",
@@ -63,7 +71,11 @@ describeWithDatabase("farm guide catalog", () => {
   });
 
   it("leaves out hidden and QA seeds", async () => {
-    await insertItems([seed("hidden", { hidden: true }), seed("qa", { name: "QA Seed" }), seed("shown")]);
+    await insertItems([
+      seed("hidden", { hidden: true }),
+      seed("qa", { name: "QA Seed" }),
+      seed("shown"),
+    ]);
     const catalog = await fetchFarmCatalog(await getTestDatabase());
     expect(catalog.map((row) => row.id)).toEqual(["shown"]);
   });

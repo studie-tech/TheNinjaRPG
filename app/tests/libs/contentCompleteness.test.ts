@@ -15,7 +15,9 @@ const effect = (fields: Record<string, unknown>) => fields as ZodAllTags;
 
 describe("isNonBattleItem", () => {
   it("excludes flagged items and non-combat types, and tolerates partial form input", () => {
-    expect(isNonBattleItem({ preventBattleUsage: true, itemType: "WEAPON" })).toBe(true);
+    expect(isNonBattleItem({ preventBattleUsage: true, itemType: "WEAPON" })).toBe(
+      true,
+    );
     expect(isNonBattleItem({ itemType: "MATERIAL" })).toBe(true);
     expect(isNonBattleItem({ itemType: "WEAPON" })).toBe(false);
     expect(isNonBattleItem({})).toBe(false);
@@ -33,8 +35,12 @@ describe("effect asset checks", () => {
 
   it("flags only referenced visuals that are missing", () => {
     const assets = new Set(["known"]);
-    expect(hasInvalidEffectAssets([effect({ appearAnimation: "known" })], assets)).toBe(false);
-    expect(hasInvalidEffectAssets([effect({ staticAnimation: "gone" })], assets)).toBe(true);
+    expect(hasInvalidEffectAssets([effect({ appearAnimation: "known" })], assets)).toBe(
+      false,
+    );
+    expect(hasInvalidEffectAssets([effect({ staticAnimation: "gone" })], assets)).toBe(
+      true,
+    );
     expect(hasInvalidEffectAssets([effect({ appearSfx: "gone" })], assets)).toBe(false);
   });
 });

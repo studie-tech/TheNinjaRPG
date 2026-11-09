@@ -7,6 +7,7 @@ import {
   count,
   desc,
   eq,
+  exists,
   gt,
   gte,
   inArray,
@@ -14,6 +15,7 @@ import {
   isNull,
   lte,
   ne,
+  notExists,
   notInArray,
   or,
   type SQL,
@@ -58,6 +60,7 @@ import {
   clan,
   gameSetting,
   mpvpBattleQueue,
+  mpvpBattleUser,
   notification,
   quest,
   questHistory,
@@ -98,8 +101,8 @@ export const updateWarForDailyDecay = (
     .update(war)
     .set({
       ...(lastTokenReductionAt ? { lastTokenReductionAt } : {}),
-      attackerWarHealth: sql`GREATEST(attackerWarHealth - ${totalHealthDrain}, 0)`,
-      defenderWarHealth: sql`GREATEST(defenderWarHealth - ${totalHealthDrain}, 0)`,
+      attackerWarHealth: sql`GREATEST(${war.attackerWarHealth} - ${totalHealthDrain}, 0)`,
+      defenderWarHealth: sql`GREATEST(${war.defenderWarHealth} - ${totalHealthDrain}, 0)`,
     })
     .where(and(eq(war.id, activeWar.id), isNull(war.endedAt)));
 
@@ -159,7 +162,7 @@ export const insertWarContributionForApplyObjectiveWarAction = (
 
 /** Execute the database statement for `applyObjectiveWarAction`. */
 export const executeClaimedForApplyObjectiveWarAction = (
-  client: Pick<DrizzleClient, "execute">,
+  client: Pick<DrizzleClient, "execute" | "select">,
   action: {
     id: string;
     camp?: undefined | import("@/drizzle/schema").WarCamp;
@@ -189,15 +192,64 @@ export const executeClaimedForApplyObjectiveWarAction = (
       WHERE ${war.id} = ${activeWar.id} AND ${war.endedAt} IS NULL AND ${war.status} = 'ACTIVE'
         AND SYSDATE(3) < DATE_ADD(${war.combatStartedAt}, INTERVAL ${rules.durationDays} DAY)
         AND ${war.attackerWarHealth} > 0 AND ${war.defenderWarHealth} > 0
-        AND EXISTS (SELECT 1 FROM UserData actor WHERE actor.userId = ${action.userId} AND actor.isAi = FALSE AND actor.isBanned = FALSE AND
-          (actor.villageId = ${action.sideVillageId} OR EXISTS (SELECT 1 FROM WarAlly membership WHERE membership.warId = ${war.id} AND membership.villageId = actor.villageId AND membership.supportVillageId = ${action.sideVillageId} AND membership.acceptedAt IS NOT NULL AND membership.endedAt IS NULL)
-            OR ${action.hasMercenarySnapshot ?? false}
-            OR EXISTS (SELECT 1 FROM WarMercenary merc WHERE merc.warId = ${war.id} AND merc.userId = actor.userId AND merc.sideVillageId = ${action.sideVillageId} AND merc.acceptedAt IS NOT NULL AND merc.endedAt IS NULL)))
+        AND ${actorMayAct(client, action)}
         AND ${warActionReceipt.applied} = FALSE
         AND ${objectiveWarCombatGuard()}
         ${objective && action.damage === undefined ? sql`AND ${canDamageShrine}` : sql``}
         ${action.camp ? sql`AND ${warCamp.resolvedAt} IS NULL AND ${warCamp.startsAt} <= SYSDATE(3) AND ${warCamp.endsAt} > SYSDATE(3)` : sql``}
     `);
+
+/**
+ * The acting player is a live, unbanned human on the action's side: from that village, an
+ * accepted ally of it, or a hired mercenary (a mercenary snapshot from battle entry stands in).
+ */
+const actorMayAct = (
+  client: Pick<DrizzleClient, "select">,
+  action: { userId: string; sideVillageId: string; hasMercenarySnapshot?: boolean },
+) =>
+  exists(
+    client
+      .select({ userId: userData.userId })
+      .from(userData)
+      .where(
+        and(
+          eq(userData.userId, action.userId),
+          eq(userData.isAi, false),
+          eq(userData.isBanned, false),
+          action.hasMercenarySnapshot
+            ? undefined
+            : or(
+                eq(userData.villageId, action.sideVillageId),
+                exists(
+                  client
+                    .select({ id: warAlly.id })
+                    .from(warAlly)
+                    .where(
+                      and(
+                        eq(warAlly.warId, war.id),
+                        eq(warAlly.villageId, userData.villageId),
+                        eq(warAlly.supportVillageId, action.sideVillageId),
+                        activeWarAllyWhere(),
+                      ),
+                    ),
+                ),
+                exists(
+                  client
+                    .select({ id: warMercenary.id })
+                    .from(warMercenary)
+                    .where(
+                      and(
+                        eq(warMercenary.warId, war.id),
+                        eq(warMercenary.userId, userData.userId),
+                        eq(warMercenary.sideVillageId, action.sideVillageId),
+                        activeWarMercenaryWhere(),
+                      ),
+                    ),
+                ),
+              ),
+        ),
+      ),
+  );
 
 /** Execute the database statement for `applyObjectiveWarAction`. */
 export const executeRowsForApplyObjectiveWarAction = (
@@ -332,7 +384,7 @@ export const executeRowsForSyncWarCamps = (
   endsAt: Date,
 ) =>
   client.execute(sql`
-          INSERT IGNORE INTO WarCamp (id, warId, sector, guardianId, startsAt, endsAt)
+          INSERT IGNORE INTO ${warCamp} (id, warId, sector, guardianId, startsAt, endsAt)
           SELECT ${`${w.id}:${slot}`}, ${war.id}, ${selectedSector}, ${guardianId}, ${startsAt}, ${endsAt}
           FROM ${war} WHERE ${war.id} = ${w.id} AND ${war.status} = 'ACTIVE' AND ${war.endedAt} IS NULL
             AND ${objectiveWarCombatGuard()}
@@ -683,7 +735,7 @@ export const executeRowsForFinishWarSettlement4 = (
 
 /** Build the `userData` update for `finishWarSettlement`, setting `warParticipantUntil`, using predicates on `villageId`. */
 export const updateUserDataForFinishWarSettlement2 = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   receipt: { villageIds: string[] },
 ) =>
   client
@@ -692,8 +744,33 @@ export const updateUserDataForFinishWarSettlement2 = (
     .where(
       and(
         inArray(userData.villageId, receipt.villageIds),
-        sql`NOT EXISTS (SELECT 1 FROM War w WHERE w.endedAt IS NULL AND (w.attackerVillageId = ${userData.villageId} OR w.defenderVillageId = ${userData.villageId}))`,
-        sql`NOT EXISTS (SELECT 1 FROM WarAlly wa INNER JOIN War w ON wa.warId = w.id WHERE w.endedAt IS NULL AND wa.acceptedAt IS NOT NULL AND wa.endedAt IS NULL AND wa.villageId = ${userData.villageId})`,
+        notExists(
+          client
+            .select({ id: war.id })
+            .from(war)
+            .where(
+              and(
+                isNull(war.endedAt),
+                or(
+                  eq(war.attackerVillageId, userData.villageId),
+                  eq(war.defenderVillageId, userData.villageId),
+                ),
+              ),
+            ),
+        ),
+        notExists(
+          client
+            .select({ id: warAlly.id })
+            .from(warAlly)
+            .innerJoin(war, eq(warAlly.warId, war.id))
+            .where(
+              and(
+                isNull(war.endedAt),
+                activeWarAllyWhere(),
+                eq(warAlly.villageId, userData.villageId),
+              ),
+            ),
+        ),
       ),
     );
 
@@ -703,8 +780,8 @@ export const executeRowsForFinishWarSettlement5 = (
   queueMatch: undefined | SQL<unknown>,
 ) =>
   client.execute(sql`
-        UPDATE ${userData} INNER JOIN MpvpBattleUser mbu ON ${userData.userId} = mbu.userId
-        INNER JOIN ${mpvpBattleQueue} ON mbu.clanBattleId = ${mpvpBattleQueue.id}
+        UPDATE ${userData} INNER JOIN ${mpvpBattleUser} ON ${userData.userId} = ${mpvpBattleUser.userId}
+        INNER JOIN ${mpvpBattleQueue} ON ${mpvpBattleUser.clanBattleId} = ${mpvpBattleQueue.id}
         SET ${userData.status} = 'AWAKE' WHERE ${queueMatch} AND ${userData.status} = 'QUEUED'
           AND ${withoutDungeonReservation()}
       `);
@@ -715,7 +792,7 @@ export const executeRowsForFinishWarSettlement6 = (
   queueMatch: undefined | SQL<unknown>,
 ) =>
   client.execute(sql`
-      DELETE mbu FROM MpvpBattleUser mbu INNER JOIN ${mpvpBattleQueue} ON mbu.clanBattleId = ${mpvpBattleQueue.id}
+      DELETE ${mpvpBattleUser} FROM ${mpvpBattleUser} INNER JOIN ${mpvpBattleQueue} ON ${mpvpBattleUser.clanBattleId} = ${mpvpBattleQueue.id}
       WHERE ${queueMatch}
     `);
 
@@ -1093,9 +1170,9 @@ export const executeRowsForAcceptWarMercenary = (
   client: Pick<DrizzleClient, "execute">,
   userId: string,
 ) =>
-  client.execute(sql`UPDATE WarMercenary m INNER JOIN War w ON w.id = m.warId
-    SET m.endedAt = COALESCE(w.endedAt, SYSDATE(3))
-    WHERE m.userId = ${userId} AND m.endedAt IS NULL AND NOT ${objectiveWarOpenSql("w")}`);
+  client.execute(sql`UPDATE ${warMercenary} INNER JOIN ${war} ON ${war.id} = ${warMercenary.warId}
+    SET ${warMercenary.endedAt} = COALESCE(${war.endedAt}, SYSDATE(3))
+    WHERE ${warMercenary.userId} = ${userId} AND ${warMercenary.endedAt} IS NULL AND NOT ${objectiveWarOpenSql()}`);
 
 /** Execute the database statement for `acceptWarMercenary`. */
 export const executeResultForAcceptWarMercenary = (
@@ -1104,24 +1181,27 @@ export const executeResultForAcceptWarMercenary = (
   userId: string,
 ) =>
   client.execute(sql`
-      UPDATE WarMercenary m
-      INNER JOIN War w ON w.id = m.warId
-      INNER JOIN Village payer ON payer.id = m.sideVillageId
-      INNER JOIN UserData recipient ON recipient.userId = m.userId
-      SET payer.tokens = payer.tokens - m.tokens,
-        recipient.money = recipient.money + m.tokens * ${WAR_MERCENARY_RYO_PER_TOKEN},
-        m.acceptedAt = SYSDATE(3)
-      WHERE m.id = ${id} AND m.userId = ${userId} AND m.acceptedAt IS NULL AND m.endedAt IS NULL
-        AND w.rules IS NOT NULL AND ${objectiveWarOpenSql("w")}
-        AND payer.kageId = m.invitedById AND payer.tokens >= m.tokens
-        AND payer.id IN (w.attackerVillageId, w.defenderVillageId)
-        AND NOT EXISTS (SELECT 1 FROM War otherWar WHERE otherWar.id != w.id AND otherWar.status = 'ACTIVE' AND otherWar.endedAt IS NULL AND (recipient.villageId IN (otherWar.attackerVillageId, otherWar.defenderVillageId) OR EXISTS (SELECT 1 FROM WarAlly otherAlly WHERE otherAlly.warId = otherWar.id AND otherAlly.villageId = recipient.villageId AND otherAlly.acceptedAt IS NOT NULL AND otherAlly.endedAt IS NULL)))
-        AND recipient.isBanned = FALSE AND recipient.isAi = FALSE AND recipient.status != 'BATTLE' AND recipient.warMission IS NULL
-        AND (recipient.villageId IS NULL OR recipient.villageId != payer.id)
-        AND (recipient.villageId IS NULL OR recipient.villageId != IF(payer.id = w.attackerVillageId, w.defenderVillageId, w.attackerVillageId))
-        AND NOT EXISTS (SELECT 1 FROM WarAlly enemy WHERE enemy.warId = w.id AND enemy.villageId = recipient.villageId
-          AND enemy.supportVillageId != payer.id AND enemy.acceptedAt IS NOT NULL AND enemy.endedAt IS NULL)
+      UPDATE ${warMercenary}
+      INNER JOIN ${war} ON ${war.id} = ${warMercenary.warId}
+      INNER JOIN ${village} ON ${village.id} = ${warMercenary.sideVillageId}
+      INNER JOIN ${userData} ON ${userData.userId} = ${warMercenary.userId}
+      SET ${village.tokens} = ${village.tokens} - ${warMercenary.tokens},
+        ${userData.money} = ${userData.money} + ${warMercenary.tokens} * ${WAR_MERCENARY_RYO_PER_TOKEN},
+        ${warMercenary.acceptedAt} = SYSDATE(3)
+      WHERE ${warMercenary.id} = ${id} AND ${warMercenary.userId} = ${userId} AND ${warMercenary.acceptedAt} IS NULL AND ${warMercenary.endedAt} IS NULL
+        AND ${war.rules} IS NOT NULL AND ${objectiveWarOpenSql()}
+        AND ${village.kageId} = ${warMercenary.invitedById} AND ${village.tokens} >= ${warMercenary.tokens}
+        AND ${village.id} IN (${war.attackerVillageId}, ${war.defenderVillageId})
+        AND NOT EXISTS (SELECT 1 FROM ${war} ${otherWar} WHERE ${otherWar.id} != ${war.id} AND ${otherWar.status} = 'ACTIVE' AND ${otherWar.endedAt} IS NULL AND (${userData.villageId} IN (${otherWar.attackerVillageId}, ${otherWar.defenderVillageId}) OR EXISTS (SELECT 1 FROM ${warAlly} WHERE ${warAlly.warId} = ${otherWar.id} AND ${warAlly.villageId} = ${userData.villageId} AND ${warAlly.acceptedAt} IS NOT NULL AND ${warAlly.endedAt} IS NULL)))
+        AND ${userData.isBanned} = FALSE AND ${userData.isAi} = FALSE AND ${userData.status} != 'BATTLE' AND ${userData.warMission} IS NULL
+        AND (${userData.villageId} IS NULL OR ${userData.villageId} != ${village.id})
+        AND (${userData.villageId} IS NULL OR ${userData.villageId} != IF(${village.id} = ${war.attackerVillageId}, ${war.defenderVillageId}, ${war.attackerVillageId}))
+        AND NOT EXISTS (SELECT 1 FROM ${warAlly} WHERE ${warAlly.warId} = ${war.id} AND ${warAlly.villageId} = ${userData.villageId}
+          AND ${warAlly.supportVillageId} != ${village.id} AND ${warAlly.acceptedAt} IS NOT NULL AND ${warAlly.endedAt} IS NULL)
     `);
+
+/** Another war the hired player's village fights in, which makes the contract ineligible. */
+const otherWar = alias(war, "otherWar");
 
 /** Build the `war` listing for `fetchWarCampEntry`, including predicates on `id`, `warId`, `sector`. */
 export const listWarForFetchWarCampEntry = (
@@ -1582,8 +1662,30 @@ export const selectWarCampForGetWarCampNotices = (
         or(
           eq(war.attackerVillageId, userData.villageId),
           eq(war.defenderVillageId, userData.villageId),
-          sql`EXISTS (SELECT 1 FROM WarMercenary m WHERE m.warId = ${war.id} AND m.userId = ${ctx.userId} AND m.acceptedAt IS NOT NULL AND m.endedAt IS NULL)`,
-          sql`EXISTS (SELECT 1 FROM WarAlly WHERE warId = ${war.id} AND villageId = ${userData.villageId} AND acceptedAt IS NOT NULL AND endedAt IS NULL)`,
+          exists(
+            client
+              .select({ id: warMercenary.id })
+              .from(warMercenary)
+              .where(
+                and(
+                  eq(warMercenary.warId, war.id),
+                  eq(warMercenary.userId, ctx.userId),
+                  activeWarMercenaryWhere(),
+                ),
+              ),
+          ),
+          exists(
+            client
+              .select({ id: warAlly.id })
+              .from(warAlly)
+              .where(
+                and(
+                  eq(warAlly.warId, war.id),
+                  eq(warAlly.villageId, userData.villageId),
+                  activeWarAllyWhere(),
+                ),
+              ),
+          ),
         ),
       ),
     );
@@ -2004,10 +2106,10 @@ export const warMissionMembershipGuard = (
   userId: string,
 ) => sql`
   ${notExclusiveMercenaryElsewhere(userId, warId)}
-  AND ((${userData.villageId} = ${side} OR EXISTS (SELECT 1 FROM WarAlly ally WHERE ally.warId = ${warId}
-      AND ally.villageId = ${userData.villageId} AND ally.supportVillageId = ${side} AND ally.acceptedAt IS NOT NULL AND ally.endedAt IS NULL))
-   OR EXISTS (SELECT 1 FROM WarMercenary merc WHERE merc.warId = ${warId} AND merc.userId = ${userId}
-     AND merc.sideVillageId = ${side} AND merc.acceptedAt IS NOT NULL AND merc.endedAt IS NULL))`;
+  AND ((${userData.villageId} = ${side} OR EXISTS (SELECT 1 FROM ${warAlly} WHERE ${warAlly.warId} = ${warId}
+      AND ${warAlly.villageId} = ${userData.villageId} AND ${warAlly.supportVillageId} = ${side} AND ${activeWarAllyWhere()}))
+   OR EXISTS (SELECT 1 FROM ${warMercenary} WHERE ${warMercenary.warId} = ${warId} AND ${warMercenary.userId} = ${userId}
+     AND ${warMercenary.sideVillageId} = ${side} AND ${activeWarMercenaryWhere()}))`;
 
 /** Reevaluate the deadline after row-lock waits rather than using the battle snapshot. */
 const objectiveWarCombatGuard = () => sql`(${war.rules} IS NULL OR (

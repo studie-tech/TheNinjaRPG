@@ -1,10 +1,11 @@
-
 import { beforeEach, describe, expect, it } from "bun:test";
 import { splitAchievementProgress } from "@/deltas/profile";
 import { quest } from "@/drizzle/schema";
 import { questHasOverworldObjectives } from "@/libs/quest/projection";
-import type { UserWithRelations } from "../../../../../src/server/api/routers/profile";
-import { fetchPublishedAchievements } from "../../../../../src/server/api/routers/profile";
+import {
+  fetchPublishedAchievements,
+  type UserWithRelations,
+} from "@/server/api/routers/profile";
 import { insertQuests } from "../../../../setup/factories";
 import {
   describeWithDatabase,
@@ -13,7 +14,7 @@ import {
 } from "../../../../setup/testDatabase";
 
 /**
- * `profile.getUser` stops shipping achievement definitions and sends progress rows instead; the
+ * `profile.getUser` sends achievement progress rows rather than definitions; the
  * logbook joins them against the catalogue `quests.getAchievementCatalogue` serves. Both halves
  * are cut from `fetchPublishedAchievements`, so this suite covers that one list deciding the
  * partition, the counters a progress row still has to carry, and the predicate behind the list.
@@ -223,12 +224,7 @@ describe("questHasOverworldObjectives", () => {
  * both together keep `getUser` and `getAchievementCatalogue` cutting at the same place.
  */
 describeWithDatabase("fetchPublishedAchievements", () => {
-  const content = (objectives: unknown[]) => ({
-    objectives,
-    reward: {},
-    sceneBackground: "",
-    sceneCharacters: [],
-  }) as never;
+  const content = (objectives: unknown[]) => ({ objectives }) as never;
 
   beforeEach(async () => {
     await resetTables(quest);

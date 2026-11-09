@@ -107,11 +107,6 @@ const createErrorPatternMatcher =
   };
 
 /**
- * Individual pattern matchers for retryable errors.
- * Each matcher validates both the error message pattern and stack frame context.
- * These are typically transient network/CDN issues that should be retried automatically.
- */
-/**
  * A browser extension that bundles its content scripts as executors/<n>.js. The frames
  * carry the page's origin, so Sentry files them under this project even though no code
  * of ours appears anywhere in the stack.
@@ -215,6 +210,11 @@ const MEDIA_FILTER_PATH = /(^|\/)mediafilter(\.js)?([?#]|$)/;
 export const isMediaFilterPath = (path: string | undefined): boolean =>
   !!path && MEDIA_FILTER_PATH.test(path);
 
+/**
+ * Individual pattern matchers for retryable errors.
+ * Each matcher validates both the error message pattern and stack frame context.
+ * These are typically transient network/CDN issues that should be retried automatically.
+ */
 export const isNetworkError = createErrorPatternMatcher([
   "Load failed",
   "fetch failed",

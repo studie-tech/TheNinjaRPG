@@ -1,9 +1,8 @@
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { HotkeyTarget } from "@/layout/HotkeyControls";
 import { HotkeyCaptureDialog } from "@/layout/HotkeyControls";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-
 
 beforeEach(() => {
   installBrowserGlobals();
@@ -43,7 +42,11 @@ const controlledCapture = () => {
 it("leaves Tab and Enter to the dialog's own buttons", () => {
   const { view, onAssign, onClose } = open();
   for (const key of ["Tab", "Enter", " "]) {
-    const event = new window.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    const event = new window.KeyboardEvent("keydown", {
+      key,
+      bubbles: true,
+      cancelable: true,
+    });
     window.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
   }

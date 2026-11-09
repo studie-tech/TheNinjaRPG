@@ -1,14 +1,22 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it, setSystemTime } from "bun:test";
-import type { AchievementProgress, UserWithRelations } from "@/server/api/routers/profile";
-import { getUserCaps, KAGE_DEFENSE_REMINDER_HOURS, MAX_MASTERY_CAP, VILLAGE_REDUCED_GAINS_DAYS } from "@/drizzle/constants";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import {
+  getUserCaps,
+  KAGE_DEFENSE_REMINDER_HOURS,
+  MAX_MASTERY_CAP,
+  VILLAGE_REDUCED_GAINS_DAYS,
+} from "@/drizzle/constants";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { getUserFactionNotifications } from "@/libs/userNotifications";
-import { QuestTracker } from "@/validators/objectives";
+import type {
+  AchievementProgress,
+  UserWithRelations,
+} from "@/server/api/routers/profile";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { KageDefenseSchedule } from "@/validators/kage";
-import type { WarMissionAttempt } from "@/validators/war";
+import { QuestTracker } from "@/validators/objectives";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-import { updateUserCache, prepareUserUpdate } from "@/utils/userCache";
+import type { WarMissionAttempt } from "@/validators/war";
 
 const key = [["profile", "getUser"], { type: "query" }];
 const profile = (money: number) => ({
@@ -17,9 +25,16 @@ const profile = (money: number) => ({
 });
 /** Build complete mission snapshots to verify replacement rather than object merging. */
 const warMission = (id: string): WarMissionAttempt => ({
-  id, warId: "war", questId: "quest", objectiveId: "objective",
-  sideVillageId: "village", villageId: "village", sector: 1,
-  task: "espionage", value: 10, endsAt: "2026-01-01T00:01:00Z",
+  id,
+  warId: "war",
+  questId: "quest",
+  objectiveId: "objective",
+  sideVillageId: "village",
+  villageId: "village",
+  sector: 1,
+  task: "espionage",
+  value: 10,
+  endsAt: "2026-01-01T00:01:00Z",
 });
 const setup = (active = true) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -38,68 +53,125 @@ const setup = (active = true) => {
   return {
     client,
     observer,
-    setDatabase: (value: number) => { database = value; },
+    setDatabase: (value: number) => {
+      database = value;
+    },
     reads: () => reads,
     value: () => client.getQueryData<ReturnType<typeof profile>>(key),
-    close: () => { unsubscribe(); client.clear(); },
+    close: () => {
+      unsubscribe();
+      client.clear();
+    },
   };
 };
 
 describe("user cache updates", () => {
-  it.each(["matching", "changed", "missing"] as const)("applies confirmed changes only with %s server prerequisites", async (baseline) => {
-    const test = setup();
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData,
-      ...(baseline === "missing" ? {} : { clanId: baseline === "matching" ? "clan" : "new-clan" }) } });
-    const response = userDeltaResponseSchema.parse({ success: true, message: "Saved",
-      userPatch: { money: 80 }, userDelta: { reputationPoints: -5 }, userExpected: { clanId: "clan" } });
-    test.setDatabase(80);
-    await updateUserCache(test.client, key, response.userPatch, {
-      revision: prepareUserUpdate(test.client, key), delta: response.userDelta, expected: response.userExpected,
-    });
-    expect(test.reads()).toBe(Number(baseline !== "matching"));
-    expect(test.value()?.userData.money).toBe(80);
-    expect(test.value()?.userData.reputationPoints).toBe(baseline === "matching" ? 25 : 30);
-    test.close();
-  });
+  it.each(["matching", "changed", "missing"] as const)(
+    "applies confirmed changes only with %s server prerequisites",
+    async (baseline) => {
+      const test = setup();
+      test.client.setQueryData(key, {
+        ...profile(100),
+        userData: {
+          ...profile(100).userData,
+          ...(baseline === "missing"
+            ? {}
+            : { clanId: baseline === "matching" ? "clan" : "new-clan" }),
+        },
+      });
+      const response = userDeltaResponseSchema.parse({
+        success: true,
+        message: "Saved",
+        userPatch: { money: 80 },
+        userDelta: { reputationPoints: -5 },
+        userExpected: { clanId: "clan" },
+      });
+      test.setDatabase(80);
+      await updateUserCache(test.client, key, response.userPatch, {
+        revision: prepareUserUpdate(test.client, key),
+        delta: response.userDelta,
+        expected: response.userExpected,
+      });
+      expect(test.reads()).toBe(Number(baseline !== "matching"));
+      expect(test.value()?.userData.money).toBe(80);
+      expect(test.value()?.userData.reputationPoints).toBe(
+        baseline === "matching" ? 25 : 30,
+      );
+      test.close();
+    },
+  );
 
   it("checks original prerequisites before merging and final prerequisites against the projected user", async () => {
     const test = setup();
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData,
-      status: "AWAKE", activeDungeonRunId: null } });
-    await updateUserCache(test.client, key, { status: "QUEUED", activeDungeonRunId: "squad" }, {
-      revision: prepareUserUpdate(test.client, key),
-      delta: { money: -10 },
-      expected: { status: "AWAKE", activeDungeonRunId: null },
-      expectedAfter: { status: "QUEUED", activeDungeonRunId: "squad" },
-      achievementProgress: [],
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: { ...profile(100).userData, status: "AWAKE", activeDungeonRunId: null },
     });
-    expect(test.value()?.userData).toMatchObject({ money: 90, status: "QUEUED", activeDungeonRunId: "squad" });
-    expect(test.client.getQueryData<{ achievementProgress: unknown[] }>(key)?.achievementProgress).toEqual([]);
+    await updateUserCache(
+      test.client,
+      key,
+      { status: "QUEUED", activeDungeonRunId: "squad" },
+      {
+        revision: prepareUserUpdate(test.client, key),
+        delta: { money: -10 },
+        expected: { status: "AWAKE", activeDungeonRunId: null },
+        expectedAfter: { status: "QUEUED", activeDungeonRunId: "squad" },
+        achievementProgress: [],
+      },
+    );
+    expect(test.value()?.userData).toMatchObject({
+      money: 90,
+      status: "QUEUED",
+      activeDungeonRunId: "squad",
+    });
+    expect(
+      test.client.getQueryData<{ achievementProgress: unknown[] }>(key)
+        ?.achievementProgress,
+    ).toEqual([]);
     expect(test.reads()).toBe(0);
     test.close();
   });
 
   it("withholds the whole projection and metadata before one canonical read when final prerequisites differ", async () => {
     const test = setup();
-    const initial = { ...profile(100), userData: { ...profile(100).userData, status: "AWAKE" as const }, achievementProgress: [{ questId: "kept" }] };
-    const canonical = { ...initial, userData: { ...initial.userData, money: 80, status: "BATTLE" as const } };
+    const initial = {
+      ...profile(100),
+      userData: { ...profile(100).userData, status: "AWAKE" as const },
+      achievementProgress: [{ questId: "kept" }],
+    };
+    const canonical = {
+      ...initial,
+      userData: { ...initial.userData, money: 80, status: "BATTLE" as const },
+    };
     test.client.setQueryData(key, initial);
     let reads = 0;
     let observed: unknown;
     let mergedNotifications = false;
-    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => {
-      reads++;
-      observed = test.client.getQueryData(key);
-      return canonical;
-    } });
-    await updateUserCache(test.client, key, { status: "QUEUED" }, {
-      revision: prepareUserUpdate(test.client, key),
-      delta: { money: -10, reputationPoints: -5 },
-      expected: { status: "AWAKE" },
-      expectedAfter: { status: "BATTLE" },
-      achievementProgress: [],
-      notifications: () => { mergedNotifications = true; return []; },
+    test.observer.setOptions({
+      queryKey: key,
+      staleTime: Infinity,
+      queryFn: async () => {
+        reads++;
+        observed = test.client.getQueryData(key);
+        return canonical;
+      },
     });
+    await updateUserCache(
+      test.client,
+      key,
+      { status: "QUEUED" },
+      {
+        revision: prepareUserUpdate(test.client, key),
+        delta: { money: -10, reputationPoints: -5 },
+        expected: { status: "AWAKE" },
+        expectedAfter: { status: "BATTLE" },
+        achievementProgress: [],
+        notifications: () => {
+          mergedNotifications = true;
+          return [];
+        },
+      },
+    );
     expect(observed).toEqual(initial);
     expect(test.client.getQueryData(key)).toEqual(canonical);
     expect(mergedNotifications).toBe(false);
@@ -107,57 +179,118 @@ describe("user cache updates", () => {
     test.close();
   });
 
-  it.each(["missing response", "changed revision", "invalid relation"] as const)("marks an inactive profile stale without executing it after %s", async (recovery) => {
-    const test = setup(false);
-    const revision = prepareUserUpdate(test.client, key);
-    test.setDatabase(80);
-    if (recovery === "changed revision") test.client.setQueryData(key, profile(120));
-    await updateUserCache(test.client, key,
-      recovery === "missing response" ? undefined : recovery === "invalid relation" ? { villageId: "new" } : { money: 80 },
-      { revision },
-    );
-    expect(test.client.getQueryState(key)?.isInvalidated).toBe(true);
-    expect(test.client.getQueryState(key)?.fetchStatus).toBe("idle");
-    expect(test.client.getQueryState(key)?.error).toBeNull();
-    expect(test.reads()).toBe(0);
-    expect(test.value()?.userData.money).toBe(recovery === "changed revision" ? 120 : 100);
-    const unsubscribe = test.observer.subscribe(() => {});
-    await test.observer.getCurrentQuery().promise;
-    expect(test.reads()).toBe(1);
-    expect(test.value()?.userData.money).toBe(80);
-    expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
-    unsubscribe();
-    test.close();
-  });
+  it.each(["missing response", "changed revision", "invalid relation"] as const)(
+    "marks an inactive profile stale without executing it after %s",
+    async (recovery) => {
+      const test = setup(false);
+      const revision = prepareUserUpdate(test.client, key);
+      test.setDatabase(80);
+      if (recovery === "changed revision") test.client.setQueryData(key, profile(120));
+      await updateUserCache(
+        test.client,
+        key,
+        recovery === "missing response"
+          ? undefined
+          : recovery === "invalid relation"
+            ? { villageId: "new" }
+            : { money: 80 },
+        { revision },
+      );
+      expect(test.client.getQueryState(key)?.isInvalidated).toBe(true);
+      expect(test.client.getQueryState(key)?.fetchStatus).toBe("idle");
+      expect(test.client.getQueryState(key)?.error).toBeNull();
+      expect(test.reads()).toBe(0);
+      expect(test.value()?.userData.money).toBe(
+        recovery === "changed revision" ? 120 : 100,
+      );
+      const unsubscribe = test.observer.subscribe(() => {});
+      await test.observer.getCurrentQuery().promise;
+      expect(test.reads()).toBe(1);
+      expect(test.value()?.userData.money).toBe(80);
+      expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
+      unsubscribe();
+      test.close();
+    },
+  );
 
-  it.each(["added", "removed"] as const)("replaces a saved Kage schedule with its invitation %s", async (change) => {
-    const test = setup();
-    const schedule: KageDefenseSchedule = { kageId: "kage", tenure: "2026-01-01T00:00:00Z", windows: [], publishedAt: null, missedStarts: 0, paused: false, observedAt: "2026-01-01T00:00:00Z" };
-    const withInvitation = { ...schedule, instantChallenge: { id: "invitation", matchId: "match", scheduledAt: "2026-01-02T00:00:00Z", expiresAt: "2026-01-01T00:10:00Z", ai: false } };
-    const previous = change === "added" ? schedule : withInvitation;
-    const saved = change === "added" ? withInvitation : schedule;
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village: { id: "village", kageSchedule: previous } } });
-    await updateUserCache(test.client, key, { village: { id: "village", kageSchedule: saved } }, { revision: prepareUserUpdate(test.client, key) });
-    expect(test.value()?.userData.village?.kageSchedule).toEqual(saved);
-    expect(test.reads()).toBe(0);
-    test.close();
-  });
+  it.each(["added", "removed"] as const)(
+    "replaces a saved Kage schedule with its invitation %s",
+    async (change) => {
+      const test = setup();
+      const schedule: KageDefenseSchedule = {
+        kageId: "kage",
+        tenure: "2026-01-01T00:00:00Z",
+        windows: [],
+        publishedAt: null,
+        missedStarts: 0,
+        paused: false,
+        observedAt: "2026-01-01T00:00:00Z",
+      };
+      const withInvitation = {
+        ...schedule,
+        instantChallenge: {
+          id: "invitation",
+          matchId: "match",
+          scheduledAt: "2026-01-02T00:00:00Z",
+          expiresAt: "2026-01-01T00:10:00Z",
+          ai: false,
+        },
+      };
+      const previous = change === "added" ? schedule : withInvitation;
+      const saved = change === "added" ? withInvitation : schedule;
+      test.client.setQueryData(key, {
+        ...profile(100),
+        userData: {
+          ...profile(100).userData,
+          village: { id: "village", kageSchedule: previous },
+        },
+      });
+      await updateUserCache(
+        test.client,
+        key,
+        { village: { id: "village", kageSchedule: saved } },
+        { revision: prepareUserUpdate(test.client, key) },
+      );
+      expect(test.value()?.userData.village?.kageSchedule).toEqual(saved);
+      expect(test.reads()).toBe(0);
+      test.close();
+    },
+  );
 
-  it.each(["none", "previous"] as const)("applies a complete war mission over %s without a profile read", async (previousId) => {
-    const test = setup();
-    const previous = previousId === "none" ? null : warMission(previousId);
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, warMission: previous } });
-    const mission = warMission("new");
-    await updateUserCache(test.client, key, { warMission: mission }, { revision: prepareUserUpdate(test.client, key) });
-    expect(test.value()?.userData.warMission).toEqual(mission);
-    expect(test.reads()).toBe(0);
-    test.close();
-  });
+  it.each(["none", "previous"] as const)(
+    "applies a complete war mission over %s without a profile read",
+    async (previousId) => {
+      const test = setup();
+      const previous = previousId === "none" ? null : warMission(previousId);
+      test.client.setQueryData(key, {
+        ...profile(100),
+        userData: { ...profile(100).userData, warMission: previous },
+      });
+      const mission = warMission("new");
+      await updateUserCache(
+        test.client,
+        key,
+        { warMission: mission },
+        { revision: prepareUserUpdate(test.client, key) },
+      );
+      expect(test.value()?.userData.warMission).toEqual(mission);
+      expect(test.reads()).toBe(0);
+      test.close();
+    },
+  );
 
   it("clears a completed war mission without a profile read", async () => {
     const test = setup();
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, warMission: warMission("completed") } });
-    await updateUserCache(test.client, key, { warMission: null }, { revision: prepareUserUpdate(test.client, key) });
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: { ...profile(100).userData, warMission: warMission("completed") },
+    });
+    await updateUserCache(
+      test.client,
+      key,
+      { warMission: null },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
     expect(test.value()?.userData.warMission).toBeNull();
     expect(test.reads()).toBe(0);
     test.close();
@@ -165,13 +298,31 @@ describe("user cache updates", () => {
 
   it("reconciles a delayed war mission snapshot after a newer cache revision", async () => {
     const test = setup();
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, warMission: null } });
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: { ...profile(100).userData, warMission: null },
+    });
     const revision = prepareUserUpdate(test.client, key);
-    const latest = { ...profile(100), userData: { ...profile(100).userData, warMission: warMission("latest") } };
+    const latest = {
+      ...profile(100),
+      userData: { ...profile(100).userData, warMission: warMission("latest") },
+    };
     test.client.setQueryData(key, latest);
     let reads = 0;
-    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return latest; } });
-    await updateUserCache(test.client, key, { warMission: warMission("delayed") }, { revision });
+    test.observer.setOptions({
+      queryKey: key,
+      staleTime: Infinity,
+      queryFn: async () => {
+        reads++;
+        return latest;
+      },
+    });
+    await updateUserCache(
+      test.client,
+      key,
+      { warMission: warMission("delayed") },
+      { revision },
+    );
     expect(test.value()?.userData.warMission).toEqual(latest.userData.warMission);
     expect(reads).toBe(1);
     test.close();
@@ -179,11 +330,31 @@ describe("user cache updates", () => {
 
   it("applies complete pet task snapshots when dispatching, replacing and clearing a task", async () => {
     const test = setup();
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, petTask: null } });
-    const first = { petId: "pet", questHistoryId: "history", questId: "quest", startedAt: 1, questVersion: 1, finishesAt: 1000 };
-    const next = { ...first, petId: "next-pet", questHistoryId: "next-history", startedAt: 2 };
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: { ...profile(100).userData, petTask: null },
+    });
+    const first = {
+      petId: "pet",
+      questHistoryId: "history",
+      questId: "quest",
+      startedAt: 1,
+      questVersion: 1,
+      finishesAt: 1000,
+    };
+    const next = {
+      ...first,
+      petId: "next-pet",
+      questHistoryId: "next-history",
+      startedAt: 2,
+    };
     for (const petTask of [first, next, null]) {
-      await updateUserCache(test.client, key, { petTask }, { revision: prepareUserUpdate(test.client, key) });
+      await updateUserCache(
+        test.client,
+        key,
+        { petTask },
+        { revision: prepareUserUpdate(test.client, key) },
+      );
       expect(test.value()?.userData.petTask).toEqual(petTask);
       expect(test.reads()).toBe(0);
     }
@@ -193,19 +364,43 @@ describe("user cache updates", () => {
   it("replaces a new village mission without retaining the previous assignment", async () => {
     const test = setup();
     const village = { id: "village", activeMission: { id: "old", progress: 12 } };
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: { ...profile(100).userData, village },
+    });
     const mission = { id: "new", progress: 0 };
-    await updateUserCache(test.client, key, { village: { id: "village", activeMission: mission } } as never, { revision: prepareUserUpdate(test.client, key) });
+    await updateUserCache(
+      test.client,
+      key,
+      { village: { id: "village", activeMission: mission } } as never,
+      { revision: prepareUserUpdate(test.client, key) },
+    );
     expect(test.value()?.userData.village?.activeMission).toEqual(mission as never);
     expect(test.reads()).toBe(0);
     test.close();
   });
   it("removes boosts omitted by a complete saved shrine settings snapshot", async () => {
     const test = setup();
-    const village = { id: "village", shrineSettings: { unlockedAiIds: [], activeAiIds: [], activeBoosts: { Training: "expired" }, boostTemplateUpdatedBy: "old" } };
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
+    const village = {
+      id: "village",
+      shrineSettings: {
+        unlockedAiIds: [],
+        activeAiIds: [],
+        activeBoosts: { Training: "expired" },
+        boostTemplateUpdatedBy: "old",
+      },
+    };
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: { ...profile(100).userData, village },
+    });
     const shrineSettings = { unlockedAiIds: [], activeAiIds: [], activeBoosts: {} };
-    await updateUserCache(test.client, key, { village: { id: "village", shrineSettings } }, { revision: prepareUserUpdate(test.client, key) });
+    await updateUserCache(
+      test.client,
+      key,
+      { village: { id: "village", shrineSettings } },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
     expect(test.value()?.userData.village?.shrineSettings).toEqual(shrineSettings);
     expect(test.reads()).toBe(0);
     test.close();
@@ -213,9 +408,26 @@ describe("user cache updates", () => {
 
   it("replaces an ANBU membership without retaining the former squad's counters", async () => {
     const test = setup();
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, anbuId: "old", anbuSquad: { id: "old", name: "Former squad", points: 100, leaderId: "former-leader" } } });
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: {
+        ...profile(100).userData,
+        anbuId: "old",
+        anbuSquad: {
+          id: "old",
+          name: "Former squad",
+          points: 100,
+          leaderId: "former-leader",
+        },
+      },
+    });
     const next = { id: "new", name: "New squad", points: 25 };
-    await updateUserCache(test.client, key, { anbuId: "new", anbuSquad: next }, { revision: prepareUserUpdate(test.client, key) });
+    await updateUserCache(
+      test.client,
+      key,
+      { anbuId: "new", anbuSquad: next },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
     expect(test.value()?.userData.anbuSquad).toEqual(next);
     expect(test.reads()).toBe(0);
     test.close();
@@ -223,13 +435,29 @@ describe("user cache updates", () => {
 
   it("replaces a confirmed membership without retaining fields from the former clan", async () => {
     const test = setup();
-    const previous = { id: "old", name: "Former clan", bank: 1000, leaderId: "former-leader" };
+    const previous = {
+      id: "old",
+      name: "Former clan",
+      bank: 1000,
+      leaderId: "former-leader",
+    };
     const next = { id: "new", name: "New clan", bank: 0 };
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, clanId: "old", clan: previous } });
-    await updateUserCache(test.client, key, {
-      clanId: "new", clan: next as NonNullable<NonNullable<UserWithRelations>["clan"]>,
-    }, { revision: prepareUserUpdate(test.client, key) });
-    expect(test.value()?.userData.clan).toEqual(next as NonNullable<NonNullable<UserWithRelations>["clan"]>);
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: { ...profile(100).userData, clanId: "old", clan: previous },
+    });
+    await updateUserCache(
+      test.client,
+      key,
+      {
+        clanId: "new",
+        clan: next as NonNullable<NonNullable<UserWithRelations>["clan"]>,
+      },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
+    expect(test.value()?.userData.clan).toEqual(
+      next as NonNullable<NonNullable<UserWithRelations>["clan"]>,
+    );
     expect(test.value()?.userData.clanId).toBe("new");
     expect(test.reads()).toBe(0);
     test.close();
@@ -237,7 +465,12 @@ describe("user cache updates", () => {
 
   it("reconciles an incomplete membership response instead of retaining the previous relation", async () => {
     const test = setup();
-    await updateUserCache(test.client, key, { clanId: "new" }, { revision: prepareUserUpdate(test.client, key) });
+    await updateUserCache(
+      test.client,
+      key,
+      { clanId: "new" },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
     expect(test.value()).toEqual(profile(100));
     expect(test.reads()).toBe(1);
     test.close();
@@ -245,9 +478,25 @@ describe("user cache updates", () => {
 
   it("replaces a confirmed bloodline and clears its cosmetic relation", async () => {
     const test = setup();
-    const bloodline = { id: "new", name: "New lineage" } as NonNullable<NonNullable<UserWithRelations>["bloodline"]>;
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, bloodlineId: "old", bloodline: { id: "old", regenIncrease: 10 }, bloodlineReskinId: "skin", activeReskin: { id: "skin" } } });
-    await updateUserCache(test.client, key, { bloodlineId: "new", bloodline, bloodlineReskinId: null, activeReskin: null }, { revision: prepareUserUpdate(test.client, key) });
+    const bloodline = { id: "new", name: "New lineage" } as NonNullable<
+      NonNullable<UserWithRelations>["bloodline"]
+    >;
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: {
+        ...profile(100).userData,
+        bloodlineId: "old",
+        bloodline: { id: "old", regenIncrease: 10 },
+        bloodlineReskinId: "skin",
+        activeReskin: { id: "skin" },
+      },
+    });
+    await updateUserCache(
+      test.client,
+      key,
+      { bloodlineId: "new", bloodline, bloodlineReskinId: null, activeReskin: null },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
     expect(test.value()?.userData.bloodline).toEqual(bloodline);
     expect(test.value()?.userData.activeReskin).toBeNull();
     expect(test.reads()).toBe(0);
@@ -256,25 +505,54 @@ describe("user cache updates", () => {
 
   it("merges notification metadata with the accepted user update", async () => {
     const test = setup();
-    const notice = { href: "/manual/review", name: "Content review (2)", color: "green" as const };
-    await updateUserCache(test.client, key, { money: 90 }, {
-      revision: prepareUserUpdate(test.client, key),
-      notifications: (current) => [...(current ?? []), notice],
-    });
+    const notice = {
+      href: "/manual/review",
+      name: "Content review (2)",
+      color: "green" as const,
+    };
+    await updateUserCache(
+      test.client,
+      key,
+      { money: 90 },
+      {
+        revision: prepareUserUpdate(test.client, key),
+        notifications: (current) => [...(current ?? []), notice],
+      },
+    );
     expect(test.value()?.userData.money).toBe(90);
-    expect(test.client.getQueryData<{ notifications: unknown[] }>(key)?.notifications).toEqual(["preserved", notice]);
+    expect(
+      test.client.getQueryData<{ notifications: unknown[] }>(key)?.notifications,
+    ).toEqual(["preserved", notice]);
     expect(test.reads()).toBe(0);
     test.close();
   });
 
   it("requires another authoritative read after reconciliation fails", async () => {
     const test = setup();
-    test.observer.setOptions({ queryKey: key, staleTime: Infinity, retry: false, queryFn: async () => { throw new Error("offline"); } });
-    await updateUserCache(test.client, key, undefined, { revision: prepareUserUpdate(test.client, key) });
+    test.observer.setOptions({
+      queryKey: key,
+      staleTime: Infinity,
+      retry: false,
+      queryFn: async () => {
+        throw new Error("offline");
+      },
+    });
+    await updateUserCache(test.client, key, undefined, {
+      revision: prepareUserUpdate(test.client, key),
+    });
     expect(test.value()?.userData.money).toBe(100);
     expect(prepareUserUpdate(test.client, key)).toBeUndefined();
-    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => profile(80) });
-    await updateUserCache(test.client, key, { money: 110 }, { revision: prepareUserUpdate(test.client, key) });
+    test.observer.setOptions({
+      queryKey: key,
+      staleTime: Infinity,
+      queryFn: async () => profile(80),
+    });
+    await updateUserCache(
+      test.client,
+      key,
+      { money: 110 },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
     expect(test.value()?.userData.money).toBe(80);
     expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
     test.close();
@@ -291,7 +569,9 @@ describe("user cache updates", () => {
   it("evaluates ordinary functional patches against the current cache", async () => {
     const test = setup();
     test.client.setQueryData(key, profile(130));
-    await updateUserCache(test.client, key, (current) => ({ money: current.money + 5 }));
+    await updateUserCache(test.client, key, (current) => ({
+      money: current.money + 5,
+    }));
     expect(test.value()).toEqual(profile(135));
     expect(test.reads()).toBe(0);
     test.close();
@@ -300,11 +580,17 @@ describe("user cache updates", () => {
   it("restarts required reconciliation after an ordinary patch", async () => {
     const test = setup();
     test.setDatabase(80);
-    const pending = test.client.fetchQuery({
+    const pending = test.client
+      .fetchQuery({
+        queryKey: key,
+        queryFn: () => new Promise<ReturnType<typeof profile>>(() => {}),
+      })
+      .catch(() => undefined);
+    test.observer.setOptions({
       queryKey: key,
-      queryFn: () => new Promise<ReturnType<typeof profile>>(() => {}),
-    }).catch(() => undefined);
-    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => profile(80) });
+      staleTime: Infinity,
+      queryFn: async () => profile(80),
+    });
     await updateUserCache(test.client, key, { tutorialOn: false });
     await pending;
     expect(test.value()?.userData.money).toBe(80);
@@ -323,27 +609,50 @@ describe("user cache updates", () => {
 
   it("rejects a delayed village snapshot after a newer profile refresh", async () => {
     const test = setup();
-    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
     const village = { id: "village", tokens: 1000 } as Village;
     test.client.setQueryData(key, { userData: { ...profile(100).userData, village } });
     const revision = prepareUserUpdate(test.client, key);
-    const latest = { ...profile(100), userData: { ...profile(100).userData, village: { ...village, tokens: 800 } } };
+    const latest = {
+      ...profile(100),
+      userData: { ...profile(100).userData, village: { ...village, tokens: 800 } },
+    };
     test.client.setQueryData(key, latest);
-    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => latest });
-    await updateUserCache(test.client, key, (current) => ({
-      village: { ...current.village!, tokens: 900 },
-    }), { revision });
+    test.observer.setOptions({
+      queryKey: key,
+      staleTime: Infinity,
+      queryFn: async () => latest,
+    });
+    await updateUserCache(
+      test.client,
+      key,
+      (current) => ({
+        village: { ...current.village!, tokens: 900 },
+      }),
+      { revision },
+    );
     expect(test.value()?.userData.village?.tokens).toBe(800);
     test.close();
   });
 
   it("preserves an unrelated village relation when applying a projection", async () => {
     const test = setup();
-    const village = { id: "village", tokens: 1000, name: "Hidden Leaf" } as unknown as NonNullable<NonNullable<UserWithRelations>["village"]>;
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
-    await updateUserCache(test.client, key, { village: { id: "village", tokens: 900 } }, {
-      revision: prepareUserUpdate(test.client, key),
+    const village = {
+      id: "village",
+      tokens: 1000,
+      name: "Hidden Leaf",
+    } as unknown as NonNullable<NonNullable<UserWithRelations>["village"]>;
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: { ...profile(100).userData, village },
     });
+    await updateUserCache(
+      test.client,
+      key,
+      { village: { id: "village", tokens: 900 } },
+      {
+        revision: prepareUserUpdate(test.client, key),
+      },
+    );
     expect(test.value()?.userData.village).toEqual({ ...village, tokens: 900 });
     expect(test.value()?.notifications).toEqual(["preserved"]);
     expect(test.reads()).toBe(0);
@@ -353,15 +662,42 @@ describe("user cache updates", () => {
   it("merges a confirmed shrine boost without dropping other shrine fields or boosts", async () => {
     const test = setup();
     const village = {
-      id: "village", tokens: 1000, name: "Hidden Leaf",
-      shrineSettings: { activeBoosts: { training: "existing" }, activeAiIds: ["defender"], unlockedAiIds: ["defender"], boostTemplate: [] },
+      id: "village",
+      tokens: 1000,
+      name: "Hidden Leaf",
+      shrineSettings: {
+        activeBoosts: { training: "existing" },
+        activeAiIds: ["defender"],
+        unlockedAiIds: ["defender"],
+        boostTemplate: [],
+      },
     } as unknown as NonNullable<NonNullable<UserWithRelations>["village"]>;
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
-    await updateUserCache(test.client, key, { village: {
-      id: "village", tokens: 900, shrineSettings: { activeBoosts: { regeneration: "new" } },
-    } }, { revision: prepareUserUpdate(test.client, key), delta: { reputationPoints: -10 } });
-    expect(test.value()?.userData.village).toEqual({ ...village, tokens: 900,
-      shrineSettings: { ...village.shrineSettings, activeBoosts: { training: "existing", regeneration: "new" } },
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: { ...profile(100).userData, village },
+    });
+    await updateUserCache(
+      test.client,
+      key,
+      {
+        village: {
+          id: "village",
+          tokens: 900,
+          shrineSettings: { activeBoosts: { regeneration: "new" } },
+        },
+      },
+      {
+        revision: prepareUserUpdate(test.client, key),
+        delta: { reputationPoints: -10 },
+      },
+    );
+    expect(test.value()?.userData.village).toEqual({
+      ...village,
+      tokens: 900,
+      shrineSettings: {
+        ...village.shrineSettings,
+        activeBoosts: { training: "existing", regeneration: "new" },
+      },
     });
     expect(test.value()?.userData.reputationPoints).toBe(20);
     expect(test.reads()).toBe(0);
@@ -370,31 +706,69 @@ describe("user cache updates", () => {
 
   it("refreshes a mismatched village projection before applying its accompanying debit", async () => {
     const test = setup();
-    const village = { id: "current", tokens: 1000 } as unknown as NonNullable<NonNullable<UserWithRelations>["village"]>;
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
-    const latest = { ...profile(90), userData: { ...profile(90).userData, village, reputationPoints: 30 } };
-    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => latest });
-    await updateUserCache(test.client, key, { village: { id: "other", tokens: 900 } }, {
-      revision: prepareUserUpdate(test.client, key), delta: { reputationPoints: -10 },
+    const village = { id: "current", tokens: 1000 } as unknown as NonNullable<
+      NonNullable<UserWithRelations>["village"]
+    >;
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: { ...profile(100).userData, village },
     });
+    const latest = {
+      ...profile(90),
+      userData: { ...profile(90).userData, village, reputationPoints: 30 },
+    };
+    test.observer.setOptions({
+      queryKey: key,
+      staleTime: Infinity,
+      queryFn: async () => latest,
+    });
+    await updateUserCache(
+      test.client,
+      key,
+      { village: { id: "other", tokens: 900 } },
+      {
+        revision: prepareUserUpdate(test.client, key),
+        delta: { reputationPoints: -10 },
+      },
+    );
     expect(test.value()?.userData).toEqual(latest.userData);
     test.close();
   });
 
   it("preserves clan fields and rejects a projection for a different clan", async () => {
     const test = setup();
-    const clan = { id: "current", bank: 1000, name: "Allies", repTreasury: 20 } as NonNullable<NonNullable<UserWithRelations>["clan"]>;
+    const clan = {
+      id: "current",
+      bank: 1000,
+      name: "Allies",
+      repTreasury: 20,
+    } as NonNullable<NonNullable<UserWithRelations>["clan"]>;
     const latest = { ...profile(100), userData: { ...profile(100).userData, clan } };
     test.client.setQueryData(key, latest);
-    await updateUserCache(test.client, key, { clan: { id: "current", bank: 900 } }, {
-      revision: prepareUserUpdate(test.client, key),
-    });
+    await updateUserCache(
+      test.client,
+      key,
+      { clan: { id: "current", bank: 900 } },
+      {
+        revision: prepareUserUpdate(test.client, key),
+      },
+    );
     expect(test.value()?.userData.clan).toEqual({ ...clan, bank: 900 });
     expect(test.reads()).toBe(0);
-    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => latest });
-    await updateUserCache(test.client, key, { clan: { id: "other", bank: 1 } }, {
-      revision: prepareUserUpdate(test.client, key), delta: { money: -10 },
+    test.observer.setOptions({
+      queryKey: key,
+      staleTime: Infinity,
+      queryFn: async () => latest,
     });
+    await updateUserCache(
+      test.client,
+      key,
+      { clan: { id: "other", bank: 1 } },
+      {
+        revision: prepareUserUpdate(test.client, key),
+        delta: { money: -10 },
+      },
+    );
     expect(test.value()?.userData).toEqual(latest.userData);
     test.close();
   });
@@ -412,7 +786,12 @@ describe("user cache updates", () => {
     const test = setup();
     const revision = prepareUserUpdate(test.client, key);
     test.setDatabase(85);
-    await updateUserCache(test.client, key, { money: 90 }, { revision, delta: undefined });
+    await updateUserCache(
+      test.client,
+      key,
+      { money: 90 },
+      { revision, delta: undefined },
+    );
     expect(test.value()).toEqual(profile(85));
     expect(test.reads()).toBe(1);
     test.close();
@@ -433,7 +812,10 @@ describe("user cache updates", () => {
     let resolve!: (value: ReturnType<typeof profile>) => void;
     const pending = test.client.fetchQuery({
       queryKey: key,
-      queryFn: () => new Promise<ReturnType<typeof profile>>((done) => { resolve = done; }),
+      queryFn: () =>
+        new Promise<ReturnType<typeof profile>>((done) => {
+          resolve = done;
+        }),
     });
     expect(prepareUserUpdate(test.client, key)).toBeUndefined();
     expect(test.client.getQueryState(key)?.fetchStatus).toBe("fetching");
@@ -448,9 +830,12 @@ describe("user cache updates", () => {
     let resolve!: (value: ReturnType<typeof profile>) => void;
     const pending = client.fetchQuery({
       queryKey: key,
-      queryFn: () => new Promise<ReturnType<typeof profile>>((done) => { resolve = done; }),
+      queryFn: () =>
+        new Promise<ReturnType<typeof profile>>((done) => {
+          resolve = done;
+        }),
     });
-    expect(await prepareUserUpdate(client, key)).toBeUndefined();
+    expect(prepareUserUpdate(client, key)).toBeUndefined();
     expect(client.getQueryState(key)?.fetchStatus).toBe("fetching");
     resolve(profile(100));
     await pending;
@@ -460,9 +845,12 @@ describe("user cache updates", () => {
 
   it("applies a confirmed debit without a query and preserves unrelated fields", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     test.setDatabase(90);
-    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: revision });
+    await updateUserCache(test.client, key, undefined, {
+      delta: { money: -10 },
+      revision,
+    });
     expect(test.value()).toEqual(profile(90));
     expect(test.reads()).toBe(0);
     test.close();
@@ -477,7 +865,9 @@ describe("user cache updates", () => {
       queryFn: async () => {
         reads++;
         return reads === 1
-          ? new Promise<ReturnType<typeof profile>>((resolve) => { resolveInitial = resolve; })
+          ? new Promise<ReturnType<typeof profile>>((resolve) => {
+              resolveInitial = resolve;
+            })
           : profile(90);
       },
     });
@@ -486,7 +876,7 @@ describe("user cache updates", () => {
     expect(revision).toBeUndefined();
     expect(client.getQueryState(key)?.fetchStatus).toBe("fetching");
 
-    await updateUserCache(client, key, undefined, { delta: { money: -10 }, revision: revision });
+    await updateUserCache(client, key, undefined, { delta: { money: -10 }, revision });
     resolveInitial(profile(100));
     await Promise.resolve();
     expect(reads).toBe(2);
@@ -498,10 +888,13 @@ describe("user cache updates", () => {
 
   it("does not debit twice when a refetch already contains the mutation", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     test.setDatabase(90);
     await test.observer.refetch();
-    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: revision });
+    await updateUserCache(test.client, key, undefined, {
+      delta: { money: -10 },
+      revision,
+    });
     expect(test.value()?.userData.money).toBe(90);
     expect(test.reads()).toBe(2);
     test.close();
@@ -509,10 +902,13 @@ describe("user cache updates", () => {
 
   it("refreshes after an absolute patch that may already include the debit", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     test.setDatabase(90);
     test.client.setQueryData(key, profile(90));
-    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: revision });
+    await updateUserCache(test.client, key, undefined, {
+      delta: { money: -10 },
+      revision,
+    });
     expect(test.value()?.userData.money).toBe(90);
     expect(test.reads()).toBe(1);
     test.close();
@@ -523,8 +919,16 @@ describe("user cache updates", () => {
     const absoluteRevision = prepareUserUpdate(test.client, key);
     const deltaRevision = prepareUserUpdate(test.client, key);
     test.setDatabase(85);
-    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: deltaRevision });
-    await updateUserCache(test.client, key, { money: 95 }, { delta: {}, revision: absoluteRevision });
+    await updateUserCache(test.client, key, undefined, {
+      delta: { money: -10 },
+      revision: deltaRevision,
+    });
+    await updateUserCache(
+      test.client,
+      key,
+      { money: 95 },
+      { delta: {}, revision: absoluteRevision },
+    );
     expect(test.value()?.userData.money).toBe(85);
     expect(test.reads()).toBe(1);
     test.close();
@@ -532,11 +936,17 @@ describe("user cache updates", () => {
 
   it("refreshes the second overlapping delta instead of using an ambiguous snapshot", async () => {
     const test = setup();
-    const first = await prepareUserUpdate(test.client, key);
-    const second = await prepareUserUpdate(test.client, key);
+    const first = prepareUserUpdate(test.client, key);
+    const second = prepareUserUpdate(test.client, key);
     test.setDatabase(70);
-    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: first });
-    await updateUserCache(test.client, key, undefined, { delta: { money: -20 }, revision: second });
+    await updateUserCache(test.client, key, undefined, {
+      delta: { money: -10 },
+      revision: first,
+    });
+    await updateUserCache(test.client, key, undefined, {
+      delta: { money: -20 },
+      revision: second,
+    });
     expect(test.value()?.userData.money).toBe(70);
     expect(test.reads()).toBe(1);
     test.close();
@@ -544,11 +954,14 @@ describe("user cache updates", () => {
 
   it("detects intervening writes even when they return to the original balance", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     test.client.setQueryData(key, profile(90));
     test.client.setQueryData(key, profile(100));
     test.setDatabase(90);
-    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: revision });
+    await updateUserCache(test.client, key, undefined, {
+      delta: { money: -10 },
+      revision,
+    });
     expect(test.value()?.userData.money).toBe(90);
     expect(test.reads()).toBe(1);
     test.close();
@@ -556,14 +969,26 @@ describe("user cache updates", () => {
 
   it("restarts an unfinished query instead of discarding its reconciliation", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     let resolve!: (value: ReturnType<typeof profile>) => void;
-    const pending = test.client.fetchQuery({
+    const pending = test.client
+      .fetchQuery({
+        queryKey: key,
+        queryFn: () =>
+          new Promise<ReturnType<typeof profile>>((done) => {
+            resolve = done;
+          }),
+      })
+      .catch(() => undefined);
+    test.observer.setOptions({
       queryKey: key,
-      queryFn: () => new Promise<ReturnType<typeof profile>>((done) => { resolve = done; }),
-    }).catch(() => undefined);
-    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => profile(110) });
-    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: revision });
+      staleTime: Infinity,
+      queryFn: async () => profile(110),
+    });
+    await updateUserCache(test.client, key, undefined, {
+      delta: { money: -10 },
+      revision,
+    });
     resolve(profile(100));
     await pending;
     expect(test.value()?.userData.money).toBe(110);
@@ -572,10 +997,13 @@ describe("user cache updates", () => {
 
   it("honors an invalidation even when its query has not completed", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     test.client.getQueryCache().find({ queryKey: key })!.invalidate();
     test.setDatabase(110);
-    await updateUserCache(test.client, key, undefined, { delta: { money: -10 }, revision: revision });
+    await updateUserCache(test.client, key, undefined, {
+      delta: { money: -10 },
+      revision,
+    });
     expect(test.value()?.userData.money).toBe(110);
     expect(test.reads()).toBe(1);
     test.close();
@@ -583,9 +1011,9 @@ describe("user cache updates", () => {
 
   it("refreshes when an identity-dependent patch cannot be applied", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     test.setDatabase(90);
-    await updateUserCache(test.client, key, () => undefined, { delta: {}, revision: revision });
+    await updateUserCache(test.client, key, () => undefined, { delta: {}, revision });
     expect(test.value()?.userData.money).toBe(90);
     expect(test.reads()).toBe(1);
     test.close();
@@ -593,33 +1021,42 @@ describe("user cache updates", () => {
 
   it("refreshes when no confirmed delta is available", async () => {
     const test = setup();
-    const revision = await prepareUserUpdate(test.client, key);
+    const revision = prepareUserUpdate(test.client, key);
     test.setDatabase(90);
-    await updateUserCache(test.client, key, undefined, { delta: undefined, revision: revision });
+    await updateUserCache(test.client, key, undefined, { delta: undefined, revision });
     expect(test.value()?.userData.money).toBe(90);
     expect(test.reads()).toBe(1);
     test.close();
   });
 });
 
-
 describe("shared mutation user response", () => {
   it("merges partial objects generically while replacing arrays, dates and nulls", async () => {
     const test = setup();
     const before = new Date("2026-01-01T00:00:00Z");
     const after = new Date("2026-01-02T00:00:00Z");
-    const cached = { ...profile(100), userData: { ...profile(100).userData,
-      questFinishAt: before, masteryTrainingStartedAt: before,
-      clan: { id: "clan", bank: 100 },
-      loadout: { id: "loadout", name: "Default", jutsuIds: ["old", "removed"] },
-    } };
+    const cached = {
+      ...profile(100),
+      userData: {
+        ...profile(100).userData,
+        questFinishAt: before,
+        masteryTrainingStartedAt: before,
+        clan: { id: "clan", bank: 100 },
+        loadout: { id: "loadout", name: "Default", jutsuIds: ["old", "removed"] },
+      },
+    };
     test.client.setQueryData(key, cached);
     await updateUserCache(test.client, key, {
-      questFinishAt: after, masteryTrainingStartedAt: null, clan: null,
+      questFinishAt: after,
+      masteryTrainingStartedAt: null,
+      clan: null,
       loadout: { jutsuIds: ["new"] },
     });
-    expect(test.value()?.userData).toEqual({ ...cached.userData,
-      questFinishAt: after, masteryTrainingStartedAt: null, clan: null,
+    expect(test.value()?.userData).toEqual({
+      ...cached.userData,
+      questFinishAt: after,
+      masteryTrainingStartedAt: null,
+      clan: null,
       loadout: { ...cached.userData.loadout, jutsuIds: ["new"] },
     });
     expect(test.reads()).toBe(0);
@@ -628,14 +1065,24 @@ describe("shared mutation user response", () => {
 
   it("adds root and nested deltas to original values instead of accompanying absolute patches", async () => {
     const test = setup();
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData,
-      clan: { id: "current", bank: 1000, name: "Allies" },
-    } });
-    await updateUserCache(test.client, key, { money: 999, clan: { id: "current", bank: 999 } }, {
-      revision: prepareUserUpdate(test.client, key),
-      delta: { money: -10, clan: { id: "current", bank: 10 } },
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: {
+        ...profile(100).userData,
+        clan: { id: "current", bank: 1000, name: "Allies" },
+      },
     });
-    expect(test.value()?.userData).toMatchObject({ money: 90,
+    await updateUserCache(
+      test.client,
+      key,
+      { money: 999, clan: { id: "current", bank: 999 } },
+      {
+        revision: prepareUserUpdate(test.client, key),
+        delta: { money: -10, clan: { id: "current", bank: 10 } },
+      },
+    );
+    expect(test.value()?.userData).toMatchObject({
+      money: 90,
       clan: { id: "current", bank: 1010, name: "Allies" },
     });
     expect(test.reads()).toBe(0);
@@ -644,17 +1091,33 @@ describe("shared mutation user response", () => {
 
   it("rejects a mismatched patch identity even when its delta identity matches", async () => {
     const test = setup();
-    const cached = { ...profile(100), userData: { ...profile(100).userData,
-      clan: { id: "current", bank: 1000 },
-    } };
+    const cached = {
+      ...profile(100),
+      userData: { ...profile(100).userData, clan: { id: "current", bank: 1000 } },
+    };
     test.client.setQueryData(key, cached);
-    const latest = { ...cached, userData: { ...cached.userData, money: 90 } as NonNullable<UserWithRelations> };
+    const latest = {
+      ...cached,
+      userData: { ...cached.userData, money: 90 } as NonNullable<UserWithRelations>,
+    };
     let reads = 0;
-    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return latest; } });
-    await updateUserCache(test.client, key, { clan: { id: "other", bank: 999 } }, {
-      revision: prepareUserUpdate(test.client, key),
-      delta: { money: -10, clan: { id: "current", bank: 10 } },
+    test.observer.setOptions({
+      queryKey: key,
+      staleTime: Infinity,
+      queryFn: async () => {
+        reads++;
+        return latest;
+      },
     });
+    await updateUserCache(
+      test.client,
+      key,
+      { clan: { id: "other", bank: 999 } },
+      {
+        revision: prepareUserUpdate(test.client, key),
+        delta: { money: -10, clan: { id: "current", bank: 10 } },
+      },
+    );
     expect(test.value()?.userData).toEqual(latest.userData);
     expect(reads).toBe(1);
     test.close();
@@ -662,13 +1125,28 @@ describe("shared mutation user response", () => {
 
   it("refreshes the whole update when a nested numeric baseline is missing", async () => {
     const test = setup();
-    const cached = { ...profile(100), userData: { ...profile(100).userData,
-      village: { id: "current" },
-    } };
+    const cached = {
+      ...profile(100),
+      userData: { ...profile(100).userData, village: { id: "current" } },
+    };
     test.client.setQueryData(key, cached);
-    const latest = { ...cached, userData: { ...cached.userData, money: 90, village: { id: "current", tokens: 90 } } as NonNullable<UserWithRelations> };
+    const latest = {
+      ...cached,
+      userData: {
+        ...cached.userData,
+        money: 90,
+        village: { id: "current", tokens: 90 },
+      } as NonNullable<UserWithRelations>,
+    };
     let reads = 0;
-    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return latest; } });
+    test.observer.setOptions({
+      queryKey: key,
+      staleTime: Infinity,
+      queryFn: async () => {
+        reads++;
+        return latest;
+      },
+    });
     await updateUserCache(test.client, key, undefined, {
       revision: prepareUserUpdate(test.client, key),
       delta: { money: -10, village: { id: "current", tokens: -10 } },
@@ -680,23 +1158,42 @@ describe("shared mutation user response", () => {
 
   it("applies a village debit while preserving unrelated boosts and the settings just saved", async () => {
     const test = setup();
-    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
     const village = {
-      id: "village", tokens: 1007, name: "Hidden Leaf",
-      shrineSettings: { activeBoosts: { PVP: "existing" }, unlockedAiIds: [], activeAiIds: [] },
+      id: "village",
+      tokens: 1007,
+      name: "Hidden Leaf",
+      shrineSettings: {
+        activeBoosts: { PVP: "existing" },
+        unlockedAiIds: [],
+        activeAiIds: [],
+      },
     } as unknown as Village;
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: { ...profile(100).userData, village },
+    });
     const response = userDeltaResponseSchema.parse({
-      success: true, message: "Saved",
+      success: true,
+      message: "Saved",
       userDelta: { village: { id: "village", tokens: -100 } },
-      userPatch: { village: { id: "village", shrineSettings: { activeBoosts: { Training: "saved" } } } },
+      userPatch: {
+        village: {
+          id: "village",
+          shrineSettings: { activeBoosts: { Training: "saved" } },
+        },
+      },
     });
     await updateUserCache(test.client, key, response.userPatch, {
-      revision: prepareUserUpdate(test.client, key), delta: response.userDelta,
+      revision: prepareUserUpdate(test.client, key),
+      delta: response.userDelta,
     });
     expect(test.value()?.userData.village).toEqual({
-      ...village, tokens: 907,
-      shrineSettings: { ...village.shrineSettings, activeBoosts: { PVP: "existing", Training: "saved" } },
+      ...village,
+      tokens: 907,
+      shrineSettings: {
+        ...village.shrineSettings,
+        activeBoosts: { PVP: "existing", Training: "saved" },
+      },
     });
     expect(test.reads()).toBe(0);
     test.close();
@@ -706,20 +1203,40 @@ describe("shared mutation user response", () => {
     for (const unavailable of [true, false]) {
       it(`refreshes all fields when ${relation} delta refers to a ${unavailable ? "missing" : "different"} relation`, async () => {
         const test = setup();
-        const cached = { ...profile(100), userData: { ...profile(100).userData,
-          [relation]: unavailable ? null : { id: "current", bank: 100, repTreasury: 10, tokens: 100 },
-        } };
+        const cached = {
+          ...profile(100),
+          userData: {
+            ...profile(100).userData,
+            [relation]: unavailable
+              ? null
+              : { id: "current", bank: 100, repTreasury: 10, tokens: 100 },
+          },
+        };
         test.client.setQueryData(key, cached);
         const latest = { ...cached, userData: { ...cached.userData, money: 90 } };
         let reads = 0;
-        test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return latest; } });
+        test.observer.setOptions({
+          queryKey: key,
+          staleTime: Infinity,
+          queryFn: async () => {
+            reads++;
+            return latest;
+          },
+        });
         const delta = userDeltaResponseSchema.parse({
-          success: true, message: "Saved", userDelta: { money: -10,
-            [relation]: relation === "clan" ? { id: "other", bank: 10 } : { id: "other", tokens: -10 },
+          success: true,
+          message: "Saved",
+          userDelta: {
+            money: -10,
+            [relation]:
+              relation === "clan"
+                ? { id: "other", bank: 10 }
+                : { id: "other", tokens: -10 },
           },
         }).userDelta;
         await updateUserCache(test.client, key, undefined, {
-          revision: prepareUserUpdate(test.client, key), delta,
+          revision: prepareUserUpdate(test.client, key),
+          delta,
         });
         expect(test.value()?.userData).toEqual(latest.userData);
         expect(reads).toBe(1);
@@ -730,46 +1247,99 @@ describe("shared mutation user response", () => {
 
   it("refreshes a delayed village debit after a newer profile already includes it", async () => {
     const test = setup();
-    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
     const village = { id: "village", tokens: 1000 } as Village;
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, village } });
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: { ...profile(100).userData, village },
+    });
     const revision = prepareUserUpdate(test.client, key);
-    const latest = { ...profile(100), userData: { ...profile(100).userData, village: { ...village, tokens: 900 } } };
+    const latest = {
+      ...profile(100),
+      userData: { ...profile(100).userData, village: { ...village, tokens: 900 } },
+    };
     test.client.setQueryData(key, latest);
     let reads = 0;
-    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return latest; } });
-    await updateUserCache(test.client, key, undefined, { revision, delta: { village: { id: "village", tokens: -100 } } });
+    test.observer.setOptions({
+      queryKey: key,
+      staleTime: Infinity,
+      queryFn: async () => {
+        reads++;
+        return latest;
+      },
+    });
+    await updateUserCache(test.client, key, undefined, {
+      revision,
+      delta: { village: { id: "village", tokens: -100 } },
+    });
     expect(test.value()?.userData.village?.tokens).toBe(900);
     expect(reads).toBe(1);
     test.close();
   });
 
   it.each([
-    { name: "bank deposit", userDelta: { money: -10, clan: { id: "current", bank: 10 } }, money: 90, reputationPoints: 30, bank: 1010, repTreasury: 20 },
-    { name: "reputation donation", userDelta: { reputationPoints: -10, clan: { id: "current", repTreasury: 10 } }, money: 100, reputationPoints: 20, bank: 1000, repTreasury: 30 },
-  ])("applies a confirmed $name without a clan readback or profile fetch", async (update) => {
-    const test = setup();
-    const clan = { id: "current", bank: 1000, name: "Allies", repTreasury: 20 } as NonNullable<NonNullable<UserWithRelations>["clan"]>;
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, clan } });
-    const revision = prepareUserUpdate(test.client, key);
-    const latest = {
-      ...profile(update.money),
-      userData: { ...profile(update.money).userData, reputationPoints: update.reputationPoints,
-        clan: { ...clan, bank: update.bank, repTreasury: update.repTreasury } },
-    };
-    let reads = 0;
-    test.observer.setOptions({ queryKey: key, staleTime: Infinity, queryFn: async () => { reads++; return latest; } });
-    const response = userDeltaResponseSchema.parse({
-      success: true, message: "Committed", userDelta: update.userDelta, userPatch: {},
-    });
-    await updateUserCache(test.client, key,
-      response.userPatch,
-      { revision, delta: response.userDelta },
-    );
-    expect(test.value()?.userData).toEqual(latest.userData);
-    expect(reads).toBe(0);
-    test.close();
-  });
+    {
+      name: "bank deposit",
+      userDelta: { money: -10, clan: { id: "current", bank: 10 } },
+      money: 90,
+      reputationPoints: 30,
+      bank: 1010,
+      repTreasury: 20,
+    },
+    {
+      name: "reputation donation",
+      userDelta: { reputationPoints: -10, clan: { id: "current", repTreasury: 10 } },
+      money: 100,
+      reputationPoints: 20,
+      bank: 1000,
+      repTreasury: 30,
+    },
+  ])(
+    "applies a confirmed $name without a clan readback or profile fetch",
+    async (update) => {
+      const test = setup();
+      const clan = {
+        id: "current",
+        bank: 1000,
+        name: "Allies",
+        repTreasury: 20,
+      } as NonNullable<NonNullable<UserWithRelations>["clan"]>;
+      test.client.setQueryData(key, {
+        ...profile(100),
+        userData: { ...profile(100).userData, clan },
+      });
+      const revision = prepareUserUpdate(test.client, key);
+      const latest = {
+        ...profile(update.money),
+        userData: {
+          ...profile(update.money).userData,
+          reputationPoints: update.reputationPoints,
+          clan: { ...clan, bank: update.bank, repTreasury: update.repTreasury },
+        },
+      };
+      let reads = 0;
+      test.observer.setOptions({
+        queryKey: key,
+        staleTime: Infinity,
+        queryFn: async () => {
+          reads++;
+          return latest;
+        },
+      });
+      const response = userDeltaResponseSchema.parse({
+        success: true,
+        message: "Committed",
+        userDelta: update.userDelta,
+        userPatch: {},
+      });
+      await updateUserCache(test.client, key, response.userPatch, {
+        revision,
+        delta: response.userDelta,
+      });
+      expect(test.value()?.userData).toEqual(latest.userData);
+      expect(reads).toBe(0);
+      test.close();
+    },
+  );
 
   it("preserves nullable saved fields and applies numeric deltas once without a profile read", async () => {
     const test = setup();
@@ -781,10 +1351,14 @@ describe("shared mutation user response", () => {
     });
     const revision = prepareUserUpdate(test.client, key);
     await updateUserCache(test.client, key, response.userPatch, {
-      revision, delta: response.userDelta,
+      revision,
+      delta: response.userDelta,
     });
     expect(test.value()?.userData).toMatchObject({
-      money: 100, reputationPoints: 20, primaryElement: "Fire", secondaryElement: null,
+      money: 100,
+      reputationPoints: 20,
+      primaryElement: "Fire",
+      secondaryElement: null,
     });
     expect(test.value()?.notifications).toEqual(["preserved"]);
     expect(test.reads()).toBe(0);
@@ -797,74 +1371,186 @@ describe("shared mutation user response", () => {
       success: true,
       message: "Updated",
       userDelta: { seichiSilver: 40 },
-      userPatch: { bloodright: [], bloodrightSpent: 0, monthlySkillResets: { month: "2026-10", count: 1 } },
+      userPatch: {
+        bloodright: [],
+        bloodrightSpent: 0,
+        monthlySkillResets: { month: "2026-10", count: 1 },
+      },
     });
     test.client.setQueryData(key, {
-      ...test.value(), userData: { ...test.value()?.userData, seichiSilver: 10, bloodrightSpent: 40, bloodright: [{skillId: "tier", cost: 40}] },
+      ...test.value(),
+      userData: {
+        ...test.value()?.userData,
+        seichiSilver: 10,
+        bloodrightSpent: 40,
+        bloodright: [{ skillId: "tier", cost: 40 }],
+      },
     });
     await updateUserCache(test.client, key, response.userPatch, {
-      revision: prepareUserUpdate(test.client, key), delta: response.userDelta,
+      revision: prepareUserUpdate(test.client, key),
+      delta: response.userDelta,
     });
     expect(test.value()?.userData).toMatchObject({
-      seichiSilver: 50, bloodrightSpent: 0, bloodright: [], monthlySkillResets: { month: "2026-10", count: 1 },
+      seichiSilver: 50,
+      bloodrightSpent: 0,
+      bloodright: [],
+      monthlySkillResets: { month: "2026-10", count: 1 },
     });
     expect(test.reads()).toBe(0);
     test.close();
   });
 });
 
-
 describe("progression cache reconciliation", () => {
-  it.each([false, true])("keeps complete tracker snapshots authoritative with explicit achievement metadata: %s", async (hasMetadata) => {
-    const client = new QueryClient();
-    client.setQueryData(key, { userData: { ...profile(100).userData, questData: [QuestTracker.parse({ id: "virtual" })] }, achievementProgress: [{ id: "virtual", questId: "virtual" }] });
-    await updateUserCache(client, key, { questData: [] }, { revision: prepareUserUpdate(client, key), achievementProgress: hasMetadata ? [] : undefined });
-    expect(client.getQueryData<{ userData: NonNullable<UserWithRelations> }>(key)?.userData.questData).toEqual([]);
-    client.clear();
-  });
+  it.each([false, true])(
+    "keeps complete tracker snapshots authoritative with explicit achievement metadata: %s",
+    async (hasMetadata) => {
+      const client = new QueryClient();
+      client.setQueryData(key, {
+        userData: {
+          ...profile(100).userData,
+          questData: [QuestTracker.parse({ id: "virtual" })],
+        },
+        achievementProgress: [{ id: "virtual", questId: "virtual" }],
+      });
+      await updateUserCache(
+        client,
+        key,
+        { questData: [] },
+        {
+          revision: prepareUserUpdate(client, key),
+          achievementProgress: hasMetadata ? [] : undefined,
+        },
+      );
+      expect(
+        client.getQueryData<{ userData: NonNullable<UserWithRelations> }>(key)?.userData
+          .questData,
+      ).toEqual([]);
+      client.clear();
+    },
+  );
 
-  const progression = (earnedExperience: number, status: "AWAKE" | "BATTLE" | "HOSPITALIZED" = "AWAKE") => ({
+  const progression = (
+    earnedExperience: number,
+    status: "AWAKE" | "BATTLE" | "HOSPITALIZED" = "AWAKE",
+  ) => ({
     ...profile(100).userData,
-    rank: "GENIN" as const, earnedExperience, status,
-    offence: 10, defence: 10, strength: 10, speed: 10, intelligence: 10, willpower: 10,
-    ninjutsuMastery: 10, genjutsuMastery: 10, taijutsuMastery: 10, bukijutsuMastery: 10,
+    rank: "GENIN" as const,
+    earnedExperience,
+    status,
+    offence: 10,
+    defence: 10,
+    strength: 10,
+    speed: 10,
+    intelligence: 10,
+    willpower: 10,
+    ninjutsuMastery: 10,
+    genjutsuMastery: 10,
+    taijutsuMastery: 10,
+    bukijutsuMastery: 10,
   });
   it("reconciles achievement progress and Assign XP without touching unrelated notifications", async () => {
     const client = new QueryClient();
-    client.setQueryData(key, { userData: progression(10), notifications: [
-      { id: "tutorial-unassigned-stats", href: "/profile/experience", name: "Assign XP", color: "blue" },
-      { href: "/inbox", name: "2 messages", color: "hidden" },
-    ], achievementProgress: [{ id: "old" }] });
-    await updateUserCache(client, key, { earnedExperience: 0 }, { revision: prepareUserUpdate(client, key), achievementProgress: [] });
-    expect(client.getQueryData(key)).toMatchObject({ achievementProgress: [], notifications: [{ href: "/inbox", name: "2 messages" }] });
+    client.setQueryData(key, {
+      userData: progression(10),
+      notifications: [
+        {
+          id: "tutorial-unassigned-stats",
+          href: "/profile/experience",
+          name: "Assign XP",
+          color: "blue",
+        },
+        { href: "/inbox", name: "2 messages", color: "hidden" },
+      ],
+      achievementProgress: [{ id: "old" }],
+    });
+    await updateUserCache(
+      client,
+      key,
+      { earnedExperience: 0 },
+      { revision: prepareUserUpdate(client, key), achievementProgress: [] },
+    );
+    expect(client.getQueryData(key)).toMatchObject({
+      achievementProgress: [],
+      notifications: [{ href: "/inbox", name: "2 messages" }],
+    });
     client.clear();
   });
   it("adds Assign XP for a confirmed reward and caps capped profession balances", async () => {
     const client = new QueryClient();
-    client.setQueryData(key, { userData: { ...progression(0), medicalExperience: 3_999_999 }, notifications: [] });
-    await updateUserCache(client, key, undefined, { revision: prepareUserUpdate(client, key), delta: { earnedExperience: 10, medicalExperience: 100 } });
-    expect(client.getQueryData(key)).toMatchObject({ userData: { earnedExperience: 10, medicalExperience: 4_000_000 }, notifications: [{ name: "Assign XP" }] });
+    client.setQueryData(key, {
+      userData: { ...progression(0), medicalExperience: 3_999_999 },
+      notifications: [],
+    });
+    await updateUserCache(client, key, undefined, {
+      revision: prepareUserUpdate(client, key),
+      delta: { earnedExperience: 10, medicalExperience: 100 },
+    });
+    expect(client.getQueryData(key)).toMatchObject({
+      userData: { earnedExperience: 10, medicalExperience: 4_000_000 },
+      notifications: [{ name: "Assign XP" }],
+    });
     client.clear();
   });
   it("replaces battle navigation with hospitalization in the same confirmed update", async () => {
     const client = new QueryClient();
-    client.setQueryData(key, { userData: progression(0, "BATTLE"), notifications: [{ href: "/combat", name: "In combat", color: "red" }] });
-    await updateUserCache(client, key, { status: "HOSPITALIZED", battleId: null }, { revision: prepareUserUpdate(client, key) });
-    expect(client.getQueryData(key)).toMatchObject({ notifications: [{ href: "/hospital", name: "In hospital", color: "red" }] });
+    client.setQueryData(key, {
+      userData: progression(0, "BATTLE"),
+      notifications: [{ href: "/combat", name: "In combat", color: "red" }],
+    });
+    await updateUserCache(
+      client,
+      key,
+      { status: "HOSPITALIZED", battleId: null },
+      { revision: prepareUserUpdate(client, key) },
+    );
+    expect(client.getQueryData(key)).toMatchObject({
+      notifications: [{ href: "/hospital", name: "In hospital", color: "red" }],
+    });
     client.clear();
   });
 });
 
-type Cache = { userData: NonNullable<UserWithRelations>; notifications: NavBarDropdownLink[]; achievementProgress: AchievementProgress[] };
+type Cache = {
+  userData: NonNullable<UserWithRelations>;
+  notifications: NavBarDropdownLink[];
+  achievementProgress: AchievementProgress[];
+};
 const progressionCache = () => {
   const client = new QueryClient();
   const cache = {
-    userData: { masteryRanks: {}, bloodlineMastery: 0, sageMastery: 0, rank: "GENIN", status: "AWAKE", earnedExperience: 100, offence: 10, defence: 10, speed: 10, intelligence: 10, strength: 10, willpower: 10, ninjutsuMastery: 10, genjutsuMastery: 10, taijutsuMastery: 10, bukijutsuMastery: 10 } as NonNullable<UserWithRelations>,
-    notifications: [{ id: "unrelated", href: "/mail", name: "Mail", color: "blue" }, { href: "/profile/experience", name: "Assign XP", color: "blue" }, { href: "/combat", name: "In combat", color: "red" }, { href: "/hospital", name: "In hospital", color: "red" }],
+    userData: {
+      masteryRanks: {},
+      bloodlineMastery: 0,
+      sageMastery: 0,
+      rank: "GENIN",
+      status: "AWAKE",
+      earnedExperience: 100,
+      offence: 10,
+      defence: 10,
+      speed: 10,
+      intelligence: 10,
+      strength: 10,
+      willpower: 10,
+      ninjutsuMastery: 10,
+      genjutsuMastery: 10,
+      taijutsuMastery: 10,
+      bukijutsuMastery: 10,
+    } as NonNullable<UserWithRelations>,
+    notifications: [
+      { id: "unrelated", href: "/mail", name: "Mail", color: "blue" },
+      { href: "/profile/experience", name: "Assign XP", color: "blue" },
+      { href: "/combat", name: "In combat", color: "red" },
+      { href: "/hospital", name: "In hospital", color: "red" },
+    ],
     achievementProgress: [{ questId: "old-progress" } as AchievementProgress],
   } satisfies Cache;
   client.setQueryData(key, cache);
-  return { client, value: () => client.getQueryData<Cache>(key)!, close: () => client.clear() };
+  return {
+    client,
+    value: () => client.getQueryData<Cache>(key)!,
+    close: () => client.clear(),
+  };
 };
 
 describe("progression-derived profile navigation", () => {
@@ -872,66 +1558,170 @@ describe("progression-derived profile navigation", () => {
     const test = progressionCache();
     test.client.setQueryData(key, {
       ...test.value(),
-      userData: { ...test.value().userData, villageId: "village", shrineBattles: [{ defenderEntityId: "village", attackerEntityId: "enemy", sector: 4 }] },
+      userData: {
+        ...test.value().userData,
+        villageId: "village",
+        shrineBattles: [
+          { defenderEntityId: "village", attackerEntityId: "enemy", sector: 4 },
+        ],
+      },
       notifications: [
-        { href: "/travel", name: "Shrine under attack (Sector 4)", color: "red", alwaysShow: true },
+        {
+          href: "/travel",
+          name: "Shrine under attack (Sector 4)",
+          color: "red",
+          alwaysShow: true,
+        },
         { id: "unrelated", href: "/mail", name: "Mail", color: "blue" },
       ],
     });
-    await updateUserCache(test.client, key, { shrineBattles: [] }, { revision: prepareUserUpdate(test.client, key) });
-    expect(test.value().notifications.some((entry) => entry.name === "Shrine under attack (Sector 4)")).toBe(false);
-    expect(test.value().notifications.some((entry) => entry.id === "unrelated")).toBe(true);
+    await updateUserCache(
+      test.client,
+      key,
+      { shrineBattles: [] },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
+    expect(
+      test
+        .value()
+        .notifications.some((entry) => entry.name === "Shrine under attack (Sector 4)"),
+    ).toBe(false);
+    expect(test.value().notifications.some((entry) => entry.id === "unrelated")).toBe(
+      true,
+    );
     test.close();
   });
 
   it("adds and preserves the canonical deletion notice once alongside unrelated navigation", async () => {
     const test = progressionCache();
-    const notice: NavBarDropdownLink = { href: "/profile?tab=edit&settings=deletion&setting=character", name: "Deletion requested", color: "red" };
-    await updateUserCache(test.client, key, { deletionAt: new Date() }, { revision: prepareUserUpdate(test.client, key) });
-    expect(test.value().notifications.filter((entry) => /delet/i.test(entry.name))).toEqual([notice]);
-    await updateUserCache(test.client, key, { gender: "Unknown" }, { revision: prepareUserUpdate(test.client, key) });
-    expect(test.value().notifications.filter((entry) => /delet/i.test(entry.name))).toEqual([notice]);
-    expect(test.value().notifications.some((entry) => entry.id === "unrelated")).toBe(true);
+    const notice: NavBarDropdownLink = {
+      href: "/profile?tab=edit&settings=deletion&setting=character",
+      name: "Deletion requested",
+      color: "red",
+    };
+    await updateUserCache(
+      test.client,
+      key,
+      { deletionAt: new Date() },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
+    expect(
+      test.value().notifications.filter((entry) => /delet/i.test(entry.name)),
+    ).toEqual([notice]);
+    await updateUserCache(
+      test.client,
+      key,
+      { gender: "Unknown" },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
+    expect(
+      test.value().notifications.filter((entry) => /delet/i.test(entry.name)),
+    ).toEqual([notice]);
+    expect(test.value().notifications.some((entry) => entry.id === "unrelated")).toBe(
+      true,
+    );
     test.close();
   });
 
   it("clears deletion and sanction notices from the same confirmed account update", async () => {
     const test = progressionCache();
-    test.client.setQueryData(key, { ...test.value(), userData: { ...test.value().userData, deletionAt: new Date(), isBanned: true, isTradeBanned: true }, notifications: [
-      { href: "/profile?tab=edit&settings=deletion&setting=character", name: "Deletion requested", color: "red" },
-      { href: "/reports", name: "Banned!", color: "red" },
-      { href: "/reports", name: "Trade Banned!", color: "red" },
-      { id: "unrelated", href: "/mail", name: "Mail", color: "blue" },
-    ] });
-    await updateUserCache(test.client, key, { deletionAt: null, isBanned: false, isTradeBanned: false }, { revision: prepareUserUpdate(test.client, key) });
-    expect(test.value().notifications.some((entry) => ["Deletion requested", "Banned!", "Trade Banned!"].includes(entry.name))).toBe(false);
-    expect(test.value().notifications.some((entry) => entry.id === "unrelated")).toBe(true);
+    test.client.setQueryData(key, {
+      ...test.value(),
+      userData: {
+        ...test.value().userData,
+        deletionAt: new Date(),
+        isBanned: true,
+        isTradeBanned: true,
+      },
+      notifications: [
+        {
+          href: "/profile?tab=edit&settings=deletion&setting=character",
+          name: "Deletion requested",
+          color: "red",
+        },
+        { href: "/reports", name: "Banned!", color: "red" },
+        { href: "/reports", name: "Trade Banned!", color: "red" },
+        { id: "unrelated", href: "/mail", name: "Mail", color: "blue" },
+      ],
+    });
+    await updateUserCache(
+      test.client,
+      key,
+      { deletionAt: null, isBanned: false, isTradeBanned: false },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
+    expect(
+      test
+        .value()
+        .notifications.some((entry) =>
+          ["Deletion requested", "Banned!", "Trade Banned!"].includes(entry.name),
+        ),
+    ).toBe(false);
+    expect(test.value().notifications.some((entry) => entry.id === "unrelated")).toBe(
+      true,
+    );
     test.close();
   });
 
   it("removes spent XP and ended battle notifications while retaining unrelated navigation", async () => {
     const test = progressionCache();
-    await updateUserCache(test.client, key, { earnedExperience: 0, status: "AWAKE" }, { revision: prepareUserUpdate(test.client, key) });
-    expect(test.value().notifications).toEqual([{ id: "unrelated", href: "/mail", name: "Mail", color: "blue" }]);
+    await updateUserCache(
+      test.client,
+      key,
+      { earnedExperience: 0, status: "AWAKE" },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
+    expect(test.value().notifications).toEqual([
+      { id: "unrelated", href: "/mail", name: "Mail", color: "blue" },
+    ]);
     test.close();
   });
 
   it("removes Assign XP when the remaining points cannot be assigned under rank caps", async () => {
     const test = progressionCache();
     const cap = getUserCaps("GENIN");
-    await updateUserCache(test.client, key, { offence: cap.stats_cap, defence: cap.stats_cap, intelligence: cap.gens_cap, speed: cap.gens_cap, strength: cap.gens_cap, willpower: cap.gens_cap, ninjutsuMastery: MAX_MASTERY_CAP, genjutsuMastery: MAX_MASTERY_CAP, taijutsuMastery: MAX_MASTERY_CAP, bukijutsuMastery: MAX_MASTERY_CAP }, { revision: prepareUserUpdate(test.client, key) });
+    await updateUserCache(
+      test.client,
+      key,
+      {
+        offence: cap.stats_cap,
+        defence: cap.stats_cap,
+        intelligence: cap.gens_cap,
+        speed: cap.gens_cap,
+        strength: cap.gens_cap,
+        willpower: cap.gens_cap,
+        ninjutsuMastery: MAX_MASTERY_CAP,
+        genjutsuMastery: MAX_MASTERY_CAP,
+        taijutsuMastery: MAX_MASTERY_CAP,
+        bukijutsuMastery: MAX_MASTERY_CAP,
+      },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
     expect(test.value().userData.earnedExperience).toBe(100);
-    expect(test.value().notifications.some(entry => entry.name === "Assign XP")).toBe(false);
+    expect(test.value().notifications.some((entry) => entry.name === "Assign XP")).toBe(
+      false,
+    );
     test.close();
   });
 
   it("introduces Assign XP and hospitalization from one accepted cache revision", async () => {
     const test = progressionCache();
-    await updateUserCache(test.client, key, { status: "HOSPITALIZED", earnedExperience: 200 }, { revision: prepareUserUpdate(test.client, key), achievementProgress: [] });
+    await updateUserCache(
+      test.client,
+      key,
+      { status: "HOSPITALIZED", earnedExperience: 200 },
+      { revision: prepareUserUpdate(test.client, key), achievementProgress: [] },
+    );
     expect(test.value().achievementProgress).toEqual([]);
-    expect(test.value().notifications.filter(entry => entry.name === "Assign XP")).toHaveLength(1);
-    expect(test.value().notifications.filter(entry => entry.name === "In hospital")).toHaveLength(1);
-    expect(test.value().notifications.some(entry => entry.name === "In combat")).toBe(false);
+    expect(
+      test.value().notifications.filter((entry) => entry.name === "Assign XP"),
+    ).toHaveLength(1);
+    expect(
+      test.value().notifications.filter((entry) => entry.name === "In hospital"),
+    ).toHaveLength(1);
+    expect(test.value().notifications.some((entry) => entry.name === "In combat")).toBe(
+      false,
+    );
     test.close();
   });
 
@@ -940,9 +1730,19 @@ describe("progression-derived profile navigation", () => {
     const revision = prepareUserUpdate(test.client, key);
     const current = [{ questId: "concurrent-progress" } as AchievementProgress];
     test.client.setQueryData(key, { ...test.value(), achievementProgress: current });
-    const observer = new QueryObserver(test.client, { queryKey: key, staleTime: Infinity, retry: false, queryFn: async () => ({ ...test.value(), achievementProgress: current }) });
+    const observer = new QueryObserver(test.client, {
+      queryKey: key,
+      staleTime: Infinity,
+      retry: false,
+      queryFn: async () => ({ ...test.value(), achievementProgress: current }),
+    });
     const unsubscribe = observer.subscribe(() => {});
-    await updateUserCache(test.client, key, { earnedExperience: 0 }, { revision, achievementProgress: [] });
+    await updateUserCache(
+      test.client,
+      key,
+      { earnedExperience: 0 },
+      { revision, achievementProgress: [] },
+    );
     expect(test.value().achievementProgress).toEqual(current);
     expect(test.value().userData.earnedExperience).toBe(100);
     expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
@@ -952,59 +1752,138 @@ describe("progression-derived profile navigation", () => {
 });
 
 describe("notification effects during cache updates", () => {
-  it.each(["urgent", "paused"] as const)("refreshes same-name Kage metadata when %s without fetching or replaying toasts", async (change) => {
-    const test = setup();
-    const threshold = Date.parse("2026-11-01T00:00:00Z");
-    const tenure = new Date(threshold - 86400000);
-    const schedule: KageDefenseSchedule = {
-      kageId: "kage", tenure: tenure.toISOString(), windows: [], publishedAt: null,
-      setupDueAt: new Date(threshold + KAGE_DEFENSE_REMINDER_HOURS * 3600_000).toISOString(),
-      missedStarts: 0, paused: false, observedAt: tenure.toISOString(),
-    };
-    const user = { ...profile(100).userData, userId: "kage", isAi: false, activePetId: "previous", villageId: "village",
-      village: { id: "village", type: "VILLAGE", kageId: "kage", leaderUpdatedAt: tenure, kageScheduleAvailableAt: tenure, kageSchedule: schedule },
-    } as NonNullable<UserWithRelations>;
-    try {
-      setSystemTime(new Date(threshold + (change === "urgent" ? -60000 : 60000)));
-      const previous = getUserFactionNotifications(user)[0]!;
-      const mail: NavBarDropdownLink = { href: "/inbox", name: "Mail", color: "green" };
-      const notifications = [mail, previous, previous, { href: "/news", name: "Reward received", color: "toast" as const }];
-      test.client.setQueryData(key, { userData: user, notifications });
-      expect(previous.color).toBe(change === "urgent" ? "blue" : "red");
-      if (change === "urgent") setSystemTime(new Date(threshold + 60000));
-      await updateUserCache(test.client, key, { success: true, userPatch: change === "urgent"
-        ? { activePetId: "next", petExperience: 0 }
-        : { village: { id: "village", kageSchedule: { ...schedule, paused: true } } },
-      }, { revision: prepareUserUpdate(test.client, key) });
-      type Snapshot = { userData: NonNullable<UserWithRelations>; notifications: NavBarDropdownLink[] };
-      const updated = test.client.getQueryData<Snapshot>(key)!;
-      expect(updated.notifications).toEqual([mail, { href: "/townhall", name: "Missing kage schedule!", color: change === "urgent" ? "red" : "blue", alwaysShow: true }]);
-      expect(updated.notifications).not.toBe(notifications);
-      expect(updated.notifications[0]).toBe(mail);
-      expect(updated.notifications[1]).not.toBe(previous);
-      if (change === "urgent") expect(updated.userData.activePetId).toBe("next");
-      else expect(updated.userData.village?.kageSchedule?.paused).toBe(true);
-      await updateUserCache(test.client, key, { money: 150 }, { revision: prepareUserUpdate(test.client, key) });
-      expect(test.client.getQueryData<Snapshot>(key)?.notifications).toBe(updated.notifications);
-      expect(test.reads()).toBe(0);
-      expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
-    } finally {
-      test.close();
-      setSystemTime();
-    }
-  });
+  it.each(["urgent", "paused"] as const)(
+    "refreshes same-name Kage metadata when %s without fetching or replaying toasts",
+    async (change) => {
+      const test = setup();
+      const threshold = Date.parse("2026-11-01T00:00:00Z");
+      const tenure = new Date(threshold - 86400000);
+      const schedule: KageDefenseSchedule = {
+        kageId: "kage",
+        tenure: tenure.toISOString(),
+        windows: [],
+        publishedAt: null,
+        setupDueAt: new Date(
+          threshold + KAGE_DEFENSE_REMINDER_HOURS * 3600_000,
+        ).toISOString(),
+        missedStarts: 0,
+        paused: false,
+        observedAt: tenure.toISOString(),
+      };
+      const user = {
+        ...profile(100).userData,
+        userId: "kage",
+        isAi: false,
+        activePetId: "previous",
+        villageId: "village",
+        village: {
+          id: "village",
+          type: "VILLAGE",
+          kageId: "kage",
+          leaderUpdatedAt: tenure,
+          kageScheduleAvailableAt: tenure,
+          kageSchedule: schedule,
+        },
+      } as NonNullable<UserWithRelations>;
+      try {
+        setSystemTime(new Date(threshold + (change === "urgent" ? -60000 : 60000)));
+        const previous = getUserFactionNotifications(user)[0]!;
+        const mail: NavBarDropdownLink = {
+          href: "/inbox",
+          name: "Mail",
+          color: "green",
+        };
+        const notifications = [
+          mail,
+          previous,
+          previous,
+          { href: "/news", name: "Reward received", color: "toast" as const },
+        ];
+        test.client.setQueryData(key, { userData: user, notifications });
+        expect(previous.color).toBe(change === "urgent" ? "blue" : "red");
+        if (change === "urgent") setSystemTime(new Date(threshold + 60000));
+        await updateUserCache(
+          test.client,
+          key,
+          {
+            success: true,
+            userPatch:
+              change === "urgent"
+                ? { activePetId: "next", petExperience: 0 }
+                : {
+                    village: {
+                      id: "village",
+                      kageSchedule: { ...schedule, paused: true },
+                    },
+                  },
+          },
+          { revision: prepareUserUpdate(test.client, key) },
+        );
+        type Snapshot = {
+          userData: NonNullable<UserWithRelations>;
+          notifications: NavBarDropdownLink[];
+        };
+        const updated = test.client.getQueryData<Snapshot>(key)!;
+        expect(updated.notifications).toEqual([
+          mail,
+          {
+            href: "/townhall",
+            name: "Missing kage schedule!",
+            color: change === "urgent" ? "red" : "blue",
+            alwaysShow: true,
+          },
+        ]);
+        expect(updated.notifications).not.toBe(notifications);
+        expect(updated.notifications[0]).toBe(mail);
+        expect(updated.notifications[1]).not.toBe(previous);
+        if (change === "urgent") expect(updated.userData.activePetId).toBe("next");
+        else expect(updated.userData.village?.kageSchedule?.paused).toBe(true);
+        await updateUserCache(
+          test.client,
+          key,
+          { money: 150 },
+          { revision: prepareUserUpdate(test.client, key) },
+        );
+        expect(test.client.getQueryData<Snapshot>(key)?.notifications).toBe(
+          updated.notifications,
+        );
+        expect(test.reads()).toBe(0);
+        expect(test.client.getQueryState(key)?.isInvalidated).toBe(false);
+      } finally {
+        test.close();
+        setSystemTime();
+      }
+    },
+  );
 
   it("adds, replaces and removes the reduced-gains notice after confirmed village timestamps", async () => {
     const test = setup();
     const mail = { href: "/inbox", name: "Mail", color: "blue" };
     const old = new Date(Date.now() - 100 * 86400000);
-    test.client.setQueryData(key, { userData: { ...profile(100).userData, rank: "JONIN", joinedVillageAt: old }, notifications: [mail] });
+    test.client.setQueryData(key, {
+      userData: { ...profile(100).userData, rank: "JONIN", joinedVillageAt: old },
+      notifications: [mail],
+    });
     for (const elapsedDays of [0, 2, 100]) {
-      await updateUserCache(test.client, key, { joinedVillageAt: new Date(Date.now() - elapsedDays * 86400000) }, { revision: prepareUserUpdate(test.client, key) });
-      const slowed = elapsedDays < VILLAGE_REDUCED_GAINS_DAYS
-        ? [{ href: "/village", name: `Slowed ${VILLAGE_REDUCED_GAINS_DAYS - elapsedDays} days`, color: "red" }]
-        : [];
-      expect(test.client.getQueryData<{ notifications: unknown[] }>(key)?.notifications).toEqual([mail, ...slowed]);
+      await updateUserCache(
+        test.client,
+        key,
+        { joinedVillageAt: new Date(Date.now() - elapsedDays * 86400000) },
+        { revision: prepareUserUpdate(test.client, key) },
+      );
+      const slowed =
+        elapsedDays < VILLAGE_REDUCED_GAINS_DAYS
+          ? [
+              {
+                href: "/village",
+                name: `Slowed ${VILLAGE_REDUCED_GAINS_DAYS - elapsedDays} days`,
+                color: "red",
+              },
+            ]
+          : [];
+      expect(
+        test.client.getQueryData<{ notifications: unknown[] }>(key)?.notifications,
+      ).toEqual([mail, ...slowed]);
     }
     expect(test.reads()).toBe(0);
     test.close();
@@ -1012,35 +1891,103 @@ describe("notification effects during cache updates", () => {
 
   it("adds and removes shrine notifications from confirmed settings without fetching", async () => {
     const test = setup();
-    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
-    const village = { id: "village", sectors: [{}], shrineSettings: { activeBoosts: {} } } as Village;
-    test.client.setQueryData(key, { userData: { ...profile(100).userData, village }, notifications: [] });
-    await updateUserCache(test.client, key, { village: { id: village.id, shrineSettings: { activeBoosts: { Training: new Date(Date.now() + 60000).toISOString() } } } }, { revision: prepareUserUpdate(test.client, key), delta: {} });
-    const boosted = test.client.getQueryData<{ notifications: { name: string }[] }>(key)?.notifications;
-    expect(boosted?.map((entry) => entry.name)).toEqual(["Shrine: +10% Training gains"]);
-    await updateUserCache(test.client, key, { village: { id: village.id, shrineSettings: { activeBoosts: { Training: new Date(Date.now() - 60000).toISOString() } } } }, { revision: prepareUserUpdate(test.client, key), delta: {} });
-    expect(test.client.getQueryData<{ notifications: unknown[] }>(key)?.notifications).toEqual([]);
+    const village = {
+      id: "village",
+      sectors: [{}],
+      shrineSettings: { activeBoosts: {} },
+    } as Village;
+    test.client.setQueryData(key, {
+      userData: { ...profile(100).userData, village },
+      notifications: [],
+    });
+    await updateUserCache(
+      test.client,
+      key,
+      {
+        village: {
+          id: village.id,
+          shrineSettings: {
+            activeBoosts: { Training: new Date(Date.now() + 60000).toISOString() },
+          },
+        },
+      },
+      { revision: prepareUserUpdate(test.client, key), delta: {} },
+    );
+    const boosted = test.client.getQueryData<{ notifications: { name: string }[] }>(
+      key,
+    )?.notifications;
+    expect(boosted?.map((entry) => entry.name)).toEqual([
+      "Shrine: +10% Training gains",
+    ]);
+    await updateUserCache(
+      test.client,
+      key,
+      {
+        village: {
+          id: village.id,
+          shrineSettings: {
+            activeBoosts: { Training: new Date(Date.now() - 60000).toISOString() },
+          },
+        },
+      },
+      { revision: prepareUserUpdate(test.client, key), delta: {} },
+    );
+    expect(
+      test.client.getQueryData<{ notifications: unknown[] }>(key)?.notifications,
+    ).toEqual([]);
     expect(test.reads()).toBe(0);
     test.close();
   });
   it("preserves existing boost links without duplicates or replaying toasts", async () => {
     const client = new QueryClient();
-    type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;
     const expires = new Date(Date.now() + 60000).toISOString();
-    const village = { id: "village", sectors: [{}], shrineSettings: { activeBoosts: { PVP: expires } } } as unknown as Village;
-    const existing = { href: "/shrine", name: "Shrine: +10% PVP gains", color: "green", group: "Active boosts" };
-    const unrelated = { href: "/shrine", name: "Shrine: +other announcement", color: "blue" };
+    const village = {
+      id: "village",
+      sectors: [{}],
+      shrineSettings: { activeBoosts: { PVP: expires } },
+    } as unknown as Village;
+    const existing = {
+      href: "/shrine",
+      name: "Shrine: +10% PVP gains",
+      color: "green",
+      group: "Active boosts",
+    };
+    const unrelated = {
+      href: "/shrine",
+      name: "Shrine: +other announcement",
+      color: "blue",
+    };
     const mail = { href: "/inbox", name: "Mail", color: "blue" };
-    client.setQueryData(key, { userData: { ...profile(100).userData, village }, notifications: [
-      existing, unrelated, mail, { href: "/news", name: "Reward received", color: "toast" },
-    ] });
-    await updateUserCache(client, key, { village: { id: "village", shrineSettings: { activeBoosts: { Training: expires } } } }, {
-      revision: prepareUserUpdate(client, key), delta: {},
+    client.setQueryData(key, {
+      userData: { ...profile(100).userData, village },
+      notifications: [
+        existing,
+        unrelated,
+        mail,
+        { href: "/news", name: "Reward received", color: "toast" },
+      ],
     });
-    type Notifications = { notifications: typeof existing[] };
+    await updateUserCache(
+      client,
+      key,
+      {
+        village: {
+          id: "village",
+          shrineSettings: { activeBoosts: { Training: expires } },
+        },
+      },
+      {
+        revision: prepareUserUpdate(client, key),
+        delta: {},
+      },
+    );
+    type Notifications = { notifications: (typeof existing)[] };
     const updated = client.getQueryData<Notifications>(key)!.notifications;
-    expect(updated.map(entry => entry.name)).toEqual([
-      existing.name, unrelated.name, mail.name, "Shrine: +10% Training gains",
+    expect(updated.map((entry) => entry.name)).toEqual([
+      existing.name,
+      unrelated.name,
+      mail.name,
+      "Shrine: +10% Training gains",
     ]);
     expect(updated[0]).toBe(existing);
     expect(updated[1]).toBe<typeof unrelated>(unrelated);
@@ -1051,47 +1998,79 @@ describe("notification effects during cache updates", () => {
   });
   it("preserves notification identity for unrelated balance changes", async () => {
     const client = new QueryClient();
-    const notifications = [{ href: "/news", name: "Reward received", color: "toast" as const }];
+    const notifications = [
+      { href: "/news", name: "Reward received", color: "toast" as const },
+    ];
     client.setQueryData(key, { ...profile(100), notifications });
     await updateUserCache(client, key, { money: 150 });
-    expect(client.getQueryData<{ notifications: unknown }>(key)?.notifications).toBe(notifications);
+    expect(client.getQueryData<{ notifications: unknown }>(key)?.notifications).toBe(
+      notifications,
+    );
     client.clear();
   });
   it("does not replay an already-displayed toast when a battle notification changes", async () => {
     const client = new QueryClient();
-    client.setQueryData(key, { userData: { ...profile(100).userData, status: "BATTLE" }, notifications: [
-      { href: "/news", name: "Reward received", color: "toast" },
-      { href: "/combat", name: "In combat", color: "red" },
-      { href: "/inbox", name: "Mail", color: "blue" },
-    ] });
-    await updateUserCache(client, key, { status: "AWAKE" }, { revision: prepareUserUpdate(client, key) });
-    expect(client.getQueryData(key)).toMatchObject({ notifications: [{ name: "Mail" }] });
+    client.setQueryData(key, {
+      userData: { ...profile(100).userData, status: "BATTLE" },
+      notifications: [
+        { href: "/news", name: "Reward received", color: "toast" },
+        { href: "/combat", name: "In combat", color: "red" },
+        { href: "/inbox", name: "Mail", color: "blue" },
+      ],
+    });
+    await updateUserCache(
+      client,
+      key,
+      { status: "AWAKE" },
+      { revision: prepareUserUpdate(client, key) },
+    );
+    expect(client.getQueryData(key)).toMatchObject({
+      notifications: [{ name: "Mail" }],
+    });
     client.clear();
   });
 });
 
 describe("standard mutation response updates", () => {
-  it.each(["patch", "delta", "both"] as const)("preserves revisions for a confirmed empty %s response", async (kind) => {
-    const test = setup();
-    const revision = prepareUserUpdate(test.client, key);
-    const response = userDeltaResponseSchema.parse({ success: true, message: "Saved",
-      ...(kind !== "delta" ? { userPatch: {} } : {}),
-      ...(kind !== "patch" ? { userDelta: {} } : {}),
-    });
-    await updateUserCache(test.client, key, response, { revision: undefined });
-    expect(prepareUserUpdate(test.client, key)).toBe(revision);
-    await updateUserCache(test.client, key, { success: true, userPatch: { money: 90 } }, { revision });
-    expect(test.reads()).toBe(0);
-    expect(test.value()?.userData.money).toBe(90);
-    test.close();
-  });
+  it.each(["patch", "delta", "both"] as const)(
+    "preserves revisions for a confirmed empty %s response",
+    async (kind) => {
+      const test = setup();
+      const revision = prepareUserUpdate(test.client, key);
+      const response = userDeltaResponseSchema.parse({
+        success: true,
+        message: "Saved",
+        ...(kind !== "delta" ? { userPatch: {} } : {}),
+        ...(kind !== "patch" ? { userDelta: {} } : {}),
+      });
+      await updateUserCache(test.client, key, response, { revision: undefined });
+      expect(prepareUserUpdate(test.client, key)).toBe(revision);
+      await updateUserCache(
+        test.client,
+        key,
+        { success: true, userPatch: { money: 90 } },
+        { revision },
+      );
+      expect(test.reads()).toBe(0);
+      expect(test.value()?.userData.money).toBe(90);
+      test.close();
+    },
+  );
 
   it("keeps explicit unsafe delta recovery even when options supply an empty delta", async () => {
     const test = setup();
     test.setDatabase(80);
-    await updateUserCache(test.client, key, userDeltaResponseSchema.parse({
-      success: true, message: "Saved", userPatch: { money: 80 }, userDelta: undefined,
-    }), { revision: prepareUserUpdate(test.client, key), delta: {} });
+    await updateUserCache(
+      test.client,
+      key,
+      userDeltaResponseSchema.parse({
+        success: true,
+        message: "Saved",
+        userPatch: { money: 80 },
+        userDelta: undefined,
+      }),
+      { revision: prepareUserUpdate(test.client, key), delta: {} },
+    );
     expect(test.reads()).toBe(1);
     expect(test.value()?.userData.money).toBe(80);
     test.close();
@@ -1099,14 +2078,24 @@ describe("standard mutation response updates", () => {
 
   it("reconciles a response without any confirmed projection", async () => {
     const test = setup();
-    await updateUserCache(test.client, key, { success: true }, { revision: prepareUserUpdate(test.client, key) });
+    await updateUserCache(
+      test.client,
+      key,
+      { success: true },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
     expect(test.reads()).toBe(1);
     test.close();
   });
 
   it("applies confirmed changes returned with a rejected action", async () => {
     const test = setup();
-    await updateUserCache(test.client, key, { success: false, userPatch: { money: 90 } }, { revision: prepareUserUpdate(test.client, key) });
+    await updateUserCache(
+      test.client,
+      key,
+      { success: false, userPatch: { money: 90 } },
+      { revision: prepareUserUpdate(test.client, key) },
+    );
     expect(test.value()?.userData.money).toBe(90);
     expect(test.reads()).toBe(0);
     test.close();
@@ -1114,32 +2103,66 @@ describe("standard mutation response updates", () => {
 
   it("clears achievement metadata without treating an empty patch as a no-op", async () => {
     const test = setup();
-    test.client.setQueryData(key, { ...profile(100), achievementProgress: [{ questId: "old" }] });
+    test.client.setQueryData(key, {
+      ...profile(100),
+      achievementProgress: [{ questId: "old" }],
+    });
     const revision = prepareUserUpdate(test.client, key);
-    await updateUserCache(test.client, key, { success: true, userPatch: {}, achievementProgress: [] }, { revision });
-    expect(test.client.getQueryData<{ achievementProgress: unknown[] }>(key)?.achievementProgress).toEqual([]);
+    await updateUserCache(
+      test.client,
+      key,
+      { success: true, userPatch: {}, achievementProgress: [] },
+      { revision },
+    );
+    expect(
+      test.client.getQueryData<{ achievementProgress: unknown[] }>(key)
+        ?.achievementProgress,
+    ).toEqual([]);
     expect(prepareUserUpdate(test.client, key)).toBe(revision! + 1);
     expect(test.reads()).toBe(0);
     test.close();
   });
 
-  it.each([true, false])("checks a server daily-counter prerequisite, matching=%s", async (matching) => {
-    const test = setup();
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData, dailyOverworldQuestRolls: matching ? 1 : 9 } });
-    await updateUserCache(test.client, key, userDeltaResponseSchema.parse({
-      success: true, message: "Rolled", userPatch: {},
-      userExpected: { dailyOverworldQuestRolls: 1 }, userDelta: { dailyOverworldQuestRolls: 1 },
-    }), { revision: prepareUserUpdate(test.client, key), expected: {} });
-    expect(test.reads()).toBe(matching ? 0 : 1);
-    if (matching) expect(test.value()?.userData.dailyOverworldQuestRolls).toBe(2);
-    test.close();
-  });
+  it.each([true, false])(
+    "checks a server daily-counter prerequisite, matching=%s",
+    async (matching) => {
+      const test = setup();
+      test.client.setQueryData(key, {
+        ...profile(100),
+        userData: {
+          ...profile(100).userData,
+          dailyOverworldQuestRolls: matching ? 1 : 9,
+        },
+      });
+      await updateUserCache(
+        test.client,
+        key,
+        userDeltaResponseSchema.parse({
+          success: true,
+          message: "Rolled",
+          userPatch: {},
+          userExpected: { dailyOverworldQuestRolls: 1 },
+          userDelta: { dailyOverworldQuestRolls: 1 },
+        }),
+        { revision: prepareUserUpdate(test.client, key), expected: {} },
+      );
+      expect(test.reads()).toBe(matching ? 0 : 1);
+      if (matching) expect(test.value()?.userData.dailyOverworldQuestRolls).toBe(2);
+      test.close();
+    },
+  );
 
   it("checks final-state prerequisites before accepting an empty response", async () => {
     const test = setup();
-    await updateUserCache(test.client, key, { success: true, userPatch: {} }, {
-      revision: prepareUserUpdate(test.client, key), expectedAfter: { status: "QUEUED" },
-    });
+    await updateUserCache(
+      test.client,
+      key,
+      { success: true, userPatch: {} },
+      {
+        revision: prepareUserUpdate(test.client, key),
+        expectedAfter: { status: "QUEUED" },
+      },
+    );
     expect(test.reads()).toBe(1);
     test.close();
   });
@@ -1148,45 +2171,126 @@ describe("standard mutation response updates", () => {
     const test = setup();
     const successor = { id: "attempt", startedAt: new Date(2) };
     const virtual = { id: "virtual", startedAt: new Date(1) };
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData,
-      petTask: { questHistoryId: "attempt" }, userQuests: [{ id: "attempt", startedAt: new Date(1) }, successor, virtual],
-    } });
-    await updateUserCache(test.client, key, userDeltaResponseSchema.parse({
-      success: true, message: "Returned", userPatch: { petTask: null },
-      userDelta: { userQuests: { remove: [{ id: "attempt", startedAt: 1 }] } },
-    }), { revision: prepareUserUpdate(test.client, key) });
-    expect(test.value()?.userData).toEqual(expect.objectContaining({ petTask: null, userQuests: [expect.objectContaining(successor), expect.objectContaining(virtual)] }));
+    test.client.setQueryData(key, {
+      ...profile(100),
+      userData: {
+        ...profile(100).userData,
+        petTask: { questHistoryId: "attempt" },
+        userQuests: [{ id: "attempt", startedAt: new Date(1) }, successor, virtual],
+      },
+    });
+    await updateUserCache(
+      test.client,
+      key,
+      userDeltaResponseSchema.parse({
+        success: true,
+        message: "Returned",
+        userPatch: { petTask: null },
+        userDelta: { userQuests: { remove: [{ id: "attempt", startedAt: 1 }] } },
+      }),
+      { revision: prepareUserUpdate(test.client, key) },
+    );
+    expect(test.value()?.userData).toEqual(
+      expect.objectContaining({
+        petTask: null,
+        userQuests: [
+          expect.objectContaining(successor),
+          expect.objectContaining(virtual),
+        ],
+      }),
+    );
     expect(test.reads()).toBe(0);
     test.close();
   });
 
-  it.each(["unknown-list", "missing-structure", "other-village"] as const)("withholds the whole update for %s collection state", async (state) => {
-    const test = setup();
-    test.client.setQueryData(key, { ...profile(100), userData: { ...profile(100).userData,
-      village: { id: state === "other-village" ? "other" : "home", ...(state === "unknown-list" ? {} : { structures: [] }) },
-    } });
-    await updateUserCache(test.client, key, userDeltaResponseSchema.parse({
-      success: true, message: "Moved", userDelta: { money: -10, village: { id: "home", structures: { update: [{ id: "hall", longitude: 1, latitude: 2 }] } } },
-    }), { revision: prepareUserUpdate(test.client, key) });
-    expect(test.reads()).toBe(1);
-    expect(test.value()?.userData.money).toBe(100);
-    test.close();
-  });
+  it.each(["unknown-list", "missing-structure", "other-village"] as const)(
+    "withholds the whole update for %s collection state",
+    async (state) => {
+      const test = setup();
+      test.client.setQueryData(key, {
+        ...profile(100),
+        userData: {
+          ...profile(100).userData,
+          village: {
+            id: state === "other-village" ? "other" : "home",
+            ...(state === "unknown-list" ? {} : { structures: [] }),
+          },
+        },
+      });
+      await updateUserCache(
+        test.client,
+        key,
+        userDeltaResponseSchema.parse({
+          success: true,
+          message: "Moved",
+          userDelta: {
+            money: -10,
+            village: {
+              id: "home",
+              structures: { update: [{ id: "hall", longitude: 1, latitude: 2 }] },
+            },
+          },
+        }),
+        { revision: prepareUserUpdate(test.client, key) },
+      );
+      expect(test.reads()).toBe(1);
+      expect(test.value()?.userData.money).toBe(100);
+      test.close();
+    },
+  );
 });
 
-it.each([true, false])("applies a confirmed global boost notice, active=%s", async (active) => {
-  const test = setup();
-  const otherBoost = { href: "/profile", name: "Global: 2X regen | 2 days", color: "green", group: "Active boosts" };
-  test.client.setQueryData(key, { ...profile(100), notifications: [otherBoost,
-    { href: "/traininggrounds", name: "Global: 2X gains | 2 days", color: "green", group: "Active boosts" },
-    { href: "/profile", name: "Already delivered", color: "toast" },
-  ] });
-  const notice = { href: "/traininggrounds", name: "Global: 3X gains | 1 days", color: "green", group: "Active boosts" } as const;
-  await updateUserCache(test.client, key, userDeltaResponseSchema.parse({
-    success: true, message: "Saved", userPatch: {},
-    userNotifications: { globalBoost: { setting: "trainingGainMultiplier", notice: active ? notice : null } },
-  }), { revision: prepareUserUpdate(test.client, key) });
-  expect(test.client.getQueryData<{ notifications: unknown[] }>(key)?.notifications).toEqual(active ? [otherBoost, notice] : [otherBoost]);
-  expect(test.reads()).toBe(0);
-  test.close();
-});
+it.each([true, false])(
+  "applies a confirmed global boost notice, active=%s",
+  async (active) => {
+    const test = setup();
+    const otherBoost = {
+      href: "/profile",
+      name: "Global: 2X regen | 2 days",
+      color: "green",
+      group: "Active boosts",
+    };
+    test.client.setQueryData(key, {
+      ...profile(100),
+      notifications: [
+        otherBoost,
+        {
+          href: "/traininggrounds",
+          name: "Global: 2X gains | 2 days",
+          color: "green",
+          group: "Active boosts",
+        },
+        { href: "/profile", name: "Already delivered", color: "toast" },
+      ],
+    });
+    const notice = {
+      href: "/traininggrounds",
+      name: "Global: 3X gains | 1 days",
+      color: "green",
+      group: "Active boosts",
+    } as const;
+    await updateUserCache(
+      test.client,
+      key,
+      userDeltaResponseSchema.parse({
+        success: true,
+        message: "Saved",
+        userPatch: {},
+        userNotifications: {
+          globalBoost: {
+            setting: "trainingGainMultiplier",
+            notice: active ? notice : null,
+          },
+        },
+      }),
+      { revision: prepareUserUpdate(test.client, key) },
+    );
+    expect(
+      test.client.getQueryData<{ notifications: unknown[] }>(key)?.notifications,
+    ).toEqual(active ? [otherBoost, notice] : [otherBoost]);
+    expect(test.reads()).toBe(0);
+    test.close();
+  },
+);
+
+type Village = NonNullable<NonNullable<UserWithRelations>["village"]>;

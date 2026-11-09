@@ -1,25 +1,21 @@
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+  vi,
+} from "bun:test";
 import { act, cleanup, render } from "@testing-library/react";
 import { Profiler, type ProfilerOnRenderCallback } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import ActionTimer from "@/layout/ActionTimer";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
-import {
-  makeBattleUser,
-  makeCompleteBattle,
-} from "../libs/combat/helpers/battleScenario";
-
-vi.mock("@/utils/UserContext", () => ({
-  useUserData: () => ({ timeDiff: 0 }),
-}));
+import * as userContext from "@/utils/UserContext";
+import { makeBattleUser, makeCompleteBattle } from "../setup/combat";
 
 const FROZEN_NOW = Date.UTC(2026, 0, 1, 12, 0, 0);
-let nowMs = FROZEN_NOW;
 let isHidden = false;
-
-const advanceTimers = (ms: number) => {
-  nowMs += ms;
-  vi.advanceTimersByTime(ms);
-};
 
 const lobbyBattle = () =>
   makeCompleteBattle({
@@ -71,12 +67,15 @@ const flushMount = () => {
 };
 
 beforeEach(() => {
-  nowMs = FROZEN_NOW;
+  vi.spyOn(userContext, "useUserData").mockReturnValue({ timeDiff: 0 } as never);
   vi.useFakeTimers();
-  vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+  setSystemTime(FROZEN_NOW);
   vi.spyOn(document, "hasFocus").mockReturnValue(true);
   isHidden = false;
-  Object.defineProperty(document, "hidden", { configurable: true, get: () => isHidden });
+  Object.defineProperty(document, "hidden", {
+    configurable: true,
+    get: () => isHidden,
+  });
 });
 
 afterEach(() => {
@@ -100,7 +99,7 @@ describe("ActionTimer interval commits", () => {
     const afterMount = commits();
 
     act(() => {
-      advanceTimers(2000);
+      vi.advanceTimersByTime(2000);
     });
 
     expect(commits() - afterMount).toBe(0);
@@ -111,19 +110,18 @@ describe("ActionTimer interval commits", () => {
     vi.spyOn(document, "hasFocus").mockReturnValue(false);
     const { getByText, queryByText } = renderTimer(countdownBattle());
     expect(queryByText("Not in Focus")).toBeNull();
-    act(() => advanceTimers(100));
+    act(() => vi.advanceTimersByTime(100));
     expect(getByText(`You: ${(COMBAT_SECONDS - 1.1).toFixed(1)}s`)).toBeTruthy();
   });
 
   it("pauses hidden timers and catches up when visible again", () => {
-
     const { commits, getByText } = renderTimer(countdownBattle());
     act(() => {
       isHidden = true;
       document.dispatchEvent(new window.Event("visibilitychange"));
     });
     const afterHide = commits();
-    act(() => advanceTimers(2000));
+    act(() => vi.advanceTimersByTime(2000));
     expect(commits()).toBe(afterHide);
     act(() => {
       isHidden = false;
@@ -139,7 +137,7 @@ describe("ActionTimer interval commits", () => {
     const afterMount = commits();
 
     act(() => {
-      advanceTimers(100);
+      vi.advanceTimersByTime(100);
     });
 
     expect(commits()).toBeGreaterThan(afterMount);

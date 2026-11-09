@@ -1,5 +1,9 @@
 import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
-import { flatCombatStats, makeBattleUser, makeCompleteBattle } from "./battleScenario";
+import {
+  flatCombatStats,
+  makeBattleUser,
+  makeCompleteBattle,
+} from "../../../setup/combat";
 
 /** Shared AI actor defaults; each suite supplies its own opponents, rules and catalog. */
 export const makeAiUser = (over: Partial<BattleUserState>): BattleUserState =>

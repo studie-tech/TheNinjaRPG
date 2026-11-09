@@ -32,13 +32,7 @@ import {
 import type { UserQuest } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
-import type { TutorialStepConfig } from "@/hooks/tutorial";
-import {
-  TUTORIAL_CHAPTERS,
-  TUTORIAL_HOSPITALIZED_STEP,
-  TUTORIAL_STEPS,
-  useTutorialStep,
-} from "@/hooks/tutorial";
+import { useTutorialStep } from "@/hooks/tutorial";
 import { useAbVariant } from "@/hooks/useAbVariant";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { ActivityDock } from "@/layout/ActivityDock";
@@ -72,6 +66,13 @@ import {
   type TutorialPortraitSide,
   type TutorialScreenBox,
 } from "@/libs/tutorial";
+import type { TutorialStepConfig } from "@/libs/tutorialSteps";
+import {
+  TUTORIAL_CHAPTERS,
+  TUTORIAL_HOSPITALIZED_STEP,
+  TUTORIAL_STEPS,
+} from "@/libs/tutorialSteps";
+import type { UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
 import { usePublicPathname } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
@@ -87,387 +88,8 @@ const DODGED_PANEL_TOP_REM = 5;
 /** Seconds a step without a Next button stays up before a "skip" escape appears. */
 const STUCK_STEP_SECONDS = 60;
 
-/** Include the Activity header when keeping highlighted controls clear of the dock. */
-const getAssistantPanelRect = (): DOMRect | null => {
-  const panel = document.getElementById(TUTORIAL_ASSISTANT_PANEL_ID);
-  return (
-    (panel?.closest("[data-activity-dock]") ?? panel)?.getBoundingClientRect() ?? null
-  );
-};
-
-const rectsOverlap = (a: DOMRect, b: DOMRect) =>
-  !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
-
-/**
- * Where a highlight of this height should end up vertically. The window's own
- * middle is not safe: the assistant panel is fixed over the foot of the screen,
- * so on a short viewport the middle is underneath it.
- */
-const getPreferredHighlightCentre = (targetHeight: number) => {
-  const safeTop = 80;
-  const panel = getAssistantPanelRect();
-  const safeBottom =
-    panel && panel.top > safeTop + targetHeight ? panel.top : window.innerHeight;
-  return (safeTop + safeBottom) / 2;
-};
-
 /** Gap between Lemu and the end of the dock she stands at. */
 const PORTRAIT_INSET_PX = 16;
-
-/**
- * Lemu standing on the dock's top edge, cropped at the waist independently of
- * lesson height. She is decorative and lets clicks through, but moves to the
- * other end of the dock, or leaves, rather than stand over the highlight.
- */
-const AssistantPortrait: React.FC<{
-  characterImage?: string;
-  avoidBox: TutorialScreenBox | null;
-  dodgeHighlight?: boolean;
-}> = ({ characterImage, avoidBox, dodgeHighlight }) => {
-  const { variant } = useAbVariant(LEMU_EXPERIMENT);
-  const { swapSides } = useActivityDock();
-  const image = characterImage || getLemuImage(variant);
-  const waist = LEMU_PORTRAIT_WAIST[image] ?? 0.5;
-  const stripRef = React.useRef<HTMLDivElement>(null);
-  const [side, setSide] = useState<TutorialPortraitSide | null>("right");
-  // Measured after layout so she never paints where she is about to leave. The
-  // dock moves when it dodges to the top or swaps sides, which the effect re-runs for.
-  React.useLayoutEffect(() => {
-    const strip = stripRef.current;
-    if (!strip) return;
-    const place = () => {
-      setSide(
-        getTutorialPortraitSide({
-          frame: strip.getBoundingClientRect(),
-          portraitWidth: strip.querySelector("img")?.getBoundingClientRect().width ?? 0,
-          inset: PORTRAIT_INSET_PX,
-          avoid: avoidBox,
-        }),
-      );
-    };
-    place();
-    const observer = new ResizeObserver(place);
-    observer.observe(strip);
-    window.addEventListener("resize", place);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", place);
-    };
-  }, [avoidBox, dodgeHighlight, swapSides]);
-  // A dodging dock sits just below the top bar, with no room above it for her.
-  if (dodgeHighlight) return null;
-  return (
-    <div
-      ref={stripRef}
-      className="pointer-events-none absolute inset-x-0 bottom-full overflow-hidden"
-      style={{ height: `calc(var(--assistant-portrait-height) * ${waist})` }}
-    >
-      <Image
-        src={image}
-        width={512}
-        height={768}
-        alt=""
-        aria-hidden="true"
-        className={cn(
-          "h-[var(--assistant-portrait-height)] w-auto max-w-[60%] select-none object-contain drop-shadow-2xl",
-          // She faces the middle of the dock from whichever end she stands at.
-          side === "left" ? "mr-auto ml-4" : "mr-4 ml-auto scale-x-[-1]",
-          !side && "invisible",
-        )}
-      />
-    </div>
-  );
-};
-
-/**
- * The tutorial lesson inside the Activity dock: a header naming the chapter and
- * a progress bar, so a player always knows where they are in the trials, then
- * scrolling text above the call to action and the controls that answer it.
- */
-const AssistantDialog: React.FC<{
-  title: string;
-  eyebrow?: string;
-  progress?: { position: number; total: number };
-  stepId?: string;
-  action?: string;
-  /** What Lemu says, shown above the call to action. */
-  lead?: React.ReactNode;
-  children?: React.ReactNode;
-  /** Controls that answer the step, kept in view under the scrolling text. */
-  footer?: React.ReactNode;
-  onOpenDisableModal?: () => void;
-  characterImage?: string;
-  onOpenOrderingDialog?: () => void;
-  showOrderingButton?: boolean;
-  /** Anchor to the top instead, to uncover a highlight it would otherwise sit on. */
-  dodgeHighlight?: boolean;
-  /** The highlighted element, which Lemu's portrait must not stand over. */
-  avoidBox?: TutorialScreenBox | null;
-  isBusy?: boolean;
-  errorMessage?: string;
-}> = ({
-  title,
-  eyebrow,
-  progress,
-  stepId,
-  action,
-  lead,
-  children,
-  footer,
-  onOpenDisableModal,
-  characterImage,
-  onOpenOrderingDialog,
-  showOrderingButton,
-  dodgeHighlight,
-  avoidBox = null,
-  isBusy = false,
-  errorMessage,
-}) => {
-  const sectionRef = React.useRef<HTMLElement>(null);
-  // The dock is fixed over the foot of the page; while a lesson is open the game
-  // layouts pad their content by its height, so whatever it covers can be
-  // scrolled clear of it.
-  React.useLayoutEffect(() => {
-    const dock = sectionRef.current?.closest<HTMLElement>("[data-activity-dock]");
-    if (!dock) return;
-    const root = document.documentElement;
-    const reserve = () =>
-      root.style.setProperty("--activity-dock-space", `${dock.offsetHeight}px`);
-    reserve();
-    const observer = new ResizeObserver(reserve);
-    observer.observe(dock);
-    return () => {
-      observer.disconnect();
-      root.style.removeProperty("--activity-dock-space");
-    };
-  }, []);
-  return (
-    <section
-      ref={sectionRef}
-      id={TUTORIAL_ASSISTANT_PANEL_ID}
-      data-tutorial-step={stepId}
-      data-dodge-highlight={dodgeHighlight || undefined}
-      aria-label={`Tutorial: ${title}`}
-      aria-live="polite"
-      className="pointer-events-auto"
-    >
-      <AssistantPortrait
-        characterImage={characterImage}
-        avoidBox={avoidBox}
-        dodgeHighlight={dodgeHighlight}
-      />
-      <div className="relative z-10 rounded-b-xl bg-card" aria-busy={isBusy}>
-        <header className="flex items-start gap-2 px-4 pt-3 md:px-5">
-          <div className="min-w-0 flex-1">
-            {eyebrow && (
-              <p className="truncate font-semibold text-muted-foreground text-xs uppercase tracking-wider">
-                {eyebrow}
-              </p>
-            )}
-            <h2 className="font-bold text-lg text-primary leading-tight">{title}</h2>
-          </div>
-          {onOpenDisableModal && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onOpenDisableModal();
-              }}
-              disabled={isBusy}
-              className="-mr-2 h-8 w-8 shrink-0 opacity-60 hover:opacity-100"
-              title={isBusy ? "Disabling" : "Skip tutorial"}
-              aria-label={isBusy ? "Disabling" : "Skip tutorial"}
-            >
-              {isBusy ? (
-                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-              ) : (
-                <X className="h-5 w-5" aria-hidden="true" />
-              )}
-            </Button>
-          )}
-        </header>
-        {progress && (
-          <div
-            className="flex gap-1 px-4 pt-2 md:px-5"
-            role="progressbar"
-            aria-label="Chapter progress"
-            aria-valuemin={1}
-            aria-valuemax={progress.total}
-            aria-valuenow={progress.position}
-          >
-            {Array.from({ length: progress.total }, (_, i) => (
-              <span
-                key={i}
-                className={cn(
-                  "h-1.5 flex-1 rounded-full",
-                  i < progress.position ? "bg-primary" : "bg-primary/20",
-                )}
-              />
-            ))}
-          </div>
-        )}
-        <div className="max-h-[min(40dvh,420px,calc(100dvh-var(--assistant-portrait-height)-22rem))] space-y-3 overflow-y-auto overscroll-contain px-4 py-3 md:px-5">
-          {isBusy && (
-            <div
-              role="status"
-              aria-live="polite"
-              className="flex items-center gap-2 font-medium text-base text-muted-foreground"
-            >
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              Disabling
-            </div>
-          )}
-          {errorMessage && !isBusy && (
-            <p role="alert" className="text-base text-destructive">
-              {errorMessage}
-            </p>
-          )}
-          <fieldset disabled={isBusy} className="contents">
-            {lead}
-            {children}
-            {showOrderingButton && onOpenOrderingDialog && (
-              <div className="flex justify-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onOpenOrderingDialog();
-                  }}
-                  className="opacity-60 hover:opacity-100"
-                  title="Sort quest priorities"
-                >
-                  <Settings2 className="mr-1 h-4 w-4" />
-                  <span className="text-sm">Priority</span>
-                </Button>
-              </div>
-            )}
-          </fieldset>
-        </div>
-        {(action || footer) && (
-          <fieldset
-            disabled={isBusy}
-            className="space-y-3 rounded-b-xl border-border border-t bg-card px-4 py-3 md:px-5"
-          >
-            {action && (
-              <p className="flex items-start gap-2 rounded-lg border border-amber-500/70 bg-amber-500/15 px-3 py-2 font-semibold text-base">
-                <MousePointerClick
-                  className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
-                  aria-hidden="true"
-                />
-                <span>{action}</span>
-              </p>
-            )}
-            {footer}
-          </fieldset>
-        )}
-      </div>
-    </section>
-  );
-};
-
-/**
- * Confirmation dialog for cancelling the tutorial
- * Shows the assistant character and warns the user
- */
-const CancelTutorialConfirmDialog: React.FC<{
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
-  isPending: boolean;
-  errorMessage?: string;
-}> = ({ open, onOpenChange, onConfirm, isPending, errorMessage }) => {
-  const { variant } = useAbVariant(LEMU_EXPERIMENT);
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!isPending) onOpenChange(nextOpen);
-      }}
-    >
-      <DialogContent
-        className="z-[70] sm:max-w-md"
-        closeDisabled={isPending}
-        aria-busy={isPending}
-        onEscapeKeyDown={(event) => {
-          if (isPending) event.preventDefault();
-        }}
-        onPointerDownOutside={(event) => {
-          if (isPending) event.preventDefault();
-        }}
-      >
-        <div className="flex gap-4">
-          <div className="min-w-0 flex-1 space-y-4">
-            <DialogHeader>
-              <DialogTitle>Skip the Academy Trials?</DialogTitle>
-              <DialogDescription className="pt-2">
-                The trials teach combat, training, travel and companions, and they grant
-                the experience you need for the Genin exam. We{" "}
-                <strong>highly recommend</strong> finishing them.
-                <br />
-                <br />
-                If you change your mind, you can turn the tutorial back on from the
-                support button.
-              </DialogDescription>
-            </DialogHeader>
-            {errorMessage && !isPending && (
-              <p role="alert" className="text-destructive text-sm">
-                {errorMessage}
-              </p>
-            )}
-            <div className="flex justify-start gap-2">
-              <Button
-                variant="outline"
-                disabled={isPending}
-                onClick={() => onOpenChange(false)}
-              >
-                Keep training
-              </Button>
-              <Button variant="destructive" disabled={isPending} onClick={onConfirm}>
-                {isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    <span role="status" aria-live="polite">
-                      Disabling
-                    </span>
-                  </>
-                ) : (
-                  "Skip tutorial"
-                )}
-              </Button>
-            </div>
-          </div>
-          <Image
-            src={getLemuImage(variant)}
-            width={256}
-            height={384}
-            alt=""
-            aria-hidden="true"
-            className="pointer-events-none h-40 w-auto shrink-0 select-none self-end object-contain drop-shadow-lg max-sm:hidden"
-          />
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
-/**
- * Tutorial assistant component props
- * @param rightSideBarOpen - Whether the right side bar is open
- * @param setRightSideBarOpen - Function to set the right side bar open
- * @param rightSideBarRef - Reference to the right side bar
- * @returns
- */
-interface TutorialAssistantProps {
-  /** Viewport width below which the shell moves its game menu into a drawer. */
-  sidebarBreakpoint: number;
-  rightSideBarOpen: boolean;
-  setRightSideBarOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  rightSideBarRef: React.RefObject<HTMLDivElement | null>;
-}
 
 /**
  * Tutorial assistant component
@@ -501,6 +123,8 @@ const TutorialAssistant: React.FC<TutorialAssistantProps> = (props) => {
   );
 };
 
+export default TutorialAssistant;
+
 /**
  * Finishes the tutorial of a player who graduated with the lesson collapsed, on
  * the Quests tab or behind chat. The assistant only runs while the lesson is on
@@ -531,12 +155,7 @@ const TutorialCompletionSync: React.FC = () => {
 };
 
 const PlayerTutorialAssistant: React.FC<
-  TutorialAssistantProps & {
-    tutorialIdentityRef: React.RefObject<{
-      userId: string | undefined;
-      tutorialStep: number | undefined;
-    }>;
-  }
+  TutorialAssistantProps & { tutorialIdentityRef: TutorialIdentityRef }
 > = ({
   tutorialIdentityRef,
   rightSideBarOpen,
@@ -566,67 +185,14 @@ const PlayerTutorialAssistant: React.FC<
   const pathname = usePublicPathname();
   const router = useRouter();
 
-  // Mutation to disable tutorial
-  const { mutateAsync: disableTutorial } = api.profile.updatePreferences.useMutation();
-  const disableTutorialLockRef = React.useRef(false);
-  const [isDisablingTutorial, setIsDisablingTutorial] = useState(false);
-  const [disableTutorialError, setDisableTutorialError] = useState<string>();
-  const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
+  const {
+    isDisablingTutorial,
+    disableTutorialError,
+    showCancelConfirmDialog,
+    setShowCancelConfirmDialog,
+    handleDisableTutorial,
+  } = useDisableTutorial(userData, updateUser, tutorialIdentityRef);
 
-  const handleDisableTutorial = async () => {
-    if (disableTutorialLockRef.current) return;
-    if (!userData?.userId || userData.tutorialOn !== true) return;
-
-    const request = { userId: userData.userId, tutorialStep: userData.tutorialStep };
-    disableTutorialLockRef.current = true;
-    setDisableTutorialError(undefined);
-    setIsDisablingTutorial(true);
-
-    await disableTutorial({ tutorialOn: false })
-      .then(async (result) => {
-        const identity = tutorialIdentityRef.current;
-        const isCurrentTutorial =
-          identity.userId === request.userId &&
-          identity.tutorialStep === request.tutorialStep;
-        if (!isCurrentTutorial) return;
-        if (!result.success) {
-          setDisableTutorialError(result.message);
-          return;
-        }
-
-        await updateUser((current) =>
-          current.userId === request.userId ? { tutorialOn: false } : undefined,
-        );
-        if (tutorialIdentityRef.current.userId !== request.userId) {
-          return;
-        }
-        setShowCancelConfirmDialog(false);
-      })
-      .catch(() => {
-        const identity = tutorialIdentityRef.current;
-        if (
-          identity.userId === request.userId &&
-          identity.tutorialStep === request.tutorialStep
-        ) {
-          setDisableTutorialError(
-            "We couldn't turn off the tutorial. Your progress is unchanged; please try again.",
-          );
-        }
-      })
-      .finally(() => {
-        disableTutorialLockRef.current = false;
-        setIsDisablingTutorial(false);
-      });
-  };
-
-  const [highlight, setHighlight] = useState<{
-    stepId: string;
-    isPrimaryElement: boolean;
-    top: number;
-    left: number;
-    width: number;
-    height: number;
-  } | null>(null);
   const [gameMenuHighlight, setGameMenuHighlight] = useState<{
     top: number;
     left: number;
@@ -653,20 +219,6 @@ const PlayerTutorialAssistant: React.FC<
   // State to track if we should show the special game menu tutorial
   const [showGameMenuTutorial, setShowGameMenuTutorial] = useState<boolean>(false);
 
-  // Placement of the current highlight, keyed by step and element. One owner
-  // decides where a highlight belongs, so scrolling never fights itself.
-  const placementRef = React.useRef<{
-    key: string;
-    attempts: number;
-    settled: boolean;
-    /** Page scroll when the placement latched, to tell layout shifts from the player. */
-    settledScrollY: number;
-  }>({ key: "", attempts: 0, settled: false, settledScrollY: 0 });
-  // Set while the panel would otherwise be sitting on top of the highlight, so
-  // it can step aside. Latched per target: recomputing it from the moved panel
-  // would say "no longer covered" and send it straight back.
-  const [panelDodgesHighlight, setPanelDodgesHighlight] = useState(false);
-
   // Tutorial management hook
   const {
     stepNumber,
@@ -689,6 +241,7 @@ const PlayerTutorialAssistant: React.FC<
 
       // Handle the tutorial step
       const tutorialStep = userData.tutorialStep;
+      const isActiveStep = tutorialStep < TUTORIAL_STEPS.length;
 
       // Get current step config
       const isHospitalized = userData.status === "HOSPITALIZED";
@@ -712,7 +265,7 @@ const PlayerTutorialAssistant: React.FC<
         inBattle &&
         !onBattlePage &&
         userData.battleId &&
-        tutorialStep < TUTORIAL_STEPS.length &&
+        isActiveStep &&
         isBattleStep
       ) {
         router.replace("/combat");
@@ -724,7 +277,7 @@ const PlayerTutorialAssistant: React.FC<
       const shouldShowGameMenuTutorial =
         isMobile &&
         !rightSideBarOpen &&
-        tutorialStep < TUTORIAL_STEPS.length &&
+        isActiveStep &&
         currentStepConfig?.requiresGameMenu === true &&
         isTutorialPageMatch(currentStepConfig.page, pathname);
 
@@ -741,12 +294,10 @@ const PlayerTutorialAssistant: React.FC<
       const onCorrectPage = isTutorialPageMatch(currentStepConfig?.page, pathname);
       const hasRequiredGameMenu =
         currentStepConfig?.requiresGameMenu && isMobile ? rightSideBarOpen : true;
-      setIsAssistantVisible(
-        tutorialStep < TUTORIAL_STEPS.length && onCorrectPage && hasRequiredGameMenu,
-      );
+      setIsAssistantVisible(isActiveStep && onCorrectPage && hasRequiredGameMenu);
 
       // If we're at a valid step but not on the correct page, redirect
-      if (tutorialStep < TUTORIAL_STEPS.length && !onCorrectPage && currentStepConfig) {
+      if (isActiveStep && !onCorrectPage && currentStepConfig) {
         if (!currentStepConfig?.requiresGameMenu) {
           setRightSideBarOpen(false);
         }
@@ -764,134 +315,6 @@ const PlayerTutorialAssistant: React.FC<
       }
     }
   }, [userData, currentStep, pathname, router, rightSideBarOpen, isMobile]);
-
-  // Helper function to update the highlight position
-  const updateHighlightPosition = (currentStepConfig: TutorialStepConfig) => {
-    const highlightInfo = findElementToHighlight(
-      currentStepConfig,
-      rightSideBarRef,
-      rightSideBarOpen,
-    );
-
-    if (highlightInfo) {
-      // Put the highlight where the player can actually see and press it. Three
-      // things can be wrong with where it is: off screen, underneath the fixed
-      // assistant panel, or just awkwardly far from where the eye expects it.
-      // All three are the same correction, so one pass owns the scrolling.
-      //
-      // It keeps correcting until the placement is good rather than firing once:
-      // a page still fetching its data lays out short, and content landing
-      // underneath the target afterwards would otherwise strand it. Once the
-      // placement is good it latches, so a player who then scrolls the highlight
-      // away is never fought. The attempt cap stops a target that can never be
-      // placed well from scrolling on every tick.
-      const targetKey = `${currentStepConfig.id}:${highlightInfo.element.id}`;
-      if (placementRef.current.key !== targetKey) {
-        placementRef.current = {
-          key: targetKey,
-          attempts: 0,
-          settled: false,
-          settledScrollY: 0,
-        };
-        setPanelDodgesHighlight(false);
-      }
-      const placement = placementRef.current;
-      const before = highlightInfo.element.getBoundingClientRect();
-      const panel = getAssistantPanelRect();
-      // Content that renders after the latch (a fight's jutsu row, say) can push a
-      // placed target under the panel without the player scrolling; place it again.
-      if (
-        placement.settled &&
-        window.scrollY === placement.settledScrollY &&
-        panel &&
-        rectsOverlap(before, panel)
-      ) {
-        placement.settled = false;
-      }
-      if (
-        !placement.settled &&
-        placement.attempts < 5 &&
-        canPositionTutorialHighlight(before.height, window.innerHeight, panel?.top)
-      ) {
-        const preferredCentre = getPreferredHighlightCentre(before.height);
-        const centre = before.top + before.height / 2;
-        const isOffscreen =
-          before.bottom < 80 ||
-          before.top > window.innerHeight - 80 ||
-          before.right < 0 ||
-          before.left > window.innerWidth;
-        const isCovered = !!panel && rectsOverlap(before, panel);
-        // In a fight the field and the action bar must stay in view together,
-        // so there a visible, uncovered target is left where it is.
-        const isMisplaced =
-          isOffscreen ||
-          isCovered ||
-          (pathname !== "/combat" && Math.abs(centre - preferredCentre) > 100);
-        if (!isMisplaced) {
-          placement.settled = true;
-          placement.settledScrollY = window.scrollY;
-        } else {
-          placement.attempts += 1;
-          const scroller = highlightInfo.element.ownerDocument.scrollingElement;
-          // In a fight a target only moves far enough to come into view clear of
-          // the panel, so as much of the field as possible stays visible with it.
-          const floor =
-            panel && before.left < panel.right && before.right > panel.left
-              ? Math.min(panel.top, window.innerHeight)
-              : window.innerHeight;
-          const offset =
-            pathname !== "/combat"
-              ? centre - preferredCentre
-              : before.top < 80
-                ? before.top - 80
-                : before.bottom + 16 - floor;
-          scroller?.scrollBy({ top: offset, behavior: "auto" });
-          // Scrolling cannot always win: on a short page the document may already
-          // be as far down as it goes, leaving the target stuck under the panel
-          // with nothing left to scroll. Rather than stretch the page to make
-          // room, the panel gives way -- a step whose only advance action is
-          // pressing the highlight has to be pressable. It only moves when the
-          // target is clear of where it lands, or it would cover it from above.
-          if (isCovered) {
-            const after = highlightInfo.element.getBoundingClientRect();
-            const panelAfter = getAssistantPanelRect();
-            if (
-              panelAfter &&
-              rectsOverlap(after, panelAfter) &&
-              after.top >
-                DODGED_PANEL_TOP_REM *
-                  Number.parseFloat(
-                    getComputedStyle(document.documentElement).fontSize,
-                  ) +
-                  panelAfter.height
-            ) {
-              setPanelDodgesHighlight(true);
-            }
-          }
-        }
-      }
-      const rect = highlightInfo.element.getBoundingClientRect();
-      const next = {
-        stepId: currentStepConfig.id,
-        isPrimaryElement: highlightInfo.isPrimaryElement,
-        top: rect.top,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height,
-      };
-      setHighlight((prev) =>
-        prev &&
-        prev.stepId === next.stepId &&
-        prev.isPrimaryElement === next.isPrimaryElement &&
-        isSameBox(prev, next)
-          ? prev
-          : next,
-      );
-    } else {
-      setHighlight(null);
-      setPanelDodgesHighlight(false);
-    }
-  };
 
   // Skip steps that have nothing to do: spending experience the player does
   // not have, adopting a companion when they already formed a bond, or
@@ -913,29 +336,14 @@ const PlayerTutorialAssistant: React.FC<
     if (nothingToAssign || alreadyBonded || alreadyThere) void handleNextStepAsync();
   }, [currentStep, userData, pathname]);
 
-  // Update highlight position based on current step and element
-  useEffect(() => {
-    // Early exit if tutorial is disabled
-    if (userData && userData?.tutorialOn === false) return;
-    if (!isAssistantVisible) return;
-
-    // Determine which step to use - hospitalized overrides everything
-    const isHospitalized = userData?.status === "HOSPITALIZED";
-    const step = isHospitalized ? TUTORIAL_HOSPITALIZED_STEP : currentStep;
-
-    // Guard against undefined step
-    if (!step) {
-      setHighlight(null);
-      return;
-    }
-
-    // If we're not on the correct page for this step, don't try to highlight
-    if (!isTutorialPageMatch(step.page, pathname)) {
-      return;
-    }
-
-    return trackLayout(() => updateHighlightPosition(step));
-  }, [currentStep, isAssistantVisible, pathname, userData?.status]);
+  const { highlight, panelDodgesHighlight } = useHighlightPlacement({
+    currentStep,
+    isAssistantVisible,
+    pathname,
+    userData,
+    rightSideBarRef,
+    rightSideBarOpen,
+  });
 
   // Update game menu highlight position when showing game menu tutorial
   useEffect(() => {
@@ -989,7 +397,7 @@ const PlayerTutorialAssistant: React.FC<
         )
       )
         return;
-      // Check for Enter key or ArrowLeft key
+      // Check for Enter key or ArrowRight key
       if (event.key === "Enter" || event.key === "ArrowRight") {
         if (isDisablingTutorial) return;
         if (showGameMenuTutorial) {
@@ -1039,89 +447,34 @@ const PlayerTutorialAssistant: React.FC<
     return () => clearTimeout(timer);
   }, [currentStep?.id, currentStep?.showNextButton, isAssistantVisible]);
 
-  // Post tutorial state - quest data from userData
-  const [postTutorialQuest, setPostTutorialQuest] = useState<{
-    userQuest: UserQuest;
-    tracker: QuestTrackerType;
-  } | null>(null);
-
-  // Post tutorial state - whether to show the quest
-  const [showPostTutorialQuest, setShowPostTutorialQuest] = useState(false);
-
-  // Quest type priority ordering (persisted in localStorage)
-  const [questTypePriority, setQuestTypePriority] = useLocalStorage<QuestType[]>(
-    "tutorial-quest-type-priority",
-    [...OrderedQuestTypesInTutorial],
-  );
-
   // Dialog state for quest type ordering
   const [showOrderingDialog, setShowOrderingDialog] = useState(false);
 
-  // Post-tutorial quest guidance: Find quest based on priority ordering
-  useEffect(() => {
-    if (userData?.tutorialOn !== false && stepNumber >= TUTORIAL_STEPS.length) {
-      // Find the first quest based on priority ordering
-      const activeUserQuests = userData?.userQuests?.filter(
-        (uq) => OrderedQuestTypesInTutorial.includes(uq.quest.questType) && !uq.endAt,
-      );
-
-      if (activeUserQuests && activeUserQuests.length > 0) {
-        // Sort by priority order (lower index = higher priority)
-        const sortedQuests = [...activeUserQuests].sort((a, b) => {
-          const aPriority = questTypePriority.indexOf(a.quest.questType);
-          const bPriority = questTypePriority.indexOf(b.quest.questType);
-          // If not found in priority list, put at end
-          const aIdx = aPriority === -1 ? questTypePriority.length : aPriority;
-          const bIdx = bPriority === -1 ? questTypePriority.length : bPriority;
-          return aIdx - bIdx;
-        });
-
-        const quest = sortedQuests[0];
-        const tracker = quest
-          ? userData?.questData?.find((q) => q.id === quest.questId)
-          : undefined;
-        setPostTutorialQuest(quest && tracker ? { userQuest: quest, tracker } : null);
-      } else {
-        setPostTutorialQuest(null);
-      }
-    } else {
-      setPostTutorialQuest(null);
-    }
-  }, [userData, stepNumber, questTypePriority]);
-
-  // Check if logbook entry exists on the page to determine whether to show the quest
-  useEffect(() => {
-    if (!postTutorialQuest) {
-      setShowPostTutorialQuest(false);
-      return;
-    }
-
-    const checkLogbookEntry = () => {
-      const logbookEntryExists = document.getElementById(
-        `logbook-entry-${postTutorialQuest.userQuest.questId}`,
-      );
-      setShowPostTutorialQuest(!logbookEntryExists);
-    };
-
-    checkLogbookEntry();
-    const interval = setInterval(checkLogbookEntry, 1000);
-    return () => clearInterval(interval);
-  }, [postTutorialQuest]);
+  const {
+    postTutorialQuest,
+    showPostTutorialQuest,
+    questTypePriority,
+    setQuestTypePriority,
+  } = usePostTutorialQuest(userData, stepNumber);
 
   // Determine which step to show - hospitalized overrides everything
   const isHospitalized = userData?.status === "HOSPITALIZED";
 
+  // The guided quest's current objective, for its text and its characters
+  const postTutorialObjective =
+    showPostTutorialQuest && postTutorialQuest
+      ? getActiveObjective(postTutorialQuest.userQuest.quest, postTutorialQuest.tracker)
+      : undefined;
+
   // Create a dynamic tutorial step for post-tutorial quest guidance
   let dynamicQuestStep: TutorialStepConfig | null = null;
   if (showPostTutorialQuest && postTutorialQuest) {
-    const { userQuest, tracker } = postTutorialQuest;
-    const quest = userQuest.quest;
-    const activeObjective = getActiveObjective(quest, tracker);
+    const quest = postTutorialQuest.userQuest.quest;
 
     // Determine the text to show
     let description = quest.description;
-    if (quest.consecutiveObjectives && activeObjective?.description) {
-      description = activeObjective.description;
+    if (quest.consecutiveObjectives && postTutorialObjective?.description) {
+      description = postTutorialObjective.description;
     }
 
     dynamicQuestStep = {
@@ -1269,23 +622,15 @@ const PlayerTutorialAssistant: React.FC<
   // For starter quests, skip fetching scene characters - we'll use the A/B tested assistant image instead
   const postTutorialCharacterIds: string[] = [];
   if (showPostTutorialQuest && postTutorialQuest) {
-    const { userQuest, tracker } = postTutorialQuest;
-    const quest = userQuest.quest;
+    const quest = postTutorialQuest.userQuest.quest;
     const isStarterQuest = quest.questType === "starter";
+    // Only consecutive quests have an active objective, which may cast its own scene.
     if (!isStarterQuest) {
-      if (quest.consecutiveObjectives) {
-        const activeObjective = getActiveObjective(quest, tracker);
-        if (
-          activeObjective?.sceneCharacters &&
-          activeObjective.sceneCharacters.length > 0
-        ) {
-          postTutorialCharacterIds.push(...activeObjective.sceneCharacters);
-        } else {
-          postTutorialCharacterIds.push(...(quest.content.sceneCharacters || []));
-        }
-      } else {
-        postTutorialCharacterIds.push(...(quest.content.sceneCharacters || []));
-      }
+      postTutorialCharacterIds.push(
+        ...(postTutorialObjective?.sceneCharacters?.length
+          ? postTutorialObjective.sceneCharacters
+          : quest.content.sceneCharacters || []),
+      );
     }
   }
 
@@ -1650,35 +995,11 @@ const PlayerTutorialAssistant: React.FC<
               </blockquote>
             )}
           {isQuestOverlay && postTutorialQuest?.userQuest.quest.content.objectives && (
-            <>
-              <div className="grid grid-cols-2 gap-4">
-                <QuestObjectives
-                  quest={postTutorialQuest.userQuest.quest}
-                  tracker={postTutorialQuest.tracker}
-                  checkRewards={() =>
-                    checkRewards({ questId: postTutorialQuest.userQuest.quest.id })
-                  }
-                />
-              </div>
-              {isQuestComplete(
-                postTutorialQuest.userQuest.quest,
-                postTutorialQuest.tracker,
-              ) &&
-                !postTutorialQuest.userQuest.completed &&
-                userData?.status === "AWAKE" && (
-                  <Button
-                    onClick={() => {
-                      checkRewards({
-                        questId: postTutorialQuest.userQuest.quest.id,
-                      });
-                    }}
-                    className="w-full"
-                  >
-                    <Sparkles className="mr-2 h-5 w-5" />
-                    Collect Reward
-                  </Button>
-                )}
-            </>
+            <PostTutorialQuestObjectives
+              postTutorialQuest={postTutorialQuest}
+              userData={userData}
+              checkRewards={checkRewards}
+            />
           )}
         </AssistantDialog>
       )}
@@ -1728,7 +1049,379 @@ const PlayerTutorialAssistant: React.FC<
   );
 };
 
-export default TutorialAssistant;
+/**
+ * Lemu standing on the dock's top edge, cropped at the waist independently of
+ * lesson height. She is decorative and lets clicks through, but moves to the
+ * other end of the dock, or leaves, rather than stand over the highlight.
+ */
+const AssistantPortrait: React.FC<{
+  characterImage?: string;
+  avoidBox: TutorialScreenBox | null;
+  dodgeHighlight?: boolean;
+}> = ({ characterImage, avoidBox, dodgeHighlight }) => {
+  const { variant } = useAbVariant(LEMU_EXPERIMENT);
+  const { swapSides } = useActivityDock();
+  const image = characterImage || getLemuImage(variant);
+  const waist = LEMU_PORTRAIT_WAIST[image] ?? 0.5;
+  const stripRef = React.useRef<HTMLDivElement>(null);
+  const [side, setSide] = useState<TutorialPortraitSide | null>("right");
+  // Measured after layout so she never paints where she is about to leave. The
+  // dock moves when it dodges to the top or swaps sides, which the effect re-runs for.
+  React.useLayoutEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const place = () => {
+      setSide(
+        getTutorialPortraitSide({
+          frame: strip.getBoundingClientRect(),
+          portraitWidth: strip.querySelector("img")?.getBoundingClientRect().width ?? 0,
+          inset: PORTRAIT_INSET_PX,
+          avoid: avoidBox,
+        }),
+      );
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(strip);
+    window.addEventListener("resize", place);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", place);
+    };
+  }, [avoidBox, dodgeHighlight, swapSides]);
+  // A dodging dock sits just below the top bar, with no room above it for her.
+  if (dodgeHighlight) return null;
+  return (
+    <div
+      ref={stripRef}
+      className="pointer-events-none absolute inset-x-0 bottom-full overflow-hidden"
+      style={{ height: `calc(var(--assistant-portrait-height) * ${waist})` }}
+    >
+      <Image
+        src={image}
+        width={512}
+        height={768}
+        alt=""
+        aria-hidden="true"
+        className={cn(
+          "h-[var(--assistant-portrait-height)] w-auto max-w-[60%] select-none object-contain drop-shadow-2xl",
+          // She faces the middle of the dock from whichever end she stands at.
+          side === "left" ? "mr-auto ml-4" : "mr-4 ml-auto scale-x-[-1]",
+          !side && "invisible",
+        )}
+      />
+    </div>
+  );
+};
+
+/**
+ * The tutorial lesson inside the Activity dock: a header naming the chapter and
+ * a progress bar, so a player always knows where they are in the trials, then
+ * scrolling text above the call to action and the controls that answer it.
+ */
+const AssistantDialog: React.FC<{
+  title: string;
+  eyebrow?: string;
+  progress?: { position: number; total: number };
+  stepId?: string;
+  action?: string;
+  /** What Lemu says, shown above the call to action. */
+  lead?: React.ReactNode;
+  children?: React.ReactNode;
+  /** Controls that answer the step, kept in view under the scrolling text. */
+  footer?: React.ReactNode;
+  onOpenDisableModal?: () => void;
+  characterImage?: string;
+  onOpenOrderingDialog?: () => void;
+  showOrderingButton?: boolean;
+  /** Anchor to the top instead, to uncover a highlight it would otherwise sit on. */
+  dodgeHighlight?: boolean;
+  /** The highlighted element, which Lemu's portrait must not stand over. */
+  avoidBox?: TutorialScreenBox | null;
+  isBusy?: boolean;
+  errorMessage?: string;
+}> = ({
+  title,
+  eyebrow,
+  progress,
+  stepId,
+  action,
+  lead,
+  children,
+  footer,
+  onOpenDisableModal,
+  characterImage,
+  onOpenOrderingDialog,
+  showOrderingButton,
+  dodgeHighlight,
+  avoidBox = null,
+  isBusy = false,
+  errorMessage,
+}) => {
+  const sectionRef = React.useRef<HTMLElement>(null);
+  // The dock is fixed over the foot of the page; while a lesson is open the game
+  // layouts pad their content by its height, so whatever it covers can be
+  // scrolled clear of it.
+  React.useLayoutEffect(() => {
+    const dock = sectionRef.current?.closest<HTMLElement>("[data-activity-dock]");
+    if (!dock) return;
+    const root = document.documentElement;
+    const reserve = () =>
+      root.style.setProperty("--activity-dock-space", `${dock.offsetHeight}px`);
+    reserve();
+    const observer = new ResizeObserver(reserve);
+    observer.observe(dock);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--activity-dock-space");
+    };
+  }, []);
+  return (
+    <section
+      ref={sectionRef}
+      id={TUTORIAL_ASSISTANT_PANEL_ID}
+      data-tutorial-step={stepId}
+      data-dodge-highlight={dodgeHighlight || undefined}
+      aria-label={`Tutorial: ${title}`}
+      aria-live="polite"
+      className="pointer-events-auto"
+    >
+      <AssistantPortrait
+        characterImage={characterImage}
+        avoidBox={avoidBox}
+        dodgeHighlight={dodgeHighlight}
+      />
+      <div className="relative z-10 rounded-b-xl bg-card" aria-busy={isBusy}>
+        <header className="flex items-start gap-2 px-4 pt-3 md:px-5">
+          <div className="min-w-0 flex-1">
+            {eyebrow && (
+              <p className="truncate font-semibold text-muted-foreground text-xs uppercase tracking-wider">
+                {eyebrow}
+              </p>
+            )}
+            <h2 className="font-bold text-lg text-primary leading-tight">{title}</h2>
+          </div>
+          {onOpenDisableModal && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onOpenDisableModal();
+              }}
+              disabled={isBusy}
+              className="-mr-2 h-8 w-8 shrink-0 opacity-60 hover:opacity-100"
+              title={isBusy ? "Disabling" : "Skip tutorial"}
+              aria-label={isBusy ? "Disabling" : "Skip tutorial"}
+            >
+              {isBusy ? (
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+              ) : (
+                <X className="h-5 w-5" aria-hidden="true" />
+              )}
+            </Button>
+          )}
+        </header>
+        {progress && (
+          <div
+            className="flex gap-1 px-4 pt-2 md:px-5"
+            role="progressbar"
+            aria-label="Chapter progress"
+            aria-valuemin={1}
+            aria-valuemax={progress.total}
+            aria-valuenow={progress.position}
+          >
+            {Array.from({ length: progress.total }, (_, i) => (
+              <span
+                key={i}
+                className={cn(
+                  "h-1.5 flex-1 rounded-full",
+                  i < progress.position ? "bg-primary" : "bg-primary/20",
+                )}
+              />
+            ))}
+          </div>
+        )}
+        <div className="max-h-[min(40dvh,420px,calc(100dvh-var(--assistant-portrait-height)-22rem))] space-y-3 overflow-y-auto overscroll-contain px-4 py-3 md:px-5">
+          {isBusy && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex items-center gap-2 font-medium text-base text-muted-foreground"
+            >
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Disabling
+            </div>
+          )}
+          {errorMessage && !isBusy && (
+            <p role="alert" className="text-base text-destructive">
+              {errorMessage}
+            </p>
+          )}
+          <fieldset disabled={isBusy} className="contents">
+            {lead}
+            {children}
+            {showOrderingButton && onOpenOrderingDialog && (
+              <div className="flex justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onOpenOrderingDialog();
+                  }}
+                  className="opacity-60 hover:opacity-100"
+                  title="Sort quest priorities"
+                >
+                  <Settings2 className="mr-1 h-4 w-4" />
+                  <span className="text-sm">Priority</span>
+                </Button>
+              </div>
+            )}
+          </fieldset>
+        </div>
+        {(action || footer) && (
+          <fieldset
+            disabled={isBusy}
+            className="space-y-3 rounded-b-xl border-border border-t bg-card px-4 py-3 md:px-5"
+          >
+            {action && (
+              <p className="flex items-start gap-2 rounded-lg border border-amber-500/70 bg-amber-500/15 px-3 py-2 font-semibold text-base">
+                <MousePointerClick
+                  className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
+                  aria-hidden="true"
+                />
+                <span>{action}</span>
+              </p>
+            )}
+            {footer}
+          </fieldset>
+        )}
+      </div>
+    </section>
+  );
+};
+
+/**
+ * Confirmation dialog for cancelling the tutorial
+ * Shows the assistant character and warns the user
+ */
+const CancelTutorialConfirmDialog: React.FC<{
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+  isPending: boolean;
+  errorMessage?: string;
+}> = ({ open, onOpenChange, onConfirm, isPending, errorMessage }) => {
+  const { variant } = useAbVariant(LEMU_EXPERIMENT);
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!isPending) onOpenChange(nextOpen);
+      }}
+    >
+      <DialogContent
+        className="z-[70] sm:max-w-md"
+        closeDisabled={isPending}
+        aria-busy={isPending}
+        onEscapeKeyDown={(event) => {
+          if (isPending) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (isPending) event.preventDefault();
+        }}
+      >
+        <div className="flex gap-4">
+          <div className="min-w-0 flex-1 space-y-4">
+            <DialogHeader>
+              <DialogTitle>Skip the Academy Trials?</DialogTitle>
+              <DialogDescription className="pt-2">
+                The trials teach combat, training, travel and companions, and they grant
+                the experience you need for the Genin exam. We{" "}
+                <strong>highly recommend</strong> finishing them.
+                <br />
+                <br />
+                If you change your mind, you can turn the tutorial back on from the
+                support button.
+              </DialogDescription>
+            </DialogHeader>
+            {errorMessage && !isPending && (
+              <p role="alert" className="text-destructive text-sm">
+                {errorMessage}
+              </p>
+            )}
+            <div className="flex justify-start gap-2">
+              <Button
+                variant="outline"
+                disabled={isPending}
+                onClick={() => onOpenChange(false)}
+              >
+                Keep training
+              </Button>
+              <Button variant="destructive" disabled={isPending} onClick={onConfirm}>
+                {isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    <span role="status" aria-live="polite">
+                      Disabling
+                    </span>
+                  </>
+                ) : (
+                  "Skip tutorial"
+                )}
+              </Button>
+            </div>
+          </div>
+          <Image
+            src={getLemuImage(variant)}
+            width={256}
+            height={384}
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none h-40 w-auto shrink-0 select-none self-end object-contain drop-shadow-lg max-sm:hidden"
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+/** The guided quest's objectives, with its reward once every objective is done. */
+const PostTutorialQuestObjectives: React.FC<{
+  postTutorialQuest: PostTutorialQuest;
+  userData: { status: string } | undefined;
+  checkRewards: ReturnType<typeof useCheckRewards>["checkRewards"];
+}> = ({ postTutorialQuest, userData, checkRewards }) => (
+  <>
+    <div className="grid grid-cols-2 gap-4">
+      <QuestObjectives
+        quest={postTutorialQuest.userQuest.quest}
+        tracker={postTutorialQuest.tracker}
+        checkRewards={() =>
+          checkRewards({ questId: postTutorialQuest.userQuest.quest.id })
+        }
+      />
+    </div>
+    {isQuestComplete(postTutorialQuest.userQuest.quest, postTutorialQuest.tracker) &&
+      !postTutorialQuest.userQuest.completed &&
+      userData?.status === "AWAKE" && (
+        <Button
+          onClick={() => {
+            checkRewards({
+              questId: postTutorialQuest.userQuest.quest.id,
+            });
+          }}
+          className="w-full"
+        >
+          <Sparkles className="mr-2 h-5 w-5" />
+          Collect Reward
+        </Button>
+      )}
+  </>
+);
 
 /**
  * Dims the page around a highlight. A mask cut-out rather than a huge
@@ -1793,6 +1486,379 @@ const HandPointer: React.FC<{
       }}
     />
   );
+};
+
+/**
+ * Turns the tutorial off for the player who asked, and keeps the confirmation open with an
+ * error when it fails. Answers that arrive after an account or step change are ignored.
+ */
+const useDisableTutorial = (
+  userData: { userId: string; tutorialOn: boolean; tutorialStep: number } | undefined,
+  updateUser: ReturnType<typeof useUserDataSelector>["updateUser"],
+  tutorialIdentityRef: TutorialIdentityRef,
+) => {
+  // Mutation to disable tutorial
+  const { mutateAsync: disableTutorial } = api.profile.updatePreferences.useMutation();
+  const disableTutorialLockRef = React.useRef(false);
+  const [isDisablingTutorial, setIsDisablingTutorial] = useState(false);
+  const [disableTutorialError, setDisableTutorialError] = useState<string>();
+  const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
+
+  const handleDisableTutorial = async () => {
+    if (disableTutorialLockRef.current) return;
+    if (!userData?.userId || userData.tutorialOn !== true) return;
+
+    const request = { userId: userData.userId, tutorialStep: userData.tutorialStep };
+    disableTutorialLockRef.current = true;
+    setDisableTutorialError(undefined);
+    setIsDisablingTutorial(true);
+
+    await disableTutorial({ tutorialOn: false })
+      .then(async (result) => {
+        const identity = tutorialIdentityRef.current;
+        const isCurrentTutorial =
+          identity.userId === request.userId &&
+          identity.tutorialStep === request.tutorialStep;
+        if (!isCurrentTutorial) return;
+        if (!result.success) {
+          setDisableTutorialError(result.message);
+          return;
+        }
+
+        await updateUser((current) =>
+          current.userId === request.userId ? { tutorialOn: false } : undefined,
+        );
+        if (tutorialIdentityRef.current.userId !== request.userId) {
+          return;
+        }
+        setShowCancelConfirmDialog(false);
+      })
+      .catch(() => {
+        const identity = tutorialIdentityRef.current;
+        if (
+          identity.userId === request.userId &&
+          identity.tutorialStep === request.tutorialStep
+        ) {
+          setDisableTutorialError(
+            "We couldn't turn off the tutorial. Your progress is unchanged; please try again.",
+          );
+        }
+      })
+      .finally(() => {
+        disableTutorialLockRef.current = false;
+        setIsDisablingTutorial(false);
+      });
+  };
+  return {
+    isDisablingTutorial,
+    disableTutorialError,
+    showCancelConfirmDialog,
+    setShowCancelConfirmDialog,
+    handleDisableTutorial,
+  };
+};
+
+/**
+ * Measures the current step's highlight and keeps it placed: scrolled into view clear of
+ * the lesson, or with the lesson moved aside when scrolling cannot uncover it.
+ */
+const useHighlightPlacement = ({
+  currentStep,
+  isAssistantVisible,
+  pathname,
+  userData,
+  rightSideBarRef,
+  rightSideBarOpen,
+}: {
+  currentStep: TutorialStepConfig | undefined;
+  isAssistantVisible: boolean;
+  pathname: string;
+  userData: { tutorialOn: boolean; status: string } | undefined;
+  rightSideBarRef: React.RefObject<HTMLDivElement | null>;
+  rightSideBarOpen: boolean;
+}) => {
+  const [highlight, setHighlight] = useState<{
+    stepId: string;
+    isPrimaryElement: boolean;
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  // Placement of the current highlight, keyed by step and element. One owner
+  // decides where a highlight belongs, so scrolling never fights itself.
+  const placementRef = React.useRef<{
+    key: string;
+    attempts: number;
+    settled: boolean;
+    /** Page scroll when the placement latched, to tell layout shifts from the player. */
+    settledScrollY: number;
+  }>({ key: "", attempts: 0, settled: false, settledScrollY: 0 });
+  // Set while the panel would otherwise be sitting on top of the highlight, so
+  // it can step aside. Latched per target: recomputing it from the moved panel
+  // would say "no longer covered" and send it straight back.
+  const [panelDodgesHighlight, setPanelDodgesHighlight] = useState(false);
+
+  // Helper function to update the highlight position
+  const updateHighlightPosition = (currentStepConfig: TutorialStepConfig) => {
+    const highlightInfo = findElementToHighlight(
+      currentStepConfig,
+      rightSideBarRef,
+      rightSideBarOpen,
+    );
+
+    if (highlightInfo) {
+      // Put the highlight where the player can actually see and press it. Three
+      // things can be wrong with where it is: off screen, underneath the fixed
+      // assistant panel, or just awkwardly far from where the eye expects it.
+      // All three are the same correction, so one pass owns the scrolling.
+      //
+      // It keeps correcting until the placement is good rather than firing once:
+      // a page still fetching its data lays out short, and content landing
+      // underneath the target afterwards would otherwise strand it. Once the
+      // placement is good it latches, so a player who then scrolls the highlight
+      // away is never fought. The attempt cap stops a target that can never be
+      // placed well from scrolling on every tick.
+      const targetKey = `${currentStepConfig.id}:${highlightInfo.element.id}`;
+      if (placementRef.current.key !== targetKey) {
+        placementRef.current = {
+          key: targetKey,
+          attempts: 0,
+          settled: false,
+          settledScrollY: 0,
+        };
+        setPanelDodgesHighlight(false);
+      }
+      const placement = placementRef.current;
+      const before = highlightInfo.element.getBoundingClientRect();
+      const panel = getAssistantPanelRect();
+      // Content that renders after the latch (a fight's jutsu row, say) can push a
+      // placed target under the panel without the player scrolling; place it again.
+      if (
+        placement.settled &&
+        window.scrollY === placement.settledScrollY &&
+        panel &&
+        rectsOverlap(before, panel)
+      ) {
+        placement.settled = false;
+      }
+      if (
+        !placement.settled &&
+        placement.attempts < 5 &&
+        canPositionTutorialHighlight(before.height, window.innerHeight, panel?.top)
+      ) {
+        const preferredCentre = getPreferredHighlightCentre(before.height);
+        const centre = before.top + before.height / 2;
+        const isOffscreen =
+          before.bottom < 80 ||
+          before.top > window.innerHeight - 80 ||
+          before.right < 0 ||
+          before.left > window.innerWidth;
+        const isCovered = !!panel && rectsOverlap(before, panel);
+        // In a fight the field and the action bar must stay in view together,
+        // so there a visible, uncovered target is left where it is.
+        const isMisplaced =
+          isOffscreen ||
+          isCovered ||
+          (pathname !== "/combat" && Math.abs(centre - preferredCentre) > 100);
+        if (!isMisplaced) {
+          placement.settled = true;
+          placement.settledScrollY = window.scrollY;
+        } else {
+          placement.attempts += 1;
+          const scroller = highlightInfo.element.ownerDocument.scrollingElement;
+          // In a fight a target only moves far enough to come into view clear of
+          // the panel, so as much of the field as possible stays visible with it.
+          const floor =
+            panel && before.left < panel.right && before.right > panel.left
+              ? Math.min(panel.top, window.innerHeight)
+              : window.innerHeight;
+          const offset =
+            pathname !== "/combat"
+              ? centre - preferredCentre
+              : before.top < 80
+                ? before.top - 80
+                : before.bottom + 16 - floor;
+          scroller?.scrollBy({ top: offset, behavior: "auto" });
+          // Scrolling cannot always win: on a short page the document may already
+          // be as far down as it goes, leaving the target stuck under the panel
+          // with nothing left to scroll. Rather than stretch the page to make
+          // room, the panel gives way -- a step whose only advance action is
+          // pressing the highlight has to be pressable. It only moves when the
+          // target is clear of where it lands, or it would cover it from above.
+          if (isCovered) {
+            const after = highlightInfo.element.getBoundingClientRect();
+            const panelAfter = getAssistantPanelRect();
+            if (
+              panelAfter &&
+              rectsOverlap(after, panelAfter) &&
+              after.top >
+                DODGED_PANEL_TOP_REM *
+                  Number.parseFloat(
+                    getComputedStyle(document.documentElement).fontSize,
+                  ) +
+                  panelAfter.height
+            ) {
+              setPanelDodgesHighlight(true);
+            }
+          }
+        }
+      }
+      const rect = highlightInfo.element.getBoundingClientRect();
+      const next = {
+        stepId: currentStepConfig.id,
+        isPrimaryElement: highlightInfo.isPrimaryElement,
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      };
+      setHighlight((prev) =>
+        prev &&
+        prev.stepId === next.stepId &&
+        prev.isPrimaryElement === next.isPrimaryElement &&
+        isSameBox(prev, next)
+          ? prev
+          : next,
+      );
+    } else {
+      setHighlight(null);
+      setPanelDodgesHighlight(false);
+    }
+  };
+
+  // Update highlight position based on current step and element
+  useEffect(() => {
+    // Early exit if tutorial is disabled
+    if (userData && userData?.tutorialOn === false) return;
+    if (!isAssistantVisible) return;
+
+    // Determine which step to use - hospitalized overrides everything
+    const isHospitalized = userData?.status === "HOSPITALIZED";
+    const step = isHospitalized ? TUTORIAL_HOSPITALIZED_STEP : currentStep;
+
+    // Guard against undefined step
+    if (!step) {
+      setHighlight(null);
+      return;
+    }
+
+    // If we're not on the correct page for this step, don't try to highlight
+    if (!isTutorialPageMatch(step.page, pathname)) {
+      return;
+    }
+
+    return trackLayout(() => updateHighlightPosition(step));
+  }, [currentStep, isAssistantVisible, pathname, userData?.status]);
+
+  return { highlight, panelDodgesHighlight };
+};
+
+/**
+ * The active quest to guide once the tutorial is over, by the player's quest type priority.
+ * It is shown only while that quest's logbook entry is not already on the page.
+ */
+const usePostTutorialQuest = (
+  userData:
+    | Pick<NonNullable<UserWithRelations>, "tutorialOn" | "userQuests" | "questData">
+    | undefined,
+  stepNumber: number,
+) => {
+  // Post tutorial state - quest data from userData
+  const [postTutorialQuest, setPostTutorialQuest] = useState<PostTutorialQuest | null>(
+    null,
+  );
+
+  // Post tutorial state - whether to show the quest
+  const [showPostTutorialQuest, setShowPostTutorialQuest] = useState(false);
+
+  // Quest type priority ordering (persisted in localStorage)
+  const [questTypePriority, setQuestTypePriority] = useLocalStorage<QuestType[]>(
+    "tutorial-quest-type-priority",
+    [...OrderedQuestTypesInTutorial],
+  );
+
+  // Post-tutorial quest guidance: Find quest based on priority ordering
+  useEffect(() => {
+    if (userData?.tutorialOn !== false && stepNumber >= TUTORIAL_STEPS.length) {
+      // Find the first quest based on priority ordering
+      const activeUserQuests = userData?.userQuests?.filter(
+        (uq) => OrderedQuestTypesInTutorial.includes(uq.quest.questType) && !uq.endAt,
+      );
+
+      if (activeUserQuests && activeUserQuests.length > 0) {
+        // Sort by priority order (lower index = higher priority)
+        const sortedQuests = [...activeUserQuests].sort((a, b) => {
+          const aPriority = questTypePriority.indexOf(a.quest.questType);
+          const bPriority = questTypePriority.indexOf(b.quest.questType);
+          // If not found in priority list, put at end
+          const aIdx = aPriority === -1 ? questTypePriority.length : aPriority;
+          const bIdx = bPriority === -1 ? questTypePriority.length : bPriority;
+          return aIdx - bIdx;
+        });
+
+        const quest = sortedQuests[0];
+        const tracker = quest
+          ? userData?.questData?.find((q) => q.id === quest.questId)
+          : undefined;
+        setPostTutorialQuest(quest && tracker ? { userQuest: quest, tracker } : null);
+      } else {
+        setPostTutorialQuest(null);
+      }
+    } else {
+      setPostTutorialQuest(null);
+    }
+  }, [userData, stepNumber, questTypePriority]);
+
+  // Check if logbook entry exists on the page to determine whether to show the quest
+  useEffect(() => {
+    if (!postTutorialQuest) {
+      setShowPostTutorialQuest(false);
+      return;
+    }
+
+    const checkLogbookEntry = () => {
+      const logbookEntryExists = document.getElementById(
+        `logbook-entry-${postTutorialQuest.userQuest.questId}`,
+      );
+      setShowPostTutorialQuest(!logbookEntryExists);
+    };
+
+    checkLogbookEntry();
+    const interval = setInterval(checkLogbookEntry, 1000);
+    return () => clearInterval(interval);
+  }, [postTutorialQuest]);
+
+  return {
+    postTutorialQuest,
+    showPostTutorialQuest,
+    questTypePriority,
+    setQuestTypePriority,
+  };
+};
+
+/** Include the Activity header when keeping highlighted controls clear of the dock. */
+const getAssistantPanelRect = (): DOMRect | null => {
+  const panel = document.getElementById(TUTORIAL_ASSISTANT_PANEL_ID);
+  return (
+    (panel?.closest("[data-activity-dock]") ?? panel)?.getBoundingClientRect() ?? null
+  );
+};
+
+const rectsOverlap = (a: DOMRect, b: DOMRect) =>
+  !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+
+/**
+ * Where a highlight of this height should end up vertically. The window's own
+ * middle is not safe: the assistant panel is fixed over the foot of the screen,
+ * so on a short viewport the middle is underneath it.
+ */
+const getPreferredHighlightCentre = (targetHeight: number) => {
+  const safeTop = 80;
+  const panel = getAssistantPanelRect();
+  const safeBottom =
+    panel && panel.top > safeTop + targetHeight ? panel.top : window.innerHeight;
+  return (safeTop + safeBottom) / 2;
 };
 
 /**
@@ -1920,3 +1986,27 @@ const findElementToHighlight = (
     height: rect.height,
   };
 };
+
+/**
+ * Tutorial assistant component props
+ * @param rightSideBarOpen - Whether the right side bar is open
+ * @param setRightSideBarOpen - Function to set the right side bar open
+ * @param rightSideBarRef - Reference to the right side bar
+ * @returns
+ */
+interface TutorialAssistantProps {
+  /** Viewport width below which the shell moves its game menu into a drawer. */
+  sidebarBreakpoint: number;
+  rightSideBarOpen: boolean;
+  setRightSideBarOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  rightSideBarRef: React.RefObject<HTMLDivElement | null>;
+}
+
+/** The account and step the assistant is showing, read when a disable request settles. */
+type TutorialIdentityRef = React.RefObject<{
+  userId: string | undefined;
+  tutorialStep: number | undefined;
+}>;
+
+/** A quest the assistant guides after the tutorial, with its live tracker. */
+type PostTutorialQuest = { userQuest: UserQuest; tracker: QuestTrackerType };

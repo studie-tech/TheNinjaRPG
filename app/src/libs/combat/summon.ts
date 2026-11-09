@@ -36,8 +36,7 @@ export const isActiveSummon = (
   usersState: BattleUserState[],
 ): boolean => !!u.isSummon && !isSummonTemplate(u, usersState);
 
-/** Active summon that can still act this battle. Collapses the
- *  `stillInBattle && !leftBattle` clause previously hand-copied at 3 sites. */
+/** Active summon that can still act this battle: alive, not fled and not left. */
 export const isLiveSummon = (
   u: BattleUserState,
   usersState: BattleUserState[],
@@ -46,10 +45,9 @@ export const isLiveSummon = (
 /** A clone (e.g. shadow-clone jutsu) reuses isSummon for battlefield placement
  *  and orphan cleanup, but is NOT the controller's summon: it must not trip the
  *  one-per-controller cap or the AI re-summon gate, so a clone and a summon can
- *  coexist (as they did pre-pilot). It is the only live isSummon entity created
- *  with isOriginal === false (clone() sets it; summons keep the template's
- *  isOriginal === true), mirroring how process.ts already treats !isOriginal as
- *  a clone. */
+ *  coexist. It is the only live isSummon entity created with isOriginal === false
+ *  (clone() sets it; summons keep the template's isOriginal === true), the same
+ *  test process.ts uses to identify clones. */
 export const isClone = (u: Pick<BattleUserState, "isSummon" | "isOriginal">): boolean =>
   !!u.isSummon && u.isOriginal === false;
 
@@ -129,9 +127,8 @@ export const summonActionBlockedReason = (
  *  `playerControlled` and the controller is a human (non-AI). With the flag off
  *  (the default) the summon stays AI-driven.
  *
- *  No AutoBattleTypes check here: summon() already refuses to spawn anything in
- *  those battle types before this is reached, so a second check would be dead
- *  code that tests could only pin by lying about the call order. */
+ *  No AutoBattleTypes check here: summon() refuses to spawn in those battle
+ *  types, so no summon is ever piloted there. */
 export const shouldPilotSummon = (
   controller: Pick<BattleUserState, "isAi"> | undefined,
   playerControlled: boolean | undefined,
@@ -156,8 +153,8 @@ export const isSummonActionCastable = (
 
 /** An ACTIVE summon whose controller can no longer act (dead/fled/left/absent).
  *  Templates are excluded by isActiveSummon; the stillInBattle(summon) guard
- *  excludes dead summons; the tri-condition keeps the absent-controller branch
- *  that shipped tests depend on.
+ *  excludes dead summons; a controller missing from usersState counts as unable
+ *  to act.
  *
  *  Clones are excluded, matching hasLiveSummon, the un-summon lookup in tags.ts
  *  and the AI does_not_have_summon gate. Removing a clone here would also strand

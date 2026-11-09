@@ -1,14 +1,18 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { MAX_PVP_BRACKET } from "@/drizzle/constants";
 import * as Avatar from "@/layout/Avatar";
 import { TravelUserCard } from "@/layout/TravelUserCard";
 import { calcLevelRequirements, getKnownExpBracket } from "@/libs/profile";
 import type { SectorUser } from "@/libs/sector-map/world-types";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../setup/browserGlobals";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 let queryClient: QueryClient;
 let requests: string[];
@@ -18,7 +22,9 @@ beforeEach(() => {
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   requests = [];
   Object.assign(vi.spyOn(client, "api" as never), { village: testApi.village });
-  vi.spyOn(Avatar, "default").mockImplementation(({ href }) => <span>avatar:{href}</span>);
+  vi.spyOn(Avatar, "default").mockImplementation(({ href }) => (
+    <span>avatar:{href}</span>
+  ));
 });
 
 afterEach(async () => {
@@ -31,11 +37,24 @@ afterEach(async () => {
 
 /** Cumulative experience the map's effective-level reading turns into level 45. */
 const experience = calcLevelRequirements(45);
-const user = (patch: Partial<SectorUser> = {}): SectorUser => ({
-  userId: "target", username: "Kakashi", status: "AWAKE", rank: "JONIN", isOutlaw: false, level: 45, experience,
-  curHealth: 62, maxHealth: 100, villageId: "leaf", allianceStatus: "NEUTRAL", warRelationship: null,
-  avatar: "full.webp", avatarLight: "light.webp", ...patch,
-}) as SectorUser;
+const user = (patch: Partial<SectorUser> = {}): SectorUser =>
+  ({
+    userId: "target",
+    username: "Kakashi",
+    status: "AWAKE",
+    rank: "JONIN",
+    isOutlaw: false,
+    level: 45,
+    experience,
+    curHealth: 62,
+    maxHealth: 100,
+    villageId: "leaf",
+    allianceStatus: "NEUTRAL",
+    warRelationship: null,
+    avatar: "full.webp",
+    avatarLight: "light.webp",
+    ...patch,
+  }) as SectorUser;
 
 const mount = (target: SectorUser, onClose = vi.fn()) => {
   const trpcClient = fakeTrpcClient(async (path) => {
@@ -57,8 +76,12 @@ it("summarizes the tapped player from the sector snapshot and links to their ful
   expect(view.getByText("avatar:light.webp")).toBeTruthy();
   expect(view.getByText("Neutral")).toBeTruthy();
   expect(view.getByText("HP (62 / 100)")).toBeTruthy();
-  expect(view.getByText(`${getKnownExpBracket(user())}/${MAX_PVP_BRACKET}`)).toBeTruthy();
-  expect(view.getByRole("link", { name: /View full profile/ }).getAttribute("href")).toBe("/userid/target");
+  expect(
+    view.getByText(`${getKnownExpBracket(user())}/${MAX_PVP_BRACKET}`),
+  ).toBeTruthy();
+  expect(
+    view.getByRole("link", { name: /View full profile/ }).getAttribute("href"),
+  ).toBe("/userid/target");
   expect(await view.findByText("Akikaze")).toBeTruthy();
   // Villages are the only request; everything else comes from the map snapshot.
   expect(requests).toEqual(["village.getAll"]);

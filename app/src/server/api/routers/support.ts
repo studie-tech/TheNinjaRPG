@@ -3,7 +3,12 @@ import { and, eq, gte, lte } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { SupportTicketCategory, SupportTicketPriority } from "@/drizzle/constants";
-import { GITHUB_API_ENDPOINT } from "@/drizzle/constants";
+import {
+  GITHUB_API_ENDPOINT,
+  SupportTicketCategories,
+  SupportTicketPriorities,
+  SupportTicketStatuses,
+} from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { supportTicket } from "@/drizzle/schema";
 import { anonymizeStaffInfo, getTicketUpdateActivities } from "@/libs/support";
@@ -32,13 +37,13 @@ import {
   updateSupportTicketForEscalateToGithub,
   updateSupportTicketForUpdateTicket,
 } from "@/queries/support";
-
 import { createConvo } from "@/server/api/routers/comments";
 import {
   baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
+  serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { offsetPage } from "@/server/utils/pagination";
@@ -59,12 +64,43 @@ import sanitize from "@/utils/sanitize";
 import { idSchema } from "@/validators/misc";
 import {
   createSupportTicketSchema,
-  escalateToGithubSchema,
-  type SupportTicketFilteringSchema,
-  supportTicketFilterSchema,
-  supportTicketMetricsSchema,
   updateSupportTicketSchema,
 } from "@/validators/support";
+
+// Escalate to GitHub Schema
+const escalateToGithubSchema = z.object({
+  ticketId: z.string(),
+});
+
+// Support Ticket Filter Schema
+const supportTicketFilterSchema = z.object({
+  status: z.array(z.enum(SupportTicketStatuses)).optional(),
+  category: z.array(z.enum(SupportTicketCategories)).optional(),
+  priority: z.array(z.enum(SupportTicketPriorities)).optional(),
+  assignedToUserId: z.string().nullable().optional(),
+  createdByUserId: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  isPublic: z.boolean().optional(),
+  search: z.string().optional(),
+  dateFrom: z.iso.datetime().optional(),
+  dateTo: z.iso.datetime().optional(),
+  cursor: z.number().nullish(),
+  limit: z.number().min(1).max(100).prefault(20),
+  orderBy: z
+    .enum(["createdAt", "updatedAt", "priority", "status"])
+    .prefault("createdAt"),
+  orderDirection: z.enum(["asc", "desc"]).prefault("desc"),
+});
+
+type SupportTicketFilteringSchema = z.infer<typeof supportTicketFilterSchema>;
+
+// Support Ticket Metrics Schema
+const supportTicketMetricsSchema = z.object({
+  dateFrom: z.iso.datetime().optional(),
+  dateTo: z.iso.datetime().optional(),
+  category: z.enum(SupportTicketCategories).optional(),
+  assignedToUserId: z.string().optional(),
+});
 
 export const supportRouter = createTRPCRouter({
   // Get all support tickets with filtering
@@ -76,7 +112,7 @@ export const supportRouter = createTRPCRouter({
       // Pagination handling
       const limit = input.limit;
       const { skip, cursorAfter } = offsetPage(input);
-      const isStaff = user.role !== "USER";
+      const isStaff = canViewStaffOnlyComments(user.role);
       // Run filtered query
       const tickets = await getSupportTicketsWithRelations({
         client: ctx.drizzle,
@@ -100,16 +136,17 @@ export const supportRouter = createTRPCRouter({
   getTicket: protectedProcedure
     .input(z.object({ ticketId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
-
-      const ticket = await getSupportTicketWithRelations(ctx.drizzle, input.ticketId);
+      const [user, ticket] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        getSupportTicketWithRelations(ctx.drizzle, input.ticketId),
+      ]);
 
       if (!ticket) {
-        throw new Error("Ticket not found");
+        throw serverError("NOT_FOUND", "Ticket not found");
       }
 
       if (!canViewSupportTicket(ticket, ctx.userId, user.role)) {
-        throw new Error("Access denied");
+        throw serverError("FORBIDDEN", "Access denied");
       }
 
       // Sanitize ticket for public view if user is not staff
@@ -295,7 +332,7 @@ export const supportRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guards
       if (!canViewSupportStatistics(user.role)) {
-        throw new Error("Access denied");
+        throw serverError("FORBIDDEN", "Access denied");
       }
       // Destructure
       const dateFrom = input.dateFrom
@@ -355,8 +392,12 @@ export const supportRouter = createTRPCRouter({
 
   // Canned responses CRUD operations
   getCannedResponses: protectedProcedure.query(async ({ ctx }) => {
-    const responses = await selectCannedResponseForGetCannedResponses(ctx.drizzle);
-    return responses;
+    const [user, responses] = await Promise.all([
+      fetchUser(ctx.drizzle, ctx.userId),
+      selectCannedResponseForGetCannedResponses(ctx.drizzle),
+    ]);
+    // Canned responses are staff drafting material; players get none.
+    return canEditCannedResponses(user.role) ? responses : [];
   }),
 
   createCannedResponse: protectedProcedure
@@ -607,16 +648,7 @@ export type SupportTicketWithRelations = Awaited<
   ReturnType<typeof getSupportTicketWithRelations>
 >;
 
-/**
- * Get support tickets with relations.
- * @param client - The database client
- * @param skip - The number of tickets to skip
- * @param limit - The maximum number of tickets to return
- * @param filters - The filters to apply to the tickets
- * @param isStaff - Whether the user is staff
- * @param userId - The ID of the user
- * @returns The tickets with relations
- */
+/** Page through support tickets matching the filters; non-staff viewers only see their own or public tickets. */
 export const getSupportTicketsWithRelations = async (info: {
   client: DrizzleClient;
   skip: number;

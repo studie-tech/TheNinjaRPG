@@ -1,6 +1,5 @@
-import { fetchBattleEssentials } from "@/queries/combat";
-import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
 import {
   aiProfile,
   battle,
@@ -15,15 +14,20 @@ import {
 import { userItemToAction } from "@/libs/combat/actions";
 import type { UserEffect } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
+import { fetchBattleEssentials } from "@/queries/combat";
 import { combatRouter } from "@/server/api/routers/combat";
 import { getTagSchema } from "@/validators/combat";
-import { insertLobbyBattle, loadCombatant, preloadLobby } from "../../../../libs/combat/helpers/preload";
 import {
+  insertLobbyBattle,
+  loadCombatant,
+  preloadLobby,
+} from "../../../../libs/combat/helpers/preload";
+import {
+  insertDefaultAiProfile,
   insertItems,
+  insertJutsus,
   insertUserItems,
   insertUsers,
-  insertJutsus,
-  insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import {
   callerFor,
@@ -122,7 +126,9 @@ const seedBattle = async () => {
 
   const essentials = await fetchBattleEssentials(db);
   const users = await Promise.all(
-    USERS.map((userId) => loadCombatant(db, userId, essentials, { equippedItemsOnly: true })),
+    USERS.map((userId) =>
+      loadCombatant(db, userId, essentials, { equippedItemsOnly: true }),
+    ),
   );
   const processed = await preloadLobby(db, users, essentials, "SPARRING");
   await insertLobbyBattle(db, BATTLE, "SPARRING", processed);

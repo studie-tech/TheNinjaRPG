@@ -20,33 +20,15 @@ interface MissionPickerProps {
   setting: {
     name: string;
     image: string;
-    rank: string;
   };
-  missions: Array<{
-    id: string;
-    name: string;
-    image?: string;
-  }>;
-  count: number;
+  missions: PickerMission[];
   disabled?: boolean;
-  onMissionSelect: (mission: {
-    id: string;
-    name: string;
-    image?: string;
-  }) => boolean | Promise<boolean>;
+  onMissionSelect: (mission: PickerMission) => boolean | Promise<boolean>;
   dialogTitle: string;
-  dialogDescription: (mission: {
-    id: string;
-    name: string;
-    image?: string;
-  }) => React.ReactNode;
+  dialogDescription: (mission: PickerMission) => React.ReactNode;
   actionDisabled?: boolean;
   actionText?: string;
-  additionalContent?: (mission: {
-    id: string;
-    name: string;
-    image?: string;
-  }) => React.ReactNode;
+  additionalContent?: (mission: PickerMission) => React.ReactNode;
   emptyContent?: React.ReactNode;
   /** Locks sibling mission controls while a mutually-exclusive start is in progress. */
   interactionDisabled?: boolean;
@@ -57,7 +39,6 @@ interface MissionPickerProps {
 export const MissionPicker: React.FC<MissionPickerProps> = ({
   setting,
   missions,
-  count,
   disabled = false,
   onMissionSelect,
   dialogTitle,
@@ -94,7 +75,7 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
         >
           <Image alt="small" src={setting.image} width={256} height={256} />
           <p className="font-bold">{setting.name}</p>
-          <p>[Select out of {count} available]</p>
+          <p>[Select out of {missions.length} available]</p>
         </button>
       </PopoverTrigger>
       <PopoverContent>
@@ -191,3 +172,5 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
 };
 
 export default MissionPicker;
+
+type PickerMission = { id: string; name: string; image?: string };

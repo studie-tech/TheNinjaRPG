@@ -10,39 +10,6 @@ import {
 import { drizzleDB } from "@/server/db";
 import { constantTimeEquals } from "@/server/utils/constantTime";
 
-// GitHub webhook payload types
-interface GitHubWebhookPayload {
-  action: string;
-  issue: {
-    number: number;
-    html_url: string;
-    state: string;
-    closed_at: string | null;
-  };
-  repository: {
-    name: string;
-    owner: {
-      login: string;
-    };
-  };
-}
-
-/**
- * Verify GitHub webhook signature
- */
-function verifyGitHubSignature(
-  payload: string,
-  signature: string,
-  secret: string,
-): boolean {
-  // Create HMAC with the secret
-  const hmac = createHmac("sha256", secret);
-  hmac.update(payload, "utf8");
-  const expectedSignature = `sha256=${hmac.digest("hex")}`;
-
-  return constantTimeEquals(expectedSignature, signature);
-}
-
 /**
  * Handle GitHub webhook events
  */
@@ -133,4 +100,37 @@ async function handleIssueClosed(data: GitHubWebhookPayload) {
   } catch (error) {
     console.error(`Error closing support ticket for GitHub issue ${issueUrl}:`, error);
   }
+}
+
+/**
+ * Verify GitHub webhook signature
+ */
+function verifyGitHubSignature(
+  payload: string,
+  signature: string,
+  secret: string,
+): boolean {
+  // Create HMAC with the secret
+  const hmac = createHmac("sha256", secret);
+  hmac.update(payload, "utf8");
+  const expectedSignature = `sha256=${hmac.digest("hex")}`;
+
+  return constantTimeEquals(expectedSignature, signature);
+}
+
+// GitHub webhook payload types
+interface GitHubWebhookPayload {
+  action: string;
+  issue: {
+    number: number;
+    html_url: string;
+    state: string;
+    closed_at: string | null;
+  };
+  repository: {
+    name: string;
+    owner: {
+      login: string;
+    };
+  };
 }

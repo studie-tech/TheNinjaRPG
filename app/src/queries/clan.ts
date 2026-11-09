@@ -11,6 +11,7 @@ import {
   isNull,
   like,
   lt,
+  lte,
   ne,
   notExists,
   or,
@@ -26,6 +27,7 @@ import {
   CLAN_COLOR_CHANGE_REP_COST,
   CLAN_CREATE_RYO_COST,
   type ClanBoostType,
+  FACTION_REPUTATION_TREASURY_LIMIT,
   HIDEOUT_COST,
   IMG_AVATAR_DEFAULT,
   IMG_VILLAGE_FACTION,
@@ -354,35 +356,28 @@ export const executeResultForUpgradeHideoutToStronghold = (
         `);
 
 /**
- * Build the `userData` update for `clanDonate`, setting `reputationPoints`, using
- * predicates on `userId` and `reputationPoints`.
+ * Execute the `clanDonate` transfer as one statement: debit the donor's reputation points and
+ * credit the faction treasury. The donor's balance and membership and the treasury limit all
+ * sit in the WHERE, so a lost race on either row moves nothing.
  */
-export const updateUserDataForClanDonate = (
-  client: Pick<DrizzleClient, "update">,
+export const executeResultForClanDonate = (
+  client: Pick<DrizzleClient, "execute">,
   repsCost: number,
   ctx: { userId: string },
+  clanId: string,
 ) =>
-  client
-    .update(userData)
-    .set({
-      reputationPoints: sql`${userData.reputationPoints} - ${repsCost}`,
-    })
-    .where(
-      and(eq(userData.userId, ctx.userId), gte(userData.reputationPoints, repsCost)),
-    );
-
-/** Build the `clan` update for `clanDonate`, setting `repTreasury`, using predicates on `id`. */
-export const updateClanForClanDonate = (
-  client: Pick<DrizzleClient, "update">,
-  repsCost: number,
-  fetchedClan: { id: string },
-) =>
-  client
-    .update(clan)
-    .set({
-      repTreasury: sql`${clan.repTreasury} + ${repsCost}`,
-    })
-    .where(eq(clan.id, fetchedClan.id));
+  client.execute(sql`
+    UPDATE ${userData}
+    INNER JOIN ${clan} ON ${clan.id} = ${userData.clanId}
+    SET ${userData.reputationPoints} = ${userData.reputationPoints} - ${repsCost},
+        ${clan.repTreasury} = ${clan.repTreasury} + ${repsCost}
+    WHERE ${and(
+      eq(userData.userId, ctx.userId),
+      eq(clan.id, clanId),
+      gte(userData.reputationPoints, repsCost),
+      lte(clan.repTreasury, FACTION_REPUTATION_TREASURY_LIMIT - repsCost),
+    )}
+  `);
 
 /** Build the `actionLog` insert for `clanDonate`. */
 export const insertActionLogForClanDonate = (
@@ -614,15 +609,27 @@ export const updateClanForConvertPointsToRyo = (
       ),
     );
 
-/** Build the `clan` update for `toBank`, setting `bank`, using predicates on `id`. */
-export const updateClanForToBank = (
-  client: Pick<DrizzleClient, "update">,
+/**
+ * Execute the `toBank` deposit as one statement: debit the member's pocket and credit the clan
+ * bank. The pocket balance and membership sit in the WHERE, so a lost race on either row moves
+ * nothing.
+ */
+export const executeResultForToBank = (
+  client: Pick<DrizzleClient, "execute">,
   input: { amount: number; clanId: string },
+  ctx: { userId: string },
 ) =>
-  client
-    .update(clan)
-    .set({ bank: sql`${clan.bank} + ${input.amount}` })
-    .where(eq(clan.id, input.clanId));
+  client.execute(sql`
+    UPDATE ${userData}
+    INNER JOIN ${clan} ON ${clan.id} = ${userData.clanId}
+    SET ${userData.money} = ${userData.money} - ${input.amount},
+        ${clan.bank} = ${clan.bank} + ${input.amount}
+    WHERE ${and(
+      eq(userData.userId, ctx.userId),
+      eq(clan.id, input.clanId),
+      gte(userData.money, input.amount),
+    )}
+  `);
 
 /** Build the `clan` update for `purchaseBoost`, setting `` and `bank`, using predicates on `id` and `bank`. */
 export const updateClanForPurchaseBoost = (
@@ -947,8 +954,8 @@ export const updateUserDataForRemoveFromClan = (
       clanId: null,
       status:
         readiness?.set.status ??
-        sql`CASE WHEN status = "QUEUED" AND ${withoutDungeonReservation()} THEN "AWAKE" ELSE status END`,
-      villageId: sql`CASE WHEN isOutlaw = 1 THEN ${VILLAGE_SYNDICATE_ID} ELSE villageId END`,
+        sql`CASE WHEN ${userData.status} = "QUEUED" AND ${withoutDungeonReservation()} THEN "AWAKE" ELSE ${userData.status} END`,
+      villageId: sql`CASE WHEN ${userData.isOutlaw} = 1 THEN ${VILLAGE_SYNDICATE_ID} ELSE ${userData.villageId} END`,
     })
     .where(and(eq(userData.userId, userId), readiness?.where));
 
@@ -1057,8 +1064,8 @@ export const updateUserDataForRemoveFromClan2 = (
     .update(userData)
     .set({
       clanId: null,
-      status: sql`CASE WHEN status = "QUEUED" AND ${withoutDungeonReservation()} THEN "AWAKE" ELSE status END`,
-      villageId: sql`CASE WHEN isOutlaw = 1 THEN ${VILLAGE_SYNDICATE_ID} ELSE villageId END`,
+      status: sql`CASE WHEN ${userData.status} = "QUEUED" AND ${withoutDungeonReservation()} THEN "AWAKE" ELSE ${userData.status} END`,
+      villageId: sql`CASE WHEN ${userData.isOutlaw} = 1 THEN ${VILLAGE_SYNDICATE_ID} ELSE ${userData.villageId} END`,
     })
     // Exclude the leaver, whose row the primary-key update above already
     // covers; two overlapping updates on UserData deadlock InnoDB.

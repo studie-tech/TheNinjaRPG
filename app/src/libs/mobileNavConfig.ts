@@ -30,9 +30,9 @@ export interface MobileNavOption {
   icon: LucideIcon;
 }
 
-// All available options (village pages + existing defaults)
+// All available options: village pages, then general pages
 export const MOBILE_NAV_OPTIONS: MobileNavOption[] = [
-  // Village pages (from requirements)
+  // Village pages
   { id: "academy", name: "Academy", href: "/academy", icon: GraduationCap },
   { id: "traininggrounds", name: "Training", href: "/traininggrounds", icon: Dumbbell },
   { id: "townhall", name: "Town Hall", href: "/townhall", icon: Landmark },
@@ -47,7 +47,7 @@ export const MOBILE_NAV_OPTIONS: MobileNavOption[] = [
   { id: "bank", name: "Bank", href: "/bank", icon: Banknote },
   { id: "anbu", name: "ANBU", href: "/anbu", icon: Shield },
   { id: "occupation", name: "Occupation", href: "/occupation", icon: Briefcase },
-  // Current default pages (must be included)
+  // General pages (DEFAULT_MOBILE_NAV_CONFIG ids must stay in this list)
   { id: "profile", name: "Profile", href: "/profile", icon: CircleUserRound },
   { id: "inbox", name: "Inbox", href: "/inbox", icon: Inbox },
   { id: "travel", name: "Travel", href: "/travel", icon: Compass },

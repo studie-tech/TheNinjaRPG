@@ -21,9 +21,16 @@ import { clanRouter } from "@/server/api/routers/clan";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { deleteClanBattle, rewardClanBattleVictory } from "@/server/utils/clanBattle";
 import { clanPointConversionSchema } from "@/validators/clan";
-import { insertUsers, insertDefaultAiProfile, insertClans } from "../../../../setup/factories";
-import { beforeStatements, failStatements, pollUntil } from "../../../../setup/statements";
-import { readUser } from "../../../../setup/userReads";
+import {
+  insertClans,
+  insertDefaultAiProfile,
+  insertUsers,
+} from "../../../../setup/factories";
+import {
+  beforeStatements,
+  failStatements,
+  pollUntil,
+} from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -31,6 +38,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { readUser } from "../../../../setup/userReads";
 
 describe("clan conversion input", () => {
   for (const points of [0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 2147483648]) {
@@ -65,15 +73,17 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
       { userId: "outsider", clanId: "c" },
     ]);
     const db = await getTestDatabase();
-    await insertClans(["a", "b", "c"].map((id) => ({
-      id,
-      villageId: "v",
-      leaderId: id === "a" ? "leader" : id === "b" ? "enemy" : "outsider",
-      leaderOrderId: id,
-      coLeader1: id === "a" ? "co" : null,
-      points: 100,
-      bank: 50,
-    })));
+    await insertClans(
+      ["a", "b", "c"].map((id) => ({
+        id,
+        villageId: "v",
+        leaderId: id === "a" ? "leader" : id === "b" ? "enemy" : "outsider",
+        leaderOrderId: id,
+        coLeader1: id === "a" ? "co" : null,
+        points: 100,
+        bank: 50,
+      })),
+    );
     await db.insert(mpvpBattleQueue).values({
       id: "q",
       attackerEntityId: "a",
@@ -94,16 +104,36 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
 
   it.each([
     ["an opposing member", "leader", "enemy", "a", "Not in your clan"],
-    ["a member of a battle the clan is not part of", "outsider", "leader", "c", "Not your clan battle"],
-  ])("rejects kicking %s from a clan battle", async (_, actorId, targetId, clanId, message) => {
-    const db = await getTestDatabase();
-    await db.insert(mpvpBattleUser).values({ id: "e", clanBattleId: "q", userId: "enemy", side: "DEFENDER", slot: 0 });
-    await db.update(userData).set({ status: "QUEUED" }).where(inArray(userData.userId, ["leader", "enemy"]));
-    const caller = await callerFor(clanRouter, actorId);
-    expect(await caller.kickFromClanBattle({ clanBattleId: "q", targetId, clanId })).toMatchObject({ success: false, message });
-    expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(2);
-    expect((await readUser(targetId))?.status).toBe("QUEUED");
-  });
+    [
+      "a member of a battle the clan is not part of",
+      "outsider",
+      "leader",
+      "c",
+      "Not your clan battle",
+    ],
+  ])(
+    "rejects kicking %s from a clan battle",
+    async (_, actorId, targetId, clanId, message) => {
+      const db = await getTestDatabase();
+      await db.insert(mpvpBattleUser).values({
+        id: "e",
+        clanBattleId: "q",
+        userId: "enemy",
+        side: "DEFENDER",
+        slot: 0,
+      });
+      await db
+        .update(userData)
+        .set({ status: "QUEUED" })
+        .where(inArray(userData.userId, ["leader", "enemy"]));
+      const caller = await callerFor(clanRouter, actorId);
+      expect(
+        await caller.kickFromClanBattle({ clanBattleId: "q", targetId, clanId }),
+      ).toMatchObject({ success: false, message });
+      expect(await db.query.mpvpBattleUser.findMany()).toHaveLength(2);
+      expect((await readUser(targetId))?.status).toBe("QUEUED");
+    },
+  );
 
   it("credits only the clan bank and preserves activity points", async () => {
     const caller = await callerFor(clanRouter, "co");
@@ -573,7 +603,8 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
                     : !(await db.query.mpvpBattleQueue.findFirst());
                 await pollUntil(hasFinished);
                 expect(await hasFinished()).toBe(true);
-                if (membershipFirst) throw new Error("Deadlock found when trying to get lock");
+                if (membershipFirst)
+                  throw new Error("Deadlock found when trying to get lock");
               },
             ],
           );
@@ -630,7 +661,9 @@ describeWithDatabase("clan economy and battle lifecycle", () => {
     const guarded = beforeStatements(db, mpvpBattleUser, [
       async () => {
         // Hold the member insert until the parallel lobby insert becomes visible.
-        await pollUntil(async () => Boolean(await db.query.mpvpBattleQueue.findFirst()));
+        await pollUntil(async () =>
+          Boolean(await db.query.mpvpBattleQueue.findFirst()),
+        );
         const lobby = await db.query.mpvpBattleQueue.findFirst();
         expect(lobby).toBeDefined();
         if (!lobby) throw new Error("Challenge lobby was not published");

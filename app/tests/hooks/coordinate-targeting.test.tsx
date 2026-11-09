@@ -1,5 +1,5 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import type { SetValueConfig } from "react-hook-form";
 import * as client from "@/app/_trpc/client";
 import type { Item, Jutsu } from "@/drizzle/schema";
@@ -91,8 +91,18 @@ const refetch = async () => undefined;
 beforeEach(() => {
   vi.clearAllMocks();
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({ item: { getAllNames: { invalidate: async () => undefined }, getVariantNames: { invalidate: async () => undefined } } }),
-    item: { getVariantNames: names, getAllNames: names, getBloodlineItemNames: names, update },
+    useUtils: () => ({
+      item: {
+        getAllNames: { invalidate: async () => undefined },
+        getVariantNames: { invalidate: async () => undefined },
+      },
+    }),
+    item: {
+      getVariantNames: names,
+      getAllNames: names,
+      getBloodlineItemNames: names,
+      update,
+    },
     jutsu: {
       getAllNames: names,
       getReskinParents: names,
@@ -115,12 +125,30 @@ const editors: {
   useEditor: () => {
     form: {
       setValue: {
-        (name: "coordinateTargeting", value: ZodJutsuInput["coordinateTargeting"], options?: SetValueConfig): void;
-        (name: "method", value: "SINGLE" | "ALL" | "COORDINATES", options?: SetValueConfig): void;
-        (name: "methodSize", value: ZodJutsuInput["methodSize"], options?: SetValueConfig): void;
+        (
+          name: "coordinateTargeting",
+          value: ZodJutsuInput["coordinateTargeting"],
+          options?: SetValueConfig,
+        ): void;
+        (
+          name: "method",
+          value: "SINGLE" | "ALL" | "COORDINATES",
+          options?: SetValueConfig,
+        ): void;
+        (
+          name: "methodSize",
+          value: ZodJutsuInput["methodSize"],
+          options?: SetValueConfig,
+        ): void;
       };
-      getValues: { (name: "coordinateTargeting"): ZodJutsuInput["coordinateTargeting"]; (name: "methodSize"): ZodJutsuInput["methodSize"]; };
-      getFieldState: (name: "coordinateTargeting" | "methodSize") => { error?: unknown; isDirty: boolean };
+      getValues: {
+        (name: "coordinateTargeting"): ZodJutsuInput["coordinateTargeting"];
+        (name: "methodSize"): ZodJutsuInput["methodSize"];
+      };
+      getFieldState: (name: "coordinateTargeting" | "methodSize") => {
+        error?: unknown;
+        isDirty: boolean;
+      };
       formState: { isDirty: boolean };
       trigger: () => Promise<boolean>;
     };
@@ -154,39 +182,64 @@ const editors: {
 
 describe("coordinate method drafts", () => {
   for (const { kind, useEditor } of editors) {
-    it.each(["ALL", "COORDINATES"] as const)(`clears hidden invalid ${kind} method sizes when changing to %s`, async (method) => {
-      const { result } = renderHook(() => useEditor());
-      await act(async () => { result.current.form.setValue("method", "SINGLE"); });
-      await act(async () => { result.current.form.setValue("methodSize", { x: Number.NaN, y: 1 }); });
-      await act(async () => { expect(await result.current.form.trigger()).toBe(false); });
-      await act(async () => {
-        result.current.form.setValue("method", method);
-        if (method === "COORDINATES") result.current.form.setValue("coordinateTargeting", coordinateTargeting);
-      });
-      expect(result.current.form.getValues("methodSize")).toBeNull();
-      expect(result.current.formData.some((field) => field.id === "methodSize")).toBe(false);
-      await act(async () => { expect(await result.current.form.trigger()).toBe(true); });
-    });
+    it.each(["ALL", "COORDINATES"] as const)(
+      `clears hidden invalid ${kind} method sizes when changing to %s`,
+      async (method) => {
+        const { result } = renderHook(() => useEditor());
+        await act(async () => {
+          result.current.form.setValue("method", "SINGLE");
+        });
+        await act(async () => {
+          result.current.form.setValue("methodSize", { x: Number.NaN, y: 1 });
+        });
+        await act(async () => {
+          expect(await result.current.form.trigger()).toBe(false);
+        });
+        await act(async () => {
+          result.current.form.setValue("method", method);
+          if (method === "COORDINATES")
+            result.current.form.setValue("coordinateTargeting", coordinateTargeting);
+        });
+        expect(result.current.form.getValues("methodSize")).toBeNull();
+        expect(result.current.formData.some((field) => field.id === "methodSize")).toBe(
+          false,
+        );
+        await act(async () => {
+          expect(await result.current.form.trigger()).toBe(true);
+        });
+      },
+    );
     it(`clears invalid ${kind} coordinates when changing to SINGLE`, async () => {
       const { result } = renderHook(() => useEditor());
       await act(async () => {
         expect(await result.current.form.trigger()).toBe(true);
         result.current.form.setValue("coordinateTargeting", {
           ...coordinateTargeting,
-          coordinates: [coordinateTargeting.coordinates[0]!, coordinateTargeting.coordinates[0]!],
+          coordinates: [
+            coordinateTargeting.coordinates[0]!,
+            coordinateTargeting.coordinates[0]!,
+          ],
         });
         await result.current.submit();
       });
       expect(save).not.toHaveBeenCalled();
-      expect(result.current.form.getFieldState("coordinateTargeting").error).toBeDefined();
+      expect(
+        result.current.form.getFieldState("coordinateTargeting").error,
+      ).toBeDefined();
 
       await act(async () => {
         result.current.form.setValue("method", "SINGLE", { shouldDirty: true });
       });
-      expect(result.current.formData.some((field) => field.id === "coordinateTargeting")).toBe(false);
+      expect(
+        result.current.formData.some((field) => field.id === "coordinateTargeting"),
+      ).toBe(false);
       expect(result.current.form.getValues("coordinateTargeting")).toBeNull();
-      expect(result.current.form.getFieldState("coordinateTargeting").isDirty).toBe(true);
-      expect(result.current.form.getFieldState("coordinateTargeting").error).toBeUndefined();
+      expect(result.current.form.getFieldState("coordinateTargeting").isDirty).toBe(
+        true,
+      );
+      expect(
+        result.current.form.getFieldState("coordinateTargeting").error,
+      ).toBeUndefined();
       await act(async () => {
         await result.current.submit();
       });
@@ -206,15 +259,23 @@ describe("coordinate method drafts", () => {
         result.current.form.setValue("method", "SINGLE", { shouldDirty: true });
       });
       expect(result.current.form.getValues("coordinateTargeting")).toBeNull();
-      expect(result.current.form.getFieldState("coordinateTargeting").isDirty).toBe(true);
+      expect(result.current.form.getFieldState("coordinateTargeting").isDirty).toBe(
+        true,
+      );
       expect(result.current.isDirty).toBe(true);
       await act(async () => {
         result.current.form.setValue("method", "COORDINATES", { shouldDirty: true });
-        result.current.form.setValue("coordinateTargeting", coordinateTargeting, { shouldDirty: true });
+        result.current.form.setValue("coordinateTargeting", coordinateTargeting, {
+          shouldDirty: true,
+        });
       });
-      expect(result.current.form.getFieldState("coordinateTargeting").isDirty).toBe(false);
+      expect(result.current.form.getFieldState("coordinateTargeting").isDirty).toBe(
+        false,
+      );
       expect(result.current.isDirty).toBe(false);
-      await act(async () => { await result.current.submit(); });
+      await act(async () => {
+        await result.current.submit();
+      });
       expect(save).not.toHaveBeenCalled();
     });
 
@@ -228,8 +289,12 @@ describe("coordinate method drafts", () => {
         await result.current.submit();
       });
       expect(save).not.toHaveBeenCalled();
-      expect(result.current.formData.some((field) => field.id === "coordinateTargeting")).toBe(true);
-      expect(result.current.form.getFieldState("coordinateTargeting").error).toBeDefined();
+      expect(
+        result.current.formData.some((field) => field.id === "coordinateTargeting"),
+      ).toBe(true);
+      expect(
+        result.current.form.getFieldState("coordinateTargeting").error,
+      ).toBeDefined();
       await act(async () => {
         result.current.form.setValue("coordinateTargeting", {
           ...coordinateTargeting,

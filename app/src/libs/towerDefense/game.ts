@@ -1,19 +1,51 @@
 /**
  * Tower Defense Game Utilities
  *
- * This file contains client-side utilities for rendering and seed generation.
- * All game logic (spawning, combat, movement) is handled by SpacetimeDB.
+ * Hex geometry, projectile, direction and upgrade-cost helpers shared by the client and
+ * the tower-defense router. All game logic (spawning, combat, movement) is handled by
+ * SpacetimeDB.
  */
 
-import { TD_PROJECTILE_SPEED, type TDEnemyDirection } from "@/drizzle/constants";
+import {
+  TD_CRIT_DAMAGE_MULTIPLIER,
+  TD_PROJECTILE_SPEED,
+  type TDEnemyDirection,
+} from "@/drizzle/constants";
 import { oddQHexDistance } from "@/libs/hexgrid";
-import type { HexPosition, SpriteDirection } from "@/validators/towerDefense";
+import type {
+  HexPosition,
+  SpriteDirection,
+  TowerDefenseAbility,
+  TowerDefenseProjectile,
+} from "@/validators/towerDefense";
 
 /**
  * Calculate axial distance between two hexes.
  */
 export const calculateHexDistance = (a: HexPosition, b: HexPosition): number =>
   oddQHexDistance(a.col, a.row, b.col, b.row);
+
+/**
+ * Damage a landed projectile shows: its base damage plus the ability's per-tile bonus for the
+ * distance flown, multiplied on a critical roll. SpacetimeDB applies the authoritative hit.
+ */
+export const calculateProjectileDamage = (
+  projectile: Pick<TowerDefenseProjectile, "origin" | "target" | "damage" | "critRoll">,
+  ability: Pick<TowerDefenseAbility, "critChance" | "damagePerTile"> | undefined,
+) => {
+  const distanceBonus = Math.floor(
+    calculateHexDistance(projectile.origin, projectile.target) *
+      (ability?.damagePerTile ?? 0),
+  );
+  const critical =
+    projectile.critRoll !== undefined &&
+    projectile.critRoll < (ability?.critChance ?? 0);
+  return {
+    value:
+      (projectile.damage + distanceBonus) * (critical ? TD_CRIT_DAMAGE_MULTIPLIER : 1),
+    critical,
+  };
+};
 
 /**
  * Interpolate a projectile's flight, 0 to 1, from its local spawn time. The server only
@@ -96,7 +128,7 @@ export const calculateEnemyDirection = (
 };
 
 // ============================================
-// Seed Generation
+// Upgrade Costs
 // ============================================
 
 /**

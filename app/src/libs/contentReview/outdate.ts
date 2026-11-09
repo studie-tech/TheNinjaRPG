@@ -10,7 +10,8 @@ import {
   updateContentProposalForReinstateProposalsFor,
 } from "@/queries/contentReview";
 import type { DrizzleClient } from "@/server/db";
-import { type ContentEntity, entityKey, entityLabel, loadEntities } from "./entities";
+import { type ContentEntity, entityKey, loadEntities } from "./entities";
+import { ENTITY_LABELS } from "./labels";
 import { MISSING_VERSION } from "./version";
 
 /**
@@ -49,14 +50,14 @@ export const editedReason = (
   entityType: ContentProposalEntityType,
   name: string,
   username: string,
-) => `${entityLabel(entityType)} ${name} was edited by ${username}`;
+) => `${ENTITY_LABELS[entityType]} ${name} was edited by ${username}`;
 
 /** Reason shown for a deletion made through one of the content editors. */
 export const deletedReason = (
   entityType: ContentProposalEntityType,
   name: string,
   username: string,
-) => `${entityLabel(entityType)} ${name} was deleted by ${username}`;
+) => `${ENTITY_LABELS[entityType]} ${name} was deleted by ${username}`;
 
 /**
  * Return to the queue the suggestions an undone approval outdated. Once its writes are rolled
@@ -136,7 +137,7 @@ export const refreshProposalFreshness = async (
       const entity = entities.get(entityKey(basis.entityType, basis.entityId));
       const version = entity?.version ?? MISSING_VERSION;
       if (version === basis.version) continue;
-      const label = entityLabel(basis.entityType);
+      const label = ENTITY_LABELS[basis.entityType];
       add(
         entity
           ? `${label} ${entity.name} changed since the suggestion was made`

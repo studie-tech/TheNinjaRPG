@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import {
@@ -40,6 +41,7 @@ const battleTypeLabels: Record<BattleType, string> = {
 };
 
 export default function ColosseumPage() {
+  const router = useRouter();
   const [selectedType, setSelectedType] = useState<BattleType>("RANKED_PVP");
   const { data: battles, isLoading } = api.combat.listOngoingBattles.useQuery(
     { battleType: selectedType },
@@ -48,11 +50,7 @@ export default function ColosseumPage() {
 
   const tableData =
     battles?.map((battle) => {
-      const users = battle?.users.map((u) => ({
-        userId: u.userId,
-        username: u.username,
-        avatar: u.avatar,
-      }));
+      const users = battle.users;
       return {
         id: battle.id,
         battleType: battleTypeLabels[battle.battleType],
@@ -155,9 +153,7 @@ export default function ColosseumPage() {
             buttons={[
               {
                 label: "Spectate",
-                onClick: (row) => {
-                  window.location.href = `/battlelog/${row.id}`;
-                },
+                onClick: (row) => router.push(`/battlelog/${row.id}`),
               },
             ]}
           />

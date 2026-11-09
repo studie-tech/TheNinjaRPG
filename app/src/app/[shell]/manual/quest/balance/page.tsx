@@ -39,8 +39,6 @@ const QuestRewardsBalance: React.FC<QuestRewardsBalanceProps> = ({ navTabs }) =>
   // Query
   const { data, isPending } = api.data.getQuestRewardStatistics.useQuery(filter);
 
-  // Ranks for x-axis
-
   // Charts
   const scatterRef = useRef<HTMLCanvasElement>(null);
 

@@ -3,7 +3,10 @@ import {
   ANBU_HOSPITAL_DISCOUNT_PERC,
   HOSPITAL_BASE_HEAL_SECONDS,
   HOSPITAL_RYO_PER_100_HP,
+  MEDNIN_BASE_CHAKRA_FACTOR,
+  MEDNIN_CHAKRA_FACTOR_REDUCTION,
   MEDNIN_CHAKRA_REDUCTION_PER_IMPROVEMENT,
+  MEDNIN_COMBAT_HEAL_PERC,
   MEDNIN_EXP_CAP,
   MEDNIN_EXP_PER_IMPROVEMENT,
   MEDNIN_HEAL_TO_EXP,
@@ -111,35 +114,24 @@ export const calcMedninRank = (healer?: Partial<Healer>): MEDNIN_RANK => {
  * @returns The calculated healing factor.
  */
 export const calcUserHealFactor = (healer: Healer) => {
-  const base = 0.5;
-
-  switch (calcMedninRank(healer)) {
-    case "NONE":
-      return 0;
-    case "NOVICE":
-      return base - 0.05;
-    case "APPRENTICE":
-      return base - 0.1;
-    case "MASTER":
-      return base - 0.25;
-    case "LEGENDARY": {
-      let factor = base - 0.35;
-
-      // Apply progressive chakra cost reduction for experience above legendary
-      if (healer.medicalExperience > MEDNIN_REQUIRED_EXP.LEGENDARY) {
-        const expAboveLegendary = Math.min(
-          healer.medicalExperience - MEDNIN_REQUIRED_EXP.LEGENDARY,
-          MEDNIN_EXP_CAP - MEDNIN_REQUIRED_EXP.LEGENDARY,
-        );
-        const additionalReduction =
-          Math.floor(expAboveLegendary / MEDNIN_EXP_PER_IMPROVEMENT) *
-          MEDNIN_CHAKRA_REDUCTION_PER_IMPROVEMENT;
-        factor = Math.max(MEDNIN_MIN_CHAKRA_FACTOR, factor - additionalReduction);
-      }
-
-      return factor;
-    }
+  const rank = calcMedninRank(healer);
+  if (rank === "NONE") return 0;
+  const factor = MEDNIN_BASE_CHAKRA_FACTOR - MEDNIN_CHAKRA_FACTOR_REDUCTION[rank];
+  if (
+    rank !== "LEGENDARY" ||
+    healer.medicalExperience <= MEDNIN_REQUIRED_EXP.LEGENDARY
+  ) {
+    return factor;
   }
+  // Apply progressive chakra cost reduction for experience above legendary
+  const expAboveLegendary = Math.min(
+    healer.medicalExperience - MEDNIN_REQUIRED_EXP.LEGENDARY,
+    MEDNIN_EXP_CAP - MEDNIN_REQUIRED_EXP.LEGENDARY,
+  );
+  const additionalReduction =
+    Math.floor(expAboveLegendary / MEDNIN_EXP_PER_IMPROVEMENT) *
+    MEDNIN_CHAKRA_REDUCTION_PER_IMPROVEMENT;
+  return Math.max(MEDNIN_MIN_CHAKRA_FACTOR, factor - additionalReduction);
 };
 
 /**
@@ -147,19 +139,8 @@ export const calcUserHealFactor = (healer: Healer) => {
  * @param healer - The healer's user data.
  * @returns The combat heal percentage.
  */
-export const calcCombatHealPercentage = (healer?: Partial<Healer>) => {
-  switch (calcMedninRank(healer)) {
-    case "NONE":
-    case "NOVICE":
-      return 30;
-    case "APPRENTICE":
-      return 40;
-    case "MASTER":
-      return 50;
-    case "LEGENDARY":
-      return 60;
-  }
-};
+export const calcCombatHealPercentage = (healer?: Partial<Healer>) =>
+  MEDNIN_COMBAT_HEAL_PERC[calcMedninRank(healer)];
 
 /**
  * Calculates the pools that a mednin can heal.

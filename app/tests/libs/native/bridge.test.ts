@@ -1,4 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import {
+  addNativeListener,
+  getPlatform,
+  invoke,
+  invokeSafe,
+  isNative,
+  NativeBridgeError,
+} from "@/libs/native/bridge";
+import * as widgets from "@/libs/native/widgetBridge";
 
 /**
  * The bridge is the one place in `libs/native` that touches `window`, so these assert the
@@ -11,48 +20,38 @@ type TestWindow = { Capacitor?: unknown };
 
 const setWindow = (value: TestWindow | undefined) => {
   if (value === undefined) {
-    delete (globalThis as { window?: unknown }).window;
+    Reflect.deleteProperty(globalThis, "window");
     return;
   }
-  (globalThis as { window?: unknown }).window = value;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    writable: true,
+    value,
+  });
 };
 
-// Put the realm back exactly as each test found it, rather than leaving it cleared. These
-// files share one process and must return the DOM globals to the next suite.
-let saved: { present: boolean; value: unknown };
+// The preload installs jsdom's `window` as a configurable, non-writable property, so tests
+// redefine it and each test restores the captured descriptor for the next suite.
+let saved: PropertyDescriptor | undefined;
 
 beforeEach(() => {
-  saved = {
-    present: "window" in globalThis,
-    value: (globalThis as { window?: unknown }).window,
-  };
+  saved = Object.getOwnPropertyDescriptor(globalThis, "window");
 });
 
 afterEach(() => {
-  if (saved.present) {
-    // Assignment, not defineProperty: the property these tests overwrite is an ordinary
-    // writable one, and restoring a captured descriptor would freeze it for the next test.
-    (globalThis as { window?: unknown }).window = saved.value;
-  } else {
-    delete (globalThis as { window?: unknown }).window;
-  }
+  if (saved) Object.defineProperty(globalThis, "window", saved);
+  else Reflect.deleteProperty(globalThis, "window");
 });
 
-// Imported fresh per test: the module reads `window` lazily, so no cache busting is
-// needed, but each test still starts from a known global.
-const load = () => import("@/libs/native/bridge");
-
 describe("isNative", () => {
-  it("is false during SSR and in an ordinary browser", async () => {
-    const { isNative } = await load();
+  it("is false during SSR and in an ordinary browser", () => {
     setWindow(undefined);
     expect(isNative()).toBe(false);
     setWindow({});
     expect(isNative()).toBe(false);
   });
 
-  it("is true only when the shell says so", async () => {
-    const { isNative } = await load();
+  it("is true only when the shell says so", () => {
     setWindow({ Capacitor: { isNativePlatform: () => true } });
     expect(isNative()).toBe(true);
     setWindow({ Capacitor: { isNativePlatform: () => false } });
@@ -61,8 +60,7 @@ describe("isNative", () => {
 });
 
 describe("getPlatform", () => {
-  it("reports what the shell reports, and web for anything else", async () => {
-    const { getPlatform } = await load();
+  it("reports what the shell reports, and web for anything else", () => {
     setWindow({ Capacitor: { getPlatform: () => "ios" } });
     expect(getPlatform()).toBe("ios");
     setWindow({ Capacitor: { getPlatform: () => "android" } });
@@ -78,13 +76,11 @@ describe("getPlatform", () => {
 
 describe("invoke", () => {
   it("rejects off-device rather than silently doing nothing", async () => {
-    const { invoke, NativeBridgeError } = await load();
     setWindow(undefined);
     await expect(invoke("Haptics", "impact")).rejects.toBeInstanceOf(NativeBridgeError);
   });
 
   it("rejects when the shell predates the plugin", async () => {
-    const { invoke } = await load();
     setWindow({
       Capacitor: { isNativePlatform: () => true, Plugins: { Haptics: {} } },
     });
@@ -92,7 +88,6 @@ describe("invoke", () => {
   });
 
   it("passes options through and returns the plugin's result", async () => {
-    const { invoke } = await load();
     let received: unknown;
     setWindow({
       Capacitor: {
@@ -116,7 +111,6 @@ describe("invoke", () => {
 
 describe("invokeSafe", () => {
   it("resolves to undefined instead of throwing, so call sites need no guard", async () => {
-    const { invokeSafe } = await load();
     setWindow(undefined);
     expect(await invokeSafe("Haptics", "impact")).toBeUndefined();
 
@@ -153,7 +147,6 @@ describe("widget ownership mutations", () => {
         },
       },
     });
-    const widgets = await import("@/libs/native/widgetBridge");
 
     await expect(widgets.clear()).rejects.toThrow("clear failed");
     await expect(
@@ -175,7 +168,6 @@ describe("widget ownership mutations", () => {
 
 describe("addNativeListener", () => {
   it("returns a callable unsubscribe even when nothing was attached", async () => {
-    const { addNativeListener } = await load();
     setWindow(undefined);
     const unsubscribe = addNativeListener("App", "backButton", () => undefined);
     expect(await unsubscribe.ready).toBe(false);
@@ -183,7 +175,6 @@ describe("addNativeListener", () => {
   });
 
   it("swallows an addListener that rejects", async () => {
-    const { addNativeListener } = await load();
     setWindow({
       Capacitor: {
         isNativePlatform: () => true,
@@ -200,7 +191,6 @@ describe("addNativeListener", () => {
   });
 
   it("removes the listener, including when unsubscribed before it attached", async () => {
-    const { addNativeListener } = await load();
     let removed = 0;
     setWindow({
       Capacitor: {

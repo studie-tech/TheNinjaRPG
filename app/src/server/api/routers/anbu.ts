@@ -11,6 +11,7 @@ import {
   ANBU_MAX_ESPIONAGE_LEVEL,
   ANBU_MAX_STEALTH_LEVEL,
   ANBU_MEMBER_RANK_REQUIREMENT,
+  ANBU_REQUEST_EXPIRY_SECS,
   ANBU_STEALTH_UPGRADE_COST,
   type UserRequestState,
 } from "@/drizzle/constants";
@@ -76,10 +77,12 @@ import { secondsFromDate } from "@/utils/time";
 import { getEffectiveStructureLevel } from "@/utils/village";
 import {
   anbuCreateSchema,
-  anbuEditSchema,
+  anbuRenameSchema,
   strictAnbuNameField,
 } from "@/validators/anbu";
 import { idSchema } from "@/validators/misc";
+
+const anbuEditSchema = anbuRenameSchema.extend({ squadId: z.string() });
 
 const pusher = getServerPusher();
 
@@ -549,7 +552,7 @@ export const anbuRouter = createTRPCRouter({
       }
 
       if (!success) {
-        return { success: false, message: "Espionage mission failed" };
+        return errorResponse("Espionage mission failed");
       }
 
       // Gather intelligence on target village
@@ -648,19 +651,25 @@ export async function getAnbuRequests(args: {
       isElderOfSquadVillage ||
       canEditClans(user.role)
     ) {
-      return fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, undefined, squadId);
+      return fetchRequests(
+        ctx.drizzle,
+        ["ANBU"],
+        ANBU_REQUEST_EXPIRY_SECS,
+        undefined,
+        squadId,
+      );
     }
     if (user.anbuId) return [];
     const ownRequests = await fetchRequests(
       ctx.drizzle,
       ["ANBU"],
-      3600 * 12,
+      ANBU_REQUEST_EXPIRY_SECS,
       ctx.userId,
       squadId,
     );
     return ownRequests.filter((request) => request.senderId === ctx.userId);
   }
-  return fetchRequests(ctx.drizzle, ["ANBU"], 3600 * 12, ctx.userId);
+  return fetchRequests(ctx.drizzle, ["ANBU"], ANBU_REQUEST_EXPIRY_SECS, ctx.userId);
 }
 
 /**

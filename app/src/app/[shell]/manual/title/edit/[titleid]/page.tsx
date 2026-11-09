@@ -39,11 +39,11 @@ export default function TitleEdit({
       </p>
     );
   if (isPending) return <Loader explanation="Loading title" />;
-  return <SingleTitleEdit title={data} refetch={() => void refetch()} />;
+  return <SingleTitleEdit title={data} />;
 }
 
 /** Edit future award bonuses without changing snapshots already collected by players. */
-const SingleTitleEdit = ({ title, refetch }: { title: Title; refetch: () => void }) => {
+const SingleTitleEdit = ({ title }: { title: Title }) => {
   const form = useForm<TitleData>({
     values: title,
     resolver: zodResolver(TitleValidator),
@@ -55,10 +55,7 @@ const SingleTitleEdit = ({ title, refetch }: { title: Title; refetch: () => void
   const save = api.title.update.useMutation({
     onSuccess: async (result) => {
       showMutationToast(result);
-      if (result.success) {
-        refetch();
-        await utils.title.invalidate();
-      }
+      if (result.success) await utils.title.invalidate();
     },
   });
   // Custom effect controls participate in the shared form's dirty and validation lifecycle.
@@ -206,6 +203,7 @@ const SingleTitleEdit = ({ title, refetch }: { title: Title; refetch: () => void
         entityType="TITLE"
         entityId={title.id}
         getData={() => form.getValues()}
+        label="Suggest instead"
       />
     </ContentBox>
   );

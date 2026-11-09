@@ -48,6 +48,7 @@ import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import { isEquippableUserItem, isImbuing, userItemDisplay } from "@/libs/item";
+import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -63,6 +64,7 @@ export function AuctionOffers({
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
   const [onlyMine, setOnlyMine] = useState(false);
+  const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const query = api.auction.getAuctionOffers.useInfiniteQuery(
     { offerType, status, search: debouncedSearch, onlyMine, limit: 10 },
     {
@@ -83,6 +85,11 @@ export function AuctionOffers({
   });
   const offers = query.data?.pages.flatMap((page) => page.data) ?? [];
   const isUpdatingFilters = search !== debouncedSearch || query.isPlaceholderData;
+  useInfinitePagination({
+    fetchNextPage: query.fetchNextPage,
+    hasNextPage: query.hasNextPage,
+    lastElement: isUpdatingFilters ? null : lastElement,
+  });
   return (
     <div>
       <div className="flex flex-wrap items-end gap-3 border-b py-3">
@@ -146,15 +153,8 @@ export function AuctionOffers({
             ))}
           </div>
         )}
-        {query.hasNextPage && (
-          <Button
-            variant="outline"
-            disabled={query.isFetching || isUpdatingFilters}
-            onClick={() => void query.fetchNextPage()}
-          >
-            Load more
-          </Button>
-        )}
+        {query.hasNextPage && <div ref={setLastElement} className="h-4" />}
+        {query.isFetchingNextPage && <Loader explanation="Loading more offers…" />}
       </div>
     </div>
   );

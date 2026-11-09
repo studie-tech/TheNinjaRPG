@@ -1,7 +1,7 @@
-import { rateLimitResponse } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
+import { GET as authorizeDiscord } from "@/app/api/discord/authorize/route";
 import { DISCORD_INDEFINITE_SANCTION_DAYS } from "@/drizzle/constants";
 import {
   actionLog,
@@ -11,22 +11,21 @@ import {
   userData,
   userReport,
 } from "@/drizzle/schema";
-import { GET as authorizeDiscord } from "@/app/api/discord/authorize/route";
 import { DISCORD_RELINK_REQUIRED, needsDiscordRelink } from "@/libs/discordLink";
 import { discordRouter } from "@/server/api/routers/discord";
 import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
 import { getDiscordConfig } from "@/server/utils/discord/config";
+import {
+  completeDiscordLink,
+  exchangeDiscordCode,
+  resolveClerkDiscordGrant,
+} from "@/server/utils/discord/linking";
 import {
   archiveDiscordLink,
   discordTombstoneHash,
   insertDiscordLink,
   loadLinkCandidate,
 } from "@/server/utils/discord/links";
-import {
-  completeDiscordLink,
-  exchangeDiscordCode,
-  resolveClerkDiscordGrant,
-} from "@/server/utils/discord/linking";
 import { encryptToken } from "@/server/utils/discord/secrets";
 import {
   fetchLinksNeedingSync,
@@ -34,7 +33,9 @@ import {
   syncDiscordMember,
 } from "@/server/utils/discord/sync";
 import { recordSanctionTombstone } from "@/server/utils/sanctionTombstone";
+import { restoreEnvAfterEach } from "../../../setup/env";
 import { insertUsers } from "../../../setup/factories";
+import { rateLimitResponse } from "../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,
@@ -42,7 +43,6 @@ import {
   indexColumns,
   resetTables,
 } from "../../../setup/testDatabase";
-import { restoreEnvAfterEach } from "../../../setup/env";
 
 const DAY = 86_400_000;
 const GUILD = "2222222222222222222";
@@ -64,7 +64,6 @@ const ENV = {
   DISCORD_TOKEN_ENCRYPTION_KEY: KEY.toString("base64"),
   NEXT_PUBLIC_BASE_URL: "http://localhost:3000",
 };
-const originalFetch = globalThis.fetch;
 
 type Call = {
   method: string;
@@ -85,51 +84,57 @@ let authorization = {
 
 /** A small fake of the Discord endpoints the feature calls. */
 const fakeDiscord = (user = { id: OLD_DISCORD, username: "naruto_fan" }) => {
-  globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-    // Public procedures (getStatus) pass the rate limiter: let every call through.
-    const rateLimit = rateLimitResponse(init);
-    if (rateLimit) return rateLimit;
-    const url = new URL(String(input));
-    const path = url.pathname.replace("/api/v10", "");
-    const method = init?.method ?? "GET";
-    const headers = (init?.headers ?? {}) as Record<string, string>;
-    const body =
-      typeof init?.body === "string" && headers["Content-Type"] === "application/json"
-        ? JSON.parse(init.body)
-        : init?.body
-          ? Object.fromEntries(new URLSearchParams(String(init.body)))
-          : null;
-    calls.push({
-      method,
-      path,
-      body,
-      reason: headers["X-Audit-Log-Reason"]
-        ? decodeURIComponent(headers["X-Audit-Log-Reason"])
-        : null,
-      auth: headers.Authorization ?? null,
-    });
-    const ok = (data: unknown, status = 200) =>
-      new Response(data === null ? null : JSON.stringify(data), { status });
-    if (path === "/oauth2/token")
-      return ok({
-        access_token: "access-1",
-        refresh_token: "refresh-1",
-        expires_in: 604800,
-        scope: "identify role_connections.write guilds.join",
-        token_type: "Bearer",
+  vi.spyOn(globalThis, "fetch").mockImplementation(
+    vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      // Public procedures (getStatus) pass the rate limiter: let every call through.
+      const rateLimit = rateLimitResponse(init);
+      if (rateLimit) return rateLimit;
+      const url = new URL(String(input));
+      const path = url.pathname.replace("/api/v10", "");
+      const method = init?.method ?? "GET";
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      const body =
+        typeof init?.body === "string" && headers["Content-Type"] === "application/json"
+          ? JSON.parse(init.body)
+          : init?.body
+            ? Object.fromEntries(new URLSearchParams(String(init.body)))
+            : null;
+      calls.push({
+        method,
+        path,
+        body,
+        reason: headers["X-Audit-Log-Reason"]
+          ? decodeURIComponent(headers["X-Audit-Log-Reason"])
+          : null,
+        auth: headers.Authorization ?? null,
       });
-    if (path === "/oauth2/token/revoke") return ok({});
-    if (path === "/oauth2/@me") return ok(authorization);
-    if (path === "/users/@me") return ok(user);
-    if (path.endsWith("/role-connection")) return ok({});
-    if (path.startsWith(`/guilds/${GUILD}/members/`) && method === "GET")
-      return guildMember
-        ? ok(guildMember)
-        : ok({ code: 10007, message: "Unknown Member" }, 404);
-    if (path.startsWith(`/guilds/${GUILD}/members/`) && method === "PUT" && !path.includes("/roles/"))
-      return ok({ roles: [] }, 201);
-    return ok(null, 204);
-  }) as unknown as typeof fetch;
+      const ok = (data: unknown, status = 200) =>
+        new Response(data === null ? null : JSON.stringify(data), { status });
+      if (path === "/oauth2/token")
+        return ok({
+          access_token: "access-1",
+          refresh_token: "refresh-1",
+          expires_in: 604800,
+          scope: "identify role_connections.write guilds.join",
+          token_type: "Bearer",
+        });
+      if (path === "/oauth2/token/revoke") return ok({});
+      if (path === "/oauth2/@me") return ok(authorization);
+      if (path === "/users/@me") return ok(user);
+      if (path.endsWith("/role-connection")) return ok({});
+      if (path.startsWith(`/guilds/${GUILD}/members/`) && method === "GET")
+        return guildMember
+          ? ok(guildMember)
+          : ok({ code: 10007, message: "Unknown Member" }, 404);
+      if (
+        path.startsWith(`/guilds/${GUILD}/members/`) &&
+        method === "PUT" &&
+        !path.includes("/roles/")
+      )
+        return ok({ roles: [] }, 201);
+      return ok(null, 204);
+    }) as unknown as typeof fetch,
+  );
 };
 
 const linkValues = (userId: string, discordId: string) => ({
@@ -153,7 +158,11 @@ const linkThroughOAuth = async (
   if (!config) throw new Error("config");
   const grant = await exchangeDiscordCode(config, "code-1");
   if (!grant) throw new Error("grant");
-  return completeDiscordLink(await getTestDatabase(), config, { userId, grant, identity });
+  return completeDiscordLink(await getTestDatabase(), config, {
+    userId,
+    grant,
+    identity,
+  });
 };
 
 type ClerkToken = { token: string; scopes: string[]; externalAccountId: string };
@@ -180,7 +189,13 @@ const fakeClerk = (
         primaryEmailAddressId: null,
         emailAddresses: [],
         externalAccounts: discordId
-          ? [{ id: "eac_discord", provider: "oauth_discord", providerUserId: discordId }]
+          ? [
+              {
+                id: "eac_discord",
+                provider: "oauth_discord",
+                providerUserId: discordId,
+              },
+            ]
           : [],
       })),
       getUserOauthAccessToken,
@@ -251,7 +266,6 @@ describeWithDatabase("Discord links (SQL)", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    globalThis.fetch = originalFetch;
   });
 
   it("keeps one link per character and at most two per Discord account", async () => {
@@ -260,23 +274,36 @@ describeWithDatabase("Discord links (SQL)", () => {
       columns: ["userId"],
       unique: true,
     });
-    expect(await indexColumns("DiscordLink", "DiscordLink_discordId_slot_key")).toEqual({
-      columns: ["discordId", "slot"],
-      unique: true,
-    });
-    expect(await insertDiscordLink(database, linkValues("user-a", OLD_DISCORD))).toBe(true);
+    expect(await indexColumns("DiscordLink", "DiscordLink_discordId_slot_key")).toEqual(
+      {
+        columns: ["discordId", "slot"],
+        unique: true,
+      },
+    );
+    expect(await insertDiscordLink(database, linkValues("user-a", OLD_DISCORD))).toBe(
+      true,
+    );
     expect(
       await insertDiscordLink(database, {
         ...linkValues("user-a", OTHER_DISCORD),
         id: "second-link-for-user",
       }),
     ).toBe(false);
-    // A link written without a slot (as before slots existed) takes slot 1.
-    expect(await insertDiscordLink(database, linkValues("user-b", OLD_DISCORD))).toBe(false);
+    // A link written without a slot takes slot 1.
+    expect(await insertDiscordLink(database, linkValues("user-b", OLD_DISCORD))).toBe(
+      false,
+    );
     expect(
-      await insertDiscordLink(database, { ...linkValues("user-b", OLD_DISCORD), slot: 2 }),
+      await insertDiscordLink(database, {
+        ...linkValues("user-b", OLD_DISCORD),
+        slot: 2,
+      }),
     ).toBe(true);
-    expect((await database.query.discordLink.findFirst({ where: eq(discordLink.userId, "user-a") }))).toMatchObject({ slot: 1, isPrimary: true });
+    expect(
+      await database.query.discordLink.findFirst({
+        where: eq(discordLink.userId, "user-a"),
+      }),
+    ).toMatchObject({ slot: 1, isPrimary: true });
   });
 
   it("lets exactly one of two concurrent links for the same Discord account win", async () => {
@@ -320,7 +347,11 @@ describeWithDatabase("Discord links (SQL)", () => {
       sanctionEndsAt: new Date(Date.now() + 100 * DAY),
       accountHashes: [discordTombstoneHash(OLD_DISCORD)],
     });
-    await addSanction("user-a", "SILENCE_ACTIVATED", DISCORD_INDEFINITE_SANCTION_DAYS + 30);
+    await addSanction(
+      "user-a",
+      "SILENCE_ACTIVATED",
+      DISCORD_INDEFINITE_SANCTION_DAYS + 30,
+    );
     const { candidate } = await loadLinkCandidate(database, {
       userId: "user-a",
       discordId: OLD_DISCORD,
@@ -366,9 +397,16 @@ describeWithDatabase("Discord links (SQL)", () => {
       metadata: { linked: "1", level: "20" },
     });
     expect(
-      calls.find((call) => call.method === "PUT" && call.path === `/guilds/${GUILD}/members/${OLD_DISCORD}`)
-        ?.body,
-    ).toEqual({ access_token: "access-1", nick: "Alpha", roles: [VERIFIED_ROLE, VILLAGE_ROLE] });
+      calls.find(
+        (call) =>
+          call.method === "PUT" &&
+          call.path === `/guilds/${GUILD}/members/${OLD_DISCORD}`,
+      )?.body,
+    ).toEqual({
+      access_token: "access-1",
+      nick: "Alpha",
+      roles: [VERIFIED_ROLE, VILLAGE_ROLE],
+    });
     const logs = await database.query.actionLog.findMany({
       where: eq(actionLog.tableName, "discordLink"),
     });
@@ -387,8 +425,15 @@ describeWithDatabase("Discord links (SQL)", () => {
     const outcome = await linkThroughOAuth("user-a", clerkIdentity(OLD_DISCORD));
     expect(outcome).toEqual({ result: "linked_second" });
     expect(
-      await database.query.discordLink.findFirst({ where: eq(discordLink.userId, "user-a") }),
-    ).toMatchObject({ slot: 2, isPrimary: false, syncError: null, syncedUsername: "Bravo" });
+      await database.query.discordLink.findFirst({
+        where: eq(discordLink.userId, "user-a"),
+      }),
+    ).toMatchObject({
+      slot: 2,
+      isPrimary: false,
+      syncError: null,
+      syncedUsername: "Bravo",
+    });
     // The account keeps showing the primary: Bravo's metadata, nickname and roles.
     expect(calls.find((call) => call.path.endsWith("/role-connection"))).toMatchObject({
       auth: "Bearer access-0",
@@ -406,7 +451,9 @@ describeWithDatabase("Discord links (SQL)", () => {
       ]),
     );
     // A Discord login shared with the declared sibling is no abuse flag.
-    expect(logs.some((log) => log.relatedMsg?.startsWith("Discord link flag"))).toBe(false);
+    expect(logs.some((log) => log.relatedMsg?.startsWith("Discord link flag"))).toBe(
+      false,
+    );
     const status = await (await callerFor(discordRouter, "user-a")).getStatus();
     expect(status.link).toMatchObject({ isPrimary: false, sibling: "Bravo" });
   });
@@ -415,7 +462,11 @@ describeWithDatabase("Discord links (SQL)", () => {
     const database = await getTestDatabase();
     await insertUsers([{ userId: "user-c", username: "Charlie", level: 5 }]);
     await insertDiscordLink(database, linkValues("user-b", OLD_DISCORD));
-    await insertDiscordLink(database, { ...linkValues("user-c", OLD_DISCORD), slot: 2, isPrimary: false });
+    await insertDiscordLink(database, {
+      ...linkValues("user-c", OLD_DISCORD),
+      slot: 2,
+      isPrimary: false,
+    });
     const outcome = await linkThroughOAuth("user-a", null);
     expect(outcome).toEqual({ result: "discord_full", hint: "B***o, C*****e" });
     expect(calls.some((call) => call.path === "/oauth2/token/revoke")).toBe(false);
@@ -437,13 +488,19 @@ describeWithDatabase("Discord links (SQL)", () => {
     ]);
     const links = await database.query.discordLink.findMany();
     expect(links).toHaveLength(2);
-    expect(links.filter((link) => link.isPrimary).map((link) => link.userId)).toEqual(["user-b"]);
+    expect(links.filter((link) => link.isPrimary).map((link) => link.userId)).toEqual([
+      "user-b",
+    ]);
   });
 
   it("lets either character become primary and syncs the account to it", async () => {
     const database = await getTestDatabase();
     await insertDiscordLink(database, linkValues("user-b", OLD_DISCORD));
-    await insertDiscordLink(database, { ...linkValues("user-a", OLD_DISCORD), slot: 2, isPrimary: false });
+    await insertDiscordLink(database, {
+      ...linkValues("user-a", OLD_DISCORD),
+      slot: 2,
+      isPrimary: false,
+    });
     await syncDiscordMember(database, "user-b", { force: true });
     expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(0);
     guildMember = { nick: "Bravo", roles: [VERIFIED_ROLE] };
@@ -454,44 +511,73 @@ describeWithDatabase("Discord links (SQL)", () => {
     const links = await database.query.discordLink.findMany();
     expect(links.find((link) => link.userId === "user-a")?.isPrimary).toBe(true);
     expect(links.find((link) => link.userId === "user-b")?.isPrimary).toBe(false);
-    expect((await (await callerFor(discordRouter, "user-b")).getStatus()).link).toMatchObject({
+    expect(
+      (await (await callerFor(discordRouter, "user-b")).getStatus()).link,
+    ).toMatchObject({
       isPrimary: false,
       sibling: "Alpha",
     });
     // setPrimary schedules the sync; outside a request it runs right away in the background.
-    for (let i = 0; i < 50 && (await fetchLinksNeedingSync(database, 10)).length > 0; i++)
+    for (
+      let i = 0;
+      i < 50 && (await fetchLinksNeedingSync(database, 10)).length > 0;
+      i++
+    )
       await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(calls.find((call) => call.path.endsWith("/role-connection"))?.body).toMatchObject({
+    expect(
+      calls.find((call) => call.path.endsWith("/role-connection"))?.body,
+    ).toMatchObject({
       platform_username: "Alpha",
       metadata: { linked: "1", level: "20" },
     });
-    expect(calls.find((call) => call.method === "PATCH")?.body).toEqual({ nick: "Alpha" });
-    expect(calls.some((call) => call.method === "PUT" && call.path.endsWith(`/roles/${VILLAGE_ROLE}`))).toBe(true);
+    expect(calls.find((call) => call.method === "PATCH")?.body).toEqual({
+      nick: "Alpha",
+    });
+    expect(
+      calls.some(
+        (call) => call.method === "PUT" && call.path.endsWith(`/roles/${VILLAGE_ROLE}`),
+      ),
+    ).toBe(true);
     expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(0);
   });
 
   it("promotes the other character when the primary unlinks, keeping the shared token", async () => {
     const database = await getTestDatabase();
     await insertDiscordLink(database, linkValues("user-b", OLD_DISCORD));
-    await insertDiscordLink(database, { ...linkValues("user-a", OLD_DISCORD), slot: 2, isPrimary: false });
+    await insertDiscordLink(database, {
+      ...linkValues("user-a", OLD_DISCORD),
+      slot: 2,
+      isPrimary: false,
+    });
     guildMember = { nick: "Bravo", roles: [VERIFIED_ROLE] };
-    expect((await (await callerFor(discordRouter, "user-b")).unlink()).success).toBe(true);
+    expect((await (await callerFor(discordRouter, "user-b")).unlink()).success).toBe(
+      true,
+    );
     expect(await database.query.discordLink.findMany()).toEqual([
       expect.objectContaining({ userId: "user-a", isPrimary: true, slot: 2 }),
     ]);
     expect(calls.some((call) => call.path === "/oauth2/token/revoke")).toBe(false);
     const connections = calls.filter((call) => call.path.endsWith("/role-connection"));
     expect(connections.map((call) => call.body)).toEqual([
-      expect.objectContaining({ platform_username: "Alpha", metadata: { linked: "1", level: "20" } }),
+      expect.objectContaining({
+        platform_username: "Alpha",
+        metadata: { linked: "1", level: "20" },
+      }),
     ]);
-    expect(calls.find((call) => call.method === "PATCH")?.body).toEqual({ nick: "Alpha" });
+    expect(calls.find((call) => call.method === "PATCH")?.body).toEqual({
+      nick: "Alpha",
+    });
     expect(await database.query.discordLinkHistory.findMany()).toEqual([
       expect.objectContaining({ userId: "user-b", discordId: OLD_DISCORD }),
     ]);
-    // The last link behaves as before: unlinked metadata and a revoked token.
+    // Unlinking the last remaining character clears the metadata and revokes the token.
     calls = [];
-    expect((await (await callerFor(discordRouter, "user-a")).unlink()).success).toBe(true);
-    expect(calls.find((call) => call.path.endsWith("/role-connection"))?.body).toMatchObject({
+    expect((await (await callerFor(discordRouter, "user-a")).unlink()).success).toBe(
+      true,
+    );
+    expect(
+      calls.find((call) => call.path.endsWith("/role-connection"))?.body,
+    ).toMatchObject({
       metadata: { linked: "0" },
     });
     expect(calls.some((call) => call.path === "/oauth2/token/revoke")).toBe(true);
@@ -500,7 +586,11 @@ describeWithDatabase("Discord links (SQL)", () => {
   it("undoes the Discord side when both characters unlink at once", async () => {
     const database = await getTestDatabase();
     await insertDiscordLink(database, linkValues("user-b", OLD_DISCORD));
-    await insertDiscordLink(database, { ...linkValues("user-a", OLD_DISCORD), slot: 2, isPrimary: false });
+    await insertDiscordLink(database, {
+      ...linkValues("user-a", OLD_DISCORD),
+      slot: 2,
+      isPrimary: false,
+    });
     guildMember = { nick: "Bravo", roles: [VERIFIED_ROLE] };
     const results = await Promise.all([
       (await callerFor(discordRouter, "user-a")).unlink(),
@@ -521,52 +611,100 @@ describeWithDatabase("Discord links (SQL)", () => {
   it("bans the account while either character is sanctioned and unbans when neither is", async () => {
     const database = await getTestDatabase();
     await insertDiscordLink(database, linkValues("user-b", OLD_DISCORD));
-    await insertDiscordLink(database, { ...linkValues("user-a", OLD_DISCORD), slot: 2, isPrimary: false });
+    await insertDiscordLink(database, {
+      ...linkValues("user-a", OLD_DISCORD),
+      slot: 2,
+      isPrimary: false,
+    });
     await syncDiscordMember(database, "user-b", { force: true });
     // The secondary character's sanction bans the shared account.
-    await addSanction("user-a", "BAN_ACTIVATED", DISCORD_INDEFINITE_SANCTION_DAYS + 1, "report-a");
+    await addSanction(
+      "user-a",
+      "BAN_ACTIVATED",
+      DISCORD_INDEFINITE_SANCTION_DAYS + 1,
+      "report-a",
+    );
     expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(2);
     calls = [];
-    expect(await reconcileDiscordLinks(database)).toMatchObject({ processed: 1, failed: 0 });
-    expect(calls.filter((call) => call.method === "PUT" && call.path.includes("/bans/"))).toEqual([
+    expect(await reconcileDiscordLinks(database)).toMatchObject({
+      processed: 1,
+      failed: 0,
+    });
+    expect(
+      calls.filter((call) => call.method === "PUT" && call.path.includes("/bans/")),
+    ).toEqual([
       expect.objectContaining({ reason: "TNR report report-a: indefinite ban" }),
     ]);
-    expect((await database.query.discordLink.findMany()).every((link) => link.syncedBanned)).toBe(true);
+    expect(
+      (await database.query.discordLink.findMany()).every((link) => link.syncedBanned),
+    ).toBe(true);
     expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(0);
     // An unsanctioned character cannot join a Discord account banned through its sibling.
     await insertUsers([{ userId: "user-c", username: "Charlie", level: 5 }]);
     await database.delete(discordLink).where(eq(discordLink.userId, "user-b"));
     expect(await linkThroughOAuth("user-c", null)).toEqual({ result: "blocked" });
-    await insertDiscordLink(database, { ...linkValues("user-b", OLD_DISCORD), syncedBanned: true });
+    await insertDiscordLink(database, {
+      ...linkValues("user-b", OLD_DISCORD),
+      syncedBanned: true,
+    });
     // Both sanctioned: clearing one keeps the ban.
-    await addSanction("user-b", "SILENCE_ACTIVATED", DISCORD_INDEFINITE_SANCTION_DAYS + 1, "report-b");
-    await database.update(userReport).set({ status: "REPORT_CLEARED" }).where(eq(userReport.id, "report-a"));
+    await addSanction(
+      "user-b",
+      "SILENCE_ACTIVATED",
+      DISCORD_INDEFINITE_SANCTION_DAYS + 1,
+      "report-b",
+    );
+    await database
+      .update(userReport)
+      .set({ status: "REPORT_CLEARED" })
+      .where(eq(userReport.id, "report-a"));
     calls = [];
     await syncDiscordMember(database, "user-a");
-    expect(calls.some((call) => call.method === "DELETE" && call.path.includes("/bans/"))).toBe(false);
+    expect(
+      calls.some((call) => call.method === "DELETE" && call.path.includes("/bans/")),
+    ).toBe(false);
     expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(0);
-    await database.update(userReport).set({ status: "REPORT_CLEARED" }).where(eq(userReport.id, "report-b"));
+    await database
+      .update(userReport)
+      .set({ status: "REPORT_CLEARED" })
+      .where(eq(userReport.id, "report-b"));
     expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(2);
     await reconcileDiscordLinks(database);
-    expect(calls.filter((call) => call.method === "DELETE" && call.path.includes("/bans/"))).toHaveLength(1);
-    expect((await database.query.discordLink.findMany()).some((link) => link.syncedBanned)).toBe(false);
+    expect(
+      calls.filter((call) => call.method === "DELETE" && call.path.includes("/bans/")),
+    ).toHaveLength(1);
+    expect(
+      (await database.query.discordLink.findMany()).some((link) => link.syncedBanned),
+    ).toBe(false);
   });
 
   it("keeps the ban after the sanctioned sibling is deleted", async () => {
     const database = await getTestDatabase();
-    await insertDiscordLink(database, { ...linkValues("user-b", OLD_DISCORD), syncedBanned: true });
+    await insertDiscordLink(database, {
+      ...linkValues("user-b", OLD_DISCORD),
+      syncedBanned: true,
+    });
     await database.insert(sanctionTombstone).values({
       userId: "user-deleted",
       sourceId: "report-deleted",
       sanction: "BAN",
-      sanctionEndsAt: new Date(Date.now() + (DISCORD_INDEFINITE_SANCTION_DAYS + 5) * DAY),
+      sanctionEndsAt: new Date(
+        Date.now() + (DISCORD_INDEFINITE_SANCTION_DAYS + 5) * DAY,
+      ),
       accountHashes: [discordTombstoneHash(OLD_DISCORD)],
     });
-    expect((await syncDiscordMember(database, "user-b", { force: true })).synced).toBe(true);
-    expect(calls.find((call) => call.method === "PUT" && call.path.includes("/bans/"))?.reason).toBe(
+    expect((await syncDiscordMember(database, "user-b", { force: true })).synced).toBe(
+      true,
+    );
+    expect(
+      calls.find((call) => call.method === "PUT" && call.path.includes("/bans/"))
+        ?.reason,
+    ).toBe(
       "TNR report report-deleted: indefinite sanction of a deleted linked account",
     );
-    expect(calls.some((call) => call.method === "DELETE" && call.path.includes("/bans/"))).toBe(false);
+    expect(
+      calls.some((call) => call.method === "DELETE" && call.path.includes("/bans/")),
+    ).toBe(false);
     expect((await database.query.discordLink.findFirst())?.syncedBanned).toBe(true);
   });
 
@@ -583,7 +721,9 @@ describeWithDatabase("Discord links (SQL)", () => {
       unlinkedAt: new Date(Date.now() - DAY),
       reason: "USER",
     });
-    expect(await linkThroughOAuth("user-a", null)).toMatchObject({ result: "cooldown" });
+    expect(await linkThroughOAuth("user-a", null)).toMatchObject({
+      result: "cooldown",
+    });
     // The unlinked character itself may come back.
     expect(await linkThroughOAuth("user-c", null)).toEqual({ result: "linked_second" });
   });
@@ -592,7 +732,11 @@ describeWithDatabase("Discord links (SQL)", () => {
     const database = await getTestDatabase();
     await insertUsers([{ userId: "staff", username: "Staffer", role: "MODERATOR" }]);
     await insertDiscordLink(database, linkValues("user-b", OLD_DISCORD));
-    await insertDiscordLink(database, { ...linkValues("user-a", OLD_DISCORD), slot: 2, isPrimary: false });
+    await insertDiscordLink(database, {
+      ...linkValues("user-a", OLD_DISCORD),
+      slot: 2,
+      isPrimary: false,
+    });
     const caller = await callerFor(discordRouter, "staff");
     for (const query of [OLD_DISCORD, "Alpha"]) {
       const { links } = await caller.searchLinks({ query });
@@ -611,21 +755,30 @@ describeWithDatabase("Discord links (SQL)", () => {
 
   it("refuses linking while banned", async () => {
     const database = await getTestDatabase();
-    await database.update(userData).set({ isBanned: true }).where(eq(userData.userId, "user-a"));
+    await database
+      .update(userData)
+      .set({ isBanned: true })
+      .where(eq(userData.userId, "user-a"));
     expect(await linkThroughOAuth("user-a", null)).toEqual({ result: "banned" });
   });
 
   it("bans the linked Discord account for an indefinite sanction and unbans when lifted", async () => {
     const database = await getTestDatabase();
     await insertDiscordLink(database, linkValues("user-a", OLD_DISCORD));
-    await addSanction("user-a", "BAN_ACTIVATED", DISCORD_INDEFINITE_SANCTION_DAYS + 1, "report-42");
+    await addSanction(
+      "user-a",
+      "BAN_ACTIVATED",
+      DISCORD_INDEFINITE_SANCTION_DAYS + 1,
+      "report-42",
+    );
     expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(1);
     expect((await syncDiscordMember(database, "user-a")).synced).toBe(true);
-    const ban = calls.find((call) => call.method === "PUT" && call.path === `/guilds/${GUILD}/bans/${OLD_DISCORD}`);
+    const ban = calls.find(
+      (call) =>
+        call.method === "PUT" && call.path === `/guilds/${GUILD}/bans/${OLD_DISCORD}`,
+    );
     expect(ban?.reason).toBe("TNR report report-42: indefinite ban");
-    expect(
-      (await database.query.discordLink.findFirst())?.syncedBanned,
-    ).toBe(true);
+    expect((await database.query.discordLink.findFirst())?.syncedBanned).toBe(true);
     // Unlinking is refused while the sanction runs.
     const caller = await callerFor(discordRouter, "user-a");
     expect((await caller.unlink()).success).toBe(false);
@@ -637,7 +790,11 @@ describeWithDatabase("Discord links (SQL)", () => {
     calls = [];
     await reconcileDiscordLinks(database);
     expect(
-      calls.some((call) => call.method === "DELETE" && call.path === `/guilds/${GUILD}/bans/${OLD_DISCORD}`),
+      calls.some(
+        (call) =>
+          call.method === "DELETE" &&
+          call.path === `/guilds/${GUILD}/bans/${OLD_DISCORD}`,
+      ),
     ).toBe(true);
     expect((await database.query.discordLink.findFirst())?.syncedBanned).toBe(false);
   });
@@ -660,7 +817,10 @@ describeWithDatabase("Discord links (SQL)", () => {
   it("re-applies a changed username and village role on the next sync", async () => {
     const database = await getTestDatabase();
     await insertDiscordLink(database, linkValues("user-a", OLD_DISCORD));
-    guildMember = { nick: "Alpha", roles: [VERIFIED_ROLE, VILLAGE_ROLE, "7777777777777777777"] };
+    guildMember = {
+      nick: "Alpha",
+      roles: [VERIFIED_ROLE, VILLAGE_ROLE, "7777777777777777777"],
+    };
     await syncDiscordMember(database, "user-a", { force: true });
     expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(0);
     await database
@@ -670,7 +830,9 @@ describeWithDatabase("Discord links (SQL)", () => {
     expect(await fetchLinksNeedingSync(database, 10)).toHaveLength(1);
     calls = [];
     await reconcileDiscordLinks(database);
-    expect(calls.find((call) => call.method === "PATCH")?.body).toEqual({ nick: "AlphaRenamed" });
+    expect(calls.find((call) => call.method === "PATCH")?.body).toEqual({
+      nick: "AlphaRenamed",
+    });
     // The old village role goes; unmanaged roles stay.
     expect(
       calls.filter((call) => call.method === "DELETE").map((call) => call.path),
@@ -696,13 +858,19 @@ describeWithDatabase("Discord links (SQL)", () => {
     guildMember = { nick: "Alpha", roles: [VILLAGE_ROLE] };
     const caller = await callerFor(discordRouter, "user-a");
     expect((await caller.unlink()).success).toBe(true);
-    expect(calls.find((call) => call.path.endsWith("/role-connection"))?.body).toMatchObject({
+    expect(
+      calls.find((call) => call.path.endsWith("/role-connection"))?.body,
+    ).toMatchObject({
       metadata: { linked: "0", level: "0" },
     });
     expect(calls.some((call) => call.path === "/oauth2/token/revoke")).toBe(true);
     expect(await database.query.discordLink.findMany()).toHaveLength(0);
     expect(await database.query.discordLinkHistory.findMany()).toEqual([
-      expect.objectContaining({ userId: "user-a", discordId: OLD_DISCORD, reason: "USER" }),
+      expect.objectContaining({
+        userId: "user-a",
+        discordId: OLD_DISCORD,
+        reason: "USER",
+      }),
     ]);
   });
 
@@ -715,9 +883,9 @@ describeWithDatabase("Discord links (SQL)", () => {
       emailAddresses: [],
       externalAccounts: [],
     });
-    expect((await database.query.sanctionTombstone.findFirst())?.accountHashes).toEqual([
-      discordTombstoneHash(OLD_DISCORD),
-    ]);
+    expect((await database.query.sanctionTombstone.findFirst())?.accountHashes).toEqual(
+      [discordTombstoneHash(OLD_DISCORD)],
+    );
     // Without an active report deletion never asks Clerk for the identity.
     await database.delete(userReport);
     await deleteUser(database, "user-a");
@@ -733,7 +901,11 @@ describeWithDatabase("Discord links (SQL)", () => {
     if (!config) throw new Error("config");
     fakeClerk();
     const grant = await resolveClerkDiscordGrant(config, "user-a");
-    expect(grant).toMatchObject({ source: "CLERK", accessToken: "clerk-access", tokens: null });
+    expect(grant).toMatchObject({
+      source: "CLERK",
+      accessToken: "clerk-access",
+      tokens: null,
+    });
     if (!grant) throw new Error("grant");
     const outcome = await completeDiscordLink(database, config, {
       userId: "user-a",
@@ -760,7 +932,9 @@ describeWithDatabase("Discord links (SQL)", () => {
     );
     expect(
       calls.find(
-        (call) => call.method === "PUT" && call.path === `/guilds/${GUILD}/members/${OLD_DISCORD}`,
+        (call) =>
+          call.method === "PUT" &&
+          call.path === `/guilds/${GUILD}/members/${OLD_DISCORD}`,
       )?.body,
     ).toMatchObject({ access_token: "clerk-access" });
     expect(needsDiscordRelink(link?.syncError)).toBe(false);
@@ -777,16 +951,22 @@ describeWithDatabase("Discord links (SQL)", () => {
     expect(response.headers.get("location")).toBe(
       "http://localhost:3000/discord/link?result=linked&auto=1",
     );
-    expect((await (await getTestDatabase()).query.discordLink.findFirst())?.tokenSource).toBe(
-      "CLERK",
-    );
+    expect(
+      (await (await getTestDatabase()).query.discordLink.findFirst())?.tokenSource,
+    ).toBe("CLERK");
   });
 
   it("falls back to the consent redirect when Clerk's token lacks the scope", async () => {
     const config = getDiscordConfig();
     if (!config) throw new Error("config");
     fakeClerk({
-      tokens: [{ token: "old", scopes: ["identify", "email"], externalAccountId: "eac_discord" }],
+      tokens: [
+        {
+          token: "old",
+          scopes: ["identify", "email"],
+          externalAccountId: "eac_discord",
+        },
+      ],
     });
     expect(await resolveClerkDiscordGrant(config, "user-a")).toBeNull();
     vi.spyOn(clerk, "auth").mockResolvedValue({ userId: "user-a" } as never);
@@ -795,8 +975,12 @@ describeWithDatabase("Discord links (SQL)", () => {
         headers: NAVIGATION,
       }),
     );
-    expect(response.headers.get("location")).toStartWith("https://discord.com/oauth2/authorize");
-    expect(await (await getTestDatabase()).query.discordLink.findMany()).toHaveLength(0);
+    expect(response.headers.get("location")).toStartWith(
+      "https://discord.com/oauth2/authorize",
+    );
+    expect(await (await getTestDatabase()).query.discordLink.findMany()).toHaveLength(
+      0,
+    );
   });
 
   it("uses the consent flow without a Discord sign-in, for a foreign token or a non-click start", async () => {
@@ -816,15 +1000,25 @@ describeWithDatabase("Discord links (SQL)", () => {
         headers: { ...NAVIGATION, "sec-fetch-site": "cross-site" },
       }),
     );
-    expect(response.headers.get("location")).toStartWith("https://discord.com/oauth2/authorize");
+    expect(response.headers.get("location")).toStartWith(
+      "https://discord.com/oauth2/authorize",
+    );
     // Nor does an image in user content on our own pages.
     const image = await authorizeDiscord(
       new Request("http://localhost:3000/api/discord/authorize", {
-        headers: { "sec-fetch-site": "same-origin", "sec-fetch-mode": "no-cors", "sec-fetch-dest": "image" },
+        headers: {
+          "sec-fetch-site": "same-origin",
+          "sec-fetch-mode": "no-cors",
+          "sec-fetch-dest": "image",
+        },
       }),
     );
-    expect(image.headers.get("location")).toStartWith("https://discord.com/oauth2/authorize");
-    expect(await (await getTestDatabase()).query.discordLink.findMany()).toHaveLength(0);
+    expect(image.headers.get("location")).toStartWith(
+      "https://discord.com/oauth2/authorize",
+    );
+    expect(await (await getTestDatabase()).query.discordLink.findMany()).toHaveLength(
+      0,
+    );
   });
 
   it("applies the linking rules to Clerk grants and never revokes Clerk's token", async () => {
@@ -842,7 +1036,10 @@ describeWithDatabase("Discord links (SQL)", () => {
         identity: clerkIdentity(),
       }),
     ).toEqual({ result: "linked_second" });
-    await database.update(userData).set({ isBanned: true }).where(eq(userData.userId, "user-a"));
+    await database
+      .update(userData)
+      .set({ isBanned: true })
+      .where(eq(userData.userId, "user-a"));
     await resetTables(discordLink);
     expect(
       await completeDiscordLink(database, config, {
@@ -865,7 +1062,9 @@ describeWithDatabase("Discord links (SQL)", () => {
       scopes: "identify role_connections.write",
     });
     const { getUserOauthAccessToken } = fakeClerk();
-    expect((await syncDiscordMember(database, "user-a", { force: true })).synced).toBe(true);
+    expect((await syncDiscordMember(database, "user-a", { force: true })).synced).toBe(
+      true,
+    );
     expect(getUserOauthAccessToken).toHaveBeenCalledWith("user-a", "discord");
     expect(calls.find((call) => call.path.endsWith("/role-connection"))?.auth).toBe(
       "Bearer clerk-access",
@@ -875,12 +1074,16 @@ describeWithDatabase("Discord links (SQL)", () => {
     expect(link?.scopes).toBe("identify email role_connections.write guilds.join");
     expect(
       calls.some(
-        (call) => call.method === "PUT" && call.path === `/guilds/${GUILD}/members/${OLD_DISCORD}`,
+        (call) =>
+          call.method === "PUT" &&
+          call.path === `/guilds/${GUILD}/members/${OLD_DISCORD}`,
       ),
     ).toBe(true);
     // Unlinking leaves Clerk's token alone.
     calls = [];
-    expect((await (await callerFor(discordRouter, "user-a")).unlink()).success).toBe(true);
+    expect((await (await callerFor(discordRouter, "user-a")).unlink()).success).toBe(
+      true,
+    );
     expect(calls.some((call) => call.path === "/oauth2/token/revoke")).toBe(false);
   });
 

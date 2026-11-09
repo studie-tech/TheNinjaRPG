@@ -49,6 +49,7 @@ export default function ManualTowerDefenseCharacters() {
     });
 
   const isLoading = isPending || isCreating || isDeleting;
+  const canEdit = !!userData && canChangeContent(userData.role);
 
   // Filter characters by type
   const enemies = characters?.filter((c) => !c.isPlayer) ?? [];
@@ -89,7 +90,7 @@ export default function ManualTowerDefenseCharacters() {
                 Players ({players.length})
               </TabsTrigger>
             </TabsList>
-            {userData && canChangeContent(userData.role) && (
+            {canEdit && (
               <Button
                 id="create-character"
                 onClick={() => create({ isPlayer: activeTab === "players" })}
@@ -103,40 +104,24 @@ export default function ManualTowerDefenseCharacters() {
           {isLoading && <Loader explanation="Loading data" />}
 
           <TabsContent value="enemies">
-            {!isLoading && enemies.length === 0 && (
-              <p className="text-muted-foreground">No enemies configured yet.</p>
-            )}
-            {!isLoading && enemies.length > 0 && (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {enemies.map((character) => (
-                  <CharacterCard
-                    key={character.id}
-                    character={character}
-                    canEdit={!!userData && canChangeContent(userData.role)}
-                    onDelete={() => remove({ id: character.id })}
-                  />
-                ))}
-              </div>
+            {!isLoading && (
+              <CharacterGrid
+                characters={enemies}
+                emptyText="No enemies configured yet."
+                canEdit={canEdit}
+                onDelete={(id) => remove({ id })}
+              />
             )}
           </TabsContent>
 
           <TabsContent value="players">
-            {!isLoading && players.length === 0 && (
-              <p className="text-muted-foreground">
-                No player characters configured yet.
-              </p>
-            )}
-            {!isLoading && players.length > 0 && (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {players.map((character) => (
-                  <CharacterCard
-                    key={character.id}
-                    character={character}
-                    canEdit={!!userData && canChangeContent(userData.role)}
-                    onDelete={() => remove({ id: character.id })}
-                  />
-                ))}
-              </div>
+            {!isLoading && (
+              <CharacterGrid
+                characters={players}
+                emptyText="No player characters configured yet."
+                canEdit={canEdit}
+                onDelete={(id) => remove({ id })}
+              />
             )}
           </TabsContent>
         </Tabs>
@@ -144,6 +129,28 @@ export default function ManualTowerDefenseCharacters() {
     </>
   );
 }
+
+/** One tab's character cards, or its empty state. */
+const CharacterGrid: React.FC<{
+  characters: TowerDefenseCharacterDb[];
+  emptyText: string;
+  canEdit: boolean;
+  onDelete: (id: string) => void;
+}> = ({ characters, emptyText, canEdit, onDelete }) =>
+  characters.length === 0 ? (
+    <p className="text-muted-foreground">{emptyText}</p>
+  ) : (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {characters.map((character) => (
+        <CharacterCard
+          key={character.id}
+          character={character}
+          canEdit={canEdit}
+          onDelete={() => onDelete(character.id)}
+        />
+      ))}
+    </div>
+  );
 
 interface CharacterCardProps {
   character: TowerDefenseCharacterDb;

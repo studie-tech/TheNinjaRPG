@@ -1,7 +1,8 @@
 import type { Grid } from "honeycomb-grid";
 import { nanoid } from "nanoid";
-import type { AttackTargets, ElementName, UserRank } from "@/drizzle/constants";
+import type { AttackTarget, ElementName, UserRank } from "@/drizzle/constants";
 import {
+  ELEMENTAL_SEAL_AP_COST,
   ID_ANIMATION_HEAL,
   ID_ANIMATION_HIT,
   ID_SFX_CLEANSE,
@@ -22,6 +23,7 @@ import {
   IMG_BASIC_WAIT,
   NonActionItemTypes,
   PET_BATTLE_CONFIG,
+  PRACTICE_BATTLE_TYPES,
   RankedBattleTypes,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
   SAGE_MODE_DISABLED_BATTLES,
@@ -230,9 +232,11 @@ export const availableUserActions = (
               );
               if (hasMoveTag) return false;
             }
-            // Elemental Seal affects exactly 60 AP elemental jutsu, regardless
-            // of the element lists retained in older content/battle payloads.
-            if (!elementalSeal || jutsu.actionCostPerc !== 60) return true;
+            // Elemental Seal hides jutsu costing exactly ELEMENTAL_SEAL_AP_COST that
+            // are elemental by classification, an elementaldamage tag or any
+            // non-None tag element.
+            if (!elementalSeal || jutsu.actionCostPerc !== ELEMENTAL_SEAL_AP_COST)
+              return true;
             const isElemental =
               (jutsu.elementClassification != null &&
                 jutsu.elementClassification !== "None") ||
@@ -1159,7 +1163,8 @@ export const insertAction = (info: {
           };
           if (action.method === "SINGLE") {
             // SINGLE: damage barriers on the A* path (projectile-in-path).
-            // getBarriersBetween already reduced absorbPercentage to a 0-1 fraction.
+            // getBarriersBetween replaced absorbPercentage with the 0-1 fraction of the
+            // hit each barrier absorbs after the barriers before it.
             barriers.forEach((barrier) => {
               addBarrierHit(
                 barrier,
@@ -1240,8 +1245,7 @@ export const insertAction = (info: {
     if (
       useritem &&
       itemData?.destroyOnUse &&
-      battle.battleType !== "SPARRING" &&
-      !RankedBattleTypes.includes(battle.battleType)
+      !PRACTICE_BATTLE_TYPES.includes(battle.battleType)
     ) {
       useritem.quantity -= 1;
     }
@@ -1322,7 +1326,7 @@ const replacePronouns = (text: string, prefix: string, gender: string | undefine
  */
 export const getTargetUser = (
   users: BattleUserState[],
-  target: (typeof AttackTargets)[number],
+  target: AttackTarget,
   tile: TerrainHex,
   userId: string,
 ) => {

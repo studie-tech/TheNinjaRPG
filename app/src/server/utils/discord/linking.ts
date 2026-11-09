@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import type { DiscordTokenSource, DiscordUnlinkReason } from "@/drizzle/constants";
 import {
+  DISCORD_LINK_FLAG_PREFIX,
   type DiscordLinkResult,
   type DiscordLinkResultDetails,
   discordSnowflakeCreatedAt,
@@ -250,7 +251,7 @@ export const completeDiscordLink = async (
             logDiscordAction(client, {
               actorUserId: input.userId,
               targetUserId: input.userId,
-              message: `Discord link flag: ${flags[0]}`,
+              message: `${DISCORD_LINK_FLAG_PREFIX}: ${flags[0]}`,
               changes: flags,
               image: character?.avatarLight,
             }),

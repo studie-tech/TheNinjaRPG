@@ -4,13 +4,10 @@ import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import {
-  safeSessionStorageGetItem,
-  safeSessionStorageSetItem,
-} from "@/hooks/localstorage";
 import { HuntingBoard } from "@/layout/HuntingBoard";
 import Modal from "@/layout/Modal";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
+import { safeSessionStorageGetItem, safeSessionStorageSetItem } from "@/utils/storage";
 import { blockingPopupOpenAtom, useUserDataSelector } from "@/utils/UserContext";
 
 /**

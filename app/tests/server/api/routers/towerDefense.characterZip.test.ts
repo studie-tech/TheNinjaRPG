@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nextjs";
 import { DrizzleQueryError, eq } from "drizzle-orm";
 import JSZip from "jszip";
 import * as uploadthing from "uploadthing/server";
@@ -53,14 +53,18 @@ describeWithDatabase("processCharacterZip", () => {
     vi.spyOn(
       uploadthing as unknown as { UTApi: () => uploadthing.UTApi },
       "UTApi",
-    ).mockImplementation(() => ({ uploadFiles: uploads }) as unknown as uploadthing.UTApi);
+    ).mockImplementation(
+      () => ({ uploadFiles: uploads }) as unknown as uploadthing.UTApi,
+    );
     return uploads;
   };
   const serveZip = (body: Uint8Array) =>
-    vi.spyOn(globalThis, "fetch").mockImplementation((async (
-      _url: string,
-      init?: RequestInit,
-    ) => rateLimitResponse(init) ?? new Response(Buffer.from(body))) as never);
+    vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(
+        (async (_url: string, init?: RequestInit) =>
+          rateLimitResponse(init) ?? new Response(Buffer.from(body))) as never,
+      );
   const process = async () =>
     (await callerFor(towerDefenseRouter, "staff")).processCharacterZip({
       characterId: "character",
@@ -100,9 +104,7 @@ describeWithDatabase("processCharacterZip", () => {
 
     const result = await process();
 
-    expect(uploads.mock.calls.map(([files]) => files.length)).toEqual([
-      20, 20, 5,
-    ]);
+    expect(uploads.mock.calls.map(([files]) => files.length)).toEqual([20, 20, 5]);
     expect(result).toMatchObject({
       success: true,
       message: "Processed 45 files and created asset config",
@@ -119,7 +121,9 @@ describeWithDatabase("processCharacterZip", () => {
     expect(animation?.frames.south).toHaveLength(44);
     // Frames missing from the zip are dropped.
     expect(animation?.frames.north).toEqual([expect.stringContaining("frames_0.png")]);
-    const stored = await (await getTestDatabase()).query.towerDefenseCharacter.findFirst({
+    const stored = await (
+      await getTestDatabase()
+    ).query.towerDefenseCharacter.findFirst({
       where: eq(towerDefenseCharacter.id, "character"),
     });
     expect(stored?.assetConfig).toEqual(result.assetConfig);
@@ -144,7 +148,11 @@ describeWithDatabase("processCharacterZip", () => {
   it("reports a failed statement to Sentry and keeps it out of the response", async () => {
     validate();
     serveZip(await characterZip(1));
-    const failure = new DrizzleQueryError("update Character", ["secret"], new TypeError("fetch failed"));
+    const failure = new DrizzleQueryError(
+      "update Character",
+      ["secret"],
+      new TypeError("fetch failed"),
+    );
     stubUploads(async () => {
       throw failure;
     });

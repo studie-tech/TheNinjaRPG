@@ -14,6 +14,7 @@ import {
   like,
   lt,
   ne,
+  not,
   or,
   SQL,
   sql,
@@ -574,11 +575,11 @@ export const selectDiscordLinkForFetchLinksNeedingSync = (
       or(
         isNull(discordLink.syncedAt),
         lt(discordLink.syncedAt, refreshBefore),
-        sql`${discordLink.syncedBanned} <> (${sanctioned})`,
-        sql`NOT (${hasPrimary})`,
+        ne(discordLink.syncedBanned, sanctioned),
+        not(hasPrimary),
         // While banned, nickname, roles and metadata are not applied, so they cannot differ.
         and(
-          sql`NOT (${sanctioned})`,
+          not(sanctioned),
           eq(discordLink.isPrimary, true),
           or(
             sql`NOT (${discordLink.syncedUsername} <=> ${userData.username})`,
@@ -607,6 +608,6 @@ export const indefiniteSanctionWhere = (userId: string | AnyColumn | SQL) =>
     gt(userReport.banEnd, sql`CURRENT_TIMESTAMP(3)`),
     gte(
       userReport.banEnd,
-      sql`${userReport.updatedAt} + INTERVAL ${sql.raw(String(DISCORD_INDEFINITE_SANCTION_DAYS))} DAY`,
+      sql`${userReport.updatedAt} + INTERVAL ${DISCORD_INDEFINITE_SANCTION_DAYS} DAY`,
     ),
   );

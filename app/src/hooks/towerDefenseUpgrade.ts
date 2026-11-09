@@ -15,10 +15,7 @@ import {
 /**
  * Hook used when creating frontend forms for editing Tower Defense upgrades
  */
-export const useTowerDefenseUpgradeEditForm = (
-  upgrade: TowerDefenseUpgrade,
-  refetch: () => void,
-) => {
+export const useTowerDefenseUpgradeEditForm = (upgrade: TowerDefenseUpgrade) => {
   // Form handling
   const form = useForm<
     UpdateTowerDefenseUpgradeInput,
@@ -42,7 +39,6 @@ export const useTowerDefenseUpgradeEditForm = (
         showMutationToast(data);
         if (!data.success) return;
         await utils.towerDefense.getUpgrade.invalidate({ id: upgrade.id });
-        refetch();
       },
     });
 

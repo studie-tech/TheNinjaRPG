@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import ContentDetail from "@/layout/ContentDetail";
-import { buildMetadata, metaDescription } from "@/libs/seo";
+import { buildMetadata, metaDescription, noindexMetadata } from "@/libs/seo";
 import { fetchItem } from "@/queries/item";
 
 import { drizzleDB } from "@/server/db";
@@ -23,7 +23,7 @@ const getItem = cache(async (id: string) => {
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const { itemid } = await props.params;
   const item = await getItem(itemid);
-  if (!item) return { title: "Item Not Found" };
+  if (!item) return noindexMetadata("Item Not Found");
   const name = item.name.trim();
   const type = capitalizeFirstLetter(item.itemType);
   const rarity = capitalizeFirstLetter(item.rarity);

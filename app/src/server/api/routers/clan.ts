@@ -33,6 +33,7 @@ import {
   CLAN_POINT_RYO_RATE,
   CLAN_RANK_REQUIREMENT,
   CLANS_PER_STRUCTURE_LEVEL,
+  ClanBoostTypes,
   ELDER_NOMINATION_CUTOFF_DAY,
   ELDER_NOMINATION_DEADLINE_DAY,
   FACTION_MIN_MEMBERS_FOR_STRONGHOLD,
@@ -65,6 +66,8 @@ import {
   deleteWarForRemoveFromClan2,
   deleteWarKillForRemoveFromClan,
   deleteWarKillForRemoveFromClan2,
+  executeResultForClanDonate,
+  executeResultForToBank,
   executeResultForUpgradeHideoutToStronghold,
   fetchActiveUserMpvpBattles,
   fetchClan,
@@ -91,7 +94,6 @@ import {
   listClanForNominateElder,
   listClanForSearchClans,
   setClanVillageKage,
-  updateClanForClanDonate,
   updateClanForClearLeadership,
   updateClanForConvertPointsToRyo,
   updateClanForDemoteMember,
@@ -102,11 +104,9 @@ import {
   updateClanForPurchaseBoost,
   updateClanForPurchaseHideout,
   updateClanForRemoveFromClan,
-  updateClanForToBank,
   updateMpvpBattleQueueForInitiateClanBattle,
   updateUserDataForAcceptRequest,
   updateUserDataForChallengeClan,
-  updateUserDataForClanDonate,
   updateUserDataForCreateClan,
   updateUserDataForEditClanColor,
   updateUserDataForInitiateClanBattle,
@@ -118,14 +118,7 @@ import {
   updateVillageForEditClanColor,
   updateVillageForRemoveFromClan,
 } from "@/queries/clan";
-import {
-  debitUserMoney,
-  fetchAllGameSettings,
-  fetchUser,
-  findUserById,
-  incrementUserMoney,
-  refundUserReputationPoints,
-} from "@/queries/profile";
+import { fetchAllGameSettings, fetchUser, findUserById } from "@/queries/profile";
 import { findMembershipUserCache } from "@/queries/socialUserCache";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
 import { fetchStructures, fetchVillage, fetchVillages } from "@/queries/village";
@@ -157,19 +150,30 @@ import {
   checkAssassin,
   checkClanLeadership,
   checkCoLeader,
-  clanBankDepositSchema,
-  clanBattleIdSchema,
-  clanBoostTypeSchema,
   clanCreateSchema,
-  clanGetRequestSchema,
   clanPointConversionSchema,
   factionColorEditSchema,
   factionEditSchema,
-  restoreStrongholdSchema,
   strictClanNameField,
 } from "@/validators/clan";
 import { idSchema } from "@/validators/misc";
 import { type UserCachePatch, userDeltaResponseSchema } from "@/validators/userCache";
+
+const clanBoostTypeSchema = z.enum(ClanBoostTypes);
+
+const clanBankDepositSchema = z.object({
+  amount: z.number().int().min(0),
+  clanId: z.string(),
+});
+
+/** Shared lobby identifier for clan battle membership, startup and deletion actions. */
+const clanBattleIdSchema = z.object({ clanBattleId: z.string() });
+
+const clanGetRequestSchema = z.object({
+  clanLeaderId: z.string(),
+});
+
+const restoreStrongholdSchema = z.object({ clanId: z.string() });
 
 const pusher = getServerPusher();
 
@@ -210,7 +214,7 @@ export const clanRouter = createTRPCRouter({
       if (!available) {
         return errorResponse("This location is reserved or not possible to build on.");
       }
-      // New structures (same as syndicate, except without ANBU & Clan)
+      // New structures: the Syndicate's, except ANBU
       const newStructures = structures.filter((s) => s.route !== "/anbu");
 
       // Mutate step 1 - pay up
@@ -322,14 +326,14 @@ export const clanRouter = createTRPCRouter({
       if (user.reputationPoints < input.reputationPoints) {
         return errorResponse("You do not have enough reputation points");
       }
-      // Derived - prevent people over-donating reputation points
-      // TODO: Remove if these gain a permanent value for clans -
-      // right now its only purpose is hideouts. We should implement
-      // it so that users can do aesthetics for their hideouts/strongholds,
-      // e.g. move around building, change skins, etc.
-      const repsCost = Math.min(
-        input.reputationPoints,
-        FACTION_REPUTATION_TREASURY_LIMIT - fetchedClan.repTreasury,
+      // Derived - donations stop at FACTION_REPUTATION_TREASURY_LIMIT; a treasury
+      // already past the limit takes nothing rather than a negative donation.
+      const repsCost = Math.max(
+        0,
+        Math.min(
+          input.reputationPoints,
+          FACTION_REPUTATION_TREASURY_LIMIT - fetchedClan.repTreasury,
+        ),
       );
       if (repsCost === 0) {
         return {
@@ -338,30 +342,29 @@ export const clanRouter = createTRPCRouter({
           ...getUnchangedClanUserUpdate(),
         };
       }
-      // Mutate step 1 - update user
-      const result = await updateUserDataForClanDonate(ctx.drizzle, repsCost, ctx);
+      // Mutate
+      const result = await executeResultForClanDonate(
+        ctx.drizzle,
+        repsCost,
+        ctx,
+        fetchedClan.id,
+      );
       if (result.rowsAffected === 0) {
-        return errorResponse("Failed to deduct points from user");
+        return errorResponse(
+          "Reputation points were not donated; refresh the faction and check your reputation points, membership and the treasury limit",
+        );
       }
-      // Mutate step 2 - update the clan
-      const result2 = await updateClanForClanDonate(ctx.drizzle, repsCost, fetchedClan);
-      if (result2.rowsAffected === 0) {
-        await refundUserReputationPoints(ctx.drizzle, repsCost, ctx.userId);
-        return errorResponse("Failed to update the treasury");
-      } else {
-        // Create donation message
-        const message = `${user.username} donated ${repsCost} reputation points to faction`;
-        await insertActionLogForClanDonate(ctx.drizzle, ctx, message, fetchedClan);
-        return {
-          success: true,
-          message,
-          ...getClanDonationUserUpdate({
-            user,
-            repsCost,
-            fetchedClanId: fetchedClan.id,
-          }),
-        };
-      }
+      const message = `${user.username} donated ${repsCost} reputation points to faction`;
+      await insertActionLogForClanDonate(ctx.drizzle, ctx, message, fetchedClan);
+      return {
+        success: true,
+        message,
+        ...getClanDonationUserUpdate({
+          user,
+          repsCost,
+          fetchedClanId: fetchedClan.id,
+        }),
+      };
     }),
   get: protectedProcedure
     .meta({ mcp: { description: "Get clan/faction details" } })
@@ -1197,14 +1200,11 @@ export const clanRouter = createTRPCRouter({
           ...getUnchangedClanUserUpdate(),
         };
       }
-      const result = await debitUserMoney(ctx.drizzle, input.amount, ctx);
+      const result = await executeResultForToBank(ctx.drizzle, input, ctx);
       if (result.rowsAffected === 0) {
-        return { success: false, message: "Not enough money in pocket" };
-      }
-      const creditResult = await updateClanForToBank(ctx.drizzle, input);
-      if (creditResult.rowsAffected === 0) {
-        await incrementUserMoney(ctx.drizzle, input.amount, ctx.userId);
-        return errorResponse("Clan bank no longer exists; your deposit was refunded");
+        return errorResponse(
+          "Ryo was not deposited; refresh the clan and check your pocket and membership",
+        );
       }
       return {
         success: true,
@@ -1299,7 +1299,7 @@ export const clanRouter = createTRPCRouter({
       if (nominee.anbuId) {
         return errorResponse("ANBU members cannot be nominated as elders");
       }
-      // Date validation - only allow nominations between 25th and 28th (UTC)
+      // Date validation - nominations open only within the monthly window (UTC)
       const now = new Date();
       const dayOfMonth = now.getUTCDate();
       if (
@@ -1887,7 +1887,7 @@ const undoClanBattleJoin = async (
 };
 
 /**
- * Removes a user from an clan.
+ * Removes a user from a clan.
  *
  * @param client - The DrizzleClient instance used for database operations.
  * @param clanData - The clan from which the user will be removed.

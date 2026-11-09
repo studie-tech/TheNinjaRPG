@@ -1,12 +1,10 @@
 /**
  * Globally coherent world-generation fields.
  *
- * Sector maps used to be generated in isolation (one independent noise seed per
- * sector, one uniform biome), so features (lakes, coastlines) stopped dead at
- * sector borders and biomes changed abruptly across them. These fields instead
- * are defined ONCE over the whole sphere and sampled at each tile's true 3D
- * position, so neighbouring sectors agree along their shared edge and the world
- * reads as continuous. The cylindrical longitude/latitude graph uses one local
+ * These fields are defined ONCE over the whole sphere and sampled at each
+ * tile's true 3D position, so neighbouring sectors agree along their shared
+ * edge: lakes, coastlines and biomes continue across sector borders and the
+ * world reads as continuous. The cylindrical longitude/latitude graph uses one local
  * orientation everywhere, and 3D sampling remains continuous across its wrapped
  * east/west boundary. Both the globe and local map generator call these same
  * fields directly, rather than deriving one view from the other's resolution.
@@ -24,8 +22,8 @@ import {
 export const WORLDGEN_RADIUS = 30;
 export const WORLDGEN_LAND_THRESHOLD = -0.2;
 // A sector is roughly 2.5 world units tall. Extending protection 2.2 units
-// lets reserved/landmark terrain spill well into adjacent sectors without
-// recreating the very broad circular continents produced by the old radius 7.
+// lets reserved/landmark terrain spill well into adjacent sectors while
+// keeping continents irregular rather than broad and circular.
 export const WORLDGEN_PROTECTED_LAND_RADIUS = 2.2;
 export const WORLDGEN_WAKE_ISLAND_RADIUS_FACTOR = 0.46;
 
@@ -168,8 +166,8 @@ export interface WorldLandScoreOptions {
 /**
  * The single deterministic land/water decision used by both the global globe
  * and high-resolution local sector maps. Landmark protection is deliberately
- * local: it guarantees a usable settlement centre without creating the broad,
- * artificial circular continents produced by the old seven-unit radius.
+ * local: it guarantees a usable settlement centre without creating broad,
+ * artificial circular continents.
  *
  * Wake Island uses a radial override across its sector and cardinal ocean
  * ring. This creates a real island with water inside the logical sector rather
@@ -194,10 +192,10 @@ export const createWorldLandScore = (options: WorldLandScoreOptions) => {
     const naturalScore = continentalness - WORLDGEN_LAND_THRESHOLD;
 
     // Wake Island must be a function of POSITION, not the sector currently
-    // sampling that position. The old sector-id branch made the same shared
-    // edge evaluate differently on the inside and outside of Wake's neighbor
-    // ring. Keep the island and its ocean moat, then blend continuously back
-    // into the natural continental field over a one-radius transition band.
+    // sampling that position, so both sides of an edge shared with Wake's
+    // neighbor ring evaluate identically. Keep the island and its ocean moat,
+    // then blend continuously back into the natural continental field over a
+    // one-radius transition band.
     const wakeDistance = Math.hypot(
       point.x - options.wakeIslandCenter.x,
       point.y - options.wakeIslandCenter.y,

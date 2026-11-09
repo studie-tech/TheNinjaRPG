@@ -26,8 +26,12 @@ import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import { moderateUserText } from "@/utils/profanity";
-import { GuideArticleValidator, GuideListFilterSchema } from "@/validators/guide";
+import { GuideArticleValidator } from "@/validators/guide";
 import { idSchema } from "@/validators/misc";
+
+const GuideListFilterSchema = z.object({
+  includeDrafts: z.boolean().optional(),
+});
 
 export const guideRouter = createTRPCRouter({
   getAll: publicProcedure

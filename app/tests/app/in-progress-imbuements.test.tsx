@@ -1,14 +1,23 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { ReactNode } from "react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
-import { AuctionDetailsDialog } from "@/app/[shell]/auctionhouse/page";
+import { AuctionDetailsDialog } from "@/app/[shell]/auctionhouse/ListingDetailsDialog";
 import { AuctionOffers } from "@/app/[shell]/auctionhouse/Offers";
+import { CRAFTING_REQUIRED_EXP, CRAFTING_TIMES_MINS } from "@/drizzle/constants";
 import * as CombatActions from "@/layout/CombatActions";
 import * as ItemDetails from "@/layout/ItemWithEffects";
 import * as Modal from "@/layout/Modal";
 import OccupationCrafting from "@/layout/OccupationCrafting";
+import * as pagination from "@/libs/pagination";
 import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
@@ -20,7 +29,8 @@ const procedure = {
 /** Router whose procedures are idle unless a test overrides them. */
 const router = (overrides: object = {}) =>
   new Proxy(overrides, {
-    get: (target, name) => (target as Record<string | symbol, unknown>)[name] ?? procedure,
+    get: (target, name) =>
+      (target as Record<string | symbol, unknown>)[name] ?? procedure,
   });
 
 const imbuedRow = {
@@ -32,17 +42,37 @@ const imbuedRow = {
   experience: 40,
   equipped: "NONE",
   isInAuction: false,
-  item: { id: "sword", name: "Sword", image: "/sword.webp", itemType: "WEAPON", maxDurability: 100 },
+  item: {
+    id: "sword",
+    name: "Sword",
+    image: "/sword.webp",
+    itemType: "WEAPON",
+    maxDurability: 100,
+  },
   imbuements: [
-    { id: "done", craftingFinishedAt: new Date(Date.now() - 60_000), item: { name: "Finished Crystal" } },
-    { id: "busy", craftingFinishedAt: new Date(Date.now() + 60_000), item: { name: "Unfinished Crystal" } },
+    {
+      id: "done",
+      craftingFinishedAt: new Date(Date.now() - 60_000),
+      item: { name: "Finished Crystal" },
+    },
+    {
+      id: "busy",
+      craftingFinishedAt: new Date(Date.now() + 60_000),
+      item: { name: "Unfinished Crystal" },
+    },
   ],
 };
 
 /** Install the tRPC stub with the auction procedures a surface reads. */
-const stubApi = (auction: object = {}, rows: object[] = [imbuedRow], occupation: object = {}) =>
+const stubApi = (
+  auction: object = {},
+  rows: object[] = [imbuedRow],
+  occupation: object = {},
+) =>
   Object.assign(vi.spyOn(client, "api" as never), {
-    item: router({ getUserItems: { useQuery: () => ({ data: rows, isPending: false }) } }),
+    item: router({
+      getUserItems: { useQuery: () => ({ data: rows, isPending: false }) },
+    }),
     auction: router(auction),
     occupation: router(occupation),
     profile: router(),
@@ -51,13 +81,24 @@ const stubApi = (auction: object = {}, rows: object[] = [imbuedRow], occupation:
 
 beforeEach(() => {
   installBrowserGlobals({ resizeObserver: true });
+  vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
-    data: { userId: "viewer", occupation: "CRAFTING", level: 1, bank: 0, reputationPoints: 0, money: 0, role: "USER" },
+    data: {
+      userId: "viewer",
+      occupation: "CRAFTING",
+      level: 1,
+      bank: 0,
+      reputationPoints: 0,
+      money: 0,
+      role: "USER",
+    },
     prepareUserUpdate: vi.fn(),
     updateUser: vi.fn(),
     timeDiff: 0,
   } as never);
-  vi.spyOn(ItemDetails, "default").mockImplementation((({ item }: {
+  vi.spyOn(ItemDetails, "default").mockImplementation((({
+    item,
+  }: {
     item: { imbuements?: { name: string }[] };
   }) => (
     <p data-testid="imbuements">{item.imbuements?.map((entry) => entry.name).join()}</p>
@@ -146,11 +187,19 @@ it("shows only finished imbuements on an item awaiting repair", () => {
 
 /** The details rendered inside the card with this heading. */
 const cardDetails = (heading: string) =>
-  within(screen.getByText(heading).closest(".rounded-xl") as HTMLElement).getAllByTestId("imbuements");
+  within(
+    screen.getByText(heading).closest(".rounded-xl") as HTMLElement,
+  ).getAllByTestId("imbuements");
 
 /** Render modals inline, with a proceed button, so a test can read and accept them. */
 const stubModals = () =>
-  vi.spyOn(Modal, "default").mockImplementation((({ isOpen, title, proceed_label, onAccept, children }: {
+  vi.spyOn(Modal, "default").mockImplementation((({
+    isOpen,
+    title,
+    proceed_label,
+    onAccept,
+    children,
+  }: {
     isOpen: boolean;
     title: string;
     proceed_label?: string;
@@ -160,7 +209,10 @@ const stubModals = () =>
     isOpen ? (
       <section aria-label={title}>
         {children}
-        <button type="button" onClick={() => onAccept?.()}>{`Confirm ${proceed_label}`}</button>
+        <button
+          type="button"
+          onClick={() => onAccept?.()}
+        >{`Confirm ${proceed_label}`}</button>
       </section>
     ) : null) as never);
 
@@ -169,29 +221,51 @@ const settledRow = {
   ...imbuedRow,
   item: { ...imbuedRow.item, canBeImbued: true, maxImbueNumber: 3 },
   imbuements: [
-    { id: "done", imbuementItemId: "a", craftingFinishedAt: null, item: { name: "Finished Crystal" } },
-    { id: "second", imbuementItemId: "b", craftingFinishedAt: null, item: { name: "Second Crystal" } },
+    {
+      id: "done",
+      imbuementItemId: "a",
+      craftingFinishedAt: null,
+      item: { name: "Finished Crystal" },
+    },
+    {
+      id: "second",
+      imbuementItemId: "b",
+      craftingFinishedAt: null,
+      item: { name: "Second Crystal" },
+    },
   ],
 };
 
 it("leaves an unfinished imbuement off the manage imbuements card", () => {
   stubApi();
   renderCrafting();
-  expect(cardDetails("Manage Existing Imbuements")[0]?.textContent).toBe("Finished Crystal");
-  expect(cardDetails("Currently Imbuing")[0]?.textContent).toBe("Finished Crystal,Unfinished Crystal");
+  expect(cardDetails("Manage Existing Imbuements")[0]?.textContent).toBe(
+    "Finished Crystal",
+  );
+  expect(cardDetails("Currently Imbuing")[0]?.textContent).toBe(
+    "Finished Crystal,Unfinished Crystal",
+  );
 });
 
 it("drops a removed imbuement from the card before the inventory refreshes", async () => {
   const mutateAsync = vi.fn(async () => ({ success: true, message: "Removed" }));
-  stubApi({}, [settledRow], { removeImbuement: { useMutation: () => ({ mutateAsync, isPending: false }) } });
+  stubApi({}, [settledRow], {
+    removeImbuement: { useMutation: () => ({ mutateAsync, isPending: false }) },
+  });
   stubModals();
   renderCrafting();
-  expect(cardDetails("Manage Existing Imbuements")[0]?.textContent).toBe("Finished Crystal,Second Crystal");
+  expect(cardDetails("Manage Existing Imbuements")[0]?.textContent).toBe(
+    "Finished Crystal,Second Crystal",
+  );
   fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0] as HTMLElement);
   fireEvent.click(screen.getByRole("button", { name: "Confirm Remove" }));
-  await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith({ userItemImbuementId: "done" }));
   await waitFor(() =>
-    expect(cardDetails("Manage Existing Imbuements")[0]?.textContent).toBe("Second Crystal"),
+    expect(mutateAsync).toHaveBeenCalledWith({ userItemImbuementId: "done" }),
+  );
+  await waitFor(() =>
+    expect(cardDetails("Manage Existing Imbuements")[0]?.textContent).toBe(
+      "Second Crystal",
+    ),
   );
 });
 
@@ -204,16 +278,35 @@ it("leaves a removed imbuement off the imbue confirmation of an item selected ea
     isInAuction: false,
     equipped: "NONE",
     imbuements: [],
-    item: { id: "crystal", name: "Fresh Crystal", image: "/crystal.webp", itemType: "CRYSTAL" },
+    item: {
+      id: "crystal",
+      name: "Fresh Crystal",
+      image: "/crystal.webp",
+      itemType: "CRYSTAL",
+    },
   };
-  stubApi({}, [settledRow, crystal], { removeImbuement: { useMutation: () => ({ mutateAsync, isPending: false }) } });
+  stubApi({}, [settledRow, crystal], {
+    removeImbuement: { useMutation: () => ({ mutateAsync, isPending: false }) },
+  });
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
-    data: { userId: "viewer", occupation: "CRAFTING", level: 1, bank: 0, reputationPoints: 0, money: 0, role: "USER", craftingExperience: 1e9 },
+    data: {
+      userId: "viewer",
+      occupation: "CRAFTING",
+      level: 1,
+      bank: 0,
+      reputationPoints: 0,
+      money: 0,
+      role: "USER",
+      craftingExperience: 1e9,
+    },
     prepareUserUpdate: vi.fn(),
     updateUser: vi.fn(),
     timeDiff: 0,
   } as never);
-  vi.spyOn(CombatActions, "ActionSelector").mockImplementation((({ items, onClick }: {
+  vi.spyOn(CombatActions, "ActionSelector").mockImplementation((({
+    items,
+    onClick,
+  }: {
     items?: { id: string; name: string }[];
     onClick: (id: string) => void;
   }) =>
@@ -228,9 +321,61 @@ it("leaves a removed imbuement off the imbue confirmation of an item selected ea
   fireEvent.click(screen.getAllByRole("button", { name: "Remove" })[0] as HTMLElement);
   fireEvent.click(screen.getByRole("button", { name: "Confirm Remove" }));
   await waitFor(() =>
-    expect(cardDetails("Manage Existing Imbuements")[0]?.textContent).toBe("Second Crystal"),
+    expect(cardDetails("Manage Existing Imbuements")[0]?.textContent).toBe(
+      "Second Crystal",
+    ),
   );
   fireEvent.click(screen.getByRole("button", { name: "Fresh Crystal" }));
   const dialog = within(screen.getByRole("region", { name: "Imbue Item" }));
   expect(dialog.getAllByTestId("imbuements")[0]?.textContent).toBe("Second Crystal");
+});
+
+it("lists each crafting rank's experience range and craftable rarity times", () => {
+  stubApi();
+  renderCrafting();
+  const card = screen
+    .getByText("Crafting Information")
+    .closest(".rounded-xl") as HTMLElement;
+  const ranks = [...card.querySelectorAll(".md\\:grid-cols-2 > div")].map((rank) => [
+    rank.querySelector(".mb-2")?.textContent,
+    [...rank.querySelectorAll("li")].map((item) => item.textContent),
+  ]);
+  const times = CRAFTING_TIMES_MINS;
+  const exp = CRAFTING_REQUIRED_EXP;
+  expect(ranks).toEqual([
+    [
+      `Novice (0-${(exp.APPRENTICE - 1).toLocaleString()} exp)`,
+      [`• Common: ${times.NOVICE.COMMON} minutes`],
+    ],
+    [
+      `Apprentice (${exp.APPRENTICE.toLocaleString()}-${(exp.MASTER - 1).toLocaleString()} exp)`,
+      [
+        `• Common: ${times.APPRENTICE.COMMON} minutes`,
+        `• Rare: ${times.APPRENTICE.RARE} minutes`,
+      ],
+    ],
+    [
+      `Master (${exp.MASTER.toLocaleString()}-${(exp.FORGEMASTER - 1).toLocaleString()} exp)`,
+      [
+        `• Common: ${times.MASTER.COMMON} minutes`,
+        `• Rare: ${times.MASTER.RARE} minutes`,
+        `• Epic: ${times.MASTER.EPIC} minutes`,
+      ],
+    ],
+    [
+      `Forgemaster (${exp.FORGEMASTER.toLocaleString()}+ exp)`,
+      [
+        `• Common: ${times.FORGEMASTER.COMMON} minutes`,
+        `• Rare: ${times.FORGEMASTER.RARE} minutes`,
+        `• Epic: ${times.FORGEMASTER.EPIC} minutes`,
+        `• Legendary: ${times.FORGEMASTER.LEGENDARY} minutes`,
+      ],
+    ],
+  ]);
+  for (const badge of card.querySelectorAll(".md\\:grid-cols-2 > div > .mb-2")) {
+    expect(badge.className).toContain("mb-2");
+  }
+  for (const list of card.querySelectorAll(".md\\:grid-cols-2 ul")) {
+    expect(list.className).toBe("space-y-1 text-muted-foreground");
+  }
 });

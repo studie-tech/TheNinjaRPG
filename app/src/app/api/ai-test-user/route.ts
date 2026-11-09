@@ -1,8 +1,9 @@
 /**
- * AI test-user broker — preview-only API for the TNR reviewer agent.
+ * AI test-user broker for automated reviewers and local agents.
  *
- * Lets the Codex-based reviewer provision throwaway Clerk + DB users on the
- * Vercel preview deployment so it can log in and exercise the app in CI.
+ * Provisions throwaway Clerk + DB users on preview deployments and local
+ * development servers, so the CI reviewer and `make dev-user` callers can log in
+ * and exercise the app.
  * Guarded by:
  *  1. VERCEL_ENV === "preview" (or NODE_ENV === "development")
  *  2. A shared bearer token in the `x-tnr-reviewer-token` header

@@ -1,10 +1,16 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "bun:test";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { useRecipientPicker, useUserPicker } from "@/utils/search";
 import type { UserSearchResult } from "@/validators/register";
 
 const player = (userId: string) =>
-  ({ userId, username: userId, avatar: null, level: 1, rank: "GENIN" }) as UserSearchResult;
+  ({
+    userId,
+    username: userId,
+    avatar: null,
+    level: 1,
+    rank: "GENIN",
+  }) as UserSearchResult;
 
 describe("useUserPicker", () => {
   it("starts empty and exposes the selection", () => {
@@ -37,10 +43,9 @@ describe("useRecipientPicker", () => {
   const self = player("self");
 
   it("defaults to self once the user loads", async () => {
-    const { result, rerender } = renderHook(
-      ({ user }) => useRecipientPicker(user),
-      { initialProps: { user: undefined as UserSearchResult | undefined } },
-    );
+    const { result, rerender } = renderHook(({ user }) => useRecipientPicker(user), {
+      initialProps: { user: undefined as UserSearchResult | undefined },
+    });
     expect(result.current.user).toBeUndefined();
     rerender({ user: self });
     await waitFor(() => expect(result.current.user?.userId).toBe("self"));

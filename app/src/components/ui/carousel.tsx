@@ -90,6 +90,8 @@ const Carousel = ({
         event.preventDefault();
         scrollNext();
       } else if (event.key === "Enter") {
+        // Unlike upstream Shadcn, Enter advances the slide and is swallowed for every
+        // descendant, so Enter inside the registration steps never submits the form.
         event.preventDefault();
         scrollNext();
       }

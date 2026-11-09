@@ -11,12 +11,30 @@ import { isUrlAccessible, isWithinImgTag } from "@/server/utils/url";
 
 const ENDPOINT_NAME = "daily-link-cleaner";
 
-interface UrlCheckResult {
-  url: string;
-  keep: boolean;
-  isImg: boolean;
-  fullTag?: string;
-}
+export const GET = async (request: Request) => {
+  const authError = authenticateCronRequest(request);
+  if (authError) return authError;
+
+  // Check timer
+  const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
+
+  return runClaimedCron(timerCheck, "/api/daily-link-cleaner", async () => {
+    // Find all content with URLs
+    const urlRegex = /(https?:\/\/[^\s"]+)/g;
+    const [nindos, posts] = await Promise.all([
+      listUserNindoForGET(drizzleDB),
+      listForumPostForGET(drizzleDB),
+    ]);
+
+    // Process nindos and forum posts in parallel
+    await Promise.all([
+      processContentUrls(nindos, userNindo, urlRegex),
+      processContentUrls(posts, forumPost, urlRegex),
+    ]);
+
+    return Response.json(`OK`);
+  });
+};
 
 function processContentUrls<T extends { id: string; content: string }>(
   items: T[],
@@ -58,27 +76,9 @@ function processContentUrls<T extends { id: string; content: string }>(
   );
 }
 
-export const GET = async (request: Request) => {
-  const authError = authenticateCronRequest(request);
-  if (authError) return authError;
-
-  // Check timer
-  const timerCheck = await lockWithDailyTimer(drizzleDB, ENDPOINT_NAME);
-
-  return runClaimedCron(timerCheck, "/api/daily-link-cleaner", async () => {
-    // Find all content with URLs
-    const urlRegex = /(https?:\/\/[^\s"]+)/g;
-    const [nindos, posts] = await Promise.all([
-      listUserNindoForGET(drizzleDB),
-      listForumPostForGET(drizzleDB),
-    ]);
-
-    // Process nindos and forum posts in parallel
-    await Promise.all([
-      processContentUrls(nindos, userNindo, urlRegex),
-      processContentUrls(posts, forumPost, urlRegex),
-    ]);
-
-    return Response.json(`OK`);
-  });
-};
+interface UrlCheckResult {
+  url: string;
+  keep: boolean;
+  isImg: boolean;
+  fullTag?: string;
+}

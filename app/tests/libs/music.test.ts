@@ -115,21 +115,20 @@ describe("getBackgroundMusicSrc", () => {
   });
 
   it("keeps Halloween music off without a loaded user", () => {
-    expect(getBackgroundMusicSrc(undefined, "halloween")).toBe(
-      MUSIC_WELCOME_TO_SEICHI,
-    );
-    expect(getBackgroundMusicSrc(null, "halloween")).toBe(
-      MUSIC_WELCOME_TO_SEICHI,
-    );
+    expect(getBackgroundMusicSrc(undefined, "halloween")).toBe(MUSIC_WELCOME_TO_SEICHI);
+    expect(getBackgroundMusicSrc(null, "halloween")).toBe(MUSIC_WELCOME_TO_SEICHI);
     expect(getBackgroundMusicSrc({}, "halloween")).toBe(MUSIC_HALLOWEEN_THEME);
   });
 
   it("plays Another day, Another battlefield in every battle, over all other themes", () => {
-    expect(getBackgroundMusicSrc({ villageName: "Hyorin", inBattle: true }, "fall")).toBe(
-      MUSIC_ANOTHER_DAY_ANOTHER_BATTLEFIELD,
-    );
     expect(
-      getBackgroundMusicSrc({ villageName: "Syndicate", isOutlaw: true, inBattle: true }, "spring"),
+      getBackgroundMusicSrc({ villageName: "Hyorin", inBattle: true }, "fall"),
+    ).toBe(MUSIC_ANOTHER_DAY_ANOTHER_BATTLEFIELD);
+    expect(
+      getBackgroundMusicSrc(
+        { villageName: "Syndicate", isOutlaw: true, inBattle: true },
+        "spring",
+      ),
     ).toBe(MUSIC_ANOTHER_DAY_ANOTHER_BATTLEFIELD);
     expect(
       getBackgroundMusicSrc(
@@ -146,11 +145,11 @@ describe("getBackgroundMusicSrc", () => {
   });
 
   it("returns to the normal theme once the battle is over", () => {
-    expect(getBackgroundMusicSrc({ villageName: "Hyorin", inBattle: false }, "fall")).toBe(
-      MUSIC_HYORIN_THEME,
-    );
-    expect(getBackgroundMusicSrc({ villageName: "Hyorin", inBattle: null }, "halloween")).toBe(
-      MUSIC_HALLOWEEN_THEME,
-    );
+    expect(
+      getBackgroundMusicSrc({ villageName: "Hyorin", inBattle: false }, "fall"),
+    ).toBe(MUSIC_HYORIN_THEME);
+    expect(
+      getBackgroundMusicSrc({ villageName: "Hyorin", inBattle: null }, "halloween"),
+    ).toBe(MUSIC_HALLOWEEN_THEME);
   });
 });

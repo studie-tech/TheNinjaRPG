@@ -3,7 +3,9 @@ import {
   MAX_SKILL_POINTS,
   MasteryNames,
   MEDNIN_EXP_CAP,
+  RECRUIT_PRESTIGE_SHARE,
   SAGE_MASTERY_EXP_CAP,
+  VILLAGE_WAR_TYPES,
 } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
 import { getGatheringItemDrops } from "@/libs/gathering";
@@ -64,8 +66,7 @@ import { hasMasteryPromotion, MASTERY_EXPERIENCE_FIELDS } from "@/validators/rew
  * Callers must win an endpoint-specific idempotency / CAS claim before invoking
  * this helper. `updateRewards` itself does not provide replay protection.
  *
- * Money/XP-style scalars use SQL increments on `userData` columns so parallel grants compose;
- * village tokens and clan points already used this pattern.
+ * Money/XP-style scalars use SQL increments on `userData` columns so parallel grants compose.
  *
  * Pet XP combines positive player XP and dedicated pet rewards in this same account update;
  * the shared SQL helper checks live pet eligibility without another database round trip.
@@ -87,9 +88,8 @@ export const updateRewards = async (info: {
   pvpBoostApplied?: boolean;
   questCounterField?: QuestCounterFieldName;
   questFinishedAt?: Date;
-  // Fully-hydrated user (with quest relations) passed ONLY by callers that want gathering drops
-  // to advance the herbs_gathered tracker. Explicit opt-in — the herbs branch below no longer
-  // sniffs `"userQuests" in user`, so a future caller cannot silently start incrementing it.
+  // Fully-hydrated user (with quest relations) passed ONLY by callers whose gathering drops
+  // advance the herbs_gathered tracker; an explicit opt-in so other callers never increment it.
   questUser?: NonNullable<UserWithRelations>;
   /** Captured by the completed collection; ordinary rewards without a snapshot use base yield. */
   gatheringBonusQuantity?: number;
@@ -243,9 +243,8 @@ export const updateRewards = async (info: {
   ];
 
   // Fold the herbs-gathered tracker into this single questData write (avoids a second UPDATE in
-  // the caller). Only the gathering-claim path drops gatherer items AND opts in via `questUser`;
-  // every other caller drops nothing (or does not pass questUser), so this is skipped and their
-  // questData write is unchanged. Tracker computation starts from `user.questData` (the
+  // the caller). Only the gathering-claim path drops gatherer items AND opts in via `questUser`.
+  // Tracker computation starts from `user.questData` (the
   // authoritative snapshot this function writes) so it stays correct even if `questUser` carries
   // a staler questData than the row being updated.
   if (droppedGatheringItems.length > 0 && questUser) {
@@ -261,9 +260,6 @@ export const updateRewards = async (info: {
   // Update userdata
   const getNewRank = rewards.reward_rank !== "NONE";
   const getNewVillage = rewards.reward_village_membership !== "NONE";
-
-  // Cap medical experience at 4 million (atomic increment + cap in SQL so parallel reward grants stack).
-  // Skillpoints and sage mastery similarly capped in SQL.
 
   // Roll ONE not-yet-owned candidate only when the player has no equipped mode.
   // Recording history without equipping would permanently burn that id (no swap path).
@@ -299,6 +295,7 @@ export const updateRewards = async (info: {
     villagePrestige: sql`${userData.villagePrestige} + ${rewards.reward_prestige ?? 0}`,
     reputationPoints: sql`${userData.reputationPoints} + ${rewards.reward_reputation ?? 0}`,
     reputationPointsTotal: sql`${userData.reputationPointsTotal} + ${rewards.reward_reputation ?? 0}`,
+    // Skill points, medical and sage mastery experience are capped in SQL so parallel grants stack.
     skillPoints: sql`LEAST(${userData.skillPoints} + ${rewards.reward_skillpoints ?? 0}, ${MAX_SKILL_POINTS})`,
     medicalExperience: sql`LEAST(${userData.medicalExperience} + ${rewards.reward_medical_experience ?? 0}, ${MEDNIN_EXP_CAP})`,
     huntingExperience: sql`${userData.huntingExperience} + ${rewards.reward_hunting_experience ?? 0}`,
@@ -326,7 +323,7 @@ export const updateRewards = async (info: {
   // Recruitment logic
   const prestigeReward = Math.floor(
     boostPvpGain(
-      Math.ceil(rewards.reward_prestige * 0.1),
+      Math.ceil(rewards.reward_prestige * RECRUIT_PRESTIGE_SHARE),
       getPvpBoost(recruiter ?? {}, pvpAverage ? [pvpAverage] : []).totalPercent,
     ),
   );
@@ -387,7 +384,7 @@ export const updateRewards = async (info: {
       // Process each war the user is involved in (VILLAGE_WAR or WAR_RAID)
       for (const activeWar of activeWars) {
         const warSide = getWarSide(activeWar, user.villageId, user.userId);
-        if (!warSide || !["VILLAGE_WAR", "WAR_RAID"].includes(activeWar.type)) continue;
+        if (!warSide || !VILLAGE_WAR_TYPES.includes(activeWar.type)) continue;
         const onAttackerSide = warSide === activeWar.attackerVillageId;
 
         // War damage hits the opponent's war health

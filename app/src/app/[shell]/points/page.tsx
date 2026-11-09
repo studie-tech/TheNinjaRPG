@@ -34,21 +34,15 @@ import { NumberInput } from "@/components/ui/number-input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   FARM_GOLD_FED_TIME_REDUCTION_PERCENT,
+  FED_BANK_INTEREST,
   FED_COOKING_SLOTS,
   FED_EVENT_ITEMS,
-  FED_GOLD_BANK_INTEREST,
-  FED_GOLD_ITEM_LOADOUTS,
-  FED_GOLD_JUTSU_LOADOUTS,
   FED_INVENTORY_SLOTS,
+  FED_ITEM_LOADOUTS,
   FED_ITEM_LOADOUTS_BASE,
+  FED_JUTSU_LOADOUTS,
   FED_JUTSU_LOADOUTS_BASE,
   FED_JUTSU_SLOTS,
-  FED_NORMAL_BANK_INTEREST,
-  FED_NORMAL_ITEM_LOADOUTS,
-  FED_NORMAL_JUTSU_LOADOUTS,
-  FED_SILVER_BANK_INTEREST,
-  FED_SILVER_ITEM_LOADOUTS,
-  FED_SILVER_JUTSU_LOADOUTS,
   FEDERAL_MONTHLY_USD_CENTS,
   type FederalStatus,
   FederalStatuses,
@@ -58,9 +52,7 @@ import {
   PAYPAL_DISCOUNT_PERCENT,
   PET_FED_COLLECTION_SLOTS,
   QUEUE_WAITING_SLOTS,
-  SKILL_TREE_RESET_FREE_GOLD,
-  SKILL_TREE_RESET_FREE_NORMAL,
-  SKILL_TREE_RESET_FREE_SILVER,
+  SKILL_TREE_RESET_FREE,
   WEB_REP_MAX,
   WEB_REP_MIN,
   WEB_REP_PRESETS,
@@ -135,10 +127,10 @@ const FEDERAL_TIER_BENEFITS = {
     eventItems: FED_EVENT_ITEMS.NORMAL,
     cookingSlots: FED_COOKING_SLOTS.NORMAL,
     jutsuSlots: FED_JUTSU_SLOTS.NORMAL,
-    bankInterest: FED_NORMAL_BANK_INTEREST,
-    jutsuLoadouts: FED_NORMAL_JUTSU_LOADOUTS,
-    itemLoadouts: FED_NORMAL_ITEM_LOADOUTS,
-    skillTreeResets: SKILL_TREE_RESET_FREE_NORMAL,
+    bankInterest: FED_BANK_INTEREST.NORMAL,
+    jutsuLoadouts: FED_JUTSU_LOADOUTS.NORMAL,
+    itemLoadouts: FED_ITEM_LOADOUTS.NORMAL,
+    skillTreeResets: SKILL_TREE_RESET_FREE.NORMAL,
     avatarSize: "512KB",
   },
   SILVER: {
@@ -148,10 +140,10 @@ const FEDERAL_TIER_BENEFITS = {
     eventItems: FED_EVENT_ITEMS.SILVER,
     cookingSlots: FED_COOKING_SLOTS.SILVER,
     jutsuSlots: FED_JUTSU_SLOTS.SILVER,
-    bankInterest: FED_SILVER_BANK_INTEREST,
-    jutsuLoadouts: FED_SILVER_JUTSU_LOADOUTS,
-    itemLoadouts: FED_SILVER_ITEM_LOADOUTS,
-    skillTreeResets: SKILL_TREE_RESET_FREE_SILVER,
+    bankInterest: FED_BANK_INTEREST.SILVER,
+    jutsuLoadouts: FED_JUTSU_LOADOUTS.SILVER,
+    itemLoadouts: FED_ITEM_LOADOUTS.SILVER,
+    skillTreeResets: SKILL_TREE_RESET_FREE.SILVER,
     avatarSize: "1MB",
   },
   GOLD: {
@@ -161,10 +153,10 @@ const FEDERAL_TIER_BENEFITS = {
     eventItems: FED_EVENT_ITEMS.GOLD,
     cookingSlots: FED_COOKING_SLOTS.GOLD,
     jutsuSlots: FED_JUTSU_SLOTS.GOLD,
-    bankInterest: FED_GOLD_BANK_INTEREST,
-    jutsuLoadouts: FED_GOLD_JUTSU_LOADOUTS,
-    itemLoadouts: FED_GOLD_ITEM_LOADOUTS,
-    skillTreeResets: SKILL_TREE_RESET_FREE_GOLD,
+    bankInterest: FED_BANK_INTEREST.GOLD,
+    jutsuLoadouts: FED_JUTSU_LOADOUTS.GOLD,
+    itemLoadouts: FED_ITEM_LOADOUTS.GOLD,
+    skillTreeResets: SKILL_TREE_RESET_FREE.GOLD,
     avatarSize: "2MB",
   },
 };
@@ -441,7 +433,7 @@ const ReputationStore = () => {
 };
 
 /**
- * Subscript paypal button, which needs a subscription plan as input
+ * PayPal subscription button for one federal tier's subscription plan
  */
 const PayPalSubscriptionButton = (props: {
   subscriptionPlan: string;
@@ -515,7 +507,7 @@ const PayPalSubscriptionButton = (props: {
   // Loading status
   const isPending = isUpgrading || isSubscribing || isBuying;
 
-  // If not loaded yet, show loader
+  // Show a loader while a subscription or purchase mutation runs
   if (isPending) return <Loader explanation="Processing..." />;
 
   // Derived vars
@@ -850,7 +842,7 @@ const SubscriptionsOverview = () => {
 };
 
 /**
- * Lookup paypal subscription
+ * Lookup a PayPal transaction
  */
 const LookupTransaction = () => {
   // tRPC utility

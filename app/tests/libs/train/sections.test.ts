@@ -3,8 +3,8 @@ import { resolveRememberedTab } from "@/layout/NavTabs";
 import { getTrainingSections } from "@/libs/train";
 import {
   getJutsuStatQuickFilter,
-  jutsuStatQuickFilters,
   jutsuStatQuickFilterSelection,
+  jutsuStatQuickFilters,
 } from "@/validators/statFilters";
 
 describe("training grounds sections", () => {
@@ -34,10 +34,13 @@ describe("training grounds sections", () => {
     ["Covert & Sensei", false, "Covert"],
     ["Masteries", true, "Masteries"],
     ["Removed", true, "Stats"],
-  ])("reopens a saved %s section (sensei eligible: %s) as %s", (stored, eligible, tab) => {
-    const { options, aliases } = getTrainingSections(eligible);
-    expect(resolveRememberedTab(stored, options, aliases)).toBe(tab);
-  });
+  ])(
+    "reopens a saved %s section (sensei eligible: %s) as %s",
+    (stored, eligible, tab) => {
+      const { options, aliases } = getTrainingSections(eligible);
+      expect(resolveRememberedTab(stored, options, aliases)).toBe(tab);
+    },
+  );
 });
 
 describe("jutsu stat quick filters", () => {
@@ -54,7 +57,9 @@ describe("jutsu stat quick filters", () => {
 
   it("round-trips every quick filter through the stat selection", () => {
     for (const option of jutsuStatQuickFilters) {
-      expect(getJutsuStatQuickFilter(jutsuStatQuickFilterSelection(option))).toBe(option);
+      expect(getJutsuStatQuickFilter(jutsuStatQuickFilterSelection(option))).toBe(
+        option,
+      );
     }
     expect(jutsuStatQuickFilterSelection("All")).toEqual([]);
     expect(jutsuStatQuickFilterSelection("Highest")).toEqual(["Highest"]);

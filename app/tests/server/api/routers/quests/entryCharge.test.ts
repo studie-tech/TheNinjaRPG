@@ -22,11 +22,11 @@ import { assignQuestToUser } from "@/server/utils/questAssignment";
 import { DialogObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
+  insertDefaultAiProfile,
   insertItems,
   insertQuests,
   insertUserItems,
   insertUsers,
-  insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import {
@@ -92,7 +92,9 @@ describeWithDatabase("quest entry items are paid at the start of a run", () => {
   const start = async (questId = "pyramid") => {
     const client = await getTestDatabase();
     const { user } = await fetchUpdatedUser({ client, userId: "hero" });
-    const pyramid = await client.query.quest.findFirst({ where: eq(quest.id, questId) });
+    const pyramid = await client.query.quest.findFirst({
+      where: eq(quest.id, questId),
+    });
     return {
       client,
       result: await assignQuestToUser({
@@ -132,12 +134,14 @@ describeWithDatabase("quest entry items are paid at the start of a run", () => {
     ]);
     const { client, result } = await start();
     expect(result.success).toBe(true);
-    const attempt = await client.query.questHistory.findFirst({ with: { quest: true } });
+    const attempt = await client.query.questHistory.findFirst({
+      with: { quest: true },
+    });
     expect(attempt?.entryPaid).toBe(true);
     // Stacks are allocated in id order: all of "a", then one from "b".
-    expect(await client.query.userItem.findMany({ orderBy: userItem.id })).toMatchObject([
-      { id: "b", quantity: 4 },
-    ]);
+    expect(
+      await client.query.userItem.findMany({ orderBy: userItem.id }),
+    ).toMatchObject([{ id: "b", quantity: 4 }]);
 
     const battleResult = await initiateBattle(
       {
@@ -162,82 +166,113 @@ describeWithDatabase("quest entry items are paid at the start of a run", () => {
     { ticketed: true, changed: false },
     { ticketed: false, changed: true },
     { ticketed: true, changed: true },
-  ])("admits recovery with a war slot (ticketed=$ticketed, changed=$changed)", async ({ ticketed, changed }) => {
-    const client = await getTestDatabase();
-    await client.insert(village).values(
-      ["home", "enemy"].map((id, i) => ({
-        id,
-        name: id,
-        sector: 201 + i,
-        kageId: `${id}-kage`,
-        tokens: 1000,
-      })),
-    );
-    await client.insert(war).values({
-      id: "war",
-      type: "VILLAGE_WAR",
-      status: "ACTIVE",
-      sector: 201,
-      attackerVillageId: "home",
-      defenderVillageId: "enemy",
-      attackerWarHealth: 100,
-      defenderWarHealth: 100,
-      defenderShrineHp: 0,
-    });
-    await client.insert(villageStructure).values(
-      ["home", "enemy"].map((id) => ({
-        id: `${id}/townhall`,
-        name: "Town Hall",
-        route: "/townhall",
-        image: "",
-        villageId: id,
-        curSp: 1000,
-      })),
-    );
-    await client
-      .update(userData)
-      .set({ villageId: "home", status: "ASLEEP", autoWakeUp: true, immunityUntil: new Date(Date.now() + 3600000) })
-      .where(eq(userData.userId, "hero"));
-    await insertQuests([
-      {
-        id: "warrun",
-        name: "War Run",
-        questType: "war",
-        hidden: false,
-        maxAttempts: 100,
-        maxCompletes: 100,
-        content: {
-          entryItems: ticketed ? [{ ids: ["ticket"], number: 2 }] : [],
-          objectives: [DialogObjective.parse({ id: "wait", task: "dialog" })],
-          reward: ObjectiveReward.parse({}),
-          sceneBackground: "",
-          sceneCharacters: [],
+  ])(
+    "admits recovery with a war slot (ticketed=$ticketed, changed=$changed)",
+    async ({ ticketed, changed }) => {
+      const client = await getTestDatabase();
+      await client.insert(village).values(
+        ["home", "enemy"].map((id, i) => ({
+          id,
+          name: id,
+          sector: 201 + i,
+          kageId: `${id}-kage`,
+          tokens: 1000,
+        })),
+      );
+      await client.insert(war).values({
+        id: "war",
+        type: "VILLAGE_WAR",
+        status: "ACTIVE",
+        sector: 201,
+        attackerVillageId: "home",
+        defenderVillageId: "enemy",
+        attackerWarHealth: 100,
+        defenderWarHealth: 100,
+        defenderShrineHp: 0,
+      });
+      await client.insert(villageStructure).values(
+        ["home", "enemy"].map((id) => ({
+          id: `${id}/townhall`,
+          name: "Town Hall",
+          route: "/townhall",
+          image: "",
+          villageId: id,
+          curSp: 1000,
+        })),
+      );
+      await client
+        .update(userData)
+        .set({
+          villageId: "home",
+          status: "ASLEEP",
+          autoWakeUp: true,
+          immunityUntil: new Date(Date.now() + 3600000),
+        })
+        .where(eq(userData.userId, "hero"));
+      await insertQuests([
+        {
+          id: "warrun",
+          name: "War Run",
+          questType: "war",
+          hidden: false,
+          maxAttempts: 100,
+          maxCompletes: 100,
+          content: {
+            entryItems: ticketed ? [{ ids: ["ticket"], number: 2 }] : [],
+            objectives: [DialogObjective.parse({ id: "wait", task: "dialog" })],
+            reward: ObjectiveReward.parse({}),
+            sceneBackground: "",
+            sceneCharacters: [],
+          },
         },
-      },
-    ]);
-    await insertUserItems([{ id: "a", userId: "hero", itemId: "ticket", quantity: 3 }]);
+      ]);
+      await insertUserItems([
+        { id: "a", userId: "hero", itemId: "ticket", quantity: 3 },
+      ]);
 
-    const interleaved = changed ? beforeStatements(client, userData, [async () => {
-      await client.update(userData).set({ autoWakeUp: false }).where(eq(userData.userId, "hero"));
-    }]) : client;
-    const result = await callerForDatabase(questsRouter, "hero", interleaved).startQuest({ questId: "warrun", userSector: 0 });
-    const saved = await client.query.userData.findFirst({ where: eq(userData.userId, "hero") });
-    expect(result.success).toBe(!changed);
-    expect(saved).toMatchObject({ status: changed ? "ASLEEP" : "AWAKE", dailyWarMissions: changed ? 0 : 1 });
-    expect(saved!.warParticipantUntil.getTime() > Date.now()).toBe(!changed);
-    expect(saved!.bracketImmunityLiftedUntil.getTime() > Date.now()).toBe(!changed);
-    expect(saved!.immunityUntil.getTime() > Date.now()).toBe(changed);
-    expect(await client.query.userItem.findMany()).toMatchObject([{ id: "a", quantity: ticketed && !changed ? 1 : 3 }]);
-    if (changed) {
-      expect(result.message).toContain("activity");
-      expect(result.actionNotice).toBeUndefined();
-      expect(await client.query.questHistory.findMany()).toHaveLength(0);
-      expect(saved?.questData ?? []).toHaveLength(0);
-    } else {
-      expect(result.actionNotice).toBe("This action woke you up.");
-      expect(result.userRecovery?.activity).toMatchObject({ status: "AWAKE", battleId: null });
-      expect((await client.query.questHistory.findFirst())?.entryPaid).toBe(ticketed);
-      expect(saved?.questData).toMatchObject([{ id: "warrun" }]);
-    }
-  });
+      const interleaved = changed
+        ? beforeStatements(client, userData, [
+            async () => {
+              await client
+                .update(userData)
+                .set({ autoWakeUp: false })
+                .where(eq(userData.userId, "hero"));
+            },
+          ])
+        : client;
+      const result = await callerForDatabase(
+        questsRouter,
+        "hero",
+        interleaved,
+      ).startQuest({ questId: "warrun", userSector: 0 });
+      const saved = await client.query.userData.findFirst({
+        where: eq(userData.userId, "hero"),
+      });
+      expect(result.success).toBe(!changed);
+      expect(saved).toMatchObject({
+        status: changed ? "ASLEEP" : "AWAKE",
+        dailyWarMissions: changed ? 0 : 1,
+      });
+      expect(saved!.warParticipantUntil.getTime() > Date.now()).toBe(!changed);
+      expect(saved!.bracketImmunityLiftedUntil.getTime() > Date.now()).toBe(!changed);
+      expect(saved!.immunityUntil.getTime() > Date.now()).toBe(changed);
+      expect(await client.query.userItem.findMany()).toMatchObject([
+        { id: "a", quantity: ticketed && !changed ? 1 : 3 },
+      ]);
+      if (changed) {
+        expect(result.message).toContain("activity");
+        expect(result.actionNotice).toBeUndefined();
+        expect(await client.query.questHistory.findMany()).toHaveLength(0);
+        expect(saved?.questData ?? []).toHaveLength(0);
+      } else {
+        expect(result.actionNotice).toBe("This action woke you up.");
+        expect(result.userRecovery?.activity).toMatchObject({
+          status: "AWAKE",
+          battleId: null,
+        });
+        expect((await client.query.questHistory.findFirst())?.entryPaid).toBe(ticketed);
+        expect(saved?.questData).toMatchObject([{ id: "warrun" }]);
+      }
+    },
+  );
 });

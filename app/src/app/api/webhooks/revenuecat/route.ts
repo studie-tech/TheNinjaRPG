@@ -1,4 +1,4 @@
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nextjs";
 import { headers } from "next/headers";
 import { env } from "@/env/server.mjs";
 import { drizzleDB } from "@/server/db";

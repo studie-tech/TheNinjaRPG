@@ -47,6 +47,7 @@ import {
   MAX_ITEM_VARIANTS,
   PET_MAX_CONSUME_PETS,
   TUTORIAL_ITEM_ID,
+  VARIANT_COST_TYPES,
   VARIANT_CURRENCY_FIELD,
   type VariantCurrency,
   type VariantCurrencyField,
@@ -61,7 +62,6 @@ import {
   type UserPetInsert,
   userData,
   userItem,
-  userItemImbuement,
 } from "@/drizzle/schema";
 import { filterRollableBloodlines } from "@/libs/bloodline";
 import { findLoadoutHotkeyConflict } from "@/libs/combat/hotkeys";
@@ -278,6 +278,7 @@ import {
   updateUserItemForTryRepairUserItemDurability,
   updateUserItemForUnequipAllItems,
   updateUserItemForUpdate,
+  userItemAvailableAt,
 } from "@/queries/item";
 import { fetchJutsuLoadouts } from "@/queries/jutsu";
 import { findActionLogById } from "@/queries/logs";
@@ -297,11 +298,7 @@ import {
   fetchUserQuestByQuestId,
 } from "@/queries/quests";
 import { fetchSageModeRolls, fetchSageModes } from "@/queries/sageMode";
-import {
-  fetchMasterySources,
-  fetchUserSkills,
-  findRequiredSkillTreeEntry,
-} from "@/queries/skillTree";
+import { fetchUserSkills, findRequiredSkillTreeEntry } from "@/queries/skillTree";
 import { fetchStructures } from "@/queries/village";
 import { fetchUpdatedUser } from "@/routers/profile";
 import {
@@ -351,7 +348,7 @@ import {
   canAwardReputation,
   canChangeContent,
   canEditItems,
-  canOnlyEditSelf,
+  isRestrictedToSelf,
 } from "@/utils/permissions";
 import { sanitizeVariantText } from "@/utils/sanitize";
 import { getNextUserSnapshotAt, getUtcDayKey } from "@/utils/time";
@@ -363,27 +360,21 @@ import {
   NonCombatQuestTag,
   type ZodAllTags,
 } from "@/validators/combat";
-import { consumeItemInputSchema } from "@/validators/cooking";
 import {
   type InventoryQuantityChange,
   inventoryQuantityChangeSchema,
 } from "@/validators/inventory";
 import {
-  adjustUserItemSchema,
   displayCostType,
-  evolveItemSchema,
-  furnitureImageMeasurementSchema,
-  getItemEvolutionsSchema,
-  getPublicUserItemsSchema,
   type ItemFilteringSchema,
-  ItemVariantResponseSchema,
+  ItemVariantValidator,
   itemBuySchema,
   itemCreateSchema,
   itemFilteringSchema,
-  UserUnlockedVariantResponseSchema,
-  upsertItemVariantInputSchema,
 } from "@/validators/item";
+import { furnitureVariantDataSchema } from "@/validators/itemFurniture";
 import { renameLoadoutSchema, setLoadoutHotkeysSchema } from "@/validators/loadout";
+import { lpcItemFields } from "@/validators/lpc";
 import { idSchema } from "@/validators/misc";
 import {
   ObjectiveReward,
@@ -399,13 +390,77 @@ import {
   weightedCacheSchema,
 } from "@/validators/weightedCache";
 
+/** Furniture measurements always describe the original uploaded image, never a CDN rendition. */
+const furnitureImageMeasurementSchema = z.object({
+  image: z.url().max(512),
+  useFullFootprint: z.boolean(),
+});
+
+const getItemEvolutionsSchema = z.object({
+  itemId: z.string(),
+});
+
+const evolveItemSchema = z.object({
+  userItemId: z.string(),
+  evolutionItemId: z.string(),
+});
+
+const getPublicUserItemsSchema = z.object({
+  userId: z.string(),
+});
+
+const adjustUserItemSchema = z.object({
+  userId: z.string(),
+  userItemId: z.string(),
+  level: z.number().int().min(1).max(ITEM_LEVEL_CAP),
+});
+
+const ItemVariantResponseSchema = z.object({
+  ...lpcItemFields.shape,
+  id: z.string(),
+  itemId: z.string(),
+  name: z.string(),
+  image: z.string(),
+  requiredItemId: z.string().trim().min(1).nullable().prefault(null),
+  costType: z.enum(VARIANT_COST_TYPES),
+  cost: z.number(),
+  order: z.number(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  description: z.string().nullish(),
+  battleDescription: z.string().nullish(),
+  furnitureData: furnitureVariantDataSchema.nullable().prefault(null),
+});
+
+const upsertItemVariantInputSchema = z.object({
+  itemId: z.string(),
+  variant: ItemVariantValidator,
+});
+
+const UserUnlockedVariantResponseSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  variantId: z.string(),
+  createdAt: z.date(),
+});
+
+/** Meals require a stack snapshot; collection grants and weighted caches require a retry ID. */
+const consumeItemInputSchema = z.object({
+  userItemId: z.string(),
+  expectedQuantity: z.int().positive().optional(),
+  requestId: z
+    .string()
+    .regex(/^[\w-]{10,64}$/)
+    .optional(),
+});
+
 export const itemRouter = createTRPCRouter({
   /** Content authoring needs source alpha bounds even for generated and historical uploads. */
   getFurnitureImageGeometry: protectedProcedure
     .input(furnitureImageMeasurementSchema)
     .query(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
-      if (!canEditItems(user.role) || user.isBanned)
+      if (!canChangeContent(user.role) || user.isBanned)
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Only content staff can measure furniture images",
@@ -569,13 +624,12 @@ export const itemRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
-      if (canChangeContent(user.role)) {
-        const id = nanoid();
-        await insertItemForCreate(ctx.drizzle, id, input);
-        return { success: true, message: id };
-      } else {
-        return { success: false, message: `Not allowed to create item` };
+      if (!canChangeContent(user.role)) {
+        return errorResponse(`Not allowed to create item`);
       }
+      const id = nanoid();
+      await insertItemForCreate(ctx.drizzle, id, input);
+      return { success: true, message: id };
     }),
   // Clone an existing item
   clone: protectedProcedure
@@ -1097,7 +1151,6 @@ export const itemRouter = createTRPCRouter({
     .input(
       itemFilteringSchema.extend({
         cursor: z.number().nullish(),
-        limit: z.number().min(1).max(500),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -1145,7 +1198,7 @@ export const itemRouter = createTRPCRouter({
           message: "Not allowed to edit public user",
         });
       }
-      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+      if (isRestrictedToSelf(user.role, user.userId, input.userId)) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "You can only view your own items",
@@ -1168,7 +1221,7 @@ export const itemRouter = createTRPCRouter({
       if (!canEditItems(user.role)) {
         return errorResponse("Not allowed to edit public user");
       }
-      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+      if (isRestrictedToSelf(user.role, user.userId, input.userId)) {
         return errorResponse("You can only edit your own items");
       }
       if (!owned?.item) {
@@ -1799,7 +1852,7 @@ export const itemRouter = createTRPCRouter({
 
       return { success: result.success, message: result.message };
     }),
-  // Drop user item
+  // Sell a user item (dropped when it has no resale value)
   sellUserItem: protectedProcedure
     .meta({ mcp: { description: "Sell or drop a user item" } })
     .input(z.object({ userItemId: z.string() }))
@@ -1970,7 +2023,7 @@ export const itemRouter = createTRPCRouter({
         ...(unconfirmed.length > 0 ? {} : getBulkSellUserUpdate(ryo)),
       };
     }),
-  // Use user item
+  // Equip or unequip a user item
   toggleEquip: protectedProcedure
     .meta({ mcp: { description: "Toggle item equip status" } })
     .input(z.object({ userItemId: z.string(), slot: z.enum(ItemSlots).optional() }))
@@ -1990,18 +2043,18 @@ export const itemRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       // Fetch
-      const [useritems, user, loadouts, masterySources] = await Promise.all([
+      const [useritems, user, loadouts] = await Promise.all([
         fetchUserItems(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
-        fetchMasterySources(ctx.drizzle, ctx.userId),
       ]);
+      if (!user) return errorResponse("User not found");
       // Mutate
       const result = await toggleEquipItem(
         ctx.drizzle,
         input.userItemId,
         useritems,
-        { ...user, ...masterySources },
+        user,
         input.slot,
       );
       // If anything happened
@@ -2043,7 +2096,7 @@ export const itemRouter = createTRPCRouter({
     })
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
-      // Equipped rows only (not fetchUserItems — it omits hidden items). `ctx.userId` is the session user; no extra userId guard.
+      // Equipped rows only (fetchUserItems omits hidden items).
       const [user, loadouts] = await Promise.all([
         fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
@@ -2621,7 +2674,7 @@ export const itemRouter = createTRPCRouter({
       };
       // Quest history may need insertion, and entry costs/rewards can touch more rows.
       // These must commit with the scroll debit and replay receipt; one guarded UPDATE
-      // cannot cover inserts. Reuse the existing cache/collection receipt transaction.
+      // cannot cover inserts, so they share the cache/collection receipt transaction.
       if ((caches.length > 0 || petReward || grantedQuest) && receiptId) {
         return await commitCacheConsumption({
           client: ctx.drizzle,
@@ -2653,7 +2706,7 @@ export const itemRouter = createTRPCRouter({
           throw error;
         });
       }
-      // Ordinary consumables retain the existing guarded claim and parallel mutation path.
+      // Ordinary consumables use the guarded claim and parallel mutation path.
       const response = await commitConsumption(ctx.drizzle, false);
       return response.success
         ? actionReadinessResponse(response, readiness, ctx.drizzle)
@@ -3297,13 +3350,11 @@ export const itemRouter = createTRPCRouter({
           return errorResponse(getInventoryBucketFullMessage(purchaseBucket));
         }
       }
-      // buy_item quest tracker. Source questData + userQuests/completedQuests together from
-      // the single fetchQuestTrackerState read above (NOT fetchUpdatedUser, which pulls
-      // achievements/wars/raids and runs regen writes) — one snapshot keeps the tracker read
-      // internally consistent, instead of pairing questData from one fetch with userQuests
-      // from another. If that fetch failed (null), SKIP tracking entirely — writing an empty
-      // questData would wipe the user's existing quest progress. NPC item shop only; auction
-      // buyouts are a separate, out-of-scope path.
+      // buy_item quest tracker (NPC item shop purchases; auction buyouts do not advance it).
+      // questData and userQuests/completedQuests come from the single
+      // fetchQuestTrackerState read above, so the tracker read is internally consistent.
+      // If that fetch failed (null), skip tracking entirely: writing an empty questData
+      // would wipe the user's existing quest progress.
       // Only touch questData when the purchase can actually advance a buy_item
       // objective for this item: buy_item is content-gated (unlike the always-on
       // counters in craft/train), so any other purchase would re-serialize an
@@ -3313,8 +3364,7 @@ export const itemRouter = createTRPCRouter({
       // completed achievements stay in fetchQuestTrackerState's result forever, so
       // without the done-check every later matching purchase would re-open the
       // redundant-write window. When it does advance, the full-snapshot write
-      // matches every other tracker path (hospital/jutsu/occupation), which all
-      // accept that same window.
+      // accepts that window.
       const advancesBuyItemObjective = questState?.userQuests.some((uq) =>
         uq.quest?.content?.objectives?.some((o) => {
           if (o.task !== "buy_item" || !objectiveContentIds(o).includes(iid)) {
@@ -3450,11 +3500,11 @@ export const itemRouter = createTRPCRouter({
     .meta({ mcp: { description: "Auto-equip best items by cost" } })
     .output(baseServerResponse)
     .mutation(async ({ ctx }) => {
-      const [useritems, user, masterySources] = await Promise.all([
+      const [useritems, user] = await Promise.all([
         fetchUserItems(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, ctx.userId),
-        fetchMasterySources(ctx.drizzle, ctx.userId),
+        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
       ]);
+      if (!user) return errorResponse("User not found");
 
       // Slot exclusivity and category / maxEquips limits are decided against one
       // in-memory snapshot. Writes are a single Promise.all so validation is not
@@ -3462,13 +3512,9 @@ export const itemRouter = createTRPCRouter({
       // a row that moves home / auction / crafting / imbue after the snapshot
       // is not equipped.
       const now = new Date();
-      const masteries = effectiveMasteries({ ...user, ...masterySources });
+      const masteries = effectiveMasteries(user);
       const { assignments, hasUnequipped, hasAvailableSlots } =
-        computeAutoEquipAssignments(
-          useritems,
-          { ...user, ...masteries, userSkills: masterySources.userSkills },
-          now,
-        );
+        computeAutoEquipAssignments(useritems, { ...user, ...masteries }, now);
 
       if (!hasUnequipped) {
         return errorResponse("No unequipped items available");
@@ -3543,24 +3589,27 @@ export const itemRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Query
       let inventoryRecovered = false;
-      const [loadouts, user, useritems, masterySources] = await Promise.all([
+      const [loadouts, user, useritems] = await Promise.all([
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
         fetchUserItems(ctx.drizzle, ctx.userId, {
           includeHidden: true,
           onStaleMergeClaimRecovery: () => {
             inventoryRecovered = true;
           },
         }),
-        fetchMasterySources(ctx.drizzle, ctx.userId),
       ]);
+      if (!user) return errorResponse("User not found");
       // Mutate & return result
       const id = input.id;
       const beforeEquipment = useritems.map((row) => ({ ...row }));
-      const result = await selectItemLoadout(ctx.drizzle, id, loadouts, useritems, {
-        ...user,
-        ...masterySources,
-      });
+      const result = await selectItemLoadout(
+        ctx.drizzle,
+        id,
+        loadouts,
+        useritems,
+        user,
+      );
       return result.success
         ? {
             ...result,
@@ -3574,7 +3623,6 @@ export const itemRouter = createTRPCRouter({
             ...getSelectItemLoadoutUserUpdate({
               result,
               user,
-              masterySources,
               id,
               useritems,
             }),
@@ -3736,7 +3784,7 @@ export const selectItemLoadout = async (
 
   // Apply atomically: a single statement equips the loadout and unequips
   // everything else, so there is no wipe-then-partial-fail window.
-  let equipped: ItemSlot = "NONE";
+  let equipped: ItemSlot | SQL = "NONE";
   if (assignments.length > 0) {
     const sqlChunks: SQL[] = [sql`(case`];
     for (const a of assignments) {
@@ -3744,15 +3792,12 @@ export const selectItemLoadout = async (
       // getEquipBlockReason + isImbuing): if a row was moved home/auction/crafting
       // or began imbuing between the snapshot and now, its arm no longer matches
       // and it falls to 'NONE' instead of being equipped while ineligible.
-      // Imbuement lives on a separate table, so it needs a correlated NOT EXISTS.
       sqlChunks.push(
-        sql`when ${userItem.id} = ${a.userItemId} and ${userItem.storedAtHome} = false and ${userItem.isInAuction} = false and (${userItem.craftingFinishedAt} is null or ${userItem.craftingFinishedAt} <= ${now}) and not exists (select 1 from ${userItemImbuement} where ${userItemImbuement.userItemId} = ${a.userItemId} and ${userItemImbuement.craftingFinishedAt} > ${now}) then ${a.slot}`,
+        sql`when ${and(eq(userItem.id, a.userItemId), userItemAvailableAt(client, a.userItemId, now))} then ${a.slot}`,
       );
     }
     sqlChunks.push(sql`else 'NONE' end)`);
-    // Drizzle narrows `equipped` to the enum union in set(); cast the raw CASE
-    // expression to that type so it is accepted as the column value.
-    equipped = sql.join(sqlChunks, sql.raw(" ")) as unknown as ItemSlot;
+    equipped = sql.join(sqlChunks, sql` `);
   }
   const equippedRows = await retryOnDeadlock(async () =>
     updateUserItemForSelectItemLoadout(client, equipped, user),
@@ -4310,7 +4355,7 @@ const refundUserMoney = async (
   await incrementUserMoney(drizzle, amount, userId);
 };
 
-// --- Stack merge (used by mergeStacks / mergeAllStacks; kept at bottom with other helpers)
+// --- Stack merge (used by mergeStacks / mergeAllStacks)
 
 type MergeEligibleUserItemForStackMerge = UserItem & {
   imbuements: readonly unknown[];

@@ -1,5 +1,6 @@
 import { vi } from "bun:test";
 import { eq, type SQL } from "drizzle-orm";
+import { captureCombatCacheSnapshot } from "@/deltas/combat";
 import type { BattleType } from "@/drizzle/constants";
 import {
   type AiProfile,
@@ -9,20 +10,19 @@ import {
   jutsuEquipLimit,
   userData,
 } from "@/drizzle/schema";
-import { captureCombatCacheSnapshot } from "@/deltas/combat";
+import { refreshMasteries } from "@/libs/combat/mastery";
 import type {
   CombatQueryUser,
   CombatQueryUserJutsu,
   CompleteBattle,
 } from "@/libs/combat/types";
-import { refreshMasteries } from "@/libs/combat/mastery";
 import type { fetchBattleEssentials } from "@/queries/combat";
 import { processUsersForBattle } from "@/server/api/routers/combat";
 import { fetchUserItemsWithVariants } from "@/server/api/routers/item";
 import { fetchUserJutsus } from "@/server/api/routers/jutsu";
 import type { DrizzleClient } from "@/server/db";
+import { makeBattleUser, makeUser, tableDefaults } from "../../../setup/combat";
 import { equipLimitFixture } from "../../../setup/jutsuEquipLimits";
-import { makeBattleUser, makeUser, tableDefaults } from "./battleScenario";
 
 type PreloadOptions = Parameters<typeof processUsersForBattle>[1];
 type Essentials = Awaited<ReturnType<typeof fetchBattleEssentials>>;
@@ -99,7 +99,9 @@ export const loadCombatant = async (
   const jutsus = await fetchUserJutsus(db, userId, undefined, { applyReskins });
   return {
     ...row,
-    items: equippedItemsOnly ? items.filter((owned) => owned.equipped !== "NONE") : items,
+    items: equippedItemsOnly
+      ? items.filter((owned) => owned.equipped !== "NONE")
+      : items,
     jutsus: unequippedJutsus ? jutsus : jutsus.filter((owned) => owned.equipped),
     userSkills: [],
     bloodline: null,
@@ -163,7 +165,9 @@ export const insertSnapshotLobby = async (
 };
 
 /** Character row with empty relations, as `initiateBattle` reads it back. */
-export const makeInitiationUser = (overrides: { userId: string } & Record<string, unknown>) => ({
+export const makeInitiationUser = (
+  overrides: { userId: string } & Record<string, unknown>,
+) => ({
   ...tableDefaults(userData),
   ...makeUser({
     username: overrides.userId,
@@ -239,7 +243,8 @@ export const fakeInitiationClient = (
             if (table === battleHistory) onHistoryRead?.(predicate);
             return builder;
           },
-          then: (resolve: (value: unknown) => unknown) => Promise.resolve(rows).then(resolve),
+          then: (resolve: (value: unknown) => unknown) =>
+            Promise.resolve(rows).then(resolve),
         };
         return builder;
       },
@@ -253,7 +258,9 @@ export const fakeInitiationClient = (
     }),
     update: () => ({
       set: () => ({
-        where: async () => ({ rowsAffected: users.filter((user) => !user.isAi).length }),
+        where: async () => ({
+          rowsAffected: users.filter((user) => !user.isAi).length,
+        }),
       }),
     }),
   } as unknown as DrizzleClient;

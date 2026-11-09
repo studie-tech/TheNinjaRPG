@@ -29,7 +29,9 @@ describe("createHexGrid", () => {
       expect(tile.center).toEqual(reference("center") as typeof tile.center);
       expect([tile.x, tile.y]).toEqual([reference("x"), reference("y")] as number[]);
       expect(tile.corners).toBe(tile.corners);
-      expect(Object.isFrozen(tile.corners) && Object.isFrozen(tile.corners[0])).toBe(true);
+      expect(Object.isFrozen(tile.corners) && Object.isFrozen(tile.corners[0])).toBe(
+        true,
+      );
     }
   });
 });
@@ -50,9 +52,7 @@ describe("hex map proportions", () => {
   });
 
   it("includes the two border rows in the height ratio", () => {
-    expect(hexGridHeightRatio(3, 4)).toBe(
-      (6 * HEX_ASPECT_RATIO) / stackedHexWidths(3),
-    );
+    expect(hexGridHeightRatio(3, 4)).toBe((6 * HEX_ASPECT_RATIO) / stackedHexWidths(3));
   });
 });
 
@@ -62,9 +62,7 @@ describe("oddQHexDistance", () => {
     const hexes = grid.toArray();
     for (const a of hexes) {
       for (const b of hexes) {
-        expect(oddQHexDistance(a.col, a.row, b.col, b.row)).toBe(
-          grid.distance(a, b),
-        );
+        expect(oddQHexDistance(a.col, a.row, b.col, b.row)).toBe(grid.distance(a, b));
       }
     }
   });

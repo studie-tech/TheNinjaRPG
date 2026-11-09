@@ -83,7 +83,7 @@
     },
     {
       "path": "/api/hourly-emails-reminder",
-      "schedule": "0/5 0 * * *"
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/kage-defense-maintenance",
@@ -123,10 +123,6 @@
     }
   ],
   "functions": {
-    "src/pages/api/trpc/[trpc].ts": {
-      "memory": 3008,
-      "maxDuration": 10
-    },
     "src/app/api/trpc/[trpc]/route.ts": {
       "includeFiles": "./fonts/OpenSans.ttf"
     },

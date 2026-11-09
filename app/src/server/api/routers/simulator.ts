@@ -12,6 +12,7 @@ import {
 import {
   baseServerResponse,
   createTRPCRouter,
+  errorResponse,
   protectedProcedure,
   publicProcedure,
   serverError,
@@ -75,29 +76,22 @@ export const simulatorRouter = createTRPCRouter({
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const entry = await fetchEntry(ctx.drizzle, input.id, ctx.userId);
+      // Scoping the delete to the caller covers both a missing and a foreign entry.
       const result = await deleteDamageSimulationForDeleteDamageSimulation(
         ctx.drizzle,
-        entry,
+        input,
+        ctx,
       );
-      if (result.rowsAffected === 0) {
-        throw serverError("NOT_FOUND", "Entry not found");
-      }
+      if (result.rowsAffected === 0) return errorResponse("Entry not found");
       return { success: true, message: "Damage simulation deleted" };
     }),
 });
 
-/**
- * Load a simulation or throw NOT_FOUND. A truthy owner ID also requires ownership;
- * omitting it preserves public reads, while mismatches throw UNAUTHORIZED.
- */
-const fetchEntry = async (client: DrizzleClient, id: string, userId?: string) => {
+/** Load a simulation for a public read, or throw NOT_FOUND. */
+const fetchEntry = async (client: DrizzleClient, id: string) => {
   const entry = await findDamageSimulationById(client, id);
   if (!entry) {
     throw serverError("NOT_FOUND", "Entry not found");
-  }
-  if (userId && entry.userId !== userId) {
-    throw serverError("UNAUTHORIZED", "Not allowed to access entry");
   }
   return entry;
 };

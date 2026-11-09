@@ -315,7 +315,6 @@ export default function MissionHall({ userData }: MissionHallProps) {
                   key={`${keyPrefix}-${setting.name}`}
                   setting={setting}
                   missions={missions}
-                  count={count}
                   disabled={grayScale}
                   interactionDisabled={isSpecificStartBlocked}
                   pendingMissionId={pendingQuestId}
@@ -484,7 +483,6 @@ export default function MissionHall({ userData }: MissionHallProps) {
           })}
           <MissionPicker
             setting={{
-              rank: "S",
               name: "War Mission",
               image: IMG_MISSION_WAR,
             }}
@@ -493,7 +491,6 @@ export default function MissionHall({ userData }: MissionHallProps) {
               name: q.name,
               image: q.image || undefined,
             }))}
-            count={availableWarMissions.length}
             disabled={
               isSpecificStartBlocked ||
               !isInActiveWar ||

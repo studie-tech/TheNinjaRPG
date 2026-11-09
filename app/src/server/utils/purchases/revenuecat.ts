@@ -167,7 +167,6 @@ export const transferSandboxScopes = (
 export const idempotencyKey = (event: RevenueCatEvent): string =>
   event.transaction_id ?? `event:${event.id}`;
 
-/** Constant-time comparison, so a wrong secret cannot be found a byte at a time. */
 /**
  * When the event actually happened.
  *
@@ -215,6 +214,7 @@ export const paidThroughAt = (event: RevenueCatEvent): Date | null => {
   return timestamps.length > 0 ? new Date(Math.max(...timestamps)) : null;
 };
 
+/** Constant-time comparison, so a wrong secret cannot be found a byte at a time. */
 export const isAuthorized = (
   header: string | null,
   secret: string | undefined,

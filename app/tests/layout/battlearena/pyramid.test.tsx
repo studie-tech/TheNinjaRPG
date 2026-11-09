@@ -1,5 +1,12 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import * as questStart from "@/hooks/useQuestStartCacheUpdate";
 import { climbLabelFontSize, PyramidMode } from "@/layout/battlearena/PyramidMode";
@@ -7,10 +14,15 @@ import * as image from "@/layout/Image";
 import * as logbook from "@/layout/Logbook";
 import * as questTeams from "@/layout/QuestTeams";
 import * as userContext from "@/utils/UserContext";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 let startQuest: ReturnType<typeof vi.fn>;
-let mutationOptions: NonNullable<Parameters<typeof client.api.quests.startQuest.useMutation>[0]>;
+let mutationOptions: NonNullable<
+  Parameters<typeof client.api.quests.startQuest.useMutation>[0]
+>;
 let prepareUserUpdate: ReturnType<typeof vi.fn>;
 let updateUser: ReturnType<typeof vi.fn>;
 let prepareQuestStartUpdate: ReturnType<typeof vi.fn>;
@@ -41,7 +53,9 @@ beforeEach(() => {
   prepareQuestStartUpdate = vi.fn(() => ({ inventory: 3 }));
   updateQuestStart = vi.fn();
   towers = [
-    tower("t-open", "Test Arena", { content: { objectives: [], reward: { reward_money: 2000 }, isolated: false } }),
+    tower("t-open", "Test Arena", {
+      content: { objectives: [], reward: { reward_money: 2000 }, isolated: false },
+    }),
     tower("t-items", "Tower of Echoes", {
       entryRequirements: [{ itemId: "shard", name: "shard", quantity: 2, owned: 1 }],
     }),
@@ -70,22 +84,40 @@ beforeEach(() => {
               description: null,
               requiredLevel: 1,
               maxLevel: 110,
-              block: { kind: "mastery", label: "Ninjutsu Mastery", required: 500, current: 100 },
+              block: {
+                kind: "mastery",
+                label: "Ninjutsu Mastery",
+                required: 500,
+                current: 100,
+              },
             },
           ],
         }),
       },
-      startQuest: { useMutation: (options: typeof mutationOptions) => {
-        mutationOptions = options;
-        return { mutate: startQuest, isPending: false };
-      } },
+      startQuest: {
+        useMutation: (options: typeof mutationOptions) => {
+          mutationOptions = options;
+          return { mutate: startQuest, isPending: false };
+        },
+      },
     },
-    item: { getAllNames: { useQuery: () => ({ data: [{ id: "shard", name: "Echo Shard" }] }) } },
+    item: {
+      getAllNames: {
+        useQuery: () => ({ data: [{ id: "shard", name: "Echo Shard" }] }),
+      },
+    },
   });
   vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
     () =>
       ({
-        data: { userId: "me", level: 30, sector: 4, userQuests, questData, petTask: null },
+        data: {
+          userId: "me",
+          level: 30,
+          sector: 4,
+          userQuests,
+          questData,
+          petTask: null,
+        },
         prepareUserUpdate,
         updateUser,
       }) as never,
@@ -96,8 +128,10 @@ beforeEach(() => {
   } as never);
   vi.spyOn(logbook, "LogbookEntry").mockImplementation(() => <p>Current objective</p>);
   vi.spyOn(questTeams, "QuestTeams").mockImplementation(() => null);
-  // biome-ignore lint/performance/noImgElement: isolated art fixture
-  vi.spyOn(image, "default").mockImplementation((({ alt }: { alt: string }) => <img alt={alt} />) as never);
+  vi.spyOn(image, "default").mockImplementation((({ alt }: { alt: string }) => (
+    // biome-ignore lint/performance/noImgElement: isolated art fixture
+    <img alt={alt} />
+  )) as never);
 });
 
 afterEach(() => {
@@ -109,7 +143,8 @@ afterEach(() => {
 
 const card = (name: string) => screen.getByRole("article", { name });
 // Confirm wraps its trigger, so the tower's own button is found by its id.
-const climbButton = (id: string) => document.getElementById(`tutorial-take-quest-${id}`)!;
+const climbButton = (id: string) =>
+  document.getElementById(`tutorial-take-quest-${id}`)!;
 
 it("renders the logbook entry of a climb without a saved tracker", () => {
   userQuests = [
@@ -129,7 +164,13 @@ it("renders the logbook entry of a climb without a saved tracker", () => {
 });
 
 it("lists the tower being climbed first", () => {
-  userQuests = [{ questId: "t-items", endAt: null, quest: { id: "t-items", name: "Tower of Echoes", questType: "battlepyramid" } }];
+  userQuests = [
+    {
+      questId: "t-items",
+      endAt: null,
+      quest: { id: "t-items", name: "Tower of Echoes", questType: "battlepyramid" },
+    },
+  ];
   questData = [{ id: "t-items", goals: [] }];
   render(<PyramidMode />);
   const names = within(screen.getByRole("list", { name: "Towers" }))
@@ -138,7 +179,9 @@ it("lists the tower being climbed first", () => {
   expect(names).toEqual(["Tower of Echoes", "Test Arena"]);
   expect(within(card("Tower of Echoes")).getByText("Climbing now")).toBeDefined();
   expect(within(card("Tower of Echoes")).getByText("Current objective")).toBeDefined();
-  const other = within(card("Test Arena")).getByRole("button", { name: /Finish current climb/ });
+  const other = within(card("Test Arena")).getByRole("button", {
+    name: /Finish current climb/,
+  });
   expect(other.hasAttribute("disabled")).toBe(true);
   // The button keeps its size: a long label shrinks onto one line and never spills out.
   expect(other.className).toMatch(/(^|\s)h-11(\s|$)/);
@@ -148,9 +191,13 @@ it("lists the tower being climbed first", () => {
 });
 
 it("shrinks only labels too long for the button", () => {
-  expect(climbLabelFontSize("Climb tower")).toBe("clamp(0.625rem, calc((100cqi - 1.75rem) / 6.05), 0.875rem)");
+  expect(climbLabelFontSize("Climb tower")).toBe(
+    "clamp(0.625rem, calc((100cqi - 1.75rem) / 6.05), 0.875rem)",
+  );
   // At the default 12px root size this 20-character label fits the 132px desktop button near 7.9px.
-  expect(climbLabelFontSize("Finish current climb")).toBe("clamp(0.625rem, calc((100cqi - 1.75rem) / 11), 0.875rem)");
+  expect(climbLabelFontSize("Finish current climb")).toBe(
+    "clamp(0.625rem, calc((100cqi - 1.75rem) / 11), 0.875rem)",
+  );
 });
 
 it("lists towers open to the player before towers missing entry items", () => {
@@ -165,13 +212,21 @@ it("lists towers open to the player before towers missing entry items", () => {
 it("shows entry items and blocks the climb when short", () => {
   render(<PyramidMode />);
   const echoes = card("Tower of Echoes");
-  expect(within(echoes).getByText(/Uses 2× Echo Shard/).closest("p")?.textContent).toContain("you have 1");
+  expect(
+    within(echoes)
+      .getByText(/Uses 2× Echo Shard/)
+      .closest("p")?.textContent,
+  ).toContain("you have 1");
   const button = within(echoes).getByRole("button", { name: "Missing 1 item" });
   expect(button.hasAttribute("disabled")).toBe(true);
 });
 
 it("allows the climb when stacks cover the cost", () => {
-  towers = [tower("t-items", "Tower of Echoes", { entryRequirements: [{ itemId: "shard", name: "shard", quantity: 2, owned: 2 }] })];
+  towers = [
+    tower("t-items", "Tower of Echoes", {
+      entryRequirements: [{ itemId: "shard", name: "shard", quantity: 2, owned: 2 }],
+    }),
+  ];
   render(<PyramidMode />);
   const button = climbButton("t-items");
   expect(button.textContent).toContain("Climb tower");
@@ -179,7 +234,11 @@ it("allows the climb when stacks cover the cost", () => {
 });
 
 it("confirms before spending entry items", () => {
-  towers = [tower("t-items", "Tower of Echoes", { entryRequirements: [{ itemId: "shard", name: "shard", quantity: 2, owned: 3 }] })];
+  towers = [
+    tower("t-items", "Tower of Echoes", {
+      entryRequirements: [{ itemId: "shard", name: "shard", quantity: 2, owned: 3 }],
+    }),
+  ];
   render(<PyramidMode />);
   act(() => {
     fireEvent.click(climbButton("t-items"));
@@ -190,15 +249,23 @@ it("confirms before spending entry items", () => {
 
 it("starts an open tower without entry costs directly", () => {
   render(<PyramidMode />);
-  fireEvent.click(within(card("Test Arena")).getByRole("button", { name: "Climb tower" }));
-  expect(startQuest).toHaveBeenCalledWith({ questId: "t-open", userSector: 4, supportsAnnouncements: true });
+  fireEvent.click(
+    within(card("Test Arena")).getByRole("button", { name: "Climb tower" }),
+  );
+  expect(startQuest).toHaveBeenCalledWith({
+    questId: "t-open",
+    userSector: 4,
+    supportsAnnouncements: true,
+  });
 });
 
 it("lists coming-up towers with what they need", () => {
   render(<PyramidMode />);
   const upcoming = screen.getByRole("list", { name: "Coming up" });
   expect(within(upcoming).getByText("Needs level 50 · you are 30")).toBeDefined();
-  expect(within(upcoming).getByText("Needs 500 Ninjutsu Mastery · you have 100")).toBeDefined();
+  expect(
+    within(upcoming).getByText("Needs 500 Ninjutsu Mastery · you have 100"),
+  ).toBeDefined();
   expect(within(upcoming).queryByRole("button", { name: /Climb/ })).toBeNull();
 });
 

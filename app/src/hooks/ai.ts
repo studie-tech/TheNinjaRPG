@@ -20,10 +20,7 @@ import {
 } from "@/validators/aiInput";
 import type { ZodAllTags } from "@/validators/combat";
 
-/**
- * Hook used when creating frontend forms for editing AIs
- * @param data
- */
+/** Hook used when creating frontend forms for editing AIs */
 export const useAiEditForm = (
   user: UserData & { jutsus: UserJutsu[]; items: UserItem[] },
 ) => {
@@ -58,7 +55,7 @@ export const useAiEditForm = (
   // tRPC utility
   const utils = api.useUtils();
 
-  // Mutation for updating item
+  // Mutation for updating the AI
   const { mutate: updateAi, isPending: l4 } = api.profile.updateAi.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);

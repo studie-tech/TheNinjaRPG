@@ -1,7 +1,7 @@
 /**
  * Database access for stealth; authorization and transaction scopes stay in callers.
  */
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { STEALTH_SENSORY_CAP } from "@/drizzle/constants";
 import { userData, villageAlliance } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
@@ -52,7 +52,7 @@ export const listUserDataForUseSensory = (
     where: and(
       eq(userData.sector, input.sector),
       eq(userData.stealthActive, true),
-      sql`${userData.userId} != ${ctx.userId}`,
+      ne(userData.userId, ctx.userId),
     ),
     columns: {
       userId: true,

@@ -1,5 +1,12 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import * as nextNavigation from "next/navigation";
 import Arena from "@/app/[shell]/battlearena/page";
 import { TUTORIAL_ARENA_DUMMY_ID } from "@/drizzle/constants";
@@ -13,8 +20,11 @@ import * as sparringMode from "@/layout/battlearena/SparringMode";
 import * as trainingMode from "@/layout/battlearena/TrainingMode";
 import * as contentBox from "@/layout/ContentBox";
 import * as userContext from "@/utils/UserContext";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 import { actualContentBox } from "../../setup/preload";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
 let tutorialStep: unknown;
 let arenaProps: { aiId?: string } = {};
@@ -31,13 +41,20 @@ beforeEach(() => {
     userData: { userId: "me", isBanned: false },
     access: true,
   } as never);
-  vi.spyOn(tutorial, "useTutorialStep").mockImplementation(() => ({ currentStep: tutorialStep }) as never);
+  vi.spyOn(tutorial, "useTutorialStep").mockImplementation(
+    () => ({ currentStep: tutorialStep }) as never,
+  );
   vi.spyOn(nextNavigation, "useRouter").mockReturnValue({
     push: (href: string) => window.history.pushState({}, "", href),
     back: () => window.history.back(),
   } as never);
   vi.spyOn(overview, "ArenaOverview").mockImplementation(({ onOpen }) => (
-    <div><p>Overview</p><button type="button" onClick={() => onOpen("Training")}>Open Training</button></div>
+    <div>
+      <p>Overview</p>
+      <button type="button" onClick={() => onOpen("Training")}>
+        Open Training
+      </button>
+    </div>
   ));
   vi.spyOn(modeShell, "ArenaModeShell").mockImplementation(({ mode, children }) => (
     <section aria-label={`${mode} mode`}>{children}</section>
@@ -69,7 +86,9 @@ it("opens the overview without a hash", () => {
 it("opens the mode named in the hash", () => {
   window.history.replaceState({}, "", "/battlearena#Battle%20Pyramid");
   render(<Arena />);
-  expect(screen.getByRole("region", { name: "Battle Pyramid mode" }).textContent).toBe("Pyramid body");
+  expect(screen.getByRole("region", { name: "Battle Pyramid mode" }).textContent).toBe(
+    "Pyramid body",
+  );
 });
 
 it("returns from a deep-linked mode to the overview through the page title", () => {

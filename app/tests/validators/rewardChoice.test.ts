@@ -34,16 +34,17 @@ describe("quest reward mode", () => {
       ).toBe(false);
     }
     expect(
-      contentSchema.safeParse({ objectives: [], reward: {}, rewardMode: "some" }).success,
+      contentSchema.safeParse({ objectives: [], reward: {}, rewardMode: "some" })
+        .success,
     ).toBe(false);
   });
 });
 
 describe("reward choice payloads", () => {
   it("rejects stored offers without cards or with an unknown field", () => {
-    expect(PendingRewardChoiceSchema.safeParse({ id: "o", pickCount: 1, cards: [] }).success).toBe(
-      false,
-    );
+    expect(
+      PendingRewardChoiceSchema.safeParse({ id: "o", pickCount: 1, cards: [] }).success,
+    ).toBe(false);
     expect(
       PendingRewardChoiceSchema.safeParse({
         id: "o",
@@ -56,11 +57,17 @@ describe("reward choice payloads", () => {
   it("caps a claim at the maximum pick count", () => {
     const base = { questId: "q", choiceId: "o" };
     // Empty clears an offer whose every card the player already holds.
-    expect(ClaimRewardChoiceSchema.safeParse({ ...base, cardIds: [] }).success).toBe(true);
+    expect(ClaimRewardChoiceSchema.safeParse({ ...base, cardIds: [] }).success).toBe(
+      true,
+    );
     expect(
-      ClaimRewardChoiceSchema.safeParse({ ...base, cardIds: ["1", "2", "3", "4", "5", "6"] })
-        .success,
+      ClaimRewardChoiceSchema.safeParse({
+        ...base,
+        cardIds: ["1", "2", "3", "4", "5", "6"],
+      }).success,
     ).toBe(false);
-    expect(ClaimRewardChoiceSchema.safeParse({ ...base, cardIds: ["1"] }).success).toBe(true);
+    expect(ClaimRewardChoiceSchema.safeParse({ ...base, cardIds: ["1"] }).success).toBe(
+      true,
+    );
   });
 });

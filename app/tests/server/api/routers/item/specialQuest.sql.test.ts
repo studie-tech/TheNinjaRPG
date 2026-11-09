@@ -23,13 +23,13 @@ import {
   insertUserItems,
   insertUsers,
 } from "../../../../setup/factories";
+import { failStatements, inTransactions } from "../../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { inTransactions, failStatements } from "../../../../setup/statements";
 
 // Validate the shared content fixture even when SQL tests are skipped locally.
 const contractObjective = DialogObjective.parse({ id: "wait", task: "dialog" });

@@ -87,7 +87,7 @@ export const useUserEditForm = (
     return userjutsu ? { ...jutsu, name: `${jutsu.name} (${userjutsu.level})` } : jutsu;
   });
 
-  // Mutation for updating item
+  // Mutation for updating the user
   const { mutate: updateUser, isPending: l4 } = api.profile.updateUser.useMutation({
     onSuccess: (data) => {
       showMutationToast(data);
@@ -113,37 +113,36 @@ export const useUserEditForm = (
   if (canEditUsername) {
     formData.push({ id: "username", type: "text" });
   }
-  if (canEditUserRoles && canEditUserRoles.length > 0)
+  if (canEditUserRoles.length > 0)
     formData.push({ id: "role", type: "str_array", values: canEditUserRoles });
   if (canEditRank) {
     formData.push({ id: "rank", type: "str_array", values: UserRanks });
   }
   if (canEditBloodline)
-    formData.push({
-      id: "bloodlineId",
-      type: "db_values",
-      values: lines || [],
-      resetButton: true,
-    });
-  if (canEditBloodline)
-    formData.push({
-      id: "bloodlineReskinId",
-      type: "db_values",
-      values:
-        [{ id: "", name: "None", image: "" }].concat(
+    formData.push(
+      {
+        id: "bloodlineId",
+        type: "db_values",
+        values: lines || [],
+        resetButton: true,
+      },
+      {
+        id: "bloodlineReskinId",
+        type: "db_values",
+        values: [{ id: "", name: "None", image: "" }].concat(
           (lineReskins ?? []).map((r) => ({ id: r.id, name: r.name, image: r.image })),
-        ) || [],
-      label: "Bloodline Reskin",
-      resetButton: true,
-    });
-  if (canEditBloodline)
-    formData.push({
-      id: "sageModeId",
-      type: "db_values",
-      values: [{ id: "", name: "None", image: "" }].concat(sageModes ?? []),
-      label: "Sage Mode",
-      resetButton: true,
-    });
+        ),
+        label: "Bloodline Reskin",
+        resetButton: true,
+      },
+      {
+        id: "sageModeId",
+        type: "db_values",
+        values: [{ id: "", name: "None", image: "" }].concat(sageModes ?? []),
+        label: "Sage Mode",
+        resetButton: true,
+      },
+    );
   if (canEditVillage)
     formData.push({
       id: "villageId",

@@ -31,6 +31,7 @@ import {
 } from "@/libs/questRun";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
+import { isTutorialActive } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { getRandomElement, isInArray, shuffle } from "@/utils/array";
 import { getUnique } from "@/utils/grouping";
@@ -296,6 +297,63 @@ export const isObjectiveLocationSatisfied = (
     return !!atPlacementIds && atPlacementIds.has(objective.overworldPlacementId);
   }
   return isLocationObjective(location, objective);
+};
+
+/**
+ * Client-side quest triggers after arriving at a position: whether the server should
+ * check quest progress, and the quests whose dialog objective opens in the logbook.
+ */
+export const getArrivalQuestTriggers = (
+  userData: NonNullable<UserWithRelations>,
+  data: { sector: number; longitude: number; latitude: number },
+) => {
+  let shouldCheckQuest = false;
+  const dialogQuestIds: string[] = [];
+  userData?.userQuests?.forEach((userquest) => {
+    const tracker = userData.questData?.find((q) => q.id === userquest.questId);
+    userquest.quest.content.objectives.forEach((objective, i) => {
+      const isOnLocation = isLocationObjective(
+        {
+          sector: data.sector,
+          longitude: data.longitude,
+          latitude: data.latitude,
+        },
+        objective,
+      );
+      if (
+        (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
+        (isOnLocation ||
+          // A masked target cannot be matched locally; the server owns its coordinates.
+          ("hideLocation" in objective && objective.hideLocation) ||
+          ("attackers" in objective &&
+            objective.attackers &&
+            objective.attackers.length > 0))
+      ) {
+        shouldCheckQuest = true;
+      }
+      const goal = tracker?.goals.find((g) => g.id === objective.id);
+      if (
+        (!tracker || isQuestObjectiveAvailable(userquest.quest, tracker, i)) &&
+        objective.task === "collect_item" &&
+        "collect_time_minutes" in objective &&
+        objective.collect_time_minutes &&
+        goal?.timestamp &&
+        !goal.done &&
+        !isOnLocation
+      ) {
+        shouldCheckQuest = true;
+      }
+      if (
+        objective.task === "dialog" &&
+        !objective.overworldPlacementId &&
+        isOnLocation &&
+        !isTutorialActive(userData)
+      ) {
+        dialogQuestIds.push(userquest.questId);
+      }
+    });
+  });
+  return { shouldCheckQuest, dialogQuestIds };
 };
 
 /** One id per spawned copy of each authored `{ ids, number }` AI entry. */
@@ -564,7 +622,7 @@ export const getNewTrackers = (
       }
 
       // Missing map entry means deleted; false means present but deactivated; true means active.
-      // Omitting the map preserves the pre-overworld behavior for callers that do not load it.
+      // Callers that do not load the map skip this check.
       const boundPlacementId = objective.overworldPlacementId;
       if (
         boundPlacementStatus &&

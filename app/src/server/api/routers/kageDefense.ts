@@ -53,16 +53,29 @@ import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlE
 import { getKageEligibility } from "@/utils/kage";
 import { secondsFromDate } from "@/utils/time";
 import {
-  kageAiSchema,
   kageBattleResponseSchema,
-  kageInstantResponseSchema,
-  kageJoinSchema,
-  kageMatchSchema,
   kageScheduleSchema,
-  kageStartSchema,
   kageVillageSchema,
 } from "@/validators/kage";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+const kageMatchSchema = z.object({ id: z.string().min(1) });
+
+/** Omit the invitation ID for an ordinary scheduled start; include it to accept early. */
+const kageStartSchema = kageMatchSchema.extend({
+  instantRequestId: z.string().min(1).optional(),
+});
+
+/** Bind dismissal to the exact invitation shown, so stale responses cannot revoke a new one. */
+const kageInstantResponseSchema = kageMatchSchema.extend({
+  instantRequestId: z.string().min(1),
+});
+
+const kageAiSchema = kageMatchSchema.extend({ consent: z.boolean() });
+
+const kageJoinSchema = kageVillageSchema.extend({
+  aiRequested: z.boolean().default(false),
+});
 
 /** Authenticated title-defense scheduling, queue participation and battle admission. */
 export const kageDefenseProcedures = {

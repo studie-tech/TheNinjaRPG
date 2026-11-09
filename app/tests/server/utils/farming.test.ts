@@ -1,5 +1,7 @@
-import { reduceActiveFarmPlotTimers } from "@/queries/farming";
 import { describe, expect, it, vi } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { MySqlDialect } from "drizzle-orm/mysql-core";
+import { reduceActiveFarmPlotTimers } from "@/queries/farming";
 import type { DrizzleClient } from "@/server/db";
 import {
   buildFarmCollectionState,
@@ -40,25 +42,23 @@ describe("farm collection catalog", () => {
       [{ itemId: "crop-carrot", firstHarvestedAt: harvestedAt }],
     );
 
-    expect(result.items.map((entry) => entry.name)).toEqual([
-      "Apple",
-      "Carrot",
-    ]);
+    expect(result.items.map((entry) => entry.name)).toEqual(["Apple", "Carrot"]);
     expect(result).toMatchObject({ collected: 1, total: 2 });
-    expect(result.items[1]).toEqual(expect.objectContaining({
-      itemId: "crop-carrot",
-      harvested: true,
-      firstHarvestedAt: harvestedAt,
-    }));
+    expect(result.items[1]).toEqual(
+      expect.objectContaining({
+        itemId: "crop-carrot",
+        harvested: true,
+        firstHarvestedAt: harvestedAt,
+      }),
+    );
   });
 });
 
 describe("recordFirstFarmHarvests", () => {
   it("deduplicates bulk crops and never updates the original harvest timestamp", async () => {
-    const onDuplicateKeyUpdate = vi
-      .fn((_update: { set: Record<string, unknown> }) =>
-        Promise.resolve({ rowsAffected: 0 }),
-      );
+    const onDuplicateKeyUpdate = vi.fn((_update: { set: Record<string, unknown> }) =>
+      Promise.resolve({ rowsAffected: 0 }),
+    );
     const values = vi.fn(
       (
         _rows: { itemId: string; firstHarvestedAt: Date }[],
@@ -94,30 +94,6 @@ describe("recordFirstFarmHarvests", () => {
 });
 
 /** Flattens a drizzle SQL fragment into text, since the object graph is cyclic. */
-const renderSql = (fragment: unknown): string => {
-  const parts: string[] = [];
-  const walk = (node: unknown, depth: number) => {
-    if (node === null || node === undefined || depth > 6) return;
-    if (typeof node === "string" || typeof node === "number") {
-      parts.push(String(node));
-      return;
-    }
-    if (node instanceof Date) return;
-    if (Array.isArray(node)) {
-      node.forEach((child) => walk(child, depth + 1));
-      return;
-    }
-    if (typeof node === "object") {
-      const obj = node as Record<string, unknown>;
-      for (const key of ["queryChunks", "value", "values", "name"]) {
-        if (key in obj) walk(obj[key], depth + 1);
-      }
-    }
-  };
-  walk(fragment, 0);
-  return parts.join(" ");
-};
-
 describe("reduceActiveFarmPlotTimers", () => {
   it("clamps the new finish time to now and only touches plots still growing", () => {
     const where = vi.fn(() => Promise.resolve({ rowsAffected: 2 }));
@@ -135,10 +111,10 @@ describe("reduceActiveFarmPlotTimers", () => {
 
     // finishAt must be pulled in by the reduction but never past `now`, so a plot
     // that is nearly ready cannot be pushed into the past by a long win streak.
-    const rendered = renderSql(applied.finishAt);
-    expect(rendered).toContain("GREATEST");
-    expect(rendered).toContain("TIMESTAMPADD");
-    expect(rendered).toContain("90");
+    const rendered = new MySqlDialect().sqlToQuery(applied.finishAt as SQL);
+    expect(rendered.sql).toContain("GREATEST");
+    expect(rendered.sql).toContain("TIMESTAMPADD");
+    expect(rendered.params).toContain(90);
 
     // Idle plots, harvest-ready plots and other users' plots must be excluded.
     expect(where).toHaveBeenCalledTimes(1);

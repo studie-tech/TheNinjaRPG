@@ -10,7 +10,7 @@ import {
   makeCompleteBattle,
   makeDamageEffect,
   makeDamageModifierEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const packet = (power: number, rawDamage = 100) =>
   computeDamagePacket({

@@ -15,7 +15,12 @@ export interface GlobalPoint {
 }
 
 export interface GlobalTile {
-  b: NonEmptyArray<GlobalPoint>; // boundary
+  /**
+   * Boundary corners. The generator writes their coordinates with toFixed(3), so
+   * hexasphere.json holds them as numeric strings despite this type; readers must
+   * coerce them to numbers.
+   */
+  b: NonEmptyArray<GlobalPoint>;
   c: GlobalPoint; // centerPoint
   t: number; // 0=ocean, 1=land, 2=desert
   /** Row-major sub-sector terrain samples used only for smooth global rendering. */

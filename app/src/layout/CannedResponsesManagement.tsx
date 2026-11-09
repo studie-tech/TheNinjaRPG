@@ -41,6 +41,7 @@ export default function CannedResponsesManagement({
   const createMutation = api.support.createCannedResponse.useMutation({
     onSuccess: (data) => {
       showMutationToast(data);
+      if (!data.success) return;
       void utils.support.getCannedResponses.invalidate();
       setIsCreateModalOpen(false);
       setFormData({ title: "", description: "" });
@@ -50,6 +51,7 @@ export default function CannedResponsesManagement({
   const updateMutation = api.support.updateCannedResponse.useMutation({
     onSuccess: (data) => {
       showMutationToast(data);
+      if (!data.success) return;
       void utils.support.getCannedResponses.invalidate();
       setEditingResponse(null);
       setFormData({ title: "", description: "" });

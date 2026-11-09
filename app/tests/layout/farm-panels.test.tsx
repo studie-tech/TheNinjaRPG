@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { FarmInventory } from "@/layout/FarmInventory";
 import { FarmMarket } from "@/layout/FarmMarket";
 import { FarmOverview } from "@/layout/FarmOverview";
@@ -109,14 +109,33 @@ describe("FarmOverview", () => {
   it("counts bulk planting and fertilizing from the selected stack", () => {
     const view = render(
       <FarmOverview
-        state={{
-          ...baseState,
-          availableSeeds: [seed, { ...seed, itemId: "seed-2", name: "Onion Seed", quantity: 1 }],
-          availableFertilizers: [
-            { userItemId: "fert-big", itemId: "f1", name: "Compost", image: "f.webp", quantity: 9, timeReductionSeconds: 60 },
-            { userItemId: "fert-small", itemId: "f2", name: "Ash", image: "f.webp", quantity: 1, timeReductionSeconds: 60 },
-          ],
-        } as unknown as FarmStateResponse}
+        state={
+          {
+            ...baseState,
+            availableSeeds: [
+              seed,
+              { ...seed, itemId: "seed-2", name: "Onion Seed", quantity: 1 },
+            ],
+            availableFertilizers: [
+              {
+                userItemId: "fert-big",
+                itemId: "f1",
+                name: "Compost",
+                image: "f.webp",
+                quantity: 9,
+                timeReductionSeconds: 60,
+              },
+              {
+                userItemId: "fert-small",
+                itemId: "f2",
+                name: "Ash",
+                image: "f.webp",
+                quantity: 1,
+                timeReductionSeconds: 60,
+              },
+            ],
+          } as unknown as FarmStateResponse
+        }
         summary={summary({ empty: 5, growing: 4, fertilizable: 4 })}
         now={now}
         timeDiff={0}
@@ -181,11 +200,13 @@ describe("FarmOverview", () => {
   it("points a returning farmer without seeds to the market instead of the first steps", () => {
     const view = render(
       <FarmOverview
-        state={{
-          ...baseState,
-          availableSeeds: [],
-          collectionLog: { collected: 2, total: 3, items: [] },
-        } as unknown as FarmStateResponse}
+        state={
+          {
+            ...baseState,
+            availableSeeds: [],
+            collectionLog: { collected: 2, total: 3, items: [] },
+          } as unknown as FarmStateResponse
+        }
         summary={summary({ empty: 5 })}
         now={now}
         timeDiff={0}
@@ -210,9 +231,9 @@ describe("FarmOverview", () => {
         {...handlers}
       />,
     );
-    expect(view.getByRole("button", { name: "Working…" }).hasAttribute("disabled")).toBe(
-      true,
-    );
+    expect(
+      view.getByRole("button", { name: "Working…" }).hasAttribute("disabled"),
+    ).toBe(true);
     expect(
       view.getByRole("button", { name: "Water all (1)" }).hasAttribute("disabled"),
     ).toBe(true);
@@ -243,7 +264,9 @@ describe("FarmMarket", () => {
         onBuy={onBuy}
       />,
     );
-    fireEvent.click(view.getByRole("button", { name: "Increase tomato seed quantity" }));
+    fireEvent.click(
+      view.getByRole("button", { name: "Increase tomato seed quantity" }),
+    );
     fireEvent.click(view.getByRole("button", { name: "Buy 2 for 20" }));
     expect(onBuy).toHaveBeenCalledWith(entry, 2);
   });
@@ -269,12 +292,20 @@ describe("FarmInventory", () => {
     const view = render(
       <FarmInventory
         view="crops"
-        farmState={{
-          ...baseState,
-          sellableCrops: [
-            { userItemId: "crop-stack", name: "Tomato", image: "crop.webp", quantity: 4, sellValue: 6 },
-          ],
-        } as unknown as FarmStateResponse}
+        farmState={
+          {
+            ...baseState,
+            sellableCrops: [
+              {
+                userItemId: "crop-stack",
+                name: "Tomato",
+                image: "crop.webp",
+                quantity: 4,
+                sellValue: 6,
+              },
+            ],
+          } as unknown as FarmStateResponse
+        }
         pendingKeys={new Set()}
         onSell={onSell}
         onSellAll={async () => true}
@@ -298,7 +329,9 @@ describe("FarmInventory", () => {
     const view = render(
       <FarmInventory
         view="crops"
-        farmState={{ ...baseState, sellableCrops: crops } as unknown as FarmStateResponse}
+        farmState={
+          { ...baseState, sellableCrops: crops } as unknown as FarmStateResponse
+        }
         pendingKeys={new Set()}
         onSell={async () => true}
         onSellAll={onSellAll}
@@ -317,10 +350,21 @@ describe("FarmInventory", () => {
 
   it("extracts with the first idle extractor and waits when all are busy", () => {
     const onExtract = vi.fn(async () => true);
-    const crop = { userItemId: "c", name: "Tomato", image: "c.webp", quantity: 3, seedCount: 2 };
+    const crop = {
+      userItemId: "c",
+      name: "Tomato",
+      image: "c.webp",
+      quantity: 3,
+      seedCount: 2,
+    };
     const busy = (extractorSlot: number) => ({
-      extractorSlot, cropName: "Onion", cropQuantity: 1, seedName: "Onion Seed",
-      seedQuantity: 2, seedImage: "s.webp", finishAt: new Date(Date.now() + 60_000),
+      extractorSlot,
+      cropName: "Onion",
+      cropQuantity: 1,
+      seedName: "Onion Seed",
+      seedQuantity: 2,
+      seedImage: "s.webp",
+      finishAt: new Date(Date.now() + 60_000),
     });
     const props = {
       view: "extraction" as const,
@@ -334,13 +378,20 @@ describe("FarmInventory", () => {
       timeDiff: 0,
     };
     const state = (active: ReturnType<typeof busy>[]) =>
-      ({ ...baseState, farmExtractorsOwned: 2, extractableCrops: [crop], activeSeedExtractions: active }) as unknown as FarmStateResponse;
+      ({
+        ...baseState,
+        farmExtractorsOwned: 2,
+        extractableCrops: [crop],
+        activeSeedExtractions: active,
+      }) as unknown as FarmStateResponse;
     const view = render(<FarmInventory {...props} farmState={state([busy(0)])} />);
     fireEvent.click(view.getByRole("button", { name: "Extract" }));
     expect(onExtract).toHaveBeenCalledWith(1, "c", 1);
     view.rerender(<FarmInventory {...props} farmState={state([busy(0), busy(1)])} />);
     expect(view.getByText(/All extractors are busy/)).toBeTruthy();
-    expect(view.getByRole("button", { name: "Extract" }).hasAttribute("disabled")).toBe(true);
+    expect(view.getByRole("button", { name: "Extract" }).hasAttribute("disabled")).toBe(
+      true,
+    );
   });
 
   it("points to upgrades when no seed extractor is owned", () => {

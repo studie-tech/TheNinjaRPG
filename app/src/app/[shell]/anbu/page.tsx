@@ -105,10 +105,20 @@ export default function ANBU() {
   // Loaders
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!access) return <Loader explanation="Accessing ANBU" />;
+  if (userData.isOutlaw)
+    return (
+      <ContentBox title="ANBU" defaultBackHref="/village">
+        Unlikely to find outlaw ANBU.
+      </ContentBox>
+    );
   if (!sectorVillage) return <Loader explanation="Loading sector village" />;
-  if (!structure) return <Loader explanation="Can not find structure" />;
+  if (!structure)
+    return (
+      <ContentBox title="ANBU" defaultBackHref="/village">
+        Can not find the ANBU structure in this village.
+      </ContentBox>
+    );
   if (isCreating) return <Loader explanation="Creating squad" />;
-  if (userData.isOutlaw) return <Loader explanation="Unlikely to find outlaw ANBU" />;
   if (userData.isBanned) return <BanInfo />;
 
   // Form handlers

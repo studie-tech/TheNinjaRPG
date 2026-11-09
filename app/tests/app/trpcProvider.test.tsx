@@ -1,31 +1,31 @@
-import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as clerk from "@clerk/nextjs";
+import type { Clerk } from "@clerk/nextjs/types";
 import * as Sentry from "@sentry/nextjs";
-import type { Clerk } from "@clerk/shared/types";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import {
   type MutationOptions,
   type QueryClient,
   QueryObserver,
   useQueryClient,
 } from "@tanstack/react-query";
-import { type TRPCClient, TRPCClientError } from "@trpc/client";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import * as trpcClient from "@trpc/client";
+import { type TRPCClient, TRPCClientError } from "@trpc/client";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { toast as sonnerToast } from "sonner";
 import superjson from "superjson";
 import type { AppRouter } from "@/api/root";
 import * as clientModule from "@/app/_trpc/client";
 import TrpcClientProvider from "@/app/_trpc/Provider";
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import { BOTID_BLOCKED_MESSAGE, BOTID_RELOAD_REQUIRED_MESSAGE } from "@/libs/botid";
+import { QUERY_METRICS_HEADER } from "@/libs/queryTelemetry";
 import * as toast from "@/libs/toast";
 import { SESSION_CHANGED_MESSAGE, SESSION_EXPIRED_MESSAGE } from "@/libs/trpcSession";
-import { QUERY_METRICS_HEADER } from "@/libs/queryTelemetry";
-import { shareUserCache } from "@/utils/userCacheSharing";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { shareUserCache } from "@/utils/userCacheSharing";
 import { actualShowMutationToast } from "../setup/preload";
 
 const testApi = createTRPCReact<AppRouter>();
@@ -380,21 +380,7 @@ it("sends captured profile causes through the provider without replacing session
 });
 
 it("coalesces a retired account's late batch while every query and mutation settles as failed", async () => {
-  const releases: Array<() => void> = [];
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-    const count = new URL(String(input), "http://localhost").pathname
-      .split("/")
-      .at(-1)!
-      .split(",").length;
-    await new Promise<void>((resolve) => releases.push(resolve));
-    return Response.json(
-      Array.from({ length: count }, () => ({
-        result: {
-          data: superjson.serialize({ success: true, newStatus: "ASLEEP" }),
-        },
-      })),
-    );
-  });
+  const releases = holdBatchedFetch({ success: true, newStatus: "ASLEEP" });
   const { auth, trpc } = mountProvider(session("a"));
   const queries = [
     () => trpc.war.getWarPointClaims.query(),
@@ -461,19 +447,7 @@ it("coalesces expired-session failures before dispatch", async () => {
 });
 
 it("coalesces a local mutation error after unmount with a retired account's late query batch", async () => {
-  const releases: Array<() => void> = [];
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-    const count = new URL(String(input), "http://localhost").pathname
-      .split("/")
-      .at(-1)!
-      .split(",").length;
-    await new Promise<void>((resolve) => releases.push(resolve));
-    return Response.json(
-      Array.from({ length: count }, () => ({
-        result: { data: superjson.serialize({ success: true, battleId: "battle-a" }) },
-      })),
-    );
-  });
+  const releases = holdBatchedFetch({ success: true, battleId: "battle-a" });
   const { auth, trpc, unmount, attack, onSuccess, onError } = mountArenaMutation(
     session("a"),
   );
@@ -601,7 +575,8 @@ it("does not retry a rate-limited query back into the same limiter window", asyn
     Response.json([
       {
         error: superjson.serialize({
-          message: "Too many requests for this page. Please wait a moment and try again.",
+          message:
+            "Too many requests for this page. Please wait a moment and try again.",
           code: -32029,
           data: { code: "TOO_MANY_REQUESTS" },
         }),
@@ -654,6 +629,27 @@ it("keeps imperative reads free of React Query retries", async () => {
   await expect(read("z", 1)).rejects.toThrow("Bad input");
   expect(fetch).toHaveBeenCalledTimes(3);
 });
+
+/**
+ * Holds every batched fetch until the test calls its release, then answers each
+ * procedure in the batch with `data`. Returns the pending releases in arrival order.
+ */
+const holdBatchedFetch = (data: unknown) => {
+  const releases: Array<() => void> = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const count = new URL(String(input), "http://localhost").pathname
+      .split("/")
+      .at(-1)!
+      .split(",").length;
+    await new Promise<void>((resolve) => releases.push(resolve));
+    return Response.json(
+      Array.from({ length: count }, () => ({
+        result: { data: superjson.serialize(data) },
+      })),
+    );
+  });
+  return releases;
+};
 
 const fetchFailure = (message = "Failed to fetch") => {
   const error = new TypeError(message);
@@ -822,7 +818,11 @@ it.each([true, false])(
 );
 
 it.each([
-  { name: "a query's server error", data: { code: "INTERNAL_SERVER_ERROR" }, fetches: 4 },
+  {
+    name: "a query's server error",
+    data: { code: "INTERNAL_SERVER_ERROR" },
+    fetches: 4,
+  },
   { name: "a query's error without data", fetches: 4 },
   { name: "a query's rejected input", data: { code: "BAD_REQUEST" }, fetches: 1 },
   { name: "a query's error with empty data", data: {}, fetches: 1 },
@@ -868,11 +868,23 @@ it.each([
 
 it("leaves endpoint recovery feedback to the feature callback", async () => {
   const notice = "This action checked you out of the hospital for free.";
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json([
-    { result: { data: superjson.serialize({ success: true, message: notice, actionNotice: notice }) } },
-  ]));
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    Response.json([
+      {
+        result: {
+          data: superjson.serialize({
+            success: true,
+            message: notice,
+            actionNotice: notice,
+          }),
+        },
+      },
+    ]),
+  );
   const { attack } = mountArenaMutation(session("a"));
-  await act(async () => { await attack(); });
+  await act(async () => {
+    await attack();
+  });
   expect(toastMessages()).toEqual([]);
   expect(queryClient.isMutating()).toBe(0);
 });

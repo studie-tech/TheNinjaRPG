@@ -18,7 +18,10 @@ const createDatabase = () =>
 describe("PlanetScale driver SQL binding", () => {
   it("escapes bound strings and preserves array result mapping", async () => {
     const { database, statements } = createDatabase();
-    const rows = await database.select().from(records).where(eq(records.id, "a' OR 1=1 --"));
+    const rows = await database
+      .select()
+      .from(records)
+      .where(eq(records.id, "a' OR 1=1 --"));
     expect(statements).toEqual([
       "select `id` from `DriverRecord` where `DriverRecord`.`id` = 'a\\' OR 1=1 --'",
     ]);
@@ -43,7 +46,7 @@ describe("PlanetScale driver SQL binding", () => {
   it("preserves double-quoted SQL literals before bound values", async () => {
     const { database, statements } = createDatabase();
     await database.execute(sql`select "?" as literal, ${"bound"} as value`);
-    expect(statements).toEqual(['select "?" as literal, \'bound\' as value']);
+    expect(statements).toEqual(["select \"?\" as literal, 'bound' as value"]);
   });
 
   it("preserves escaped quotes, identifiers and comments around bound values", async () => {
@@ -87,7 +90,9 @@ describe("PlanetScale driver SQL binding", () => {
       "ROLLBACK",
     ]);
     expect(sessions).toEqual([
-      null, { token: "test-session" }, { token: "test-session" },
+      null,
+      { token: "test-session" },
+      { token: "test-session" },
     ]);
   });
 
@@ -110,9 +115,11 @@ describe("PlanetScale driver SQL binding", () => {
       });
     });
     expect(statements).toEqual([
-      "BEGIN", "savepoint sp1",
+      "BEGIN",
+      "savepoint sp1",
       "delete from `DriverRecord` where `DriverRecord`.`id` = 'owner\\'s row'",
-      "release savepoint sp1", "COMMIT",
+      "release savepoint sp1",
+      "COMMIT",
     ]);
   });
 });

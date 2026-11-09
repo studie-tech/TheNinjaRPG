@@ -64,23 +64,34 @@ export const getRaidObjectiveData = (questData: { content: Quest["content"] }) =
  * Validates that a raid is currently active and can be interacted with.
  * @param raid - The raid quest to validate
  * @param now - Current date for comparison (optional, defaults to new Date())
- * @returns Object with isValid flag and optional error message
+ * @returns Object with isValid flag, and the reason and error message when invalid
  */
 export const validateRaidIsActive = (
   raid: { raidEndsAt: Date | null; raidBossCurrentHealth: number | null },
   now = new Date(),
-): { isValid: true } | { isValid: false; error: string } => {
+):
+  | { isValid: true }
+  | {
+      isValid: false;
+      reason: "ended" | "misconfigured" | "defeated";
+      error: string;
+    } => {
   if (raid.raidEndsAt && raid.raidEndsAt < now) {
-    return { isValid: false, error: "This raid has ended" };
+    return { isValid: false, reason: "ended", error: "This raid has ended" };
   }
   if (raid.raidBossCurrentHealth === null) {
     return {
       isValid: false,
+      reason: "misconfigured",
       error: "This raid is not properly configured (missing boss HP)",
     };
   }
   if (raid.raidBossCurrentHealth <= 0) {
-    return { isValid: false, error: "The raid boss has been defeated" };
+    return {
+      isValid: false,
+      reason: "defeated",
+      error: "The raid boss has been defeated",
+    };
   }
   return { isValid: true };
 };
@@ -107,21 +118,13 @@ export const isRaidListedForVillage = (
 
   const raidData = getRaidObjectiveData(raid);
   if (!raidData) return false;
-
-  if (raidData.isOpen) {
-    return true;
-  }
-  if (raidData.isExclusive) {
-    if (!villageId || raidData.sector === null) {
-      return false;
-    }
-    if (raidCaptureClosedMessage(raid, now)) return false;
-    return (
-      ownedSectorNumbers.has(raidData.sector) ||
-      attackerDefeatedShrineSectors.has(raidData.sector)
-    );
-  }
-  return false;
+  if (raidData.isOpen) return true;
+  if (!villageId || raidData.sector === null) return false;
+  if (raidCaptureClosedMessage(raid, now)) return false;
+  return (
+    ownedSectorNumbers.has(raidData.sector) ||
+    attackerDefeatedShrineSectors.has(raidData.sector)
+  );
 };
 
 /** Why an exclusive raid no longer takes participants, or null within its capture window. */
@@ -138,8 +141,9 @@ export const raidCaptureClosedMessage = (
 };
 
 /**
- * Simple boolean check if a raid is currently active (has time remaining and boss is alive).
- * Use this for filtering/conditional logic. Use validateRaidIsActive for error messages.
+ * Whether an activated raid is running: it has a raidEndsAt still in the future and a
+ * living boss. A null raidEndsAt means not activated (exclusive raids get one when their
+ * shrine falls), unlike validateRaidIsActive, which treats it as having no end.
  */
 export const isRaidCurrentlyActive = (
   raid: { raidEndsAt: Date | null; raidBossCurrentHealth: number | null },
@@ -216,14 +220,13 @@ export const prepareExclusiveRaidActivation = (
   const raidEndsAt = new Date(
     now.getTime() + EXCLUSIVE_RAID_DURATION_HOURS * 60 * 60 * 1000,
   );
-  const raidCaptureDeadline = raidEndsAt;
 
   return {
     activated: true,
     mutations: sectorExclusiveRaids.map((raid) => ({
       raidId: raid.id,
       raidEndsAt,
-      raidCaptureDeadline,
+      raidCaptureDeadline: raidEndsAt,
       raidBossCurrentHealth: raid.raidBossMaxHealth ?? 0,
     })),
   };

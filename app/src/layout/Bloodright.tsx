@@ -7,8 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   COST_SKILL_RESET,
   MAX_BLOODRIGHT_TIERS,
-  SKILL_TREE_RESET_FREE_GOLD,
-  SKILL_TREE_RESET_FREE_NORMAL,
+  SKILL_TREE_RESET_FREE,
 } from "@/drizzle/constants";
 import { BloodrightTree } from "@/layout/BloodrightTree";
 import Confirm from "@/layout/Confirm";
@@ -214,8 +213,8 @@ export const ResetBloodright = () => {
     <div className="space-y-4 p-4">
       <p>
         Reset all Bloodright tiers and refund all invested Seichi Silver. Bloodright and
-        Skills share the monthly reset allowance: {SKILL_TREE_RESET_FREE_NORMAL} free
-        reset, or {SKILL_TREE_RESET_FREE_GOLD} with Gold Federal. After that, resets
+        Skills share the monthly reset allowance: {SKILL_TREE_RESET_FREE.NORMAL} free
+        reset, or {SKILL_TREE_RESET_FREE.GOLD} with Gold Federal. After that, resets
         cost {COST_SKILL_RESET} reputation points.
       </p>
       <Confirm

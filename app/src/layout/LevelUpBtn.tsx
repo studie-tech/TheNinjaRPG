@@ -32,7 +32,7 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id, className = "mt-2" }) => {
   // Tutorial hook
   const { currentStep, completeTutorialAction } = useTutorialStep();
 
-  // Fetch avatar query
+  // Level-up mutation
   const { mutate: levelUp, isPending: isLevelling } = api.profile.levelUp.useMutation({
     onMutate: () => ({ userRevision: prepareUserUpdate() }),
     onSuccess: async (data, _variables, context) => {
@@ -69,10 +69,9 @@ const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id, className = "mt-2" }) => {
     }
   }, [currentStep?.advanceOn, userData, canLevel, completeTutorialAction]);
 
-  // Don't show anyth
   if (!userData) return null;
 
-  // If no href, show loader, otherwise show avatar
+  // Level-up button and confirmation dialog
   return (
     <>
       {canLevel && (

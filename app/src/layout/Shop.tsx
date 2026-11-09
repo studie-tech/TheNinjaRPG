@@ -60,189 +60,6 @@ import type { UserWithRelations } from "@/routers/profile";
 import { useAwake, usePublicPathname } from "@/utils/routing";
 import { useUserData } from "@/utils/UserContext";
 
-/** First-page catalog size; further rows load through the existing infinite-query cursor. */
-const SHOP_CATALOG_PAGE_SIZE = 30;
-
-/** Optional overrides for the catalog UI (e.g. black-market reputation vs silver). */
-export interface ShopCatalogOverrides {
-  heroTitle?: string;
-  heroDescription?: string;
-  heroBadge?: string;
-  searchId?: string;
-  /** `false` omits the catalog list wrapper id; string overrides. Default: tutorial-itemshop when not `eventItems`. */
-  listId?: string | false;
-  filterTriggerId?: string;
-  /** User-facing Seichi silver wording (`silver` on black market; default village: seichi). */
-  silverLabel?: "silver" | "seichi";
-  /** Extra controls next to the filter button (e.g. black-market currency tabs). */
-  headerExtra?: ReactNode;
-}
-
-interface ShopProps {
-  userData: NonNullable<UserWithRelations>;
-  defaultType: ItemType;
-  restrictTypes?: ItemType[];
-  eventItems?: boolean;
-  title?: string;
-  image?: string;
-  subtitle?: string;
-  defaultBackHref?: string;
-  initialBreak?: boolean;
-  minCost?: number;
-  minRepsCost?: number;
-  minSeichiSilverCost?: number;
-  catalog?: ShopCatalogOverrides;
-}
-
-const SILVER_COPY = {
-  seichi: {
-    catalog: "seichi",
-    purchase: "seichi silver",
-    wallet: "Seichi Silver:",
-  },
-  silver: {
-    catalog: "silver",
-    purchase: "silver",
-    wallet: "Silver:",
-  },
-} as const;
-
-const SHOP_ITEM_TYPE_TAB_ICON: Partial<Record<ItemType, LucideIcon>> = {
-  WEAPON: Sword,
-  CONSUMABLE: FlaskConical,
-  ARMOR: Shield,
-  ACCESSORY: Sparkles,
-  MATERIAL: Package,
-  COOKING: ChefHat,
-  MEAL: ChefHat,
-  FURNITURE: Sofa,
-  KEYSTONE: Gem,
-  CRYSTAL: Diamond,
-};
-
-const SHOP_ITEM_TYPE_TAB_HINT: Record<ItemType, string> = {
-  WEAPON: "Weapons — damage tags, stat scaling, and battle usage vary by piece.",
-  CONSUMABLE: "Consumables — scrolls, pills, and one-off tools for combat and travel.",
-  ARMOR: "Armor — defensive layers and resistances for your build.",
-  ACCESSORY: "Accessories — rings, charms, and extras that tweak your kit.",
-  MATERIAL: "Materials — crafting and upgrade components.",
-  COOKING: "Cooking — ingredients and prepared foods for storage.",
-  MEAL: "Meals — cooked food with a timed effect.",
-  FURNITURE: "Furniture — painted props to place and arrange in your residence.",
-  KEYSTONE: "Keystones — slot upgrades and build-defining modifiers.",
-  CRYSTAL: "Crystals — special slot items and enhancements.",
-  OTHER: "Other — miscellaneous goods in stock.",
-};
-
-const SHOP_ITEM_TYPE_TAB_LABEL: Record<ItemType, string> = {
-  WEAPON: "Weapon",
-  CONSUMABLE: "Consumable",
-  ARMOR: "Armor",
-  ACCESSORY: "Accessory",
-  MATERIAL: "Material",
-  COOKING: "Cooking",
-  MEAL: "Meals",
-  FURNITURE: "Furniture",
-  KEYSTONE: "Keystone",
-  CRYSTAL: "Crystal",
-  OTHER: "Other",
-};
-
-function categoryTabIcon(type: ItemType) {
-  const cls = "h-4 w-4 shrink-0 opacity-90";
-  const Icon = SHOP_ITEM_TYPE_TAB_ICON[type] ?? LayoutGrid;
-  return <Icon className={cls} />;
-}
-
-function ShopCatalogCard({
-  item,
-  selected,
-  onSelect,
-  ryoPrice,
-  canAfford,
-  seichiCatalogWord,
-}: {
-  item: Item;
-  selected: boolean;
-  onSelect: () => void;
-  ryoPrice: number;
-  canAfford: boolean;
-  seichiCatalogWord: string;
-}) {
-  const lineParts = [
-    item.cost > 0 ? `${ryoPrice.toLocaleString()} ryo` : null,
-    item.repsCost > 0 ? `${item.repsCost.toLocaleString()} rep` : null,
-    item.seichiSilverCost > 0
-      ? `${item.seichiSilverCost.toLocaleString()} ${seichiCatalogWord}`
-      : null,
-  ].filter(Boolean);
-
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={cn(
-        "flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border bg-card text-center shadow-sm transition-colors sm:rounded-xl",
-        selected ? "border-primary bg-muted/40" : "border-border hover:bg-muted/30",
-      )}
-    >
-      <div className="flex shrink-0 items-center justify-center px-1.5 pt-1.5 pb-1 sm:px-3 sm:pt-3 sm:pb-2">
-        <div className="relative aspect-square size-16 shrink-0 overflow-hidden rounded border border-border/70 bg-muted/20 sm:size-28 sm:rounded-md lg:size-32">
-          <ContentImage
-            image={item.image}
-            alt={item.name}
-            rarity={item.rarity ?? undefined}
-            hideBorder
-            className="h-full max-h-full w-full max-w-full object-contain"
-          />
-        </div>
-      </div>
-      <div className="flex min-h-0 w-full flex-1 flex-col gap-1 border-border border-t px-1.5 pt-1.5 pb-2 sm:px-2.5 sm:pt-2.5 sm:pb-3">
-        <div className="min-h-0 min-w-0 flex-1 text-balance">
-          <p className="break-words font-semibold text-[11px] leading-tight sm:text-sm">
-            {item.name}
-          </p>
-          {lineParts.length > 0 ? (
-            <p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">
-              {lineParts.join(" · ")}
-            </p>
-          ) : (
-            <p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">
-              Tap for details
-            </p>
-          )}
-        </div>
-        <div
-          className={cn(
-            "-mx-1.5 flex shrink-0 items-center justify-center gap-0.5 rounded px-1.5 py-0.5 font-medium text-[9px] sm:-mx-2.5 sm:gap-1 sm:rounded-md sm:px-2.5 sm:py-1 sm:text-[11px]",
-            canAfford
-              ? "bg-emerald-500/15 text-emerald-900 ring-1 ring-emerald-600/30 ring-inset dark:bg-emerald-500/20 dark:text-emerald-50 dark:ring-emerald-400/35"
-              : "bg-destructive/10 text-destructive",
-          )}
-        >
-          {canAfford ? (
-            <>
-              <Check
-                className="h-2.5 w-2.5 shrink-0 opacity-90 sm:h-3 sm:w-3"
-                aria-hidden
-              />
-              <span>Afford</span>
-            </>
-          ) : (
-            <>
-              <CircleAlert
-                className="h-2.5 w-2.5 shrink-0 opacity-90 sm:h-3 sm:w-3"
-                aria-hidden
-              />
-              <span>Can't afford</span>
-            </>
-          )}
-        </div>
-      </div>
-    </button>
-  );
-}
-
 const Shop: React.FC<ShopProps> = (props) => {
   const { userData, defaultType, minCost, minRepsCost, minSeichiSilverCost, catalog } =
     props;
@@ -439,7 +256,6 @@ const Shop: React.FC<ShopProps> = (props) => {
       proceed_label={isPurchasing ? undefined : canAfford ? costString : missingString}
       isOpen={isOpen}
       setIsOpen={setItemConfirmOpen}
-      isValid={false}
       isLoading={isPurchasing}
       keepOpenOnAccept
       proceedDisabled={!canReviewRollOdds || !canPurchaseQuantity || isPurchasing}
@@ -819,3 +635,186 @@ const Shop: React.FC<ShopProps> = (props) => {
 };
 
 export default Shop;
+
+function ShopCatalogCard({
+  item,
+  selected,
+  onSelect,
+  ryoPrice,
+  canAfford,
+  seichiCatalogWord,
+}: {
+  item: Item;
+  selected: boolean;
+  onSelect: () => void;
+  ryoPrice: number;
+  canAfford: boolean;
+  seichiCatalogWord: string;
+}) {
+  const lineParts = [
+    item.cost > 0 ? `${ryoPrice.toLocaleString()} ryo` : null,
+    item.repsCost > 0 ? `${item.repsCost.toLocaleString()} rep` : null,
+    item.seichiSilverCost > 0
+      ? `${item.seichiSilverCost.toLocaleString()} ${seichiCatalogWord}`
+      : null,
+  ].filter(Boolean);
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border bg-card text-center shadow-sm transition-colors sm:rounded-xl",
+        selected ? "border-primary bg-muted/40" : "border-border hover:bg-muted/30",
+      )}
+    >
+      <div className="flex shrink-0 items-center justify-center px-1.5 pt-1.5 pb-1 sm:px-3 sm:pt-3 sm:pb-2">
+        <div className="relative aspect-square size-16 shrink-0 overflow-hidden rounded border border-border/70 bg-muted/20 sm:size-28 sm:rounded-md lg:size-32">
+          <ContentImage
+            image={item.image}
+            alt={item.name}
+            rarity={item.rarity ?? undefined}
+            hideBorder
+            className="h-full max-h-full w-full max-w-full object-contain"
+          />
+        </div>
+      </div>
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-1 border-border border-t px-1.5 pt-1.5 pb-2 sm:px-2.5 sm:pt-2.5 sm:pb-3">
+        <div className="min-h-0 min-w-0 flex-1 text-balance">
+          <p className="break-words font-semibold text-[11px] leading-tight sm:text-sm">
+            {item.name}
+          </p>
+          {lineParts.length > 0 ? (
+            <p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">
+              {lineParts.join(" · ")}
+            </p>
+          ) : (
+            <p className="mt-0.5 text-[9px] text-muted-foreground sm:text-xs">
+              Tap for details
+            </p>
+          )}
+        </div>
+        <div
+          className={cn(
+            "-mx-1.5 flex shrink-0 items-center justify-center gap-0.5 rounded px-1.5 py-0.5 font-medium text-[9px] sm:-mx-2.5 sm:gap-1 sm:rounded-md sm:px-2.5 sm:py-1 sm:text-[11px]",
+            canAfford
+              ? "bg-emerald-500/15 text-emerald-900 ring-1 ring-emerald-600/30 ring-inset dark:bg-emerald-500/20 dark:text-emerald-50 dark:ring-emerald-400/35"
+              : "bg-destructive/10 text-destructive",
+          )}
+        >
+          {canAfford ? (
+            <>
+              <Check
+                className="h-2.5 w-2.5 shrink-0 opacity-90 sm:h-3 sm:w-3"
+                aria-hidden
+              />
+              <span>Afford</span>
+            </>
+          ) : (
+            <>
+              <CircleAlert
+                className="h-2.5 w-2.5 shrink-0 opacity-90 sm:h-3 sm:w-3"
+                aria-hidden
+              />
+              <span>Can't afford</span>
+            </>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/** First-page catalog size; further rows load through the existing infinite-query cursor. */
+const SHOP_CATALOG_PAGE_SIZE = 30;
+
+const SILVER_COPY = {
+  seichi: {
+    catalog: "seichi",
+    purchase: "seichi silver",
+    wallet: "Seichi Silver:",
+  },
+  silver: {
+    catalog: "silver",
+    purchase: "silver",
+    wallet: "Silver:",
+  },
+} as const;
+
+const SHOP_ITEM_TYPE_TAB_ICON: Partial<Record<ItemType, LucideIcon>> = {
+  WEAPON: Sword,
+  CONSUMABLE: FlaskConical,
+  ARMOR: Shield,
+  ACCESSORY: Sparkles,
+  MATERIAL: Package,
+  COOKING: ChefHat,
+  MEAL: ChefHat,
+  FURNITURE: Sofa,
+  KEYSTONE: Gem,
+  CRYSTAL: Diamond,
+};
+
+const SHOP_ITEM_TYPE_TAB_HINT: Record<ItemType, string> = {
+  WEAPON: "Weapons — damage tags, stat scaling, and battle usage vary by piece.",
+  CONSUMABLE: "Consumables — scrolls, pills, and one-off tools for combat and travel.",
+  ARMOR: "Armor — defensive layers and resistances for your build.",
+  ACCESSORY: "Accessories — rings, charms, and extras that tweak your kit.",
+  MATERIAL: "Materials — crafting and upgrade components.",
+  COOKING: "Cooking — ingredients and prepared foods for storage.",
+  MEAL: "Meals — cooked food with a timed effect.",
+  FURNITURE: "Furniture — painted props to place and arrange in your residence.",
+  KEYSTONE: "Keystones — slot upgrades and build-defining modifiers.",
+  CRYSTAL: "Crystals — special slot items and enhancements.",
+  OTHER: "Other — miscellaneous goods in stock.",
+};
+
+const SHOP_ITEM_TYPE_TAB_LABEL: Record<ItemType, string> = {
+  WEAPON: "Weapon",
+  CONSUMABLE: "Consumable",
+  ARMOR: "Armor",
+  ACCESSORY: "Accessory",
+  MATERIAL: "Material",
+  COOKING: "Cooking",
+  MEAL: "Meals",
+  FURNITURE: "Furniture",
+  KEYSTONE: "Keystone",
+  CRYSTAL: "Crystal",
+  OTHER: "Other",
+};
+
+function categoryTabIcon(type: ItemType) {
+  const cls = "h-4 w-4 shrink-0 opacity-90";
+  const Icon = SHOP_ITEM_TYPE_TAB_ICON[type] ?? LayoutGrid;
+  return <Icon className={cls} />;
+}
+
+/** Optional overrides for the catalog UI (e.g. black-market reputation vs silver). */
+export interface ShopCatalogOverrides {
+  heroTitle?: string;
+  heroDescription?: string;
+  heroBadge?: string;
+  searchId?: string;
+  /** `false` omits the catalog list wrapper id; string overrides. Default: tutorial-itemshop when not `eventItems`. */
+  listId?: string | false;
+  filterTriggerId?: string;
+  /** User-facing Seichi silver wording (`silver` on black market; default village: seichi). */
+  silverLabel?: "silver" | "seichi";
+  /** Extra controls next to the filter button (e.g. black-market currency tabs). */
+  headerExtra?: ReactNode;
+}
+
+interface ShopProps {
+  userData: NonNullable<UserWithRelations>;
+  defaultType: ItemType;
+  restrictTypes?: ItemType[];
+  eventItems?: boolean;
+  title?: string;
+  image?: string;
+  subtitle?: string;
+  defaultBackHref?: string;
+  initialBreak?: boolean;
+  minCost?: number;
+  minRepsCost?: number;
+  minSeichiSilverCost?: number;
+  catalog?: ShopCatalogOverrides;
+}

@@ -2,12 +2,12 @@ import { useAtomValue } from "jotai";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Progress } from "@/components/ui/progress";
 import { usePageActive } from "@/hooks/usePageActive";
+import Loader from "@/layout/Loader";
 import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
 import { calcApReduction } from "@/libs/combat/turn";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { clamp } from "@/utils/math";
 import { combatPendingActionAtom, useUserData } from "@/utils/UserContext";
-import Loader from "./Loader";
 
 interface ActionTimerProps {
   action?: CombatAction | undefined;

@@ -1,6 +1,5 @@
 import { Client as PlanetScaleClient } from "@planetscale/database";
 import * as Sentry from "@sentry/nextjs";
-import { TRPCError } from "@trpc/server";
 import { after } from "next/server";
 import { z } from "zod";
 import {
@@ -41,7 +40,7 @@ import {
 } from "@/queries/profile";
 import { findStoreUserIdAlias, insertStoreUserIdAlias } from "@/queries/purchases";
 import { deleteRankedQueueForUser } from "@/queries/pvprank";
-import { clearQueueBattleId, deleteQueueById, listQueueMembers } from "@/queries/raids";
+import { clearQueueBattleId, deleteEmptyQueueById } from "@/queries/raids";
 import { fetchMasterySources } from "@/queries/skillTree";
 import {
   applyDevelopmentBackup,
@@ -193,6 +192,7 @@ import {
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
+  serverError,
 } from "@/server/api/trpc";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import {
@@ -213,6 +213,8 @@ import {
   canUnequipAllUsers,
   canUnstuckVillage,
   canUseMonitoringTests,
+  isSiteOwnerAccount,
+  isStaffRole,
 } from "@/utils/permissions";
 import { idSchema } from "@/validators/misc";
 import { userDeltaResponseSchema } from "@/validators/userCache";
@@ -230,7 +232,7 @@ export const staffRouter = createTRPCRouter({
   getBackups: protectedProcedure.query(async ({ ctx }) => {
     const user = await fetchUser(ctx.drizzle, ctx.userId);
     if (!canControlBackups(user.role)) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Not allowed for you" });
+      throw serverError("FORBIDDEN", "Not allowed for you");
     }
     return listContentBackupForGetBackups(ctx.drizzle);
   }),
@@ -353,10 +355,7 @@ export const staffRouter = createTRPCRouter({
         await Sentry.flush(2000);
       });
       // Mutate
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Test error",
-      });
+      throw serverError("INTERNAL_SERVER_ERROR", "Test error");
     }),
   unequipAllJutsus: protectedProcedure
     .output(userDeltaResponseSchema)
@@ -367,7 +366,6 @@ export const staffRouter = createTRPCRouter({
       if (!canUnequipAllUsers(user)) {
         return errorResponse("You do not have permission to unequip all jutsus");
       }
-      // Non-AI only — AI opponents keep their equipped loadouts for combat.
       // Non-AI only — AI opponents keep equipped jutsu for combat.
       // Prefer NOT IN (isAi = true): AI accounts are few, so the subquery stays small;
       // IN (isAi = false) would materialize essentially every human userId.
@@ -459,15 +457,12 @@ export const staffRouter = createTRPCRouter({
       ]);
       // Clean up empty teams or stuck claiming states if user was in a team
       if (queueEntry) {
-        const remainingMembers = await listQueueMembers(
+        const removed = await deleteEmptyQueueById(
           ctx.drizzle,
           queueEntry.clanBattleId,
         );
-        if (remainingMembers.length === 0) {
-          // Delete the queue entry - team is now empty
-          await deleteQueueById(ctx.drizzle, queueEntry.clanBattleId);
-        } else {
-          // If there are remaining members but battleId is a claiming ID, reset it
+        if (removed.rowsAffected === 0) {
+          // Members remain: reset a claiming battleId so they can start again
           const team = await findMpvpBattleQueueForForceAwake(ctx.drizzle, queueEntry);
           if (isBattleClaimId(team?.battleId)) {
             await clearQueueBattleId(ctx.drizzle, queueEntry.clanBattleId);
@@ -544,7 +539,7 @@ export const staffRouter = createTRPCRouter({
 
       return { success: true, message: "Badge removed" };
     }),
-  // Copy user setting to Terriator - exclusive to Terriator user for debugging
+  // Copy a user's settings onto the calling staff member for debugging
   cloneUserForDebug: protectedProcedure
     .input(z.object({ userId: z.string() }))
     .output(baseServerResponse)
@@ -628,10 +623,10 @@ export const staffRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
       if (!canSeeIps(user.role)) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You don't have permission to view IP addresses",
-        });
+        throw serverError(
+          "FORBIDDEN",
+          "You don't have permission to view IP addresses",
+        );
       }
       // Fetch historical IPs
       const historicalIps = await listHistoricalIpForGetUserHistoricalIps(
@@ -681,10 +676,10 @@ export const staffRouter = createTRPCRouter({
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       // Guard
       if (!canSeeActivityEvents(user.role)) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You don't have permission to view activity events",
-        });
+        throw serverError(
+          "FORBIDDEN",
+          "You don't have permission to view activity events",
+        );
       }
       // Fetch activity events
       const activityEvents = await listUserActivityEventForGetUserActivityEvents(
@@ -710,7 +705,7 @@ export const staffRouter = createTRPCRouter({
         ],
       );
       // Guard
-      if (user.username !== "Terriator") {
+      if (!isSiteOwnerAccount(user)) {
         return { success: false, message: "You are not Terriator" };
       }
       if (isDeletedStoreUserId(input.userId) || isDeletedStoreUserId(input.newUserId)) {
@@ -736,12 +731,12 @@ export const staffRouter = createTRPCRouter({
         return { success: false, message: "UserId was already renamed to another id" };
       }
       if (!fromUser && !resuming) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+        return errorResponse("User not found");
       }
       if (toUser && !movedAlready) {
         return { success: false, message: "UserId already exists" };
       }
-      if (fromUser && fromUser.role !== "USER") {
+      if (fromUser && isStaffRole(fromUser.role)) {
         return { success: false, message: "Cannot change staff member's userId " };
       }
       // Battles carry immutable participant identities and settlement ownership.

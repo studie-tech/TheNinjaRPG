@@ -1,9 +1,8 @@
 "use client";
 
-import type { inferRouterOutputs } from "@trpc/server";
 import { CirclePlay, DoorOpen, Loader2, Shield, Swords, Users } from "lucide-react";
 import type React from "react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -20,15 +19,13 @@ import Loader from "@/layout/Loader";
 import { showUserRank } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import type { AppRouter } from "@/server/api/root";
 import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
-type ShrineBattleData =
-  inferRouterOutputs<AppRouter>["shrine"]["getShrineBattles"][number];
+type ShrineBattleData = RouterOutputs["shrine"]["getShrineBattles"][number];
 
 interface ShrineBattleLobbyProps {
   sectorNumber: number;
@@ -180,6 +177,7 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
   isLeaving,
   isInitiating,
 }) => {
+  const { timeDiff } = useUserInfo();
   const attackers = battle.queue.filter((q) => q.side === "ATTACKER");
   const defenders = battle.queue.filter((q) => q.side === "DEFENDER");
   const userInBattle = battle.queue.some((q) => q.userId === userId);
@@ -234,7 +232,7 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
         <div className="text-muted-foreground text-sm">
           <Countdown
             targetDate={startTime}
-            timeDiff={0}
+            timeDiff={timeDiff}
             onEndShow={
               canInitiate
                 ? "Battle can start!"

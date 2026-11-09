@@ -41,6 +41,7 @@ import {
   craftingRequirement,
   huntingSession,
   type Item,
+  type ItemSlot,
   item,
   itemLoadout,
   itemPurchaseCounter,
@@ -74,8 +75,11 @@ import {
 } from "@/server/utils/concurrency";
 import { getItemPurchasePeriodStart, getNextUserSnapshotAt } from "@/utils/time";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
-import { DEFAULT_FURNITURE_DATA, FURNITURE_ITEM_DEFAULTS } from "@/validators/item";
-import type { FurnitureVariantData } from "@/validators/itemFurniture";
+import {
+  DEFAULT_FURNITURE_DATA,
+  FURNITURE_ITEM_DEFAULTS,
+  type FurnitureVariantData,
+} from "@/validators/itemFurniture";
 import type { cacheConsumptionResponseSchema } from "@/validators/weightedCache";
 
 /** Load an item definition by ID; a missing definition yields undefined. */
@@ -385,7 +389,6 @@ export const insertItemForCreate = (
       ? {
           ...FURNITURE_ITEM_DEFAULTS,
           furnitureData: { ...DEFAULT_FURNITURE_DATA },
-          effects: [],
           inShop: false,
           cost: 0,
           repsCost: 0,
@@ -1705,23 +1708,36 @@ export const updateUserItemForAutoEquipOptimal = (
         eq(userItem.id, assignment.userItemId),
         eq(userItem.userId, user.userId),
         eq(userItem.equipped, "NONE"),
-        eq(userItem.storedAtHome, false),
-        eq(userItem.isInAuction, false),
         gt(userItem.quantity, 0),
-        or(isNull(userItem.craftingFinishedAt), lte(userItem.craftingFinishedAt, now)),
-        notExists(
-          client
-            .select({ one: sql`1` })
-            .from(userItemImbuement)
-            .where(
-              and(
-                eq(userItemImbuement.userItemId, assignment.userItemId),
-                gt(userItemImbuement.craftingFinishedAt, now),
-              ),
-            ),
-        ),
+        userItemAvailableAt(client, assignment.userItemId, now),
       ),
     );
+
+/**
+ * Whether a user item can be equipped at `now`: not stored at home, not in an auction,
+ * done crafting and without an imbuement still in progress.
+ */
+export const userItemAvailableAt = (
+  client: Pick<DrizzleClient, "select">,
+  userItemId: string,
+  now: Date,
+) =>
+  and(
+    eq(userItem.storedAtHome, false),
+    eq(userItem.isInAuction, false),
+    or(isNull(userItem.craftingFinishedAt), lte(userItem.craftingFinishedAt, now)),
+    notExists(
+      client
+        .select({ one: sql`1` })
+        .from(userItemImbuement)
+        .where(
+          and(
+            eq(userItemImbuement.userItemId, userItemId),
+            gt(userItemImbuement.craftingFinishedAt, now),
+          ),
+        ),
+    ),
+  );
 
 /** Build the `itemLoadout` insert for `insertMissing`, updating duplicate keys. */
 export const insertItemLoadoutForInsertMissing = (
@@ -1793,7 +1809,7 @@ export const listPetSpeciesForFetchRewardPetSpecies = (
  */
 export const updateUserItemForSelectItemLoadout = (
   client: Pick<DrizzleClient, "update">,
-  equipped: import("@/drizzle/schema").ItemSlot,
+  equipped: ItemSlot | SQL,
   user: { userId: string },
 ) =>
   client

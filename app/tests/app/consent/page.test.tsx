@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
-import * as contentBox from "@/layout/ContentBox";
 import CookieConsent from "@/app/[shell]/consent/page";
+import * as contentBox from "@/layout/ContentBox";
 
 beforeEach(() => {
   vi.useFakeTimers();

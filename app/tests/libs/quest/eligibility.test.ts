@@ -1,11 +1,9 @@
-
-import type { SQL } from "drizzle-orm";
-import { QueryBuilder } from "drizzle-orm/mysql-core";
-import { describe, expect, it, vi } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { QUESTS_CONCURRENT_LIMIT } from "@/drizzle/constants";
-import { quest } from "@/drizzle/schema";
 import { questTypeConcurrentBlockMessage } from "@/libs/quest/missionHall";
+import type { DrizzleClient } from "@/server/db";
 import { fetchUncompletedQuests } from "@/server/utils/questAssignment";
+import { planetScaleFixture } from "../../setup/planetscale";
 
 /** Creates a minimal user fixture with unfinished quests of the supplied types. */
 const userWith = (active: { questType: string; endAt?: Date | null }[]) =>
@@ -40,7 +38,7 @@ describe("questTypeConcurrentBlockMessage", () => {
   });
 
   it.each(["story", "hunting", "gathering", "anbu", "event"])(
-    "preserves the shared %s concurrent limit extracted from startQuest",
+    "enforces the shared %s concurrent limit",
     (questType) => {
       const active = Array.from({ length: QUESTS_CONCURRENT_LIMIT }, () => ({
         questType,
@@ -55,7 +53,7 @@ describe("questTypeConcurrentBlockMessage", () => {
   );
 
   it.each(["battlepyramid", "starter"])(
-    "preserves the single-active limit for %s quests",
+    "enforces the single-active limit for %s quests",
     (questType) => {
       expect(
         questTypeConcurrentBlockMessage(
@@ -130,25 +128,11 @@ describe("questTypeConcurrentBlockMessage", () => {
   });
 });
 
-describe("fetchUncompletedQuests date-window compatibility", () => {
+describe("fetchUncompletedQuests date window", () => {
   it("prefilters currently active quests instead of future or expired quests", async () => {
-    let predicate: SQL | undefined;
-    const orderBy = vi.fn().mockResolvedValue([]);
-    const client = {
-      select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          leftJoin: vi.fn(() => ({
-            where: vi.fn((value: SQL) => {
-              predicate = value;
-              return { orderBy };
-            }),
-          })),
-        })),
-      })),
-    };
-
+    const { database, statements } = planetScaleFixture(() => ({ rows: [] }));
     await fetchUncompletedQuests(
-      client as never,
+      database as unknown as DrizzleClient,
       {
         userId: "user-1",
         rank: "JONIN",
@@ -160,13 +144,8 @@ describe("fetchUncompletedQuests date-window compatibility", () => {
       "tier",
     );
 
-    if (!predicate) throw new Error("query predicate was not captured");
-    const rendered = new QueryBuilder()
-      .select()
-      .from(quest)
-      .where(predicate)
-      .toSQL().sql;
-    expect(rendered).toMatch(/startsAt[^)]*<= \?/i);
-    expect(rendered).toMatch(/endsAt[^)]*>= \?/i);
+    // The PlanetScale client inlines bound values, so the window bounds arrive as literals.
+    expect(statements[0]).toMatch(/startsAt[^)]*<= '/i);
+    expect(statements[0]).toMatch(/endsAt[^)]*>= '/i);
   });
 });

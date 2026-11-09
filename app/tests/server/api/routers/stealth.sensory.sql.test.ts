@@ -166,7 +166,10 @@ describeWithDatabase("sensory reveals", () => {
     await hire("turncoat", "foe");
     await hire("defector", "foe", 1);
     const detected = await scan();
-    expect(detected.map((user) => user.userId).sort()).toEqual(["defector", "turncoat"]);
+    expect(detected.map((user) => user.userId).sort()).toEqual([
+      "defector",
+      "turncoat",
+    ]);
     expect(detected.every((user) => user.canAttack && user.isMasked)).toBe(true);
     const db = await getTestDatabase();
     const turncoat = await db.query.userData.findFirst({

@@ -1,13 +1,13 @@
 "use client";
 
 import { useClerk } from "@clerk/nextjs";
-import type { SignInResource } from "@clerk/shared/types";
+import type { SignInResource } from "@clerk/nextjs/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNativeAuthHandoff } from "@/hooks/useNativeAuthHandoff";
 import { appEvents, appleAuth, isNative, oauthBrowser, platform } from "@/libs/native";
 import { createAuthProof } from "@/libs/native/authProof";
 import { browserAuthContinuation } from "@/libs/native/deepLink";
-import type { NativeAuthProvider } from "@/validators/nativeAuth";
+import { nativeAuthStartSchema } from "@/validators/nativeAuth";
 
 /** Where the provider sends the player back to. Registered in both native projects. */
 const OAUTH_REDIRECT = "tnr://oauth-callback";
@@ -101,7 +101,8 @@ export const useNativeAuth = () => {
       if (!isNative() || !signIn) {
         return { status: "error", message: "Authentication is still loading" };
       }
-      if (!["google", "discord", "facebook"].includes(provider)) {
+      const handoffProvider = nativeAuthStartSchema.shape.provider.safeParse(provider);
+      if (!handoffProvider.success) {
         return { status: "error", message: "This provider is unavailable" };
       }
       if (busy.current) return { status: "cancelled" };
@@ -113,121 +114,21 @@ export const useNativeAuth = () => {
       try {
         const proof = await createAuthProof();
         const { flowId } = await handoff.start({
-          provider: provider as NativeAuthProvider,
+          provider: handoffProvider.data,
           challenge: proof.challenge,
         });
         if (!alive.current) return { status: "cancelled" };
         const target = new URL("/native-sign-in", window.location.origin);
         target.searchParams.set("flow", flowId);
         const isAndroid = platform() === "android";
-        let callback: URL | undefined;
-        await new Promise<void>((resolve) => {
-          let settled = false;
-          let revision = 0;
-          let dismissalTimer: ReturnType<typeof setTimeout> | undefined;
-          const clearDismissal = () => {
-            revision += 1;
-            clearTimeout(dismissalTimer);
-          };
-          const finish = () => {
-            if (settled) return;
-            settled = true;
-            clearDismissal();
-            resolve();
-          };
-          // An intermediate App Link can hide the first tab while its replacement is
-          // opening. Check the shell after the grace period instead of treating the
-          // old tab's browserFinished event as cancellation of the replacement.
-          const scheduleDismissal = () => {
-            if (settled) return;
-            clearDismissal();
-            const currentRevision = revision;
-            dismissalTimer = setTimeout(() => {
-              // Safari's sheet is inside the active iOS app; only browserFinished
-              // signals its dismissal. Android's tab runs in another activity.
-              if (!isAndroid) {
-                finish();
-                return;
-              }
-              void appEvents.getState().then(
-                ({ isActive }) => {
-                  if (currentRevision === revision && isActive) finish();
-                },
-                () => {
-                  if (currentRevision === revision) finish();
-                },
-              );
-            }, OAUTH_CALLBACK_GRACE_MS);
-          };
-          let shellActive = false;
-          let pendingContinuation: string | undefined;
-          let openingContinuation = false;
-          const reopened = new Set<string>();
-          const reopenContinuation = () => {
-            if (settled || !shellActive || !pendingContinuation || openingContinuation)
-              return;
-            const url = pendingContinuation;
-            pendingContinuation = undefined;
-            openingContinuation = true;
-            void oauthBrowser
-              .open(url)
-              .catch(finish)
-              .finally(() => {
-                openingContinuation = false;
-                reopenContinuation();
-              });
-          };
-          cancelPending.current = finish;
-          const stopUrl = appEvents.onUrlOpen((url) => {
-            if (settled) return;
-            const continuation = isAndroid
-              ? browserAuthContinuation(url, window.location.origin, flowId)
-              : null;
-            if (continuation) {
-              if (reopened.has(continuation)) return;
-              reopened.add(continuation);
-              clearDismissal();
-              pendingContinuation = continuation;
-              // MainActivity must resume and clear the old browser controller before
-              // Browser.open can create a replacement controller with the same cookies.
-              void appEvents.getState().then(({ isActive }) => {
-                if (isActive) shellActive = true;
-                reopenContinuation();
-              }, finish);
-              return;
-            }
-            const parsed = parseOAuthCallback(url);
-            if (
-              !parsed ||
-              parsed.searchParams.get("flow") !== flowId ||
-              !/^[A-Za-z0-9_-]{43}$/.test(parsed.searchParams.get("code") ?? "")
-            )
-              return;
-            callback = parsed;
-            finish();
-          });
-          const stopFinished = oauthBrowser.onFinished(scheduleDismissal);
-          const stopState = isAndroid
-            ? appEvents.onStateChange((isActive) => {
-                shellActive = isActive;
-                if (isActive) {
-                  reopenContinuation();
-                  scheduleDismissal();
-                }
-              })
-            : () => undefined;
-          stopListening = () => {
-            settled = true;
-            clearDismissal();
-            stopUrl();
-            stopFinished();
-            stopState();
-          };
-          browserOpened = true;
-          void oauthBrowser.open(target.toString()).catch(finish);
+        browserOpened = true;
+        const wait = waitForOAuthCallback(flowId, target, isAndroid, (cancel) => {
+          cancelPending.current = cancel;
         });
+        stopListening = wait.stop;
+        const callback = await wait.result;
         if (!callback || !alive.current) return { status: "cancelled" };
-        const { ticket } = await handoff.exchange({
+        const exchanged = await handoff.exchange({
           flowId,
           verifier: proof.verifier,
           code: callback.searchParams.get("code") ?? "",
@@ -235,6 +136,8 @@ export const useNativeAuth = () => {
         if (!alive.current || (clerk.session?.id ?? null) !== initialSessionId) {
           return { status: "cancelled" };
         }
+        if (!exchanged.success) return { status: "error", message: exchanged.message };
+        const { ticket } = exchanged;
         // This ticket is consumed by the WebView's client, so existing SSR/session
         // cookies, logout and device isolation retain their normal behavior.
         const created = await signIn.create({ strategy: "ticket", ticket });
@@ -261,6 +164,127 @@ export const useNativeAuth = () => {
   );
 
   return { isReady, isPending, signInWithApple, signInWithProvider };
+};
+
+/**
+ * Wait for the OAuth browser to hand back this flow's callback. `result` resolves with
+ * the callback, or with undefined once the browser is dismissed or the cancel handed to
+ * `onCancel` runs; `stop` unsubscribes without settling.
+ */
+const waitForOAuthCallback = (
+  flowId: string,
+  target: URL,
+  isAndroid: boolean,
+  onCancel: (cancel: () => void) => void,
+) => {
+  let callback: URL | undefined;
+  let stopListening: () => void = () => undefined;
+  const result = new Promise<URL | undefined>((resolveCallback) => {
+    const resolve = () => resolveCallback(callback);
+    let settled = false;
+    let revision = 0;
+    let dismissalTimer: ReturnType<typeof setTimeout> | undefined;
+    const clearDismissal = () => {
+      revision += 1;
+      clearTimeout(dismissalTimer);
+    };
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearDismissal();
+      resolve();
+    };
+    // An intermediate App Link can hide the first tab while its replacement is
+    // opening. Check the shell after the grace period instead of treating the
+    // old tab's browserFinished event as cancellation of the replacement.
+    const scheduleDismissal = () => {
+      if (settled) return;
+      clearDismissal();
+      const currentRevision = revision;
+      dismissalTimer = setTimeout(() => {
+        // Safari's sheet is inside the active iOS app; only browserFinished
+        // signals its dismissal. Android's tab runs in another activity.
+        if (!isAndroid) {
+          finish();
+          return;
+        }
+        void appEvents.getState().then(
+          ({ isActive }) => {
+            if (currentRevision === revision && isActive) finish();
+          },
+          () => {
+            if (currentRevision === revision) finish();
+          },
+        );
+      }, OAUTH_CALLBACK_GRACE_MS);
+    };
+    let shellActive = false;
+    let pendingContinuation: string | undefined;
+    let openingContinuation = false;
+    const reopened = new Set<string>();
+    const reopenContinuation = () => {
+      if (settled || !shellActive || !pendingContinuation || openingContinuation)
+        return;
+      const url = pendingContinuation;
+      pendingContinuation = undefined;
+      openingContinuation = true;
+      void oauthBrowser
+        .open(url)
+        .catch(finish)
+        .finally(() => {
+          openingContinuation = false;
+          reopenContinuation();
+        });
+    };
+    onCancel(finish);
+    const stopUrl = appEvents.onUrlOpen((url) => {
+      if (settled) return;
+      const continuation = isAndroid
+        ? browserAuthContinuation(url, window.location.origin, flowId)
+        : null;
+      if (continuation) {
+        if (reopened.has(continuation)) return;
+        reopened.add(continuation);
+        clearDismissal();
+        pendingContinuation = continuation;
+        // MainActivity must resume and clear the old browser controller before
+        // Browser.open can create a replacement controller with the same cookies.
+        void appEvents.getState().then(({ isActive }) => {
+          if (isActive) shellActive = true;
+          reopenContinuation();
+        }, finish);
+        return;
+      }
+      const parsed = parseOAuthCallback(url);
+      if (
+        !parsed ||
+        parsed.searchParams.get("flow") !== flowId ||
+        !/^[A-Za-z0-9_-]{43}$/.test(parsed.searchParams.get("code") ?? "")
+      )
+        return;
+      callback = parsed;
+      finish();
+    });
+    const stopFinished = oauthBrowser.onFinished(scheduleDismissal);
+    const stopState = isAndroid
+      ? appEvents.onStateChange((isActive) => {
+          shellActive = isActive;
+          if (isActive) {
+            reopenContinuation();
+            scheduleDismissal();
+          }
+        })
+      : () => undefined;
+    stopListening = () => {
+      settled = true;
+      clearDismissal();
+      stopUrl();
+      stopFinished();
+      stopState();
+    };
+    void oauthBrowser.open(target.toString()).catch(finish);
+  });
+  return { result, stop: () => stopListening() };
 };
 
 /** Only this registered callback belongs to an outstanding native sign-in. */

@@ -70,7 +70,7 @@ Create/edit shared skills only in `.agents/skills/<name>/SKILL.md`. `make ensure
 
 ## Code map
 
-Next.js 15 App Router / React 19 / strict TypeScript; Tailwind, Shadcn/Radix; Drizzle/MySQL; tRPC; Clerk; Jotai; PixiJS.
+Next.js 16 App Router / React 19 / strict TypeScript; Tailwind, Shadcn/Radix; Drizzle/MySQL; tRPC; Clerk; Jotai; PixiJS.
 
 | Path | Responsibility |
 | --- | --- |
@@ -106,7 +106,7 @@ Combat logic lives in `app/src/libs/combat/`: `actions.ts` (actions), `bossFight
 Capacitor shells and dependencies live in `mobile/`, with their own `package.json`; see `mobile/README.md` for setup.
 
 - `app/src/libs/native/` is the **only shell bridge**. Do not import `@capacitor/*` or raw `bridge` elsewhere under `src/` (Biome enforces this). Install plugins in `mobile/`, not `app/`, and add a wrapper in `libs/native/`.
-- Fire-and-forget exports (`haptics`, `widgets`, `audioSession`, `liveActivity`) no-op off device; no platform check needed. Result-bearing calls (`appleAuth.authorize`, `oauthBrowser.open`, `purchases.purchase`, `push.register`) reject off device; call only after establishing shell context.
+- Fire-and-forget exports (`haptics`, `audioSession`, `liveActivity`) no-op off device; no platform check needed. Result-bearing calls (`appleAuth.authorize`, `oauthBrowser.open`, `purchases.purchaseForBoundIdentity`, `purchases.restoreForBoundIdentity`, `widgets.sync`, `widgets.clear`) reject off device; call only after establishing shell context. `push.register` resolves without registering off device.
 - Ordinary push must use `sendPushToUsers` from `@/server/utils/push`, never router-to-transport calls. It handles opt-outs, device fan-out and dead-token pruning, and never throws. Live Activities use `pushActivityUpdate` instead (ActivityKit tokens); defer with `after()` as in `hospital.ts` to keep Apple latency off the response.
 - `Notification` is a global announcement feed: `userId` is the author; `unreadNotifications` increments determine recipients. It is separate from per-user push delivery.
 - Store branching is client-side via `useNativeShell()`: `points/page.tsx` renders `NativeStore` instead of PayPal in the shell. Preserve this gate against web checkout. `libs/native/userAgent.ts` has a tested server-side detector, and the account-deletion router uses it to restrict the supported client.

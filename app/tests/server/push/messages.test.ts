@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { announcement, deliveryTest } from "@/server/utils/push/messages";
-import { shouldReportPushFailures, summarise } from "@/server/utils/push/types";
+import {
+  isDeadApnsToken,
+  isDeadFcmToken,
+  shouldReportPushFailures,
+  summarise,
+} from "@/server/utils/push/types";
 
 /** The alert body an announcement's stored HTML turns into. */
 const toPlainText = (html: string) => announcement(html).body;
@@ -37,6 +42,23 @@ describe("announcement body", () => {
   it("separates blocks and drops script contents", () => {
     expect(toPlainText("<p>Hello</p><p>World</p>")).toBe("Hello World");
     expect(toPlainText("Before<script>alert(1)</script>")).toBe("Before");
+  });
+
+  it("decodes decimal and hexadecimal apostrophes", () => {
+    // Most editors emit these rather than &apos;, so a named-entity table alone leaves
+    // raw markup in the notification body.
+    expect(toPlainText("Tom&#39;s squad")).toBe("Tom's squad");
+    expect(toPlainText("Tom&#039;s squad")).toBe("Tom's squad");
+    expect(toPlainText("Tom&#x27;s squad")).toBe("Tom's squad");
+    expect(toPlainText("Tom&#X27;s squad")).toBe("Tom's squad");
+  });
+
+  it("replaces references it cannot safely decode", () => {
+    expect(toPlainText("lone surrogate &#xD800; here")).toBe(
+      "lone surrogate \uFFFD here",
+    );
+    expect(toPlainText("out of range &#1114112;")).toBe("out of range \uFFFD");
+    expect(toPlainText("null &#0;")).toBe("null \uFFFD");
   });
 });
 
@@ -88,8 +110,7 @@ describe("summarise", () => {
 });
 
 describe("dead-token classification", () => {
-  it("prunes only APNs reasons that are about this one device", async () => {
-    const { isDeadApnsToken } = await import("@/server/utils/push/types");
+  it("prunes only APNs reasons that are about this one device", () => {
     expect(isDeadApnsToken(410, "Unregistered")).toBe(true);
     expect(isDeadApnsToken(400, "ExpiredToken")).toBe(true);
     // A wrong APNs environment or bundle id rejects every token at once; pruning either
@@ -100,8 +121,7 @@ describe("dead-token classification", () => {
     expect(isDeadApnsToken(503, "ServiceUnavailable")).toBe(false);
   });
 
-  it("does not treat an FCM payload error as a dead token", async () => {
-    const { isDeadFcmToken } = await import("@/server/utils/push/types");
+  it("does not treat an FCM payload error as a dead token", () => {
     // UNREGISTERED is the only code that specifically means this token is gone.
     expect(isDeadFcmToken("UNREGISTERED")).toBe(true);
     // INVALID_ARGUMENT covers a malformed payload and NOT_FOUND is the status behind
@@ -111,22 +131,5 @@ describe("dead-token classification", () => {
     expect(isDeadFcmToken("NOT_FOUND")).toBe(false);
     expect(isDeadFcmToken("UNAVAILABLE")).toBe(false);
     expect(isDeadFcmToken("INTERNAL")).toBe(false);
-  });
-});
-
-describe("numeric character references", () => {
-  it("decodes decimal and hexadecimal apostrophes", () => {
-    // Most editors emit these rather than &apos;, so a named-entity table alone leaves
-    // raw markup in the notification body.
-    expect(toPlainText("Tom&#39;s squad")).toBe("Tom's squad");
-    expect(toPlainText("Tom&#039;s squad")).toBe("Tom's squad");
-    expect(toPlainText("Tom&#x27;s squad")).toBe("Tom's squad");
-    expect(toPlainText("Tom&#X27;s squad")).toBe("Tom's squad");
-  });
-
-  it("replaces references it cannot safely decode", () => {
-    expect(toPlainText("lone surrogate &#xD800; here")).toBe("lone surrogate \uFFFD here");
-    expect(toPlainText("out of range &#1114112;")).toBe("out of range \uFFFD");
-    expect(toPlainText("null &#0;")).toBe("null \uFFFD");
   });
 });

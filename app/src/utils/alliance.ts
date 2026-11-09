@@ -188,7 +188,6 @@ const errorResponse = (msg: string) => {
  * Checks if alliances can be formed between two villages.
  *
  * @param relationships - The array of VillageAlliance objects representing the existing relationships between villages.
- * @param requests - The array of UserRequest objects representing the pending alliance requests.
  * @param villages - The array of Village objects representing all the villages.
  * @param villageId - The ID of the village initiating the alliance request.
  * @param targetId - The ID of the village being requested for alliance.
@@ -216,11 +215,9 @@ export const canAlly = (
         "Cannot ally with someone who is allied with someone we are enemies with",
       );
     }
-    // Cannot ally with someone who is allied with someone we are enemy with
+    // Cannot ally with an enemy of one of our allies
     if (target === "ENEMY" && self === "ALLY") {
-      return errorResponse(
-        "Cannot ally with someone who is allied with someone we are enemies with",
-      );
+      return errorResponse("Cannot ally with an enemy of our ally");
     }
   }
   return { success: true, message: "OK" };

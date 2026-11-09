@@ -11,35 +11,35 @@ import {
 } from "@/layout/ContentFiltering";
 
 /** Manual-list filter schema: name, roll-pool level, village, and staff visibility. */
-const makeSageModeFilteringSchema = () =>
-  defineFilteringSchema({
-    fields: [
-      { id: "name", label: "Name", type: "text", defaultValue: "" },
-      {
-        id: "level",
-        label: "Level",
-        type: "single-select",
-        defaultValue: "None",
-        options: Array.from({ length: SAGE_MODE_MAX_LEVEL }, (_, i) => ({
-          value: String(i + 1),
-          label: `Level ${i + 1}`,
-        })),
-        emptyValues: ["None"],
-        includeNone: true,
-      },
-      {
-        id: "village",
-        label: "Village",
-        type: "single-select",
-        defaultValue: "None",
-        emptyValues: ["None"],
-        includeNone: true,
-        dataSource: "villages",
-        filterOptions: (opts) => opts.sort((a, b) => a.label.localeCompare(b.label)),
-      },
-      hiddenVisibilityField(),
-    ] as const,
-  });
+const SAGE_MODE_FILTERING_SCHEMA = defineFilteringSchema({
+  fields: [
+    { id: "name", label: "Name", type: "text", defaultValue: "" },
+    {
+      id: "level",
+      label: "Level",
+      type: "single-select",
+      defaultValue: "None",
+      options: Array.from({ length: SAGE_MODE_MAX_LEVEL }, (_, i) => ({
+        value: String(i + 1),
+        label: `Level ${i + 1}`,
+      })),
+      emptyValues: ["None"],
+      includeNone: true,
+      normalizeForFilter: (v: string) => Number.parseInt(v, 10),
+    },
+    {
+      id: "village",
+      label: "Village",
+      type: "single-select",
+      defaultValue: "None",
+      emptyValues: ["None"],
+      includeNone: true,
+      dataSource: "villages",
+      filterOptions: (opts) => opts.sort((a, b) => a.label.localeCompare(b.label)),
+    },
+    hiddenVisibilityField(),
+  ] as const,
+});
 
 interface SageModeFilteringProps {
   state: SageModeFilteringState;
@@ -47,12 +47,11 @@ interface SageModeFilteringProps {
 
 /** Filter popover for the sage mode manual list. Visibility is staff-only. */
 const SageModeFiltering: React.FC<SageModeFilteringProps> = (props) => {
-  const schema = makeSageModeFilteringSchema();
   const context = useContentEditContext();
 
   return (
     <ContentFiltering
-      schema={schema}
+      schema={SAGE_MODE_FILTERING_SCHEMA}
       state={props.state.cf}
       context={context}
       triggerButtonId="filter-sagemode"
@@ -62,20 +61,13 @@ const SageModeFiltering: React.FC<SageModeFilteringProps> = (props) => {
 
 export default SageModeFiltering;
 
-/** tRPC filter for `api.sageMode.getAll` (coerces level from the select string). */
-export const getFilter = (state: SageModeFilteringState) => {
-  const filter = buildFilter(state.cf, makeSageModeFilteringSchema());
-  // Convert level from string to number if present
-  if (filter.level && typeof filter.level === "string") {
-    filter.level = parseInt(filter.level, 10);
-  }
-  return filter;
-};
+/** tRPC filter for `api.sageMode.getAll`; the level select's string is parsed to a number. */
+export const getFilter = (state: SageModeFilteringState) =>
+  buildFilter(state.cf, SAGE_MODE_FILTERING_SCHEMA);
 
 /** State for the Sage Mode Filtering component. */
 export const useFiltering = () => {
-  const schema = makeSageModeFilteringSchema();
-  const cf = useContentFiltering(schema);
+  const cf = useContentFiltering(SAGE_MODE_FILTERING_SCHEMA);
   return {
     ...cf.values,
     cf,

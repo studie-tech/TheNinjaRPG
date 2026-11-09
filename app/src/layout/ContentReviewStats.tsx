@@ -168,17 +168,22 @@ export const ContentReviewStats: React.FC<{ canView: boolean }> = ({ canView }) 
           <StatsSelect
             label="Agent"
             disabled={filters.source === "STAFF"}
-            value={filters.agentName == null ? "ALL" : `agent:${filters.agentName}`}
+            value={
+              filters.agentName == null
+                ? "ALL"
+                : `${AGENT_OPTION_PREFIX}${filters.agentName}`
+            }
             onChange={(value) =>
               update({
-                agentName: value === "ALL" ? null : value.slice(6),
+                agentName:
+                  value === "ALL" ? null : value.slice(AGENT_OPTION_PREFIX.length),
                 ...(value !== "ALL" ? { source: "AGENT" as const } : {}),
               })
             }
             options={[
               ["ALL", "All agents"],
               ...agents.map((agent): [string, string] => [
-                `agent:${agent}`,
+                `${AGENT_OPTION_PREFIX}${agent}`,
                 agent || "Unnamed agent",
               ]),
             ]}
@@ -525,6 +530,12 @@ const downloadStats = (data: Stats) => {
     `content-review-${data.start.slice(0, 10)}-${data.end.slice(0, 10)}.csv`,
   );
 };
+/**
+ * Prefix for agent option values: Radix Select rejects an empty value, and an agent
+ * may be unnamed or named "ALL", so a bare name could collide with the "ALL" option.
+ */
+const AGENT_OPTION_PREFIX = "agent:";
+
 const DEFAULT_FILTERS: ReviewStatsInput = {
   days: CONTENT_PROPOSAL_RETENTION_DAYS,
   interval: "weekly",

@@ -1,4 +1,4 @@
-import type { UserData } from "../../drizzle/schema";
+import type { UserData } from "@/drizzle/schema";
 
 // Options in standard ramen shop
 export const ramenOptions = ["small", "medium", "large"] as const;
@@ -19,7 +19,7 @@ export const getRamenHealPercentage = (option: RamenOption) => {
 };
 
 /**
- * For each ramen option, return the percentage of health it heals
+ * Ryo cost of a ramen option for this user: maxHealth × the option's heal percentage / 500
  */
 export const calcRamenCost = (option: RamenOption, user: UserData) => {
   const totalHealth = user.maxHealth;

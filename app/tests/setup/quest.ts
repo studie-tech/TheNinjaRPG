@@ -30,7 +30,13 @@ export const trackerQuest = (
   gatheringRank: null,
   endsAt: null,
   ...overrides,
-  content: { objectives, reward: {}, sceneBackground: "", sceneCharacters: [], ...content },
+  content: {
+    objectives,
+    reward: {},
+    sceneBackground: "",
+    sceneCharacters: [],
+    ...content,
+  },
 });
 
 type TrackerQuest = ReturnType<typeof trackerQuest>;
@@ -92,7 +98,9 @@ export const rewardUser = (content: object, questType: QuestType = "mission") =>
 
 /** Reward-choice ownership holding only the supplied content ids. */
 export const rewardOwnership = (
-  owned: Partial<Record<keyof Omit<RewardChoiceOwnership, "hasSageMode">, string[]>> = {},
+  owned: Partial<
+    Record<keyof Omit<RewardChoiceOwnership, "hasSageMode">, string[]>
+  > = {},
   hasSageMode = false,
 ): RewardChoiceOwnership => ({
   jutsuIds: new Set(owned.jutsuIds),

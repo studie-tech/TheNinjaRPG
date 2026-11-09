@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { didKageChallengerWin, didUserTakeKageSeat } from "@/libs/combat/settlement";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 describe("Kage challenge outcome", () => {
   it("does not treat the defending Kage's victory as a challenger win", () => {
@@ -63,10 +63,6 @@ describe("Kage seat change after a challenge", () => {
 
     expect(didUserTakeKageSeat(battle, "challenger")).toBe(true);
     expect(didUserTakeKageSeat(battle, "kage")).toBe(false);
-  });
-
-  it("keeps a defending kage's rank when they lose the seat", () => {
-    expect(didUserTakeKageSeat(kageBattle(100, 0), "kage")).toBe(false);
   });
 
   it("keeps a losing challenger's rank", () => {

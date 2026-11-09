@@ -110,8 +110,8 @@ import type { UserDelta, UserDeltaResponse } from "@/validators/userCache";
  *      repeatable-achievement re-arm prep, and `updateRewards` (run together).
  * Milestone fields join the guarded account UPDATE so competing quests cannot grant the
  * same level. They are not delivered separately in the ordinary post-claim reward payout.
- * Returns a discriminated outcome; the raw bytes of the reward names are mapped onto
- * `rewards` so callers can render them directly.
+ * Returns a discriminated outcome; resolved reward names are mapped onto `rewards` so
+ * callers can render them directly.
  */
 export const commitQuestObjectiveRewards = async (info: {
   client: DrizzleClient;
@@ -485,9 +485,9 @@ export const commitQuestObjectiveRewards = async (info: {
   // quest finalizes: `checkRewards` (which finalizes overworld `defeat_opponents` quests won in
   // combat — combat only advances the tracker, never the completion) as well as the overworld
   // friendly objective path. The IF preserves questId-scoping, so completing a non-NPC quest — or
-  // a concurrent interaction at a different NPC — never clears a slot it does not own. Without
-  // this, a `defeat_opponents` slot stayed stale until a later interaction self-healed it, which
-  // a value-only self-heal could race into an ABA double-grant of a repeatable quest.
+  // a concurrent interaction at a different NPC — never clears a slot it does not own. Clearing
+  // at finalization, rather than leaving a stale slot for a later interaction to notice, keeps a
+  // value-only clear from racing into an ABA double-grant of a repeatable quest.
   const slotClearPatch =
     resolved && userQuest
       ? {

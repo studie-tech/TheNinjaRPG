@@ -1,8 +1,8 @@
-import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { dirname, join } from "node:path";
 import { describe, expect, it } from "bun:test";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { isProfileIndexable, profileIndexCutoff } from "@/libs/profileIndexing";
-import { SITE_URL, buildMetadata, noindexMetadata, stripSiteName } from "@/libs/seo";
+import { buildMetadata, noindexMetadata, SITE_URL, stripSiteName } from "@/libs/seo";
 
 // Every page lives under the shell segment; what remains at the app root is route
 // handlers and metadata files, which have no metadata of their own to declare.
@@ -13,7 +13,9 @@ const APP_DIR = join(import.meta.dirname, "..", "..", "src", "app", "[shell]");
  */
 const pageDirs = (dir: string): string[] => {
   const entries = readdirSync(dir, { withFileTypes: true });
-  const here = entries.some((e) => !e.isDirectory() && e.name === "page.tsx") ? [dir] : [];
+  const here = entries.some((e) => !e.isDirectory() && e.name === "page.tsx")
+    ? [dir]
+    : [];
   return entries
     .filter((e) => e.isDirectory())
     .flatMap((e) => pageDirs(join(dir, e.name)))
@@ -53,9 +55,8 @@ const uncoveredPages = (routeDir: string): string[] =>
 
 describe("route metadata coverage", () => {
   it("declares metadata for every top-level route", () => {
-    // Forty gated screens shipped without any, so Googlebot received the homepage's
-    // title, description and no canonical for each of them and Search Console filed the
-    // set under "Duplicate without user-selected canonical".
+    // A route without metadata hands Googlebot the homepage's title, description and no
+    // canonical, which Search Console files under "Duplicate without user-selected canonical".
     const uncovered = readdirSync(APP_DIR, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .flatMap((entry) => uncoveredPages(join(APP_DIR, entry.name)))
@@ -97,14 +98,21 @@ describe("buildMetadata", () => {
     // follow: false here would tell Google to ignore every link on the gated screens,
     // including the ones pointing at manual and profile URLs the sitemap advertises.
     expect(noindexMetadata("Hospital").robots).toEqual({ index: false });
+    expect(
+      buildMetadata({
+        title: "Cart",
+        description: "Your merch cart.",
+        path: "/merch/cart",
+        noindex: true,
+      }).robots,
+    ).toEqual({ index: false });
   });
 
   it("names no canonical on a noindex page", () => {
     // Next resolves each metadata key against the nearest ancestor that declares it, so
     // leaving `alternates` off does not mean "no canonical" -- it inherits the parent
-    // segment's. That put 39 staff routes on `noindex` while pointing at an indexable
-    // page (/manual/logs at /manual, /manual/item/balance at /manual/item), the one
-    // pairing Google asks you not to ship. Only an explicit null replaces the inherited
+    // segment's, so a `noindex` route would point at an indexable page (/manual/logs at
+    // /manual), the one pairing Google asks you not to ship. Only an explicit null replaces the inherited
     // value; undefined would fall back to it again.
     expect(noindexMetadata("Content Log").alternates).toEqual({ canonical: null });
     expect(
@@ -120,8 +128,8 @@ describe("buildMetadata", () => {
 
 describe("stripSiteName", () => {
   // Guide articles store seoTitle as the whole browser-tab title, brand included, and
-  // buildMetadata appends the brand again. Every guide page read
-  // "Aerathiel TheNinja-RPG | TheNinja-RPG" until the edge was stripped first.
+  // buildMetadata appends the brand again, so the edge is stripped first; otherwise a guide
+  // page would read "Aerathiel TheNinja-RPG | TheNinja-RPG".
   it.each([
     ["Aerathiel TheNinja-RPG", "Aerathiel"],
     ["TheNinja-RPG Getting Started", "Getting Started"],
@@ -133,13 +141,12 @@ describe("stripSiteName", () => {
     expect(stripSiteName(input)).toBe(expected);
   });
 
-  it.each([
-    "Combat in TheNinja-RPG: basics",
-    "TNRx Tools",
-    "Villages of Seichi",
-  ])("leaves %j alone", (input) => {
-    expect(stripSiteName(input)).toBe(input);
-  });
+  it.each(["Combat in TheNinja-RPG: basics", "TNRx Tools", "Villages of Seichi"])(
+    "leaves %j alone",
+    (input) => {
+      expect(stripSiteName(input)).toBe(input);
+    },
+  );
 
   it("falls back to the input when nothing but the brand remains", () => {
     expect(stripSiteName("TheNinja-RPG")).toBe("TheNinja-RPG");
@@ -169,12 +176,14 @@ describe("isProfileIndexable", () => {
     expect(isProfileIndexable(active, now)).toBe(true);
   });
 
-  // The sitemap already declined to advertise these; the routes now answer noindex for
-  // the same set, so one that Google found before the floor existed does not stay
-  // indexed indefinitely on an old crawl.
+  // The sitemap does not advertise these, and the routes answer noindex for the same set,
+  // so one that Google found on an earlier crawl does not stay indexed indefinitely.
   it.each([
     ["below the level floor", { level: 13 }],
-    ["inactive past the window", { updatedAt: new Date(now - 91 * 24 * 60 * 60 * 1000) }],
+    [
+      "inactive past the window",
+      { updatedAt: new Date(now - 91 * 24 * 60 * 60 * 1000) },
+    ],
     ["never updated", { updatedAt: null }],
     ["an AI character", { isAi: true }],
     ["banned", { isBanned: true }],
@@ -184,9 +193,9 @@ describe("isProfileIndexable", () => {
   });
 
   it("treats the activity window as inclusive at the boundary", () => {
-    expect(isProfileIndexable({ ...active, updatedAt: profileIndexCutoff(now) }, now)).toBe(
-      true,
-    );
+    expect(
+      isProfileIndexable({ ...active, updatedAt: profileIndexCutoff(now) }, now),
+    ).toBe(true);
   });
 });
 
@@ -207,9 +216,19 @@ describe("discord link share card", () => {
       images: [image],
     });
     expect(metadata.openGraph?.description).toContain("Verified Ninja role");
-    expect(metadata.twitter).toMatchObject({ card: "summary_large_image", images: [image] });
+    expect(metadata.twitter).toMatchObject({
+      card: "summary_large_image",
+      images: [image],
+    });
     expect(metadata.robots).toEqual({ index: false });
-    const asset = join(import.meta.dirname, "..", "..", "public", "images", "discord-link-og.png");
+    const asset = join(
+      import.meta.dirname,
+      "..",
+      "..",
+      "public",
+      "images",
+      "discord-link-og.png",
+    );
     expect(existsSync(asset)).toBe(true);
   });
 });

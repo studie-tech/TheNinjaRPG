@@ -65,7 +65,10 @@ describe("hasFriendlyBindingToPlacement", () => {
 
   it("is true when a dialog objective binds the placement", () => {
     expect(
-      hasFriendlyBindingToPlacement([{ task: "dialog", overworldPlacementId: "p1" }], "p1"),
+      hasFriendlyBindingToPlacement(
+        [{ task: "dialog", overworldPlacementId: "p1" }],
+        "p1",
+      ),
     ).toBe(true);
   });
 

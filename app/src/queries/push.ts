@@ -3,8 +3,12 @@
  */
 import { and, desc, eq, gte, inArray, isNotNull, lte, ne } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import type { z } from "zod";
-import { PUSH_TOKEN_STALE_DAYS, type PushCategory } from "@/drizzle/constants";
+import {
+  type LiveActivityKind,
+  PUSH_TOKEN_STALE_DAYS,
+  type PushCategory,
+  type PushPlatform,
+} from "@/drizzle/constants";
 import {
   storeUserIdAlias,
   userData,
@@ -15,7 +19,6 @@ import {
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { DAY_S, secondsFromDate } from "@/utils/time";
-import type { RegisterDeviceInput, registerActivitySchema } from "@/validators/push";
 
 /**
  * A device that has not checked in for a season is almost certainly uninstalled. Every
@@ -59,7 +62,12 @@ export const findUserDeviceForGET = (
 export const insertUserDeviceForRegisterDevice = (
   client: Pick<DrizzleClient, "insert">,
   ctx: { userId: string },
-  input: RegisterDeviceInput,
+  input: {
+    token: string;
+    platform: PushPlatform;
+    appVersion?: string | undefined;
+    locale?: string | undefined;
+  },
   widgetToken: string,
   now: Date,
 ) =>
@@ -161,7 +169,12 @@ export const insertUserPushPreferenceForSetPreference = (
 export const insertUserLiveActivityForRegisterActivity = (
   client: Pick<DrizzleClient, "insert">,
   ctx: { userId: string },
-  input: z.infer<typeof registerActivitySchema>,
+  input: {
+    activityId: string;
+    kind: LiveActivityKind;
+    pushToken: string;
+    endsAt: Date;
+  },
   createdAt: Date,
 ) =>
   client

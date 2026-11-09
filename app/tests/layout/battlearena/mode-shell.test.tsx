@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import * as combatHooks from "@/hooks/combat";
 import * as loadoutNames from "@/hooks/useLoadoutNames";
@@ -8,7 +8,10 @@ import { BattleSetupPanel } from "@/layout/battlearena/BattleSetupPanel";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import * as jutsuLoadout from "@/layout/JutsuLoadoutSelector";
 import * as userContext from "@/utils/UserContext";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 const setAutoCombat = vi.fn();
 
@@ -17,7 +20,9 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     sparring: {
       getUserChallenges: {
-        useQuery: () => ({ data: [{ id: "c1", senderId: "kaito", receiverId: "me", status: "PENDING" }] }),
+        useQuery: () => ({
+          data: [{ id: "c1", senderId: "kaito", receiverId: "me", status: "PENDING" }],
+        }),
       },
     },
   });
@@ -38,9 +43,20 @@ beforeEach(() => {
     },
   } as never);
   vi.spyOn(combatHooks, "useAutoCombatSetting").mockReturnValue([false, setAutoCombat]);
-  vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({ jutsu: "PvE build", item: "Item loadout 1" });
-  vi.spyOn(jutsuLoadout, "default").mockImplementation((({ label }: { label?: string }) => <p>{label}</p>) as never);
-  vi.spyOn(itemLoadout, "default").mockImplementation((({ label }: { label?: string }) => <p>{label}</p>) as never);
+  vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({
+    jutsu: "PvE build",
+    item: "Item loadout 1",
+  });
+  vi.spyOn(jutsuLoadout, "default").mockImplementation((({
+    label,
+  }: {
+    label?: string;
+  }) => <p>{label}</p>) as never);
+  vi.spyOn(itemLoadout, "default").mockImplementation((({
+    label,
+  }: {
+    label?: string;
+  }) => <p>{label}</p>) as never);
 });
 
 afterEach(() => {
@@ -64,7 +80,13 @@ const renderShell = (mode: "Arena" | "Sparring" = "Arena") => {
 it("marks the open tab and switches", () => {
   const { onSelect } = renderShell();
   const tabs = screen.getAllByRole("tab");
-  expect(tabs.map((tab) => tab.textContent)).toEqual(["Arena", "Sparring1", "Training", "Ranked", "Pyramid"]);
+  expect(tabs.map((tab) => tab.textContent)).toEqual([
+    "Arena",
+    "Sparring1",
+    "Training",
+    "Ranked",
+    "Pyramid",
+  ]);
   expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
   fireEvent.mouseDown(screen.getByRole("tab", { name: /Ranked/ }));
   expect(onSelect).toHaveBeenCalledWith("PVP Rank");
@@ -73,7 +95,9 @@ it("marks the open tab and switches", () => {
 
 it("shows the exam strip outside sparring", () => {
   const { onSelect } = renderShell("Arena");
-  expect(screen.getByRole("button", { name: /Genin Exam/ }).textContent).toContain("1 / 3");
+  expect(screen.getByRole("button", { name: /Genin Exam/ }).textContent).toContain(
+    "1 / 3",
+  );
   fireEvent.click(screen.getByRole("button", { name: /Find opponents/ }));
   expect(onSelect).toHaveBeenCalledWith("Sparring");
   cleanup();
@@ -108,7 +132,10 @@ it("summarises the setup on the phone row", () => {
 });
 
 it("names the options when there is no loadout to show", () => {
-  vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({ jutsu: null, item: null });
+  vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({
+    jutsu: null,
+    item: null,
+  });
   render(<BattleSetupPanel action={null} />);
   expect(screen.getByText("Battle options")).toBeDefined();
 });

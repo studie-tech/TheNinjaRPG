@@ -2,8 +2,7 @@
 
 import { Music } from "lucide-react";
 import type React from "react";
-import ReactDOM from "react-dom";
-import { GlobalAudioProvider } from "@/layout/GameSettings";
+import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
 
 interface LayoutProps {
@@ -11,9 +10,6 @@ interface LayoutProps {
 }
 
 const PixelPublicLayout: React.FC<LayoutProps> = ({ children }) => {
-  ReactDOM.prefetchDNS("https://o4507797256601600.ingest.de.sentry.io");
-  ReactDOM.prefetchDNS("https://consentcdn.cookiebot.com");
-
   return (
     <GlobalAudioProvider>
       <div

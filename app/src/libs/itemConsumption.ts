@@ -1,10 +1,11 @@
 import { nanoid } from "nanoid";
 import type { Item } from "@/drizzle/schema";
+import { isRetryableTrpcError } from "@/utils/error";
 import {
   safeSessionStorageGetItem,
+  safeSessionStorageRemoveItem,
   safeSessionStorageSetItem,
-} from "@/hooks/localstorage";
-import { isRetryableTrpcError } from "@/utils/error";
+} from "@/utils/storage";
 
 // Memory retains retries when browser storage is unavailable; session storage survives reloads.
 const pending = new Map<string, string>();
@@ -25,11 +26,8 @@ export const getItemConsumeRequestId = (userId: string, userItemId: string) => {
 export const finishItemConsumeRequest = (userId: string, userItemId: string) => {
   const key = storageKey(userId, userItemId);
   pending.delete(key);
-  try {
-    sessionStorage.removeItem(key);
-  } catch {
-    // Storage availability does not affect the authoritative server receipt.
-  }
+  // Storage availability does not affect the authoritative server receipt.
+  safeSessionStorageRemoveItem(key);
 };
 
 /**

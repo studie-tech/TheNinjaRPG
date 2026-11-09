@@ -1,17 +1,17 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { summonCastBlockedReason } from "@/libs/combat/summon";
-import { makeBattleUser } from "./helpers/battleScenario";
+import type { BattleUserState } from "@/libs/combat/types";
+import { makeBattleUser } from "../../setup/combat";
 import {
   DEMON,
-  TIGER,
   SUMMON_OWNER,
   makeSpawnedSummon as spawned,
+  TIGER,
   makeSummonTemplate as template,
 } from "./helpers/summon";
-import type { BattleUserState } from "@/libs/combat/types";
 
 // Two independent caps: one of each CREATURE (so different summon jutsus can
-// coexist, as they did pre-PR), and one PILOTED summon overall (each piloted
+// coexist), and one PILOTED summon overall (each piloted
 // summon grants its owner an extra turn per round).
 
 const P = SUMMON_OWNER;

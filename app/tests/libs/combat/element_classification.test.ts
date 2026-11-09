@@ -1,12 +1,16 @@
 import { describe, expect, it } from "bun:test";
-import { ElementNames, type ElementName } from "@/drizzle/constants";
+import { type ElementName, ElementNames } from "@/drizzle/constants";
 import {
   availableUserActions,
   getActionPointCost,
   userJutsuToAction,
 } from "@/libs/combat/actions";
 import { resolvePotencyTags } from "@/libs/combat/potency";
-import type { BattleUserJutsu } from "@/libs/combat/types";
+import type {
+  BattleUserJutsu,
+  CombatAction,
+  CompleteBattle,
+} from "@/libs/combat/types";
 import {
   canTrainJutsu,
   canUseJutsu,
@@ -19,7 +23,7 @@ import {
   makeEffect,
   makeJutsu,
   makeTag,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const fixture = (elementClassification: ElementName | null = "Fire") => {
   const jutsu = makeJutsu({
@@ -142,6 +146,42 @@ describe("classification potency", () => {
 });
 
 describe("classification combat restrictions", () => {
+  /**
+   * Time compression/dilation scoped to `element` shift the action's 40 AP cost only when
+   * `matches`, and an elemental seal leaves the action available.
+   */
+  const expectTemporalAndSeal = (
+    battle: CompleteBattle,
+    action: CombatAction,
+    element: ElementName,
+    matches: boolean,
+  ) => {
+    for (const type of ["timecompression", "timedilation"] as const) {
+      battle.usersEffects = [
+        makeEffect(
+          type,
+          { elements: [element], rounds: 3 },
+          { targetId: "caster", castThisRound: false },
+        ),
+      ];
+      expect(getActionPointCost("caster", battle, action)).toBe(
+        40 + (matches ? (type === "timecompression" ? 10 : -10) : 0),
+      );
+    }
+    battle.usersEffects = [
+      makeEffect(
+        "elementalseal",
+        { rounds: 3 },
+        { targetId: "caster", castThisRound: false },
+      ),
+    ];
+    expect(
+      availableUserActions(battle, "caster").some(
+        (candidate) => candidate.id === action.id,
+      ),
+    ).toBe(true);
+  };
+
   it.each([null, "None"] as const)(
     "does not infer None elements from %s classification",
     (classification) => {
@@ -152,31 +192,7 @@ describe("classification combat restrictions", () => {
           : [makeTag("activatesagemode")];
         const owned = battle.usersState[0]!.jutsus[0]!;
         const action = userJutsuToAction(owned, battle);
-        const matches = tagElements?.[0] === "None";
-        for (const type of ["timecompression", "timedilation"] as const) {
-          battle.usersEffects = [
-            makeEffect(
-              type,
-              { elements: ["None"], rounds: 3 },
-              { targetId: "caster", castThisRound: false },
-            ),
-          ];
-          expect(getActionPointCost("caster", battle, action)).toBe(
-            40 + (matches ? (type === "timecompression" ? 10 : -10) : 0),
-          );
-        }
-        battle.usersEffects = [
-          makeEffect(
-            "elementalseal",
-            { rounds: 3 },
-            { targetId: "caster", castThisRound: false },
-          ),
-        ];
-        expect(
-          availableUserActions(battle, "caster").some(
-            (candidate) => candidate.id === action.id,
-          ),
-        ).toBe(true);
+        expectTemporalAndSeal(battle, action, "None", tagElements?.[0] === "None");
       }
     },
   );
@@ -185,31 +201,12 @@ describe("classification combat restrictions", () => {
     "matches temporal effects and seals against %s",
     (element) => {
       const { battle, action } = fixture();
-      for (const type of ["timecompression", "timedilation"] as const) {
-        battle.usersEffects = [
-          makeEffect(
-            type,
-            { elements: [element], rounds: 3 },
-            { targetId: "caster", castThisRound: false },
-          ),
-        ];
-        const matches = element === "Fire" || element === "Water";
-        expect(getActionPointCost("caster", battle, action)).toBe(
-          40 + (matches ? (type === "timecompression" ? 10 : -10) : 0),
-        );
-      }
-      battle.usersEffects = [
-        makeEffect(
-          "elementalseal",
-          { rounds: 3 },
-          { targetId: "caster", castThisRound: false },
-        ),
-      ];
-      expect(
-        availableUserActions(battle, "caster").some(
-          (candidate) => candidate.id === action.id,
-        ),
-      ).toBe(true);
+      expectTemporalAndSeal(
+        battle,
+        action,
+        element,
+        element === "Fire" || element === "Water",
+      );
     },
   );
 });

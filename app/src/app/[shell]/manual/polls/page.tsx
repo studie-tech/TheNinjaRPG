@@ -6,7 +6,7 @@ import { Eye, Pencil, Plus, Trash2, Type, User, Vote, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import type { z } from "zod";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -29,10 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "@/components/ui/use-toast";
 import type { PollOptionType } from "@/drizzle/constants";
-import type { Poll, PollOption } from "@/drizzle/schema";
 import Accordion from "@/layout/Accordion";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
@@ -41,7 +38,6 @@ import RichInput from "@/layout/RichInput";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
-import { getSessionErrorToastId } from "@/libs/trpcSession";
 import { parseHtml } from "@/utils/parse";
 import {
   canAddNonCustomPollOptions,
@@ -54,34 +50,11 @@ import { useUserPicker } from "@/utils/search";
 import { useUserData } from "@/utils/UserContext";
 import {
   type AddPollOptionSchema,
+  type CreatePollSchema,
   createPollSchema,
   type UpdatePollSchema,
   updatePollSchema,
 } from "@/validators/poll";
-
-type PollUser = {
-  userId: string;
-  username: string;
-  avatar: string | null;
-};
-
-type PollOptionWithRelations = PollOption & {
-  createdBy: PollUser;
-  targetUser?: PollUser | null;
-  voteCount: number;
-  percentage: number;
-};
-
-// Define types for the poll data
-interface PollWithRelations extends Poll {
-  createdBy: PollUser;
-  options: PollOptionWithRelations[];
-  totalVotes: number;
-}
-
-// Form types for the poll creation form - using z.input/z.output for proper Zod v4 handling
-type CreatePollInput = z.input<typeof createPollSchema>;
-type CreatePollOutput = z.output<typeof createPollSchema>;
 
 export default function PollsPage() {
   const { data: userData } = useUserData();
@@ -240,18 +213,19 @@ function PollAccordion({
   setSelectedPollId: React.Dispatch<React.SetStateAction<string>>;
 }) {
   const { data: userData } = useUserData();
-  const isSelected = selectedPollId === poll.id;
   const userCanEditPolls = userData?.role ? canEditPolls(userData.role) : false;
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const subtitle = `Created by ${poll.createdBy.username} • ${format(new Date(poll.createdAt), "PPP")} • ${poll.totalVotes} votes${!poll.isActive ? " • Closed" : ""}`;
 
   return (
     <Accordion
       key={poll.id}
       title={poll.title}
-      selectedTitle={isSelected ? poll.title : ""}
-      unselectedSubtitle={`Created by ${poll.createdBy.username} • ${format(new Date(poll.createdAt), "PPP")} • ${poll.totalVotes} votes${!poll.isActive ? " • Closed" : ""}`}
-      selectedSubtitle={`Created by ${poll.createdBy.username} • ${format(new Date(poll.createdAt), "PPP")} • ${poll.totalVotes} votes${!poll.isActive ? " • Closed" : ""}`}
-      onClick={() => setSelectedPollId(isSelected ? "" : poll.id)}
+      selectionKey={poll.id}
+      selectedTitle={selectedPollId}
+      unselectedSubtitle={subtitle}
+      selectedSubtitle={subtitle}
+      onClick={setSelectedPollId}
       options={
         userCanEditPolls ? (
           <Button
@@ -383,7 +357,7 @@ function PollContent({
   const canDeleteOption = (option: PollOptionWithRelations) => {
     if (!userLoggedIn || !userData) return false;
 
-    // User can delete their own options with no votes
+    // Creators can delete their own options, whatever their votes
     const isCreator = option.createdBy.userId === userData.userId;
 
     // Admin can delete any option based on role permissions
@@ -443,6 +417,18 @@ function PollContent({
     if (!userCanClosePolls) return;
     closePoll({ id: poll.id, isActive: !poll.isActive });
   };
+
+  // The voting view only shows for active polls, so both views share the results styling
+  const statusButton = userCanClosePolls && (
+    <Button
+      variant={poll.isActive ? "destructive" : "default"}
+      size="sm"
+      onClick={handleTogglePollStatus}
+      disabled={isClosingPoll}
+    >
+      {poll.isActive ? "Close Poll" : "Reopen Poll"}
+    </Button>
+  );
 
   // Render option content based on option type
   const renderOptionContent = (option: PollWithRelations["options"][0]) => {
@@ -544,16 +530,7 @@ function PollContent({
               )}
 
               {/* Admin controls */}
-              {userCanClosePolls && (
-                <Button
-                  variant={poll.isActive ? "destructive" : "default"}
-                  size="sm"
-                  onClick={handleTogglePollStatus}
-                  disabled={isClosingPoll}
-                >
-                  {poll.isActive ? "Close Poll" : "Reopen Poll"}
-                </Button>
-              )}
+              {statusButton}
             </div>
           </div>
         ) : (
@@ -682,16 +659,7 @@ function PollContent({
               )}
 
               {/* Admin controls */}
-              {userCanClosePolls && (
-                <Button
-                  variant={poll.isActive ? "destructive" : "outline"}
-                  size="sm"
-                  onClick={handleTogglePollStatus}
-                  disabled={isClosingPoll}
-                >
-                  {poll.isActive ? "Close Poll" : "Reopen Poll"}
-                </Button>
-              )}
+              {statusButton}
             </div>
           </div>
         )}
@@ -703,7 +671,7 @@ function PollContent({
 function CreatePollForm({ onSuccess }: { onSuccess: () => void }) {
   const [optionType, setOptionType] = useState<PollOptionType>("text");
 
-  const form = useForm<CreatePollInput, unknown, CreatePollOutput>({
+  const form = useForm<CreatePollInput, unknown, CreatePollSchema>({
     resolver: zodResolver(createPollSchema),
     defaultValues: {
       title: "",
@@ -777,7 +745,7 @@ function CreatePollForm({ onSuccess }: { onSuccess: () => void }) {
     },
   });
 
-  const onSubmit = (data: CreatePollOutput) => {
+  const onSubmit = (data: CreatePollSchema) => {
     createPoll(data);
   };
 
@@ -991,28 +959,14 @@ function EditPollForm({
       form.reset();
       onSuccess();
     },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-        id: getSessionErrorToastId(error.message),
-      });
-    },
   });
-
-  const onSubmit = (data: UpdatePollSchema) => {
-    updatePoll({
-      id: poll.id,
-      title: data.title,
-      description: data.description,
-      allowCustomOptions: data.allowCustomOptions,
-    });
-  };
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form
+        onSubmit={form.handleSubmit((data) => updatePoll(data))}
+        className="space-y-4"
+      >
         <FormField
           control={form.control}
           name="title"
@@ -1030,14 +984,16 @@ function EditPollForm({
         <FormField
           control={form.control}
           name="description"
-          render={({ field }) => (
+          render={() => (
             <FormItem>
               <FormLabel>Description</FormLabel>
               <FormControl>
-                <Textarea
+                <RichInput
                   placeholder="Poll description"
-                  className="min-h-[100px]"
-                  {...field}
+                  id="description"
+                  height="150"
+                  control={form.control}
+                  error={form.formState.errors.description?.message}
                 />
               </FormControl>
               <FormMessage />
@@ -1075,3 +1031,9 @@ function EditPollForm({
     </Form>
   );
 }
+
+type PollWithRelations = RouterOutputs["poll"]["getPolls"]["data"][number];
+type PollOptionWithRelations = PollWithRelations["options"][number];
+
+// Form input type for the poll creation form; z.input keeps Zod v4 prefaults optional
+type CreatePollInput = z.input<typeof createPollSchema>;

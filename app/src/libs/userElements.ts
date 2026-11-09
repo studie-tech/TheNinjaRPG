@@ -15,21 +15,16 @@ export const getBloodlineElements = (
   return bloodlineElements;
 };
 
-export const isBloodlineEffectBeneficial = (effect: ZodAllTags) => {
-  // Default to beneficial, as should be true for most bloodline effects
-  let isStrength = true;
-  // Certains tags are negative in a bloodline context
-  if (
-    [
-      "decreasedamagegiven",
-      "increasedamagetaken",
-      "decreaseheal",
-      "decreasestat",
-      "decreasemastery",
-      "damage",
-      "elementaldamage",
-    ].includes(effect.type)
-  )
-    isStrength = false;
-  return isStrength;
-};
+/** Most bloodline effects are beneficial; these tags are negative in a bloodline context. */
+const NON_BENEFICIAL_BLOODLINE_TAGS: readonly string[] = [
+  "decreasedamagegiven",
+  "increasedamagetaken",
+  "decreaseheal",
+  "decreasestat",
+  "decreasemastery",
+  "damage",
+  "elementaldamage",
+];
+
+export const isBloodlineEffectBeneficial = (effect: ZodAllTags) =>
+  !NON_BENEFICIAL_BLOODLINE_TAGS.includes(effect.type);

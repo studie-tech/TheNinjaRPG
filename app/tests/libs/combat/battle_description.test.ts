@@ -3,7 +3,7 @@ import { insertAction } from "@/libs/combat/actions";
 import type { CombatAction, GroundEffect, ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import { DamageTag } from "@/validators/combat";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 const PLACEHOLDERS =
   "%user_subject %user_object %user_posessive %user_reflexive | %target_subject %target_object %target_posessive %target_reflexive";

@@ -13,7 +13,13 @@ import {
   WAR_VICTORY_TOKEN_BONUS,
   WAR_WINNING_COOLDOWN_DAYS,
 } from "@/drizzle/constants";
-import type { Village, VillageAlliance, VillageStructure, War } from "@/drizzle/schema";
+import type {
+  UserRequest,
+  Village,
+  VillageAlliance,
+  VillageStructure,
+  War,
+} from "@/drizzle/schema";
 import { isObjectiveWarOpen } from "@/libs/objectiveWar";
 import type { FetchActiveWarsReturnType } from "@/server/api/routers/war";
 import { findRelationship } from "@/utils/alliance";
@@ -297,3 +303,9 @@ export const getRaidDeclarationBlock = (
   if (retryUntil && new Date(retryUntil) > now)
     return `Raids against this settlement are on cooldown until ${new Date(retryUntil).toUTCString()}`;
 };
+
+/** Whether a village war card lists this ally offer. */
+export const isOfferForWarCard = (
+  offer: Pick<UserRequest, "relatedId" | "status">,
+  warId: string,
+) => offer.relatedId === warId && offer.status !== "ACCEPTED";

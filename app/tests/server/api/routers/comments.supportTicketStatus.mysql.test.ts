@@ -1,4 +1,3 @@
-import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { SupportTicketStatus } from "@/drizzle/constants";
@@ -13,6 +12,7 @@ import {
 import { Pusher } from "@/libs/pusher";
 import { commentsRouter } from "@/server/api/routers/comments";
 import { insertUsers } from "../../../setup/factories";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,

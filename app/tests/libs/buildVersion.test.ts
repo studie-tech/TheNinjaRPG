@@ -2,9 +2,9 @@ import { describe, expect, it } from "bun:test";
 import {
   BUILD_RELOAD_STORAGE_KEY,
   claimBuildReload,
+  getErrorServerBuild,
   isMissingProcedureError,
   isOutdatedBuild,
-  getErrorServerBuild,
   shouldReloadForMissingProcedure,
 } from "@/libs/buildVersion";
 
@@ -64,14 +64,20 @@ describe("isMissingProcedureError", () => {
   });
 
   it("ignores other NOT_FOUND errors, other codes and non-errors", () => {
-    expect(isMissingProcedureError(trpcError("User not found", "NOT_FOUND"))).toBe(false);
+    expect(isMissingProcedureError(trpcError("User not found", "NOT_FOUND"))).toBe(
+      false,
+    );
     expect(
-      isMissingProcedureError(trpcError('No procedure found on path "a.b"', "BAD_REQUEST")),
+      isMissingProcedureError(
+        trpcError('No procedure found on path "a.b"', "BAD_REQUEST"),
+      ),
     ).toBe(false);
     expect(isMissingProcedureError(trpcError('No procedure found on path "a.b"'))).toBe(
       false,
     );
-    expect(isMissingProcedureError({ message: "No procedure found on path" })).toBe(false);
+    expect(isMissingProcedureError({ message: "No procedure found on path" })).toBe(
+      false,
+    );
     expect(isMissingProcedureError(null)).toBe(false);
   });
 });
@@ -146,7 +152,7 @@ describe("shouldReloadForMissingProcedure", () => {
 
 describe("getErrorServerBuild", () => {
   it("reads the build header from the response attached to a tRPC error", () => {
-    const error = Object.assign(new Error("No procedure found on path \"x\""), {
+    const error = Object.assign(new Error('No procedure found on path "x"'), {
       meta: { response: new Response(null, { headers: { "x-tnr-build": "abc123" } }) },
     });
     expect(getErrorServerBuild(error)).toBe("abc123");

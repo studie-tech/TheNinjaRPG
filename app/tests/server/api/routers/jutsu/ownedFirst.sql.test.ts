@@ -5,7 +5,12 @@ import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { DamageTag } from "@/validators/combat";
 import { insertUsers } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
-import { callerFor, describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import {
+  callerFor,
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../../setup/testDatabase";
 
 const USER = "owned-first-player";
 // Equal catalogue timestamps exercise the ID tie-breaker across pages.
@@ -23,8 +28,14 @@ describeWithDatabase("jutsu catalogue with the player's jutsu first", () => {
     const db = await getTestDatabase();
     await db.insert(jutsu).values(
       ids.map((id) => ({
-        id, name: id, image: "", description: id, battleDescription: id,
-        target: "SELF" as const, range: 0, requiredRank: "GENIN" as const,
+        id,
+        name: id,
+        image: "",
+        description: id,
+        battleDescription: id,
+        target: "SELF" as const,
+        range: 0,
+        requiredRank: "GENIN" as const,
         jutsuType: "NORMAL" as const,
         effects: [DamageTag.parse({ statTypes: ["Ninjutsu"] })],
         updatedAt: new Date(Date.UTC(2026, 0, 10)),
@@ -37,7 +48,11 @@ describeWithDatabase("jutsu catalogue with the player's jutsu first", () => {
     ]);
   });
 
-  const pages = async (input: { ownedFirst?: boolean; favoriteIds?: string[]; trainingIds?: string[] }) => {
+  const pages = async (input: {
+    ownedFirst?: boolean;
+    favoriteIds?: string[];
+    trainingIds?: string[];
+  }) => {
     const caller = await callerFor(jutsuRouter, USER);
     const seen: string[][] = [];
     let cursor: number | null | undefined;
@@ -50,7 +65,11 @@ describeWithDatabase("jutsu catalogue with the player's jutsu first", () => {
   };
 
   it("pages the player's jutsu first, highest level first, then the rest without repeats", async () => {
-    expect(await pages({ ownedFirst: true })).toEqual([["j5", "j4"], ["j1", "j2"], ["j3"]]);
+    expect(await pages({ ownedFirst: true })).toEqual([
+      ["j5", "j4"],
+      ["j1", "j2"],
+      ["j3"],
+    ]);
   });
 
   it("pages favorites first, then the player's jutsu by level, then the rest", async () => {
@@ -70,11 +89,13 @@ describeWithDatabase("jutsu catalogue with the player's jutsu first", () => {
   });
 
   it("keeps favorites ahead of active/queued priority and ignores missing priority IDs", async () => {
-    expect(await pages({ ownedFirst: true, favoriteIds: ["j3", "j4"], trainingIds: ["j2", "j5", "missing"] })).toEqual([
-      ["j4", "j3"],
-      ["j5", "j2"],
-      ["j1"],
-    ]);
+    expect(
+      await pages({
+        ownedFirst: true,
+        favoriteIds: ["j3", "j4"],
+        trainingIds: ["j2", "j5", "missing"],
+      }),
+    ).toEqual([["j4", "j3"], ["j5", "j2"], ["j1"]]);
   });
 
   it("breaks catalogue timestamp ties by id when priority is off", async () => {

@@ -9,7 +9,7 @@ import { MAX_BLOODRIGHT_TIERS } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
-import Loader from "@/layout/Loader";
+import ListLoader from "@/layout/ListLoader";
 import SkillTreeFiltering, {
   getFilter,
   useFiltering,
@@ -43,6 +43,7 @@ export default function ManualSkillTree({
   const {
     data: skills,
     isFetching,
+    isPending,
     fetchNextPage,
     hasNextPage,
   } = api.skillTree.getAll.useInfiniteQuery(
@@ -86,6 +87,7 @@ export default function ManualSkillTree({
 
   // Derived calculations
   const totalLoading = isFetching || load1 || load2;
+  const canEdit = !!userData && canChangeContent(userData.role);
 
   return (
     <>
@@ -100,7 +102,7 @@ export default function ManualSkillTree({
                 <ChartCandlestick className="h-6 w-6" />
               </Button>
             </Link>
-            {userData && canChangeContent(userData.role) && (
+            {canEdit && (
               <Link href="/manual/skillTreeFolder">
                 <Button hoverText="Manage Folders">
                   <FolderOpen className="h-6 w-6" />
@@ -153,35 +155,33 @@ export default function ManualSkillTree({
         initialBreak={true}
         topRightContent={
           <div className="flex flex-row items-center gap-2">
-            {userData &&
-              canChangeContent(userData.role) &&
-              canAccessHiddenSkillTree(userData.role) && (
-                <div className="flex flex-wrap gap-2">
-                  {isBloodright && (
-                    <select
-                      aria-label="Bloodline for new tier"
-                      value={bloodlineId}
-                      onChange={(event) => setBloodlineId(event.target.value)}
-                      className="rounded border bg-background p-2"
-                    >
-                      <option value="">Choose a bloodline</option>
-                      {bloodlines?.map((line) => (
-                        <option key={line.id} value={line.id}>
-                          {line.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  <Button
-                    id="create-skill"
-                    onClick={() => create(isBloodright ? { bloodlineId } : undefined)}
-                    disabled={load1 || (isBloodright && !bloodlineId)}
+            {canEdit && userData && canAccessHiddenSkillTree(userData.role) && (
+              <div className="flex flex-wrap gap-2">
+                {isBloodright && (
+                  <select
+                    aria-label="Bloodline for new tier"
+                    value={bloodlineId}
+                    onChange={(event) => setBloodlineId(event.target.value)}
+                    className="rounded border bg-background p-2"
                   >
-                    <FilePlus className="h-6 w-6 sm:mr-2" />
-                    {load1 ? "Creating..." : "New"}
-                  </Button>
-                </div>
-              )}
+                    <option value="">Choose a bloodline</option>
+                    {bloodlines?.map((line) => (
+                      <option key={line.id} value={line.id}>
+                        {line.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <Button
+                  id="create-skill"
+                  onClick={() => create(isBloodright ? { bloodlineId } : undefined)}
+                  disabled={load1 || (isBloodright && !bloodlineId)}
+                >
+                  <FilePlus className="h-6 w-6 sm:mr-2" />
+                  {load1 ? "Creating..." : "New"}
+                </Button>
+              </div>
+            )}
 
             <SkillTreeFiltering state={state} isBloodright={isBloodright} />
           </div>
@@ -192,27 +192,24 @@ export default function ManualSkillTree({
             {createResult.message}
           </p>
         )}
-        {totalLoading && <Loader explanation="Loading data" />}
         {allSkills.map((skill, i) => (
           <div key={skill.id} ref={i === allSkills.length - 1 ? setLastElement : null}>
             <ItemWithEffects
               item={skill}
-              showEdit={
-                userData && canChangeContent(userData.role) ? "skillTree" : undefined
-              }
-              onDelete={
-                userData && canChangeContent(userData.role)
-                  ? (id: string) => deleteSkill({ id })
-                  : undefined
-              }
-              folderName={
-                userData && canChangeContent(userData.role)
-                  ? (skill.folder?.name ?? "Uncategorized")
-                  : undefined
-              }
+              showEdit={canEdit ? "skillTree" : undefined}
+              onDelete={canEdit ? (id: string) => deleteSkill({ id }) : undefined}
+              folderName={canEdit ? (skill.folder?.name ?? "Uncategorized") : undefined}
             />
           </div>
         ))}
+        {!totalLoading && allSkills.length === 0 && (
+          <div>No skills found given the search criteria.</div>
+        )}
+        <ListLoader
+          initialLoading={isPending}
+          loading={totalLoading}
+          explanation="Loading data"
+        />
       </ContentBox>
     </>
   );

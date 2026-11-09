@@ -42,13 +42,14 @@ import NavTabs from "@/layout/NavTabs";
 import Shop from "@/layout/Shop";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
+import { getRyoOfferUnfreezeDate } from "@/libs/blackmarket";
 import { filterRollableBloodlines, getPityRolls } from "@/libs/bloodline";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { round } from "@/utils/math";
+import { isSiteOwnerAccount } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
-import { secondsFromDate } from "@/utils/time";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 import {
@@ -56,6 +57,7 @@ import {
   type BlackMarketOfferSchemaInput,
   blackMarketOfferSchema,
 } from "@/validators/blackmarket";
+import type { UserDeltaResponse } from "@/validators/userCache";
 
 export default function BlackMarket() {
   // Tab selection
@@ -79,7 +81,7 @@ export default function BlackMarket() {
         title="Black Market"
         subtitle="Special Abilities and Items"
         defaultBackHref="/village"
-        topRightCorntentBreakpoint="sm"
+        stackTopRight
         topRightContent={
           <NavTabs
             id="blackmarket-page"
@@ -167,11 +169,7 @@ const BlackMarketItemCatalog: React.FC<{
   );
 };
 
-/**
- * For every 150 failed rolls, let the user get a free bloodline of the given rank
- * @param param0
- * @returns
- */
+/** Every PITY_BLOODLINE_ROLLS item rolls for a rank grant one guaranteed roll of that rank. */
 const PityBloodlineRoll: React.FC<{
   userData: NonNullable<UserWithRelations>;
 }> = ({ userData }) => {
@@ -260,10 +258,9 @@ const PityBloodlineRoll: React.FC<{
     >
       <Table data={itemRolls} columns={columns} />
       <p className="p-3 text-xs italic">
-        Once you have have rolled {PITY_BLOODLINE_ROLLS} times for a given rank
-        bloodline using items, you get 1 free roll, which is guarenteed to give you a
-        random bloodline of the given rank. <b>Note:</b> Pity system will be disabled
-        next monday alongside sales of S-rank items!
+        Once you have rolled {PITY_BLOODLINE_ROLLS} times for a given rank bloodline
+        using items, you get 1 free roll, which is guaranteed to give you a random
+        bloodline of the given rank.
       </p>
     </ContentBox>
   );
@@ -304,48 +301,31 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   // Utility
   const utils = api.useUtils();
 
-  // Mutations
+  // Mutations: every offer change returns the viewer's balance delta
+  const offerMutationOptions = {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (
+      data: UserDeltaResponse,
+      _variables: unknown,
+      revision: number | undefined,
+    ) => {
+      showMutationToast(data);
+      if (data.success) {
+        await Promise.all([
+          updateUser(undefined, { revision, delta: data.userDelta }),
+          utils.blackmarket.getRyoOffers.invalidate(),
+        ]);
+      }
+    },
+  };
   const { mutate: create, isPending: isCreating } =
-    api.blackmarket.createOffer.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        showMutationToast(data);
-        if (data.success) {
-          await Promise.all([
-            updateUser(undefined, { revision, delta: data.userDelta }),
-            utils.blackmarket.getRyoOffers.invalidate(),
-          ]);
-        }
-      },
-    });
+    api.blackmarket.createOffer.useMutation(offerMutationOptions);
 
   const { mutate: delist, isPending: isDelisting } =
-    api.blackmarket.delistOffer.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        showMutationToast(data);
-        if (data.success) {
-          await Promise.all([
-            updateUser(undefined, { revision, delta: data.userDelta }),
-            utils.blackmarket.getRyoOffers.invalidate(),
-          ]);
-        }
-      },
-    });
+    api.blackmarket.delistOffer.useMutation(offerMutationOptions);
 
   const { mutate: accept, isPending: isAccepting } =
-    api.blackmarket.takeOffer.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        showMutationToast(data);
-        if (data.success) {
-          await Promise.all([
-            updateUser(undefined, { revision, delta: data.userDelta }),
-            utils.blackmarket.getRyoOffers.invalidate(),
-          ]);
-        }
-      },
-    });
+    api.blackmarket.takeOffer.useMutation(offerMutationOptions);
 
   const isLoading = isCreating || isDelisting || isAccepting;
   const belowRepTradeMinLevel = userData.level < REP_TRADE_MIN_LEVEL;
@@ -380,10 +360,8 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
     .map((offer) => {
       const hasRyo = userData.money >= offer.requestedRyo;
       const owner = offer.creatorUserId === userData.userId;
-      const isTerr = userData.username === "Terriator";
-      const canDelist =
-        new Date() >=
-        secondsFromDate(3600 * 24 * RYO_FOR_REP_DAYS_FROZEN, offer.createdAt);
+      const isOwner = isSiteOwnerAccount(userData);
+      const canDelist = new Date() >= getRyoOfferUnfreezeDate(offer.createdAt);
       return {
         ...offer,
         item: (
@@ -431,7 +409,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
                 Buy
               </Button>
             )}
-            {showActive && (isTerr || (owner && canDelist)) && (
+            {showActive && (isOwner || (owner && canDelist)) && (
               <Button onClick={() => delist({ offerId: offer.id })}>
                 <X className="h-6 w-6" />
               </Button>
@@ -485,11 +463,11 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
       subtitle="Trade for reputation points"
       initialBreak={true}
       padding={false}
-      topRightCorntentBreakpoint="sm"
+      stackTopRight
       topRightContent={
         <div className="flex flex-row items-center">
           <NavTabs
-            id="hospital-page"
+            id="blackmarket-ryo-shop"
             current={tab}
             options={["Active", "Ledger"]}
             setValue={setTab}
@@ -525,8 +503,8 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
             <b>{userData.money.toLocaleString()} ryo</b> in your pocket. You may list
             reputation points here for sale, so that other users may buy them for a
             pre-determined amount of ryo. Once listed, your sale cannot be delisted for{" "}
-            {RYO_FOR_REP_DAYS_FROZEN} days. You can not trade the first 10 reputation
-            points given on your account.
+            {RYO_FOR_REP_DAYS_FROZEN} days. You must keep at least {RYO_FOR_REP_RESERVE}{" "}
+            reputation points on your account.
           </p>
           {!showActive && (
             <div className="flex flex-row gap-2 px-3">
@@ -633,7 +611,7 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
                         </p>
                       )}
                       {(offerReps === 0 || offerRyo === 0) && (
-                        <p>Must enter reputation & reputation values above 0.</p>
+                        <p>Must enter reputation & ryo values above 0.</p>
                       )}
                     </Confirm>
                   </div>

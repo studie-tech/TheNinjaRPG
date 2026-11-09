@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -389,17 +389,11 @@ export const ObjectiveWarPanel = ({
                   />
                 </div>
                 {!objective.destroyed && !hasEnded && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {user.sector !== objective.sector && (
-                      <Button asChild variant="outline" size="sm">
-                        <Link
-                          href={`/travel?sector=${objective.sector}`}
-                          onNavigate={onNavigate}
-                        >
-                          Travel to sector {objective.sector}
-                        </Link>
-                      </Button>
-                    )}
+                  <SectorTravelControl
+                    sector={objective.sector}
+                    userSector={user.sector}
+                    onNavigate={onNavigate}
+                  >
                     {objective.villageId !== side && isRevealed && !isNotice && (
                       <Button
                         size="sm"
@@ -417,12 +411,7 @@ export const ObjectiveWarPanel = ({
                           : "Attack guardian"}
                       </Button>
                     )}
-                    {user.sector === objective.sector && (
-                      <span className="text-muted-foreground text-sm">
-                        You are here
-                      </span>
-                    )}
-                  </div>
+                  </SectorTravelControl>
                 )}
               </div>
             ))}
@@ -458,9 +447,7 @@ export const ObjectiveWarPanel = ({
             </p>
           )}
           {!data.missions.length && (
-            <p className="rounded-lg border bg-popover p-3 text-muted-foreground text-sm">
-              No war missions are currently available to you.
-            </p>
+            <EmptyNote>No war missions are currently available to you.</EmptyNote>
           )}
           {data.missions.map((mission) => (
             <div
@@ -509,13 +496,13 @@ export const ObjectiveWarPanel = ({
             damage. Ties deal no damage.
           </p>
           {!openCamps.length && (
-            <p className="rounded-lg border bg-popover p-3 text-muted-foreground text-sm">
+            <EmptyNote>
               {hasEnded
                 ? "War camps are closed."
                 : isNotice
                   ? "War camps open after combat begins."
                   : "No war camps are open. Check back for the next camp."}
-            </p>
+            </EmptyNote>
           )}
           {openCamps.map((c) => (
             <div key={c.id} className="space-y-3 rounded-lg border bg-popover p-3">
@@ -551,14 +538,11 @@ export const ObjectiveWarPanel = ({
                   </div>
                 ))}
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {user.sector !== c.sector && (
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={`/travel?sector=${c.sector}`} onNavigate={onNavigate}>
-                      Travel to sector {c.sector}
-                    </Link>
-                  </Button>
-                )}
+              <SectorTravelControl
+                sector={c.sector}
+                userSector={user.sector}
+                onNavigate={onNavigate}
+              >
                 <Button
                   size="sm"
                   disabled={hasEnded || isNotice || busy || user.sector !== c.sector}
@@ -573,10 +557,7 @@ export const ObjectiveWarPanel = ({
                     ? "Starting battle..."
                     : "Attack war camp"}
                 </Button>
-                {user.sector === c.sector && (
-                  <span className="text-muted-foreground text-sm">You are here</span>
-                )}
-              </div>
+              </SectorTravelControl>
             </div>
           ))}
         </TabsContent>
@@ -600,9 +581,7 @@ export const ObjectiveWarPanel = ({
                 compact
               />
             ) : (
-              <p className="rounded-lg border bg-popover p-3 text-muted-foreground text-sm">
-                No townhall contributions have been recorded yet.
-              </p>
+              <EmptyNote>No townhall contributions have been recorded yet.</EmptyNote>
             )}
             <h3 className="font-bold">Kills/Losses</h3>
             <p className="text-muted-foreground text-sm">
@@ -622,9 +601,7 @@ export const ObjectiveWarPanel = ({
                 compact
               />
             ) : (
-              <p className="rounded-lg border bg-popover p-3 text-muted-foreground text-sm">
-                No kills or losses have been recorded yet.
-              </p>
+              <EmptyNote>No kills or losses have been recorded yet.</EmptyNote>
             )}
           </TabsContent>
         )}
@@ -632,3 +609,37 @@ export const ObjectiveWarPanel = ({
     </section>
   );
 };
+
+/** Travel link while away from a sector, its actions, and a marker once there. */
+const SectorTravelControl = ({
+  sector,
+  userSector,
+  onNavigate,
+  children,
+}: {
+  sector: number;
+  userSector: number;
+  onNavigate?: () => void;
+  children: ReactNode;
+}) => (
+  <div className="flex flex-wrap items-center gap-2">
+    {userSector !== sector && (
+      <Button asChild variant="outline" size="sm">
+        <Link href={`/travel?sector=${sector}`} onNavigate={onNavigate}>
+          Travel to sector {sector}
+        </Link>
+      </Button>
+    )}
+    {children}
+    {userSector === sector && (
+      <span className="text-muted-foreground text-sm">You are here</span>
+    )}
+  </div>
+);
+
+/** Placeholder for a war list with nothing to show. */
+const EmptyNote = ({ children }: { children: ReactNode }) => (
+  <p className="rounded-lg border bg-popover p-3 text-muted-foreground text-sm">
+    {children}
+  </p>
+);

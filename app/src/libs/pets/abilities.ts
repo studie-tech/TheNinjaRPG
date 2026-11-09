@@ -227,8 +227,7 @@ const isAllowedEffect = (effect: ZodAllTags, allowed: Set<ZodAllTags["type"]>) =
   (effect.calculation !== "percentage" || effect.power <= 100) &&
   (!("elements" in effect) || !effect.elements?.some((element) => element !== "None"));
 
-/** Persisted selections plus the progression fields needed to validate their limits. */
-/** Saved selections and species identity needed for capacity and eligibility checks. */
+/** Saved selections plus the progression and species fields needed for capacity and eligibility checks. */
 export type PetAbilityLoadout = Pick<
   UserPet,
   "rank" | "experience" | "jutsuIds" | "skillIds"

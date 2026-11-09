@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import * as globalMapData from "@/data/hexasphere.json";
 import {
@@ -25,6 +26,14 @@ import {
 import type { DrizzleClient } from "@/server/db";
 
 const globalMap = globalMapData as unknown as GlobalMapData;
+
+/**
+ * sha256 hex digest of the JSON.stringify'd upload, stored as the row's
+ * sourceHash. Not canonicalized, so the same logical document with different
+ * key ordering hashes differently.
+ */
+export const hashTiledJson = (json: unknown) =>
+  createHash("sha256").update(JSON.stringify(json)).digest("hex");
 
 // A sector's published map is immutable per version (publishing inserts a new
 // row and archives the old), so cache the deserialized normalizedJson blob to

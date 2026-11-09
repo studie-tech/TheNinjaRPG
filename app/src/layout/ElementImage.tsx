@@ -11,7 +11,7 @@ import {
   Heart,
   HeartPulse,
   LoaderPinwheel,
-  Rabbit,
+  type LucideIcon,
   Shield,
   Sparkles,
   SquarePlus,
@@ -36,10 +36,7 @@ import type {
   StatType,
 } from "@/drizzle/constants";
 import {
-  AdjustableBasicActions,
-  CombatStatTypes,
   ElementNames,
-  GeneralTypes,
   IMG_ELEMENT_BOIL,
   IMG_ELEMENT_CRYSTAL,
   IMG_ELEMENT_DUST,
@@ -61,9 +58,6 @@ import {
   IMG_ELEMENT_WIND,
   IMG_ELEMENT_WOOD,
   IMG_ELEMENT_YINYANG,
-  MasteryTypes,
-  PoolTypes,
-  StatTypes,
 } from "@/drizzle/constants";
 import Image from "@/layout/Image";
 import { cn } from "@/libs/shadui";
@@ -86,53 +80,64 @@ interface ElementImageProps {
   className?: string;
 }
 
-export const getElementImg = (element: ElementName): string => {
-  switch (element) {
-    case "Yin-Yang":
-      return IMG_ELEMENT_YINYANG;
-    case "Shadow":
-      return IMG_ELEMENT_SHADOW;
-    case "None":
-      return IMG_ELEMENT_NONE;
-    case "Explosion":
-      return IMG_ELEMENT_EXPLOSION;
-    case "Wind":
-      return IMG_ELEMENT_WIND;
-    case "Water":
-      return IMG_ELEMENT_WATER;
-    case "Lava":
-      return IMG_ELEMENT_LAVA;
-    case "Ice":
-      return IMG_ELEMENT_ICE;
-    case "Wood":
-      return IMG_ELEMENT_WOOD;
-    case "Storm":
-      return IMG_ELEMENT_STORM;
-    case "Crystal":
-      return IMG_ELEMENT_CRYSTAL;
-    case "Magnet":
-      return IMG_ELEMENT_MAGNET;
-    case "Fire":
-      return IMG_ELEMENT_FIRE;
-    case "Light":
-      return IMG_ELEMENT_LIGHT;
-    case "Earth":
-      return IMG_ELEMENT_EARTH;
-    case "Scorch":
-      return IMG_ELEMENT_SCORCH;
-    case "Dust":
-      return IMG_ELEMENT_DUST;
-    case "Sand":
-      return IMG_ELEMENT_SAND;
-    case "Lightning":
-      return IMG_ELEMENT_LIGHTNING;
-    case "Boil":
-      return IMG_ELEMENT_BOIL;
-    case "Metal":
-      return IMG_ELEMENT_METAL;
-  }
+const ELEMENT_IMAGES: Record<ElementName, string> = {
+  "Yin-Yang": IMG_ELEMENT_YINYANG,
+  Shadow: IMG_ELEMENT_SHADOW,
+  None: IMG_ELEMENT_NONE,
+  Explosion: IMG_ELEMENT_EXPLOSION,
+  Wind: IMG_ELEMENT_WIND,
+  Water: IMG_ELEMENT_WATER,
+  Lava: IMG_ELEMENT_LAVA,
+  Ice: IMG_ELEMENT_ICE,
+  Wood: IMG_ELEMENT_WOOD,
+  Storm: IMG_ELEMENT_STORM,
+  Crystal: IMG_ELEMENT_CRYSTAL,
+  Magnet: IMG_ELEMENT_MAGNET,
+  Fire: IMG_ELEMENT_FIRE,
+  Light: IMG_ELEMENT_LIGHT,
+  Earth: IMG_ELEMENT_EARTH,
+  Scorch: IMG_ELEMENT_SCORCH,
+  Dust: IMG_ELEMENT_DUST,
+  Sand: IMG_ELEMENT_SAND,
+  Lightning: IMG_ELEMENT_LIGHTNING,
+  Boil: IMG_ELEMENT_BOIL,
+  Metal: IMG_ELEMENT_METAL,
 };
 
+/** Return the configured image URL for a supported element name, including None. */
+export const getElementImg = (element: ElementName): string => ELEMENT_IMAGES[element];
+
+/** Icon and background colour of each stat, pool, mastery and basic action badge. */
+const ICON_BADGES: Partial<
+  Record<ElementImageProps["element"], { Icon: LucideIcon; background: string }>
+> = {
+  basicAttack: { Icon: Swords, background: "bg-blue-600" },
+  offensiveStance: { Icon: BicepsFlexed, background: "bg-red-600" },
+  defensiveStance: { Icon: BrainCog, background: "bg-blue-600" },
+  basicHeal: { Icon: HeartPulse, background: "bg-green-600" },
+  meditate: { Icon: Brain, background: "bg-purple-600" },
+  clear: { Icon: Eraser, background: "bg-stone-500" },
+  cleanse: { Icon: Sparkles, background: "bg-yellow-400" },
+  move: { Icon: Footprints, background: "bg-cyan-600" },
+  replacementTechnique: { Icon: LoaderPinwheel, background: "bg-orange-500" },
+  Taijutsu: { Icon: Grab, background: "bg-green-600" },
+  Ninjutsu: { Icon: Zap, background: "bg-amber-500" },
+  Genjutsu: { Icon: BrainCog, background: "bg-purple-600" },
+  Bukijutsu: { Icon: Sword, background: "bg-red-600" },
+  Offence: { Icon: Swords, background: "bg-red-700" },
+  Defence: { Icon: Shield, background: "bg-sky-700" },
+  Bloodline: { Icon: Heart, background: "bg-rose-600" },
+  Sage: { Icon: Sparkles, background: "bg-emerald-600" },
+  Strength: { Icon: BicepsFlexed, background: "bg-blue-800" },
+  Intelligence: { Icon: Brain, background: "bg-teal-600" },
+  Speed: { Icon: Footprints, background: "bg-cyan-600" },
+  Willpower: { Icon: Flame, background: "bg-orange-600" },
+  Health: { Icon: Heart, background: "bg-red-600" },
+  Chakra: { Icon: Atom, background: "bg-blue-600" },
+  Stamina: { Icon: BatteryMedium, background: "bg-green-600" },
+};
+
+/** Display element artwork or combat badges, retaining labels for unsupported tags. */
 const ElementImage: React.FC<ElementImageProps> = (props) => {
   // Destructure
   const { element, hoverText } = props;
@@ -149,206 +154,35 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
         className={props.className}
       />
     );
-  } else if (
-    isInArray(element, [
-      ...StatTypes.filter((type) => type !== "None"),
-      ...CombatStatTypes,
-      ...MasteryTypes,
-      ...GeneralTypes,
-      ...PoolTypes,
-      ...AdjustableBasicActions,
-      "All",
-    ])
-  ) {
+  } else {
     const base = "rounded-full p-1 text-white";
-    switch (element) {
-      case "basicAttack":
+    if (element === "Highest") {
+      return (
+        <SquarePlus
+          strokeWidth={3}
+          className={cn(base, props.className, "bg-stone-500")}
+        />
+      );
+    }
+    if (element === "All") {
+      image = (
+        <LoaderPinwheel
+          className={cn(props.className, "rounded-full bg-gray-600 p-1 text-white")}
+        />
+      );
+    } else {
+      // Unknown tags and inherited object keys keep the label-only fallback.
+      const badge = Object.hasOwn(ICON_BADGES, element)
+        ? ICON_BADGES[element]
+        : undefined;
+      if (badge) {
         image = (
-          <Swords
+          <badge.Icon
             strokeWidth={3}
-            className={cn(base, props.className, "bg-blue-600")}
+            className={cn(base, props.className, badge.background)}
           />
         );
-        break;
-      case "offensiveStance":
-        image = (
-          <BicepsFlexed
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-red-600")}
-          />
-        );
-        break;
-      case "defensiveStance":
-        image = (
-          <BrainCog
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-blue-600")}
-          />
-        );
-        break;
-      case "basicHeal":
-        image = (
-          <HeartPulse
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-green-600")}
-          />
-        );
-        break;
-      case "meditate":
-        image = (
-          <Brain
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-purple-600")}
-          />
-        );
-        break;
-      case "clear":
-        image = (
-          <Eraser
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-stone-500")}
-          />
-        );
-        break;
-      case "cleanse":
-        image = (
-          <Sparkles
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-yellow-400")}
-          />
-        );
-        break;
-      case "flee":
-        image = (
-          <Rabbit
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-pink-400")}
-          />
-        );
-        break;
-      case "move":
-        image = (
-          <Footprints
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-cyan-600")}
-          />
-        );
-        break;
-      case "replacementTechnique":
-        image = (
-          <LoaderPinwheel
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-orange-500")}
-          />
-        );
-        break;
-      case "Highest":
-        return (
-          <SquarePlus
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-stone-500")}
-          />
-        );
-      case "Taijutsu":
-        image = (
-          <Grab strokeWidth={3} className={cn(base, props.className, "bg-green-600")} />
-        );
-        break;
-      case "Ninjutsu":
-        image = (
-          <Zap strokeWidth={3} className={cn(base, props.className, "bg-amber-500")} />
-        );
-        break;
-      case "Genjutsu":
-        image = (
-          <BrainCog
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-purple-600")}
-          />
-        );
-        break;
-      case "Bukijutsu":
-        image = (
-          <Sword strokeWidth={3} className={cn(base, props.className, "bg-red-600")} />
-        );
-        break;
-      case "Offence":
-        image = (
-          <Swords strokeWidth={3} className={cn(base, props.className, "bg-red-700")} />
-        );
-        break;
-      case "Defence":
-        image = (
-          <Shield strokeWidth={3} className={cn(base, props.className, "bg-sky-700")} />
-        );
-        break;
-      case "Bloodline":
-        image = (
-          <Heart strokeWidth={3} className={cn(base, props.className, "bg-rose-600")} />
-        );
-        break;
-      case "Sage":
-        image = (
-          <Sparkles
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-emerald-600")}
-          />
-        );
-        break;
-      case "Strength":
-        image = (
-          <BicepsFlexed
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-blue-800")}
-          />
-        );
-        break;
-      case "Intelligence":
-        image = (
-          <Brain strokeWidth={3} className={cn(base, props.className, "bg-teal-600")} />
-        );
-        break;
-      case "Speed":
-        image = (
-          <Footprints
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-cyan-600")}
-          />
-        );
-        break;
-      case "Willpower":
-        image = (
-          <Flame
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-orange-600")}
-          />
-        );
-        break;
-      case "Health":
-        image = (
-          <Heart strokeWidth={3} className={cn(base, props.className, "bg-red-600")} />
-        );
-        break;
-      case "Chakra":
-        image = (
-          <Atom strokeWidth={3} className={cn(base, props.className, "bg-blue-600")} />
-        );
-        break;
-      case "Stamina":
-        image = (
-          <BatteryMedium
-            strokeWidth={3}
-            className={cn(base, props.className, "bg-green-600")}
-          />
-        );
-        break;
-      case "All":
-        image = (
-          <LoaderPinwheel
-            className={cn(props.className, "rounded-full bg-gray-600 p-1 text-white")}
-          />
-        );
-        break;
+      }
     }
   }
 

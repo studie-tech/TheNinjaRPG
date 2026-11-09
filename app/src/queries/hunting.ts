@@ -2,7 +2,17 @@
  * Database access for hunting; authorization and transaction scopes stay in callers.
  */
 
-import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  exists,
+  gte,
+  inArray,
+  isNull,
+  notExists,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   actionLog,
@@ -128,7 +138,7 @@ export const insertHuntingHabitatForSave = (
  * `version`, including predicates on `contractId`, `used`, `cooldownUntil`.
  */
 export const updateHuntingProgressForSave = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   contract: { cooldownSeconds: number; id: string; hunts: number },
 ) =>
   client
@@ -140,10 +150,20 @@ export const updateHuntingProgressForSave = (
     .where(
       and(
         eq(huntingProgress.contractId, contract.id),
-        sql`${huntingProgress.used} >= ${contract.hunts}`,
+        gte(huntingProgress.used, contract.hunts),
         isNull(huntingProgress.cooldownUntil),
         // Active contracts keep their allowance and settlement version.
-        sql`NOT EXISTS (SELECT 1 FROM ${huntingSession} WHERE ${huntingSession.userId} = ${huntingProgress.userId} AND ${huntingSession.contractId} = ${huntingProgress.contractId})`,
+        notExists(
+          client
+            .select({ userId: huntingSession.userId })
+            .from(huntingSession)
+            .where(
+              and(
+                eq(huntingSession.userId, huntingProgress.userId),
+                eq(huntingSession.contractId, huntingProgress.contractId),
+              ),
+            ),
+        ),
       ),
     );
 
@@ -165,7 +185,7 @@ export const insertActionLogForSave = (
 
 /** Build the `huntingHabitat` deletion for `delete`, using predicates on `id` and `habitatId`. */
 export const deleteHuntingHabitatForDelete = (
-  client: Pick<DrizzleClient, "delete">,
+  client: Pick<DrizzleClient, "delete" | "select">,
   input: { id: string },
 ) =>
   client
@@ -173,7 +193,12 @@ export const deleteHuntingHabitatForDelete = (
     .where(
       and(
         eq(huntingHabitat.id, input.id),
-        sql`NOT EXISTS (SELECT 1 FROM ${huntingSession} WHERE ${huntingSession.habitatId} = ${input.id})`,
+        notExists(
+          client
+            .select({ userId: huntingSession.userId })
+            .from(huntingSession)
+            .where(eq(huntingSession.habitatId, input.id)),
+        ),
       ),
     );
 
@@ -329,7 +354,7 @@ export const findHuntingHabitatForReconcileInactiveAllowance = (
  * `cooldownUntil` and `version`, including predicates on `userId`, `id`, `updatedAt`.
  */
 export const updateHuntingProgressForReconcileInactiveAllowance = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   contract: { cooldownSeconds: number; id: string; hunts: number },
   userId: string,
   habitatId: string,
@@ -344,11 +369,31 @@ export const updateHuntingProgressForReconcileInactiveAllowance = (
     .where(
       and(
         eq(huntingProgress.userId, userId),
-        sql`EXISTS (SELECT 1 FROM ${huntingHabitat} WHERE ${huntingHabitat.id} = ${habitatId} AND ${huntingHabitat.updatedAt} = ${habitat.updatedAt})`,
+        exists(
+          client
+            .select({ id: huntingHabitat.id })
+            .from(huntingHabitat)
+            .where(
+              and(
+                eq(huntingHabitat.id, habitatId),
+                eq(huntingHabitat.updatedAt, habitat.updatedAt),
+              ),
+            ),
+        ),
         eq(huntingProgress.contractId, contract.id),
-        sql`${huntingProgress.used} >= ${contract.hunts}`,
+        gte(huntingProgress.used, contract.hunts),
         isNull(huntingProgress.cooldownUntil),
-        sql`NOT EXISTS (SELECT 1 FROM ${huntingSession} WHERE ${huntingSession.userId} = ${userId} AND ${huntingSession.contractId} = ${contract.id})`,
+        notExists(
+          client
+            .select({ userId: huntingSession.userId })
+            .from(huntingSession)
+            .where(
+              and(
+                eq(huntingSession.userId, userId),
+                eq(huntingSession.contractId, contract.id),
+              ),
+            ),
+        ),
       ),
     );
 

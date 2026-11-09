@@ -80,8 +80,14 @@ describe("planHomeStorageMove", () => {
 
   it("takes stored stacks out until their backpack bucket is full", () => {
     const max = getInventoryBucketCapacity("normal", user);
-    const carried = Array.from({ length: max - 1 }, (_, index) => row(`carried-${index}`));
-    const rows = [...carried, row("a", { storedAtHome: true }), row("b", { storedAtHome: true })];
+    const carried = Array.from({ length: max - 1 }, (_, index) =>
+      row(`carried-${index}`),
+    );
+    const rows = [
+      ...carried,
+      row("a", { storedAtHome: true }),
+      row("b", { storedAtHome: true }),
+    ];
     const plan = planHomeStorageMove({
       rows,
       userItemIds: ["a", "b"],
@@ -143,11 +149,15 @@ describe("homeStorageMoveMessage", () => {
 
 describe("homeStorageMoveBlockReason", () => {
   it("names why one stack cannot move as a sentence, keeping the message's casing", () => {
-    const rows = Array.from({ length: 12 }, (_, index) => row(`kept-${index}`, { storedAtHome: true }));
-    const input = { rows: [...rows, row("sword")], user, homeStorage: 12 };
-    expect(homeStorageMoveBlockReason({ ...input, userItemId: "sword", toHome: true })).toBe(
-      "Does not fit: Your home storage is full",
+    const rows = Array.from({ length: 12 }, (_, index) =>
+      row(`kept-${index}`, { storedAtHome: true }),
     );
-    expect(homeStorageMoveBlockReason({ ...input, userItemId: "kept-0", toHome: false })).toBeNull();
+    const input = { rows: [...rows, row("sword")], user, homeStorage: 12 };
+    expect(
+      homeStorageMoveBlockReason({ ...input, userItemId: "sword", toHome: true }),
+    ).toBe("Does not fit: Your home storage is full");
+    expect(
+      homeStorageMoveBlockReason({ ...input, userItemId: "kept-0", toHome: false }),
+    ).toBeNull();
   });
 });

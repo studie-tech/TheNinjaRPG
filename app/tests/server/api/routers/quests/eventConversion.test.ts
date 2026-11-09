@@ -47,7 +47,9 @@ describeWithDatabase("converting a quest into an event", () => {
 
   const save = async (client: Awaited<ReturnType<typeof getTestDatabase>>) => {
     const db = await getTestDatabase();
-    const authored = (await db.query.quest.findFirst({ where: eq(quest.id, "convert") }))!;
+    const authored = (await db.query.quest.findFirst({
+      where: eq(quest.id, "convert"),
+    }))!;
     return callerForDatabase(questsRouter, "editor", client).update({
       id: "convert",
       data: QuestValidator.parse({ ...authored, questType: "event" }),

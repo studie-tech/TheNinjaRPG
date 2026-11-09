@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import type { Quest } from "@/drizzle/schema";
 import {
   buildObjectiveEdges,
   findCompletedPredecessor,
@@ -8,7 +9,6 @@ import {
   isQuestObjectiveAvailable,
   objectiveLinks,
 } from "@/libs/objectives";
-import type { Quest } from "@/drizzle/schema";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 
 const battle = {
@@ -35,7 +35,9 @@ describe("findCompletedPredecessor", () => {
   });
 
   it("ignores predecessors that are not complete", () => {
-    expect(findCompletedPredecessor([battle, lost], "lost", tracker([]))).toBeUndefined();
+    expect(
+      findCompletedPredecessor([battle, lost], "lost", tracker([])),
+    ).toBeUndefined();
   });
 });
 
@@ -60,7 +62,10 @@ describe("objectiveLinks", () => {
       task: "dialog",
       nextObjectiveId: [{ nextObjectiveId: "left" }, {}, { nextObjectiveId: "right" }],
     } as unknown as AllObjectivesType;
-    expect(objectiveLinks(dialog).map((link) => link.target)).toEqual(["left", "right"]);
+    expect(objectiveLinks(dialog).map((link) => link.target)).toEqual([
+      "left",
+      "right",
+    ]);
   });
 
   it("does not treat a reset link as a predecessor", () => {

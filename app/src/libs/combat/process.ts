@@ -20,11 +20,13 @@ import type { ShieldTagType, ZodAllTags } from "@/validators/combat";
 import { ShieldTag, VisualTag } from "@/validators/combat";
 import { creditConsequenceEnmity, creditDamageEnmity } from "./aggro";
 import {
+  ABSORB_CAP_RATIO,
   BARRIER_DAMAGE_TAG_TYPES,
   DAMAGE_LEECH_CAP_RATIO,
   damageModifierTypes,
   dmgConfig as defaultDmgConfig,
   HP_DAMAGE_KEYS,
+  REFLECT_CAP_RATIO,
 } from "./constants";
 import {
   accumulateCurseConsequence,
@@ -387,8 +389,8 @@ export const applyEffects = (
   // Separate non-damage-modifier effects from damage modifier effects
   // Note: pierce is explicitly excluded here to maintain the sortEffects ordering
   // where damage modifiers run BEFORE pierce (pierce bypasses damage reduction)
-  // Note: POST_DAMAGE_MODIFIER_TYPES (wound, afterburn, reflect, recoil, lifesteal, absorb)
-  // are excluded here because they must read post-mitigated damage values
+  // Note: all POST_DAMAGE_MODIFIER_TYPES are excluded here and resolved in their
+  // own passes below
   // Note: increaseheal/decreaseheal are excluded because they modify lifesteal_hp/absorb_hp/vampRatio
   // which are set by post-damage modifiers
   const nonDamageModifierEffects = usersEffects
@@ -401,7 +403,8 @@ export const applyEffects = (
   // Separate pierce effects (must run AFTER damage modifiers, BEFORE post-damage modifiers)
   const pierceEffects = usersEffects.filter((e) => e.type === "pierce");
 
-  // Separate post-damage-modifier effects (wound, afterburn, reflect, recoil, lifesteal, absorb)
+  // Separate post-damage-modifier effects: POST_DAMAGE_MODIFIER_TYPES except consume
+  // and siphon, which register earlier as shield conversions.
   // These depend on post-mitigated damage values, so they must run after pierce
   const postDamageModifierEffects = usersEffects.filter(
     (e) =>
@@ -416,7 +419,7 @@ export const applyEffects = (
     (e) => e.type === "increaseheal" || e.type === "decreaseheal",
   );
 
-  // Apply non-damage-modifier effects first (maintains existing ordering)
+  // Apply non-damage-modifier effects first
   nonDamageModifierEffects.sort(sortEffects).forEach(resolve);
 
   // Instant kills precede Curse activation and seals; account only their resolved HP loss.
@@ -591,7 +594,7 @@ export const applyEffects = (
     .forEach(resolve);
   const parryReturns = splitParriedDamage(consequences, actionEffects);
 
-  // Apply post-damage-modifier effects (wound, afterburn, reflect, recoil, lifesteal, absorb)
+  // Apply the remaining post-damage-modifier effects (parry resolved above).
   // These read consequence.damage to calculate their effect, so they must run after pierce
   // to include pierce damage in their calculations
   postDamageModifierEffects.sort(sortEffects).forEach((effect) => {
@@ -1131,7 +1134,7 @@ const applyConsequence = (
     if (c.reflect !== undefined && c.reflect >= 0) {
       // Reflect caps against the source hit before Diffuse and shields; leech uses the remainder.
       const preShieldDamage = c.preDiffuseDamage ?? c.preShieldDamage ?? 0;
-      const maxReflect = preShieldDamage * 0.6;
+      const maxReflect = preShieldDamage * REFLECT_CAP_RATIO;
       const finalReflect = Math.min(c.reflect, maxReflect);
       accumulateCurseDamage(
         newUsersEffects,
@@ -1215,9 +1218,10 @@ const applyConsequence = (
       target.curHealth > 0 &&
       !curseHolders.has(target.userId)
     ) {
-      // Use pre-shield damage for the 60% cap calculation to avoid shield interference
+      // Use pre-shield damage for the absorb cap to avoid shield interference
       const preShieldDamage = c.preShieldDamage ?? 0;
-      const maxAbsorb = (c.diffuseImmediateDamage ?? preShieldDamage) * 0.6;
+      const maxAbsorb =
+        (c.diffuseImmediateDamage ?? preShieldDamage) * ABSORB_CAP_RATIO;
       const absorbAmount = Math.min(c.absorb_hp, maxAbsorb);
       target.curHealth += absorbAmount;
       target.curHealth = Math.min(cap(target, "Health"), target.curHealth);

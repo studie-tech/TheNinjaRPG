@@ -7,8 +7,10 @@ import * as map from "@/data/hexasphere.json";
 import { getFinishGlobalMoveUserUpdate, getRobPlayerUserUpdate } from "@/deltas/travel";
 import {
   IMG_AVATAR_DEFAULT,
+  MAP_WAKE_ISLAND_SECTOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   REGEN_SECONDS,
+  ROBBING_MAX_LEVEL_DIFFERENCE,
   ROBBING_STOLLEN_AMOUNT,
   ROBBING_SUCCESS_CHANCE,
   ROBBING_VILLAGE_PRESTIGE_GAIN,
@@ -193,8 +195,8 @@ export const travelRouter = createTRPCRouter({
       if (target.rank === "STUDENT" || target.rank === "GENIN") {
         return errorResponse("Cannot rob Academy Students or Genins");
       }
-      // Special check for Wake Island - always block if sector is 222
-      if (input.sector === 222) {
+      // Wake Island always blocks robbing
+      if (input.sector === MAP_WAKE_ISLAND_SECTOR) {
         return errorResponse("Cannot rob players in Wake Island");
       }
 
@@ -211,22 +213,22 @@ export const travelRouter = createTRPCRouter({
         return errorResponse("Target is immune from being robbed");
       }
 
-      // Level restrictions - prevent robbing users more than 15 levels under or above (skip if in war-torn sector)
+      // Level restrictions, skipped in the war-torn sector
       const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
       if (!isInWarTornSector) {
         const robberLevel = getEffectiveLevel(user);
         const targetLevel = getEffectiveLevel(target);
         const levelDifference = robberLevel - targetLevel;
 
-        if (levelDifference > 15) {
+        if (levelDifference > ROBBING_MAX_LEVEL_DIFFERENCE) {
           return errorResponse(
-            `Cannot rob ${target.username} - they are more than 15 levels below you (${levelDifference} level difference)`,
+            `Cannot rob ${target.username} - they are more than ${ROBBING_MAX_LEVEL_DIFFERENCE} levels below you (${levelDifference} level difference)`,
           );
         }
 
-        if (levelDifference < -15) {
+        if (levelDifference < -ROBBING_MAX_LEVEL_DIFFERENCE) {
           return errorResponse(
-            `Cannot rob ${target.username} - they are more than 15 levels above you (${Math.abs(levelDifference)} level difference)`,
+            `Cannot rob ${target.username} - they are more than ${ROBBING_MAX_LEVEL_DIFFERENCE} levels above you (${Math.abs(levelDifference)} level difference)`,
           );
         }
       }
@@ -683,8 +685,8 @@ export const travelRouter = createTRPCRouter({
         user.status = "TRAVEL";
         user.travelFinishAt = endTime;
         // Only broadcast if user is NOT stealthed. The sector being left is told
-        // too, the same way a sector crossing already does it, so the departing
-        // player stops being drawn there instead of lingering until the next poll.
+        // too, so the departing player stops being drawn there instead of lingering
+        // until the next poll.
         if (!isUserCurrentlyStealthed(user)) {
           after(() => updateUserOnMap(pusher, input.sector, user));
           if (departureSector !== input.sector) {
@@ -1335,7 +1337,7 @@ export const completeExpiredGlobalTravel = async (client: DrizzleClient) => {
         maxEnergy: calcMaxEnergy(user),
       }),
     ),
-    // Empty queues keep the existing lazy passive recovery behavior.
+    // Users without an energy queue recover lazily on their next regeneration read.
     retryOnDeadlock(() =>
       updateUserDataForCompleteExpiredGlobalTravel(client, expiredTravel, hasQueue),
     ),

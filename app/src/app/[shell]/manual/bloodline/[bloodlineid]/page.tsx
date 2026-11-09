@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import ContentDetail from "@/layout/ContentDetail";
-import { buildMetadata, metaDescription } from "@/libs/seo";
+import { buildMetadata, metaDescription, noindexMetadata } from "@/libs/seo";
 import { fetchBloodline } from "@/queries/bloodline";
 import { fetchGuideForBloodline } from "@/queries/guide";
 
@@ -23,7 +23,7 @@ const getBloodline = cache(async (id: string) => {
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const { bloodlineid } = await props.params;
   const bloodline = await getBloodline(bloodlineid);
-  if (!bloodline) return { title: "Bloodline Not Found" };
+  if (!bloodline) return noindexMetadata("Bloodline Not Found");
   const name = bloodline.name.trim();
   return buildMetadata({
     title: `${name} - ${bloodline.rank} Rank Bloodline`,

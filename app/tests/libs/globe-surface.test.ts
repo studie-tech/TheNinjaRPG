@@ -6,8 +6,8 @@ import {
   MAP_WORLD_COLUMNS,
   MAP_WORLD_ROWS,
 } from "@/drizzle/constants";
-import { sectorAtGeographic } from "@/libs/sector-map/world-grid";
 import { buildGlobeSurfaceData } from "@/libs/rendering/scenes/globeSurface";
+import { sectorAtGeographic } from "@/libs/sector-map/world-grid";
 import type { GlobalMapData, GlobalPoint } from "@/libs/sector-map/world-types";
 
 const hexasphere = globe as unknown as GlobalMapData;

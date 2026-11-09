@@ -32,7 +32,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { type BountyStatus, IMG_BUILDING_MISSIONHALL } from "@/drizzle/constants";
+import {
+  BOUNTY_MAX_HUNTERS,
+  BOUNTY_STATUSES,
+  type BountyStatus,
+  IMG_BUILDING_MISSIONHALL,
+} from "@/drizzle/constants";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import type { ColumnDefinitionType } from "@/layout/Table";
@@ -44,6 +49,7 @@ import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { canSeeHiddenBountyInfo } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
+import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { createBountySchema } from "@/validators/bounty";
 
@@ -59,7 +65,6 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
   const [bountyStatus, setBountyStatus] = useState<BountyStatus | "all">("OPEN");
   const [addingMoneyTo, setAddingMoneyTo] = useState<string | null>(null);
   const [addMoneyAmount, setAddMoneyAmount] = useState<number>(0);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const isStaff = canSeeHiddenBountyInfo(userData.role);
 
@@ -102,6 +107,11 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
 
   // Use infinite pagination hook
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
+
+  const closeAddMoney = () => {
+    setAddingMoneyTo(null);
+    setAddMoneyAmount(0);
+  };
 
   // Mutations
   const { mutate: createBounty, isPending: isCreating } = api.bounty.create.useMutation(
@@ -153,9 +163,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
       onSuccess: async (data, variables) => {
         showMutationToast(data);
         if (data.success) {
-          setAddingMoneyTo(null);
-          setAddMoneyAmount(0);
-          setIsModalOpen(false);
+          closeAddMoney();
           await util.bounty.board.invalidate();
           await updateUser({ money: userData.money - variables.amountRyo });
         }
@@ -297,10 +305,11 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="OPEN">Open</SelectItem>
-              <SelectItem value="CLAIMED">Claimed</SelectItem>
-              <SelectItem value="EXPIRED">Expired</SelectItem>
-              <SelectItem value="CANCELLED">Cancelled</SelectItem>
+              {BOUNTY_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {capitalizeFirstLetter(status)}
+                </SelectItem>
+              ))}
               <SelectItem value="all">All</SelectItem>
             </SelectContent>
           </Select>
@@ -332,23 +341,16 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
               <span>{b.amountRyo.toLocaleString()}</span>
               {b.status === "OPEN" && (
                 <Dialog
-                  open={isModalOpen && addingMoneyTo === b.id}
+                  open={addingMoneyTo === b.id}
                   onOpenChange={(open) => {
-                    setIsModalOpen(open);
-                    if (!open) {
-                      setAddingMoneyTo(null);
-                      setAddMoneyAmount(0);
-                    }
+                    if (!open) closeAddMoney();
                   }}
                 >
                   <DialogTrigger asChild>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => {
-                        setAddingMoneyTo(b.id);
-                        setIsModalOpen(true);
-                      }}
+                      onClick={() => setAddingMoneyTo(b.id)}
                       disabled={isAddingMoney}
                     >
                       <Plus className="h-3 w-3" />
@@ -375,14 +377,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                         />
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setIsModalOpen(false);
-                            setAddingMoneyTo(null);
-                            setAddMoneyAmount(0);
-                          }}
-                        >
+                        <Button variant="outline" onClick={closeAddMoney}>
                           Cancel
                         </Button>
                         <Button
@@ -404,7 +399,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
               )}
             </div>
           ),
-          hunters: `${b.huntersCount} / 3`,
+          hunters: `${b.huntersCount} / ${BOUNTY_MAX_HUNTERS}`,
           creatorInfo: b.creatorUser ? (
             <div>
               <p className="font-bold">{b.creatorUser.username}</p>
@@ -491,7 +486,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
             // User can track if not signed up, not the creator, and bounty is open with space
             if (
               !b.youSignedUp &&
-              b.huntersCount < 3 &&
+              b.huntersCount < BOUNTY_MAX_HUNTERS &&
               b.status === "OPEN" &&
               !b.isCreator
             ) {
@@ -499,9 +494,7 @@ export default function BountyBoard({ userData }: BountyBoardProps) {
                 <Button
                   key="track"
                   size="sm"
-                  onClick={() =>
-                    signup({ bountyId: b.id, targetUserId: b.targetUserId })
-                  }
+                  onClick={() => signup({ bountyId: b.id })}
                   disabled={isSigningup}
                 >
                   <Eye className="mr-2 h-4 w-4" />

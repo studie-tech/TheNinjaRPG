@@ -4,6 +4,7 @@ import { env } from "@/env/server.mjs";
 import { drawLemuVariant } from "@/libs/lemuExperiment";
 import { isNativeUserAgent } from "@/libs/native/userAgent";
 import { chooseShell, publicPathForShellPath, shellParam } from "@/libs/shell";
+import { drawWallpaperVariant } from "@/libs/wallpaperExperiment";
 
 /**
  * Paths the matcher admits that are not pages, and so have no variant to rewrite to:
@@ -44,6 +45,7 @@ export default clerkMiddleware(
         !request.headers.has("next-router-prefetch") &&
         request.headers.get("purpose") !== "prefetch",
       draw: drawLemuVariant,
+      drawWallpaper: drawWallpaperVariant,
     });
     // The public URL and its query are untouched, so the router, every link and the
     // referral parameters keep working. The response carries the prerendered page's

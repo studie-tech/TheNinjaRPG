@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { RefreshCw, Search, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import { useConversationViewing } from "@/hooks/useConversationViewing";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import { usePageActive } from "@/hooks/usePageActive";
+import { useTypingIndicators } from "@/hooks/useTypingIndicators";
 import { AiSenderSelect } from "@/layout/AiSenderSelect";
 import ContentBox from "@/layout/ContentBox";
 import { ConversationComments } from "@/layout/ConversationComments";
@@ -111,13 +112,6 @@ export const useConversation = (props: ConversationLogicProps) => {
     return () => clearTimeout(timeout);
   }, [isPageActive]);
 
-  // Typing indicator state
-  type TypingUser = { username: string; timestamp: number };
-  const [typingUsers, setTypingUsers] = useState<Map<string, TypingUser>>(
-    () => new Map(),
-  );
-  const lastTypingSentRef = useRef<number>(0);
-
   const queryKey = useMemo(
     () => ({
       convo_id: props.convo_id,
@@ -171,9 +165,9 @@ export const useConversation = (props: ConversationLogicProps) => {
   }, [conversation?.id, lastReadAt, recordConversationRead]);
 
   /**
-   * Shared infinite-query cache writer for conversation comments. The
-   * `pages[0].convo` guard and ValidPage cast live here only — callers just
-   * map each page's `data` array.
+   * Shared infinite-query cache writer for conversation comments. It applies the
+   * `pages[0].convo` guard and ValidPage cast, so callers just map each page's
+   * `data` array.
    */
   const updateCachedComments = useCallback(
     (
@@ -291,11 +285,7 @@ export const useConversation = (props: ConversationLogicProps) => {
     [isSearchOpen, searchForm, searchQuery, clearSearch, onSearchSubmit],
   );
 
-  /**
-   * Perform an optimistic update of the conversation reactions
-   * @param newMessage
-   * @returns
-   */
+  /** Optimistically toggle a user's emoji reaction on a cached comment. */
   const optimisticReactionUpdate = async (
     commentId: string,
     emoji: string,
@@ -334,10 +324,6 @@ export const useConversation = (props: ConversationLogicProps) => {
       onError: () => void refetch(),
     });
 
-  // Mutation for typing indicator
-  const { mutate: sendTypingIndicator } =
-    api.comments.sendTypingIndicator.useMutation();
-
   // infinite pagination
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
@@ -370,6 +356,19 @@ export const useConversation = (props: ConversationLogicProps) => {
     defaultValue: [],
   });
 
+  const toggleQuoteId = useCallback(
+    (quoteId: string) => {
+      const currentQuoteIds = getValues("quoteIds");
+      setValue(
+        "quoteIds",
+        currentQuoteIds?.includes(quoteId)
+          ? currentQuoteIds.filter((id) => id !== quoteId)
+          : [...(currentQuoteIds ?? []), quoteId],
+      );
+    },
+    [getValues, setValue],
+  );
+
   // A proven-successful delete remains hidden even if the subsequent
   // best-effort invalidation fails or briefly returns stale data.
   const handleConversationCommentDeleted = useCallback(
@@ -383,32 +382,9 @@ export const useConversation = (props: ConversationLogicProps) => {
       updateCachedComments((data) =>
         data.filter((comment) => comment.id !== commentId),
       );
-      const currentQuoteIds = getValues("quoteIds");
-      if (currentQuoteIds?.includes(commentId)) {
-        setValue(
-          "quoteIds",
-          currentQuoteIds.filter((id) => id !== commentId),
-        );
-      }
+      if (getValues("quoteIds")?.includes(commentId)) toggleQuoteId(commentId);
     },
-    [getValues, setValue, updateCachedComments],
-  );
-
-  const toggleQuoteId = useCallback(
-    (quoteId: string) => {
-      const currentQuoteIds = getValues("quoteIds");
-      if (currentQuoteIds?.includes(quoteId)) {
-        setValue(
-          "quoteIds",
-          currentQuoteIds.filter((id) => id !== quoteId),
-        );
-      } else if (currentQuoteIds && currentQuoteIds.length > 0) {
-        setValue("quoteIds", [...currentQuoteIds, quoteId]);
-      } else {
-        setValue("quoteIds", [quoteId]);
-      }
-    },
-    [getValues, setValue],
+    [getValues, toggleQuoteId, updateCachedComments],
   );
 
   // Watch comment field for typing indicator
@@ -418,26 +394,11 @@ export const useConversation = (props: ConversationLogicProps) => {
     defaultValue: "",
   });
 
-  // Send typing indicator when user types (debounced)
-  useEffect(() => {
-    const DEBOUNCE_MS = 2000;
-    if (
-      userData?.userId &&
-      conversation?.isPublic &&
-      commentValue &&
-      commentValue.length > 0 &&
-      Date.now() - lastTypingSentRef.current > DEBOUNCE_MS
-    ) {
-      lastTypingSentRef.current = Date.now();
-      sendTypingIndicator({ conversationId: conversation.id });
-    }
-  }, [
+  const { typingUsers, markTyping } = useTypingIndicators(
+    conversation,
     commentValue,
-    conversation?.isPublic,
-    conversation?.id,
-    sendTypingIndicator,
     userData?.userId,
-  ]);
+  );
 
   // Set the object_id to the conversation id, and drop quotes from the previous one
   useEffect(() => {
@@ -447,22 +408,28 @@ export const useConversation = (props: ConversationLogicProps) => {
     }
   }, [conversation?.id]);
 
+  /** Prepend a comment another player posted, fetched after its live event. */
+  const prependFetchedComment = async (comment: ReturnedComment) => {
+    if (!userData || !conversation) return;
+    await utils.comments.getConversationComments.cancel(queryKey);
+    updateCachedComments((data, pageIndex) =>
+      pageIndex === 0 ? [comment, ...data] : data,
+    );
+  };
+
   /**
-   * Perform an optimistic update to the conversation comments, i.e. no API calls,
-   * just directly insert message into the comments array.
-   * @param newMessage
-   * @returns
+   * Show the player's own submission at the top before the server confirms it. The
+   * returned temp id lets success and failure reconcile exactly that row.
    */
-  const optimisticConversationUpdate = async (
-    newMessage: MutateCommentSchema | ReturnedComment,
-  ) => {
+  const insertOptimisticComment = async (newMessage: MutateCommentSchema) => {
     if (!userData || !conversation) return {};
 
-    // If we're in search mode and this is a new message, don't show it unless it matches the search
-    if (searchQuery && "comment" in newMessage) {
-      if (!newMessage.comment.toLowerCase().includes(searchQuery.toLowerCase())) {
-        return {};
-      }
+    // During a search, a new message only shows when it matches the search
+    if (
+      searchQuery &&
+      !newMessage.comment.toLowerCase().includes(searchQuery.toLowerCase())
+    ) {
+      return {};
     }
 
     // Optimistic update
@@ -478,62 +445,53 @@ export const useConversation = (props: ConversationLogicProps) => {
         })
         .join("") || "";
 
-    // Build optimistic comment in component scope so types narrow without `!`.
-    // Temp id is only present when we insert; success/failure reconcile by it.
-    const optimisticComment =
-      "id" in newMessage
-        ? null
-        : {
-            id: nanoid(),
-            createdAt: new Date(),
-            conversationId: conversation.id,
-            content: quoteText + processMentions(newMessage.comment).processedContent,
-            reactions: {},
-            isPinned: false,
-            isReported: false,
-            isStaffOnly: false,
-            villageName: senderUser
-              ? (senderUser.village?.name ?? null)
-              : (userData.village?.name ?? null),
-            villageHexColor: senderUser
-              ? (senderUser.village?.hexColor ?? null)
-              : (userData.village?.hexColor ?? null),
-            villageKageId: senderUser
-              ? (senderUser.village?.kageId ?? null)
-              : (userData.village?.kageId ?? null),
-            userId: senderUser ? senderUser.userId : userData.userId,
-            authorId: userData.userId,
-            username: senderUser?.username ?? userData.username,
-            avatar: senderUser?.avatar ?? userData.avatar,
-            rank: senderUser?.rank ?? userData.rank,
-            isOutlaw: senderUser?.isOutlaw ?? userData.isOutlaw,
-            level: senderUser?.level ?? userData.level,
-            role: senderUser?.role ?? userData.role,
-            displayTitle: senderUser
-              ? (senderUser.displayTitle ?? "")
-              : (userData.displayTitle ?? ""),
-            federalStatus: senderUser?.federalStatus ?? userData.federalStatus,
-            tavernUsernameColor: senderUser
-              ? (senderUser.tavernUsernameColor ?? "DEFAULT")
-              : userData.tavernUsernameColor,
-            tavernTitleColor: senderUser
-              ? (senderUser.tavernTitleColor ?? "DEFAULT")
-              : userData.tavernTitleColor,
-            nRecruited: senderUser ? (senderUser.nRecruited ?? 0) : userData.nRecruited,
-            tavernMessages: senderUser
-              ? (senderUser.tavernMessages ?? 0)
-              : userData.tavernMessages,
-          };
-    // `?? newMessage` keeps MutateCommentSchema in the union; narrow explicitly.
-    const next: ReturnedComment | undefined =
-      optimisticComment ?? ("id" in newMessage ? newMessage : undefined);
-    if (!next) return {};
+    const optimisticComment = {
+      id: nanoid(),
+      createdAt: new Date(),
+      conversationId: conversation.id,
+      content: quoteText + processMentions(newMessage.comment).processedContent,
+      reactions: {},
+      isPinned: false,
+      isReported: false,
+      isStaffOnly: false,
+      villageName: senderUser
+        ? (senderUser.village?.name ?? null)
+        : (userData.village?.name ?? null),
+      villageHexColor: senderUser
+        ? (senderUser.village?.hexColor ?? null)
+        : (userData.village?.hexColor ?? null),
+      villageKageId: senderUser
+        ? (senderUser.village?.kageId ?? null)
+        : (userData.village?.kageId ?? null),
+      userId: senderUser ? senderUser.userId : userData.userId,
+      authorId: userData.userId,
+      username: senderUser?.username ?? userData.username,
+      avatar: senderUser?.avatar ?? userData.avatar,
+      rank: senderUser?.rank ?? userData.rank,
+      isOutlaw: senderUser?.isOutlaw ?? userData.isOutlaw,
+      level: senderUser?.level ?? userData.level,
+      role: senderUser?.role ?? userData.role,
+      displayTitle: senderUser
+        ? (senderUser.displayTitle ?? "")
+        : (userData.displayTitle ?? ""),
+      federalStatus: senderUser?.federalStatus ?? userData.federalStatus,
+      tavernUsernameColor: senderUser
+        ? (senderUser.tavernUsernameColor ?? "DEFAULT")
+        : userData.tavernUsernameColor,
+      tavernTitleColor: senderUser
+        ? (senderUser.tavernTitleColor ?? "DEFAULT")
+        : userData.tavernTitleColor,
+      nRecruited: senderUser ? (senderUser.nRecruited ?? 0) : userData.nRecruited,
+      tavernMessages: senderUser
+        ? (senderUser.tavernMessages ?? 0)
+        : userData.tavernMessages,
+    };
     if (!cached?.pages[0]?.convo) return {};
 
     updateCachedComments((data, pageIndex) =>
-      pageIndex === 0 ? [next, ...data] : data,
+      pageIndex === 0 ? [optimisticComment, ...data] : data,
     );
-    return { optimisticCommentId: optimisticComment?.id };
+    return { optimisticCommentId: optimisticComment.id };
   };
 
   /** Remove a single optimistic comment by temp id without discarding later cache updates. */
@@ -547,7 +505,7 @@ export const useConversation = (props: ConversationLogicProps) => {
     api.comments.createConversationComment.useMutation({
       onMutate: async (newMessage) => {
         const input = queryKey;
-        return { ...(await optimisticConversationUpdate(newMessage)), input };
+        return { ...(await insertOptimisticComment(newMessage)), input };
       },
       onSuccess: (data, newComment, context) => {
         if (data.success) {
@@ -584,11 +542,11 @@ export const useConversation = (props: ConversationLogicProps) => {
       },
     });
 
-  // Create comment & optimistically update the interface
+  // Fetch a comment announced over the websocket and prepend it to the cache
   const { mutate: fetchComment } = api.comments.fetchConversationComment.useMutation({
     onSuccess: async (data) => {
       if (!data) return;
-      await optimisticConversationUpdate(data);
+      await prependFetchedComment(data);
       if (data.lastReadAt && data.conversationId)
         await recordConversationRead(data.conversationId, data.lastReadAt);
     },
@@ -632,16 +590,7 @@ export const useConversation = (props: ConversationLogicProps) => {
               break;
             case "typing":
               if (data.fromId && data.fromId !== ownUserId && data.username) {
-                const fromId = data.fromId;
-                const username = data.username;
-                setTypingUsers((prev) => {
-                  const next = new Map(prev);
-                  next.set(fromId, {
-                    username: username,
-                    timestamp: Date.now(),
-                  });
-                  return next;
-                });
+                markTyping(data.fromId, data.username);
               }
               break;
           }
@@ -669,26 +618,6 @@ export const useConversation = (props: ConversationLogicProps) => {
       pusher.connection.unbind("connected", refreshConversation);
     };
   }, [pusher, refetch, isPaused]);
-
-  // Cleanup stale typing indicators every second
-  useEffect(() => {
-    const TYPING_TIMEOUT_MS = 3000;
-    const interval = setInterval(() => {
-      setTypingUsers((prev) => {
-        const now = Date.now();
-        const next = new Map(prev);
-        let changed = false;
-        for (const [userId, data] of next) {
-          if (now - data.timestamp > TYPING_TIMEOUT_MS) {
-            next.delete(userId);
-            changed = true;
-          }
-        }
-        return changed ? next : prev;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   /**
    * Submit comment. The handler is built on submit, not during render: the compiler
@@ -767,7 +696,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
     userSearchMethods,
     senderUser,
     quoteIds,
-    setValue,
     toggleQuoteId,
     control,
     errors,
@@ -854,12 +782,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                       key={quoteId}
                       author={quote.username || "Unknown"}
                       date={format(quote.createdAt, "MM/dd/yyyy")}
-                      onRemove={() => {
-                        setValue(
-                          "quoteIds",
-                          quoteIds.filter((id) => id !== quoteId),
-                        );
-                      }}
+                      onRemove={() => toggleQuoteId(quoteId)}
                     >
                       {stripBlockquotes(quote.content)}
                     </Quote>
@@ -885,8 +808,8 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                   {isCommenting && <Loader />}
                 </div>
               </div>
-              {/* The line is kept when nobody is typing: it comes and goes every few
-                  seconds in a busy chat, and each time it moved every message below. */}
+              {/* Reserve the line's height even when nobody is typing, so the indicator
+                  appearing and disappearing in a busy chat does not shift the messages below. */}
               {conversation?.isPublic && (
                 <div className="mt-1 min-h-4 text-muted-foreground text-xs italic">
                   {typingUsers.size > 0 &&

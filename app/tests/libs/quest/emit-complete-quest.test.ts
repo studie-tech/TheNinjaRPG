@@ -1,10 +1,10 @@
+import { describe, expect, it } from "bun:test";
+import { getReward } from "@/libs/quest/rewards";
 import {
   trackerQuest as makeQuest,
   trackerUser as makeUser,
   trackerGoalValue,
 } from "../../setup/quest";
-import { describe, expect, it } from "bun:test";
-import { getReward } from "@/libs/quest/rewards";
 
 const winQuestObjective = (id: string) => ({
   id,

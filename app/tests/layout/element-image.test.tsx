@@ -1,8 +1,7 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "bun:test";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import ElementImage from "@/layout/ElementImage";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-
 
 beforeEach(() => {
   installBrowserGlobals();

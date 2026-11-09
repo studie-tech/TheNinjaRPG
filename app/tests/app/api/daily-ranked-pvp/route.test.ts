@@ -1,9 +1,13 @@
-import { timerClaimFixture } from "../../../setup/gameTimers";
 import { afterEach, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
 import { GET } from "@/app/api/daily-ranked-pvp/route";
 import * as gamesettings from "@/libs/gamesettings";
-import { resetServerModuleStubs, stubCronAuth, stubDatabase } from "../../../setup/serverModules";
+import { timerClaimFixture } from "../../../setup/gameTimers";
+import {
+  resetServerModuleStubs,
+  stubCronAuth,
+  stubDatabase,
+} from "../../../setup/serverModules";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -23,7 +27,9 @@ it("hands the day back when the season lookup fails", async () => {
     response: Response.json(null),
   });
   stubDatabase({
-    query: { rankedSeason: { findMany: () => Promise.reject(new Error("database down")) } },
+    query: {
+      rankedSeason: { findMany: () => Promise.reject(new Error("database down")) },
+    },
   });
 
   const response = await GET(new Request("https://example.com/api/daily-ranked-pvp"));

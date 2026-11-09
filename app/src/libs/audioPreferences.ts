@@ -1,5 +1,5 @@
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { platform } from "@/libs/native";
+import { safeLocalStorageGetItem } from "@/utils/storage";
 
 type AudioPreference = "musicOn" | "sfxOn" | "buttonSfxOn";
 

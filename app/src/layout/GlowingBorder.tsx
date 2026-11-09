@@ -15,7 +15,7 @@ const GlowingBorder: React.FC<GlowingBorderProps> = ({
   className,
 }) => {
   // Calculate animation speed based on message count (faster for higher counts)
-  // Cap at 500 messages as mentioned in requirements
+  // Speed and glow saturate at 100 tavern messages
   const normalizedCount = Math.min(messageCount || 0, 100);
   const animationDuration = 10 - (normalizedCount / 100) * 9; // Range from 10s to 1s
 

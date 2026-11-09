@@ -20,7 +20,10 @@ describe("readUploadResult", () => {
   it("toasts a rejected upload and yields nothing", () => {
     const res = [{ serverData: { fileUrl: "", error: "Image rejected" } }];
     expect(readUploadResult(res)).toBeUndefined();
-    expect(showToast).toHaveBeenCalledWith({ success: false, message: "Image rejected" });
+    expect(showToast).toHaveBeenCalledWith({
+      success: false,
+      message: "Image rejected",
+    });
   });
 
   it("tolerates a completion without files", () => {

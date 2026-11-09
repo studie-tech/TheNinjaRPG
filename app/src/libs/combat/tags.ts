@@ -13,6 +13,7 @@ import {
   COPY_MAX_TAGS,
   COPY_PRIORITY_RANK,
   COPYABLE_EFFECT_TYPES,
+  ELEMENTAL_SEAL_AP_COST,
   MIRROR_EXCLUDED_EFFECT_TYPES,
   MIRROR_MAX_TAGS,
   MIRROR_PRIORITY_RANK,
@@ -22,7 +23,11 @@ import {
   TRANSFER_EXCLUDED_SOURCE_TYPES,
 } from "@/drizzle/constants";
 import type { Battle } from "@/drizzle/schema";
-import { damageDerivedTagTypes, damageModifierTypes } from "@/libs/combat/constants";
+import {
+  AFTERBURN_CAP_RATIO,
+  damageDerivedTagTypes,
+  damageModifierTypes,
+} from "@/libs/combat/constants";
 import {
   getPreferredDamageElement,
   resolveElementalDamage,
@@ -1904,9 +1909,9 @@ export const afterburn = (
           const ratio = getEfficiencyRatio(damageEffect, effect);
           const convert = capConversion(effect, power, consequence.damage) * ratio;
 
-          // Add to existing afterburn damage (stacking) with 60% limit
+          // Add to existing afterburn damage (stacking) up to the afterburn cap
           const currentAfterburn = consequence.afterburn || 0;
-          const maxAfterburn = Math.floor(consequence.damage * 0.6); // 60% limit
+          const maxAfterburn = Math.floor(consequence.damage * AFTERBURN_CAP_RATIO);
           const newAfterburn = Math.min(currentAfterburn + convert, maxAfterburn);
           consequence.afterburn = newAfterburn;
         }
@@ -2435,7 +2440,11 @@ export const elementalseal = (effect: UserEffect, target: BattleUserState) => {
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
   if (mainCheck) {
-    return getInfo(target, effect, "will be sealed from using elemental 60 AP jutsu");
+    return getInfo(
+      target,
+      effect,
+      `will be sealed from using elemental ${ELEMENTAL_SEAL_AP_COST} AP jutsu`,
+    );
   } else if (effect.isNew) {
     effect.rounds = 0;
   }
@@ -2650,12 +2659,19 @@ export const redirection = (
   };
 };
 
-/** summon()/clone() live here; summon predicates and lifecycle helpers are in summon.ts */
+/**
+ * Summon tag. On the cast round it refuses in auto-resolved battle types,
+ * resolves the template AI (controllerId === effect.aiId), applies the summon cap
+ * backstop, spawns a stand-in with the effect's aiHp and the template's bloodline
+ * and effects, and inserts it into usersState at its summoner's initiative. When
+ * the effect expires (rounds === 0) it removes the creature recorded in
+ * summonedUserId. Summon predicates and lifecycle helpers are in summon.ts.
+ */
 export const summon = (
   usersState: BattleUserState[],
   effect: GroundEffect,
   userEffects: UserEffect[],
-  battle: Battle, // Add battle parameter
+  battle: Battle,
 ) => {
   const { power } = getPower(effect);
   const perc = power / 100;
@@ -2676,8 +2692,7 @@ export const summon = (
       // Template AI to clone: match on controllerId, because
       // processUsersForBattle loads AI templates with controllerId = their DB
       // userId (=== effect.aiId) and a fresh nanoid as their in-battle userId.
-      // We no longer rebind effect.aiId to the spawned summon, so it keeps
-      // pointing at the template and re-cast works.
+      // effect.aiId always names the template, so a re-cast resolves it again.
       // A dungeon enemy can share the source ID after spending its loadout.
       const ai =
         usersState.find((u) => u.controllerId === effect.aiId && u.isSummonTemplate) ??
@@ -2783,7 +2798,11 @@ export const summon = (
   }
 };
 
-/** Prevent target from being stunned */
+/**
+ * Weakness tag: rolls power% each round to report the weakness as applied, and
+ * cancels a new effect whose first roll fails. calcDmgModifier reads enabled
+ * weakness effects to scale matching damage.
+ */
 export const weakness = (effect: UserEffect, target: BattleUserState) => {
   const { power } = getPower(effect);
   const mainCheck = Math.random() < power / 100;
@@ -2850,7 +2869,7 @@ const capConversion = (effect: UserEffect, power: number, damage: number) =>
  * If the input array contains the value "Highest", the function will include the user's highest generals in the result.
  *
  * @param generals - An array of GeneralType values.
- * @param user - An optional BattleUserState object.
+ * @param highestGenerals - The user's highest generals, used for "Highest".
  * @returns An array of lowercase generals.
  */
 export const getLowerGenerals = (
@@ -2898,9 +2917,8 @@ export const getPower = (effect: UserEffect | GroundEffect) => {
  */
 export const getEfficiencyRatio = (dmgEffect: UserEffect, effect: UserEffect) => {
   // Damage-derived tags (absorb, reflect, lifesteal, ...) are only limited by generals.
-  // Their elements lock which users can learn the jutsu (see checkJutsuElements); they
-  // never restricted which hits the tag converts, because the legacy stat selector
-  // (usually all four stats) matched every hit before it was removed.
+  // Their elements only gate who can learn the jutsu (see checkJutsuElements); they
+  // never restrict which hits the tag converts.
   if (damageDerivedTagTypes.includes(effect.type)) {
     const generals = "generalTypes" in effect ? effect.generalTypes : undefined;
     if (!generals?.length || dmgEffect.type === "pierce") return 1;
@@ -2983,7 +3001,7 @@ const preventCheck = (
   usersEffects: UserEffect[],
   type: PreventTagType,
   target: BattleUserState,
-  effect?: UserEffect, // Add optional effect parameter to check creation time
+  effect?: UserEffect,
 ) => {
   const preventTag = getActiveTargetEffects(usersEffects, target.userId, type)[0];
 

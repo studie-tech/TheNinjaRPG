@@ -3,7 +3,8 @@
  *
  * This hook manages the tower defense game state using SpacetimeDB for
  * authoritative server-side game logic. All game state comes from SpacetimeDB
- * in real-time - no client-side simulation or server validation needed.
+ * in real time; run stats are signed by the tRPC server at start and the
+ * signature is verified when a completed run is claimed.
  */
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -144,7 +145,7 @@ const initialGameState = towerDefenseGameStateSchema.parse({
   existingSession: null,
 });
 
-// COST OPTIMIZATION: Extended EntityStore to include enemy spawn data
+// EntityStore also holds enemy spawn data (static path, maxHealth).
 // Enemy spawn data (path, maxHealth) is stored separately and never updated
 interface ExtendedEntityStore extends EntityStore {
   enemySpawns: Map<string, EnemySpawn>;
@@ -237,7 +238,7 @@ const convertProjectile = (
 };
 
 /**
- * Convert SpacetimeDB session state to TowerDefenseState for compatibility
+ * Convert SpacetimeDB session state to the TowerDefenseState render shape
  */
 const sessionStateToState = (
   state: SessionState,
@@ -268,11 +269,10 @@ export const useTowerDefense = (userId?: string) => {
 
   // PERFORMANCE: Entity store lives outside React state
   // Animation loop reads directly from this - no re-renders on entity updates
-  // COST OPTIMIZATION: Extended to include enemySpawns for static path data
   const entitiesRef = useRef<ExtendedEntityStore>(createEntityStore());
 
-  // PERFORMANCE: Runtime state lives outside React state
-  // All game data updates here immediately, React state syncs on throttle
+  // PERFORMANCE: Runtime state lives outside React state. Game data updates here
+  // immediately and syncHudStore pushes it to the HUD store synchronously.
   const runtimeStateRef = useRef<RuntimeState>(createRuntimeState());
 
   // PERFORMANCE: Track in-run upgrades in a ref to ensure they are available
@@ -312,15 +312,7 @@ export const useTowerDefense = (userId?: string) => {
    * PERFORMANCE: This ensures no data leaks between runs.
    */
   const resetGameRefs = useCallback(() => {
-    // Clear entities
-    const store = entitiesRef.current;
-    store.enemies.clear();
-    store.projectiles.clear();
-    store.enemySpawns.clear();
-    store.enemiesArray = [];
-    store.projectilesArray = [];
-    store.enemiesVersion++;
-    store.projectilesVersion++;
+    clearEntities(entitiesRef.current);
 
     // Reset runtime and session data
     runtimeStateRef.current = createRuntimeState();
@@ -436,10 +428,6 @@ export const useTowerDefense = (userId?: string) => {
         sessionIdRef.current = session.id;
         // Subscribe to this session's entities (enemies, projectiles, upgrades)
         connectionRef.current.subscribeToSession(session.id);
-        setGameState((prev) => ({
-          ...prev,
-          seed: session.seed,
-        }));
       }
 
       // If we already have this session tracked, ensure seed is set
@@ -618,12 +606,9 @@ export const useTowerDefense = (userId?: string) => {
             waveInProgress: state.waveInProgress,
             existingSession: null,
           }));
-          // ALSO sync HUD store for mode changes (so InRunUpgrades gets initial values)
-          syncHudStore();
-        } else {
-          // For non-critical updates during gameplay, update HUD store
-          syncHudStore();
         }
+        // Mode changes also need it, so InRunUpgrades gets initial values
+        syncHudStore();
         return;
       }
 
@@ -655,7 +640,7 @@ export const useTowerDefense = (userId?: string) => {
 
   /**
    * Handle session upgrade from SpacetimeDB
-   * PERFORMANCE: Updates runtime ref, schedules throttled UI update
+   * PERFORMANCE: Updates runtime ref and syncs the HUD store
    */
   const handleSessionUpgrade = useCallback(
     (upgrade: SessionUpgrade) => {
@@ -670,7 +655,7 @@ export const useTowerDefense = (userId?: string) => {
         [upgrade.upgradeId]: upgrade.level,
       };
 
-      // Also update runtime state if it exists (for compatibility)
+      // Keep runtime state's activeUpgrades in sync
       const runtime = runtimeStateRef.current;
       if (runtime.state) {
         runtimeStateRef.current = {
@@ -717,7 +702,7 @@ export const useTowerDefense = (userId?: string) => {
     store.enemies.set(id, convertEnemy(enemy, spawnData));
     store.enemiesArray = Array.from(store.enemies.values());
     store.enemiesVersion++;
-    // Update runtime enemy count for throttled UI sync
+    // The live enemy count lives in runtime state and the HUD store
     runtimeStateRef.current.enemyCount = store.enemies.size;
   }, []);
 
@@ -729,13 +714,12 @@ export const useTowerDefense = (userId?: string) => {
     store.enemySpawns.delete(id);
     store.enemiesArray = Array.from(store.enemies.values());
     store.enemiesVersion++;
-    // Update runtime enemy count for throttled UI sync
     runtimeStateRef.current.enemyCount = store.enemies.size;
   }, []);
 
   /**
-   * COST OPTIMIZATION: Projectiles no longer receive update events from server
-   * Progress is computed client-side from client spawn timestamp
+   * COST OPTIMIZATION: Projectiles only receive insert/delete events from the server;
+   * progress is computed client-side from the client spawn timestamp
    * We preserve the original client spawn time if the projectile already exists
    */
   const updateProjectileInStore = useCallback((projectile: Projectile) => {
@@ -760,14 +744,7 @@ export const useTowerDefense = (userId?: string) => {
   }, []);
 
   const clearEntityStore = useCallback(() => {
-    const store = entitiesRef.current;
-    store.enemies.clear();
-    store.projectiles.clear();
-    store.enemySpawns.clear();
-    store.enemiesArray = [];
-    store.projectilesArray = [];
-    store.enemiesVersion++;
-    store.projectilesVersion++;
+    clearEntities(entitiesRef.current);
     playerHitEventsRef.current = [];
     // Clear runtime enemy count
     runtimeStateRef.current.enemyCount = 0;
@@ -840,7 +817,6 @@ export const useTowerDefense = (userId?: string) => {
           break;
 
         // COST OPTIMIZATION: Projectile progress computed client-side
-        // No more projectile_update events - only insert/delete
         case "projectile_insert":
           updateProjectileInStore(event.projectile);
           break;
@@ -903,7 +879,7 @@ export const useTowerDefense = (userId?: string) => {
   /**
    * Start a new run
    *
-   * SECURITY: This now uses a secure flow where stats are calculated server-side:
+   * SECURITY: Stats are calculated server-side:
    * 1. Call tRPC initiateSecureSession (or initiateGuestSession for guests) to get server-calculated stats + signature
    * 2. Pass the signed params to SpacetimeDB
    * 3. This prevents clients from faking their upgrade stats
@@ -954,14 +930,10 @@ export const useTowerDefense = (userId?: string) => {
 
       // The session_update event will trigger and update the game state to "playing"
       // Set initial local state while waiting for server response
-      const center = Math.floor(secureSession.params.initialGridSize / 2);
-      const initialState = {
-        playerHealth: secureSession.params.playerMaxHealth,
-        playerPosition: { col: center, row: center },
-        inRunCurrency: 0,
-        activeUpgrades: {},
-        gridSize: secureSession.params.initialGridSize,
-      };
+      const initialState = initialPlayerState(
+        secureSession.params.initialGridSize,
+        secureSession.params.playerMaxHealth,
+      );
 
       // PERFORMANCE: Update runtime ref IMMEDIATELY so the renderer sees it on mount
       runtimeStateRef.current = {
@@ -1009,14 +981,10 @@ export const useTowerDefense = (userId?: string) => {
 
       // Transition to connecting mode and set initial state
       // The mode will be corrected to "playing" or "wave-end" when session_state arrives
-      const center = Math.floor(sessionToResume.gridSize / 2);
-      const initialState = {
-        playerHealth: sessionToResume.health,
-        playerPosition: { col: center, row: center },
-        inRunCurrency: 0,
-        activeUpgrades: {},
-        gridSize: sessionToResume.gridSize,
-      };
+      const initialState = initialPlayerState(
+        sessionToResume.gridSize,
+        sessionToResume.health,
+      );
 
       // PERFORMANCE: Update runtime ref IMMEDIATELY so the renderer sees it on mount
       // We use current values from ref for abilities/bonuses since we don't have them in existingSession yet
@@ -1077,10 +1045,9 @@ export const useTowerDefense = (userId?: string) => {
       await connection.connect(userId);
 
       await connection.abandonSession(BigInt(gameState.existingSession.id));
-      // NOTE: We don't disconnect immediately anymore.
-      // The server will delete the session, which triggers a 'session_delete' event
-      // that handles the UI cleanup and then we can disconnect in returnToLobby
-      // if needed, or just let it stay for the next action.
+      // Stay connected: the server deletes the session and emits session_delete,
+      // which handles UI cleanup; returnToLobby disconnects if needed, otherwise
+      // the connection stays open for the next action.
       setGameState((prev) => ({
         ...prev,
         existingSession: null,
@@ -1378,5 +1345,28 @@ export const useTowerDefense = (userId?: string) => {
 
     // Guest mode flag
     isGuest: !userId,
+  };
+};
+
+/** Empty the entity store and bump its versions so the renderer drops the old entities. */
+const clearEntities = (store: ExtendedEntityStore) => {
+  store.enemies.clear();
+  store.projectiles.clear();
+  store.enemySpawns.clear();
+  store.enemiesArray = [];
+  store.projectilesArray = [];
+  store.enemiesVersion++;
+  store.projectilesVersion++;
+};
+
+/** Local player state shown until the session's first state update: centred, no upgrades. */
+const initialPlayerState = (gridSize: number, playerHealth: number) => {
+  const center = Math.floor(gridSize / 2);
+  return {
+    playerHealth,
+    playerPosition: { col: center, row: center },
+    inRunCurrency: 0,
+    activeUpgrades: {},
+    gridSize,
   };
 };

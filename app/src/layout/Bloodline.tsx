@@ -59,9 +59,11 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
         showMutationToast(data);
         if (data.success) await updateUser(data, { revision });
       },
-      onSettled: (_data, error) => {
+      // A rejection can mean the bloodline or battle status changed since the profile loaded.
+      onSettled: (data, error) => {
         setIsOpen(false);
-        if (error) return updateUser(undefined, { revision: undefined });
+        if (error || !data?.success)
+          return updateUser(undefined, { revision: undefined });
       },
     });
 
@@ -164,8 +166,10 @@ export const CurrentBloodline: React.FC<CurrentBloodlineProps> = (props) => {
   const { mutate: remove, isPending: isRemoving } =
     api.bloodline.removeBloodline.useMutation({
       onMutate: prepareUserUpdate,
-      onSettled: (_data, error) => {
-        if (error) return updateUser(undefined, { revision: undefined });
+      // A rejection can mean the bloodline or battle status changed since the profile loaded.
+      onSettled: (data, error) => {
+        if (error || !data?.success)
+          return updateUser(undefined, { revision: undefined });
       },
       onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);

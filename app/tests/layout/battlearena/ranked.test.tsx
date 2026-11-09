@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { RANKED_ENTRY_COST } from "@/drizzle/constants";
 import * as queueCount from "@/hooks/useRankedQueueCount";
@@ -7,7 +7,10 @@ import { RankedMode } from "@/layout/battlearena/RankedMode";
 import * as pvpRank from "@/layout/PvpRank";
 import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 const mutations: Record<string, ReturnType<typeof vi.fn>> = {};
 let user: Record<string, unknown>;
@@ -16,21 +19,49 @@ let season: unknown;
 
 beforeEach(() => {
   installBrowserGlobals();
-  user = { userId: "me", status: "AWAKE", rankedLp: 180, villagePrestige: 50000, isBanned: false };
+  user = {
+    userId: "me",
+    status: "AWAKE",
+    rankedLp: 180,
+    villagePrestige: 50000,
+    isBanned: false,
+  };
   inQueue = false;
   season = { name: "Season 4", paused: false };
-  for (const name of ["enterRankedSeason", "queueForRankedPvp", "leaveRankedPvpQueue", "checkRankedPvpMatches"]) {
+  for (const name of [
+    "enterRankedSeason",
+    "queueForRankedPvp",
+    "leaveRankedPvpQueue",
+    "checkRankedPvpMatches",
+  ]) {
     mutations[name] = vi.fn();
   }
-  const useMutation = (name: string) => () => ({ mutate: mutations[name], isPending: false });
+  const useMutation = (name: string) => () => ({
+    mutate: mutations[name],
+    isPending: false,
+  });
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({}),
     pvpRank: {
-      getRankedPvpQueue: { useQuery: () => ({ data: { inQueue, queueCount: 4, createdAt: new Date() } }) },
-      getCurrentTopPlayers: { useQuery: () => ({ data: [1200, 1190, 1180, 1170, 1160, 1150, 1140, 1130, 1120, 1110] }) },
+      getRankedPvpQueue: {
+        useQuery: () => ({ data: { inQueue, queueCount: 4, createdAt: new Date() } }),
+      },
+      getCurrentTopPlayers: {
+        useQuery: () => ({
+          data: [1200, 1190, 1180, 1170, 1160, 1150, 1140, 1130, 1120, 1110],
+        }),
+      },
       getCurrentSeason: { useQuery: () => ({ data: season, isPending: false }) },
       getRankedLoadout: {
-        useQuery: () => ({ data: { loadout: { jutsuIds: Array(12).fill("j"), weaponIds: ["w", "w"], consumableIds: ["c"] } } }),
+        useQuery: () => ({
+          data: {
+            loadout: {
+              jutsuIds: Array(12).fill("j"),
+              weaponIds: ["w", "w"],
+              consumableIds: ["c"],
+            },
+          },
+        }),
       },
       enterRankedSeason: { useMutation: useMutation("enterRankedSeason") },
       queueForRankedPvp: { useMutation: useMutation("queueForRankedPvp") },
@@ -41,8 +72,12 @@ beforeEach(() => {
   vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
     () => ({ data: user, prepareUserUpdate: vi.fn(), updateUser: vi.fn() }) as never,
   );
-  vi.spyOn(queueCount, "useRankedQueueCountCache").mockReturnValue({ refreshRankedQueueCount: vi.fn() } as never);
-  vi.spyOn(pvpRank, "RankedLoadoutSelector").mockImplementation(() => <p>Ranked loadout picker</p>);
+  vi.spyOn(queueCount, "useRankedQueueCountCache").mockReturnValue({
+    refreshRankedQueueCount: vi.fn(),
+  } as never);
+  vi.spyOn(pvpRank, "RankedLoadoutSelector").mockImplementation(() => (
+    <p>Ranked loadout picker</p>
+  ));
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined as never);
 });
 
@@ -58,7 +93,9 @@ it("shows the division and LP to the next one", () => {
   expect(screen.getByRole("heading", { name: "Wood" })).toBeDefined();
   expect(screen.getByText("180 LP")).toBeDefined();
   expect(screen.getByText("120 LP to Adept")).toBeDefined();
-  expect(screen.getByText("Jutsu 12 / 15 · Weapons 2 / 2 · Consumables 1 / 4")).toBeDefined();
+  expect(
+    screen.getByText("Jutsu 12 / 15 · Weapons 2 / 2 · Consumables 1 / 4"),
+  ).toBeDefined();
 });
 
 it("shows Sannin for a player among the top Legend players", () => {
@@ -87,7 +124,8 @@ it("refuses to queue during a battle", () => {
   expect(mutations.queueForRankedPvp).not.toHaveBeenCalled();
   expect(toast.showMutationToast).toHaveBeenCalledWith({
     success: false,
-    message: "You cannot queue while in battle. Please finish your current battle first.",
+    message:
+      "You cannot queue while in battle. Please finish your current battle first.",
   });
 });
 

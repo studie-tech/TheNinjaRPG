@@ -1,19 +1,50 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { actionLog, aiProfile, aiSpriteAnimation, aiTransformation, battle, spriteAnimation, userData } from "@/drizzle/schema";
+import {
+  actionLog,
+  aiProfile,
+  aiSpriteAnimation,
+  aiTransformation,
+  battle,
+  spriteAnimation,
+  userData,
+} from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import { deleteAiTransformationsFor } from "@/queries/ai";
 import { aiRouter } from "@/server/api/routers/ai";
 import { initiateBattle } from "@/server/api/routers/combat";
-import { deleteAiTransformationsFor } from "@/queries/ai";
 import { insertDefaultAiProfile, insertUsers } from "../../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../setup/testDatabase";
+import {
+  callerFor,
+  describeWithDatabase,
+  getTestDatabase,
+  recordQueries,
+  resetTables,
+} from "../../../setup/testDatabase";
 
 const EDITOR = "boss-editor";
 const PLAYER = "boss-player";
-const ARRIVAL = { announce: "RISEN", log: "It rises again!", tier: 2, color: 0x123456, glow: 0x654321 };
+const ARRIVAL = {
+  announce: "RISEN",
+  log: "It rises again!",
+  tier: 2,
+  color: 0x123456,
+  glow: 0x654321,
+};
 
-const fight = async (battleType: "QUEST" | "ARENA" | "OVERWORLD" | "RAID", targetIds = ["boss-one"], extra = {}) =>
+const fight = async (
+  battleType: "QUEST" | "ARENA" | "OVERWORLD" | "RAID",
+  targetIds = ["boss-one"],
+  extra = {},
+) =>
   initiateBattle(
-    { userIds: [PLAYER], targetIds, client: await getTestDatabase(), actionUserId: PLAYER, biome: "default", ...extra },
+    {
+      userIds: [PLAYER],
+      targetIds,
+      client: await getTestDatabase(),
+      actionUserId: PLAYER,
+      biome: "default",
+      ...extra,
+    },
     battleType,
   );
 const save = async (aiId: string, nextAiId: string | null, userId = EDITOR) => {
@@ -27,11 +58,25 @@ const save = async (aiId: string, nextAiId: string | null, userId = EDITOR) => {
 describeWithDatabase("AI boss transformations", () => {
   beforeEach(async () => {
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
-    await resetTables(actionLog, aiProfile, aiSpriteAnimation, aiTransformation, battle, spriteAnimation, userData);
+    await resetTables(
+      actionLog,
+      aiProfile,
+      aiSpriteAnimation,
+      aiTransformation,
+      battle,
+      spriteAnimation,
+      userData,
+    );
     await insertDefaultAiProfile({ userId: "boss-one" });
     await insertUsers([
       { userId: EDITOR, username: EDITOR, role: "CONTENT-ADMIN" },
-      { userId: PLAYER, username: PLAYER, level: 20, rank: "GENIN", villageId: "village" },
+      {
+        userId: PLAYER,
+        username: PLAYER,
+        level: 20,
+        rank: "GENIN",
+        villageId: "village",
+      },
       ...["boss-one", "boss-two", "boss-three"].map((userId) => ({
         userId,
         username: userId,
@@ -51,25 +96,51 @@ describeWithDatabase("AI boss transformations", () => {
 
     const caller = await callerFor(aiRouter, EDITOR);
     const fromMiddle = await caller.getBossFight({ aiId: "boss-two" });
-    expect(fromMiddle.forms.map((form) => form.userId)).toEqual(["boss-one", "boss-two", "boss-three"]);
+    expect(fromMiddle.forms.map((form) => form.userId)).toEqual([
+      "boss-one",
+      "boss-two",
+      "boss-three",
+    ]);
     expect(fromMiddle.transformation?.nextAiId).toBe("boss-three");
-    expect(fromMiddle.forms[1]).toMatchObject({ announce: "RISEN", hasArrivalClip: false, hasIdle: false, jutsuCount: 0 });
+    expect(fromMiddle.forms[1]).toMatchObject({
+      announce: "RISEN",
+      hasArrivalClip: false,
+      hasIdle: false,
+      jutsuCount: 0,
+    });
     const client = await getTestDatabase();
-    expect((await client.query.actionLog.findMany()).map((row) => row.relatedId)).toContain("boss-one");
+    expect(
+      (await client.query.actionLog.findMany()).map((row) => row.relatedId),
+    ).toContain("boss-one");
 
     expect(await save("boss-one", null)).toMatchObject({ success: true });
     expect((await caller.getBossFight({ aiId: "boss-one" })).forms).toHaveLength(1);
   });
 
   it("refuses non-editors, human next forms, loops and self-links without saving", async () => {
-    expect(await save("boss-one", "boss-two", PLAYER)).toMatchObject({ success: false });
-    expect(await save("boss-one", PLAYER)).toMatchObject({ success: false, message: "The next form must be an AI" });
+    expect(await save("boss-one", "boss-two", PLAYER)).toMatchObject({
+      success: false,
+    });
+    expect(await save("boss-one", PLAYER)).toMatchObject({
+      success: false,
+      message: "The next form must be an AI",
+    });
     expect(await save("boss-one", "boss-one")).toMatchObject({ success: false });
-    expect(await save(PLAYER, "boss-one")).toMatchObject({ success: false, message: "AI not found" });
+    expect(await save(PLAYER, "boss-one")).toMatchObject({
+      success: false,
+      message: "AI not found",
+    });
     await save("boss-one", "boss-two");
-    expect(await save("boss-two", "boss-one")).toMatchObject({ success: false, message: "These forms would transform in a loop" });
-    expect(await (await getTestDatabase()).query.aiTransformation.findMany()).toHaveLength(1);
-    await expect((await callerFor(aiRouter, PLAYER)).getBossFight({ aiId: "boss-one" })).rejects.toThrow("Unauthorized");
+    expect(await save("boss-two", "boss-one")).toMatchObject({
+      success: false,
+      message: "These forms would transform in a loop",
+    });
+    expect(
+      await (await getTestDatabase()).query.aiTransformation.findMany(),
+    ).toHaveLength(1);
+    await expect(
+      (await callerFor(aiRouter, PLAYER)).getBossFight({ aiId: "boss-one" }),
+    ).rejects.toThrow("Unauthorized");
   });
 
   it("turns a lone AI opponent into a boss in every supported battle type", async () => {
@@ -79,7 +150,11 @@ describeWithDatabase("AI boss transformations", () => {
     for (const battleType of ["QUEST", "ARENA", "OVERWORLD"] as const) {
       expect(await fight(battleType)).toMatchObject({ success: true });
       const [created] = await client.query.battle.findMany();
-      expect(created?.extraState.encounter?.pendingWaves.map((wave) => wave.arrival?.announce)).toEqual(["RISEN", "RISEN"]);
+      expect(
+        created?.extraState.encounter?.pendingWaves.map(
+          (wave) => wave.arrival?.announce,
+        ),
+      ).toEqual(["RISEN", "RISEN"]);
       await resetTables(battle);
       await client.update(userData).set({ status: "AWAKE", battleId: null });
     }
@@ -88,14 +163,20 @@ describeWithDatabase("AI boss transformations", () => {
   it("leaves other fights untouched", async () => {
     await save("boss-one", "boss-two");
     const client = await getTestDatabase();
-    expect(await fight("QUEST", ["boss-one", "boss-three"])).toMatchObject({ success: true });
-    expect((await client.query.battle.findFirst())?.extraState.encounter).toBeUndefined();
+    expect(await fight("QUEST", ["boss-one", "boss-three"])).toMatchObject({
+      success: true,
+    });
+    expect(
+      (await client.query.battle.findFirst())?.extraState.encounter,
+    ).toBeUndefined();
   });
 
   it("reads boss links alongside the participants, so a fight without a boss pays no extra round trip", async () => {
     const client = await getTestDatabase();
     const trips = async (targetIds: string[]) => {
-      const { result, roundTrips } = await recordQueries(() => fight("QUEST", targetIds));
+      const { result, roundTrips } = await recordQueries(() =>
+        fight("QUEST", targetIds),
+      );
       expect(result).toMatchObject({ success: true });
       await resetTables(battle);
       await client.update(userData).set({ status: "AWAKE", battleId: null });

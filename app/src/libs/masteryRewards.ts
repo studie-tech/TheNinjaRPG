@@ -8,7 +8,7 @@ import {
 /**
  * Display positive discipline XP grants and the final quest's mastery promotion.
  * Sage discipline XP is separate from reward_sage_mastery_experience (sage-mode XP),
- * which remains rendered by the existing sage-mode reward presentation.
+ * which the sage-mode reward presentation renders.
  */
 export const masteryRewardLabels = (
   reward: Partial<

@@ -1,9 +1,12 @@
-
 import { describe, expect, it } from "bun:test";
-import { CombatStatNames, MAX_STORED_POOL, SCALED_AI_STAT_BUDGET_SHARE } from "@/drizzle/constants";
+import {
+  CombatStatNames,
+  MAX_STORED_POOL,
+  SCALED_AI_STAT_BUDGET_SHARE,
+} from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { calcLevelRequirements } from "@/libs/profile";
-import { scaleEditedAi } from "../../../../../src/server/api/routers/profile";
+import { scaleEditedAi } from "@/server/api/routers/profile";
 
 // Row _-LABA3r7vwogsQ4O3ALq in data/ai.sql: a specialist whose six stats hold more than
 // half its experience.
@@ -121,9 +124,15 @@ describe("scaleEditedAi", () => {
     const stored = makeClown();
     const edited = { ...stored, level: 99, poolsMultiplier: 1000 };
     scaleEditedAi(stored, edited);
-    for (const pool of [edited.curHealth, edited.maxHealth, edited.curChakra, edited.maxChakra, edited.curStamina, edited.maxStamina]) {
+    for (const pool of [
+      edited.curHealth,
+      edited.maxHealth,
+      edited.curChakra,
+      edited.maxChakra,
+      edited.curStamina,
+      edited.maxStamina,
+    ]) {
       expect(pool).toBe(5_000_000);
     }
   });
-
 });

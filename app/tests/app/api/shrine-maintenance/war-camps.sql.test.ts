@@ -16,8 +16,8 @@ import * as gamesettings from "@/libs/gamesettings";
 import * as villageRouter from "@/queries/village";
 import * as objectiveWar from "@/server/utils/objectiveWar";
 import { defaultWarRules } from "@/validators/war";
+import { restoreEnvAfterEach } from "../../../setup/env";
 import { insertUsers } from "../../../setup/factories";
-import { actualGameSettings } from "../../../setup/preload";
 import { resetServerModuleStubs } from "../../../setup/serverModules";
 import {
   describeWithDatabase,
@@ -25,7 +25,6 @@ import {
   recordQueries,
   resetTables,
 } from "../../../setup/testDatabase";
-import { restoreEnvAfterEach } from "../../../setup/env";
 
 const minuteTimer = "shrine-maintenance";
 const dailyTimer = "shrine-maintenance-daily";
@@ -59,15 +58,6 @@ describeWithDatabase("shrine minute scheduler war camps", () => {
       userData,
       village,
     );
-    vi.spyOn(gamesettings, "getGameSetting").mockImplementation(actualGameSettings.getGameSetting);
-    vi.spyOn(gamesettings, "lockWithMinuteTimer")
-      .mockImplementation(actualGameSettings.lockWithMinuteTimer);
-    vi.spyOn(gamesettings, "lockWithDailyTimer")
-      .mockImplementation(actualGameSettings.lockWithDailyTimer);
-    vi.spyOn(gamesettings, "updateGameSetting")
-      .mockImplementation(actualGameSettings.updateGameSetting);
-    vi.spyOn(gamesettings, "handleEndpointError")
-      .mockImplementation(actualGameSettings.handleEndpointError);
 
     const db = await getTestDatabase();
     const combatStartedAt = new Date(now.getTime() - 10 * 60000);
@@ -155,8 +145,9 @@ describeWithDatabase("shrine minute scheduler war camps", () => {
     const db = await getTestDatabase();
     const failure = new Error("Camp synchronization failed");
     vi.spyOn(objectiveWar, "syncWarCamps").mockRejectedValueOnce(failure);
-    vi.spyOn(gamesettings, "handleEndpointError")
-      .mockResolvedValueOnce(new Response("Internal server error", { status: 500 }));
+    vi.spyOn(gamesettings, "handleEndpointError").mockResolvedValueOnce(
+      new Response("Internal server error", { status: 500 }),
+    );
 
     expect((await GET(request())).status).toBe(500);
     expect(gamesettings.handleEndpointError).toHaveBeenCalledWith(failure);
@@ -176,10 +167,12 @@ describeWithDatabase("shrine minute scheduler war camps", () => {
       .update(gameSetting)
       .set({ time: previousDay })
       .where(eq(gameSetting.name, dailyTimer));
-    vi.spyOn(villageRouter, "fetchVillages")
-      .mockRejectedValueOnce(new Error("Daily maintenance failed"));
-    vi.spyOn(gamesettings, "handleEndpointError")
-      .mockResolvedValueOnce(new Response("Internal server error", { status: 500 }));
+    vi.spyOn(villageRouter, "fetchVillages").mockRejectedValueOnce(
+      new Error("Daily maintenance failed"),
+    );
+    vi.spyOn(gamesettings, "handleEndpointError").mockResolvedValueOnce(
+      new Response("Internal server error", { status: 500 }),
+    );
 
     expect((await GET(request())).status).toBe(500);
     expect(await db.query.warCamp.findMany()).toHaveLength(1);

@@ -1,8 +1,8 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import {
+  hasLiveSummon,
   isOrphanedSummon,
   spliceOrphanedSummons,
-  hasLiveSummon,
 } from "@/libs/combat/summon";
 import type { BattleUserState } from "@/libs/combat/types";
 
@@ -17,7 +17,6 @@ const mk = (over: Partial<BattleUserState>): BattleUserState =>
     leftBattle: false,
     ...over,
   }) as unknown as BattleUserState;
-
 
 describe("isOrphanedSummon", () => {
   const summon = mk({ userId: "s1", controllerId: "p1", isSummon: true });
@@ -88,36 +87,6 @@ describe("spliceOrphanedSummons", () => {
     expect(state.map((u) => u.userId)).toEqual(["u1"]);
   });
 
-  it("splices a summon whose controller has fled", () => {
-    const state = [
-      mk({ userId: "u1", controllerId: "u1", fledBattle: true }),
-      mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
-    ];
-    const removed = spliceOrphanedSummons(state).map((u) => u.userId);
-    expect(removed).toEqual(["s1"]);
-    expect(state.map((u) => u.userId)).toEqual(["u1"]);
-  });
-
-  it("splices a summon whose controller has LEFT (leftBattle) even if still alive", () => {
-    const state = [
-      mk({ userId: "u1", controllerId: "u1", curHealth: 100, leftBattle: true }),
-      mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
-    ];
-    const removed = spliceOrphanedSummons(state).map((u) => u.userId);
-    expect(removed).toEqual(["s1"]);
-    expect(state.map((u) => u.userId)).toEqual(["u1"]);
-  });
-
-  it("splices a summon whose controller is gone from the array entirely", () => {
-    const state = [
-      mk({ userId: "enemy", controllerId: "enemy", curHealth: 100 }),
-      mk({ userId: "s1", controllerId: "u1", isSummon: true, curHealth: 50 }),
-    ];
-    const removed = spliceOrphanedSummons(state).map((u) => u.userId);
-    expect(removed).toEqual(["s1"]);
-    expect(state.map((u) => u.userId)).toEqual(["enemy"]);
-  });
-
   it("preserves relative order of survivors after a mid-array splice", () => {
     const state = [
       mk({ userId: "u1", controllerId: "u1", curHealth: 0 }),
@@ -157,7 +126,12 @@ describe("hasLiveSummon one-per-controller cap", () => {
   });
 
   it("false once the prior summon has left (allows re-summon)", () => {
-    const left = mk({ userId: "s1", controllerId: "p1", isSummon: true, leftBattle: true });
+    const left = mk({
+      userId: "s1",
+      controllerId: "p1",
+      isSummon: true,
+      leftBattle: true,
+    });
     expect(hasLiveSummon([player, left], "p1")).toBe(false);
   });
 

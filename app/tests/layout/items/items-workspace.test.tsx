@@ -1,5 +1,13 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
@@ -11,13 +19,16 @@ import * as equipmentPreview from "@/layout/EquipmentPreview";
 import * as hotkeyControls from "@/layout/HotkeyControls";
 import * as image from "@/layout/Image";
 import * as itemWithEffects from "@/layout/ItemWithEffects";
-import * as inspector from "@/layout/items/ItemInspector";
 import { USER_ITEM_DRAG_TYPE } from "@/layout/items/ItemCard";
+import * as inspector from "@/layout/items/ItemInspector";
 import { ItemsWorkspace } from "@/layout/items/ItemsWorkspace";
 import * as itemLib from "@/libs/item";
 import * as mastery from "@/libs/mastery";
 import * as skills from "@/libs/skillRequirements";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 let equip: ReturnType<typeof vi.fn>;
 let settle: () => void;
@@ -29,7 +40,11 @@ const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia")
 const setFinePointer = (fine: boolean) =>
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
-    value: (query: string) => ({ matches: query === "(any-pointer: fine)" && fine, addEventListener() {}, removeEventListener() {} }),
+    value: (query: string) => ({
+      matches: query === "(any-pointer: fine)" && fine,
+      addEventListener() {},
+      removeEventListener() {},
+    }),
   });
 
 beforeEach(() => {
@@ -38,18 +53,36 @@ beforeEach(() => {
   inspectorEquip = vi.fn();
   isEquipping = false;
   settle = () => {};
-  vi.spyOn(itemActions, "useItemActions").mockImplementation(((options: { useritem?: UserItemWithRelations; onDone: () => void }) => {
+  vi.spyOn(itemActions, "useItemActions").mockImplementation(((options: {
+    useritem?: UserItemWithRelations;
+    onDone: () => void;
+  }) => {
     if (!options.useritem) settle = options.onDone;
-    return { equip: options.useritem ? inspectorEquip : equip, merge: vi.fn(), isEquipping: options.useritem ? false : isEquipping, isPending: false };
+    return {
+      equip: options.useritem ? inspectorEquip : equip,
+      merge: vi.fn(),
+      isEquipping: options.useritem ? false : isEquipping,
+      isPending: false,
+    };
   }) as never);
-  vi.spyOn(bulkSell, "useBulkSellItems").mockReturnValue({ sellMany: vi.fn(), isSelling: false });
-  vi.spyOn(homeMove, "useHomeStorageMove").mockReturnValue({ moveItems: vi.fn(), isMoving: false });
+  vi.spyOn(bulkSell, "useBulkSellItems").mockReturnValue({
+    sellMany: vi.fn(),
+    isSelling: false,
+  });
+  vi.spyOn(homeMove, "useHomeStorageMove").mockReturnValue({
+    moveItems: vi.fn(),
+    isMoving: false,
+  });
   setFinePointer(true);
   containerWidth = 1000;
   // The workspace measures its own width to choose inline panels or a bottom sheet.
   installBrowserGlobals({
     resizeObserver: class {
-      constructor(private readonly callback: (entries: { contentRect: { width: number } }[]) => void) {}
+      constructor(
+        private readonly callback: (
+          entries: { contentRect: { width: number } }[],
+        ) => void,
+      ) {}
       observe() {
         this.callback([{ contentRect: { width: containerWidth } }]);
       }
@@ -57,9 +90,17 @@ beforeEach(() => {
       disconnect() {}
     },
   });
-  vi.spyOn(hotkeyControls, "useHotkeyAssignment").mockReturnValue({ hotkeys: { byAction: {} }, assign: vi.fn(), dialog: null } as never);
-  vi.spyOn(equipmentPreview, "EquipmentPreview").mockImplementation(() => <button type="button">Preview</button>);
-  vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => <span>{alt} art</span>);
+  vi.spyOn(hotkeyControls, "useHotkeyAssignment").mockReturnValue({
+    hotkeys: { byAction: {} },
+    assign: vi.fn(),
+    dialog: null,
+  } as never);
+  vi.spyOn(equipmentPreview, "EquipmentPreview").mockImplementation(() => (
+    <button type="button">Preview</button>
+  ));
+  vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => (
+    <span>{alt} art</span>
+  ));
   // biome-ignore lint/performance/noImgElement: isolated silhouette fixture
   vi.spyOn(image, "default").mockImplementation(({ alt }) => <img alt={alt} />);
   vi.spyOn(mastery, "gearMissingMastery").mockReturnValue(null as never);
@@ -78,7 +119,8 @@ afterEach(() => {
   document.body.innerHTML = "";
   vi.restoreAllMocks();
   window.localStorage.clear();
-  if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
+  if (originalMatchMedia)
+    Object.defineProperty(window, "matchMedia", originalMatchMedia);
   else Reflect.deleteProperty(window, "matchMedia");
   restoreBrowserGlobals();
 });
@@ -96,13 +138,30 @@ const gear = (id: string, slot: string, equipped: ItemSlot = "NONE") =>
     isInAuction: false,
     craftingFinishedAt: null,
     imbuements: [],
-    item: { id: `item-${id}`, name: id, image: null, rarity: "RARE", itemType: "WEAPON", slot, maxDurability: 50, hidden: false, effects: [], inShop: true },
+    item: {
+      id: `item-${id}`,
+      name: id,
+      image: null,
+      rarity: "RARE",
+      itemType: "WEAPON",
+      slot,
+      maxDurability: 50,
+      hidden: false,
+      effects: [],
+      inShop: true,
+    },
   }) as unknown as UserItemWithRelations;
 
 const katana = gear("Shadowsteel Katana", "HAND", "HAND_1");
 const tanto = gear("Raijin Tanto", "HAND");
 const pill = gear("Chakra Pill", "ITEM");
-const player = { userId: "user-1", role: "USER", status: "AWAKE", battleId: null, items: [] } as never;
+const player = {
+  userId: "user-1",
+  role: "USER",
+  status: "AWAKE",
+  battleId: null,
+  items: [],
+} as never;
 
 const renderWorkspace = (props: Partial<Parameters<typeof ItemsWorkspace>[0]> = {}) => {
   const all = props.userItems ?? [katana, tanto, pill];
@@ -117,11 +176,17 @@ const renderWorkspace = (props: Partial<Parameters<typeof ItemsWorkspace>[0]> = 
     />
   );
   const view = render(tree({}));
-  return { view, rerender: (next: Partial<Parameters<typeof ItemsWorkspace>[0]>) => view.rerender(tree(next)) };
+  return {
+    view,
+    rerender: (next: Partial<Parameters<typeof ItemsWorkspace>[0]>) =>
+      view.rerender(tree(next)),
+  };
 };
 
-const slotOf = (slot: ItemSlot) => document.querySelector<HTMLButtonElement>(`[data-slot="${slot}"]`)!;
-const card = (name: string) => screen.getByRole("button", { name: new RegExp(`^${name}`) });
+const slotOf = (slot: ItemSlot) =>
+  document.querySelector<HTMLButtonElement>(`[data-slot="${slot}"]`)!;
+const card = (name: string) =>
+  screen.getByRole("button", { name: new RegExp(`^${name}`) });
 
 it("opens the slot picker for a slot and the inspector for an item", () => {
   renderWorkspace();
@@ -133,7 +198,9 @@ it("opens the slot picker for a slot and the inspector for an item", () => {
   act(() => {
     fireEvent.click(screen.getByRole("button", { name: "Inspect" }));
   });
-  expect(screen.getByRole("region", { name: "Inspecting Shadowsteel Katana" })).toBeDefined();
+  expect(
+    screen.getByRole("region", { name: "Inspecting Shadowsteel Katana" }),
+  ).toBeDefined();
   act(() => {
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
   });
@@ -143,53 +210,64 @@ it("opens the slot picker for a slot and the inspector for an item", () => {
   expect(screen.getByRole("region", { name: "Inspecting Raijin Tanto" })).toBeDefined();
 });
 
-it.each([1000, 390])("returns focus to the equipment tile after inspecting from its picker at width %s", async (width) => {
-  useRealInspector();
-  containerWidth = width;
-  renderWorkspace();
-  const trigger = slotOf("HAND_1");
-  act(() => trigger.focus());
-  act(() => fireEvent.click(trigger));
-  const inspect = screen.getByRole("button", { name: "Inspect" });
-  act(() => inspect.focus());
-  act(() => fireEvent.click(inspect));
-  expect(inspect.isConnected).toBe(false);
-  const close = await screen.findByRole("button", { name: "← Back" });
-  await waitFor(() => expect(document.activeElement === close).toBe(true));
-  act(() => fireEvent.keyDown(close, { key: "Escape" }));
-  await waitFor(() => expect(document.activeElement === trigger).toBe(true));
-});
+it.each([1000, 390])(
+  "returns focus to the equipment tile after inspecting from its picker at width %s",
+  async (width) => {
+    useRealInspector();
+    containerWidth = width;
+    renderWorkspace();
+    const trigger = slotOf("HAND_1");
+    act(() => trigger.focus());
+    act(() => fireEvent.click(trigger));
+    const inspect = screen.getByRole("button", { name: "Inspect" });
+    act(() => inspect.focus());
+    act(() => fireEvent.click(inspect));
+    expect(inspect.isConnected).toBe(false);
+    const close = await screen.findByRole("button", { name: "← Back" });
+    await waitFor(() => expect(document.activeElement === close).toBe(true));
+    act(() => fireEvent.keyDown(close, { key: "Escape" }));
+    await waitFor(() => expect(document.activeElement === trigger).toBe(true));
+  },
+);
 
-it.each([1000, 390])("focuses the backpack after navigating there from a slot picker at width %s", async (width) => {
-  containerWidth = width;
-  renderWorkspace();
-  const trigger = slotOf("HAND_1");
-  act(() => trigger.focus());
-  act(() => fireEvent.click(trigger));
-  const showBackpack = screen.getByRole("button", { name: "Show Backpack" });
-  act(() => showBackpack.focus());
-  act(() => fireEvent.click(showBackpack));
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  const backpack = screen.getByRole("tabpanel", { name: "Backpack · 2" });
-  expect(screen.getByRole("tab", { name: "Backpack · 2" }).getAttribute("aria-selected")).toBe("true");
-  await waitFor(() => expect(document.activeElement === backpack).toBe(true));
-});
+it.each([1000, 390])(
+  "focuses the backpack after navigating there from a slot picker at width %s",
+  async (width) => {
+    containerWidth = width;
+    renderWorkspace();
+    const trigger = slotOf("HAND_1");
+    act(() => trigger.focus());
+    act(() => fireEvent.click(trigger));
+    const showBackpack = screen.getByRole("button", { name: "Show Backpack" });
+    act(() => showBackpack.focus());
+    act(() => fireEvent.click(showBackpack));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const backpack = screen.getByRole("tabpanel", { name: "Backpack · 2" });
+    expect(
+      screen.getByRole("tab", { name: "Backpack · 2" }).getAttribute("aria-selected"),
+    ).toBe("true");
+    await waitFor(() => expect(document.activeElement === backpack).toBe(true));
+  },
+);
 
-it.each(["backpack", "equipment"])("returns focus to the %s trigger after inspecting through its menu", async (source) => {
-  useRealInspector();
-  renderWorkspace();
-  const trigger = source === "backpack" ? card("Raijin Tanto") : slotOf("HAND_1");
-  // A pointer context menu need not focus the card before focusing its menu item.
-  act(() => fireEvent.contextMenu(trigger));
-  const inspect = screen.getByRole("menuitem", { name: "Inspect" });
-  act(() => inspect.focus());
-  act(() => fireEvent.keyDown(inspect, { key: "Enter" }));
-  const close = await screen.findByRole("button", { name: "← Back" });
-  await waitFor(() => expect(document.activeElement === close).toBe(true));
-  expect(inspect.isConnected).toBe(false);
-  act(() => fireEvent.keyDown(close, { key: "Escape" }));
-  await waitFor(() => expect(document.activeElement === trigger).toBe(true));
-});
+it.each(["backpack", "equipment"])(
+  "returns focus to the %s trigger after inspecting through its menu",
+  async (source) => {
+    useRealInspector();
+    renderWorkspace();
+    const trigger = source === "backpack" ? card("Raijin Tanto") : slotOf("HAND_1");
+    // A pointer context menu need not focus the card before focusing its menu item.
+    act(() => fireEvent.contextMenu(trigger));
+    const inspect = screen.getByRole("menuitem", { name: "Inspect" });
+    act(() => inspect.focus());
+    act(() => fireEvent.keyDown(inspect, { key: "Enter" }));
+    const close = await screen.findByRole("button", { name: "← Back" });
+    await waitFor(() => expect(document.activeElement === close).toBe(true));
+    expect(inspect.isConnected).toBe(false);
+    act(() => fireEvent.keyDown(close, { key: "Escape" }));
+    await waitFor(() => expect(document.activeElement === trigger).toBe(true));
+  },
+);
 
 it("returns focus to another equipment tile when it opens a new picker", async () => {
   renderWorkspace();
@@ -198,7 +276,11 @@ it("returns focus to another equipment tile when it opens a new picker", async (
   const trigger = slotOf("HEAD");
   act(() => trigger.focus());
   act(() => fireEvent.click(trigger));
-  act(() => fireEvent.keyDown(screen.getByRole("button", { name: "Close slot picker" }), { key: "Escape" }));
+  act(() =>
+    fireEvent.keyDown(screen.getByRole("button", { name: "Close slot picker" }), {
+      key: "Escape",
+    }),
+  );
   await waitFor(() => expect(document.activeElement === trigger).toBe(true));
 });
 
@@ -212,7 +294,11 @@ it("focuses the inspector when its equipment menu selects the already inspected 
   act(() => inspect.focus());
   act(() => fireEvent.keyDown(inspect, { key: "Enter" }));
   await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
-  await waitFor(() => expect(document.activeElement === screen.getByRole("button", { name: "← Back" })).toBe(true));
+  await waitFor(() =>
+    expect(
+      document.activeElement === screen.getByRole("button", { name: "← Back" }),
+    ).toBe(true),
+  );
 });
 
 it("equips from the slot picker into that slot", () => {
@@ -221,7 +307,10 @@ it("equips from the slot picker into that slot", () => {
     fireEvent.click(slotOf("HAND_2"));
   });
   fireEvent.click(screen.getByRole("button", { name: "Equip Raijin Tanto" }));
-  expect(equip.mock.calls[0]?.[0]).toEqual({ userItemId: "Raijin Tanto", slot: "HAND_2" });
+  expect(equip.mock.calls[0]?.[0]).toEqual({
+    userItemId: "Raijin Tanto",
+    slot: "HAND_2",
+  });
 });
 
 it("changing bag resets the right column", () => {
@@ -263,7 +352,9 @@ it("phone shows tabs and opens panels in a bottom sheet", () => {
   });
   // A modal sheet above every layout's navigation, not a panel inside the page.
   const sheet = screen.getByRole("dialog");
-  expect(sheet.contains(screen.getByRole("region", { name: "Inspecting Raijin Tanto" }))).toBe(true);
+  expect(
+    sheet.contains(screen.getByRole("region", { name: "Inspecting Raijin Tanto" })),
+  ).toBe(true);
   // Size containment would collapse a content-sized bottom sheet to its padding.
   expect(sheet.style.contain).toBe("layout paint");
   expect(document.querySelector("[data-items-panel]")).toBeNull();
@@ -304,10 +395,15 @@ it("names the phone inspector sheet with the active variant name", () => {
   const sword = {
     ...tanto,
     activeVariantId: "blue",
-    item: { ...tanto.item, variants: [{ id: "blue", image: "/blue.webp", name: "Blue Tanto" }] },
+    item: {
+      ...tanto.item,
+      variants: [{ id: "blue", image: "/blue.webp", name: "Blue Tanto" }],
+    },
   } as UserItemWithRelations;
   renderWorkspace({ userItems: [sword] });
-  act(() => fireEvent.mouseDown(screen.getAllByRole("tab")[1]!, { button: 0, ctrlKey: false }));
+  act(() =>
+    fireEvent.mouseDown(screen.getAllByRole("tab")[1]!, { button: 0, ctrlKey: false }),
+  );
   act(() => fireEvent.click(card("Blue Tanto")));
   expect(screen.getByRole("dialog", { name: "Blue Tanto" })).toBeDefined();
 });
@@ -327,11 +423,14 @@ it("show backpack from the picker switches the phone tab", () => {
 it("drags a backpack item onto a fitting slot only", () => {
   renderWorkspace();
   act(() => {
-    fireEvent.dragStart(card("Raijin Tanto"), { dataTransfer: { setData: vi.fn(), effectAllowed: "" } });
+    fireEvent.dragStart(card("Raijin Tanto"), {
+      dataTransfer: { setData: vi.fn(), effectAllowed: "" },
+    });
   });
   expect(slotOf("HEAD").className).toContain("opacity-40");
   expect(slotOf("HAND_2").className).not.toContain("opacity-40");
-  const getData = (type: string) => (type === USER_ITEM_DRAG_TYPE ? "Raijin Tanto" : "");
+  const getData = (type: string) =>
+    type === USER_ITEM_DRAG_TYPE ? "Raijin Tanto" : "";
   act(() => {
     fireEvent.drop(slotOf("HEAD"), { dataTransfer: { getData } });
   });
@@ -339,7 +438,10 @@ it("drags a backpack item onto a fitting slot only", () => {
   act(() => {
     fireEvent.drop(slotOf("HAND_2"), { dataTransfer: { getData } });
   });
-  expect(equip.mock.calls[0]?.[0]).toEqual({ userItemId: "Raijin Tanto", slot: "HAND_2" });
+  expect(equip.mock.calls[0]?.[0]).toEqual({
+    userItemId: "Raijin Tanto",
+    slot: "HAND_2",
+  });
 });
 
 it("does not drag worn gear, which the server will not move", () => {
@@ -373,7 +475,10 @@ it("sends one equip per change until it settles", () => {
 });
 
 it("keeps hidden items out of the slot picker for players", () => {
-  const secret = { ...gear("Secret Blade", "HAND"), item: { ...gear("Secret Blade", "HAND").item, hidden: true } } as UserItemWithRelations;
+  const secret = {
+    ...gear("Secret Blade", "HAND"),
+    item: { ...gear("Secret Blade", "HAND").item, hidden: true },
+  } as UserItemWithRelations;
   renderWorkspace({ userItems: [katana, tanto, secret] });
   act(() => {
     fireEvent.click(slotOf("HAND_2"));
@@ -418,7 +523,11 @@ it("puts the phone sheet's close button in the panel's own top bar", () => {
   });
   const sheet = screen.getByRole("dialog");
   // The panel header owns the sheet's sole close control.
-  expect(within(sheet).getAllByRole("button", { name: /close/i }).map((b) => b.textContent)).toEqual(["Close inspector"]);
+  expect(
+    within(sheet)
+      .getAllByRole("button", { name: /close/i })
+      .map((b) => b.textContent),
+  ).toEqual(["Close inspector"]);
 });
 
 /** Keep the inspector's real action controls to exercise toggles across panel changes. */
@@ -431,23 +540,32 @@ const useRealInspector = () => {
   vi.spyOn(itemLib, "calcItemSellingPrice").mockReturnValue(120);
 };
 
-it.each([1000, 390])("equips an inspected slot candidate into the selected empty hand at width %s", (width) => {
-  useRealInspector();
-  containerWidth = width;
-  renderWorkspace({ userItems: [tanto] });
-  act(() => fireEvent.click(slotOf("HAND_1")));
-  act(() => fireEvent.click(screen.getByRole("button", { name: "Details of Raijin Tanto" })));
-  fireEvent.click(screen.getByRole("button", { name: "Equip in Hand 1" }));
-  expect(equip.mock.calls[0]?.[0]).toEqual({ userItemId: tanto.id, slot: "HAND_1" });
-  expect(inspectorEquip).not.toHaveBeenCalled();
-});
+it.each([1000, 390])(
+  "equips an inspected slot candidate into the selected empty hand at width %s",
+  (width) => {
+    useRealInspector();
+    containerWidth = width;
+    renderWorkspace({ userItems: [tanto] });
+    act(() => fireEvent.click(slotOf("HAND_1")));
+    act(() =>
+      fireEvent.click(screen.getByRole("button", { name: "Details of Raijin Tanto" })),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Equip in Hand 1" }));
+    expect(equip.mock.calls[0]?.[0]).toEqual({ userItemId: tanto.id, slot: "HAND_1" });
+    expect(inspectorEquip).not.toHaveBeenCalled();
+  },
+);
 
 it("offers the selected slot when inspecting an item equipped in another hand", () => {
   useRealInspector();
   const worn = { ...katana, item: { ...katana.item, maxEquips: 2 } };
   renderWorkspace({ userItems: [worn] });
   act(() => fireEvent.click(slotOf("HAND_2")));
-  act(() => fireEvent.click(screen.getByRole("button", { name: "Details of Shadowsteel Katana" })));
+  act(() =>
+    fireEvent.click(
+      screen.getByRole("button", { name: "Details of Shadowsteel Katana" }),
+    ),
+  );
   fireEvent.click(screen.getByRole("button", { name: "Equip in Hand 2" }));
   expect(equip.mock.calls[0]?.[0]).toEqual({ userItemId: worn.id, slot: "HAND_2" });
 });
@@ -457,8 +575,14 @@ it("keeps the equip-limit restriction when inspecting a candidate worn elsewhere
   const worn = { ...katana, item: { ...katana.item, maxEquips: 1 } };
   renderWorkspace({ userItems: [worn] });
   act(() => fireEvent.click(slotOf("HAND_2")));
-  act(() => fireEvent.click(screen.getByRole("button", { name: "Details of Shadowsteel Katana" })));
-  const equipButton = screen.getByRole("button", { name: "Equip in Hand 2" }) as HTMLButtonElement;
+  act(() =>
+    fireEvent.click(
+      screen.getByRole("button", { name: "Details of Shadowsteel Katana" }),
+    ),
+  );
+  const equipButton = screen.getByRole("button", {
+    name: "Equip in Hand 2",
+  }) as HTMLButtonElement;
   expect(equipButton.disabled).toBe(true);
   expect(screen.getByText("Unequip from Hand 1 first")).toBeDefined();
   fireEvent.click(equipButton);
@@ -472,12 +596,16 @@ it("checks mastery after removing the selected slot's current item in the inspec
   vi.spyOn(mastery, "gearMissingMastery").mockImplementation((_item, wearer) =>
     wearer.items?.some((ui) => ui.id === katana.id)
       ? null
-      : { required: 500, current: 0, label: "Bukijutsu" } as never,
+      : ({ required: 500, current: 0, label: "Bukijutsu" } as never),
   );
   renderWorkspace();
   act(() => fireEvent.click(slotOf("HAND_1")));
-  act(() => fireEvent.click(screen.getByRole("button", { name: "Details of Raijin Tanto" })));
-  const equipButton = screen.getByRole("button", { name: "Equip in Hand 1" }) as HTMLButtonElement;
+  act(() =>
+    fireEvent.click(screen.getByRole("button", { name: "Details of Raijin Tanto" })),
+  );
+  const equipButton = screen.getByRole("button", {
+    name: "Equip in Hand 1",
+  }) as HTMLButtonElement;
   expect(equipButton.disabled).toBe(true);
   expect(screen.getByText("Needs 500 Bukijutsu")).toBeDefined();
   fireEvent.click(equipButton);

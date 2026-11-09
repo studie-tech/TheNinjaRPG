@@ -1,5 +1,11 @@
 import { eq } from "drizzle-orm";
-import { MAP_WAKE_ISLAND_SECTOR, PET_SANCTUARY_NAME, PET_SANCTUARY_IMAGE, PET_SANCTUARY_LONGITUDE, PET_SANCTUARY_LATITUDE } from "@/drizzle/constants";
+import {
+  MAP_WAKE_ISLAND_SECTOR,
+  PET_SANCTUARY_IMAGE,
+  PET_SANCTUARY_LATITUDE,
+  PET_SANCTUARY_LONGITUDE,
+  PET_SANCTUARY_NAME,
+} from "@/drizzle/constants";
 import { village, villageStructure } from "@/drizzle/schema";
 import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
 import type { DrizzleClient } from "@/server/db";
@@ -9,9 +15,9 @@ export const seedVillages = async (client: DrizzleClient) => {
   console.log("\nSyncing villages...");
   await executeSqlDump(client, "villages.sql");
 
-  // villages.sql is a production-shaped legacy dump. Normalize its geographic
-  // references after import so `make dbpush && make seed` cannot put globe
-  // markers back on the obsolete cube-world sectors.
+  // villages.sql carries pre-globe sector numbers. Move each village to its
+  // canonical WORLD_LANDMARKS sector after import so `make dbpush && make seed`
+  // places globe markers correctly.
   for (const landmark of WORLD_LANDMARKS) {
     await client
       .update(village)

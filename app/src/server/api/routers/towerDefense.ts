@@ -1,4 +1,3 @@
-import type { InferSelectModel } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { UTApi, UTFile } from "uploadthing/server";
@@ -14,8 +13,8 @@ import {
 } from "@/drizzle/constants";
 import {
   type TowerDefenseCharacterDb,
+  type TowerDefenseUpgrade,
   towerDefenseCharacter,
-  type towerDefenseUpgrade,
 } from "@/drizzle/schema";
 import {
   applyUpgradesToAbility,
@@ -91,13 +90,27 @@ import type {
 } from "@/validators/towerDefense";
 import {
   characterAssetConfigSchema,
-  claimCompletedRunInputSchema,
-  purchaseUpgradeInputSchema,
   signedEnemyDefinitionSchema,
   signedUpgradeDefinitionSchema,
   updateTowerDefenseUpgradeSchema,
 } from "@/validators/towerDefense";
 import { insertTowerDefenseCharacterSchema } from "@/validators/towerDefenseCharacter";
+
+const purchaseUpgradeInputSchema = z.object({
+  upgradeId: z.string(),
+});
+
+/**
+ * A claim names the SpacetimeDB session only. Score, wave and the signed session
+ * parameters are read from that session's authoritative completed_run row; the
+ * definitions are not stored there, so the client supplies them and the session
+ * signature proves they are the ones the server signed.
+ */
+const claimCompletedRunInputSchema = z.object({
+  spacetimeSessionId: z.string().regex(/^\d{1,20}$/, "Invalid session ID"),
+  upgradeDefinitionsJson: z.string().min(1, "Upgrade definitions required"),
+  enemyDefinitionsJson: z.string().min(1, "Enemy definitions required"),
+});
 
 /**
  * Tower Defense tRPC Router
@@ -167,7 +180,7 @@ export const towerDefenseRouter = createTRPCRouter({
    *
    * Security flow:
    * 1. Server fetches user's upgrades AND upgrade definitions from MySQL
-   * 2. Server calculates stats using the same formulas as before, but server-side
+   * 2. Server calculates the starting stats from those upgrades
    * 3. Server signs (userId, nonce, stats, upgrade_definitions) with HMAC
    * 4. Client passes signed params + definitions to SpacetimeDB
    * 5. SpacetimeDB stores everything for use during the game
@@ -848,11 +861,9 @@ export const towerDefenseRouter = createTRPCRouter({
 // Helper Functions for Session Initiation
 // ============================================
 
-type TowerDefenseUpgradeDb = InferSelectModel<typeof towerDefenseUpgrade>;
-
 /** Convert upgrade definitions to signed format for SpacetimeDB */
 function toSignedUpgradeDefinitions(
-  upgrades: TowerDefenseUpgradeDb[],
+  upgrades: TowerDefenseUpgrade[],
 ): SignedUpgradeDefinition[] {
   return upgrades.map((def) => ({
     id: def.id,
@@ -952,7 +963,7 @@ function initiateSession(input: {
   ability: ReturnType<typeof getShurikenAbility>;
   playerBonuses: ReturnType<typeof getDefaultPlayerBonuses>;
   maxHealth: number;
-  upgradeDefinitions: TowerDefenseUpgradeDb[];
+  upgradeDefinitions: TowerDefenseUpgrade[];
   enemyDefinitionsDb: TowerDefenseCharacterDb[];
   playerCharactersDb: TowerDefenseCharacterDb[];
   isGuest?: boolean;

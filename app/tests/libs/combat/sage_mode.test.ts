@@ -1,15 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import { applySageModeAfterRoundTransition } from "@/libs/combat/process";
 import { cleanse, getPower } from "@/libs/combat/tags";
+import type { UserEffect } from "@/libs/combat/types";
 import { isEffectActive } from "@/libs/combat/util";
 import {
   makeBattleUser,
   makeCompleteBattle,
   makeEffect,
   makeTag,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 import { activateSageMode, makeSageMode, makeSageUser } from "./helpers/sageMode";
-import type { UserEffect } from "@/libs/combat/types";
 
 /** Exhaustion fixture: a simple stat-reduction after-effect. */
 const exhaustionSageMode = () =>
@@ -165,16 +165,38 @@ describe("sageModeAfter protection", () => {
     const user = makeBattleUser("sage", { userId: "sage" });
     const after = makeEffect(
       "decreasestat",
-      { power: 10, rounds: 2, calculation: "percentage", statTypes: ["Ninjutsu"], generalTypes: [] },
-      { id: "after-1", creatorId: "sage", targetId: "sage", targetType: "user",
-        fromType: "sageModeAfter", isNew: false, castThisRound: false, createdRound: 1 },
+      {
+        power: 10,
+        rounds: 2,
+        calculation: "percentage",
+        statTypes: ["Ninjutsu"],
+        generalTypes: [],
+      },
+      {
+        id: "after-1",
+        creatorId: "sage",
+        targetId: "sage",
+        targetType: "user",
+        fromType: "sageModeAfter",
+        isNew: false,
+        castThisRound: false,
+        createdRound: 1,
+      },
     );
     const usersEffects: UserEffect[] = [after];
     const cleanseEffect = makeEffect(
       "cleanse",
       { power: 100 },
-      { id: "cleanse-1", creatorId: "sage", targetId: "sage", targetType: "user",
-        isNew: true, castThisRound: true, createdRound: 1, fromType: "basic" },
+      {
+        id: "cleanse-1",
+        creatorId: "sage",
+        targetId: "sage",
+        targetType: "user",
+        isNew: true,
+        castThisRound: true,
+        createdRound: 1,
+        fromType: "basic",
+      },
     );
     cleanse(cleanseEffect, usersEffects, user);
     expect(usersEffects.find((e) => e.id === "after-1")?.rounds).toBe(2);
@@ -232,7 +254,7 @@ describe("sage mode active-phase aura teardown at expiry", () => {
         .filter((e) => isEffectActive(e) || e.type === "visual");
     }
 
-    // The buff has expired and dropped normally; the visual aura lingers (the bug)
+    // The buff has expired and dropped normally; the visual aura lingers
     // with rounds now <= 0, so no sage effect is reported "active" and the
     // after-round transition fires.
     const stillActiveSage = battle.usersEffects.some(
@@ -377,9 +399,7 @@ describe("sage mode instant tags", () => {
     const sageAfter = battle.usersState.find((u) => u.userId === "sage");
     expect(sageAfter?.curHealth).toBeGreaterThan(4000);
     expect(
-      battle.usersEffects.some(
-        (e) => e.fromType === "sageModeAfter" && e.rounds === 0,
-      ),
+      battle.usersEffects.some((e) => e.fromType === "sageModeAfter" && e.rounds === 0),
     ).toBe(false);
   });
 });

@@ -2,11 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { FORM_LABEL_MAP } from "@/layout/EditContent";
 import { getObjectiveSchema } from "@/validators/objectives";
 
-// Each new specific-X objective task must (a) expose its id-list field in the
-// schema and (b) carry a FORM_LABEL_MAP entry, or the EditContent render chain
-// falls through to the `allowAddNew` free-text branch and silently renders a
-// text box instead of the intended db_values picker. This locks each field name
-// and its editor label together so a new picker field can't silently regress.
+// Each id-list objective field must exist in its schema and have a FORM_LABEL_MAP
+// entry; without one the objective editor labels the picker with the raw field name.
 const ID_LIST_PICKERS = [
   { task: "craft_specific_item", field: "craftItemIds" },
   { task: "train_specific_jutsu", field: "trainJutsuIds" },
@@ -23,7 +20,6 @@ describe("EditContent specific-X id-list pickers", () => {
       expect(field in schema.shape).toBe(true);
       const label = FORM_LABEL_MAP[field];
       expect(label).toBeTruthy();
-      expect((label ?? "").length).toBeGreaterThan(0);
     });
   }
 });

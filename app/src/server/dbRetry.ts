@@ -155,7 +155,7 @@ const parseDriverRequest = (
  * the whole transaction back, so replaying one statement would lose the rest.
  *
  * When every attempt fails the final response is returned unchanged, so the
- * driver still raises its normal `DatabaseError` and callers behave as before.
+ * driver raises its normal `DatabaseError`.
  */
 export const createRetryingFetch = (
   baseFetch: typeof fetch = fetch,

@@ -81,7 +81,7 @@ export const isSceneAssetPath = (path: string) =>
   /(?:^|\.)(?:sceneBackground|sceneCharacters\.\d+)$/.test(path);
 
 /** Catalog pictures used by quest scenes, including scenes nested in objectives. */
-export const sceneAssetIds = (fields: unknown) =>
+export const questSceneAssetIds = (fields: unknown) =>
   [...flattenLeaves(fields)].flatMap(([path, value]) =>
     isSceneAssetPath(path) && typeof value === "string" && value ? [value] : [],
   );

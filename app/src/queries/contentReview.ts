@@ -19,11 +19,11 @@ import {
   sum,
 } from "drizzle-orm";
 import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
-import type { z } from "zod";
 import type {
   ContentAuditFocus,
   ContentProposalCategory,
   ContentProposalEntityType,
+  ContentProposalRejectReason,
   ContentProposalStatus,
 } from "@/drizzle/constants";
 import {
@@ -45,7 +45,6 @@ import {
 } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { getUtcDayWindowStart, secondsFromNow } from "@/utils/time";
-import type { rejectProposalSchema } from "@/validators/contentReview";
 
 /**
  * A suggestion with its changes and media in submission order, its basis, and the author's
@@ -150,7 +149,12 @@ export const selectGameAssetForGetProposal = (
 /** Build the `contentProposal` update for `reject`, using predicates on `id`, `status`, `statusChangedAt`. */
 export const updateContentProposalForReject = (
   client: Pick<DrizzleClient, "update">,
-  input: z.infer<typeof rejectProposalSchema>,
+  input: {
+    id: string;
+    expectedStatusChangedAt?: string | undefined;
+    reason: ContentProposalRejectReason;
+    note?: string | null | undefined;
+  },
   ctx: { userId: string },
 ) =>
   client

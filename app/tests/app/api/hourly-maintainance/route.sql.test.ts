@@ -16,8 +16,12 @@ import * as dataQueries from "@/queries/data";
 import { getUtcMonthKey } from "@/utils/time";
 import { insertUsers } from "../../../setup/factories";
 import { resetServerModuleStubs, stubCronAuth } from "../../../setup/serverModules";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 import { pollUntil } from "../../../setup/statements";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../setup/testDatabase";
 
 const TOKENS = 1_000_000;
 const previousHour = new Date(Date.now() - 2 * 3600_000);
@@ -39,10 +43,13 @@ const settled = async () => {
 /** Fail only once the guarded effects have landed, so a retry can repeat each of them. */
 const failAfterEffects = async () => {
   const expected = { money: 500, tokens: TOKENS - VILLAGE_STRUCTURE_MONTHLY_COST };
-  await pollUntil(async () => {
-    const { money, tokens } = await settled();
-    return money === expected.money && tokens === expected.tokens;
-  }, { attempts: 200, intervalMs: 10 });
+  await pollUntil(
+    async () => {
+      const { money, tokens } = await settled();
+      return money === expected.money && tokens === expected.tokens;
+    },
+    { attempts: 200, intervalMs: 10 },
+  );
   throw new Error("analytics down");
 };
 
@@ -115,7 +122,9 @@ describeWithDatabase("hourly maintenance claim", () => {
       .mockImplementation(failAfterEffects as never);
 
     expect((await GET(request())).status).toBe(500);
-    expect(await timer()).toEqual(expect.objectContaining({ time: previousHour, value: 0 }));
+    expect(await timer()).toEqual(
+      expect.objectContaining({ time: previousHour, value: 0 }),
+    );
 
     analytics.mockRestore();
     expect((await GET(request())).status).toBe(200);

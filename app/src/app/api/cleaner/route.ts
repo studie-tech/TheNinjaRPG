@@ -70,27 +70,24 @@ export async function GET(request: Request) {
     // backlog cannot consume the entire route execution window.
     const rangeCleanupBatchSize = 10_000;
 
-    // Step 1: Delete from battle table where updatedAt is older than 1 day
+    // Delete from battle table where updatedAt is older than 1 day
     await deleteBattleForGET(drizzleDB, rangeCleanupBatchSize);
 
-    // Step 1b: Release hunting reservations whose battle is gone. Settlement clears the
-    // reservation with the battle, but an abandoned hunt only expires through Step 1;
+    // Release hunting reservations whose battle is gone. Settlement clears the
+    // reservation with the battle, but an abandoned hunt only expires through the battle cleanup above;
     // a dangling battleId would trap the hunter.
     await retryOnDeadlock(() => updateHuntingSessionForGET(drizzleDB));
 
-    // Step 2: Release missing fights while preserving an open isolated Pyramid run.
+    // Release missing fights while preserving an open isolated Pyramid run.
     await updateUserDataForGET(drizzleDB);
 
-    // Step 2.5: Complete travel for users whose travel time has expired
+    // Complete travel for users whose travel time has expired
     await completeExpiredGlobalTravel(drizzleDB);
 
-    // Time constants
-    const oneHour = 1000 * 60 * 60;
-    const oneDay = oneHour * 24;
-
     // A device can end an orphaned activity after a cold launch without JavaScript knowing
-    // its id. Keep a retry window for failed APNs endings, then drain those dead addresses.
-    await deleteUserLiveActivityForGET(drizzleDB, oneDay);
+    // its id. Keep a one-day retry window past endsAt for failed APNs endings, then drain
+    // those dead addresses.
+    await deleteUserLiveActivityForGET(drizzleDB);
 
     // Battle retention periods:
     // - PVP (72 hours): Explicit PVP types that we want longer retention for
@@ -109,35 +106,35 @@ export async function GET(request: Request) {
       "RANKED_PVP",
     ] as const;
 
-    // Step 3a: All action types expire after at most 72 hours. Keep the backlog
+    // All action types expire after at most 72 hours. Keep the backlog
     // path join-free so the updatedAt index can stop after one small range batch.
     await deleteBattleActionForGET(drizzleDB, backlogCleanupBatchSize);
 
-    // Step 3b: Only inspect the bounded 12-72 hour window for shorter non-PVP
+    // Only inspect the bounded 12-72 hour window for shorter non-PVP
     // retention and orphans. The derived table is deliberately the first side of
     // the outer STRAIGHT_JOIN so the delete remains 1,000 primary-key point lookups.
     await executeRowsForGET(drizzleDB, pvpTypes, cleanupBatchSize);
 
-    // Step 5: Delete history after its actions have drained. Drive from createdAt
+    // Delete history after its actions have drained. Drive from createdAt
     // so LIMIT bounds the scan instead of sorting every row in each retention class.
     await executeRowsForGET2(drizzleDB, pvpTypes, cleanupBatchSize);
 
-    // Step 6: Delete conversations older than 14 days
-    await deleteConversationForGET(drizzleDB, oneDay);
+    // Delete private, non-staff conversations not updated for 14 days
+    await deleteConversationForGET(drizzleDB);
 
-    // Step 8a: Delete conversation comments older than 14 days
+    // Delete comments older than 14 days outside staff conversations and Global
     await executeRowsForGET3(drizzleDB);
 
-    // Step 8b: Delete other public conversation comments older than 2 days
+    // Delete other public conversation comments older than 2 days
     await executeRowsForGET4(drizzleDB);
 
-    // Step 11: Clearing historical avatars that failed more than 3 hours ago
+    // Clear historical avatars that failed more than 3 hours ago
     await deleteHistoricalAvatarForGET(drizzleDB);
 
-    // Step 12: Update users who have a clanId by no clan
+    // Update users who have a clanId by no clan
     await updateUserDataForGET2(drizzleDB);
 
-    // Step 14: Purge inactive low-progress characters in guarded primary-key batches
+    // Purge inactive low-progress characters in guarded primary-key batches
     await deleteCleanupCandidates(
       drizzleDB,
       userData,
@@ -161,13 +158,13 @@ export async function GET(request: Request) {
       ),
     );
 
-    // Step 22: Clear training log entries
+    // Clear training log entries older than 7 days
     await deleteTrainingLogForGET(drizzleDB, rangeCleanupBatchSize);
 
-    // Step 23: Clear mpvp battle queue entries
+    // Clear mpvp battle queue entries older than 7 days
     await deleteMpvpBattleQueueForGET(drizzleDB, rangeCleanupBatchSize);
 
-    // Step 24: Clear mpvp battle user entries
+    // Clear mpvp battle user entries
     await deleteCleanupCandidates(
       drizzleDB,
       mpvpBattleUser,
@@ -175,28 +172,28 @@ export async function GET(request: Request) {
       notExists(selectMpvpBattleQueueForGET(drizzleDB)),
     );
 
-    // Step 25: Set status to AWAKE for users who are QUEUED if they are not in any active battle systems
+    // Set status to AWAKE for users who are QUEUED if they are not in any active battle systems
     // Only claimed ranked rows own status; provisional joins must not keep an orphan queued.
     // This covers mpvp battles, ranked PvP and live dungeon reservations.
     await updateUserDataForGET3(drizzleDB);
 
-    // Step 26: Update the population of each village
+    // Update the population of each village
     await executeRowsForGET5(drizzleDB);
 
     // Repair the ANBU capacity counter if a compensated multi-step membership
     // change was interrupted between statements.
     await executeRowsForGET6(drizzleDB);
 
-    // Step 27: Clear old captcha checks
+    // Clear captcha checks older than 30 days
     await deleteCaptchaForGET(drizzleDB, rangeCleanupBatchSize);
 
     // Expiry releases pending ally reservations in the same write; accepted history stays.
     await retryOnDeadlock(() => executeRowsForGET7(drizzleDB));
 
-    // Step 29: Wrong village wrt. clan
+    // Wrong village wrt. clan
     await executeRowsForGET8(drizzleDB);
 
-    // Step 30: Run orphan sweeps, tavern cleanup and activity decay once per day.
+    // Run orphan sweeps, tavern cleanup and activity decay once per day.
     const tavernDecayTimer = await lockWithDailyTimer(drizzleDB, "cleaner-daily");
     if (tavernDecayTimer.isNewDay) {
       try {
@@ -209,20 +206,21 @@ export async function GET(request: Request) {
       }
     }
 
-    // Step 31: Clear automatedModeration older than  3 months
+    // Clear automatedModeration older than 3 months
     await deleteAutomatedModerationForGET(drizzleDB, rangeCleanupBatchSize);
 
+    // Clear moderation scans past MODERATION_SCAN_RETENTION_DAYS
     await deleteModerationScanForGET(drizzleDB, rangeCleanupBatchSize);
 
-    // Step 32: Federal status is derived state. Reconcile its exact maximum active tier
+    // Federal status is derived state. Reconcile its exact maximum active tier
     // across PayPal and both stores, including downgrades when a higher receipt expires.
     await reconcileFederalStatuses(drizzleDB);
 
-    // Step 34: Clear bank interest outside the claimable UTC date window
+    // Clear bank interest outside the claimable UTC date window
     const { oldestDate } = getBankInterestDateRange();
     await deleteDailyBankInterestForGET(drizzleDB, oldestDate, rangeCleanupBatchSize);
 
-    // Step 35: Clear daily bank interest older than 2 days which are already claimed
+    // Clear daily bank interest older than 2 days which are already claimed
     await deleteDailyBankInterestForGET2(drizzleDB, rangeCleanupBatchSize);
 
     // Delete historical ips older than 90 days
@@ -238,7 +236,7 @@ export async function GET(request: Request) {
     );
     await notifyRankedQueueChanged(expiredRankedRows.rowsAffected);
 
-    // Clear war kills older than 10 days
+    // Clear war kills older than 30 days
     await deleteWarKillForGET(drizzleDB, rangeCleanupBatchSize);
 
     // Clear dataBattleAction entries older than 30 days

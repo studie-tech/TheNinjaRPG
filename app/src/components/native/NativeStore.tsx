@@ -9,7 +9,6 @@ import {
 } from "@/components/native/NativeFeatureCard";
 import { Button } from "@/components/ui/button";
 import { env } from "@/env/client.mjs";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -31,6 +30,7 @@ import {
   storeRestoreReconciliation,
 } from "@/libs/native/purchaseSettlement";
 import { showMutationToast } from "@/libs/toast";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { sleep } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
@@ -60,12 +60,7 @@ export default function NativeStore() {
   // reach a webhook with nobody to credit.
   const player = userId && userData?.userId === userId ? userData : undefined;
   const utils = api.useUtils();
-  const [packageState, setPackageState] = useState<{
-    userId: string;
-    packages: purchases.StorePackage[];
-    activeSubscriptions: string[] | null;
-    bound: boolean;
-  } | null>(null);
+  const [packageState, setPackageState] = useState<StorePackageState | null>(null);
   const [bindingError, setBindingError] = useState<string | null>(null);
   const [bindingRetry, setBindingRetry] = useState(0);
   const bindingGeneration = useRef(0);
@@ -248,21 +243,13 @@ export default function NativeStore() {
       setIsRefreshingSubscriptions(true);
       // Store management runs outside the webview. Do not offer a plan using its
       // pre-background entitlement snapshot while checking changes on return.
-      setPackageState((current) =>
-        current?.userId === accountId
-          ? { ...current, activeSubscriptions: null }
-          : current,
-      );
+      setPackageState(withActiveSubscriptions(accountId, null));
       void purchases
         .refreshCustomerInfo()
         .then(async (info) => {
           if (disposed) return;
           if (!info) throw new Error("Could not refresh your store subscriptions");
-          setPackageState((current) =>
-            current?.userId === accountId
-              ? { ...current, activeSubscriptions: info.activeSubscriptions }
-              : current,
-          );
+          setPackageState(withActiveSubscriptions(accountId, info.activeSubscriptions));
           setBindingError(null);
           await refreshProfile();
         })
@@ -377,12 +364,7 @@ export default function NativeStore() {
       for (const delay of GRANT_POLL_DELAYS_MS) {
         await sleep(delay);
         assertCurrent?.();
-        const matching = await fetchRecentFresh({
-          limit: 50,
-          ...(hasStoreTransactionId(attempt.transactionId)
-            ? { transactionId: attempt.transactionId }
-            : { productId: attempt.productId }),
-        });
+        const matching = await fetchRecentFresh(attemptReceiptsQuery(attempt));
         assertCurrent?.();
         observation = storePurchaseReconciliation(matching, attempt);
         if (observation !== "pending") break;
@@ -406,12 +388,7 @@ export default function NativeStore() {
       assertCurrent?: () => void,
     ) => {
       assertCurrent?.();
-      const matching = await fetchRecentFresh({
-        limit: 50,
-        ...(hasStoreTransactionId(attempt.transactionId)
-          ? { transactionId: attempt.transactionId }
-          : { productId: attempt.productId }),
-      });
+      const matching = await fetchRecentFresh(attemptReceiptsQuery(attempt));
       // A server response from an old session is not allowed to unlock that account after
       // RevenueCat has been rebound to somebody else or the character has disappeared.
       assertCurrent?.();
@@ -590,13 +567,11 @@ export default function NativeStore() {
         assertCurrentCheckout();
         let storeProductChangeInfo: purchases.StoreProductChangeInfo | undefined;
         if (isFederal && catalogue?.federal) {
-          setPackageState((current) =>
-            current?.userId === accountId
-              ? {
-                  ...current,
-                  activeSubscriptions: checkoutCustomerInfo.activeSubscriptions,
-                }
-              : current,
+          setPackageState(
+            withActiveSubscriptions(
+              accountId,
+              checkoutCustomerInfo.activeSubscriptions,
+            ),
           );
           if (storePlatform !== "android") {
             if (checkoutCustomerInfo.activeSubscriptions.includes(productId)) {
@@ -707,17 +682,13 @@ export default function NativeStore() {
         success: true,
         message: "Purchase complete. Crediting your account...",
       });
-      if (isFederal) {
-        if (postPurchaseCustomerInfo) {
-          setPackageState((current) =>
-            current?.userId === accountId
-              ? {
-                  ...current,
-                  activeSubscriptions: postPurchaseCustomerInfo.activeSubscriptions,
-                }
-              : current,
-          );
-        }
+      if (isFederal && postPurchaseCustomerInfo) {
+        setPackageState(
+          withActiveSubscriptions(
+            accountId,
+            postPurchaseCustomerInfo.activeSubscriptions,
+          ),
+        );
       }
       // Held busy across the wait so the player cannot buy the same tier twice while the
       // first grant is still in flight.
@@ -779,11 +750,7 @@ export default function NativeStore() {
       if (!info) {
         throw new Error("Could not verify restored purchases with the store");
       }
-      setPackageState((current) =>
-        current?.userId === accountId
-          ? { ...current, activeSubscriptions: info.activeSubscriptions }
-          : current,
-      );
+      setPackageState(withActiveSubscriptions(accountId, info.activeSubscriptions));
       if (info.activeSubscriptions.length) {
         // A TRANSFER can arrive after the first poll and may have no pending row before it
         // moves the receipt. Wait for each restored subscription to have a live server
@@ -1193,3 +1160,24 @@ export default function NativeStore() {
     </ContentBox>
   );
 }
+
+/** Replace one account's store subscriptions; state bound to another account is kept. */
+const withActiveSubscriptions =
+  (accountId: string, activeSubscriptions: string[] | null) =>
+  (current: StorePackageState | null) =>
+    current?.userId === accountId ? { ...current, activeSubscriptions } : current;
+
+/** Receipts that can settle an attempt: its own transaction when known, else its product. */
+const attemptReceiptsQuery = (attempt: StorePurchaseAttempt) => ({
+  limit: 50,
+  ...(hasStoreTransactionId(attempt.transactionId)
+    ? { transactionId: attempt.transactionId }
+    : { productId: attempt.productId }),
+});
+
+type StorePackageState = {
+  userId: string;
+  packages: purchases.StorePackage[];
+  activeSubscriptions: string[] | null;
+  bound: boolean;
+};

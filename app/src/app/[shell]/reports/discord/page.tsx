@@ -13,6 +13,8 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import Table from "@/layout/Table";
+import { DISCORD_LINK_FLAG_PREFIX } from "@/libs/discordLink";
 import { showMutationToast } from "@/libs/toast";
 import { canManageDiscordLinks, canViewDiscordLinks } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -94,51 +96,37 @@ export default function DiscordLinksStaffPage() {
           <h3 className="font-bold">Link history ({data.history.length})</h3>
           {data.history.length === 0 && <p className="italic">No ended links found.</p>}
           {data.history.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="p-1">Character</th>
-                    <th className="p-1">Discord</th>
-                    <th className="p-1">Linked</th>
-                    <th className="p-1">Unlinked</th>
-                    <th className="p-1">Reason</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.history.map((entry) => (
-                    <tr key={entry.id} className="border-b">
-                      <td className="p-1">{entry.username ?? entry.userId}</td>
-                      <td className="p-1">
-                        {entry.discordUsername}
-                        <br />
-                        <span className="text-muted-foreground text-xs">
-                          {entry.discordId}
-                        </span>
-                      </td>
-                      <td className="p-1">
-                        {new Date(entry.linkedAt).toLocaleDateString()}
-                      </td>
-                      <td className="p-1">
-                        {new Date(entry.unlinkedAt).toLocaleDateString()}
-                      </td>
-                      <td className="p-1">
-                        {entry.reason}
-                        {entry.cooldownWaived ? " (cooldown waived)" : ""}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table
+              data={data.history.map((entry) => ({
+                id: entry.id,
+                character: entry.username ?? entry.userId,
+                discord: (
+                  <>
+                    {entry.discordUsername}
+                    <br />
+                    <span className="text-muted-foreground text-xs">
+                      {entry.discordId}
+                    </span>
+                  </>
+                ),
+                linked: new Date(entry.linkedAt).toLocaleDateString(),
+                unlinked: new Date(entry.unlinkedAt).toLocaleDateString(),
+                reason: `${entry.reason}${entry.cooldownWaived ? " (cooldown waived)" : ""}`,
+              }))}
+              columns={[
+                { key: "character", header: "Character", type: "string" },
+                { key: "discord", header: "Discord", type: "jsx" },
+                { key: "linked", header: "Linked", type: "string" },
+                { key: "unlinked", header: "Unlinked", type: "string" },
+                { key: "reason", header: "Reason", type: "string" },
+              ]}
+            />
           )}
         </div>
       )}
     </ContentBox>
   );
 }
-
-type StaffLink = RouterOutputs["discord"]["searchLinks"]["links"][number];
 
 const DiscordLinkCard: React.FC<{ link: StaffLink; canManage: boolean }> = ({
   link,
@@ -157,7 +145,7 @@ const DiscordLinkCard: React.FC<{ link: StaffLink; canManage: boolean }> = ({
     onSuccess,
   });
   const flags = link.log.filter((entry) =>
-    entry.relatedMsg?.startsWith("Discord link flag"),
+    entry.relatedMsg?.startsWith(DISCORD_LINK_FLAG_PREFIX),
   );
 
   return (
@@ -298,3 +286,5 @@ const DiscordLinkCard: React.FC<{ link: StaffLink; canManage: boolean }> = ({
     </div>
   );
 };
+
+type StaffLink = RouterOutputs["discord"]["searchLinks"]["links"][number];

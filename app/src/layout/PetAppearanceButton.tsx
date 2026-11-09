@@ -27,11 +27,7 @@ export function PetAppearanceButton({
   onGenerate,
 }: PetAppearanceButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [draft, setDraft] = useState({
-    paletteIndex: pet.paletteIndex,
-    characteristicIndex: pet.characteristicIndex,
-    auraIndex: pet.auraIndex,
-  });
+  const [draft, setDraft] = useState(() => savedTraits(pet));
   const buttonRef = useRef<HTMLButtonElement>(null);
   const canChoose = canChoosePetAppearance(pet);
   const fields = [
@@ -62,11 +58,7 @@ export function PetAppearanceButton({
             return;
           }
           // Closing the picker discards its draft; reopening starts from the saved traits.
-          setDraft({
-            paletteIndex: pet.paletteIndex,
-            characteristicIndex: pet.characteristicIndex,
-            auraIndex: pet.auraIndex,
-          });
+          setDraft(savedTraits(pet));
           setIsOpen(true);
         }}
       >
@@ -136,6 +128,13 @@ export function PetAppearanceButton({
     </>
   );
 }
+
+/** The pet's saved cosmetic indices, where every picker draft starts. */
+const savedTraits = (pet: PetAppearanceButtonProps["pet"]) => ({
+  paletteIndex: pet.paletteIndex,
+  characteristicIndex: pet.characteristicIndex,
+  auraIndex: pet.auraIndex,
+});
 
 type PetAppearanceButtonProps = {
   pet: Pick<

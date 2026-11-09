@@ -1,6 +1,6 @@
+import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "bun:test";
 
 /**
  * `package.json` pins bun via `packageManager`, but nothing enforces it, and an older bun does
@@ -50,7 +50,8 @@ describe("bun.lock", () => {
   it("still carries the nested overrides an older bun would have dropped", () => {
     // Scoped to the overrides block on purpose: the names also appear in the packages list, so
     // searching the whole file passes even on a lockfile that has lost them
-    const overrides = readLockfile().match(/"overrides":\s*\{([\s\S]*?)\n {2}\},/)?.[1] ?? "";
+    const overrides =
+      readLockfile().match(/"overrides":\s*\{([\s\S]*?)\n {2}\},/)?.[1] ?? "";
     const nested = nestedOverrideNames();
     // Without one of these the assertion below is vacuous and the canary watches nothing
     expect(nested.length).toBeGreaterThan(0);

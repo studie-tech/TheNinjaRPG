@@ -1,17 +1,21 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { BarChart2, Flag, Quote, SmilePlus, SquarePen, Trash2 } from "lucide-react";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ConversationComment, UserReportComment } from "@/drizzle/schema";
 import { CompactComment } from "@/layout/CompactComment";
 import Confirm from "@/layout/Confirm";
 import { EmojiPicker } from "@/layout/EmojiPicker";
 import { ModerationSummary } from "@/layout/ModerationSummary";
+import Post, { type PostProps } from "@/layout/Post";
+import { QuotingNote } from "@/layout/QuotingNote";
 import { ReactionPill } from "@/layout/ReactionPill";
 import ReportUser from "@/layout/Report";
+import RichInput from "@/layout/RichInput";
 import type { ChatStartUser } from "@/libs/chatPanel";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -22,9 +26,6 @@ import { useUserData } from "@/utils/UserContext";
 import type { DeleteCommentSchema, MutateCommentSchema } from "@/validators/comments";
 import { mutateCommentSchema } from "@/validators/comments";
 import type { systems } from "@/validators/reports";
-import Post, { type PostProps } from "./Post";
-import { QuotingNote } from "./QuotingNote";
-import RichInput from "./RichInput";
 
 /**
  * Component for handling comments on user reports
@@ -152,9 +153,7 @@ interface BaseCommentProps extends PostProps {
   setQuoteId?: (id: string) => void;
 }
 const BaseComment: React.FC<BaseCommentProps> = (props) => {
-  // Reference for emoji element
   const { data: userData } = useUserData();
-  const emojiRef = useRef<HTMLDivElement | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
 
   // Handle submit: an edit sends only the author's own text; the server keeps attached quotes
@@ -195,45 +194,34 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
         ))
       : [];
 
-  // Also dismiss while the picker chunk is loading, before its own outside-click
-  // handler is available. Closed comments do not need a document listener.
-  useEffect(() => {
-    if (!emojiOpen) return;
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (emojiRef.current && !emojiRef.current.contains(e.target as HTMLElement)) {
-        setEmojiOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-    };
-  }, [emojiOpen]);
-
   return (
     <Post
       options={
         props.user && (
           <div className="flex flex-row gap-1">
             {props.toggleReaction && (
-              <>
-                <SmilePlus
-                  className="h-6 w-6 cursor-pointer hover:text-orange-500"
-                  onClick={() => setEmojiOpen(!emojiOpen)}
-                />
-                <div className="absolute top-0 right-2 z-50" ref={emojiRef}>
-                  {emojiOpen && (
-                    <EmojiPicker
-                      perLine={12}
-                      onSelect={(native) => {
-                        props.toggleReaction?.(native);
-                        setEmojiOpen(false);
-                      }}
-                      onClickOutside={() => setEmojiOpen(false)}
-                    />
-                  )}
-                </div>
-              </>
+              <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+                <PopoverTrigger asChild>
+                  <button type="button" aria-label="Add reaction" className="flex">
+                    <SmilePlus className="h-6 w-6 cursor-pointer hover:text-orange-500" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="end"
+                  collisionPadding={8}
+                  className="max-h-[var(--radix-popover-content-available-height)] w-[300px] overflow-y-auto border-0 p-0"
+                >
+                  <EmojiPicker
+                    perLine={12}
+                    // Radix cannot scan shadow-root controls; let the loaded picker focus search.
+                    autoFocus
+                    onSelect={(native) => {
+                      props.toggleReaction?.(native);
+                      setEmojiOpen(false);
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
             )}
             {props.setQuoteId && (
               <Quote

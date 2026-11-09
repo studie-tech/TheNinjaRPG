@@ -1,5 +1,5 @@
-import { fetchBloodlineCollectionRolls } from "@/queries/quests";
 import { describe, expect, it, mock } from "bun:test";
+import { fetchBloodlineCollectionRolls } from "@/queries/quests";
 import type { DrizzleClient } from "@/server/db";
 import { withRequestScope } from "@/server/requestScope";
 import {
@@ -61,10 +61,23 @@ describe("quest collection snapshots", () => {
   it("uses preloaded rows without more reads and still counts the equipped bloodline", async () => {
     const { client, findCatalogue, findRolls } = database();
     const snapshot = { catalogue: [...catalogue], rolls };
-    const result = await hydrateQuestCollections(client, userWithCollection(), false, snapshot);
+    const result = await hydrateQuestCollections(
+      client,
+      userWithCollection(),
+      false,
+      snapshot,
+    );
 
-    expect(result.bloodlineCollectionProgress).toContainEqual({ rank: "D", collected: 2, total: 2 });
-    expect(result.bloodlineCollectionProgress).toContainEqual({ rank: "C", collected: 0, total: 1 });
+    expect(result.bloodlineCollectionProgress).toContainEqual({
+      rank: "D",
+      collected: 2,
+      total: 2,
+    });
+    expect(result.bloodlineCollectionProgress).toContainEqual({
+      rank: "C",
+      collected: 0,
+      total: 1,
+    });
     expect(findCatalogue).not.toHaveBeenCalled();
     expect(findRolls).not.toHaveBeenCalled();
     expect(snapshot.rolls).toEqual(rolls);
@@ -73,26 +86,44 @@ describe("quest collection snapshots", () => {
   it("retains the lazy fallback for callers without a snapshot", async () => {
     const { client, findCatalogue, findRolls } = database();
     const result = await hydrateQuestCollections(client, userWithCollection());
-    expect(result.bloodlineCollectionProgress).toContainEqual({ rank: "D", collected: 2, total: 2 });
+    expect(result.bloodlineCollectionProgress).toContainEqual({
+      rank: "D",
+      collected: 2,
+      total: 2,
+    });
     expect(findCatalogue).toHaveBeenCalledTimes(1);
     expect(findRolls).toHaveBeenCalledTimes(1);
   });
 
-  it.each([false, true])("skips completed collection goals (preloaded=%s)", async (preloaded) => {
-    const { client, findCatalogue, findRolls } = database();
-    const user = userWithCollection();
-    user.questData = [{ id: "collection-quest", goals: [{ id: "collection-goal", done: true }] }] as never;
-    const result = await hydrateQuestCollections(client, user, false,
-      preloaded ? { catalogue: [...catalogue], rolls } : undefined);
-    expect(result.bloodlineCollectionProgress).toBeUndefined();
-    expect(findCatalogue).not.toHaveBeenCalled();
-    expect(findRolls).not.toHaveBeenCalled();
-  });
+  it.each([false, true])(
+    "skips completed collection goals (preloaded=%s)",
+    async (preloaded) => {
+      const { client, findCatalogue, findRolls } = database();
+      const user = userWithCollection();
+      user.questData = [
+        { id: "collection-quest", goals: [{ id: "collection-goal", done: true }] },
+      ] as never;
+      const result = await hydrateQuestCollections(
+        client,
+        user,
+        false,
+        preloaded ? { catalogue: [...catalogue], rolls } : undefined,
+      );
+      expect(result.bloodlineCollectionProgress).toBeUndefined();
+      expect(findCatalogue).not.toHaveBeenCalled();
+      expect(findRolls).not.toHaveBeenCalled();
+    },
+  );
 
   it("treats an empty preloaded snapshot as loaded", async () => {
     const { client, findCatalogue, findRolls } = database();
-    const result = await hydrateQuestCollections(client, userWithCollection(), false, { catalogue: [], rolls: [] });
-    expect(result.bloodlineCollectionProgress?.every((rank) => rank.total === 0)).toBe(true);
+    const result = await hydrateQuestCollections(client, userWithCollection(), false, {
+      catalogue: [],
+      rolls: [],
+    });
+    expect(result.bloodlineCollectionProgress?.every((rank) => rank.total === 0)).toBe(
+      true,
+    );
     expect(findCatalogue).not.toHaveBeenCalled();
     expect(findRolls).not.toHaveBeenCalled();
   });
@@ -135,12 +166,27 @@ describe("quest collection snapshots", () => {
     } as unknown as DrizzleClient;
     await withRequestScope(async () => {
       await fetchBloodlineCollectionCatalogue(client);
-      const result = await hydrateQuestCollections(transaction, userWithCollection(), true, {
-        catalogue: [], rolls,
+      const result = await hydrateQuestCollections(
+        transaction,
+        userWithCollection(),
+        true,
+        {
+          catalogue: [],
+          rolls,
+        },
+      );
+      expect(result.bloodlineCollectionProgress).toContainEqual({
+        rank: "D",
+        collected: 1,
+        total: 2,
       });
-      expect(result.bloodlineCollectionProgress).toContainEqual({ rank: "D", collected: 1, total: 2 });
     });
-    expect(events).toEqual(["catalogue:start", "catalogue:end", "rolls:start", "rolls:end"]);
+    expect(events).toEqual([
+      "catalogue:start",
+      "catalogue:end",
+      "rolls:start",
+      "rolls:end",
+    ]);
   });
 
   describe("owned objective jutsu", () => {
@@ -159,7 +205,9 @@ describe("quest collection snapshots", () => {
               hidden: false,
               retryDelay: "none",
               content: {
-                objectives: [{ id: "learn", task: "train_specific_jutsu", trainJutsuIds }],
+                objectives: [
+                  { id: "learn", task: "train_specific_jutsu", trainJutsuIds },
+                ],
                 reward: {},
               },
             },
@@ -176,7 +224,10 @@ describe("quest collection snapshots", () => {
 
     it("reads ownership for an unfinished objective, disciplines included", async () => {
       const { client, findOwned } = jutsuDatabase();
-      const result = await hydrateQuestCollections(client, userWithObjective(["listed"]));
+      const result = await hydrateQuestCollections(
+        client,
+        userWithObjective(["listed"]),
+      );
       expect(findOwned).toHaveBeenCalledTimes(1);
       expect(result.ownedObjectiveJutsus).toEqual([
         { jutsuId: "listed", masteryTypes: ["Ninjutsu"] },
@@ -185,7 +236,10 @@ describe("quest collection snapshots", () => {
 
     it("costs nothing once done, or for mastery objectives without a jutsu list", async () => {
       const { client, findOwned } = jutsuDatabase();
-      const done = await hydrateQuestCollections(client, userWithObjective(["listed"], true));
+      const done = await hydrateQuestCollections(
+        client,
+        userWithObjective(["listed"], true),
+      );
       const unlisted = await hydrateQuestCollections(client, userWithObjective([]));
       expect(findOwned).not.toHaveBeenCalled();
       expect(done.ownedObjectiveJutsus).toBeUndefined();

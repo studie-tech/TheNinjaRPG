@@ -1,38 +1,57 @@
-
-import { eq } from "drizzle-orm";
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import type { UserCache } from "@/deltas/profile";
-import { fetchActionUser } from "@/queries/actionReadiness";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { eq } from "drizzle-orm";
+import type { UserCache } from "@/deltas/profile";
 import {
   HOSPITAL_BASE_HEAL_SECONDS,
   MEDNIN_REQUIRED_EXP,
   REGEN_SECONDS,
   SENSEI_GENIN_MED_EXP_SHARE_PERC,
 } from "@/drizzle/constants";
-import { bloodline, quest, questHistory, title, userData, userTitle } from "@/drizzle/schema";
+import {
+  bloodline,
+  quest,
+  questHistory,
+  title,
+  userData,
+  userTitle,
+} from "@/drizzle/schema";
 import { AUTO_CHECKOUT_MESSAGE } from "@/libs/actionReadiness";
 import { Pusher } from "@/libs/pusher";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { hospitalRouter } from "@/server/api/routers/hospital";
 import { questsRouter } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
-import { DialogObjective, QuestTracker, SimpleObjective } from "@/validators/objectives";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import {
+  DialogObjective,
+  QuestTracker,
+  SimpleObjective,
+} from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { insertQuestHistory, insertQuests, insertUsers } from "../../../../setup/factories";
+import { deferred } from "../../../../setup/deferred";
+import {
+  insertQuestHistory,
+  insertQuests,
+  insertUsers,
+} from "../../../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
-import { beforeStatements, inTransactions, aroundStatements, interceptExecute } from "../../../../setup/statements";
-import { readUser } from "../../../../setup/userReads";
+import {
+  aroundStatements,
+  beforeStatements,
+  inTransactions,
+  interceptExecute,
+} from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
-  resetTables,
   lockWaitObserved,
+  resetTables,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
+import { readUser } from "../../../../setup/userReads";
 
 const USER_ID = "hospital-self-heal-user";
 const TARGET_ID = "hospital-heal-target";
@@ -113,17 +132,35 @@ const readHealer = (userId = USER_ID) => readUser(userId);
 
 /** Assigns a real isolated run through its router so healing exercises persisted isolation. */
 const startTargetPyramid = async (client?: DrizzleClient) => {
-  await insertQuests([{
-    id: "hospital-isolated-pyramid", questType: "battlepyramid", hidden: false,
-    maxAttempts: 100, maxCompletes: 100,
-    content: {
-      isolated: true, entryItems: [], reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
-      objectives: [DialogObjective.parse({ id: "enter", task: "dialog", nextObjectiveId: [] })],
+  await insertQuests([
+    {
+      id: "hospital-isolated-pyramid",
+      questType: "battlepyramid",
+      hidden: false,
+      maxAttempts: 100,
+      maxCompletes: 100,
+      content: {
+        isolated: true,
+        entryItems: [],
+        reward: ObjectiveReward.parse({}),
+        sceneBackground: "",
+        sceneCharacters: [],
+        objectives: [
+          DialogObjective.parse({ id: "enter", task: "dialog", nextObjectiveId: [] }),
+        ],
+      },
     },
-  }]);
+  ]);
   const target = await readHealer(TARGET_ID);
-  const api = callerForDatabase(questsRouter, TARGET_ID, client ?? await getTestDatabase());
-  const result = await api.startQuest({ questId: "hospital-isolated-pyramid", userSector: target!.sector });
+  const api = callerForDatabase(
+    questsRouter,
+    TARGET_ID,
+    client ?? (await getTestDatabase()),
+  );
+  const result = await api.startQuest({
+    questId: "hospital-isolated-pyramid",
+    userSector: target!.sector,
+  });
   expect(result.success).toBe(true);
 };
 
@@ -188,22 +225,43 @@ describeWithDatabase("hospital self-healing", () => {
     const key = ["profile", USER_ID];
     cache.setQueryData(key, { userData: initial, notifications: [] });
     let reads = 0;
-    const observer = new QueryObserver(cache, { queryKey: key, staleTime: Infinity,
-      queryFn: async () => { reads++; return { userData: initial, notifications: [] }; } });
+    const observer = new QueryObserver(cache, {
+      queryKey: key,
+      staleTime: Infinity,
+      queryFn: async () => {
+        reads++;
+        return { userData: initial, notifications: [] };
+      },
+    });
     const unsubscribe = observer.subscribe(() => {});
     const revision = prepareUserUpdate(cache, key);
     const api = await callerFor(hospitalRouter, USER_ID);
     const result = await api.userHeal({ userId: USER_ID, healPercentage: 100 });
     try {
-      await updateUserCache(cache, key, result.healer, { revision, userRecovery: result.userRecovery });
+      await updateUserCache(cache, key, result.healer, {
+        revision,
+        userRecovery: result.userRecovery,
+      });
       expect(reads).toBe(0);
       const saved = await readHealer();
-      expect(cache.getQueryData<UserCache>(key)?.userData).toMatchObject({ status: "AWAKE",
-        curHealth: saved?.curHealth, curChakra: saved?.curChakra, curStamina: saved?.curStamina,
-        curEnergy: saved?.curEnergy, medicalExperience: saved?.medicalExperience, questData: saved?.questData });
-    } finally { unsubscribe(); cache.clear(); }
+      expect(cache.getQueryData<UserCache>(key)?.userData).toMatchObject({
+        status: "AWAKE",
+        curHealth: saved?.curHealth,
+        curChakra: saved?.curChakra,
+        curStamina: saved?.curStamina,
+        curEnergy: saved?.curEnergy,
+        medicalExperience: saved?.medicalExperience,
+        questData: saved?.questData,
+      });
+    } finally {
+      unsubscribe();
+      cache.clear();
+    }
 
-    expect(result).toMatchObject({ success: true, actionNotice: AUTO_CHECKOUT_MESSAGE });
+    expect(result).toMatchObject({
+      success: true,
+      actionNotice: AUTO_CHECKOUT_MESSAGE,
+    });
     const saved = await readHealer();
     expect(saved).toMatchObject({ status: "AWAKE", curHealth: 1000, curStamina: 100 });
     expect(saved?.curChakra).toBeCloseTo(8000 - (result.chakraCost ?? 0));
@@ -264,18 +322,25 @@ describeWithDatabase("hospital self-healing", () => {
     // Bootstrap profile rows before both requests read the same user concurrently.
     await fetchUpdatedUser({ client: database, userId: USER_ID, forceRegen: true });
 
-    const { promise: secondRegenReached, resolve: releaseFirstRegen } = deferred<void>();
-    const { promise: firstHealFinished, resolve: releaseSecondRegen } = deferred<void>();
+    const { promise: secondRegenReached, resolve: releaseFirstRegen } =
+      deferred<void>();
+    const { promise: firstHealFinished, resolve: releaseSecondRegen } =
+      deferred<void>();
     let regenWrites = 0;
-    const delayedDatabase = aroundStatements(database, userData, async (run) => {
-      regenWrites++;
-      if (regenWrites === 1) await secondRegenReached;
-      else if (regenWrites === 2) {
-        releaseFirstRegen();
-        await firstHealFinished;
-      }
-      return run();
-    }, { when: (set) => "primaryElement" in set });
+    const delayedDatabase = aroundStatements(
+      database,
+      userData,
+      async (run) => {
+        regenWrites++;
+        if (regenWrites === 1) await secondRegenReached;
+        else if (regenWrites === 2) {
+          releaseFirstRegen();
+          await firstHealFinished;
+        }
+        return run();
+      },
+      { when: (set) => "primaryElement" in set },
+    );
     const api = callerForDatabase(hospitalRouter, USER_ID, delayedDatabase);
 
     const first = api
@@ -318,7 +383,12 @@ describeWithDatabase("hospital healing another user", () => {
     trigger = vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await insertLegendaryHealer({
       curHealth: 1000,
-      questData: [QuestTracker.parse({ id: "hospital-medical-quest", goals: [{ id: "heal", value: 0 }] })],
+      questData: [
+        QuestTracker.parse({
+          id: "hospital-medical-quest",
+          goals: [{ id: "heal", value: 0 }],
+        }),
+      ],
     });
     await insertUsers([
       {
@@ -340,49 +410,79 @@ describeWithDatabase("hospital healing another user", () => {
         medicalExperience: 0,
       },
     ]);
-    await insertQuests([{
-      id: "hospital-medical-quest", questType: "daily", hidden: false,
-      maxAttempts: 100, maxCompletes: 100,
-      content: {
-        objectives: [SimpleObjective.parse({ id: "heal", task: "medical_experience_gained", value: 1000 })],
-        reward: ObjectiveReward.parse({}), sceneBackground: "", sceneCharacters: [],
+    await insertQuests([
+      {
+        id: "hospital-medical-quest",
+        questType: "daily",
+        hidden: false,
+        maxAttempts: 100,
+        maxCompletes: 100,
+        content: {
+          objectives: [
+            SimpleObjective.parse({
+              id: "heal",
+              task: "medical_experience_gained",
+              value: 1000,
+            }),
+          ],
+          reward: ObjectiveReward.parse({}),
+          sceneBackground: "",
+          sceneCharacters: [],
+        },
       },
-    }]);
-    await insertQuestHistory([{ userId: USER_ID, questId: "hospital-medical-quest", questType: "daily" }]);
+    ]);
+    await insertQuestHistory([
+      { userId: USER_ID, questId: "hospital-medical-quest", questType: "daily" },
+    ]);
   });
 
   afterEach(() => vi.restoreAllMocks());
 
   it("rejects a recipient entering isolation before delivery without charging or sharing experience", async () => {
     const database = await getTestDatabase();
-    await database.update(userData).set({ status: "AWAKE", isOutlaw: true })
+    await database
+      .update(userData)
+      .set({ status: "AWAKE", isOutlaw: true })
       .where(eq(userData.userId, TARGET_ID));
-    const api = callerForDatabase(hospitalRouter, USER_ID, beforeStatements(database, userData, [
-      async () => {}, async () => {}, async () => {
-        await startTargetPyramid();
-      },
-    ]));
+    const api = callerForDatabase(
+      hospitalRouter,
+      USER_ID,
+      beforeStatements(database, userData, [
+        async () => {},
+        async () => {},
+        async () => {
+          await startTargetPyramid();
+        },
+      ]),
+    );
 
     const result = await api.userHeal({ userId: TARGET_ID, healPercentage: 30 });
 
     expect(result.success).toBe(false);
     const [healer, target, student, run] = await Promise.all([
-      readHealer(), readHealer(TARGET_ID), readHealer(STUDENT_ID),
-      database.query.questHistory.findFirst({ where: eq(questHistory.userId, TARGET_ID) }),
+      readHealer(),
+      readHealer(TARGET_ID),
+      readHealer(STUDENT_ID),
+      database.query.questHistory.findFirst({
+        where: eq(questHistory.userId, TARGET_ID),
+      }),
     ]);
     expect(run).toMatchObject({ isolated: true, completed: 0, endAt: null });
     expect(target?.curHealth).toBe(100);
     expect(healer?.curChakra).toBe(8000);
     expect(healer?.medicalExperience).toBe(MEDNIN_REQUIRED_EXP.LEGENDARY);
     expect(student?.medicalExperience).toBe(0);
-    expect(healer?.questData?.find((q) => q.id === "hospital-medical-quest")?.goals)
-      .toMatchObject([{ id: "heal", value: 0 }]);
+    expect(
+      healer?.questData?.find((q) => q.id === "hospital-medical-quest")?.goals,
+    ).toMatchObject([{ id: "heal", value: 0 }]);
     expect(trigger).not.toHaveBeenCalled();
   });
 
   it("rejects an already isolated recipient without payment, experience or notifications", async () => {
     const database = await getTestDatabase();
-    await database.update(userData).set({ status: "AWAKE", isOutlaw: true })
+    await database
+      .update(userData)
+      .set({ status: "AWAKE", isOutlaw: true })
       .where(eq(userData.userId, TARGET_ID));
     await startTargetPyramid();
     const api = await callerFor(hospitalRouter, USER_ID);
@@ -392,21 +492,31 @@ describeWithDatabase("hospital healing another user", () => {
     expect(result.success).toBe(false);
     expect(result.message).toContain("awake or hospitalized");
     expect((await readHealer(TARGET_ID))?.curHealth).toBe(100);
-    expect(await readHealer()).toMatchObject({ curChakra: 8000, medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY });
+    expect(await readHealer()).toMatchObject({
+      curChakra: 8000,
+      medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY,
+    });
     expect((await readHealer(STUDENT_ID))?.medicalExperience).toBe(0);
     expect(trigger).not.toHaveBeenCalled();
   });
 
   it("observes isolation committed while healing waits for the recipient account lock", async () => {
     const database = await getTestDatabase();
-    await database.update(userData).set({ status: "AWAKE", isOutlaw: true })
+    await database
+      .update(userData)
+      .set({ status: "AWAKE", isOutlaw: true })
       .where(eq(userData.userId, TARGET_ID));
     const { promise: release, resolve: releaseAssignment } = deferred<void>();
     const { promise: locked, resolve: markLocked } = deferred<void>();
     const { promise: healingSent, resolve: markHealingSent } = deferred<void>();
-    const assignmentClient = inTransactions(database, (tx) => beforeStatements(tx, questHistory, [
-      async () => { markLocked(); await release; },
-    ]));
+    const assignmentClient = inTransactions(database, (tx) =>
+      beforeStatements(tx, questHistory, [
+        async () => {
+          markLocked();
+          await release;
+        },
+      ]),
+    );
     let assignment: Promise<void> | undefined;
     const healingClient = interceptExecute(database, async (_query, run) => {
       assignment = startTargetPyramid(assignmentClient);
@@ -420,7 +530,10 @@ describeWithDatabase("hospital healing another user", () => {
     let isWaiting = false;
     try {
       await healingSent;
-      isWaiting = await lockWaitObserved({ table: "UserData", heldLockData: TARGET_ID });
+      isWaiting = await lockWaitObserved({
+        table: "UserData",
+        heldLockData: TARGET_ID,
+      });
     } finally {
       releaseAssignment();
     }
@@ -428,14 +541,22 @@ describeWithDatabase("hospital healing another user", () => {
     expect(isWaiting).toBe(true);
     expect(result.success).toBe(false);
     const [healer, target, student, run] = await Promise.all([
-      readHealer(), readHealer(TARGET_ID), readHealer(STUDENT_ID),
-      database.query.questHistory.findFirst({ where: eq(questHistory.userId, TARGET_ID) }),
+      readHealer(),
+      readHealer(TARGET_ID),
+      readHealer(STUDENT_ID),
+      database.query.questHistory.findFirst({
+        where: eq(questHistory.userId, TARGET_ID),
+      }),
     ]);
     expect(run).toMatchObject({ isolated: true, completed: 0, endAt: null });
     expect(target?.curHealth).toBe(100);
-    expect(healer).toMatchObject({ curChakra: 8000, medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY });
-    expect(healer?.questData?.find((q) => q.id === "hospital-medical-quest")?.goals)
-      .toMatchObject([{ id: "heal", value: 0 }]);
+    expect(healer).toMatchObject({
+      curChakra: 8000,
+      medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY,
+    });
+    expect(
+      healer?.questData?.find((q) => q.id === "hospital-medical-quest")?.goals,
+    ).toMatchObject([{ id: "heal", value: 0 }]);
     expect(student?.medicalExperience).toBe(0);
     expect(trigger).not.toHaveBeenCalled();
   }, 20_000);
@@ -444,20 +565,31 @@ describeWithDatabase("hospital healing another user", () => {
     "rejects a late %s change without payment, trackers or student shares",
     async (change) => {
       const database = await getTestDatabase();
-      const api = callerForDatabase(hospitalRouter, USER_ID, beforeStatements(database, userData, [
-        async () => {}, async () => {
-          if (change === "sql error") throw new Error("Healing delivery failed on purpose");
-          if (change === "recipient") {
-            await database.delete(userData).where(eq(userData.userId, TARGET_ID));
-          } else {
-            await database.update(userData).set(
-              change === "snapshot" ? { updatedAt: new Date(Date.now() + 1000) }
-                : change === "status" ? { status: "ASLEEP" }
-                  : { curChakra: 0 },
-            ).where(eq(userData.userId, USER_ID));
-          }
-        },
-      ]));
+      const api = callerForDatabase(
+        hospitalRouter,
+        USER_ID,
+        beforeStatements(database, userData, [
+          async () => {},
+          async () => {
+            if (change === "sql error")
+              throw new Error("Healing delivery failed on purpose");
+            if (change === "recipient") {
+              await database.delete(userData).where(eq(userData.userId, TARGET_ID));
+            } else {
+              await database
+                .update(userData)
+                .set(
+                  change === "snapshot"
+                    ? { updatedAt: new Date(Date.now() + 1000) }
+                    : change === "status"
+                      ? { status: "ASLEEP" }
+                      : { curChakra: 0 },
+                )
+                .where(eq(userData.userId, USER_ID));
+            }
+          },
+        ]),
+      );
 
       const heal = api.userHeal({ userId: TARGET_ID, healPercentage: 30 });
       if (change === "sql error") {
@@ -468,13 +600,16 @@ describeWithDatabase("hospital healing another user", () => {
         expect(result.message).toContain("changed");
       }
       const [healer, target, student] = await Promise.all([
-        readHealer(), readHealer(TARGET_ID), readHealer(STUDENT_ID),
+        readHealer(),
+        readHealer(TARGET_ID),
+        readHealer(STUDENT_ID),
       ]);
       expect(target?.curHealth).toBe(change === "recipient" ? undefined : 100);
       expect(healer?.curChakra).toBe(change === "chakra" ? 0 : 8000);
       expect(healer?.medicalExperience).toBe(MEDNIN_REQUIRED_EXP.LEGENDARY);
-      expect(healer?.questData?.find((q) => q.id === "hospital-medical-quest")?.goals)
-        .toMatchObject([{ id: "heal", value: 0 }]);
+      expect(
+        healer?.questData?.find((q) => q.id === "hospital-medical-quest")?.goals,
+      ).toMatchObject([{ id: "heal", value: 0 }]);
       expect(student?.medicalExperience).toBe(0);
       expect(trigger).not.toHaveBeenCalled();
     },
@@ -501,8 +636,9 @@ describeWithDatabase("hospital healing another user", () => {
     ]);
     expect(healer?.curChakra).toBe(7865);
     expect(healer?.medicalExperience).toBe(MEDNIN_REQUIRED_EXP.LEGENDARY + 90);
-    expect(healer?.questData?.find((q) => q.id === "hospital-medical-quest")?.goals)
-      .toMatchObject([{ id: "heal", value: 90 }]);
+    expect(
+      healer?.questData?.find((q) => q.id === "hospital-medical-quest")?.goals,
+    ).toMatchObject([{ id: "heal", value: 90 }]);
     expect(target?.curHealth).toBe(1000);
     expect(target?.status).toBe("HOSPITALIZED");
     expect(student?.medicalExperience).toBe(
@@ -524,16 +660,24 @@ describeWithDatabase("hospital healing another user", () => {
   it("settles a hospitalized target's Energy before resetting its recovery clock", async () => {
     const database = await getTestDatabase();
     await database.insert(bloodline).values({
-      id: "hospital-regen-line", name: "Hospital Regen Line", rank: "D",
-      image: "", description: "", effects: [], regenIncrease: 100,
+      id: "hospital-regen-line",
+      name: "Hospital Regen Line",
+      rank: "D",
+      image: "",
+      description: "",
+      effects: [],
+      regenIncrease: 100,
     });
-    await database.update(userData).set({
-      level: 100,
-      bloodlineId: "hospital-regen-line",
-      curEnergy: 20,
-      regeneration: 60,
-      regenAt: new Date(Date.now() - 75000),
-    }).where(eq(userData.userId, TARGET_ID));
+    await database
+      .update(userData)
+      .set({
+        level: 100,
+        bloodlineId: "hospital-regen-line",
+        curEnergy: 20,
+        regeneration: 60,
+        regenAt: new Date(Date.now() - 75000),
+      })
+      .where(eq(userData.userId, TARGET_ID));
     const api = await callerFor(hospitalRouter, USER_ID);
     const result = await api.userHeal({ userId: TARGET_ID, healPercentage: 100 });
     expect(result.success).toBe(true);
@@ -549,74 +693,156 @@ describeWithDatabase("hospital healing another user", () => {
     const database = await getTestDatabase();
     const nextTick = new Date(Date.now() + 1000);
     const regenAt = new Date(nextTick.getTime() - REGEN_SECONDS * 1000);
-    await database.update(userData).set({
-      curEnergy: 0, regeneration: 10, regenAt, joinedVillageAt: new Date(0),
-    }).where(eq(userData.userId, TARGET_ID));
+    await database
+      .update(userData)
+      .set({
+        curEnergy: 0,
+        regeneration: 10,
+        regenAt,
+        joinedVillageAt: new Date(0),
+      })
+      .where(eq(userData.userId, TARGET_ID));
     await database.insert(title).values({
-      id: "hospital-regen-title", name: "Hospital Recovery",
+      id: "hospital-regen-title",
+      name: "Hospital Recovery",
       effects: [{ type: "increaseregeneration", power: 7 }],
     });
     await insertQuests([{ id: "hospital-title-choice", questType: "story" }]);
-    await insertQuestHistory([{
-      userId: TARGET_ID, questId: "hospital-title-choice", completed: 1, endAt: new Date(),
-      pendingRewardChoice: {
-        id: "hospital-title-offer", pickCount: 1,
-        cards: [{ id: "hospital-title-card", field: "reward_titles", amount: 1, contentId: "hospital-regen-title" }],
+    await insertQuestHistory([
+      {
+        userId: TARGET_ID,
+        questId: "hospital-title-choice",
+        completed: 1,
+        endAt: new Date(),
+        pendingRewardChoice: {
+          id: "hospital-title-offer",
+          pickCount: 1,
+          cards: [
+            {
+              id: "hospital-title-card",
+              field: "reward_titles",
+              amount: 1,
+              contentId: "hospital-regen-title",
+            },
+          ],
+        },
       },
-    }]);
-    const api = callerForDatabase(hospitalRouter, USER_ID, beforeStatements(database, userData, [
-      async () => {}, async () => {
-        // The recipient is still hospitalized when its pending title-only reward is claimed.
-        const claim = await (await callerFor(questsRouter, TARGET_ID)).claimRewardChoice({
-          questId: "hospital-title-choice", choiceId: "hospital-title-offer", cardIds: ["hospital-title-card"],
-        });
-        expect(claim.success).toBe(true);
-        expect(claim.rewards?.reward_titles).toEqual(["Hospital Recovery"]);
-        const owned = await database.query.userTitle.findFirst({ where: eq(userTitle.userId, TARGET_ID) });
-        expect(owned?.createdAt.getTime()).toBeLessThan(nextTick.getTime());
-        // Delivery's SQL NOW(3) crosses the first complete tick after acquisition.
-        await new Promise((resolve) => setTimeout(resolve, Math.max(0, nextTick.getTime() - Date.now() + 20)));
-      },
-    ]));
+    ]);
+    const api = callerForDatabase(
+      hospitalRouter,
+      USER_ID,
+      beforeStatements(database, userData, [
+        async () => {},
+        async () => {
+          // The recipient is still hospitalized when its pending title-only reward is claimed.
+          const claim = await (
+            await callerFor(questsRouter, TARGET_ID)
+          ).claimRewardChoice({
+            questId: "hospital-title-choice",
+            choiceId: "hospital-title-offer",
+            cardIds: ["hospital-title-card"],
+          });
+          expect(claim.success).toBe(true);
+          expect(claim.rewards?.reward_titles).toEqual(["Hospital Recovery"]);
+          const owned = await database.query.userTitle.findFirst({
+            where: eq(userTitle.userId, TARGET_ID),
+          });
+          expect(owned?.createdAt.getTime()).toBeLessThan(nextTick.getTime());
+          // Delivery's SQL NOW(3) crosses the first complete tick after acquisition.
+          await new Promise((resolve) =>
+            setTimeout(resolve, Math.max(0, nextTick.getTime() - Date.now() + 20)),
+          );
+        },
+      ]),
+    );
 
     const rejected = await api.userHeal({ userId: TARGET_ID, healPercentage: 100 });
 
     expect(rejected.success).toBe(false);
     expect(rejected.message).toContain("changed");
     const [healer, target, student] = await Promise.all([
-      readHealer(), readHealer(TARGET_ID), readHealer(STUDENT_ID),
+      readHealer(),
+      readHealer(TARGET_ID),
+      readHealer(STUDENT_ID),
     ]);
-    expect(healer).toMatchObject({ curChakra: 8000, medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY });
-    expect(healer?.questData?.find((q) => q.id === "hospital-medical-quest")?.goals)
-      .toMatchObject([{ id: "heal", value: 0 }]);
-    expect(target).toEqual(expect.objectContaining({ curHealth: 100, curEnergy: 0, regenAt, status: "HOSPITALIZED" }));
+    expect(healer).toMatchObject({
+      curChakra: 8000,
+      medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY,
+    });
+    expect(
+      healer?.questData?.find((q) => q.id === "hospital-medical-quest")?.goals,
+    ).toMatchObject([{ id: "heal", value: 0 }]);
+    expect(target).toEqual(
+      expect.objectContaining({
+        curHealth: 100,
+        curEnergy: 0,
+        regenAt,
+        status: "HOSPITALIZED",
+      }),
+    );
     expect(student?.medicalExperience).toBe(0);
     expect(trigger).not.toHaveBeenCalled();
 
     const retry = await api.userHeal({ userId: TARGET_ID, healPercentage: 100 });
 
     expect(retry.success).toBe(true);
-    expect(await readHealer(TARGET_ID)).toMatchObject({ curHealth: 1000, curEnergy: 17, status: "HOSPITALIZED" });
-    expect((await readHealer(TARGET_ID))?.regenAt.getTime()).toBeGreaterThan(nextTick.getTime());
-    expect(await readHealer()).toMatchObject({ curChakra: 7865, medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY + 90 });
-    expect((await readHealer(STUDENT_ID))?.medicalExperience).toBe(Math.floor((90 * SENSEI_GENIN_MED_EXP_SHARE_PERC) / 100));
+    expect(await readHealer(TARGET_ID)).toMatchObject({
+      curHealth: 1000,
+      curEnergy: 17,
+      status: "HOSPITALIZED",
+    });
+    expect((await readHealer(TARGET_ID))?.regenAt.getTime()).toBeGreaterThan(
+      nextTick.getTime(),
+    );
+    expect(await readHealer()).toMatchObject({
+      curChakra: 7865,
+      medicalExperience: MEDNIN_REQUIRED_EXP.LEGENDARY + 90,
+    });
+    expect((await readHealer(STUDENT_ID))?.medicalExperience).toBe(
+      Math.floor((90 * SENSEI_GENIN_MED_EXP_SHARE_PERC) / 100),
+    );
   });
 
-  it.each([{ max: 1000, expected: 300 }, { max: 250, expected: 250 }])(
-    "adds healing to live pools and caps at $max after another write follows the snapshot", async ({ max, expected }) => {
-    const database = await getTestDatabase();
-    await database.update(userData).set({ curChakra: 100, maxChakra: 1000, curStamina: 100, maxStamina: 1000 })
-      .where(eq(userData.userId, TARGET_ID));
-    const api = callerForDatabase(hospitalRouter, USER_ID, beforeStatements(database, userData, [
-      async () => {}, async () => {
-        await database.update(userData).set({ curHealth: 200, curChakra: 200, curStamina: 200, maxHealth: max, maxChakra: max, maxStamina: max })
-          .where(eq(userData.userId, TARGET_ID));
-      },
-    ]));
+  it.each([
+    { max: 1000, expected: 300 },
+    { max: 250, expected: 250 },
+  ])(
+    "adds healing to live pools and caps at $max after another write follows the snapshot",
+    async ({ max, expected }) => {
+      const database = await getTestDatabase();
+      await database
+        .update(userData)
+        .set({ curChakra: 100, maxChakra: 1000, curStamina: 100, maxStamina: 1000 })
+        .where(eq(userData.userId, TARGET_ID));
+      const api = callerForDatabase(
+        hospitalRouter,
+        USER_ID,
+        beforeStatements(database, userData, [
+          async () => {},
+          async () => {
+            await database
+              .update(userData)
+              .set({
+                curHealth: 200,
+                curChakra: 200,
+                curStamina: 200,
+                maxHealth: max,
+                maxChakra: max,
+                maxStamina: max,
+              })
+              .where(eq(userData.userId, TARGET_ID));
+          },
+        ]),
+      );
 
-    const result = await api.userHeal({ userId: TARGET_ID, healPercentage: 10 });
+      const result = await api.userHeal({ userId: TARGET_ID, healPercentage: 10 });
 
-    expect(result.success).toBe(true);
-    expect(await readHealer(TARGET_ID)).toMatchObject({ curHealth: expected, curChakra: expected, curStamina: expected });
-  });
+      expect(result.success).toBe(true);
+      expect(await readHealer(TARGET_ID)).toMatchObject({
+        curHealth: expected,
+        curChakra: expected,
+        curStamina: expected,
+      });
+    },
+  );
 });

@@ -8,7 +8,7 @@ import {
   makeCompleteBattle,
   makeDamageEffect,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 /**
  * Regression tests for damage_dealt attribution: every source of HP loss must
@@ -79,44 +79,50 @@ const makeSummon = () =>
   });
 
 describe("applyEffects — damage over time damage_dealt credit", () => {
-  it.each(DOT_TICKS)("credits $tag HP loss on an opponent to the caster", ({ makeTick, action }) => {
-    const player = makeBattleUser("attacker");
-    const enemy = makeBattleUser("defender");
-    const battle = makeBattle([player, enemy], [makeTick("attacker", "defender")], 2);
+  it.each(DOT_TICKS)(
+    "credits $tag HP loss on an opponent to the caster",
+    ({ makeTick, action }) => {
+      const player = makeBattleUser("attacker");
+      const enemy = makeBattleUser("defender");
+      const battle = makeBattle([player, enemy], [makeTick("attacker", "defender")], 2);
 
-    // The affected target acts, triggering the tick.
-    const { newBattle } = applyEffects(battle, "defender", action);
+      // The affected target acts, triggering the tick.
+      const { newBattle } = applyEffects(battle, "defender", action);
 
-    const newPlayer = newBattle.usersState.find((u) => u.userId === "attacker");
-    const newEnemy = newBattle.usersState.find((u) => u.userId === "defender");
-    const healthLost = enemy.curHealth - (newEnemy?.curHealth ?? 0);
+      const newPlayer = newBattle.usersState.find((u) => u.userId === "attacker");
+      const newEnemy = newBattle.usersState.find((u) => u.userId === "defender");
+      const healthLost = enemy.curHealth - (newEnemy?.curHealth ?? 0);
 
-    expect(healthLost).toBeGreaterThan(0);
-    expect(newPlayer?.damageDealt).toBeCloseTo(healthLost, 5);
-    expect(newEnemy?.damageDealt).toBe(0);
-  });
+      expect(healthLost).toBeGreaterThan(0);
+      expect(newPlayer?.damageDealt).toBeCloseTo(healthLost, 5);
+      expect(newEnemy?.damageDealt).toBe(0);
+    },
+  );
 
-  it.each(DOT_TICKS)("credits $tag cast by a summon to its controller", ({ makeTick, action }) => {
-    const player = makeBattleUser("attacker");
-    const summon = makeSummon();
-    const enemy = makeBattleUser("defender");
-    const battle = makeBattle(
-      [player, summon, enemy],
-      [makeTick("summon-1", "defender")],
-      2,
-    );
+  it.each(DOT_TICKS)(
+    "credits $tag cast by a summon to its controller",
+    ({ makeTick, action }) => {
+      const player = makeBattleUser("attacker");
+      const summon = makeSummon();
+      const enemy = makeBattleUser("defender");
+      const battle = makeBattle(
+        [player, summon, enemy],
+        [makeTick("summon-1", "defender")],
+        2,
+      );
 
-    const { newBattle } = applyEffects(battle, "defender", action);
+      const { newBattle } = applyEffects(battle, "defender", action);
 
-    const newPlayer = newBattle.usersState.find((u) => u.userId === "attacker");
-    const newSummon = newBattle.usersState.find((u) => u.userId === "summon-1");
-    const newEnemy = newBattle.usersState.find((u) => u.userId === "defender");
-    const healthLost = enemy.curHealth - (newEnemy?.curHealth ?? 0);
+      const newPlayer = newBattle.usersState.find((u) => u.userId === "attacker");
+      const newSummon = newBattle.usersState.find((u) => u.userId === "summon-1");
+      const newEnemy = newBattle.usersState.find((u) => u.userId === "defender");
+      const healthLost = enemy.curHealth - (newEnemy?.curHealth ?? 0);
 
-    expect(healthLost).toBeGreaterThan(0);
-    expect(newPlayer?.damageDealt).toBeCloseTo(healthLost, 5);
-    expect(newSummon?.damageDealt).toBe(0);
-  });
+      expect(healthLost).toBeGreaterThan(0);
+      expect(newPlayer?.damageDealt).toBeCloseTo(healthLost, 5);
+      expect(newSummon?.damageDealt).toBe(0);
+    },
+  );
 
   it("credits the nominal poison amount even when the kill clamps actual HP loss", () => {
     const player = makeBattleUser("attacker");
@@ -208,7 +214,10 @@ describe("isOpponentDamageTarget (damage attribution)", () => {
     const attacker = makeBattleUser("attacker");
     expect(isOpponentDamageTarget(attacker, attacker)).toBe(false);
 
-    const enemySummon = makeBattleUser("summon", { direction: "right", isSummon: true });
+    const enemySummon = makeBattleUser("summon", {
+      direction: "right",
+      isSummon: true,
+    });
     expect(isOpponentDamageTarget(attacker, enemySummon)).toBe(false);
 
     const ally = makeBattleUser("ally", { direction: "left" });

@@ -46,9 +46,7 @@ import {
 type UserFilter = "all" | "user" | "opponents";
 
 type CombatTimelineProps = {
-  battleId: string;
-  battle?: ReturnedBattle | null;
-  battleVersion?: number;
+  battle: ReturnedBattle;
   showBasicActions?: boolean;
 };
 
@@ -80,11 +78,11 @@ const filterOptions: { value: UserFilter; icon: LucideIcon; label: string }[] = 
 ];
 
 const CombatTimeline: React.FC<CombatTimelineProps> = ({
-  battleId,
   battle,
-  battleVersion,
   showBasicActions = true,
 }) => {
+  const battleId = battle.id;
+  const battleVersion = battle.version;
   const [selected, setSelected] = useState<{
     entry: BattleAction;
     actionItem: GenericObject;
@@ -123,7 +121,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
       battleId,
       limit,
       offset: 0,
-      refreshKey: battleVersion ?? 0,
+      refreshKey: battleVersion,
       userFilter,
       showBasicActions,
     },
@@ -146,7 +144,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
     !presentedEntries?.some((entry) => entry.battleVersion >= pendingAction.version)
       ? pendingAction
       : undefined;
-  const pendingUser = battle?.usersState.find((u) => u.userId === pendingSlot?.userId);
+  const pendingUser = battle.usersState.find((u) => u.userId === pendingSlot?.userId);
   const slotCount = (presentedEntries?.length ?? 0) + (pendingSlot ? 1 : 0);
 
   const resolvedEntries = useMemo(() => {
@@ -154,19 +152,16 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
     return [...presentedEntries]
       .reverse() // Oldest on left, newest on right
       .map((entry) => {
-        const user = battle?.usersState.find((u) => u.userId === entry.userId);
-        const actions =
-          battle && entry.userId
-            ? availableUserActions(battle, entry.userId, true, false)
-            : [];
+        const user = battle.usersState.find((u) => u.userId === entry.userId);
+        const actions = entry.userId
+          ? availableUserActions(battle, entry.userId, true, false)
+          : [];
         const action = actions.find((a) => a.id === entry.actionId);
 
         // Catalogs contain the viewer's actions and publicly used actions; resolving
         // logs by action ID does not require exposing anyone else's loadout.
-        const jutsu =
-          battle && entry.actionId ? getJutsu(battle, entry.actionId) : undefined;
-        const item =
-          battle && entry.actionId ? getItem(battle, entry.actionId) : undefined;
+        const jutsu = entry.actionId ? getJutsu(battle, entry.actionId) : undefined;
+        const item = entry.actionId ? getItem(battle, entry.actionId) : undefined;
 
         let actionImage: string | undefined;
         let actionItem: GenericObject;
@@ -197,7 +192,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
         // Calculate remaining rounds for active effects from this action
         let remainingRounds = 0;
         let isNewEffect = false;
-        if (battle && entry.actionId) {
+        if (entry.actionId) {
           const allEffects = [
             ...(battle.usersEffects ?? []),
             ...(battle.groundEffects ?? []),
@@ -224,6 +219,8 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
         };
       });
   }, [presentedEntries, battle]);
+
+  const selectedEffects = (selected?.entry.appliedEffects ?? []) as ActionEffect[];
 
   // Auto-scroll to right only when new entries appear (not when loading older)
   useEffect(() => {
@@ -406,7 +403,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
             <PendingTimelineSlot
               action={pendingSlot}
               avatar={pendingUser?.avatar}
-              round={battle?.round}
+              round={battle.round}
               hasPrevious={resolvedEntries.length > 0}
             />
           )}
@@ -431,39 +428,34 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
                   </span>
                 </DialogTitle>
               </DialogHeader>
-              {(() => {
-                const effects = (selected.entry.appliedEffects ?? []) as ActionEffect[];
-                return (
-                  <div className="space-y-4">
-                    <ItemWithEffects
-                      item={selected.actionItem}
-                      hideDetails={true}
-                      hideDates={true}
-                      hideData={true}
-                      hideEffects={true}
-                    />
-                    {effects.length > 0 && (
-                      <div className="space-y-2 rounded-md border p-3">
-                        <p className="font-semibold text-sm">Applied effects</p>
-                        <div className="flex flex-wrap gap-2">
-                          {effects.map((effect, i) => (
-                            <span
-                              key={`${effect.txt}-${i}`}
-                              className={cn(
-                                "rounded-full px-2 py-1 font-medium text-[11px]",
-                                effectBackgrounds[effect.color],
-                                EFFECT_TEXT_COLORS[effect.color],
-                              )}
-                            >
-                              {effect.txt}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+              <div className="space-y-4">
+                <ItemWithEffects
+                  item={selected.actionItem}
+                  hideDetails={true}
+                  hideDates={true}
+                  hideData={true}
+                  hideEffects={true}
+                />
+                {selectedEffects.length > 0 && (
+                  <div className="space-y-2 rounded-md border p-3">
+                    <p className="font-semibold text-sm">Applied effects</p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedEffects.map((effect, i) => (
+                        <span
+                          key={`${effect.txt}-${i}`}
+                          className={cn(
+                            "rounded-full px-2 py-1 font-medium text-[11px]",
+                            effectBackgrounds[effect.color],
+                            EFFECT_TEXT_COLORS[effect.color],
+                          )}
+                        >
+                          {effect.txt}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                );
-              })()}
+                )}
+              </div>
             </>
           )}
         </DialogContent>

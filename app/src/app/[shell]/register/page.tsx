@@ -42,7 +42,6 @@ import {
   IMG_REGISTRATIN_STEP8,
   IMG_REGISTRATIN_STEP9,
 } from "@/drizzle/constants";
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { CharacterPreview } from "@/layout/CharacterPreview";
 import { ActionSelector } from "@/layout/CombatActions";
@@ -55,6 +54,7 @@ import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { getRandomElement, shuffle } from "@/utils/array";
 import { isRetryableTrpcError } from "@/utils/error";
 import { secureRandomInt } from "@/utils/math";
+import { safeLocalStorageGetItem } from "@/utils/storage";
 import { useUserData } from "@/utils/UserContext";
 import {
   attributes,
@@ -496,154 +496,74 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
         )}
       />
       <div className="col-span-2 grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 sm:col-span-1 sm:grid-cols-3">
-        <FormField
-          control={form.control}
-          name="hair_color"
-          render={({ field }) => (
-            <FormItem className="min-w-0 gap-1">
-              <FormLabel>Hair color</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder={`None`} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>{option_colors}</SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="eye_color"
-          render={({ field }) => (
-            <FormItem className="min-w-0 gap-1">
-              <FormLabel>Eye color</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder={`None`} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>{option_colors}</SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="skin_color"
-          render={({ field }) => (
-            <FormItem className="min-w-0 gap-1">
-              <FormLabel>Skin color</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder={`None`} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>{option_skins}</SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {(
+          [
+            ["hair_color", "Hair color", option_colors],
+            ["eye_color", "Eye color", option_colors],
+            ["skin_color", "Skin color", option_skins],
+          ] as const
+        ).map(([name, label, options]) => (
+          <FormField
+            key={name}
+            control={form.control}
+            name={name}
+            render={({ field }) => (
+              <FormItem className="min-w-0 gap-1">
+                <FormLabel>{label}</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder={`None`} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>{options}</SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        ))}
 
-        <FormField
-          control={form.control}
-          name="attribute_1"
-          render={({ field }) => (
-            <FormItem className="min-w-0 gap-1">
-              <FormLabel>Trait 1</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder={`None`} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {attributes
-                    .filter(
-                      (e) =>
-                        ![watchAttr2, watchAttr3].some(
-                          (chosen) => chosen && getAttributeGroup(e).includes(chosen),
-                        ),
-                    )
-                    .map((attribute, i) => (
-                      <SelectItem key={`${attribute}-${i}`} value={attribute}>
-                        {attribute}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="attribute_2"
-          render={({ field }) => (
-            <FormItem className="min-w-0 gap-1">
-              <FormLabel>Trait 2</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder={`None`} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {attributes
-                    .filter(
-                      (e) =>
-                        ![watchAttr1, watchAttr3].some(
-                          (chosen) => chosen && getAttributeGroup(e).includes(chosen),
-                        ),
-                    )
-                    .map((attribute, i) => (
-                      <SelectItem key={`${attribute}-${i}`} value={attribute}>
-                        {attribute}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="attribute_3"
-          render={({ field }) => (
-            <FormItem className="min-w-0 gap-1">
-              <FormLabel>Trait 3</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value ?? ""}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder={`None`} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {attributes
-                    .filter(
-                      (e) =>
-                        ![watchAttr1, watchAttr2].some(
-                          (chosen) => chosen && getAttributeGroup(e).includes(chosen),
-                        ),
-                    )
-                    .map((attribute, i) => (
-                      <SelectItem key={`${attribute}-${i}`} value={attribute}>
-                        {attribute}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {(["attribute_1", "attribute_2", "attribute_3"] as const).map((name, slot) => {
+          const otherChoices = [watchAttr1, watchAttr2, watchAttr3].filter(
+            (_, other) => other !== slot,
+          );
+          return (
+            <FormField
+              key={name}
+              control={form.control}
+              name={name}
+              render={({ field }) => (
+                <FormItem className="min-w-0 gap-1">
+                  <FormLabel>Trait {slot + 1}</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={`None`} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {attributes
+                        .filter(
+                          (e) =>
+                            !otherChoices.some(
+                              (chosen) =>
+                                chosen && getAttributeGroup(e).includes(chosen),
+                            ),
+                        )
+                        .map((attribute, i) => (
+                          <SelectItem key={`${attribute}-${i}`} value={attribute}>
+                            {attribute}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          );
+        })}
         {[watchAttr1, watchAttr2, watchAttr3].includes("Bald") && (
           <p className="text-muted-foreground col-span-2 text-sm sm:col-span-3">
             Bald hides scalp hair; hair color still applies to beards.

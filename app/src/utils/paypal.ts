@@ -1,15 +1,10 @@
 import {
-  FED_GOLD_ITEM_LOADOUTS,
-  FED_GOLD_JUTSU_LOADOUTS,
-  FED_GOLD_REPS_COST,
+  FED_ITEM_LOADOUTS,
   FED_ITEM_LOADOUTS_BASE,
+  FED_JUTSU_LOADOUTS,
   FED_JUTSU_LOADOUTS_BASE,
-  FED_NORMAL_ITEM_LOADOUTS,
-  FED_NORMAL_JUTSU_LOADOUTS,
-  FED_NORMAL_REPS_COST,
-  FED_SILVER_ITEM_LOADOUTS,
-  FED_SILVER_JUTSU_LOADOUTS,
-  FED_SILVER_REPS_COST,
+  FED_REPS_COST,
+  FED_UPGRADE_REPS_COST,
   FederalStatuses,
   MAX_REPS_EXTRA_PER_MONTH,
   MAX_REPS_PER_MONTH,
@@ -30,7 +25,6 @@ export const getUserFederalStatus = (
   }
 };
 
-/** One active entry plus the federal waiting-slot allowance. */
 /** Jobs that may wait behind the active one in each timed queue. */
 export const getQueueWaitingSlots = (
   user: Pick<UserData, "staffAccount" | "federalStatus">,
@@ -46,16 +40,7 @@ export const fedJutsuLoadouts = (
 ) => {
   const base = FED_JUTSU_LOADOUTS_BASE;
   if (!user) return base;
-  const status = getUserFederalStatus(user);
-  switch (status) {
-    case "NORMAL":
-      return base + FED_NORMAL_JUTSU_LOADOUTS;
-    case "SILVER":
-      return base + FED_SILVER_JUTSU_LOADOUTS;
-    case "GOLD":
-      return base + FED_GOLD_JUTSU_LOADOUTS;
-  }
-  return base;
+  return base + FED_JUTSU_LOADOUTS[getUserFederalStatus(user)];
 };
 
 export const fedItemLoadouts = (
@@ -63,16 +48,7 @@ export const fedItemLoadouts = (
 ) => {
   const base = FED_ITEM_LOADOUTS_BASE;
   if (!user) return base;
-  const status = getUserFederalStatus(user);
-  switch (status) {
-    case "NORMAL":
-      return base + FED_NORMAL_ITEM_LOADOUTS;
-    case "SILVER":
-      return base + FED_SILVER_ITEM_LOADOUTS;
-    case "GOLD":
-      return base + FED_GOLD_ITEM_LOADOUTS;
-  }
-  return base;
+  return base + FED_ITEM_LOADOUTS[getUserFederalStatus(user)];
 };
 
 /** Scale the monthly reputation cap with completed account-age months, never below base. */
@@ -120,19 +96,8 @@ export const dollars2reps = (dollars: number) => {
   return reps;
 };
 
-export const calcFedUgradeCost = (a: FederalStatus, b: FederalStatus) => {
-  let cost: number | null = null;
-  if (a === "NORMAL") {
-    if (b === "SILVER") {
-      cost = 20;
-    } else if (b === "GOLD") {
-      cost = 40;
-    }
-  } else if (a === "SILVER" && b === "GOLD") {
-    cost = 20;
-  }
-  return cost;
-};
+export const calcFedUgradeCost = (a: FederalStatus, b: FederalStatus) =>
+  FED_UPGRADE_REPS_COST[a]?.[b] ?? null;
 
 /**
  * Explains a federal card whose reputation purchase is hidden: reputation points only
@@ -167,13 +132,6 @@ export const plan2FedStatus = (planId: string) => {
 };
 
 export const fedStatusRepsCost = (status: FederalStatus) => {
-  switch (status) {
-    case "NORMAL":
-      return FED_NORMAL_REPS_COST;
-    case "SILVER":
-      return FED_SILVER_REPS_COST;
-    case "GOLD":
-      return FED_GOLD_REPS_COST;
-  }
-  throw new Error("Invalid federal status");
+  if (status === "NONE") throw new Error("Invalid federal status");
+  return FED_REPS_COST[status];
 };

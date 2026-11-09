@@ -76,11 +76,41 @@ import type { UserRecoveryActivity } from "@/validators/base";
 import {
   type EventParticipant,
   type EventTournamentState,
-  eventTournamentActionSchema,
-  eventTournamentIdSchema,
-  eventTournamentPlayerSchema,
-  eventTournamentSaveSchema,
+  eventTournamentConfigSchema,
 } from "@/validators/tournament";
+
+/** Shared identity for authenticated event reads and mutations. */
+const eventTournamentIdSchema = z.object({ tournamentId: z.string().min(1) });
+
+/** An omitted tournament ID creates a draft; an existing ID edits an editable draft. */
+const eventTournamentSaveSchema = z.object({
+  tournamentId: z.string().optional(),
+  config: eventTournamentConfigSchema,
+});
+
+/** Staff commands; the router validates each action's fields and current event phase. */
+const eventTournamentActionSchema = eventTournamentIdSchema.extend({
+  action: z.enum([
+    "PUBLISH",
+    "SEED",
+    "BEGIN",
+    "CANCEL",
+    "INVITE",
+    "REMOVE_INVITE",
+    "SUBSTITUTE",
+  ]),
+  userId: z.string().optional(),
+  seatId: z.string().optional(),
+  seriesId: z.string().optional(),
+  scheduledAt: z.number().int().positive().optional(),
+  payRewards: z.boolean().optional(),
+});
+
+/** Player commands for registration, advisory series readiness and timed match acceptance. */
+const eventTournamentPlayerSchema = eventTournamentIdSchema.extend({
+  action: z.enum(["JOIN", "WITHDRAW", "DECLINE", "ACCEPT", "READY", "NOT_READY"]),
+  seriesId: z.string().optional(),
+});
 
 export const eventTournamentProcedures = {
   /** Return invitations and open ready checks that still need this player's response. */

@@ -25,7 +25,11 @@ describeWithDatabase("aroundStatements", () => {
   });
 
   const update = (client: Awaited<ReturnType<typeof getTestDatabase>>) =>
-    client.update(userData).set({ money: 1 }).where(eq(userData.userId, "user")).limit(1);
+    client
+      .update(userData)
+      .set({ money: 1 })
+      .where(eq(userData.userId, "user"))
+      .limit(1);
 
   it("fires each nested hook once and sends the statement once", async () => {
     const { client, fired } = await counted(2);
@@ -35,8 +39,14 @@ describeWithDatabase("aroundStatements", () => {
   });
 
   it.each([
-    ["catch", (statement: ReturnType<typeof update>) => statement.catch(() => undefined)],
-    ["finally", (statement: ReturnType<typeof update>) => statement.finally(() => undefined)],
+    [
+      "catch",
+      (statement: ReturnType<typeof update>) => statement.catch(() => undefined),
+    ],
+    [
+      "finally",
+      (statement: ReturnType<typeof update>) => statement.finally(() => undefined),
+    ],
     ["execute", (statement: ReturnType<typeof update>) => statement.execute()],
   ])("runs the hook for a statement settled through %s", async (_label, settle) => {
     const { client, fired } = await counted(1);

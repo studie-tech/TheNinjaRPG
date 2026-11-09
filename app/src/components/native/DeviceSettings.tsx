@@ -9,12 +9,13 @@ import { NativeFeatureCard } from "@/components/native/NativeFeatureCard";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { PushCategory } from "@/drizzle/constants";
-import { safeLocalStorageSetItem, useLocalStorage } from "@/hooks/localstorage";
+import { useLocalStorage } from "@/hooks/localstorage";
 import { useNativePushPermission } from "@/hooks/useNativePush";
 import { useNativeShell } from "@/hooks/useNativeShell";
 import Link from "@/layout/Link";
 import { haptics, liveActivity, platform } from "@/libs/native";
 import { showMutationToast } from "@/libs/toast";
+import { safeLocalStorageSetItem } from "@/utils/storage";
 
 /** Player-facing wording for each push category. */
 const CATEGORY_LABELS: Record<PushCategory, string> = {
@@ -28,11 +29,8 @@ const CATEGORY_LABELS: Record<PushCategory, string> = {
   system: "Announcements",
 };
 
-/**
- * Device-only settings — haptics and push notifications. Renders nothing in a browser, so
- * it can sit unconditionally in the shared settings panel.
- */
-export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void }) {
+/** Device-only settings for the native app settings page: haptics and push notifications. */
+export default function DeviceSettings() {
   const [hapticsOn, setHapticsOn] = useLocalStorage<boolean>(
     haptics.HAPTICS_STORAGE_KEY,
     true,
@@ -73,11 +71,6 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
       .then((result) => {
         if (!result.success) {
           showMutationToast(result);
-          setPreferenceOverrides((current) => {
-            const next = { ...current };
-            delete next[category];
-            return next;
-          });
           return;
         }
 
@@ -96,22 +89,18 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
               }
             : current,
         );
-        setPreferenceOverrides((current) => {
-          const next = { ...current };
-          delete next[category];
-          return next;
-        });
       })
       .catch(() => {
-        // Transport errors are surfaced by the shared mutation error handler. Restore
-        // only this row; independently saving categories keep their optimistic state.
+        // Transport errors are surfaced by the shared mutation error handler.
+      })
+      .finally(() => {
+        // Every outcome hands only this row back to the cache; independently saving
+        // categories keep their optimistic state.
         setPreferenceOverrides((current) => {
           const next = { ...current };
           delete next[category];
           return next;
         });
-      })
-      .finally(() => {
         savingCategoriesRef.current.delete(category);
         setSavingCategories((current) => {
           const next = new Set(current);
@@ -315,7 +304,7 @@ export default function DeviceSettings({ onNavigate }: { onNavigate?: () => void
         <p className="text-muted-foreground text-xs">For live status, open the game.</p>
       </NativeFeatureCard>
       <NativeFeatureCard title="Account" icon={Shield}>
-        <NativeAccountDeletionLink onNavigate={onNavigate} />
+        <NativeAccountDeletionLink />
       </NativeFeatureCard>
     </div>
   );

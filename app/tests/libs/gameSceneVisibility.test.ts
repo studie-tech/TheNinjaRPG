@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { isGameSceneVisible, setGameSceneVisible, subscribeGameSceneVisibility } from "@/libs/gameSceneVisibility";
+import {
+  isGameSceneVisible,
+  setGameSceneVisible,
+  subscribeGameSceneVisibility,
+} from "@/libs/gameSceneVisibility";
 
 const scenes = [{}, {}];
 

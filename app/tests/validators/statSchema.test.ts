@@ -2,7 +2,14 @@ import { describe, expect, it } from "bun:test";
 import { getCombatStatCap, getUserCaps } from "@/drizzle/constants";
 import { createStatSchema } from "@/validators/combat";
 
-const STATS = ["offence", "defence", "strength", "speed", "intelligence", "willpower"] as const;
+const STATS = [
+  "offence",
+  "defence",
+  "strength",
+  "speed",
+  "intelligence",
+  "willpower",
+] as const;
 
 describe("createStatSchema", () => {
   it.each(STATS)("applies the minimum, default, rounding and own cap to %s", (stat) => {
@@ -13,9 +20,15 @@ describe("createStatSchema", () => {
 
     expect(schema.parse(others)[stat]).toBe(7);
     expect(schema.parse({ ...others, [stat]: "6.126" })[stat]).toBe(6.13);
-    expect(schema.parse({ ...others, [stat]: maxValues[stat] })[stat]).toBe(maxValues[stat]);
-    expect(schema.safeParse({ ...others, [stat]: 4.99 }).error?.issues[0]?.path).toEqual([stat]);
-    expect(schema.safeParse({ ...others, [stat]: maxValues[stat] + 1 }).success).toBe(false);
+    expect(schema.parse({ ...others, [stat]: maxValues[stat] })[stat]).toBe(
+      maxValues[stat],
+    );
+    expect(
+      schema.safeParse({ ...others, [stat]: 4.99 }).error?.issues[0]?.path,
+    ).toEqual([stat]);
+    expect(schema.safeParse({ ...others, [stat]: maxValues[stat] + 1 }).success).toBe(
+      false,
+    );
     expect(maxValues[stat]).toBe(getCombatStatCap(getUserCaps("GENIN"), stat) - 3);
   });
 

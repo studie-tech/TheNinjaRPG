@@ -61,7 +61,9 @@ describe("getNewTrackers — timed collect_item", () => {
     expect(goal?.done).toBeUndefined();
     expect(Number.isFinite(Date.parse(goal?.timestamp ?? ""))).toBe(true);
     expect(granted).toBe(false);
-    expect(result.notifications.some((n) => n.includes("started collecting"))).toBe(true);
+    expect(result.notifications.some((n) => n.includes("started collecting"))).toBe(
+      true,
+    );
   });
 
   it("formats the collection duration in the start notification", () => {
@@ -110,7 +112,9 @@ describe("gathering collection snapshots", () => {
     const player = withGatheringBonus();
     player.bloodline!.effects.push(IncreaseGatheringYield.parse({ power: 2 }));
     const started = evaluate(player);
-    player.questData = started.result.trackers.map((tracker) => QuestTracker.parse(tracker));
+    player.questData = started.result.trackers.map((tracker) =>
+      QuestTracker.parse(tracker),
+    );
     expect(player.questData[0]!.goals[0]!.gatheringBonusQuantity).toBe(2);
     player.bloodline!.effects = [IncreaseGatheringYield.parse({ power: 7 })];
     nowMs = START + 1000;

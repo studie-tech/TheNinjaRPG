@@ -20,6 +20,8 @@ import {
   AUCTION_BIDDER_LEVEL_MAX,
   AUCTION_BIDDER_LEVEL_MIN,
   AUCTION_HOUSE_MIN_LEVEL,
+  AUCTION_LISTING_STATES,
+  AUCTION_LISTING_TYPES,
   auctionHouseLevelMessage,
 } from "@/drizzle/constants";
 import {
@@ -72,12 +74,23 @@ import { offsetPage } from "@/server/utils/pagination";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { auctionOutbid, tradeUpdate } from "@/server/utils/push/messages";
 import type { QueryCondition } from "@/utils/typeutils";
-import {
-  createAuctionListingSchema,
-  getAuctionListingsSchema,
-} from "@/validators/auction";
+import { createAuctionListingSchema } from "@/validators/auction";
 import { auctionOfferProcedures } from "./auctionOffers";
 import { splitItemStack } from "./item";
+
+const getAuctionListingsSchema = z.object({
+  limit: z.number().min(1).max(100).prefault(10),
+  cursor: z.number().nullish(),
+  itemName: z.string().optional(),
+  /** Partial match on listing seller username (case-insensitive per DB collation). */
+  sellerSearch: z.string().optional(),
+  minPrice: z.number().min(0).optional(),
+  maxPrice: z.number().min(0).optional(),
+  listingType: z.enum(AUCTION_LISTING_TYPES).optional(),
+  onlyMine: z.boolean().optional(),
+  onlyBidOn: z.boolean().optional(),
+  status: z.enum(AUCTION_LISTING_STATES).optional(),
+});
 
 export const auctionRouter = createTRPCRouter({
   ...auctionOfferProcedures,
@@ -158,7 +171,7 @@ export const auctionRouter = createTRPCRouter({
       }
 
       if (maxPrice) {
-        whereConditions.push(sql`${auctionListing.currentPrice} <= ${maxPrice}`);
+        whereConditions.push(lte(auctionListing.currentPrice, maxPrice));
       }
 
       // Add item name filter if provided

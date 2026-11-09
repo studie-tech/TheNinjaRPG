@@ -1,5 +1,8 @@
 import { SECTOR_MAP_VERSION } from "@/drizzle/constants";
-import type { NormalizedSectorMap, NormalizedSectorTile } from "@/libs/sector-map/types";
+import type {
+  NormalizedSectorMap,
+  NormalizedSectorTile,
+} from "@/libs/sector-map/types";
 
 /** Walkable wilderness tile. */
 export const sectorTile = (

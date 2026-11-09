@@ -8,7 +8,12 @@ import {
   getDungeonStateUserUpdate,
   getUnchangedDungeonUserUpdate,
 } from "@/deltas/dungeon";
-import { DUNGEON_RUN_SECONDS, DUNGEON_SOLO_PETS } from "@/drizzle/constants";
+import {
+  DUNGEON_RUN_SECONDS,
+  DUNGEON_SOLO_PETS,
+  MAP_SECTOR_ID_MAX,
+  MAP_SECTOR_ID_MIN,
+} from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
 import { transitionCoopParty } from "@/libs/coop";
 import { dungeonFloorAt, dungeonRequirements } from "@/libs/dungeon";
@@ -88,13 +93,39 @@ import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlE
 import { updateRewards } from "@/server/utils/questRewards";
 import { canChangeContent } from "@/utils/permissions";
 import { secondsFromNow } from "@/utils/time";
-import {
-  dungeonActionSchema,
-  dungeonContentSchema,
-  dungeonIdSchema,
-  dungeonSectorSchema,
-  saveDungeonSchema,
-} from "@/validators/dungeon";
+import { dungeonContentSchema } from "@/validators/dungeon";
+
+/** Omit the ID to create a definition; existing runs keep their captured content snapshot. */
+const saveDungeonSchema = z.object({
+  id: z.string().optional(),
+  content: dungeonContentSchema,
+});
+
+/** Identify a definition for lobby creation or a run for completion claims. */
+const dungeonIdSchema = z.object({ id: z.string().min(1) });
+
+/** Availability is restricted to the authenticated player's current sector by the router. */
+const dungeonSectorSchema = z.object({
+  sector: z.number().int().min(MAP_SECTOR_ID_MIN).max(MAP_SECTOR_ID_MAX),
+});
+
+/** Party commands; membership, readiness and leader privileges are checked against the saved run. */
+const dungeonActionSchema = z.object({
+  id: z.string().min(1),
+  action: z.enum([
+    "invite",
+    "accept",
+    "decline",
+    "remove",
+    "leave",
+    "ready",
+    "unready",
+    "start",
+    "pause",
+    "resume",
+  ]),
+  userId: z.string().optional(),
+});
 
 /** Party state is versioned; active membership and completion receipts guard cross-run effects. */
 export const dungeonRouter = createTRPCRouter({

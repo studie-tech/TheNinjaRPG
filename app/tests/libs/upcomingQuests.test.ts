@@ -62,7 +62,9 @@ describe("getUpcomingQuestBlock", () => {
   });
 
   it("reports a missing mastery", () => {
-    expect(getUpcomingQuestBlock(tower({ requiredNinjutsuMastery: 500 }), player())).toEqual({
+    expect(
+      getUpcomingQuestBlock(tower({ requiredNinjutsuMastery: 500 }), player()),
+    ).toEqual({
       kind: "mastery",
       label: "Ninjutsu Mastery",
       required: 500,
@@ -75,7 +77,12 @@ describe("getUpcomingQuestBlock", () => {
   });
 
   it("ignores towers for another village", () => {
-    expect(getUpcomingQuestBlock(tower({ requiredLevel: 50, requiredVillage: "other" }), player())).toBeNull();
+    expect(
+      getUpcomingQuestBlock(
+        tower({ requiredLevel: 50, requiredVillage: "other" }),
+        player(),
+      ),
+    ).toBeNull();
   });
 
   it("ignores towers the player has outgrown", () => {
@@ -84,7 +91,10 @@ describe("getUpcomingQuestBlock", () => {
 
   it("ignores hidden towers even for content staff", () => {
     expect(
-      getUpcomingQuestBlock(tower({ requiredLevel: 50, hidden: true }), player({ role: "CONTENT-ADMIN" })),
+      getUpcomingQuestBlock(
+        tower({ requiredLevel: 50, hidden: true }),
+        player({ role: "CONTENT-ADMIN" }),
+      ),
     ).toBeNull();
   });
 });

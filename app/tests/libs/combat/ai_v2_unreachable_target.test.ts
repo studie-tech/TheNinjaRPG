@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { Grid, rectangle, ring } from "honeycomb-grid";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import type { BattleUserState, ExtraState } from "@/libs/combat/types";
@@ -8,17 +8,16 @@ import {
   ActionWithEffectHighestPower,
   ConditionDistanceHigherThan,
 } from "@/validators/ai";
+import { makeJutsu, makeTag } from "../../setup/combat";
 import { makeAiBattle, makeAiUser } from "./helpers/aiScenario";
-import { makeJutsu, makeTag } from "./helpers/battleScenario";
 
 /**
  * An AI whose chosen action turns out to be impossible must fall through to its
  * next rule instead of aborting the whole turn. Scenario: the player stands in a
  * corner and AIs occupy every neighbouring tile, so one more AI can neither step
  * closer nor reach with its range-1 basic attack, and its 60 AP jutsu is
- * unaffordable on 40 AP. Throwing there surfaced as an "Action Basic Attack no
- * longer possible" notification that the client re-fired every second until the
- * round timer passed the turn on.
+ * unaffordable on 40 AP. Throwing there would surface as a repeating "Action Basic
+ * Attack no longer possible" notification until the round timer passes the turn on.
  */
 
 const PROFILE = "profile-dragon";
@@ -28,9 +27,15 @@ const HEIGHT = 9;
 
 const mkUser = (over: Partial<BattleUserState>): BattleUserState =>
   makeAiUser({
-    controllerId: "dragon-template", aiProfileId: PROFILE, villageId: "village-ai",
-    longitude: 0, latitude: 0, originalLongitude: 0, originalLatitude: 0,
-    level: 60, originalLevel: 60,
+    controllerId: "dragon-template",
+    aiProfileId: PROFILE,
+    villageId: "village-ai",
+    longitude: 0,
+    latitude: 0,
+    originalLongitude: 0,
+    originalLatitude: 0,
+    level: 60,
+    originalLevel: 60,
     ...over,
   });
 
@@ -41,50 +46,87 @@ const heavyJutsu = makeJutsu({
   jutsuType: "AI",
   range: 5,
   actionCostPerc: 60,
-  effects: [makeTag("damage", {
-    power: 40, powerPerLevel: 0,
-    calculation: "formula", statTypes: ["None"], generalTypes: [], elements: [],
-    rounds: 0, target: "INHERIT", friendlyFire: "ENEMIES", description: "dmg",
-  })],
+  effects: [
+    makeTag("damage", {
+      power: 40,
+      powerPerLevel: 0,
+      calculation: "formula",
+      statTypes: ["None"],
+      generalTypes: [],
+      elements: [],
+      rounds: 0,
+      target: "INHERIT",
+      friendlyFire: "ENEMIES",
+      description: "dmg",
+    }),
+  ],
 });
 
 /** Places the player in a corner, fills every neighbouring tile, and parks one AI behind them. */
 const mkCorneredBattle = (grid: Grid<TerrainHex>) => {
   const corner = grid.getHex({ col: 0, row: 0 });
   if (!corner) throw new Error("Grid has no corner tile");
-  const neighbours = grid.traverse(ring({ center: [corner.q, corner.r], radius: 1 })).toArray();
-  const outerRing = grid.traverse(ring({ center: [corner.q, corner.r], radius: 2 })).toArray();
+  const neighbours = grid
+    .traverse(ring({ center: [corner.q, corner.r], radius: 1 }))
+    .toArray();
+  const outerRing = grid
+    .traverse(ring({ center: [corner.q, corner.r], radius: 2 }))
+    .toArray();
   const behind = outerRing[0];
   if (!behind || neighbours.length === 0) throw new Error("Unexpected grid layout");
 
   const player = mkUser({
-    userId: "user_player", username: "Player", controllerId: "user_player",
-    isAi: false, aiProfileId: undefined, villageId: "village-player", direction: "left",
-    longitude: corner.col, latitude: corner.row,
+    userId: "user_player",
+    username: "Player",
+    controllerId: "user_player",
+    isAi: false,
+    aiProfileId: undefined,
+    villageId: "village-player",
+    direction: "left",
+    longitude: corner.col,
+    latitude: corner.row,
   });
   const blockers = neighbours.map((hex, i) =>
     mkUser({
-      userId: `dragon-${i}`, username: "Baby Diamond",
-      longitude: hex.col, latitude: hex.row,
+      userId: `dragon-${i}`,
+      username: "Baby Diamond",
+      longitude: hex.col,
+      latitude: hex.row,
     }),
   );
   const stuck = mkUser({
-    userId: "dragon-stuck", username: "Baby Diamond",
-    longitude: behind.col, latitude: behind.row,
+    userId: "dragon-stuck",
+    username: "Baby Diamond",
+    longitude: behind.col,
+    latitude: behind.row,
     // Spent 60 AP on a jutsu already: only 20 AP basics remain affordable
     actionPoints: 40,
-    jutsus: [{ id: "uj1", jutsuId: HEAVY_JUTSU, level: 1, experience: 0,
-               equipped: true, lastUsedRound: -99, originalCooldown: 0 }],
+    jutsus: [
+      {
+        id: "uj1",
+        jutsuId: HEAVY_JUTSU,
+        level: 1,
+        experience: 0,
+        equipped: true,
+        lastUsedRound: -99,
+        originalCooldown: 0,
+      },
+    ],
   } as Partial<BattleUserState>);
 
   return makeAiBattle({
-    battleType: "QUEST", activeUserId: stuck.userId, width: WIDTH, height: HEIGHT,
+    battleType: "QUEST",
+    activeUserId: stuck.userId,
+    width: WIDTH,
+    height: HEIGHT,
     usersState: [player, ...blockers, stuck],
     extraState: {
       jutsus: { [HEAVY_JUTSU]: heavyJutsu },
       aiProfiles: {
         [PROFILE]: {
-          id: PROFILE, name: "baby diamond", includeDefaultRules: true,
+          id: PROFILE,
+          name: "baby diamond",
+          includeDefaultRules: true,
           rules: [
             {
               conditions: [ConditionDistanceHigherThan.parse({ value: 2 })],

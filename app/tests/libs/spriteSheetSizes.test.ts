@@ -14,7 +14,9 @@ const sheet = async (cell: number) =>
   })
     .composite([
       {
-        input: { create: { width: cell, height: cell, channels: 4, background: "#ff0000" } },
+        input: {
+          create: { width: cell, height: cell, channels: 4, background: "#ff0000" },
+        },
         left: 0,
         top: 0,
       },
@@ -24,9 +26,15 @@ const sheet = async (cell: number) =>
 
 describe("sprite sheet sizes", () => {
   it("reads square cells and refuses sheets that do not fit the grid", () => {
-    expect(spriteSheetCell({ width: 1024, height: 512 }, { columns: 4, rows: 2 })).toBe(256);
-    expect(spriteSheetCell({ width: 1000, height: 512 }, { columns: 4, rows: 2 })).toBeNull();
-    expect(spriteSheetCell({ width: 1024, height: 256 }, { columns: 4, rows: 2 })).toBeNull();
+    expect(spriteSheetCell({ width: 1024, height: 512 }, { columns: 4, rows: 2 })).toBe(
+      256,
+    );
+    expect(
+      spriteSheetCell({ width: 1000, height: 512 }, { columns: 4, rows: 2 }),
+    ).toBeNull();
+    expect(
+      spriteSheetCell({ width: 1024, height: 256 }, { columns: 4, rows: 2 }),
+    ).toBeNull();
   });
 
   it("never bleeds one frame into its neighbour", async () => {
@@ -37,7 +45,8 @@ describe("sprite sheet sizes", () => {
       .raw()
       .toBuffer({ resolveWithObject: true });
     expect([info.width, info.height]).toEqual([256, 128]);
-    const alpha = (x: number, y: number) => data[(y * info.width + x) * info.channels + 3];
+    const alpha = (x: number, y: number) =>
+      data[(y * info.width + x) * info.channels + 3];
     expect(alpha(127, 64)).toBeGreaterThan(240);
     expect(alpha(128, 64)).toBe(0);
   });

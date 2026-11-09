@@ -24,14 +24,16 @@ const makeCaller = (
     requiredVillage: null,
     content: {
       entryItems: entryPaid === undefined ? [] : [{ ids: ["ticket"], number: 1 }],
-      objectives: collect ? [
-        CollectItem.parse({
-          id: "collect",
-          task: "collect_item",
-          ...location,
-          collectItemIds: ["scroll"],
-        }),
-      ] : [],
+      objectives: collect
+        ? [
+            CollectItem.parse({
+              id: "collect",
+              task: "collect_item",
+              ...location,
+              collectItemIds: ["scroll"],
+            }),
+          ]
+        : [],
       reward: {},
     },
   };
@@ -46,10 +48,12 @@ const makeCaller = (
     items: [],
     activeWars: [],
     completedQuests: [],
-    questData: collect || entryPaid !== undefined ? [QuestTracker.parse({ id: quest.id })] : [],
-    userQuests: collect || entryPaid !== undefined
-      ? [{ id: "history", questId: quest.id, completed: 0, entryPaid, quest }]
-      : [],
+    questData:
+      collect || entryPaid !== undefined ? [QuestTracker.parse({ id: quest.id })] : [],
+    userQuests:
+      collect || entryPaid !== undefined
+        ? [{ id: "history", questId: quest.id, completed: 0, entryPaid, quest }]
+        : [],
   };
   stubProfile("fetchUpdatedUser", (async () => ({
     user: missingUser ? undefined : user,
@@ -113,15 +117,18 @@ describe("location quest inventory signal", () => {
     ]);
   });
 
-  it.each([false, true])("refreshes inventory for combat even if entry was already paid (entryPaid: %s)", async (entryPaid) => {
-    const { caller } = makeCaller(
-      [{ type: "combat", ids: ["opponent"], questId: "collection" }],
-      false,
-      false,
-      entryPaid,
-    );
-    expect((await caller.checkLocationQuest()).itemsChanged).toBe(true);
-  });
+  it.each([false, true])(
+    "refreshes inventory for combat even if entry was already paid (entryPaid: %s)",
+    async (entryPaid) => {
+      const { caller } = makeCaller(
+        [{ type: "combat", ids: ["opponent"], questId: "collection" }],
+        false,
+        false,
+        entryPaid,
+      );
+      expect((await caller.checkLocationQuest()).itemsChanged).toBe(true);
+    },
+  );
 
   it("refreshes inventory for combat without entry costs because battle setup can settle crafts", async () => {
     const { caller } = makeCaller([{ type: "combat", ids: ["opponent"] }]);

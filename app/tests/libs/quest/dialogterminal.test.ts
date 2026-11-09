@@ -1,19 +1,19 @@
-import {
-  trackerQuest,
-  trackerUser as makeUser,
-  trackerGoal as goal,
-} from "../../setup/quest";
 import { describe, expect, it } from "bun:test";
 import { TERMINAL_DIALOG_PREFIX } from "@/drizzle/constants";
 import { getNewTrackers } from "@/libs/quest";
+import {
+  trackerGoal as goal,
+  trackerUser as makeUser,
+  trackerQuest,
+} from "../../setup/quest";
 
 const makeQuest = (id: string, objectives: object[]) =>
   trackerQuest(id, objectives, "mission");
 
 // ---------------------------------------------------------------------------
 // Runtime completion of TERMINAL dialog branches (branches with no follow-up
-// objective). Save-time validation now blocks authoring these, but already-saved
-// legacy content can still contain them — the runtime must complete them via the
+// objective). Save-time validation blocks authoring these, but already-saved
+// legacy content can contain them — the runtime must complete them via the
 // objective-scoped sentinel instead of re-opening the same dialog forever.
 // ---------------------------------------------------------------------------
 

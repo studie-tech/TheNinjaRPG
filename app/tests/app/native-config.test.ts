@@ -1,6 +1,6 @@
+import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "bun:test";
 
 const REPO_ROOT = join(import.meta.dirname, "../../..");
 const readRepoFile = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
@@ -39,13 +39,11 @@ describe("native release configuration", () => {
     const android = readRepoFile(
       "mobile/android/app/src/main/java/com/theninjarpg/app/TNRLiveUpdatesPlugin.java",
     );
-    const ios = readRepoFile(
-      "mobile/ios/App/App/Plugins/TNRLiveActivityPlugin.swift",
-    );
+    const ios = readRepoFile("mobile/ios/App/App/Plugins/TNRLiveActivityPlugin.swift");
 
     expect(bridge).toContain('invokeSafe(PLUGIN, "endKind", { kind })');
     expect(android).toContain("public void endKind(PluginCall call)");
-    expect(ios).toContain('@objc func endKind(_ call: CAPPluginCall)');
+    expect(ios).toContain("@objc func endKind(_ call: CAPPluginCall)");
   });
 
   it("stops the audio service after a rebuilt Activity is finally destroyed", () => {
@@ -58,17 +56,20 @@ describe("native release configuration", () => {
 
   it("mounts native audio and device controls in the live settings module", () => {
     const settings = readRepoFile("app/src/layout/GameSettings.tsx");
+    const audio = readRepoFile("app/src/layout/GlobalAudioProvider.tsx");
     const controller = readRepoFile(
       "app/src/components/layout/shared/GameLayoutController.tsx",
     );
 
-    expect(controller).toContain('from "@/layout/GameSettings"');
-    expect(settings).toContain('import { NativeSettingsEntry } from "@/components/native/NativeSettingsEntry"');
-    expect(settings).toContain('from "@/libs/native"');
+    expect(controller).toContain('from "@/layout/GlobalAudioProvider"');
+    expect(settings).toContain(
+      'import { NativeSettingsEntry } from "@/components/native/NativeSettingsEntry"',
+    );
+    expect(audio).toContain('from "@/libs/native"');
     expect(settings).toContain("<NativeSettingsEntry");
     const devicePage = readRepoFile("app/src/app/[shell]/settings/device/page.tsx");
     expect(devicePage).toContain("<DeviceSettings />");
-    expect(settings).toContain("audioSession.onRemoteCommand");
+    expect(audio).toContain("audioSession.onRemoteCommand");
   });
 
   it("propagates the configured app id through both native projects", () => {

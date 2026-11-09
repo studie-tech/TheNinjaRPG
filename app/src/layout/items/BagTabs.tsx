@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useEffectEvent } from "react";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { cn } from "@/libs/shadui";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
 /** The inventory's bags with their item counts; the chosen bag is remembered. */
 export function BagTabs({

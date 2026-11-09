@@ -1,12 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as sentry from "@sentry/nextjs";
-import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
-import {
-  resetServerModuleStubs,
-  stubDatabase,
-} from "../../../setup/serverModules";
 import * as cleanup from "@/server/utils/accountDeletion/cleanup";
 import * as identity from "@/server/utils/accountDeletion/identity";
+import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
+import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
 
 const f = {
   find: vi.fn(),

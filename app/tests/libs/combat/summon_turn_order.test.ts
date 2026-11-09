@@ -1,7 +1,7 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { calcActiveUser } from "@/libs/combat/actions";
 import type { BattleUserState } from "@/libs/combat/types";
-import { makeCompleteBattle } from "./helpers/battleScenario";
+import { makeCompleteBattle } from "../../setup/combat";
 
 const mk = (over: Partial<BattleUserState>): BattleUserState =>
   ({

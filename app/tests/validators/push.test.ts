@@ -9,8 +9,8 @@ describe("unregisterDeviceSchema", () => {
         widgetToken: "b".repeat(32),
       }).success,
     ).toBe(true);
-    expect(
-      unregisterDeviceSchema.safeParse({ token: "a".repeat(64) }).success,
-    ).toBe(false);
+    expect(unregisterDeviceSchema.safeParse({ token: "a".repeat(64) }).success).toBe(
+      false,
+    );
   });
 });

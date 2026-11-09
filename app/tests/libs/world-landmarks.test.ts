@@ -1,17 +1,14 @@
+import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "bun:test";
 import globe from "@/data/hexasphere.json";
 import { MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
-import { getWorldProtectedLandSectors, WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
+import { type EdgeIndex, sectorMapEdgeForGlobeEdge } from "@/libs/sector-map/crossing";
 import {
-  type EdgeIndex,
-  sectorMapEdgeForGlobeEdge,
-} from "@/libs/sector-map/crossing";
-import {
-  globalElevation,
-  globalMoisture,
-} from "@/libs/sector-map/worldgen";
+  getWorldProtectedLandSectors,
+  WORLD_LANDMARKS,
+} from "@/libs/sector-map/landmarks";
+import { globalElevation, globalMoisture } from "@/libs/sector-map/worldgen";
 import { buildTiledJson } from "../../scripts/generate-sector-map";
 
 const WAKE_ISLAND_STRUCTURE_POSITIONS = [
@@ -72,40 +69,17 @@ const globalMarkerTerrain = (sector: number): TerrainName => {
 const angularDistanceDegrees = (sectorA: number, sectorB: number) => {
   const a = globe.tiles[sectorA]!.c;
   const b = globe.tiles[sectorB]!.c;
-  const cosine =
-    (a.x * b.x + a.y * b.y + a.z * b.z) / globe.radius ** 2;
+  const cosine = (a.x * b.x + a.y * b.y + a.z * b.z) / globe.radius ** 2;
   return (Math.acos(Math.max(-1, Math.min(1, cosine))) * 180) / Math.PI;
 };
 
 const globalTerrainCounts = (sector: number) => {
-  const counts = new Map<TerrainName, number>(
-    TERRAIN_NAMES.map((name) => [name, 0]),
-  );
+  const counts = new Map<TerrainName, number>(TERRAIN_NAMES.map((name) => [name, 0]));
   for (const terrain of globe.tiles[sector]!.v) {
     const name = TERRAIN_NAMES[terrain]!;
     counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   return counts;
-};
-
-const localTerrainGrid = (sector: number, village = true) => {
-  const tiled = buildTiledJson({
-    sector,
-    width: MAP_SIZE,
-    height: MAP_SIZE,
-    village,
-    seed: "v1",
-    ensureWalkable: [],
-  });
-  const terrainData = tiled.layers[0]?.data;
-  if (!terrainData) throw new Error(`Sector ${sector} has no terrain tile layer`);
-  const terrainByGid = new Map(
-    tiled.tilesets[0]!.tiles.map((tile) => [
-      tile.id + 1,
-      tile.properties.find((property) => property.name === "terrain")!.value as string,
-    ]),
-  );
-  return terrainData.map((gid) => terrainByGid.get(gid)!);
 };
 
 const localTileProperties = (sector: number, village = true) => {
@@ -130,12 +104,13 @@ const localTileProperties = (sector: number, village = true) => {
   return terrainData.map((gid) => propertiesByGid.get(gid)!);
 };
 
+const localTerrainGrid = (sector: number, village = true) =>
+  localTileProperties(sector, village).map((tile) => tile.terrain as string);
+
 describe("canonical world landmarks", () => {
   it("keeps every settlement on a distinct, intentional sector", () => {
     expect(
-      Object.fromEntries(
-        WORLD_LANDMARKS.map(({ name, sector }) => [name, sector]),
-      ),
+      Object.fromEntries(WORLD_LANDMARKS.map(({ name, sector }) => [name, sector])),
     ).toEqual({
       "Freedom State": 555,
       "Wake Island": 222,
@@ -197,8 +172,7 @@ describe("canonical world landmarks", () => {
   it("anchors every global-map marker on its intended visible biome", () => {
     for (const landmark of WORLD_LANDMARKS) {
       const expectedCenter =
-        landmark.expectedTerrain === "dessert" ||
-        landmark.expectedTerrain === "ice"
+        landmark.expectedTerrain === "dessert" || landmark.expectedTerrain === "ice"
           ? landmark.expectedTerrain
           : "ground";
       const tile = globe.tiles[landmark.sector]!;
@@ -239,10 +213,9 @@ describe("canonical world landmarks", () => {
     expect(terrain[0 * MAP_SIZE + 13]).toBe("ocean");
     expect(terrain[13 * MAP_SIZE + 0]).toBe("ocean");
     for (const structure of WAKE_ISLAND_STRUCTURE_POSITIONS) {
-      expect(
-        terrain[structure.y * MAP_SIZE + structure.x],
-        structure.name,
-      ).not.toBe("ocean");
+      expect(terrain[structure.y * MAP_SIZE + structure.x], structure.name).not.toBe(
+        "ocean",
+      );
     }
   });
 
@@ -252,9 +225,9 @@ describe("canonical world landmarks", () => {
         (tile) => tile.terrain === "ocean",
       );
       expect(water.length).toBeGreaterThan(0);
-      expect(
-        water.every((tile) => tile.blocked === false && tile.walkCost === 1),
-      ).toBe(true);
+      expect(water.every((tile) => tile.blocked === false && tile.walkCost === 1)).toBe(
+        true,
+      );
     }
   });
 
@@ -396,10 +369,7 @@ describe("canonical world landmarks", () => {
 
   it("keeps the Wake Island structure positions aligned with the relocation migration", () => {
     const sql = readFileSync(
-      resolve(
-        process.cwd(),
-        "drizzle/migrations/0021_relocate_world_landmarks.sql",
-      ),
+      resolve(process.cwd(), "drizzle/migrations/0021_relocate_world_landmarks.sql"),
       "utf8",
     );
     for (const structure of WAKE_ISLAND_STRUCTURE_POSITIONS) {
@@ -415,7 +385,7 @@ describe("canonical world landmarks", () => {
       resolve(process.cwd(), "drizzle/seeds/village.ts"),
       "utf8",
     );
-    expect(seed).toContain('import { WORLD_LANDMARKS }');
+    expect(seed).toContain("import { WORLD_LANDMARKS }");
     expect(seed).toContain("for (const landmark of WORLD_LANDMARKS)");
     expect(seed).toContain(".set({ sector: landmark.sector })");
   });

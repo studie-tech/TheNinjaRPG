@@ -20,7 +20,9 @@ import {
 import {
   PVP_EXPERIENCE_DAILY_DECAY,
   RANKED_ENTRY_COST,
+  RANKED_ENTRY_LP,
   RANKED_LEGEND_LP_REQUIREMENT,
+  RANKED_LP_DAILY_DECAY,
   RANKED_SANNIN_TOP_PLAYERS,
   type RankedRank,
 } from "@/drizzle/constants";
@@ -74,25 +76,38 @@ export const listRankedSeasonForGET = (client: Pick<DrizzleClient, "query">) =>
     where: and(eq(rankedSeason.ended, false)),
   });
 
-/** Execute the database statement for `GET`. */
-export const executeRowsForGET = (
-  client: Pick<DrizzleClient, "execute">,
-  fiveDaysAgo: Date,
+/** Decay the LP of Legend players with no ranked battle, as attacker or defender, since `cutoff`. */
+export const decayInactiveLegendRankedLp = (
+  client: Pick<DrizzleClient, "update" | "select">,
+  cutoff: Date,
 ) =>
-  client.execute(
-    sql`
-          UPDATE ${userData} u
-          LEFT JOIN (
-            SELECT attackedId AS userId FROM ${battleHistory}
-            WHERE battleType = 'RANKED_PVP' AND createdAt > ${fiveDaysAgo}
-            UNION
-            SELECT defenderId AS userId FROM ${battleHistory}
-            WHERE battleType = 'RANKED_PVP' AND createdAt > ${fiveDaysAgo}
-          ) b ON u.userId = b.userId
-          SET u.rankedLp = u.rankedLp - 70
-          WHERE u.rankedLp > 899 AND b.userId IS NULL
-        `,
-  );
+  client
+    .update(userData)
+    .set({ rankedLp: sql`${userData.rankedLp} - ${RANKED_LP_DAILY_DECAY}` })
+    .where(
+      and(
+        gte(userData.rankedLp, RANKED_LEGEND_LP_REQUIREMENT),
+        notExists(rankedBattleSince(client, battleHistory.attackedId, cutoff)),
+        notExists(rankedBattleSince(client, battleHistory.defenderId, cutoff)),
+      ),
+    );
+
+/** A ranked battle since `cutoff` with the outer user on the given side; each side has its own index. */
+const rankedBattleSince = (
+  client: Pick<DrizzleClient, "select">,
+  side: typeof battleHistory.attackedId | typeof battleHistory.defenderId,
+  cutoff: Date,
+) =>
+  client
+    .select({ id: battleHistory.id })
+    .from(battleHistory)
+    .where(
+      and(
+        eq(side, userData.userId),
+        eq(battleHistory.battleType, "RANKED_PVP"),
+        gt(battleHistory.createdAt, cutoff),
+      ),
+    );
 
 /** Build the `userData` update for `GET`, setting `rankedStreak`, using predicates on `rankedLp`. */
 export const updateUserDataForGET = (client: Pick<DrizzleClient, "update">) =>
@@ -296,7 +311,7 @@ export const updateUserDataForEnterRankedSeason = (
   client
     .update(userData)
     .set({
-      rankedLp: 150,
+      rankedLp: RANKED_ENTRY_LP,
       villagePrestige: sql`${userData.villagePrestige} - ${RANKED_ENTRY_COST}`,
     })
     .where(

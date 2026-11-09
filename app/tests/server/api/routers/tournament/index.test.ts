@@ -1,8 +1,11 @@
-import { Pusher } from "@/libs/pusher";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { tournament, tournamentMatch, tournamentRecord } from "@/drizzle/schema";
+import { Pusher } from "@/libs/pusher";
+import {
+  archivedTournamentRecordName,
+  syncTournamentState,
+} from "@/routers/tournament";
 import { resetServerModuleStubs } from "../../../../setup/serverModules";
-import { archivedTournamentRecordName, syncTournamentState } from "@/routers/tournament";
 
 const FINALIZATION_INCOMPLETE =
   "Tournament finalization incomplete. Staff recovery required.";
@@ -43,18 +46,15 @@ const createTournamentData = (overrides?: Partial<typeof baseTournament>) => ({
   matches: [finalMatch],
 });
 
-const createTournamentRecord = (overrides?: Record<string, unknown>) => ({
-  id: "tournament-1",
-  name: "Test Tournament",
-  image: "image.png",
-  description: "desc",
-  round: 1,
-  type: "KAGE",
-  rewards: { reward_money: 5000 },
-  startedAt: new Date("2026-05-01T08:00:00.000Z"),
-  winnerId: "winner-1",
-  ...overrides,
-});
+const createTournamentRecord = (overrides?: Record<string, unknown>) => {
+  const {
+    roundStartedAt: _roundStartedAt,
+    createdAt: _createdAt,
+    status: _status,
+    ...record
+  } = baseTournament;
+  return { ...record, winnerId: "winner-1", ...overrides };
+};
 
 const createClient = ({
   recordResponses = [null],
@@ -305,7 +305,9 @@ describe("syncTournamentState", () => {
     });
     insertValues
       .mockRejectedValueOnce(nameKeyConflict())
-      .mockRejectedValueOnce(new Error("Duplicate entry 'tournament-1' for key 'PRIMARY'"));
+      .mockRejectedValueOnce(
+        new Error("Duplicate entry 'tournament-1' for key 'PRIMARY'"),
+      );
 
     const result = await syncTournament(client);
 

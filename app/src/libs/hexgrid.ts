@@ -299,8 +299,8 @@ export class PathCalculator {
    * Snapshotted, and it bites harder than the path cache does: a stale cache still answers a
    * miss correctly, whereas a bound taken before a tile got CHEAPER overestimates, and then even
    * a miss comes back with a path that is not the shortest. Lowering any tile's cost means
-   * building a new calculator, not just clearing the cache. Every site does that today — each
-   * one constructs after its mutations — which is why this is a note rather than a guard.
+   * building a new calculator, not just clearing the cache. Every caller constructs after its
+   * mutations; nothing guards this.
    */
   minStepCost: number;
 
@@ -351,12 +351,9 @@ export class PathCalculator {
  * A* with a lazy-deletion binary heap.
  *
  * Finding a cheaper route to a tile pushes a second entry rather than moving the existing one,
- * and whichever entry surfaces after the tile is settled is skipped. That is what replaced
- * `abstract-astar`: its MinHeap sifts DOWN when a key decreases (a decrease has to sift up) and
- * `removeMinimum` leaves the moved item's stale index behind in its index map, so once the
- * heuristic actually reorders the frontier the pop order is wrong and the path it returns is not
- * always the shortest — measured at 4 of 68 paths on a sector-sized grid with mixed terrain
- * costs. Never decreasing a key sidesteps both.
+ * and whichever entry surfaces after the tile is settled is skipped. Never decreasing a key
+ * avoids decrease-key bookkeeping in the heap, a common source of wrong pop order (and so of
+ * paths that are not the shortest) in heap-based A*.
  *
  * `estimate` must not overestimate the remaining cost or the result is not the shortest path;
  * `PathCalculator.minStepCost` is what keeps the caller's estimate under that bound.

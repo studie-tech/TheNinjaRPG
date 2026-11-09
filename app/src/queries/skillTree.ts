@@ -7,7 +7,6 @@ import { userData, userItem, userSkill } from "@/drizzle/schema";
 import type { MasterySources } from "@/libs/mastery";
 import type { DrizzleClient } from "@/server/db";
 import { getNextUserSnapshotAt } from "@/utils/time";
-import type { SkillTreeFolderSchema } from "@/validators/skillTree";
 
 /**
  * Fetch the user's skills
@@ -339,6 +338,39 @@ export const deleteSkillTreeForDelete = (
   input: { id: string },
 ) => client.delete(skillTree).where(eq(skillTree.id, input.id));
 
+/** Build the `actionLog` insert for `update`. */
+export const insertActionLogForUpdate = (
+  client: Pick<DrizzleClient, "insert">,
+  ctx: { userId: string },
+  diff: string[],
+  entry: { id: string; name: string; image: string },
+) =>
+  client.insert(actionLog).values({
+    id: nanoid(),
+    userId: ctx.userId,
+    tableName: "skillTree",
+    changes: diff,
+    relatedId: entry.id,
+    relatedMsg: `Update: ${entry.name}`,
+    relatedImage: entry.image,
+  });
+
+/** Build the `actionLog` insert for `delete`. */
+export const insertActionLogForDelete = (
+  client: Pick<DrizzleClient, "insert">,
+  ctx: { userId: string },
+  entry: { id: string; name: string; image: string },
+) =>
+  client.insert(actionLog).values({
+    id: nanoid(),
+    userId: ctx.userId,
+    tableName: "skillTree",
+    changes: [`Deleted: ${entry.name}`],
+    relatedId: entry.id,
+    relatedMsg: `Delete: ${entry.name}`,
+    relatedImage: entry.image,
+  });
+
 /**
  * Build the `userData` update for `resetSkillPoints`, using predicates on `userId`,
  * `monthlySkillResets`, `reputationPoints`.
@@ -456,7 +488,7 @@ export const listSkillTreeForGetFolderStats = (client: Pick<DrizzleClient, "quer
 export const insertSkillTreeFolderForCreateFolder = (
   client: Pick<DrizzleClient, "insert">,
   id: string,
-  input: SkillTreeFolderSchema,
+  input: SkillTreeFolderInput,
 ) =>
   client.insert(skillTreeFolder).values({
     id,
@@ -480,7 +512,7 @@ export const findSkillTreeFolderForUpdateFolder = (
 export const updateSkillTreeFolderForUpdateFolder = (
   client: Pick<DrizzleClient, "update">,
   input: {
-    data: SkillTreeFolderSchema;
+    data: SkillTreeFolderInput;
     id: string;
   },
 ) =>
@@ -542,3 +574,12 @@ export const findRequiredSkillTreeEntry = (
     columns: { id: true, pathType: true },
     where: eq(skillTree.id, input.data.requiredSkillId),
   });
+
+/** Editable folder fields shared by the create and update statements. */
+type SkillTreeFolderInput = {
+  name: string;
+  image?: string | undefined;
+  description?: string | undefined;
+  hidden?: boolean | undefined;
+  order?: number | undefined;
+};

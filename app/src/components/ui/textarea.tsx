@@ -8,8 +8,7 @@ export interface TextareaProps
   ref?: React.Ref<HTMLTextAreaElement>;
 }
 
-const Textarea = ({ className, isDirty, value, ref, ...props }: TextareaProps) => {
-  const isControlled = value !== undefined;
+const Textarea = ({ className, isDirty, ref, ...props }: TextareaProps) => {
   // iOS zooms focused fields below 16px; retain larger inherited accessibility sizes.
   return (
     <textarea
@@ -19,7 +18,6 @@ const Textarea = ({ className, isDirty, value, ref, ...props }: TextareaProps) =
         className,
       )}
       ref={ref}
-      {...(isControlled ? { value } : {})}
       {...props}
     />
   );

@@ -82,7 +82,10 @@ describe("findNearestReachableCoordinate", () => {
 
   it("keeps a shaded coordinate reachable without relocating it", () => {
     const map = makeMap([]);
-    Object.assign(map.tiles.find((tile) => tile.x === 3 && tile.y === 3)!, { blocked: true, walkCost: 0 });
+    Object.assign(map.tiles.find((tile) => tile.x === 3 && tile.y === 3)!, {
+      blocked: true,
+      walkCost: 0,
+    });
     expect(findNearestReachableCoordinate(map, { x: 3, y: 3 })).toEqual({ x: 3, y: 3 });
   });
 

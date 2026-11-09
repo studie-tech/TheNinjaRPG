@@ -25,7 +25,11 @@ describe("support.getStatistics grouped summaries", () => {
         ["IN_PROGRESS", "1"],
         ["CLOSED", "2"],
       ],
-      assignedToUserId: [[userId, "3"], ["other-staff", "2"], [null, "1"]],
+      assignedToUserId: [
+        [userId, "3"],
+        ["other-staff", "2"],
+        [null, "1"],
+      ],
     });
 
     expect(await caller.getStatistics(dateRange)).toEqual({
@@ -66,8 +70,14 @@ describe("support.getStatistics grouped summaries", () => {
     const { caller } = statisticsCaller({
       category: [["OTHER", 4]],
       priority: [["LOW", 4]],
-      status: [["IN_PROGRESS", 3], ["CLOSED", 1]],
-      assignedToUserId: [["other-staff", 2], [null, 2]],
+      status: [
+        ["IN_PROGRESS", 3],
+        ["CLOSED", 1],
+      ],
+      assignedToUserId: [
+        ["other-staff", 2],
+        [null, 2],
+      ],
     });
 
     expect(await caller.getStatistics(dateRange)).toMatchObject({
@@ -87,11 +97,13 @@ describe("support.getStatistics grouped summaries", () => {
       assignedToUserId: [["other-staff", 5]],
     });
 
-    expect(await caller.getStatistics({
-      ...dateRange,
-      assignedToUserId: "other-staff",
-      category: "BUG_REPORT",
-    })).toMatchObject({
+    expect(
+      await caller.getStatistics({
+        ...dateRange,
+        assignedToUserId: "other-staff",
+        category: "BUG_REPORT",
+      }),
+    ).toMatchObject({
       totalTickets: 5,
       openTickets: 5,
       resolvedTickets: 0,
@@ -120,13 +132,16 @@ const statisticsCaller = (
   stubProfile("fetchUser", async () => ({ userId, role: "ADMIN" }));
   const queries: { sql: string; params: unknown[] }[] = [];
   // Real Drizzle SQL generation and decoding, with driver rows supplied in memory.
-  const client = drizzle(async (sql, params) => {
-    queries.push({ sql, params });
-    const group = /group by `SupportTicket`\.`(\w+)`/.exec(sql)?.[1];
-    if (group) return { rows: groups[group] ?? [] };
-    // The metrics relation read has no tickets in these summary fixtures.
-    expect(sql).toContain("`SupportTicket` `supportTicket`");
-    return { rows: [] };
-  }, { schema }) as unknown as DrizzleClient;
+  const client = drizzle(
+    async (sql, params) => {
+      queries.push({ sql, params });
+      const group = /group by `SupportTicket`\.`(\w+)`/.exec(sql)?.[1];
+      if (group) return { rows: groups[group] ?? [] };
+      // The metrics relation read has no tickets in these summary fixtures.
+      expect(sql).toContain("`SupportTicket` `supportTicket`");
+      return { rows: [] };
+    },
+    { schema },
+  ) as unknown as DrizzleClient;
   return { caller: callerForDatabase(supportRouter, userId, client), queries };
 };

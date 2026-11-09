@@ -28,11 +28,17 @@ import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
+import { getClaimedVotesPatch } from "@/deltas/profile";
 import {
   ACTIVE_VOTING_SITES,
+  MAX_LINK_PROMOTION_POINTS,
+  RECRUIT_PRESTIGE_SHARE,
   RECRUIT_RANK_MILESTONES,
+  RECRUITER_LEVEL_REWARD_FACTOR,
+  REFERRAL_REPUTATION_SHARE,
   type RecruitMilestoneRank,
   SITE_URL,
+  VOTE_REWARD_REPUTATION,
 } from "@/drizzle/constants";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import AvatarImage from "@/layout/Avatar";
@@ -42,7 +48,7 @@ import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { useInfinitePagination } from "@/libs/pagination";
-import { showUserRank } from "@/libs/profile";
+import { recruiterLevelReward, showUserRank } from "@/libs/profile";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { getVotingLink } from "@/libs/voting";
@@ -58,20 +64,17 @@ import {
 
 export function ProfileSharing() {
   // State
-  const { data: userData, updateUser } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const [recruitTab, setRecruitTab] = useState<string>("Link");
 
   // mutations
   const { mutate: claimVotes, isPending } = api.profile.claimVotes.useMutation({
-    onSuccess: async (data) => {
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _input, revision) => {
       showMutationToast(data);
-      if (data.success && userData && userData?.votes) {
-        await updateUser({
-          reputationPoints: userData.reputationPoints + 1,
-          reputationPointsTotal: userData.reputationPointsTotal + 1,
-          votes: { ...userData.votes, userId: userData.userId, claimed: true },
-        });
+      if (data.success) {
+        await updateUser(getClaimedVotesPatch, { revision, delta: data.userDelta });
       }
     },
   });
@@ -158,9 +161,9 @@ export function ProfileSharing() {
       <ContentBox title="TNR Promotion" subtitle="Earn by helping us grow">
         <p className="mb-4 italic">
           Vote on the following sites to earn reputation points. Once you have voted on
-          all voting sites, and the votes have succesfully registered, you can claim 1
-          reputation point per day. Note that sites may be added/removed from this list
-          regularly.
+          all voting sites, and the votes have succesfully registered, you can claim{" "}
+          {VOTE_REWARD_REPUTATION} reputation point per day. Note that sites may be
+          added/removed from this list regularly.
         </p>
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -287,21 +290,23 @@ const RecruitLinkTab: React.FC = () => {
           <strong>Money</strong>
           <br />
           Each time a recruited user levels up, you will receive money in your bank
-          account according to the following formula: <code>10 x level³</code>. i.e. if
-          a person you recruited achieved level 50, you get {(1250000).toLocaleString()}{" "}
-          ryo.
+          account according to the following formula:{" "}
+          <code>{RECRUITER_LEVEL_REWARD_FACTOR} x level³</code>. i.e. if a person you
+          recruited achieved level 50, you get{" "}
+          {recruiterLevelReward(50).toLocaleString()} ryo.
         </li>
         <li className="px-2 py-2">
           <strong>Reputation Points</strong>
           <br />
           Every time a recruited user buys reputation points, you will also receive an
-          amount of reputation points equal to 10% of what they bought.
+          amount of reputation points equal to {REFERRAL_REPUTATION_SHARE * 100}% of
+          what they bought.
         </li>
         <li className="px-2 py-2">
           <strong>Village Prestige</strong>
           <br />
           Every time a recruited user earns village prestige from quests, you will
-          receive 10% of the prestige they earn.
+          receive {RECRUIT_PRESTIGE_SHARE * 100}% of the prestige they earn.
         </li>
         <li className="px-2 py-2">
           <strong>Rank Milestones</strong>
@@ -362,10 +367,7 @@ const RecruitGuideTab: React.FC = () => {
     fetchNextPage,
     hasNextPage,
   } = api.linkPromotion.getLinkPromotions.useInfiniteQuery(
-    {
-      limit: 30,
-      userId: userData?.userId || "placeholder",
-    },
+    { limit: 30 },
     {
       enabled: !!userData?.userId,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -592,7 +594,7 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
                   <FormControl>
                     <NumberInput
                       min={0}
-                      max={500}
+                      max={MAX_LINK_PROMOTION_POINTS}
                       step={1}
                       inputMode="numeric"
                       disabled={reviewPromotion.isPending}

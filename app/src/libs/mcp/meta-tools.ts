@@ -546,9 +546,7 @@ function hasWriteScope(scopes: string[]): boolean {
  * This keeps the "authenticated users can mutate" policy decision separate from
  * OAuth scope enforcement — scopes are never synthetically injected.
  *
- * NOTE: Currently checks for write scope broadly. All mutations with write scope can execute any mutation endpoint.
- * For production use, consider implementing endpoint-specific permission checks for sensitive operations
- * (e.g., require "profile:write" for profile mutations, "admin" scope for administrative operations).
+ * NOTE: Any write scope authorizes every mutation endpoint; there are no endpoint-specific scopes.
  */
 function checkEndpointAuthorization(
   endpoint: EndpointData,

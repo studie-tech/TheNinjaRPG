@@ -15,29 +15,29 @@ const realAudio = globalThis.Audio;
 beforeEach(() => {
   created.length = 0;
   vi.useFakeTimers();
-  globalThis.Audio = (class {
-      src = "";
-      paused = true;
-      volume = 1;
-      removed = false;
-      loop = false;
-      preload = "";
-      constructor() {
-        created.push(this as unknown as FakeAudio);
-      }
-      addEventListener() {}
-      removeEventListener() {}
-      async play() {
-        this.paused = false;
-      }
-      pause() {
-        this.paused = true;
-      }
-      load() {}
-      removeAttribute() {
-        this.removed = true;
-      }
-  }) as unknown as typeof Audio;
+  globalThis.Audio = class {
+    src = "";
+    paused = true;
+    volume = 1;
+    removed = false;
+    loop = false;
+    preload = "";
+    constructor() {
+      created.push(this as unknown as FakeAudio);
+    }
+    addEventListener() {}
+    removeEventListener() {}
+    async play() {
+      this.paused = false;
+    }
+    pause() {
+      this.paused = true;
+    }
+    load() {}
+    removeAttribute() {
+      this.removed = true;
+    }
+  } as unknown as typeof Audio;
 });
 afterEach(() => {
   vi.useRealTimers();

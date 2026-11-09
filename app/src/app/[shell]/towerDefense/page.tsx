@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type React from "react";
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { TowerDefenseUpgradeCategory } from "@/drizzle/constants";
-import { ID_ANIMATION_HIT, ID_SFX_HIT } from "@/drizzle/constants";
+import {
+  ID_ANIMATION_HIT,
+  ID_SFX_HIT,
+  TD_SCORE_TO_POINTS_RATIO,
+} from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useHudStoreValues, useTowerDefense } from "@/hooks/useTowerDefense";
 import ContentBox from "@/layout/ContentBox";
@@ -57,7 +61,6 @@ const TowerDefenseCanvas = dynamic(() => import("@/layout/TowerDefense"), {
 });
 
 const GAME_NAME = "Tower Defense";
-const PAGE_TITLE = `${GAME_NAME}`;
 const PAGE_SUBTITLE = "Survive as many waves as possible!";
 
 const TowerDefensePage: React.FC = () => {
@@ -124,14 +127,6 @@ const TowerDefensePage: React.FC = () => {
     checkForExistingSession,
   ]);
 
-  // PERFORMANCE: Stable callback for tile clicks (never changes reference)
-  const handleTileClick = useCallback(
-    (position: { col: number; row: number }) => {
-      throwShuriken(position);
-    },
-    [throwShuriken],
-  );
-
   // Loader
   if (!isClerkLoaded) return <Loader explanation="Loading user data..." />;
 
@@ -139,17 +134,10 @@ const TowerDefensePage: React.FC = () => {
   if (gameState.mode === "lobby") {
     return (
       <ContentBox
-        title={PAGE_TITLE}
+        title={GAME_NAME}
         subtitle={PAGE_SUBTITLE}
         defaultBackHref="/minigames"
-        topRightContent={
-          <Link href="/manual/towerDefense/leaderboard">
-            <Button size="sm">
-              <Trophy className="mr-2 h-4 w-4" />
-              Leaderboard
-            </Button>
-          </Link>
-        }
+        topRightContent={<LeaderboardLink />}
       >
         {/* Guest Mode Notice */}
         {isGuest && (
@@ -336,13 +324,7 @@ const TowerDefensePage: React.FC = () => {
 
         {/* Error Display */}
         {gameState.error && (
-          <div className="mt-4 flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-destructive">
-            <AlertCircle className="h-4 w-4" />
-            <span>{gameState.error}</span>
-            <Button variant="ghost" size="sm" onClick={clearError}>
-              Dismiss
-            </Button>
-          </div>
+          <ErrorBanner message={gameState.error} onDismiss={clearError} />
         )}
       </ContentBox>
     );
@@ -355,14 +337,7 @@ const TowerDefensePage: React.FC = () => {
       subtitle={
         gameState.mode === "wave-end" ? "Wave Complete!" : `Score: ${gameState.score}`
       }
-      topRightContent={
-        <Link href="/manual/towerDefense/leaderboard">
-          <Button size="sm">
-            <Trophy className="mr-2 h-4 w-4" />
-            Leaderboard
-          </Button>
-        </Link>
-      }
+      topRightContent={<LeaderboardLink />}
     >
       {/* Game HUD - Subscribes directly to module-level hudStore, parent never re-renders */}
       <GameHUD />
@@ -374,7 +349,7 @@ const TowerDefensePage: React.FC = () => {
             seed={gameState.seed}
             initialGridSize={gameState.state.gridSize}
             initialPlayerPosition={gameState.state.playerPosition}
-            onTileClick={handleTileClick}
+            onTileClick={throwShuriken}
             active={gameState.mode === "playing"}
             onFrame={update}
             entitiesRef={entitiesRef}
@@ -433,7 +408,8 @@ const TowerDefensePage: React.FC = () => {
                   <div className="mt-4 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
                     <p className="font-semibold text-blue-500 text-lg">
                       <Info className="mr-2 inline h-5 w-5" />
-                      Would have earned {Math.floor(gameState.score / 100)} points
+                      Would have earned{" "}
+                      {Math.floor(gameState.score / TD_SCORE_TO_POINTS_RATIO)} points
                     </p>
                     <div className="mt-2 space-y-1 text-muted-foreground text-xs">
                       <p>
@@ -461,12 +437,12 @@ const TowerDefensePage: React.FC = () => {
                     <div className="mt-2 space-y-1 text-muted-foreground text-xs">
                       <p className="font-medium">How points are calculated:</p>
                       <p>
-                        {gameState.score} score ÷ 100 ={" "}
-                        {Math.floor(gameState.score / 100)} points
+                        {gameState.score} score ÷ {TD_SCORE_TO_POINTS_RATIO} ={" "}
+                        {Math.floor(gameState.score / TD_SCORE_TO_POINTS_RATIO)} points
                       </p>
                       {(gameState.finalPointsEarned ?? 0) === 0 && (
                         <p className="text-amber-500/80">
-                          Reach 100+ score to earn points!
+                          Reach {TD_SCORE_TO_POINTS_RATIO}+ score to earn points!
                         </p>
                       )}
                       {(gameState.finalPointsEarned ?? 0) > 0 && (
@@ -539,19 +515,44 @@ const TowerDefensePage: React.FC = () => {
 
       {/* Error Display */}
       {gameState.error && gameState.mode !== "game-over" && (
-        <div className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-destructive/10 p-3 text-destructive">
-          <AlertCircle className="h-4 w-4" />
-          <span>{gameState.error}</span>
-          <Button variant="ghost" size="sm" onClick={clearError}>
-            Dismiss
-          </Button>
-        </div>
+        <ErrorBanner message={gameState.error} onDismiss={clearError} centered />
       )}
     </ContentBox>
   );
 };
 
 export default TowerDefensePage;
+
+/** Reuse the leaderboard navigation control across tower-defense screen states. */
+const LeaderboardLink = () => (
+  <Link href="/manual/towerDefense/leaderboard">
+    <Button size="sm">
+      <Trophy className="mr-2 h-4 w-4" />
+      Leaderboard
+    </Button>
+  </Link>
+);
+
+/** Keep a recoverable tower-defense error visible until the player dismisses it. */
+const ErrorBanner = ({
+  message,
+  onDismiss,
+  centered = false,
+}: {
+  message: string;
+  onDismiss: () => void;
+  centered?: boolean;
+}) => (
+  <div
+    className={`mt-4 flex items-center ${centered ? "justify-center " : ""}gap-2 rounded-lg bg-destructive/10 p-3 text-destructive`}
+  >
+    <AlertCircle className="h-4 w-4" />
+    <span>{message}</span>
+    <Button variant="ghost" size="sm" onClick={onDismiss}>
+      Dismiss
+    </Button>
+  </div>
+);
 
 // ============================================================================
 // PERFORMANCE: HUD components that subscribe directly to hudStore (module-level singleton)
@@ -688,14 +689,6 @@ const GameHUD = memo(function GameHUD() {
  * Only re-renders when activeUpgrades or inRunCurrency change.
  * Wrapped in memo() to ensure parent re-renders don't affect this component.
  */
-interface InRunUpgradesWrapperProps {
-  upgradeDefinitions: Parameters<typeof TowerDefenseUpgrades>[0]["upgradeDefinitions"];
-  userUpgrades: Parameters<typeof TowerDefenseUpgrades>[0]["userUpgrades"];
-  activeTab: TowerDefenseUpgradeCategory | undefined;
-  onTabChange: (tab: TowerDefenseUpgradeCategory) => void;
-  onInRunPurchase: (upgradeId: string) => void;
-}
-
 const InRunUpgradesWrapper = memo(function InRunUpgradesWrapper({
   upgradeDefinitions,
   userUpgrades,
@@ -719,3 +712,11 @@ const InRunUpgradesWrapper = memo(function InRunUpgradesWrapper({
     />
   );
 });
+
+interface InRunUpgradesWrapperProps {
+  upgradeDefinitions: Parameters<typeof TowerDefenseUpgrades>[0]["upgradeDefinitions"];
+  userUpgrades: Parameters<typeof TowerDefenseUpgrades>[0]["userUpgrades"];
+  activeTab: TowerDefenseUpgradeCategory | undefined;
+  onTabChange: (tab: TowerDefenseUpgradeCategory) => void;
+  onInRunPurchase: (upgradeId: string) => void;
+}

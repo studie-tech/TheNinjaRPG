@@ -1,7 +1,7 @@
 /// <reference types="bun-types/test" />
 
-import { desc, eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { desc, eq } from "drizzle-orm";
 import { damageSimulation } from "@/drizzle/schema";
 import { simulatorRouter } from "@/server/api/routers/simulator";
 import { damageSimulationStateSchema } from "@/validators/combat";
@@ -12,7 +12,11 @@ import {
   resetTables,
 } from "../../../setup/testDatabase";
 
-const state = damageSimulationStateSchema.parse({ attacker: {}, defender: {}, action: {} });
+const state = damageSimulationStateSchema.parse({
+  attacker: {},
+  defender: {},
+  action: {},
+});
 
 describeWithDatabase("damage simulation history", () => {
   beforeEach(async () => {
@@ -54,17 +58,38 @@ describeWithDatabase("damage simulation history", () => {
       .from(damageSimulation)
       .where(eq(damageSimulation.userId, "simulator-user"))
       .orderBy(desc(damageSimulation.createdAt));
-    const seededKept = Array.from({ length: expected - 1 }, (_, i) =>
-      `sim-${String(existing - 1 - i).padStart(2, "0")}`,
+    const seededKept = Array.from(
+      { length: expected - 1 },
+      (_, i) => `sim-${String(existing - 1 - i).padStart(2, "0")}`,
     );
     expect(rows).toHaveLength(expected);
     expect(rows.map((row) => row.id)).toEqual(expect.arrayContaining(seededKept));
-    expect(rows.map((row) => row.id).filter((id) => !id.startsWith("sim-"))).toHaveLength(1);
+    expect(
+      rows.map((row) => row.id).filter((id) => !id.startsWith("sim-")),
+    ).toHaveLength(1);
 
     const other = await db
       .select({ id: damageSimulation.id })
       .from(damageSimulation)
       .where(eq(damageSimulation.userId, "other-user"));
     expect(other).toHaveLength(1);
+  });
+
+  it("deletes only the caller's own simulation", async () => {
+    const db = await seed(1);
+    const caller = await callerFor(simulatorRouter, "simulator-user");
+    expect(await caller.deleteDamageSimulation({ id: "sim-00" })).toMatchObject({
+      success: true,
+    });
+    expect(await caller.deleteDamageSimulation({ id: "other-user-sim" })).toEqual({
+      success: false,
+      message: "Entry not found",
+    });
+    expect(await caller.deleteDamageSimulation({ id: "missing-sim" })).toEqual({
+      success: false,
+      message: "Entry not found",
+    });
+    const rows = await db.select({ id: damageSimulation.id }).from(damageSimulation);
+    expect(rows.map((row) => row.id)).toEqual(["other-user-sim"]);
   });
 });

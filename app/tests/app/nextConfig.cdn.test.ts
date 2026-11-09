@@ -42,7 +42,9 @@ describe("next.config with a pull zone configured", () => {
   });
 
   it("lets the browser use the cross-origin chunks Next marks `crossorigin`", () => {
-    expect(headerValue("/_next/static/:path*", "Access-Control-Allow-Origin")).toBe("*");
+    expect(headerValue("/_next/static/:path*", "Access-Control-Allow-Origin")).toBe(
+      "*",
+    );
     expect(headerValue("/_next/static/:path*", "X-Robots-Tag")).toBe("noindex");
   });
 });

@@ -34,7 +34,7 @@ import { battleCalcText } from "@/layout/seoTexts";
 import { damageUser } from "@/libs/combat/tags";
 import type { BattleUserState, Consequence, UserEffect } from "@/libs/combat/types";
 import { calcHP, calcLevel } from "@/libs/profile";
-import { showMutationToast } from "@/libs/toast";
+import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canModifyCombatSettings } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import {
@@ -45,7 +45,7 @@ import {
   statSchema,
 } from "@/validators/combat";
 
-// Default user
+// Simulator form types
 type StatSchemaInput = z.input<typeof statSchema>;
 type StatSchemaOutput = z.infer<typeof statSchema>;
 type ActSchemaInput = z.input<typeof actSchema>;
@@ -137,7 +137,10 @@ export default function Simulator(props: {
   // Mutation for creating new entry
   const { mutate: saveEntry, isPending: isSaving } =
     api.simulator.createDamageSimulation.useMutation({
-      onSuccess: () => refetch(),
+      onSuccess: async (result) => {
+        showMutationToast(result);
+        if (result.success) await refetch();
+      },
     });
 
   // Mutation for editing entry
@@ -146,17 +149,19 @@ export default function Simulator(props: {
       onSuccess: () => refetch(),
     });
 
-  // Mutation for editing entry
+  // Delete entry
   const { mutate: deleteEntry, isPending: isDeleting } =
     api.simulator.deleteDamageSimulation.useMutation({
-      onSuccess: () => refetch(),
+      onSuccess: async (data) => {
+        if (!data.success) showMutationToast(data);
+        await refetch();
+      },
     });
 
   const isPending = isSaving || isUpdating || isDeleting;
 
-  // Calculate experience from stats. Every stat starts at 10, so the starting total is not
-  // earned experience — derive the baseline from the schema instead of hardcoding it, or the
-  // number goes negative whenever the number of stats changes.
+  // Calculate experience from stats. Every stat starts at 10, so the starting total of all
+  // schema stats is not earned experience.
   const calcExperience = (values: StatSchemaOutput) => {
     const assigned = statNames.map((k) => Number(values[k])).reduce((a, b) => a + b, 0);
     return assigned - statNames.length * 10;
@@ -171,7 +176,7 @@ export default function Simulator(props: {
   const defLevel = defProgress?.level ?? calcLevel(defExp);
   const defHp = calcHP(defLevel);
 
-  // Monkey-wrap the damage function
+  // Wraps damageUser for a single formula effect
   const getDamage = (
     attValues: StatSchemaOutput,
     defValues: StatSchemaOutput,
@@ -288,7 +293,7 @@ export default function Simulator(props: {
         attackerProgress: attProgress,
         defenderProgress: defProgress,
       }),
-    (errors) => console.error(errors),
+    showFormErrorsToast,
   );
 
   // Handle inserting historical entry into form
@@ -547,11 +552,7 @@ export default function Simulator(props: {
                     <ClipboardCopy
                       className="ml-1 h-5 w-5 hover:cursor-pointer hover:text-orange-900"
                       onClick={() => {
-                        const origin =
-                          typeof window !== "undefined" && window.location.origin
-                            ? window.location.origin
-                            : "";
-                        const link = `${origin}/manual/damage_calcs/${entry.id}`;
+                        const link = `${window.location.origin}/manual/damage_calcs/${entry.id}`;
                         navigator.clipboard.writeText(link).then(
                           () => {
                             showMutationToast({

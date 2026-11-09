@@ -42,10 +42,8 @@ interface AvatarImageProps {
 }
 
 /**
- * Sizing shared by the placeholder and the loaded avatar. The two states must resolve to
- * the same box: the placeholder used to omit `max-w-80`, so in any container wider than
- * 384px it rendered wider (and, being square, taller) than the image that replaced it,
- * shifting everything below it once the avatar arrived.
+ * Sizing shared by the placeholder and the loaded avatar, so both resolve to the same box
+ * and the image's arrival causes no layout shift.
  */
 const AVATAR_BOX =
   "relative max-w-80 m-auto w-5/6 aspect-square rounded-2xl border-2 border-black";

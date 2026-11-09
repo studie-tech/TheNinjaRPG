@@ -1,5 +1,16 @@
 /** SQL-side eligibility and increments for the active companion's unassigned XP bank. */
-import { sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { UserRanks } from "@/drizzle/constants";
 import { userData, userPet } from "@/drizzle/schema";
 import { getMaxPetRank } from "@/libs/pets/progression";
@@ -20,22 +31,24 @@ export const petExperienceGainSql = (experience: number, petId?: string | null) 
     UserRanks.map((rank) => sql`WHEN ${rank} THEN ${getMaxPetRank(rank)}`),
     sql` `,
   )} ELSE 0 END`;
-  const identity = petId ? sql`AND ${userPet.id} = ${petId}` : sql``;
   // The live identity guard excludes released/replaced pets, while the correlated
   // rank check also stops progression after the owner loses the required rank.
   // Match isPetAppearanceReady: accepted current-rank art remains usable during redraws.
-  return sql`${userData.petExperience} + IF(EXISTS (
-    SELECT 1 FROM ${userPet}
-    WHERE ${userPet.userId} = ${userData.userId}
-      AND ${userPet.id} = ${userData.activePetId}
-      AND ${userPet.battleEnabled} = true
-      AND ${userPet.generationStatus} IN ('READY', 'GENERATING')
-      AND ${userPet.artRank} = ${userPet.rank}
-      AND ${userPet.avatar} IS NOT NULL AND ${userPet.avatar} <> ''
-      AND ${userPet.rank} <= ${maxRank}
-      AND ${userPet.rank} >= 1
-      AND (${userData.petTask} IS NULL OR
-        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(${userData.petTask}, '$.petId')), '') <> ${userPet.id})
-      ${identity}
-  ), ${gain}, 0)`;
+  const eligible = and(
+    eq(userPet.userId, userData.userId),
+    eq(userPet.id, userData.activePetId),
+    eq(userPet.battleEnabled, true),
+    inArray(userPet.generationStatus, ["READY", "GENERATING"]),
+    eq(userPet.artRank, userPet.rank),
+    isNotNull(userPet.avatar),
+    ne(userPet.avatar, ""),
+    lte(userPet.rank, maxRank),
+    gte(userPet.rank, 1),
+    or(
+      isNull(userData.petTask),
+      sql`COALESCE(JSON_UNQUOTE(JSON_EXTRACT(${userData.petTask}, '$.petId')), '') <> ${userPet.id}`,
+    ),
+    petId ? eq(userPet.id, petId) : undefined,
+  );
+  return sql`${userData.petExperience} + IF(EXISTS (SELECT 1 FROM ${userPet} WHERE ${eligible}), ${gain}, 0)`;
 };

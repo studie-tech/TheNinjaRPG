@@ -7,8 +7,8 @@ import type { UserData } from "@/drizzle/schema";
  * a stale in-memory snapshot cannot overwrite concurrent rewards or membership changes.
  * Village transitions persist their own guarded updates before changing the in-memory user.
  *
- * Every column here must carry an absolute value. The caller re-issues this UPDATE when a pooled
- * PlanetScale connection drops, which a `sql` increment would turn into a double-apply.
+ * The caller writes this through `claimUserSnapshot`, whose `updatedAt` CAS rejects a stale
+ * snapshot, and removes `updatedAt` from the result so the claim timestamp is written instead.
  */
 export const buildDerivedUserRegenUpdate = (props: {
   user: Pick<

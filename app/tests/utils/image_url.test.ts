@@ -59,7 +59,9 @@ describe("image URL utilities", () => {
 
   it("routes packed sprite atlases through Bunny without resizing", () => {
     const atlas = "https://ui0arpl8sm.ufs.sh/f/raw-atlas-key";
-    expect(textureImageUrl(atlas, 0)).toBe("https://uploadthing.b-cdn.net/f/raw-atlas-key");
+    expect(textureImageUrl(atlas, 0)).toBe(
+      "https://uploadthing.b-cdn.net/f/raw-atlas-key",
+    );
   });
 
   it("replaces an existing width and preserves fragments", () => {
@@ -72,7 +74,9 @@ describe("image URL utilities", () => {
   });
 
   it("matches and transforms parsed hostnames rather than URL text", () => {
-    expect(isBunnyCdnUrl("https://example.com/?host=uploadthing.b-cdn.net")).toBe(false);
+    expect(isBunnyCdnUrl("https://example.com/?host=uploadthing.b-cdn.net")).toBe(
+      false,
+    );
     expect(transformImageUrl("https://example.com/?host=utfs.io")).toBe(
       "https://example.com/?host=utfs.io",
     );

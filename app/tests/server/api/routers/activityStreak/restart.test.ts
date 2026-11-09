@@ -1,18 +1,18 @@
-import { setSystemTime } from "bun:test";
+import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import {
   actionLog,
   activityStreakConfig,
   activityStreakReward,
   userData,
-  userStreakProgress,
   userQueue,
+  userStreakProgress,
 } from "@/drizzle/schema";
 import { activityStreakRouter } from "@/server/api/routers/activityStreak";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertUsers } from "../../../../setup/factories";
+import { queueEnergy } from "../../../../setup/queues";
 import { beforeStatements } from "../../../../setup/statements";
 import {
   callerFor,
@@ -21,7 +21,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { queueEnergy } from "../../../../setup/queues";
 
 describeWithDatabase("recurring streak cycle timing", () => {
   beforeEach(async () => {
@@ -92,16 +91,14 @@ describeWithDatabase("recurring streak cycle timing", () => {
       .where(eq(userStreakProgress.id, "progress"));
     const raced = beforeStatements(database, userStreakProgress, [
       async () =>
-        database
-          .insert(userStreakProgress)
-          .values({
-            id: "winning-first-claim",
-            userId: "streak-user",
-            configId: "recurring",
-            currentDay: 1,
-            lastClaimDate: new Date(),
-            startedAt: new Date(),
-          }),
+        database.insert(userStreakProgress).values({
+          id: "winning-first-claim",
+          userId: "streak-user",
+          configId: "recurring",
+          currentDay: 1,
+          lastClaimDate: new Date(),
+          startedAt: new Date(),
+        }),
     ]);
     const result = await callerForDatabase(
       activityStreakRouter,
@@ -189,15 +186,17 @@ describeWithDatabase("recurring streak cycle timing", () => {
       expect((await caller.claimStreakDay({ configId: "recurring" })).success).toBe(
         true,
       );
-      expect((await caller.getUserStreaks()).streaks[0]).toEqual(expect.objectContaining({
-        currentDay: 1,
-        alreadyClaimedToday: true,
-        canClaimToday: false,
-        theoreticalMaxDay: 1,
-        needsCatchUp: false,
-        daysToGo: 0,
-        startedAt: new Date(restartAt),
-      }));
+      expect((await caller.getUserStreaks()).streaks[0]).toEqual(
+        expect.objectContaining({
+          currentDay: 1,
+          alreadyClaimedToday: true,
+          canClaimToday: false,
+          theoreticalMaxDay: 1,
+          needsCatchUp: false,
+          daysToGo: 0,
+          startedAt: new Date(restartAt),
+        }),
+      );
       // A stale or crafted paid request must not turn the false offer into a charge.
       expect(
         (await caller.claimStreakDay({ configId: "recurring", payCatchUp: true }))
@@ -280,11 +279,13 @@ describeWithDatabase("recurring streak cycle timing", () => {
       .where(eq(userStreakProgress.id, "progress"));
     const caller = await callerFor(activityStreakRouter, "streak-user");
     expect((await caller.claimStreakDay({ configId: "recurring" })).success).toBe(true);
-    expect((await caller.getUserStreaks()).streaks[0]).toEqual(expect.objectContaining({
-      startedAt: purchasedAt,
-      needsCatchUp: true,
-      daysToGo: 1,
-    }));
+    expect((await caller.getUserStreaks()).streaks[0]).toEqual(
+      expect.objectContaining({
+        startedAt: purchasedAt,
+        needsCatchUp: true,
+        daysToGo: 1,
+      }),
+    );
   });
 
   it("lets only one concurrent claim start the next recurring cycle", async () => {

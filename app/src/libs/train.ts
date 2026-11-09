@@ -22,10 +22,13 @@ import {
   REGEN_SECONDS,
   SENSEI_GENIN_TRAIN_EXP_BOOST_PERC,
   SENSEI_JUTSU_TRAIN_COST_REDUCTION_PERC,
+  SENSEI_JUTSU_TRAINING_BOOST_PERC,
   SENSEI_MAX_STUDENT_LEVEL,
   STATS_PER_ENERGY,
+  TRAINING_SPEED_CONFIG,
   VILLAGE_LEAVE_REQUIRED_RANK,
   VILLAGE_REDUCED_GAINS_DAYS,
+  VILLAGE_REDUCED_GAINS_FACTOR,
 } from "@/drizzle/constants";
 import type { GameSetting, Jutsu, UserData, UserQueue } from "@/drizzle/schema";
 import { actionStatusMessage } from "@/libs/actionReadiness";
@@ -100,8 +103,6 @@ export const getReducedGainsDays = (user: UserData) => {
 /** XP remaining until the next ownership level (jutsu, items, etc.). Never negative. */
 export const remainingXpToLevel = (xpToLevel: number, experience: number): number =>
   Math.max(0, xpToLevel - experience);
-
-export const SENSEI_JUTSU_TRAINING_BOOST_PERC = 5;
 
 /**
  * Milliseconds to train from the current level to the next level.
@@ -221,53 +222,22 @@ export const getTrainingSections = (canUseSenseiSystem: boolean) => {
 /**
  * Get training efficiency
  */
-export const trainEfficiency = (user: Pick<UserData, "trainingSpeed">) => {
-  switch (user.trainingSpeed) {
-    case "15min":
-      return 100;
-    case "1hr":
-      return 90;
-    case "4hrs":
-      return 80;
-    case "8hrs":
-      return 70;
-    case "12hrs":
-      return 60;
-    case "24hrs":
-      return 50;
-    default:
-      throw Error("Invalid training speed");
-  }
-};
+export const trainEfficiency = (user: Pick<UserData, "trainingSpeed">) =>
+  trainingSpeedConfig(user.trainingSpeed).efficiency;
 
 /**
  * Get training multiplier
  */
 export const trainingMultiplier = (user: UserData) => {
   const factor = getTrainingMultiplierBoost(user);
-  switch (user.trainingSpeed) {
-    case "15min":
-      return 0.01 * factor;
-    case "1hr":
-      return 0.04 * factor;
-    case "4hrs":
-      return 0.16 * factor;
-    case "8hrs":
-      return 0.32 * factor;
-    case "12hrs":
-      return 0.48 * factor;
-    case "24hrs":
-      return 0.96 * factor;
-    default:
-      throw Error("Invalid training speed");
-  }
+  return trainingSpeedConfig(user.trainingSpeed).multiplier * factor;
 };
 
 /**
  * Player training modifiers independent of the selected training interval.
  */
 export const getTrainingMultiplierBoost = (user: UserData) => {
-  const factor = getReducedGainsDays(user) > 0 ? 0.5 : 1;
+  const factor = getReducedGainsDays(user) > 0 ? VILLAGE_REDUCED_GAINS_FACTOR : 1;
   return user.rank === "GENIN" && user.senseiId
     ? factor * (1 + SENSEI_GENIN_TRAIN_EXP_BOOST_PERC / 100)
     : factor;
@@ -276,23 +246,15 @@ export const getTrainingMultiplierBoost = (user: UserData) => {
 /**
  * Convert training speeds to total time to completion in seconds
  */
-export const trainingSpeedSeconds = (speed: TrainingSpeed) => {
-  switch (speed) {
-    case "15min":
-      return 15 * 60;
-    case "1hr":
-      return 60 * 60;
-    case "4hrs":
-      return 4 * 60 * 60;
-    case "8hrs":
-      return 8 * 60 * 60;
-    case "12hrs":
-      return 12 * 60 * 60;
-    case "24hrs":
-      return 24 * 60 * 60;
-    default:
-      throw Error("Invalid training speed");
+export const trainingSpeedSeconds = (speed: TrainingSpeed) =>
+  trainingSpeedConfig(speed).seconds;
+
+/** Stored training speeds come from the database, so an unknown value is rejected. */
+const trainingSpeedConfig = (speed: TrainingSpeed) => {
+  if (!Object.hasOwn(TRAINING_SPEED_CONFIG, speed)) {
+    throw Error("Invalid training speed");
   }
+  return TRAINING_SPEED_CONFIG[speed];
 };
 
 /**

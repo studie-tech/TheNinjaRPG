@@ -1,4 +1,5 @@
 import type { LetterRank } from "@/drizzle/constants";
+import { USER_RANK_ORDER } from "@/drizzle/constants";
 import type { UserRank } from "@/drizzle/schema";
 
 /** List jutsu letter ranks unlocked by shinobi rank; Chunin includes A-rank jutsu. */
@@ -40,25 +41,15 @@ export const hasRequiredLevel = (userLevel: number, requiredLevel: number) => {
   return userLevel >= requiredLevel;
 };
 
-/** Compares along the shinobi progression, which ranks Elder below Elite Jonin. */
+/**
+ * Compares along USER_RANK_ORDER, which ranks Elder below Elite Jonin. Any user rank meets a
+ * Student requirement; a NONE requirement is never met.
+ */
 export const hasRequiredRank = (userRank?: UserRank, requiredRank?: UserRank) => {
   if (!userRank) return false;
-  if (!requiredRank) return true;
-  switch (requiredRank) {
-    case "STUDENT":
-      return true;
-    case "GENIN":
-      return ["GENIN", "CHUNIN", "JONIN", "ELDER", "ELITE JONIN"].includes(userRank);
-    case "CHUNIN":
-      return ["CHUNIN", "JONIN", "ELDER", "ELITE JONIN"].includes(userRank);
-    case "JONIN":
-      return ["JONIN", "ELDER", "ELITE JONIN"].includes(userRank);
-    case "ELDER":
-      return ["ELDER", "ELITE JONIN"].includes(userRank);
-    case "ELITE JONIN":
-      return userRank === "ELITE JONIN";
-  }
-  return false;
+  if (!requiredRank || requiredRank === "STUDENT") return true;
+  const required = USER_RANK_ORDER.indexOf(requiredRank);
+  return required !== -1 && USER_RANK_ORDER.indexOf(userRank) >= required;
 };
 
 /** Expand a letter or shinobi rank into its allowed progression range, defaulting to every rank. */

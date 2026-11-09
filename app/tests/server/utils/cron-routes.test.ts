@@ -1,11 +1,10 @@
-
-import { readFileSync, readdirSync } from "node:fs";
-import { resolve } from "node:path";
 import { expect, it } from "bun:test";
+import { readdirSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const appRoot = resolve(import.meta.dirname, "../../..");
 const config = JSON.parse(readFileSync(resolve(appRoot, "vercel.json"), "utf8")) as {
-  crons: { path: string }[];
+  crons: { path: string; schedule: string }[];
 };
 // Include periodic maintenance routes that are currently not in the deployment schedule.
 const periodic = readdirSync(resolve(appRoot, "src/app/api"))
@@ -14,7 +13,9 @@ const periodic = readdirSync(resolve(appRoot, "src/app/api"))
 const routes = [...new Set([...config.crons.map((cron) => cron.path), ...periodic])];
 
 // Content-review routes authenticate with the cron secret but are called by the audit workflow.
-const cronAuthenticated = readdirSync(resolve(appRoot, "src/app/api"), { recursive: true })
+const cronAuthenticated = readdirSync(resolve(appRoot, "src/app/api"), {
+  recursive: true,
+})
   .map(String)
   .filter((file) => file.endsWith("route.ts") && !file.startsWith("content-review"))
   .filter((file) =>
@@ -31,8 +32,26 @@ it.each(cronAuthenticated)("%s is scheduled in vercel.json", (route) => {
 it.each([...routes])("%s authenticates before timers or other work", (route) => {
   const file = resolve(appRoot, `src/app${route}/route.ts`);
   const source = readFileSync(file, "utf8");
-  expect(source).toContain('import { authenticateCronRequest } from "@/server/utils/cron";');
+  expect(source).toContain(
+    'import { authenticateCronRequest } from "@/server/utils/cron";',
+  );
   // Require the guard at the start of either established GET handler declaration.
   // This catches newly scheduled endpoints and work accidentally placed before auth.
-  expect(source).toMatch(/export (?:async function GET\(request: Request\)|const GET = async \(request: Request\) =>) \{\s*const authError = authenticateCronRequest\(request\);\s*if \(authError\) return authError;/);
+  expect(source).toMatch(
+    /export (?:async function GET\(request: Request\)|const GET = async \(request: Request\) =>) \{\s*const authError = authenticateCronRequest\(request\);\s*if \(authError\) return authError;/,
+  );
 });
+
+// An hourly lock only claims one run per hour, so its schedule must fire in every hour.
+const hourlyLocked = config.crons.filter((cron) =>
+  readFileSync(resolve(appRoot, `src/app${cron.path}/route.ts`), "utf8").includes(
+    "lockWithHourlyTimer(",
+  ),
+);
+
+it.each(hourlyLocked.map((cron) => [cron.path, cron.schedule]))(
+  "%s runs in every hour (%s)",
+  (_path, schedule) => {
+    expect(schedule.split(" ")[1]).toBe("*");
+  },
+);

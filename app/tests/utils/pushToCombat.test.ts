@@ -18,25 +18,12 @@ const fakeRouter = () => {
 };
 
 describe("pushToCombat", () => {
-  it("navigates on the first announcement of a battle and ignores the second", () => {
+  it("navigates once per battle id, ignoring a repeated announcement", () => {
     const { router, pushed } = fakeRouter();
     pushToCombat(router, "battle-1");
     pushToCombat(router, "battle-1");
-    expect(pushed).toEqual(["/combat"]);
-  });
-
-  it("navigates for a battle this tab has not been sent to, whoever started it", () => {
-    const { router, pushed } = fakeRouter();
-    // The tab has just seen battle-1 (previous test); being pulled into another one still routes
     pushToCombat(router, "battle-2");
-    expect(pushed).toEqual(["/combat"]);
-  });
-
-  it("navigates for every later battle, since each has its own id", () => {
-    const { router, pushed } = fakeRouter();
     pushToCombat(router, "battle-3");
-    pushToCombat(router, "battle-4");
-    pushToCombat(router, "battle-5");
     expect(pushed).toEqual(["/combat", "/combat", "/combat"]);
   });
 

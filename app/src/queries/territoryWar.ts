@@ -7,9 +7,11 @@ import {
   desc,
   eq,
   gt,
+  isNotNull,
   isNull,
   lte,
   notExists,
+  or,
   type SQL,
   sql,
 } from "drizzle-orm";
@@ -20,11 +22,14 @@ import {
   TERRITORY_WAR_TOKEN_REWARD,
 } from "@/drizzle/constants";
 import {
+  battle,
   clan,
   mpvpBattleQueue,
   mpvpBattleUser,
   notification,
+  sector,
   territoryWar,
+  territoryWarReceipt,
   territoryWarScore,
   userData,
   village,
@@ -72,13 +77,14 @@ export const updateTerritoryWarForSettleTerritoryWarCombat = (
 
 /** Execute the database statement for `settleTerritoryWarCombat`. */
 export const executeReceiptForSettleTerritoryWarCombat = (
-  client: Pick<DrizzleClient, "execute">,
-  battle: { id: string },
+  client: Pick<DrizzleClient, "insert">,
+  settled: { id: string },
   snapshot: { id: string },
 ) =>
-  client.execute(
-    sql`INSERT IGNORE INTO TerritoryWarReceipt (battleId, warId) VALUES (${battle.id}, ${snapshot.id})`,
-  );
+  client
+    .insert(territoryWarReceipt)
+    .ignore()
+    .values({ battleId: settled.id, warId: snapshot.id });
 
 /** Build the `territoryWarScore` insert for `settleTerritoryWarCombat`, updating duplicate keys. */
 export const insertTerritoryWarScoreForSettleTerritoryWarCombat = (
@@ -213,10 +219,10 @@ export const executeInsertedForSyncTerritoryWars = (
   guardianId: string,
   now: Date,
 ) =>
-  client.execute(sql`INSERT IGNORE INTO TerritoryWar (id, predecessorId, sector, guardianId, startsAt, endsAt)
+  client.execute(sql`INSERT IGNORE INTO ${territoryWar} (id, predecessorId, sector, guardianId, startsAt, endsAt)
       SELECT ${id}, ${latest?.id ?? "initial"}, ${sectorNumber}, ${guardianId}, ${now}, ${new Date(now.getTime() + TERRITORY_WAR_DURATION_MINUTES * 60000)}
-      WHERE NOT EXISTS (SELECT 1 FROM Sector WHERE Sector.sector = ${sectorNumber})
-        AND NOT EXISTS (SELECT 1 FROM Village WHERE Village.sector = ${sectorNumber})`);
+      WHERE NOT EXISTS (SELECT 1 FROM ${sector} WHERE ${sector.sector} = ${sectorNumber})
+        AND NOT EXISTS (SELECT 1 FROM ${village} WHERE ${village.sector} = ${sectorNumber})`);
 
 /** Build the `notification` insert for `syncTerritoryWars`. */
 export const insertNotificationForSyncTerritoryWars = (
@@ -229,23 +235,34 @@ export const insertNotificationForSyncTerritoryWars = (
     content: `Territory War! A guardian has appeared in sector ${sectorNumber} for ${TERRITORY_WAR_DURATION_MINUTES} minutes. First to ${TERRITORY_WAR_TARGET_POINTS} wins early; otherwise the highest positive score wins at the deadline. [Join the battle](/territory-war).`,
   });
 
+/**
+ * Territory War lobbies whose event closed without starting a battle. Reads the queue, its
+ * event and the started battle, so statements using it join `TerritoryWar` and left-join `Battle`.
+ */
+export const expiredTerritoryWarLobby = (now: Date) =>
+  and(
+    eq(mpvpBattleQueue.battleType, "TERRITORY_WAR"),
+    or(isNotNull(territoryWar.resolvedAt), lte(territoryWar.endsAt, now)),
+    isNull(battle.id),
+  );
+
 /** Execute the database statement for `cleanupTerritoryWarTeams`. */
 export const executeRowsForCleanupTerritoryWarTeams = (
   client: Pick<DrizzleClient, "execute">,
-  expired: SQL<unknown>,
+  expired: SQL<unknown> | undefined,
 ) =>
   client.execute(
-    sql`UPDATE UserData u INNER JOIN MpvpBattleUser m ON m.userId = u.userId INNER JOIN MpvpBattleQueue q ON q.id = m.clanBattleId INNER JOIN TerritoryWar w ON w.id = q.territoryWarId LEFT JOIN Battle b ON b.id = q.battleId SET u.status = 'AWAKE' WHERE ${expired} AND u.status = 'QUEUED'
-      AND ${withoutDungeonReservation(sql`u.userId`)}`,
+    sql`UPDATE ${userData} INNER JOIN ${mpvpBattleUser} ON ${mpvpBattleUser.userId} = ${userData.userId} INNER JOIN ${mpvpBattleQueue} ON ${mpvpBattleQueue.id} = ${mpvpBattleUser.clanBattleId} INNER JOIN ${territoryWar} ON ${territoryWar.id} = ${mpvpBattleQueue.territoryWarId} LEFT JOIN ${battle} ON ${battle.id} = ${mpvpBattleQueue.battleId} SET ${userData.status} = 'AWAKE' WHERE ${expired} AND ${userData.status} = 'QUEUED'
+      AND ${withoutDungeonReservation()}`,
   );
 
 /** Execute the database statement for `cleanupTerritoryWarTeams`. */
 export const executeRowsForCleanupTerritoryWarTeams2 = (
   client: Pick<DrizzleClient, "execute">,
-  expired: SQL<unknown>,
+  expired: SQL<unknown> | undefined,
 ) =>
   client.execute(
-    sql`DELETE q, m FROM MpvpBattleQueue q INNER JOIN TerritoryWar w ON w.id = q.territoryWarId LEFT JOIN Battle b ON b.id = q.battleId LEFT JOIN MpvpBattleUser m ON m.clanBattleId = q.id WHERE ${expired}`,
+    sql`DELETE ${mpvpBattleQueue}, ${mpvpBattleUser} FROM ${mpvpBattleQueue} INNER JOIN ${territoryWar} ON ${territoryWar.id} = ${mpvpBattleQueue.territoryWarId} LEFT JOIN ${battle} ON ${battle.id} = ${mpvpBattleQueue.battleId} LEFT JOIN ${mpvpBattleUser} ON ${mpvpBattleUser.clanBattleId} = ${mpvpBattleQueue.id} WHERE ${expired}`,
   );
 
 /** Build the `userData` lookup for `fetchTerritoryWarUser`, using predicates on `userId`. */
@@ -357,13 +374,22 @@ export const findMpvpBattleQueueForStartBattle = (
 
 /** Execute the database statement for `startBattle`. */
 export const executeRowsForStartBattle = (
-  client: Pick<DrizzleClient, "execute">,
+  client: Pick<DrizzleClient, "update" | "select">,
   team: { id: string },
   battleId: string,
 ) =>
-  client.execute(
-    sql`UPDATE ${mpvpBattleQueue} SET ${mpvpBattleQueue.battleId} = NULL WHERE ${mpvpBattleQueue.id} = ${team.id} AND ${mpvpBattleQueue.battleId} = ${battleId} AND NOT EXISTS (SELECT 1 FROM Battle WHERE Battle.id = ${battleId})`,
-  );
+  client
+    .update(mpvpBattleQueue)
+    .set({ battleId: null })
+    .where(
+      and(
+        eq(mpvpBattleQueue.id, team.id),
+        eq(mpvpBattleQueue.battleId, battleId),
+        notExists(
+          client.select({ id: battle.id }).from(battle).where(eq(battle.id, battleId)),
+        ),
+      ),
+    );
 
 /** Execute the database statement for `joinTeam`. */
 export const executeInsertedForJoinTeam = (

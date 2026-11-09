@@ -6,128 +6,49 @@ import Link from "@/layout/Link";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import type { ArrayElement } from "@/utils/typeutils";
 
-export default function ManualCombat() {
+/** Link staff to usage, power and completeness reports for each content type. */
+export default function ManualBalance() {
   const data = [
     {
       content: "Bloodlines",
-      usage: (
-        <Link href="/manual/bloodline/balance#Usage">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
-      power: (
-        <Link href="/manual/bloodline/balance#Power">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
-      completeness: (
-        <Link href="/manual/bloodline/completeness#Incomplete">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
-      diversity: (
-        <Link href="/manual/bloodline/completeness#Diversity">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
+      usage: linkCell("/manual/bloodline/balance#Usage"),
+      power: linkCell("/manual/bloodline/balance#Power"),
+      completeness: linkCell("/manual/bloodline/completeness#Incomplete"),
+      diversity: linkCell("/manual/bloodline/completeness#Diversity"),
     },
     {
       content: "Jutsus",
-      usage: (
-        <Link href="/manual/jutsu/balance#Usage">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
-      power: (
-        <Link href="/manual/jutsu/balance#Power">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
-      completeness: (
-        <Link href="/manual/jutsu/completeness#Incomplete">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
-      diversity: (
-        <Link href="/manual/jutsu/completeness#Diversity">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
+      usage: linkCell("/manual/jutsu/balance#Usage"),
+      power: linkCell("/manual/jutsu/balance#Power"),
+      completeness: linkCell("/manual/jutsu/completeness#Incomplete"),
+      diversity: linkCell("/manual/jutsu/completeness#Diversity"),
     },
     {
       content: "Items",
-      usage: (
-        <Link href="/manual/item/balance#Usage">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
-      power: (
-        <Link href="/manual/item/balance#Power">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
-      completeness: (
-        <Link href="/manual/item/completeness#Incomplete">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
-      diversity: (
-        <Link href="/manual/item/completeness#Diversity">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
+      usage: linkCell("/manual/item/balance#Usage"),
+      power: linkCell("/manual/item/balance#Power"),
+      completeness: linkCell("/manual/item/completeness#Incomplete"),
+      diversity: linkCell("/manual/item/completeness#Diversity"),
     },
     {
       content: "AI",
-      usage: (
-        <Link href="/manual/ai/balance#Usage">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
-      power: (
-        <Link href="/manual/ai/balance#Power">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
+      usage: linkCell("/manual/ai/balance#Usage"),
+      power: linkCell("/manual/ai/balance#Power"),
     },
     {
       content: "Skill Trees",
-      usage: (
-        <Link href="/manual/skillTree/balance#Usage">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
-      power: (
-        <Link href="/manual/skillTree/balance#Power">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
+      usage: linkCell("/manual/skillTree/balance#Usage"),
+      power: linkCell("/manual/skillTree/balance#Power"),
     },
     {
       content: "Ranked PvP",
-      usage: (
-        <Link href="/manual/pvp_rank#loadouts">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
-      diversity: (
-        <Link href="/manual/pvp_rank#rewards">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
-      timing: (
-        <Link href="/manual/pvp_rank#matchmaking">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
+      usage: linkCell("/manual/pvp_rank#loadouts"),
+      diversity: linkCell("/manual/pvp_rank#rewards"),
+      timing: linkCell("/manual/pvp_rank#matchmaking"),
     },
     {
       content: "Combat",
-      timing: (
-        <Link href="/manual/combat">
-          <SquareArrowOutUpRight className="h-4 w-4" />
-        </Link>
-      ),
+      timing: linkCell("/manual/combat"),
     },
   ];
 
@@ -161,3 +82,10 @@ export default function ManualCombat() {
     </ContentBox>
   );
 }
+
+/** Render the shared report-link control used throughout the balance summary table. */
+const linkCell = (href: string) => (
+  <Link href={href}>
+    <SquareArrowOutUpRight className="h-4 w-4" />
+  </Link>
+);

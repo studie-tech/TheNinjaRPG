@@ -85,7 +85,7 @@ export const ShrineHall = ({ user, navTabs }: ShrineHallProps) => {
         subtitle={`${user.village?.name} Shrines`}
         defaultBackHref="/village"
         topRightContent={navTabs}
-        topRightCorntentBreakpoint="sm"
+        stackTopRight
         padding={false}
       >
         <Tabs
@@ -299,7 +299,8 @@ const BoostsTab = ({ user, isActive }: TabProps) => {
   const utils = api.useUtils();
   const { updateUser } = useRequiredUserData();
   const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
-  const nowMs = useNow(60_000, { enabled: isActive });
+  const { timeDiff } = useUserInfo();
+  const nowMs = useNow(60_000, { enabled: isActive }) - timeDiff;
   const now = new Date(nowMs);
   const currentDayOfWeek = now.getUTCDay();
   const currentSlotIndex = getSlotIndex(now.getUTCHours());
@@ -694,6 +695,7 @@ const DefendersTab = ({ user, isActive }: TabProps) => {
 /** Pay shrine upkeep and reconcile confirmed account and village changes through the shared cache hooks. */
 const MaintenanceTab = ({ user }: TabProps) => {
   const utils = api.useUtils();
+  const { timeDiff } = useUserInfo();
   const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
 
   const { data: capturedSectors } = api.shrine.getCapturedSectors.useQuery(
@@ -753,13 +755,14 @@ const MaintenanceTab = ({ user }: TabProps) => {
                 </p>
               ) : (
                 maintainedSectors.map((sector) => {
+                  const serverNow = Date.now() - timeDiff;
                   const dueDate = sector.nextMaintainanceDueDate
                     ? new Date(sector.nextMaintainanceDueDate)
-                    : new Date();
+                    : new Date(serverNow);
 
-                  const isOverdue = dueDate <= new Date();
+                  const isOverdue = dueDate.getTime() <= serverNow;
 
-                  const msToNextPayment = dueDate.getTime() - Date.now();
+                  const msToNextPayment = dueDate.getTime() - serverNow;
 
                   const nextPaymentAt = getTimeLeftStr(msToNextPayment);
 

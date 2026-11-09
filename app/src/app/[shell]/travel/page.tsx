@@ -46,6 +46,7 @@ import {
   HIDEOUT_COST,
   MAP_WAR_TORN_BATTLEGROUND_COLOR,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  MAX_TRAVEL_PIN_LABEL_LENGTH,
   MAX_TRAVEL_PINS,
   STEALTH_SENSORY_CAP,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
@@ -163,12 +164,9 @@ function Travel() {
   const [revealedPlayers, setRevealedPlayers] = useState<RevealedPlayer[]>([]);
   const [showRevealedPlayersModal, setShowRevealedPlayersModal] =
     useState<boolean>(false);
-  const [pendingAttackTarget, setPendingAttackTarget] = useState<{
-    userId: string;
-    username: string;
-    longitude: number;
-    latitude: number;
-  } | null>(null);
+  const [pendingAttackTarget, setPendingAttackTarget] = useState<AttackTarget | null>(
+    null,
+  );
 
   const [activeTab, setActiveTab] = useState<string>("");
   const [focusSector, setFocusSector] = useState<number | null>(null);
@@ -242,8 +240,8 @@ function Travel() {
     enabled: !!userData,
   });
   // Sector.tsx observes this same key on a 10s refetchInterval, and the payload carries Dates,
-  // which defeat structural sharing — so the whole page re-rendered on every poll for the one
-  // string it reads. Selecting that string keeps the poll inside the sector scene.
+  // which defeat structural sharing, so reading the whole payload would re-render the page on
+  // every poll. Selecting the one string it reads keeps the poll inside the sector scene.
   const { data: sectorVillageName } = api.travel.getSectorData.useQuery(
     { sector: userData?.sector ?? -1 },
     {
@@ -946,8 +944,8 @@ function Travel() {
   const joinVillageBtn = userData.isOutlaw && canJoin && sectorVillage?.joinable;
   // Compare against the stable Global label rather than sectorLink: the sector
   // tab's label mutates from "Sector N" to "You (x, y)" once the scene reports
-  // the player position, so a string match against it goes stale and the
-  // subtitle silently fell back to the world name while on the sector view.
+  // the player position, so a string match against it would go stale and drop
+  // the subtitle back to the world name while on the sector view.
   const subtitle =
     hasCurrentSector && userData && !isGlobal
       ? `Sector ${currentSector} ${sectorVillageName ? `(${sectorVillageName})` : ""}`
@@ -999,7 +997,7 @@ function Travel() {
         title="Travel"
         subtitle={subtitle}
         padding={false}
-        topRightCorntentBreakpoint="sm"
+        stackTopRight
         topRightContent={
           <div className="flex cursor-pointer flex-row items-center">
             <WarFieldActions />
@@ -1155,7 +1153,7 @@ function Travel() {
                   <Input
                     aria-label="Pin name"
                     placeholder="Name this location"
-                    maxLength={40}
+                    maxLength={MAX_TRAVEL_PIN_LABEL_LENGTH}
                     value={pinLabel}
                     onChange={(event) => setPinLabel(event.target.value)}
                   />
@@ -1303,7 +1301,7 @@ function Travel() {
               isOpen={showModal}
               setIsOpen={setShowModal}
               proceed_label={!isStartingTravel ? "Travel" : undefined}
-              isValid={false}
+              keepOpenOnAccept
               onAccept={() => handleGlobalMove(targetSector)}
             >
               {isStartingTravel && <Loader explanation="Preparing to Travel" />}
@@ -1386,7 +1384,7 @@ function Travel() {
               title="Item Details"
               isOpen={isOpen}
               setIsOpen={setIsOpen}
-              isValid={false}
+              keepOpenOnAccept
             >
               <ItemWithEffects
                 item={{
@@ -1433,7 +1431,7 @@ function Travel() {
           title="Players Revealed by Sensory!"
           isOpen={showRevealedPlayersModal}
           setIsOpen={setShowRevealedPlayersModal}
-          isValid={false}
+          keepOpenOnAccept
         >
           <div className="space-y-3">
             <p className="text-muted-foreground text-sm">
@@ -1717,16 +1715,8 @@ const StealthControls: React.FC<{
 };
 
 /**
- * Revealed Player Card
- * @param player - The revealed player
- * @param userData - The user data
- * @param villageData - The village data
- * @param isAttackingRevealed - Whether the user is attacking a revealed player
- * @param pendingAttackTarget - The target of the pending attack
- * @param attackRevealedUser - The function to attack a revealed player
- * @param setPendingAttackTarget - The function to set the pending attack target
- * @param setTargetPosition - The function to set the target position
- * @returns
+ * Revealed Player Card: a player revealed by sensing, with actions to travel to or
+ * attack them.
  */
 const RevealedPlayerCard = ({
   player,
@@ -1744,12 +1734,7 @@ const RevealedPlayerCard = ({
   userData: ReturnType<typeof useRequiredUserData>["data"];
   villageData: { id: string; name: string; hexColor: string }[] | undefined;
   isAttackingRevealed: boolean;
-  pendingAttackTarget: {
-    userId: string;
-    username: string;
-    longitude: number;
-    latitude: number;
-  } | null;
+  pendingAttackTarget: AttackTarget | null;
   originSocketId?: string;
   attackRevealedUser: (params: {
     originSocketId?: string;
@@ -1758,12 +1743,7 @@ const RevealedPlayerCard = ({
     latitude: number;
     sector: number;
   }) => void;
-  setPendingAttackTarget: (target: {
-    userId: string;
-    username: string;
-    longitude: number;
-    latitude: number;
-  }) => void;
+  setPendingAttackTarget: (target: AttackTarget) => void;
   setTargetPosition: (pos: { x: number; y: number }) => void;
   setShowRevealedPlayersModal: (show: boolean) => void;
 }) => {
@@ -1778,10 +1758,7 @@ const RevealedPlayerCard = ({
   const showAttack = player.canAttack;
 
   return (
-    <div
-      key={player.userId}
-      className="flex items-center justify-between rounded-lg bg-muted p-3"
-    >
+    <div className="flex items-center justify-between rounded-lg bg-muted p-3">
       <div>
         <p className="font-semibold">{player.username}</p>
         <p className="text-muted-foreground text-sm">
@@ -1846,13 +1823,12 @@ const RevealedPlayerCard = ({
 const activateSensory = api.stealth.useSensory;
 
 /** Public player fields shown by sensory reveals and their map markers. */
-type RevealedPlayer = {
-  userId: string;
-  username: string;
-  longitude: number;
-  latitude: number;
-  villageId: string | null;
-  level: number | null;
-  isMasked: boolean;
-  canAttack: boolean;
-};
+type RevealedPlayer = NonNullable<
+  RouterOutputs["stealth"]["useSensory"]["data"]
+>["detectedUsers"][number];
+
+/** A revealed player the user is walking to attack on arrival. */
+type AttackTarget = Pick<
+  RevealedPlayer,
+  "userId" | "username" | "longitude" | "latitude"
+>;

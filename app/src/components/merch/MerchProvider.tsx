@@ -14,11 +14,11 @@ import {
 } from "@/components/ui/sheet";
 import ContentBox from "@/layout/ContentBox";
 import "./merch.css";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { formatMerchMoney, preferredMerchImage } from "@/libs/merch/catalog";
 import { usePublicPathname } from "@/utils/routing";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 import {
   MERCH_MAX_QUANTITY,
   MERCH_REVIEW_BAG_LIMIT,

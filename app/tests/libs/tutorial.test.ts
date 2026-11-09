@@ -1,7 +1,7 @@
+import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "bun:test";
 import {
   TUTORIAL_ARENA_DUMMY_ID,
   TUTORIAL_GENIN_EXAM_QUEST_ID,
@@ -12,17 +12,17 @@ import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
 import {
   canPositionTutorialHighlight,
   GENIN_QUEST_OBJECTIVES,
-  getTutorialPortraitSide,
   getStarterQuestProgress,
   getTutorialBattleReturnPage,
   getTutorialCatchUpStepIndex,
-  getTutorialRewindStepIndex,
-  hasOutgrownTutorial,
   getTutorialChapterProgress,
   getTutorialCombatGuidance,
   getTutorialHighlightedQuestId,
+  getTutorialPortraitSide,
+  getTutorialRewindStepIndex,
   getTutorialStepPath,
   getTutorialTakeQuestId,
+  hasOutgrownTutorial,
   isStarterObjectiveSatisfied,
   isTutorialActive,
   isTutorialCaptureStep,
@@ -42,14 +42,13 @@ import {
 } from "@/libs/tutorial";
 
 /**
- * TUTORIAL_STEPS lives in a client module that pulls in tRPC, jotai and
- * next/navigation, so it cannot be imported here. Read the source instead and
- * slice it to the array, so `id:` keys elsewhere in the file cannot leak in.
+ * Read the step source and slice it to the array, so `id:` keys elsewhere in
+ * the file cannot leak in.
  */
 const readTutorialStepsSource = () => {
   const tutorialPath = join(
     dirname(fileURLToPath(import.meta.url)),
-    "../../src/hooks/tutorial.tsx",
+    "../../src/libs/tutorialSteps.tsx",
   );
   const source = readFileSync(tutorialPath, "utf8");
   const start = source.indexOf("export const TUTORIAL_STEPS");
@@ -112,25 +111,64 @@ describe("getTutorialBattleReturnPage", () => {
   const active = { tutorialOn: true, tutorialStep: 0, status: "AWAKE" };
 
   it("returns a first polled win directly to training before its step write settles", () => {
-    expect(getTutorialBattleReturnPage(steps, active, "Won", "/profile")).toBe("/village");
+    expect(getTutorialBattleReturnPage(steps, active, "Won", "/profile")).toBe(
+      "/village",
+    );
   });
 
   it("uses the confirmed lesson when progress has already advanced", () => {
-    expect(getTutorialBattleReturnPage(steps, { ...active, tutorialStep: 1 }, "Won", "/profile")).toBe("/village");
+    expect(
+      getTutorialBattleReturnPage(
+        steps,
+        { ...active, tutorialStep: 1 },
+        "Won",
+        "/profile",
+      ),
+    ).toBe("/village");
   });
 
   it("keeps the puppy victory on travel and a hospitalized player on healing", () => {
-    expect(getTutorialBattleReturnPage(steps, { ...active, tutorialStep: 3 }, "Won", "/profile")).toBe("/travel");
-    expect(getTutorialBattleReturnPage(steps, { ...active, status: "HOSPITALIZED" }, "Lost", "/profile")).toBe("/hospital");
+    expect(
+      getTutorialBattleReturnPage(
+        steps,
+        { ...active, tutorialStep: 3 },
+        "Won",
+        "/profile",
+      ),
+    ).toBe("/travel");
+    expect(
+      getTutorialBattleReturnPage(
+        steps,
+        { ...active, status: "HOSPITALIZED" },
+        "Lost",
+        "/profile",
+      ),
+    ).toBe("/hospital");
   });
 
   it("preserves the chosen destination after the tutorial is disabled or finished", () => {
-    expect(getTutorialBattleReturnPage(steps, { ...active, tutorialOn: false }, "Won", "/profile")).toBe("/profile");
-    expect(getTutorialBattleReturnPage(steps, { ...active, tutorialStep: TUTORIAL_STEPS_COUNT }, "Won", "/profile")).toBe("/profile");
+    expect(
+      getTutorialBattleReturnPage(
+        steps,
+        { ...active, tutorialOn: false },
+        "Won",
+        "/profile",
+      ),
+    ).toBe("/profile");
+    expect(
+      getTutorialBattleReturnPage(
+        steps,
+        { ...active, tutorialStep: TUTORIAL_STEPS_COUNT },
+        "Won",
+        "/profile",
+      ),
+    ).toBe("/profile");
   });
 
   it("does not send an unresolved battle return back to combat", () => {
-    expect(getTutorialBattleReturnPage(steps, active, undefined, "/profile")).toBe("/profile");
+    expect(getTutorialBattleReturnPage(steps, active, undefined, "/profile")).toBe(
+      "/profile",
+    );
   });
 });
 
@@ -149,7 +187,7 @@ describe("isTutorialItemBuyStep", () => {
 });
 
 describe("TUTORIAL_HOME_SECTOR", () => {
-  it("tracks the current Horizon landmark, not the remapped 296 sector", () => {
+  it("matches the Horizon landmark sector", () => {
     const horizon = WORLD_LANDMARKS.find((landmark) => landmark.name === "Horizon");
     expect(horizon?.sector).toBe(TUTORIAL_HOME_SECTOR);
     expect(TUTORIAL_HOME_SECTOR).not.toBe(296);
@@ -176,10 +214,16 @@ describe("getTutorialHighlightedQuestId", () => {
       }),
     ).toBe("exam-1");
     expect(
-      getTutorialHighlightedQuestId({ advanceOn: "questDialog", relatedValue: "quest-2" }),
+      getTutorialHighlightedQuestId({
+        advanceOn: "questDialog",
+        relatedValue: "quest-2",
+      }),
     ).toBe("quest-2");
     expect(
-      getTutorialHighlightedQuestId({ advanceOn: "questReward", relatedValue: "quest-3" }),
+      getTutorialHighlightedQuestId({
+        advanceOn: "questReward",
+        relatedValue: "quest-3",
+      }),
     ).toBe("quest-3");
   });
 
@@ -230,7 +274,6 @@ describe("tutorial highlight placement", () => {
   });
 });
 
-
 describe("getTutorialPortraitSide", () => {
   // The strip above a 420px dock at the bottom-left of a 1280x800 window.
   const frame = { top: 330, left: 20, width: 420, height: 180 };
@@ -266,7 +309,7 @@ describe("TUTORIAL_STEPS", () => {
   it("highlights the world-travel confirm button before the globe and the Global tab", () => {
     // Travel steps share one element list defined above the step array.
     const source = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "../../src/hooks/tutorial.tsx"),
+      join(dirname(fileURLToPath(import.meta.url)), "../../src/libs/tutorialSteps.tsx"),
       "utf8",
     );
     const start = source.indexOf("const globalTravelElements = [");
@@ -280,7 +323,9 @@ describe("TUTORIAL_STEPS", () => {
     expect(block.indexOf("tutorial-global-map")).toBeLessThan(
       block.indexOf("tutorial-Global"),
     );
-    expect(readTutorialStepsSource().match(/elementIds: globalTravelElements/g)).toHaveLength(2);
+    expect(
+      readTutorialStepsSource().match(/elementIds: globalTravelElements/g),
+    ).toHaveLength(2);
   });
 
   it("uses unique ids so findIndex cannot jump to an earlier step", () => {
@@ -297,7 +342,7 @@ describe("TUTORIAL_STEPS", () => {
       TUTORIAL_CAPTURE_TRAVEL_STEP_ID,
       TUTORIAL_CAPTURE_STEP_ID,
       TUTORIAL_WAKE_TRAVEL_STEP_ID,
-        ]) {
+    ]) {
       expect(ids).toContain(id);
     }
   });
@@ -338,10 +383,14 @@ describe("TUTORIAL_STEPS", () => {
       const block = stepBlock(id ?? "");
       const isGeninStep = block.includes("relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID");
       expect(block).toContain(
-        isGeninStep ? "relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID" : "relatedValue: TUTORIAL_STARTER_QUEST_ID",
+        isGeninStep
+          ? "relatedValue: TUTORIAL_GENIN_EXAM_QUEST_ID"
+          : "relatedValue: TUTORIAL_STARTER_QUEST_ID",
       );
       expect(block).toContain(
-        isGeninStep ? "objectiveId: GENIN_QUEST_OBJECTIVES." : "objectiveId: STARTER_QUEST_OBJECTIVES.",
+        isGeninStep
+          ? "objectiveId: GENIN_QUEST_OBJECTIVES."
+          : "objectiveId: STARTER_QUEST_OBJECTIVES.",
       );
     }
     expect(source).not.toContain("hideDialog");
@@ -481,7 +530,10 @@ describe("starter quest progress", () => {
   it("places a player by the path their tracker took, not the current chain", () => {
     // The previous chain went straight from the opening dialog to the pup.
     const progress = getStarterQuestProgress(
-      user([{ id: O.accept, done: true, selectedNextObjectiveId: O.pup }, { id: O.pup }]),
+      user([
+        { id: O.accept, done: true, selectedNextObjectiveId: O.pup },
+        { id: O.pup },
+      ]),
     );
     if (!progress) throw new Error("expected progress");
     expect(progress.activeIndex).toBe(4);
@@ -629,7 +681,12 @@ describe("getTutorialCatchUpStepIndex", () => {
           id: TUTORIAL_STARTER_QUEST_ID,
           goals: [
             { id: O.accept, done: true, selectedNextObjectiveId: O.arena },
-            { id: O.arena, done: true, collected: true, selectedNextObjectiveId: O.jutsu },
+            {
+              id: O.arena,
+              done: true,
+              collected: true,
+              selectedNextObjectiveId: O.jutsu,
+            },
           ],
         },
       ],
@@ -656,7 +713,9 @@ describe("getTutorialCatchUpStepIndex", () => {
       { objectiveId: O.jutsu, advanceOn: "questReward" as const }, // 8
       {}, // 9: buy a tool
     ];
-    const withGoals = (goals: { id: string; done?: boolean; collected?: boolean }[]) => ({
+    const withGoals = (
+      goals: { id: string; done?: boolean; collected?: boolean }[],
+    ) => ({
       userQuests: [activeQuest],
       questData: [{ id: TUTORIAL_STARTER_QUEST_ID, goals }],
     });
@@ -707,17 +766,51 @@ describe("getTutorialCatchUpStepIndex", () => {
 
 describe("getTutorialCombatGuidance", () => {
   const options = (overrides: Partial<Record<string, boolean>> = {}) => [
-    { id: "basicAttack", name: "Basic Attack", type: "basic" as const, range: 1, isUsable: overrides.basicAttack ?? true },
-    { id: "move", name: "Move", type: "basic" as const, range: 1, isUsable: overrides.move ?? true },
-    { id: "meditate", name: "Meditate", type: "basic" as const, range: 0, isUsable: true },
+    {
+      id: "basicAttack",
+      name: "Basic Attack",
+      type: "basic" as const,
+      range: 1,
+      isUsable: overrides.basicAttack ?? true,
+    },
+    {
+      id: "move",
+      name: "Move",
+      type: "basic" as const,
+      range: 1,
+      isUsable: overrides.move ?? true,
+    },
+    {
+      id: "meditate",
+      name: "Meditate",
+      type: "basic" as const,
+      range: 0,
+      isUsable: true,
+    },
     { id: "wait", name: "End Turn", type: "basic" as const, range: 0, isUsable: true },
-    { id: "slash", name: "Sonic Slash", type: "jutsu" as const, range: 3, isUsable: overrides.slash ?? true },
-    { id: "shuriken", name: "Shuriken", type: "item" as const, range: 4, isUsable: overrides.shuriken ?? true },
+    {
+      id: "slash",
+      name: "Sonic Slash",
+      type: "jutsu" as const,
+      range: 3,
+      isUsable: overrides.slash ?? true,
+    },
+    {
+      id: "shuriken",
+      name: "Shuriken",
+      type: "item" as const,
+      range: 4,
+      isUsable: overrides.shuriken ?? true,
+    },
   ];
 
   it("waits while it is the opponent's turn", () => {
     expect(
-      getTutorialCombatGuidance({ isPlayersTurn: false, distanceToEnemy: 3, options: options() }),
+      getTutorialCombatGuidance({
+        isPlayersTurn: false,
+        distanceToEnemy: 3,
+        options: options(),
+      }),
     ).toEqual({ kind: "wait" });
   });
 
@@ -733,7 +826,11 @@ describe("getTutorialCombatGuidance", () => {
 
   it("prefers the jutsu, then thrown tools, then the basic attack", () => {
     expect(
-      getTutorialCombatGuidance({ isPlayersTurn: true, distanceToEnemy: 2, options: options() }),
+      getTutorialCombatGuidance({
+        isPlayersTurn: true,
+        distanceToEnemy: 2,
+        options: options(),
+      }),
     ).toMatchObject({ actionId: "slash", reason: "attack" });
     expect(
       getTutorialCombatGuidance({
@@ -767,7 +864,12 @@ describe("getTutorialCombatGuidance", () => {
       getTutorialCombatGuidance({
         isPlayersTurn: true,
         distanceToEnemy: 1,
-        options: options({ basicAttack: false, slash: false, shuriken: false, move: false }),
+        options: options({
+          basicAttack: false,
+          slash: false,
+          shuriken: false,
+          move: false,
+        }),
       }),
     ).toMatchObject({ kind: "select", actionId: "wait", reason: "end" });
     expect(
@@ -775,7 +877,12 @@ describe("getTutorialCombatGuidance", () => {
         isPlayersTurn: true,
         distanceToEnemy: 1,
         selectedActionId: "wait",
-        options: options({ basicAttack: false, slash: false, shuriken: false, move: false }),
+        options: options({
+          basicAttack: false,
+          slash: false,
+          shuriken: false,
+          move: false,
+        }),
       }),
     ).toMatchObject({ kind: "target", actionId: "wait", reason: "end" });
   });
@@ -792,7 +899,11 @@ describe("getTutorialCatchUpStepIndex on Road to Genin", () => {
     { objectiveId: G.win, advanceOn: "questReward" as const },
     {},
   ];
-  const activeQuest = { questId: TUTORIAL_GENIN_EXAM_QUEST_ID, completed: 0, endAt: null };
+  const activeQuest = {
+    questId: TUTORIAL_GENIN_EXAM_QUEST_ID,
+    completed: 0,
+    endAt: null,
+  };
   const withGoals = (goals: { id: string; done?: boolean; collected?: boolean }[]) => ({
     rank: "STUDENT",
     userQuests: [activeQuest],
@@ -800,7 +911,9 @@ describe("getTutorialCatchUpStepIndex on Road to Genin", () => {
   });
 
   it("waits at the exam marker until the player walks there", () => {
-    expect(getTutorialCatchUpStepIndex(steps, 0, withGoals([{ id: G.exam }]))).toBeUndefined();
+    expect(
+      getTutorialCatchUpStepIndex(steps, 0, withGoals([{ id: G.exam }])),
+    ).toBeUndefined();
   });
 
   it("counts whichever village the player chose", () => {

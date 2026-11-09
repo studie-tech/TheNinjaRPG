@@ -1,9 +1,9 @@
-import * as Sentry from "@sentry/node";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as Sentry from "@sentry/nextjs";
 import * as nextHeaders from "next/headers";
+import { POST } from "@/app/api/webhooks/revenuecat/route";
 import { env } from "@/env/server.mjs";
 import * as grants from "@/server/utils/purchases/grant";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { POST } from "@/app/api/webhooks/revenuecat/route";
 
 interface RevenueCatRouteMocks {
   captureException: ReturnType<typeof vi.fn>;

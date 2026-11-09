@@ -19,7 +19,7 @@ import {
   type PendingRewardChoice,
   type RewardChoiceCard,
 } from "@/validators/rewards";
-import { rewardOwnership as ownership, rewardUser as makeUser } from "../setup/quest";
+import { rewardUser as makeUser, rewardOwnership as ownership } from "../setup/quest";
 
 const reward = (input: Parameters<typeof ObjectiveReward.parse>[0]) =>
   ObjectiveReward.parse(input);
@@ -75,7 +75,12 @@ describe("buildRewardChoiceCards", () => {
         amount: 1,
         contentId: "fireball",
       },
-      { id: "reward_badges:badge-1", field: "reward_badges", amount: 1, contentId: "badge-1" },
+      {
+        id: "reward_badges:badge-1",
+        field: "reward_badges",
+        amount: 1,
+        contentId: "badge-1",
+      },
     ]);
   });
 
@@ -87,7 +92,9 @@ describe("buildRewardChoiceCards", () => {
       reward_hunter_items: true,
       reward_hunter_items_ids: ["hide"],
     });
-    expect(buildRewardChoiceCards(full).map((card) => card.id)).toEqual(["reward_money"]);
+    expect(buildRewardChoiceCards(full).map((card) => card.id)).toEqual([
+      "reward_money",
+    ]);
     const fixed = getFixedChoiceRewards(full);
     expect(fixed).toMatchObject({
       reward_money: 0,
@@ -113,9 +120,9 @@ describe("validateRewardPicks", () => {
 
   it("rejects too few, too many, duplicated and unknown picks", () => {
     expect(validateRewardPicks(offer(2, 4), ["card-1"]).success).toBe(false);
-    expect(validateRewardPicks(offer(2, 4), ["card-0", "card-1", "card-2"]).success).toBe(
-      false,
-    );
+    expect(
+      validateRewardPicks(offer(2, 4), ["card-0", "card-1", "card-2"]).success,
+    ).toBe(false);
     expect(validateRewardPicks(offer(2, 4), ["card-1", "card-1"]).success).toBe(false);
     expect(validateRewardPicks(offer(2, 4), ["card-1", "card-9"]).success).toBe(false);
   });
@@ -229,10 +236,14 @@ describe("sage mode picks", () => {
 
   it("allows at most one sage mode per pick", () => {
     expect(
-      validateRewardPicks(sageOffer, ["reward_sage_modes:toad", "reward_sage_modes:snake"]),
+      validateRewardPicks(sageOffer, [
+        "reward_sage_modes:toad",
+        "reward_sage_modes:snake",
+      ]),
     ).toEqual({ success: false, message: "Only one sage mode can be picked" });
     expect(
-      validateRewardPicks(sageOffer, ["reward_money", "reward_sage_modes:snake"]).success,
+      validateRewardPicks(sageOffer, ["reward_money", "reward_sage_modes:snake"])
+        .success,
     ).toBe(true);
   });
 
@@ -242,8 +253,12 @@ describe("sage mode picks", () => {
       reward: reward({ reward_money: 1, reward_sage_modes: ["toad", "snake", "slug"] }),
       rewardMode: "choose" as const,
     };
-    expect(verifyRewardChoiceForSave({ ...content, rewardPickCount: 1 }).check).toBe(true);
-    expect(verifyRewardChoiceForSave({ ...content, rewardPickCount: 2 }).check).toBe(false);
+    expect(verifyRewardChoiceForSave({ ...content, rewardPickCount: 1 }).check).toBe(
+      true,
+    );
+    expect(verifyRewardChoiceForSave({ ...content, rewardPickCount: 2 }).check).toBe(
+      false,
+    );
   });
 
   it("swaps the selected sage mode instead of adding a second one", () => {
@@ -270,7 +285,11 @@ describe("getExperienceTrackerTasks", () => {
   it("emits one increment per granted profession experience", () => {
     expect(
       getExperienceTrackerTasks(
-        reward({ reward_medical_experience: 30, reward_hunting_experience: 5, reward_exp: 9 }),
+        reward({
+          reward_medical_experience: 30,
+          reward_hunting_experience: 5,
+          reward_exp: 9,
+        }),
       ),
     ).toEqual([
       { task: "medical_experience_gained", increment: 30 },
@@ -298,11 +317,23 @@ describe("rewardFromChoiceCards", () => {
   it("grants picked items guaranteed and sums scalars", () => {
     const granted = rewardFromChoiceCards([
       { id: "reward_money", field: "reward_money", amount: 300 },
-      { id: "reward_items:0:tanto", field: "reward_items", amount: 2, contentId: "tanto" },
-      { id: "reward_jutsus:fire", field: "reward_jutsus", amount: 1, contentId: "fire" },
+      {
+        id: "reward_items:0:tanto",
+        field: "reward_items",
+        amount: 2,
+        contentId: "tanto",
+      },
+      {
+        id: "reward_jutsus:fire",
+        field: "reward_jutsus",
+        amount: 1,
+        contentId: "fire",
+      },
     ]);
     expect(granted.reward_money).toBe(300);
-    expect(granted.reward_items).toEqual([{ ids: ["tanto"], number: 100, quantity: 2 }]);
+    expect(granted.reward_items).toEqual([
+      { ids: ["tanto"], number: 100, quantity: 2 },
+    ]);
     expect(granted.reward_jutsus).toEqual(["fire"]);
     expect(granted.reward_exp).toBe(0);
   });
@@ -327,10 +358,15 @@ describe("reward mode helpers", () => {
       reward: reward({ reward_money: 1, reward_exp: 1 }),
       rewardMode: "choose" as const,
     };
-    expect(verifyRewardChoiceForSave({ ...content, rewardPickCount: 1 }).check).toBe(true);
-    expect(verifyRewardChoiceForSave({ ...content, rewardPickCount: 2 }).check).toBe(false);
+    expect(verifyRewardChoiceForSave({ ...content, rewardPickCount: 1 }).check).toBe(
+      true,
+    );
+    expect(verifyRewardChoiceForSave({ ...content, rewardPickCount: 2 }).check).toBe(
+      false,
+    );
     expect(
-      verifyRewardChoiceForSave({ ...content, rewardMode: "all", rewardPickCount: 5 }).check,
+      verifyRewardChoiceForSave({ ...content, rewardMode: "all", rewardPickCount: 5 })
+        .check,
     ).toBe(true);
   });
 });
@@ -376,7 +412,9 @@ describe("getReward with a reward choice", () => {
     const all = getReward(makeUser({ reward: questReward }), "q1");
     const reduced = getReward(user, "q1");
     const fullAmount = all.rewards.reward_money;
-    const offered = reduced.rewardChoice?.cards.find((card) => card.id === "reward_money");
+    const offered = reduced.rewardChoice?.cards.find(
+      (card) => card.id === "reward_money",
+    );
     expect(offered?.amount).toBeLessThan(fullAmount);
   });
 });

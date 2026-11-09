@@ -11,6 +11,7 @@ import {
   IMG_WALLPAPER_TSUKIMORI,
   IMG_WALLPAPER_WINTER,
 } from "@/drizzle/constants";
+import { getRandomElement } from "@/utils/array";
 
 // Freeze village artwork for the run instead of fetching mutable village settings at
 // request time: the prerendered image, preload, and experiment label must agree.
@@ -47,6 +48,10 @@ export const parseWallpaperVariant = (
   value?: string | null,
 ): WallpaperVariant | undefined =>
   WALLPAPER_VARIANTS.find((variant) => variant === value);
+
+/** Pick a configured wallpaper assignment, falling back to the control variant. */
+export const drawWallpaperVariant = (): WallpaperVariant =>
+  getRandomElement(WALLPAPER_VARIANTS) ?? "control";
 
 export const WALLPAPER_LABELS: Record<WallpaperVariant, string> = {
   control: "Fall (control)",

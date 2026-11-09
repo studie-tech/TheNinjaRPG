@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
-import { eq, gte, isNull, sql } from "drizzle-orm";
+import { eq, gte, isNull, lt, sql } from "drizzle-orm";
 import { after } from "next/server";
+import { z } from "zod";
 import { getUserProgressionUpdate } from "@/deltas/profile";
 import {
   getSavedTrainingQueueUserUpdate,
@@ -13,7 +14,11 @@ import {
   MASTERY_QUEUE_KIND_LABELS,
   MAX_DAILY_TRAININGS,
   MasteryNames,
+  MasteryQueueKinds,
+  QUEUE_WAITING_SLOTS,
   type TimedMasteryName,
+  TimedMasteryNames,
+  TrainingSpeeds,
 } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
 import { actionStatusMessage } from "@/libs/actionReadiness";
@@ -70,17 +75,51 @@ import { editTrainingQueue } from "@/server/utils/userQueue";
 import { isInArray } from "@/utils/array";
 import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 import { secondsPassed } from "@/utils/time";
-import { selectTrainedElementSchema } from "@/validators/elementalMastery";
 import {
-  startMasteryTrainingInputSchema,
+  energyTrainingQueueEntrySchema,
+  masteryTrainingQueueEntrySchema,
   startTrainingInputSchema,
-  stopTrainingInputSchema,
-  trainingLogInputSchema,
-  updateEnergyTrainingQueueInputSchema,
-  updateMasteryTrainingQueueInputSchema,
-  updateTrainingSpeedInputSchema,
 } from "@/validators/train";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+const updateEnergyTrainingQueueInputSchema = z.object({
+  entries: z.array(energyTrainingQueueEntrySchema).max(1 + QUEUE_WAITING_SLOTS.GOLD),
+  expectedEntries: z
+    .array(energyTrainingQueueEntrySchema)
+    .max(1 + QUEUE_WAITING_SLOTS.GOLD),
+  guess: z.string().optional(),
+});
+
+const updateMasteryTrainingQueueInputSchema = z.object({
+  kind: z.enum(MasteryQueueKinds).default("MASTERY"),
+  entries: z.array(masteryTrainingQueueEntrySchema).max(QUEUE_WAITING_SLOTS.GOLD),
+  expectedEntries: z
+    .array(masteryTrainingQueueEntrySchema)
+    .max(QUEUE_WAITING_SLOTS.GOLD),
+});
+
+const startMasteryTrainingInputSchema = z.object({
+  stat: z.enum(TimedMasteryNames),
+  speed: z.enum(TrainingSpeeds).optional(),
+});
+
+const stopTrainingInputSchema = z.object({
+  stat: z.enum(TimedMasteryNames),
+  startedAt: z.date(),
+  guess: z.string().optional(),
+});
+
+const updateTrainingSpeedInputSchema = z.object({
+  speed: z.enum(TrainingSpeeds),
+});
+
+const trainingLogInputSchema = z.object({
+  userId: z.string(),
+});
+
+const selectTrainedElementSchema = z.object({
+  element: z.enum(BasicElementName).nullable(),
+});
 
 export const trainRouter = createTRPCRouter({
   selectTrainedElement: protectedProcedure
@@ -419,7 +458,7 @@ export const trainRouter = createTRPCRouter({
         where: [
           ...elementalSnapshotConditions(user),
           isNull(userData[fields.stat]),
-          sql`${userData.dailyTrainings} < ${MAX_DAILY_TRAININGS}`,
+          lt(userData.dailyTrainings, MAX_DAILY_TRAININGS),
         ],
       });
       if (!claim.success)
@@ -540,7 +579,7 @@ export const trainRouter = createTRPCRouter({
           ...sessionUpdate,
           ...(gained > 0
             ? {
-                dailyTrainings: sql`dailyTrainings + 1`,
+                dailyTrainings: sql`${userData.dailyTrainings} + 1`,
                 // Apply both live progression caps without lowering stored entitlement;
                 // the snapshot guards keep the gain and queued-session handoff consistent.
                 ...masteryGainUpdates({ [trained]: gained }),
@@ -550,9 +589,7 @@ export const trainRouter = createTRPCRouter({
           ...(questData ? { questData } : {}),
         },
         where: [
-          ...(gained > 0
-            ? [sql`${userData.dailyTrainings} < ${MAX_DAILY_TRAININGS}`]
-            : []),
+          ...(gained > 0 ? [lt(userData.dailyTrainings, MAX_DAILY_TRAININGS)] : []),
           ...MasteryNames.map((stat) => eq(userData[stat], user[stat])),
           ...elementalSnapshotConditions(user),
           sql`${userData.masteryRanks} = CAST(${JSON.stringify(user.masteryRanks)} AS JSON)`,

@@ -26,7 +26,9 @@ test("stripBlockquotes removes multiple sibling blockquotes", () => {
 test("stripBlockquotes returns an empty string for empty or quote-only input", () => {
   expect(stripBlockquotes("")).toBe("");
   expect(
-    stripBlockquotes('<blockquote author="A" date="04/12/2026">Only quote</blockquote>'),
+    stripBlockquotes(
+      '<blockquote author="A" date="04/12/2026">Only quote</blockquote>',
+    ),
   ).toBe("");
 });
 
@@ -49,15 +51,13 @@ test("stripBlockquotes preserves non-quote media tags around blockquotes", () =>
     stripBlockquotes(
       '<img src="avatar.png" /><blockquote author="A">Quoted</blockquote><iframe src="https://example.com/embed"></iframe>',
     ),
-  ).toBe(
-    '<img src="avatar.png" /><iframe src="https://example.com/embed"></iframe>',
-  );
+  ).toBe('<img src="avatar.png" /><iframe src="https://example.com/embed"></iframe>');
 });
 
 test("htmlToPlainText parses entities and separates block content", () => {
-  expect(
-    htmlToPlainText("<p>Don&apos;t<br>fight</p><p>AT&amp;T &copy; 2026</p>"),
-  ).toBe("Don't fight AT&T © 2026");
+  expect(htmlToPlainText("<p>Don&apos;t<br>fight</p><p>AT&amp;T &copy; 2026</p>")).toBe(
+    "Don't fight AT&T © 2026",
+  );
 });
 
 test("htmlToPlainText discards script and style contents", () => {
@@ -76,11 +76,18 @@ test("buildQuoteBlock stores the author and date without nested quotes", () => {
       createdAt: new Date(2026, 0, 31),
       content: "<blockquote>Old</blockquote><p>New</p>",
     }),
-  ).toBe('<blockquote author="Terriator" date="01/31/2026" data-comment-id="comment-1"><p>New</p></blockquote>');
+  ).toBe(
+    '<blockquote author="Terriator" date="01/31/2026" data-comment-id="comment-1"><p>New</p></blockquote>',
+  );
 });
 
 test("buildQuoteBlock names a deleted author Unknown", () => {
   expect(
-    buildQuoteBlock({ id: "comment-2", username: null, createdAt: new Date(2026, 0, 31), content: "x" }),
+    buildQuoteBlock({
+      id: "comment-2",
+      username: null,
+      createdAt: new Date(2026, 0, 31),
+      content: "x",
+    }),
   ).toContain('author="Unknown"');
 });

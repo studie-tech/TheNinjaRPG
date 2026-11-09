@@ -2,9 +2,9 @@ import { describe, expect, it } from "bun:test";
 import { IMG_BADGE_DAYS_IN_VILLAGE, IMG_BADGE_PVPKILLS } from "@/drizzle/constants";
 import { getObjectiveImage } from "@/libs/objectives";
 import {
+  type AllObjectivesType,
   allObjectiveTasks,
   objectiveImageMap,
-  type AllObjectivesType,
 } from "@/validators/objectives";
 
 describe("objectiveImageMap / getObjectiveImage", () => {
@@ -25,7 +25,7 @@ describe("objectiveImageMap / getObjectiveImage", () => {
     }
   });
 
-  it("preserves the previous image + title verbatim for representative tasks", () => {
+  it("maps representative tasks to their image and title", () => {
     expect(
       getObjectiveImage({ task: "pvp_kills" } as unknown as AllObjectivesType),
     ).toEqual({ image: IMG_BADGE_PVPKILLS, title: "PVP kills" });

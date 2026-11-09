@@ -1,12 +1,12 @@
+import { describe, expect, it } from "bun:test";
+import { type QuestType, QuestTypes } from "@/drizzle/constants";
+import { getNewTrackers, killObjectiveCountsForQuest } from "@/libs/quest";
 import {
-  trackerQuest,
+  trackerGoalValue as goalValue,
   trackerUser as makeUser,
   trackerGoal,
-  trackerGoalValue as goalValue,
+  trackerQuest,
 } from "../../setup/quest";
-import { describe, expect, it } from "bun:test";
-import { QuestTypes, type QuestType } from "@/drizzle/constants";
-import { getNewTrackers, killObjectiveCountsForQuest } from "@/libs/quest";
 
 const makeQuest = (id: string, questType: QuestType, objectives: object[]) =>
   trackerQuest(id, objectives, questType);
@@ -121,7 +121,7 @@ describe("killObjectiveCountsForQuest", () => {
 });
 
 // ---------------------------------------------------------------------------
-// getNewTrackers — wiring of the gate (reproduces the reported bug)
+// getNewTrackers — wiring of the gate
 // ---------------------------------------------------------------------------
 
 describe("getNewTrackers pvp_kills gating", () => {

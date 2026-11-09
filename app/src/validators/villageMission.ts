@@ -5,15 +5,6 @@ import type { QuestRewardType } from "@/validators/rewardPackages";
 import { rewardPayloads } from "@/validators/rewardPackages";
 import { hasReward, ObjectiveReward } from "@/validators/rewards";
 
-export const villageMissionActionSchema = z.object({
-  villageId: z.string().min(1),
-  missionId: z.string().min(1).optional(),
-});
-
-export const villageMissionCancelSchema = villageMissionActionSchema.extend({
-  missionId: z.string().min(1),
-});
-
 export const villageMissionObjectiveSchema = z.object({
   id: z.string().min(1),
   task: z.enum(VILLAGE_MISSION_TASKS),
@@ -85,9 +76,3 @@ export const villageMissionContentError = (
     return "Village missions cannot branch or spawn attackers";
   return null;
 };
-
-export const structureUpgradeSchema = z.object({
-  structureId: z.string().min(1),
-  villageId: z.string().min(1),
-  clanId: z.string().nullish(),
-});

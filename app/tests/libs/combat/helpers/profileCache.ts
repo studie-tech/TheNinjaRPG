@@ -1,7 +1,7 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { combatProfilePatch, type CombatProfileUpdate } from "@/deltas/combat";
-import type { CompleteBattle } from "@/libs/combat/types";
+import { type CombatProfileUpdate, combatProfilePatch } from "@/deltas/combat";
 import { calcBattleResult } from "@/libs/combat/settlement";
+import type { CompleteBattle } from "@/libs/combat/types";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 
 /**
@@ -33,10 +33,15 @@ export const observeProfile = <User>(
     user: () => client.getQueryData<{ userData: User }>(key)!.userData,
     revision: () => prepareUserUpdate(client, key),
     apply: (update?: CombatProfileUpdate, revision = prepareUserUpdate(client, key)) =>
-      updateUserCache(client, key, update ? (user) => combatProfilePatch(user, update) : undefined, {
-        revision,
-        delta: update?.userDelta,
-      }),
+      updateUserCache(
+        client,
+        key,
+        update ? (user) => combatProfilePatch(user, update) : undefined,
+        {
+          revision,
+          delta: update?.userDelta,
+        },
+      ),
     close: () => {
       stop();
       client.clear();

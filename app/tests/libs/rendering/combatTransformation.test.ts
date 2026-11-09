@@ -29,9 +29,7 @@ describe("combat transformation", () => {
   });
 
   it("ignores a tier with no staged arrival", () => {
-    expect(
-      findTransformation(battle([]), battle([fighter("new", 9)])),
-    ).toBeUndefined();
+    expect(findTransformation(battle([]), battle([fighter("new", 9)]))).toBeUndefined();
   });
 
   it("builds through the clip, bursts at its end and then returns the field", () => {

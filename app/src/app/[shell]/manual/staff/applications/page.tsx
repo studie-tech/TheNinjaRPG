@@ -13,6 +13,7 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
 import { useInfinitePagination } from "@/libs/pagination";
+import { showMutationToast } from "@/libs/toast";
 import { canDeleteStaffApplication, isStaffRole } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -50,7 +51,9 @@ export default function ApplicationsPage() {
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
   const utils = api.useUtils();
   const deleteMutation = api.applications.delete.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      showMutationToast(data);
+      if (!data.success) return;
       // Invalidate the exact list query with current filters for precision
       await utils.applications.list.invalidate({
         ...getApplicationsFilter(filterState),
@@ -98,7 +101,7 @@ export default function ApplicationsPage() {
         ? "Approved"
         : "Rejected"
       : "Not voted",
-    // Actions: delete button for CODING_ADMIN
+    // Actions: delete button for the owner
     actions: (
       <div>
         {me && canDeleteStaffApplication(me.role) && (
@@ -115,15 +118,10 @@ export default function ApplicationsPage() {
             }
             confirmClassName="bg-red-600 text-white hover:bg-red-700"
             disabled={deleteMutation.isPending}
-            onAccept={async (e) => {
+            onAccept={(e) => {
               e.preventDefault();
               if (deleteMutation.isPending) return;
-              try {
-                await deleteMutation.mutateAsync({ id: a.id });
-              } catch (err) {
-                console.error(err);
-                alert("Failed to delete application");
-              }
+              deleteMutation.mutate({ id: a.id });
             }}
             proceed_label="Delete"
           >

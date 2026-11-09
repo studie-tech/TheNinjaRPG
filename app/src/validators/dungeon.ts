@@ -114,34 +114,6 @@ export const dungeonContentSchema = z
       });
     });
   });
-/** Omit the ID to create a definition; existing runs keep their captured content snapshot. */
-export const saveDungeonSchema = z.object({
-  id: z.string().optional(),
-  content: dungeonContentSchema,
-});
-/** Identify a definition for lobby creation or a run for completion claims. */
-export const dungeonIdSchema = z.object({ id: z.string().min(1) });
-/** Availability is restricted to the authenticated player's current sector by the router. */
-export const dungeonSectorSchema = z.object({
-  sector: z.number().int().min(MAP_SECTOR_ID_MIN).max(MAP_SECTOR_ID_MAX),
-});
-/** Party commands; membership, readiness and leader privileges are checked against the saved run. */
-export const dungeonActionSchema = z.object({
-  id: z.string().min(1),
-  action: z.enum([
-    "invite",
-    "accept",
-    "decline",
-    "remove",
-    "leave",
-    "ready",
-    "unready",
-    "start",
-    "pause",
-    "resume",
-  ]),
-  userId: z.string().optional(),
-});
 /** Validated staff-authored definition copied into a run when its lobby is created. */
 export type DungeonContent = z.infer<typeof dungeonContentSchema>;
 /** Authored room shared by the editor, run transitions and battle initiation. */

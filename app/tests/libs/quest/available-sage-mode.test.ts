@@ -137,6 +137,8 @@ describe("quest eligibility after sage removal", () => {
     const quest = makeQuest(null);
     const before = makeUser("sage-fire", 250_000);
     expect(isAvailableUserQuests(quest, before, true).check).toBe(true);
-    expect(isAvailableUserQuests(quest, { ...before, sageModeId: null }, true).check).toBe(true);
+    expect(
+      isAvailableUserQuests(quest, { ...before, sageModeId: null }, true).check,
+    ).toBe(true);
   });
 });

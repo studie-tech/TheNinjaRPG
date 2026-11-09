@@ -1,17 +1,15 @@
-import { describe, it, expect } from "bun:test";
-import { alignBattle, hasNoAvailableActions, wantsHumanActionSet } from "@/libs/combat/turn";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import { describe, expect, it } from "bun:test";
+import { alignBattle, hasNoAvailableActions } from "@/libs/combat/turn";
 import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 /**
- * Guards EXISTING behaviour that this feature reaches into:
- *
- *  1. alignBattle now splices orphaned summons on EVERY call, for every battle
- *     in the game -- not just on round progression. A battle with no summons in
- *     it must be completely unaffected.
+ *  1. alignBattle splices orphaned summons on EVERY call, for every battle in the
+ *     game -- not just on round progression. A battle with no summons in it must
+ *     be completely unaffected.
  *  2. hasNoAvailableActions drives round progression for all actors, and its
- *     action-set choice now goes through wantsHumanActionSet. Ordinary humans
- *     and ordinary AI must keep the sets they had before piloting existed.
+ *     action-set choice goes through wantsHumanActionSet. Ordinary humans and
+ *     ordinary AI keep their own action sets.
  */
 
 const battleOf = (usersState: BattleUserState[], over: Record<string, unknown> = {}) =>
@@ -46,21 +44,26 @@ describe("alignBattle leaves a summon-free battle untouched", () => {
 
   it("refills action points when the round progresses", () => {
     const users = plain();
-    users.forEach((u) => { u.actionPoints = 5; u.round = 3; });
+    users.forEach((u) => {
+      u.actionPoints = 5;
+      u.round = 3;
+    });
     const battle = battleOf(users);
     const { progressRound } = alignBattle(battle, [], "p1");
-    if (progressRound) {
-      expect(battle.usersState.every((u) => u.actionPoints === 100)).toBe(true);
-      expect(battle.round).toBe(4);
-    }
+    expect(progressRound).toBe(true);
+    expect(battle.usersState.every((u) => u.actionPoints === 100)).toBe(true);
+    expect(battle.round).toBe(4);
   });
 
   it("does not disturb a battle where a summon's controller is alive", () => {
     const battle = battleOf([
       makeBattleUser("p1", { curHealth: 100, isAi: false }),
       makeBattleUser("s1", {
-        controllerId: "p1", isAi: true, isSummon: true,
-        isOriginal: true, curHealth: 500,
+        controllerId: "p1",
+        isAi: true,
+        isSummon: true,
+        isOriginal: true,
+        curHealth: 500,
       }),
       makeBattleUser("e1", { curHealth: 100, isAi: true }),
     ]);
@@ -69,13 +72,18 @@ describe("alignBattle leaves a summon-free battle untouched", () => {
   });
 });
 
-describe("hasNoAvailableActions keeps the pre-piloting action sets", () => {
+describe("hasNoAvailableActions for ordinary actors", () => {
   // An actor with no jutsu/items and zero action points can afford nothing,
-  // whichever set it is evaluated against -- so "no actions" must stay true for
-  // ordinary humans AND ordinary AI, exactly as before this feature.
+  // whichever set it is evaluated against -- so "no actions" must hold for
+  // ordinary humans AND ordinary AI.
   const broke = (over: Partial<BattleUserState>) =>
     makeBattleUser("x", {
-      curHealth: 100, actionPoints: 0, jutsus: [], items: [], basicActions: [], ...over,
+      curHealth: 100,
+      actionPoints: 0,
+      jutsus: [],
+      items: [],
+      basicActions: [],
+      ...over,
     });
 
   it("an ordinary human with nothing affordable has no actions", () => {
@@ -90,18 +98,10 @@ describe("hasNoAvailableActions keeps the pre-piloting action sets", () => {
     expect(hasNoAvailableActions(battle, "a1")).toBe(true);
   });
 
-  it("routes each actor to the set piloting intends", () => {
-    // The wiring hasNoAvailableActions depends on, pinned directly.
-    expect(wantsHumanActionSet({ isAi: false })).toBe(true);            // human
-    expect(wantsHumanActionSet({ isAi: true })).toBe(false);            // plain AI
-    expect(wantsHumanActionSet({ isAi: true, isPiloted: true })).toBe(true);
-    expect(wantsHumanActionSet({ isAi: true, isPiloted: false })).toBe(false);
-  });
-
   it("treats an actor missing from the battle as having no actions", () => {
-    // Pre-existing contract: the lookup misses and the function falls through to
-    // its default. Pinned because alignBattle can now remove a spliced summon
-    // between an actorId being chosen and this being asked about it.
+    // The lookup misses and the function falls through to its default. alignBattle
+    // can remove a spliced summon between an actorId being chosen and this being
+    // asked about it.
     const battle = battleOf([makeBattleUser("p1", { curHealth: 100 })]);
     expect(hasNoAvailableActions(battle, "ghost")).toBe(true);
   });

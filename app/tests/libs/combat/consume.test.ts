@@ -1,11 +1,22 @@
 import { describe, expect, it } from "bun:test";
 import { SHIELD_MAX_HEALTH } from "@/drizzle/constants";
 import { insertAction } from "@/libs/combat/actions";
-import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { applyEffects } from "@/libs/combat/process";
+import type {
+  BattleUserState,
+  CombatAction,
+  CompleteBattle,
+  UserEffect,
+} from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
-import { ClearTag, ConsumeTag, DamageTag, JutsuValidatorRawSchema, SageModeValidator } from "@/validators/combat";
-import type { BattleUserState, CombatAction, CompleteBattle, UserEffect } from "@/libs/combat/types";
+import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
+import {
+  ClearTag,
+  ConsumeTag,
+  DamageTag,
+  JutsuValidatorRawSchema,
+  SageModeValidator,
+} from "@/validators/combat";
 import {
   makeBattleUser,
   makeCombatAction,
@@ -14,7 +25,7 @@ import {
   makeEffect,
   makeJutsu,
   makeShield,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 import { makeActivateSageEffect, makeSageMode } from "./helpers/sageMode";
 
 const ROUND = 3;
@@ -81,7 +92,11 @@ describe("applyEffects — consume", () => {
     const attacker = makeAttacker();
     const defender = makeDefender();
     const battle = makeBattle([attacker, defender], [makeAttack(), makeConsume(50)]);
-    const { newBattle, actionEffects } = applyEffects(battle, "attacker", makeCombatAction());
+    const { newBattle, actionEffects } = applyEffects(
+      battle,
+      "attacker",
+      makeCombatAction(),
+    );
 
     const healthLost = healthLostBy(defender, newBattle);
     expect(healthLost).toBeGreaterThan(0);
@@ -179,9 +194,8 @@ describe("applyEffects — consume", () => {
       "attacker",
       makeCombatAction(),
     );
-    const perDefenderLost = [first, second].map(
-      (defender) =>
-        healthLostBy(defender, newBattle),
+    const perDefenderLost = [first, second].map((defender) =>
+      healthLostBy(defender, newBattle),
     );
     const healthLost = perDefenderLost.reduce((total, lost) => total + lost, 0);
     const shields = consumeShields(newBattle.usersEffects);
@@ -360,7 +374,9 @@ describe("active Consume damage conversion", () => {
   });
 
   it("keeps a zero-duration conversion when a Sage activation grants Clear", () => {
-    const sageMode = makeSageMode({ effects: [ClearTag.parse({ power: 100, rounds: 3 })] });
+    const sageMode = makeSageMode({
+      effects: [ClearTag.parse({ power: 100, rounds: 3 })],
+    });
     const battle = makeBattle(
       [makeAttacker({ sageModeId: sageMode.id }), makeDefender()],
       [
@@ -370,8 +386,14 @@ describe("active Consume damage conversion", () => {
       ],
     );
     battle.extraState.sageModes = { [sageMode.id]: sageMode };
-    const { newBattle, actionEffects } = applyEffects(battle, "attacker", makeCombatAction());
-    expect(actionEffects.map((e) => e.txt)).toContain("attacker was cleared of all positive status effects. ");
+    const { newBattle, actionEffects } = applyEffects(
+      battle,
+      "attacker",
+      makeCombatAction(),
+    );
+    expect(actionEffects.map((e) => e.txt)).toContain(
+      "attacker was cleared of all positive status effects. ",
+    );
     expect(shieldHp(newBattle)).toBeGreaterThan(0);
   });
 
@@ -469,60 +491,116 @@ describe("active Consume damage conversion", () => {
     expect(shieldHp(newBattle)).toBe(0);
   });
 
-  it.each([0, 25])("converts ground-hit reflection on Sage activation with %i percent existing Consume", (existingPower) => {
-    const sageMode = makeSageMode(
-      SageModeValidator.parse({
-        ...makeSageMode(),
-        name: "Consume Sage",
-        description: "Converts outgoing damage into a shield",
-        villageId: null,
-        effects: [ConsumeTag.parse({ power: 50, rounds: 7, shieldRounds: 2 })],
-      }),
-    );
-    const initial = makeCompleteBattle({
-      width: 5,
-      height: 5,
-      round: 1,
-      createdAt: new Date(0),
-      usersState: [makeAttacker({ sageModeId: sageMode.id }), makeDefender("defender", { curHealth: 1000, maxHealth: 1000 })],
-      extraState: { sageModes: { [sageMode.id]: sageMode } },
-    });
-    const groundAction = {
-      ...JutsuValidatorRawSchema.parse(
-        makeJutsu({
-          name: "Ground attack",
-          target: "GROUND",
-          range: 3,
-          effects: [DamageTag.parse({ power: 100, calculation: "static", rounds: 3, statTypes: ["None"] })],
+  it.each([0, 25])(
+    "converts ground-hit reflection on Sage activation with %i percent existing Consume",
+    (existingPower) => {
+      const sageMode = makeSageMode(
+        SageModeValidator.parse({
+          ...makeSageMode(),
+          name: "Consume Sage",
+          description: "Converts outgoing damage into a shield",
+          villageId: null,
+          effects: [ConsumeTag.parse({ power: 50, rounds: 7, shieldRounds: 2 })],
         }),
-      ),
-      id: "ground-hit",
-      type: "jutsu",
-      updatedAt: 0,
-      originalCooldown: 0,
-      level: 0,
-    } as CombatAction;
-    expect(insertAction({ battle: initial, grid: getBattleGrid(20, initial), action: groundAction, actorId: "defender", longitude: 0, latitude: 0 })).toBe(true);
-    const battle = applyEffects(initial, "defender", groundAction).newBattle;
-    expect(battle.groundEffects).toHaveLength(1);
-    battle.round = ROUND;
-    battle.usersEffects.push(makeEffect("reflect", { power: 50, calculation: "percentage", rounds: 3 }, {
-      creatorId: "attacker", targetId: "attacker", targetType: "user", createdRound: ROUND - 1, isNew: false,
-    }));
-    if (existingPower) battle.usersEffects.push(activeConsume({ power: existingPower, shieldRounds: 5 }));
-    const action = { ...SAGE_MODE_ACTIVATION_JUTSU, type: "jutsu", updatedAt: 0, originalCooldown: 0, level: 0 } as CombatAction;
-    expect(insertAction({ battle, grid: getBattleGrid(20, battle), action, actorId: "attacker", longitude: 0, latitude: 0 })).toBe(true);
+      );
+      const initial = makeCompleteBattle({
+        width: 5,
+        height: 5,
+        round: 1,
+        createdAt: new Date(0),
+        usersState: [
+          makeAttacker({ sageModeId: sageMode.id }),
+          makeDefender("defender", { curHealth: 1000, maxHealth: 1000 }),
+        ],
+        extraState: { sageModes: { [sageMode.id]: sageMode } },
+      });
+      const groundAction = {
+        ...JutsuValidatorRawSchema.parse(
+          makeJutsu({
+            name: "Ground attack",
+            target: "GROUND",
+            range: 3,
+            effects: [
+              DamageTag.parse({
+                power: 100,
+                calculation: "static",
+                rounds: 3,
+                statTypes: ["None"],
+              }),
+            ],
+          }),
+        ),
+        id: "ground-hit",
+        type: "jutsu",
+        updatedAt: 0,
+        originalCooldown: 0,
+        level: 0,
+      } as CombatAction;
+      expect(
+        insertAction({
+          battle: initial,
+          grid: getBattleGrid(20, initial),
+          action: groundAction,
+          actorId: "defender",
+          longitude: 0,
+          latitude: 0,
+        }),
+      ).toBe(true);
+      const battle = applyEffects(initial, "defender", groundAction).newBattle;
+      expect(battle.groundEffects).toHaveLength(1);
+      battle.round = ROUND;
+      battle.usersEffects.push(
+        makeEffect(
+          "reflect",
+          { power: 50, calculation: "percentage", rounds: 3 },
+          {
+            creatorId: "attacker",
+            targetId: "attacker",
+            targetType: "user",
+            createdRound: ROUND - 1,
+            isNew: false,
+          },
+        ),
+      );
+      if (existingPower)
+        battle.usersEffects.push(
+          activeConsume({ power: existingPower, shieldRounds: 5 }),
+        );
+      const action = {
+        ...SAGE_MODE_ACTIVATION_JUTSU,
+        type: "jutsu",
+        updatedAt: 0,
+        originalCooldown: 0,
+        level: 0,
+      } as CombatAction;
+      expect(
+        insertAction({
+          battle,
+          grid: getBattleGrid(20, battle),
+          action,
+          actorId: "attacker",
+          longitude: 0,
+          latitude: 0,
+        }),
+      ).toBe(true);
 
-    const { newBattle, actionEffects } = applyEffects(battle, "attacker", action);
+      const { newBattle, actionEffects } = applyEffects(battle, "attacker", action);
 
-    expect(newBattle.usersState[0]?.sageModeActivated).toBe(true);
-    expect(newBattle.usersState[0]?.curHealth).toBe(840);
-    expect(newBattle.usersState[1]?.curHealth).toBe(960);
-    expect(newBattle.usersEffects.find((e) => e.type === "consume" && e.fromType === "sageMode")?.rounds).toBe(sageMode.activationRounds);
-    expect(shieldHp(newBattle)).toBe(40 * (50 + existingPower) / 100);
-    expect(findConsumeShield(newBattle.usersEffects)?.rounds).toBe(existingPower ? 5 : 2);
-    expect(actionEffects.filter((e) => e.txt.includes("consumes"))).toHaveLength(1);
-  });
+      expect(newBattle.usersState[0]?.sageModeActivated).toBe(true);
+      expect(newBattle.usersState[0]?.curHealth).toBe(840);
+      expect(newBattle.usersState[1]?.curHealth).toBe(960);
+      expect(
+        newBattle.usersEffects.find(
+          (e) => e.type === "consume" && e.fromType === "sageMode",
+        )?.rounds,
+      ).toBe(sageMode.activationRounds);
+      expect(shieldHp(newBattle)).toBe((40 * (50 + existingPower)) / 100);
+      expect(findConsumeShield(newBattle.usersEffects)?.rounds).toBe(
+        existingPower ? 5 : 2,
+      );
+      expect(actionEffects.filter((e) => e.txt.includes("consumes"))).toHaveLength(1);
+    },
+  );
 
   it("combines Diffuse repayments and new damage with capped conversion and the longest shield duration", () => {
     const defender = makeDefender("defender", {
@@ -796,30 +874,33 @@ describe("active Consume damage conversion", () => {
     ).toBeLessThan(first.usersState.find((u) => u.userId === "attacker")!.curHealth);
   });
 
-  it.each([0, 3])("does not convert a cleared Consume with %i active rounds", (rounds) => {
-    const clear = makeEffect(
-      "clear",
-      { power: 100, rounds: 0 },
-      {
-        creatorId: "defender",
-        targetId: "attacker",
-        targetType: "user",
-        createdRound: ROUND,
-        isNew: true,
-      },
-    );
-    const { newBattle, actionEffects } = applyEffects(
-      makeBattle(
-        [makeAttacker(), makeDefender()],
-        [staticHit(), makeConsume(50, 3, rounds), clear],
-      ),
-      "attacker",
-      makeCombatAction(),
-    );
-    expect(actionEffects.some((e) => e.txt.includes("cleared"))).toBe(true);
-    expect(shieldHp(newBattle)).toBe(0);
-    expect(actionEffects.some((e) => e.txt.includes("consumes"))).toBe(false);
-  });
+  it.each([0, 3])(
+    "does not convert a cleared Consume with %i active rounds",
+    (rounds) => {
+      const clear = makeEffect(
+        "clear",
+        { power: 100, rounds: 0 },
+        {
+          creatorId: "defender",
+          targetId: "attacker",
+          targetType: "user",
+          createdRound: ROUND,
+          isNew: true,
+        },
+      );
+      const { newBattle, actionEffects } = applyEffects(
+        makeBattle(
+          [makeAttacker(), makeDefender()],
+          [staticHit(), makeConsume(50, 3, rounds), clear],
+        ),
+        "attacker",
+        makeCombatAction(),
+      );
+      expect(actionEffects.some((e) => e.txt.includes("cleared"))).toBe(true);
+      expect(shieldHp(newBattle)).toBe(0);
+      expect(actionEffects.some((e) => e.txt.includes("consumes"))).toBe(false);
+    },
+  );
 
   it("keeps deferred summon damage conversion on its caster and quest credit on its controller", () => {
     const summon = makeBattleUser("summon", {

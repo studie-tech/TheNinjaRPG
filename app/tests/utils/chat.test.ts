@@ -15,7 +15,9 @@ describe("processMentions", () => {
     const { processedContent, mentionedUserNames } = processMentions(content);
     expect(mentionedUserNames).toEqual(["Alice"]);
     expect(sanitize(processedContent)).toBe(
-      sanitize(content.replace("@Alice", '<a href="/username/Alice"><b>@Alice</b></a>')),
+      sanitize(
+        content.replace("@Alice", '<a href="/username/Alice"><b>@Alice</b></a>'),
+      ),
     );
   });
 
@@ -58,8 +60,7 @@ describe("processMentions", () => {
     "normalizes encoded username characters before extracting mentions: %s",
     (content) => {
       expect(processMentions(`<p>${content}</p>`)).toEqual({
-        processedContent:
-          '<p><a href="/username/Alice_Foo"><b>@Alice_Foo</b></a></p>',
+        processedContent: '<p><a href="/username/Alice_Foo"><b>@Alice_Foo</b></a></p>',
         mentionedUserNames: ["Alice_Foo"],
       });
     },
@@ -135,6 +136,8 @@ describe("getNewReactions", () => {
   });
 
   it("keys on the sanitized emoji", () => {
-    expect(getNewReactions({}, "<b>x</b>", "ann")).toEqual({ [sanitize("<b>x</b>")]: ["ann"] });
+    expect(getNewReactions({}, "<b>x</b>", "ann")).toEqual({
+      [sanitize("<b>x</b>")]: ["ann"],
+    });
   });
 });

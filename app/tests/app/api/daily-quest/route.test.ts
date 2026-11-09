@@ -1,3 +1,7 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { MySqlDialect } from "drizzle-orm/mysql-core";
+import { GET } from "@/app/api/daily-quest/route";
 import * as gameSettings from "@/libs/gamesettings";
 import * as quests from "@/server/utils/questAssignment";
 import {
@@ -5,10 +9,6 @@ import {
   stubCronAuth,
   stubDatabase,
 } from "../../../setup/serverModules";
-import type { SQL } from "drizzle-orm";
-import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { GET } from "@/app/api/daily-quest/route";
 
 type DailyQuestTestMocks = {
   lock: ReturnType<typeof vi.fn>;
@@ -53,17 +53,7 @@ const seedHappyPath = () => {
   mocks.findVillages.mockResolvedValue([
     { id: "village-1", type: "VILLAGE", sector: 1, structures: [] },
   ]);
-  mocks.select.mockReturnValueOnce({
-    from: vi.fn(() => ({
-      where: vi.fn(() => ({
-        groupBy: vi
-          .fn()
-          .mockResolvedValue([
-            { rank: "GENIN", villageId: "village-1", level: 10, count: 1 },
-          ]),
-      })),
-    })),
-  });
+  seedCombos([{ rank: "GENIN", villageId: "village-1", level: 10, count: 1 }]);
   mocks.update.mockImplementation(() => ({
     set: (value: Record<string, unknown>) => {
       mocks.updateSets.push(value);
@@ -148,7 +138,8 @@ describe("daily-quest cron", () => {
     mocks.lock.mockResolvedValue({
       release: mocks.rollback,
       update: mocks.rollback,
-      isClaimed: true, isNewDay: true,
+      isClaimed: true,
+      isNewDay: true,
       prevTime: 1,
     });
   });
@@ -169,8 +160,8 @@ describe("daily-quest cron", () => {
   });
 
   it("closes only dailies that are still open, leaving earlier days' rows untouched", async () => {
-    // Every closed attempt already has an endAt; rewriting it each night rewrote the whole
-    // daily history and misdated when those attempts ended.
+    // Closed attempts already carry their endedAt; the nightly close touches only open
+    // dailies so earlier attempts keep their end dates.
     seedHappyPath();
     const wheres: SQL[] = [];
     mocks.update.mockImplementation(() => ({
@@ -211,17 +202,10 @@ describe("daily-quest cron", () => {
     const second = { ...daily, id: "daily-2" };
     seedHappyPath();
     mocks.findQuests.mockResolvedValue([daily, second]);
-    mocks.select.mockReset();
-    mocks.select.mockReturnValueOnce({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          groupBy: vi.fn().mockResolvedValue([
-            { rank: "GENIN", villageId: "village-1", level: 10, count: 1 },
-            { rank: "GENIN", villageId: "village-1", level: 12, count: 1 },
-          ]),
-        })),
-      })),
-    });
+    seedCombos([
+      { rank: "GENIN", villageId: "village-1", level: 10, count: 1 },
+      { rank: "GENIN", villageId: "village-1", level: 12, count: 1 },
+    ]);
 
     await GET(cronRequest());
 
@@ -264,7 +248,11 @@ describe("daily-quest cron", () => {
   });
 
   it("skips the reset when the daily timer says it is not a new day", async () => {
-    mocks.lock.mockResolvedValue({ isClaimed: false, isNewDay: false, response: new Response("locked") });
+    mocks.lock.mockResolvedValue({
+      isClaimed: false,
+      isNewDay: false,
+      response: new Response("locked"),
+    });
 
     await GET(cronRequest());
 
@@ -344,7 +332,8 @@ describe("daily-quest cron", () => {
       mocks.lock.mockResolvedValue({
         release: mocks.rollback,
         update: mocks.rollback,
-        isClaimed: true, isNewDay: true,
+        isClaimed: true,
+        isNewDay: true,
         prevTime: time,
         prevValue: value,
       });
@@ -377,7 +366,8 @@ describe("daily-quest cron", () => {
     mocks.lock.mockResolvedValue({
       release: mocks.rollback,
       update: mocks.rollback,
-      isClaimed: true, isNewDay: true,
+      isClaimed: true,
+      isNewDay: true,
       prevTime: new Date(Date.UTC(2020, 0, 1) - 1),
       prevValue: 1,
     });

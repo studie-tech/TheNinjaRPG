@@ -27,7 +27,10 @@ describe("getReducedGainsDays", () => {
   });
 
   it("keeps the penalty when createdAt is not loaded", () => {
-    const user = { rank: "CHUNIN", joinedVillageAt: new Date(Date.now() - DAY) } as UserData;
+    const user = {
+      rank: "CHUNIN",
+      joinedVillageAt: new Date(Date.now() - DAY),
+    } as UserData;
     expect(getReducedGainsDays(user)).toBeGreaterThan(0);
   });
 });

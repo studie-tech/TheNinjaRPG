@@ -6,7 +6,8 @@ import {
 import { shrineLobbyFreshAfter } from "@/server/utils/shrine";
 
 describe("shrineLobbyFreshAfter", () => {
-  const windowMs = (SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS) * 1000;
+  const windowMs =
+    (SHRINE_BATTLE_LOBBY_SECONDS + SHRINE_BATTLE_STALE_LOBBY_SECONDS) * 1000;
 
   it("reaches back one lobby window plus its grace period", () => {
     const now = new Date("2026-03-01T12:00:00.500Z");

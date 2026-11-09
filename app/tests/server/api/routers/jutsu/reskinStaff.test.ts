@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
 import { actionLog, jutsu, jutsuReskin, userData, userJutsu } from "@/drizzle/schema";
 import * as actualModerator from "@/libs/moderator";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
@@ -69,7 +69,9 @@ describeWithDatabase("jutsu reskin staff editing against a real MySQL", () => {
       { userId: OWNER, username: "Owner" },
       { userId: OTHER, username: "Other" },
     ] as never);
-    await insertJutsus(["jutsu-a", "jutsu-b"].map((id) => ({ id, requiredRank: "GENIN" })));
+    await insertJutsus(
+      ["jutsu-a", "jutsu-b"].map((id) => ({ id, requiredRank: "GENIN" })),
+    );
   });
 
   describe("getReskin", () => {

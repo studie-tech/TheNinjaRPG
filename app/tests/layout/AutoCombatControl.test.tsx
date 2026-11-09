@@ -1,8 +1,12 @@
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { AutoCombatBadge, AutoCombatControl } from "@/layout/AutoCombatControl";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { AutoCombatBadge, AutoCombatControl } from "@/layout/AutoCombatControl";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../setup/browserGlobals";
 
 beforeEach(() => {
   installBrowserGlobals({ resizeObserver: true });
@@ -15,7 +19,13 @@ afterEach(async () => {
 
 const mount = (overrides: Partial<Parameters<typeof AutoCombatControl>[0]> = {}) => {
   const onChange = vi.fn();
-  const props = { isActive: false, isPending: false, requiresConfirmation: true, onChange, ...overrides };
+  const props = {
+    isActive: false,
+    isPending: false,
+    requiresConfirmation: true,
+    onChange,
+    ...overrides,
+  };
   return { ...render(<AutoCombatControl {...props} />), onChange, props };
 };
 
@@ -37,7 +47,9 @@ it("requires confirmation to enable PvP AI and leaves cancellation manual", () =
 
 it("shows restored AI state and returns to manual without confirmation", () => {
   const view = mount({ isActive: true });
-  expect(view.getByRole("switch", { name: "Auto combat" }).getAttribute("aria-checked")).toBe("true");
+  expect(
+    view.getByRole("switch", { name: "Auto combat" }).getAttribute("aria-checked"),
+  ).toBe("true");
   fireEvent.click(view.getByRole("switch", { name: "Auto combat" }));
   expect(view.onChange).toHaveBeenCalledTimes(1);
   expect(view.onChange).toHaveBeenCalledWith(false);
@@ -54,7 +66,10 @@ it("preserves the direct PvE toggle and explains its saved preference", () => {
 });
 
 it("disables the control while saving and shows failed changes beside it", () => {
-  const view = mount({ isPending: true, error: "You are no longer fighting in this battle" });
+  const view = mount({
+    isPending: true,
+    error: "You are no longer fighting in this battle",
+  });
   fireEvent.click(view.getByRole("switch", { name: "Auto combat" }));
   expect(view.onChange).not.toHaveBeenCalled();
   expect(view.queryByRole("dialog")).toBeNull();
@@ -69,14 +84,18 @@ it("discards an unconfirmed handover when a different battle mounts", () => {
   expect(view.onChange).not.toHaveBeenCalled();
 });
 
-
 it("confirms a PvP handover from inside the settings popover", () => {
   const onChange = vi.fn();
   const view = render(
     <Popover>
       <PopoverTrigger>Combat settings</PopoverTrigger>
       <PopoverContent>
-        <AutoCombatControl isActive={false} isPending={false} requiresConfirmation onChange={onChange} />
+        <AutoCombatControl
+          isActive={false}
+          isPending={false}
+          requiresConfirmation
+          onChange={onChange}
+        />
       </PopoverContent>
     </Popover>,
   );

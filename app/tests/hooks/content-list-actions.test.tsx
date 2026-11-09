@@ -19,7 +19,8 @@ afterEach(() => {
 
 describe("useContentListActions", () => {
   const setup = () =>
-    renderHook(() => useContentListActions(refetch, "/manual/jutsu/edit")).result.current;
+    renderHook(() => useContentListActions(refetch, "/manual/jutsu/edit")).result
+      .current;
 
   it("refreshes and opens a created row", async () => {
     await setup().onCreated({ success: true, message: "new-id" });

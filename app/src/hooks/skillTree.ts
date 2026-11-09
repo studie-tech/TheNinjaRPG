@@ -24,8 +24,7 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
   const utils = api.useUtils();
   const { data: userData } = useRequiredUserData();
 
-  // Case type
-  const skillTree = { ...data, effects: data.effects };
+  const skillTree = { ...data };
 
   // Form handling
   const submitContent = useContentSubmit();

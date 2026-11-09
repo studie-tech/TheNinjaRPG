@@ -49,6 +49,7 @@ import { isPetAppearanceReady } from "@/libs/pets/progression";
 import {
   isPetTaskAttempt,
   isPetTaskContract,
+  PET_TASK_IN_PROGRESS_MESSAGE,
   petTaskDispatchBlockMessage,
 } from "@/libs/pets/tasks";
 import { eliteJoninExamBlockMessage } from "@/libs/profile";
@@ -218,8 +219,8 @@ import {
   canChangeContent,
   canEditQuests,
   canEditStarterQuests,
-  canOnlyEditSelf,
   canPlayHiddenQuests,
+  isRestrictedToSelf,
 } from "@/utils/permissions";
 import { getNextUserSnapshotAt, secondsFromDate, secondsFromNow } from "@/utils/time";
 import { canAccessStructure } from "@/utils/village";
@@ -231,11 +232,7 @@ import {
   QuestValidator,
 } from "@/validators/objectives";
 import { petSelectionSchema } from "@/validators/pets";
-import {
-  type PetTask,
-  petTaskActionSchema,
-  startPetTaskSchema,
-} from "@/validators/petTasks";
+import { type PetTask, petTaskSchema } from "@/validators/petTasks";
 import { questFilteringSchema } from "@/validators/quest";
 import { rewardPayloads } from "@/validators/rewardPackages";
 import {
@@ -250,6 +247,18 @@ import {
   RewardChoiceDisplaySchema,
 } from "@/validators/rewards";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+/** The displayed attempt identity prevents a stale cancel or claim from affecting a later task. */
+const petTaskActionSchema = petTaskSchema.pick({
+  petId: true,
+  questHistoryId: true,
+  startedAt: true,
+});
+
+/** Dispatch accepts catalogue IDs only; occupation, duration and availability are server-owned. */
+const startPetTaskSchema = petSelectionSchema.extend({
+  questId: z.string().min(1).max(191),
+});
 
 export const questsRouter = createTRPCRouter({
   /** Public scenery exposes neutral presentation, never quest steps or player progress. */
@@ -493,7 +502,7 @@ export const questsRouter = createTRPCRouter({
         }),
         fetchSectorVillage(ctx.drizzle, input.userSector),
         // Random missions/crimes/errands/medical/pvp all resolve the candidate pool the same
-        // way (same widened LEFT JOIN + filters); the quest type is already carried by the
+        // way (same LEFT JOIN + filters); the quest type is already carried by the
         // `eq(quest.questType, input.type)` predicate, so no per-type query branch is needed.
         // Farming, bloodline and sage requirements are checked by isAvailableUserQuests
         // after the user refresh, so this query can run alongside it.
@@ -574,7 +583,7 @@ export const questsRouter = createTRPCRouter({
         user,
         result,
         "random_assignment",
-        // The widened LEFT JOIN already loaded this row; a null is the idempotent insert branch.
+        // The LEFT JOIN already loaded this row; a null is the idempotent insert branch.
         result.history,
         false,
         quota ? undefined : readiness,
@@ -1593,7 +1602,6 @@ export const questsRouter = createTRPCRouter({
         };
       }
 
-      // Handle immidiate consequences first
       const finalNotifications = [...toastMessages, ...claim.postNotifications];
       if (claim.rewardChoicePending) {
         finalNotifications.push(REWARD_CHOICE_READY_MESSAGE);
@@ -1914,7 +1922,7 @@ export const questsRouter = createTRPCRouter({
         return errorResponse("Target user not found");
       }
       // Roles that can only edit themselves
-      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+      if (isRestrictedToSelf(user.role, user.userId, input.userId)) {
         return errorResponse("You can only delete quests from your own profile");
       }
       // Derives
@@ -2148,8 +2156,7 @@ const petTaskReturnBlockMessage = (
     return "This contract attempt changed. Return your companion without rewards.";
   if (owner.status !== "AWAKE" || owner.battleId)
     return "Wake up and finish combat before collecting task rewards.";
-  if (task.finishesAt > Date.now())
-    return "Your companion is still working on this task.";
+  if (task.finishesAt > Date.now()) return PET_TASK_IN_PROGRESS_MESSAGE;
   return null;
 };
 

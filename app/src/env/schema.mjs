@@ -116,6 +116,23 @@ export const serverSchema = z.object({
    * moves a balance.
    */
   STORE_SANDBOX_USER_IDS: z.string().optional(),
+  // RevenueCat secret API key, used to delete a deleted account's subscriber record.
+  REVENUECAT_SECRET_API_KEY: z.string().optional(),
+  // Bearer secret every cron request must present (src/server/utils/cron.ts).
+  CRON_SECRET: z.string().optional(),
+  // Native account deletion is refused unless this is "true".
+  NATIVE_ACCOUNT_DELETION_ENABLED: z.string().optional(),
+  // Sign in with Apple credentials, used to revoke a deleted account's Apple tokens.
+  APPLE_SIGN_IN_CLIENT_ID: z.string().optional(),
+  APPLE_SIGN_IN_SERVICES_ID: z.string().optional(),
+  APPLE_SIGN_IN_TEAM_ID: z.string().optional(),
+  APPLE_SIGN_IN_KEY_ID: z.string().optional(),
+  APPLE_SIGN_IN_PRIVATE_KEY: z.string().optional(),
+  // GitHub webhook signing secret and the token support uses to open issues.
+  GITHUB_WEBHOOK_SECRET: z.string().optional(),
+  GITHUB_ISSUE_TOKEN: z.string().optional(),
+  // PayPal REST API secret, paired with NEXT_PUBLIC_PAYPAL_CLIENT_ID.
+  PAYPAL_CLIENT_SECRET: z.string().optional(),
 });
 
 /**
@@ -203,6 +220,19 @@ export const serverEnv = {
   REVENUECAT_IOS_APP_ID: process.env.REVENUECAT_IOS_APP_ID,
   REVENUECAT_ANDROID_APP_ID: process.env.REVENUECAT_ANDROID_APP_ID,
   STORE_SANDBOX_USER_IDS: process.env.STORE_SANDBOX_USER_IDS,
+  REVENUECAT_SECRET_API_KEY: process.env.REVENUECAT_SECRET_API_KEY,
+  CRON_SECRET: process.env.CRON_SECRET,
+  NATIVE_ACCOUNT_DELETION_ENABLED: process.env.NATIVE_ACCOUNT_DELETION_ENABLED,
+  // Sign in with Apple
+  APPLE_SIGN_IN_CLIENT_ID: process.env.APPLE_SIGN_IN_CLIENT_ID,
+  APPLE_SIGN_IN_SERVICES_ID: process.env.APPLE_SIGN_IN_SERVICES_ID,
+  APPLE_SIGN_IN_TEAM_ID: process.env.APPLE_SIGN_IN_TEAM_ID,
+  APPLE_SIGN_IN_KEY_ID: process.env.APPLE_SIGN_IN_KEY_ID,
+  APPLE_SIGN_IN_PRIVATE_KEY: process.env.APPLE_SIGN_IN_PRIVATE_KEY,
+  // GitHub
+  GITHUB_WEBHOOK_SECRET: process.env.GITHUB_WEBHOOK_SECRET,
+  GITHUB_ISSUE_TOKEN: process.env.GITHUB_ISSUE_TOKEN,
+  PAYPAL_CLIENT_SECRET: process.env.PAYPAL_CLIENT_SECRET,
 };
 
 /**

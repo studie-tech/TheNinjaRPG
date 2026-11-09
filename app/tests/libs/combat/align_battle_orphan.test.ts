@@ -1,7 +1,7 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { alignBattle } from "@/libs/combat/turn";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
 import type { BattleUserState } from "@/libs/combat/types";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 /**
  * alignBattle must remove masterless summons BEFORE it selects the next actor.
@@ -55,8 +55,7 @@ describe("alignBattle orphan cleanup ordering", () => {
   });
 
   it("cleans up orphans even when the round does not progress", () => {
-    // Previously the splice was gated on progressRound, so a summon orphaned
-    // mid-round lingered until the next round boundary.
+    // A summon orphaned mid-round is removed immediately, not at the next round boundary.
     const battle = makeCompleteBattle({
       usersState: scenario(),
       activeUserId: "enemy",

@@ -63,8 +63,9 @@ make dev-call USER_KEY=hero ENDPOINT=<router.procedure> INPUT_FILE=/tmp/input.js
 ```
 
 Paths are absolute or relative to the worktree root. The helper uses dotenv-parsed
-`AI_TEST_USER_BROKER_TOKEN`, validates requests with the existing broker schemas and
-calls the existing broker/tRPC caller. A missing token must be configured in the real
+`AI_TEST_USER_BROKER_TOKEN`, validates requests with the broker schemas
+(`@/validators/ai-test-user`) and calls the AI test-user broker endpoint
+(`/api/ai-test-user`). A missing token must be configured in the real
 env file (`realpath app/.env`); do not paste secrets into command lines. A shared `.env`
 symlink affects every linked worktree; replace its link with a real file for a separate
 configuration/database.

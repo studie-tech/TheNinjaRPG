@@ -3,13 +3,12 @@
 //! This module runs authoritative game logic on the SpacetimeDB server.
 //! All game state changes happen here - clients only send actions and receive state updates.
 //!
-//! COST OPTIMIZATIONS IMPLEMENTED:
+//! Bandwidth and compute design:
 //! 1. Separate EnemySpawn table for static path data (sent once, not on every update)
 //! 2. Client-side projectile interpolation (only spawn/delete, no progress updates)
-//! 3. Increased tick rate from 100ms to 150ms
-//! 4. Definition hash in completed_run instead of full JSON
-//! 5. B-Tree indexes on all subscription filter columns (session_id, ninjarpg_user_id)
-//! 6. Optimized reducers using index-based filtered iterators instead of sequential scans
+//! 3. Definition hash in completed_run instead of full JSON
+//! 4. B-Tree indexes on all subscription filter columns (session_id, ninjarpg_user_id)
+//! 5. Reducers use index-based filtered iterators instead of sequential scans
 
 use spacetimedb::{
     reducer, table, ReducerContext, ScheduleAt, SpacetimeType, Table, Timestamp,
@@ -23,9 +22,7 @@ use serde::{Deserialize, Serialize};
 // Constants
 // ============================================
 
-// COST OPTIMIZATION: Increased from 100ms (10 TPS) to 150ms (~6.7 TPS)
-// Combined with client-side interpolation, this maintains smooth visuals
-// while reducing compute costs by ~33%.
+// Server tick: 100ms (10 TPS).
 const GAME_TICK_MS: u64 = 100;
 const PROJECTILE_SPEED: f64 = 5.0; // tiles/sec - must match TD_PROJECTILE_SPEED in constants.ts
 const HEX_ASPECT_RATIO: f64 = 0.866;
@@ -211,8 +208,7 @@ pub struct EnemySpawn {
     pub path: Vec<HexPosition>,
 }
 
-/// Active enemies in a game session (volatile data only)
-/// COST OPTIMIZATION: Path removed - stored in EnemySpawn table (sent once)
+/// Active enemies in a game session (volatile data only; the path lives in EnemySpawn)
 #[table(accessor = enemy, public)]
 pub struct Enemy {
     #[primary_key]
@@ -234,8 +230,7 @@ pub struct Enemy {
 }
 
 /// Active projectiles in a game session
-/// COST OPTIMIZATION: Added spawned_at, progress computed client-side
-/// Server only sends insert/delete, reducing projectile bandwidth by ~90%
+/// Clients compute flight progress from spawned_at; the server only inserts and deletes rows.
 #[table(accessor = projectile, public)]
 pub struct Projectile {
     #[primary_key]
@@ -1452,9 +1447,7 @@ pub fn game_loop(ctx: &ReducerContext, arg: GameLoopSchedule) {
                                 });
                             } else {
                                 // Update movement progress
-                                // NOTE: We removed the threshold optimization because SpacetimeDB
-                                // doesn't support "silent" updates - every update is broadcast.
-                                // The main bandwidth savings come from removing path from Enemy table.
+                                // Every update is broadcast: SpacetimeDB has no silent updates.
                                 let direction = calculate_direction(enemy.col, enemy.row, next_waypoint.col, next_waypoint.row);
                                 ctx.db.enemy().id().update(Enemy {
                                     movement_progress: new_progress,

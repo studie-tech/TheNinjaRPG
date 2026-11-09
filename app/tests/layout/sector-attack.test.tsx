@@ -1,10 +1,10 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import type { VillageAlliance } from "@/drizzle/schema";
 import * as Image from "@/layout/Image";
 import * as modal from "@/layout/Modal";
-import { SorroundingUsers } from "@/layout/Sector";
+import { SorroundingUsers } from "@/layout/SorroundingUsers";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { travelActionAvailability } from "@/libs/rendering/scenes/travelActors";
 import type { SectorUser } from "@/libs/sector-map/world-types";
@@ -181,9 +181,15 @@ describe("sector attack controls", () => {
 });
 
 it("closes scouting during travel and restores it after arrival", () => {
-  const scoutingModal = vi.spyOn(modal, "default").mockImplementation(({ children, isOpen, title }) => isOpen ? (
-    <div role="dialog" aria-label={title}>{children}</div>
-  ) : null);
+  const scoutingModal = vi
+    .spyOn(modal, "default")
+    .mockImplementation(({ children, isOpen, title }) =>
+      isOpen ? (
+        <div role="dialog" aria-label={title}>
+          {children}
+        </div>
+      ) : null,
+    );
   const props = {
     userData: { userId: "viewer", status: "AWAKE" } as NonNullable<UserWithRelations>,
     users: [],
@@ -200,11 +206,15 @@ it("closes scouting during travel and restores it after arrival", () => {
   };
   const view = render(<SorroundingUsers {...props} />);
   expect(scoutingModal.mock.calls.at(-1)?.[0].isOpen).toBe(true);
-  view.rerender(<SorroundingUsers {...props} userData={{ ...props.userData, status: "TRAVEL" }} />);
+  view.rerender(
+    <SorroundingUsers {...props} userData={{ ...props.userData, status: "TRAVEL" }} />,
+  );
   expect(scoutingModal.mock.calls.at(-1)?.[0].isOpen).toBe(false);
   expect(view.queryByRole("dialog")).toBeNull();
   view.rerender(<SorroundingUsers {...props} />);
   expect(scoutingModal.mock.calls.at(-1)?.[0].isOpen).toBe(true);
-  expect(view.getByRole("dialog", { name: "Scouting. Your position: [13, 13]" })).toBeDefined();
+  expect(
+    view.getByRole("dialog", { name: "Scouting. Your position: [13, 13]" }),
+  ).toBeDefined();
   expect(props.setIsOpen).not.toHaveBeenCalled();
 });

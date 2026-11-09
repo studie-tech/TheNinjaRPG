@@ -20,7 +20,10 @@ describe("discordSnowflakeCreatedAt", () => {
 
   it("round-trips a snowflake built from a known date", () => {
     const createdAt = new Date("2026-10-01T12:00:00.000Z");
-    const snowflake = ((BigInt(createdAt.getTime()) - 1_420_070_400_000n) << 22n).toString();
+    const snowflake = (
+      (BigInt(createdAt.getTime()) - 1_420_070_400_000n) <<
+      22n
+    ).toString();
     expect(discordSnowflakeCreatedAt(snowflake).getTime()).toBe(createdAt.getTime());
   });
 
@@ -67,11 +70,12 @@ describe("result copy", () => {
       expect(isDiscordLinkResult(result)).toBe(true);
     }
     expect(isDiscordLinkResult("hacked")).toBe(false);
-    expect(describeDiscordLinkResult("discord_full", { hint: "T***r" }).description).toContain(
-      "T***r",
-    );
-    expect(describeDiscordLinkResult("cooldown", { until: "2026-11-01T00:00:00.000Z" }).description).toContain(
-      "01 Nov 2026",
-    );
+    expect(
+      describeDiscordLinkResult("discord_full", { hint: "T***r" }).description,
+    ).toContain("T***r");
+    expect(
+      describeDiscordLinkResult("cooldown", { until: "2026-11-01T00:00:00.000Z" })
+        .description,
+    ).toContain("01 Nov 2026");
   });
 });

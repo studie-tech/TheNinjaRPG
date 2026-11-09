@@ -1,10 +1,10 @@
-import {
-  trackerQuest as makeQuest,
-  trackerUser as makeUser,
-  trackerGoalValue as goalValue,
-} from "../../setup/quest";
 import { describe, expect, it } from "bun:test";
 import { getJutsuLearnedTrackerTasks, getNewTrackers } from "@/libs/quest";
+import {
+  trackerGoalValue as goalValue,
+  trackerQuest as makeQuest,
+  trackerUser as makeUser,
+} from "../../setup/quest";
 
 const masteredObjective = (id: string, value = 5) => ({
   id,

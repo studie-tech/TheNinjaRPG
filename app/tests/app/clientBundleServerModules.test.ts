@@ -1,6 +1,6 @@
+import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
-import { describe, expect, it } from "bun:test";
 
 /**
  * Everything a "use client" module imports ships to the browser and runs there, so a
@@ -21,10 +21,18 @@ import { describe, expect, it } from "bun:test";
 const APP_ROOT = join(import.meta.dirname, "../..");
 const SOURCE_ROOT = join(APP_ROOT, "src");
 
-const SERVER_ONLY_FILES = ["drizzle/schema.ts", "src/server/db.ts", "src/env/server.mjs"];
+const SERVER_ONLY_FILES = [
+  "drizzle/schema.ts",
+  "src/server/db.ts",
+  "src/env/server.mjs",
+];
 const SERVER_ONLY_PACKAGES =
   /^(?:drizzle-orm(?:\/.*)?|drizzle-zod|@planetscale\/database|react-dom\/server(?:\..*)?)$/;
-const RUNTIME_IMPORT_KINDS = new Set(["import-statement", "dynamic-import", "require-call"]);
+const RUNTIME_IMPORT_KINDS = new Set([
+  "import-statement",
+  "dynamic-import",
+  "require-call",
+]);
 const CODE_FILE = /\.[cm]?[jt]sx?$/;
 
 /** Next bundles this for every page without a "use client" directive. */
@@ -53,7 +61,9 @@ const sourceFiles = (directory: string): string[] =>
   });
 
 const isClientModule = (file: string) =>
-  /^(?:\s|\/\/[^\n]*\n|\/\*(?:[^*]|\*(?!\/))*\*\/)*["']use client["']/.test(readFileSync(file, "utf8"));
+  /^(?:\s|\/\/[^\n]*\n|\/\*(?:[^*]|\*(?!\/))*\*\/)*["']use client["']/.test(
+    readFileSync(file, "utf8"),
+  );
 
 const runtimeImports = (file: string) =>
   transpiler
@@ -71,7 +81,9 @@ const resolveFrom = (file: string, specifier: string) => {
 
 /** Each server-only import reachable from `entries` and not `allowed`, as an import chain. */
 const findServerOnlyImports = (entries: string[], allowed?: RegExp) => {
-  const cameFrom = new Map<string, string | null>(entries.map((entry) => [entry, null]));
+  const cameFrom = new Map<string, string | null>(
+    entries.map((entry) => [entry, null]),
+  );
   const chain = (file: string) => {
     const steps: string[] = [];
     for (let at: string | null | undefined = file; at; at = cameFrom.get(at)) {
@@ -86,7 +98,10 @@ const findServerOnlyImports = (entries: string[], allowed?: RegExp) => {
     const file = queue.shift() as string;
     for (const specifier of runtimeImports(file)) {
       const target = resolveFrom(file, specifier);
-      const local = target?.startsWith(APP_ROOT) && !target.includes("/node_modules/") ? target : undefined;
+      const local =
+        target?.startsWith(APP_ROOT) && !target.includes("/node_modules/")
+          ? target
+          : undefined;
       const serverOnly = SERVER_ONLY_PACKAGES.test(specifier)
         ? specifier
         : SERVER_ONLY_FILES.find((path) => local === join(APP_ROOT, path));
@@ -112,14 +127,19 @@ describe("client bundle", () => {
 
     expect(entries.length).toBeGreaterThan(100);
     for (const editor of editors) expect(entries).toContain(editor);
-    expect(findServerOnlyImports(entries.filter((entry) => !editors.includes(entry)))).toEqual([]);
+    expect(
+      findServerOnlyImports(entries.filter((entry) => !editors.includes(entry))),
+    ).toEqual([]);
     expect(findServerOnlyImports(editors, SCHEMA_SUPPORT)).toEqual([]);
   });
 });
 
 type BunRuntime = {
   Transpiler: new () => {
-    scanImports: (code: string, loader: "ts" | "tsx") => { kind: string; path: string }[];
+    scanImports: (
+      code: string,
+      loader: "ts" | "tsx",
+    ) => { kind: string; path: string }[];
   };
   resolveSync: (specifier: string, from: string) => string;
 };

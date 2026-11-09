@@ -1,6 +1,7 @@
+import { RANKED_DECAY_INACTIVE_DAYS } from "@/drizzle/constants";
 import { lockWithDailyTimer, runClaimedCron } from "@/libs/gamesettings";
 import {
-  executeRowsForGET,
+  decayInactiveLegendRankedLp,
   listRankedSeasonForGET,
   updateUserDataForGET,
 } from "@/queries/pvprank";
@@ -29,11 +30,11 @@ export async function GET(request: Request) {
     if (endedSeason) {
       await endRankedSeason(drizzleDB, endedSeason.id);
     } else {
-      // Apply LP decay only to Legend rank users (900+ LP) who haven't had ranked matches in 5 days
-      const fiveDaysAgo = new Date();
-      fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+      // Apply LP decay only to Legend rank users who haven't had recent ranked matches
+      const inactiveSince = new Date();
+      inactiveSince.setDate(inactiveSince.getDate() - RANKED_DECAY_INACTIVE_DAYS);
 
-      await executeRowsForGET(drizzleDB, fiveDaysAgo);
+      await decayInactiveLegendRankedLp(drizzleDB, inactiveSince);
 
       // Reset streaks for all users (not just Legend/Sannin)
       await updateUserDataForGET(drizzleDB);

@@ -442,9 +442,13 @@ export const removeBackgroundToBuffer = async (image: Buffer, signal?: AbortSign
 };
 
 /**
- * Upload an image from OpenAI to UploadThing
- * @param img - The image to upload
- * @param generationId - The generation ID
+ * Resize each image in an OpenAI images response to fit width × height, encode it as
+ * WebP and upload it to UploadThing as `<prefix>-<idx>-<i>.webp`.
+ * @param config.prefix - Asset namespace included in the filename
+ * @param config.img - The OpenAI images response (b64_json data)
+ * @param config.idx - Identifier shared by this response's files
+ * @param config.width - Maximum width of the stored images
+ * @param config.height - Maximum height of the stored images
  * @returns The uploaded files
  */
 export const uploadImageFromOpenAI = async (config: {

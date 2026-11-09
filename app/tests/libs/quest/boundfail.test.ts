@@ -11,11 +11,7 @@ import { trackerGoal as goalOf, trackerQuest, trackerUser } from "../../setup/qu
 // ---------------------------------------------------------------------------
 
 /** Creates one objective in a linear quest chain, optionally bound to a placement. */
-const boundObjective = (
-  id: string,
-  next: string | undefined,
-  placementId?: string,
-) =>
+const boundObjective = (id: string, next: string | undefined, placementId?: string) =>
   ({
     id,
     task: "dialog" as const,
@@ -40,9 +36,7 @@ const makeUser = (
 
 /** Returns whether tracker evaluation emitted a failure consequence for the quest. */
 const questFailed = (result: ReturnType<typeof getNewTrackers>, questId: string) =>
-  result.consequences.some(
-    (c) => c.type === "fail_quest" && c.ids.includes(questId),
-  );
+  result.consequences.some((c) => c.type === "fail_quest" && c.ids.includes(questId));
 
 describe("getNewTrackers — bound-placement check respects consecutive reachability", () => {
   it("does NOT fail the quest when an unreached objective's placement was deleted", () => {
@@ -91,7 +85,7 @@ describe("getNewTrackers — bound-placement check respects consecutive reachabi
 
   it("STILL fails the quest when the reachable start objective's placement was deleted", () => {
     // Control: the start objective is always reachable, so its deleted placement
-    // must still auto-fail — proving the fix didn't disable the feature.
+    // must still auto-fail.
     const quest = makeConsecutiveQuest("q1", [
       boundObjective("o1", "o2", "p1"), // DELETED and reachable (start)
       boundObjective("o2", undefined, "p2"),
@@ -107,9 +101,7 @@ describe("getNewTrackers — bound-placement check respects consecutive reachabi
   });
 
   it("freezes a reachable objective while its placement is deactivated", () => {
-    const quest = makeConsecutiveQuest("q1", [
-      boundObjective("o1", undefined, "p1"),
-    ]);
+    const quest = makeConsecutiveQuest("q1", [boundObjective("o1", undefined, "p1")]);
     const result = getNewTrackers(
       makeUser(quest, [{ id: "o1", done: false }]),
       [],

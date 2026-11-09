@@ -3,15 +3,25 @@ import { aiProfile, battle, userData } from "@/drizzle/schema";
 import { getNewTrackers } from "@/libs/quest";
 import { handleQuestConsequences } from "@/server/utils/questConsequences";
 import { InstantStartBattleObjective } from "@/validators/objectives";
-import { insertUsers, insertDefaultAiProfile } from "../../../../setup/factories";
+import { insertDefaultAiProfile, insertUsers } from "../../../../setup/factories";
 import { trackerQuest, trackerUser } from "../../../../setup/quest";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../../../../setup/testDatabase";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../../setup/testDatabase";
 
 describeWithDatabase("quest battle rejection feedback", () => {
   beforeEach(async () => {
     await resetTables(battle, userData, aiProfile);
     await insertUsers([
-      { userId: "hero", status: "AWAKE", rank: "JONIN", level: 50, experience: 20000000 },
+      {
+        userId: "hero",
+        status: "AWAKE",
+        rank: "JONIN",
+        level: 50,
+        experience: 20000000,
+      },
       { userId: "template", isAi: true },
     ]);
     await insertDefaultAiProfile({ userId: "template" });
@@ -27,7 +37,8 @@ describeWithDatabase("quest battle rejection feedback", () => {
         where: (u, { eq }) => eq(u.userId, "hero"),
       });
       const objective = InstantStartBattleObjective.parse({
-        id: "fight", task: "start_battle",
+        id: "fight",
+        task: "start_battle",
         opponentAIs: [{ ids: ["template"], number: 1 }],
         allyAIs: [{ ids: [allyId], number }],
       });
@@ -41,11 +52,16 @@ describeWithDatabase("quest battle rejection feedback", () => {
       user.questData = tracking.trackers;
 
       const result = await handleQuestConsequences(
-        client, user, tracking.consequences, tracking.notifications,
+        client,
+        user,
+        tracking.consequences,
+        tracking.notifications,
       );
 
       expect(result).toEqual({
-        notifications: ["Attacking 1 target for Allies.", message], claimed: true, battleAttempted: true,
+        notifications: ["Attacking 1 target for Allies.", message],
+        claimed: true,
+        battleAttempted: true,
       });
       expect(await client.query.battle.findMany()).toHaveLength(0);
       const saved = await client.query.userData.findFirst({

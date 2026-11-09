@@ -8,8 +8,7 @@ import { DAY_S } from "@/utils/time";
 
 describe("Occupation change cooldown", () => {
   const signupAt = new Date("2026-01-01T00:00:00Z");
-  const after = (days: number) =>
-    new Date(signupAt.getTime() + days * DAY_S * 1000);
+  const after = (days: number) => new Date(signupAt.getTime() + days * DAY_S * 1000);
 
   it("ends a whole number of days after signup", () => {
     expect(getOccupationChangeAvailableAt(signupAt)).toEqual(

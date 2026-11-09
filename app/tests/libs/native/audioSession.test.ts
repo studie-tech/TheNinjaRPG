@@ -33,7 +33,10 @@ describe("native soundtrack metadata", () => {
         },
       },
     });
-    const session: { metadata: MediaMetadataInit | null; playbackState: string } = { metadata: null, playbackState: "none" };
+    const session: { metadata: MediaMetadataInit | null; playbackState: string } = {
+      metadata: null,
+      playbackState: "none",
+    };
     setGlobal("navigator", { mediaSession: session });
     setGlobal("MediaMetadata", function (info: MediaMetadataInit) {
       return info;
@@ -68,7 +71,9 @@ describe("native soundtrack metadata", () => {
     const handler = vi.fn();
     const remove = onRemoteCommand(handler);
     const play = setActionHandler.mock.calls.find(([action]) => action === "play")?.[1];
-    const pause = setActionHandler.mock.calls.find(([action]) => action === "pause")?.[1];
+    const pause = setActionHandler.mock.calls.find(
+      ([action]) => action === "pause",
+    )?.[1];
     play();
     pause();
     expect(handler.mock.calls).toEqual([["play"], ["pause"]]);

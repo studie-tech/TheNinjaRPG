@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BanStates, TimeUnits } from "@/drizzle/constants";
+import { TimeUnits } from "@/drizzle/constants";
 import type { UserCard } from "@/queries/userColumns";
 
 export const systems = [
@@ -28,11 +28,6 @@ export const reportCommentSchema = z.object({
 
 export type ReportCommentSchema = z.infer<typeof reportCommentSchema>;
 
-export const reportTimeoutSchema = z.object({
-  comment: z.string().min(10).max(5000),
-  object_id: z.string(),
-});
-
 export const userReviewSchema = z.object({
   staffUserId: z.string(),
   review: z.string(),
@@ -45,15 +40,6 @@ export type AdditionalContext = UserCard & {
   content: string;
   createdAt: Date;
 };
-
-export const reportFilteringSchema = z.object({
-  reportedUser: z.string().optional(),
-  reporterUser: z.string().optional(),
-  status: z.enum(BanStates).optional(),
-  startDate: z.date().optional(),
-  endDate: z.date().optional(),
-  system: z.string().optional(),
-});
 
 export const modBotPerformanceSchema = z.object({
   days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30),

@@ -17,7 +17,7 @@ import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
 import { UserContextProvider, useUserData } from "@/utils/UserContext";
 import { actualUserContext } from "../setup/preload";
-import { testApi, TrpcTestProviders } from "../setup/trpc";
+import { TrpcTestProviders, testApi } from "../setup/trpc";
 
 const clients: QueryClient[] = [];
 let userId = "player";
@@ -289,7 +289,11 @@ it("settles failed initial profiles without rejecting the pending event handler"
 
 function mount(
   options: {
-    mute?: { chatMuted: boolean; mutedConversationIds: string[]; unmutedTavernIds: string[] };
+    mute?: {
+      chatMuted: boolean;
+      mutedConversationIds: string[];
+      unmutedTavernIds: string[];
+    };
     initialCount?: number;
     deferredRefresh?: boolean;
     refreshCounts?: number[];
@@ -324,7 +328,8 @@ function mount(
       clanId: "clan",
       villageId: "village",
       chatMuted: false,
-      mutedConversationIds: [], unmutedTavernIds: [],
+      mutedConversationIds: [],
+      unmutedTavernIds: [],
       ...options.mute,
     },
     notifications: count

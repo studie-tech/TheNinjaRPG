@@ -19,7 +19,7 @@ import {
   makeCompleteBattle,
   makeEffect,
   makeTag,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const target = () => makeBattleUser("defender");
 const newCast = {
@@ -58,11 +58,15 @@ describe("applyPreventTag", () => {
 
   it("keeps an ongoing prevent running on a failed roll", () => {
     spyOn(Math, "random").mockReturnValue(0.99);
-    const effect = makeEffect("stunprevent", { power: 50, rounds: 3 }, {
-      ...newCast,
-      isNew: false,
-      castThisRound: false,
-    });
+    const effect = makeEffect(
+      "stunprevent",
+      { power: 50, rounds: 3 },
+      {
+        ...newCast,
+        isNew: false,
+        castThisRound: false,
+      },
+    );
     expect(applyPreventTag(effect as never, [], target())).toBeUndefined();
     expect(effect.rounds).toBe(3);
   });
@@ -89,12 +93,20 @@ describe("temporalShift", () => {
     ["timecompression", "time compression"],
     ["timedilation", "time dilation"],
   ] as const)("rejects an overlapping %s", (type, label) => {
-    const active = makeEffect(type, { power: 100, rounds: 3 }, {
-      ...newCast,
-      isNew: false,
-      castThisRound: false,
-    });
-    const effect = makeEffect(type, { power: 100, rounds: 3 }, { ...newCast, id: "new" });
+    const active = makeEffect(
+      type,
+      { power: 100, rounds: 3 },
+      {
+        ...newCast,
+        isNew: false,
+        castThisRound: false,
+      },
+    );
+    const effect = makeEffect(
+      type,
+      { power: 100, rounds: 3 },
+      { ...newCast, id: "new" },
+    );
     expect(temporalShift(effect as never, [active, effect], target())?.txt).toBe(
       `defender already has ${label} active`,
     );

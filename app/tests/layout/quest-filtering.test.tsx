@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import * as useSize from "@radix-ui/react-use-size";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import {
   buildFilter,
@@ -8,17 +15,18 @@ import {
   defineFilteringSchema,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
-import { makeQuestFilteringSchema } from "@/layout/QuestFiltering";
+import { QUEST_FILTERING_SCHEMA } from "@/layout/QuestFiltering";
 import { questFilteringSchema } from "@/validators/quest";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
-// The app's React Compiler keeps this stable; without it a schema per render never settles.
-const schema = makeQuestFilteringSchema();
+const schema = QUEST_FILTERING_SCHEMA;
 let state: ReturnType<typeof useContentFiltering<typeof schema.fields>>;
 
 const Harness = () => {
   state = useContentFiltering(schema);
-  return <ContentFiltering schema={schema} state={state} triggerButtonId="filter-quests" />;
+  return (
+    <ContentFiltering schema={schema} state={state} triggerButtonId="filter-quests" />
+  );
 };
 
 /** Opens the filter popover and returns the User Level spinbutton. */

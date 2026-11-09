@@ -6,11 +6,15 @@ const url = "https://utfs.io/f/source.webp";
 const served = "https://uploadthing.b-cdn.net/f/source.webp";
 const grid = { columns: 2, rows: 1, frameCount: 2 };
 const png = (cell: number) =>
-  sharp({ create: { width: cell * 2, height: cell, channels: 4, background: "#ff0000" } })
+  sharp({
+    create: { width: cell * 2, height: cell, channels: 4, background: "#ff0000" },
+  })
     .png()
     .toBuffer();
 const respond = (body: Buffer) =>
-  vi.spyOn(globalThis, "fetch").mockImplementation((async () => new Response(new Uint8Array(body))) as never);
+  vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation((async () => new Response(new Uint8Array(body))) as never);
 
 let uploaded = 0;
 const upload = async () => `https://uploadthing.b-cdn.net/f/key-${++uploaded}`;
@@ -24,7 +28,10 @@ afterEach(() => {
 describe("prepareSpriteSheetUrls", () => {
   it("never fetches a host outside our CDN", async () => {
     const fetched = vi.spyOn(globalThis, "fetch");
-    const result = await prepareSpriteSheetUrls({ ...grid, url: "http://169.254.169.254/latest" });
+    const result = await prepareSpriteSheetUrls({
+      ...grid,
+      url: "http://169.254.169.254/latest",
+    });
     expect(result.success).toBe(false);
     expect(fetched).not.toHaveBeenCalled();
   });
@@ -44,7 +51,9 @@ describe("prepareSpriteSheetUrls", () => {
 
   it("reports an unreadable image", async () => {
     respond(Buffer.from("not an image"));
-    expect((await prepareSpriteSheetUrls({ ...grid, url }, upload)).success).toBe(false);
+    expect((await prepareSpriteSheetUrls({ ...grid, url }, upload)).success).toBe(
+      false,
+    );
   });
 
   it("uses a 128-pixel sheet for both sizes without uploading", async () => {
@@ -82,6 +91,8 @@ describe("prepareSpriteSheetUrls", () => {
     const failing = async () => {
       throw new Error("storage down");
     };
-    expect((await prepareSpriteSheetUrls({ ...grid, url }, failing)).success).toBe(false);
+    expect((await prepareSpriteSheetUrls({ ...grid, url }, failing)).success).toBe(
+      false,
+    );
   });
 });

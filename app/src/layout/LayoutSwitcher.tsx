@@ -3,11 +3,11 @@
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { useEffect, useState } from "react";
+import ReactDOM from "react-dom";
 import { GameLayout } from "@/components/layout/GameLayout";
 import { PanelPublicLayout } from "@/components/layout/PanelPublicLayout";
 import PixelPublicLayout from "@/components/layout/PixelPublicLayout";
-import ParticleProvider from "@/components/ui/particles";
-import { safeLocalStorageGetItem } from "@/hooks/localstorage";
+import { LayoutParticles } from "@/components/layout/shared/LayoutParticles";
 import { applyGameLayout } from "@/hooks/useGameLayout";
 import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import {
@@ -19,6 +19,7 @@ import {
 import type { WallpaperVariant } from "@/libs/wallpaperExperiment";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
 import { usePublicPathname } from "@/utils/routing";
+import { safeLocalStorageGetItem } from "@/utils/storage";
 import { useUserInfo } from "@/utils/UserContext";
 
 /**
@@ -51,6 +52,9 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   initialLayout,
   wallpaper,
 }) => {
+  // Error reporting and consent load in every frame, signed in or not.
+  ReactDOM.prefetchDNS("https://o4507797256601600.ingest.de.sentry.io");
+  ReactDOM.prefetchDNS("https://consentcdn.cookiebot.com");
   const pathname = usePublicPathname();
   const { isClerkLoaded, isSignedIn } = useUserInfo();
   // Explicit choices replace only the presentation; remounting the root shell would
@@ -60,9 +64,9 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   // The server picks the layout from the cookie; localStorage is only a recovery source
   // for when that cookie is lost (Safari caps JS-set cookies at 7 days, so it expires
   // for anyone who visits less often than weekly). Swapping the shell here after
-  // hydration replaced the entire viewport in one frame, which is among the largest
-  // layout-shift events on the site. The stored preference is re-synced to the cookie so
-  // the *next* request renders the right shell, and the current render is left alone.
+  // hydration would replace the entire viewport in one frame, a large layout shift, so
+  // the current render is left alone and the stored preference is only re-synced to the
+  // cookie for the *next* request.
   // When the stored choice differs from what the server rendered, pages the router has
   // already fetched or prefetched carry the wrong shell too, and navigating to them would
   // flip between layouts; a single refresh re-renders under the repaired cookie.
@@ -125,7 +129,7 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
       wallpaper={wallpaper}
     >
       {content}
-      <ParticleProvider />
+      <LayoutParticles />
     </LayoutContextProvider>
   );
 };

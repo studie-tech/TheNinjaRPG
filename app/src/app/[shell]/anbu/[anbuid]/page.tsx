@@ -90,8 +90,13 @@ export default function ANBUDetails(props: { params: Promise<{ anbuid: string }>
   // Loading states
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!access) return <Loader explanation="Accessing ANBU" />;
+  if (userData.isOutlaw)
+    return (
+      <ContentBox title="ANBU" defaultBackHref="/village">
+        Unlikely to find outlaw ANBU.
+      </ContentBox>
+    );
   if (!squad) return <Loader explanation="Loading ANBU squad" />;
-  if (userData.isOutlaw) return <Loader explanation="Unlikely to find outlaw ANBU" />;
   if (userData.isBanned) return <BanInfo />;
 
   // Derived — village-gate kage/elder so cross-village staff (canStaffEdit) do not
@@ -675,12 +680,6 @@ const AnbuMembers: React.FC<AnbuMembersProps> = (props) => {
   );
 };
 
-/**
- * Renders the Anbu Orders component.
- *
- * @param props - The component props.
- * @returns The rendered component.
- */
 interface AnbuOrdersProps {
   squadId: string;
   title: string;
@@ -741,13 +740,6 @@ const AnbuOrders: React.FC<AnbuOrdersProps> = (props) => {
   );
 };
 
-/**
- * Renders a component that displays ANBU requests for a squad.
- *
- * @component
- * @param {AnbuRequestsProps} props - The component props.
- * @returns {React.ReactNode} The rendered component.
- */
 interface AnbuRequestsProps {
   squadId: string;
   isLeader: boolean;
@@ -760,6 +752,7 @@ interface AnbuRequestsProps {
   canStaffEdit: boolean;
 }
 
+/** ANBU join requests for a squad. */
 const AnbuRequests: React.FC<AnbuRequestsProps> = (props) => {
   // Destructure
   const {

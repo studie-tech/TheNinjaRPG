@@ -1,35 +1,39 @@
-import { dashboardContentGroups, dashboardContentPrioritySchema } from "@/validators/dashboard";
-import { canStartStatTraining } from "@/libs/train";
-import { isWarMissionAvailable } from "@/libs/quest/missionHall";
 import { describe, expect, it } from "bun:test";
 import {
+  CombatStatNames,
+  getUserCaps,
   MAP_WAKE_ISLAND_SECTOR,
   MAX_DAILY_TRAININGS,
   MAX_EXPERIENCE_LEVEL,
   MAX_PLAYER_LEVEL,
-  CombatStatNames,
+  type UserStatName,
   UserStatNames,
   WAR_MISSIONS_PER_DAY,
-  getUserCaps,
 } from "@/drizzle/constants";
+import { calcLevelRequirements } from "@/libs/profile";
+import type { DashboardContentSummary } from "@/libs/profileDashboard";
 import {
+  buildDashboardCatalogue,
   condenseDashboardMissionContent,
   dashboardContentActionLabel,
   dashboardContentHref,
-  buildDashboardCatalogue,
-  dashboardTrainingAction,
   dashboardLevelPercent,
   dashboardLevelProgress,
   dashboardRaidAction,
+  dashboardTrainingAction,
   describeOccupationLine,
+  getDashboardContentPriority,
+  orderDashboardContent,
   raidContinueHref,
   selectDashboardHighlights,
-  orderDashboardContent,
-  getDashboardContentPriority,
 } from "@/libs/profileDashboard";
+import { isWarMissionAvailable } from "@/libs/quest/missionHall";
+import { canStartStatTraining } from "@/libs/train";
+import {
+  dashboardContentGroups,
+  dashboardContentPrioritySchema,
+} from "@/validators/dashboard";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
-import type { DashboardContentSummary } from "@/libs/profileDashboard";
-import { calcLevelRequirements } from "@/libs/profile";
 import { huntingContract } from "../setup/hunting";
 
 const availableDailyCounts = {
@@ -170,12 +174,9 @@ describe("selectDashboardHighlights", () => {
         }),
       ];
 
-      expect(selectDashboardHighlights(content, 4, priority).map((entry) => entry.questType)).toEqual([
-        "mission",
-        "story",
-        "event",
-        "errand",
-      ]);
+      expect(
+        selectDashboardHighlights(content, 4, priority).map((entry) => entry.questType),
+      ).toEqual(["mission", "story", "event", "errand"]);
     },
   );
 
@@ -222,12 +223,16 @@ describe("dashboard content links", () => {
       destination: "/globalanbuhq",
       travelSector: MAP_WAKE_ISLAND_SECTOR,
     });
-    expect(dashboardContentHref(entry)).toBe(`/travel?sector=${MAP_WAKE_ISLAND_SECTOR}`);
+    expect(dashboardContentHref(entry)).toBe(
+      `/travel?sector=${MAP_WAKE_ISLAND_SECTOR}`,
+    );
     expect(dashboardContentActionLabel(entry)).toBe("Travel");
   });
 
   it("falls back to the travel map when the destination sector is unknown", () => {
-    expect(dashboardContentHref(createContent("mission", { travelSector: undefined }))).toBe("/travel");
+    expect(
+      dashboardContentHref(createContent("mission", { travelSector: undefined })),
+    ).toBe("/travel");
   });
 
   it("opens the battle pyramid tab only when it can be started here", () => {
@@ -358,7 +363,7 @@ const occupationTracker = (
 
 const trainableUser = () => {
   const stats = Object.fromEntries(UserStatNames.map((stat) => [stat, 0])) as Record<
-    (typeof UserStatNames)[number],
+    UserStatName,
     number
   >;
   return {
@@ -584,77 +589,150 @@ describe("describeOccupationLine", () => {
 
 it("honors preferred content types and fills missing categories without hiding content", () => {
   const content = [
-    createContent("mission"), createContent("errand"), createContent("medical"), createContent("pvp"),
+    createContent("mission"),
+    createContent("errand"),
+    createContent("medical"),
+    createContent("pvp"),
     createContent("event", { category: "events" }),
     createContent("event", { category: "events", id: "second-event" }),
     createContent("story", { category: "story" }),
     createContent("battlepyramid", { category: "battlePyramids" }),
   ];
-  const priority = ["battlePyramids", "events", "story", "raids", "missions", "errands", "medical", "pvp"];
-  expect(selectDashboardHighlights(content, 4, priority).map((entry) => entry.questType))
-    .toEqual(["battlepyramid", "event", "story", "mission"]);
+  const priority = [
+    "battlePyramids",
+    "events",
+    "story",
+    "raids",
+    "missions",
+    "errands",
+    "medical",
+    "pvp",
+  ];
+  expect(
+    selectDashboardHighlights(content, 4, priority).map((entry) => entry.questType),
+  ).toEqual(["battlepyramid", "event", "story", "mission"]);
   expect(orderDashboardContent(content, priority)).toHaveLength(content.length);
-  expect(selectDashboardHighlights(content.filter((entry) => entry.category === "missions"), 4, priority)
-    .map((entry) => entry.questType)).toEqual(["mission", "errand", "medical", "pvp"]);
+  expect(
+    selectDashboardHighlights(
+      content.filter((entry) => entry.category === "missions"),
+      4,
+      priority,
+    ).map((entry) => entry.questType),
+  ).toEqual(["mission", "errand", "medical", "pvp"]);
 });
 
 it("rejects duplicate, missing and unknown content priorities", () => {
-  expect(dashboardContentPrioritySchema.safeParse([...dashboardContentGroups]).success).toBe(true);
-  for (const priority of [[], [...dashboardContentGroups.slice(1), "raids"], [...dashboardContentGroups.slice(1), "unknown"]]) {
+  expect(
+    dashboardContentPrioritySchema.safeParse([...dashboardContentGroups]).success,
+  ).toBe(true);
+  for (const priority of [
+    [],
+    [...dashboardContentGroups.slice(1), "raids"],
+    [...dashboardContentGroups.slice(1), "unknown"],
+  ]) {
     expect(dashboardContentPrioritySchema.safeParse(priority).success).toBe(false);
     expect(getDashboardContentPriority(priority)).toEqual([...dashboardContentGroups]);
   }
 });
 
-
 describe("dashboard training access", () => {
   type User = Parameters<typeof dashboardTrainingAction>[0];
   type Village = NonNullable<Parameters<typeof dashboardTrainingAction>[2]>;
   const village = {
-    id: "home", name: "Home", sector: 1, type: "VILLAGE",
+    id: "home",
+    name: "Home",
+    sector: 1,
+    type: "VILLAGE",
     structures: [{ route: "/traininggrounds", allyAccess: 1 }],
-    relationshipA: [], relationshipB: [],
+    relationshipA: [],
+    relationshipB: [],
   } as unknown as Village;
-  const user = (patch: Partial<User> = {}) => ({
-    ...trainableUser(), villageId: "home", village, ...patch,
-  }) as User;
+  const user = (patch: Partial<User> = {}) =>
+    ({
+      ...trainableUser(),
+      villageId: "home",
+      village,
+      ...patch,
+    }) as User;
 
-  it.each([true, false])("guides a player outside home to travel (active training: %s)", (active) => {
-    expect(dashboardTrainingAction(user({ sector: 2 }), active)).toMatchObject({
-      href: "/travel", action: "Go home",
-      reason: expect.stringContaining("Return to Home"),
-    });
-  });
+  it.each([true, false])(
+    "guides a player outside home to travel (active training: %s)",
+    (active) => {
+      expect(dashboardTrainingAction(user({ sector: 2 }), active)).toMatchObject({
+        href: "/travel",
+        action: "Go home",
+        reason: expect.stringContaining("Return to Home"),
+      });
+    },
+  );
 
   it("keeps home training and outlaw access available", () => {
-    expect(dashboardTrainingAction(user(), true, village)).toMatchObject({ href: "/traininggrounds", action: "View", reason: null });
-    expect(dashboardTrainingAction(user(), false, village)).toMatchObject({ action: "Train", reason: null });
-    expect(dashboardTrainingAction(user({ isOutlaw: true, sector: 2 }), true)).toMatchObject({ href: "/traininggrounds", action: "View", reason: null });
+    expect(dashboardTrainingAction(user(), true, village)).toMatchObject({
+      href: "/traininggrounds",
+      action: "View",
+      reason: null,
+    });
+    expect(dashboardTrainingAction(user(), false, village)).toMatchObject({
+      action: "Train",
+      reason: null,
+    });
+    expect(
+      dashboardTrainingAction(user({ isOutlaw: true, sector: 2 }), true),
+    ).toMatchObject({ href: "/traininggrounds", action: "View", reason: null });
   });
 
   it("allows viewing training in an allied village but directs new stat training home", () => {
-    const ally = { ...village, id: "ally", sector: 2, relationshipA: [{ villageIdA: "ally", villageIdB: "home", status: "ALLY" }] } as unknown as Village;
-    expect(dashboardTrainingAction(user({ sector: 2 }), true, ally).href).toBe("/traininggrounds");
-    expect(dashboardTrainingAction(user({ sector: 2 }), false, ally).href).toBe("/travel");
-    expect(dashboardTrainingAction(user({ sector: 2 }), true, { ...ally, structures: [] }).href).toBe("/travel");
+    const ally = {
+      ...village,
+      id: "ally",
+      sector: 2,
+      relationshipA: [{ villageIdA: "ally", villageIdB: "home", status: "ALLY" }],
+    } as unknown as Village;
+    expect(dashboardTrainingAction(user({ sector: 2 }), true, ally).href).toBe(
+      "/traininggrounds",
+    );
+    expect(dashboardTrainingAction(user({ sector: 2 }), false, ally).href).toBe(
+      "/travel",
+    );
+    expect(
+      dashboardTrainingAction(user({ sector: 2 }), true, { ...ally, structures: [] })
+        .href,
+    ).toBe("/travel");
   });
 
   it("keeps Energy training open past the mastery daily limit", () => {
-    expect(dashboardTrainingAction(user({ dailyTrainings: MAX_DAILY_TRAININGS }), false, village)).toMatchObject({ action: "Train", reason: null });
+    expect(
+      dashboardTrainingAction(
+        user({ dailyTrainings: MAX_DAILY_TRAININGS }),
+        false,
+        village,
+      ),
+    ).toMatchObject({ action: "Train", reason: null });
   });
 
   it("explains banned and non-awake states without offering to start", () => {
-    expect(dashboardTrainingAction(user({ isBanned: true }), false, village)).toMatchObject({ action: "View", reason: "Cannot spend Energy while banned" });
-    expect(dashboardTrainingAction(user({ status: "ASLEEP", autoWakeUp: false }), false, village)).toMatchObject({ action: "View", reason: "You are asleep. Wake up before taking this action." });
+    expect(
+      dashboardTrainingAction(user({ isBanned: true }), false, village),
+    ).toMatchObject({ action: "View", reason: "Cannot spend Energy while banned" });
+    expect(
+      dashboardTrainingAction(
+        user({ status: "ASLEEP", autoWakeUp: false }),
+        false,
+        village,
+      ),
+    ).toMatchObject({
+      action: "View",
+      reason: "You are asleep. Wake up before taking this action.",
+    });
   });
 });
-
 
 describe("dashboard level guidance", () => {
   it("fills the bar with experience earned within the level", () => {
     const start = calcLevelRequirements(9);
     const span = calcLevelRequirements(10) - start;
-    const percent = (experience: number) => dashboardLevelPercent({ rank: "GENIN", level: 10, experience });
+    const percent = (experience: number) =>
+      dashboardLevelPercent({ rank: "GENIN", level: 10, experience });
     expect(percent(start)).toBe(0);
     expect(percent(start + span / 2)).toBe(50);
     expect(percent(start + span)).toBe(100);
@@ -663,60 +741,153 @@ describe("dashboard level guidance", () => {
   });
   it("keeps Elite Jonin on the milestone scale regardless of experience", () => {
     const level = MAX_EXPERIENCE_LEVEL + (MAX_PLAYER_LEVEL - MAX_EXPERIENCE_LEVEL) / 2;
-    expect(dashboardLevelPercent({ rank: "ELITE JONIN", level, experience: 0 })).toBe(50);
-    expect(dashboardLevelPercent({ rank: "ELITE JONIN", level, experience: 1e9 })).toBe(50);
+    expect(dashboardLevelPercent({ rank: "ELITE JONIN", level, experience: 0 })).toBe(
+      50,
+    );
+    expect(dashboardLevelPercent({ rank: "ELITE JONIN", level, experience: 1e9 })).toBe(
+      50,
+    );
   });
   it("explains rank caps even when XP is still missing", () => {
-    expect(dashboardLevelProgress({ rank: "STUDENT", level: getUserCaps("STUDENT").lvl_cap, experience: 0 })).toMatchObject({ label: "Rank level cap reached", reason: expect.any(String) });
+    expect(
+      dashboardLevelProgress({
+        rank: "STUDENT",
+        level: getUserCaps("STUDENT").lvl_cap,
+        experience: 0,
+      }),
+    ).toMatchObject({ label: "Rank level cap reached", reason: expect.any(String) });
   });
   it("explains the Horizon gate instead of asking for zero XP", () => {
-    expect(dashboardLevelProgress({ rank: "GENIN", level: 10, experience: 1e9, village: { name: "Horizon" } })).toMatchObject({ label: "Progression required", reason: expect.stringContaining("academy") });
+    expect(
+      dashboardLevelProgress({
+        rank: "GENIN",
+        level: 10,
+        experience: 1e9,
+        village: { name: "Horizon" },
+      }),
+    ).toMatchObject({
+      label: "Progression required",
+      reason: expect.stringContaining("academy"),
+    });
   });
   it("distinguishes insufficient XP from a level ready to claim", () => {
-    expect(dashboardLevelProgress({ rank: "STUDENT", level: 1, experience: 0 })).toMatchObject({ label: expect.stringContaining("XP to go"), reason: null });
-    expect(dashboardLevelProgress({ rank: "STUDENT", level: 1, experience: 1e9 })).toEqual({ label: "Ready to level up", reason: null });
+    expect(
+      dashboardLevelProgress({ rank: "STUDENT", level: 1, experience: 0 }),
+    ).toMatchObject({ label: expect.stringContaining("XP to go"), reason: null });
+    expect(
+      dashboardLevelProgress({ rank: "STUDENT", level: 1, experience: 1e9 }),
+    ).toEqual({ label: "Ready to level up", reason: null });
   });
 });
 
-
 it("keeps idle crafting viewable while explaining its state and location gates", () => {
-  const input = { occupation: "CRAFTING", quests: [], trackers: [], craftingItemName: null };
-  expect(describeOccupationLine({ ...input, craftingUser: { status: "AWAKE", sector: MAP_WAKE_ISLAND_SECTOR } })).toMatchObject({ action: "View", detail: "Cannot craft items on Wake Island" });
-  expect(describeOccupationLine({ ...input, craftingUser: { status: "ASLEEP", autoWakeUp: false, sector: 1 } })).toMatchObject({ action: "View", detail: "You are asleep. Wake up before taking this action." });
-  expect(describeOccupationLine({ ...input, craftingItemName: "Healing Salve", craftingUser: { status: "ASLEEP", autoWakeUp: false, sector: 1 } })).toMatchObject({ action: "View", detail: null, craftTimer: true });
+  const input = {
+    occupation: "CRAFTING",
+    quests: [],
+    trackers: [],
+    craftingItemName: null,
+  };
+  expect(
+    describeOccupationLine({
+      ...input,
+      craftingUser: { status: "AWAKE", sector: MAP_WAKE_ISLAND_SECTOR },
+    }),
+  ).toMatchObject({ action: "View", detail: "Cannot craft items on Wake Island" });
+  expect(
+    describeOccupationLine({
+      ...input,
+      craftingUser: { status: "ASLEEP", autoWakeUp: false, sector: 1 },
+    }),
+  ).toMatchObject({
+    action: "View",
+    detail: "You are asleep. Wake up before taking this action.",
+  });
+  expect(
+    describeOccupationLine({
+      ...input,
+      craftingItemName: "Healing Salve",
+      craftingUser: { status: "ASLEEP", autoWakeUp: false, sector: 1 },
+    }),
+  ).toMatchObject({ action: "View", detail: null, craftTimer: true });
 });
 
 it("lets blocked players view raids without promising participation or sending them to travel", () => {
-  expect(dashboardRaidAction(40, { sector: 12, status: "AWAKE", isBanned: false })).toEqual({ href: "/travel?sector=40", action: "Travel", reason: null });
-  expect(dashboardRaidAction(null, { sector: 12, status: "AWAKE", isBanned: false })).toEqual({ href: "/globalanbuhq", action: "Continue raid", reason: null });
-  expect(dashboardRaidAction(40, { sector: 12, status: "BATTLE", isBanned: false })).toMatchObject({ href: "/globalanbuhq", action: "View raid", reason: "Must be awake to join a raid" });
-  expect(dashboardRaidAction(40, { sector: 12, status: "AWAKE", isBanned: true })).toMatchObject({ href: "/globalanbuhq", action: "View raid", reason: "You are banned" });
+  expect(
+    dashboardRaidAction(40, { sector: 12, status: "AWAKE", isBanned: false }),
+  ).toEqual({ href: "/travel?sector=40", action: "Travel", reason: null });
+  expect(
+    dashboardRaidAction(null, { sector: 12, status: "AWAKE", isBanned: false }),
+  ).toEqual({ href: "/globalanbuhq", action: "Continue raid", reason: null });
+  expect(
+    dashboardRaidAction(40, { sector: 12, status: "BATTLE", isBanned: false }),
+  ).toMatchObject({
+    href: "/globalanbuhq",
+    action: "View raid",
+    reason: "Must be awake to join a raid",
+  });
+  expect(
+    dashboardRaidAction(40, { sector: 12, status: "AWAKE", isBanned: true }),
+  ).toMatchObject({
+    href: "/globalanbuhq",
+    action: "View raid",
+    reason: "You are banned",
+  });
   expect(dashboardContentActionLabel({ availability: "blocked" })).toBe("View content");
 });
-
 
 it("keeps remote raid cards actionable with their destination sector", () => {
   type User = Parameters<typeof buildDashboardCatalogue>[1];
   const user = {
-    sector: 12, status: "AWAKE", isBanned: false,
-    activeRaids: [{ id: "remote-raid", name: "Remote raid", description: null, image: null, sector: 0, raidEndsAt: null }],
+    sector: 12,
+    status: "AWAKE",
+    isBanned: false,
+    activeRaids: [
+      {
+        id: "remote-raid",
+        name: "Remote raid",
+        description: null,
+        image: null,
+        sector: 0,
+        raidEndsAt: null,
+      },
+    ],
   } as User;
   const [entry] = buildDashboardCatalogue([], user);
   expect(entry).toMatchObject({ availability: "travel", travelSector: 0 });
   expect(dashboardContentHref(entry!)).toBe("/travel?sector=0");
   expect(entry?.availabilityReason).toBeNull();
-  expect(buildDashboardCatalogue([], { ...user, status: "ASLEEP", autoWakeUp: false })[0]).toMatchObject({ availability: "blocked", destination: "/globalanbuhq" });
+  expect(
+    buildDashboardCatalogue([], { ...user, status: "ASLEEP", autoWakeUp: false })[0],
+  ).toMatchObject({ availability: "blocked", destination: "/globalanbuhq" });
 });
 
 it("shows the personal hunting contract and its current stage ahead of legacy quests", () => {
   const serverTime = new Date("2026-01-01T12:00:00Z");
   const hunting = {
-    session: { content: null, userId: "hunter", id: "session", contractId: "contract", habitatId: "forest", sector: 1, readyAt: null as Date | null, battleId: null as string | null, version: 0, startedAt: serverTime, lastResult: null },
+    session: {
+      content: null,
+      userId: "hunter",
+      id: "session",
+      contractId: "contract",
+      habitatId: "forest",
+      sector: 1,
+      readyAt: null as Date | null,
+      battleId: null as string | null,
+      version: 0,
+      startedAt: serverTime,
+      lastResult: null,
+    },
     contract: huntingContract(),
-    allowance: { used: 1, remaining: 2, cooling: false }, serverTime,
+    allowance: { used: 1, remaining: 2, cooling: false },
+    serverTime,
   };
-  const line = () => describeOccupationLine({ occupation: "HUNTER", quests: [], trackers: [], hunting });
-  expect(line()).toMatchObject({ title: "Forest boar", detail: "Accepted · Sector 1 · 2 / 3 hunts remaining", action: "View contract" });
+  const line = () =>
+    describeOccupationLine({ occupation: "HUNTER", quests: [], trackers: [], hunting });
+  expect(line()).toMatchObject({
+    title: "Forest boar",
+    detail: "Accepted · Sector 1 · 2 / 3 hunts remaining",
+    action: "View contract",
+  });
   hunting.session.readyAt = new Date(serverTime.getTime() + 10_000);
   expect(line().detail).toContain("Preparing: 10s remaining");
   hunting.session.readyAt = serverTime;
@@ -725,18 +896,60 @@ it("shows the personal hunting contract and its current stage ahead of legacy qu
   expect(line().detail).toContain("Contract Cooldown");
   hunting.session.battleId = "battle";
   expect(line().detail).toContain("Fighting");
-  expect(describeOccupationLine({ occupation: "HUNTER", quests: [], trackers: [], hunting: { ...hunting, contract: null } }).title).toBe("Unavailable contract");
+  expect(
+    describeOccupationLine({
+      occupation: "HUNTER",
+      quests: [],
+      trackers: [],
+      hunting: { ...hunting, contract: null },
+    }).title,
+  ).toBe("Unavailable contract");
 });
 
-for (const [status, autoWakeUp, expected] of [["AWAKE", true, true], ["ASLEEP", true, true], ["HOSPITALIZED", true, true], ["ASLEEP", false, false], ["BATTLE", true, false], ["TRAVEL", true, false], ["QUEUED", true, false]] as const) {
-  const actor = { status, autoWakeUp, sector: 1, rank: "JONIN", dailyTrainings: 0, isBanned: false, isOutlaw: false, village: { id: "home", sector: 1, name: "Home", structures: [{ route: "/traininggrounds", allyAccess: 1 }], relationshipA: [], relationshipB: [] }, ...Object.fromEntries(CombatStatNames.map((stat) => [stat, 1])) } as unknown as Parameters<typeof dashboardTrainingAction>[0];
+for (const [status, autoWakeUp, expected] of [
+  ["AWAKE", true, true],
+  ["ASLEEP", true, true],
+  ["HOSPITALIZED", true, true],
+  ["ASLEEP", false, false],
+  ["BATTLE", true, false],
+  ["TRAVEL", true, false],
+  ["QUEUED", true, false],
+] as const) {
+  const actor = {
+    status,
+    autoWakeUp,
+    sector: 1,
+    rank: "JONIN",
+    dailyTrainings: 0,
+    isBanned: false,
+    isOutlaw: false,
+    village: {
+      id: "home",
+      sector: 1,
+      name: "Home",
+      structures: [{ route: "/traininggrounds", allyAccess: 1 }],
+      relationshipA: [],
+      relationshipB: [],
+    },
+    ...Object.fromEntries(CombatStatNames.map((stat) => [stat, 1])),
+  } as unknown as Parameters<typeof dashboardTrainingAction>[0];
   it(`dashboard local training ${status} auto=${autoWakeUp}`, () => {
-    const result = dashboardTrainingAction(actor, false, actor.village as Parameters<typeof dashboardTrainingAction>[2]);
+    const result = dashboardTrainingAction(
+      actor,
+      false,
+      actor.village as Parameters<typeof dashboardTrainingAction>[2],
+    );
     expect(result.href).toBe("/traininggrounds");
     expect(!result.reason).toBe(expected);
   });
   it(`dashboard crafting ${status} auto=${autoWakeUp}`, () => {
-    const result = describeOccupationLine({ occupation: "CRAFTING", quests: [], trackers: [], craftingItemName: null, craftingUser: actor });
+    const result = describeOccupationLine({
+      occupation: "CRAFTING",
+      quests: [],
+      trackers: [],
+      craftingItemName: null,
+      craftingUser: actor,
+    });
     expect(!result.detail).toBe(expected);
   });
   it(`dashboard remote raid ${status} auto=${autoWakeUp}`, () => {
@@ -746,7 +959,17 @@ for (const [status, autoWakeUp, expected] of [["AWAKE", true, true], ["ASLEEP", 
   });
 }
 it("dashboard preserves bans and Wake Island crafting restriction", () => {
-  const user = { sector: 1, status: "AWAKE", isBanned: true } as unknown as Parameters<typeof dashboardTrainingAction>[0];
+  const user = { sector: 1, status: "AWAKE", isBanned: true } as unknown as Parameters<
+    typeof dashboardTrainingAction
+  >[0];
   expect(dashboardRaidAction(1539, user).reason).toContain("banned");
-  expect(describeOccupationLine({ occupation: "CRAFTING", quests: [], trackers: [], craftingItemName: null, craftingUser: { ...user, sector: MAP_WAKE_ISLAND_SECTOR } }).detail).toContain("Wake Island");
+  expect(
+    describeOccupationLine({
+      occupation: "CRAFTING",
+      quests: [],
+      trackers: [],
+      craftingItemName: null,
+      craftingUser: { ...user, sector: MAP_WAKE_ISLAND_SECTOR },
+    }).detail,
+  ).toContain("Wake Island");
 });

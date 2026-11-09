@@ -11,7 +11,9 @@ it("skips notifications when a guarded queue write changed no rows", async () =>
 });
 
 it("records rejected HTTP delivery while preserving a successful queue write", async () => {
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("Unavailable", { status: 503 }));
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response("Unavailable", { status: 503 }),
+  );
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
   await notifyRankedQueueChanged(1);
   expect(error).toHaveBeenCalledWith("Pusher event request failed", 503);

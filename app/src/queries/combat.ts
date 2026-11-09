@@ -44,7 +44,7 @@ import {
   MAP_WAKE_ISLAND_SECTOR,
   MasteryNames,
   PoolTypes,
-  RankedBattleTypes,
+  PRACTICE_BATTLE_TYPES,
   SAGE_MODE_ACTIVATION_JUTSU_ID,
   STEALTH_POST_COMBAT_COOLDOWN_SECONDS,
   type TimedMasteryName,
@@ -785,7 +785,7 @@ export const selectBattleHistoryForInitiateBattle = (
   targetIds: string[],
 ) =>
   client
-    .select({ count: sql`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(battleHistory)
     .where(
       and(
@@ -1132,30 +1132,27 @@ export const updateUserDataForCreateBattle = (
       ...queueUpdate,
       status: "BATTLE",
       battleId: battleId,
-      pvpFights:
-        !info.tournamentGame && ["SPARRING", "COMBAT"].includes(battleType)
-          ? sql`${userData.pvpFights} + 1`
-          : sql`${userData.pvpFights}`,
-      pveFights:
-        !info.tournamentGame && !["SPARRING", "COMBAT"].includes(battleType)
-          ? sql`${userData.pveFights} + 1`
-          : sql`${userData.pveFights}`,
-      immunityUntil:
-        !info.tournamentGame &&
-        ["SPARRING", "COMBAT", "SHRINE_WAR"].includes(battleType)
-          ? sql`CASE WHEN ${inArray(userData.userId, userIds)} THEN NOW() ELSE ${userData.immunityUntil} END`
-          : sql`immunityUntil`,
+      ...(!info.tournamentGame && ["SPARRING", "COMBAT"].includes(battleType)
+        ? { pvpFights: sql`${userData.pvpFights} + 1` }
+        : {}),
+      ...(!info.tournamentGame && !["SPARRING", "COMBAT"].includes(battleType)
+        ? { pveFights: sql`${userData.pveFights} + 1` }
+        : {}),
+      ...(!info.tournamentGame &&
+      ["SPARRING", "COMBAT", "SHRINE_WAR"].includes(battleType)
+        ? {
+            immunityUntil: sql`CASE WHEN ${inArray(userData.userId, userIds)} THEN NOW() ELSE ${userData.immunityUntil} END`,
+          }
+        : {}),
       // Break stealth when entering combat
       // Defenders (being attacked) always lose stealth
       // Attackers roll to keep stealth based on their stealth stat
-      stealthActive:
-        stealthBreakUserIds.length > 0
-          ? sql`CASE WHEN ${inArray(userData.userId, stealthBreakUserIds)} THEN false ELSE ${userData.stealthActive} END`
-          : sql`stealthActive`,
-      stealthActivatedAt:
-        stealthBreakUserIds.length > 0
-          ? sql`CASE WHEN ${inArray(userData.userId, stealthBreakUserIds)} THEN NULL ELSE ${userData.stealthActivatedAt} END`
-          : sql`stealthActivatedAt`,
+      ...(stealthBreakUserIds.length > 0
+        ? {
+            stealthActive: sql`CASE WHEN ${inArray(userData.userId, stealthBreakUserIds)} THEN false ELSE ${userData.stealthActive} END`,
+            stealthActivatedAt: sql`CASE WHEN ${inArray(userData.userId, stealthBreakUserIds)} THEN NULL ELSE ${userData.stealthActivatedAt} END`,
+          }
+        : {}),
       // Stamp war aggressors AND bracket-immunity aggressors in the same update so the WHERE guard
       // (status/sector match) gates both the battle entry and these timers atomically. GREATEST never
       // shortens an existing longer stamp; any leak on the rollback path is bounded (war ~2h, bracket
@@ -1402,10 +1399,6 @@ export const updateUserDataForCreateBattle = (
                 ),
             ]
           : []),
-        // Ranked participants are claimed straight from the queue, so require
-        // QUEUED specifically: a player who just left the queue (now AWAKE)
-        // must not be pulled into a ranked battle by a poll whose snapshot
-        // predated their leave.
         ["CLAN_BATTLE", "TERRITORY_WAR"].includes(battleType) && info.clanBattle
           ? and(
               eq(userData.status, "QUEUED"),
@@ -1427,7 +1420,11 @@ export const updateUserDataForCreateBattle = (
               ),
             )
           : battleType === "RANKED_PVP"
-            ? and(
+            ? // Ranked participants are claimed straight from the queue, so require
+              // QUEUED specifically: a player who just left the queue (now AWAKE)
+              // must not be pulled into a ranked battle by a poll whose snapshot
+              // predated their leave.
+              and(
                 eq(userData.status, "QUEUED"),
                 exists(selectClaimedRankedQueueEntry(client, userData.userId)),
               )
@@ -1620,7 +1617,7 @@ export const updateKageDefendedChallengesForInitiateBattle = (
  * `version`, including predicates on `userId`, `id`, `version`.
  */
 export const updateHuntingSessionForInitiateBattle = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   battleId: string,
   meta: {
     userId: string;
@@ -1644,7 +1641,18 @@ export const updateHuntingSessionForInitiateBattle = (
         eq(huntingSession.contractId, meta.contract.id),
         eq(huntingSession.sector, sector ?? -1),
         eq(huntingSession.habitatId, meta.habitatId),
-        sql`EXISTS (SELECT 1 FROM ${huntingProgress} WHERE ${huntingProgress.userId} = ${meta.userId} AND ${huntingProgress.contractId} = ${meta.contract.id} AND ${huntingProgress.version} = ${meta.progressVersion})`,
+        exists(
+          client
+            .select({ userId: huntingProgress.userId })
+            .from(huntingProgress)
+            .where(
+              and(
+                eq(huntingProgress.userId, meta.userId),
+                eq(huntingProgress.contractId, meta.contract.id),
+                eq(huntingProgress.version, meta.progressVersion),
+              ),
+            ),
+        ),
       ),
     );
 
@@ -2540,8 +2548,7 @@ export const updateUserDataForUpdateUser2 = (
             weeklyPvpKillsAt: settledAt,
           }
         : {}),
-      ...(curBattle.battleType !== "SPARRING" &&
-      !RankedBattleTypes.includes(curBattle.battleType)
+      ...(!PRACTICE_BATTLE_TYPES.includes(curBattle.battleType)
         ? {
             curHealth: result.curHealth,
             curStamina: result.curStamina,
@@ -2552,10 +2559,10 @@ export const updateUserDataForUpdateUser2 = (
       intelligence: sql`intelligence + ${result.intelligence}`,
       willpower: sql`willpower + ${result.willpower}`,
       speed: sql`speed + ${result.speed}`,
-      money: result.money ? sql`money + ${result.money}` : sql`money`,
-      seichiSilver: result.seichiSilver
-        ? sql`seichiSilver + ${result.seichiSilver}`
-        : sql`seichiSilver`,
+      ...(result.money ? { money: sql`money + ${result.money}` } : {}),
+      ...(result.seichiSilver
+        ? { seichiSilver: sql`seichiSilver + ${result.seichiSilver}` }
+        : {}),
       // Preserve stored over-cap entitlement; concurrent gains cannot exceed the cap.
       ...masteryGainUpdates(result.masteryGains ?? {}),
       offence: sql`offence + ${result.offence}`,
@@ -2587,10 +2594,9 @@ export const updateUserDataForUpdateUser2 = (
       ...(!isIsolated && sendsToHospital(curBattle, result.curHealth)
         ? {
             ...hospitalPlacement(curBattle, user),
-            immunityUntil:
-              curBattle.battleType === "COMBAT"
-                ? sql`NOW() + INTERVAL 1 MINUTE`
-                : sql`immunityUntil`,
+            ...(curBattle.battleType === "COMBAT"
+              ? { immunityUntil: sql`NOW() + INTERVAL 1 MINUTE` }
+              : {}),
           }
         : { status: isIsolated ? "BATTLE" : "AWAKE" }),
       // Deactivate stealth and set cooldown after leaving combat (20 seconds)

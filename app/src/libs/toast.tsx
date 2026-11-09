@@ -46,8 +46,8 @@ const loadConfetti = (): Promise<FireConfetti | null> => {
       registerParticlePlugins(),
     ]);
 
-    // Bind to a pre-styled canvas so confetti does not insert a new #confetti
-    // host (fullScreen: true) that Speed Insights blamed for CLS of 1.0.
+    // Bind to a pre-styled canvas so confetti does not insert a full-screen
+    // #confetti host (fullScreen: true), which shifts layout (CLS).
     const canvas = ensureParticleOverlayCanvas(
       CONFETTI_OVERLAY_ID,
       CONFETTI_OVERLAY_Z_INDEX,
@@ -68,7 +68,8 @@ const CONFETTI_COLORS = ["#FFD700", "#FFA500", "#FF6347", "#4169E1", "#32CD32"];
 
 /**
  * Trigger a confetti animation
- * @returns Promise that resolves when animation is complete (or immediately if running on server)
+ * @returns Promise that resolves once the confetti engine has loaded and the bursts are
+ * scheduled (immediately when no canvas is available), before the animation finishes
  */
 export const triggerConfetti = async (): Promise<void> => {
   // Start the celebration sound before particle imports can delay playback.
@@ -249,12 +250,15 @@ export const showFormErrorsToast = (errors: FieldErrors<any>) => {
 };
 
 /**
- * Message to show in a toast when rewards are collected
- * @param notifications - Notifications to show
- * @param resolved - Whether the quest was resolved
- * @param quest - The quest that was completed
+ * Show a success toast listing collected rewards, then trigger confetti
+ * @param notifications - Objective descriptions to show
  * @param rewards - The rewards that were collected
- * @returns The message to show in a toast
+ * @param title - The toast title
+ * @param resolved - Whether the quest was resolved, which shows its success description
+ * @param quest - The quest that was completed
+ * @param badges - Badges to show with their images
+ * @param cacheRewards - Cache rewards to show
+ * @param petRewards - Pets with a link to generate their appearance
  */
 export const showRewardToast = (
   notifications: string[],

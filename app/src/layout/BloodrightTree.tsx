@@ -4,16 +4,26 @@ import { MAX_BLOODRIGHT_TIERS } from "@/drizzle/constants";
 import type { SkillTree } from "@/drizzle/schema";
 import { SkillCard } from "@/layout/SkillTreeFolderModal";
 
+/** Card geometry: each card sits inset in a square cell; edges attach to card edges. */
+const CARD_WIDTH = 168;
+const CARD_HEIGHT = 136;
+const CARD_INSET = 12;
+const CELL_SIZE = CARD_WIDTH + 2 * CARD_INSET;
+/** Space above each row's cards for its tier heading. */
+const TIER_LABEL_HEIGHT = 32;
+/** Vertical clearance a skip-tier edge keeps from the cards it leaves and enters. */
+const EDGE_CLEARANCE = 12;
+
 export const BloodrightTree = ({ tiers, purchasedIds, silver, onSelect }: Props) => {
   const levels = [...new Set(tiers.map((tier) => tier.tier))].sort((a, b) => a - b);
   const rows = levels.map((level) => tiers.filter((tier) => tier.tier === level));
-  const width = Math.max(1, ...rows.map((row) => row.length)) * 192;
-  const height = rows.length * 192;
+  const width = Math.max(1, ...rows.map((row) => row.length)) * CELL_SIZE;
+  const height = rows.length * CELL_SIZE;
   const nodes = rows.flatMap((row, rowIndex) =>
     row.map((skill, column) => ({
       skill,
-      x: (width - row.length * 192) / 2 + column * 192 + 12,
-      y: rowIndex * 192 + 32,
+      x: (width - row.length * CELL_SIZE) / 2 + column * CELL_SIZE + CARD_INSET,
+      y: rowIndex * CELL_SIZE + TIER_LABEL_HEIGHT,
     })),
   );
 
@@ -37,16 +47,16 @@ export const BloodrightTree = ({ tiers, purchasedIds, silver, onSelect }: Props)
             node.skill.requiredSkillIds.map((id) => {
               const parent = nodes.find((entry) => entry.skill.id === id);
               if (!parent) return null;
-              const fromX = parent.x + 84;
-              const fromY = parent.y + 136;
-              const toX = node.x + 84;
+              const fromX = parent.x + CARD_WIDTH / 2;
+              const fromY = parent.y + CARD_HEIGHT;
+              const toX = node.x + CARD_WIDTH / 2;
               const toY = node.y;
               const middle = (fromY + toY) / 2;
               // Skip-tier prerequisites travel around the cards so they cannot
               // appear to connect to an unrelated intermediate tier.
               const path =
-                node.y - parent.y > 192
-                  ? `M ${fromX} ${fromY} V ${fromY + 12} H ${width - 2} V ${toY - 12} H ${toX} V ${toY}`
+                node.y - parent.y > CELL_SIZE
+                  ? `M ${fromX} ${fromY} V ${fromY + EDGE_CLEARANCE} H ${width - 2} V ${toY - EDGE_CLEARANCE} H ${toX} V ${toY}`
                   : `M ${fromX} ${fromY} C ${fromX} ${middle}, ${toX} ${middle}, ${toX} ${toY}`;
               return (
                 <path
@@ -69,7 +79,7 @@ export const BloodrightTree = ({ tiers, purchasedIds, silver, onSelect }: Props)
           <h4
             key={level}
             className="absolute left-0 font-semibold text-muted-foreground text-sm"
-            style={{ top: index * 192 }}
+            style={{ top: index * CELL_SIZE }}
           >
             Tier {level}
           </h4>
@@ -85,18 +95,12 @@ export const BloodrightTree = ({ tiers, purchasedIds, silver, onSelect }: Props)
           return (
             <div
               key={skill.id}
-              className="absolute flex h-[136px] w-[168px]"
-              style={{ left: x, top: y }}
+              className="absolute flex"
+              style={{ left: x, top: y, width: CARD_WIDTH, height: CARD_HEIGHT }}
             >
               <SkillCard
                 skill={skill}
-                status={{
-                  isOwned,
-                  isActivated: isOwned,
-                  hasPrereqs,
-                  hasPoints,
-                  canPurchase: !isOwned && hasPrereqs && hasPoints,
-                }}
+                status={{ isOwned, isActivated: isOwned, hasPrereqs, hasPoints }}
                 costLabel={`${skill.seichiSilverCost.toLocaleString()} Silver`}
                 onClick={() => onSelect(skill.id)}
               />

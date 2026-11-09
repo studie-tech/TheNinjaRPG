@@ -22,13 +22,13 @@ import {
   getUserCaps,
   REP_TRADE_MIN_LEVEL,
   RYO_CAP,
-  RYO_FOR_REP_DAYS_FROZEN,
   RYO_FOR_REP_MAX_LISTINGS,
   RYO_FOR_REP_MIN_REPS,
   RYO_FOR_REP_RESERVE,
   repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { userData } from "@/drizzle/schema";
+import { getRyoOfferUnfreezeDate } from "@/libs/blackmarket";
 import {
   getJutsuSlotIncreaseError,
   getJutsuSlotIncreaseLimit,
@@ -42,28 +42,22 @@ import {
   addElementRoll,
   deleteRyoTradeForDelistOffer,
   type ExtraSlotPurchase,
+  executeResultForTakeOffer,
   fetchActiveUserOffers,
   fetchOffer,
-  findUserDataForTakeOffer,
+  findRyoTradeForTakeOffer,
   insertActionLogForBuySlot,
   insertActionLogForRerollElement,
-  insertActionLogForTakeOffer,
   insertActionLogForTakeOffer2,
   insertActionLogForUpdateStats,
   insertRyoTradeForCreateOffer,
   selectActionLogForGetRolledElements,
   selectRyoTradeForGetGraph,
   selectRyoTradeForGetRyoOffers,
-  updateRyoTradeForTakeOffer,
-  updateRyoTradeForTakeOffer2,
   updateUserDataForBuySlot,
   updateUserDataForChangeUserGender,
   updateUserDataForCreateOffer,
   updateUserDataForRerollElement,
-  updateUserDataForTakeOffer,
-  updateUserDataForTakeOffer2,
-  updateUserDataForTakeOffer3,
-  updateUserDataForTakeOffer4,
 } from "@/queries/blackmarket";
 import {
   fetchUser,
@@ -81,13 +75,18 @@ import {
   canChangeContent,
   canRollPrimaryElement,
   canRollSecondaryElement,
+  isSiteOwnerAccount,
 } from "@/utils/permissions";
-import { secondsFromDate } from "@/utils/time";
 import type { DatabasePromiseReturn } from "@/utils/typeutils";
-import { blackMarketOfferSchema, rerollElementSchema } from "@/validators/blackmarket";
+import { blackMarketOfferSchema } from "@/validators/blackmarket";
 import { statSchema } from "@/validators/combat";
 import { genders } from "@/validators/register";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+/** Selects a stored innate slot; the mutation checks whether it can be rerolled. */
+const rerollElementSchema = z.object({
+  elementType: z.enum(["primary", "secondary"]),
+});
 
 export const blackMarketRouter = createTRPCRouter({
   getRyoOffers: protectedProcedure
@@ -174,14 +173,13 @@ export const blackMarketRouter = createTRPCRouter({
       ]);
       if (!offer) return errorResponse("Offer not found");
       // Derived
-      const isTerr = user.username === "Terriator";
+      const isOwner = isSiteOwnerAccount(user);
       const creatorId = offer.creatorUserId;
       // Guard
-      if (creatorId !== ctx.userId && !isTerr) return errorResponse("Not yours");
+      if (creatorId !== ctx.userId && !isOwner) return errorResponse("Not yours");
       // Check time
-      const delistSeconds = 3600 * 24 * RYO_FOR_REP_DAYS_FROZEN;
-      const delistDate = secondsFromDate(delistSeconds, offer.createdAt);
-      const canDelist = new Date() >= delistDate || isTerr;
+      const canDelist =
+        new Date() >= getRyoOfferUnfreezeDate(offer.createdAt) || isOwner;
       if (!canDelist) return errorResponse("Offer is frozen");
       // Mutate
       await Promise.all([
@@ -205,9 +203,9 @@ export const blackMarketRouter = createTRPCRouter({
     .input(z.object({ offerId: z.string() }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      // Fetch the offer, user, and seller data simultaneously
+      // Fetch the offer with its seller's bank, and the buyer, simultaneously
       const [offer, user] = await Promise.all([
-        fetchOffer(ctx.drizzle, input.offerId),
+        findRyoTradeForTakeOffer(ctx.drizzle, input),
         fetchUser(ctx.drizzle, ctx.userId),
       ]);
 
@@ -228,60 +226,19 @@ export const blackMarketRouter = createTRPCRouter({
       }
 
       // Verify seller still exists and can receive payment
-      const seller = await findUserDataForTakeOffer(ctx.drizzle, offer);
-      if (!seller) {
+      if (!offer.creator) {
         return errorResponse("Seller account no longer exists");
       }
       // Reject trade if seller's bank would exceed RYO_CAP (prevents silent ryo loss)
-      if (seller.bank + offer.requestedRyo > RYO_CAP) {
+      if (offer.creator.bank + offer.requestedRyo > RYO_CAP) {
         return errorResponse("Seller's bank is at capacity - trade cannot proceed");
       }
 
-      // Mark the offer as taken first - this will fail if someone else has taken it
-      const offerResult = await updateRyoTradeForTakeOffer(ctx.drizzle, ctx, input);
-      if (offerResult.rowsAffected === 0) {
-        return errorResponse("Offer no longer available");
-      }
-
-      // Perform both updates simultaneously
-      const [buyerResult, sellerResult] = await Promise.all([
-        // Update buyer's money and reputation points
-        updateUserDataForTakeOffer(ctx.drizzle, offer, ctx),
-        // Update seller's bank - add the full requested ryo (validated to fit under RYO_CAP)
-        updateUserDataForTakeOffer2(ctx.drizzle, offer),
-      ]);
-
-      // Verify BOTH buyer and seller updates succeeded
-      const buyerFailed = buyerResult.rowsAffected === 0;
-      const sellerFailed = sellerResult.rowsAffected === 0;
-
-      if (buyerFailed || sellerFailed) {
-        // Rollback: reset offer status and any successful updates
-        await Promise.all([
-          // Always reset the offer status
-          updateRyoTradeForTakeOffer2(ctx.drizzle, input),
-          // Roll back seller's bank if only buyer failed (seller succeeded)
-          ...(sellerFailed === false && buyerFailed
-            ? [updateUserDataForTakeOffer3(ctx.drizzle, offer)]
-            : []),
-          // Roll back buyer if only seller failed (buyer succeeded)
-          ...(buyerFailed === false && sellerFailed
-            ? [updateUserDataForTakeOffer4(ctx.drizzle, offer, ctx)]
-            : []),
-          // Log the failure for debugging
-          insertActionLogForTakeOffer(
-            ctx.drizzle,
-            ctx,
-            input,
-            buyerFailed,
-            sellerFailed,
-          ),
-        ]);
-
+      // Claim the offer and move the ryo and reputation in one guarded statement
+      const result = await executeResultForTakeOffer(ctx.drizzle, offer, ctx.userId);
+      if (result.rowsAffected === 0) {
         return errorResponse(
-          buyerFailed
-            ? "Failed to update buyer - transaction reverted"
-            : "Failed to update seller - transaction reverted",
+          "The offer was taken or a balance changed. Please try again",
         );
       }
 
@@ -556,15 +513,9 @@ export const getRolledElements = async (client: DrizzleClient, userId: string) =
 };
 
 /**
- * Rerolls an element type.
- *
- * @param {DrizzleClient} client - The Drizzle client used to make the query.
- * @param {string} userId - The ID of the user who rolled the element.
- * @param {string} elementType - The type of element rolled (primary or secondary).
- * @param currentElement
- * @param oppositeElement
- * @param rolledElements
- * @returns
+ * Picks a new basic element for the `elementType` slot, excluding the opposite slot's
+ * element, the current element and every element rolled since the last reset. When none
+ * remain, the rolls reset and any basic element except the opposite one can be picked.
  */
 const rerollElementType = (
   elementType: "primary" | "secondary",

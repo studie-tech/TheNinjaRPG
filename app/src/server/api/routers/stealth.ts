@@ -1,4 +1,6 @@
+import { z } from "zod";
 import {
+  CovertTrainingTypes,
   STEALTH_SENSORY_CAP,
   STEALTH_TRAIN_GAIN_PER_MINUTE,
 } from "@/drizzle/constants";
@@ -44,14 +46,50 @@ import {
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
 import { canShowMapAttack, mapAttackRelation } from "@/utils/alliance";
-import {
-  activateStealthDataSchema,
-  startTrainDataSchema,
-  stopTrainDataSchema,
-  trainInputSchema,
-  useSensoryDataSchema,
-  useSensoryInputSchema,
-} from "@/validators/stealth";
+
+// Input schemas
+const useSensoryInputSchema = z.object({
+  sector: z.int(),
+});
+
+const trainInputSchema = z.object({
+  type: z.enum(CovertTrainingTypes),
+  minutes: z.number().min(1).max(60),
+});
+
+// Output data schemas
+const detectedUserSchema = z.object({
+  userId: z.string(),
+  username: z.string(),
+  longitude: z.number(),
+  latitude: z.number(),
+  /** Null with `level` when `isMasked`: a reveal does not name a covered player's village. */
+  villageId: z.string().nullable(),
+  level: z.number().nullable(),
+  isMasked: z.boolean(),
+  /** The server-side map attack rule, so the client needs no masked fields to apply it. */
+  canAttack: z.boolean(),
+});
+
+const activateStealthDataSchema = z.object({
+  stealthActivatedAt: z.date(),
+});
+
+const useSensoryDataSchema = z.object({
+  detectedUsers: z.array(detectedUserSchema),
+  lastSensoryAt: z.date(),
+});
+
+const startTrainDataSchema = z.object({
+  covertTrainingType: z.enum(CovertTrainingTypes),
+  covertTrainingFinishAt: z.date(),
+  covertTrainingGain: z.number(),
+});
+
+const stopTrainDataSchema = z.object({
+  gained: z.number(),
+  newValue: z.number(),
+});
 
 const pusher = getServerPusher();
 

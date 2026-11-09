@@ -1,12 +1,11 @@
-import { act, cleanup, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { act, cleanup, render, renderHook } from "@testing-library/react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useAvatarRenditionWidth } from "@/layout/Avatar";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-
 
 const Probe = ({ record }: { record?: (width: number) => void }) => {
   const width = useAvatarRenditionWidth(100);
@@ -39,7 +38,8 @@ describe("avatar preference snapshots", () => {
     const add = spyOn(window, "addEventListener");
     const remove = spyOn(window, "removeEventListener");
     const write = spyOn(Object.getPrototypeOf(window.localStorage), "setItem");
-    const isStorageEvent = ([type]: unknown[]) => type === "storage" || type === "localStorageSync";
+    const isStorageEvent = ([type]: unknown[]) =>
+      type === "storage" || type === "localStorageSync";
     try {
       const first = renderHook(() => useAvatarRenditionWidth(100));
       const second = renderHook(() => useAvatarRenditionWidth(50));
@@ -91,29 +91,42 @@ describe("avatar preference snapshots", () => {
     expect(avatar.result.current).toBe(100);
     act(() => {
       window.localStorage.removeItem(LIGHT_LAYOUT_STORAGE_KEY);
-      window.dispatchEvent(new window.StorageEvent("storage", {
-        key: LIGHT_LAYOUT_STORAGE_KEY,
-        newValue: null,
-        storageArea: window.localStorage,
-      }));
+      window.dispatchEvent(
+        new window.StorageEvent("storage", {
+          key: LIGHT_LAYOUT_STORAGE_KEY,
+          newValue: null,
+          storageArea: window.localStorage,
+        }),
+      );
     });
     expect(avatar.result.current).toBe(320);
   });
 
   it("honors same-page events even before persistence and when storage is blocked", () => {
     const avatar = renderHook(() => useAvatarRenditionWidth(100));
-    const read = spyOn(Object.getPrototypeOf(window.localStorage), "getItem").mockImplementation(() => {
+    const read = spyOn(
+      Object.getPrototypeOf(window.localStorage),
+      "getItem",
+    ).mockImplementation(() => {
       throw new Error("Storage disabled");
     });
     const warn = spyOn(console, "warn").mockImplementation(() => undefined);
     try {
-      act(() => window.dispatchEvent(new window.CustomEvent("localStorageSync", {
-        detail: { key: LIGHT_LAYOUT_STORAGE_KEY, value: "true" },
-      })));
+      act(() =>
+        window.dispatchEvent(
+          new window.CustomEvent("localStorageSync", {
+            detail: { key: LIGHT_LAYOUT_STORAGE_KEY, value: "true" },
+          }),
+        ),
+      );
       expect(avatar.result.current).toBe(100);
-      act(() => window.dispatchEvent(new window.CustomEvent("localStorageSync", {
-        detail: { key: "another-key", value: "false" },
-      })));
+      act(() =>
+        window.dispatchEvent(
+          new window.CustomEvent("localStorageSync", {
+            detail: { key: "another-key", value: "false" },
+          }),
+        ),
+      );
       expect(avatar.result.current).toBe(100);
     } finally {
       read.mockRestore();

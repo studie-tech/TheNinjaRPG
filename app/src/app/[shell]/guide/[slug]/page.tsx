@@ -5,7 +5,12 @@ import { GUIDE_CATEGORY_LABELS } from "@/drizzle/constants";
 import { GuideArticleView } from "@/layout/GuideArticleView";
 import { BloodlineCatalog, FarmCatalog } from "@/layout/GuideCatalog";
 import { GuideStructuredData } from "@/layout/GuideStructuredData";
-import { buildMetadata, metaDescription, stripSiteName } from "@/libs/seo";
+import {
+  buildMetadata,
+  metaDescription,
+  noindexMetadata,
+  stripSiteName,
+} from "@/libs/seo";
 import {
   fetchBloodlineCatalog,
   fetchFarmCatalog,
@@ -20,12 +25,12 @@ type Props = { params: Promise<{ slug: string }> };
 const getGuide = cache(async (slug: string) => await fetchGuideBySlug(drizzleDB, slug));
 
 /**
- * Where an unpublished generated stub sends its visitors. The per-entity pages were
- * seeded from item and bloodline rows and unpublished as too thin to index; anyone still
- * holding one of those URLs -- a crawler included -- lands on the hub instead of a 404.
+ * Where an unpublished generated stub (item- or bloodline-linked) sends its visitors:
+ * its hub, so anyone still holding one of those URLs -- a crawler included -- lands on
+ * content instead of a 404.
  *
  * The redirect is temporary (307) on purpose. It lasts exactly as long as the row stays
- * unpublished: the generator now seeds these as drafts, and a draft that staff later
+ * unpublished: generated stubs start as drafts, and a draft that staff later
  * write and publish must serve at its own slug again. A 308 would be cached by browsers
  * and read by Google as permanent, and would keep sending that page's visitors to the
  * hub after it went live.
@@ -40,8 +45,8 @@ const draftStubTarget = (article: {
 };
 
 /**
- * Hubs whose category used to be split across many thin pages get a table from live
- * game data instead. Keyed by slug so adding one is a single entry here.
+ * Hubs that render a catalog table from live game data. Keyed by slug so adding one is
+ * a single entry here.
  */
 const HUB_CATALOGS: Record<string, () => Promise<React.ReactNode>> = {
   farming: async () => <FarmCatalog rows={await fetchFarmCatalog(drizzleDB)} />,
@@ -53,7 +58,7 @@ const HUB_CATALOGS: Record<string, () => Promise<React.ReactNode>> = {
 /**
  * The stored seoDescription is written as the whole snippet. The templated lead-in only
  * belongs on the fallback, where the excerpt or body opening needs the framing; on top
- * of a hand-written description it repeated the title and the brand back to back.
+ * of a hand-written description it would repeat the title and the brand back to back.
  */
 const guideDescription = (article: {
   title: string;
@@ -72,7 +77,7 @@ const guideDescription = (article: {
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const { slug } = await props.params;
   const article = await getGuide(slug);
-  if (!article?.published) return { title: "Guide Not Found" };
+  if (!article?.published) return noindexMetadata("Guide Not Found");
   return buildMetadata({
     title: article.seoTitle || article.title,
     description: guideDescription(article),

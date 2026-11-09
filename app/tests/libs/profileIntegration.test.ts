@@ -1,9 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { getUserCaps } from "@/drizzle/constants";
-import { isStreakContinuous, nextStreakRefreshAt } from "@/libs/activityStreak";
 import { bankAccessBlockMessage } from "@/libs/bank";
 import { calcLevelRequirements, levelUpBlockMessage } from "@/libs/profile";
-import { questAlreadyActiveBlockMessage, questRequiresTravel, questTypeConcurrentBlockMessage, questUiAccessBlockMessage } from "@/libs/quest/missionHall";
+import {
+  questAlreadyActiveBlockMessage,
+  questRequiresTravel,
+  questTypeConcurrentBlockMessage,
+  questUiAccessBlockMessage,
+} from "@/libs/quest/missionHall";
 import { raidRewardBlockMessage } from "@/libs/raids";
 import { statTrainingBlockMessage } from "@/libs/train";
 import type { UserWithRelations } from "@/server/api/routers/profile";
@@ -59,11 +63,20 @@ describe("shared profile system contracts", () => {
         experience: calcLevelRequirements(10),
         village: { name: "Horizon" },
       }),
-    ).toContain("Horizon");
+    ).toContain("Horizon users cannot level beyond level 10.");
+    expect(
+      levelUpBlockMessage({
+        ...user,
+        rank: "CHUNIN",
+        level: 9,
+        experience: calcLevelRequirements(9),
+        village: { name: "Horizon" },
+      }),
+    ).toBeNull();
   });
 
   it("rejects Energy spending for banned users", () => {
-    expect(statTrainingBlockMessage({...user, isBanned: true})).toContain("banned");
+    expect(statTrainingBlockMessage({ ...user, isBanned: true })).toContain("banned");
   });
 
   it("recognizes allied structure access instead of sending every visitor home", () => {
@@ -135,19 +148,5 @@ describe("shared profile system contracts", () => {
     expect(
       raidRewardBlockMessage({ damageDealt: 100, rewardsClaimed: [] }, threshold),
     ).toBeNull();
-  });
-
-  it("refreshes streaks at elapsed pass days and the exact continuity deadline", () => {
-    const now = new Date("2026-10-01T12:00:00Z");
-    const lastClaimDate = new Date("2026-09-30T00:00:00Z");
-    expect(isStreakContinuous(lastClaimDate, new Date(now.getTime() - 1))).toBe(true);
-    expect(isStreakContinuous(lastClaimDate, now)).toBe(false);
-    expect(
-      nextStreakRefreshAt(
-        [{ lastClaimDate: now, startedAt: new Date("2026-09-30T14:00:00Z") }],
-        now,
-      ),
-    ).toEqual(new Date("2026-10-01T14:00:00Z"));
-    expect(nextStreakRefreshAt([], now)).toEqual(new Date("2026-10-02T00:00:00Z"));
   });
 });

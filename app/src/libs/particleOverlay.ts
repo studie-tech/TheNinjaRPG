@@ -1,7 +1,7 @@
 /**
- * tsParticles inserts a <canvas> that defaults to 300×150 in normal flow. That
- * single insertion was the largest desktop CLS source on the site
- * (#tsparticles>canvas and #confetti). Hosts must be taken out of flow with
+ * tsParticles inserts a <canvas> that defaults to 300×150 in normal flow, so
+ * inserting it into the #tsparticles or #confetti host shifts the layout (CLS).
+ * Hosts must be taken out of flow with
  * inline styles *before* they are appended, so the first painted frame cannot
  * shift the document.
  */

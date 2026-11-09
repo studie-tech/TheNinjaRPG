@@ -1,20 +1,21 @@
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+  vi,
+} from "bun:test";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { useLiveCountdown } from "@/hooks/useLiveCountdown";
 import { getRemainingStealthCooldown } from "@/libs/stealth";
 
 const BASE = Date.UTC(2026, 9, 21, 12);
-let nowMs = BASE;
-
-const advanceTimers = (ms: number) => {
-  nowMs += ms;
-  vi.advanceTimersByTime(ms);
-};
 
 beforeEach(() => {
-  nowMs = BASE;
   vi.useFakeTimers();
-  vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+  setSystemTime(BASE);
 });
 
 afterEach(() => {
@@ -34,61 +35,64 @@ describe("useLiveCountdown", () => {
     for (const seconds of [1, 2]) {
       rerender({ seconds });
       expect(result.current).toBe(seconds);
-      act(() => advanceTimers(1_000));
+      act(() => vi.advanceTimersByTime(1_000));
       expect(result.current).toBe(seconds - 1);
-      act(() => advanceTimers(1_000));
+      act(() => vi.advanceTimersByTime(1_000));
       expect(result.current).toBe(0);
       rerender({ seconds: 0 });
     }
   });
 
-  it.each([0, undefined, null])("clears an active countdown when given %s", (stopped) => {
-    const { result, rerender } = renderHook(
-      ({ seconds }) => useLiveCountdown(seconds),
-      { initialProps: { seconds: 2 as number | undefined | null } },
-    );
-    act(() => advanceTimers(1_000));
-    expect(result.current).toBe(1);
-    rerender({ seconds: stopped });
-    expect(result.current).toBe(0);
-    act(() => advanceTimers(5_000));
-    expect(result.current).toBe(0);
-  });
+  it.each([0, undefined, null])(
+    "clears an active countdown when given %s",
+    (stopped) => {
+      const { result, rerender } = renderHook(
+        ({ seconds }) => useLiveCountdown(seconds),
+        { initialProps: { seconds: 2 as number | undefined | null } },
+      );
+      act(() => vi.advanceTimersByTime(1_000));
+      expect(result.current).toBe(1);
+      rerender({ seconds: stopped });
+      expect(result.current).toBe(0);
+      act(() => vi.advanceTimersByTime(5_000));
+      expect(result.current).toBe(0);
+    },
+  );
 
   it("accepts small extensions and reductions from a fresh remaining-time snapshot", () => {
     const { result, rerender } = renderHook(
       ({ seconds }) => useLiveCountdown(seconds),
       { initialProps: { seconds: 10 } },
     );
-    act(() => advanceTimers(1_000));
+    act(() => vi.advanceTimersByTime(1_000));
     expect(result.current).toBe(9);
 
     rerender({ seconds: 11 });
     expect(result.current).toBe(11);
-    act(() => advanceTimers(1_000));
+    act(() => vi.advanceTimersByTime(1_000));
     expect(result.current).toBe(10);
 
     rerender({ seconds: 9 });
     expect(result.current).toBe(9);
-    act(() => advanceTimers(1_000));
+    act(() => vi.advanceTimersByTime(1_000));
     expect(result.current).toBe(8);
   });
 
   it("does not restart an unchanged snapshot on unrelated rerenders", () => {
     const { result, rerender } = renderHook(() => useLiveCountdown(2));
-    act(() => advanceTimers(500));
+    act(() => vi.advanceTimersByTime(500));
     rerender();
-    act(() => advanceTimers(500));
+    act(() => vi.advanceTimersByTime(500));
     expect(result.current).toBe(1);
     rerender();
-    act(() => advanceTimers(1_000));
+    act(() => vi.advanceTimersByTime(1_000));
     expect(result.current).toBe(0);
   });
 
   it("uses elapsed wall time when interval callbacks are delayed", () => {
     const { result } = renderHook(() => useLiveCountdown(30));
     act(() => {
-      nowMs += 60_000;
+      setSystemTime(Date.now() + 59_000);
       vi.advanceTimersByTime(1_000);
     });
     expect(result.current).toBe(0);
@@ -102,11 +106,11 @@ describe("useLiveCountdown", () => {
       { initialProps: { timeDiff: 3_000 } },
     );
     expect(result.current).toBe(5);
-    act(() => advanceTimers(1_000));
+    act(() => vi.advanceTimersByTime(1_000));
     expect(result.current).toBe(4);
     rerender({ timeDiff: 4_000 });
     expect(result.current).toBe(5);
-    act(() => advanceTimers(5_000));
+    act(() => vi.advanceTimersByTime(5_000));
     expect(result.current).toBe(0);
   });
 

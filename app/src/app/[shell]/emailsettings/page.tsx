@@ -5,17 +5,6 @@ import { AlertCircle, Mail, Trash2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { api } from "@/app/_trpc/client";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,22 +17,23 @@ import {
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 
-// Helper function to format dates
-const formatDate = (date: Date | string): string => {
-  return format(new Date(date), "MMM d, yyyy h:mm a");
-};
-
-export const EmailReminderSkeleton: React.FC = () => {
+export default function EmailReminderPage() {
   return (
-    <Skeleton className="flex h-[400px] w-full items-start justify-center">
-      <Loader explanation="Loading email reminder settings" />
-    </Skeleton>
+    <ContentBox
+      title="Email Reminder Settings"
+      subtitle="Manage your email notification preferences"
+    >
+      <Suspense fallback={<EmailReminderSkeleton />}>
+        <EmailReminderContent />
+      </Suspense>
+    </ContentBox>
   );
-};
+}
 
 // Component that uses useSearchParams
 const EmailReminderContent: React.FC = () => {
@@ -186,8 +176,9 @@ const EmailReminderContent: React.FC = () => {
               This link is unique to your email address. Do not share it with others.
             </p>
 
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
+            <Confirm
+              title="Delete Email Reminder"
+              button={
                 <Button
                   variant="destructive"
                   size="sm"
@@ -196,26 +187,14 @@ const EmailReminderContent: React.FC = () => {
                   <Trash2 className="h-4 w-4" />
                   Delete
                 </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Email Reminder</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to delete this email reminder? This action
-                    cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              }
+              proceed_label="Delete"
+              confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onAccept={handleDelete}
+            >
+              Are you sure you want to delete this email reminder? This action cannot be
+              undone.
+            </Confirm>
           </CardFooter>
         </Card>
       )}
@@ -223,15 +202,15 @@ const EmailReminderContent: React.FC = () => {
   );
 };
 
-export default function EmailReminderPage() {
+const EmailReminderSkeleton: React.FC = () => {
   return (
-    <ContentBox
-      title="Email Reminder Settings"
-      subtitle="Manage your email notification preferences"
-    >
-      <Suspense fallback={<EmailReminderSkeleton />}>
-        <EmailReminderContent />
-      </Suspense>
-    </ContentBox>
+    <Skeleton className="flex h-[400px] w-full items-start justify-center">
+      <Loader explanation="Loading email reminder settings" />
+    </Skeleton>
   );
-}
+};
+
+// Helper function to format dates
+const formatDate = (date: Date | string): string => {
+  return format(new Date(date), "MMM d, yyyy h:mm a");
+};

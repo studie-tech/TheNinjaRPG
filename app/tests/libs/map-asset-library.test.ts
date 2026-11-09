@@ -7,7 +7,10 @@ import {
 } from "@/libs/sector-map/decorations";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import { normalizeTiledSectorMap } from "@/libs/sector-map/tiled";
-import { addDecorationTileset, type SpriteFile } from "@/libs/sector-map/tiled-download";
+import {
+  addDecorationTileset,
+  type SpriteFile,
+} from "@/libs/sector-map/tiled-download";
 
 const sprite = (key: string, width = 64, height = 96): SpriteFile => ({
   key,
@@ -41,7 +44,9 @@ describe("decoration asset registry merge", () => {
     ]);
     expect(merged.get(builtin.key)?.filepath).toBe("https://cdn.example/reskinned.png");
     expect(merged.get(builtin.key)?.randomRotation).toBe(true);
-    expect(merged.get("custom.statue")?.filepath).toBe("https://cdn.example/statue.png");
+    expect(merged.get("custom.statue")?.filepath).toBe(
+      "https://cdn.example/statue.png",
+    );
     // Untouched built-ins remain
     expect(merged.size).toBe(DECORATION_ASSETS_BY_KEY.size + 1);
     const other = DECORATION_ASSETS[1]!;
@@ -59,10 +64,12 @@ describe("decoration asset registry merge", () => {
         renderScale: 1,
       },
     ]);
-    expect(resolveDecorationAsset({ assetKey: "custom.statue" }, registry)).toMatchObject(
-      { filepath: "https://cdn.example/statue.png", windAffected: true },
-    );
-    expect(resolveDecorationAsset({ assetKey: "no.such.key" }, registry)).toBeUndefined();
+    expect(
+      resolveDecorationAsset({ assetKey: "custom.statue" }, registry),
+    ).toMatchObject({ filepath: "https://cdn.example/statue.png", windAffected: true });
+    expect(
+      resolveDecorationAsset({ assetKey: "no.such.key" }, registry),
+    ).toBeUndefined();
   });
 });
 
@@ -129,7 +136,7 @@ describe("WYSIWYG decoration tileset export", () => {
     // firstgid sits above the terrain tileset's id range (1 + 3)
     expect(deco?.firstgid).toBe(4);
     expect(deco?.objectalignment).toBe("bottom");
-    expect((deco?.tiles as unknown[]).length).toBe(1);
+    expect((deco!.tiles as unknown[]).length).toBe(1);
 
     const layers = map.layers as Record<string, unknown>[];
     const objects = layers[1]?.objects as Record<string, unknown>[];
@@ -139,7 +146,7 @@ describe("WYSIWYG decoration tileset export", () => {
     // height = scale (2) x hex height (56); square like the game renders
     expect(treeObject?.height).toBe(112);
     expect(treeObject?.width).toBe(112);
-    // grounded on the hex: y dropped by half a hex from the centre
+    // grounded on the hex: y dropped from the centre by half a hex minus the 0.1 x scale lift
     expect(treeObject?.y).toBeCloseTo(84 + 56 * (0.5 - 0.2), 1);
     // anchors untouched
     const anchor = objects.find((object) => object.type === "anchor");

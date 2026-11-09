@@ -1,9 +1,12 @@
-import { trackerQuest as makeQuest } from "../../setup/quest";
 import { describe, expect, it } from "bun:test";
-import { buildCombatTrackerTasks, hydrateUserForQuests } from "@/libs/combat/settlement";
-import { getNewTrackers } from "@/libs/quest";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
+import {
+  buildCombatTrackerTasks,
+  hydrateUserForQuests,
+} from "@/libs/combat/settlement";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
+import { getNewTrackers } from "@/libs/quest";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
+import { trackerQuest as makeQuest } from "../../setup/quest";
 
 // Exercise combat task construction, quest hydration and objective credit together.
 const makeResult = (didWin: number): CombatResult =>
@@ -58,7 +61,11 @@ describe("use_specific_item_combat — updateUser seam", () => {
     const me = makeBattleUser("attacker", {
       usedActions: [{ id: "item-1", type: "item" }],
     });
-    const result = runUpdateUserSeam(battleWith(me, makeBattleUser("foe"), quest), me, 1);
+    const result = runUpdateUserSeam(
+      battleWith(me, makeBattleUser("foe"), quest),
+      me,
+      1,
+    );
     const goal = result.trackers
       .find((t) => t.id === "q")
       ?.goals.find((g) => g.id === "o");
@@ -71,7 +78,11 @@ describe("use_specific_item_combat — updateUser seam", () => {
     const me = makeBattleUser("attacker", {
       usedActions: [{ id: "item-1", type: "item" }],
     });
-    const result = runUpdateUserSeam(battleWith(me, makeBattleUser("foe"), quest), me, 0);
+    const result = runUpdateUserSeam(
+      battleWith(me, makeBattleUser("foe"), quest),
+      me,
+      0,
+    );
     const goal = result.trackers
       .find((t) => t.id === "q")
       ?.goals.find((g) => g.id === "o");
@@ -83,7 +94,11 @@ describe("use_specific_item_combat — updateUser seam", () => {
     const me = makeBattleUser("attacker", {
       usedActions: [{ id: "other-item", type: "item" }],
     });
-    const result = runUpdateUserSeam(battleWith(me, makeBattleUser("foe"), quest), me, 1);
+    const result = runUpdateUserSeam(
+      battleWith(me, makeBattleUser("foe"), quest),
+      me,
+      1,
+    );
     const goal = result.trackers
       .find((t) => t.id === "q")
       ?.goals.find((g) => g.id === "o");

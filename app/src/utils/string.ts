@@ -69,9 +69,9 @@ const PREVIEW_ENTITIES: Record<string, string> = {
 };
 
 /**
- * Truncate a string to maxLength, appending an indicator if truncated.
+ * Truncate a string to maximumLength, appending an indicator if truncated.
  * @param text - The string to truncate
- * @param maxLength - Maximum length including the indicator
+ * @param maximumLength - Maximum length including the indicator
  * @param indicator - The truncation indicator (default: "...")
  * @returns The truncated string
  */

@@ -59,7 +59,9 @@ describeWithDatabase("furniture auction transfers", () => {
       bidderId: "buyer",
       amount: 100,
     });
-    expect((await completeAuctionInternal(database, "chair-auction")).success).toBe(true);
+    expect((await completeAuctionInternal(database, "chair-auction")).success).toBe(
+      true,
+    );
     const [transferred] = await database
       .select()
       .from(userItem)

@@ -1,19 +1,15 @@
 import { describe, expect, it } from "bun:test";
-import { applyEffects } from "@/libs/combat/process";
-import type {
-  BattleUserState,
-  CompleteBattle,
-  UserEffect,
-} from "@/libs/combat/types";
-import { applyPoolAdjustmentsToBase, getEffectiveMaxPool } from "@/libs/combat/util";
 import type { PoolType } from "@/drizzle/constants";
+import { applyEffects } from "@/libs/combat/process";
+import type { BattleUserState, CompleteBattle, UserEffect } from "@/libs/combat/types";
+import { applyPoolAdjustmentsToBase, getEffectiveMaxPool } from "@/libs/combat/util";
 import {
   makeBattleUser,
   makeCombatAction,
   makeCompleteBattle,
   makeDamageEffect,
   makeEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 /**
  * Equipment with `increasemaxpools` raises a combatant's maximum pools for the
@@ -144,7 +140,10 @@ describe("armor pool bonus survives in-battle healing", () => {
     const player = makeArmoredUser("player", armor);
     player.curHealth = BASE_MAX + BONUS - 50;
     const enemy = makeBattleUser("enemy");
-    const battle = makeBattle([player, enemy], [armor, makeHeal("player", ["Health"], 50)]);
+    const battle = makeBattle(
+      [player, enemy],
+      [armor, makeHeal("player", ["Health"], 50)],
+    );
 
     const { newBattle } = applyEffects(battle, "player", makeCombatAction());
 

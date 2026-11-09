@@ -5,7 +5,9 @@ import {
   getItemConsumeRequestId,
 } from "@/libs/itemConsumption";
 
-afterEach(() => { for (const user of ["first", "second"]) finishItemConsumeRequest(user, "stack"); });
+afterEach(() => {
+  for (const user of ["first", "second"]) finishItemConsumeRequest(user, "stack");
+});
 
 describe("item opening request identity", () => {
   it("retains the same request across uncertain retries and isolates accounts", () => {

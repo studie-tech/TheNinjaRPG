@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -42,10 +41,10 @@ import {
   fetchPublishedSectorMaps,
   fetchSectorWindowEntries,
   getSectorNeighborIds,
+  hashTiledJson,
   invalidatePublishedMapCache,
 } from "@/server/utils/sectorMap";
 import { canChangeContent } from "@/utils/permissions";
-// Reuse the centralized sector-id bounds instead of redefining them here
 import { sectorIdSchema as sectorSchema } from "@/validators/travel";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -68,10 +67,8 @@ export const worldMapRouter = createTRPCRouter({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
-      // Filter in SQL (uses the SectorMap_sector_status_idx index) instead of
-      // scanning the whole ever-growing table and filtering in JS. Conditions
-      // derive only from input, so the listing can run parallel with the auth
-      // guard (metadata-only columns, so no heavy blobs leak before the check).
+      // Conditions come only from input, so the metadata-only listing runs in
+      // parallel with the auth guard.
       const conditions = [
         input?.sector !== undefined ? eq(sectorMap.sector, input.sector) : undefined,
         input?.status ? eq(sectorMap.status, input.status) : undefined,
@@ -437,8 +434,8 @@ export const worldMapRouter = createTRPCRouter({
       if (!structure?.village) return errorResponse("Structure not found");
 
       // Guards: the target tile must be inside the sector's published map bounds
-      // and not already occupied by another structure (the map read genuinely
-      // depends on the structure's sector, so it stays sequential here)
+      // and not already occupied by another structure (the map read depends on
+      // the structure's sector)
       const maps = await fetchPublishedSectorMaps(ctx.drizzle, [
         structure.village.sector,
       ]);
@@ -512,15 +509,6 @@ const buildWindowLayoutBundle = (sector: number) => {
   return [sector, cardinals.north, cardinals.east, cardinals.south, cardinals.west]
     .filter((center) => center >= 0)
     .map((center) => ({ center, entries: buildSectorWindowLayout(center) }));
-};
-
-/**
- * sha256 hex digest of the JSON.stringify'd upload, stored as the row's
- * sourceHash. Not canonicalized, so the same logical document with different
- * key ordering hashes differently.
- */
-const hashTiledJson = (json: unknown) => {
-  return createHash("sha256").update(JSON.stringify(json)).digest("hex");
 };
 
 /**

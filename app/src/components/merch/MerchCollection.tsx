@@ -22,6 +22,9 @@ import { getScrollBehavior } from "@/utils/dom";
 import type { MerchProduct } from "@/validators/merch";
 import { useMerch } from "./MerchProvider";
 
+/** Products shown per page of the collection grid. */
+const PAGE_SIZE = 24;
+
 const FEATURED_COLLECTION_ORDER: Record<string, number> = {
   Community: 0,
   "S-ranks": 1,
@@ -58,7 +61,8 @@ export function MerchCollection() {
   const [kind, setKind] = useState("Organic Hoodie");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("featured");
-  const [limit, setLimit] = useState(24);
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const resetPaging = () => setLimit(PAGE_SIZE);
   const kinds = [...new Set(products.map((p) => p.kind))];
   const activeKind =
     kinds.includes(kind) || kind === "All pieces" ? kind : "All pieces";
@@ -82,7 +86,7 @@ export function MerchCollection() {
     );
   const selectCollection = (name: string) => {
     setCollection(name);
-    setLimit(24);
+    resetPaging();
     document
       .getElementById("collection")
       ?.scrollIntoView({ behavior: getScrollBehavior() });
@@ -91,7 +95,7 @@ export function MerchCollection() {
     setSearch("");
     setCollection("All designs");
     setKind("All pieces");
-    setLimit(24);
+    resetPaging();
   };
   const heroPieces = [
     { key: "blueblade", kind: "Organic T-Shirt" },
@@ -235,7 +239,7 @@ export function MerchCollection() {
                 aria-pressed={collection === c}
                 onClick={() => {
                   setCollection(c);
-                  setLimit(24);
+                  resetPaging();
                 }}
               >
                 {c}
@@ -250,7 +254,7 @@ export function MerchCollection() {
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
-                  setLimit(24);
+                  resetPaging();
                 }}
                 placeholder="Search designs, villages…"
               />
@@ -270,7 +274,7 @@ export function MerchCollection() {
                 value={activeKind}
                 onChange={(e) => {
                   setKind(e.target.value);
-                  setLimit(24);
+                  resetPaging();
                 }}
               >
                 <option>All pieces</option>
@@ -358,7 +362,7 @@ export function MerchCollection() {
                 <button
                   type="button"
                   className="merch-button merch-button-outline"
-                  onClick={() => setLimit(limit + 24)}
+                  onClick={() => setLimit(limit + PAGE_SIZE)}
                 >
                   Explore more pieces <ArrowDown size={16} />
                 </button>

@@ -4,11 +4,10 @@
  * Uses the auto-generated bindings from SpacetimeDB to connect and manage
  * Tower Defense game sessions.
  *
- * COST OPTIMIZATIONS:
- * - EnemySpawn table separates static path data (sent once) from volatile enemy data
- * - Projectile progress computed client-side from spawned_at timestamp
- * - Enemy updates use threshold-based movement (25%, 50%, 75%, 100%)
- * - Tick rate increased to 150ms with client-side interpolation
+ * Data layout:
+ * - EnemySpawn carries each enemy's static path data once; Enemy rows carry the volatile state
+ * - Projectiles have only insert/delete events; the client computes their progress
+ * - The server advances the game every GAME_TICK_MS (app/spacetimedb/src/lib.rs)
  */
 
 import { DbConnection, type ErrorContext, type SubscriptionHandle } from "./bindings";
@@ -93,8 +92,7 @@ function validateUserId(userId: string | undefined | null): string | null {
 export type ConnectionState = "disconnected" | "connecting" | "connected" | "error";
 
 /**
- * Event types for state subscriptions
- * COST OPTIMIZATION: Added enemy_spawn events for static path data
+ * Event types for state subscriptions; enemy_spawn carries static path data once per enemy.
  */
 export type SpacetimeDBEvent =
   | { type: "connection_state"; state: ConnectionState }
@@ -172,9 +170,8 @@ export class SpacetimeDBConnection {
       return;
     }
 
-    // If already connecting, wait for it to complete instead of returning immediately
-    // This fixes a race condition where startRun() could call createSession() before
-    // the WebSocket was actually open (InvalidStateError)
+    // If already connecting, wait for it to complete so callers such as startRun() never
+    // send on a WebSocket that is not open yet (InvalidStateError)
     if (this.connectionState === "connecting") {
       await this.waitForConnection();
       this.switchUser(userId);
@@ -196,8 +193,7 @@ export class SpacetimeDBConnection {
           // Row listeners accumulate per registration, so attach them once per connection.
           this.setupTableHandlers();
 
-          // Set up filtered subscriptions first to avoid race conditions
-          // PERFORMANCE: Only subscribe to this user's data
+          // Set up the user-level subscriptions first to avoid race conditions
           // Note: connectionState will be set in setupGlobalSubscriptions's onApplied callback
           // This ensures callers cannot send reducers before subscriptions are established
           this.setupGlobalSubscriptions();
@@ -239,8 +235,10 @@ export class SpacetimeDBConnection {
   }
 
   /**
-   * Set up global subscriptions (user-level, not session-specific)
-   * PERFORMANCE: Filtered subscriptions to only receive this user's data.
+   * Set up global subscriptions (user-level, not session-specific).
+   * game_session and completed_run are filtered to this user. session_state has no user
+   * column and is subscribed whole: the lobby's resume card reads wave, score and health
+   * from it before subscribeToSession runs.
    *
    * For guests, we DON'T subscribe to all guest sessions here.
    * Instead, subscribeToGuestSession() is called with the specific seed
@@ -301,8 +299,8 @@ export class SpacetimeDBConnection {
       this.globalSubscription = null;
     }
 
-    // Subscribe to the specific session by seed (unique per session)
-    // This ensures we only receive events for OUR session, not all guests
+    // Subscribe to the specific session by seed (unique per session), so only OUR
+    // game_session row arrives; session_state is subscribed whole, as above
     this.globalSubscription = this.connection
       .subscriptionBuilder()
       .onError((ctx: ErrorContext) => {
@@ -433,7 +431,7 @@ export class SpacetimeDBConnection {
       this.emit({ type: "session_state_delete", sessionId: row.sessionId });
     });
 
-    // COST OPTIMIZATION: Enemy spawn events (static path data, sent once)
+    // Enemy spawn events (static path data, sent once)
     // These are only insert/delete, never update
     db.enemySpawn.onInsert((_ctx, row) => {
       this.emit({ type: "enemy_spawn_insert", spawn: row });
@@ -456,14 +454,10 @@ export class SpacetimeDBConnection {
       this.emit({ type: "enemy_delete", enemyId: row.id });
     });
 
-    // Projectile events
-    // COST OPTIMIZATION: No more projectile_update events - progress computed client-side
+    // Projectile events: insert/delete only; the client computes progress
     db.projectile.onInsert((_ctx, row) => {
       this.emit({ type: "projectile_insert", projectile: row as Projectile });
     });
-
-    // Note: projectile_update removed - server no longer sends progress updates
-    // Client computes progress from spawned_at timestamp
 
     db.projectile.onDelete((_ctx, row) => {
       this.emit({ type: "projectile_delete", projectileId: row.id });

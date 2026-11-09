@@ -7,15 +7,21 @@ import {
   FED_INVENTORY_SLOTS,
   FED_MATERIALS_SLOTS,
   HOME_FURNITURE_STORAGE_CAPACITY,
+  INVENTORY_BASE_SLOTS,
+  ITEM_REPAIR_BASE_COST,
+  ITEM_SELL_BASE_DISCOUNT_PERC,
+  ITEM_SELL_MAX_DISCOUNT_PERC,
   type ItemSlot,
   ItemSlots,
   ItemSlotTypes,
+  type ItemType,
   ItemTypes,
   MATERIALS_BASE_SLOTS,
 } from "@/drizzle/constants";
 import type {
   Item,
   ItemLoadout,
+  ItemSlotType,
   UserData,
   UserItemWithItem,
   UserItemWithRelations,
@@ -214,10 +220,10 @@ export const getHomeStorageBucketFullMessage = (bucket: HomeStorageBucket): stri
  * @param user - The user data.
  * @returns The maximum number of items.
  */
-export const calcMaxItems = (user: UserData) => {
-  const base = 20;
-  return base + user.extraItemSlots + FED_INVENTORY_SLOTS[getUserFederalStatus(user)];
-};
+export const calcMaxItems = (user: UserData) =>
+  INVENTORY_BASE_SLOTS +
+  user.extraItemSlots +
+  FED_INVENTORY_SLOTS[getUserFederalStatus(user)];
 
 /**
  * Calculates the selling price of a user's item based on various discounts and factors.
@@ -233,11 +239,14 @@ export const calcItemSellingPrice = (
   structures: VillageStructure[] | undefined,
 ) => {
   if (!useritem) return 0;
-  const bDiscount = 80;
+  const bDiscount = ITEM_SELL_BASE_DISCOUNT_PERC;
   const sDiscount = getStrucBoost("itemDiscountPerLvl", structures);
   const aDiscount = user.anbuId ? ANBU_ITEMSHOP_DISCOUNT_PERC : 0;
   const hDiscount = healItemDiscountPerc(useritem.item);
-  const discount = Math.min(bDiscount + sDiscount + aDiscount + hDiscount, 95);
+  const discount = Math.min(
+    bDiscount + sDiscount + aDiscount + hDiscount,
+    ITEM_SELL_MAX_DISCOUNT_PERC,
+  );
   const factor = (100 - discount) / 100;
   const isEventItem = useritem.item.isEventItem;
   const cost = isEventItem ? 0 : useritem.item.cost * useritem.quantity * factor;
@@ -254,18 +263,10 @@ export const calcItemRepairCost = (useritem: UserItemWithItem) => {
   const maxDurability = useritem.item.maxDurability;
   const pointsToRepair = maxDurability - curDurability;
   const factor = pointsToRepair * DURABILITY_POINT_PRICE_PERCENT;
-  switch (useritem.item.rarity) {
-    case "COMMON":
-      return Math.ceil(50 * factor);
-    case "RARE":
-      return Math.ceil(200 * factor);
-    case "EPIC":
-      return Math.ceil(400 * factor);
-    case "LEGENDARY":
-      return Math.ceil(800 * factor);
-    default:
-      return 0;
-  }
+  const rarity = useritem.item.rarity;
+  // Rarity is stored data; an unknown value costs nothing.
+  if (!Object.hasOwn(ITEM_REPAIR_BASE_COST, rarity)) return 0;
+  return Math.ceil(ITEM_REPAIR_BASE_COST[rarity] * factor);
 };
 
 /**
@@ -321,15 +322,19 @@ export const isEquippableUserItem = (
 export const isImbuing = (
   ui: { imbuements: { craftingFinishedAt: Date | null }[] },
   now: Date = new Date(),
-): boolean =>
-  ui.imbuements.some((im) => im.craftingFinishedAt && im.craftingFinishedAt > now);
+): boolean => ui.imbuements.some((im) => !isImbuementFinished(im, now));
 
 /** A user item's imbuements that are no longer being crafted at `now`. */
 export const finishedImbuements = <T extends { craftingFinishedAt: Date | null }>(
   ui: { imbuements: T[] },
   now: Date = new Date(),
-): T[] =>
-  ui.imbuements.filter((im) => !im.craftingFinishedAt || im.craftingFinishedAt <= now);
+): T[] => ui.imbuements.filter((im) => isImbuementFinished(im, now));
+
+/** An imbuement finishing exactly at `now` counts as finished, as in getEquipBlockReason. */
+const isImbuementFinished = (
+  im: { craftingFinishedAt: Date | null },
+  now: Date = new Date(),
+) => !im.craftingFinishedAt || im.craftingFinishedAt <= now;
 
 /**
  * Items of a user item's finished imbuements, in the shape item detail views pass
@@ -559,21 +564,21 @@ export const findFreeEquipSlot = (
  */
 export const readItemListFilterSlot = (
   slot: string | undefined,
-  itemType: (typeof ItemTypes)[number] | undefined,
+  itemType: ItemType | undefined,
 ): {
-  slot?: (typeof ItemSlotTypes)[number];
-  itemType?: (typeof ItemTypes)[number];
+  slot?: ItemSlotType;
+  itemType?: ItemType;
 } => {
   const slotName = slot?.split("_")[0];
   const catalogSlot = (ItemSlotTypes as readonly string[]).includes(slotName ?? "")
-    ? (slotName as (typeof ItemSlotTypes)[number])
+    ? (slotName as ItemSlotType)
     : undefined;
   return {
     slot: catalogSlot,
     itemType:
       itemType ??
       (slotName && !catalogSlot && (ItemTypes as readonly string[]).includes(slotName)
-        ? (slotName as (typeof ItemTypes)[number])
+        ? (slotName as ItemType)
         : undefined),
   };
 };

@@ -97,7 +97,11 @@ describe("computeWarOutcome", () => {
 
   it("splits the bonus across allied winners and gives the remainder to the leader", () => {
     const result = outcome({
-      warAllies: [ally("zeta", "attacker"), ally("beta", "attacker"), ally("x", "defender")],
+      warAllies: [
+        ally("zeta", "attacker"),
+        ally("beta", "attacker"),
+        ally("x", "defender"),
+      ],
     });
     const share = Math.floor(WAR_VICTORY_TOKEN_BONUS / 3);
     expect(result.winningVillageIds).toEqual(["attacker", "beta", "zeta"]);
@@ -138,7 +142,8 @@ describe("computeWarOutcome", () => {
       const { attackerCooldown, defenderCooldown } = outcome(overrides);
       return [attackerCooldown, defenderCooldown];
     };
-    const exhausted = (count: number) => days(count * WAR_ATTACKER_EXHAUSTION_MULTIPLIER);
+    const exhausted = (count: number) =>
+      days(count * WAR_ATTACKER_EXHAUSTION_MULTIPLIER);
     expect(cooldowns({})).toEqual([
       exhausted(WAR_WINNING_COOLDOWN_DAYS),
       days(WAR_LOSING_COOLDOWN_DAYS),

@@ -1,8 +1,11 @@
-
+import { describe, expect, it, vi } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { describe, expect, it, vi } from "bun:test";
-import { assignQuestToUser, upsertQuestEntries, upsertQuestEntry } from "@/server/utils/questAssignment";
+import {
+  assignQuestToUser,
+  upsertQuestEntries,
+  upsertQuestEntry,
+} from "@/server/utils/questAssignment";
 import { trackerQuest } from "../../../../setup/quest";
 
 const quest = trackerQuest("mission-1", [], "mission", {
@@ -62,7 +65,9 @@ const entryClient = (entry: object) => {
       },
     })),
     insert: vi.fn(() => ({
-      values: vi.fn(() => ({ onDuplicateKeyUpdate: vi.fn().mockResolvedValue(undefined) })),
+      values: vi.fn(() => ({
+        onDuplicateKeyUpdate: vi.fn().mockResolvedValue(undefined),
+      })),
     })),
     query: { questHistory: { findFirst: vi.fn().mockResolvedValue(entry) } },
   } as never;
@@ -70,9 +75,11 @@ const entryClient = (entry: object) => {
 };
 
 /** Minimal write client for the successful upsert + daily-counter assignment path. */
-const makeClient = (assignedQuest: { questId: string } | null = { questId: quest.id }) => {
+const makeClient = (
+  assignedQuest: { questId: string } | null = { questId: quest.id },
+) => {
   const where = vi.fn().mockResolvedValue({ rowsAffected: 1 });
-  // Hoisted so tests can inspect what was written, not just that a write happened.
+  // Exposed so tests can inspect the written values.
   const set = vi.fn((_update: Record<string, unknown>) => ({ where }));
   const update = vi.fn(() => ({ set }));
   const onDuplicateKeyUpdate = vi.fn().mockResolvedValue(undefined);
@@ -174,7 +181,7 @@ const makeBulkClient = (
   };
 };
 
-describe("assignQuestToUser compatibility", () => {
+describe("quest assignment", () => {
   it("initializes a collection objective from bloodlines owned before quest acceptance", async () => {
     const { client, set } = makeClient();
     const collector = { ...user, bloodlineId: "line-2", userQuests: [] };
@@ -187,13 +194,19 @@ describe("assignQuestToUser compatibility", () => {
         ],
       },
     };
-    await upsertQuestEntry(client, collector as never, collectionQuest as never, "ui", null);
+    await upsertQuestEntry(
+      client,
+      collector as never,
+      collectionQuest as never,
+      "ui",
+      null,
+    );
     expect(set.mock.calls[0]?.[0].questData).toMatchObject([
       { id: quest.id, goals: [{ id: "collect", value: 2, target: 2, done: true }] },
     ]);
   });
 
-  it("preserves the successful UI mission path: history upsert, tracker write, and counter", async () => {
+  it("starts a UI mission with a history upsert, tracker write and counter", async () => {
     const { client, update, insert } = makeClient();
 
     const result = await assignQuestToUser({
@@ -205,7 +218,10 @@ describe("assignQuestToUser compatibility", () => {
       prevAttempt: undefined,
     });
 
-    expect(result).toMatchObject({ success: true, message: "Quest started: A-rank mission" });
+    expect(result).toMatchObject({
+      success: true,
+      message: "Quest started: A-rank mission",
+    });
     expect(insert).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledTimes(2);
   });
@@ -248,7 +264,8 @@ describe("assignQuestToUser compatibility", () => {
 
     expect(result).toEqual({
       success: false,
-      message: "New hunts are available on the Hunter contract board. Existing hunting quests can still be completed.",
+      message:
+        "New hunts are available on the Hunter contract board. Existing hunting quests can still be completed.",
     });
     expect(insert).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
@@ -286,7 +303,10 @@ describe("assignQuestToUser compatibility", () => {
       prevAttempt: undefined,
     });
 
-    expect(result).toMatchObject({ success: true, message: "Quest started: A-rank mission" });
+    expect(result).toMatchObject({
+      success: true,
+      message: "Quest started: A-rank mission",
+    });
     expect(findFirst).toHaveBeenCalledTimes(1);
     expect(insert).toHaveBeenCalledTimes(1);
     expect(update).toHaveBeenCalledTimes(1);
@@ -324,9 +344,9 @@ describe("assignQuestToUser compatibility", () => {
         "quest_objective",
       ),
     ).rejects.toThrow("Overworld quests can only be accepted from their assigned NPC.");
-    await expect(upsertQuestEntries(client, overworldQuest, undefined as never)).rejects.toThrow(
-      "Overworld quests cannot be assigned to users in bulk.",
-    );
+    await expect(
+      upsertQuestEntries(client, overworldQuest, undefined as never),
+    ).rejects.toThrow("Overworld quests cannot be assigned to users in bulk.");
     expect(insert).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
   });
@@ -358,7 +378,9 @@ describe("assignQuestToUser compatibility", () => {
     expect(removal.params).toContain(daily.id);
     // JSON_SEARCH matches with LIKE semantics and nanoid ids contain `_`, so the id has to be
     // escaped or the reset drops some other quest's tracker.
-    expect(removal.sql).toContain("REPLACE(REPLACE(REPLACE(?, '#', '##'), '%', '#%'), '_', '#_')");
+    expect(removal.sql).toContain(
+      "REPLACE(REPLACE(REPLACE(?, '#', '##'), '%', '#%'), '_', '#_')",
+    );
     // Rows with no tracker for this quest are skipped rather than written with a NULL document.
     expect(render(wheres[0]).sql).toContain("IS NOT NULL");
 
@@ -452,7 +474,9 @@ describe("assignQuestToUser compatibility", () => {
     }));
     const { client, sets } = makeBulkClient(rows, [0, 0]);
     const ticks = [1_000, 10_000];
-    const clock = vi.spyOn(Date, "now").mockImplementation(() => ticks.shift() ?? 10_000);
+    const clock = vi
+      .spyOn(Date, "now")
+      .mockImplementation(() => ticks.shift() ?? 10_000);
     try {
       const finished = await upsertQuestEntries(
         client,
@@ -469,7 +493,9 @@ describe("assignQuestToUser compatibility", () => {
   });
 
   it("reports a finished reset when every batch ran inside the deadline", async () => {
-    const { client } = makeBulkClient([{ userId: user.userId, historyId: "history-1" }]);
+    const { client } = makeBulkClient([
+      { userId: user.userId, historyId: "history-1" },
+    ]);
 
     const finished = await upsertQuestEntries(
       client,
@@ -615,7 +641,6 @@ describe("assignQuestToUser compatibility", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-
   it("hydrates collection progress when the quest is accepted", async () => {
     const { client, set } = makeClient();
     const collectionQuest = {
@@ -657,23 +682,57 @@ describe("assignQuestToUser compatibility", () => {
     });
   });
 
-  it.each(["ui", "pet_task", "overworld_npc"] as const)("rejects Special quests from %s without writes", async (source) => {
-    const { client, update, insert } = makeClient();
-    expect(await assignQuestToUser({ client, user: { ...user } as never, quest: { ...quest, questType: "special" } as never, source, prevAttempt: undefined })).toMatchObject({ success: false, message: expect.stringContaining("consuming an item") });
-    expect(update).not.toHaveBeenCalled();
-    expect(insert).not.toHaveBeenCalled();
-  });
+  it.each(["ui", "pet_task", "overworld_npc"] as const)(
+    "rejects Special quests from %s without writes",
+    async (source) => {
+      const { client, update, insert } = makeClient();
+      expect(
+        await assignQuestToUser({
+          client,
+          user: { ...user } as never,
+          quest: { ...quest, questType: "special" } as never,
+          source,
+          prevAttempt: undefined,
+        }),
+      ).toMatchObject({
+        success: false,
+        message: expect.stringContaining("consuming an item"),
+      });
+      expect(update).not.toHaveBeenCalled();
+      expect(insert).not.toHaveBeenCalled();
+    },
+  );
 
-  it.each(["ui", "pet_task", "overworld_npc", "random_assignment", "system", "quest_objective"] as const)("blocks Special quest upserts from %s", async (source) => {
+  it.each([
+    "ui",
+    "pet_task",
+    "overworld_npc",
+    "random_assignment",
+    "system",
+    "quest_objective",
+  ] as const)("blocks Special quest upserts from %s", async (source) => {
     const { client, update, insert } = makeClient();
-    await expect(upsertQuestEntry(client, { ...user } as never, { ...quest, questType: "special" } as never, source)).rejects.toThrow("consuming an item");
+    await expect(
+      upsertQuestEntry(
+        client,
+        { ...user } as never,
+        { ...quest, questType: "special" } as never,
+        source,
+      ),
+    ).rejects.toThrow("consuming an item");
     expect(update).not.toHaveBeenCalled();
     expect(insert).not.toHaveBeenCalled();
   });
 
   it("blocks bulk Special grants", async () => {
     const { client, update, insert } = makeClient();
-    await expect(upsertQuestEntries(client, { ...quest, questType: "special" } as never, undefined as never)).rejects.toThrow("consuming an item");
+    await expect(
+      upsertQuestEntries(
+        client,
+        { ...quest, questType: "special" } as never,
+        undefined as never,
+      ),
+    ).rejects.toThrow("consuming an item");
     expect(update).not.toHaveBeenCalled();
     expect(insert).not.toHaveBeenCalled();
   });
@@ -682,25 +741,44 @@ describe("assignQuestToUser compatibility", () => {
     { startsAt: "2999-01-01" },
     { endsAt: "2000-01-01" },
     { questRank: "S" as const },
-  ])("rejects an item grant outside its date or player rank requirements: %j", async (change) => {
-    const { client, update, insert } = makeClient();
+  ])(
+    "rejects an item grant outside its date or player rank requirements: %j",
+    async (change) => {
+      const { client, update, insert } = makeClient();
+      const result = await assignQuestToUser({
+        client,
+        user: { ...user, rank: "CHUNIN", userQuests: [] } as never,
+        quest: { ...quest, questType: "special", questRank: "D", ...change } as never,
+        source: "item",
+        inTransaction: true,
+        prevAttempt: undefined,
+      });
+      expect(result.success).toBe(false);
+      expect(update).not.toHaveBeenCalled();
+      expect(insert).not.toHaveBeenCalled();
+    },
+  );
+
+  it("starts a Special quest through the item transaction without incrementing daily quotas", async () => {
+    const { client, set } = makeClient();
     const result = await assignQuestToUser({
       client,
-      user: { ...user, rank: "CHUNIN", userQuests: [] } as never,
-      quest: { ...quest, questType: "special", questRank: "D", ...change } as never,
+      user: { ...user, userQuests: [] } as never,
+      quest: {
+        ...quest,
+        questType: "special",
+        maxAttempts: 0,
+        maxCompletes: 0,
+        retryDelay: "daily",
+      } as never,
       source: "item",
       inTransaction: true,
       prevAttempt: undefined,
     });
-    expect(result.success).toBe(false);
-    expect(update).not.toHaveBeenCalled();
-    expect(insert).not.toHaveBeenCalled();
-  });
-
-  it("starts a Special quest through the item transaction without incrementing daily quotas", async () => {
-    const { client, set } = makeClient();
-    const result = await assignQuestToUser({ client, user: { ...user, userQuests: [] } as never, quest: { ...quest, questType: "special", maxAttempts: 0, maxCompletes: 0, retryDelay: "daily" } as never, source: "item", inTransaction: true, prevAttempt: undefined });
-    expect(result).toMatchObject({ success: true, message: expect.stringContaining("Quest started") });
+    expect(result).toMatchObject({
+      success: true,
+      message: expect.stringContaining("Quest started"),
+    });
     expect(set.mock.calls.some(([update]) => "dailyMissions" in update)).toBe(false);
   });
 });

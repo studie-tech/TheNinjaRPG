@@ -4,10 +4,10 @@ import {
   SAGE_MODE_ACTIVATION_JUTSU_ID,
 } from "@/drizzle/constants";
 import { handleInjectedJutsus } from "@/libs/combat/actions";
-import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
-import { makeInjectBattle } from "./helpers/battleScenario";
-import { activateSageMode, makeSageMode, makeSageUser } from "./helpers/sageMode";
 import type { BattleUserState } from "@/libs/combat/types";
+import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
+import { makeInjectBattle } from "../../setup/combat";
+import { activateSageMode, makeSageMode, makeSageUser } from "./helpers/sageMode";
 
 const activationJutsus = {
   [SAGE_MODE_ACTIVATION_JUTSU_ID]: SAGE_MODE_ACTIVATION_JUTSU,
@@ -37,7 +37,10 @@ describe("sage activation daily-cap gating", () => {
 });
 
 const runActivate = (user: BattleUserState) =>
-  activateSageMode(user, makeInjectBattle(user, { sageModes: { "sage-1": makeSageMode() } }));
+  activateSageMode(
+    user,
+    makeInjectBattle(user, { sageModes: { "sage-1": makeSageMode() } }),
+  );
 
 describe("sage activation daily-cap enforcement in combat", () => {
   it("refuses activation at the daily cap without spending resources", () => {

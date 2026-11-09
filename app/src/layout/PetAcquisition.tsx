@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   PET_GENDER_LABELS,
+  PET_NAME_MAX_LENGTH,
   PET_OPTION_COUNTS,
   type PetGender,
   PetGenders,
@@ -531,7 +532,7 @@ export function PetAcquisition() {
                       id="new-pet-name"
                       placeholder="Name your companion"
                       value={name}
-                      maxLength={40}
+                      maxLength={PET_NAME_MAX_LENGTH}
                       disabled={isBusy}
                       onChange={(event) => setName(event.target.value)}
                       className="max-w-md"

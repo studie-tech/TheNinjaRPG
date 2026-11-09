@@ -1,56 +1,53 @@
-import { createToastMock } from "../setup/toastMock";
-import { stubDialog } from "../setup/dialog";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as useSize from "@radix-ui/react-use-size";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { act } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as client from "@/app/_trpc/client";
+import { SuggestChange } from "@/layout/SuggestChange";
 import * as UserContext from "@/utils/UserContext";
+import { stubDialog } from "../setup/dialog";
+import { spyOnToasts } from "../setup/toastMock";
 
 type MutationOptions = { onError?: (err: { message: string; data?: unknown }) => void };
 const mutate = vi.fn();
 let mutationOptions: MutationOptions = {};
 
-vi.mock("@/app/_trpc/client", () => ({
-  api: {
-    useUtils: () => ({}),
-    contentReview: {
-      create: {
-        useMutation: (options: MutationOptions) => {
-          mutationOptions = options;
-          return { mutate, isPending: false };
-        },
+const api = {
+  useUtils: () => ({}),
+  contentReview: {
+    create: {
+      useMutation: (options: MutationOptions) => {
+        mutationOptions = options;
+        return { mutate, isPending: false };
       },
     },
   },
-}));
-vi.mock("@/libs/toast", createToastMock);
-vi.mock("@radix-ui/react-use-size", () => ({
-  useSize: () => ({ width: 0, height: 0 }),
-}));
+};
 
-const { SuggestChange } = await import("@/layout/SuggestChange");
-
-const spies: { mockRestore: () => void }[] = [];
 let restoreDialog: () => void;
 beforeEach(() => {
   mutate.mockClear();
   restoreDialog = stubDialog();
-  spies.push(
-    vi
-      .spyOn(UserContext, "useRequiredUserData")
-      .mockReturnValue({ data: { role: "CONTENT" } } as never),
-  );
+  Object.assign(vi.spyOn(client, "api" as never), api);
+  spyOnToasts();
+  vi.spyOn(useSize, "useSize").mockReturnValue({ width: 0, height: 0 });
+  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+    data: { role: "CONTENT" },
+  } as never);
 });
 afterEach(() => {
   cleanup();
-  for (const spy of spies.splice(0)) spy.mockRestore();
+  vi.restoreAllMocks();
   restoreDialog();
 });
 
-// THENINJARPG-33K: a 9-character rationale ("BL Rework") reached the server, which
-// rejected it and the staffer saw the raw Zod issue JSON.
 const openModal = () => {
   const view = render(
-    <SuggestChange entityType="JUTSU" entityId="jutsu" getData={() => ({ name: "A" })} />,
+    <SuggestChange
+      entityType="JUTSU"
+      entityId="jutsu"
+      getData={() => ({ name: "A" })}
+    />,
   );
   fireEvent.click(view.getByRole("button", { name: "Suggest a change" }));
   fireEvent.change(view.getByLabelText("Title"), { target: { value: "BL Rework" } });

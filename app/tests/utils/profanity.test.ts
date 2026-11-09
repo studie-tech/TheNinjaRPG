@@ -37,12 +37,15 @@ describe("checkForBadWords", () => {
     "alligator, bait",
     "alligator\nbait",
     "alligator<br>bait",
-  ])("does not flag phrase tokens across unrelated text or boundaries: %s", async (content) => {
-    await expectAllowed(content);
-  });
+  ])(
+    "does not flag phrase tokens across unrelated text or boundaries: %s",
+    async (content) => {
+      await expectAllowed(content);
+    },
+  );
 
   it.each(["ali baba", "ang mo", "bounty bar", "choc ice", "full blood"])(
-    "allows removed low-signal phrases: %s",
+    "allows low-signal phrases: %s",
     async (content) => {
       await expectAllowed(content);
     },

@@ -1,6 +1,5 @@
-import { stubRateLimitTransport } from "../../../../setup/rateLimit";
-import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
 import {
   actionLog,
   item,
@@ -13,7 +12,8 @@ import {
 import * as actualModerator from "@/libs/moderator";
 import { profileRouter } from "@/server/api/routers/profile";
 import { type UpdateUserInput, updateUserSchema } from "@/validators/user";
-import { insertItems, insertUsers, insertJutsus } from "../../../../setup/factories";
+import { insertItems, insertJutsus, insertUsers } from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,
@@ -65,7 +65,9 @@ describeWithDatabase("profile updates preserve ownership lists", () => {
       },
     ]);
     await insertItems([{ id: "inventory-item" }]);
-    await insertJutsus([{ id: "inventory-jutsu", name: "Inventory Jutsu", requiredRank: "GENIN" }]);
+    await insertJutsus([
+      { id: "inventory-jutsu", name: "Inventory Jutsu", requiredRank: "GENIN" },
+    ]);
     await database.insert(userItem).values({
       id: "owned-item",
       userId: OWNER,

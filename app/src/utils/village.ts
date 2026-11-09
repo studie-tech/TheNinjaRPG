@@ -3,9 +3,7 @@ import {
   BUILDING_UPGRADE_BASE_COST,
   BUILDING_UPGRADE_PER_LEVEL_COST,
   FACTION_RAID_BOOST_PERCENT,
-  FED_GOLD_BANK_INTEREST,
-  FED_NORMAL_BANK_INTEREST,
-  FED_SILVER_BANK_INTEREST,
+  FED_BANK_INTEREST,
   SHRINE_BOOST_BASE_PERC,
   SHRINE_BOOST_PER_SHRINE_PERC,
   VILLAGE_MAINTAINED_STRUCTURE_ROUTES,
@@ -123,12 +121,11 @@ export const getStrucBoost = (
 };
 
 /**
- * Calculates the boost factor for a given shrine boost type.
- * Uses base boost of 10% with 1+ shrines, plus ~3.33% per additional shrine
- * for a range of 10% (1 shrine) to 20% (4 shrines).
- * @param village - The village to calculate the boost for.
- * @param sectors - The number of sectors in the village.
+ * Calculates the boost factor for a given shrine boost type: 0 unless the village has
+ * that boost active, otherwise getShrineBoostPercentage(sectors) / 100.
+ * @param sectors - The number of boosting shrines (countBoostingShrines).
  * @param boostType - The type of boost to calculate.
+ * @param village - The village to calculate the boost for.
  * @returns The boost factor for the given shrine boost type.
  */
 export const getShrineBoost = (
@@ -165,16 +162,7 @@ export const calcBankInterest = (
 ) => {
   const baseFactor = boost > 1 ? 1 + (boost - 1) * 0.1 : 1;
   if (!user) return baseFactor;
-  const status = getUserFederalStatus(user);
-  switch (status) {
-    case "NORMAL":
-      return baseFactor + FED_NORMAL_BANK_INTEREST;
-    case "SILVER":
-      return baseFactor + FED_SILVER_BANK_INTEREST;
-    case "GOLD":
-      return baseFactor + FED_GOLD_BANK_INTEREST;
-  }
-  return baseFactor;
+  return baseFactor + FED_BANK_INTEREST[getUserFederalStatus(user)];
 };
 
 /**

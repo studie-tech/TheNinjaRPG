@@ -1,6 +1,9 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import * as farmControllerModule from "@/hooks/farm-controller";
+import * as FarmCanvas from "@/layout/FarmCanvas";
+import * as FarmHUD from "@/layout/FarmHUD";
 import OccupationFarming from "@/layout/OccupationFarming";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
@@ -19,31 +22,21 @@ const controller = {
   summary: { ready: 0, growing: 0, empty: 0, waterable: 0, fertilizable: 0 },
 };
 
-// The controller's transport is isolated so load failures and farm states can be set directly.
-vi.mock("@/hooks/farm-controller", () => ({
-  useFarmController: () => ({
-    farmState: controller.farmState,
-    selectedSlotIndex: null,
-    selectedPlot: null,
-    setSelectedSlotIndex,
-    query,
-    summary: controller.summary,
-    now: new Date(),
-    timeDiff: 0,
-    pendingBulkAction: null,
-    pendingPlotSlots: new Set(),
-    pendingInventoryKeys: new Set(),
-    announcement: "",
-    effectEvent: null,
-  }),
-}));
-// WebGL rendering and the day/night clock are outside this layout's contract.
-vi.mock("@/layout/FarmCanvas", () => ({
-  FarmCanvas: () => <div data-testid="farm-canvas" />,
-}));
-vi.mock("@/layout/FarmHUD", () => ({
-  FarmHUD: () => <div data-testid="farm-hud" />,
-}));
+const farmControllerState = () => ({
+  farmState: controller.farmState,
+  selectedSlotIndex: null,
+  selectedPlot: null,
+  setSelectedSlotIndex,
+  query,
+  summary: controller.summary,
+  now: new Date(),
+  timeDiff: 0,
+  pendingBulkAction: null,
+  pendingPlotSlots: new Set(),
+  pendingInventoryKeys: new Set(),
+  announcement: "",
+  effectEvent: null,
+});
 
 const router = testRouter("farm-test");
 
@@ -102,10 +95,20 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
   window.scrollBy = vi.fn() as unknown as typeof window.scrollBy;
   installBrowserGlobals({ events: [], resizeObserver: true });
+  // The controller's transport is isolated so load failures and farm states can be set directly.
+  vi.spyOn(farmControllerModule, "useFarmController").mockImplementation(
+    farmControllerState as never,
+  );
+  // WebGL rendering and the day/night clock are outside this layout's contract.
+  vi.spyOn(FarmCanvas, "FarmCanvas").mockImplementation((() => (
+    <div data-testid="farm-canvas" />
+  )) as never);
+  vi.spyOn(FarmHUD, "FarmHUD").mockImplementation(() => <div data-testid="farm-hud" />);
 });
 afterEach(() => {
   cleanup();
   restoreBrowserGlobals();
+  vi.restoreAllMocks();
 });
 
 /** Initial farm failures must leave loading and remain recoverable inside a residence. */
@@ -130,29 +133,41 @@ describe("OccupationFarming load recovery", () => {
 describe("OccupationFarming layout", () => {
   it("leaves the residence dialog's title as the only farm heading", () => {
     controller.farmState = newFarm;
-    controller.summary = { ready: 0, growing: 0, empty: 2, waterable: 0, fertilizable: 0 };
+    controller.summary = {
+      ready: 0,
+      growing: 0,
+      empty: 2,
+      waterable: 0,
+      fertilizable: 0,
+    };
     const view = renderFarm();
     expect(view.queryByText("Your Farm")).toBeNull();
     expect(view.getByRole("heading", { name: "Your fields" })).toBeTruthy();
-    expect(view.getByRole("tab", { name: "Market" }).getAttribute("aria-selected")).toBe(
-      "true",
-    );
+    expect(
+      view.getByRole("tab", { name: "Market" }).getAttribute("aria-selected"),
+    ).toBe("true");
   });
 
   it("guides a new farm to the market from the overview", () => {
     controller.farmState = newFarm;
-    controller.summary = { ready: 0, growing: 0, empty: 2, waterable: 0, fertilizable: 0 };
+    controller.summary = {
+      ready: 0,
+      growing: 0,
+      empty: 2,
+      waterable: 0,
+      fertilizable: 0,
+    };
     const view = renderFarm();
     fireEvent.mouseDown(view.getByRole("tab", { name: "Upgrades" }));
-    expect(view.getByRole("tab", { name: "Upgrades" }).getAttribute("aria-selected")).toBe(
-      "true",
-    );
+    expect(
+      view.getByRole("tab", { name: "Upgrades" }).getAttribute("aria-selected"),
+    ).toBe("true");
     expect(setSelectedSlotIndex).toHaveBeenCalledWith(null);
     setSelectedSlotIndex.mockClear();
     fireEvent.click(view.getByRole("button", { name: "Buy seeds" }));
-    expect(view.getByRole("tab", { name: "Market" }).getAttribute("aria-selected")).toBe(
-      "true",
-    );
+    expect(
+      view.getByRole("tab", { name: "Market" }).getAttribute("aria-selected"),
+    ).toBe("true");
     expect(setSelectedSlotIndex).toHaveBeenCalledWith(null);
     // Only scrolling containers move; scrollIntoView would also shift a clipped dialog frame.
     expect(window.scrollBy).toHaveBeenCalled();

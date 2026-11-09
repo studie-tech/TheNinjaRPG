@@ -24,18 +24,28 @@ const boundDeliverWithStaleCoords = DeliverItem.parse({
 describe("isObjectiveLocationSatisfied", () => {
   it("treats a placement-bound objective as on-location when the player interacts with that placement, despite stale coords", () => {
     expect(
-      isObjectiveLocationSatisfied(onNpcTile, boundDeliverWithStaleCoords, new Set(["p1"])),
+      isObjectiveLocationSatisfied(
+        onNpcTile,
+        boundDeliverWithStaleCoords,
+        new Set(["p1"]),
+      ),
     ).toBe(true);
   });
 
   it("is not satisfied when the player is at a different placement than the one the objective binds", () => {
     expect(
-      isObjectiveLocationSatisfied(onNpcTile, boundDeliverWithStaleCoords, new Set(["other"])),
+      isObjectiveLocationSatisfied(
+        onNpcTile,
+        boundDeliverWithStaleCoords,
+        new Set(["other"]),
+      ),
     ).toBe(false);
   });
 
-  it("is not satisfied for a placement-bound objective when no placement context is supplied (non-overworld callers unchanged)", () => {
-    expect(isObjectiveLocationSatisfied(onNpcTile, boundDeliverWithStaleCoords)).toBe(false);
+  it("is not satisfied for a placement-bound objective when no placement context is supplied", () => {
+    expect(isObjectiveLocationSatisfied(onNpcTile, boundDeliverWithStaleCoords)).toBe(
+      false,
+    );
   });
 
   it("does NOT complete a placement-bound objective via coordinates alone — the placement is authoritative", () => {
@@ -54,10 +64,12 @@ describe("isObjectiveLocationSatisfied", () => {
       item_name: "Secret scroll",
     });
     expect(isObjectiveLocationSatisfied(onNpcTile, boundCoordsMatch)).toBe(false);
-    expect(isObjectiveLocationSatisfied(onNpcTile, boundCoordsMatch, new Set(["p9"]))).toBe(true);
+    expect(
+      isObjectiveLocationSatisfied(onNpcTile, boundCoordsMatch, new Set(["p9"])),
+    ).toBe(true);
   });
 
-  it("still satisfies on exact coordinate match (existing isLocationObjective behavior preserved)", () => {
+  it("satisfies an unbound objective on an exact coordinate match", () => {
     const atTile = DeliverItem.parse({
       id: "o2",
       task: "deliver_item",
@@ -197,9 +209,7 @@ describe("getNewTrackers — legacy location compatibility", () => {
       new Map(),
     );
 
-    expect(result.trackers[0]?.goals.find(({ id }) => id === "move")?.done).toBe(
-      true,
-    );
+    expect(result.trackers[0]?.goals.find(({ id }) => id === "move")?.done).toBe(true);
     expect(result.consequences.some(({ type }) => type === "fail_quest")).toBe(false);
   });
 });

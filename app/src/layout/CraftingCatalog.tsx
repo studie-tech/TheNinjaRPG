@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ItemRarities } from "@/drizzle/constants";
+import { ItemRarities, type ItemType, MAX_COOKING_BATCHES } from "@/drizzle/constants";
 import type { Item, UserItemWithRelations } from "@/drizzle/schema";
 import { useActivityBonusRefresh } from "@/hooks/useActivityBonusRefresh";
 import { ActionSelector } from "@/layout/CombatActions";
@@ -51,7 +51,7 @@ type CatalogCategory = "WEAPON" | "ARMOR" | "CONSUMABLE" | "COOKING" | "OTHER";
 
 const CATEGORY_CONFIG: Record<
   CatalogCategory,
-  { label: string; icon: React.ReactNode; itemTypes: string[] }
+  { label: string; icon: React.ReactNode; itemTypes: ItemType[] }
 > = {
   WEAPON: {
     label: "Weapons",
@@ -191,7 +191,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   // Calculate max craftable for selected item
   const maxCraftable = useMemo(() => {
     if (!selectedItem || !userItems) return 0;
-    let max = 10;
+    let max = MAX_COOKING_BATCHES;
     for (const req of selectedItem.craftingRequirements) {
       const totalQuantity = getTotalItemQuantity(userItems, req.requirementItemId);
       const maxForThisMaterial = Math.floor(totalQuantity / req.quantity);
@@ -284,19 +284,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
       OTHER: 0,
     };
     if (!craftableItems) return counts;
-    for (const item of craftableItems) {
-      if (CATEGORY_CONFIG.WEAPON.itemTypes.includes(item.itemType)) {
-        counts.WEAPON++;
-      } else if (CATEGORY_CONFIG.ARMOR.itemTypes.includes(item.itemType)) {
-        counts.ARMOR++;
-      } else if (CATEGORY_CONFIG.CONSUMABLE.itemTypes.includes(item.itemType)) {
-        counts.CONSUMABLE++;
-      } else if (CATEGORY_CONFIG.COOKING.itemTypes.includes(item.itemType)) {
-        counts.COOKING++;
-      } else {
-        counts.OTHER++;
-      }
-    }
+    for (const item of craftableItems) counts[getCatalogCategory(item.itemType)]++;
     return counts;
   }, [craftableItems]);
 
@@ -319,7 +307,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
               {config.icon}
               <span className="font-semibold">{config.label}</span>
               <span className="text-muted-foreground text-sm">
-                {categoryCounts[category] || 0} recipes
+                {categoryCounts[category]} recipes
               </span>
             </CardContent>
           </Card>
@@ -457,7 +445,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
                 id="craft-quantity"
                 inputMode="numeric"
                 min={maxCraftable > 0 ? 1 : 0}
-                max={maxCraftable > 0 ? Math.min(maxCraftable, 10) : 0}
+                max={maxCraftable > 0 ? Math.min(maxCraftable, MAX_COOKING_BATCHES) : 0}
                 value={maxCraftable > 0 ? craftQuantityInput : 0}
                 onValueChange={setCraftQuantity}
                 emptyFallback={1}
@@ -551,5 +539,11 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
     </>
   );
 };
+
+/** The catalog category whose config lists the item type; unlisted types count as other. */
+const getCatalogCategory = (itemType: ItemType): CatalogCategory =>
+  (Object.keys(CATEGORY_CONFIG) as CatalogCategory[]).find((category) =>
+    CATEGORY_CONFIG[category].itemTypes.includes(itemType),
+  ) ?? "OTHER";
 
 export default CraftingCatalog;

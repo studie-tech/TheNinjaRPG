@@ -1,5 +1,5 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { useAudio } from "@/hooks/useAudio";
 import * as native from "@/libs/native";
 import * as audioUtils from "@/utils/audio";
@@ -18,7 +18,10 @@ beforeEach(() => {
     () => () => undefined,
   );
   audio = document.createElement("audio");
-  vi.spyOn(globalThis as unknown as { Audio: (src?: string) => HTMLAudioElement }, "Audio").mockImplementation(function () {
+  vi.spyOn(
+    globalThis as unknown as { Audio: (src?: string) => HTMLAudioElement },
+    "Audio",
+  ).mockImplementation(function () {
     return audio;
   });
   play = vi.spyOn(audio, "play").mockImplementation(async () => {

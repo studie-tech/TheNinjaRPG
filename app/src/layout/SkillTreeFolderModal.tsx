@@ -1,11 +1,11 @@
 "use client";
 
 import { Check, ChevronLeft, ExternalLink, Lock, X } from "lucide-react";
-import Image from "next/image";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { SkillTree, SkillTreeFolder, UserSkill } from "@/drizzle/schema";
+import Image from "@/layout/Image";
 import Modal from "@/layout/Modal";
 import { parseHtml } from "@/utils/parse";
 
@@ -71,7 +71,7 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
     .sort((a, b) => a - b);
 
   // Skill status helpers
-  const getSkillStatus = (skill: SkillTree) => {
+  const getSkillStatus = (skill: SkillTree): SkillStatus => {
     const isOwned = ownedSkillIds.includes(skill.id);
     const isActivated = activatedSkillIds.includes(skill.id);
     const hasPrereqs = skill.requiredSkillIds.every((reqId) =>
@@ -82,11 +82,7 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
 
     return { isOwned, isActivated, hasPrereqs, hasPoints, canPurchase };
   };
-
-  // Handle skill click
-  const handleSkillClick = (skill: SkillTree) => {
-    setSelectedSkill(skill);
-  };
+  const selectedStatus = selectedSkill && getSkillStatus(selectedSkill);
 
   // Handle purchase; accepting closes the modal without onClose, so reset its navigation here
   const handlePurchase = () => {
@@ -137,19 +133,13 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
       setIsOpen={setIsOpen}
       onClose={handleClose}
       proceed_label={
-        selectedSkill
-          ? getSkillStatus(selectedSkill).canPurchase
-            ? `Purchase for ${selectedSkill.costSkillPoints} SP`
-            : null
+        selectedSkill && selectedStatus?.canPurchase
+          ? `Purchase for ${selectedSkill.costSkillPoints} SP`
           : null
       }
       proceed_loading_label="Purchasing"
       isLoading={isPurchasing}
-      onAccept={
-        selectedSkill && getSkillStatus(selectedSkill).canPurchase
-          ? handlePurchase
-          : undefined
-      }
+      onAccept={selectedStatus?.canPurchase ? handlePurchase : undefined}
       className="max-w-2xl"
     >
       {/* Back button if viewing skill details or from navigation */}
@@ -166,10 +156,10 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
       )}
 
       {/* Skill details view */}
-      {selectedSkill ? (
+      {selectedSkill && selectedStatus ? (
         <SkillDetails
           skill={selectedSkill}
-          status={getSkillStatus(selectedSkill)}
+          status={selectedStatus}
           allSkills={allSkills}
           activatedSkillIds={activatedSkillIds}
           onNavigateToPrereq={handleNavigateToPrereq}
@@ -215,7 +205,7 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
                       key={skill.id}
                       skill={skill}
                       status={status}
-                      onClick={() => handleSkillClick(skill)}
+                      onClick={() => setSelectedSkill(skill)}
                     />
                   );
                 })}
@@ -239,13 +229,7 @@ export const SkillTreeFolderModal: React.FC<SkillTreeFolderModalProps> = ({
 // Skill Card Component
 interface SkillCardProps {
   skill: SkillTree;
-  status: {
-    isOwned: boolean;
-    isActivated: boolean;
-    hasPrereqs: boolean;
-    hasPoints: boolean;
-    canPurchase: boolean;
-  };
+  status: Omit<SkillStatus, "canPurchase">;
   onClick: () => void;
   costLabel?: string;
 }
@@ -324,13 +308,7 @@ export const SkillCard: React.FC<SkillCardProps> = ({
 // Skill Details Component
 interface SkillDetailsProps {
   skill: SkillTree;
-  status: {
-    isOwned: boolean;
-    isActivated: boolean;
-    hasPrereqs: boolean;
-    hasPoints: boolean;
-    canPurchase: boolean;
-  };
+  status: SkillStatus;
   allSkills: SkillTree[];
   activatedSkillIds: string[];
   onNavigateToPrereq: (skillId: string) => void;
@@ -417,7 +395,7 @@ const SkillDetails: React.FC<SkillDetailsProps> = ({
                       onClick={() => onNavigateToPrereq(reqId)}
                     >
                       <ExternalLink className="mr-1 h-3 w-3" />
-                      {prereqFolder?.name ?? "Uncategorized"}
+                      {prereqFolder.name}
                     </Button>
                   )}
                 </li>
@@ -443,3 +421,11 @@ const SkillDetails: React.FC<SkillDetailsProps> = ({
 };
 
 export default SkillTreeFolderModal;
+
+type SkillStatus = {
+  isOwned: boolean;
+  isActivated: boolean;
+  hasPrereqs: boolean;
+  hasPoints: boolean;
+  canPurchase: boolean;
+};

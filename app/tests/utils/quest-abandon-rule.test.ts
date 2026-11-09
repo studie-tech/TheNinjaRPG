@@ -20,9 +20,12 @@ const PLAYER_ABANDONABLE = [
 ];
 
 describe("quest abandon rule", () => {
-  it.each(QuestTypes)("lets regular players abandon only the listed %s types", (type) => {
-    expect(canAbandonQuestType("USER", type)).toBe(PLAYER_ABANDONABLE.includes(type));
-  });
+  it.each(QuestTypes)(
+    "lets regular players abandon only the listed %s types",
+    (type) => {
+      expect(canAbandonQuestType("USER", type)).toBe(PLAYER_ABANDONABLE.includes(type));
+    },
+  );
 
   it("keeps war quests abandonable and ANBU quests locked for regular players", () => {
     expect(canAbandonQuestType("USER", "war")).toBe(true);

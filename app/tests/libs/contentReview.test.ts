@@ -1,7 +1,6 @@
-
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import sharp from "sharp";
-import { afterEach, describe, expect, it, vi } from "bun:test";
 import { ContentAuditFocuses } from "@/drizzle/constants";
 import { ENTITY_CONFIG, normalizeEditable } from "@/libs/contentReview/entities";
 import * as epidemic from "@/libs/contentReview/epidemic";
@@ -10,13 +9,12 @@ import {
   epidemicAssetId,
   materializeChoice,
 } from "@/libs/contentReview/media";
-import * as replicate from "@/libs/replicate";
-import type { DrizzleClient } from "@/server/db";
 import {
   directMediaValue,
   getAtPath,
   isMediaPath,
   mediaPlaceholder,
+  questSceneAssetIds,
   setAtPath,
   topLevelField,
 } from "@/libs/contentReview/paths";
@@ -31,6 +29,8 @@ import {
   resolveFocus,
 } from "@/libs/contentReview/snapshot";
 import { canonicalJson, contentVersion, sameValue } from "@/libs/contentReview/version";
+import * as replicate from "@/libs/replicate";
+import type { DrizzleClient } from "@/server/db";
 import { agentAuditOutputSchema } from "@/validators/contentReview";
 
 describe("content versions", () => {
@@ -51,7 +51,9 @@ describe("content versions", () => {
 
   it("treats dates and undefined fields like JSON does", () => {
     const at = new Date("2026-09-29T10:00:00.000Z");
-    expect(canonicalJson({ at, gone: undefined })).toBe('{"at":"2026-09-29T10:00:00.000Z"}');
+    expect(canonicalJson({ at, gone: undefined })).toBe(
+      '{"at":"2026-09-29T10:00:00.000Z"}',
+    );
     expect(sameValue([1, { a: null }], [1, { a: null }])).toBe(true);
     expect(sameValue("1", 1)).toBe(false);
   });
@@ -72,6 +74,20 @@ describe("paths", () => {
     expect(() => setAtPath(original, "effects.5.power", 1)).toThrow(/out of range/);
     expect(() => setAtPath(original, "__proto__.polluted", 1)).toThrow(/not allowed/);
   });
+
+  it("collects only nonempty scene references at any nesting level", () => {
+    expect(
+      questSceneAssetIds({
+        content: {
+          sceneBackground: "background",
+          sceneCharacters: ["old", ""],
+          objectives: [{ sceneCharacters: ["next"], targetId: "unrelated" }],
+          image: "https://example.com/image.webp",
+        },
+      }),
+    ).toEqual(["background", "old", "next"]);
+    expect(questSceneAssetIds(null)).toEqual([]);
+  });
 });
 
 describe("audit rules", () => {
@@ -87,7 +103,10 @@ describe("audit rules", () => {
     const result = applySetOperations("BADGE", { name: "Old" }, [
       { path: "createdAt", value: "2020-01-01" },
     ]);
-    expect(result).toEqual({ ok: false, reason: "Badge has no editable field createdAt" });
+    expect(result).toEqual({
+      ok: false,
+      reason: "Badge has no editable field createdAt",
+    });
     const ok = applySetOperations("BADGE", { name: "Old", description: "x" }, [
       { path: "name", value: "New" },
     ]);
@@ -101,9 +120,16 @@ describe("audit rules", () => {
     expect(agentChangeViolation(item, { ...item, seichiSilverCost: 5 })).toMatch(
       /^seichiSilverCost:/,
     );
-    const effect = { type: "noncombatconsumereward", reward_money: 50, reward_reputation: 2 };
+    const effect = {
+      type: "noncombatconsumereward",
+      reward_money: 50,
+      reward_reputation: 2,
+    };
     expect(
-      agentChangeViolation({ effects: [effect] }, { effects: [{ ...effect, reward_money: 80 }] }),
+      agentChangeViolation(
+        { effects: [effect] },
+        { effects: [{ ...effect, reward_money: 80 }] },
+      ),
     ).toBeNull();
     expect(
       agentChangeViolation(
@@ -117,7 +143,10 @@ describe("audit rules", () => {
     };
     const extended = {
       reward: { reward_money: 500, reward_seichi_silver: 10 },
-      objectives: [...content.objectives, { description: "Return", reward_reputation: 0 }],
+      objectives: [
+        ...content.objectives,
+        { description: "Return", reward_reputation: 0 },
+      ],
     };
     expect(agentChangeViolation({ content }, { content: extended })).toBeNull();
     expect(
@@ -134,7 +163,10 @@ describe("audit rules", () => {
         { name: "A", effects: [{ power: 1 }], description: "x" },
         { name: "A", effects: [{ power: 2 }], description: "x" },
       ),
-    ).toEqual({ before: { effects: [{ power: 1 }] }, after: { effects: [{ power: 2 }] } });
+    ).toEqual({
+      before: { effects: [{ power: 1 }] },
+      after: { effects: [{ power: 2 }] },
+    });
   });
 
   it("matches media kinds to the effect fields that hold them", () => {
@@ -145,8 +177,14 @@ describe("audit rules", () => {
   });
 
   it("sorts order-insensitive lists so reordering is not a change", () => {
-    const one = normalizeEditable("AI", { jutsus: ["b", "a"], items: [{ ids: ["z"] }, { ids: ["y"] }] });
-    const two = normalizeEditable("AI", { jutsus: ["a", "b"], items: [{ ids: ["y"] }, { ids: ["z"] }] });
+    const one = normalizeEditable("AI", {
+      jutsus: ["b", "a"],
+      items: [{ ids: ["z"] }, { ids: ["y"] }],
+    });
+    const two = normalizeEditable("AI", {
+      jutsus: ["a", "b"],
+      items: [{ ids: ["y"] }, { ids: ["z"] }],
+    });
     expect(sameValue(one, two)).toBe(true);
   });
 });
@@ -195,18 +233,30 @@ describe("media values", () => {
 
 describe("audit snapshot helpers", () => {
   it("takes the focuses in turn, one per scheduled run", () => {
-    const at = (time: string) => resolveFocus("rotate", new Date(`2026-09-30T${time}Z`));
-    const runs = ["00:40", "03:40", "06:40", "09:40", "12:40", "15:40", "18:40", "21:40"].map(
-      (time) => at(`${time}:00`),
-    );
+    const at = (time: string) =>
+      resolveFocus("rotate", new Date(`2026-09-30T${time}Z`));
+    const runs = [
+      "00:40",
+      "03:40",
+      "06:40",
+      "09:40",
+      "12:40",
+      "15:40",
+      "18:40",
+      "21:40",
+    ].map((time) => at(`${time}:00`));
     const first = ContentAuditFocuses.findIndex((focus) => focus === runs[0]);
     expect(runs).toEqual<Array<ReturnType<typeof resolveFocus> | undefined>>(
-      runs.map((_, index) => ContentAuditFocuses[(first + index) % ContentAuditFocuses.length]),
+      runs.map(
+        (_, index) => ContentAuditFocuses[(first + index) % ContentAuditFocuses.length],
+      ),
     );
     // A run that GitHub starts late keeps the focus of its window.
     expect(at("02:59:59")).toBe<ReturnType<typeof resolveFocus> | undefined>(runs[0]);
     // The rotation carries on across days instead of restarting at midnight.
-    expect(resolveFocus("rotate", new Date("2026-10-01T00:40:00Z"))).toBe<ReturnType<typeof resolveFocus> | undefined>(runs[1]);
+    expect(resolveFocus("rotate", new Date("2026-10-01T00:40:00Z"))).toBe<
+      ReturnType<typeof resolveFocus> | undefined
+    >(runs[1]);
     expect(resolveFocus("sound")).toBe("sound");
   });
 
@@ -243,7 +293,9 @@ describe("audit snapshot helpers", () => {
               entityType: "JUTSU",
               entityId: "jutsu-1",
               operation: "UPDATE",
-              set: [{ path: "description", valueJson: '"The user traps their opponent."' }],
+              set: [
+                { path: "description", valueJson: '"The user traps their opponent."' },
+              ],
               media: [],
             },
           ],
@@ -279,7 +331,10 @@ describe("chosen media", () => {
       title: "Splash",
       url: null,
     };
-    expect(materializeChoice(pick, "reviewer")).toEqual({ value: "asset-1", asset: null });
+    expect(materializeChoice(pick, "reviewer")).toEqual({
+      value: "asset-1",
+      asset: null,
+    });
   });
 });
 
@@ -290,7 +345,9 @@ describe("candidate collection", () => {
 
   it("leaves out candidates whose service fails instead of failing the suggestion", async () => {
     vi.spyOn(epidemic, "isEpidemicConfigured").mockReturnValue(true);
-    vi.spyOn(epidemic, "searchEpidemicSfx").mockRejectedValue(new Error("Epidemic is down"));
+    vi.spyOn(epidemic, "searchEpidemicSfx").mockRejectedValue(
+      new Error("Epidemic is down"),
+    );
     vi.spyOn(replicate, "generateAndUploadAudio").mockRejectedValue(
       new Error("Replicate is down"),
     );
@@ -322,7 +379,10 @@ describe("snapshot size", () => {
 
 describe("audit output schema", () => {
   it("fits a draft that sets every editable field of an item", () => {
-    const set = ENTITY_CONFIG.ITEM.editableKeys.map((path) => ({ path, valueJson: "null" }));
+    const set = ENTITY_CONFIG.ITEM.editableKeys.map((path) => ({
+      path,
+      valueJson: "null",
+    }));
     const parsed = agentAuditOutputSchema.safeParse({
       proposals: [
         {
@@ -342,7 +402,6 @@ describe("audit output schema", () => {
   });
 });
 
-
 describe("scene cast media", () => {
   it("uses indexed IMAGE media for main and objective casts, not whole arrays", () => {
     expect(isMediaPath("IMAGE", "content.sceneCharacters.0")).toBe(true);
@@ -352,31 +411,86 @@ describe("scene cast media", () => {
   });
   it("writes catalog character ids and creates character assets for generated cutouts", () => {
     const path = "content.sceneCharacters.0";
-    const base = { kind: "IMAGE" as const, path, title: "Village representative", url: "https://example.com/elder.png" };
-    expect(materializeChoice({ ...base, source: "CATALOG", externalId: "elder" }, "staff")).toEqual({ value: "elder", asset: null });
-    const generated = materializeChoice({ ...base, source: "GENERATED", externalId: null }, "staff");
-    expect(generated.asset).toMatchObject({ id: generated.value, type: "SCENE_CHARACTER", image: base.url, createdByUserId: "staff" });
-    expect(materializeChoice({ ...base, path: "image", source: "GENERATED", externalId: null }, "staff")).toEqual({ value: base.url, asset: null });
+    const base = {
+      kind: "IMAGE" as const,
+      path,
+      title: "Village representative",
+      url: "https://example.com/elder.png",
+    };
+    expect(
+      materializeChoice({ ...base, source: "CATALOG", externalId: "elder" }, "staff"),
+    ).toEqual({ value: "elder", asset: null });
+    const generated = materializeChoice(
+      { ...base, source: "GENERATED", externalId: null },
+      "staff",
+    );
+    expect(generated.asset).toMatchObject({
+      id: generated.value,
+      type: "SCENE_CHARACTER",
+      image: base.url,
+      createdByUserId: "staff",
+    });
+    expect(
+      materializeChoice(
+        { ...base, path: "image", source: "GENERATED", externalId: null },
+        "staff",
+      ),
+    ).toEqual({ value: base.url, asset: null });
   });
 });
 
-
 describe("generated scene candidates", () => {
-  const originalFetch = globalThis.fetch;
-  afterEach(() => { vi.restoreAllMocks(); globalThis.fetch = originalFetch; });
+  afterEach(() => vi.restoreAllMocks());
   it("uses cutout generation for quest casts and rejects opaque output", async () => {
-    const generate = vi.spyOn(replicate, "txt2imgNanoBanana").mockResolvedValue(["https://example.com/character.png"]);
+    const generate = vi
+      .spyOn(replicate, "txt2imgNanoBanana")
+      .mockResolvedValue(["https://example.com/character.png"]);
     const pixels = Buffer.alloc(128 * 128 * 4);
-    for (let y = 20; y < 110; y += 1) for (let x = 40; x < 90; x += 1) pixels[(y * 128 + x) * 4 + 3] = 255;
-    const cutout = await sharp(pixels, { raw: { width: 128, height: 128, channels: 4 } }).png().toBuffer();
+    for (let y = 20; y < 110; y += 1)
+      for (let x = 40; x < 90; x += 1) pixels[(y * 128 + x) * 4 + 3] = 255;
+    const cutout = await sharp(pixels, {
+      raw: { width: 128, height: 128, channels: 4 },
+    })
+      .png()
+      .toBuffer();
     const fetchImage = vi.fn().mockResolvedValue(new Response(cutout));
-    globalThis.fetch = fetchImage;
-    const request = { kind: "IMAGE" as const, path: "content.objectives.0.sceneCharacters.0", catalogIds: [], search: null, generate: "A dignified village representative" };
-    const candidates = await collectCandidates({} as DrizzleClient, request, { searches: 0, generations: 1 }, "quest");
-    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ removeBg: true, width: 341, height: 512, size: "portrait", preprompt: expect.stringContaining("scene character") }));
+    vi.spyOn(globalThis, "fetch").mockImplementation(fetchImage);
+    const request = {
+      kind: "IMAGE" as const,
+      path: "content.objectives.0.sceneCharacters.0",
+      catalogIds: [],
+      search: null,
+      generate: "A dignified village representative",
+    };
+    const candidates = await collectCandidates(
+      {} as DrizzleClient,
+      request,
+      { searches: 0, generations: 1 },
+      "quest",
+    );
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        removeBg: true,
+        width: 341,
+        height: 512,
+        size: "portrait",
+        preprompt: expect.stringContaining("scene character"),
+      }),
+    );
     expect(candidates).toHaveLength(1);
-    const opaque = await sharp({ create: { width: 128, height: 128, channels: 3, background: "white" } }).png().toBuffer();
+    const opaque = await sharp({
+      create: { width: 128, height: 128, channels: 3, background: "white" },
+    })
+      .png()
+      .toBuffer();
     fetchImage.mockResolvedValue(new Response(opaque));
-    expect(await collectCandidates({} as DrizzleClient, request, { searches: 0, generations: 1 }, "quest")).toEqual([]);
+    expect(
+      await collectCandidates(
+        {} as DrizzleClient,
+        request,
+        { searches: 0, generations: 1 },
+        "quest",
+      ),
+    ).toEqual([]);
   });
 });

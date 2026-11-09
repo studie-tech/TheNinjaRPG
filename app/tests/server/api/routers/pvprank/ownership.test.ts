@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { readFile } from "node:fs/promises";
 import { eq, sql } from "drizzle-orm";
 import {
   aiProfile,
@@ -19,12 +19,20 @@ import { Pusher } from "@/libs/pusher";
 import { clanRouter } from "@/server/api/routers/clan";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { deleteUserRankedQueueRow, pvpRankRouter } from "@/server/api/routers/pvprank";
-import * as ranked from "@/server/utils/ranked";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
-import { insertUsers, insertDefaultAiProfile, insertClans } from "../../../../setup/factories";
-import { beforeStatements, interceptExecute, overrideQuery } from "../../../../setup/statements";
-import { readUser } from "../../../../setup/userReads";
+import * as ranked from "@/server/utils/ranked";
+import { deferred } from "../../../../setup/deferred";
+import {
+  insertClans,
+  insertDefaultAiProfile,
+  insertUsers,
+} from "../../../../setup/factories";
+import {
+  beforeStatements,
+  interceptExecute,
+  overrideQuery,
+} from "../../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -32,7 +40,7 @@ import {
   resetTables,
   runRawSql,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
+import { readUser } from "../../../../setup/userReads";
 
 describeWithDatabase("ranked queue ownership across clan cleanup", () => {
   beforeEach(async () => {
@@ -61,7 +69,14 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
       })),
     );
     const db = await getTestDatabase();
-    await insertClans(["a", "b"].map((id) => ({ id, villageId: "v", leaderId: id === "a" ? "leader" : "enemy", leaderOrderId: id })));
+    await insertClans(
+      ["a", "b"].map((id) => ({
+        id,
+        villageId: "v",
+        leaderId: id === "a" ? "leader" : "enemy",
+        leaderOrderId: id,
+      })),
+    );
     await db.insert(mpvpBattleQueue).values({
       id: "q",
       attackerEntityId: "a",
@@ -135,12 +150,19 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
   ) =>
     operation === "leave"
       ? caller.leaveClanBattle({ clanBattleId: "q" })
-      : caller.kickFromClanBattle({ clanBattleId: "q", targetId: "member", clanId: "a" });
+      : caller.kickFromClanBattle({
+          clanBattleId: "q",
+          targetId: "member",
+          clanId: "a",
+        });
 
   it("keeps existing queue entries claimed when applying the migration", async () => {
     const db = await getTestDatabase();
     const migration = await readFile(
-      new URL("../../../../../drizzle/migrations/0075_watery_moondragon.sql", import.meta.url),
+      new URL(
+        "../../../../../drizzle/migrations/0075_watery_moondragon.sql",
+        import.meta.url,
+      ),
       "utf8",
     );
     await runRawSql("ALTER TABLE RankedPvpQueue DROP COLUMN hasClaimed");
@@ -247,39 +269,54 @@ describeWithDatabase("ranked queue ownership across clan cleanup", () => {
     expect((await leader.queueForRankedPvp()).success).toBe(true);
     expect(await member.getRankedQueueCount()).toBe(2);
     vi.clearAllMocks();
-    expect(await member.checkRankedPvpMatches()).toMatchObject({ success: true, message: "Match found!" });
+    expect(await member.checkRankedPvpMatches()).toMatchObject({
+      success: true,
+      message: "Match found!",
+    });
     expect(await queueRows()).toHaveLength(0);
     expect(await member.getRankedQueueCount()).toBe(0);
-    expect(Pusher.prototype.trigger).toHaveBeenCalledWith("ranked-queue", "updated", {});
+    expect(Pusher.prototype.trigger).toHaveBeenCalledWith(
+      "ranked-queue",
+      "updated",
+      {},
+    );
   });
 
   it("logs every pick of both loadouts, counting selections they share", async () => {
     const db = await getTestDatabase();
     const clean = ranked.cleanRankedProhibitedSelections;
-    vi.spyOn(ranked, "cleanRankedProhibitedSelections").mockImplementation(async (...args) => {
-      const cleaned = await clean(...args);
-      const { userId } = args[1];
-      return {
-        ...cleaned,
-        loadout: {
-          ...cleaned.loadout,
+    vi.spyOn(ranked, "cleanRankedProhibitedSelections").mockImplementation(
+      async (...args) => {
+        const cleaned = await clean(...args);
+        const { userId } = args[1];
+        return {
+          ...cleaned,
           loadout: {
-            ...cleaned.loadout.loadout,
-            jutsuIds: [`jutsu-${userId}`, "shared"],
-            weaponIds: [`weapon-${userId}`],
-            consumableIds: ["shared"],
+            ...cleaned.loadout,
+            loadout: {
+              ...cleaned.loadout.loadout,
+              jutsuIds: [`jutsu-${userId}`, "shared"],
+              weaponIds: [`weapon-${userId}`],
+              consumableIds: ["shared"],
+            },
           },
-        },
-      };
-    });
+        };
+      },
+    );
     const member = callerForDatabase(pvpRankRouter, "member", db);
     expect((await member.queueForRankedPvp()).success).toBe(true);
-    expect((await callerForDatabase(pvpRankRouter, "leader", db).queueForRankedPvp()).success).toBe(true);
+    expect(
+      (await callerForDatabase(pvpRankRouter, "leader", db).queueForRankedPvp())
+        .success,
+    ).toBe(true);
     expect(await member.checkRankedPvpMatches()).toMatchObject({ success: true });
     const picks = await db.query.logRankedPicks.findMany();
     expect(
       picks
-        .map(({ type, contentId, battleType, count }) => `${type} ${contentId} ${battleType} ${count}`)
+        .map(
+          ({ type, contentId, battleType, count }) =>
+            `${type} ${contentId} ${battleType} ${count}`,
+        )
         .sort(),
     ).toEqual([
       "consumable shared RANKED_PVP 2",

@@ -13,9 +13,9 @@ const browser = (
 
 describe("isIOSInstallDevice", () => {
   it("recognizes an iPhone user agent", () => {
-    expect(isIOSInstallDevice(browser("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)"))).toBe(
-      true,
-    );
+    expect(
+      isIOSInstallDevice(browser("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)")),
+    ).toBe(true);
   });
 
   it("recognizes an iPad using desktop-class Safari", () => {

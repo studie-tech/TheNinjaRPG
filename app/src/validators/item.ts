@@ -3,7 +3,6 @@ import {
   AttackMethods,
   AttackTargets,
   BattleUsageTypes,
-  ITEM_LEVEL_CAP,
   ItemRarities,
   ItemSlots,
   ItemSlotTypes,
@@ -11,6 +10,7 @@ import {
   MAX_ITEM_SHOP_PURCHASE_QUANTITY,
   MAX_ITEM_VARIANTS,
   VARIANT_COST_TYPES,
+  type VariantCostType,
 } from "@/drizzle/constants";
 import { furnitureVariantDataSchema } from "@/validators/itemFurniture";
 import { lpcItemFields } from "@/validators/lpc";
@@ -18,42 +18,10 @@ import { statFilters } from "@/validators/statFilters";
 
 export const itemCreateSchema = z.object({ type: z.enum(ItemTypes) });
 
-/** Furniture measurements always describe the original uploaded image, never a CDN rendition. */
-export const furnitureImageMeasurementSchema = z.object({
-  image: z.url().max(512),
-  useFullFootprint: z.boolean(),
-});
-
-export {
-  DEFAULT_FURNITURE_DATA,
-  FURNITURE_ITEM_DEFAULTS,
-  furnitureDataSchema,
-  furnitureItemSchema,
-} from "@/validators/itemFurniture";
-
 export const itemBuySchema = z.object({
   itemId: z.string(),
   stack: z.number().int().min(1).max(MAX_ITEM_SHOP_PURCHASE_QUANTITY),
   villageId: z.string().nullish(),
-});
-
-export const getItemEvolutionsSchema = z.object({
-  itemId: z.string(),
-});
-
-export const evolveItemSchema = z.object({
-  userItemId: z.string(),
-  evolutionItemId: z.string(),
-});
-
-export const getPublicUserItemsSchema = z.object({
-  userId: z.string(),
-});
-
-export const adjustUserItemSchema = z.object({
-  userId: z.string(),
-  userItemId: z.string(),
-  level: z.number().int().min(1).max(ITEM_LEVEL_CAP),
 });
 
 export const itemFilteringSchema = z.object({
@@ -107,7 +75,7 @@ export const ItemVariantValidator = z.object({
 });
 export type ZodItemVariantType = z.infer<typeof ItemVariantValidator>;
 
-const COST_TYPE_LABELS: Record<(typeof VARIANT_COST_TYPES)[number], string> = {
+const COST_TYPE_LABELS: Record<VariantCostType, string> = {
   MONEY: "Ryo",
   REPUTATION: "Reputation",
   SEICHI_SILVER: "Seichi Silver",
@@ -116,34 +84,5 @@ const COST_TYPE_LABELS: Record<(typeof VARIANT_COST_TYPES)[number], string> = {
 };
 
 /** Returns the human-readable label for a variant cost type. */
-export const displayCostType = (type: (typeof VARIANT_COST_TYPES)[number]): string =>
+export const displayCostType = (type: VariantCostType): string =>
   COST_TYPE_LABELS[type];
-
-export const ItemVariantResponseSchema = z.object({
-  ...lpcItemFields.shape,
-  id: z.string(),
-  itemId: z.string(),
-  name: z.string(),
-  image: z.string(),
-  requiredItemId: z.string().trim().min(1).nullable().prefault(null),
-  costType: z.enum(VARIANT_COST_TYPES),
-  cost: z.number(),
-  order: z.number(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-  description: z.string().nullish(),
-  battleDescription: z.string().nullish(),
-  furnitureData: furnitureVariantDataSchema.nullable().prefault(null),
-});
-
-export const upsertItemVariantInputSchema = z.object({
-  itemId: z.string(),
-  variant: ItemVariantValidator,
-});
-
-export const UserUnlockedVariantResponseSchema = z.object({
-  id: z.string(),
-  userId: z.string(),
-  variantId: z.string(),
-  createdAt: z.date(),
-});

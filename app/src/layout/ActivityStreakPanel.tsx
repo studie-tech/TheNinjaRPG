@@ -10,25 +10,14 @@ import {
   RotateCcw,
   ShoppingCart,
 } from "lucide-react";
-import Image from "next/image";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import { useActivityStreaks, useClaimStreakDay } from "@/hooks/useActivityStreaks";
 import Confirm from "@/layout/Confirm";
+import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { formatEventPassCost } from "@/libs/activityStreak";
 import { getRewardPreview } from "@/libs/objectives";
@@ -179,8 +168,11 @@ export function ActivityStreakPanel() {
                     </div>
                   </div>
 
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
+                  <Confirm
+                    title={`Purchase ${pass.name}?`}
+                    proceed_label="Confirm Purchase"
+                    disabled={purchasePass.isPending}
+                    button={
                       <Button
                         variant="outline"
                         disabled={purchasePass.isPending}
@@ -189,28 +181,16 @@ export function ActivityStreakPanel() {
                         <ShoppingCart className="mr-2 h-4 w-4" />
                         {purchasePass.isPending ? "Purchasing..." : "Purchase"}
                       </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Purchase {pass.name}?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This event pass costs <strong>{costText}</strong>.
-                          <br />
-                          <br />
-                          You will be able to claim daily rewards for {pass.totalDays}{" "}
-                          days.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => purchasePass.mutate({ configId: pass.id })}
-                        >
-                          Confirm Purchase
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                    }
+                    onAccept={() => purchasePass.mutate({ configId: pass.id })}
+                  >
+                    <p className="text-muted-foreground text-sm">
+                      This event pass costs <strong>{costText}</strong>.
+                      <br />
+                      <br />
+                      You will be able to claim daily rewards for {pass.totalDays} days.
+                    </p>
+                  </Confirm>
                 </div>
               );
             })}

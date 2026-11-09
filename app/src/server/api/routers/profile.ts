@@ -6,6 +6,7 @@ import {
   canBootstrapQuestType,
   getAwardExperienceToAllUserUpdate,
   getAwardExperienceUserUpdate,
+  getClaimVotesUserUpdate,
   getTavernColorPatch,
   getToggleDeletionTimerUserUpdate,
   getUpdatePreferencesUserUpdate,
@@ -33,6 +34,7 @@ import {
   type MasteryName,
   MasteryNames,
   REGEN_SECONDS,
+  SEICHI_SILVER_ADJUST_LIMIT,
   SENSEI_MAX_STUDENT_LEVEL,
   SHRINE_BOOST_TYPES,
   SKILL_POINT_MAX_LEVEL,
@@ -104,6 +106,7 @@ import {
   experienceAssignmentBlockMessage,
   getAssignedCombatStatTotal,
   levelUpBlockMessage,
+  recruiterLevelReward,
   scaleUserStats,
 } from "@/libs/profile";
 import { getServerPusher } from "@/libs/pusher";
@@ -158,6 +161,7 @@ import {
   deleteUserBlackListForToggleBlacklistEntry,
   deleteUserItemForApplyUserContentChanges,
   deleteUserJutsuForApplyUserContentChanges,
+  executeClaimVotes,
   fetchAchievementCatalogue,
   fetchActiveRaids,
   fetchActiveShrineLobbies,
@@ -237,7 +241,6 @@ import {
   updateQuestHistoryForFetchUpdatedUserOnce,
   updateUserDataForAwardExperience,
   updateUserDataForAwardExperienceToAll,
-  updateUserDataForClaimVotes,
   updateUserDataForFetchUpdatedUserOnce,
   updateUserDataForFetchUpdatedUserOnce2,
   updateUserDataForGetPublicUser,
@@ -252,7 +255,6 @@ import {
   updateUserItemForUpdateAi,
   updateUserNindoForUpdateNindo,
   updateUserPetForResetPetImageGeneration,
-  updateUserVoteForClaimVotes,
   updateVillageForFetchUpdatedUserOnce,
   upsertHistoricalIp,
 } from "@/queries/profile";
@@ -348,13 +350,16 @@ import {
   canEditUsername,
   canEditVillage,
   canInteractWithPolls,
-  canModerateRoles,
+  canModerate,
   canOnlyEditSelf,
+  canPromoteUsersToStaff,
   canResetPetImageGeneration,
   canSeeIps,
   canSeeSecretData,
   getApprovalGroup,
   getBanOrSilenceRestriction,
+  isRestrictedToSelf,
+  isStaffRole,
 } from "@/utils/permissions";
 import { checkForBadWords } from "@/utils/profanity";
 import sanitize from "@/utils/sanitize";
@@ -383,16 +388,32 @@ import {
   RESERVED_CUSTOM_TITLE_MESSAGE,
 } from "@/validators/reservedName";
 import {
-  adjustSeichiSilverSchema,
   assignableMasteryNames,
   createAssignedExperienceSchema,
   getPublicUsersSchema,
-  resetPetImageGenerationSchema,
   tavernColorChangeSchema,
   updateUserPreferencesSchema,
   updateUserSchema,
 } from "@/validators/user";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+const adjustSeichiSilverSchema = z.object({
+  userId: z.string(),
+  delta: z.coerce
+    .number()
+    .int()
+    .min(-SEICHI_SILVER_ADJUST_LIMIT)
+    .max(SEICHI_SILVER_ADJUST_LIMIT)
+    .refine((d) => d !== 0, { message: "Delta cannot be zero" }),
+  reason: z.string().trim().min(10).max(500),
+});
+
+/** Identify the owner's companion and require an auditable reason for restoring attempts. */
+const resetPetImageGenerationSchema = z.object({
+  userId: z.string().min(1),
+  petId: z.string().min(1),
+  reason: z.string().trim().min(10).max(500),
+});
 
 const pusher = getServerPusher();
 const voteSecret = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyzABCDEF", 8);
@@ -740,7 +761,7 @@ export const profileRouter = createTRPCRouter({
       if (result.success && user.recruiterId) {
         const amount = Math.floor(
           boostPvpGain(
-            10 * newLevel * newLevel * newLevel,
+            recruiterLevelReward(newLevel),
             getPvpBoost(recruiter ?? {}, settings).totalPercent,
           ),
         );
@@ -1008,13 +1029,11 @@ export const profileRouter = createTRPCRouter({
         // Get moderation, application and content review counts in parallel for staff.
         const approvalGroup = getApprovalGroup(user.role);
         const canReviewContent = canChangeContent(user.role);
-        if (canModerateRoles.includes(user.role) || approvalGroup || canReviewContent) {
+        if (canModerate(user.role) || approvalGroup || canReviewContent) {
           const [reportCounts, ticketCounts, applicationCounts, reviewCounts] =
             await Promise.all([
-              canModerateRoles.includes(user.role)
-                ? selectUserReportForGetUser(ctx.drizzle)
-                : null,
-              canModerateRoles.includes(user.role)
+              canModerate(user.role) ? selectUserReportForGetUser(ctx.drizzle) : null,
+              canModerate(user.role)
                 ? selectSupportTicketForGetUser(ctx.drizzle)
                 : null,
               approvalGroup
@@ -1213,6 +1232,8 @@ export const profileRouter = createTRPCRouter({
           listAiSpriteAnimationBindings(ctx.drizzle, input.id),
         ]);
       // Guard
+      if (user.isBanned)
+        return errorResponse("You are banned and cannot perform this action");
       if (!aiData) return errorResponse("AI not found");
       if (!aiData.isAi) return errorResponse("Not an AI");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
@@ -1258,15 +1279,16 @@ export const profileRouter = createTRPCRouter({
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      const [user, ai, habitats] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        findUserById(ctx.drizzle, input.id),
+        listHuntingHabitats(ctx.drizzle),
+      ]);
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       if (!canChangeContent(user.role))
         return errorResponse("Not allowed to delete AI");
-      const [ai, habitats] = await Promise.all([
-        fetchUser(ctx.drizzle, input.id),
-        listHuntingHabitats(ctx.drizzle),
-      ]);
+      if (!ai) return errorResponse("AI not found");
       if (habitats.some((h) => h.content.contracts.some((c) => c.aiId === input.id)))
         return errorResponse(
           "This AI is used by a hunting contract. Remove the target first.",
@@ -1310,7 +1332,7 @@ export const profileRouter = createTRPCRouter({
       if (user.isBanned)
         return errorResponse("You are banned and cannot perform this action");
       // Roles that can only edit themselves
-      if (canOnlyEditSelf(user.role) && user.userId !== target.userId) {
+      if (isRestrictedToSelf(user.role, user.userId, target.userId)) {
         return errorResponse("You can only edit your own profile");
       }
 
@@ -1391,14 +1413,12 @@ export const profileRouter = createTRPCRouter({
       if (roleChanged && !availableRoles.includes(input.data.role)) {
         return errorResponse(`Only available roles: ${availableRoles.join(", ")}`);
       }
-      // Block promoting USER to staff role - must go through application process
-      // Demotions (to USER) are allowed without restrictions
-      // CODING-ADMIN can bypass this restriction
+      // Promoting a player to staff goes through the staff application; demotions do not
       if (
         roleChanged &&
-        input.data.role !== "USER" &&
-        target.role === "USER" &&
-        user.role !== "CODING-ADMIN"
+        isStaffRole(input.data.role) &&
+        !isStaffRole(target.role) &&
+        !canPromoteUsersToStaff(user.role)
       ) {
         return errorResponse(
           "Promotion of users to staff must go through the staff application process. See manual.",
@@ -2171,7 +2191,7 @@ export const profileRouter = createTRPCRouter({
     }),
   claimVotes: protectedProcedure
     .meta({ mcp: { description: "Claim reputation points for voting" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
       // Get user's vote record
       const userVoteRecord = await findUserVoteForClaimVotes(ctx.drizzle, ctx);
@@ -2186,25 +2206,15 @@ export const profileRouter = createTRPCRouter({
       if (userVoteRecord.claimed) {
         return errorResponse("Votes already claimed");
       }
-      // Update user's reputation points and mark votes as claimed
-      // Only the request that flips `claimed` from false is credited, and the credit commits
-      // together with that claim
-      const claimed = await retryOnDeadlock(() =>
-        ctx.drizzle.transaction(async (tx) => {
-          const claim = await updateUserVoteForClaimVotes(tx, voteSecret, ctx);
-          if (claim.rowsAffected !== 1) return false;
-          const credit = await updateUserDataForClaimVotes(tx, ctx);
-          if (credit.rowsAffected !== 1)
-            throw new Error("Vote reward recipient not found");
-          return true;
-        }),
-      );
-      if (!claimed) {
+      // Mark the votes as claimed and credit the reputation point in one guarded statement
+      const claim = await executeClaimVotes(ctx.drizzle, voteSecret(), ctx);
+      if (claim.rowsAffected === 0) {
         return errorResponse("Votes already claimed");
       }
       return {
         success: true,
         message: "Successfully claimed reputation points for voting",
+        ...getClaimVotesUserUpdate(),
       };
     }),
   /** Load support controls on demand without publishing generation leases. */
@@ -2280,7 +2290,7 @@ export const profileRouter = createTRPCRouter({
       // Query
       const [actor, target] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.userId),
+        findUserById(ctx.drizzle, input.userId),
       ]);
       // Guards
       if (actor.isBanned)
@@ -2288,6 +2298,7 @@ export const profileRouter = createTRPCRouter({
       if (!canEditSeichiSilver(actor.role)) {
         return errorResponse("You don't have permission to edit Seichi Silver");
       }
+      if (!target) return errorResponse("User not found");
       // Early sufficiency check: gives the admin the precise "Insufficient"
       // message and keeps the AI moderator from seeing a negative projected
       // balance. The atomic CAS in adjustSeichiSilverAtomically remains the
@@ -2327,7 +2338,7 @@ export const profileRouter = createTRPCRouter({
       // Query
       const [awarder, target] = await Promise.all([
         fetchUser(ctx.drizzle, ctx.userId),
-        fetchUser(ctx.drizzle, input.targetUserId),
+        findUserById(ctx.drizzle, input.targetUserId),
       ]);
 
       // Guards
@@ -2336,6 +2347,7 @@ export const profileRouter = createTRPCRouter({
       if (!canAwardExperience(awarder)) {
         return errorResponse("You don't have permission to award experience");
       }
+      if (!target) return errorResponse("User not found");
 
       // Mutation
       const result = await updateUserDataForAwardExperience(ctx.drizzle, input);
@@ -3048,8 +3060,8 @@ const fetchUpdatedUserOnce = async (
   // Rewards, e.g. for activity streak
   const toastMessages: string[] = [];
 
-  // If more than 5min since last user update, update the user with regen. We do not need this to be synchronous
-  // and it is mostly done to keep user updated on the overview pages
+  // Settle passive regen, queued training and activity rewards for awake or sleeping users;
+  // the conditions for persisting the result follow below.
   if (
     user &&
     !settlement.hasRejectedPassiveRegen &&

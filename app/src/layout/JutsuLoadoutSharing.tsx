@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { JutsuLoadout } from "@/drizzle/schema";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import { modalScrollableBodyClassName, modalViewportClassName } from "@/layout/Modal";
 import type { computeJutsuLoadoutPreview } from "@/libs/jutsu";
 import { exportJutsuLoadout } from "@/libs/loadout";
@@ -68,9 +69,8 @@ export const JutsuLoadoutSharingDialog = (props: SharingProps) => {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [error, setError] = useState("");
   const [copyMessage, setCopyMessage] = useState("");
-  const [isPending, setIsPending] = useState(false);
-  // Block duplicate events immediately, before React renders disabled controls.
-  const pendingRef = useRef(false);
+  const importFlight = useSingleFlight();
+  const isPending = importFlight.isPending;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const returnFocusRef = useRef<HTMLButtonElement>(null);
   const selected = props.loadouts.find((entry) => entry.id === loadoutId);
@@ -96,9 +96,8 @@ export const JutsuLoadoutSharingDialog = (props: SharingProps) => {
    * through cache refresh; a rejected replacement must be previewed again.
    */
   const runImportAction = async (replace: boolean) => {
-    if (pendingRef.current || !selected || (replace && !preview)) return;
-    pendingRef.current = true;
-    setIsPending(true);
+    if (importFlight.current() || !selected || (replace && !preview)) return;
+    importFlight.claim();
     setError("");
     if (!replace) setPreview(null);
     try {
@@ -123,8 +122,7 @@ export const JutsuLoadoutSharingDialog = (props: SharingProps) => {
       );
       setPreview(null);
     } finally {
-      pendingRef.current = false;
-      setIsPending(false);
+      importFlight.release();
     }
   };
 
@@ -162,7 +160,7 @@ export const JutsuLoadoutSharingDialog = (props: SharingProps) => {
       <Dialog
         open={mode !== null}
         onOpenChange={(isOpen) => {
-          if (!isOpen && !pendingRef.current) setMode(null);
+          if (!isOpen && !importFlight.current()) setMode(null);
         }}
       >
         <DialogContent

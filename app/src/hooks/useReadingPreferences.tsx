@@ -8,7 +8,6 @@ import {
   useEffect,
   useState,
 } from "react";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import {
   applyReadingPreferences,
   DEFAULT_READING_PREFERENCES,
@@ -16,6 +15,7 @@ import {
   READING_PREFERENCES_STORAGE_KEY,
   type ReadingPreferences,
 } from "@/libs/readingPreferences";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
 /** Keeps temporary preferences and save feedback available when settings panels remount. */
 export const ReadingPreferencesProvider = ({ children }: { children: ReactNode }) => {

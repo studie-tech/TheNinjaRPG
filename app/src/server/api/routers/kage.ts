@@ -73,14 +73,29 @@ import { getKageEligibility } from "@/utils/kage";
 import { canTakeKage } from "@/utils/permissions";
 import { secondsFromDate, secondsFromNow } from "@/utils/time";
 import { calcStructureUpgrade } from "@/utils/village";
-import {
-  kageNominationSchema,
-  kageRemovalSchema,
-  kageVillageSchema,
-  kageVoteSchema,
-} from "@/validators/kage";
+import { kageVillageSchema } from "@/validators/kage";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-import { structureUpgradeSchema } from "@/validators/villageMission";
+
+const structureUpgradeSchema = z.object({
+  structureId: z.string().min(1),
+  villageId: z.string().min(1),
+  clanId: z.string().nullish(),
+});
+
+const kageRemovalSchema = kageVillageSchema.extend({
+  reason: z.string().trim().min(10).max(1000),
+});
+
+const kageVoteSchema = z.object({
+  voteId: z.string().min(1),
+  vote: z.enum(["YES", "NO"]),
+});
+
+const kageNominationSchema = kageVillageSchema.extend({
+  // Defense-panel nominations omit this; the server finds the current vacancy's approved motion.
+  voteId: z.string().min(1).optional(),
+  userId: z.string().min(1),
+});
 
 export const kageRouter = createTRPCRouter({
   ...kageDefenseProcedures,
@@ -178,7 +193,6 @@ export const kageRouter = createTRPCRouter({
       // Guards
       if (!user) return errorResponse("User not found");
 
-      // Fetch village data for logging
       if (user.anbuId) return errorResponse("Cannot be kage while in ANBU");
       if (user.village?.type !== "VILLAGE") return errorResponse("Only for villages");
       if (!canTakeKage(user.role)) return errorResponse("Not staff");

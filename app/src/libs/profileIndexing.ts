@@ -7,10 +7,9 @@ import { addDays } from "@/utils/time";
  *
  * The sitemap and the profile routes must agree on this, so both read it from here:
  * a profile the sitemap declines to advertise must also answer `noindex`, or it stays
- * indexed on the strength of an old crawl. That is how a level-13 account inactive
- * since March became the site's most-clicked page -- its username happens to match a
- * high-volume query unrelated to the game -- and half of all measured search clicks
- * turned out to be visitors who were never going to play.
+ * indexed on the strength of an old crawl. Low-level or inactive profiles whose
+ * usernames match unrelated search queries would otherwise draw search visitors who
+ * are not looking for the game.
  */
 
 export const PROFILE_INDEX_MIN_LEVEL = 25;

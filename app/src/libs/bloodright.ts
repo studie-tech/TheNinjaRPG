@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { UserData } from "@/drizzle/schema";
 import { userData } from "@/drizzle/schema";
 
@@ -8,7 +8,9 @@ export const matchBloodrightSnapshot = (
 ) =>
   and(
     eq(userData.userId, user.userId),
-    sql`${userData.bloodlineId} <=> ${user.bloodlineId}`,
+    user.bloodlineId === null
+      ? isNull(userData.bloodlineId)
+      : eq(userData.bloodlineId, user.bloodlineId),
     sql`${userData.bloodright} = CAST(${JSON.stringify(user.bloodright)} AS JSON)`,
   );
 

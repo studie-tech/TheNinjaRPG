@@ -1,7 +1,10 @@
-
-import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
-import { COST_REROLL_ELEMENT, COST_RESET_STATS, getUserCaps } from "@/drizzle/constants";
+import { eq } from "drizzle-orm";
+import {
+  COST_REROLL_ELEMENT,
+  COST_RESET_STATS,
+  getUserCaps,
+} from "@/drizzle/constants";
 import { actionLog, bloodline, userData } from "@/drizzle/schema";
 import { blackMarketRouter } from "@/server/api/routers/blackmarket";
 import { IncreaseDamageGivenTag } from "@/validators/combat";
@@ -69,7 +72,11 @@ describeWithDatabase("blackmarket updateStats against a real MySQL", () => {
 
     expect(result.success).toBe(true);
     expect(result.userDelta).toEqual({ reputationPoints: -COST_RESET_STATS });
-    expect(result.userPatch).toMatchObject({ offence: 30_000, defence: 30_000, willpower: 2_500 });
+    expect(result.userPatch).toMatchObject({
+      offence: 30_000,
+      defence: 30_000,
+      willpower: 2_500,
+    });
     const user = await readUser();
     expect(user.offence).toBe(30_000);
     expect(user.defence).toBe(30_000);
@@ -78,28 +85,67 @@ describeWithDatabase("blackmarket updateStats against a real MySQL", () => {
   });
 
   it("returns the committed element and debit without another user read", async () => {
-    await insertUsers([{ userId: USER_ID, username: "Roller", rank: "GENIN", primaryElement: "Fire", secondaryElement: null, reputationPoints: COST_REROLL_ELEMENT } as never]);
+    await insertUsers([
+      {
+        userId: USER_ID,
+        username: "Roller",
+        rank: "GENIN",
+        primaryElement: "Fire",
+        secondaryElement: null,
+        reputationPoints: COST_REROLL_ELEMENT,
+      } as never,
+    ]);
     const api = await callerFor(blackMarketRouter, USER_ID);
     const result = await api.rerollElement({ elementType: "primary" });
     expect(result.success).toBe(true);
     const saved = await readUser();
-    expect(result.userPatch).toEqual({ primaryElement: saved.primaryElement, secondaryElement: saved.secondaryElement });
+    expect(result.userPatch).toEqual({
+      primaryElement: saved.primaryElement,
+      secondaryElement: saved.secondaryElement,
+    });
     expect(result.userPatch?.primaryElement).not.toBe("Fire");
     expect(result.userDelta).toEqual({ reputationPoints: -COST_REROLL_ELEMENT });
     expect(saved.reputationPoints).toBe(0);
   });
 
-  it.each(["primary", "secondary"] as const)("rejects a bloodline-overridden %s reroll before spending or logging", async (elementType) => {
-    const database = await getTestDatabase();
-    await database.insert(bloodline).values({ id: "wind-line", name: "Wind Line", image: "/test.png", rank: "C", description: "test", effects: [IncreaseDamageGivenTag.parse({ elements: ["Wind"] })] });
-    await insertUsers([{ userId: USER_ID, username: "Roller", rank: "JONIN", primaryElement: "Fire", secondaryElement: "Water", bloodlineId: "wind-line", activeTrainedElement: "Water", reputationPoints: COST_REROLL_ELEMENT } as never]);
-    const api = await callerFor(blackMarketRouter, USER_ID);
-    const result = await api.rerollElement({ elementType });
-    expect(result.success).toBe(false);
-    expect(result.message).toContain("bloodline overrides");
-    expect(await readUser()).toMatchObject({ primaryElement: "Fire", secondaryElement: "Water", reputationPoints: COST_REROLL_ELEMENT });
-    expect(await database.select().from(actionLog).where(eq(actionLog.userId, USER_ID))).toEqual([]);
-  });
+  it.each(["primary", "secondary"] as const)(
+    "rejects a bloodline-overridden %s reroll before spending or logging",
+    async (elementType) => {
+      const database = await getTestDatabase();
+      await database.insert(bloodline).values({
+        id: "wind-line",
+        name: "Wind Line",
+        image: "/test.png",
+        rank: "C",
+        description: "test",
+        effects: [IncreaseDamageGivenTag.parse({ elements: ["Wind"] })],
+      });
+      await insertUsers([
+        {
+          userId: USER_ID,
+          username: "Roller",
+          rank: "JONIN",
+          primaryElement: "Fire",
+          secondaryElement: "Water",
+          bloodlineId: "wind-line",
+          activeTrainedElement: "Water",
+          reputationPoints: COST_REROLL_ELEMENT,
+        } as never,
+      ]);
+      const api = await callerFor(blackMarketRouter, USER_ID);
+      const result = await api.rerollElement({ elementType });
+      expect(result.success).toBe(false);
+      expect(result.message).toContain("bloodline overrides");
+      expect(await readUser()).toMatchObject({
+        primaryElement: "Fire",
+        secondaryElement: "Water",
+        reputationPoints: COST_REROLL_ELEMENT,
+      });
+      expect(
+        await database.select().from(actionLog).where(eq(actionLog.userId, USER_ID)),
+      ).toEqual([]);
+    },
+  );
 
   it("rejects a redistribution that leaves the above-cap points out", async () => {
     await resetter();
@@ -122,6 +168,7 @@ describeWithDatabase("blackmarket updateStats against a real MySQL", () => {
   it("preserves converted overflow when it exceeds the rank's total capacity", async () => {
     await resetter();
     const database = await getTestDatabase();
+    // Offence/defence as migration 0056 converts four capped legacy Genin stats (4 x 60,000).
     const convertedStat = 10 + (4 * 60_000 - 40) * (1_299_990 / 1_799_960);
     await database
       .update(userData)
@@ -177,12 +224,14 @@ describeWithDatabase("blackmarket updateStats against a real MySQL", () => {
     const stale = callerForDatabase(
       blackMarketRouter,
       USER_ID,
-      beforeStatements(database, userData, [async () => {
-        await database
-          .update(userData)
-          .set({ defence: 1_050 })
-          .where(eq(userData.userId, USER_ID));
-      }]),
+      beforeStatements(database, userData, [
+        async () => {
+          await database
+            .update(userData)
+            .set({ defence: 1_050 })
+            .where(eq(userData.userId, USER_ID));
+        },
+      ]),
     );
     const result = await stale.updateStats({
       offence: 30_000,

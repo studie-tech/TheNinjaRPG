@@ -167,7 +167,6 @@ export const Modal: React.FC<ModalProps> = (props) => {
           modalViewportClassName,
           "!top-4 !translate-y-0 sm:!top-[50%] sm:!-translate-y-1/2",
           "data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-top-0",
-          "sm:data-[state=open]:[--tw-enter-translate-y:-48%] sm:data-[state=closed]:[--tw-exit-translate-y:-48%]",
           props.isLoading && "[&>button]:pointer-events-none [&>button]:opacity-40",
         )}
         aria-busy={props.isLoading}

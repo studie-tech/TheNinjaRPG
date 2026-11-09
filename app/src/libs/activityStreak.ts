@@ -87,7 +87,7 @@ export const shouldFetchActivityStreaksForPopup = ({
   userClosed: boolean;
 }): boolean => hasUser && !tutorialActive && !dismissedToday && !userClosed;
 
-/** Identifies legacy audit entries created when an event pass was completed. */
+/** Identifies the audit entry written when an event pass is completed. */
 export const isEventPassCompletion = (changes: unknown): boolean =>
   Array.isArray(changes) &&
   changes.some(

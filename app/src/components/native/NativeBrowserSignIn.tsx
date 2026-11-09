@@ -58,6 +58,10 @@ export default function NativeBrowserSignIn() {
     setError("");
     try {
       const result = await approve.mutateAsync({ flowId });
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
       setCallback(result.callbackUrl);
       window.location.assign(result.callbackUrl);
     } catch {

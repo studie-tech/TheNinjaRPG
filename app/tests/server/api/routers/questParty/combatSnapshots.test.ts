@@ -1,35 +1,40 @@
-import { stubRateLimitTransport } from "../../../../setup/rateLimit";
-import { beforeEach, afterEach, expect, it, vi } from "bun:test";
-import { eq, and } from "drizzle-orm";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { and, eq } from "drizzle-orm";
 import {
   aiProfile,
   battle,
   battleHistory,
   conversation,
+  item,
   quest,
   questHistory,
   questParty,
   user2conversation,
   userData,
   userItem,
-  item,
   village,
   villageStructure,
 } from "@/drizzle/schema";
-import type { DrizzleClient } from "@/server/db";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { profileRouter } from "@/server/api/routers/profile";
 import { questPartyRouter } from "@/server/api/routers/questParty";
 import { questsRouter } from "@/server/api/routers/quests";
+import type { DrizzleClient } from "@/server/db";
 import { AllObjectives } from "@/validators/objectives";
 import {
-  insertItems,
-  insertUsers,
-  insertUserItems,
   insertDefaultAiProfile,
+  insertItems,
+  insertUserItems,
+  insertUsers,
 } from "../../../../setup/factories";
-import { formQuestTeam, insertQuestTeamWorld, insertTeamQuest } from "../../../../setup/questParty";
+import {
+  formQuestTeam,
+  insertQuestTeamWorld,
+  insertTeamQuest,
+} from "../../../../setup/questParty";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
+import { beforeStatements } from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -37,7 +42,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { beforeStatements } from "../../../../setup/statements";
 
 describeWithDatabase("quest team snapshots during unrelated battle", () => {
   beforeEach(async () => {
@@ -60,25 +64,35 @@ describeWithDatabase("quest team snapshots during unrelated battle", () => {
     stubRateLimitTransport({ answerOtherRequests: true });
     await insertQuestTeamWorld();
     await insertUsers([
-      { userId: "enemy", username: "enemy", isAi: true, inArena: true, level: 50, rank: "JONIN" },
+      {
+        userId: "enemy",
+        username: "enemy",
+        isAi: true,
+        inArena: true,
+        level: 50,
+        rank: "JONIN",
+      },
     ]);
     await insertDefaultAiProfile({ userId: "enemy" });
     await insertItems([{ id: "scroll" }]);
-    await insertTeamQuest([
-            AllObjectives.parse({
-              id: "collect",
-              task: "collect_item",
-              collectItemIds: ["scroll"],
-              item_name: "Scroll",
-              sector: 50,
-              longitude: 11,
-              latitude: 10,
-              sectorType: "specific",
-              locationType: "specific",
-              nextObjectiveId: "wait",
-            }),
-            AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
-          ], { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 });
+    await insertTeamQuest(
+      [
+        AllObjectives.parse({
+          id: "collect",
+          task: "collect_item",
+          collectItemIds: ["scroll"],
+          item_name: "Scroll",
+          sector: 50,
+          longitude: 11,
+          latitude: 10,
+          sectorType: "specific",
+          locationType: "specific",
+          nextObjectiveId: "wait",
+        }),
+        AllObjectives.parse({ id: "wait", task: "stats_trained", value: 100 }),
+      ],
+      { consecutiveObjectives: true, maxAttempts: 3, maxCompletes: 3 },
+    );
   });
   afterEach(() => vi.restoreAllMocks());
 

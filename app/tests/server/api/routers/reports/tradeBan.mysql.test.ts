@@ -98,12 +98,16 @@ describeWithDatabase("moderator trade ban removal", () => {
 
   it("keeps report count recovery canonical after a committed moderation decision", async () => {
     const db = await getTestDatabase();
-    const result = await callerForDatabase(reportsRouter, "staff", db).tradeBan(decision);
+    const result = await callerForDatabase(reportsRouter, "staff", db).tradeBan(
+      decision,
+    );
     expect(result.success).toBe(true);
     expect(result).not.toHaveProperty("userPatch");
     expect(result).not.toHaveProperty("userDelta");
     expect(result).not.toHaveProperty("pendingReportCount");
-    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "target") })).toMatchObject({ isTradeBanned: true });
+    expect(
+      await db.query.userData.findFirst({ where: eq(userData.userId, "target") }),
+    ).toMatchObject({ isTradeBanned: true });
     expect(await db.query.userReportComment.findMany()).toHaveLength(1);
   });
 

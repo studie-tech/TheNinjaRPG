@@ -6,12 +6,14 @@ import {
   asc,
   desc,
   eq,
+  exists,
   getTableColumns,
   gte,
   inArray,
   isNotNull,
   isNull,
   ne,
+  notExists,
   or,
   type SQL,
   sql,
@@ -63,7 +65,7 @@ export const fetchJutsuLoadouts = async (client: DrizzleClient, userId: string) 
 };
 
 /**
- * Fetch a jutsu by id (for reskin update)
+ * Fetch a jutsu by id
  * @param client - The database client
  * @param id - The ID of the jutsu to fetch
  * @returns A promise that resolves to the result of the select
@@ -858,7 +860,7 @@ export const updateJutsuLoadoutForUnequipAll = (
 
 /** Build the `userJutsu` update for `toggleEquip`, setting `equipped`, using predicates on `id`, `userId`, `equipped`. */
 export const updateUserJutsuForToggleEquip = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   input: { userJutsuId: string },
   ctx: { userId: string },
 
@@ -872,7 +874,7 @@ export const updateUserJutsuForToggleEquip = (
         eq(userJutsu.id, input.userJutsuId),
         eq(userJutsu.userId, ctx.userId),
         eq(userJutsu.equipped, true),
-        activeJutsuLoadoutLacksJutsuSql(ctx.userId, userjutsuObj.jutsuId),
+        activeJutsuLoadoutLacksJutsu(client, ctx.userId, userjutsuObj.jutsuId),
       ),
     );
 
@@ -1459,7 +1461,7 @@ export const selectUserJutsuEquipped = (
  * Supplying an expected order also guards the baseline used for cache projection.
  */
 export const updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   jutsuId: string,
   loadoutId: string,
   userId: string,
@@ -1474,7 +1476,7 @@ export const updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically = (
       and(
         eq(jutsuLoadout.id, loadoutId),
         eq(jutsuLoadout.userId, userId),
-        isActiveJutsuLoadoutSql(userId, loadoutId),
+        isActiveJutsuLoadout(client, userId, loadoutId),
         expectedJutsuIds
           ? sql`${jutsuLoadout.jutsuIds} = CAST(${JSON.stringify(expectedJutsuIds)} AS JSON)`
           : undefined,
@@ -1487,7 +1489,7 @@ export const updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically = (
  * Supplying an expected order also guards the baseline used for cache projection.
  */
 export const updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   searchPattern: string,
   loadoutId: string,
   userId: string,
@@ -1507,7 +1509,7 @@ export const updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically = (
       and(
         eq(jutsuLoadout.id, loadoutId),
         eq(jutsuLoadout.userId, userId),
-        isActiveJutsuLoadoutSql(userId, loadoutId),
+        isActiveJutsuLoadout(client, userId, loadoutId),
         expectedJutsuIds
           ? sql`${jutsuLoadout.jutsuIds} = CAST(${JSON.stringify(expectedJutsuIds)} AS JSON)`
           : undefined,
@@ -1618,22 +1620,29 @@ export const listJutsuByIds = (
 ) => client.query.jutsu.findMany({ where: inArray(jutsu.id, jutsusIds) });
 
 /** True when the user's active loadout does not currently contain `jutsuId`. */
-const activeJutsuLoadoutLacksJutsuSql = (userId: string, jutsuId: string) =>
-  sql`NOT EXISTS (
-    SELECT 1 FROM (
-      SELECT ${jutsuLoadout.jutsuIds} AS ids
-      FROM ${userData}
-      INNER JOIN ${jutsuLoadout} ON ${jutsuLoadout.id} = ${userData.jutsuLoadout}
-      WHERE ${userData.userId} = ${userId}
-        AND ${jutsuLoadout.userId} = ${userId}
-    ) AS active_loadout
-    WHERE JSON_CONTAINS(active_loadout.ids, JSON_QUOTE(${jutsuId}))
-  )`;
+const activeJutsuLoadoutLacksJutsu = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+  jutsuId: string,
+) =>
+  notExists(
+    client
+      .select({ id: jutsuLoadout.id })
+      .from(userData)
+      .innerJoin(jutsuLoadout, eq(jutsuLoadout.id, userData.jutsuLoadout))
+      .where(
+        and(
+          eq(userData.userId, userId),
+          eq(jutsuLoadout.userId, userId),
+          sql`JSON_CONTAINS(${jutsuLoadout.jutsuIds}, JSON_QUOTE(${jutsuId}))`,
+        ),
+      ),
+  );
 
 /**
  * Rollback predicate: unequip this row only when it sits outside the first N
- * kept slots for an exceeded cap. Concurrent racers that both passed under-cap
- * then both equip no longer both lose — earlier (updatedAt, id) keeps the slot.
+ * kept slots for an exceeded cap. When concurrent equips both pass the under-cap
+ * check, the earlier (updatedAt, id) keeps the slot.
  */
 const equipCapRollbackGuardSql = (
   userId: string,
@@ -1645,7 +1654,11 @@ const equipCapRollbackGuardSql = (
   for (const cap of caps) {
     if (flags[cap.key]) {
       parts.push(
-        equippedRankExceedsCapSql(userId, cap.max, equipCapCategorySql(cap, "j_rank")),
+        equippedRankExceedsCapSql(
+          userId,
+          cap.max,
+          equipCapCategorySql(cap, rankedJutsu),
+        ),
       );
     }
   }
@@ -1662,7 +1675,7 @@ const equipCapUnderGuardSql = (
   const parts = [sql`c.total < ${maxEquip}`];
   for (const cap of caps) {
     if (flags[cap.key]) {
-      parts.push(sql`${sql.raw(`c.${cap.countAlias}`)} < ${cap.max}`);
+      parts.push(sql`c.${sql.identifier(cap.countAlias)} < ${cap.max}`);
     }
   }
   return sql`(
@@ -1672,39 +1685,47 @@ const equipCapUnderGuardSql = (
 };
 
 /** True when this loadout is still the user's active `userData.jutsuLoadout`. */
-const isActiveJutsuLoadoutSql = (userId: string, loadoutId: string) => sql`EXISTS (
-  SELECT 1 FROM ${userData}
-  WHERE ${userData.userId} = ${userId}
-    AND ${userData.jutsuLoadout} = ${loadoutId}
-)`;
+const isActiveJutsuLoadout = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+  loadoutId: string,
+) =>
+  exists(
+    client
+      .select({ userId: userData.userId })
+      .from(userData)
+      .where(and(eq(userData.userId, userId), eq(userData.jutsuLoadout, loadoutId))),
+  );
 
 /**
  * Detect nonzero numeric residual modifiers on a trusted jutsu table alias.
  * JSON_SEARCH only matches strings, so extract the numeric array and test its digits.
  */
-const residualModifierOnAliasSql = (alias: string) =>
-  sql.raw(
-    `CAST(JSON_EXTRACT(${alias}.effects, '$[*].residualModifier') AS CHAR) REGEXP '[1-9]'`,
-  );
+const residualModifierOnAliasSql = (table: CapJutsuAlias) =>
+  sql`CAST(JSON_EXTRACT(${table.effects}, '$[*].residualModifier') AS CHAR) REGEXP '[1-9]'`;
 
 /** Build a cap category predicate against the supplied jutsu table alias. */
-const equipCapCategorySql = (cap: JutsuEquipCap, alias: string) => {
+const equipCapCategorySql = (cap: JutsuEquipCap, table: CapJutsuAlias) => {
   const kind = cap.sql;
-  if (kind.kind === "actionCostPerc") {
-    return sql`${sql.raw(`${alias}.actionCostPerc`)} = ${kind.value}`;
-  }
-  if (kind.kind === "residual") return residualModifierOnAliasSql(alias);
-  if (kind.kind === "jutsuType") {
-    return sql.raw(`${alias}.jutsuType = '${kind.jutsuType}'`);
-  }
-  return sql`JSON_SEARCH(${sql.raw(`${alias}.effects`)}, 'one', ${kind.effectType}, NULL, '$[*].type') IS NOT NULL`;
+  if (kind.kind === "actionCostPerc")
+    return sql`${table.actionCostPerc} = ${kind.value}`;
+  if (kind.kind === "residual") return residualModifierOnAliasSql(table);
+  if (kind.kind === "jutsuType") return sql`${table.jutsuType} = ${kind.jutsuType}`;
+  return sql`JSON_SEARCH(${table.effects}, 'one', ${kind.effectType}, NULL, '$[*].type') IS NOT NULL`;
 };
+
+/** Equipped peers counted by the cap guards; the derived tables keep these aliases. */
+const countedUserJutsu = alias(userJutsu, "uj_cap");
+const countedJutsu = alias(jutsu, "j_cap");
+const rankedUserJutsu = alias(userJutsu, "uj_rank");
+const rankedJutsu = alias(jutsu, "j_rank");
+type CapJutsuAlias = typeof countedJutsu | typeof rankedJutsu;
 
 /** Materialize all equipped-jutsu cap counts in one pass so UPDATE guards avoid MySQL ERROR 1093. */
 const equippedCapCountsDerivedSql = (userId: string, caps: JutsuEquipCap[]) => {
   const sumCols = caps.map(
     (cap) =>
-      sql`COALESCE(SUM(CASE WHEN ${equipCapCategorySql(cap, "j_cap")} THEN 1 ELSE 0 END), 0) AS ${sql.raw(cap.countAlias)}`,
+      sql`COALESCE(SUM(CASE WHEN ${equipCapCategorySql(cap, countedJutsu)} THEN 1 ELSE 0 END), 0) AS ${sql.identifier(cap.countAlias)}`,
   );
   return sql`(
     SELECT
@@ -1714,11 +1735,11 @@ const equippedCapCountsDerivedSql = (userId: string, caps: JutsuEquipCap[]) => {
         sql`,
       `,
       )}
-    FROM ${userJutsu} AS uj_cap
-    INNER JOIN ${jutsu} AS j_cap ON j_cap.id = uj_cap.jutsuId
-    WHERE uj_cap.userId = ${userId}
-      AND uj_cap.equipped = true
-      AND j_cap.jutsuType != 'AI'
+    FROM ${userJutsu} AS ${countedUserJutsu}
+    INNER JOIN ${jutsu} AS ${countedJutsu} ON ${countedJutsu.id} = ${countedUserJutsu.jutsuId}
+    WHERE ${countedUserJutsu.userId} = ${userId}
+      AND ${countedUserJutsu.equipped} = true
+      AND ${countedJutsu.jutsuType} != 'AI'
   )`;
 };
 
@@ -1734,17 +1755,17 @@ const equippedRankExceedsCapSql = (
 ) => sql`(
   SELECT cnt FROM (
     SELECT COUNT(*) AS cnt
-    FROM ${userJutsu} AS uj_rank
-    INNER JOIN ${jutsu} AS j_rank ON j_rank.id = uj_rank.jutsuId
-    WHERE uj_rank.userId = ${userId}
-      AND uj_rank.equipped = true
-      AND j_rank.jutsuType != 'AI'
+    FROM ${userJutsu} AS ${rankedUserJutsu}
+    INNER JOIN ${jutsu} AS ${rankedJutsu} ON ${rankedJutsu.id} = ${rankedUserJutsu.jutsuId}
+    WHERE ${rankedUserJutsu.userId} = ${userId}
+      AND ${rankedUserJutsu.equipped} = true
+      AND ${rankedJutsu.jutsuType} != 'AI'
       ${categorySql ? sql`AND ${categorySql}` : sql``}
       AND (
-        uj_rank.updatedAt < ${userJutsu.updatedAt}
+        ${rankedUserJutsu.updatedAt} < ${userJutsu.updatedAt}
         OR (
-          uj_rank.updatedAt = ${userJutsu.updatedAt}
-          AND uj_rank.id <= ${userJutsu.id}
+          ${rankedUserJutsu.updatedAt} = ${userJutsu.updatedAt}
+          AND ${rankedUserJutsu.id} <= ${userJutsu.id}
         )
       )
   ) AS equip_rank_cnt

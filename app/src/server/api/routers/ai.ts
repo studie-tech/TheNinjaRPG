@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { AI_PROFILE_MAX_RULES, TRANSFORMATION_ACTION } from "@/drizzle/constants";
@@ -32,6 +31,7 @@ import {
   errorResponse,
   protectedProcedure,
   publicProcedure,
+  serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { canChangeContent, canChangeDefaultAiProfile } from "@/utils/permissions";
@@ -50,13 +50,13 @@ export const aiRouter = createTRPCRouter({
       ]);
       // Guard
       if (!profile) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Profile not found" });
+        throw serverError("NOT_FOUND", "Profile not found");
       }
       if (
         !canChangeContent(user.role) &&
         input.id !== (user.aiProfileId ?? "Default")
       ) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Unauthorized" });
+        throw serverError("UNAUTHORIZED", "Unauthorized");
       }
       // Return
       return profile;
@@ -142,7 +142,7 @@ export const aiRouter = createTRPCRouter({
         listAiTransformations(ctx.drizzle),
       ]);
       if (!canChangeContent(user.role)) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Unauthorized" });
+        throw serverError("UNAUTHORIZED", "Unauthorized");
       }
       const first = bossChainStart(input.aiId, links);
       const chain = bossFormsFrom(first, links);

@@ -1,14 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { buildCombatTrackerTasks } from "@/libs/combat/settlement";
-import { makeBattleUser, makeCompleteBattle } from "./helpers/battleScenario";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 const makeResult = (didWin: number): CombatResult =>
   ({ didWin, outcome: didWin > 0 ? "Won" : "Lost" }) as unknown as CombatResult;
 
-const makeBattle = (
-  usersState: ReturnType<typeof makeBattleUser>[],
-): CompleteBattle => makeCompleteBattle({ usersState });
+const makeBattle = (usersState: ReturnType<typeof makeBattleUser>[]): CompleteBattle =>
+  makeCompleteBattle({ usersState });
 
 describe("buildCombatTrackerTasks — creatures_hunted", () => {
   it("emits +1 per defeated non-self, non-summon opponent on a win", () => {
@@ -16,7 +15,11 @@ describe("buildCombatTrackerTasks — creatures_hunted", () => {
     const foeA = makeBattleUser("foe-a", { curHealth: 0 });
     const foeB = makeBattleUser("foe-b", { curHealth: 0 });
 
-    const tasks = buildCombatTrackerTasks(makeBattle([me, foeA, foeB]), me, makeResult(1));
+    const tasks = buildCombatTrackerTasks(
+      makeBattle([me, foeA, foeB]),
+      me,
+      makeResult(1),
+    );
 
     expect(tasks.filter((t) => t.task === "creatures_hunted")).toEqual([
       { task: "creatures_hunted", increment: 1 },
@@ -92,9 +95,27 @@ describe("buildCombatTrackerTasks — use_specific item/jutsu", () => {
     const tasks = buildCombatTrackerTasks(battle, me, makeResult(0)); // lost: any outcome
 
     expect(tasks.filter((t) => t.task === "use_specific_jutsu_combat")).toEqual([
-      { task: "use_specific_jutsu_combat", increment: 1, contentId: "jutsu-1", masteryTypes: undefined, combatType: "PVP" },
-      { task: "use_specific_jutsu_combat", increment: 1, contentId: "jutsu-1", masteryTypes: undefined, combatType: "PVP" },
-      { task: "use_specific_jutsu_combat", increment: 1, contentId: "jutsu-2", masteryTypes: undefined, combatType: "PVP" },
+      {
+        task: "use_specific_jutsu_combat",
+        increment: 1,
+        contentId: "jutsu-1",
+        masteryTypes: undefined,
+        combatType: "PVP",
+      },
+      {
+        task: "use_specific_jutsu_combat",
+        increment: 1,
+        contentId: "jutsu-1",
+        masteryTypes: undefined,
+        combatType: "PVP",
+      },
+      {
+        task: "use_specific_jutsu_combat",
+        increment: 1,
+        contentId: "jutsu-2",
+        masteryTypes: undefined,
+        combatType: "PVP",
+      },
     ]);
     expect(tasks.filter((t) => t.task === "use_specific_item_combat")).toEqual([
       { task: "use_specific_item_combat", increment: 1, contentId: "item-1" },
@@ -107,16 +128,20 @@ describe("buildCombatTrackerTasks — tag_usage_win", () => {
     const me = makeBattleUser("attacker", { usedTagTypes: ["stun", "stun", "poison"] });
     const battle = makeBattle([me, makeBattleUser("foe")]);
 
-    expect(buildCombatTrackerTasks(battle, me, makeResult(1)).filter(
-      (t) => t.task === "tag_usage_win",
-    )).toEqual([
+    expect(
+      buildCombatTrackerTasks(battle, me, makeResult(1)).filter(
+        (t) => t.task === "tag_usage_win",
+      ),
+    ).toEqual([
       { task: "tag_usage_win", increment: 1, contentId: "stun" },
       { task: "tag_usage_win", increment: 1, contentId: "poison" },
     ]);
 
-    expect(buildCombatTrackerTasks(battle, me, makeResult(0)).filter(
-      (t) => t.task === "tag_usage_win",
-    )).toHaveLength(0);
+    expect(
+      buildCombatTrackerTasks(battle, me, makeResult(0)).filter(
+        (t) => t.task === "tag_usage_win",
+      ),
+    ).toHaveLength(0);
   });
 });
 
@@ -124,7 +149,11 @@ describe("buildCombatTrackerTasks — damage_dealt", () => {
   it("emits the accumulated damage on any outcome and skips a zero emit", () => {
     const me = makeBattleUser("attacker", { damageDealt: 1500 });
     expect(
-      buildCombatTrackerTasks(makeBattle([me, makeBattleUser("foe")]), me, makeResult(0)),
+      buildCombatTrackerTasks(
+        makeBattle([me, makeBattleUser("foe")]),
+        me,
+        makeResult(0),
+      ),
     ).toContainEqual({ task: "damage_dealt", increment: 1500 });
 
     const zero = makeBattleUser("attacker", { damageDealt: 0 });

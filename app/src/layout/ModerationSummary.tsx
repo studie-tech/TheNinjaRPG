@@ -87,9 +87,8 @@ export const ModerationSummary: React.FC<ModerationSummaryProps> = ({
   const createOrUpdateChart = async () => {
     if (!data || !categoryChartRef.current || categoryChartData.length === 0) return;
 
-    // chart.js/auto registers every controller so nothing tree-shakes, and this dialog was
-    // reachable from the root layout, so ~72 KB gzip rode along on every page for a panel
-    // opened on demand. Fetched on first draw instead, then kept for redraws.
+    // chart.js/auto registers every controller (~72 KB gzip) and cannot be tree-shaken,
+    // so it is imported on first draw and kept for redraws.
     const run = ++chartRunRef.current;
     const Chart = await ensureChart();
     if (!Chart) return;

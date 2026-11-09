@@ -1,16 +1,26 @@
-import { userData, userJutsu, aiProfile } from "@/drizzle/schema";
-import { sql, eq } from "drizzle-orm";
+import { eq, notExists } from "drizzle-orm";
+import { aiProfile, userData, userJutsu } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { executeSqlDump } from "./sqlDump";
 
-// Delete anything not in above list, and insert those missing
+/**
+ * Deletes the Default AI profile, all AI users and user jutsu left without a user, then
+ * loads the checked-in ai.sql and userjutsu.sql dumps.
+ */
 export const seedAI = async (client: DrizzleClient) => {
   console.log("\nClearing AIs...");
   await client.delete(aiProfile).where(eq(aiProfile.id, "Default"));
   await client.delete(userData).where(eq(userData.isAi, true));
-  await client.execute(
-    sql`DELETE FROM ${userJutsu} a WHERE NOT EXISTS (SELECT id FROM ${userData} b WHERE b.userId = a.userId)`,
-  );
+  await client
+    .delete(userJutsu)
+    .where(
+      notExists(
+        client
+          .select({ userId: userData.userId })
+          .from(userData)
+          .where(eq(userData.userId, userJutsu.userId)),
+      ),
+    );
   // Insert AI
   console.log("Syncing AIs...");
   await executeSqlDump(client, "ai.sql");

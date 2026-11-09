@@ -711,7 +711,7 @@ export const updateUserJutsuForUpdateBloodline = (
   client
     .update(userJutsu)
     .set({
-      level: sql`CASE WHEN finishTraining > NOW() THEN level - 1 ELSE level END`,
+      level: sql`CASE WHEN ${userJutsu.finishTraining} > NOW() THEN ${userJutsu.level} - 1 ELSE ${userJutsu.level} END`,
       finishTraining: null,
       equipped: false,
     })

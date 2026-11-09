@@ -64,6 +64,7 @@ import {
   MAX_DAILY_TRAININGS,
   MAX_JUTSU_TRAIN_TIME_MS,
   MasteryNames,
+  SENSEI_JUTSU_TRAINING_BOOST_PERC,
   SENSEI_REQUIRED_RANK,
   SENSEI_STUDENT_RYO_PER_MISSION,
   STATS_PER_ENERGY,
@@ -75,7 +76,6 @@ import {
   TUTORIAL_JUTSU_ID,
 } from "@/drizzle/constants";
 import type { Jutsu } from "@/drizzle/schema";
-import { safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useJutsuTrainingCacheUpdate } from "@/hooks/useJutsuTrainingCacheUpdate";
 import { useMasteryTrainingQueue } from "@/hooks/useMasteryTrainingQueue";
@@ -103,7 +103,6 @@ import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
 import PublicUserComponent from "@/layout/PublicUser";
 import QuestPicker from "@/layout/QuestPicker";
-import { calcCurrent } from "@/layout/StatusBar";
 import { TimedQueue } from "@/layout/TimedQueue";
 import { UserAvatarTile } from "@/layout/UserAvatarTile";
 import UserRequestSystem from "@/layout/UserRequestSystem";
@@ -129,6 +128,7 @@ import { getMasteryRank, masteryTotal } from "@/libs/masteryProgression";
 import { useInfinitePagination } from "@/libs/pagination";
 import { getEnergyQueue, getMasteryQueue } from "@/libs/queue";
 import { availableRanks, hasRequiredRank } from "@/libs/rank";
+import { calcCurrent } from "@/libs/regeneration";
 import { cn } from "@/libs/shadui";
 import { getStealthStatus } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
@@ -143,7 +143,6 @@ import {
   masteryTrainingBlockMessage,
   masteryTrainingGainRoom,
   queuedMasteryStartBlockMessage,
-  SENSEI_JUTSU_TRAINING_BOOST_PERC,
   statTrainingBlockMessage,
   trainEfficiency,
   trainingEnergyMessage,
@@ -153,11 +152,11 @@ import type { UserWithRelations } from "@/routers/profile";
 import { isInArray } from "@/utils/array";
 import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 import { useUserPicker } from "@/utils/search";
+import { safeLocalStorageSetItem } from "@/utils/storage";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { getTimeLeftStr } from "@/utils/time";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
-
-const getJutsuLevelCap = (_jutsu: { parentJutsuId?: string | null }) => JUTSU_LEVEL_CAP;
+import type { BaseServerResponse } from "@/validators/base";
 
 // Favorites live on the ranked loadout, whose cleanup drops jutsu ranked cannot use
 const isRankedFavoritable = (j: Jutsu) =>
@@ -192,8 +191,8 @@ export default function Training() {
       ? "Stats"
       : section;
 
-  // Every user-driven section change is remembered, including Radix keyboard navigation and
-  // the shortcut links below, which bypass the NavTabs click handler.
+  // Every user-driven section change is remembered, including Radix keyboard navigation,
+  // which bypasses the NavTabs click handler.
   const sectionStorageKey = `trainingTab:${userData.userId}`;
   const selectSection = (value: string) => {
     safeLocalStorageSetItem(sectionStorageKey, value);
@@ -276,11 +275,7 @@ interface TrainingProps {
   timeDiff: number;
 }
 
-/**
- * Component for sensei system
- * @param props
- * @returns
- */
+/** Component for sensei system */
 const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
   // Settings
@@ -303,6 +298,12 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
     staleTime: 5000,
   });
 
+  /** Report a sensei request change and refresh the open requests. */
+  const onRequestChange = async (data: BaseServerResponse) => {
+    showMutationToast(data);
+    if (data.success) await utils.sensei.getRequests.invalidate();
+  };
+
   // Mutations
   const { mutate: remove, isPending: isRemoving } =
     api.sensei.removeStudent.useMutation({
@@ -318,14 +319,7 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
     });
 
   const { mutate: create, isPending: isCreating } =
-    api.sensei.createRequest.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.sensei.getRequests.invalidate();
-        }
-      },
-    });
+    api.sensei.createRequest.useMutation({ onSuccess: onRequestChange });
 
   const { mutate: accept, isPending: isAccepting } =
     api.sensei.acceptRequest.useMutation({
@@ -343,24 +337,10 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
     });
 
   const { mutate: reject, isPending: isRejecting } =
-    api.sensei.rejectRequest.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.sensei.getRequests.invalidate();
-        }
-      },
-    });
+    api.sensei.rejectRequest.useMutation({ onSuccess: onRequestChange });
 
   const { mutate: cancel, isPending: isCancelling } =
-    api.sensei.cancelRequest.useMutation({
-      onSuccess: async (data) => {
-        showMutationToast(data);
-        if (data.success) {
-          await utils.sensei.getRequests.invalidate();
-        }
-      },
-    });
+    api.sensei.cancelRequest.useMutation({ onSuccess: onRequestChange });
 
   const { mutate: leaveSensei, isPending: isLeaving } =
     api.sensei.leaveSensei.useMutation({
@@ -504,7 +484,7 @@ const TRAINING_SPEED_LABELS = Object.fromEntries(
   ]),
 );
 
-/** Each tile gets its own art; the per-type images are matched by look, not by name */
+/** Timed stat, mastery and element training sessions. */
 const StatsTraining: React.FC<
   TrainingProps & { section: "Stats" | "Masteries" | "Elements" }
 > = (props) => {
@@ -720,7 +700,7 @@ const StatsTraining: React.FC<
       {props.section === "Stats" && (
         <ContentBox
           title="Combat stats"
-          topRightCorntentBreakpoint="sm"
+          stackTopRight
           subtitle={isQueueingStats ? "Train as Energy recovers" : "Instant training"}
           initialBreak
           topRightContent={
@@ -897,7 +877,7 @@ const StatsTraining: React.FC<
           title={props.section}
           subtitle="Timed training · No Energy cost"
           initialBreak={true}
-          topRightCorntentBreakpoint="sm"
+          stackTopRight
           topRightContent={
             <div className="my-2 ml-2 overflow-x-auto overflow-y-hidden">
               <NavTabs
@@ -1087,11 +1067,7 @@ const StatsTraining: React.FC<
   );
 };
 
-/**
- * Component for jutsu training
- * @param props
- * @returns
- */
+/** Component for jutsu training */
 const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Settings
   const { userData, timeDiff } = props;
@@ -1305,7 +1281,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   ]);
 
   // Selecting a jutsu restyles every tile of the grid and mounts or unmounts the confirm
-  // modal; as a transition that render no longer blocks the tap's next paint.
+  // modal; as a transition, that render does not block the tap's next paint.
   const setJutsuConfirmOpen: Dispatch<SetStateAction<boolean>> = (open) => {
     const next = typeof open === "function" ? open(isOpen) : open;
     startTransition(() => {
@@ -1348,7 +1324,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           isFavorite: favoriteJutsuIds.includes(j.id),
         };
       })
-      .filter((j) => j.level < getJutsuLevelCap(j))
+      .filter((j) => j.level < JUTSU_LEVEL_CAP)
       // Favorites first, then jutsu in training/queued, then highest level
       .sort(
         (a, b) =>
@@ -1365,7 +1341,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     canTrainJutsu(tutorialJutsu, userData, masteries) &&
     // The list drops capped jutsu; pinning one back would show a tile whose
     // confirm modal can only say "Level capped".
-    tutorialJutsuLevel < getJutsuLevelCap(tutorialJutsu) &&
+    tutorialJutsuLevel < JUTSU_LEVEL_CAP &&
     !alljutsus.some((j) => j.id === tutorialJutsu.id)
   ) {
     alljutsus.unshift({
@@ -1402,12 +1378,11 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     : userJutsuCounts?.find((entry) => entry.id === jutsu?.id)?.quantity || 0;
   // The same jutsu can be bought several levels at once, up to the free queue slots
   // (all of them, the active one included, when nothing is training) and the level cap.
-  const levelCap = jutsu ? getJutsuLevelCap(jutsu) : JUTSU_LEVEL_CAP;
   const freeSlots =
     (trainingQueue?.capacity ?? 1) -
     (finishTrainingAt?.finishTraining ? 1 : 0) -
     queuedJobs.length;
-  const maxLevelCount = Math.max(1, Math.min(freeSlots, levelCap - level));
+  const maxLevelCount = Math.max(1, Math.min(freeSlots, JUTSU_LEVEL_CAP - level));
   const count = Math.min(levelCount || 1, maxLevelCount);
   const countLevels = Array.from({ length: count }, (_, i) => level + i);
   const trainTimeLabel =
@@ -1429,7 +1404,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   const okVillage = checkJutsuVillage(jutsu, userData);
   const okBloodline = checkJutsuBloodline(jutsu, userData);
   const canAfford = cost && userData.money >= cost;
-  const isCapped = level >= (jutsu ? getJutsuLevelCap(jutsu) : JUTSU_LEVEL_CAP);
+  const isCapped = level >= JUTSU_LEVEL_CAP;
   const canTrain =
     okRank &&
     okVillage &&
@@ -1545,7 +1520,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
               proceedDisabled={!Number.isFinite(levelCount)}
               isOpen={isOpen}
               setIsOpen={setJutsuConfirmOpen}
-              isValid={false}
+              keepOpenOnAccept
               onClose={() => startTransition(() => setJutsu(undefined))}
               onAccept={() => {
                 if (canTrain && !isPending) {
@@ -1650,11 +1625,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   );
 };
 
-/**
- * Component for covert operations training (stealth & sensory)
- * @param props
- * @returns
- */
+/** Component for covert operations training (stealth & sensory) */
 const CovertTraining: React.FC<TrainingProps> = (props) => {
   const { userData, timeDiff } = props;
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
@@ -1912,6 +1883,7 @@ const TrainingCaptchaGate: React.FC<{
   );
 };
 
+/** Each tile gets its own art; the per-type images are matched by look, not by name */
 const getTrainingImage = (stat: CombatStatName | TimedMasteryName) => {
   if (isInArray(stat, BasicElementName)) return getElementImg(stat);
   switch (stat) {
@@ -1981,9 +1953,3 @@ const getTrainingLabel = (stat: CombatStatName | TimedMasteryName) => {
       return stat.charAt(0).toUpperCase() + stat.slice(1);
   }
 };
-
-/**
- * Component for stats training
- * @param props
- * @returns
- */

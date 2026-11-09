@@ -1,16 +1,19 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import * as combatHooks from "@/hooks/combat";
-import * as loadoutNames from "@/hooks/useLoadoutNames";
 import * as navigation from "@/hooks/navigation";
 import * as sleep from "@/hooks/sleep";
+import * as loadoutNames from "@/hooks/useLoadoutNames";
 import { TrainingMode } from "@/layout/battlearena/TrainingMode";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import * as jutsuLoadout from "@/layout/JutsuLoadoutSelector";
 import * as userContext from "@/utils/UserContext";
 import { createStatSchema } from "@/validators/combat";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 const { maxValues } = createStatSchema(10, 10, undefined);
 let mutate: ReturnType<typeof vi.fn>;
@@ -33,12 +36,24 @@ beforeEach(() => {
     },
     updateUser: vi.fn(),
   } as never);
-  vi.spyOn(navigation, "useNavigationRouter").mockReturnValue({ push: vi.fn() } as never);
-  vi.spyOn(sleep, "useSleepToggle").mockReturnValue({ toggleSleep: vi.fn(), isTogglingSleep: false } as never);
+  vi.spyOn(navigation, "useNavigationRouter").mockReturnValue({
+    push: vi.fn(),
+  } as never);
+  vi.spyOn(sleep, "useSleepToggle").mockReturnValue({
+    toggleSleep: vi.fn(),
+    isTogglingSleep: false,
+  } as never);
   vi.spyOn(combatHooks, "useAutoCombatSetting").mockReturnValue([false, vi.fn()]);
-  vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({ jutsu: null, item: null });
-  vi.spyOn(jutsuLoadout, "default").mockImplementation((() => <p>Jutsu loadout</p>) as never);
-  vi.spyOn(itemLoadout, "default").mockImplementation((() => <p>Item loadout</p>) as never);
+  vi.spyOn(loadoutNames, "useLoadoutNames").mockReturnValue({
+    jutsu: null,
+    item: null,
+  });
+  vi.spyOn(jutsuLoadout, "default").mockImplementation((() => (
+    <p>Jutsu loadout</p>
+  )) as never);
+  vi.spyOn(itemLoadout, "default").mockImplementation((() => (
+    <p>Item loadout</p>
+  )) as never);
 });
 
 afterEach(() => {
@@ -48,11 +63,10 @@ afterEach(() => {
   restoreBrowserGlobals();
 });
 
-const value = (label: string) => (screen.getByLabelText(label) as HTMLInputElement).value;
+const value = (label: string) =>
+  (screen.getByLabelText(label) as HTMLInputElement).value;
 const pressed = () =>
-  screen
-    .getAllByRole("button", { pressed: true })
-    .map((button) => button.textContent);
+  screen.getAllByRole("button", { pressed: true }).map((button) => button.textContent);
 
 it("fills the dummy from the player's own stats", () => {
   render(<TrainingMode statDistribution={undefined} setStatDistribution={vi.fn()} />);
@@ -76,7 +90,12 @@ it("marks Custom after editing a value", () => {
 
 it("remembers the stats used for the fight", async () => {
   const setStatDistribution = vi.fn();
-  render(<TrainingMode statDistribution={undefined} setStatDistribution={setStatDistribution} />);
+  render(
+    <TrainingMode
+      statDistribution={undefined}
+      setStatDistribution={setStatDistribution}
+    />,
+  );
   act(() => {
     fireEvent.click(screen.getByRole("button", { name: "Maximum" }));
   });

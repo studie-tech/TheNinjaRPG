@@ -11,6 +11,7 @@ import {
 import type { GameAssetType } from "@/drizzle/constants";
 import { SAGE_MODE_ACTIVATION_JUTSU_ID } from "@/drizzle/constants";
 import type { Bloodline, Item, ItemRarity, Jutsu } from "@/drizzle/schema";
+import ContentImage from "@/layout/ContentImage";
 import DurabilityBar from "@/layout/DurabilityBar";
 import ElementImage from "@/layout/ElementImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
@@ -22,7 +23,6 @@ import { cn } from "@/libs/shadui";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import type { ZodAllTags } from "@/validators/combat";
-import ContentImage from "./ContentImage";
 
 interface ActionItemProps
   extends Partial<
@@ -371,7 +371,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
             </TooltipProvider>
           </div>
         )}
-        {/* Warning icon - top right corner */}
+        {/* Reskin indicator - bottom centre */}
         {isReskinned && (
           <div className="absolute right-1/2 bottom-0 translate-x-1/2">
             <TooltipProvider delayDuration={50}>

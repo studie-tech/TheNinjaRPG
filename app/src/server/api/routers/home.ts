@@ -1,7 +1,8 @@
 import { sql } from "drizzle-orm";
 import { z } from "zod";
-import type { UserRequestState, UserStatus } from "@/drizzle/constants";
+import type { HomeType, UserRequestState, UserStatus } from "@/drizzle/constants";
 import {
+  HOME_DOWNGRADE_REFUND_PERCENT,
   HOME_FURNITURE_STORAGE_CAPACITY,
   HOME_INVITATION_EXPIRY_SECONDS,
   HOME_MAX_INVITATIONS,
@@ -58,7 +59,6 @@ import { fetchSectorVillage } from "@/queries/village";
 import { fetchUserItems } from "@/routers/item";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { fetchRequest, updateRequestState } from "@/routers/sparring";
-
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -73,15 +73,32 @@ import {
   type HomePlacement,
   type HomeRoomStyle,
   homeFurnitureSaveInputSchema,
-  homeInvitationInputSchema,
-  homeSharingInputSchema,
-  homeSleepResponseSchema,
-  homeStorageInputSchema,
   homeUpgradeInputSchema,
-  homeVisitInputSchema,
 } from "@/validators/home";
 import { DEFAULT_FURNITURE_DATA } from "@/validators/itemFurniture";
 import { idSchema } from "@/validators/misc";
+
+/** The router checks visibility or invitation membership for the requested owner. */
+const homeVisitInputSchema = z.strictObject({
+  userId: z.string().min(1).max(191),
+});
+
+/** Visibility edits are guarded by the furniture revision. */
+const homeSharingInputSchema = z.strictObject({
+  revision: z.int().nonnegative(),
+  isPublic: z.boolean(),
+});
+
+/** Invitees are addressed by their current username. */
+const homeInvitationInputSchema = z.strictObject({
+  username: z.string().trim().min(1).max(191),
+});
+
+const homeStorageInputSchema = z.object({ userItemId: z.string() });
+
+const homeSleepResponseSchema = baseServerResponse.extend({
+  newStatus: z.enum(["AWAKE", "ASLEEP"]).optional(),
+});
 
 export const homeRouter = createTRPCRouter({
   /** Return authorized, placed decorations without repairing the owner's home or exposing inventory. */
@@ -129,7 +146,7 @@ export const homeRouter = createTRPCRouter({
     fetchRequests(ctx.drizzle, ["HOME"], undefined, ctx.userId),
   ),
 
-  /** Send the existing request type instead of granting access through an account JSON list. */
+  /** Invite a player to visit; access is a HOME user request the invitee must accept. */
   inviteHomeVisitor: protectedProcedure
     .input(homeInvitationInputSchema)
     .output(baseServerResponse)
@@ -203,7 +220,7 @@ export const homeRouter = createTRPCRouter({
       );
     }),
 
-  /** Rejection changes the same shared request rather than maintaining a second access list. */
+  /** The invitee rejects a pending HOME request. */
   rejectHomeInvitation: protectedProcedure
     .input(idSchema)
     .output(baseServerResponse)
@@ -253,7 +270,7 @@ export const homeRouter = createTRPCRouter({
       );
     }),
 
-  /** Visibility and the account revision publish together without placing home settings on the account. */
+  /** Set home visibility and bump the furniture revision in one guarded statement. */
   setHomeSharing: protectedProcedure
     .input(homeSharingInputSchema)
     .output(baseServerResponse)
@@ -432,25 +449,12 @@ export const homeRouter = createTRPCRouter({
       });
       // Guard
       if (!user) return [];
-      // Derived
-      const currentHomeIndex = HomeTypes.indexOf(user.homeType);
-      const currentHomeCost = HomeTypeDetails[user.homeType].cost;
-      // Return all other home types; upgradeCost is what the user pays (target cost minus current home value)
-      const upgrades = HomeTypes.map((homeType, i) => {
-        const details = HomeTypeDetails[homeType];
-        const isUpgrade = i > currentHomeIndex;
-        const upgradeCost = isUpgrade ? Math.max(0, details.cost - currentHomeCost) : 0;
-        const downgradeRefund = !isUpgrade
-          ? Math.floor((currentHomeCost - details.cost) * 0.75)
-          : 0;
-        return {
-          type: homeType,
-          ...details,
-          isUpgrade,
-          upgradeCost,
-          downgradeRefund,
-        };
-      }).filter((upgrade) => upgrade.type !== user.homeType);
+      // Return all other home types with what a move to each costs or refunds
+      const upgrades = HomeTypes.map((homeType) => ({
+        type: homeType,
+        ...HomeTypeDetails[homeType],
+        ...getHomeChangeQuote(user.homeType, homeType),
+      })).filter((upgrade) => upgrade.type !== user.homeType);
       return upgrades;
     }),
 
@@ -477,10 +481,12 @@ export const homeRouter = createTRPCRouter({
         return errorResponse("You already own this home type");
       // Derived
       const targetHome = HomeTypeDetails[input.homeType];
-      const currentHomeCost = HomeTypeDetails[user.homeType].cost;
-      const upgradeCost = Math.max(0, targetHome.cost - currentHomeCost);
+      const { isUpgrade, upgradeCost, downgradeRefund } = getHomeChangeQuote(
+        user.homeType,
+        input.homeType,
+      );
       // Upgrading or downgrading
-      if (HomeTypes.indexOf(input.homeType) > HomeTypes.indexOf(user.homeType)) {
+      if (isUpgrade) {
         if (user.money < upgradeCost) return errorResponse("Not enough Ryo");
         const result = await updateUserDataForUpgradeHome(
           ctx.drizzle,
@@ -524,7 +530,6 @@ export const homeRouter = createTRPCRouter({
             );
           }
         }
-        const downgradeRefund = Math.floor((currentHomeCost - targetHome.cost) * 0.75);
         // As with layout saves, Drizzle needs a joined statement to publish both tables atomically.
         // Join settings after inventory so MySQL applies the guarded revision to every placement.
         // LEFT JOIN also refunds homes with no removed placements; the owner is updated once.
@@ -569,7 +574,6 @@ export const homeRouter = createTRPCRouter({
       const blocked = homeStorageBlockReason(user);
       if (blocked) return errorResponse(blocked);
       if (!userItemResult) return errorResponse("Item not found or is equipped");
-      if (!userItemResult.item) return errorResponse("Item data not found");
       if (userItemResult.equipped !== "NONE") {
         return errorResponse("You can't store/retrieve already equipped items");
       }
@@ -583,9 +587,9 @@ export const homeRouter = createTRPCRouter({
       // Mutate
       if (userItemResult.storedAtHome) {
         const inventoryBucket = getInventoryBucket(userItemResult.item);
-        const bucketCount =
-          nonStoredItems.filter((ui) => getInventoryBucket(ui.item) === inventoryBucket)
-            .length || 0;
+        const bucketCount = nonStoredItems.filter(
+          (ui) => getInventoryBucket(ui.item) === inventoryBucket,
+        ).length;
         if (bucketCount >= getInventoryBucketCapacity(inventoryBucket, user)) {
           return errorResponse(getInventoryBucketFullMessage(inventoryBucket));
         }
@@ -593,9 +597,9 @@ export const homeRouter = createTRPCRouter({
         // Check storage limits based on home-storage bucket
         const homeBucket = getHomeStorageBucket(userItemResult.item);
         const homeStorage = HomeTypeDetails[user.homeType].storage;
-        const storedInBucket =
-          storedItems.filter((ui) => getHomeStorageBucket(ui.item) === homeBucket)
-            .length || 0;
+        const storedInBucket = storedItems.filter(
+          (ui) => getHomeStorageBucket(ui.item) === homeBucket,
+        ).length;
         if (storedInBucket >= getHomeStorageBucketCapacity(homeBucket, homeStorage)) {
           return errorResponse(getHomeStorageBucketFullMessage(homeBucket));
         }
@@ -807,6 +811,22 @@ const homeFurnitureAccessError = (
   if (!["AWAKE", "ASLEEP"].includes(user.status))
     return "You cannot furnish your home right now";
   return null;
+};
+
+/**
+ * Price of moving between home types: an upgrade pays the price difference, a downgrade
+ * refunds HOME_DOWNGRADE_REFUND_PERCENT of it.
+ */
+const getHomeChangeQuote = (current: HomeType, target: HomeType) => {
+  const isUpgrade = HomeTypes.indexOf(target) > HomeTypes.indexOf(current);
+  const priceDifference = HomeTypeDetails[target].cost - HomeTypeDetails[current].cost;
+  return {
+    isUpgrade,
+    upgradeCost: isUpgrade ? Math.max(0, priceDifference) : 0,
+    downgradeRefund: isUpgrade
+      ? 0
+      : Math.floor(-priceDifference * (HOME_DOWNGRADE_REFUND_PERCENT / 100)),
+  };
 };
 
 /** Create home-only settings on the first write; a concurrent insertion retains the existing row. */

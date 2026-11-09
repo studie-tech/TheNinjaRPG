@@ -1,21 +1,13 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { FarmMarket } from "@/layout/FarmMarket";
 import { FarmPlotInspector } from "@/layout/FarmPlotInspector";
+import * as Image from "@/layout/Image";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import { getFarmGrowTimeSeconds } from "@/libs/farming";
+import * as userContext from "@/utils/UserContext";
 import { DecreaseFarmingTime } from "@/validators/combat";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
-
-vi.mock("@/utils/UserContext", () => ({
-  useRequiredUserData: () => ({ timeDiff: 0 }),
-}));
-vi.mock("@/layout/Image", () => ({
-  default: (props: { src: string; alt: string }) => (
-    // biome-ignore lint/performance/noImgElement: isolated component test stub
-    <img src={props.src} alt={props.alt} />
-  ),
-}));
 
 const plot = (patch: Partial<FarmPlotState> = {}): FarmPlotState => ({
   id: "plot-1",
@@ -76,9 +68,22 @@ const handlers = {
 };
 
 describe("FarmPlotInspector", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+      timeDiff: 0,
+    } as never);
+    vi.spyOn(Image, "default").mockImplementation(((props: {
+      src: string;
+      alt: string;
+    }) => (
+      // biome-ignore lint/performance/noImgElement: isolated component test stub
+      <img src={props.src} alt={props.alt} />
+    )) as never);
   });
 
   it.each([
@@ -110,18 +115,20 @@ describe("FarmPlotInspector", () => {
       ...farmState,
       farmCurrency: 100,
       availableSeeds: [seed],
-      shopEntries: [{
-        type: "SEED" as const,
-        label: seed.name,
-        cost: 10,
-        minLevel: seed.minLevel,
-        itemId: seed.itemId,
-        canAfford: true,
-        canPurchase: true,
-        growTimeSeconds,
-        yieldQuantity: seed.yieldQuantity,
-        yieldName: seed.yieldName,
-      }],
+      shopEntries: [
+        {
+          type: "SEED" as const,
+          label: seed.name,
+          cost: 10,
+          minLevel: seed.minLevel,
+          itemId: seed.itemId,
+          canAfford: true,
+          canPurchase: true,
+          growTimeSeconds,
+          yieldQuantity: seed.yieldQuantity,
+          yieldName: seed.yieldName,
+        },
+      ],
     };
     const inspector = render(
       <FarmPlotInspector
@@ -185,7 +192,10 @@ describe("FarmPlotInspector", () => {
     expect(document.activeElement).toBe(seed);
     expect(handlers.onPlant).not.toHaveBeenCalled();
     fireEvent.click(getByRole("button", { name: "Plant" }));
-    expect(handlers.onPlant).toHaveBeenCalledWith(expect.objectContaining({ id: "plot-1" }), "seed-1");
+    expect(handlers.onPlant).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "plot-1" }),
+      "seed-1",
+    );
   });
 
   it("focuses its close control after canvas selection so Escape dismisses it", () => {
@@ -225,9 +235,9 @@ describe("FarmPlotInspector", () => {
       />,
     );
     expect(getByText("50% grown")).toBeTruthy();
-    expect(
-      getByRole("button", { name: "Working…" }).hasAttribute("disabled"),
-    ).toBe(true);
+    expect(getByRole("button", { name: "Working…" }).hasAttribute("disabled")).toBe(
+      true,
+    );
   });
 
   it("requires an explicit harvest action for ready plots", () => {

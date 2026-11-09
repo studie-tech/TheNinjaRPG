@@ -32,12 +32,12 @@ import {
   QuestValidatorRawSchema,
 } from "@/validators/objectives";
 import {
+  insertDefaultAiProfile,
   insertItems,
+  insertJutsus,
   insertQuestHistory,
   insertQuests,
   insertUsers,
-  insertJutsus,
-  insertDefaultAiProfile,
 } from "../../setup/factories";
 import { queueEnergy } from "../../setup/queues";
 import { beforeStatements } from "../../setup/statements";
@@ -222,23 +222,27 @@ describeWithDatabase("achievement persistence through sparse quest updates", () 
       expect(saved?.questData?.find((entry) => entry.id === achievementId)).toEqual(
         expected,
       );
-      expect(result.user?.questData?.find((entry) => entry.id === achievementId)).toEqual(
-        expected,
+      expect(
+        result.user?.questData?.find((entry) => entry.id === achievementId),
+      ).toEqual(expected);
+      expect(
+        saved?.questData?.find((entry) => entry.id === "active-quest")?.goals,
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: "story", value: 1, done: true }),
+        ]),
       );
-      expect(saved?.questData?.find((entry) => entry.id === "active-quest")?.goals).toEqual(
-        expect.arrayContaining([expect.objectContaining({ id: "story", value: 1, done: true })]),
-      );
-      expect(result.user?.userQuests.some((entry) => entry.questId === "deleted-quest")).toBe(
-        false,
-      );
+      expect(
+        result.user?.userQuests.some((entry) => entry.questId === "deleted-quest"),
+      ).toBe(false);
       if (race !== "none") {
         expect(result.requiresUserRefresh).toBe(true);
         expect(result.requiresProgressionRefresh).toBe(true);
       }
       const reloaded = await fetchUpdatedUser({ client: db, userId });
-      expect(reloaded.user?.questData?.find((entry) => entry.id === achievementId)).toEqual(
-        expected,
-      );
+      expect(
+        reloaded.user?.questData?.find((entry) => entry.id === achievementId),
+      ).toEqual(expected);
     },
   );
 
@@ -269,9 +273,9 @@ describeWithDatabase("achievement persistence through sparse quest updates", () 
         }),
       );
       if (race === "isolation") {
-        await expect(fetchUpdatedUser({ client, userId, forceRegen: true })).rejects.toThrow(
-          "User state changed concurrently",
-        );
+        await expect(
+          fetchUpdatedUser({ client, userId, forceRegen: true }),
+        ).rejects.toThrow("User state changed concurrently");
         expect(attempts).toBe(3);
       } else {
         const result = await fetchUpdatedUser({ client, userId, forceRegen: true });
@@ -279,7 +283,9 @@ describeWithDatabase("achievement persistence through sparse quest updates", () 
         expect(
           result.user?.questData?.find((entry) => entry.id === achievementId),
         ).toEqual(before?.questData?.find((entry) => entry.id === achievementId));
-        expect(result.user?.updatedAt).toEqual(new Date(before!.updatedAt.getTime() + 1));
+        expect(result.user?.updatedAt).toEqual(
+          new Date(before!.updatedAt.getTime() + 1),
+        );
         expect(
           result.user?.userQuests.some((entry) => entry.questId === "deleted-quest"),
         ).toBe(false);
@@ -311,19 +317,17 @@ describeWithDatabase("achievement persistence through sparse quest updates", () 
       const now = new Date();
       if (action === "jutsu") {
         await insertJutsus([{ id: "new-jutsu", name: "New" }]);
-        await db
-          .insert(userQueue)
-          .values({
-            id: "jutsu-queue",
-            userId,
-            kind: "JUTSU",
-            position: 1,
-            jutsuId: "new-jutsu",
-            reservedRyo: 100,
-            durationSeconds: 60,
-            startsAt: now,
-            finishesAt: new Date(now.getTime() + 60000),
-          });
+        await db.insert(userQueue).values({
+          id: "jutsu-queue",
+          userId,
+          kind: "JUTSU",
+          position: 1,
+          jutsuId: "new-jutsu",
+          reservedRyo: 100,
+          durationSeconds: 60,
+          startsAt: now,
+          finishesAt: new Date(now.getTime() + 60000),
+        });
         expect(await settleJutsuTrainingQueue(db, userId, now)).toBe(1);
       } else if (action === "buy") {
         await insertItems([{ id: "shop-item", cost: 10, inShop: true }]);
@@ -333,16 +337,14 @@ describeWithDatabase("achievement persistence through sparse quest updates", () 
         ).toBe(true);
       } else if (action === "water") {
         await insertItems([{ id: "seed", isFarmSeed: true }]);
-        await db
-          .insert(farmPlot)
-          .values({
-            id: "growing-plot",
-            userId,
-            slotIndex: 0,
-            seedItemId: "seed",
-            plantedAt: now,
-            finishAt: new Date(now.getTime() + 3600000),
-          });
+        await db.insert(farmPlot).values({
+          id: "growing-plot",
+          userId,
+          slotIndex: 0,
+          seedItemId: "seed",
+          plantedAt: now,
+          finishAt: new Date(now.getTime() + 3600000),
+        });
         const api = await callerFor(farmingRouter, userId);
         expect((await api.waterPlot({ plotId: "growing-plot" })).success).toBe(true);
       } else {
@@ -369,7 +371,14 @@ describeWithDatabase("achievement persistence through sparse quest updates", () 
           })
           .where(eq(userData.userId, userId));
         await insertUsers([
-          { userId: "enemy", username: "Enemy", isAi: true, inArena: true, rank: "NONE", level: 1 },
+          {
+            userId: "enemy",
+            username: "Enemy",
+            isAi: true,
+            inArena: true,
+            rank: "NONE",
+            level: 1,
+          },
         ]);
         await insertDefaultAiProfile();
         if (action === "energy")

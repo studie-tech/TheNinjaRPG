@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "tailwindcss-animate";
 
 @import "uploadthing/tw/v4";
 @source "../../node_modules/@uploadthing/react/dist";
@@ -112,15 +113,10 @@
 }
 
 /*
-  The default border color has changed to `currentColor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
-
-  If we ever want to remove these styles, we need to add an explicit border
-  color utility to any element that depends on these defaults.
+  Tailwind CSS v4 defaults borders to `currentColor`; pseudo-elements keep
+  gray-200. Elements take `border-border` from the later base rule.
 */
 @layer base {
-  *,
   ::after,
   ::before,
   ::backdrop,
@@ -197,12 +193,6 @@
     --border: 215 16% 47%;
     --input: 214.3 31.8% 91.4%;
     --ring: 0 0% 100%;
-  }
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-slate-900 text-foreground text-xs sm:text-base;
   }
   .dark body {
     @apply bg-slate-900 text-foreground;

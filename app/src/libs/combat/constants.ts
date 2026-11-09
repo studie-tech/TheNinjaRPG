@@ -35,6 +35,14 @@ export const EFFECT_TEXT_COLORS: Record<ActionEffect["color"], string> = {
   gray: "text-gray-500",
 };
 
+/**
+ * Phrases in the item durability notices a battle result carries. The battle screen
+ * titles its notification toasts by them, so the notices and the titles share these.
+ */
+export const ITEM_BROKEN_NOTICE = "has broken";
+export const ITEM_DURABILITY_CRITICAL_NOTICE = "durability is critically low";
+export const ITEM_DURABILITY_NOTICE = "durability is now";
+
 /** Ranked bloodlines boost every damage element, including attacks outside Highest. */
 export const RANKED_BLOODLINE_DAMAGE_TAG = IncreaseDamageGivenTag.parse({
   power: (RANKED_BLOODLINE_EFFECT_MULT - 1) * 100,
@@ -48,6 +56,14 @@ export const COMBAT_BORDER_RIGHT = 2;
 export const COMBAT_BORDER_TOP = 2;
 export const COMBAT_BORDER_BOTTOM = 0;
 export const COMBAT_SECONDS = 60;
+/** Initiative multiplier gained per level above the average level of all combatants. */
+export const INITIATIVE_LEVEL_BONUS = 0.03;
+/** Initiative multiplier gained in the user's own village sector, and lost outside it. */
+export const INITIATIVE_TERRITORY_BONUS = 0.1;
+/** Initiative bonus of each consecutive PvP streak step; later steps add the last entry. */
+export const INITIATIVE_PVP_STREAK_BONUSES = [
+  0.02, 0.015, 0.01, 0.005, 0.0025,
+] as const;
 export const COMBAT_LOBBY_SECONDS = 15;
 
 export const SPAR_EXPIRY_SECONDS = 120;
@@ -58,6 +74,18 @@ export const SPAR_EXPIRY_SECONDS = 120;
  * the remainder.
  */
 export const DAMAGE_LEECH_CAP_RATIO = 0.6;
+
+/**
+ * Max fraction of a hit's pre-Diffuse damage that reflect returns to the attacker;
+ * the Diffuse split and the final reflect application share it.
+ */
+export const REFLECT_CAP_RATIO = 0.6;
+
+/** Max fraction of a hit's pre-shield damage that absorb converts to health. */
+export const ABSORB_CAP_RATIO = 0.6;
+
+/** Max fraction of a hit's damage that stacked afterburn conversions can reach. */
+export const AFTERBURN_CAP_RATIO = 0.6;
 
 export const BARRIER_DAMAGE_TAG_TYPES = new Set<string>(["damage", "pierce"]);
 
@@ -225,9 +253,8 @@ export const damageDerivedTagTypes: string[] = [
 ];
 
 /**
- * Post-pierce tags that must run AFTER pierce effects (per sortEffects ordering).
- * These tags read damage consequences that pierce creates, so they must run after pierce.
- * This constant is shared between process.ts and util.ts (sortEffects) to ensure consistency.
+ * Tags that sortEffects orders after pierce, because they read the damage
+ * consequences pierce creates.
  */
 export const POST_PIERCE_TAGS: string[] = [
   "lifesteal",

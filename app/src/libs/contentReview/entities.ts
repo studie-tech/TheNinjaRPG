@@ -25,7 +25,6 @@ import {
 } from "@/validators/combat";
 import { QuestValidator, QuestValidatorRawSchema } from "@/validators/objectives";
 import { TitleValidator } from "@/validators/title";
-import { ENTITY_LABELS } from "./labels";
 import { contentVersion } from "./version";
 
 /**
@@ -62,10 +61,6 @@ export const loadAllEntities = async (
 /** Key of one entity among entities of every type. */
 export const entityKey = (type: ContentProposalEntityType, id: string) =>
   `${type}:${id}`;
-
-/** Display name of a content type. */
-export const entityLabel = (type: ContentProposalEntityType) =>
-  ENTITY_CONFIG[type].label;
 
 /** The editable fields of a payload, such as an editor form or a validated update. */
 export const editableOf = (
@@ -192,7 +187,6 @@ const findNamesOf =
 export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   JUTSU: {
     contentType: "jutsu",
-    label: ENTITY_LABELS.JUTSU,
     editableKeys: keysOf(JutsuValidatorRawSchema),
     validator: JutsuValidator,
     detailHref: (id) => `/manual/jutsu/${id}`,
@@ -204,7 +198,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   },
   ITEM: {
     contentType: "item",
-    label: ENTITY_LABELS.ITEM,
     editableKeys: keysOf(ItemValidatorRawSchema),
     validator: ItemValidator,
     detailHref: (id) => `/manual/item/${id}`,
@@ -234,7 +227,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   },
   BLOODLINE: {
     contentType: "bloodline",
-    label: ENTITY_LABELS.BLOODLINE,
     editableKeys: keysOf(BloodlineValidator),
     validator: BloodlineValidator,
     detailHref: (id) => `/manual/bloodline/${id}`,
@@ -246,7 +238,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   },
   QUEST: {
     contentType: "quest",
-    label: ENTITY_LABELS.QUEST,
     // Raid boss health moves during play; it is state, not content.
     editableKeys: keysOf(QuestValidatorRawSchema).filter(
       (key) => key !== "raidBossCurrentHealth",
@@ -261,7 +252,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   },
   BADGE: {
     contentType: "badge",
-    label: ENTITY_LABELS.BADGE,
     editableKeys: keysOf(BadgeValidator),
     validator: BadgeValidator,
     detailHref: (id) => `/manual/badge/edit/${id}`,
@@ -279,7 +269,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   },
   TITLE: {
     contentType: "title",
-    label: ENTITY_LABELS.TITLE,
     editableKeys: keysOf(TitleValidator),
     validator: TitleValidator,
     detailHref: (id) => `/manual/title/edit/${id}`,
@@ -298,7 +287,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   },
   GAME_ASSET: {
     contentType: "asset",
-    label: ENTITY_LABELS.GAME_ASSET,
     editableKeys: keysOf(gameAssetValidator),
     validator: gameAssetValidator,
     detailHref: (id) => `/manual/asset/edit/${id}`,
@@ -310,7 +298,6 @@ export const ENTITY_CONFIG: Record<ContentProposalEntityType, EntityConfig> = {
   },
   AI: {
     contentType: "ai",
-    label: ENTITY_LABELS.AI,
     editableKeys: AI_EDITABLE_KEYS,
     validator: insertAiSchema,
     detailHref: (id) => `/manual/ai/edit/${id}`,
@@ -363,7 +350,6 @@ export type ContentEntity = {
 };
 
 type EntityConfig = {
-  label: string;
   /** Content type used for image generation prompts. */
   contentType: ContentType;
   /** Top-level fields suggestions may change. */

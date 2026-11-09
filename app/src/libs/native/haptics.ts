@@ -12,9 +12,8 @@ export type ImpactStyle = "LIGHT" | "MEDIUM" | "HEAVY";
 export type NotificationStyle = "SUCCESS" | "WARNING" | "ERROR";
 
 /**
- * Haptics default to on; only an explicit `false` disables them. Read directly rather
- * than through the localstorage helpers, which live behind a "use client" boundary this
- * module must not pull in.
+ * Haptics default to on; only an explicit `false` disables them. Storage is read directly
+ * so a blocked store stays silent: this runs on every haptic call, including off device.
  */
 export const isEnabled = (): boolean => {
   try {

@@ -46,7 +46,7 @@ const available = (
     ignorePreviousAttempts,
   );
 
-describe("isAvailableUserQuests legacy compatibility", () => {
+describe("isAvailableUserQuests core requirements", () => {
   it("requires Chunin or higher for regular and concurrent war missions", () => {
     for (const rank of [
       "STUDENT",
@@ -72,7 +72,7 @@ describe("isAvailableUserQuests legacy compatibility", () => {
     expect(available({}, { rank: "GENIN" }).check).toBe(true);
   });
 
-  it("keeps the baseline legacy quest available when new fields are absent", () => {
+  it("keeps a baseline quest available when optional fields are absent", () => {
     expect(available()).toEqual({ check: true, message: "" });
   });
 
@@ -82,9 +82,7 @@ describe("isAvailableUserQuests legacy compatibility", () => {
   });
 
   it("preserves village and outlaw-syndicate eligibility", () => {
-    expect(available({ requiredVillage: "village-2" }).message).toContain(
-      "village",
-    );
+    expect(available({ requiredVillage: "village-2" }).message).toContain("village");
     expect(
       available(
         { requiredVillage: VILLAGE_SYNDICATE_ID },
@@ -102,9 +100,7 @@ describe("isAvailableUserQuests legacy compatibility", () => {
       available(
         { prerequisiteQuestId: "prerequisite" },
         {
-          completedQuests: [
-            { id: "history-1", questId: "prerequisite", completed: 1 },
-          ],
+          completedQuests: [{ id: "history-1", questId: "prerequisite", completed: 1 }],
         },
       ).check,
     ).toBe(true);
@@ -120,18 +116,16 @@ describe("isAvailableUserQuests legacy compatibility", () => {
   });
 
   it("gates quests by minimum farming level", () => {
-    expect(available({ requiredFarmingLevel: 2 }).message).toContain(
-      "farming level 2",
-    );
+    expect(available({ requiredFarmingLevel: 2 }).message).toContain("farming level 2");
     expect(
       available({ requiredFarmingLevel: 2 }, { farmingExperience: 500 }).check,
     ).toBe(true);
   });
 
   it("does not apply farming level gates to daily quests", () => {
-    expect(
-      available({ questType: "daily", requiredFarmingLevel: 100 }).check,
-    ).toBe(true);
+    expect(available({ questType: "daily", requiredFarmingLevel: 100 }).check).toBe(
+      true,
+    );
   });
 
   it("preserves lifetime attempt and completion caps for non-periodic quests", () => {

@@ -17,7 +17,8 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import { useUserData } from "@/utils/UserContext";
 import { type UserReviewSchema, userReviewSchema } from "@/validators/reports";
 
-export default function ManualTravel() {
+/** Let players submit staff reviews and inspect their existing submissions. */
+export default function ManualOpinions() {
   // User state
   const { data: userData } = useUserData();
 
@@ -37,7 +38,7 @@ export default function ManualTravel() {
     <>
       <ContentBox
         title="Opinions"
-        subtitle="Let us know that state of affairs"
+        subtitle="Let us know the state of affairs"
         defaultBackHref="/manual"
       >
         TNR has always been community-driven; it&apos;s been our strength, but it&apos;s
@@ -47,7 +48,7 @@ export default function ManualTravel() {
       </ContentBox>
       <ContentBox
         title="Review Staff"
-        subtitle="Annonymously share your thoughts"
+        subtitle="Anonymously share your thoughts"
         initialBreak={true}
       >
         <p className="pb-2 italic">

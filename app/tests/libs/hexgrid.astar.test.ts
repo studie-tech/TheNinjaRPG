@@ -1,5 +1,5 @@
-import { defineHex, Grid, Orientation, rectangle, ring } from "honeycomb-grid";
 import { describe, expect, it } from "bun:test";
+import { defineHex, Grid, Orientation, rectangle, ring } from "honeycomb-grid";
 import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
 
 /**
@@ -41,7 +41,10 @@ const pathCost = (path: TerrainHex[] | undefined) =>
     ? Number.POSITIVE_INFINITY
     : path
         .slice(1)
-        .reduce((total, tile, index) => total + stepCost(path[index] as TerrainHex, tile), 0);
+        .reduce(
+          (total, tile, index) => total + stepCost(path[index] as TerrainHex, tile),
+          0,
+        );
 
 /** Deliberately naive and heuristic-free, so it agrees with A* only if A* is right. */
 const optimalCost = (grid: Grid<TerrainHex>, start: TerrainHex, goal: TerrainHex) => {
@@ -80,8 +83,12 @@ const found = (path: TerrainHex[] | undefined) => {
 };
 
 /** Fixed seed: a failure has to be reproducible to be worth anything. */
-const randomiser = (seed: number): (() => number) => () =>
-  ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+const randomiser =
+  (seed: number): (() => number) =>
+  () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
 
 describe("PathCalculator.minStepCost", () => {
   it("is twice the tile cost on a combat grid", () => {
@@ -110,7 +117,16 @@ describe("PathCalculator.minStepCost", () => {
   });
 
   it("falls back to zero — a plain Dijkstra — when no tile is passable", () => {
-    expect(new PathCalculator(makeGrid(4, 4, () => 2, () => true)).minStepCost).toBe(0);
+    expect(
+      new PathCalculator(
+        makeGrid(
+          4,
+          4,
+          () => 2,
+          () => true,
+        ),
+      ).minStepCost,
+    ).toBe(0);
   });
 
   it("falls back to zero rather than trusting a nonsense cost", () => {
@@ -133,15 +149,28 @@ describe("PathCalculator.getShortestPath", () => {
   });
 
   it("gives up when the origin or the target is blocked", () => {
-    const grid = makeGrid(5, 5, () => 1, (col, row) => col === 4 && row === 4);
+    const grid = makeGrid(
+      5,
+      5,
+      () => 1,
+      (col, row) => col === 4 && row === 4,
+    );
     const finder = new PathCalculator(grid);
     expect(finder.getShortestPath(at(grid, 0, 0), at(grid, 4, 4))).toBeUndefined();
     expect(finder.getShortestPath(at(grid, 4, 4), at(grid, 0, 0))).toBeUndefined();
   });
 
   it("gives up when a wall separates the two tiles", () => {
-    const grid = makeGrid(9, 9, () => 1, (col) => col === 4);
-    const path = new PathCalculator(grid).getShortestPath(at(grid, 0, 0), at(grid, 8, 8));
+    const grid = makeGrid(
+      9,
+      9,
+      () => 1,
+      (col) => col === 4,
+    );
+    const path = new PathCalculator(grid).getShortestPath(
+      at(grid, 0, 0),
+      at(grid, 8, 8),
+    );
     expect(path).toBeUndefined();
   });
 
@@ -211,7 +240,8 @@ describe("PathCalculator.getShortestPath", () => {
       for (let attempt = 0; attempt < 60; attempt++) {
         const start = at(grid, ~~(random() * size), ~~(random() * size));
         const goal = at(grid, ~~(random() * size), ~~(random() * size));
-        if (!start || !goal || start.blocked || goal.blocked || start === goal) continue;
+        if (!start || !goal || start.blocked || goal.blocked || start === goal)
+          continue;
         const want = optimalCost(grid, start, goal);
         const path = finder.getShortestPath(start, goal);
         if (want === Number.POSITIVE_INFINITY) {

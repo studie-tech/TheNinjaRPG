@@ -1,9 +1,9 @@
 import type React from "react";
+import type { UserReport } from "@/drizzle/schema";
 import Image from "@/layout/Image";
 import type { UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
 import { canSeeSecretData } from "@/utils/permissions";
-import type { UserReport } from "../../drizzle/schema";
 
 type InfractionData = {
   title?: string;

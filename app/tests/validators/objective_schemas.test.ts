@@ -38,22 +38,16 @@ describe("getObjectiveSchema resolution", () => {
 });
 
 describe("specific-X / tag / damage objective schemas", () => {
-  it("registers every new task in allObjectiveTasks", () => {
+  it("registers each of these tasks in allObjectiveTasks", () => {
     for (const task of NEW_TASKS) {
       expect(allObjectiveTasks).toContain(task);
-    }
-  });
-
-  it("routes every new task through getObjectiveSchema without throwing", () => {
-    for (const task of NEW_TASKS) {
-      expect(() => getObjectiveSchema(task)).not.toThrow();
     }
   });
 
   it("parses a freshly-added objective (id + task only) so the editor renders its pickers", () => {
     // The editor safeParses the objective and renders fields from the PARSED result; a
     // required field with no default makes parse fail, the raw object is used instead, and
-    // that field's picker never renders. Every new task must parse from just id + task
+    // that field's picker never renders. Each of these tasks must parse from just id + task
     // (e.g. tag_usage_win's tagType must default to a valid tag).
     for (const task of NEW_TASKS) {
       const result = getObjectiveSchema(task).safeParse(base({ task }));
@@ -88,7 +82,7 @@ describe("specific-X / tag / damage objective schemas", () => {
     expect((parsed as { value: number }).value).toBe(500);
   });
 
-  it("accepts each new objective through AllObjectives", () => {
+  it("accepts each of these objectives through AllObjectives", () => {
     const samples = [
       base({ task: "craft_specific_item", craftItemIds: ["i1"], value: 1 }),
       base({ task: "train_specific_jutsu", trainJutsuIds: ["j1"], value: 1 }),

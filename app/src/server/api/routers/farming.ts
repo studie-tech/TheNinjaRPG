@@ -66,7 +66,6 @@ import {
   fetchFarmSeedAndYield,
   fetchFarmShopItems,
   fetchUserExtractions,
-  findFarmExtractionForExtractSeeds,
   findFarmPlotForPlantSeed,
   findUserItemForAwardItemToUser,
   insertFarmExtractionForExtractSeeds,
@@ -115,6 +114,7 @@ import {
   getFarmCollectionState,
   recordFirstFarmHarvests,
 } from "@/server/utils/farming";
+import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { fetchTerritoryWarUser as fetchUser } from "@/server/utils/territoryWar";
 import { getNextUserSnapshotAt } from "@/utils/time";
 import {
@@ -1324,24 +1324,21 @@ export const farmingRouter = createTRPCRouter({
       const extractionId = nanoid();
       const extractionSeconds = getSeedExtractionDurationSeconds(input.quantity);
       const finishAt = new Date(now.getTime() + extractionSeconds * 1000);
-      await insertFarmExtractionForExtractSeeds(
-        ctx.drizzle,
-        extractionId,
-        ctx,
-        input,
-        cropStack,
-        seedItem,
-        seedsToGrant,
-        now,
-        finishAt,
-      );
-      const extractionCreated = await findFarmExtractionForExtractSeeds(
-        ctx.drizzle,
-        extractionId,
-        ctx,
-        input,
-      );
-      if (!extractionCreated) {
+      // The user/slot unique key decides a race for the same extractor.
+      try {
+        await insertFarmExtractionForExtractSeeds(
+          ctx.drizzle,
+          extractionId,
+          ctx,
+          input,
+          cropStack,
+          seedItem,
+          seedsToGrant,
+          now,
+          finishAt,
+        );
+      } catch (error) {
+        if (!isMysqlDuplicateKeyError(error)) throw error;
         return actionReadinessResponse(
           {
             ...errorResponse(
@@ -2091,11 +2088,11 @@ const FARM_EXTRACTION_CLAIM_TIMEOUT_SECONDS = 60;
  * behind by a request that died is taken over once it goes stale.
  *
  * The window: settledAt is written after the seeds land, so a failure of that one statement
- * leaves a granted payout looking unpaid, and the stale-claim takeover grants it again. This
- * is not exactly-once and should not be described as such. Closing it needs either a
- * transaction, which PlanetScale does not give us, or a grant keyed to the extraction id so
- * a replay collides -- and an insert-only grant cannot top up a partial stack, which is what
- * keeps settlement inside the material cap. The duplicate is the accepted side of that trade.
+ * leaves a granted payout looking unpaid, and the stale-claim takeover grants it again, so
+ * settlement is at-least-once in that window. Closing it would need a transaction (kept as a
+ * last resort) or a grant keyed to the extraction id so a replay collides -- and an
+ * insert-only grant cannot top up a partial stack, which is what keeps settlement inside the
+ * material cap. The rare duplicate is the accepted side of that trade.
  *
  * Grants are aggregated per seed item because they share one inventory snapshot. Two
  * extractions of the same seed would otherwise both measure the same partial stack, and the
@@ -2440,15 +2437,15 @@ const farmingQuestStateAfterClaim = (
       }
     : questState;
 
-/** Awards farming XP and advances the matching active quest objectives together. */
 /** Max read-modify-write passes before a contended quest update gives up. */
 const QUEST_PROGRESS_ATTEMPTS = 3;
 
 /**
+ * Awards farming XP and advances the matching active quest objectives together.
+ *
  * Farming XP is a SQL increment and merges on its own, but quest trackers are one JSON
  * document rewritten wholesale. Two farming actions that each read the same trackers would
- * both write "1", and the later write would erase the earlier one -- watering two plots left
- * `plants_watered` at 1. So the tracker write is a compare-and-swap on the row it was derived
+ * both write "1", and the later write would erase the earlier one. So the tracker write is a compare-and-swap on the row it was derived
  * from, and a lost race re-reads and recomputes instead of overwriting.
  * Returns awarded XP and its confirmed cache projection, or null when progress could not be saved.
  */

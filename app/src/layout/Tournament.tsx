@@ -123,7 +123,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
   // Format the match data
   const matches = groupBy(data?.matches || [], "round");
   const rounds = [...matches.keys()];
-  const initialSeeds = matches?.get(1)?.length || 0;
+  const initialSeeds = matches.get(1)?.length ?? 0;
 
   if (isCreating) return <Loader explanation="Creating tournament" />;
   if (isJoiningTournament) return <Loader explanation="Joining tournament" />;
@@ -145,7 +145,6 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                   <UserRoundPlus className="h-5 w-5" />
                 </Button>
               }
-              isValid={createForm.formState.isValid}
               onAccept={(e) => {
                 e.preventDefault();
                 joinTournament({ tournamentId });

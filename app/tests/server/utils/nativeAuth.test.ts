@@ -1,4 +1,3 @@
-import { hasLocalRedis, startLocalRedis } from "../../setup/localRedis";
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import type { Redis } from "@upstash/redis";
 import { createNativeAuthStore, nativeAuthChallenge } from "@/server/utils/nativeAuth";
@@ -6,6 +5,7 @@ import {
   nativeAuthExchangeSchema,
   nativeAuthStartSchema,
 } from "@/validators/nativeAuth";
+import { hasLocalRedis, startLocalRedis } from "../../setup/localRedis";
 
 const integration = hasLocalRedis ? describe : describe.skip;
 

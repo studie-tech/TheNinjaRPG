@@ -20,8 +20,6 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { useUserData } from "@/utils/UserContext";
 
-/** Keep the forum loading boundary consistent with the game layout. */
-export const ForumSkeleton = () => <Loader explanation="Loading forum…" />;
 /** Provide the Suspense boundary required by URL-backed forum filters. */
 export default function Forum() {
   return (
@@ -30,6 +28,9 @@ export default function Forum() {
     </Suspense>
   );
 }
+
+/** Keep the forum loading boundary consistent with the game layout. */
+const ForumSkeleton = () => <Loader explanation="Loading forum…" />;
 
 /** Preserve in-progress filtering during local URL updates and reset browse state on navigation. */
 function ForumHome() {

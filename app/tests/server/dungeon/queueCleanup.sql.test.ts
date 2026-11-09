@@ -1,6 +1,7 @@
 /** Ordinary and delayed activity cleanup must preserve another live dungeon's reservation. */
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import { CLAN_LOBBY_SECONDS, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import {
   actionLog,
   aiProfile,
@@ -25,27 +26,26 @@ import {
   war,
   warAlly,
 } from "@/drizzle/schema";
-import { CLAN_LOBBY_SECONDS, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { dungeonRouter } from "@/server/api/routers/dungeon";
-import { shrineRouter } from "@/server/api/routers/shrine";
-import { clanRouter } from "@/server/api/routers/clan";
-import { territoryWarRouter } from "@/server/api/routers/territoryWar";
-import { petsRouter } from "@/server/api/routers/pets";
-import { wakeQueuedUser } from "@/queries/profile";
+import { Pusher } from "@/libs/pusher";
 import { updateUserDataForInitiateClanBattle } from "@/queries/clan";
 import { updateUserDataForGET3 } from "@/queries/cleaner";
+import { wakeQueuedUser } from "@/queries/profile";
+import { clanRouter } from "@/server/api/routers/clan";
+import { dungeonRouter } from "@/server/api/routers/dungeon";
+import { petsRouter } from "@/server/api/routers/pets";
+import { shrineRouter } from "@/server/api/routers/shrine";
+import { territoryWarRouter } from "@/server/api/routers/territoryWar";
 import { runStaleShrineLobbyCleanup } from "@/server/utils/shrineMaintenance";
-import { resumePendingWarSettlements } from "@/server/utils/war";
 import { cleanupTerritoryWarTeams } from "@/server/utils/territoryWar";
-import { Pusher } from "@/libs/pusher";
-import { dungeonContent } from "../../setup/dungeon";
+import { resumePendingWarSettlements } from "@/server/utils/war";
 import { initialPetSpecies } from "../../libs/pets/helpers/species";
+import { dungeonContent } from "../../setup/dungeon";
 import {
-  insertPetSpecies,
-  insertUsers,
-  insertDefaultAiProfile,
   insertClans,
+  insertDefaultAiProfile,
+  insertPetSpecies,
   insertUserPets,
+  insertUsers,
 } from "../../setup/factories";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { beforeStatements, interceptExecute, sqlText } from "../../setup/statements";
@@ -97,25 +97,21 @@ const verifyReservedDungeon = async (status = "LOBBY") => {
 const expiredShrineLeave = async () => {
   const db = await getTestDatabase();
   await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "a"));
-  await db
-    .insert(mpvpBattleQueue)
-    .values({
-      id: "expired-shrine",
-      battleType: "SHRINE_BATTLE",
-      attackerEntityId: "v",
-      defenderEntityId: "enemy",
-      sector: 205,
-      createdAt: new Date(0),
-    });
-  await db
-    .insert(mpvpBattleUser)
-    .values({
-      id: "shrine-member",
-      clanBattleId: "expired-shrine",
-      userId: "a",
-      side: "ATTACKER",
-      slot: 0,
-    });
+  await db.insert(mpvpBattleQueue).values({
+    id: "expired-shrine",
+    battleType: "SHRINE_BATTLE",
+    attackerEntityId: "v",
+    defenderEntityId: "enemy",
+    sector: 205,
+    createdAt: new Date(0),
+  });
+  await db.insert(mpvpBattleUser).values({
+    id: "shrine-member",
+    clanBattleId: "expired-shrine",
+    userId: "a",
+    side: "ATTACKER",
+    slot: 0,
+  });
   expect(
     await (await callerFor(shrineRouter, "a")).leaveShrineBattle({
       shrineBattleId: "expired-shrine",
@@ -194,17 +190,19 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
     ]);
     await insertDefaultAiProfile({ userId: "x" });
     await insertPetSpecies(initialPetSpecies);
-    await insertUserPets(["one", "two"].map((id) => ({
-      id,
-      userId: "a",
-      name: id,
-      speciesId: initialPetSpecies[0]!.id,
-      rank: 1,
-      artRank: 1,
-      generationStatus: "READY" as const,
-      battleEnabled: true,
-      avatar: "https://example.com/pet.webp",
-    })));
+    await insertUserPets(
+      ["one", "two"].map((id) => ({
+        id,
+        userId: "a",
+        name: id,
+        speciesId: initialPetSpecies[0]!.id,
+        rank: 1,
+        artRank: 1,
+        generationStatus: "READY" as const,
+        battleEnabled: true,
+        avatar: "https://example.com/pet.webp",
+      })),
+    );
     await db
       .insert(dungeon)
       .values({ id: "definition", content: dungeonContent(), updatedAt: new Date() });
@@ -230,27 +228,25 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
             lobbiesCleared: 1,
           });
         else {
-          await db
-            .insert(war)
-            .values({
-              id: "ended-war",
-              type: "VILLAGE_WAR",
-              status: "ATTACKER_VICTORY",
-              attackerVillageId: "v",
-              defenderVillageId: "enemy",
-              endedAt: new Date(),
-              settlementPending: true,
-              settlement: {
-                villageIds: ["v", "enemy"],
-                winningVillageIds: ["v"],
-                warIds: ["ended-war"],
-                notificationContent: "Ended war",
-                cleanupCutoff: Date.now(),
-                boostsDelivered: true,
-                structuresDelivered: true,
-                notified: true,
-              },
-            });
+          await db.insert(war).values({
+            id: "ended-war",
+            type: "VILLAGE_WAR",
+            status: "ATTACKER_VICTORY",
+            attackerVillageId: "v",
+            defenderVillageId: "enemy",
+            endedAt: new Date(),
+            settlementPending: true,
+            settlement: {
+              villageIds: ["v", "enemy"],
+              winningVillageIds: ["v"],
+              warIds: ["ended-war"],
+              notificationContent: "Ended war",
+              cleanupCutoff: Date.now(),
+              boostsDelivered: true,
+              structuresDelivered: true,
+              notified: true,
+            },
+          });
           await resumePendingWarSettlements(db);
           expect(await db.query.war.findFirst()).toMatchObject({
             settlementPending: false,
@@ -270,13 +266,15 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
       .insert(sector)
       .values({ sector: 205, villageId: VILLAGE_SYNDICATE_ID, shrineLevel: 1 });
     let interposed = false;
-    const delayed = beforeStatements(db, mpvpBattleQueue, [async () => {
-      interposed = true;
-      await updateUserDataForGET3(db);
-      expect((await owner()).status).toBe("AWAKE");
-      await createDungeon();
-      throw new Error("Injected unavailable queue insert");
-    }]);
+    const delayed = beforeStatements(db, mpvpBattleQueue, [
+      async () => {
+        interposed = true;
+        await updateUserDataForGET3(db);
+        expect((await owner()).status).toBe("AWAKE");
+        await createDungeon();
+        throw new Error("Injected unavailable queue insert");
+      },
+    ]);
     await expect(
       callerForDatabase(shrineRouter, "a", delayed).challengeShrine({
         sectorNumber: 205,
@@ -288,16 +286,14 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
 
   it("preserves a dungeon admitted while territory team membership is provisional", async () => {
     const db = await getTestDatabase();
-    await db
-      .insert(territoryWar)
-      .values({
-        id: "event",
-        predecessorId: "initial",
-        sector: 1,
-        guardianId: "guardian",
-        startsAt: new Date("2000-01-01T00:00:00.000Z"),
-        endsAt: new Date("2100-01-01T00:00:00.000Z"),
-      });
+    await db.insert(territoryWar).values({
+      id: "event",
+      predecessorId: "initial",
+      sector: 1,
+      guardianId: "guardian",
+      startsAt: new Date("2000-01-01T00:00:00.000Z"),
+      endsAt: new Date("2100-01-01T00:00:00.000Z"),
+    });
     let interposed = false;
     const delayed = interceptExecute(db, async (query, run) => {
       const result = await run();
@@ -324,15 +320,13 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
   it("preserves an admitted dungeon when clan battle startup releases surplus members", async () => {
     const db = await getTestDatabase();
     // This lobby and both existing participants represent ordinary earlier joins.
-    await db
-      .insert(mpvpBattleQueue)
-      .values({
-        id: "clan-lobby",
-        battleType: "CLAN_BATTLE",
-        attackerEntityId: "c",
-        defenderEntityId: "d",
-        createdAt: new Date(Date.now() - (CLAN_LOBBY_SECONDS + 5) * 1000),
-      });
+    await db.insert(mpvpBattleQueue).values({
+      id: "clan-lobby",
+      battleType: "CLAN_BATTLE",
+      attackerEntityId: "c",
+      defenderEntityId: "d",
+      createdAt: new Date(Date.now() - (CLAN_LOBBY_SECONDS + 5) * 1000),
+    });
     await db.insert(mpvpBattleUser).values([
       {
         id: "x-member",
@@ -354,12 +348,14 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
     await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "x"));
     await db.update(userData).set({ status: "QUEUED" }).where(eq(userData.userId, "y"));
     let interposed = false;
-    const delayed = beforeStatements(db, mpvpBattleUser, [async () => {
-      interposed = true;
-      await updateUserDataForGET3(db);
-      expect((await owner()).status).toBe("AWAKE");
-      await createDungeon();
-    }]);
+    const delayed = beforeStatements(db, mpvpBattleUser, [
+      async () => {
+        interposed = true;
+        await updateUserDataForGET3(db);
+        expect((await owner()).status).toBe("AWAKE");
+        await createDungeon();
+      },
+    ]);
     expect(
       (
         await callerForDatabase(clanRouter, "a", delayed).joinClanBattle({
@@ -403,55 +399,45 @@ describeWithDatabase("queue cleanup preserves dungeon reservations", () => {
         }
         if (release === "shrine rollback") await wakeQueuedUser(db, "a");
         else if (release === "territory cleanup") {
-          await db
-            .insert(territoryWar)
-            .values({
-              id: "event",
-              predecessorId: "initial",
-              sector: 1,
-              guardianId: "guardian",
-              startsAt: new Date(0),
-              endsAt: new Date(1),
-            });
-          await db
-            .insert(mpvpBattleQueue)
-            .values({
-              id: "control",
-              battleType: "TERRITORY_WAR",
-              territoryWarId: "event",
-              attackerEntityId: "village:v",
-              defenderEntityId: "guardian",
-              sector: 1,
-            });
-          await db
-            .insert(mpvpBattleUser)
-            .values({
-              id: "member",
-              clanBattleId: "control",
-              userId: "a",
-              side: "ATTACKER",
-              slot: 0,
-            });
+          await db.insert(territoryWar).values({
+            id: "event",
+            predecessorId: "initial",
+            sector: 1,
+            guardianId: "guardian",
+            startsAt: new Date(0),
+            endsAt: new Date(1),
+          });
+          await db.insert(mpvpBattleQueue).values({
+            id: "control",
+            battleType: "TERRITORY_WAR",
+            territoryWarId: "event",
+            attackerEntityId: "village:v",
+            defenderEntityId: "guardian",
+            sector: 1,
+          });
+          await db.insert(mpvpBattleUser).values({
+            id: "member",
+            clanBattleId: "control",
+            userId: "a",
+            side: "ATTACKER",
+            slot: 0,
+          });
           await cleanupTerritoryWarTeams(db);
         } else {
-          await db
-            .insert(mpvpBattleQueue)
-            .values({
-              id: "control",
-              battleId: "fight",
-              battleType: "CLAN_BATTLE",
-              attackerEntityId: "c",
-              defenderEntityId: "d",
-            });
-          await db
-            .insert(mpvpBattleUser)
-            .values({
-              id: "member",
-              clanBattleId: "control",
-              userId: "a",
-              side: "ATTACKER",
-              slot: 0,
-            });
+          await db.insert(mpvpBattleQueue).values({
+            id: "control",
+            battleId: "fight",
+            battleType: "CLAN_BATTLE",
+            attackerEntityId: "c",
+            defenderEntityId: "d",
+          });
+          await db.insert(mpvpBattleUser).values({
+            id: "member",
+            clanBattleId: "control",
+            userId: "a",
+            side: "ATTACKER",
+            slot: 0,
+          });
           await updateUserDataForInitiateClanBattle(
             db,
             ["a"],

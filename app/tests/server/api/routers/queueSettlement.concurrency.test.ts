@@ -1,5 +1,5 @@
-import { and, eq, gt } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { and, eq, gt } from "drizzle-orm";
 import {
   item,
   jutsu,
@@ -22,7 +22,15 @@ import {
   settleCraftingQueue,
   settleJutsuTrainingQueue,
 } from "@/server/utils/userQueue";
-import { insertItems, insertJutsus, insertUsers, insertUserVotes, jutsuRow } from "../../../setup/factories";
+import { deferred } from "../../../setup/deferred";
+import {
+  insertItems,
+  insertJutsus,
+  insertUsers,
+  insertUserVotes,
+  jutsuRow,
+} from "../../../setup/factories";
+import { aroundStatements, barrier, overrideQuery } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -30,8 +38,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { barrier, aroundStatements, overrideQuery } from "../../../setup/statements";
-import { deferred } from "../../../setup/deferred";
 
 const userId = "queue-settlement";
 const minute = 60_000;
@@ -88,10 +94,15 @@ const delayQueueRead = (database: DrizzleClient) => {
 
 const gateEnqueueWrites = (database: DrizzleClient) => {
   const bothArrived = barrier(2);
-  return aroundStatements(database, userData, async (run) => {
-    await bothArrived();
-    return run();
-  }, { operations: ["update"] });
+  return aroundStatements(
+    database,
+    userData,
+    async (run) => {
+      await bothArrived();
+      return run();
+    },
+    { operations: ["update"] },
+  );
 };
 
 const readUser = async () => {
@@ -223,7 +234,9 @@ describeWithDatabase("Queue settlement concurrency and caps", () => {
     ]);
     const before = await fetchJutsuTrainingQueue(database, userId);
     expect(results.filter((result) => result.success)).toHaveLength(1);
-    expect(before.map((row) => row.reservedRyo)).toEqual<Array<number | undefined>>([costs[0]]);
+    expect(before.map((row) => row.reservedRyo)).toEqual<Array<number | undefined>>([
+      costs[0],
+    ]);
     expect((await readUser()).money).toBe(initialMoney - costs[0]!);
   });
 

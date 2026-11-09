@@ -1,5 +1,5 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it } from "bun:test";
+import { cleanup, render } from "@testing-library/react";
 import { GameAssetPreview } from "@/layout/GameAssetPreview";
 import { lpcAssets } from "../setup/lpc";
 
@@ -9,14 +9,34 @@ it("anchors mixed-size and trimmed LPC layers in one logical viewport", () => {
   const asset = lpcAssets.find(({ id }) => id === "shirt")!;
   const source = asset.lpcConfig.variants["male/gray/blue"]![0]!;
   const stand = [[0], [1], [2], [3]];
-  const view = render(<GameAssetPreview asset={{ ...asset, frames: 1, speed: 50, lpcConfig: {
-    ...asset.lpcConfig,
-    variants: { "male/gray/blue": [
-      { ...source, z: 35, layout: { cell: 64, columns: 4, clips: { stand } } },
-      { ...source, z: -5, layout: { cell: 192, columns: 4, clips: { stand }, trim: { x: 70, y: 80, width: 20, height: 25 } } },
-      { ...source, layout: { cell: 128, columns: 4, clips: { slash: stand } } },
-    ] },
-  } }} />);
+  const view = render(
+    <GameAssetPreview
+      asset={{
+        ...asset,
+        frames: 1,
+        speed: 50,
+        lpcConfig: {
+          ...asset.lpcConfig,
+          variants: {
+            "male/gray/blue": [
+              { ...source, z: 35, layout: { cell: 64, columns: 4, clips: { stand } } },
+              {
+                ...source,
+                z: -5,
+                layout: {
+                  cell: 192,
+                  columns: 4,
+                  clips: { stand },
+                  trim: { x: 70, y: 80, width: 20, height: 25 },
+                },
+              },
+              { ...source, layout: { cell: 128, columns: 4, clips: { slash: stand } } },
+            ],
+          },
+        },
+      }}
+    />,
+  );
   const viewport = view.getByRole("img", { name: asset.name });
   expect(viewport.getAttribute("viewBox")).toBe("0 0 192 192");
   const layers = viewport.querySelectorAll<HTMLDivElement>("foreignObject > div > div");

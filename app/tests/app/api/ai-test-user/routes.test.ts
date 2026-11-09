@@ -76,7 +76,10 @@ describe.each([
       const response = await handler(request);
 
       expect(response.status).toBe(401);
-      expect(await response.json()).toEqual({ success: false, message: "Unauthorized" });
+      expect(await response.json()).toEqual({
+        success: false,
+        message: "Unauthorized",
+      });
       expect(parseBody).not.toHaveBeenCalled();
     },
   );
@@ -97,7 +100,10 @@ describe.each([
       const response = await handler(request);
 
       expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({ success: false, message: "Invalid JSON body" });
+      expect(await response.json()).toEqual({
+        success: false,
+        message: "Invalid JSON body",
+      });
       expect(parseBody).toHaveBeenCalledTimes(1);
     },
   );

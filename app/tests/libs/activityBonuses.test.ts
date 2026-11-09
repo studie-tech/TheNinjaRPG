@@ -6,8 +6,8 @@ import {
   DecreaseCraftingTime,
   DecreaseFarmingTime,
   DecreaseGatheringTime,
-  IncreaseHuntingYield,
   IncreaseGatheringYield,
+  IncreaseHuntingYield,
 } from "@/validators/combat";
 
 const bonus = (power = 10) => DecreaseGatheringTime.parse({ power });

@@ -42,9 +42,6 @@ import { QuestFormSchema } from "@/validators/objectives";
 import { type QuestRewardType, questRewardFields } from "@/validators/rewardPackages";
 import { MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 
-// A merged type for quest with its rewards, so that we can show both in the same form
-export type ZodCombinedQuest = ZodQuestFormType;
-
 /** Manage quest fields, objective layouts and validated content saves in one form. */
 export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) => {
   const submitContent = useContentSubmit();
@@ -53,9 +50,6 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
   const { data: userData } = useUserData();
   const userRole = userData?.role ?? "USER";
   const hasReputationPermission = canAwardReputation(userRole);
-
-  // Schema used - includes superRefine validations for frontend validation
-  const schema = QuestFormSchema;
 
   // Form handling
   const endsAt = quest.endsAt ? quest.endsAt.slice(0, 10) : "";
@@ -72,15 +66,15 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
     endsAt: endsAt,
     startsAt: startsAt,
   };
-  const parsedStart = schema.safeParse(initialData);
+  const parsedStart = QuestFormSchema.safeParse(initialData);
   const start = parsedStart.success ? parsedStart.data : initialData;
 
-  const form = useForm<ZodQuestFormInput, unknown, ZodCombinedQuest>({
+  const form = useForm<ZodQuestFormInput, unknown, ZodQuestFormType>({
     mode: "all",
     criteriaMode: "all",
     values: start as ZodQuestFormInput,
     defaultValues: start as ZodQuestFormInput,
-    resolver: zodResolver(schema),
+    resolver: zodResolver(QuestFormSchema),
   });
 
   // Query for relations
@@ -105,7 +99,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
 
   const { data: titles, isPending: l11 } = api.title.getAllNames.useQuery();
 
-  // Mutation for updating item
+  // Mutation for updating the quest
   const utils = api.useUtils();
   const { mutateAsync: updateQuest, isPending: isUpdating } =
     api.quests.update.useMutation({
@@ -124,7 +118,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
     });
 
   /** The quest.update payload for validated form values; shared by saving and suggesting. */
-  const toQuestPayload = (data: ZodCombinedQuest) => {
+  const toQuestPayload = (data: ZodQuestFormType) => {
     const newObjectives = data.content.objectives.map((objective) => {
       if (objective.task === "move_to_location" && data.image) {
         objective.image = data.image;
@@ -179,7 +173,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
 
   // Form submission
   const handleQuestSubmit = form.handleSubmit(
-    async (data: ZodCombinedQuest) => {
+    async (data: ZodQuestFormType) => {
       await submitContent(quest, toQuestPayload(data), (newQuest) =>
         updateQuest({ id: quest.id, data: newQuest }),
       );
@@ -187,7 +181,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
     (errors) => showFormErrorsToast(errors),
   );
 
-  // Watch the effects
+  // Watch the quest content
   const content = useWatch({
     control: form.control,
     name: "content",
@@ -198,13 +192,13 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
   // Watch the entire thing - cast to output type for proper typing with z.coerce fields
   const currentValues = useWatch({
     control: form.control,
-  }) as ZodCombinedQuest;
+  }) as ZodQuestFormType;
 
   /** Replace objectives while retaining saved positions only for remaining nodes. */
   const setObjectives = (values: AllObjectivesType[]) => {
     // Cast content to output type for proper typing
     const newContent = {
-      ...(content as ZodCombinedQuest["content"]),
+      ...(content as ZodQuestFormType["content"]),
       objectives: values,
       nodePositions: content.nodePositions
         ? Object.fromEntries(
@@ -243,7 +237,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
   });
 
   // Object for form values
-  const formData: FormEntry<keyof ZodCombinedQuest>[] = [
+  const formData: FormEntry<keyof ZodQuestFormType>[] = [
     { id: "name", label: "Title", type: "text" },
     { id: "hidden", type: "boolean", label: "Hidden" },
     {
@@ -375,7 +369,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
   formData.push({ id: "description", type: "richinput", doubleWidth: true });
   formData.push({ id: "successDescription", type: "richinput", doubleWidth: true });
 
-  // Add description & image only for missions/crimes/events
+  // Availability window
   formData.push({ id: "endsAt", type: "date", label: "Ends At" });
   formData.push({ id: "startsAt", type: "date", label: "Starts At" });
 
@@ -555,8 +549,8 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
 
   /** What a suggestion sends: the save payload, or null while the form does not validate. */
   const getSuggestionData = () => {
-    const parsed = schema.safeParse(form.getValues());
-    return parsed.success ? toQuestPayload(parsed.data as ZodCombinedQuest) : null;
+    const parsed = QuestFormSchema.safeParse(form.getValues());
+    return parsed.success ? toQuestPayload(parsed.data as ZodQuestFormType) : null;
   };
 
   return {

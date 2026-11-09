@@ -44,10 +44,13 @@ describe("letter ranks", () => {
     ["ELDER", all, all],
     ["ELITE JONIN", all, all],
     ["NONE", ["D"], ["D"]],
-  ] as [UserRank, string[], string[]][])("opens %s to its jutsu and quests", (rank, jutsu, quests) => {
-    expect(availableJutsuLetterRanks(rank)).toEqual(jutsu as typeof all & never);
-    expect(availableQuestLetterRanks(rank)).toEqual(quests as typeof all & never);
-  });
+  ] as [UserRank, string[], string[]][])(
+    "opens %s to its jutsu and quests",
+    (rank, jutsu, quests) => {
+      expect(availableJutsuLetterRanks(rank)).toEqual(jutsu as typeof all & never);
+      expect(availableQuestLetterRanks(rank)).toEqual(quests as typeof all & never);
+    },
+  );
 });
 
 describe("availableRanks", () => {

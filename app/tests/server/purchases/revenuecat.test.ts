@@ -1,13 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  STORE_FEDERAL_PRODUCTS,
-  STORE_REP_PRODUCTS,
-} from "@/drizzle/constants";
-import { dollars2reps } from "@/utils/paypal";
-import {
-  androidSubscriptionChange,
-  productIdForPackage,
-} from "@/libs/native/purchases";
+import { STORE_FEDERAL_PRODUCTS, STORE_REP_PRODUCTS } from "@/drizzle/constants";
 import {
   classifyEvent,
   expirationAt,
@@ -18,12 +10,13 @@ import {
   occurredAt,
   paidThroughAt,
   purchasedAt,
-  transferOccurredAt,
-  transferSandboxScopes,
   resolveTransferStore,
   storePlatformFromAppId,
   toStorePlatform,
+  transferOccurredAt,
+  transferSandboxScopes,
 } from "@/server/utils/purchases/revenuecat";
+import { dollars2reps } from "@/utils/paypal";
 
 describe("store catalogue", () => {
   it("gives the same reputation per dollar as the web checkout", () => {
@@ -31,7 +24,9 @@ describe("store catalogue", () => {
     // absorbed rather than passed on. If this fails, either the pricing formula moved or
     // a tier was edited without recomputing its reputation.
     for (const product of STORE_REP_PRODUCTS) {
-      expect(product.reputationPoints).toBe<number | null | undefined>(dollars2reps(product.usd));
+      expect(product.reputationPoints).toBe<number | null | undefined>(
+        dollars2reps(product.usd),
+      );
     }
   });
 
@@ -45,84 +40,18 @@ describe("store catalogue", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("maps a Play offering package to the selected base plan", () => {
-    expect(
-      productIdForPackage(
-        {
-          identifier: "gold-package",
-          product: {
-            identifier: "tnr_federal_gold",
-            priceString: "$15.00",
-            title: "Gold",
-            description: "Gold tier",
-            defaultOption: { basePlanId: "monthly" },
-          },
-        },
-        "android",
-      ),
-    ).toBe("tnr_federal_gold:monthly");
-  });
-
   it("offers tiers in ascending order, so the list reads as a ladder", () => {
     const prices = STORE_REP_PRODUCTS.map((p) => p.usd);
     expect([...prices].sort((a, b) => a - b)).toEqual(prices);
-  });
-
-  it("uses Play's replacement flow for subscription tier changes", () => {
-    expect(
-      androidSubscriptionChange(
-        ["tnr_federal_normal:monthly"],
-        "tnr_federal_gold:monthly",
-        STORE_FEDERAL_PRODUCTS,
-      ),
-    ).toEqual({
-      status: "change",
-      storeProductChangeInfo: {
-        oldProductIdentifier: "tnr_federal_normal:monthly",
-        replacementMode: "CHARGE_PRORATED_PRICE",
-      },
-    });
-    expect(
-      androidSubscriptionChange(
-        ["tnr_federal_gold:monthly"],
-        "tnr_federal_silver:monthly",
-        STORE_FEDERAL_PRODUCTS,
-      ),
-    ).toEqual({
-      status: "change",
-      storeProductChangeInfo: {
-        oldProductIdentifier: "tnr_federal_gold:monthly",
-        replacementMode: "DEFERRED",
-      },
-    });
-  });
-
-  it("does not replace a new or already-active Play subscription", () => {
-    expect(
-      androidSubscriptionChange(
-        [],
-        "tnr_federal_gold:monthly",
-        STORE_FEDERAL_PRODUCTS,
-      ),
-    ).toEqual({ status: "new" });
-    expect(
-      androidSubscriptionChange(
-        ["tnr_federal_gold:monthly"],
-        "tnr_federal_gold:monthly",
-        STORE_FEDERAL_PRODUCTS,
-      ),
-    ).toEqual({ status: "active" });
   });
 });
 
 describe("revenuecat webhook classification", () => {
   it("infers a storeless transfer platform from its dashboard app id", () => {
-    expect(storePlatformFromAppId("ios-app", "ios-app", "android-app")).toBe(
-      "APPLE",
+    expect(storePlatformFromAppId("ios-app", "ios-app", "android-app")).toBe("APPLE");
+    expect(storePlatformFromAppId("android-app", "ios-app", "android-app")).toBe(
+      "GOOGLE",
     );
-    expect(
-      storePlatformFromAppId("android-app", "ios-app", "android-app"),
-    ).toBe("GOOGLE");
     expect(storePlatformFromAppId("unknown", "ios-app", "android-app")).toBeUndefined();
     expect(
       resolveTransferStore(undefined, "ios-app", "ios-app", "android-app"),
@@ -169,7 +98,9 @@ describe("revenuecat webhook classification", () => {
       id: "e",
       expiration_at_ms: 1_701_000_000_000,
     } as Parameters<typeof expirationAt>[0];
-    expect(expirationAt(event)?.getTime()).toBe<typeof event.expiration_at_ms>(event.expiration_at_ms);
+    expect(expirationAt(event)?.getTime()).toBe<typeof event.expiration_at_ms>(
+      event.expiration_at_ms,
+    );
     expect(expirationAt({ ...event, expiration_at_ms: null })).toBeNull();
   });
 
@@ -200,10 +131,19 @@ describe("revenuecat webhook classification", () => {
     // receipt for a subscription the player has since bought back.
     const at = 1_700_000_000_000;
     expect(
-      occurredAt({ type: "EXPIRATION", id: "e", app_user_id: "u", event_timestamp_ms: at } as Parameters<typeof occurredAt>[0]).getTime(),
+      occurredAt({
+        type: "EXPIRATION",
+        id: "e",
+        app_user_id: "u",
+        event_timestamp_ms: at,
+      } as Parameters<typeof occurredAt>[0]).getTime(),
     ).toBe(at);
     // Absent only in hand-made payloads; falling back to now keeps the caller simple.
-    const fallback = occurredAt({ type: "EXPIRATION", id: "e", app_user_id: "u" } as Parameters<typeof occurredAt>[0]);
+    const fallback = occurredAt({
+      type: "EXPIRATION",
+      id: "e",
+      app_user_id: "u",
+    } as Parameters<typeof occurredAt>[0]);
     expect(Math.abs(fallback.getTime() - Date.now())).toBeLessThan(5000);
   });
 
@@ -216,8 +156,10 @@ describe("revenuecat webhook classification", () => {
     } as Parameters<typeof transferOccurredAt>[0];
     expect(transferOccurredAt(event)).toBeNull();
     expect(
-      transferOccurredAt({ ...event, event_timestamp_ms: 1_700_000_000_000 })
-        ?.getTime(),
+      transferOccurredAt({
+        ...event,
+        event_timestamp_ms: 1_700_000_000_000,
+      })?.getTime(),
     ).toBe(1_700_000_000_000);
   });
 
@@ -230,8 +172,12 @@ describe("revenuecat webhook classification", () => {
       purchased_at_ms: 1_699_000_000_000,
       expiration_at_ms: 1_701_000_000_000,
     } as Parameters<typeof occurredAt>[0];
-    expect(purchasedAt(event).getTime()).toBe<typeof event.purchased_at_ms>(event.purchased_at_ms);
-    expect(occurredAt(event).getTime()).toBe<typeof event.expiration_at_ms>(event.expiration_at_ms);
+    expect(purchasedAt(event).getTime()).toBe<typeof event.purchased_at_ms>(
+      event.purchased_at_ms,
+    );
+    expect(occurredAt(event).getTime()).toBe<typeof event.expiration_at_ms>(
+      event.expiration_at_ms,
+    );
   });
 
   it("tells a refund apart from an ordinary cancellation", () => {

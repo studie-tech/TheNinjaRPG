@@ -1,126 +1,74 @@
 import { describe, expect, it } from "bun:test";
 import { computeTemplateActivations } from "@/server/utils/shrineMaintenance";
 
-// Helper: build a Date at a specific UTC time
-function utcDate(dayOfWeek: number, hour: number, minute = 0): Date {
-  // Find next occurrence of dayOfWeek at hour:minute UTC from a fixed epoch
-  // We use a fixed Monday (2024-01-01 = Monday = dayOfWeek 1) as base
-  const base = new Date("2024-01-01T00:00:00.000Z"); // Monday
-  const baseDow = base.getUTCDay(); // 1
-  let daysOffset = dayOfWeek - baseDow;
-  if (daysOffset < 0) daysOffset += 7;
-  const d = new Date(base);
-  d.setUTCDate(d.getUTCDate() + daysOffset);
-  d.setUTCHours(hour, minute, 0, 0);
-  return d;
-}
+/** A UTC time on Monday 2024-01-01, the day every template row below targets (dayOfWeek 1). */
+const monday = (hour: number, minute = 0) =>
+  new Date(Date.UTC(2024, 0, 1, hour, minute));
 
-const BASE_PARAMS = {
-  villageTokens: 100_000,
-  hasLevel3Shrine: true,
-  boostCost: 15_000,
-};
+const TRAINING_SLOT_2 = { boostType: "Training", dayOfWeek: 1, slotIndex: 2 } as const;
+
+/** Runs the 03:59 -> 04:00 Monday slot-2 tick for a well-funded Level 3 shrine village. */
+const activations = (
+  overrides: Partial<Parameters<typeof computeTemplateActivations>[0]> = {},
+) =>
+  computeTemplateActivations({
+    villageTokens: 100_000,
+    hasLevel3Shrine: true,
+    boostCost: 15_000,
+    now: monday(4),
+    prevTime: monday(3, 59),
+    shrineSettings: { boostTemplate: [TRAINING_SLOT_2] },
+    ...overrides,
+  });
 
 describe("computeTemplateActivations", () => {
   it("returns empty array when slot is not due (not a boundary)", () => {
-    const now = utcDate(1, 4, 30); // mid-slot
-    const prevTime = utcDate(1, 4, 29); // also mid-slot, no boundary crossed
-    const result = computeTemplateActivations({
-      ...BASE_PARAMS,
-      now,
-      prevTime,
-      shrineSettings: {
-        boostTemplate: [{ boostType: "Training", dayOfWeek: 1, slotIndex: 2 }],
-      },
-    });
+    // Both times are mid-slot, so no boundary is crossed.
+    const result = activations({ now: monday(4, 30), prevTime: monday(4, 29) });
     expect(result).toHaveLength(0);
   });
 
   it("fires at slot boundary (minute 0 of a new slot)", () => {
-    const now = utcDate(1, 4, 0); // Monday slot 2 boundary (04:00)
-    const prevTime = utcDate(1, 3, 59); // just before
-    const result = computeTemplateActivations({
-      ...BASE_PARAMS,
-      now,
-      prevTime,
-      shrineSettings: {
-        boostTemplate: [{ boostType: "Training", dayOfWeek: 1, slotIndex: 2 }],
-      },
-    });
+    const result = activations();
     expect(result).toHaveLength(1);
     expect(result[0]?.boostType).toBe("Training");
   });
 
   it("skips boost already active with future expiry", () => {
-    const now = utcDate(1, 4, 0);
-    const prevTime = utcDate(1, 3, 59);
-    const futureExpiry = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
-    const result = computeTemplateActivations({
-      ...BASE_PARAMS,
-      now,
-      prevTime,
+    const futureExpiry = new Date(monday(4).getTime() + 60 * 60 * 1000).toISOString();
+    const result = activations({
       shrineSettings: {
         activeBoosts: { Training: futureExpiry },
-        boostTemplate: [{ boostType: "Training", dayOfWeek: 1, slotIndex: 2 }],
+        boostTemplate: [TRAINING_SLOT_2],
       },
     });
     expect(result).toHaveLength(0);
   });
 
   it("activates boost whose stored expiry has already passed", () => {
-    const now = utcDate(1, 4, 0);
-    const prevTime = utcDate(1, 3, 59);
-    const pastExpiry = new Date(now.getTime() - 1000).toISOString();
-    const result = computeTemplateActivations({
-      ...BASE_PARAMS,
-      now,
-      prevTime,
+    const pastExpiry = new Date(monday(4).getTime() - 1000).toISOString();
+    const result = activations({
       shrineSettings: {
         activeBoosts: { Training: pastExpiry },
-        boostTemplate: [{ boostType: "Training", dayOfWeek: 1, slotIndex: 2 }],
+        boostTemplate: [TRAINING_SLOT_2],
       },
     });
     expect(result).toHaveLength(1);
   });
 
   it("skips if village has no Level 3 shrine", () => {
-    const now = utcDate(1, 4, 0);
-    const prevTime = utcDate(1, 3, 59);
-    const result = computeTemplateActivations({
-      ...BASE_PARAMS,
-      hasLevel3Shrine: false, // village controls no Level 3 shrine
-      now,
-      prevTime,
-      shrineSettings: {
-        boostTemplate: [{ boostType: "Training", dayOfWeek: 1, slotIndex: 2 }],
-      },
-    });
+    const result = activations({ hasLevel3Shrine: false });
     expect(result).toHaveLength(0);
   });
 
   it("skips all if insufficient tokens", () => {
-    const now = utcDate(1, 4, 0);
-    const prevTime = utcDate(1, 3, 59);
-    const result = computeTemplateActivations({
-      ...BASE_PARAMS,
-      villageTokens: 5_000, // less than boostCost
-      now,
-      prevTime,
-      shrineSettings: {
-        boostTemplate: [{ boostType: "Training", dayOfWeek: 1, slotIndex: 2 }],
-      },
-    });
+    const result = activations({ villageTokens: 5_000 }); // less than boostCost
     expect(result).toHaveLength(0);
   });
 
   it("activates partial alphabetical boosts when tokens are limited", () => {
-    const now = utcDate(1, 4, 0);
-    const prevTime = utcDate(1, 3, 59);
-    const result = computeTemplateActivations({
-      ...BASE_PARAMS,
+    const result = activations({
       villageTokens: 20_000, // enough for 1 boost at 15_000
-      now,
-      prevTime,
       shrineSettings: {
         boostTemplate: [
           { boostType: "PVP", dayOfWeek: 1, slotIndex: 2 },
@@ -134,19 +82,11 @@ describe("computeTemplateActivations", () => {
   });
 
   it("dedupes duplicate (boostType, day, slot) rows so a type activates at most once", () => {
-    const now = utcDate(1, 4, 0);
-    const prevTime = utcDate(1, 3, 59);
-    const result = computeTemplateActivations({
-      ...BASE_PARAMS,
-      now,
-      prevTime,
+    const result = activations({
       shrineSettings: {
         // Malformed/legacy data: the same type repeated for one slot. The cron must
         // not charge tokens per occurrence (JSON_SET writes the key only once).
-        boostTemplate: [
-          { boostType: "Training", dayOfWeek: 1, slotIndex: 2 },
-          { boostType: "Training", dayOfWeek: 1, slotIndex: 2 },
-        ],
+        boostTemplate: [{ ...TRAINING_SLOT_2 }, { ...TRAINING_SLOT_2 }],
       },
     });
     expect(result).toHaveLength(1);
@@ -154,27 +94,15 @@ describe("computeTemplateActivations", () => {
   });
 
   it("returns empty array when template is empty", () => {
-    const now = utcDate(1, 4, 0);
-    const prevTime = utcDate(1, 3, 59);
-    const result = computeTemplateActivations({
-      ...BASE_PARAMS,
-      now,
-      prevTime,
-      shrineSettings: { boostTemplate: [] },
-    });
+    const result = activations({ shrineSettings: { boostTemplate: [] } });
     expect(result).toHaveLength(0);
   });
 
   it("only fires entries matching current dayOfWeek and slotIndex", () => {
-    const now = utcDate(1, 4, 0); // Monday slot 2
-    const prevTime = utcDate(1, 3, 59);
-    const result = computeTemplateActivations({
-      ...BASE_PARAMS,
-      now,
-      prevTime,
+    const result = activations({
       shrineSettings: {
         boostTemplate: [
-          { boostType: "Training", dayOfWeek: 1, slotIndex: 2 }, // matches
+          TRAINING_SLOT_2, // matches
           { boostType: "PVP", dayOfWeek: 2, slotIndex: 2 }, // wrong day
           { boostType: "Mission", dayOfWeek: 1, slotIndex: 3 }, // wrong slot
         ],
@@ -185,17 +113,9 @@ describe("computeTemplateActivations", () => {
   });
 
   it("fires at slot boundary even when cron is 1 minute late", () => {
-    // Slot 2 starts at 04:00 UTC. Cron fires at 04:01 (1 min late).
-    const now = utcDate(1, 4, 1); // 04:01
-    const prevTime = utcDate(1, 3, 59); // 03:59 — slot boundary 04:00 is in (prevTime, now]
-    const result = computeTemplateActivations({
-      ...BASE_PARAMS,
-      now,
-      prevTime,
-      shrineSettings: {
-        boostTemplate: [{ boostType: "Training", dayOfWeek: 1, slotIndex: 2 }],
-      },
-    });
+    // Slot 2 starts at 04:00 UTC. Cron fires at 04:01 (1 min late), so the
+    // slot boundary 04:00 is in (prevTime, now].
+    const result = activations({ now: monday(4, 1) });
     expect(result).toHaveLength(1);
     // Expiry must anchor to the slot start (04:00 + 2h = 06:00), not to `now`,
     // so the next slot tick at 06:00 doesn't skip this boost type.

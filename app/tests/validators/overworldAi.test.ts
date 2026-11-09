@@ -17,7 +17,15 @@ describe("OverworldPlacementSchema", () => {
 
   it("defaults to a five-hex roam, one copy on its own and standard size", () => {
     const parsed = OverworldPlacementSchema.parse(base);
-    expect(parsed).toMatchObject({ wanderRadius: 5, spawnCount: 1, groupMin: 1, groupMax: 1, habitats: [], wildOnly: false, mapScale: 100 });
+    expect(parsed).toMatchObject({
+      wanderRadius: 5,
+      spawnCount: 1,
+      groupMin: 1,
+      groupMax: 1,
+      habitats: [],
+      wildOnly: false,
+      mapScale: 100,
+    });
   });
 
   it("accepts ambient wildlife herds spread over random habitat sectors", () => {
@@ -38,7 +46,14 @@ describe("OverworldPlacementSchema", () => {
   });
 
   it("accepts a biome placement with a few groups in every sector of its biomes", () => {
-    const biome = { ...base, interactionType: "AMBIENT", sectorType: "biome", locationType: "random", habitats: ["snow"], spawnCount: 2 };
+    const biome = {
+      ...base,
+      interactionType: "AMBIENT",
+      sectorType: "biome",
+      locationType: "random",
+      habitats: ["snow"],
+      spawnCount: 2,
+    };
     expect(OverworldPlacementSchema.safeParse(biome).success).toBe(true);
   });
 
@@ -47,7 +62,14 @@ describe("OverworldPlacementSchema", () => {
     [{ locationType: "specific" }, "locationType"],
     [{ spawnCount: 5 }, "spawnCount"],
   ])("rejects a biome placement with %p", (patch, path) => {
-    const biome = { ...base, interactionType: "AMBIENT", sectorType: "biome", locationType: "random", habitats: ["grassland"], ...patch };
+    const biome = {
+      ...base,
+      interactionType: "AMBIENT",
+      sectorType: "biome",
+      locationType: "random",
+      habitats: ["grassland"],
+      ...patch,
+    };
     const result = OverworldPlacementSchema.safeParse(biome);
     expect(result.success).toBe(false);
     expect(result.error?.issues.some((issue) => issue.path[0] === path)).toBe(true);
@@ -131,7 +153,11 @@ describe("OverworldPlacementSchema", () => {
 
   it("requires a non-empty sectorList when sectorType is from_list", () => {
     expect(() =>
-      OverworldPlacementSchema.parse({ ...base, sectorType: "from_list", sectorList: [] }),
+      OverworldPlacementSchema.parse({
+        ...base,
+        sectorType: "from_list",
+        sectorList: [],
+      }),
     ).toThrow();
   });
 

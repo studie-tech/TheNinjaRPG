@@ -1,20 +1,21 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-
+import { FarmCollectionLog } from "@/layout/FarmCollectionLog";
+import * as Image from "@/layout/Image";
 import { stubDialog } from "../setup/dialog";
 
 let restoreDialog: () => void;
 beforeEach(() => {
   restoreDialog = stubDialog();
+  vi.spyOn(Image, "default").mockImplementation(((props: ComponentProps<"img">) => (
+    <img {...props} />
+  )) as never);
 });
-afterEach(() => restoreDialog());
-
-vi.mock("@/layout/Image", () => ({
-  default: (props: ComponentProps<"img">) => <img {...props} />,
-}));
-
-import { FarmCollectionLog } from "@/layout/FarmCollectionLog";
+afterEach(() => {
+  restoreDialog();
+  vi.restoreAllMocks();
+});
 
 describe("FarmCollectionLog", () => {
   it("renders a responsive grid, green check, and non-color completion states", () => {

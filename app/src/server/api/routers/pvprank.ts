@@ -85,10 +85,15 @@ import { idSchema } from "@/validators/misc";
 import {
   type RankedSeasonDivisionReward,
   rankedLoadoutSchema,
-  rankedQueueResponseSchema,
   rankedSeasonSchema,
 } from "@/validators/pvpRank";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+const rankedQueueResponseSchema = userDeltaResponseSchema.extend({
+  battleId: z.string().optional(),
+  removedJutsuIds: z.array(z.string()).optional(),
+  removedItemIds: z.array(z.string()).optional(),
+});
 
 export const pvpRankRouter = createTRPCRouter({
   // Get the user's season rewards
@@ -280,13 +285,15 @@ export const pvpRankRouter = createTRPCRouter({
     .input(idSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
-      // Fetch user & permission guard
-      const user = await fetchUser(ctx.drizzle, ctx.userId);
+      // Query
+      const [user, season] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        findRankedSeasonById(ctx.drizzle, input.id),
+      ]);
+      // Guard
       if (!canChangeContent(user.role)) {
         return errorResponse("You don't have permission to end ranked seasons");
       }
-      // Verify season exists & not already ended
-      const season = await findRankedSeasonById(ctx.drizzle, input.id);
       if (!season) {
         return errorResponse("Season not found");
       }
@@ -324,6 +331,9 @@ export const pvpRankRouter = createTRPCRouter({
             favoriteConsumableIds: [],
           },
         };
+        // RankedLoadout has no unique key on userId: two concurrent first reads of one
+        // account can each insert a row. Every read uses the same unordered lookup and in
+        // practice returns the same row, so the cost is a stray row support can remove.
         await insertRankedLoadoutForGetRankedLoadout(ctx.drizzle, loadout);
         return loadout;
       }
@@ -573,13 +583,11 @@ export const pvpRankRouter = createTRPCRouter({
       if (user.status !== "QUEUED") {
         return errorResponse("Not in the queue");
       }
-      // Mutation. Capture the CAS result: if a concurrent match claimed us into a
-      // battle between the guard read above and this update, the QUEUED-guarded
-      // status update matches no rows.
+      // Mutation. The status update is guarded on QUEUED, so a concurrent match that
+      // claimed us into a battle (status BATTLE) between the guard read above and this
+      // update is not clobbered back to AWAKE; the update then matches no rows.
       const [, leaveResult] = await Promise.all([
         deleteUserRankedQueueRow(ctx.drizzle, ctx.userId),
-        // Guard on QUEUED so a concurrent match that already claimed us into a
-        // battle (status BATTLE) is not clobbered back to AWAKE.
         wakeQueuedUser(ctx.drizzle, ctx.userId),
       ]);
       // No row matched: status changed between the guard read and this update.

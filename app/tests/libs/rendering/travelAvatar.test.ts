@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { travelAvatar } from "@/libs/rendering/scenes/travelActors";
 
@@ -36,7 +36,11 @@ describe("travelAvatar", () => {
 
   it("falls back to avatarLight for an NPC when avatar is missing", () => {
     expect(
-      travelAvatar({ isNpc: true, avatar: null, avatarLight: "https://cdn/thumb.webp" }),
+      travelAvatar({
+        isNpc: true,
+        avatar: null,
+        avatarLight: "https://cdn/thumb.webp",
+      }),
     ).toBe("https://cdn/thumb.webp");
   });
 

@@ -12,12 +12,20 @@ import {
   JUTSU_TRAIN_LEVEL_CAP,
   JUTSU_XP_TO_LEVEL,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  MPVP_QUEUE_BATTLE_TYPES,
   REGEN_SECONDS,
+  SPARRING_BATTLE_TYPES,
+  VILLAGE_WAR_TYPES,
   WAR_SHRINE_CAPTURE_WARHEALTH_DMG,
   WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL,
 } from "@/drizzle/constants";
 import { type Battle, userData, userJutsu, war } from "@/drizzle/schema";
 import { stillInBattle } from "@/libs/combat/actions";
+import {
+  ITEM_BROKEN_NOTICE,
+  ITEM_DURABILITY_CRITICAL_NOTICE,
+  ITEM_DURABILITY_NOTICE,
+} from "@/libs/combat/constants";
 import { settleObjectiveWarCombat } from "@/libs/combat/objectiveWar";
 import { areBattleAllies, hasHumanOpponent } from "@/libs/combat/participants";
 import type { CombatQuestTrackerTask } from "@/libs/combat/quests";
@@ -294,7 +302,7 @@ export const updateBattle = async (
           ? [insertLogBattleLengthsForFinishBattle(client, newBattle, user, other)]
           : []),
         // Clean up battle users in parallel - safe since they only read from mpvpBattleQueue
-        ...(["RAID", "SHRINE_WAR", "TERRITORY_WAR"].includes(newBattle.battleType)
+        ...(MPVP_QUEUE_BATTLE_TYPES.includes(newBattle.battleType)
           ? [deleteMpvpBattleUserForFinishBattle(client, newBattle)]
           : []),
         // Purge raid-chat memberships on any raid battle-over (boss kill OR team
@@ -352,7 +360,7 @@ export const updateBattle = async (
 
       // Delete queue entries AFTER the Promise.all to ensure mpvpBattleUser
       // subquery has completed (it references mpvpBattleQueue)
-      if (["RAID", "SHRINE_WAR", "TERRITORY_WAR"].includes(newBattle.battleType)) {
+      if (MPVP_QUEUE_BATTLE_TYPES.includes(newBattle.battleType)) {
         await deleteMpvpBattleQueueForFinishBattle(client, newBattle);
       }
 
@@ -672,7 +680,7 @@ export const updateWars = async (
       // Use per-war shrine HP change for village wars/raids (includes level diff adjustment)
       // For sector wars, use the total accumulated shrineChangeHp value
       let logShrineHpChange = 0;
-      if (["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) {
+      if (VILLAGE_WAR_TYPES.includes(w.type)) {
         // Use the already-computed villageWarShrineInfo which includes:
         // 1. The correct shrine change constants
         // 2. Level difference adjustment (reduced to ±1 when STREAK_LEVEL_DIFF exceeded)
@@ -741,7 +749,7 @@ export const updateWars = async (
       const shrineChanges = result.villageWarShrineInfo[w.id];
       if (
         hasShrineChange(shrineChanges) &&
-        ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
+        VILLAGE_WAR_TYPES.includes(w.type) &&
         !processedShrineWarIds.has(w.id)
       ) {
         processedShrineWarIds.add(w.id);
@@ -803,7 +811,7 @@ export const updateWars = async (
       // Skip if we've already scheduled an update for this war (prevents double-counting when multiple targets share a war)
       if (
         result.warHealthChange !== 0 &&
-        ["VILLAGE_WAR", "WAR_RAID"].includes(w.type) &&
+        VILLAGE_WAR_TYPES.includes(w.type) &&
         !processedWarHealthIds.has(w.id)
       ) {
         processedWarHealthIds.add(w.id);
@@ -830,7 +838,7 @@ export const updateWars = async (
 
       // Find the war from user's wars
       const w = userWars.find((war) => war.id === warId);
-      if (!w || w.rules || !["VILLAGE_WAR", "WAR_RAID"].includes(w.type)) continue;
+      if (!w || w.rules || !VILLAGE_WAR_TYPES.includes(w.type)) continue;
 
       processedShrineWarIds.add(warId);
 
@@ -1586,10 +1594,7 @@ export const updateUser = async (
       });
     }
     // Update map status
-    if (
-      result.curHealth > 0 ||
-      ["SPARRING", "RANKED_SPARRING"].includes(curBattle.battleType)
-    ) {
+    if (result.curHealth > 0 || SPARRING_BATTLE_TYPES.includes(curBattle.battleType)) {
       void updateUserOnMap(pusher, user.sector, {
         ...user,
         longitude: user.originalLongitude,
@@ -1645,7 +1650,7 @@ const durabilityNotifications = (battle: CompleteBattle, user: BattleUserState) 
       // Broken: now at 0
       if (initial > 0 && final <= 0) {
         notifications.push(
-          `${item.name} has broken and cannot be used until repaired!`,
+          `${item.name} ${ITEM_BROKEN_NOTICE} and cannot be used until repaired!`,
         );
       } else if (
         // Urgent warning: crossed down to <=25%
@@ -1654,7 +1659,7 @@ const durabilityNotifications = (battle: CompleteBattle, user: BattleUserState) 
         final > 0
       ) {
         notifications.push(
-          `${item.name} durability is critically low at ${finalPct}%! Repair it soon to prevent it from breaking!`,
+          `${item.name} ${ITEM_DURABILITY_CRITICAL_NOTICE} at ${finalPct}%! Repair it soon to prevent it from breaking!`,
         );
       } else if (
         // Regular warning: crossed down to <=50% (but still above 25%)
@@ -1664,7 +1669,7 @@ const durabilityNotifications = (battle: CompleteBattle, user: BattleUserState) 
         final > 0
       ) {
         notifications.push(
-          `${item.name} durability is now ${finalPct}%. Consider repairing it soon!`,
+          `${item.name} ${ITEM_DURABILITY_NOTICE} ${finalPct}%. Consider repairing it soon!`,
         );
       }
     }
@@ -1732,7 +1737,9 @@ export const combatEnergyRecoverySql = (
   const regeneration =
     (userId ? snapshot?.extraState.energyRegeneration?.[userId] : undefined) ??
     userData.regeneration;
-  // Orphaned battles released by the cleaner have no snapshot; do not erase stored Energy.
+  // Without a captured capacity for this user (no snapshot, e.g. the cleaner's orphan
+  // release or an expired dungeon whose battle is gone), cap at the larger of
+  // maxEnergy and the stored balance so Energy is never erased.
   const capacity =
     (userId ? snapshot?.extraState.energyCapacity?.[userId] : undefined) ??
     sql`GREATEST(${userData.maxEnergy}, ${userData.curEnergy})`;

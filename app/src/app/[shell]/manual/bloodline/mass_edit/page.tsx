@@ -36,6 +36,7 @@ export default function BloodlineMassEditPage() {
       lastElementRef={setLastElement}
       onEntriesUpdated={() => refetch()}
       renderFilter={(disabled) => <BloodFiltering state={state} disabled={disabled} />}
+      filterEffectTypes={state.effect}
     />
   );
 }

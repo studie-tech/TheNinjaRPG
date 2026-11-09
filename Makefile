@@ -47,7 +47,7 @@ cloc: # Count lines of code
 .PHONY: docker-build
 docker-build: # Build/Rebuild the application.
 	@echo "${YELLOW}Building/Rebuilding the application${RESET}"
-	docker-compose --file $$PWD/.devcontainer/docker-compose.yml build --no-cache
+	docker compose -p devcontainer -f $$PWD/.devcontainer/docker-compose.yml build --no-cache
 
 .PHONY: docker-apply
 docker-apply: # Recreate the shared service stack from the current docker-compose.yml
@@ -57,7 +57,7 @@ docker-apply: # Recreate the shared service stack from the current docker-compos
 .PHONY: docker-stop
 docker-stop: # Stop all docker containers.
 	@echo "${GREEN}docker-stop${RESET}"
-	docker compose --progress plain --file $$PWD/.devcontainer/docker-compose.yml stop
+	docker compose --progress plain -p devcontainer -f $$PWD/.devcontainer/docker-compose.yml stop
 
 -----------LocalDevelopment-------------: # -------------------------------------------------------
 .PHONY: setup
@@ -153,7 +153,7 @@ makemigrations: ensure-env # Create database migration file
 	cd app && node ../scripts/dev-bun.mjs makemigrations
 
 .PHONY: emptymigration
-emptymigration: ensure-env # Create database migration file
+emptymigration: ensure-env # Create an empty custom migration file
 	@echo "${YELLOW}Create empty migrations file ${RESET}"
 	cd app && node ../scripts/dev-bun.mjs emptymigration
 	
@@ -177,7 +177,7 @@ lint: # Run linting of the project
 .PHONY: format
 format: # Run biome formatter on the project
 	@echo "${YELLOW}Running biome formatter${RESET}"
-	cd app && ./node_modules/@biomejs/biome/bin/biome format --write src/
+	cd app && node ../scripts/dev-bun.mjs run format:write
 
 .PHONY: check
 check: # Run Biome and TypeScript checks
@@ -211,17 +211,17 @@ mobile-configure: # Apply capabilities and the widget target to the generated Xc
 	cd mobile && bun run configure:ios
 
 .PHONY: mobile-beta
-mobile-beta: mobile-sync # Upload builds to TestFlight and the Play internal track
+mobile-beta: # Upload builds to TestFlight and the Play internal track
 	@echo "${GREEN}mobile-beta${RESET}"
 	cd mobile && bun run beta:ios && bun run beta:android
 
 .PHONY: mobile-ios
-mobile-ios: mobile-sync # Build and run the iOS shell in the simulator
+mobile-ios: # Build and run the iOS shell in the simulator
 	@echo "${GREEN}mobile-ios${RESET}"
 	cd mobile && bun run run:ios
 
 .PHONY: mobile-android
-mobile-android: mobile-sync # Build and run the Android shell in an emulator
+mobile-android: # Build and run the Android shell in an emulator
 	@echo "${GREEN}mobile-android${RESET}"
 	cd mobile && bun run run:android
 
@@ -281,7 +281,7 @@ squash: # Squash the last N commits into one, usage: make squash N
 	git reset --soft HEAD~$(ARGS) && git commit --edit -m"$(shell git log --format=%B --reverse HEAD..HEAD@{1})"
 
 .PHONY: git-branch-uncommit
-git-branch-uncommit: # Undo the last N commits (keeping changes staged), usage: make uncommit N
+git-branch-uncommit: # Reset to origin/main and reapply this branch's changes as unstaged edits
 	@echo "${YELLOW}Uncommitting branch commits${RESET}"
 	git diff --binary --ignore-space-at-eol origin/main...HEAD > branch.patch
 	git reset --hard origin/main

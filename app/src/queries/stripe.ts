@@ -79,11 +79,11 @@ export const executeResultForClaim = (
   client: Pick<DrizzleClient, "execute">,
   receipt: { id: string },
 ) =>
-  client.execute(sql`UPDATE ${userData} u INNER JOIN ${stripePayment} p ON p.affectedUserId = u.userId
-      SET u.reputationPoints = u.reputationPoints + p.reputationPoints,
-          u.reputationPointsTotal = u.reputationPointsTotal + p.reputationPoints,
-          p.grantedAt = CURRENT_TIMESTAMP(3)
-      WHERE p.id = ${receipt.id} AND p.grantedAt IS NULL AND p.reviewRequired = FALSE`);
+  client.execute(sql`UPDATE ${userData} INNER JOIN ${stripePayment} ON ${stripePayment.affectedUserId} = ${userData.userId}
+      SET ${userData.reputationPoints} = ${userData.reputationPoints} + ${stripePayment.reputationPoints},
+          ${userData.reputationPointsTotal} = ${userData.reputationPointsTotal} + ${stripePayment.reputationPoints},
+          ${stripePayment.grantedAt} = CURRENT_TIMESTAMP(3)
+      WHERE ${stripePayment.id} = ${receipt.id} AND ${stripePayment.grantedAt} IS NULL AND ${stripePayment.reviewRequired} = FALSE`);
 
 /** Build a Stripe checkout lookup by ID. */
 export const findStripeCheckoutById = (
@@ -152,16 +152,16 @@ export const executeResultForUpgradeStripeFederalWithReps = (
   userId: string,
   currentTier: import("@/drizzle/schema").FederalStatus,
 ) =>
-  client.execute(sql`UPDATE ${userData} u INNER JOIN ${stripePayment} p ON p.affectedUserId = u.userId
-    SET u.reputationPoints = u.reputationPoints - ${cost},
-        u.reputationPointsTotal = u.reputationPointsTotal - ${cost},
-        u.federalStatus = ${nextTier},
-        p.federalStatusOverride = ${nextTier}
-    WHERE p.id = ${receipt.id} AND p.createdById = ${userId} AND p.affectedUserId = ${userId}
-      AND p.grantedAt IS NOT NULL AND p.purchasedAt <= CURRENT_TIMESTAMP(3)
-      AND p.expiresAt > CURRENT_TIMESTAMP(3)
-      AND COALESCE(p.federalStatusOverride, p.federalStatus) = ${currentTier}
-      AND u.federalStatus = ${currentTier} AND u.reputationPoints >= ${cost}`);
+  client.execute(sql`UPDATE ${userData} INNER JOIN ${stripePayment} ON ${stripePayment.affectedUserId} = ${userData.userId}
+    SET ${userData.reputationPoints} = ${userData.reputationPoints} - ${cost},
+        ${userData.reputationPointsTotal} = ${userData.reputationPointsTotal} - ${cost},
+        ${userData.federalStatus} = ${nextTier},
+        ${stripePayment.federalStatusOverride} = ${nextTier}
+    WHERE ${stripePayment.id} = ${receipt.id} AND ${stripePayment.createdById} = ${userId} AND ${stripePayment.affectedUserId} = ${userId}
+      AND ${stripePayment.grantedAt} IS NOT NULL AND ${stripePayment.purchasedAt} <= CURRENT_TIMESTAMP(3)
+      AND ${stripePayment.expiresAt} > CURRENT_TIMESTAMP(3)
+      AND COALESCE(${stripePayment.federalStatusOverride}, ${stripePayment.federalStatus}) = ${currentTier}
+      AND ${userData.federalStatus} = ${currentTier} AND ${userData.reputationPoints} >= ${cost}`);
 
 /** Table alias for recipient joins, keeping its columns distinct from other participants. */
 const recipient = alias(userData, "recipient");

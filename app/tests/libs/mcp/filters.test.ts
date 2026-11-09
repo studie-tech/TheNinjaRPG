@@ -53,7 +53,9 @@ describe("response field selection", () => {
   });
 
   it("returns the expanded items of a trailing wildcard", async () => {
-    expect(await select("users.*", "meta.nested.*", "nothing.*", "meta.total.*")).toEqual({
+    expect(
+      await select("users.*", "meta.nested.*", "nothing.*", "meta.total.*"),
+    ).toEqual({
       "users.*": payload.users,
       "meta.nested.*": [true],
     });

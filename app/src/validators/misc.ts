@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { GAME_SETTING_GAINS_MULTIPLIER } from "@/drizzle/constants";
+import {
+  GAME_SETTING_GAINS_MULTIPLIER,
+  MAX_MASS_EXPERIENCE_AWARD,
+} from "@/drizzle/constants";
 
 export const changeSettingSchema = z.object({
   setting: z.enum([
@@ -29,7 +32,7 @@ export type PrestigeTransferSchema = z.infer<
 
 // Experience award schema (used in PublicUser for staff)
 export const experienceAwardSchema = z.object({
-  amount: z.number().min(1).max(100000),
+  amount: z.number().min(1).max(MAX_MASS_EXPERIENCE_AWARD),
 });
 export type ExperienceAwardSchema = z.infer<typeof experienceAwardSchema>;
 

@@ -1,8 +1,11 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "bun:test";
-import { COMBAT_LAYOUT_COMPONENTS, DEFAULT_LAYOUT_ORDER, useCombatPreferences } from "@/hooks/combat";
+import { act, cleanup, renderHook } from "@testing-library/react";
+import {
+  COMBAT_LAYOUT_COMPONENTS,
+  DEFAULT_LAYOUT_ORDER,
+  useCombatPreferences,
+} from "@/hooks/combat";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-
 
 beforeEach(() => {
   installBrowserGlobals({ events: ["CustomEvent"] });
@@ -51,8 +54,16 @@ it.each([
 });
 
 it("orders the layout by component and restores a copy after a change", () => {
-  expect(DEFAULT_LAYOUT_ORDER).toEqual(COMBAT_LAYOUT_COMPONENTS.map((component) => component.id));
-  expect(DEFAULT_LAYOUT_ORDER).toEqual(["timer", "battlefield", "actions", "timeline", "battlelog"]);
+  expect(DEFAULT_LAYOUT_ORDER).toEqual(
+    COMBAT_LAYOUT_COMPONENTS.map((component) => component.id),
+  );
+  expect(DEFAULT_LAYOUT_ORDER).toEqual([
+    "timer",
+    "battlefield",
+    "actions",
+    "timeline",
+    "battlelog",
+  ]);
   const { result } = renderHook(useCombatPreferences);
   act(() => result.current.setLayoutOrder(["battlelog", "timer"]));
   expect(result.current.layoutOrder).toEqual(["battlelog", "timer"]);
@@ -66,5 +77,7 @@ it("stores the resource bar visibility", () => {
   expect(result.current.resourceBarsVisibility).toBe("mobile-only");
   act(() => result.current.setResourceBarsVisibility("off"));
   expect(result.current.resourceBarsVisibility).toBe("off");
-  expect(JSON.parse(window.localStorage.getItem("combatResourceBarsVisibility") ?? "null")).toBe("off");
+  expect(
+    JSON.parse(window.localStorage.getItem("combatResourceBarsVisibility") ?? "null"),
+  ).toBe("off");
 });

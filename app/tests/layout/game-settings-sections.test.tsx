@@ -1,6 +1,6 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import { SignedInIcons } from "@/components/layout/shared/LayoutSidebars";
 import * as nativeEntry from "@/components/native/NativeSettingsEntry";
@@ -11,24 +11,29 @@ import * as layoutPicker from "@/layout/GameLayoutPicker";
 import {
   GameSettingsPanel,
   GameSettingsPopover,
-  GlobalAudioProvider,
   SETTINGS_HREF,
 } from "@/layout/GameSettings";
+import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
 import { hasTutorialReminder, TutorialSettings } from "@/layout/TutorialSettings";
 import * as audioPreferences from "@/libs/audioPreferences";
 import * as toast from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import * as audioUtils from "@/utils/audio";
 import * as userContext from "@/utils/UserContext";
-import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../setup/browserGlobals";
 
 const MUSIC = "Music";
 const SFX = "Combat sounds";
 const LIGHTING = "Day/night colors";
 const SIDEBARS = "Swap sidebars";
 
-let preferenceCallbacks: Parameters<typeof client.api.profile.updatePreferences.useMutation>[0];
+let preferenceCallbacks: Parameters<
+  typeof client.api.profile.updatePreferences.useMutation
+>[0];
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -45,7 +50,6 @@ beforeEach(() => {
   vi.spyOn(iframeHook, "useIframeMute").mockReturnValue({
     isIframesMuted: false,
     setIframesMuted: vi.fn(),
-    toggleIframesMute: vi.fn(),
   });
   vi.spyOn(gameLayoutHook, "useSelectGameLayout").mockReturnValue(vi.fn());
   vi.spyOn(layoutPicker, "GameLayoutPicker").mockReturnValue(null as never);
@@ -126,7 +130,9 @@ describe("game settings sections", () => {
       </section>,
     );
     expect(screen.getAllByText("Game layout")).toHaveLength(1);
-    expect(screen.getByRole("link", { name: "Explore layouts" }).getAttribute("href")).toBe("/layouts");
+    expect(
+      screen.getByRole("link", { name: "Explore layouts" }).getAttribute("href"),
+    ).toBe("/layouts");
     expect(screen.getByLabelText("Lighter layout")).toBeTruthy();
     expect(screen.getByLabelText(SIDEBARS)).toBeTruthy();
     expect(screen.queryByLabelText(LIGHTING)).toBeNull();
@@ -144,12 +150,24 @@ describe("game settings sections", () => {
     );
     expect(screen.getAllByText("Visual effects")).toHaveLength(1);
     expect(screen.queryByText("Adjust graphics for your device.")).toBeNull();
-    expect(screen.getByText("Shared across the game; saved on this device.")).toBeTruthy();
-    for (const label of ["Sunlight", LIGHTING, "Local lights", "Shadows", "Weather", "Wind", "Sprite animations"]) {
+    expect(
+      screen.getByText("Shared across the game; saved on this device."),
+    ).toBeTruthy();
+    for (const label of [
+      "Sunlight",
+      LIGHTING,
+      "Local lights",
+      "Shadows",
+      "Weather",
+      "Wind",
+      "Sprite animations",
+    ]) {
       expect(screen.getByLabelText(label)).toBeTruthy();
     }
     fireEvent.click(screen.getByLabelText(LIGHTING));
-    expect((screen.getByLabelText("Shadows") as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByLabelText("Shadows") as HTMLButtonElement).disabled).toBe(
+      false,
+    );
     expect(screen.queryByLabelText(MUSIC)).toBeNull();
     expect(screen.queryByLabelText(SIDEBARS)).toBeNull();
   });
@@ -158,34 +176,48 @@ describe("game settings sections", () => {
     renderInAudio(<GameSettingsPanel />);
     expect(screen.getByLabelText(MUSIC)).toBeTruthy();
     expect(screen.getByLabelText(SFX)).toBeTruthy();
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Game layout" }), { button: 0 });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Game layout" }), {
+      button: 0,
+    });
     expect(screen.getAllByText("Game layout")).toHaveLength(1);
     expect(screen.getByLabelText(SIDEBARS)).toBeTruthy();
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Visual effects" }), { button: 0 });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Visual effects" }), {
+      button: 0,
+    });
     expect(screen.getAllByText("Visual effects")).toHaveLength(1);
-    for (const label of ["Sunlight", LIGHTING, "Local lights", "Shadows", "Weather", "Wind", "Sprite animations"]) {
+    for (const label of [
+      "Sunlight",
+      LIGHTING,
+      "Local lights",
+      "Shadows",
+      "Weather",
+      "Wind",
+      "Sprite animations",
+    ]) {
       expect(screen.getByLabelText(label)).toBeTruthy();
     }
   });
 
   it("gives character owners a top-bar settings gear with sound controls and a link to all settings", async () => {
-    renderInAudio(<SignedInIcons
-      variant="default"
-      isSignedIn
-      userData={{
-        musicOn: true,
-        buttonSfxOn: true,
-        sfxOn: true,
-        village: null,
-        isOutlaw: false,
-        bloodlineId: null,
-        status: "AWAKE",
-        preferredGeneral1: null,
-        preferredGeneral2: null,
-      }}
-      updateUser={async () => undefined}
-      onEventClick={() => {}}
-    />);
+    renderInAudio(
+      <SignedInIcons
+        variant="default"
+        isSignedIn
+        userData={{
+          musicOn: true,
+          buttonSfxOn: true,
+          sfxOn: true,
+          village: null,
+          isOutlaw: false,
+          bloodlineId: null,
+          status: "AWAKE",
+          preferredGeneral1: null,
+          preferredGeneral2: null,
+        }}
+        updateUser={async () => undefined}
+        onEventClick={() => {}}
+      />,
+    );
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Game settings" }));
     });
@@ -196,39 +228,56 @@ describe("game settings sections", () => {
     expect(screen.queryByRole("tab", { name: "Game layout" })).toBeNull();
   });
 
-  it.each([true, false])("marks the top-bar settings gear only while music is off (music on: %p)", (musicOn) => {
-    const playing = audioHook.useAudio({ src: "" });
-    vi.spyOn(audioHook, "useAudio").mockImplementation(() => ({ ...playing, enabled: musicOn }));
-    renderInAudio(<SignedInIcons
-      variant="default"
-      isSignedIn
-      updateUser={async () => undefined}
-      onEventClick={() => {}}
-    />);
-    const mark = screen
-      .getByRole("button", { name: "Game settings" })
-      .querySelector("[data-muted-mark]");
-    expect(mark).not.toBeNull();
-    expect(mark?.getAttribute("class")?.split(" ").includes("hidden")).toBe(musicOn);
-  });
+  it.each([true, false])(
+    "marks the top-bar settings gear only while music is off (music on: %p)",
+    (musicOn) => {
+      const playing = audioHook.useAudio({ src: "" });
+      vi.spyOn(audioHook, "useAudio").mockImplementation(() => ({
+        ...playing,
+        enabled: musicOn,
+      }));
+      renderInAudio(
+        <SignedInIcons
+          variant="default"
+          isSignedIn
+          updateUser={async () => undefined}
+          onEventClick={() => {}}
+        />,
+      );
+      const mark = screen
+        .getByRole("button", { name: "Game settings" })
+        .querySelector("[data-muted-mark]");
+      expect(mark).not.toBeNull();
+      expect(mark?.getAttribute("class")?.split(" ").includes("hidden")).toBe(musicOn);
+    },
+  );
 
-  it.each([false, true])("keeps full top-bar settings without a character when isSignedIn=%s", async (isSignedIn) => {
-    renderInAudio(<SignedInIcons
-      variant="default"
-      isSignedIn={isSignedIn}
-      updateUser={async () => undefined}
-      onEventClick={() => {}}
-    />);
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Game settings" }));
-    });
-    expect(screen.getByLabelText(MUSIC)).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "All settings" })).toBeNull();
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Game layout" }), { button: 0 });
-    expect(screen.getByLabelText(SIDEBARS)).toBeTruthy();
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Visual effects" }), { button: 0 });
-    expect(screen.getByLabelText(LIGHTING)).toBeTruthy();
-  });
+  it.each([false, true])(
+    "keeps full top-bar settings without a character when isSignedIn=%s",
+    async (isSignedIn) => {
+      renderInAudio(
+        <SignedInIcons
+          variant="default"
+          isSignedIn={isSignedIn}
+          updateUser={async () => undefined}
+          onEventClick={() => {}}
+        />,
+      );
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Game settings" }));
+      });
+      expect(screen.getByLabelText(MUSIC)).toBeTruthy();
+      expect(screen.queryByRole("link", { name: "All settings" })).toBeNull();
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Game layout" }), {
+        button: 0,
+      });
+      expect(screen.getByLabelText(SIDEBARS)).toBeTruthy();
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Visual effects" }), {
+        button: 0,
+      });
+      expect(screen.getByLabelText(LIGHTING)).toBeTruthy();
+    },
+  );
 
   it("keeps the full popover without a settings link elsewhere", async () => {
     renderInAudio(<GameSettingsPopover trigger="settings" />);
@@ -265,7 +314,9 @@ describe("tutorial settings mutation", () => {
     vi.spyOn(userContext, "useRequiredUserDataSelector").mockReturnValue({
       data: {
         tutorialOn: false,
-        userQuests: hasActiveQuest ? [{ completed: 0, quest: { questType: "starter" } }] : [],
+        userQuests: hasActiveQuest
+          ? [{ completed: 0, quest: { questType: "starter" } }]
+          : [],
       },
       prepareUserUpdate,
       updateUser,
@@ -285,27 +336,50 @@ describe("tutorial settings mutation", () => {
     expect(screen.queryByText(/The tutorial helps new players/)).toBeNull();
     expect(screen.getByText("You have active quests!")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Enable Tutorial" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Player guide" }).getAttribute("href")).toBe("/guide");
-    expect(screen.getByRole("link", { name: "Support tickets" }).getAttribute("href")).toBe("/support");
+    expect(
+      screen.getByRole("link", { name: "Player guide" }).getAttribute("href"),
+    ).toBe("/guide");
+    expect(
+      screen.getByRole("link", { name: "Support tickets" }).getAttribute("href"),
+    ).toBe("/support");
   });
 
   it("applies the successful server patch at the captured cache revision", async () => {
     const { prepareUserUpdate, updateUser } = mockUser();
     render(<TutorialSettings />);
     expect(preferenceCallbacks?.onMutate).toBe(prepareUserUpdate);
-    const result = { success: true, message: "Updated preferences", userPatch: { tutorialOn: true } };
-    await preferenceCallbacks?.onSuccess?.(result, { tutorialOn: true }, 7, {} as never);
+    const result = {
+      success: true,
+      message: "Updated preferences",
+      userPatch: { tutorialOn: true },
+    };
+    await preferenceCallbacks?.onSuccess?.(
+      result,
+      { tutorialOn: true },
+      7,
+      {} as never,
+    );
     expect(updateUser).toHaveBeenCalledWith(result, { revision: 7 });
   });
 
   it("shows rejected updates without accepting a profile patch", async () => {
     const { updateUser } = mockUser();
-    const showToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+    const showToast = vi
+      .spyOn(toast, "showMutationToast")
+      .mockImplementation(() => undefined);
     render(<TutorialSettings />);
     const result = { success: false, message: "Failed to update preferences" };
-    await preferenceCallbacks?.onSuccess?.(result, { tutorialOn: true }, 7, {} as never);
+    await preferenceCallbacks?.onSuccess?.(
+      result,
+      { tutorialOn: true },
+      7,
+      {} as never,
+    );
     expect(showToast).toHaveBeenCalledWith(result);
     expect(updateUser).not.toHaveBeenCalled();
-    expect((screen.getByRole("button", { name: "Enable Tutorial" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(
+      (screen.getByRole("button", { name: "Enable Tutorial" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
   });
 });

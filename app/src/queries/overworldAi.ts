@@ -1,7 +1,7 @@
 /**
  * Database access for overworld ai; authorization and transaction scopes stay in callers.
  */
-import { and, eq, inArray, ne, or, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, ne, or, type SQL, sql } from "drizzle-orm";
 import { OVERWORLD_QUEST_ROLLS_PER_DAY } from "@/drizzle/constants";
 import {
   overworldAiPlacement,
@@ -257,7 +257,7 @@ export const updateUserDataForInteractWithOverworldAi = (
       and(
         eq(userData.userId, ctx.userId),
         readiness?.where,
-        sql`${userData.dailyOverworldQuestRolls} < ${OVERWORLD_QUEST_ROLLS_PER_DAY}`,
+        lt(userData.dailyOverworldQuestRolls, OVERWORLD_QUEST_ROLLS_PER_DAY),
       ),
     );
 

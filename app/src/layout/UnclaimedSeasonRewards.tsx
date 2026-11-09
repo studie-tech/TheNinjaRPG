@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getRewardArray } from "@/libs/objectives";
-import { showRewardToast } from "@/libs/toast";
+import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 export function UnclaimedSeasonRewards() {
@@ -16,22 +16,24 @@ export function UnclaimedSeasonRewards() {
   const { data: unclaimedRewards } =
     api.pvpRank.getUnclaimedUserSeasonRewards.useQuery(undefined);
 
-  // Optional: allow the player to claim all rewards directly from here
+  // Claims every unclaimed season reward at once
   const claimRewards = api.pvpRank.claimSeasonRewards.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
-      if (data.success) {
-        if ("rewards" in data && data.rewards) {
-          showRewardToast(
-            [data.message, ...(data.announcements ?? [])],
-            data.rewards,
-            "Claimed!",
-          );
-          await Promise.all([
-            utils.pvpRank.getUnclaimedUserSeasonRewards.invalidate(),
-            updateUser(data, { revision, delta: data.userDelta }),
-          ]);
-        }
+      if (!data.success) {
+        showMutationToast(data);
+        return;
+      }
+      if ("rewards" in data && data.rewards) {
+        showRewardToast(
+          [data.message, ...(data.announcements ?? [])],
+          data.rewards,
+          "Claimed!",
+        );
+        await Promise.all([
+          utils.pvpRank.getUnclaimedUserSeasonRewards.invalidate(),
+          updateUser(data, { revision, delta: data.userDelta }),
+        ]);
       }
     },
   });
@@ -66,11 +68,7 @@ export function UnclaimedSeasonRewards() {
                 </span>
                 <span className="text-muted-foreground text-xs">{rewardSummary}</span>
               </div>
-              {reward.claimed ? (
-                <Badge variant="secondary">Claimed</Badge>
-              ) : (
-                <Badge variant="default">Unclaimed</Badge>
-              )}
+              <Badge variant="default">Unclaimed</Badge>
             </div>
           );
         })}

@@ -1,7 +1,7 @@
 import type { CombatCacheSnapshot, CombatProfileUpdate } from "@/deltas/combat";
 import type {
-  AttackMethods,
-  AttackTargets,
+  AttackMethod,
+  AttackTarget,
   BattleType,
   CombatBiome,
   ElementName,
@@ -645,8 +645,8 @@ export type CombatAction = {
   image: string;
   battleDescription: string;
   type: "basic" | "jutsu" | "item";
-  target: (typeof AttackTargets)[number];
-  method: (typeof AttackMethods)[number];
+  target: AttackTarget;
+  method: AttackMethod;
   range: number;
   coordinateTargeting?: CoordinateTargeting | null;
   methodSize?: MethodSize | null;

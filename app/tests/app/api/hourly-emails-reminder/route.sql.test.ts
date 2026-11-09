@@ -1,6 +1,6 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import sgMail from "@sendgrid/mail";
 import * as Sentry from "@sentry/nextjs";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { GET } from "@/app/api/hourly-emails-reminder/route";
 import { EMAIL_REMINDER_EXPERIENCE_REWARD } from "@/drizzle/constants";
 import { emailReminder, userData } from "@/drizzle/schema";
@@ -57,7 +57,8 @@ describeWithDatabase("hourly email reminders", () => {
     expect((await GET(request())).status).toBe(200);
     const [message] = send.mock.calls[0] ?? [];
     const url = new URL(
-      (Array.isArray(message) ? message[0] : message)?.dynamicTemplateData?.unsubscribeUrl,
+      (Array.isArray(message) ? message[0] : message)?.dynamicTemplateData
+        ?.unsubscribeUrl,
     );
     expect(url.searchParams.get("email")).toBe(email);
     expect(url.searchParams.get("secret")).toBe("secret+/=");

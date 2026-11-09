@@ -42,7 +42,14 @@ const makeUser = (status: string) =>
         id: "mission",
         startAt: new Date().toISOString(),
         goals: [
-          { id: "intro", done: true, value: 0, collected: false, recentlyDied: false, selectedNextObjectiveId: "fight" },
+          {
+            id: "intro",
+            done: true,
+            value: 0,
+            collected: false,
+            recentlyDied: false,
+            selectedNextObjectiveId: "fight",
+          },
         ],
       },
     ],
@@ -70,11 +77,10 @@ const makeUser = (status: string) =>
 /** Runs one tracker pass and applies its resets, as handleQuestConsequences does. */
 const pass = (user: TrackerUser, tasks: Parameters<typeof getNewTrackers>[1]) => {
   const result = getNewTrackers(user, tasks);
-  user.questData =
-    applyQuestResets(
-      result.trackers,
-      result.consequences.filter((c) => c.type === "reset_quest"),
-    );
+  user.questData = applyQuestResets(
+    result.trackers,
+    result.consequences.filter((c) => c.type === "reset_quest"),
+  );
   return result.consequences;
 };
 
@@ -104,7 +110,14 @@ describe("quest battle reset after a loss", () => {
         id: "mission",
         startAt: new Date().toISOString(),
         goals: [
-          { id: "fight", done: true, value: 0, collected: false, recentlyDied: false, selectedNextObjectiveId: "again" },
+          {
+            id: "fight",
+            done: true,
+            value: 0,
+            collected: false,
+            recentlyDied: false,
+            selectedNextObjectiveId: "again",
+          },
           { id: "again", done: false, value: 0, collected: false, recentlyDied: false },
         ],
       },
@@ -121,8 +134,21 @@ describe("quest battle reset after a loss", () => {
         id: "pyramid",
         startAt: new Date().toISOString(),
         goals: [
-          { id: "floor", done: true, value: 0, collected: false, recentlyDied: true, selectedNextObjectiveId: "checkpoint" },
-          { id: "checkpoint", done: false, value: 0, collected: false, recentlyDied: false },
+          {
+            id: "floor",
+            done: true,
+            value: 0,
+            collected: false,
+            recentlyDied: true,
+            selectedNextObjectiveId: "checkpoint",
+          },
+          {
+            id: "checkpoint",
+            done: false,
+            value: 0,
+            collected: false,
+            recentlyDied: false,
+          },
         ],
       },
     ];

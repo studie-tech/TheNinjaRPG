@@ -7,7 +7,7 @@ import {
   CONTENT_PROPOSAL_RATIONALE_LENGTH,
   type ContentProposalEntityType,
 } from "@/drizzle/constants";
-import type { contentProposalMedia } from "@/drizzle/schema";
+import type { ContentProposalMedia } from "@/drizzle/schema";
 import type { MediaInsert, Rows } from "@/queries/contentReview";
 import {
   deleteContentProposalBasisForReviseAgentProposal,
@@ -41,6 +41,7 @@ import {
   loadEntities,
   normalizeEditable,
 } from "./entities";
+import { ENTITY_LABELS } from "./labels";
 import { collectCandidates, deleteStoredFiles, type MediaBudget } from "./media";
 import {
   directMediaValue,
@@ -292,7 +293,7 @@ export const createStaffProposal = async (
     ? entities.get(entityKey(input.entityType, input.entityId))
     : undefined;
   if (input.entityId && !entity)
-    return { ok: false, reason: `${config.label} not found` };
+    return { ok: false, reason: `${ENTITY_LABELS[input.entityType]} not found` };
   const base = normalizeEditable(input.entityType, entity?.editable ?? {});
   // An empty select or input reads "" where the database holds null: a field the author left
   // empty is not part of the suggestion, so the live value stands and is what gets validated.
@@ -387,7 +388,7 @@ const planAgentProposal = async (
   budget: MediaBudget,
   guards: Guards,
   uploaded: string[],
-  retained?: Map<string, (typeof contentProposalMedia.$inferSelect)[]>,
+  retained?: Map<string, ContentProposalMedia[]>,
 ): Promise<Rows | string> => {
   const proposalId = nanoid();
   const rows: Rows = {
@@ -413,12 +414,14 @@ const planAgentProposal = async (
     const changeId = nanoid();
     let entity: ContentEntity | undefined;
     if (change.operation === "UPDATE") {
-      if (!change.entityId) return `${config.label} update is missing its id`;
+      if (!change.entityId)
+        return `${ENTITY_LABELS[change.entityType]} update is missing its id`;
       entity = entities.get(entityKey(change.entityType, change.entityId));
-      if (!entity) return `${config.label} ${change.entityId} does not exist`;
+      if (!entity)
+        return `${ENTITY_LABELS[change.entityType]} ${change.entityId} does not exist`;
       const key = entityKey(change.entityType, change.entityId);
       if (guards.claimed.has(key) || guards.open.has(key)) {
-        return `An open suggestion already targets ${config.label} ${entity.name}`;
+        return `An open suggestion already targets ${ENTITY_LABELS[change.entityType]} ${entity.name}`;
       }
       targets.add(key);
     } else if (change.entityId) {
@@ -493,18 +496,19 @@ const planAgentProposal = async (
       const name = draftName(next);
       const key = nameKey(change.entityType, name);
       if (name && (guards.names.has(key) || drafted.has(key))) {
-        return `${config.label} ${name} already exists or is waiting in the queue`;
+        return `${ENTITY_LABELS[change.entityType]} ${name} already exists or is waiting in the queue`;
       }
       if (name) drafted.add(key);
     }
     const diff = changedFields(base, next);
     if (Object.keys(diff.after).length === 0)
-      return `${config.label} change has no effect`;
+      return `${ENTITY_LABELS[change.entityType]} change has no effect`;
     const invalid = validationError(
       config.validator,
       entity ? { ...entity.payload, ...next } : next,
     );
-    if (invalid) return `${config.label} would be invalid: ${invalid}`;
+    if (invalid)
+      return `${ENTITY_LABELS[change.entityType]} would be invalid: ${invalid}`;
     if (
       entity &&
       guards.rejected.some(
@@ -514,7 +518,7 @@ const planAgentProposal = async (
           sameValue(row.after, diff.after),
       )
     ) {
-      return `The same change to ${config.label} ${entity.name} was rejected recently`;
+      return `The same change to ${ENTITY_LABELS[change.entityType]} ${entity.name} was rejected recently`;
     }
     rows.changes.push({
       id: changeId,
@@ -530,7 +534,7 @@ const planAgentProposal = async (
   for (const basis of proposal.basis) {
     const key = entityKey(basis.entityType, basis.entityId);
     const entity = entities.get(key);
-    const label = ENTITY_CONFIG[basis.entityType].label;
+    const label = ENTITY_LABELS[basis.entityType];
     if (!entity) return `Basis ${label} ${basis.entityId} does not exist`;
     if (entity.version !== basis.v) {
       return `${label} ${entity.name} changed after the snapshot was taken`;

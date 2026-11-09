@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { getRewardArray } from "@/libs/objectives";
-import { ObjectiveReward, hasReward } from "@/validators/rewards";
+import { hasReward, ObjectiveReward } from "@/validators/rewards";
 
 describe("getRewardArray sage mastery experience", () => {
   it("includes sage mode experience in the reward summary", () => {
@@ -13,7 +13,9 @@ describe("getRewardArray sage mastery experience", () => {
 
 describe("hasReward reward_sage_modes", () => {
   it("hasReward is true when reward_sage_modes is set", () => {
-    expect(hasReward(ObjectiveReward.parse({ reward_sage_modes: ["sm_1"] }))).toBe(true);
+    expect(hasReward(ObjectiveReward.parse({ reward_sage_modes: ["sm_1"] }))).toBe(
+      true,
+    );
     expect(hasReward(ObjectiveReward.parse({ reward_sage_modes: [] }))).toBe(false);
   });
 });

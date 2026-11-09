@@ -1,4 +1,4 @@
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
 /** Independent device preferences shared by settings and renderers. */
 export const VISUAL_EFFECT_KEYS = {

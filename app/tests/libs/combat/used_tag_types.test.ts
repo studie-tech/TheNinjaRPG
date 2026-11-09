@@ -1,11 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import { applyEffects, applySingleEffect } from "@/libs/combat/process";
-import {
-  makeBattleUser,
-  makeCompleteBattle,
-  makeDamageModifierEffect,
-  makeEffect,
-} from "./helpers/battleScenario";
 import type {
   ActionEffect,
   CompleteBattle,
@@ -13,6 +7,12 @@ import type {
   GroundEffect,
   UserEffect,
 } from "@/libs/combat/types";
+import {
+  makeBattleUser,
+  makeCompleteBattle,
+  makeDamageModifierEffect,
+  makeEffect,
+} from "../../setup/combat";
 
 const makeStun = (): UserEffect =>
   makeEffect(
@@ -38,7 +38,10 @@ const runResolution = (
   appliedEffects = new Set<string>(),
   actorId = "attacker",
 ) => {
-  const battle = makeCompleteBattle({ usersState: newUsersState, usersEffects: [effect] });
+  const battle = makeCompleteBattle({
+    usersState: newUsersState,
+    usersEffects: [effect],
+  });
 
   applySingleEffect(
     {
@@ -119,7 +122,10 @@ describe("usedTagTypes — damage-modifier tags", () => {
       targetId: "attacker",
       runtime: { isNew: true, castThisRound: true },
     });
-    const { newBattle } = applyEffects(makeBattle([attacker, defender], [buff]), "attacker");
+    const { newBattle } = applyEffects(
+      makeBattle([attacker, defender], [buff]),
+      "attacker",
+    );
     const newAttacker = newBattle.usersState.find((u) => u.userId === "attacker");
     expect(newAttacker?.usedTagTypes).toContain("increasedamagegiven");
   });

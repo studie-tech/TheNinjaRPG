@@ -1,19 +1,23 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { useArenaView } from "@/hooks/useArenaView";
 
 const eventDescriptor = Object.getOwnPropertyDescriptor(globalThis, "PopStateEvent");
 
 describe("useArenaView", () => {
   beforeEach(() => {
-    Object.defineProperty(globalThis, "PopStateEvent", { configurable: true, value: window.PopStateEvent });
+    Object.defineProperty(globalThis, "PopStateEvent", {
+      configurable: true,
+      value: window.PopStateEvent,
+    });
     window.history.replaceState({}, "", "/battlearena");
   });
 
   afterEach(() => {
     cleanup();
     window.history.replaceState({}, "", "/");
-    if (eventDescriptor) Object.defineProperty(globalThis, "PopStateEvent", eventDescriptor);
+    if (eventDescriptor)
+      Object.defineProperty(globalThis, "PopStateEvent", eventDescriptor);
     else Reflect.deleteProperty(globalThis, "PopStateEvent");
   });
 

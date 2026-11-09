@@ -1,18 +1,38 @@
-//
-// These run in the Node environment on purpose: `/news`, `/forum` and the
-// conversation pages are server-rendered, so `parseHtml` output has to survive
-// `renderToString` without any DOM globals.
+// `/news`, `/forum` and the conversation pages are server-rendered, so `parseHtml`
+// output has to survive `renderToString` without any DOM globals. The suite removes
+// the preloaded jsdom globals it would otherwise inherit and restores them afterwards.
 
-import { describe, expect, it } from "bun:test";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { renderToString } from "react-dom/server";
 import { Quote } from "@/components/ui/quote";
 import { parseHtml } from "@/utils/parse";
+
+const domGlobals = ["window", "document", "DOMParser"] as const;
+const savedGlobals = new Map<string, PropertyDescriptor>();
+
+beforeAll(() => {
+  for (const key of domGlobals) {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, key);
+    if (descriptor) savedGlobals.set(key, descriptor);
+    Reflect.deleteProperty(globalThis, key);
+  }
+});
+
+afterAll(() => {
+  for (const [key, descriptor] of savedGlobals)
+    Object.defineProperty(globalThis, key, descriptor);
+});
 
 // parseHtml returns an array of nodes, so it needs a host element to render into.
 const render = (html: string) => renderToString(<div>{parseHtml(html)}</div>);
 
 describe("parseHtml during server rendering", () => {
   it("renders a blockquote without needing a DOM", () => {
+    expect([typeof window, typeof document, typeof DOMParser]).toEqual([
+      "undefined",
+      "undefined",
+      "undefined",
+    ]);
     expect(() => render("<blockquote>hello</blockquote>")).not.toThrow();
   });
 
@@ -61,19 +81,26 @@ describe("parseHtml during server rendering", () => {
   });
 
   it("applies post media transforms and filtering inside attributed quotes", () => {
-    const content = '<h1>Heading</h1><script>alert(1)</script><iframe src="https://example.com/embed"></iframe><iframe src="https://www.youtube.com/embed/id"></iframe>[conceptart:gallery-1]';
-    expect(parseHtml(`<blockquote author="Bob">${content}</blockquote>`)).toMatchObject([
-      { type: Quote, props: { children: parseHtml(content) } },
-    ]);
+    const content =
+      '<h1>Heading</h1><script>alert(1)</script><iframe src="https://example.com/embed"></iframe><iframe src="https://www.youtube.com/embed/id"></iframe>[conceptart:gallery-1]';
+    expect(parseHtml(`<blockquote author="Bob">${content}</blockquote>`)).toMatchObject(
+      [{ type: Quote, props: { children: parseHtml(content) } }],
+    );
   });
 
   it("offers a jump to the quoted message when the quote names it", () => {
-    const html = render('<blockquote author="Bob" date="11/05/2026" data-comment-id="c1">hi</blockquote>');
-    expect(html).toMatch(/<button[^>]+aria-label="Jump to the quoted message from Bob"/);
+    const html = render(
+      '<blockquote author="Bob" date="11/05/2026" data-comment-id="c1">hi</blockquote>',
+    );
+    expect(html).toMatch(
+      /<button[^>]+aria-label="Jump to the quoted message from Bob"/,
+    );
   });
 
   it("shows an older quote without a jump", () => {
-    expect(render('<blockquote author="Bob" date="11/05/2026">hi</blockquote>')).not.toContain("<button");
+    expect(
+      render('<blockquote author="Bob" date="11/05/2026">hi</blockquote>'),
+    ).not.toContain("<button");
   });
 
   it("survives a blockquote nested inside a blockquote", () => {

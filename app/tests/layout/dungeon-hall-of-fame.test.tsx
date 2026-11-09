@@ -4,18 +4,60 @@ import * as client from "@/app/_trpc/client";
 import { DungeonHallOfFame } from "@/layout/DungeonHallOfFame";
 import * as modal from "@/layout/Modal";
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 it("opens both squad rankings in modals with grouped member names", () => {
   const inputs: { mode: string; page: number }[] = [];
-  Object.assign(vi.spyOn(client, "api" as never), { coop: { dungeon: {
-    getHallOfFameDungeons: { useQuery: () => ({ data: [{ id: "d", name: "Dungeon" }], isPending: false, isError: false }) },
-    getRankings: { useQuery: (input: { mode: string; page: number }) => {
-      inputs.push(input);
-      return { isPending: false, isError: false, isFetching: false, data: { hasMore: true, entries: [{ id: "run", rank: 1, durationMs: 65000, completedAt: 100000, players: [{ id: "a", name: "Akira" }, { id: "b", name: "ShadowFox" }, { id: "c", name: "Kuren" }] }] } };
-    } },
-  } } });
-  vi.spyOn(modal, "default").mockImplementation(({ title, children, setIsOpen }) => <section role="dialog" aria-label={title}>{children}<button type="button" onClick={() => setIsOpen(false)}>Close</button></section>);
+  Object.assign(vi.spyOn(client, "api" as never), {
+    coop: {
+      dungeon: {
+        getHallOfFameDungeons: {
+          useQuery: () => ({
+            data: [{ id: "d", name: "Dungeon" }],
+            isPending: false,
+            isError: false,
+          }),
+        },
+        getRankings: {
+          useQuery: (input: { mode: string; page: number }) => {
+            inputs.push(input);
+            return {
+              isPending: false,
+              isError: false,
+              isFetching: false,
+              data: {
+                hasMore: true,
+                entries: [
+                  {
+                    id: "run",
+                    rank: 1,
+                    durationMs: 65000,
+                    completedAt: 100000,
+                    players: [
+                      { id: "a", name: "Akira" },
+                      { id: "b", name: "ShadowFox" },
+                      { id: "c", name: "Kuren" },
+                    ],
+                  },
+                ],
+              },
+            };
+          },
+        },
+      },
+    },
+  });
+  vi.spyOn(modal, "default").mockImplementation(({ title, children, setIsOpen }) => (
+    <section role="dialog" aria-label={title}>
+      {children}
+      <button type="button" onClick={() => setIsOpen(false)}>
+        Close
+      </button>
+    </section>
+  ));
   const view = render(<DungeonHallOfFame />);
   expect(view.queryByRole("dialog")).toBeNull();
   fireEvent.click(view.getByRole("button", { name: "Fastest Clear for Dungeon" }));

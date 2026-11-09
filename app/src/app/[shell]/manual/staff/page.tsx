@@ -58,9 +58,6 @@ export default function Staff() {
       showMutationToast(res);
       await utils.applications.list.invalidate();
     },
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
-    },
   });
   const isSubmittingApplication = useRef(false);
 
@@ -70,7 +67,7 @@ export default function Staff() {
     try {
       await createApp.mutateAsync(values);
     } catch {
-      // The mutation's onError callback provides the user-facing error feedback.
+      // The shared mutation error handler provides the user-facing feedback.
     } finally {
       isSubmittingApplication.current = false;
     }

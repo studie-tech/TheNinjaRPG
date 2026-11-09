@@ -235,28 +235,7 @@ sdkmanager "platforms;android-37.0" "system-images;android-36;google_apis;arm64-
 avdmanager create avd -n TNR-Pixel -k "system-images;android-36;google_apis;arm64-v8a"
 ```
 
-## Verified
-
-Both shells build, install and launch:
-
-- **iOS** — `xcodebuild ... -sdk iphonesimulator` succeeds with zero errors and zero
-  warnings in our sources. The app installs with `TNRWidgets.appex` embedded and runs on
-  an iPhone 17 / iOS 26.5 simulator.
-- **Android** — `./gradlew assembleDebug` succeeds. The APK installs and launches on an
-  API 36 emulator, the adaptive launcher icon renders, and `libsentry-android.so` loads,
-  so native crash reporting is live.
-
-On both, the bundled entry point paints immediately and the offline screen appears when
-the connectivity preflight fails — which it currently does against production, because the
-CORS header the preflight needs is part of this PR and is not deployed yet. Verified
-locally against this branch:
-
-```
-access-control-allow-origin: https://localhost
-```
-
-with `capacitor://localhost` allowed, an arbitrary origin refused, and `OPTIONS` answering
-204.
+## Device validation
 
 Validate push delivery, Live Activities, in-app purchase, Sign in with Apple,
 Clerk session persistence across cold launches, and WebView memory limits with

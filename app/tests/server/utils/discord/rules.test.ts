@@ -20,13 +20,22 @@ const FIRST: DiscordLinkDecision = {
   isPrimary: true,
   sibling: null,
 };
-const linkOf = (userId: string, slot: number, username: string | null = null): DiscordAccountLink => ({
+const linkOf = (
+  userId: string,
+  slot: number,
+  username: string | null = null,
+): DiscordAccountLink => ({
   userId,
   slot,
   isPrimary: slot === 1,
   username,
 });
-const unlink = (userId: string, discordId: string, daysAgo: number, cooldownWaived = false) => ({
+const unlink = (
+  userId: string,
+  discordId: string,
+  daysAgo: number,
+  cooldownWaived = false,
+) => ({
   userId,
   discordId,
   unlinkedAt: new Date(NOW.getTime() - daysAgo * DAY),
@@ -34,7 +43,9 @@ const unlink = (userId: string, discordId: string, daysAgo: number, cooldownWaiv
 });
 const DISCORD = "100000000000000001";
 
-const candidate = (overrides: Partial<DiscordLinkCandidate> = {}): DiscordLinkCandidate => ({
+const candidate = (
+  overrides: Partial<DiscordLinkCandidate> = {},
+): DiscordLinkCandidate => ({
   userId: "user-a",
   discordId: "100000000000000001",
   discordCreatedAt: new Date(NOW.getTime() - 400 * DAY),
@@ -64,7 +75,9 @@ describe("evaluateDiscordLink", () => {
     expect(
       evaluateDiscordLink(candidate({ character: { isBanned: true } }), NOW),
     ).toMatchObject({ result: "banned" });
-    expect(evaluateDiscordLink(candidate({ hasBlockingSanction: true }), NOW)).toMatchObject({
+    expect(
+      evaluateDiscordLink(candidate({ hasBlockingSanction: true }), NOW),
+    ).toMatchObject({
       result: "banned",
     });
   });
@@ -86,7 +99,9 @@ describe("evaluateDiscordLink", () => {
     });
     // Slot 1 freed by an unlink is reused.
     const second = { ...linkOf("user-b", 2), isPrimary: true };
-    expect(evaluateDiscordLink(candidate({ linksForDiscord: [second] }), NOW)).toMatchObject({
+    expect(
+      evaluateDiscordLink(candidate({ linksForDiscord: [second] }), NOW),
+    ).toMatchObject({
       slot: 1,
       isPrimary: false,
     });
@@ -96,7 +111,10 @@ describe("evaluateDiscordLink", () => {
     expect(
       evaluateDiscordLink(
         candidate({
-          linksForDiscord: [linkOf("user-b", 1, "Terriator"), linkOf("user-c", 2, "Kakashi")],
+          linksForDiscord: [
+            linkOf("user-b", 1, "Terriator"),
+            linkOf("user-c", 2, "Kakashi"),
+          ],
         }),
         NOW,
       ),
@@ -114,7 +132,10 @@ describe("evaluateDiscordLink", () => {
 
   it("refuses a character already linked to a different Discord account", () => {
     expect(
-      evaluateDiscordLink(candidate({ linkForUser: { discordId: "100000000000000002" } }), NOW),
+      evaluateDiscordLink(
+        candidate({ linkForUser: { discordId: "100000000000000002" } }),
+        NOW,
+      ),
     ).toMatchObject({ result: "character_has_link" });
   });
 
@@ -131,16 +152,22 @@ describe("evaluateDiscordLink", () => {
   });
 
   it("refuses accounts younger than the minimum age and says when they qualify", () => {
-    const createdAt = new Date(NOW.getTime() - (DISCORD_MIN_ACCOUNT_AGE_DAYS - 1) * DAY);
-    expect(evaluateDiscordLink(candidate({ discordCreatedAt: createdAt }), NOW)).toEqual({
+    const createdAt = new Date(
+      NOW.getTime() - (DISCORD_MIN_ACCOUNT_AGE_DAYS - 1) * DAY,
+    );
+    expect(
+      evaluateDiscordLink(candidate({ discordCreatedAt: createdAt }), NOW),
+    ).toEqual({
       allowed: false,
       result: "too_new",
-      until: new Date(createdAt.getTime() + DISCORD_MIN_ACCOUNT_AGE_DAYS * DAY).toISOString(),
+      until: new Date(
+        createdAt.getTime() + DISCORD_MIN_ACCOUNT_AGE_DAYS * DAY,
+      ).toISOString(),
     });
     const oldEnough = new Date(NOW.getTime() - DISCORD_MIN_ACCOUNT_AGE_DAYS * DAY);
-    expect(evaluateDiscordLink(candidate({ discordCreatedAt: oldEnough }), NOW).allowed).toBe(
-      true,
-    );
+    expect(
+      evaluateDiscordLink(candidate({ discordCreatedAt: oldEnough }), NOW).allowed,
+    ).toBe(true);
   });
 
   it("keeps a character that unlinked from switching Discord accounts", () => {
@@ -148,7 +175,9 @@ describe("evaluateDiscordLink", () => {
     expect(evaluateDiscordLink(candidate({ history }), NOW)).toEqual({
       allowed: false,
       result: "cooldown",
-      until: new Date(NOW.getTime() + (DISCORD_UNLINK_COOLDOWN_DAYS - 5) * DAY).toISOString(),
+      until: new Date(
+        NOW.getTime() + (DISCORD_UNLINK_COOLDOWN_DAYS - 5) * DAY,
+      ).toISOString(),
     });
   });
 
@@ -169,18 +198,24 @@ describe("evaluateDiscordLink", () => {
     ).toEqual({
       allowed: false,
       result: "cooldown",
-      until: new Date(NOW.getTime() + (DISCORD_UNLINK_COOLDOWN_DAYS - 5) * DAY).toISOString(),
+      until: new Date(
+        NOW.getTime() + (DISCORD_UNLINK_COOLDOWN_DAYS - 5) * DAY,
+      ).toISOString(),
     });
     // Two unlinked recently: the window frees once the older one ages out.
     expect(
       evaluateDiscordLink(
-        candidate({ history: [unlink("user-b", DISCORD, 5), unlink("user-c", DISCORD, 10)] }),
+        candidate({
+          history: [unlink("user-b", DISCORD, 5), unlink("user-c", DISCORD, 10)],
+        }),
         NOW,
       ),
     ).toEqual({
       allowed: false,
       result: "cooldown",
-      until: new Date(NOW.getTime() + (DISCORD_UNLINK_COOLDOWN_DAYS - 10) * DAY).toISOString(),
+      until: new Date(
+        NOW.getTime() + (DISCORD_UNLINK_COOLDOWN_DAYS - 10) * DAY,
+      ).toISOString(),
     });
     // Relinking a character from the window adds nobody new.
     expect(

@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from "bun:test";
 import { flattenLeaves, wordDiff } from "@/utils/wordDiff";
 
@@ -15,15 +14,15 @@ describe("wordDiff", () => {
   it("keeps combat placeholders as whole tokens", () => {
     const parts = wordDiff("%user trap %target", "%user traps %target.");
     expect(parts[0]).toEqual({ op: "same", text: "%user " });
-    expect(parts.filter((part) => part.op !== "same").map((part) => part.text)).toEqual([
-      "trap",
-      "traps",
-      ".",
-    ]);
+    expect(parts.filter((part) => part.op !== "same").map((part) => part.text)).toEqual(
+      ["trap", "traps", "."],
+    );
   });
 
   it("returns the text unchanged when nothing differs", () => {
-    expect(wordDiff("same text", "same text")).toEqual([{ op: "same", text: "same text" }]);
+    expect(wordDiff("same text", "same text")).toEqual([
+      { op: "same", text: "same text" },
+    ]);
   });
 });
 

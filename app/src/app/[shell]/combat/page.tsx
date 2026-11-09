@@ -271,7 +271,8 @@ export default function CombatPage() {
     router,
   ]);
 
-  // Redirect to profile if not in battle
+  // Mirror the fetched battle into local state (keeping held results for the same
+  // battle) and advance tutorial steps on a settled outcome.
   useEffect(() => {
     if (data?.battle) {
       // Share Combat's exact query key so the request starts before its mount.
@@ -351,9 +352,6 @@ export default function CombatPage() {
           showMutationToast(data);
         }
       },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
       onSettled: () => {
         arenaHealInFlightRef.current = false;
       },
@@ -376,9 +374,6 @@ export default function CombatPage() {
             await updateUser(result, { revision, refetch: false });
           showMutationToast(result);
         }
-      },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
       },
       onSettled: () => {
         arenaStartInFlightRef.current = false;
@@ -619,7 +614,7 @@ export default function CombatPage() {
             action={actions.find((a) => a.id === actionId)}
             user={{
               userId: controlledActorId,
-              actionPoints: user?.actionPoints ?? 0,
+              actionPoints: user.actionPoints,
             }}
             battle={battle}
             isPending={battleState.isPending}
@@ -662,7 +657,6 @@ export default function CombatPage() {
       resultShown,
       actions,
       actionId,
-      userId,
       controlledActorId,
       config,
       userData,
@@ -751,7 +745,6 @@ export default function CombatPage() {
       );
     },
     [
-      userId,
       isInBattle,
       battle,
       isAutoCombatActive,
@@ -771,12 +764,7 @@ export default function CombatPage() {
     (focus = false) => {
       if ((!focus && !config.showTimeline) || !battle) return null;
       return (
-        <CombatTimeline
-          battleId={battle.id}
-          battle={battle}
-          battleVersion={battle.version}
-          showBasicActions={config.showBasicActions}
-        />
+        <CombatTimeline battle={battle} showBasicActions={config.showBasicActions} />
       );
     },
     [config.showTimeline, config.showBasicActions, battle],
@@ -974,7 +962,7 @@ export default function CombatPage() {
             .map((id) => (
               <div key={id}>{renderComponent(id)}</div>
             ))}
-          {battle && renderTabbedContent()}
+          {renderTabbedContent()}
         </>
       ) : (
         // Non-tabs mode: render all components in order

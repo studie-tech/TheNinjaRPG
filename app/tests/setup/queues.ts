@@ -50,7 +50,10 @@ export const queueMasteries = async (
 ) => {
   const database = await getTestDatabase();
   const [user] = await database
-    .select({ head: kind === "ELEMENT" ? userData.elementalQueueHead : userData.masteryQueueHead })
+    .select({
+      head:
+        kind === "ELEMENT" ? userData.elementalQueueHead : userData.masteryQueueHead,
+    })
     .from(userData)
     .where(eq(userData.userId, userId));
   const head = user?.head ?? 0;
@@ -87,5 +90,7 @@ export const readEnergyQueue = async (userId: string) =>
   getEnergyQueue(await readUserQueue(userId));
 
 /** The user's live mastery queue, as the client derives it. */
-export const readMasteryQueue = async (userId: string, kind: MasteryQueueKind = "MASTERY") =>
-  getMasteryQueue(await readUserQueue(userId), kind);
+export const readMasteryQueue = async (
+  userId: string,
+  kind: MasteryQueueKind = "MASTERY",
+) => getMasteryQueue(await readUserQueue(userId), kind);

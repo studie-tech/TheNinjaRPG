@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   AI_PROFILE_MAX_RULES,
   AvatarFacings,
-  PET_MAX_ABILITY_SLOTS,
+  PET_NAME_MAX_LENGTH,
   PetGenders,
   PetPaymentCurrencies,
   PetSpawnPositions,
@@ -18,23 +18,12 @@ export const petSelectionSchema = z.object({ petId: z.string().min(1).max(191) }
 export const petPaymentSchema = z.object({
   currency: z.enum(PetPaymentCurrencies),
 });
-/** Include the displayed stack quantity so a changed meal stack must be refreshed before consumption. */
-export const feedPetSchema = petSelectionSchema.extend({
-  userItemId: z.string().min(1).max(191),
-  expectedQuantity: z.number().int().positive(),
-});
-/** Bound request size; owner access, duplicates and the combined budget are validated against live content. */
-export const updatePetAbilitiesSchema = petSelectionSchema.extend({
-  jutsuIds: z.array(z.string().min(1).max(191)).max(PET_MAX_ABILITY_SLOTS),
-  skillIds: z.array(z.string().min(1).max(191)).max(PET_MAX_ABILITY_SLOTS),
-});
-
 /** Player-visible name only; controls and invisible formatting characters are rejected. */
 export const petNameSchema = z
   .string()
   .trim()
   .min(1)
-  .max(40)
+  .max(PET_NAME_MAX_LENGTH)
   .refine(
     (name) => !/[\p{Cc}\p{Cf}]/u.test(name),
     "Pet names cannot contain control characters.",
@@ -63,18 +52,6 @@ export const acquirePetSchema = petPaymentSchema.extend({
     .int()
     .min(0)
     .max(PET_AURAS.length - 1),
-});
-
-/** Only founders without accepted artwork can choose daily cosmetics. */
-export const generatePetAppearanceSchema = petSelectionSchema.extend({
-  appearance: acquirePetSchema
-    .pick({
-      dayKey: true,
-      paletteIndex: true,
-      characteristicIndex: true,
-      auraIndex: true,
-    })
-    .optional(),
 });
 
 /** Partial settings update that must supply at least one field besides the companion ID. */

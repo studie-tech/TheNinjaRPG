@@ -7,6 +7,7 @@ import type {
 } from "@/drizzle/constants";
 import {
   ABANDONABLE_QUEST_TYPES,
+  CREATOR_USERNAME,
   isStaffApprovalGroup,
   MESSAGING_MIN_LEVEL,
   messagingLevelMessage,
@@ -128,12 +129,12 @@ export const canModerateReskin = (role: UserRole) => {
 
 export const canControlBackups = (role: UserRole) => SENIOR_ADMIN_ROLES.includes(role);
 
-// Recruitment analytics visibility (admins only)
+// Recruitment analytics visibility (any staff role)
 export const canViewRecruitmentAnalytics = (role: UserRole) => {
   return isStaffRole(role);
 };
 
-// Revenue analytics visibility (coding admin only)
+// Revenue analytics visibility (owner, coding and content admins)
 export const canViewRevenueAnalytics = (role: UserRole) => {
   return ["OWNER", "CODING-ADMIN", "CONTENT-ADMIN"].includes(role);
 };
@@ -178,6 +179,13 @@ export const canTransferJutsu = (user?: UserData) => {
   return user.role !== "USER" || user.staffAccount;
 };
 
+/**
+ * The site owner's own account, matched by username: no role grant confers its powers
+ * (delisting any ryo offer before its freeze ends, renaming user ids).
+ */
+export const isSiteOwnerAccount = (user: Pick<UserData, "username">) =>
+  user.username === CREATOR_USERNAME;
+
 export const canUseMonitoringTests = (role: UserRole) => {
   return ["OWNER"].includes(role);
 };
@@ -208,6 +216,9 @@ export const canChangeDefaultAiProfile = (role: UserRole) =>
   SENIOR_ADMIN_ROLES.includes(role);
 
 export const canAdministrateWars = (role: UserRole) => WAR_MANAGER_ROLES.includes(role);
+
+/** Staff roles are granted through the staff application; this role may promote players directly. */
+export const canPromoteUsersToStaff = (role: UserRole) => role === "CODING-ADMIN";
 
 export const canChangeUserRolesTo = (role: UserRole): UserRole[] => {
   if (role === "OWNER") {
@@ -375,7 +386,7 @@ export const canSilenceUsers = (user: UserData) => {
   ].includes(user.role);
 };
 
-/** Timeout: 1-hour silence. Usable by CONTENT-ADMIN and EVENT-ADMIN only. */
+/** Timeout: timed silence. Usable by CONTENT-ADMIN and EVENT-ADMIN only. */
 export const canTimeoutUsers = (user: UserData) => {
   return ["CONTENT-ADMIN", "EVENT-ADMIN"].includes(user.role);
 };
@@ -427,18 +438,18 @@ export const getMessagingRestriction = (
   return null;
 };
 
-/**
- * Banned/silenced users may only reply to support tickets they created.
- * Staff applications and other people's tickets are not allowed.
- * Returns false unless the user is banned or silenced — callers must not
- * treat this as a general compose permission for unrestricted users.
- */
 export const RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE =
   "You can only reply to support tickets you created while banned or silenced";
 
 export const RESTRICTED_STAFF_CONVERSATION_MESSAGE =
   "You cannot participate in this conversation while banned or silenced";
 
+/**
+ * Banned/silenced users may only reply to support tickets they created.
+ * Staff applications and other people's tickets are not allowed.
+ * Returns false unless the user is banned or silenced — callers must not
+ * treat this as a general compose permission for unrestricted users.
+ */
 export const canReplyToStaffConversationWhileRestricted = (
   user: Pick<UserData, "userId" | "isBanned" | "isSilenced">,
   supportTicketCreatedByUserId: string | null | undefined,
@@ -511,6 +522,13 @@ export const canClearUserNindo = (user: UserData) => {
 export const canOnlyEditSelf = (userRole: UserRole) => {
   return ["CONTENT", "BALANCE", "EVENT", "CODER"].includes(userRole);
 };
+
+/** Whether a role limited to editing itself is acting on someone else. */
+export const isRestrictedToSelf = (
+  role: UserRole,
+  actorId: string | undefined,
+  targetId: string,
+) => canOnlyEditSelf(role) && actorId !== targetId;
 
 export const canAwardReputation = (role: UserRole) => ADMIN_ROLES.includes(role);
 

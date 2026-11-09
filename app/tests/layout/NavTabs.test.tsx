@@ -1,9 +1,9 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import * as storage from "@/hooks/localstorage";
-import NavTabs from "@/layout/NavTabs";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import NavTabs from "@/layout/NavTabs";
+import * as storage from "@/utils/storage";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 beforeEach(() => {
@@ -18,15 +18,32 @@ const options = ["Dashboard", "Character", "Achievements"];
 
 describe("optional tab remembering", () => {
   it("keeps responsive icon tabs named and keyboard accessible", async () => {
-    const iconOptions = ["Dashboard", "Character", "Achievements", "Sharing", "History"];
+    const iconOptions = [
+      "Dashboard",
+      "Character",
+      "Achievements",
+      "Sharing",
+      "History",
+    ];
     const view = render(
       <Tabs defaultValue="Character">
         <NavTabs
           current="Character"
           options={iconOptions}
-          icons={Object.fromEntries(iconOptions.map((option) => [option, <span aria-hidden="true">★</span>]))}
+          icons={Object.fromEntries(
+            iconOptions.map((option) => [
+              option,
+              <span key={option} aria-hidden="true">
+                ★
+              </span>,
+            ]),
+          )}
           iconOnlyOptions={iconOptions}
-          labelClassName={(option) => option === "Dashboard" || option === "Character" ? "@min-[480px]:not-sr-only" : ""}
+          labelClassName={(option) =>
+            option === "Dashboard" || option === "Character"
+              ? "@min-[480px]:not-sr-only"
+              : ""
+          }
           accessibleTabs
           label="Profile sections"
           values={{ History: "history" }}
@@ -39,9 +56,17 @@ describe("optional tab remembering", () => {
     const character = view.getByRole("tab", { name: "Character" });
     character.focus();
     fireEvent.keyDown(character, { key: "ArrowRight" });
-    await waitFor(() => expect(view.getByRole("tabpanel", { name: "Achievements" }).textContent).toBe("Your achievements"));
+    await waitFor(() =>
+      expect(view.getByRole("tabpanel", { name: "Achievements" }).textContent).toBe(
+        "Your achievements",
+      ),
+    );
     fireEvent.keyDown(document.activeElement as HTMLElement, { key: "End" });
-    await waitFor(() => expect(view.getByRole("tabpanel", { name: "History" }).textContent).toBe("History details"));
+    await waitFor(() =>
+      expect(view.getByRole("tabpanel", { name: "History" }).textContent).toBe(
+        "History details",
+      ),
+    );
     expect(document.activeElement).toBe(view.getByRole("tab", { name: "History" }));
   });
   it("associates icon tab panels with labels containing spaces using stable values", () => {
@@ -59,8 +84,12 @@ describe("optional tab remembering", () => {
         <TabsContent value="edit">Character settings</TabsContent>
       </Tabs>,
     );
-    expect(view.getByRole("tab", { name: "Edit Character" }).getAttribute("aria-selected")).toBe("true");
-    expect(view.getByRole("tabpanel", { name: "Edit Character" }).textContent).toBe("Character settings");
+    expect(
+      view.getByRole("tab", { name: "Edit Character" }).getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(view.getByRole("tabpanel", { name: "Edit Character" }).textContent).toBe(
+      "Character settings",
+    );
   });
   it("names icon tabs and preserves their notification badges", () => {
     const onChange = vi.fn();
@@ -77,7 +106,9 @@ describe("optional tab remembering", () => {
     const sharing = view.getByRole("button", { name: "Sharing 2 notifications" });
     expect(sharing.getAttribute("title")).toBe("Sharing");
     expect(sharing.querySelector(".sr-only")?.textContent).toBe("Sharing");
-    expect(view.getByRole("button", { name: "Dashboard" }).querySelector(".sr-only")).toBeNull();
+    expect(
+      view.getByRole("button", { name: "Dashboard" }).querySelector(".sr-only"),
+    ).toBeNull();
     fireEvent.click(sharing);
     expect(onChange).toHaveBeenCalledWith("Sharing");
   });
@@ -212,7 +243,9 @@ describe("accessible training tabs", () => {
     const jutsu = view.getByRole("tab", { name: "Jutsu" });
     jutsu.focus();
     fireEvent.keyDown(jutsu, { key: "Home" });
-    await waitFor(() => expect(write).toHaveBeenLastCalledWith(trainingTabKey, "Stats"));
+    await waitFor(() =>
+      expect(write).toHaveBeenLastCalledWith(trainingTabKey, "Stats"),
+    );
   });
 
   it("does not overwrite the remembered section while a tutorial forces one", () => {

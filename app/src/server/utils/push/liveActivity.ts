@@ -11,7 +11,7 @@ import {
  * `apns.ts` derives from the push type.
  */
 
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nextjs";
 import type { LiveActivityKind } from "@/drizzle/constants";
 import type { DrizzleClient } from "@/server/db";
 import * as apns from "./apns";

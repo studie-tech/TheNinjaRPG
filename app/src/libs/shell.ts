@@ -17,7 +17,6 @@ import {
   WALLPAPER_VARIANTS,
   type WallpaperVariant,
 } from "@/libs/wallpaperExperiment";
-import { getRandomElement } from "@/utils/array";
 
 /**
  * The application shell is prerendered once per variant and served from the CDN.
@@ -26,10 +25,10 @@ import { getRandomElement } from "@/utils/array";
  * that matches it, so the root layout never reads the request: nothing in a document is
  * specific to the visitor, and a copy rendered for one can be served to the next. A
  * variant is the set of things that change the markup before hydration -- whether the
- * frame is the signed-in one, which layout it uses, which wallpaper it shows,
- * and which client it is for,
- * as the native shells load Clerk through a proxy and Android takes a different
- * viewport. Everything the visitor actually sees arrives through tRPC after hydration.
+ * frame is the signed-in one, which layout it uses, which wallpaper it shows, and which
+ * client it is for, as the native shells load Clerk through a proxy and Android takes a
+ * different viewport. Everything the visitor actually sees arrives through tRPC after
+ * hydration.
  */
 export interface ShellVariant {
   client: "web" | "ios" | "android";
@@ -41,15 +40,17 @@ export interface ShellVariant {
 export const SHELL_CLIENTS = ["web", "ios", "android"] as const;
 export const SHELL_LAYOUTS = GAME_LAYOUTS.map((layout) => layout.id);
 
+/** A variant segment, capturing its client, layout, session and optional wallpaper. */
+const SHELL_SEGMENT = `(${SHELL_CLIENTS.join("|")})-(${SHELL_LAYOUTS.join("|")})-(in|out)(?:-(${WALLPAPER_VARIANTS.join("|")}))?`;
+const SHELL_PARAM_REGEX = new RegExp(`^${SHELL_SEGMENT}$`);
+
 /** The URL segment a variant renders under, e.g. "web-pixel-in". */
 export const shellParam = ({ client, layout, signedIn, wallpaper }: ShellVariant) =>
   `${client}-${layout}-${signedIn ? "in" : "out"}${wallpaper ? `-${wallpaper}` : ""}`;
 
 /** Inverse of shellParam; null for anything that is not a known variant. */
 export const parseShellParam = (param: string): ShellVariant | null => {
-  const match = new RegExp(
-    `^(${SHELL_CLIENTS.join("|")})-(${SHELL_LAYOUTS.join("|")})-(in|out)(?:-(${WALLPAPER_VARIANTS.join("|")}))?$`,
-  ).exec(param);
+  const match = SHELL_PARAM_REGEX.exec(param);
   if (!match) return null;
   const [, client, layout, session, wallpaper] = match;
   if (wallpaper && (client !== "web" || layout !== "default" || session !== "out"))
@@ -63,13 +64,17 @@ export const parseShellParam = (param: string): ShellVariant | null => {
   };
 };
 
-/** Every variant, for generateStaticParams. */
+/** Variants without a wallpaper arm. */
 const BASE_SHELL_PARAMS = SHELL_CLIENTS.flatMap((client) =>
   SHELL_LAYOUTS.flatMap((layout) =>
     [false, true].map((signedIn) => shellParam({ client, layout, signedIn })),
   ),
 );
 
+/**
+ * Every variant, for generateStaticParams. Wallpaper arms exist only for the signed-out
+ * web Classic shell.
+ */
 export const SHELL_PARAMS = [
   ...BASE_SHELL_PARAMS,
   ...WALLPAPER_VARIANTS.map((wallpaper) =>
@@ -77,9 +82,7 @@ export const SHELL_PARAMS = [
   ),
 ];
 
-const SHELL_PARAM_PATTERN = new RegExp(
-  `^/(?:${SHELL_CLIENTS.join("|")})-(?:${SHELL_LAYOUTS.join("|")})-(?:in|out)(?:-(?:${WALLPAPER_VARIANTS.join("|")}))?(?=/|$)`,
-);
+const SHELL_PATH_PATTERN = new RegExp(`^/${SHELL_SEGMENT}(?=/|$)`);
 
 /**
  * The public path a variant path stands for, or null when the path is not one. Variant
@@ -89,7 +92,7 @@ const SHELL_PARAM_PATTERN = new RegExp(
  * as //host cannot turn the redirect into one that leaves the site.
  */
 export const publicPathForShellPath = (pathname: string): string | null => {
-  const match = SHELL_PARAM_PATTERN.exec(pathname);
+  const match = SHELL_PATH_PATTERN.exec(pathname);
   if (!match) return null;
   const rest = pathname.slice(match[0].length).replace(/^[/\\]+/, "");
   return `/${rest}`;
@@ -104,7 +107,7 @@ export interface ShellRequest {
   cookies: ReadonlyMap<string, string>;
   /** Draws an experiment assignment for a visitor who has none. */
   draw: () => LemuVariant;
-  drawWallpaper?: () => WallpaperVariant;
+  drawWallpaper: () => WallpaperVariant;
   /** Only a document visit can enroll a new visitor, never prefetch or RSC navigation. */
   isDocument?: boolean;
 }
@@ -142,11 +145,10 @@ const clientHasSession = (cookies: ReadonlyMap<string, string>) => {
  *
  * Layout preferences apply both in game and on public pages. Visitors without a choice
  * receive the site's welcome default; signed-in players without a choice receive Classic.
- * Crawlers always receive the default. A person
- * whose browser string happens to match the crawler pattern is told apart by their
- * session cookies. A signed-out visitor arriving on the landing page without an
- * assignments for the tutorial and wallpaper experiments is given them here so the document and the
- * cookie agree.
+ * Crawlers always receive the default. A person whose browser string happens to match the
+ * crawler pattern is told apart by their session cookies. A signed-out visitor arriving on
+ * the landing page without assignments for the Lemu and wallpaper experiments is given them
+ * here so the document and the cookie agree.
  */
 export const chooseShell = (
   request: ShellRequest,
@@ -172,8 +174,8 @@ export const chooseShell = (
   }
   let wallpaper = parseWallpaperVariant(request.cookies.get(WALLPAPER_EXPERIMENT));
   if (client === "web" && isLandingVisit && !wallpaper) {
-    wallpaper = request.drawWallpaper?.() ?? getRandomElement(WALLPAPER_VARIANTS);
-    if (wallpaper) assigned[WALLPAPER_EXPERIMENT] = wallpaper;
+    wallpaper = request.drawWallpaper();
+    assigned[WALLPAPER_EXPERIMENT] = wallpaper;
   }
   return {
     variant: {

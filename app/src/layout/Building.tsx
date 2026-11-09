@@ -31,15 +31,6 @@ import {
   type StructureAttribute,
 } from "@/utils/village";
 
-interface BuildingProps {
-  structure: VillageStructure;
-  village: Village;
-  showBar?: boolean;
-  showUpgrade?: boolean;
-  /** Load the first visible row immediately; other tiles load as they approach the viewport. */
-  eager?: boolean;
-}
-
 const Building: React.FC<BuildingProps> = (props) => {
   // Destructure
   const { structure, village, showBar, showUpgrade } = props;
@@ -81,7 +72,7 @@ const Building: React.FC<BuildingProps> = (props) => {
                 <Info className="size-4" aria-hidden="true" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{StructureRewardEntries(structure)}</TooltipContent>
+            <TooltipContent>{structureRewardEntries(structure)}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
         {userData && userData?.village?.kageId === userData?.userId && showUpgrade && (
@@ -181,55 +172,6 @@ const RestoreStructureButton = ({
     </Confirm>
   );
 };
-
-interface StructureBonus {
-  key: StructureAttribute;
-  label: string;
-  unit: string;
-  scale?: number;
-  /**
-   * Total displayed value at the given level. Defaults to perLvl * level * scale.
-   * Override for non-linear bonuses such as bank interest.
-   */
-  valueAt?: (perLvl: number, level: number) => number;
-  /** Formats a single number for display. Defaults to whole numbers. */
-  format?: (n: number) => string;
-}
-
-const STRUCTURE_BONUSES: StructureBonus[] = [
-  { key: "anbuSquadsPerLvl", label: "Anbu Squads", unit: "" },
-  { key: "arenaRewardPerLvl", label: "Arena Rewards", unit: "%" },
-  {
-    key: "bankInterestPerLvl",
-    label: "Bank Interest",
-    unit: "%",
-    valueAt: (perLvl, level) => calcBankInterest(perLvl * level),
-    format: (n) => (Number.isInteger(n) ? `${n}` : n.toFixed(1).replace(/\.0$/, "")),
-  },
-  { key: "blackDiscountPerLvl", label: "Market Discount", unit: "%" },
-  {
-    key: "clansPerLvl",
-    label: "Clan Slots",
-    unit: "",
-    scale: CLANS_PER_STRUCTURE_LEVEL,
-  },
-  { key: "hospitalSpeedupPerLvl", label: "Hospital Speed", unit: "%" },
-  { key: "itemDiscountPerLvl", label: "Item Discount", unit: "%" },
-  { key: "missionRewardPerLvl", label: "Mission/Errand Rewards", unit: "%" },
-  { key: "patrolsPerLvl", label: "Patrol Attacking Enemies", unit: "%" },
-  { key: "ramenDiscountPerLvl", label: "Ramen Discount", unit: "%" },
-  { key: "regenIncreasePerLvl", label: "Regen In Village", unit: "%" },
-  { key: "sleepRegenPerLvl", label: "Sleep Regen", unit: "%" },
-  { key: "structureDiscountPerLvl", label: "Structure Discount", unit: "%" },
-  { key: "trainBoostPerLvl", label: "Training Boost", unit: "%" },
-  { key: "villageDefencePerLvl", label: "Village Defence", unit: "%" },
-];
-
-const formatNumber = (bonus: StructureBonus, n: number) =>
-  (bonus.format ?? ((v: number) => `${v}`))(n);
-
-const computeBonusValue = (bonus: StructureBonus, perLvl: number, level: number) =>
-  bonus.valueAt ? bonus.valueAt(perLvl, level) : perLvl * level * (bonus.scale ?? 1);
 
 const UpgradeButton = ({
   structure,
@@ -363,7 +305,7 @@ const UpgradeButton = ({
  * @param structure - The village structure object.
  * @returns An array of reward messages.
  */
-export const StructureRewardEntries = (structure: VillageStructure) => {
+export const structureRewardEntries = (structure: VillageStructure) => {
   const baseLevel = structure.level;
   const effectiveLevel = getEffectiveStructureLevel(structure);
 
@@ -390,3 +332,61 @@ export const StructureRewardEntries = (structure: VillageStructure) => {
   if (msgs.length === 0) msgs.push("No rewards for this structure");
   return msgs.map((e) => <p key={`building-reward-${e}`}>{e}</p>);
 };
+
+const STRUCTURE_BONUSES: StructureBonus[] = [
+  { key: "anbuSquadsPerLvl", label: "Anbu Squads", unit: "" },
+  { key: "arenaRewardPerLvl", label: "Arena Rewards", unit: "%" },
+  {
+    key: "bankInterestPerLvl",
+    label: "Bank Interest",
+    unit: "%",
+    valueAt: (perLvl, level) => calcBankInterest(perLvl * level),
+    format: (n) => (Number.isInteger(n) ? `${n}` : n.toFixed(1).replace(/\.0$/, "")),
+  },
+  { key: "blackDiscountPerLvl", label: "Market Discount", unit: "%" },
+  {
+    key: "clansPerLvl",
+    label: "Clan Slots",
+    unit: "",
+    scale: CLANS_PER_STRUCTURE_LEVEL,
+  },
+  { key: "hospitalSpeedupPerLvl", label: "Hospital Speed", unit: "%" },
+  { key: "itemDiscountPerLvl", label: "Item Discount", unit: "%" },
+  { key: "missionRewardPerLvl", label: "Mission/Errand Rewards", unit: "%" },
+  { key: "patrolsPerLvl", label: "Patrol Attacking Enemies", unit: "%" },
+  { key: "ramenDiscountPerLvl", label: "Ramen Discount", unit: "%" },
+  { key: "regenIncreasePerLvl", label: "Regen In Village", unit: "%" },
+  { key: "sleepRegenPerLvl", label: "Sleep Regen", unit: "%" },
+  { key: "structureDiscountPerLvl", label: "Structure Discount", unit: "%" },
+  { key: "trainBoostPerLvl", label: "Training Boost", unit: "%" },
+  { key: "villageDefencePerLvl", label: "Village Defence", unit: "%" },
+];
+
+const formatNumber = (bonus: StructureBonus, n: number) =>
+  (bonus.format ?? ((v: number) => `${v}`))(n);
+
+const computeBonusValue = (bonus: StructureBonus, perLvl: number, level: number) =>
+  bonus.valueAt ? bonus.valueAt(perLvl, level) : perLvl * level * (bonus.scale ?? 1);
+
+interface BuildingProps {
+  structure: VillageStructure;
+  village: Village;
+  showBar?: boolean;
+  showUpgrade?: boolean;
+  /** Load the first visible row immediately; other tiles load as they approach the viewport. */
+  eager?: boolean;
+}
+
+interface StructureBonus {
+  key: StructureAttribute;
+  label: string;
+  unit: string;
+  scale?: number;
+  /**
+   * Total displayed value at the given level. Defaults to perLvl * level * scale.
+   * Override for non-linear bonuses such as bank interest.
+   */
+  valueAt?: (perLvl: number, level: number) => number;
+  /** Formats a single number for display. Defaults to whole numbers. */
+  format?: (n: number) => string;
+}

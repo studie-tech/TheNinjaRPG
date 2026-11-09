@@ -42,7 +42,6 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     coordinateTargeting: data.coordinateTargeting || null,
     methodSize: data.methodSize || null,
     elementClassification: data.elementClassification || "None",
-    effects: data.effects,
   };
 
   // Form handling

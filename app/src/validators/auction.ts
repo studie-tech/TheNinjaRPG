@@ -2,10 +2,8 @@ import { z } from "zod";
 import {
   AUCTION_BIDDER_LEVEL_MAX,
   AUCTION_BIDDER_LEVEL_MIN,
-  AUCTION_LISTING_STATES,
   AUCTION_LISTING_TYPES,
   AUCTION_OFFER_MAX_RYO,
-  AUCTION_OFFER_TYPES,
   MAX_ITEM_STACK_SIZE,
   RYO_FOR_REP_MIN_REPS,
   TRADEABLE_CURRENCY_TYPES,
@@ -81,20 +79,6 @@ export const createAuctionListingSchema = z
     },
   );
 
-export const getAuctionListingsSchema = z.object({
-  limit: z.number().min(1).max(100).prefault(10),
-  cursor: z.number().nullish(),
-  itemName: z.string().optional(),
-  /** Partial match on listing seller username (case-insensitive per DB collation). */
-  sellerSearch: z.string().optional(),
-  minPrice: z.number().min(0).optional(),
-  maxPrice: z.number().min(0).optional(),
-  listingType: z.enum(AUCTION_LISTING_TYPES).optional(),
-  onlyMine: z.boolean().optional(),
-  onlyBidOn: z.boolean().optional(),
-  status: z.enum(AUCTION_LISTING_STATES).optional(),
-});
-
 /** Item-specific validation for the listing form; the router checks fresh item data. */
 export const auctionListingSchemaForItem = (
   item?: Pick<Item, "canBeTraded" | "auctionMinPrice" | "auctionMaxPrice"> &
@@ -150,15 +134,3 @@ export const createAuctionOfferSchema = z.discriminatedUnion("offerType", [
     offeredQuantity: offerQuantity,
   }),
 ]);
-export const getAuctionOffersSchema = z.object({
-  offerType: z.enum(AUCTION_OFFER_TYPES),
-  status: z.enum(AUCTION_LISTING_STATES).default("ACTIVE"),
-  onlyMine: z.boolean().default(false),
-  search: z.string().max(100).default(""),
-  limit: z.int().min(1).max(100).default(10),
-  cursor: z.int().min(0).nullish(),
-});
-export const auctionOfferIdSchema = z.object({ offerId: z.string().min(1) });
-export const acceptAuctionOfferSchema = auctionOfferIdSchema.extend({
-  userItemId: z.string().min(1),
-});

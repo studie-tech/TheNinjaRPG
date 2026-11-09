@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { applyPoolAdjustmentsToBase, reconcileLobbyPools } from "@/libs/combat/util";
-import { makeBattleUser, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeEffect } from "../../setup/combat";
 
 const makePoolUser = () =>
   makeBattleUser("player", {

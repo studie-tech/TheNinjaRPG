@@ -4,26 +4,21 @@ import { useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { cn } from "@/libs/shadui";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
 interface ToggleProps {
   id?: string;
-  labelActive?: string;
-  labelInactive?: string;
+  labelActive: string;
+  labelInactive: string;
   value?: boolean;
   disabled?: boolean;
   setShowActive: React.Dispatch<React.SetStateAction<boolean | undefined>>;
-  verticalLayout?: boolean;
 }
 
 const Toggle: React.FC<ToggleProps> = (props) => {
   // Destructure
   const { id, disabled, value, labelActive, labelInactive, setShowActive } = props;
-
-  // State
-  const active = labelActive ?? "Unhandled";
-  const inactive = labelInactive ?? "Resolved";
 
   // Set state
   const setState = useCallback(
@@ -45,14 +40,9 @@ const Toggle: React.FC<ToggleProps> = (props) => {
 
   // Render
   return (
-    <div
-      className={cn(
-        "flex",
-        props.verticalLayout ? "flex-col items-start gap-2" : "flex-row items-center",
-      )}
-    >
+    <div className="flex flex-row items-center">
       <Label htmlFor="tag_name" className="mr-2">
-        {value ? active : inactive}
+        {value ? labelActive : labelInactive}
       </Label>
       <Switch
         onCheckedChange={() => setState(!value)}

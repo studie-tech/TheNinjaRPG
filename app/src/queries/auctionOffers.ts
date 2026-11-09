@@ -1,14 +1,16 @@
-import { AUCTION_HOUSE_MIN_LEVEL } from "@/drizzle/constants";
+import {
+  AUCTION_HOUSE_MIN_LEVEL,
+  type AUCTION_OFFER_TYPES,
+  type AuctionListingState,
+} from "@/drizzle/constants";
 /**
  * Database access for auction offers; authorization and transaction scopes stay in callers.
  */
 
 import { and, eq } from "drizzle-orm";
-import type { z } from "zod";
 import { userItem } from "@/drizzle/schema";
 import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient, DrizzleTransaction } from "@/server/db";
-import type { getAuctionOffersSchema } from "@/validators/auction";
 
 /** Build the offered-item lookup with its item and imbuement relations for offer validation. */
 export const fetchOfferItem = (database: DrizzleClient, id: string, userId: string) =>
@@ -17,14 +19,27 @@ export const fetchOfferItem = (database: DrizzleClient, id: string, userId: stri
     with: { item: true, imbuements: { with: { item: true } } },
   });
 
-import { desc, gt, gte, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  desc,
+  exists,
+  gt,
+  gte,
+  isNull,
+  like,
+  lte,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   actionLog,
   auctionOffer,
   item,
+  storeUserIdAlias,
   type UserItem,
   userData,
+  userItemImbuement,
 } from "@/drizzle/schema";
 
 /** Build the `item` listing for `getAuctionOfferItems`, using predicates on `canBeTraded` and `hidden`. */
@@ -45,19 +60,38 @@ export const listItemForGetAuctionOfferItems = (client: Pick<DrizzleClient, "que
 
 /** Build the `auctionOffer` listing for `getAuctionOffers`, including predicates on `offerType`, `status`, `ownerId`. */
 export const listAuctionOfferForGetAuctionOffers = (
-  client: Pick<DrizzleClient, "query">,
-  input: z.infer<typeof getAuctionOffersSchema>,
+  client: Pick<DrizzleClient, "query" | "select">,
+  input: {
+    offerType: (typeof AUCTION_OFFER_TYPES)[number];
+    status: AuctionListingState;
+    onlyMine: boolean;
+    search: string;
+    limit: number;
+    cursor?: number | null | undefined;
+  },
   ctx: { userId: string },
 ) =>
   client.query.auctionOffer.findMany({
-    where: and(
-      eq(auctionOffer.offerType, input.offerType),
-      eq(auctionOffer.status, input.status),
-      input.onlyMine ? eq(auctionOffer.ownerId, ctx.userId) : undefined,
-      input.search.trim()
-        ? sql`EXISTS (SELECT 1 FROM Item WHERE Item.id = ${auctionOffer.requestedItemId} AND Item.name LIKE ${`%${input.search.trim()}%`})`
-        : undefined,
-    ),
+    // The callback's aliased columns correlate the item subquery with the relational root.
+    where: (offer) =>
+      and(
+        eq(offer.offerType, input.offerType),
+        eq(offer.status, input.status),
+        input.onlyMine ? eq(offer.ownerId, ctx.userId) : undefined,
+        input.search.trim()
+          ? exists(
+              client
+                .select({ id: item.id })
+                .from(item)
+                .where(
+                  and(
+                    eq(item.id, offer.requestedItemId),
+                    like(item.name, `%${input.search.trim()}%`),
+                  ),
+                ),
+            )
+          : undefined,
+      ),
     with: {
       owner: { columns: { userId: true, username: true } },
       requestedItem: true,
@@ -72,7 +106,7 @@ export const listAuctionOfferForGetAuctionOffers = (
 
 /** Build the `userData` update for `createAuctionOffer`, setting `bank` and `updatedAt`, using predicates on `bank`. */
 export const updateUserDataForCreateAuctionOffer = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   input: { ryo: number },
 
   ctx: { userId: string },
@@ -80,7 +114,7 @@ export const updateUserDataForCreateAuctionOffer = (
   client
     .update(userData)
     .set({ bank: sql`${userData.bank} - ${input.ryo}`, updatedAt: new Date() })
-    .where(and(eligibleOfferUser(ctx.userId), gte(userData.bank, input.ryo)));
+    .where(and(eligibleOfferUser(client, ctx.userId), gte(userData.bank, input.ryo)));
 
 /** Build the `auctionOffer` insert for `createAuctionOffer`. */
 export const insertAuctionOfferForCreateAuctionOffer = (
@@ -207,7 +241,7 @@ export const updateUserItemForCancelAuctionOffer = (
 
 /** Build the `userData` update for `claimOfferUser`, setting `updatedAt`, using the configured predicates. */
 export const updateUserDataForClaimOfferUser = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
 
   id: string,
 ) =>
@@ -216,11 +250,11 @@ export const updateUserDataForClaimOfferUser = (
     .set({
       updatedAt: nextSnapshotSql(userData.updatedAt),
     })
-    .where(eligibleOfferUser(id));
+    .where(eligibleOfferUser(client, id));
 
 /** Build the `userItem` update for `moveOfferItem`, including predicates on `id`, `userId`, `itemId`. */
 export const updateUserItemForMoveOfferItem = (
-  client: Pick<DrizzleClient, "update">,
+  client: Pick<DrizzleClient, "update" | "select">,
   isPartial: false | true,
   quantity: number,
   recipientId: string,
@@ -269,9 +303,26 @@ export const updateUserItemForMoveOfferItem = (
           isNull(userItem.craftingFinishedAt),
           lte(userItem.craftingFinishedAt, new Date()),
         ),
-        sql`EXISTS (SELECT 1 FROM Item WHERE Item.id = ${row.itemId} AND Item.canBeTraded = 1)`,
+        exists(
+          client
+            .select({ id: item.id })
+            .from(item)
+            .where(and(eq(item.id, row.itemId), eq(item.canBeTraded, true))),
+        ),
         // Completed imbuements follow a whole item; splitting one would duplicate them.
-        sql`NOT EXISTS (SELECT 1 FROM UserItemImbuement WHERE UserItemImbuement.userItemId = ${row.id} ${isPartial ? sql`` : sql`AND UserItemImbuement.craftingFinishedAt > CURRENT_TIMESTAMP(3)`})`,
+        notExists(
+          client
+            .select({ id: userItemImbuement.id })
+            .from(userItemImbuement)
+            .where(
+              and(
+                eq(userItemImbuement.userItemId, row.id),
+                isPartial
+                  ? undefined
+                  : gt(userItemImbuement.craftingFinishedAt, sql`CURRENT_TIMESTAMP(3)`),
+              ),
+            ),
+        ),
       ),
     );
 
@@ -316,10 +367,15 @@ export const logOffer = (
   });
 
 /** Require an eligible account and reject aliases before claiming auction funds. */
-const eligibleOfferUser = (id: string) =>
+const eligibleOfferUser = (client: Pick<DrizzleClient, "select">, id: string) =>
   and(
     eq(userData.userId, id),
-    sql`NOT EXISTS (SELECT 1 FROM StoreUserIdAlias WHERE StoreUserIdAlias.oldUserId = ${id})`,
+    notExists(
+      client
+        .select({ oldUserId: storeUserIdAlias.oldUserId })
+        .from(storeUserIdAlias)
+        .where(eq(storeUserIdAlias.oldUserId, id)),
+    ),
     eq(userData.isBanned, false),
     eq(userData.isTradeBanned, false),
     gte(userData.level, AUCTION_HOUSE_MIN_LEVEL),

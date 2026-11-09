@@ -90,15 +90,19 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
     enabled: canEditCannedResponses(userData?.role),
   });
 
+  // Reload this ticket and the ticket list after it changes
+  const refreshTicket = () =>
+    Promise.all([
+      utils.support.getTicket.invalidate({ ticketId: params.ticketId }),
+      utils.support.getTickets.invalidate(),
+    ]);
+
   // Update ticket mutation
   const updateTicket = api.support.updateTicket.useMutation({
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await Promise.all([
-          utils.support.getTicket.invalidate({ ticketId: params.ticketId }),
-          utils.support.getTickets.invalidate(),
-        ]);
+        await refreshTicket();
         setRefreshKey((prev) => prev + 1);
       }
     },
@@ -142,10 +146,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await Promise.all([
-          utils.support.getTicket.invalidate({ ticketId: params.ticketId }),
-          utils.support.getTickets.invalidate(),
-        ]);
+        await refreshTicket();
         setRefreshKey((prev) => prev + 1);
       }
     },
@@ -630,10 +631,7 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
         supportTicketCreatedByUserId={ticket.createdByUserId}
         onCommentPosted={() => {
           // The server moves the ticket's status on a reply; show the new one
-          void Promise.all([
-            utils.support.getTicket.invalidate({ ticketId: params.ticketId }),
-            utils.support.getTickets.invalidate(),
-          ]);
+          void refreshTicket();
         }}
       />
 

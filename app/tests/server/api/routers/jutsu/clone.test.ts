@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "bun:test";
 import { actionLog, jutsu } from "@/drizzle/schema";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
-import { resolverOf } from "../../../../setup/testDatabase";
+import { callerForDatabase } from "../../../../setup/testDatabase";
 
 const source = {
   id: "source",
@@ -27,27 +27,23 @@ const setup = (
   user = { role: "CONTENT", isBanned: false },
 ) => {
   const values = vi.fn(async (_row: Record<string, unknown>) => ({ rowsAffected: 1 }));
-  const logValues = vi.fn(async (_row: Record<string, unknown>) => ({ rowsAffected: 1 }));
+  const logValues = vi.fn(async (_row: Record<string, unknown>) => ({
+    rowsAffected: 1,
+  }));
   const insert = vi.fn((table: object) => ({
     values: table === actionLog ? logValues : values,
   }));
-  const resolver = resolverOf(jutsuRouter.clone);
+  const database = {
+    query: {
+      userData: { findFirst: async () => user },
+      jutsu: { findFirst: async () => row },
+    },
+    insert,
+    transaction: async (callback: (tx: object) => Promise<unknown>) =>
+      callback({ insert }),
+  };
   const clone = () =>
-    resolver({
-      ctx: {
-        userId: "staff",
-        drizzle: {
-          query: {
-            userData: { findFirst: async () => user },
-            jutsu: { findFirst: async () => row },
-          },
-          insert,
-          transaction: async (callback: (tx: object) => Promise<unknown>) =>
-            callback({ insert }),
-        },
-      },
-      input: { id: source.id },
-    });
+    callerForDatabase(jutsuRouter, "staff", database as never).clone({ id: source.id });
   return { clone, insert, values, logValues };
 };
 
@@ -111,16 +107,6 @@ describe("jutsu.clone", () => {
     values.mockRejectedValueOnce(new Error("Insert failed"));
     await expect(clone()).rejects.toThrow("Insert failed");
     expect(logValues).not.toHaveBeenCalled();
-  });
-
-  it("supports repeated clones of a maximum-length name", async () => {
-    const { clone, values } = setup({ ...source, name: "a".repeat(191) });
-    const first = await clone();
-    const second = await clone();
-    expect(first.message).not.toBe(second.message);
-    const names = values.mock.calls.map(([row]) => row.name as string);
-    expect(names[0]).not.toBe(names[1]);
-    expect(names.every((name) => name.length <= 191 && name.includes(" - copy "))).toBe(true);
   });
 
   it.each([

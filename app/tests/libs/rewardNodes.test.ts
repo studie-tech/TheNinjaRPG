@@ -16,7 +16,8 @@ describe("active reward nodes", () => {
   });
   it("preserves explicitly selected custom nodes and their complete field lists", () => {
     expect(getActiveRewardNodes(nodes, ["ryo", "currency-copy"], active)).toEqual([
-      nodes[0], nodes[2],
+      nodes[0],
+      nodes[2],
     ]);
   });
   it("adds a group when an existing reward is not covered by the selected node", () => {
@@ -28,12 +29,14 @@ describe("active reward nodes", () => {
   });
   it("retains opened groups in selection order even when their values are cleared", () => {
     expect(getActiveRewardNodes(nodes, ["items", "currency"], () => false)).toEqual([
-      nodes[3], nodes[1],
+      nodes[3],
+      nodes[1],
     ]);
   });
   it("ignores removed catalog nodes and appends uncovered saved rewards", () => {
     expect(getActiveRewardNodes(nodes, ["removed", "items"], active)).toEqual([
-      nodes[3], nodes[1],
+      nodes[3],
+      nodes[1],
     ]);
   });
 });

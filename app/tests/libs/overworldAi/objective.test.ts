@@ -10,25 +10,43 @@ const quests = [
     questId: "qd",
     objectives: [
       { id: "o1", task: "dialog", overworldPlacementId: "p1", done: false },
-      { id: "o2", task: "deliver_item", overworldPlacementId: "p2", deliverItemIds: ["i1"], done: false },
+      {
+        id: "o2",
+        task: "deliver_item",
+        overworldPlacementId: "p2",
+        deliverItemIds: ["i1"],
+        done: false,
+      },
     ],
   },
 ];
 
 describe("findActionableBoundObjective", () => {
   it("matches a dialog objective bound to the placement", () => {
-    const r = findActionableBoundObjective({ activeQuests: quests, ownedItemIds: [], placementId: "p1" });
+    const r = findActionableBoundObjective({
+      activeQuests: quests,
+      ownedItemIds: [],
+      placementId: "p1",
+    });
     expect(r?.questId).toBe("qd");
     expect(r?.objective.id).toBe("o1");
   });
 
   it("does NOT match a deliver objective when the item is missing (not actionable)", () => {
-    const r = findActionableBoundObjective({ activeQuests: quests, ownedItemIds: [], placementId: "p2" });
+    const r = findActionableBoundObjective({
+      activeQuests: quests,
+      ownedItemIds: [],
+      placementId: "p2",
+    });
     expect(r).toBeNull();
   });
 
   it("matches a deliver objective when the item is held", () => {
-    const r = findActionableBoundObjective({ activeQuests: quests, ownedItemIds: ["i1"], placementId: "p2" });
+    const r = findActionableBoundObjective({
+      activeQuests: quests,
+      ownedItemIds: ["i1"],
+      placementId: "p2",
+    });
     expect(r?.objective.id).toBe("o2");
   });
 
@@ -46,7 +64,11 @@ describe("findActionableBoundObjective", () => {
 
   it("returns null when nothing is bound to the placement", () => {
     expect(
-      findActionableBoundObjective({ activeQuests: quests, ownedItemIds: [], placementId: "pX" }),
+      findActionableBoundObjective({
+        activeQuests: quests,
+        ownedItemIds: [],
+        placementId: "pX",
+      }),
     ).toBeNull();
   });
 
@@ -56,9 +78,7 @@ describe("findActionableBoundObjective", () => {
         activeQuests: [
           {
             questId: "bad",
-            objectives: [
-              { id: "o1", task: "pvp_kills", overworldPlacementId: "p1" },
-            ],
+            objectives: [{ id: "o1", task: "pvp_kills", overworldPlacementId: "p1" }],
           },
         ],
         ownedItemIds: [],
@@ -75,8 +95,20 @@ describe("findActionableBoundObjective — consecutive-objective ordering", () =
     {
       questId: "qc",
       objectives: [
-        { id: "c1", task: "dialog", overworldPlacementId: "p1", done: true, available: true },
-        { id: "c2", task: "dialog", overworldPlacementId: "p2", done: false, available: true },
+        {
+          id: "c1",
+          task: "dialog",
+          overworldPlacementId: "p1",
+          done: true,
+          available: true,
+        },
+        {
+          id: "c2",
+          task: "dialog",
+          overworldPlacementId: "p2",
+          done: false,
+          available: true,
+        },
         {
           id: "c3",
           task: "deliver_item",
@@ -175,10 +207,8 @@ describe("resolveArrivalPromptCta", () => {
     [null, "Request mission"],
   ])("maps %s to the expected friendly interaction", (task, action) => {
     expect(
-      resolveArrivalPromptCta(
-        { username: "NPC", npcInteractionType: "FRIENDLY" },
-        task,
-      ).action,
+      resolveArrivalPromptCta({ username: "NPC", npcInteractionType: "FRIENDLY" }, task)
+        .action,
     ).toBe(action);
   });
 

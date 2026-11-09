@@ -1,7 +1,8 @@
 # Release automation for both shells.
 #
-# Uploads only. Version and build numbers come from the CI run so two builds can never
-# collide, and signing material is read from the environment rather than the repository.
+# Builds and uploads. Build numbers are derived from TestFlight (iOS) and the clock
+# (Android, overridable with ANDROID_VERSION_CODE) so two runs cannot collide, and signing
+# material is read from the environment rather than the repository.
 #
 #   bundle exec fastlane ios beta
 #   bundle exec fastlane android beta

@@ -126,9 +126,8 @@ describe.each([
 it("rejects coordinate Curse in the shared effects validator", () => {
   const effects = JutsuValidatorRawSchema.shape.effects;
   expect(
-    effects.safeParse([
-      CurseTag.parse({ target: "COORDINATES", coordinateTargeting }),
-    ]).success,
+    effects.safeParse([CurseTag.parse({ target: "COORDINATES", coordinateTargeting })])
+      .success,
   ).toBe(false);
   expect(effects.safeParse([CurseTag.parse({ target: "SELF" })]).success).toBe(true);
 });

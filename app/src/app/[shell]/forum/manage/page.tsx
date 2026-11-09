@@ -74,7 +74,7 @@ export default function ForumManagement() {
       title="Forum tools"
       subtitle="Moderation, access and boards."
       defaultBackHref="/forum"
-      topRightCorntentBreakpoint="sm"
+      stackTopRight
       topRightContent={<ForumNavigation />}
     >
       {!user ? (

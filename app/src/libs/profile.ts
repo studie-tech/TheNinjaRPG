@@ -9,6 +9,7 @@ import {
   ENERGY_PER_LVL,
   getCombatStatCap,
   getUserCaps,
+  HORIZON_MAX_LEVEL,
   HomeTypeDetails,
   HP_PER_LVL,
   MAX_EXPERIENCE_LEVEL,
@@ -19,8 +20,10 @@ import {
   PLAYER_LEVEL_XP_HIGH_FACTOR,
   PLAYER_LEVEL_XP_HIGH_THRESHOLD,
   RANKS_RESTRICTED_FROM_PVP,
+  RECRUITER_LEVEL_REWARD_FACTOR,
   SCALED_AI_STAT_BUDGET_SHARE,
   SP_PER_LVL,
+  VILLAGE_REDUCED_GAINS_FACTOR,
   XP_BRACKETS,
 } from "@/drizzle/constants";
 import type {
@@ -89,11 +92,10 @@ export const levelUpBlock = (
     };
   if (user.experience < calcLevelRequirements(user.level))
     return { kind: "experience", message: "Not enough experience for level" };
-  if (user.village?.name === "Horizon" && user.level > 9) {
+  if (user.village?.name === "Horizon" && user.level >= HORIZON_MAX_LEVEL) {
     return {
       kind: "village",
-      message:
-        "Horizon users cannot level beyond level 9. To progress, go to the academy to take a quest for joining one of the main villages.",
+      message: `Horizon users cannot level beyond level ${HORIZON_MAX_LEVEL}. To progress, go to the academy to take a quest for joining one of the main villages.`,
     };
   }
   return null;
@@ -376,7 +378,8 @@ export function scaleUserStats(
   user.curChakra = calcCP(user.level) * poolMod;
   user.maxChakra = calcCP(user.level) * poolMod;
   // Combat stats
-  const levelBudget = calcLevelRequirements(user.level) - 500;
+  // Level 1 carries no stat budget.
+  const levelBudget = calcLevelRequirements(user.level) - calcLevelRequirements(1);
   const experience = user.experience ?? 0;
   user.experience = levelBudget;
   const share = statScale === "ai" ? SCALED_AI_STAT_BUDGET_SHARE : 1;
@@ -554,7 +557,7 @@ export const calcActiveUserRegen = (
   // Reduce regen if just joined village
   const reducedDays = getReducedGainsDays(user);
   if (reducedDays > 0) {
-    regeneration *= 0.5;
+    regeneration *= VILLAGE_REDUCED_GAINS_FACTOR;
   }
 
   regeneration *= percentageMultiplier(getVillageLoyaltyBonuses(user).regen);
@@ -616,3 +619,7 @@ export const calcMaxEnergy = (user: MasteryBuffUser) => {
     }
   return Math.max(1, maximum);
 };
+
+/** Ryo a recruiter earns, before PvP boosts, when their recruit reaches `level`. */
+export const recruiterLevelReward = (level: number) =>
+  RECRUITER_LEVEL_REWARD_FACTOR * level * level * level;

@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import AdministrationBuilding from "@/app/[shell]/adminbuilding/page";
@@ -21,13 +21,22 @@ const event = (id: string, overrides: Record<string, unknown> = {}) => ({
   questType: "event",
   teamEnabled: false,
   content: { objectives: [], reward: {} },
-  entryRequirements: [] as { itemId: string; name: string; quantity: number; owned: number }[],
+  entryRequirements: [] as {
+    itemId: string;
+    name: string;
+    quantity: number;
+    owned: number;
+  }[],
   ...overrides,
 });
 
 const paidEvent = (owned: number) =>
   event("Paid Event", {
-    content: { objectives: [], reward: {}, entryItems: [{ ids: ["ticket"], number: 2 }] },
+    content: {
+      objectives: [],
+      reward: {},
+      entryItems: [{ ids: ["ticket"], number: 2 }],
+    },
     entryRequirements: [{ itemId: "ticket", name: "ticket", quantity: 2, owned }],
   });
 
@@ -45,7 +54,14 @@ const setup = (hallData: ReturnType<typeof event>[], userQuests: unknown[] = [])
     },
   });
   vi.spyOn(UserContext, "useRequireInVillage").mockReturnValue({
-    userData: { sector: 3, level: 10, rank: "GENIN", villageId: "home", userQuests, questData: [] },
+    userData: {
+      sector: 3,
+      level: 10,
+      rank: "GENIN",
+      villageId: "home",
+      userQuests,
+      questData: [],
+    },
     access: true,
     updateUser: vi.fn(),
     prepareUserUpdate: vi.fn(),
@@ -55,7 +71,9 @@ const setup = (hallData: ReturnType<typeof event>[], userQuests: unknown[] = [])
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => <div>{children}</div>);
+  vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
+    <div>{children}</div>
+  ));
   vi.spyOn(Image, "default").mockImplementation(({ alt }) => <img alt={alt} />);
   vi.spyOn(Logbook, "LogbookEntry").mockImplementation(() => null);
   vi.spyOn(ItemWithEffects, "default").mockImplementation(
@@ -64,16 +82,17 @@ beforeEach(() => {
   vi.spyOn(QuestTeams, "QuestTeams").mockImplementation(({ teamEnabled }) =>
     teamEnabled ? <p>Quest team controls</p> : null,
   );
-  vi.spyOn(Modal, "default").mockImplementation(({ isOpen, title, children, onAccept }) =>
-    isOpen ? (
-      <div>
-        <h2>{title}</h2>
-        {children}
-        <button type="button" onClick={(e) => onAccept?.(e)}>
-          Proceed
-        </button>
-      </div>
-    ) : null,
+  vi.spyOn(Modal, "default").mockImplementation(
+    ({ isOpen, title, children, onAccept }) =>
+      isOpen ? (
+        <div>
+          <h2>{title}</h2>
+          {children}
+          <button type="button" onClick={(e) => onAccept?.(e)}>
+            Proceed
+          </button>
+        </div>
+      ) : null,
   );
 });
 
@@ -82,13 +101,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const open = (name: string) => fireEvent.click(screen.getByRole("button", { name: new RegExp(name) }));
+const open = (name: string) =>
+  fireEvent.click(screen.getByRole("button", { name: new RegExp(name) }));
 
 describe("Administration Building", () => {
   it("confirms the entry cost before starting an event with entry items", () => {
     setup([paidEvent(2)]);
     open("Paid Event");
-    fireEvent.click(screen.getAllByRole("button", { name: "Take Quest" }).at(-1) as HTMLElement);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Take Quest" }).at(-1) as HTMLElement,
+    );
     expect(startQuest).not.toHaveBeenCalled();
     expect(screen.getByText("Start Paid Event?")).toBeTruthy();
     expect(screen.getByText("2× Event Ticket")).toBeTruthy();
@@ -103,8 +125,12 @@ describe("Administration Building", () => {
   it("shows the carried count and blocks an entry the player cannot pay for", () => {
     setup([paidEvent(1)]);
     open("Paid Event");
-    expect(screen.getByText("Event Ticket: 1 / 2 owned. Consumed on entry.")).toBeTruthy();
-    const take = screen.getAllByRole("button", { name: "Take Quest" }).at(-1) as HTMLButtonElement;
+    expect(
+      screen.getByText("Event Ticket: 1 / 2 owned. Consumed on entry."),
+    ).toBeTruthy();
+    const take = screen
+      .getAllByRole("button", { name: "Take Quest" })
+      .at(-1) as HTMLButtonElement;
     expect(take.disabled).toBe(true);
     fireEvent.click(take);
     expect(startQuest).not.toHaveBeenCalled();
@@ -133,16 +159,28 @@ describe("Administration Building", () => {
   });
 
   it("opens the running event rather than a finished one by default", () => {
-    const finished = { quest: { name: "Old Event", questType: "event" }, endAt: new Date(0) };
+    const finished = {
+      quest: { name: "Old Event", questType: "event" },
+      endAt: new Date(0),
+    };
     const running = { quest: { name: "New Event", questType: "event" }, endAt: null };
     setup([event("Old Event"), event("New Event")], [finished, running]);
-    expect(screen.getByRole("button", { name: /Old Event/ }).getAttribute("aria-expanded")).toBe("false");
-    expect(screen.getByRole("button", { name: /New Event/ }).getAttribute("aria-expanded")).toBe("true");
+    expect(
+      screen.getByRole("button", { name: /Old Event/ }).getAttribute("aria-expanded"),
+    ).toBe("false");
+    expect(
+      screen.getByRole("button", { name: /New Event/ }).getAttribute("aria-expanded"),
+    ).toBe("true");
   });
 
   it("opens nothing by default when every event has finished", () => {
-    const finished = { quest: { name: "Old Event", questType: "event" }, endAt: new Date(0) };
+    const finished = {
+      quest: { name: "Old Event", questType: "event" },
+      endAt: new Date(0),
+    };
     setup([event("Old Event")], [finished]);
-    expect(screen.getByRole("button", { name: /Old Event/ }).getAttribute("aria-expanded")).toBe("false");
+    expect(
+      screen.getByRole("button", { name: /Old Event/ }).getAttribute("aria-expanded"),
+    ).toBe("false");
   });
 });

@@ -16,12 +16,13 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { api } from "@/app/_trpc/client";
+import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
   RAID_BATTLE_LOBBY_SECONDS,
   RAID_BATTLE_MAX_USERS_PER_TEAM,
+  RAID_MAX_CONCURRENT_TEAMS,
 } from "@/drizzle/constants";
 import { ActiveTimedBuffs } from "@/layout/ActiveTimedBuffs";
 import AvatarImage from "@/layout/Avatar";
@@ -221,7 +222,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
   const thresholds = raidDetailsData?.thresholds ?? [];
   const leaderboard = leaderboardData?.participations ?? [];
   const activeTeams = activeTeamsData?.teams ?? [];
-  const maxTeams = activeTeamsData?.maxTeams ?? 5;
+  const maxTeams = activeTeamsData?.maxTeams ?? RAID_MAX_CONCURRENT_TEAMS;
 
   // Auto-select the only raid when sectorFilter is provided and there's exactly one raid
   useEffect(() => {
@@ -602,71 +603,12 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
 
             {/* Reward Thresholds */}
             {thresholds.length > 0 && (
-              <div className="rounded-lg border p-3">
-                <h4 className="mb-2 flex items-center gap-2 font-medium">
-                  <Gift className="h-4 w-4" />
-                  Damage Thresholds
-                </h4>
-                <div className="space-y-2">
-                  {thresholds.map((threshold, idx) => {
-                    const userDamage = participation?.damageDealt ?? 0;
-                    const hasMetThreshold = userDamage >= threshold.damageRequired;
-                    const rewardsClaimed = participation?.rewardsClaimed ?? [];
-                    const alreadyClaimed = rewardsClaimed.includes(threshold.id);
-                    const rewardList = getRewardArray(threshold.rewards);
-
-                    return (
-                      <div
-                        key={threshold.id}
-                        className={`rounded border p-3 text-sm ${hasMetThreshold && !alreadyClaimed ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20" : "border-transparent"}`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="mb-1 flex items-center gap-2">
-                              <span
-                                className={`font-medium ${hasMetThreshold ? "text-green-600 dark:text-green-400" : ""}`}
-                              >
-                                Tier {idx + 1}:{" "}
-                                {threshold.damageRequired.toLocaleString()} damage
-                              </span>
-                            </div>
-                            {rewardList.length > 0 && (
-                              <p className="text-muted-foreground text-xs">
-                                {rewardList.join(" • ")}
-                              </p>
-                            )}
-                          </div>
-                          <div className="ml-2 flex items-center gap-2">
-                            {alreadyClaimed ? (
-                              <span className="flex items-center gap-1 text-muted-foreground">
-                                <Check className="h-4 w-4" />
-                                Claimed
-                              </span>
-                            ) : hasMetThreshold ? (
-                              <Button
-                                size="sm"
-                                onClick={() => handleClaimReward(threshold.id)}
-                                disabled={claimPending}
-                              >
-                                <Gift className="mr-1 h-3 w-3" />
-                                {claimPending ? "Claiming..." : "Claim"}
-                              </Button>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">
-                                {Math.max(
-                                  0,
-                                  threshold.damageRequired - userDamage,
-                                ).toLocaleString()}{" "}
-                                more
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <RaidThresholds
+                thresholds={thresholds}
+                participation={participation}
+                claimPending={claimPending}
+                onClaim={handleClaimReward}
+              />
             )}
 
             {!isViewingCompletedRaid && raidDetails.raidChatConversationId && (
@@ -678,40 +620,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
             )}
 
             {/* Leaderboard */}
-            {leaderboard.length > 0 && (
-              <div className="rounded-lg border p-3">
-                <h4 className="mb-2 flex items-center gap-2 font-medium">
-                  <Trophy className="h-4 w-4" />
-                  Damage Leaderboard
-                </h4>
-                <div className="space-y-2">
-                  {leaderboard.map((entry) => {
-                    const username = entry.user?.username ?? "Deleted User";
-                    const avatar = entry.user?.avatar ?? null;
-                    return (
-                      <div
-                        key={entry.id}
-                        className="flex items-center justify-between rounded bg-muted/50 p-2"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 font-bold">{entry.rank}</span>
-                          <AvatarImage
-                            href={avatar}
-                            alt={username}
-                            size={24}
-                            className="h-6 w-6"
-                          />
-                          <span className="text-sm">{username}</span>
-                        </div>
-                        <span className="font-medium text-sm">
-                          {entry.damageDealt.toLocaleString()}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {leaderboard.length > 0 && <RaidLeaderboard leaderboard={leaderboard} />}
           </div>
         </ContentBox>
       )}
@@ -721,22 +630,135 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
   );
 };
 
+// --- RaidThresholds Component ---
+
+interface RaidThresholdsProps {
+  thresholds: RaidDetails["thresholds"];
+  participation: RaidDetails["participation"];
+  claimPending: boolean;
+  onClaim: (thresholdId: string) => void;
+}
+
+/** Show damage-reward progress and forward claims through the raid controller. */
+const RaidThresholds: React.FC<RaidThresholdsProps> = ({
+  thresholds,
+  participation,
+  claimPending,
+  onClaim,
+}) => {
+  return (
+    <div className="rounded-lg border p-3">
+      <h4 className="mb-2 flex items-center gap-2 font-medium">
+        <Gift className="h-4 w-4" />
+        Damage Thresholds
+      </h4>
+      <div className="space-y-2">
+        {thresholds.map((threshold, idx) => {
+          const userDamage = participation?.damageDealt ?? 0;
+          const hasMetThreshold = userDamage >= threshold.damageRequired;
+          const rewardsClaimed = participation?.rewardsClaimed ?? [];
+          const alreadyClaimed = rewardsClaimed.includes(threshold.id);
+          const rewardList = getRewardArray(threshold.rewards);
+
+          return (
+            <div
+              key={threshold.id}
+              className={`rounded border p-3 text-sm ${hasMetThreshold && !alreadyClaimed ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20" : "border-transparent"}`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span
+                      className={`font-medium ${hasMetThreshold ? "text-green-600 dark:text-green-400" : ""}`}
+                    >
+                      Tier {idx + 1}: {threshold.damageRequired.toLocaleString()} damage
+                    </span>
+                  </div>
+                  {rewardList.length > 0 && (
+                    <p className="text-muted-foreground text-xs">
+                      {rewardList.join(" • ")}
+                    </p>
+                  )}
+                </div>
+                <div className="ml-2 flex items-center gap-2">
+                  {alreadyClaimed ? (
+                    <span className="flex items-center gap-1 text-muted-foreground">
+                      <Check className="h-4 w-4" />
+                      Claimed
+                    </span>
+                  ) : hasMetThreshold ? (
+                    <Button
+                      size="sm"
+                      onClick={() => onClaim(threshold.id)}
+                      disabled={claimPending}
+                    >
+                      <Gift className="mr-1 h-3 w-3" />
+                      {claimPending ? "Claiming..." : "Claim"}
+                    </Button>
+                  ) : (
+                    <span className="text-muted-foreground text-xs">
+                      {Math.max(
+                        0,
+                        threshold.damageRequired - userDamage,
+                      ).toLocaleString()}{" "}
+                      more
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// --- RaidLeaderboard Component ---
+
+interface RaidLeaderboardProps {
+  leaderboard: RouterOutputs["raids"]["getRaidLeaderboard"]["participations"];
+}
+
+/** Display raid damage standings while retaining entries for deleted accounts. */
+const RaidLeaderboard: React.FC<RaidLeaderboardProps> = ({ leaderboard }) => {
+  return (
+    <div className="rounded-lg border p-3">
+      <h4 className="mb-2 flex items-center gap-2 font-medium">
+        <Trophy className="h-4 w-4" />
+        Damage Leaderboard
+      </h4>
+      <div className="space-y-2">
+        {leaderboard.map((entry) => {
+          const username = entry.user?.username ?? "Deleted User";
+          const avatar = entry.user?.avatar ?? null;
+          return (
+            <div
+              key={entry.id}
+              className="flex items-center justify-between rounded bg-muted/50 p-2"
+            >
+              <div className="flex items-center gap-2">
+                <span className="w-6 font-bold">{entry.rank}</span>
+                <AvatarImage
+                  href={avatar}
+                  alt={username}
+                  size={24}
+                  className="h-6 w-6"
+                />
+                <span className="text-sm">{username}</span>
+              </div>
+              <span className="font-medium text-sm">
+                {entry.damageDealt.toLocaleString()}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // --- RaidTeamsDisplay Component ---
-
-interface RaidTeamMember {
-  slot: number;
-  visibleId: string;
-  username: string;
-  avatar: string | null;
-}
-
-interface RaidTeam {
-  id: string;
-  createdAt: Date;
-  members: RaidTeamMember[];
-  canJoin: boolean;
-  isClaiming?: boolean;
-}
 
 interface RaidTeamsDisplayProps {
   activeTeams: RaidTeam[];
@@ -1017,3 +1039,6 @@ const RaidEmptySlot: React.FC<RaidEmptySlotProps> = ({
 };
 
 export default RaidBrowser;
+
+type RaidTeam = RouterOutputs["raids"]["getActiveRaidTeams"]["teams"][number];
+type RaidDetails = RouterOutputs["raids"]["getRaidDetails"];

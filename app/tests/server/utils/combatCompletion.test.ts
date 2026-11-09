@@ -1,19 +1,29 @@
 import { afterEach, expect, it, vi } from "bun:test";
+import * as Sentry from "@sentry/nextjs";
 import type { Redis } from "@upstash/redis";
-import * as Sentry from "@sentry/node";
 import type { CombatResult, ReturnedBattle } from "@/libs/combat/types";
 import { createCombatCompletionStore } from "@/server/utils/combatCompletion";
-import { makeCompleteBattle } from "../../libs/combat/helpers/battleScenario";
+import { makeCompleteBattle } from "../../setup/combat";
 import { hasLocalRedis, startLocalRedis } from "../../setup/localRedis";
 
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 const fixture = () => {
   const entries = new Map<string, unknown>();
-  const set = vi.fn(async (key: string, value: unknown, _options: { ex: number }) => { entries.set(key, value); return "OK"; });
+  const set = vi.fn(async (key: string, value: unknown, _options: { ex: number }) => {
+    entries.set(key, value);
+    return "OK";
+  });
   const get = vi.fn(async (key: string) => entries.get(key) ?? null);
   const store = createCombatCompletionStore({ get, set } as unknown as Redis);
-  const battle = makeCompleteBattle({ id: "arena-result", battleType: "ARENA", updatedAt: new Date("2026-11-06T10:00:00Z") }) as unknown as ReturnedBattle;
+  const battle = makeCompleteBattle({
+    id: "arena-result",
+    battleType: "ARENA",
+    updatedAt: new Date("2026-11-06T10:00:00Z"),
+  }) as unknown as ReturnedBattle;
   const result = { outcome: "Won", money: 58, experience: 5.45 } as CombatResult;
   return { store, battle, result, get, set, entries };
 };
@@ -70,17 +80,22 @@ it("keeps committed action responses usable when receipt storage is unavailable"
   expect(report).toHaveBeenCalledTimes(2);
 });
 
-it.skipIf(!hasLocalRedis)("round trips through the production Redis client with a bounded expiry", async () => {
-  const { redis, close } = await startLocalRedis("combat-completion");
-  const { battle, result } = fixture();
-  const store = createCombatCompletionStore(redis);
-  try {
-    await store.save("player", battle, result);
-    expect(await store.recover("player", battle.id)).toEqual({ battle, result });
-    const [key] = await redis.keys("combat-completion:*");
-    expect(key).toBeDefined();
-    const ttl = await redis.ttl(key!);
-    expect(ttl).toBeGreaterThan(590);
-    expect(ttl).toBeLessThanOrEqual(600);
-  } finally { close(); }
-});
+it.skipIf(!hasLocalRedis)(
+  "round trips through the production Redis client with a bounded expiry",
+  async () => {
+    const { redis, close } = await startLocalRedis("combat-completion");
+    const { battle, result } = fixture();
+    const store = createCombatCompletionStore(redis);
+    try {
+      await store.save("player", battle, result);
+      expect(await store.recover("player", battle.id)).toEqual({ battle, result });
+      const [key] = await redis.keys("combat-completion:*");
+      expect(key).toBeDefined();
+      const ttl = await redis.ttl(key!);
+      expect(ttl).toBeGreaterThan(590);
+      expect(ttl).toBeLessThanOrEqual(600);
+    } finally {
+      close();
+    }
+  },
+);

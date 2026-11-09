@@ -1,7 +1,9 @@
 import { z } from "zod";
 import {
   AdjustableBasicActions,
+  type AttackMethod,
   AttackMethods,
+  type AttackTarget,
   AttackTargets,
   type BasicElement,
   BattleUsageTypes,
@@ -10,6 +12,7 @@ import {
   type CombatStatName,
   DIFFUSE_DEFAULT_DELAY_ROUNDS,
   DIFFUSE_MAX_PERCENTAGE,
+  ELEMENTAL_SEAL_AP_COST,
   ElementNames,
   GeneralTypes,
   getCombatStatCap,
@@ -37,6 +40,7 @@ import {
   SAGE_MASTERY_EXP_CAP,
   SAGE_MODE_MAX_LEVEL,
   SHIELD_MAX_HEALTH,
+  SKILL_TREE_MAX_TIER,
   SkillTreeEntryTypes,
   SkillTreePathTypes,
   SkillTreeTargets,
@@ -94,8 +98,8 @@ const tagType = <T extends string>(tag: T) => z.literal(tag).prefault(tag);
  * Battle Descriptions use the following variables:
  * https://www.scribbr.com/nouns-and-pronouns/pronouns/
  *
- * %user - the name of the one who is affected by the effect
- * %target - the name of the one who is affected by the effect
+ * %user - the acting user's name
+ * %target - the targets' names, comma-joined
  * %user_subject - he/she
  * %target_subject - he/she
  * %user_object - him/her
@@ -104,12 +108,10 @@ const tagType = <T extends string>(tag: T) => z.literal(tag).prefault(tag);
  * %target_posessive - his/hers
  * %user_reflexive - himself/herself
  * %target_reflexive - himself/herself
- * %attacker - a character attacking the target
- * %rounds - the number of rounds the effect will last
- * %amount - the amount of the effect
- * %affected - the stats or pools that are affected by the effect
- * %changetype - the type of change (increased or decreased)
- * %location - the location of the action
+ * %location - the location of the action, as [row, col]
+ *
+ * Target pronouns take the plural forms (they/them/theirs/themselves) when several
+ * users are targeted; substitution happens in actions.ts.
  */
 
 /******************** */
@@ -129,7 +131,10 @@ const BaseAttributes = {
   // Timing controls
   rounds: z.coerce.number().int().min(0).max(100).optional(),
   timeTracker: z.record(z.string(), z.coerce.number()).optional(),
-  // Power controls. Has different meanings depending on calculation
+  // Power controls. Power's meaning depends on calculation:
+  // static: directly equates to the amount returned
+  // percentage: power is returned as a percentage
+  // formula: power is used in stats-based formula to calculate return value
   power: z.coerce.number().min(-100).max(100).prefault(1),
   powerPerLevel: z.coerce.number().min(-1).max(1).prefault(0),
   // Used for indicating offensive / defensive effect
@@ -279,10 +284,6 @@ const statTypesField = z.array(
 );
 
 const IncludeStats = {
-  // Power has the following meaning depending on calculation
-  // static: directly equates to the amount returned
-  // percentage: power is returned as a percentage
-  // formula: power is used in stats-based formula to calculate return value
   statTypes: statTypesField.optional(),
   ...IncludeGeneralsAndElements,
 };
@@ -964,7 +965,7 @@ export const StealthTag = simpleTag(
 
 export const ElementalSealTag = simpleTag(
   "elementalseal",
-  "Seals the target's ability to use all elemental 60 AP jutsu",
+  `Seals the target's ability to use all elemental ${ELEMENTAL_SEAL_AP_COST} AP jutsu`,
 );
 
 export const StunPreventTag = z.object({
@@ -1296,6 +1297,10 @@ export type EffectType = (typeof tagTypes)[number];
 
 // clearprevent, cleanseprevent and injectjutsus are deliberately unclassified, so
 // clear/cleanse cannot remove their own prevention effects.
+// These sets decide what clear (positive), cleanse (negative), copy (positive) and
+// mirror (negative) act on. They differ from questBuffTypes / questDebuffTypes:
+// moveprevent is in both sets, stun is a quest debuff but in neither set, and
+// summonprevent is a quest buff but classified negative here.
 const POSITIVE_USER_EFFECT_TYPES: ReadonlySet<string> = new Set([
   "absorb",
   "consume",
@@ -1382,11 +1387,12 @@ export const getTagSchema = (type: ZodAllTags["type"]) => {
 };
 
 /**
- * Refiner object, which is used to refine the data in the battle object
+ * Fields shared by jutsu and item validators for cross-field targeting checks in
+ * SuperRefineBase.
  */
 interface ContentBaseValidatorType {
-  target: (typeof AttackTargets)[number];
-  method: (typeof AttackMethods)[number];
+  target: AttackTarget;
+  method: AttackMethod;
   range?: number;
   coordinateTargeting?: CoordinateTargeting | null;
   methodSize?: MethodSize | null;
@@ -1987,7 +1993,7 @@ export const SkillTreeValidator = z
     image: z.string(),
     description: z.string(),
     target: z.enum(SkillTreeTargets).prefault("SELF"),
-    tier: z.coerce.number().int().min(1).max(10),
+    tier: z.coerce.number().int().min(1).max(SKILL_TREE_MAX_TIER),
     requiredSkillIds: z.array(z.string()),
     costSkillPoints: z.coerce.number().int().min(1),
     pathType: z.enum(SkillTreePathTypes).prefault("SKILL"),

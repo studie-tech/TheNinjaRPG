@@ -34,7 +34,9 @@ describe("isWarAllies", () => {
 
   it("separates opposing sides and outsiders", () => {
     expect(isWarAllies(wars, ...villagers("attacker", "defender"))).toBe(false);
-    expect(isWarAllies(wars, ...villagers("attacker-ally", "defender-ally"))).toBe(false);
+    expect(isWarAllies(wars, ...villagers("attacker-ally", "defender-ally"))).toBe(
+      false,
+    );
     expect(isWarAllies(wars, ...villagers("attacker", "neutral"))).toBe(false);
   });
 
@@ -60,9 +62,9 @@ describe("isWarAllies", () => {
       ] as BattleWar[];
 
     it("counts a war once combat has started", () => {
-      expect(isWarAllies(objectiveWar(), ...villagers("attacker", "attacker-ally"))).toBe(
-        true,
-      );
+      expect(
+        isWarAllies(objectiveWar(), ...villagers("attacker", "attacker-ally")),
+      ).toBe(true);
     });
 
     it("ignores wars still in their notice period or past their deadline", () => {
@@ -88,9 +90,9 @@ describe("isWarAllies", () => {
       const hired = objectiveWar({
         warMercenaries: [{ userId: "merc", sideVillageId: "attacker" }],
       });
-      expect(
-        isWarAllies(hired, player("defender", "merc"), player("defender")),
-      ).toBe(false);
+      expect(isWarAllies(hired, player("defender", "merc"), player("defender"))).toBe(
+        false,
+      );
     });
 
     it("excludes a viewer contracted to another war from native participation", () => {
@@ -121,21 +123,23 @@ describe("canJoinWar", () => {
     [{ villageIdA: "joining", villageIdB: "warring", status }] as Relationships;
 
   it("admits a neutral or allied village into a war its partner fights", () => {
-    expect(canJoinWar(war(), [], joining(), warring)).toEqual({ check: true, message: "" });
+    expect(canJoinWar(war(), [], joining(), warring)).toEqual({
+      check: true,
+      message: "",
+    });
     expect(canJoinWar(war(), relation("ALLY"), joining(), warring).check).toBe(true);
     expect(
-      canJoinWar(war(), [], joining({ type: "HIDEOUT", allianceSystem: false }), warring)
-        .check,
+      canJoinWar(
+        war(),
+        [],
+        joining({ type: "HIDEOUT", allianceSystem: false }),
+        warring,
+      ).check,
     ).toBe(true);
   });
 
   it.each([
-    [
-      "Raids do not accept war allies",
-      war({ type: "WAR_RAID" }),
-      [],
-      joining(),
-    ],
+    ["Raids do not accept war allies", war({ type: "WAR_RAID" }), [], joining()],
     [
       "Cannot join war, already in it",
       war({ type: "WAR_RAID", attackerVillageId: "joining" }),
@@ -150,7 +154,10 @@ describe("canJoinWar", () => {
     ],
     [
       "Cannot join war, faction already in war",
-      war({ defenderVillageId: "other", warAllies: [{ villageId: "joining" }] as War["warAllies"] }),
+      war({
+        defenderVillageId: "other",
+        warAllies: [{ villageId: "joining" }] as War["warAllies"],
+      }),
       [],
       joining(),
     ],

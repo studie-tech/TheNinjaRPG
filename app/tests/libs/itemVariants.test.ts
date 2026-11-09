@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { applyActiveVariant } from "@/libs/item";
 import { DEFAULT_FURNITURE_DATA, type FurnitureData } from "@/validators/itemFurniture";
 
@@ -17,32 +17,80 @@ describe("applyActiveVariant", () => {
       footprint: { x: 20, y: 70, width: 60, height: 20 },
     };
     const furnitureData = { ...DEFAULT_FURNITURE_DATA, geometry };
-    const variant = { id: "red", image: "/red.webp", furnitureData: { geometry: { ...geometry, aspectRatio: 1 }, views: {} } };
+    const variant = {
+      id: "red",
+      image: "/red.webp",
+      furnitureData: { geometry: { ...geometry, aspectRatio: 1 }, views: {} },
+    };
     const item = { ...baseItem, furnitureData, variants: [variant] };
-    expect(applyActiveVariant({ activeVariantId: "red", item }).furnitureData.geometry?.aspectRatio).toBe(1);
-    expect(applyActiveVariant({ activeVariantId: "red", item: { ...item, variants: [{ id: "red", image: "/red.webp" }] } }).furnitureData.geometry).toBeUndefined();
-    expect(applyActiveVariant({ activeVariantId: null, item }).furnitureData.geometry).toBe(geometry);
+    expect(
+      applyActiveVariant({ activeVariantId: "red", item }).furnitureData.geometry
+        ?.aspectRatio,
+    ).toBe(1);
+    expect(
+      applyActiveVariant({
+        activeVariantId: "red",
+        item: { ...item, variants: [{ id: "red", image: "/red.webp" }] },
+      }).furnitureData.geometry,
+    ).toBeUndefined();
+    expect(
+      applyActiveVariant({ activeVariantId: null, item }).furnitureData.geometry,
+    ).toBe(geometry);
   });
 
   it("replaces furniture directions with the active skin's complete set without mutating mechanics", () => {
-    const furnitureData: FurnitureData = { ...DEFAULT_FURNITURE_DATA, action: "storage", views: { "90": { image: "/base-90.webp" } } };
-    const item = { ...baseItem, furnitureData, variants: [{
-      id: "red", image: "/red.webp", furnitureData: { width: 20, groundAnchor: 90, views: { "180": { image: "/red-180.webp", width: 18 } } },
-    }] };
+    const furnitureData: FurnitureData = {
+      ...DEFAULT_FURNITURE_DATA,
+      action: "storage",
+      views: { "90": { image: "/base-90.webp" } },
+    };
+    const item = {
+      ...baseItem,
+      furnitureData,
+      variants: [
+        {
+          id: "red",
+          image: "/red.webp",
+          furnitureData: {
+            width: 20,
+            groundAnchor: 90,
+            views: { "180": { image: "/red-180.webp", width: 18 } },
+          },
+        },
+      ],
+    };
     const result = applyActiveVariant({ activeVariantId: "red", item });
-    expect(result.furnitureData).toEqual({ ...furnitureData, width: 20, groundAnchor: 90, views: { "180": { image: "/red-180.webp", width: 18 } } });
+    expect(result.furnitureData).toEqual({
+      ...furnitureData,
+      width: 20,
+      groundAnchor: 90,
+      views: { "180": { image: "/red-180.webp", width: 18 } },
+    });
     expect(item.furnitureData.views).toEqual({ "90": { image: "/base-90.webp" } });
-    expect(applyActiveVariant({ activeVariantId: null, item }).furnitureData).toBe(furnitureData);
+    expect(applyActiveVariant({ activeVariantId: null, item }).furnitureData).toBe(
+      furnitureData,
+    );
   });
 
-  it.each([undefined, null, { views: {} }])("uses only the active skin's canonical image when its directions are missing: %j", (variantData) => {
-    const furnitureData: FurnitureData = { ...DEFAULT_FURNITURE_DATA, views: { "90": { image: "/base-90.webp" } } };
-    const result = applyActiveVariant({ activeVariantId: "red", item: {
-      ...baseItem, furnitureData, variants: [{ id: "red", image: "/red.webp", furnitureData: variantData }],
-    } });
-    expect(result.image).toBe("/red.webp");
-    expect(result.furnitureData.views).toEqual({});
-  });
+  it.each([undefined, null, { views: {} }])(
+    "uses only the active skin's canonical image when its directions are missing: %j",
+    (variantData) => {
+      const furnitureData: FurnitureData = {
+        ...DEFAULT_FURNITURE_DATA,
+        views: { "90": { image: "/base-90.webp" } },
+      };
+      const result = applyActiveVariant({
+        activeVariantId: "red",
+        item: {
+          ...baseItem,
+          furnitureData,
+          variants: [{ id: "red", image: "/red.webp", furnitureData: variantData }],
+        },
+      });
+      expect(result.image).toBe("/red.webp");
+      expect(result.furnitureData.views).toEqual({});
+    },
+  );
 
   // ── no active variant ──────────────────────────────────────────────────────
 

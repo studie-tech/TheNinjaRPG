@@ -12,7 +12,8 @@ import { secondsFromNow } from "@/utils/time";
  * @param client - The DrizzleClient instance used for querying the database.
  * @param types - An array of user request types to fetch.
  * @param [secondsBack] - Optional. The number of seconds in the past to consider when fetching requests.
- * @param [id] - Optional. The ID of the user to filter requests by.
+ * @param [id] - Optional. User ID(s) that must be the sender or receiver.
+ * @param [relatedId] - Optional. The related entity ID the requests must carry.
  * @returns - A Promise that resolves to an array of user requests matching the specified criteria.
  */
 export const fetchRequests = async (
@@ -92,6 +93,10 @@ export const updateUserRequestForUpdateRequestState = (
  * @param senderId - The ID of the sender.
  * @param receiverId - The ID of the receiver.
  * @param type - The type of the user request.
+ * @param [value] - Optional. The request's numeric value.
+ * @param [relatedId] - Optional. The related entity ID.
+ * @param [useRankedRules] - Optional. Whether the challenge uses ranked rules.
+ * @param [spectatable] - Optional. Whether the challenge can be spectated.
  * @returns A Promise that resolves when the request is successfully inserted.
  */
 export const insertRequest = async (

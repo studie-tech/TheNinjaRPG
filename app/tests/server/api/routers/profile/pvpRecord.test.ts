@@ -1,9 +1,9 @@
-import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { item, userItem, userData } from "@/drizzle/schema";
+import { item, userData, userItem } from "@/drizzle/schema";
 import { profileRouter } from "@/server/api/routers/profile";
-import { insertUsers, insertItems, insertUserItems } from "../../../../setup/factories";
+import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,
@@ -11,7 +11,7 @@ import {
   resetTables,
 } from "../../../../setup/testDatabase";
 
-describeWithDatabase("public PvP record visibility", () => {
+describeWithDatabase("public profile privacy", () => {
   beforeEach(async () => {
     stubRateLimitTransport();
     await resetTables(userItem, item, userData);
@@ -31,12 +31,28 @@ describeWithDatabase("public PvP record visibility", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(["viewer", "signed-out"])("does not expose private furniture placements through public profiles to %s", async (viewer) => {
-    await insertItems([{ id: "private-chair", name: "Private chair", itemType: "FURNITURE" }]);
-    await insertUserItems([{ id: "private-placement", userId: "owner", itemId: "private-chair", homeX: 50, homeY: 50, homeRoom: "main" }]);
-    const result = await (await callerFor(profileRouter, viewer)).getPublicUser({ userId: "owner" });
-    expect(result?.items).toEqual([]);
-  });
+  it.each(["viewer", "signed-out"])(
+    "does not expose private furniture placements through public profiles to %s",
+    async (viewer) => {
+      await insertItems([
+        { id: "private-chair", name: "Private chair", itemType: "FURNITURE" },
+      ]);
+      await insertUserItems([
+        {
+          id: "private-placement",
+          userId: "owner",
+          itemId: "private-chair",
+          homeX: 50,
+          homeY: 50,
+          homeRoom: "main",
+        },
+      ]);
+      const result = await (await callerFor(profileRouter, viewer)).getPublicUser({
+        userId: "owner",
+      });
+      expect(result?.items).toEqual([]);
+    },
+  );
 
   it.each(["viewer", "signed-out"])("hides private records from %s", async (viewer) => {
     const profile = await (await callerFor(profileRouter, viewer)).getPublicUser({
@@ -55,7 +71,11 @@ describeWithDatabase("public PvP record visibility", () => {
   });
 
   it("publishes the record only after its owner opts in", async () => {
-    expect(await (await callerFor(profileRouter, "owner")).updatePreferences({ showPvpRecord: true })).toMatchObject({ success: true, userPatch: { showPvpRecord: true } });
+    expect(
+      await (await callerFor(profileRouter, "owner")).updatePreferences({
+        showPvpRecord: true,
+      }),
+    ).toMatchObject({ success: true, userPatch: { showPvpRecord: true } });
     const profile = await (await callerFor(profileRouter, "viewer")).getPublicUser({
       userId: "owner",
     });

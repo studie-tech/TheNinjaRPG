@@ -2,7 +2,7 @@ import { jutsu } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { executeSqlDump } from "./sqlDump";
 
-// Delete anything not in above list, and insert those missing
+/** Reloads the Jutsu catalogue from its checked-in SQL content dump. */
 export const seedJutsus = async (client: DrizzleClient) => {
   console.log("\nClearing old jutsus...");
   await client.delete(jutsu);

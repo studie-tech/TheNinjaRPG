@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { BagCapacity, BagTabs } from "@/layout/items/BagTabs";
 
 beforeEach(() => {
@@ -25,7 +25,13 @@ it("names each bag with its item count and marks the open one", () => {
   expect(screen.getByRole("group", { name: "Bags" })).toBeDefined();
   expect(screen.queryByRole("tablist")).toBeNull();
   const buttons = screen.getAllByRole("button");
-  expect(buttons.map((button) => button.textContent)).toEqual(["All · 58", "Gear · 16", "Event · 2", "Materials · 31", "Cooking · 9"]);
+  expect(buttons.map((button) => button.textContent)).toEqual([
+    "All · 58",
+    "Gear · 16",
+    "Event · 2",
+    "Materials · 31",
+    "Cooking · 9",
+  ]);
   expect(buttons[1]?.getAttribute("aria-pressed")).toBe("true");
   expect(buttons[0]?.getAttribute("aria-pressed")).toBe("false");
 });
@@ -50,8 +56,17 @@ it("reopens the remembered bag after mount", () => {
 it("restores the home bag when the reused switcher changes inventories", () => {
   window.localStorage.setItem("homeStorageSelection", "materials");
   const onHomeChange = vi.fn();
-  const { rerender } = render(<BagTabs bags={bags} active="normal" onChange={vi.fn()} />);
-  rerender(<BagTabs bags={bags} active="all" onChange={onHomeChange} storageKey="homeStorageSelection" />);
+  const { rerender } = render(
+    <BagTabs bags={bags} active="normal" onChange={vi.fn()} />,
+  );
+  rerender(
+    <BagTabs
+      bags={bags}
+      active="all"
+      onChange={onHomeChange}
+      storageKey="homeStorageSelection"
+    />,
+  );
   expect(onHomeChange).toHaveBeenCalledWith("materials");
 });
 
@@ -64,7 +79,8 @@ it("shows the bag's used and total slots", () => {
 
 it("explains a bag over its limit", () => {
   render(<BagCapacity used={37} max={20} />);
-  const capacity = screen.getByText("37 of 20 bag slots used, 17 over the limit").parentElement!;
+  const capacity = screen.getByText("37 of 20 bag slots used, 17 over the limit")
+    .parentElement!;
   expect(capacity.getAttribute("data-over")).toBe("true");
   expect(capacity.getAttribute("title")).toBe(
     "Rewards and drops can go past the limit. Until you are back under it, you cannot buy items or take them out of your home.",
@@ -85,5 +101,7 @@ it("marks a bag over its limit in its button", () => {
   const gear = screen.getByRole("button", { name: /^Gear · 37/ });
   expect(gear.getAttribute("data-over")).toBe("true");
   expect(gear.textContent).toBe("Gear · 37 (over limit)");
-  expect(screen.getByRole("button", { name: "All · 40" }).getAttribute("data-over")).toBeNull();
+  expect(
+    screen.getByRole("button", { name: "All · 40" }).getAttribute("data-over"),
+  ).toBeNull();
 });

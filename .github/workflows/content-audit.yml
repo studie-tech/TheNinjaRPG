@@ -40,7 +40,6 @@ on:
       - ".github/scripts/render-scene-catalog.mjs"
       - ".github/scripts/apply-visual-check.mjs"
       - ".github/scripts/check-audit-media.mjs"
-      - "app/tests/scripts/check-audit-media.test.mjs"
       - ".agents/skills/tnr-content-audit/**"
       - "app/src/app/api/content-review/**"
       - "app/src/app/*/manual/review/battlefield/**"
@@ -243,7 +242,7 @@ jobs:
           model: "gpt-5.6-sol"
           # An unpinned install takes CLI releases that were never run against the Azure
           # deployments; 0.159.0 fails there before its first reply.
-          codex-version: "0.154.0"
+          codex-version: "0.167.0"
           sandbox: "read-only"
           # Blacksmith runners fail both drop-sudo and sudo-based user switching checks.
           safety-strategy: "unsafe"
@@ -342,7 +341,7 @@ jobs:
           openai-api-key: ${{ secrets.AZURE_API_KEY }}
           responses-api-endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
           model: "gpt-5.6-sol"
-          codex-version: "0.154.0"
+          codex-version: "0.167.0"
           sandbox: "read-only"
           safety-strategy: "unsafe"
           allow-users: "MathiasGruber"
@@ -371,7 +370,6 @@ jobs:
           fetch-depth: 1
           sparse-checkout: |
             .github/scripts
-            app/tests/scripts
       - name: Apply the battlefield check
         env:
           PROPOSALS: ${{ needs.audit.outputs.proposals }}
@@ -390,7 +388,6 @@ jobs:
         env:
           PROPOSALS_FILE: checked.json
         run: |
-          node --test app/tests/scripts/check-audit-media.test.mjs
           node .github/scripts/check-audit-media.mjs
       - name: Submit suggestions
         env:

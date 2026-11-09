@@ -1,4 +1,4 @@
-import type { Clerk } from "@clerk/shared/types";
+import type { Clerk } from "@clerk/nextjs/types";
 import type { TRPCLink } from "@trpc/client";
 import { TRPCClientError } from "@trpc/client";
 import { observable } from "@trpc/server/observable";

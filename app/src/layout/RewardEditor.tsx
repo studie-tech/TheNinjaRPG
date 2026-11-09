@@ -1,24 +1,39 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { nanoid } from "nanoid";
+import type React from "react";
 import { useEffect, useState } from "react";
-import { type UseFormReturn, useWatch } from "react-hook-form";
+import { type UseFormReturn, useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ContentType } from "@/drizzle/constants";
-import { EditContent, type FormEntry, RewardFormWrapper } from "@/layout/EditContent";
+import {
+  EditContent,
+  FORM_LABEL_MAP,
+  type FormEntry,
+  rewardCatalogFormEntry,
+  unwrapFieldSchema,
+} from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
 import { getRewardPreview } from "@/libs/objectives";
 import { getActiveRewardNodes } from "@/libs/rewardNodes";
 import { showFormErrorsToast } from "@/libs/toast";
-import { isStaffRole } from "@/utils/permissions";
+import { calculateContentDiff } from "@/utils/diff";
+import { canAwardReputation, isStaffRole } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 import {
+  MAX_REWARD_PACKAGES,
   QuestReward,
   type RewardPackageSnapshotType,
 } from "@/validators/rewardPackages";
-import { ObjectiveReward, rewardFields } from "@/validators/rewards";
+import {
+  ObjectiveReward,
+  type ObjectiveRewardType,
+  rewardFields,
+} from "@/validators/rewards";
 
 /** Edit grouped rewards, repeat groups as independent nodes, and attach catalog snapshots. */
 export const RewardEditor = ({
@@ -105,7 +120,7 @@ export const RewardEditor = ({
     form.setValue("reward_packages", next, { shouldDirty: true, shouldValidate: true });
   /** Validate only the copied group's fields, leaving invalid drafts available for correction. */
   const copyNode = (node: (typeof groups)[number]) => {
-    if (packages.length >= 50) return;
+    if (packages.length >= MAX_REWARD_PACKAGES) return;
     const rewards = ObjectiveReward.safeParse(
       Object.fromEntries(node.fields.map((field) => [field, values[field]])),
     );
@@ -166,7 +181,7 @@ export const RewardEditor = ({
             </select>
             <Button
               type="button"
-              disabled={!source || packages.length >= 50}
+              disabled={!source || packages.length >= MAX_REWARD_PACKAGES}
               onClick={() => {
                 // Each attachment owns its payload and identity; catalog edits cannot change it.
                 if (source)
@@ -214,7 +229,7 @@ export const RewardEditor = ({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={packages.length >= 50}
+                  disabled={packages.length >= MAX_REWARD_PACKAGES}
                   onClick={() =>
                     setPackages([
                       ...packages,
@@ -271,7 +286,9 @@ export const RewardEditor = ({
           {groups
             .filter(
               (node) =>
-                (node.id !== "milestone" && allowPackages && packages.length < 50) ||
+                (node.id !== "milestone" &&
+                  allowPackages &&
+                  packages.length < MAX_REWARD_PACKAGES) ||
                 !activeNodes.some((active) => active.id === node.id),
             )
             .map((node) => (
@@ -301,7 +318,7 @@ export const RewardEditor = ({
               type="button"
               size="sm"
               variant="outline"
-              disabled={packages.length >= 50}
+              disabled={packages.length >= MAX_REWARD_PACKAGES}
               onClick={() => copyNode(node)}
             >
               Add Another Node
@@ -335,8 +352,140 @@ export const RewardEditor = ({
   );
 };
 
+/**
+ * A wrapper component around EditContent for creating a form for reward fields
+ * @returns React.ReactNode
+ */
+export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
+  const { idx, reward, rewards, setRewards, hideFields = [] } = props;
+
+  const { data: rewardUser } = useUserData();
+  // Parse reward with schema
+  const parsedReward = ObjectiveReward.safeParse(reward);
+  const shownReward = parsedReward.success ? parsedReward.data : reward;
+
+  // Queries for db-backed fields
+  const { data: itemData } = api.item.getAllNames.useQuery();
+  const { data: jutsuData } = api.jutsu.getAllNames.useQuery();
+  const { data: badgeData } = api.badge.getAll.useQuery();
+  const { data: titleData } = api.title.getAllNames.useQuery();
+  const { data: bloodlineData } = api.bloodline.getAllNames.useQuery();
+  const { data: sageModeData } = api.sageMode.getAllNames.useQuery();
+
+  // Form for handling the reward
+  const form = useForm<any>({
+    defaultValues: shownReward,
+    values: shownReward,
+    resolver: zodResolver(ObjectiveReward),
+    mode: "all",
+  });
+
+  // Watch form values
+  const watchAll = useWatch({ control: form.control });
+
+  // Sync changed drafts; grouped editors include invalid values for parent validation.
+  useEffect(() => {
+    const newRewards = [...rewards];
+    const parsed = ObjectiveReward.safeParse(watchAll);
+    if (parsed.success || props.grouped) {
+      newRewards[idx] = parsed.success
+        ? parsed.data
+        : (watchAll as ObjectiveRewardType);
+      const diff = calculateContentDiff(rewards, newRewards);
+      if (diff.length > 0) {
+        setRewards(newRewards);
+        // Keep invalid drafts without repeatedly resetting NaN values that diff as changed.
+        if (parsed.success) form.reset(watchAll);
+      }
+    }
+  }, [watchAll]);
+
+  // Attributes on this reward schema
+  type Attribute = keyof ObjectiveRewardType;
+  const attributes = Object.keys(ObjectiveReward.shape) as Attribute[];
+
+  // Generate form data dynamically
+  const rewardCatalogs = {
+    items: itemData,
+    jutsus: jutsuData,
+    bloodlines: bloodlineData,
+    sageModes: sageModeData,
+    titles: titleData,
+    badges: badgeData?.data,
+  };
+  const formData: FormEntry<Attribute>[] = attributes
+    .filter((value) => !hideFields.includes(value))
+    .map((value) => {
+      const innerType = unwrapFieldSchema(ObjectiveReward.shape[value]);
+      const rewardCatalogEntry = rewardCatalogFormEntry(value, rewardCatalogs);
+      if (rewardCatalogEntry) return rewardCatalogEntry;
+
+      // Special handling for db-backed array fields
+      if (
+        (value === "reward_hunter_items_ids" ||
+          value === "reward_gathering_items_ids") &&
+        itemData
+      ) {
+        return {
+          id: value,
+          values: itemData,
+          multiple: true,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "db_values" as const,
+        };
+      } else if (innerType instanceof z.ZodNumber) {
+        return {
+          id: value,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "number" as const,
+          readonly:
+            value === "reward_reputation" &&
+            !canAwardReputation(rewardUser?.role ?? "USER"),
+        };
+      } else if (innerType instanceof z.ZodBoolean) {
+        return {
+          id: value,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "boolean" as const,
+        };
+      } else if (innerType instanceof z.ZodEnum) {
+        return {
+          id: value,
+          type: "str_array" as const,
+          values: innerType.options as string[],
+          label: FORM_LABEL_MAP[value] ?? value,
+        };
+      } else {
+        return {
+          id: value,
+          label: FORM_LABEL_MAP[value] ?? value,
+          type: "text" as const,
+        };
+      }
+    });
+
+  if (props.grouped)
+    return (
+      <RewardEditor
+        form={form}
+        formData={formData}
+        allowPackages={false}
+        hideFields={hideFields}
+      />
+    );
+  return (
+    <EditContent
+      fieldsOnly
+      schema={ObjectiveReward}
+      form={form}
+      formData={formData}
+      showSubmit={false}
+    />
+  );
+};
+
 /** Fallback groups expose every reward field even when no custom catalog node includes it. */
-export const DEFAULT_REWARD_NODES = [
+const DEFAULT_REWARD_NODES = [
   { id: "give-title", name: "Give Title", fields: ["reward_titles"] },
   {
     id: "currency",
@@ -397,3 +546,13 @@ export const DEFAULT_REWARD_NODES = [
     ],
   },
 ];
+
+interface RewardFormWrapperProps {
+  /** Use node groups for package payloads without recursively offering more packages. */
+  grouped?: boolean;
+  idx: number;
+  reward: ObjectiveRewardType;
+  rewards: ObjectiveRewardType[];
+  setRewards: (rewards: ObjectiveRewardType[]) => void;
+  hideFields?: string[];
+}

@@ -22,8 +22,7 @@ import { BloodlineValidator } from "@/validators/combat";
  * @param data
  */
 export const useBloodlineEditForm = (data: Bloodline, refetch: () => void) => {
-  // Case type
-  const bloodline = { ...data, effects: data.effects };
+  const bloodline = { ...data };
 
   // Form handling
   const submitContent = useContentSubmit();
@@ -35,7 +34,7 @@ export const useBloodlineEditForm = (data: Bloodline, refetch: () => void) => {
     resolver: zodResolver(BloodlineValidator),
   });
 
-  // Query for bloodlines and villages
+  // Query for villages
   const { data: villages, isPending: l1 } = api.village.getAllNames.useQuery(undefined);
 
   // Mutation for updating bloodline
@@ -62,7 +61,7 @@ export const useBloodlineEditForm = (data: Bloodline, refetch: () => void) => {
     name: "effects",
   });
 
-  // Handle updating of effects. This casting should be safe, and is a hack to make it work with MassEdit functionality types
+  // Handle updating of effects
   const setEffects = (newEffects: ZodAllTags[]) => {
     form.setValue("effects", newEffects, { shouldDirty: true });
   };

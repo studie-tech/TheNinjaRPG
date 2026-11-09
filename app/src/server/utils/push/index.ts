@@ -12,7 +12,7 @@ import {
  * push outage can never take a game action down with it.
  */
 
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/nextjs";
 import type { PushCategory, PushPlatform } from "@/drizzle/constants";
 import type { DrizzleClient } from "@/server/db";
 import * as apns from "./apns";

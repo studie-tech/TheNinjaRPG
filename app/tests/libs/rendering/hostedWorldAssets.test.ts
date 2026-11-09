@@ -1,6 +1,6 @@
 import { expect, it } from "bun:test";
-import bakedSources from "@/libs/rendering/bakedWorldSources.json";
 import lightFields from "@/libs/rendering/bakedVillageLightFields.json";
+import bakedSources from "@/libs/rendering/bakedWorldSources.json";
 import worldSources from "@/libs/rendering/worldAssetSources.json";
 import { isBunnyCdnUrl, textureImageUrl } from "@/utils/image";
 

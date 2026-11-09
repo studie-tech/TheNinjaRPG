@@ -64,7 +64,7 @@ const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => 
       const rows = Array.from(groups.entries()).map(([name, entries]) => {
         const outcomes = summarizeBattleOutcomes(entries);
 
-        // Extract AI ID from the name or use the aiUserId
+        // Every row of a group shares the AI's userId
         const aiUserId = entries[0]?.aiUserId ?? "";
 
         return {

@@ -1,5 +1,5 @@
-import { TRPCError } from "@trpc/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { TRPCError } from "@trpc/server";
 import { env } from "@/env/server.mjs";
 import {
   BOTID_BLOCKED_MESSAGE,
@@ -23,11 +23,11 @@ const checkBotId = getCheckBotId();
 vi.mock("botid/server", () => ({ checkBotId: getCheckBotId() }));
 
 import {
+  BOTID_DEEP_ANALYSIS_TIMEOUT_MS,
+  BOTID_TIMEOUT_MS,
   createBotIdGuard,
   enforceBotId,
   isBotIdEnforced,
-  BOTID_DEEP_ANALYSIS_TIMEOUT_MS,
-  BOTID_TIMEOUT_MS,
   runBotIdCheck,
   shouldGuardTrpcRequest,
   shouldLogBotIdTiming,
@@ -68,7 +68,10 @@ const records = () =>
   warn.mock.calls
     .map(([line]: unknown[]) => String(line))
     .filter((line: string) => line.startsWith("[botid] "))
-    .map((line: string) => JSON.parse(line.slice("[botid] ".length)) as Record<string, unknown>);
+    .map(
+      (line: string) =>
+        JSON.parse(line.slice("[botid] ".length)) as Record<string, unknown>,
+    );
 
 beforeEach(() => {
   warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -121,9 +124,9 @@ describe("BotID check level", () => {
   });
 
   it("checks a batch with account creation at the Deep Analysis level", () => {
-    expect(createBotIdGuard(["bank.transfer", "register.createCharacter"]).checkLevel).toBe(
-      "deepAnalysis",
-    );
+    expect(
+      createBotIdGuard(["bank.transfer", "register.createCharacter"]).checkLevel,
+    ).toBe("deepAnalysis");
     expect(createBotIdGuard(["bank.transfer"]).checkLevel).toBe("basic");
   });
 
@@ -218,7 +221,9 @@ describe("enforceBotId", () => {
     process.env.VERCEL_ENV = "preview";
     await expect(guardedMutation(bot).run()).resolves.toBeUndefined();
     env.BOTID_ENFORCE = "true";
-    await expect(guardedMutation(bot).run()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(guardedMutation(bot).run()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
   });
 
   it("fails open when BotID errors, logging without a Sentry event", async () => {
@@ -227,7 +232,9 @@ describe("enforceBotId", () => {
     await expect(
       withBotIdGuard(guard, () => enforceBotId(mutation)),
     ).resolves.toBeUndefined();
-    expect(records()).toMatchObject([{ event: "check_failed", reason: "fetch failed" }]);
+    expect(records()).toMatchObject([
+      { event: "check_failed", reason: "fetch failed" },
+    ]);
     expect(guard.needsFlush).toBe(false);
   });
 
@@ -371,13 +378,15 @@ describe("trpcPathsFromUrl", () => {
     expect(
       trpcPathsFromUrl("https://x.test/api/trpc/cdn/a.b,c.d?batch=1", "/api/trpc/cdn"),
     ).toEqual(["a.b", "c.d"]);
-    expect(trpcPathsFromUrl("https://x.test/api/trpc/cdn/", "/api/trpc/cdn")).toEqual([]);
+    expect(trpcPathsFromUrl("https://x.test/api/trpc/cdn/", "/api/trpc/cdn")).toEqual(
+      [],
+    );
   });
 
   it("keeps an undecodable path whole, so it can match nothing", () => {
-    expect(trpcPathsFromUrl("https://x.test/api/trpc/cdn/a%zz", "/api/trpc/cdn")).toEqual([
-      "a%zz",
-    ]);
+    expect(
+      trpcPathsFromUrl("https://x.test/api/trpc/cdn/a%zz", "/api/trpc/cdn"),
+    ).toEqual(["a%zz"]);
   });
 });
 
@@ -430,7 +439,10 @@ describe("BotID timing", () => {
 /** The client-side matcher botid@1.5 applies to a request's pathname. */
 const clientRegex = (routePath: string) =>
   new RegExp(
-    `^${routePath.replace(/[.?+^$[\]\\(){}|-]/g, "\\$&").split("*").join(".*")}$`,
+    `^${routePath
+      .replace(/[.?+^$[\]\\(){}|-]/g, "\\$&")
+      .split("*")
+      .join(".*")}$`,
   );
 
 describe("BotID protected procedures", () => {
@@ -438,7 +450,9 @@ describe("BotID protected procedures", () => {
     BOTID_PROTECTED_ROUTES.filter((route) => clientRegex(route.path).test(pathname));
 
   it("lists each procedure once", () => {
-    expect(new Set(BOTID_PROTECTED_PROCEDURES).size).toBe(BOTID_PROTECTED_PROCEDURES.length);
+    expect(new Set(BOTID_PROTECTED_PROCEDURES).size).toBe(
+      BOTID_PROTECTED_PROCEDURES.length,
+    );
   });
 
   it("attaches the challenge to protected mutations, alone or batched", () => {
@@ -477,7 +491,9 @@ describe("BotID client matcher with mixed check levels", () => {
       ["train.startTraining"],
     ]) {
       const route = firstMatch(`/api/trpc/${paths.join(",")}`);
-      expect(route?.advancedOptions.checkLevel).toBe(createBotIdGuard(paths).checkLevel);
+      expect(route?.advancedOptions.checkLevel).toBe(
+        createBotIdGuard(paths).checkLevel,
+      );
     }
   });
 });

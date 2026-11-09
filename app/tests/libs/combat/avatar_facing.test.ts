@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { getFacingDirection } from "@/libs/combat/util";
 import type { ReturnedUserState } from "@/libs/combat/types";
+import { getFacingDirection } from "@/libs/combat/util";
 
 /** Minimal battle user for facing checks. */
 const user = (overrides: Partial<ReturnedUserState>): ReturnedUserState =>
@@ -59,7 +59,6 @@ describe("getFacingDirection", () => {
     const alive = user({ userId: "p3", direction: "left", longitude: 2 });
     expect(getFacingDirection(ai, [ai, dead, fled, alive], "right")).toBe("left");
   });
-
 
   it("breaks distance ties on userId so the pick is stable across frames", () => {
     const ai = user({ userId: "ai", direction: "right", longitude: 5, latitude: 5 });

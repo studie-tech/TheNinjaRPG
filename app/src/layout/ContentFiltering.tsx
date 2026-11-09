@@ -1,6 +1,6 @@
 import { Filter, X } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { TriStateToggle } from "@/components/control/Toggle";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/select";
 import type { BattleType } from "@/drizzle/constants";
 import { BattleTypes } from "@/drizzle/constants";
-import { useDelayState } from "@/hooks/useDelayState";
 import { canChangeContent } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
 
@@ -36,40 +35,41 @@ import { useUserData } from "@/utils/UserContext";
  * - A buildFilter helper to emit API-ready filters
  *
  * Key guarantees:
- * - No hooks-in-loops (one state map + per-key debouncing)
+ * - No hooks-in-loops (one state map, one debounce over the typed inputs)
  * - Field keys and value unions are inferred from the schema (no any/unknown)
  */
 
 /** Discrete UI option for (single|multi)-select fields */
 export type Option<V extends string = string> = { value: V; label: string };
 
+/** Built-in option lists a select field can load instead of static options */
+export type FilteringDataSource =
+  | "bloodlines"
+  | "assets"
+  | "villages"
+  | "referralSources"
+  | "visitorUtmSources";
+
 // Field config types (discriminated unions ensure correct value types)
 
-/** Free-text input */
-export interface TextFieldConfig<Id extends string> {
+/** Members every field shares; `T` discriminates the field and `V` is its value. */
+interface BaseFieldConfig<Id extends string, T extends string, V> {
   id: Id;
   label: string;
-  type: "text";
-  defaultValue: string;
+  type: T;
+  defaultValue: V;
   filterKey?: string;
   doubleWidth?: boolean;
-  countActive?: (value: string) => number;
-  normalizeForFilter?: (value: string) => unknown;
+  countActive?: (value: V) => number;
+  normalizeForFilter?: (value: V) => unknown;
   visibleIf?: (ctx?: unknown) => boolean;
 }
 
+/** Free-text input */
+export type TextFieldConfig<Id extends string> = BaseFieldConfig<Id, "text", string>;
+
 /** Date input (string yyyy-mm-dd) */
-export interface DateFieldConfig<Id extends string> {
-  id: Id;
-  label: string;
-  type: "date";
-  defaultValue: string;
-  filterKey?: string;
-  doubleWidth?: boolean;
-  countActive?: (value: string) => number;
-  normalizeForFilter?: (value: string) => unknown;
-  visibleIf?: (ctx?: unknown) => boolean;
-}
+export type DateFieldConfig<Id extends string> = BaseFieldConfig<Id, "date", string>;
 
 /**
  * Numeric input (undefined considered empty).
@@ -78,20 +78,12 @@ export interface DateFieldConfig<Id extends string> {
  * starts at 0, so without `min` a single click or arrow key produces -1. Values outside
  * the bounds stay editable, but are treated as empty and never reach the API.
  */
-export interface NumberFieldConfig<Id extends string> {
-  id: Id;
-  label: string;
-  type: "number";
-  defaultValue: number | undefined;
+export interface NumberFieldConfig<Id extends string>
+  extends BaseFieldConfig<Id, "number", number | undefined> {
   /** Lowest accepted value; defaults to 0 since no content filter takes negatives. */
   min?: number;
   /** Highest accepted value; unbounded when omitted. */
   max?: number;
-  filterKey?: string;
-  doubleWidth?: boolean;
-  countActive?: (value: number | undefined) => number;
-  normalizeForFilter?: (value: number | undefined) => unknown;
-  visibleIf?: (ctx?: unknown) => boolean;
 }
 
 /** Single-select (supports an optional sentinel 'none' value) */
@@ -99,65 +91,30 @@ export interface SingleSelectFieldConfig<
   Id extends string,
   V extends string,
   NV extends string = never,
-> {
-  id: Id;
-  label: string;
-  type: "single-select";
-  defaultValue: V | NV;
+> extends BaseFieldConfig<Id, "single-select", V | NV> {
   options?: Option<V>[];
-  dataSource?:
-    | "bloodlines"
-    | "assets"
-    | "villages"
-    | "referralSources"
-    | "visitorUtmSources";
+  dataSource?: FilteringDataSource;
   filterOptions?: (options: Option<string>[], ctx?: unknown) => Option<string>[];
   includeNone?: boolean;
   noneOption?: Option<NV>;
   emptyValues?: ReadonlyArray<V | NV> | (V | NV)[];
-  filterKey?: string;
-  doubleWidth?: boolean;
-  countActive?: (value: V | NV) => number;
-  normalizeForFilter?: (value: V | NV) => unknown;
-  visibleIf?: (ctx?: unknown) => boolean;
 }
 
 /** Multi-select (empty array is considered empty) */
-export interface MultiSelectFieldConfig<Id extends string, V extends string> {
-  id: Id;
-  label: string;
-  type: "multi-select";
-  defaultValue: V[];
+export interface MultiSelectFieldConfig<Id extends string, V extends string>
+  extends BaseFieldConfig<Id, "multi-select", V[]> {
   options?: Option<V>[];
-  dataSource?:
-    | "bloodlines"
-    | "assets"
-    | "villages"
-    | "referralSources"
-    | "visitorUtmSources";
+  dataSource?: FilteringDataSource;
   filterOptions?: (options: Option<string>[], ctx?: unknown) => Option<string>[];
   includeNone?: boolean;
   noneOption?: Option<string>;
   emptyValues?: never;
-  filterKey?: string;
-  doubleWidth?: boolean;
-  countActive?: (value: V[]) => number;
-  normalizeForFilter?: (value: V[]) => unknown;
-  visibleIf?: (ctx?: unknown) => boolean;
 }
 
 /** Tri-state toggle (undefined represents "All") */
-export interface TriStateFieldConfig<Id extends string> {
-  id: Id;
-  label: string;
-  type: "tri-state";
-  defaultValue: boolean | undefined;
+export interface TriStateFieldConfig<Id extends string>
+  extends BaseFieldConfig<Id, "tri-state", boolean | undefined> {
   triStateLabels?: { labelActive: string; labelInactive: string; labelAll: string };
-  filterKey?: string;
-  doubleWidth?: boolean;
-  countActive?: (value: boolean | undefined) => number;
-  normalizeForFilter?: (value: boolean | undefined) => unknown;
-  visibleIf?: (ctx?: unknown) => boolean;
 }
 
 export type AnyFieldConfig<Id extends string = string> =
@@ -316,8 +273,9 @@ const isTypingField = (field: AnyFieldConfig) =>
 
 /**
  * Hook: derives typed state maps (values, debounced, setters, exclusions) from a schema.
- * - Uses single state objects + per-key timers (no hooks-in-loops)
- * - Text, number and date inputs update after DEBOUNCE_MS; discrete choices apply immediately
+ * - Uses single state objects and one timer (no hooks-in-loops)
+ * - Text, number and date inputs apply together once none has changed for DEBOUNCE_MS;
+ *   discrete choices apply immediately
  */
 export const useContentFiltering = <
   F extends readonly AnyFieldConfig[],
@@ -350,31 +308,20 @@ export const useContentFiltering = <
     );
   }, [initialValues]);
 
-  // Debounce per field (one timer per key)
-  const timersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // Any change restarts the timer; when it fires, every typed input applies at once.
   useEffect(() => {
-    const timers = timersRef.current;
-    for (const field of schema.fields) {
-      if (!isTypingField(field)) continue;
-      const key = field.id as keyof ValuesFromSchema<F> & string;
-      const timer = timers[key];
-      if (timer) clearTimeout(timer);
-      timers[key] = setTimeout(() => {
-        setFieldState((prev) =>
-          prev.debounced[key] === values[key]
-            ? prev
-            : {
-                ...prev,
-                debounced: { ...prev.debounced, [key]: values[key] },
-              },
-        );
-      }, DEBOUNCE_MS);
-    }
-    return () => {
-      for (const key of Object.keys(timers)) {
-        clearTimeout(timers[key]);
-      }
-    };
+    const timer = setTimeout(() => {
+      setFieldState((prev) => {
+        let next = prev.debounced;
+        for (const field of schema.fields) {
+          if (!isTypingField(field)) continue;
+          const key = field.id as keyof ValuesFromSchema<F> & string;
+          if (next[key] !== values[key]) next = { ...next, [key]: values[key] };
+        }
+        return next === prev.debounced ? prev : { ...prev, debounced: next };
+      });
+    }, DEBOUNCE_MS);
+    return () => clearTimeout(timer);
   }, [schema.fields, values]);
 
   // Generate typed setters (stable across renders for the same schema)
@@ -616,11 +563,11 @@ export const ContentFiltering = <
 }) => {
   // Local UI state
   const [filterOpen, setFilterOpen] = useState(false);
-  const [showExclusionPopover, , setShowExclusionPopover] = useDelayState(false);
-  const [exclusionCategoryKey, , setExclusionCategoryKey] = useDelayState<string>(
+  const [showExclusionPopover, setShowExclusionPopover] = useState(false);
+  const [exclusionCategoryKey, setExclusionCategoryKey] = useState<string>(
     schema.exclusions?.[0]?.key ?? "",
   );
-  const [tempExclusions, , setTempExclusions] = useDelayState<string[]>([]);
+  const [tempExclusions, setTempExclusions] = useState<string[]>([]);
 
   useEffect(() => {
     if (disabled) setFilterOpen(false);
@@ -633,10 +580,7 @@ export const ContentFiltering = <
 
   // Determine which dynamic data sources are needed by the currently visible fields
   const needsDataSource = useMemo(() => {
-    const mutableRequired: Record<
-      "bloodlines" | "assets" | "villages" | "referralSources" | "visitorUtmSources",
-      boolean
-    > = {
+    const mutableRequired: Record<FilteringDataSource, boolean> = {
       bloodlines: false,
       assets: false,
       villages: false,
@@ -644,19 +588,11 @@ export const ContentFiltering = <
       visitorUtmSources: false,
     };
     for (const field of fieldsToRender) {
-      if (!("dataSource" in field)) continue;
+      if (!("dataSource" in field) || !field.dataSource) continue;
       const hasStaticOptions =
         "options" in field && Array.isArray(field.options) && field.options.length > 0;
       if (hasStaticOptions) continue;
-      if (
-        field.dataSource === "bloodlines" ||
-        field.dataSource === "assets" ||
-        field.dataSource === "villages" ||
-        field.dataSource === "referralSources" ||
-        field.dataSource === "visitorUtmSources"
-      ) {
-        mutableRequired[field.dataSource] = true;
-      }
+      mutableRequired[field.dataSource] = true;
     }
     return mutableRequired;
   }, [fieldsToRender]);
@@ -678,23 +614,19 @@ export const ContentFiltering = <
     enabled: needsDataSource.visitorUtmSources,
   });
 
+  const dataSourceOptions: Record<FilteringDataSource, Option[]> = {
+    bloodlines: (bloodlineNames ?? []).map((b) => ({ value: b.id, label: b.name })),
+    assets: (assetNames ?? []).map((a) => ({ value: a.id, label: a.name })),
+    villages: (villageNames ?? []).map((v) => ({ value: v.id, label: v.name })),
+    referralSources: (referralSources ?? []).map((s) => ({ value: s, label: s })),
+    visitorUtmSources: (utmSources ?? []).map((s) => ({ value: s, label: s })),
+  };
+
   // Resolve options for a field: prefer static options, otherwise derive from data source
   const resolveOptions = (field: AnyFieldConfig): Option[] => {
     let opts: Option[] | undefined = "options" in field ? field.options : undefined;
-    if (!opts && "dataSource" in field && field.dataSource === "bloodlines") {
-      opts = (bloodlineNames ?? []).map((b) => ({ value: b.id, label: b.name }));
-    }
-    if (!opts && "dataSource" in field && field.dataSource === "assets") {
-      opts = (assetNames ?? []).map((a) => ({ value: a.id, label: a.name }));
-    }
-    if (!opts && "dataSource" in field && field.dataSource === "villages") {
-      opts = (villageNames ?? []).map((v) => ({ value: v.id, label: v.name }));
-    }
-    if (!opts && "dataSource" in field && field.dataSource === "referralSources") {
-      opts = (referralSources ?? []).map((s) => ({ value: s, label: s }));
-    }
-    if (!opts && "dataSource" in field && field.dataSource === "visitorUtmSources") {
-      opts = (utmSources ?? []).map((s) => ({ value: s, label: s }));
+    if (!opts && "dataSource" in field && field.dataSource) {
+      opts = dataSourceOptions[field.dataSource];
     }
     const finalOpts = opts ?? [];
     return "filterOptions" in field && field.filterOptions
@@ -834,18 +766,19 @@ export const ContentFiltering = <
                       setShowActive={(v) => setter(v)}
                       disabled={disabled}
                       labelActive={
-                        ("triStateLabels" in field &&
-                          field.triStateLabels?.labelActive) ||
-                        "Active"
+                        "triStateLabels" in field
+                          ? field.triStateLabels?.labelActive
+                          : undefined
                       }
                       labelInactive={
-                        ("triStateLabels" in field &&
-                          field.triStateLabels?.labelInactive) ||
-                        "Inactive"
+                        "triStateLabels" in field
+                          ? field.triStateLabels?.labelInactive
+                          : undefined
                       }
                       labelAll={
-                        ("triStateLabels" in field && field.triStateLabels?.labelAll) ||
-                        "All"
+                        "triStateLabels" in field
+                          ? field.triStateLabels?.labelAll
+                          : undefined
                       }
                     />
                   </div>

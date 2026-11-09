@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { appRouter } from "@/api/root";
 import { BOTID_CHALLENGE_HEADER } from "@/libs/botid";
 import { BUILD_ID, BUILD_ID_HEADER } from "@/libs/buildVersion";
+import { diagnosticTrpcInput } from "@/libs/trpcLogging";
 import { createAppTRPCContext } from "@/server/api/trpc";
 import { withRequestScope } from "@/server/requestScope";
 import {
@@ -13,7 +14,6 @@ import {
   withBotIdGuard,
 } from "@/server/utils/botid";
 import { flushSafe, isExpectedTrpcRouteError, logError } from "@/server/utils/sentry";
-import { diagnosticTrpcInput } from "@/server/utils/trpcInput";
 
 export const runtime = "nodejs";
 // Reference-image evolution includes generation, cutout and content verification.

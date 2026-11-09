@@ -1,9 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  getCurrentSlotBoundary,
-  getSlotIndex,
-  isNewSlotDue,
-} from "@/utils/time";
+import { getCurrentSlotBoundary, getSlotIndex, isNewSlotDue } from "@/utils/time";
 
 describe("getSlotIndex", () => {
   it("maps hour 0 to slot 0", () => expect(getSlotIndex(0)).toBe(0));

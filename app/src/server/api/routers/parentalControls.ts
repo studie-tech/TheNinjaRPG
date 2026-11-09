@@ -1,3 +1,4 @@
+import { PARENTAL_PIN_WINDOW_MINUTES } from "@/drizzle/constants";
 import { getServerPusher } from "@/libs/pusher";
 import {
   findParentalControlForGet,
@@ -56,8 +57,8 @@ export const parentalControlsRouter = createTRPCRouter({
         );
       }
       if (settings?.pinHash) {
-        // Claim an attempt before hashing, so concurrent requests cannot bypass the five-attempt window.
-        const cutoff = new Date(Date.now() - 15 * 60 * 1000);
+        // Claim an attempt before hashing, so concurrent requests cannot bypass the attempt window.
+        const cutoff = new Date(Date.now() - PARENTAL_PIN_WINDOW_MINUTES * 60 * 1000);
         const claim = await updateParentalControlForSave(
           ctx.drizzle,
           cutoff,
@@ -66,7 +67,7 @@ export const parentalControlsRouter = createTRPCRouter({
         );
         if (!claim.rowsAffected)
           return errorResponse(
-            "Too many PIN attempts or settings changed. Try again in 15 minutes or reload settings.",
+            `Too many PIN attempts or settings changed. Try again in ${PARENTAL_PIN_WINDOW_MINUTES} minutes or reload settings.`,
           );
         if (!(await verifyParentalPin(input.pin, settings.pinHash)))
           return errorResponse("Incorrect parent PIN. Settings were not changed.");

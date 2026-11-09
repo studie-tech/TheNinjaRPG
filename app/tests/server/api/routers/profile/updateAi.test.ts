@@ -1,10 +1,10 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { beforeEach, expect, it, vi } from "bun:test";
 import { actionLog, jutsu, userData, userJutsu } from "@/drizzle/schema";
 import * as socials from "@/libs/socials";
 import { profileRouter } from "@/server/api/routers/profile";
 import type { InsertAiSchemaInput } from "@/validators/aiInput";
-import { insertUsers, insertJutsus } from "../../../../setup/factories";
+import { insertJutsus, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -33,8 +33,8 @@ const aiState = async () => {
 };
 
 describeWithDatabase("profile.updateAi username uniqueness", () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
-    vi.restoreAllMocks();
     vi.spyOn(socials, "callDiscordContent").mockResolvedValue(undefined);
     await resetTables(actionLog, userJutsu, jutsu, userData);
     await insertUsers([
@@ -64,6 +64,9 @@ describeWithDatabase("profile.updateAi username uniqueness", () => {
       data: await editData({ username: "Guardian Bot", jutsus: ["ai-jutsu"] }),
     });
     expect(result.success).toBe(true);
-    expect(await aiState()).toEqual({ username: "Guardian Bot", jutsuIds: ["ai-jutsu"] });
+    expect(await aiState()).toEqual({
+      username: "Guardian Bot",
+      jutsuIds: ["ai-jutsu"],
+    });
   });
 });

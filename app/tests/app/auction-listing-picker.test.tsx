@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
-import { NewAuctionListingDialog } from "@/app/[shell]/auctionhouse/page";
+import { NewAuctionListingDialog } from "@/app/[shell]/auctionhouse/NewListingDialog";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const row = (name: string, patch: object = {}) => ({
@@ -14,7 +14,6 @@ const row = (name: string, patch: object = {}) => ({
   item: { name, canBeTraded: true },
   ...patch,
 });
-
 
 beforeEach(() => {
   installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
@@ -57,4 +56,25 @@ it("leaves items still being imbued out of the listing picker", async () => {
   expect(screen.getByText("Stored Sword")).toBeTruthy();
   expect(screen.getByText("Imbued Sword (1 imbuement(s))")).toBeTruthy();
   expect(screen.queryByText("Imbuing Sword", { exact: false })).toBeNull();
+});
+
+it("clears the picked item and search when the listing is cancelled", async () => {
+  render(<NewAuctionListingDialog />);
+  fireEvent.click(screen.getByRole("button", { name: "List item" }));
+  await waitFor(() => expect(screen.getByText("Available Sword")).toBeTruthy());
+  fireEvent.click(screen.getByText("Available Sword"));
+  const picker = () => document.getElementById("user-item-search") as HTMLInputElement;
+  await waitFor(() => expect(picker().value).toBe("Available Sword"));
+  expect(picker().getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+  fireEvent.click(screen.getByRole("button", { name: "List item" }));
+  await waitFor(() => expect(screen.getByText("Available Sword")).toBeTruthy());
+  expect(picker().value).toBe("");
+  expect(picker().getAttribute("aria-expanded")).toBe("true");
+  expect(
+    (screen.getAllByPlaceholderText("Search your items...")[1] as HTMLInputElement)
+      .value,
+  ).toBe("");
 });

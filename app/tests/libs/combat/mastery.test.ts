@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
 import { availableUserActions } from "@/libs/combat/actions";
+import { dmgConfig } from "@/libs/combat/constants";
+import { refreshMasteries } from "@/libs/combat/mastery";
 import { applyEffects } from "@/libs/combat/process";
 import {
   damageCalc,
@@ -9,48 +11,55 @@ import {
   increaseStats,
   updateStatUsage,
 } from "@/libs/combat/tags";
-import { dmgConfig } from "@/libs/combat/constants";
+import { alignBattle } from "@/libs/combat/turn";
 import type {
   BattleUserState,
   CompleteBattle,
   GroundEffect,
   UserEffect,
 } from "@/libs/combat/types";
-import { refreshMasteries } from "@/libs/combat/mastery";
-import { alignBattle } from "@/libs/combat/turn";
 import { effectiveMasteries } from "@/libs/mastery";
 import type { ZodAllTags } from "@/validators/combat";
 import {
   makeBattleUserItem,
+  makeCompleteBattle,
   makeDamageEffect,
   makeEffect,
   makeUser,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
+
+/** Applies a static 250-point Ninjutsu mastery change to a user with 1000 mastery and 2000 offence/defence. */
+const changeMastery = (
+  type: "increasemastery" | "decreasemastery",
+  apply: typeof increaseMastery,
+) => {
+  const target = makeUser({
+    userId: "user",
+    ninjutsuMastery: 1000,
+    offence: 2000,
+    defence: 2000,
+  });
+  const effect = makeEffect(
+    type,
+    {
+      masteryTypes: ["Ninjutsu"],
+      calculation: "static",
+      power: 250,
+      powerPerLevel: 0,
+    },
+    {
+      isNew: false,
+      castThisRound: false,
+      targetId: "user",
+    },
+  );
+  apply(effect, [], target);
+  return target;
+};
 
 describe("increaseMastery", () => {
   it("raises the selected mastery without changing offence or defence", () => {
-    const target = makeUser({
-      userId: "user",
-      ninjutsuMastery: 1000,
-      offence: 2000,
-      defence: 2000,
-    });
-    const effect = makeEffect(
-      "increasemastery",
-      {
-        masteryTypes: ["Ninjutsu"],
-        calculation: "static",
-        power: 250,
-        powerPerLevel: 0,
-      },
-      {
-        isNew: false,
-        castThisRound: false,
-        targetId: "user",
-      },
-    );
-
-    increaseMastery(effect, [], target);
+    const target = changeMastery("increasemastery", increaseMastery);
 
     expect(target.ninjutsuMastery).toBe(1250);
     expect(target.offence).toBe(2000);
@@ -60,28 +69,7 @@ describe("increaseMastery", () => {
 
 describe("decreaseMastery", () => {
   it("lowers the selected mastery without changing offence or defence", () => {
-    const target = makeUser({
-      userId: "user",
-      ninjutsuMastery: 1000,
-      offence: 2000,
-      defence: 2000,
-    });
-    const effect = makeEffect(
-      "decreasemastery",
-      {
-        masteryTypes: ["Ninjutsu"],
-        calculation: "static",
-        power: 250,
-        powerPerLevel: 0,
-      },
-      {
-        isNew: false,
-        castThisRound: false,
-        targetId: "user",
-      },
-    );
-
-    decreaseMastery(effect, [], target);
+    const target = changeMastery("decreasemastery", decreaseMastery);
 
     expect(target.ninjutsuMastery).toBe(750);
     expect(target.offence).toBe(2000);
@@ -127,7 +115,6 @@ describe("increaseStats", () => {
   });
 });
 
-
 const GATED_JUTSU = "gated-jutsu";
 const GATED_BLADE = "gated-blade";
 
@@ -157,9 +144,7 @@ const makeBattle = (
   usersEffects: UserEffect[] = [],
   round = 1,
 ): CompleteBattle =>
-  ({
-    id: "battle-1",
-    battleType: "COMBAT",
+  makeCompleteBattle({
     width: 5,
     height: 5,
     round,
@@ -169,7 +154,6 @@ const makeBattle = (
     roundStartAt: new Date("2020-01-01T00:00:00Z"),
     usersState: users,
     usersEffects,
-    groundEffects: [],
     extraState: {
       dmgConfig,
       jutsus: {
@@ -194,7 +178,6 @@ const makeBattle = (
           effects: [],
         },
       },
-      jutsuReskins: {},
       items: {
         [GATED_BLADE]: {
           id: GATED_BLADE,
@@ -219,21 +202,8 @@ const makeBattle = (
           effects: [],
         },
       },
-      bloodlines: {},
-      villages: {},
-      anbuSquads: {},
-      keystoneItems: {},
-      wars: {},
-      aiProfiles: {},
-      relations: {},
-      clans: {},
-      userQuests: {},
-      completedQuests: {},
-      questData: {},
-      bounties: {},
-      bountySignups: {},
-    },
-  }) as unknown as CompleteBattle;
+    } as never,
+  });
 
 /** A residual Ninjutsu mastery tag on `targetId`, as applyEffects stores it once cast. */
 const masteryEffect = (

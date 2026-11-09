@@ -50,15 +50,15 @@ import { useUserData } from "@/utils/UserContext";
 export default function ManualMain() {
   const { data: userData } = useUserData();
   const role = userData?.role ?? "USER";
-  const hasBackupAccess = canControlBackups(role);
-  const canSeeRecruitment = canViewRecruitmentAnalytics(role);
-  const canEditMaps = canChangeContent(role);
+  const canEditContent = canChangeContent(role);
+  const isStaff = isStaffRole(role);
 
-  const baseEntries = [
-    ...(canManageTournaments(role)
-      ? [{ name: "tournaments", img: IMG_MANUAL_TOURNAMENTS }]
-      : []),
-    // recruitment added conditionally below
+  const entries = [
+    {
+      name: "tournaments",
+      img: IMG_MANUAL_TOURNAMENTS,
+      visible: canManageTournaments(role),
+    },
     { name: "combat", img: IMG_MANUAL_COMBAT },
     { name: "bloodline", img: IMG_MANUAL_BLOODLINE },
     { name: "sageMode", img: IMG_MANUAL_SAGE_MODE },
@@ -70,8 +70,8 @@ export default function ManualMain() {
     { name: "ai", img: IMG_MANUAL_AI },
     { name: "companions", img: IMG_MANUAL_PET_SPECIES },
     { name: "quest", img: IMG_MANUAL_QUEST },
-    { name: "dungeon", img: IMG_MANUAL_DUNGEON },
-    ...(canChangeContent(role) ? [{ name: "hunting", img: IMG_MANUAL_HUNTING }] : []),
+    { name: "dungeon", img: IMG_MANUAL_DUNGEON, visible: canEditContent },
+    { name: "hunting", img: IMG_MANUAL_HUNTING, visible: canEditContent },
     { name: "logs", img: IMG_MANUAL_LOGS },
     { name: "damage_calcs", img: IMG_MANUAL_DAM_CALCS },
     { name: "badge", img: IMG_MANUAL_BADGE },
@@ -85,30 +85,22 @@ export default function ManualMain() {
     { name: "staff", img: IMG_MANUAL_STAFF },
     { name: "towerDefense", img: IMG_MANUAL_TOWER_UPGRADES },
     { name: "activityStreak", img: IMG_MANUAL_ACTIVITY_STREAK },
+    { name: "world", img: IMG_MANUAL_TRAVEL, visible: canEditContent },
+    { name: "sprite_studio", img: IMG_MANUAL_ASSET, visible: canEditContent },
+    {
+      name: "recruitment",
+      img: IMG_MANUAL_RECRUITMENT,
+      visible: canViewRecruitmentAnalytics(role),
+    },
+    {
+      name: "content_backups",
+      img: IMG_MANUAL_BACKUP,
+      visible: canControlBackups(role),
+    },
+    // Staff suggest content changes here; content staff review them.
+    { name: "review", img: IMG_MANUAL_REVIEW, visible: isStaff },
+    { name: "rewards", img: IMG_MANUAL_REWARDS, visible: isStaff },
   ];
-
-  // Add conditional entries based on permissions
-  const withWorld = canEditMaps
-    ? [
-        ...baseEntries,
-        { name: "world", img: IMG_MANUAL_TRAVEL },
-        { name: "sprite_studio", img: IMG_MANUAL_ASSET },
-      ]
-    : baseEntries;
-  const withRecruitment = canSeeRecruitment
-    ? [{ name: "recruitment", img: IMG_MANUAL_RECRUITMENT }, ...withWorld]
-    : withWorld;
-  const withBackups = hasBackupAccess
-    ? [{ name: "content_backups", img: IMG_MANUAL_BACKUP }, ...withRecruitment]
-    : withRecruitment;
-  // Staff suggest content changes here; content staff review them.
-  const entries = isStaffRole(role)
-    ? [
-        { name: "review", img: IMG_MANUAL_REVIEW },
-        { name: "rewards", img: IMG_MANUAL_REWARDS },
-        ...withBackups,
-      ]
-    : withBackups;
 
   return (
     <>
@@ -133,8 +125,9 @@ export default function ManualMain() {
       >
         <ImageLinkGrid
           entries={entries
+            .filter((page) => page.visible ?? true)
             .sort((a, b) => a.name.localeCompare(b.name))
-            .map((page) => ({ ...page, href: `/manual/${page.name}` }))}
+            .map(({ name, img }) => ({ name, img, href: `/manual/${name}` }))}
         />
       </ContentBox>
     </>

@@ -1,6 +1,6 @@
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { GlobeCamera } from "@/libs/rendering/scenes/globeProjection";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 
 /** Persisted distance fraction in [0, 1], with zero selecting the closest limit. */
 export const storedGlobeZoom = () => {

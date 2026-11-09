@@ -15,7 +15,10 @@ test("chunkArray rejects invalid batch sizes", () => {
 });
 
 test("countNames collapses repeats into a count and keeps first-seen order", () => {
-  expect(countNames(["Sickle", "Bow", "Sickle", "Sickle"])).toEqual(["Sickle ×3", "Bow"]);
+  expect(countNames(["Sickle", "Bow", "Sickle", "Sickle"])).toEqual([
+    "Sickle ×3",
+    "Bow",
+  ]);
   expect(countNames([])).toEqual([]);
 });
 

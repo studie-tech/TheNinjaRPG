@@ -226,7 +226,7 @@ export default function Thread({
         ) : undefined
       }
       defaultBackHref={thread ? `/forum/${thread.boardId}` : "/forum"}
-      topRightCorntentBreakpoint="sm"
+      stackTopRight
       topRightContent={<ForumNavigation />}
     >
       {comments.error && (

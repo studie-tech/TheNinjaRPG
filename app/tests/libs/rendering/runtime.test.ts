@@ -10,7 +10,9 @@ describe("renderer initialization failure", () => {
 
   it("rejects with the initialization error when teardown of a partial renderer also throws", async () => {
     const cause = new Error("This browser does not support WebGL");
-    vi.spyOn(WebGLRenderer.prototype, "init").mockImplementation(async function (this: WebGLRenderer) {
+    vi.spyOn(WebGLRenderer.prototype, "init").mockImplementation(async function (
+      this: WebGLRenderer,
+    ) {
       Object.assign(this, { view: { canvas: document.createElement("canvas") } });
       throw cause;
     });
@@ -33,7 +35,13 @@ describe("shared renderer frame loop", () => {
     let callback: FrameRequestCallback = () => {};
     let requests = 0;
     const cancelled: number[] = [];
-    const loop = createFrameLoop((next) => { callback = next; return ++requests; }, (id) => cancelled.push(id));
+    const loop = createFrameLoop(
+      (next) => {
+        callback = next;
+        return ++requests;
+      },
+      (id) => cancelled.push(id),
+    );
     const frames: string[] = [];
     const leaveA = loop.subscribe(() => frames.push("a"));
     const leaveB = loop.subscribe(() => frames.push("b"));
@@ -51,7 +59,13 @@ describe("shared renderer frame loop", () => {
   });
   it("does not invoke a canvas removed by an earlier subscriber", () => {
     let callback: FrameRequestCallback = () => {};
-    const loop = createFrameLoop((next) => { callback = next; return 1; }, () => {});
+    const loop = createFrameLoop(
+      (next) => {
+        callback = next;
+        return 1;
+      },
+      () => {},
+    );
     let leaveB = () => {};
     const leaveA = loop.subscribe(() => leaveB());
     let count = 0;
@@ -67,27 +81,41 @@ describe("scene resource leases", () => {
     const loaded: string[] = [];
     const unloaded: string[] = [];
     const cache = createLeaseCache({
-      load: async (key) => { loaded.push(key); return 4; },
-      unload: async (key) => { unloaded.push(key); },
-      bytes: (size) => size, idleBudget: 4,
+      load: async (key) => {
+        loaded.push(key);
+        return 4;
+      },
+      unload: async (key) => {
+        unloaded.push(key);
+      },
+      bytes: (size) => size,
+      idleBudget: 4,
     });
     const a = cache.acquire("a");
     const shared = cache.acquire("a");
     const b = cache.acquire("b");
     await Promise.all([a.resource, shared.resource, b.resource]);
     expect(loaded).toEqual(["a", "b"]);
-    a.release(); b.release();
+    a.release();
+    b.release();
     expect(unloaded).toEqual([]);
-    shared.release(); shared.release();
+    shared.release();
+    shared.release();
     expect(unloaded).toEqual(["b"]);
   });
   it("releases a texture that finishes loading after its scene has gone away", async () => {
     let complete = (_size: number) => {};
     const unloaded: string[] = [];
     const cache = createLeaseCache({
-      load: () => new Promise<number>((resolve) => { complete = resolve; }),
-      unload: async (key) => { unloaded.push(key); },
-      bytes: (size) => size, idleBudget: 0,
+      load: () =>
+        new Promise<number>((resolve) => {
+          complete = resolve;
+        }),
+      unload: async (key) => {
+        unloaded.push(key);
+      },
+      bytes: (size) => size,
+      idleBudget: 0,
     });
     const lease = cache.acquire("late");
     lease.release();
@@ -100,9 +128,16 @@ describe("scene resource leases", () => {
     let finishUnload = () => {};
     const events: string[] = [];
     const cache = createLeaseCache({
-      load: async (key) => { events.push(`load ${key}`); return 4; },
-      unload: () => new Promise<void>((resolve) => { finishUnload = resolve; }),
-      bytes: (size) => size, idleBudget: 0,
+      load: async (key) => {
+        events.push(`load ${key}`);
+        return 4;
+      },
+      unload: () =>
+        new Promise<void>((resolve) => {
+          finishUnload = resolve;
+        }),
+      bytes: (size) => size,
+      idleBudget: 0,
     });
     const first = cache.acquire("a");
     await first.resource;

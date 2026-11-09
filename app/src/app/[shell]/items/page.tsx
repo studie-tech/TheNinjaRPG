@@ -92,19 +92,11 @@ export default function MyItems() {
           setIsBuyItemSlotOpen(false);
         }
       },
-      onError: (error) => {
-        showMutationToast({
-          success: false,
-          message: error.message,
-          variant: "destructive",
-        });
-      },
       onSettled: () => {
         buyItemSlotInFlight.current = false;
       },
     });
 
-  // Subtitle
   const availableItems = userItems
     ?.filter((ui) => isEquippableUserItem(ui, inventoryTime))
     .map((ui) => ({

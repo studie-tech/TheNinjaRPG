@@ -1,46 +1,99 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import type {
+  ReturnedBattle,
+  ReturnedUserState,
+  UserEffect,
+} from "@/libs/combat/types";
 import { getEffectiveMaxPool } from "@/libs/combat/util";
-import type { ReturnedBattle, ReturnedUserState, UserEffect } from "@/libs/combat/types";
 import { createCombatMaxPoolCache } from "@/libs/rendering/combatMaxPools";
-import { makeBattleUser, makeCompleteBattle, makeEffect } from "../combat/helpers/battleScenario";
+import { makeBattleUser, makeCompleteBattle, makeEffect } from "../../setup/combat";
 
 let cache = createCombatMaxPoolCache();
-afterEach(() => { vi.restoreAllMocks(); cache = createCombatMaxPoolCache(); });
-type PoolInfo = { users: ReturnedUserState[]; usersEffects: UserEffect[]; battle: ReturnedBattle; displayed: Map<string, number | undefined> };
+afterEach(() => {
+  vi.restoreAllMocks();
+  cache = createCombatMaxPoolCache();
+});
+type PoolInfo = {
+  users: ReturnedUserState[];
+  usersEffects: UserEffect[];
+  battle: ReturnedBattle;
+  displayed: Map<string, number | undefined>;
+};
 const sample = (info: PoolInfo) => {
   for (const user of info.users) {
     const values = cache(user, info.battle, info.usersEffects);
     info.displayed.set(`${user.userId}:hp_current`, user.curHealth / values.health);
-    info.displayed.set(`${user.userId}:sp_current`, "curStamina" in user && values.stamina !== undefined ? user.curStamina / values.stamina : undefined);
-    info.displayed.set(`${user.userId}:cp_current`, "curChakra" in user && values.chakra !== undefined ? user.curChakra / values.chakra : undefined);
+    info.displayed.set(
+      `${user.userId}:sp_current`,
+      "curStamina" in user && values.stamina !== undefined
+        ? user.curStamina / values.stamina
+        : undefined,
+    );
+    info.displayed.set(
+      `${user.userId}:cp_current`,
+      "curChakra" in user && values.chakra !== undefined
+        ? user.curChakra / values.chakra
+        : undefined,
+    );
   }
 };
 const fixture = (count = 1) => {
-  const users = Array.from({ length: count }, (_, i) => makeBattleUser(`user-${i}`, { longitude: i % 10, latitude: Math.floor(i / 10), curHealth: 50, maxHealth: 100, curStamina: 40, maxStamina: 80, curChakra: 30, maxChakra: 60 }));
-  const battle = makeCompleteBattle({ usersState: users, usersEffects: [] }) as unknown as ReturnedBattle;
-  const info: PoolInfo = { users, battle, usersEffects: battle.usersEffects, displayed: new Map() };
-  return { info, user: users[0]!, value: (name = "hp_current") => info.displayed.get(`user-0:${name}`) };
+  const users = Array.from({ length: count }, (_, i) =>
+    makeBattleUser(`user-${i}`, {
+      longitude: i % 10,
+      latitude: Math.floor(i / 10),
+      curHealth: 50,
+      maxHealth: 100,
+      curStamina: 40,
+      maxStamina: 80,
+      curChakra: 30,
+      maxChakra: 60,
+    }),
+  );
+  const battle = makeCompleteBattle({
+    usersState: users,
+    usersEffects: [],
+  }) as unknown as ReturnedBattle;
+  const info: PoolInfo = {
+    users,
+    battle,
+    usersEffects: battle.usersEffects,
+    displayed: new Map(),
+  };
+  return {
+    info,
+    user: users[0]!,
+    value: (name = "hp_current") => info.displayed.get(`user-0:${name}`),
+  };
 };
 
 const poolBonus = (targetId = "user-0") =>
-  makeEffect("increasemaxpools", {
-    power: 20,
-    calculation: "percentage",
-    poolsAffected: ["Health", "Stamina", "Chakra"],
-    rounds: 10,
-  }, { targetId });
+  makeEffect(
+    "increasemaxpools",
+    {
+      power: 20,
+      calculation: "percentage",
+      poolsAffected: ["Health", "Stamina", "Chakra"],
+      rounds: 10,
+    },
+    { targetId },
+  );
 
 describe("combat user pool bars", () => {
   it("does not rescan effects on unchanged frames", () => {
     const { info } = fixture(20);
     let targetReads = 0;
     info.usersEffects = info.users.flatMap((user) =>
-      Array.from({ length: 10 }, () => new Proxy(poolBonus(user.userId), {
-        get(target, key) {
-          if (key === "targetId") targetReads++;
-          return Reflect.get(target, key);
-        },
-      })),
+      Array.from(
+        { length: 10 },
+        () =>
+          new Proxy(poolBonus(user.userId), {
+            get(target, key) {
+              if (key === "targetId") targetReads++;
+              return Reflect.get(target, key);
+            },
+          }),
+      ),
     );
     sample(info);
     targetReads = 0;
@@ -52,9 +105,16 @@ describe("combat user pool bars", () => {
     const { info, user, value } = fixture();
     info.usersEffects = [
       poolBonus(),
-      makeEffect("decreasemaxpools", {
-        power: 7, calculation: "static", poolsAffected: ["Health"], rounds: 3,
-      }, { targetId: user.userId }),
+      makeEffect(
+        "decreasemaxpools",
+        {
+          power: 7,
+          calculation: "static",
+          poolsAffected: ["Health"],
+          rounds: 3,
+        },
+        { targetId: user.userId },
+      ),
       { ...poolBonus(), rounds: 0 },
       { ...poolBonus(), targetId: "someone-else" },
       { ...poolBonus(), fromType: "bloodline" },
@@ -69,7 +129,9 @@ describe("combat user pool bars", () => {
       ["sp_current", "Stamina", user.curStamina],
       ["cp_current", "Chakra", user.curChakra],
     ] as const) {
-      expect(value(name)).toBeCloseTo(current / getEffectiveMaxPool(user, info.usersEffects, pool));
+      expect(value(name)).toBeCloseTo(
+        current / getEffectiveMaxPool(user, info.usersEffects, pool),
+      );
     }
   });
 
@@ -136,9 +198,15 @@ describe("combat user pool bars", () => {
     const { info, user, value } = fixture();
     info.usersEffects = [
       { ...poolBonus(), fromType: "bloodline" },
-      makeEffect("seal", { rounds: 3 }, {
-        targetId: user.userId, isNew: false, timedBuffExpiresAt: 11_000,
-      }),
+      makeEffect(
+        "seal",
+        { rounds: 3 },
+        {
+          targetId: user.userId,
+          isNew: false,
+          timedBuffExpiresAt: 11_000,
+        },
+      ),
       makeEffect("seal", { rounds: 3 }, { targetId: user.userId, isNew: true }),
       makeEffect("seal", { rounds: 3 }, { targetId: "someone-else", isNew: false }),
     ];
@@ -174,6 +242,4 @@ describe("combat user pool bars", () => {
     sample(info);
     expect(value()).toBeCloseTo(50 / 140);
   });
-
-
 });

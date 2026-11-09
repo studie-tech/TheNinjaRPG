@@ -41,6 +41,7 @@ import {
   type TimedMasteryName,
   type TrainingSpeed,
   type UserRole,
+  VOTE_REWARD_REPUTATION,
 } from "@/drizzle/constants";
 import {
   abEvent,
@@ -773,7 +774,7 @@ export const listQuestPartyForGetUser = (
 /** Build the `userReport` selection for `getUser`, using predicates on `status`. */
 export const selectUserReportForGetUser = (client: Pick<DrizzleClient, "select">) =>
   client
-    .select({ count: sql`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(userReport)
     .innerJoin(userData, eq(userData.userId, userReport.reportedUserId))
     .where(inArray(userReport.status, ["UNVIEWED", "BAN_ESCALATED"]));
@@ -781,7 +782,7 @@ export const selectUserReportForGetUser = (client: Pick<DrizzleClient, "select">
 /** Build the `supportTicket` selection for `getUser`, using predicates on `status`. */
 export const selectSupportTicketForGetUser = (client: Pick<DrizzleClient, "select">) =>
   client
-    .select({ count: sql`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(supportTicket)
     .where(inArray(supportTicket.status, ["OPEN", "IN_PROGRESS", "WAITING_FOR_STAFF"]));
 
@@ -792,7 +793,7 @@ export const selectStaffApplicationForGetUser = (
   user: { userId: string },
 ) =>
   client
-    .select({ count: sql`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(staffApplication)
     .leftJoin(
       staffApplicationApproval,
@@ -814,7 +815,7 @@ export const selectContentProposalForGetUser = (
   client: Pick<DrizzleClient, "select">,
 ) =>
   client
-    .select({ count: sql`count(*)`.mapWith(Number) })
+    .select({ count: count() })
     .from(contentProposal)
     .where(eq(contentProposal.status, "PENDING"));
 
@@ -1140,7 +1141,7 @@ export const updateUserDataForUpdateUsername = (
     .update(userData)
     .set({
       username: input.username,
-      reputationPoints: sql`reputationPoints - ${COST_CHANGE_USERNAME}`,
+      reputationPoints: sql`${userData.reputationPoints} - ${COST_CHANGE_USERNAME}`,
     })
     .where(
       and(
@@ -1290,7 +1291,7 @@ export const listUserDataForSearchUsers = (
       like(userData.username, `%${input.username}%`),
       eq(userData.approvedTos, true),
       ...(input.showAi ? [] : [eq(userData.isAi, false)]),
-      ...(input.showYourself ? [] : [sql`${userData.userId} != ${ctx.userId}`]),
+      ...(input.showYourself ? [] : [ne(userData.userId, ctx.userId)]),
     ),
     orderBy: [sql`LENGTH(${userData.username}) asc`],
     limit: 5,
@@ -1491,42 +1492,29 @@ export const findUserVoteForClaimVotes = (
     where: eq(userVote.userId, ctx.userId),
   });
 
-/** Build the `userVote` update for `claimVotes`, using predicates on `userId`, `claimed`, `site`. */
-export const updateUserVoteForClaimVotes = (
-  client: Pick<DrizzleClient, "update">,
-  smallNanoid: (size?: number) => string,
-  ctx: { userId: string },
-) =>
-  client
-    .update(userVote)
-    .set({
-      claimed: true,
-      totalClaims: sql`${userVote.totalClaims} + 1`,
-      secret: smallNanoid(),
-    })
-    .where(
-      and(
-        eq(userVote.userId, ctx.userId),
-        eq(userVote.claimed, false),
-        ...ACTIVE_VOTING_SITES.map((site) => eq(userVote[site], true)),
-      ),
-    );
-
 /**
- * Build the `userData` update for `claimVotes`, setting `reputationPoints` and
- * `reputationPointsTotal`, using predicates on `userId`.
+ * Execute the claim of a completed vote set together with its reputation credit. One
+ * guarded multi-table UPDATE flips `claimed` and credits the voter atomically, so only the
+ * request that claims the votes is credited; zero affected rows means nothing was claimed.
  */
-export const updateUserDataForClaimVotes = (
-  client: Pick<DrizzleClient, "update">,
+export const executeClaimVotes = (
+  client: Pick<DrizzleClient, "execute">,
+  secret: string,
   ctx: { userId: string },
 ) =>
-  client
-    .update(userData)
-    .set({
-      reputationPoints: sql`${userData.reputationPoints} + 1`,
-      reputationPointsTotal: sql`${userData.reputationPointsTotal} + 1`,
-    })
-    .where(eq(userData.userId, ctx.userId));
+  client.execute(sql`
+    UPDATE ${userVote} INNER JOIN ${userData} ON ${userData.userId} = ${userVote.userId}
+    SET ${userVote.claimed} = true,
+        ${userVote.totalClaims} = ${userVote.totalClaims} + 1,
+        ${userVote.secret} = ${secret},
+        ${userData.reputationPoints} = ${userData.reputationPoints} + ${VOTE_REWARD_REPUTATION},
+        ${userData.reputationPointsTotal} = ${userData.reputationPointsTotal} + ${VOTE_REWARD_REPUTATION}
+    WHERE ${and(
+      eq(userVote.userId, ctx.userId),
+      eq(userVote.claimed, false),
+      ...ACTIVE_VOTING_SITES.map((site) => eq(userVote[site], true)),
+    )}
+  `);
 
 /** Build the `userPet` listing for `getPetImageGenerationForStaff`, using predicates on `userId`. */
 export const listUserPetForGetPetImageGenerationForStaff = (

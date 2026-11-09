@@ -7,14 +7,10 @@ const FAST = { maxRetries: 3, baseDelayMs: 1, deadlineMs: 5_000 };
 const okResponse = (body: string) => new Response(body, { status: 200 });
 
 describe("fetchWithRetry", () => {
-  // Bun lacks vi.stubGlobal; save/restore the real fetch instead
-  const realFetch = globalThis.fetch;
   const stubFetch = (mock: unknown) => {
-    globalThis.fetch = mock as typeof fetch;
+    vi.spyOn(globalThis, "fetch").mockImplementation(mock as typeof fetch);
   };
-  afterEach(() => {
-    globalThis.fetch = realFetch;
-  });
+  afterEach(() => vi.restoreAllMocks());
 
   it("returns the response on first success without retrying", async () => {
     const fetchMock = vi.fn(async () => okResponse("hello"));

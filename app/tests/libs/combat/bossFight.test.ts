@@ -14,7 +14,7 @@ import {
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
 import { maskBattle } from "@/libs/combat/masking";
 import { calcBattleResult } from "@/libs/combat/settlement";
-import { makeCompleteBattle, makeUser } from "./helpers/battleScenario";
+import { makeCompleteBattle, makeUser } from "../../setup/combat";
 
 const form = (userId: string, longitude = 8, latitude = 4) =>
   makeUser({ userId, isAi: true, direction: "right", longitude, latitude });
@@ -72,7 +72,10 @@ describe("boss fight", () => {
     expect(withBossForms(alone, links)).toBe(alone);
     const pack = { targetIds: ["first", "guard"] };
     expect(withBossForms(pack, links)).toBe(pack);
-    const authored = { targetIds: ["first"], waves: [{ aiIds: ["first"], delayRounds: 3 }] };
+    const authored = {
+      targetIds: ["first"],
+      waves: [{ aiIds: ["first"], delayRounds: 3 }],
+    };
     expect(withBossForms(authored, links).targetIds).toEqual(["first", "second"]);
   });
 
@@ -114,7 +117,10 @@ describe("boss fight", () => {
       link(`f${i}`, `f${i + 1}`),
     );
     expect(
-      bossChainIssue({ userId: `f${BOSS_FIGHT_MAX_FORMS - 1}`, nextAiId: "extra" }, full),
+      bossChainIssue(
+        { userId: `f${BOSS_FIGHT_MAX_FORMS - 1}`, nextAiId: "extra" },
+        full,
+      ),
     ).toContain(`${BOSS_FIGHT_MAX_FORMS} forms`);
   });
 
@@ -137,14 +143,15 @@ describe("boss fight", () => {
         { aiIds: ["plain"], delayRounds: 0 },
       ],
       opening,
-      async () => ({
-        usersState: [replies.shift()!],
-        userEffects: [],
-        extraState: {},
-      }) as never,
+      async () =>
+        ({
+          usersState: [replies.shift()!],
+          userEffects: [],
+          extraState: {},
+        }) as never,
     );
 
-    const first = (opening as { usersState: typeof hero[] }).usersState[1]!;
+    const first = (opening as { usersState: (typeof hero)[] }).usersState[1]!;
     expect(hero.risesAgain).toBeUndefined();
     expect(first.risesAgain).toBe(true);
     expect(second.risesAgain).toBe(true);
@@ -231,7 +238,8 @@ describe("boss fight", () => {
     advanceEncounterWave(battle);
     const masked = maskBattle(battle, "hero");
     expect(
-      masked.usersState.find((user) => user.userId === "genin")?.transformation?.announce,
+      masked.usersState.find((user) => user.userId === "genin")?.transformation
+        ?.announce,
     ).toBe("GENIN");
     expect(JSON.stringify(masked)).not.toContain("chunin");
     expect(masked.extraState.encounter).toEqual({ wave: 2 });
@@ -245,7 +253,10 @@ describe("boss fight", () => {
       masked.usersState.find((user) => user.userId === "student")?.risesAgain,
     ).toBe(true);
     expect(masked.extraState.sfxAssets).toEqual(
-      expect.arrayContaining([ID_SFX_TRANSFORMATION_SURGE, ID_SFX_TRANSFORMATION_BURST]),
+      expect.arrayContaining([
+        ID_SFX_TRANSFORMATION_SURGE,
+        ID_SFX_TRANSFORMATION_BURST,
+      ]),
     );
   });
 

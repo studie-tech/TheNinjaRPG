@@ -1,6 +1,7 @@
 "use client";
 
 import type React from "react";
+import { useState } from "react";
 import { BattleTypes } from "@/drizzle/constants";
 import {
   buildFilter,
@@ -11,31 +12,33 @@ import {
 } from "@/layout/ContentFiltering";
 import { getLocalDateStringMonthsAgo } from "@/utils/time";
 
-const statisticsFilteringSchema = defineFilteringSchema({
-  fields: [
-    {
-      id: "battleType",
-      label: "Battle Type",
-      type: "single-select",
-      defaultValue: "None",
-      includeNone: true,
-      emptyValues: ["None"],
-      options: [{ value: "None", label: "All" }, ...toOptions(BattleTypes)],
-    },
-    {
-      id: "startDate",
-      label: "Start Date",
-      type: "date",
-      defaultValue: getLocalDateStringMonthsAgo(1),
-    },
-    {
-      id: "endDate",
-      label: "End Date",
-      type: "date",
-      defaultValue: "",
-    },
-  ] as const,
-});
+/** Built once per mount, so the default start date follows the day the page opened. */
+const makeStatisticsFilteringSchema = () =>
+  defineFilteringSchema({
+    fields: [
+      {
+        id: "battleType",
+        label: "Battle Type",
+        type: "single-select",
+        defaultValue: "None",
+        includeNone: true,
+        emptyValues: ["None"],
+        options: [{ value: "None", label: "All" }, ...toOptions(BattleTypes)],
+      },
+      {
+        id: "startDate",
+        label: "Start Date",
+        type: "date",
+        defaultValue: getLocalDateStringMonthsAgo(1),
+      },
+      {
+        id: "endDate",
+        label: "End Date",
+        type: "date",
+        defaultValue: "",
+      },
+    ] as const,
+  });
 
 interface StatisticsFilteringProps {
   state: StatisticsFilteringState;
@@ -44,7 +47,7 @@ interface StatisticsFilteringProps {
 const StatisticsFiltering: React.FC<StatisticsFilteringProps> = ({ state }) => {
   return (
     <ContentFiltering
-      schema={statisticsFilteringSchema}
+      schema={state.schema}
       state={state.cf}
       triggerButtonId="filter-statistics"
     />
@@ -54,13 +57,15 @@ const StatisticsFiltering: React.FC<StatisticsFilteringProps> = ({ state }) => {
 export default StatisticsFiltering;
 
 export const getFilter = (state: StatisticsFilteringState) =>
-  buildFilter(state.cf, statisticsFilteringSchema);
+  buildFilter(state.cf, state.schema);
 
 export const useFiltering = () => {
-  const cf = useContentFiltering(statisticsFilteringSchema);
+  const [schema] = useState(makeStatisticsFilteringSchema);
+  const cf = useContentFiltering(schema);
   return {
     ...cf.values,
     cf,
+    schema,
   };
 };
 

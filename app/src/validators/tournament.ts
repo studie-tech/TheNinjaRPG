@@ -20,6 +20,10 @@ export type TournamentCreateSchemaInput = z.input<typeof tournamentCreateSchema>
 
 /** Allowed best-of settings, shared by the default and per-round overrides. */
 const seriesLength = z.union([z.literal(1), z.literal(3), z.literal(5)]);
+export type EventTournamentSeriesLength = z.infer<typeof seriesLength>;
+export const EVENT_TOURNAMENT_SERIES_LENGTHS = seriesLength.options.map(
+  (option) => option.value,
+);
 /** Staff configuration; schedule values are Unix milliseconds and rewards use quest schemas. */
 export const eventTournamentConfigSchema = z
   .object({
@@ -57,36 +61,6 @@ export const eventTournamentConfigSchema = z
     (v) => v.endsAt > v.registrationClosesAt,
     "Tournament must end after registration",
   );
-
-/** Shared identity for authenticated event reads and mutations. */
-export const eventTournamentIdSchema = z.object({ tournamentId: z.string().min(1) });
-/** An omitted tournament ID creates a draft; an existing ID edits an editable draft. */
-export const eventTournamentSaveSchema = z.object({
-  tournamentId: z.string().optional(),
-  config: eventTournamentConfigSchema,
-});
-/** Staff commands; the router validates each action's fields and current event phase. */
-export const eventTournamentActionSchema = eventTournamentIdSchema.extend({
-  action: z.enum([
-    "PUBLISH",
-    "SEED",
-    "BEGIN",
-    "CANCEL",
-    "INVITE",
-    "REMOVE_INVITE",
-    "SUBSTITUTE",
-  ]),
-  userId: z.string().optional(),
-  seatId: z.string().optional(),
-  seriesId: z.string().optional(),
-  scheduledAt: z.number().int().positive().optional(),
-  payRewards: z.boolean().optional(),
-});
-/** Player commands for registration, advisory series readiness and timed match acceptance. */
-export const eventTournamentPlayerSchema = eventTournamentIdSchema.extend({
-  action: z.enum(["JOIN", "WITHDRAW", "DECLINE", "ACCEPT", "READY", "NOT_READY"]),
-  seriesId: z.string().optional(),
-});
 
 /** Validated staff settings persisted with the event state. */
 export type EventTournamentConfig = z.infer<typeof eventTournamentConfigSchema>;
@@ -141,7 +115,7 @@ export type EventSeries = {
   loserId: string | null;
   /** The player who earned this series win, preserved across later substitutions. */
   winnerUserId: string | null;
-  bestOf: 1 | 3 | 5;
+  bestOf: EventTournamentSeriesLength;
   scores: [number, number];
   dodges: [number, number];
   games: EventGame[];

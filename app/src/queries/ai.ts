@@ -60,13 +60,7 @@ export const fetchAiProfileById = async (client: DrizzleClient, id: string) => {
   return profile;
 };
 
-/**
- * Fetches an AI profile from the database using the provided client and user ID.
- *
- * @param client
- * @param userId
- * @returns
- */
+/** Fetches the AI profile with the given `userId`, or undefined when none exists. */
 export const fetchAiProfileByUserId = async (client: DrizzleClient, userId: string) => {
   const profile = await client.query.aiProfile.findFirst({
     where: eq(aiProfile.userId, userId),

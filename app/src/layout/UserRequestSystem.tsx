@@ -33,7 +33,7 @@ interface UserRequestSystemProps {
 const UserRequestSystem: React.FC<UserRequestSystemProps> = (props) => {
   // Table for challenges sent
   const challengesSent = props.requests
-    ?.filter((c) => c.senderId === props.userId)
+    .filter((c) => c.senderId === props.userId)
     .map((c) => ({
       info: <ChallengeInfo request={c} />,
       receiver: <ChallengeUserInfo user={c.receiver} />,
@@ -50,7 +50,7 @@ const UserRequestSystem: React.FC<UserRequestSystemProps> = (props) => {
 
   // Table for challenges received (or moderated)
   const challengesReceived = props.requests
-    ?.filter((c) =>
+    .filter((c) =>
       props.canModerateRequests
         ? c.senderId !== props.userId
         : c.receiverId === props.userId,
@@ -71,10 +71,10 @@ const UserRequestSystem: React.FC<UserRequestSystemProps> = (props) => {
 
   return (
     <div>
-      {challengesSent && challengesSent.length > 0 && (
+      {challengesSent.length > 0 && (
         <Table data={challengesSent} columns={sentColumns} compact={props.compact} />
       )}
-      {challengesReceived && challengesReceived.length > 0 && (
+      {challengesReceived.length > 0 && (
         <Table
           data={challengesReceived}
           columns={receivedColumns}
@@ -131,32 +131,9 @@ const ChallengeActionsBox: React.FC<ChallengeActionsBoxProps> = (props) => {
 };
 
 const ChallengeStatusBox: React.FC<{ status: UserRequestState }> = ({ status }) => {
-  switch (status) {
-    case "PENDING":
-      return (
-        <div className="rounded-md border-2 border-amber-400 bg-amber-300 p-2 font-bold text-amber-600">
-          Pending
-        </div>
-      );
-    case "ACCEPTED":
-      return (
-        <div className="rounded-md border-2 border-green-400 bg-green-300 p-2 font-bold text-green-600">
-          Accepted
-        </div>
-      );
-    case "REJECTED":
-      return (
-        <div className="rounded-md border-2 border-red-400 bg-red-300 p-2 font-bold text-red-600">
-          Rejected
-        </div>
-      );
-    case "CANCELLED":
-      return (
-        <div className="rounded-md border-2 border-slate-400 bg-slate-300 p-2 font-bold text-slate-600">
-          Cancelled
-        </div>
-      );
-  }
+  const className = STATUS_BOX_CLASSES[status];
+  if (!className) return null;
+  return <div className={className}>{capitalizeFirstLetter(status)}</div>;
 };
 
 const ChallengeInfo: React.FC<{ request: UserRequest }> = ({ request }) => {
@@ -186,6 +163,17 @@ const ChallengeUserInfo: React.FC<{ user: RequestUser }> = ({ user }) => {
       {user.village && <p>Village: {user.village.name}</p>}
     </div>
   );
+};
+
+/** Status badge styles; states without an entry render no badge. */
+const STATUS_BOX_CLASSES: Partial<Record<UserRequestState, string>> = {
+  PENDING:
+    "rounded-md border-2 border-amber-400 bg-amber-300 p-2 font-bold text-amber-600",
+  ACCEPTED:
+    "rounded-md border-2 border-green-400 bg-green-300 p-2 font-bold text-green-600",
+  REJECTED: "rounded-md border-2 border-red-400 bg-red-300 p-2 font-bold text-red-600",
+  CANCELLED:
+    "rounded-md border-2 border-slate-400 bg-slate-300 p-2 font-bold text-slate-600",
 };
 
 export default UserRequestSystem;

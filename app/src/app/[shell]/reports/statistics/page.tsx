@@ -1,6 +1,7 @@
 "use client";
 
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
@@ -8,18 +9,36 @@ import { isStaffRole } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 
-export default function Reports() {
+/** Display staff report aggregates with role gating before enabling the query. */
+export default function ReportStatistics() {
   const { data: userData } = useRequiredUserData();
+  const canView = !!userData && isStaffRole(userData.role);
 
-  const { data, isFetching } = api.reports.getReportStatistics.useQuery(undefined, {
-    enabled: !!userData && isStaffRole(userData.role),
-  });
+  const { data, isFetching, refetch } = api.reports.getReportStatistics.useQuery(
+    undefined,
+    { enabled: canView },
+  );
 
   if (!userData) return <Loader explanation="Loading userdata" />;
+  if (!canView)
+    return (
+      <ContentBox title="Reports" subtitle="Staff activity" defaultBackHref="/reports">
+        Only staff can view report statistics.
+      </ContentBox>
+    );
   if (isFetching) return <Loader explanation="Loading statistics" />;
-  if (!data) return <Loader explanation="No access" />;
+  if (!data)
+    return (
+      <ContentBox title="Reports" subtitle="Staff activity" defaultBackHref="/reports">
+        <p role="alert">
+          Could not load report statistics.{" "}
+          <Button variant="outline" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </p>
+      </ContentBox>
+    );
 
-  // Wrangle a little bit
   const { staff, timesReported, timesReporting, decisions } = data;
   const processed = staff
     .map((member) => {
@@ -58,7 +77,7 @@ export default function Reports() {
   return (
     <ContentBox
       title="Reports"
-      subtitle={userData?.role === "USER" ? "Your reports" : "Overview"}
+      subtitle="Overview"
       defaultBackHref="/reports"
       padding={false}
     >

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "bun:test";
+import type { Item, Jutsu } from "@/drizzle/schema";
 import {
   insertAction,
   userItemToAction,
   userJutsuToAction,
 } from "@/libs/combat/actions";
+import { validateActionTarget } from "@/libs/combat/targetValidation";
 import type { CombatAction, GroundEffect, ReturnedBattle } from "@/libs/combat/types";
 import {
   getActionAffectedTiles,
@@ -11,27 +13,25 @@ import {
   getBattleGrid,
 } from "@/libs/combat/util";
 import { getPossibleActionTiles } from "@/libs/hexgrid";
-import { validateActionTarget } from "@/libs/combat/targetValidation";
 import {
   DamageTag,
   HealTag,
-  MoveTag,
-  JutsuValidatorRawSchema,
   JutsuValidator,
+  JutsuValidatorRawSchema,
+  MoveTag,
   SuperRefinePassiveEffects,
 } from "@/validators/combat";
 import {
-  coordinateTargetingSchema,
   type CoordinateTargeting,
+  coordinateTargetingSchema,
 } from "@/validators/coordinateTargeting";
 import {
+  makeBattleUser,
   makeCombatAction,
   makeCompleteBattle,
-  makeBattleUser,
   makeEffect,
   makeJutsu,
-} from "./helpers/battleScenario";
-import type { Item, Jutsu } from "@/drizzle/schema";
+} from "../../setup/combat";
 
 const coordinate = (longitude: number, latitude: number) => ({ longitude, latitude });
 const pattern = (
@@ -249,7 +249,13 @@ describe("coordinate pattern resolution", () => {
   });
   it("permits the full grid for CHARACTER actions with the ALL method", () => {
     const { grid, origin } = scenario();
-    expect(getPossibleActionTiles(action({ target: "CHARACTER", method: "ALL", range: 0 }), origin, grid)).toBe(grid);
+    expect(
+      getPossibleActionTiles(
+        action({ target: "CHARACTER", method: "ALL", range: 0 }),
+        origin,
+        grid,
+      ),
+    ).toBe(grid);
   });
   it("restricts clicked target anchors but permits global and caster patterns", () => {
     const { grid, origin, clicked, battle } = scenario();
@@ -395,11 +401,16 @@ describe("coordinate casts and preview", () => {
           action({
             target,
             coordinateTargeting: pattern({ selection: "EXCLUDE", coordinates: [] }),
-            effects: [DamageTag.parse({}), HealTag.parse({ target: "SELF", friendlyFire: "ENEMIES" })],
+            effects: [
+              DamageTag.parse({}),
+              HealTag.parse({ target: "SELF", friendlyFire: "ENEMIES" }),
+            ],
           }),
         ),
       ).toBe(true);
-      expect(battle.usersEffects.filter((effect) => effect.type === "heal")).toEqual([]);
+      expect(battle.usersEffects.filter((effect) => effect.type === "heal")).toEqual(
+        [],
+      );
     },
   );
   it.each(["GROUND", "OPPONENT"] as const)(
@@ -436,7 +447,10 @@ describe("coordinate casts and preview", () => {
       expect(battle.usersEffects).toHaveLength(1);
       expect(
         battle.groundEffects.map((effect) => [effect.longitude, effect.latitude]),
-      ).toEqual([[3, 3], [4, 4]]);
+      ).toEqual([
+        [3, 3],
+        [4, 4],
+      ]);
       expect(actor.curChakra).toBe(before.chakra - 10);
       expect(actor.actionPoints).toBe(before.ap - 10);
       expect(actor.usedActions).toHaveLength(1);
@@ -557,21 +571,21 @@ describe("coordinate casts and preview", () => {
         staminaCostReducePerLvl: 0,
       } as unknown as Item,
     };
-    expect(
-      userJutsuToAction(
-        { id: "owned", jutsuId: "pattern", level: 1, originalCooldown: 0 } as never,
-        battle,
-      ).coordinateTargeting,
-    ).toEqual(ability.coordinateTargeting ?? null);
-    expect(userJutsuToAction({ id: "owned", jutsuId: "pattern", level: 1, originalCooldown: 0 } as never, battle).methodSize).toEqual(ability.methodSize ?? null);
-    expect(userItemToAction({ id: "owned", itemId: "pattern", originalCooldown: 0 } as never, actor, battle).methodSize).toEqual(ability.methodSize ?? null);
-    expect(
-      userItemToAction(
-        { id: "owned", itemId: "pattern", originalCooldown: 0 } as never,
-        actor,
-        battle,
-      ).coordinateTargeting,
-    ).toEqual(ability.coordinateTargeting ?? null);
+    const jutsuAction = userJutsuToAction(
+      { id: "owned", jutsuId: "pattern", level: 1, originalCooldown: 0 } as never,
+      battle,
+    );
+    const itemAction = userItemToAction(
+      { id: "owned", itemId: "pattern", originalCooldown: 0 } as never,
+      actor,
+      battle,
+    );
+    expect(jutsuAction.coordinateTargeting).toEqual(
+      ability.coordinateTargeting ?? null,
+    );
+    expect(jutsuAction.methodSize).toEqual(ability.methodSize ?? null);
+    expect(itemAction.methodSize).toEqual(ability.methodSize ?? null);
+    expect(itemAction.coordinateTargeting).toEqual(ability.coordinateTargeting ?? null);
   });
 });
 
@@ -649,9 +663,8 @@ describe("coordinate validation", () => {
     expect(
       effects.safeParse([DamageTag.parse({ target: "COORDINATES" })]).success,
     ).toBe(false);
-    const moveEffects = JutsuValidatorRawSchema.shape.effects;
     expect(
-      moveEffects.safeParse([
+      effects.safeParse([
         MoveTag.parse({ target: "COORDINATES", coordinateTargeting: pattern() }),
       ]).success,
     ).toBe(false);

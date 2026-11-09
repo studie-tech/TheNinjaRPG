@@ -9,18 +9,22 @@ import {
   makeBattleUserItem,
   makeBattleWithWeapon,
   makeDamageEffect,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
+
+/** A battle holding the 22-power Ninjutsu weapon that gains 1 power per level. */
+const scalingWeaponBattle = () =>
+  makeBattleWithWeapon({
+    damage: {
+      power: 22,
+      powerPerLevel: 1,
+      statTypes: ["Ninjutsu"],
+      generalTypes: [],
+    },
+  });
 
 describe("weapon action scaling", () => {
   it("does not scale weapon damage power from the user's character level", () => {
-    const battle = makeBattleWithWeapon({
-      damage: {
-        power: 22,
-        powerPerLevel: 1,
-        statTypes: ["Ninjutsu"],
-        generalTypes: [],
-      },
-    });
+    const battle = scalingWeaponBattle();
     const user = { userId: "attacker", level: 100 } as ReturnedUserState;
     const userItem = makeBattleUserItem({ level: 1 });
 
@@ -35,14 +39,7 @@ describe("weapon action scaling", () => {
   });
 
   it("scales weapon damage power from the item ownership level", () => {
-    const battle = makeBattleWithWeapon({
-      damage: {
-        power: 22,
-        powerPerLevel: 1,
-        statTypes: ["Ninjutsu"],
-        generalTypes: [],
-      },
-    });
+    const battle = scalingWeaponBattle();
     const user = { userId: "attacker", level: 1 } as ReturnedUserState;
     const userItem = makeBattleUserItem({ level: 10 });
 
@@ -59,14 +56,7 @@ describe("weapon action scaling", () => {
   it("keeps character-level scaling for AI users' items", () => {
     // AI users never earn item XP, so their gear scales from character level
     // instead of being pinned to item level 1.
-    const battle = makeBattleWithWeapon({
-      damage: {
-        power: 22,
-        powerPerLevel: 1,
-        statTypes: ["Ninjutsu"],
-        generalTypes: [],
-      },
-    });
+    const battle = scalingWeaponBattle();
     const user = { userId: "attacker", level: 100, isAi: true } as ReturnedUserState;
     const userItem = makeBattleUserItem({ level: 1 });
 
@@ -76,7 +66,6 @@ describe("weapon action scaling", () => {
   });
 
   it("keeps a 30EP weapon below a comparable 50EP damage jutsu at equal levels", () => {
-    // Regression test for: https://discord.com/channels/1080832341234159667/1375094434437271572/1518261967616475248
     const battle = makeBattleWithWeapon({
       damage: {
         power: 30,
@@ -103,12 +92,7 @@ describe("weapon action scaling", () => {
       level: 1,
     });
 
-    const weaponDamage = damageCalc(
-      weaponDamageEffect,
-      attacker,
-      defender,
-      dmgConfig,
-    );
+    const weaponDamage = damageCalc(weaponDamageEffect, attacker, defender, dmgConfig);
     const jutsuDamage = damageCalc(jutsuDamageEffect, attacker, defender, dmgConfig);
 
     expect(getPower(weaponDamageEffect).power).toBe(31);

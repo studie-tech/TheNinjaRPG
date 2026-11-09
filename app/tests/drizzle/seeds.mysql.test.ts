@@ -22,7 +22,11 @@ import { seedForum } from "../../drizzle/seeds/forum";
 import { seedGuides } from "../../drizzle/seeds/guide";
 import { seedVillages } from "../../drizzle/seeds/village";
 import { insertItems } from "../setup/factories";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../setup/testDatabase";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../setup/testDatabase";
 
 const insertBloodline = async (name: string, image: string) => {
   const database = await getTestDatabase();
@@ -76,7 +80,12 @@ describeWithDatabase("content seeds", () => {
   it("gives generated guides their entity's image and relation", async () => {
     await insertBloodline("Seed Crystal Line", "/seed-crystal.webp");
     await insertItems([
-      { id: "seed-herb", name: "Seed Moonleaf", image: "/moonleaf.webp", isFarmSeed: true },
+      {
+        id: "seed-herb",
+        name: "Seed Moonleaf",
+        image: "/moonleaf.webp",
+        isFarmSeed: true,
+      },
     ]);
 
     await seedGuides(await getTestDatabase());
@@ -118,7 +127,11 @@ describeWithDatabase("content seeds", () => {
     expect((await guideBySlug("combat"))?.relatedBloodlineId).toBeNull();
     expect(await guideBySlug("edit")).toBeUndefined();
     expect(await guideBySlug("seed-crystal-line")).toEqual(
-      expect.objectContaining({ id: "staff-guide", title: "Written by staff", image: null }),
+      expect.objectContaining({
+        id: "staff-guide",
+        title: "Written by staff",
+        image: null,
+      }),
     );
     const rows = await database.select({ slug: guideArticle.slug }).from(guideArticle);
     expect(new Set(rows.map((row) => row.slug)).size).toBe(rows.length);

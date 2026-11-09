@@ -1,7 +1,8 @@
 /**
  * Database access for parental controls; authorization and transaction scopes stay in callers.
  */
-import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
+import { PARENTAL_PIN_MAX_ATTEMPTS } from "@/drizzle/constants";
 import { parentalControl, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 
@@ -67,23 +68,25 @@ export const updateParentalControlForSave = (
   cutoff: Date,
   ctx: { userId: string },
   input: { version: number },
-) =>
-  client
+) => {
+  const windowExpired = lte(parentalControl.attemptWindowStart, cutoff);
+  return client
     .update(parentalControl)
     .set({
-      failedAttempts: sql`CASE WHEN ${parentalControl.attemptWindowStart} <= ${cutoff} THEN 1 ELSE ${parentalControl.failedAttempts} + 1 END`,
-      attemptWindowStart: sql`CASE WHEN ${parentalControl.attemptWindowStart} <= ${cutoff} THEN ${new Date()} ELSE ${parentalControl.attemptWindowStart} END`,
+      failedAttempts: sql`CASE WHEN ${windowExpired} THEN 1 ELSE ${parentalControl.failedAttempts} + 1 END`,
+      attemptWindowStart: sql`CASE WHEN ${windowExpired} THEN ${new Date()} ELSE ${parentalControl.attemptWindowStart} END`,
     })
     .where(
       and(
         eq(parentalControl.userId, ctx.userId),
         eq(parentalControl.version, input.version),
         or(
-          lt(parentalControl.failedAttempts, 5),
-          sql`${parentalControl.attemptWindowStart} <= ${cutoff}`,
+          lt(parentalControl.failedAttempts, PARENTAL_PIN_MAX_ATTEMPTS),
+          windowExpired,
         ),
       ),
     );
+};
 
 /** Build the `parentalControl` update for `save`, using predicates on `userId` and `version`. */
 export const updateParentalControlForSave2 = (

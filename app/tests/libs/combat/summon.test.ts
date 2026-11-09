@@ -1,13 +1,13 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
+import type { Battle } from "@/drizzle/schema";
+import { maskBattle } from "@/libs/combat/masking";
 import {
-  isSummonTemplate,
   isActiveSummon,
   isLiveSummon,
+  isSummonTemplate,
   spliceOrphanedSummons,
   summonsAllowedInBattle,
 } from "@/libs/combat/summon";
-import { maskBattle } from "@/libs/combat/masking";
-import type { Battle } from "@/drizzle/schema";
 import type { BattleUserState } from "@/libs/combat/types";
 
 const mk = (over: Partial<BattleUserState>): BattleUserState =>
@@ -27,13 +27,15 @@ const player = mk({ userId: "p1", controllerId: "p1" });
 
 describe("isSummonTemplate / isActiveSummon", () => {
   it("flagged template -> template", () => {
-    const t = mk({ userId: "t", controllerId: "aiX", isSummon: true, isSummonTemplate: true, curHealth: 0 });
+    const t = mk({
+      userId: "t",
+      controllerId: "aiX",
+      isSummon: true,
+      isSummonTemplate: true,
+      curHealth: 0,
+    });
     expect(isSummonTemplate(t, [player, t])).toBe(true);
     expect(isActiveSummon(t, [player, t])).toBe(false);
-  });
-  it("unflagged dead summon whose controller left -> template", () => {
-    const t = mk({ userId: "t", controllerId: "aiX", isSummon: true, isSummonTemplate: undefined, curHealth: 0 });
-    expect(isSummonTemplate(t, [player, t])).toBe(true);
   });
   it("spawned summon (alive, controller present) -> active", () => {
     const s = mk({ userId: "s", controllerId: "p1", isSummon: true, curHealth: 50 });
@@ -66,26 +68,50 @@ describe("isLiveSummon", () => {
     expect(isLiveSummon(s, [player, s])).toBe(false);
   });
   it("left-battle summon is not live", () => {
-    const s = mk({ userId: "s", controllerId: "p1", isSummon: true, curHealth: 50, leftBattle: true });
+    const s = mk({
+      userId: "s",
+      controllerId: "p1",
+      isSummon: true,
+      curHealth: 50,
+      leftBattle: true,
+    });
     expect(isLiveSummon(s, [player, s])).toBe(false);
   });
 });
 
 describe("unflagged summons", () => {
   it("classifies a flag-less curHealth-0 controller-less summon as a template", () => {
-    const t = mk({ userId: "t", controllerId: "aiX", isSummon: true, isSummonTemplate: undefined, curHealth: 0 });
+    const t = mk({
+      userId: "t",
+      controllerId: "aiX",
+      isSummon: true,
+      isSummonTemplate: undefined,
+      curHealth: 0,
+    });
     expect(isSummonTemplate(t, [player, t])).toBe(true);
     expect(isActiveSummon(t, [player, t])).toBe(false);
   });
   it("still treats a flag-less alive summon with a present controller as active", () => {
-    const s = mk({ userId: "s", controllerId: "p1", isSummon: true, isSummonTemplate: undefined, curHealth: 50 });
+    const s = mk({
+      userId: "s",
+      controllerId: "p1",
+      isSummon: true,
+      isSummonTemplate: undefined,
+      curHealth: 50,
+    });
     expect(isActiveSummon(s, [player, s])).toBe(true);
   });
 });
 
 describe("isSummonTemplate is server-internal (stripped by masking)", () => {
   it("is absent from the masked public state of a non-controller viewer", () => {
-    const summon = mk({ userId: "s1", controllerId: "p1", isSummon: true, isSummonTemplate: false, curHealth: 50 });
+    const summon = mk({
+      userId: "s1",
+      controllerId: "p1",
+      isSummon: true,
+      isSummonTemplate: false,
+      curHealth: 50,
+    });
     const battle = { usersState: [summon] } as unknown as Battle;
     const masked = maskBattle(battle, "opponentX");
     expect("isSummonTemplate" in (masked.usersState[0] as object)).toBe(false);
@@ -93,7 +119,13 @@ describe("isSummonTemplate is server-internal (stripped by masking)", () => {
   it("is absent even from the controller's own (full) masked state", () => {
     // The controller gets allState (public+private); isSummonTemplate is in
     // neither list, so it must be stripped for them too.
-    const summon = mk({ userId: "s1", controllerId: "p1", isSummon: true, isSummonTemplate: false, curHealth: 50 });
+    const summon = mk({
+      userId: "s1",
+      controllerId: "p1",
+      isSummon: true,
+      isSummonTemplate: false,
+      curHealth: 50,
+    });
     const battle = { usersState: [summon] } as unknown as Battle;
     const masked = maskBattle(battle, "p1");
     expect("isSummonTemplate" in (masked.usersState[0] as object)).toBe(false);

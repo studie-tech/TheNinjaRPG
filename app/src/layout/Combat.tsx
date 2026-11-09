@@ -1,16 +1,11 @@
 import type { Grid } from "honeycomb-grid";
 import { useAtom, useSetAtom } from "jotai";
-import { Check, HelpCircle, Loader2 } from "lucide-react";
 import type React from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, type RouterInputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { combatProfilePatch, getCombatInventoryUpdate } from "@/deltas/combat";
-import {
-  AutoBattleTypes,
-  IMG_INITIATIVE_D20,
-  PvpBattleTypes,
-} from "@/drizzle/constants";
+import { AutoBattleTypes } from "@/drizzle/constants";
 import {
   type CombatPreferences,
   useBattleMaps,
@@ -19,23 +14,18 @@ import {
 import { useGameScene } from "@/hooks/game-scene";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
-import { useNavigationRouter as useRouter } from "@/hooks/navigation";
-import { TUTORIAL_STEPS, useTutorialStep } from "@/hooks/tutorial";
+import { useTutorialStep } from "@/hooks/tutorial";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import { CombatAggro } from "@/layout/CombatAggro";
+import { CombatLobby } from "@/layout/CombatLobby";
 import { CombatResourceBars } from "@/layout/CombatResourceBars";
-import { CombatRewards } from "@/layout/CombatRewards";
+import { CombatResultScreen } from "@/layout/CombatResultScreen";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
-import { HuntingBoard } from "@/layout/HuntingBoard";
-import Image from "@/layout/Image";
-import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
-import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
-import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { QuestUpdateModal } from "@/layout/Logbook";
-import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/MenuBoxProfile";
+import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/VisualizeEffects";
 import WebGlError from "@/layout/WebGLError";
 import { getAudioPreference } from "@/libs/audioPreferences";
 import {
@@ -45,16 +35,22 @@ import {
 } from "@/libs/combat/actions";
 import { getAggroDisplay } from "@/libs/combat/aggroDisplay";
 import { shouldInvalidateEndedBattleCaches } from "@/libs/combat/battleMaps";
-import { COMBAT_LOBBY_SECONDS, COMBAT_SECONDS } from "@/libs/combat/constants";
+import {
+  COMBAT_LOBBY_SECONDS,
+  COMBAT_SECONDS,
+  ITEM_BROKEN_NOTICE,
+  ITEM_DURABILITY_CRITICAL_NOTICE,
+  ITEM_DURABILITY_NOTICE,
+} from "@/libs/combat/constants";
 import { isBattleHotkeyBlocked } from "@/libs/combat/hotkeys";
-import { isPvpEnergyRewardBattle, sendsToHospital } from "@/libs/combat/settlement";
 import { validateActionTarget } from "@/libs/combat/targetValidation";
 import { getTurnControl, resolveControlledActorId } from "@/libs/combat/turn";
 import type { BattleState, CombatAction, ReturnedBattle } from "@/libs/combat/types";
+import { isBattleInLobby } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
 import { haptics } from "@/libs/native";
-import { findConsecutiveQuestId, getIsolatedPyramid } from "@/libs/questRun";
+import { findConsecutiveQuestId } from "@/libs/questRun";
 import {
   type CombatHover,
   type CombatPresented,
@@ -63,7 +59,7 @@ import {
 } from "@/libs/rendering/scenes/combat";
 import type { WorldWeather } from "@/libs/rendering/worldWeather";
 import { showMutationToast } from "@/libs/toast";
-import { getTutorialBattleReturnPage, isTutorialActive } from "@/libs/tutorial";
+import { isTutorialActive } from "@/libs/tutorial";
 import { playPreloadedAudio, preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
 import { isStaffRole } from "@/utils/permissions";
 import { secondsFromNow } from "@/utils/time";
@@ -76,7 +72,6 @@ import {
   useRequiredUserData,
   userBattleAtom,
 } from "@/utils/UserContext";
-import Countdown from "./Countdown";
 
 /** Autonomous requests stay inside the 60-per-minute limit that fines players. */
 const AUTONOMOUS_ACTION_MS = 1100;
@@ -102,7 +97,6 @@ interface CombatProps {
 const Combat: React.FC<CombatProps> = (props) => {
   // Destructure props
   const { battleState, setBattleState, config } = props;
-  const router = useRouter();
   const [heldResultVersion, setHeldResultVersion] = useAtom(combatHeldResultAtom);
   /** Settled outcome; everything that acts on the battle reads this, not the display. */
   const settledResult = battleState.result;
@@ -112,16 +106,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   const loadLpcCatalog = useLpcCatalogLoader();
 
   // State
-  const [isReturningFromTutorial, setIsReturningFromTutorial] = useState(false);
-  const tutorialReturnLockRef = useRef(false);
   const [logbookModalQuestId, setLogbookModalQuestId] = useState<string | null>(null);
-  const [readySettledBattleId, setReadySettledBattleId] = useState<string | null>(null);
-  const [pendingLoadoutSelection, setPendingLoadoutSelection] = useState<{
-    battleId: string;
-    kind: "item" | "jutsu";
-    loadoutId: string;
-    displayName: string;
-  } | null>(null);
 
   // Hover tooltip state for effects (can include both user and ground effects)
   const [hoveredEffect, setHoveredEffect] = useState<CombatHover | null>(null);
@@ -142,12 +127,6 @@ const Combat: React.FC<CombatProps> = (props) => {
   const fieldFailedRef = useRef(false);
   const lastBattleCheckRef = useRef(0);
   const actionInFlightRef = useRef(false);
-  const readyInFlightBattleIdRef = useRef<string | null>(null);
-  const loadoutInFlightRef = useRef<{
-    battleId: string;
-    kind: "item" | "jutsu";
-    loadoutId: string;
-  } | null>(null);
   const battleRef = useRef<ReturnedBattle | null | undefined>(battleState.battle);
   const actionRef = useRef<CombatAction | undefined>(props.action);
   const userIdRef = useRef<string>(props.userId);
@@ -161,7 +140,6 @@ const Combat: React.FC<CombatProps> = (props) => {
   }, [props.endTurnKey]);
   const gridRef = useRef<Grid<TerrainHex> | null>(null);
   const battleId = battleRef.current?.id;
-  const battleType = battleRef.current?.battleType;
 
   // getUser / travel / raid invalidation after a result must run once per
   // ended battle, not on every later props identity change while result is set.
@@ -202,9 +180,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
   const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(userData?.sector);
   const [isInLobby, setIsInLobby] = useState(
-    () =>
-      !!battleState.battle &&
-      battleState.battle.createdAt.getTime() > Date.now() - timeDiff,
+    () => !!battleState.battle && isBattleInLobby(battleState.battle, timeDiff),
   );
   // Departed players and their summons can retain auto flags; only humans still
   // fighting keep optional auto combat active, matching the server's batch gate.
@@ -307,8 +283,6 @@ const Combat: React.FC<CombatProps> = (props) => {
     tooltip.style.top = `${Math.max(8, Math.min(above >= 8 ? above : y + 15, window.innerHeight - height - 8))}px`;
   }, [detailsTarget, detailsEffects]);
 
-  // Store precomputed maps in refs for use in render loop
-  const setHoveredEffectRef = useRef(setHoveredEffect);
   const lastHoverKeyRef = useRef<string | null>(null);
   // Touch effects use a held gesture so their tooltip cannot intercept a quick
   // action tap. Aggro inspection is selected independently on pointer release.
@@ -316,25 +290,6 @@ const Combat: React.FC<CombatProps> = (props) => {
   const touchDetailsOpenRef = useRef(false);
   const touchDetailsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressClickUntilRef = useRef(0);
-
-  // Update refs when memos change
-  useEffect(() => {
-    setHoveredEffectRef.current = setHoveredEffect;
-  }, [battleMaps, setHoveredEffect]);
-
-  // Session battle user state (the human's own account — used for lobby/ready
-  // UI and loadout selection, NOT for piloting; piloting reads userIdRef).
-  const battleSessionUser = battleRef.current?.usersState.find(
-    (u) => u.userId === userData?.userId,
-  );
-  // Once this participant's readiness has been proven by the mutation response,
-  // do not let an older query snapshot expose the action again. Battle IDs are
-  // immutable, so a genuinely new lobby resets this local settlement naturally.
-  const hasSettledReady =
-    !!battleId &&
-    (battleSessionUser?.iAmHere === true || readySettledBattleId === battleId);
-  const activePendingLoadout =
-    pendingLoadoutSelection?.battleId === battleId ? pendingLoadoutSelection : null;
 
   // Asset IDs to fetch
   const textureAssets = battleRef.current?.extraState.textureAssets || [];
@@ -449,7 +404,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       // away from) another actor — e.g. to/from a piloted summon. On the
       // player's own consecutive actions the controlled actor is unchanged, so
       // the highlight persists and the same jutsu/item can be chained across AP
-      // spends (matching pre-pilot behaviour). No-op responses (e.g. "Not your
+      // spends. No-op responses (e.g. "Not your
       // turn") omit battleUpdate and so never clear it. Reset here in onSuccess
       // rather than a useEffect (React Compiler lints the effect form).
       if (data.updateClient && data.battleUpdate) {
@@ -496,12 +451,12 @@ const Combat: React.FC<CombatProps> = (props) => {
       }
       if (data?.result?.notifications.length !== 0) {
         data?.result?.notifications.forEach((notification) => {
-          // Check if this is a durability warning (contains "durability is now" or "has broken")
+          // Check if this is a durability warning
           const isDurabilityWarning =
-            notification.includes("durability is now") ||
-            notification.includes("durability is critically low") ||
-            notification.includes("has broken");
-          const isBrokenItem = notification.includes("has broken");
+            notification.includes(ITEM_DURABILITY_NOTICE) ||
+            notification.includes(ITEM_DURABILITY_CRITICAL_NOTICE) ||
+            notification.includes(ITEM_BROKEN_NOTICE);
+          const isBrokenItem = notification.includes(ITEM_BROKEN_NOTICE);
           // Check if this is a war notification
           const isWarNotification =
             notification.includes("townhall") || notification.includes("Shrine");
@@ -570,159 +525,6 @@ const Combat: React.FC<CombatProps> = (props) => {
     mutateAction(input);
   };
 
-  // I am here call
-  const { mutate: iAmHere, isPending: isMarkingReady } = api.combat.iAmHere.useMutation(
-    {
-      onSuccess: (data, variables) => {
-        const readinessWasProven =
-          "battle" in data &&
-          data.success &&
-          data.battle?.usersState.some((user) => user.userId === suid && user.iAmHere);
-
-        if (readinessWasProven && data.battle) {
-          setReadySettledBattleId(variables.battleId);
-
-          // Do not replace a newer battle with a response from a lobby the user
-          // has already left. The settlement is keyed to the old battle and is
-          // therefore harmless when the new battle renders.
-          if (battleRef.current?.id === variables.battleId) {
-            battleRef.current = data.battle;
-            setBattleAtom(data.battle);
-            setBattleState({ battle: data.battle, result: null, isPending: false });
-            void utils.combat.getBattle.invalidate();
-          }
-        } else {
-          showMutationToast({
-            success: false,
-            message:
-              data.message ||
-              "The combat lobby has expired. Refresh to see the current battle.",
-          });
-        }
-      },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
-      onSettled: (_data, _error, variables) => {
-        if (readyInFlightBattleIdRef.current === variables.battleId) {
-          readyInFlightBattleIdRef.current = null;
-        }
-      },
-    },
-  );
-
-  const handleMarkReady = () => {
-    const currentBattleId = battleRef.current?.id;
-    const sessionUser = battleRef.current?.usersState.find(
-      (user) => user.userId === suid,
-    );
-    if (
-      !currentBattleId ||
-      !suid ||
-      isMarkingReady ||
-      loadoutInFlightRef.current?.battleId === currentBattleId ||
-      readyInFlightBattleIdRef.current === currentBattleId ||
-      sessionUser?.iAmHere ||
-      readySettledBattleId === currentBattleId
-    ) {
-      return;
-    }
-
-    readyInFlightBattleIdRef.current = currentBattleId;
-    iAmHere({ battleId: currentBattleId });
-  };
-
-  // Mutation for selecting loadouts
-  const { mutate: selectLoadout } = api.combat.updateCombatLoadout.useMutation({
-    onSuccess: (data, variables) => {
-      if (
-        "battle" in data &&
-        data.success &&
-        data.battle &&
-        data.battle.id === variables.battleId
-      ) {
-        // The response belongs to an immutable lobby ID. Never allow a slow
-        // response from a lobby the player has left to replace the new battle.
-        if (battleRef.current?.id === variables.battleId) {
-          battleRef.current = data.battle;
-          setBattleAtom(data.battle);
-          setBattleState({ battle: data.battle, result: null, isPending: false });
-          if (data.message) {
-            showMutationToast({
-              success: true,
-              title: "Loadout updated",
-              message: data.message,
-            });
-          }
-          void utils.combat.getBattle.invalidate();
-        }
-      } else {
-        showMutationToast({
-          success: false,
-          message:
-            data.message ||
-            "The combat lobby changed before this loadout could be saved.",
-        });
-      }
-    },
-    onError: (error) => {
-      showMutationToast({ success: false, message: error.message });
-    },
-    onSettled: (_data, _error, variables) => {
-      const kind = variables.itemLoadoutId ? "item" : "jutsu";
-      const loadoutId = variables.itemLoadoutId ?? variables.jutsuLoadoutId;
-      const currentRequest = loadoutInFlightRef.current;
-      if (
-        loadoutId &&
-        currentRequest?.battleId === variables.battleId &&
-        currentRequest.kind === kind &&
-        currentRequest.loadoutId === loadoutId
-      ) {
-        loadoutInFlightRef.current = null;
-        setPendingLoadoutSelection((pending) =>
-          pending?.battleId === variables.battleId &&
-          pending.kind === kind &&
-          pending.loadoutId === loadoutId
-            ? null
-            : pending,
-        );
-      }
-    },
-  });
-
-  const handleSelectLoadout = (
-    kind: "item" | "jutsu",
-    loadoutId: string,
-    displayName: string,
-  ) => {
-    const currentBattle = battleRef.current;
-    const currentUser = currentBattle?.usersState.find((user) => user.userId === suid);
-    if (
-      !currentBattle ||
-      !currentUser ||
-      currentUser.iAmHere ||
-      readySettledBattleId === currentBattle.id ||
-      readyInFlightBattleIdRef.current === currentBattle.id ||
-      loadoutInFlightRef.current?.battleId === currentBattle.id
-    ) {
-      return;
-    }
-
-    const selectedId =
-      kind === "item" ? currentUser.itemLoadout : currentUser.jutsuLoadout;
-    if (selectedId === loadoutId) return;
-
-    const pending = { battleId: currentBattle.id, kind, loadoutId, displayName };
-    loadoutInFlightRef.current = pending;
-    setPendingLoadoutSelection(pending);
-    selectLoadout({
-      battleId: currentBattle.id,
-      ...(kind === "item"
-        ? { itemLoadoutId: loadoutId }
-        : { jutsuLoadoutId: loadoutId }),
-    });
-  };
-
   // Handle key-presses
   const onDocumentKeyDown = (event: KeyboardEvent) => {
     if (isBattleHotkeyBlocked(event)) return;
@@ -734,9 +536,8 @@ const Combat: React.FC<CombatProps> = (props) => {
     if (battleRef.current && suid && !resultRef.current) {
       // Read the refs rather than render-scope state: this listener only
       // re-registers on [suid, timeDiff], so a captured value would go stale.
-      // Both refs are kept current, which also lets the precompute be reused on
-      // the summon's turn (the old precomputedUserId: suid only ever hit on the
-      // player's own turn, and dropping it recomputed actions on every keypress).
+      // Both refs are kept current, so the precomputed actions apply on the
+      // player's own turn and on the piloted summon's turn.
       const { actor } = calcActiveUser(battleRef.current, suid, timeDiff, {
         precomputedUserId: userIdRef.current,
         precomputedActions: precomputedActionsRef.current,
@@ -792,7 +593,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     }
     touchDetailsOpenRef.current = false;
     lastHoverKeyRef.current = null;
-    setHoveredEffectRef.current(null);
+    setHoveredEffect(null);
   };
   // Long presses inspect effects without submitting a combat action.
   const onDocumentTouchStart = (event: TouchEvent) => {
@@ -850,9 +651,9 @@ const Combat: React.FC<CombatProps> = (props) => {
         // falsy, so they stay AI-driven.
         // Never auto-fire while the battle lobby is still counting down: the
         // server rejects early actions ("Battle has not started yet"), so
-        // firing would only spam error toasts — relevant now that a player on
-        // auto combat can be the initiative winner of a PvP lobby battle.
-        const inLobby = battleRef.current.createdAt.getTime() > Date.now() - timeDiff;
+        // firing would only spam error toasts. A player on auto combat can win
+        // initiative in a PvP lobby battle.
+        const inLobby = isBattleInLobby(battleRef.current, timeDiff);
         const { isAITurn } = getTurnControl(actor, suid);
         // Spectators follow the battle's channel; only its fighters drive its AI turns.
         const isFighter = battleRef.current.usersState.some(
@@ -869,7 +670,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           }
         } else if (now - lastBattleCheckRef.current >= BATTLE_CHECK_MS) {
           lastBattleCheckRef.current = now;
-          // Scenario 2: more than 10 seconds passed, or actor is no longer the same as active user - refetch
+          // Scenario 2: the round timer (COMBAT_SECONDS) elapsed after the lobby, or the active actor changed - refetch
           const updatePassed =
             Date.now() - timeDiff - battleRef.current.roundStartAt.getTime();
           const createPassed =
@@ -981,8 +782,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   useEffect(() => {
     if (isInLobby) {
       const interval = setInterval(() => {
-        const syncedTime = Date.now() - timeDiff;
-        if (battleRef.current && battleRef.current.createdAt.getTime() > syncedTime) {
+        if (battleRef.current && isBattleInLobby(battleRef.current, timeDiff)) {
           setIsInLobby(true);
         } else {
           setIsInLobby(false);
@@ -1103,7 +903,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           const key = hover ? `${hover.tileKey}-${hover.userId ?? ""}` : null;
           if (key !== lastHoverKeyRef.current) {
             lastHoverKeyRef.current = key;
-            setHoveredEffectRef.current(hover);
+            setHoveredEffect(hover);
           }
         },
       }),
@@ -1166,49 +966,6 @@ const Combat: React.FC<CombatProps> = (props) => {
       sceneRef.removeEventListener("mouseleave", handleMouseLeave);
     };
   }, []);
-
-  // Derived variables
-  const showShrineAgain = result?.outcome === "Won" && battleType === "SHRINE_WAR";
-  const showTravelBtn = battleType === "QUEST" && !getIsolatedPyramid(userData);
-  const initiveWinner = battleRef.current?.usersState.find(
-    (u) => u.userId === battleRef.current?.activeUserId,
-  );
-  const toHospital =
-    !!battleRef.current &&
-    !!result &&
-    sendsToHospital(battleRef.current, result.curHealth);
-
-  const handleTutorialBattleReturn = async (
-    event: React.MouseEvent<HTMLAnchorElement>,
-    destination: string,
-  ) => {
-    if (!currentStep || !userData?.tutorialOn || getIsolatedPyramid(userData)) return;
-    event.preventDefault();
-    if (tutorialReturnLockRef.current) return;
-    tutorialReturnLockRef.current = true;
-    setIsReturningFromTutorial(true);
-    try {
-      // Navigation must wait for the confirmed profile: a cached BATTLE status
-      // otherwise makes the tutorial redirect back to the fight that just ended.
-      const profile = await utils.profile.getUser.fetch(undefined, { staleTime: 0 });
-      router.push(
-        getTutorialBattleReturnPage(
-          TUTORIAL_STEPS,
-          profile.userData,
-          result?.outcome,
-          destination,
-        ),
-      );
-    } catch {
-      showMutationToast({
-        success: false,
-        message: "Could not load your updated character. Please try returning again.",
-      });
-    } finally {
-      tutorialReturnLockRef.current = false;
-      setIsReturningFromTutorial(false);
-    }
-  };
 
   return (
     <>
@@ -1275,213 +1032,21 @@ const Combat: React.FC<CombatProps> = (props) => {
 
       {webglError && <WebGlError />}
       {/* BATTLE LOBBY SCREEN */}
-      {isInLobby &&
-        battleRef.current &&
-        PvpBattleTypes.includes(battleRef.current.battleType) && (
-          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto overflow-y-auto bg-black/90">
-            <div className="flex h-full flex-col items-center justify-center text-white">
-              <p className="text-3xl">Waiting for opponent</p>
-              <p className="text-xl">
-                Time Left:{" "}
-                <Countdown
-                  targetDate={battleRef.current.createdAt}
-                  timeDiff={timeDiff}
-                />
-              </p>
-              <p className="mb-2 flex flex-row text-lg">
-                Initiative Winner: {initiveWinner?.username}{" "}
-                <Link href="/manual/combat">
-                  <HelpCircle className="h6 ml-2 w-6 hover:text-orange-500" />
-                </Link>
-              </p>
-              <div className="flex flex-row gap-4">
-                {battleRef.current.usersState
-                  .filter((u) => u.isOriginal && !u.isAi)
-                  .map((u) => {
-                    return (
-                      <div
-                        key={`${u.userId}-initiative-${u.initiative}`}
-                        className="relative flex flex-col items-center font-bold"
-                      >
-                        <Image
-                          alt={`roll-${u.userId}`}
-                          src={IMG_INITIATIVE_D20}
-                          height={60}
-                          width={60}
-                        ></Image>
-                        <p className="absolute top-7 text-md">
-                          {Math.floor(u.initiative)}
-                        </p>
-                        <p>
-                          {u.username}{" "}
-                          {u.iAmHere ||
-                          (u.userId === suid && readySettledBattleId === battleId)
-                            ? "(✓)"
-                            : ""}
-                        </p>
-                      </div>
-                    );
-                  })}
-              </div>
-              <fieldset
-                className="mt-3 flex flex-row items-end gap-3"
-                disabled={isMarkingReady || hasSettledReady || !!activePendingLoadout}
-                aria-busy={isMarkingReady || !!activePendingLoadout}
-              >
-                {(battleRef.current.battleType === "COMBAT" ||
-                  battleRef.current.battleType === "SPARRING") && (
-                  <>
-                    <ItemLoadoutSelector
-                      variant="dropdown"
-                      label="Item Loadout"
-                      onSelectOverride={(loadoutId, displayName) =>
-                        handleSelectLoadout("item", loadoutId, displayName)
-                      }
-                      selectedOverrideId={battleSessionUser?.itemLoadout}
-                    />
-                    <JutsuLoadoutSelector
-                      variant="dropdown"
-                      label="Jutsu Loadout"
-                      onSelectOverride={(loadoutId, displayName) =>
-                        handleSelectLoadout("jutsu", loadoutId, displayName)
-                      }
-                      selectedOverrideId={battleSessionUser?.jutsuLoadout}
-                    />
-                  </>
-                )}
-                <Button
-                  variant="secondary"
-                  className="shrink-0"
-                  disabled={isMarkingReady || hasSettledReady || !!activePendingLoadout}
-                  aria-busy={isMarkingReady || !!activePendingLoadout}
-                  onClick={handleMarkReady}
-                >
-                  {isMarkingReady ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                      Confirming
-                    </>
-                  ) : hasSettledReady ? (
-                    <>
-                      <Check className="mr-2 h-4 w-4" aria-hidden />
-                      Ready
-                    </>
-                  ) : (
-                    "I'm Ready"
-                  )}
-                </Button>
-              </fieldset>
-              {activePendingLoadout && (
-                <p
-                  className="mt-2 flex items-center text-sm text-white/80"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                  Saving
-                </p>
-              )}
-            </div>
-          </div>
-        )}
+      <CombatLobby
+        battleRef={battleRef}
+        isInLobby={isInLobby}
+        setBattleState={setBattleState}
+      />
       {/* FINAL DONE SCREEN */}
       {result && (
-        <div className="relative z-20 bg-black/90">
-          <div className="mx-auto max-w-3xl px-3 pb-3 text-center text-white sm:px-5 sm:pb-5">
-            <p className="p-5 pb-2 text-3xl">You {result.outcome}</p>
-            <div className="space-y-4 bg-background p-3 text-foreground sm:p-4">
-              {result.hunting && (
-                <HuntingBoard
-                  victory={result.hunting}
-                  onStarted={() => setBattleAtom(undefined)}
-                />
-              )}
-              <CombatRewards
-                result={result}
-                isOutlaw={!!userData?.isOutlaw}
-                isQuest={battleType === "QUEST"}
-                showPvpEnergy={
-                  !!battleRef.current &&
-                  isPvpEnergyRewardBattle(battleRef.current, props.userId)
-                }
-              />
-            </div>
-            <div className="grid gap-2 pt-3 sm:grid-cols-2 [&>:only-child]:sm:col-span-2">
-              <Link
-                href={
-                  getIsolatedPyramid(userData)
-                    ? "/combat"
-                    : toHospital
-                      ? "/hospital"
-                      : "/profile"
-                }
-                className="w-full"
-                onClick={(event) => {
-                  void handleTutorialBattleReturn(
-                    event,
-                    toHospital ? "/hospital" : "/profile",
-                  );
-                }}
-              >
-                <Button
-                  id="return"
-                  className="w-full"
-                  disabled={isReturningFromTutorial}
-                  aria-busy={isReturningFromTutorial}
-                  onClick={() => {
-                    if (getIsolatedPyramid(userData)) setBattleState(undefined);
-                  }}
-                >
-                  {isReturningFromTutorial
-                    ? "Returning..."
-                    : getIsolatedPyramid(userData)
-                      ? "Continue Pyramid"
-                      : currentStep && userData?.tutorialOn
-                        ? "Continue tutorial"
-                        : `Return to ${toHospital ? "Hospital" : "Profile"}`}
-                </Button>
-              </Link>
-              {showShrineAgain && (
-                <Link href="/shrine" className="w-full">
-                  <Button id="return" className="w-full">
-                    Back to Shrine
-                  </Button>
-                </Link>
-              )}
-              {props.arenaActions}
-              {battleType === "RANKED_PVP" && (
-                <Link href="/battlearena#PVP%20Rank" className="w-full">
-                  <Button id="toPvpRank" className="w-full">
-                    Back to PvP Queue
-                  </Button>
-                </Link>
-              )}
-              {battleRef.current?.extraState.dungeon && (
-                <Link href="/dungeon" className="w-full">
-                  <Button className="w-full">Return to party</Button>
-                </Link>
-              )}
-              {showTravelBtn && (
-                <Link
-                  href="/travel"
-                  className="w-full"
-                  onClick={(event) => {
-                    void handleTutorialBattleReturn(event, "/travel");
-                  }}
-                >
-                  <Button
-                    id="toTravel"
-                    className="w-full"
-                    disabled={isReturningFromTutorial}
-                    aria-busy={isReturningFromTutorial}
-                  >
-                    {isReturningFromTutorial ? "Returning..." : "To Map"}
-                  </Button>
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
+        <CombatResultScreen
+          result={result}
+          battleRef={battleRef}
+          userId={props.userId}
+          currentStep={currentStep}
+          setBattleState={setBattleState}
+          arenaActions={props.arenaActions}
+        />
       )}
       {logbookModalQuestId && (
         <QuestUpdateModal

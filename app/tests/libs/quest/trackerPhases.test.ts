@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { getNewTrackers } from "@/libs/quest";
-import { DialogObjective, MoveToObjective, SimpleObjective } from "@/validators/objectives";
+import {
+  DialogObjective,
+  MoveToObjective,
+  SimpleObjective,
+} from "@/validators/objectives";
 import {
   trackerGoal as goalOf,
   trackerQuest as makeQuest,
@@ -57,15 +61,24 @@ describe("getNewTrackers passive snapshots", () => {
     const quest = makeQuest("q1", [
       SimpleObjective.parse({ id: "o1", task: "minutes_passed", value: 1000 }),
     ]);
-    const user = makeUser([quest], [
-      { id: "q1", startAt: new Date(NOW - 5 * 60_000 - 1000).toISOString(), goals: [] },
-    ]);
+    const user = makeUser(
+      [quest],
+      [
+        {
+          id: "q1",
+          startAt: new Date(NOW - 5 * 60_000 - 1000).toISOString(),
+          goals: [],
+        },
+      ],
+    );
     expect(goalOf(getNewTrackers(user, [{ task: "any" }]), "q1", "o1")?.value).toBe(5);
   });
 
   it("reads days as Kage only for the village's Kage", () => {
     const village = { id: "v1", sector: 1, kageId: "u1", leaderUpdatedAt: daysAgo(2) };
-    expect(goalOf(passive("days_as_kage", { village }).result, "q1", "o1")?.value).toBe(2);
+    expect(goalOf(passive("days_as_kage", { village }).result, "q1", "o1")?.value).toBe(
+      2,
+    );
     expect(
       goalOf(
         passive("days_as_kage", { village: { ...village, kageId: "other" } }).result,
@@ -83,14 +96,17 @@ describe("getNewTrackers passive snapshots", () => {
       { completed: 1, previousCompletes: 9 },
     ];
     expect(
-      goalOf(passive("stories_completed", { completedQuests }).result, "q1", "o1")?.value,
+      goalOf(passive("stories_completed", { completedQuests }).result, "q1", "o1")
+        ?.value,
     ).toBe(4);
   });
 
   it("requests one persisted write when a snapshot earns a completion", () => {
     const { result } = passive("dungeons_completed", { dungeonsCompleted: 2_000_000 });
     expect(goalOf(result, "q1", "o1")?.done).toBe(true);
-    expect(result.consequences).toEqual([{ type: "update_user", ids: ["activity_completion"] }]);
+    expect(result.consequences).toEqual([
+      { type: "update_user", ids: ["activity_completion"] },
+    ]);
     expect(result.questIdsUpdated).toEqual(["q1"]);
   });
 
@@ -112,7 +128,11 @@ const located = (
   goal?: object,
   quest: Record<string, unknown> = {},
 ) => {
-  const objective = MoveToObjective.parse({ id: "o1", task: "move_to_location", ...location });
+  const objective = MoveToObjective.parse({
+    id: "o1",
+    task: "move_to_location",
+    ...location,
+  });
   const definition = makeQuest("q1", [objective], "daily", quest);
   const tracked = makeUser(
     [definition],
@@ -136,7 +156,11 @@ describe("getNewTrackers location instantiation", () => {
   it.each<[object, object, number]>([
     [{ sectorType: "specific", sector: 9 }, {}, 9],
     [{ sectorType: "from_list", sectorList: ["17"] }, {}, 17],
-    [{ sectorType: "user_village" }, { sector: 2, village: { id: "v1", sector: 6 } }, 6],
+    [
+      { sectorType: "user_village" },
+      { sector: 2, village: { id: "v1", sector: 6 } },
+      6,
+    ],
     [{ sectorType: "user_village" }, { sector: 2, village: null }, 2],
     [{ sectorType: "current_sector" }, { sector: 2 }, 2],
     [{ sectorType: "enemy_village" }, { activeWars: [war("v1", "other")] }, 40],
@@ -145,7 +169,10 @@ describe("getNewTrackers location instantiation", () => {
     const { goal, objective, result } = located({ ...rolled, ...location }, user);
     expect(goal).toMatchObject({ sector, longitude: 4, latitude: 5 });
     expect(objective).toMatchObject({ sector, longitude: 4, latitude: 5 });
-    expect(result.consequences).toContainEqual({ type: "update_user", ids: ["location_update"] });
+    expect(result.consequences).toContainEqual({
+      type: "update_user",
+      ids: ["location_update"],
+    });
   });
 
   it.each([
@@ -167,7 +194,11 @@ describe("getNewTrackers location instantiation", () => {
   });
 
   it("rolls random coordinates inside the sector and pins the objective", () => {
-    const { goal, objective } = located({ sectorType: "specific", sector: 9, locationType: "random" });
+    const { goal, objective } = located({
+      sectorType: "specific",
+      sector: 9,
+      locationType: "random",
+    });
     expect(goal?.longitude).toBeGreaterThan(0);
     expect(goal?.latitude).toBeGreaterThan(0);
     expect(objective).toMatchObject({
@@ -185,12 +216,21 @@ describe("getNewTrackers location instantiation", () => {
     );
     expect(goal).toMatchObject({ sector: 9, longitude: 4, latitude: 5 });
     expect(goal).not.toHaveProperty("locationChecked");
-    expect(result.consequences).toContainEqual({ type: "update_user", ids: ["location_update"] });
+    expect(result.consequences).toContainEqual({
+      type: "update_user",
+      ids: ["location_update"],
+    });
   });
 
   it("rerolls a masked placeholder from its random definition", () => {
     const { goal } = located(
-      { sectorType: "from_list", sectorList: ["17"], locationType: "specific", longitude: 4, latitude: 5 },
+      {
+        sectorType: "from_list",
+        sectorList: ["17"],
+        locationType: "specific",
+        longitude: 4,
+        latitude: 5,
+      },
       {},
       { sector: 1337, longitude: 2, latitude: 3 },
     );
@@ -204,8 +244,16 @@ describe("getNewTrackers location instantiation", () => {
       { sector: 3, longitude: 1, latitude: 1, locationChecked: true },
       { publicLocations: true },
     );
-    expect(goal).toMatchObject({ sector: 9, longitude: 4, latitude: 5, locationChecked: false });
-    expect(result.consequences).toContainEqual({ type: "update_user", ids: ["location_update"] });
+    expect(goal).toMatchObject({
+      sector: 9,
+      longitude: 4,
+      latitude: 5,
+      locationChecked: false,
+    });
+    expect(result.consequences).toContainEqual({
+      type: "update_user",
+      ids: ["location_update"],
+    });
   });
 
   const dialogChain = (fromGoal: object, extra: object = {}) => {
@@ -219,7 +267,9 @@ describe("getNewTrackers location instantiation", () => {
       ...extra,
     });
     const talk = DialogObjective.parse({ id: "talk", task: "dialog" });
-    const quest = makeQuest("q1", [first, talk], "daily", { consecutiveObjectives: true });
+    const quest = makeQuest("q1", [first, talk], "daily", {
+      consecutiveObjectives: true,
+    });
     const user = makeUser(
       [quest],
       [

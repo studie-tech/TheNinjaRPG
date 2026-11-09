@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { arrivalPromptDecision, isArrivalPromptStale } from "@/libs/overworldAi";
 
 /** Creates the minimal positioned NPC shape required by the arrival-prompt helpers. */
@@ -121,8 +121,8 @@ describe("isArrivalPromptStale", () => {
   });
 
   it("goes stale when the player walks off the tile while the prompt is up", () => {
-    // The reported bug: the modal stayed open pointing at a tile the player had left, and its CTA
-    // then tripped the server's "You are not standing on the NPC's tile" guard.
+    // An open prompt for a tile the player has left would offer a CTA the server rejects with
+    // "You are not standing on the NPC's tile".
     expect(
       isArrivalPromptStale({
         promptedPlacementId: "A:0",
@@ -156,9 +156,8 @@ describe("isArrivalPromptStale", () => {
   });
 
   it("still closes on despawn when the player position is unknown", () => {
-    // The despawn half must not be gated on known coordinates: the effect this replaced cleared a
-    // despawned NPC's prompt regardless of position, and a transient undefined `userData` must not
-    // strand the modal.
+    // Despawn closes the prompt regardless of known coordinates, so a transient undefined
+    // `userData` cannot strand the modal.
     expect(
       isArrivalPromptStale({
         promptedPlacementId: "A:0",
@@ -193,9 +192,8 @@ describe("isArrivalPromptStale", () => {
   });
 
   it("does not close the armed prompt the player is still standing on", () => {
-    // Guards the trap in the literal `else setArrivalNpc(null)` fix: once armed,
-    // `arrivalPromptDecision` returns `prompt: null` for the NPC underfoot, so an `else` branch
-    // would close the modal on the next re-render. The staleness check must not.
+    // Once armed, `arrivalPromptDecision` returns `prompt: null` for the NPC underfoot; that must
+    // not close the modal on the next re-render.
     const armed = arrivalPromptDecision({
       playerLongitude: 3,
       playerLatitude: 4,

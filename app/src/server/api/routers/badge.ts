@@ -111,39 +111,37 @@ export const badgeRouter = createTRPCRouter({
       if (!entry) return errorResponse("Badge not found");
       if (badgeWithName && badgeWithName.id !== entry.id)
         return errorResponse("Badge name already exists");
-      if (canChangeContent(user.role)) {
-        // Calculate diff
-        const diff = calculateContentDiff(entry, {
-          id: entry.id,
-          createdAt: entry.createdAt,
-          ...input.data,
-        });
-        // Update database
-        await Promise.all([
-          updateBadgeForUpdate(ctx.drizzle, input, entry),
-          insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
-        ]);
-        await outdateProposalsFor(
-          ctx.drizzle,
-          "BADGE",
-          [entry.id],
-          editedReason("BADGE", entry.name, user.username),
-        );
-        await callDiscordContent(user.username, entry.name, diff, entry.image);
-        return { success: true, message: `Data updated: ${diff.join(". ")}` };
-      } else {
-        return { success: false, message: `Not allowed to edit badge` };
+      if (!canChangeContent(user.role)) {
+        return errorResponse(`Not allowed to edit badge`);
       }
+      // Calculate diff
+      const diff = calculateContentDiff(entry, {
+        id: entry.id,
+        createdAt: entry.createdAt,
+        ...input.data,
+      });
+      // Update database
+      await Promise.all([
+        updateBadgeForUpdate(ctx.drizzle, input, entry),
+        insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
+      ]);
+      await outdateProposalsFor(
+        ctx.drizzle,
+        "BADGE",
+        [entry.id],
+        editedReason("BADGE", entry.name, user.username),
+      );
+      await callDiscordContent(user.username, entry.name, diff, entry.image);
+      return { success: true, message: `Data updated: ${diff.join(". ")}` };
     }),
   create: protectedProcedure.output(baseServerResponse).mutation(async ({ ctx }) => {
     const user = await fetchUser(ctx.drizzle, ctx.userId);
-    if (canChangeContent(user.role)) {
-      const id = nanoid();
-      await insertBadgeForCreate(ctx.drizzle, id);
-      return { success: true, message: id };
-    } else {
-      return { success: false, message: `Not allowed to create badge` };
+    if (!canChangeContent(user.role)) {
+      return errorResponse(`Not allowed to create badge`);
     }
+    const id = nanoid();
+    await insertBadgeForCreate(ctx.drizzle, id);
+    return { success: true, message: id };
   }),
   delete: protectedProcedure
     .input(idSchema)
@@ -153,21 +151,20 @@ export const badgeRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         fetchBadge(ctx.drizzle, input.id),
       ]);
-      if (entry && canChangeContent(user.role)) {
-        await Promise.all([
-          deleteBadgeForDelete(ctx.drizzle, input),
-          deleteUserBadgeForDelete(ctx.drizzle, input),
-          insertActionLogForDelete(ctx.drizzle, ctx, entry),
-        ]);
-        await outdateProposalsFor(
-          ctx.drizzle,
-          "BADGE",
-          [entry.id],
-          deletedReason("BADGE", entry.name, user.username),
-        );
-        return { success: true, message: `Badge deleted` };
-      } else {
-        return { success: false, message: `Not allowed to delete badge` };
+      if (!entry || !canChangeContent(user.role)) {
+        return errorResponse(`Not allowed to delete badge`);
       }
+      await Promise.all([
+        deleteBadgeForDelete(ctx.drizzle, input),
+        deleteUserBadgeForDelete(ctx.drizzle, input),
+        insertActionLogForDelete(ctx.drizzle, ctx, entry),
+      ]);
+      await outdateProposalsFor(
+        ctx.drizzle,
+        "BADGE",
+        [entry.id],
+        deletedReason("BADGE", entry.name, user.username),
+      );
+      return { success: true, message: `Badge deleted` };
     }),
 });

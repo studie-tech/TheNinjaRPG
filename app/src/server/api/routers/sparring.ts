@@ -265,6 +265,7 @@ export async function fetchRequest(
  * @param challengeId - The ID of the challenge.
  * @param status - The new state of the user request.
  * @param type - The type of the user request.
+ * @param relatedId - Optional related entity ID to store on the request.
  * @param expectedStatus - Optional CAS guard for revocable requests whose status must not be overwritten.
  * @returns An object indicating the success of the update operation.
  */

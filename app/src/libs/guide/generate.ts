@@ -28,7 +28,7 @@ const link = (href: string, label: string) =>
 
 /**
  * Indefinite article for a word or a letter grade. A single letter is read by its name,
- * so "an A-rank" and "an S-rank" but "a B-rank": the vowel test alone said "a A-rank".
+ * so "an A-rank" and "an S-rank" but "a B-rank".
  */
 const articleFor = (word: string) => {
   const w = word.trim();
@@ -95,10 +95,10 @@ export const generateItemGuide = (item: ItemEntity): GuideSeedArticle => {
     category: "farming" satisfies GuideCategory,
     image: item.image || IMG_MANUAL_ITEM,
     sortOrder: 90,
-    // Drafts until someone writes them. Twenty-eight of these went live at ~450
-    // characters each, which is the near-duplicate shape Google's helpful-content
-    // classifier keys on -- and that signal is site-wide. The farming hub lists every
-    // seed and herb from live item data instead.
+    // Drafts until someone writes them: short template-only pages are near-duplicates
+    // of each other, the shape Google's helpful-content classifier keys on, and that
+    // signal is site-wide. The farming hub lists every seed and herb from live item
+    // data instead.
     published: false,
     content: [
       paragraph(

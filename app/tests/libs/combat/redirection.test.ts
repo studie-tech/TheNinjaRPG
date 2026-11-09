@@ -6,7 +6,7 @@ import type {
   ReturnedBattle,
 } from "@/libs/combat/types";
 import { oddQHexDistance } from "@/libs/hexgrid";
-import { makeBattleUser, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeEffect } from "../../setup/combat";
 
 const WIDTH = 13;
 const HEIGHT = 9;
@@ -130,7 +130,12 @@ describe("redirection", () => {
 
   it("carries ground entry timers to the landing tile", () => {
     const ground = (col: number, row: number, timeTracker: Record<string, number>) =>
-      ({ ...makeEffect("damage", { rounds: 3 }), longitude: col, latitude: row, timeTracker }) as GroundEffect;
+      ({
+        ...makeEffect("damage", { rounds: 3 }),
+        longitude: col,
+        latitude: row,
+        timeTracker,
+      }) as GroundEffect;
     const casterTile = { col: 0, row: 4 };
     const start = { col: 6, row: 4 };
     const { col, row } = redirect(casterTile, start, 2, "pull");

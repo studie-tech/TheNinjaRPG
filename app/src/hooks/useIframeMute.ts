@@ -1,33 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { showMutationToast } from "@/libs/toast";
 import { observeUserIframes, setIframeMuteState } from "@/utils/audio";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 import { useUserDataSelector } from "@/utils/UserContext";
 
 interface UseIframeMuteReturn {
   isIframesMuted: boolean;
   setIframesMuted: (muted: boolean) => void;
-  toggleIframesMute: () => void;
 }
-
-/**
- * Get initial mute state from user data or localStorage
- * @param userData
- * @returns boolean
- */
-const getInitialIframeMuteState = (
-  userData: { iframesMuted?: boolean } | undefined,
-): boolean => {
-  // Respect explicit user preference when logged in
-  if (typeof userData?.iframesMuted === "boolean") return userData.iframesMuted;
-
-  // Fallback to locally saved preference
-  const saved = safeLocalStorageGetItem("iframesMuted");
-  if (saved !== null) return JSON.parse(saved) as boolean;
-
-  return false;
-};
 
 /**
  * Hook for managing user iframe muting state
@@ -84,14 +65,26 @@ export const useIframeMute = (): UseIframeMuteReturn => {
     [userData, updatePreferences],
   );
 
-  // Toggle iframes mute state
-  const toggleIframesMute = useCallback(() => {
-    setIframesMuted(!isIframesMuted);
-  }, [isIframesMuted, setIframesMuted]);
-
   return {
     isIframesMuted,
     setIframesMuted,
-    toggleIframesMute,
   };
+};
+
+/**
+ * Get initial mute state from user data or localStorage
+ * @param userData
+ * @returns boolean
+ */
+const getInitialIframeMuteState = (
+  userData: { iframesMuted?: boolean } | undefined,
+): boolean => {
+  // Respect explicit user preference when logged in
+  if (typeof userData?.iframesMuted === "boolean") return userData.iframesMuted;
+
+  // Fallback to locally saved preference
+  const saved = safeLocalStorageGetItem("iframesMuted");
+  if (saved !== null) return JSON.parse(saved) as boolean;
+
+  return false;
 };

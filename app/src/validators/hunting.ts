@@ -60,25 +60,6 @@ export const huntingHabitatSchema = z
         });
     });
   });
-/** An omitted ID creates a habitat; an existing ID updates the same authored definition. */
-export const saveHuntingHabitatSchema = z.object({
-  id: z.string().optional(),
-  content: huntingHabitatSchema,
-});
-/** Identify the habitat or personal session addressed by its procedure. */
-export const huntingIdSchema = z.object({ id: z.string().min(1) });
-/** A null version creates a session; an existing version guards contract switching. */
-export const acceptHuntingContractSchema = z.object({
-  habitatId: z.string().min(1),
-  contractId: z.string().min(1),
-  version: z.number().int().nullable(),
-});
-/** Both preparation and finish must claim the exact session version displayed to the player. */
-export const huntingSessionActionSchema = z.object({
-  id: z.string().min(1),
-  version: z.number().int(),
-  action: z.enum(["prepare", "finish"]),
-});
 export type HuntingHabitatContent = z.infer<typeof huntingHabitatSchema>;
 /** Legacy sessions can retain a captured contract without the removed habitat's metadata. */
 export type HuntingSessionContent = Pick<HuntingHabitatContent, "contracts"> &

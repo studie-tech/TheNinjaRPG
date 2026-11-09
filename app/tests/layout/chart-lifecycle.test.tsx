@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import * as chartLibrary from "chart.js/auto";
 import type { Chart } from "chart.js";
+import * as chartLibrary from "chart.js/auto";
 import * as client from "@/app/_trpc/client";
 import { CombatStatNames, MasteryNames } from "@/drizzle/constants";
 import { BloodlineStatistics } from "@/layout/BloodlineStatistics";
@@ -16,7 +16,9 @@ let attempts: number;
 let failAt: number | undefined;
 const statistics = { S: 20, none: 80 };
 const user = {
-  ...Object.fromEntries([...CombatStatNames, ...MasteryNames].map((name) => [name, 100])),
+  ...Object.fromEntries(
+    [...CombatStatNames, ...MasteryNames].map((name) => [name, 100]),
+  ),
   rank: "JONIN",
   primaryElement: null,
   secondaryElement: null,
@@ -29,20 +31,26 @@ beforeEach(() => {
   charts = [];
   attempts = 0;
   failAt = undefined;
-  const constructor = vi.spyOn(chartLibrary, "Chart").mockImplementation(
-    function () {
+  const chartConstructor = vi
+    .spyOn(chartLibrary, "Chart")
+    .mockImplementation(function () {
       attempts += 1;
       if (attempts === failAt) throw new Error("Chart initialization failed");
       const chart = { destroy: vi.fn() };
       charts.push(chart);
       return chart as unknown as Chart;
-    } as never,
+    } as never);
+  Object.assign(chartConstructor, { defaults: { ...chartDefaults } });
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+    () => ({}) as never,
   );
-  Object.assign(constructor, { defaults: { ...chartDefaults } });
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => ({}) as never);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
   Object.assign(vi.spyOn(client, "api" as never), {
-    bloodline: { getNaturalRollStatistics: { useQuery: () => ({ data: statistics, isLoading: false }) } },
+    bloodline: {
+      getNaturalRollStatistics: {
+        useQuery: () => ({ data: statistics, isLoading: false }),
+      },
+    },
   });
 });
 
@@ -68,7 +76,9 @@ describe("profile chart lifetime", () => {
   it("does not create charts if the tab unmounts before the import resolves", async () => {
     const view = render(<GraphsTab userData={user} />);
     view.unmount();
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(charts).toHaveLength(0);
   });
 
@@ -100,7 +110,10 @@ describe("profile chart lifetime", () => {
 });
 
 describe("statistics popover chart lifetime", () => {
-  const mount = () => render(<BloodlineStatistics trigger={<button type="button">Roll Statistics</button>} />);
+  const mount = () =>
+    render(
+      <BloodlineStatistics trigger={<button type="button">Roll Statistics</button>} />,
+    );
 
   it("draws only while open, survives debug toggles, and redraws after reopening", async () => {
     const view = mount();
@@ -111,7 +124,9 @@ describe("statistics popover chart lifetime", () => {
     const debug = view.getByRole("dialog").querySelector("button");
     expect(debug).not.toBeNull();
     fireEvent.click(debug!);
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(charts).toHaveLength(1);
     fireEvent.click(trigger);
     await waitFor(() => expect(charts[0]?.destroy).toHaveBeenCalledTimes(1));
@@ -121,12 +136,66 @@ describe("statistics popover chart lifetime", () => {
     expect(charts[1]?.destroy).toHaveBeenCalledTimes(1);
   });
 
+  it("charts each rank except H with its own colour and leaves H in the total", async () => {
+    Object.assign(vi.spyOn(client, "api" as never), {
+      bloodline: {
+        getNaturalRollStatistics: {
+          useQuery: () => ({
+            data: { D: 10, C: 20, B: 30, A: 15, S: 5, H: 100, none: 20 },
+            isLoading: false,
+          }),
+        },
+      },
+    });
+    const view = mount();
+    fireEvent.click(view.getByRole("button", { name: "Roll Statistics" }));
+    await waitFor(() => expect(charts).toHaveLength(1));
+    expect(
+      view.getByText("Total bloodline rolls:").nextElementSibling?.textContent,
+    ).toBe("200");
+    const config = (chartLibrary.Chart as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[1] as {
+      data: { labels: string[]; datasets: Record<string, unknown>[] };
+    };
+    expect(config.data.labels).toEqual([
+      "S-Rank",
+      "A-Rank",
+      "B-Rank",
+      "C-Rank",
+      "D-Rank",
+      "No Bloodline",
+    ]);
+    expect(config.data.datasets[0]).toEqual(
+      expect.objectContaining({
+        data: [5, 15, 30, 20, 10, 20],
+        backgroundColor: [
+          "rgba(255, 99, 132, 0.7)",
+          "rgba(255, 159, 64, 0.7)",
+          "rgba(255, 205, 86, 0.7)",
+          "rgba(75, 192, 192, 0.7)",
+          "rgba(54, 162, 235, 0.7)",
+          "rgba(201, 203, 207, 0.7)",
+        ],
+        borderColor: [
+          "rgb(255, 99, 132)",
+          "rgb(255, 159, 64)",
+          "rgb(255, 205, 86)",
+          "rgb(75, 192, 192)",
+          "rgb(54, 162, 235)",
+          "rgb(201, 203, 207)",
+        ],
+      }),
+    );
+  });
+
   it("cancels a draw if closed before the import resolves", async () => {
     const view = mount();
     const trigger = view.getByRole("button", { name: "Roll Statistics" });
     fireEvent.click(trigger);
     fireEvent.click(trigger);
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(charts).toHaveLength(0);
   });
 

@@ -10,12 +10,27 @@ import {
 
 const key = env.GAMEASSET_API_KEY;
 const respond = (body: unknown, status = 200) =>
-  vi.spyOn(globalThis, "fetch").mockImplementation((async () =>
-    new Response(JSON.stringify(body), { status })) as never);
+  vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(
+      (async () => new Response(JSON.stringify(body), { status })) as never,
+    );
 const asset = {
-  id: "ast", status: "queued", stage: "Queued", error: null, credits: { paid: 0.4 }, files: null, sprite: null,
+  id: "ast",
+  status: "queued",
+  stage: "Queued",
+  error: null,
+  credits: { paid: 0.4 },
+  files: null,
+  sprite: null,
 };
-const input = { imageId: "img", prompt: "walks", motion: "move", facing: "left", frames: 33 } as const;
+const input = {
+  imageId: "img",
+  prompt: "walks",
+  motion: "move",
+  facing: "left",
+  frames: 33,
+} as const;
 
 beforeEach(() => {
   env.GAMEASSET_API_KEY = "ga_live_test";
@@ -44,24 +59,40 @@ describe("gameasset.dev client", () => {
     expect(headers.Authorization).toBe("Bearer ga_live_test");
     expect(headers["Idempotency-Key"]).toBe("request-1");
     expect(JSON.parse(init.body as string).motion).toEqual({
-      prompt: "walks", action: "move", facing: "left", frames: 33,
+      prompt: "walks",
+      action: "move",
+      facing: "left",
+      frames: 33,
     });
   });
 
   it("surfaces the API's own message", async () => {
-    respond({ error: { code: "insufficient_credits", message: "Top up your balance" } }, 402);
-    await expect(createSpriteAsset(input, "request-2")).rejects.toThrow("Top up your balance");
+    respond(
+      { error: { code: "insufficient_credits", message: "Top up your balance" } },
+      402,
+    );
+    await expect(createSpriteAsset(input, "request-2")).rejects.toThrow(
+      "Top up your balance",
+    );
   });
 
   it("rejects a reply it cannot read", async () => {
     respond({ id: "ast" });
-    await expect(createSpriteAsset(input, "request-3")).rejects.toThrow("unexpected reply");
+    await expect(createSpriteAsset(input, "request-3")).rejects.toThrow(
+      "unexpected reply",
+    );
   });
 
   it("downloads only from our CDN and gameasset.dev storage", async () => {
-    const fetched = vi.spyOn(globalThis, "fetch").mockImplementation((async () => new Response("ok")) as never);
-    await expect(downloadSpriteFile("http://169.254.169.254/latest")).rejects.toThrow("CDN");
-    await expect(downloadSpriteFile("https://me6hopahd7.ufs.sh.evil.test/f/a")).rejects.toThrow("CDN");
+    const fetched = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((async () => new Response("ok")) as never);
+    await expect(downloadSpriteFile("http://169.254.169.254/latest")).rejects.toThrow(
+      "CDN",
+    );
+    await expect(
+      downloadSpriteFile("https://me6hopahd7.ufs.sh.evil.test/f/a"),
+    ).rejects.toThrow("CDN");
     expect(fetched).not.toHaveBeenCalled();
     await downloadSpriteFile("https://me6hopahd7.ufs.sh/f/a");
     await downloadSpriteFile("https://utfs.io/f/b");

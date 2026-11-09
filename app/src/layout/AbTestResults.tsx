@@ -26,37 +26,48 @@ import {
   wallpaperLabel,
 } from "@/libs/wallpaperExperiment";
 
-type VariantAgg = { variant: string; loaded: number; register: number };
-type ExperimentAgg = { experiment: string; variants: VariantAgg[] };
+/** Show full-history results for recently active tests, with source/device filters. */
+export const AbTestResults: React.FC = () => {
+  const visitorFilterState = useVisitorFiltering();
 
-// statistical helpers are imported from @/libs/statistics
-
-const inferControlTreatment = (
-  variants: VariantAgg[],
-): {
-  a?: VariantAgg;
-  b?: VariantAgg;
-  ambiguous: boolean;
-} => {
-  if (variants.length < 2) return { a: undefined, b: undefined, ambiguous: true };
-  const byHeuristic = [...variants].sort((x, y) => {
-    const rx = x.variant.toLowerCase();
-    const ry = y.variant.toLowerCase();
-    const score = (s: string) =>
-      (/(^|\b)(control|baseline|original)(\b|$)/i.test(s) ? -10 : 0) +
-      (/(^|\b)(treatment|variant\s*b)(\b|$)/i.test(s) ? 10 : 0) +
-      (/(^|\b)variant\s*a(\b|$)/i.test(s) ? -5 : 0) +
-      (/(^|\b)variant\s*b(\b|$)/i.test(s) ? 5 : 0);
-    return score(rx) - score(ry) || rx.localeCompare(ry);
-  });
-  const aVar = byHeuristic[0];
-  const bVar = byHeuristic[1];
-  if (!aVar || !bVar) return { a: undefined, b: undefined, ambiguous: true };
-  const ambiguous = !/(^|\b)(control|baseline|original|variant\s*a)(\b|$)/i.test(
-    aVar.variant,
+  const { data, isFetching, isError, refetch } = api.data.getAbTests.useQuery(
+    { ...getVisitorFilter(visitorFilterState, false) },
+    { staleTime: 60_000 },
   );
-  return { a: aVar, b: bVar, ambiguous };
+
+  return (
+    <ContentBox
+      title="A/B/C Tests"
+      subtitle="All-time unique visits and tutorial completions for tests active in the last 7 days"
+      initialBreak
+      topRightContent={
+        <VisitorFiltering state={visitorFilterState} includeDates={false} />
+      }
+    >
+      {isFetching && <Loader explanation="Loading A/B test results" />}
+      {isError && (
+        <p role="alert">
+          Could not load experiment results.{" "}
+          <button type="button" onClick={() => void refetch()} className="underline">
+            Retry
+          </button>
+        </p>
+      )}
+      {!isFetching && !isError && (!data || data.length === 0) && (
+        <p>No experiments with activity in the last 7 days match these filters.</p>
+      )}
+      {!isFetching && data && data.length > 0 && (
+        <div className="flex flex-col gap-4">
+          {data.map((exp) => (
+            <ExperimentResults key={exp.experiment} exp={exp} />
+          ))}
+        </div>
+      )}
+    </ContentBox>
+  );
 };
+
+export default AbTestResults;
 
 const DistributionChart: React.FC<{
   title: string;
@@ -352,49 +363,6 @@ const ExperimentRow: React.FC<{
   );
 };
 
-/** Show full-history results for recently active tests, with source/device filters. */
-export const AbTestResults: React.FC = () => {
-  const visitorFilterState = useVisitorFiltering();
-
-  const { data, isFetching, isError, refetch } = api.data.getAbTests.useQuery(
-    { ...getVisitorFilter(visitorFilterState, false) },
-    { staleTime: 60_000 },
-  );
-
-  return (
-    <ContentBox
-      title="A/B/C Tests"
-      subtitle="All-time unique visits and tutorial completions for tests active in the last 7 days"
-      initialBreak
-      topRightContent={
-        <VisitorFiltering state={visitorFilterState} includeDates={false} />
-      }
-    >
-      {isFetching && <Loader explanation="Loading A/B test results" />}
-      {isError && (
-        <p role="alert">
-          Could not load experiment results.{" "}
-          <button type="button" onClick={() => void refetch()} className="underline">
-            Retry
-          </button>
-        </p>
-      )}
-      {!isFetching && !isError && (!data || data.length === 0) && (
-        <p>No experiments with activity in the last 7 days match these filters.</p>
-      )}
-      {!isFetching && data && data.length > 0 && (
-        <div className="flex flex-col gap-4">
-          {data.map((exp) => (
-            <ExperimentResults key={exp.experiment} exp={exp} />
-          ))}
-        </div>
-      )}
-    </ContentBox>
-  );
-};
-
-export default AbTestResults;
-
 const ExperimentResults = ({ exp }: { exp: ExperimentAgg }) => {
   const panelId = useId();
   const inferred = inferControlTreatment(exp.variants);
@@ -532,9 +500,40 @@ const VariantDistribution = ({
   );
 };
 
+const inferControlTreatment = (
+  variants: VariantAgg[],
+): {
+  a?: VariantAgg;
+  b?: VariantAgg;
+  ambiguous: boolean;
+} => {
+  if (variants.length < 2) return { a: undefined, b: undefined, ambiguous: true };
+  const byHeuristic = [...variants].sort((x, y) => {
+    const rx = x.variant.toLowerCase();
+    const ry = y.variant.toLowerCase();
+    const score = (s: string) =>
+      (/(^|\b)(control|baseline|original)(\b|$)/i.test(s) ? -10 : 0) +
+      (/(^|\b)(treatment|variant\s*b)(\b|$)/i.test(s) ? 10 : 0) +
+      (/(^|\b)variant\s*a(\b|$)/i.test(s) ? -5 : 0) +
+      (/(^|\b)variant\s*b(\b|$)/i.test(s) ? 5 : 0);
+    return score(rx) - score(ry) || rx.localeCompare(ry);
+  });
+  const aVar = byHeuristic[0];
+  const bVar = byHeuristic[1];
+  if (!aVar || !bVar) return { a: undefined, b: undefined, ambiguous: true };
+  const ambiguous = !/(^|\b)(control|baseline|original|variant\s*a)(\b|$)/i.test(
+    aVar.variant,
+  );
+  return { a: aVar, b: bVar, ambiguous };
+};
+
 /** Readable name of a variant in the experiments that define one. */
 const variantLabel = (experiment: string, variant: string) => {
   if (experiment === WALLPAPER_EXPERIMENT) return wallpaperLabel(variant);
   if (experiment === LEMU_EXPERIMENT) return lemuLabel(variant);
   return variant;
 };
+
+type VariantAgg = { variant: string; loaded: number; register: number };
+
+type ExperimentAgg = { experiment: string; variants: VariantAgg[] };

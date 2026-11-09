@@ -17,7 +17,8 @@ describe("comment schemas", () => {
     const base = { comment: "hello", object_id: "x" };
     expect(mutateCommentSchema.safeParse(base).success).toBe(false);
     expect(
-      mutateCommentSchema.safeParse({ ...base, quoteIds: undefined, senderId: null }).success,
+      mutateCommentSchema.safeParse({ ...base, quoteIds: undefined, senderId: null })
+        .success,
     ).toBe(false);
     expect(
       mutateCommentSchema.parse({ ...base, quoteIds: null, senderId: null }),
@@ -37,10 +38,17 @@ describe("comment schemas", () => {
   });
 
   it("rejects unknown keys", () => {
-    const comment = { comment: "hello", object_id: "x", quoteIds: null, senderId: null };
+    const comment = {
+      comment: "hello",
+      object_id: "x",
+      quoteIds: null,
+      senderId: null,
+    };
     expect(mutateCommentSchema.safeParse({ ...comment, extra: 1 }).success).toBe(false);
     expect(deleteCommentSchema.safeParse({ id: "a", extra: 1 }).success).toBe(false);
-    expect(mutateContentSchema.safeParse({ content: "ok", extra: 1 }).success).toBe(false);
+    expect(mutateContentSchema.safeParse({ content: "ok", extra: 1 }).success).toBe(
+      false,
+    );
   });
 
   it("reports missing delete and content keys as missing strings", () => {

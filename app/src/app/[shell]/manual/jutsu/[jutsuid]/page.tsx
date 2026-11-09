@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import ContentDetail from "@/layout/ContentDetail";
-import { buildMetadata, metaDescription } from "@/libs/seo";
+import { buildMetadata, metaDescription, noindexMetadata } from "@/libs/seo";
 import { fetchJutsu } from "@/queries/jutsu";
 
 import { drizzleDB } from "@/server/db";
@@ -24,7 +24,7 @@ const getJutsu = cache(async (id: string) => {
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const { jutsuid } = await props.params;
   const jutsu = await getJutsu(jutsuid);
-  if (!jutsu) return { title: "Jutsu Not Found" };
+  if (!jutsu) return noindexMetadata("Jutsu Not Found");
   const name = jutsu.name.trim();
   const type = capitalizeFirstLetter(jutsu.jutsuType);
   return buildMetadata({

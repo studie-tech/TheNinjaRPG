@@ -14,6 +14,7 @@ import {
   Gift,
   Hammer,
   LockKeyhole,
+  type LucideIcon,
   MapPin,
   RotateCcw,
   ScrollText,
@@ -38,7 +39,6 @@ import {
   MASTERY_QUEUE_KIND_LABELS,
   MasteryQueueKinds,
 } from "@/drizzle/constants";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/hooks/localstorage";
 import { useActivityStreaks, useClaimStreakDay } from "@/hooks/useActivityStreaks";
 import { useClaimBankInterest, usePendingBankInterest } from "@/hooks/useBankInterest";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
@@ -66,6 +66,7 @@ import {
   dashboardRaidAction,
   dashboardTrainingAction,
   describeOccupationLine,
+  type OccupationAction,
   orderDashboardContent,
   selectDashboardHighlights,
 } from "@/libs/profileDashboard";
@@ -73,6 +74,7 @@ import { cn } from "@/libs/shadui";
 import { getMasteryTrainingState, masteryTrainingEndsAt } from "@/libs/train";
 import { moveItem } from "@/utils/array";
 import { calculatePercent } from "@/utils/math";
+import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 import { capitalizeFirstLetter, stripHtmlPreview } from "@/utils/string";
 import { nextUtcDayAt } from "@/utils/time";
 import { useRequiredUserData } from "@/utils/UserContext";
@@ -283,6 +285,12 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
   );
   const craftTimer = craftingTimers.find((timer) => timer.kind === "crafting");
   const trainingAction = dashboardTrainingAction(userData, !!training, sectorVillage);
+  const trainingRestrictionLabel =
+    trainingAction.href === "/travel"
+      ? trainingAction.disabled
+        ? "Must be awake"
+        : "Return to village"
+      : undefined;
   const bankBlockMessage = bankAccessBlockMessage(userData);
   const levelStatus = dashboardLevelProgress(userData);
   const raidTitle =
@@ -511,13 +519,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
                 action={
                   <RowAction
                     restriction={isLoadingSector ? null : trainingAction.reason}
-                    restrictionLabel={
-                      trainingAction.href === "/travel"
-                        ? trainingAction.disabled
-                          ? "Must be awake"
-                          : "Return to village"
-                        : undefined
-                    }
+                    restrictionLabel={trainingRestrictionLabel}
                     href={trainingAction.href}
                     icon={trainingAction.href === "/travel" ? MapPin : Eye}
                     disabled={isLoadingSector || trainingAction.disabled}
@@ -533,13 +535,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
                 action={
                   <RowAction
                     restriction={isLoadingSector ? null : trainingAction.reason}
-                    restrictionLabel={
-                      trainingAction.href === "/travel"
-                        ? trainingAction.disabled
-                          ? "Must be awake"
-                          : "Return to village"
-                        : undefined
-                    }
+                    restrictionLabel={trainingRestrictionLabel}
                     href={trainingAction.href}
                     icon={trainingAction.href === "/travel" ? MapPin : Dumbbell}
                     disabled={
@@ -619,7 +615,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
                     userData.occupation === "CRAFTING" ? occupationLine.detail : null
                   }
                   href="/occupation"
-                  icon={iconForRowAction(occupationLine.action)}
+                  icon={rowActionIcons[occupationLine.action]}
                 >
                   {occupationLine.action}
                 </RowAction>
@@ -976,19 +972,15 @@ function SectionHeader({
   );
 }
 
-const rowActionIcons = {
+const rowActionIcons: Record<OccupationAction, LucideIcon> = {
   "Start a job": Briefcase,
   "Pick a quest": ScrollText,
   "Open quest": BookOpen,
   View: Eye,
   "Start crafting": Hammer,
   Open: ArrowRight,
-} as const;
-
-const iconForRowAction = (action: string) =>
-  action in rowActionIcons
-    ? rowActionIcons[action as keyof typeof rowActionIcons]
-    : ArrowRight;
+  "View contract": ArrowRight,
+};
 
 function RowAction({
   href,

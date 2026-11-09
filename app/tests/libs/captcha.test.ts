@@ -8,7 +8,11 @@ import {
   showTrainingCapcha,
 } from "@/libs/captcha";
 
-const user = (federalStatus: FederalStatus, dailyTrainings: number, staffAccount = false) => ({
+const user = (
+  federalStatus: FederalStatus,
+  dailyTrainings: number,
+  staffAccount = false,
+) => ({
   federalStatus,
   dailyTrainings,
   staffAccount,

@@ -1,25 +1,23 @@
 import { describe, expect, it } from "bun:test";
 
 /**
- * Regression test for the AOE-vs-barrier damage scaling bug.
- *
  * `damageBarrier` consumes `barrierAbsorb` as a 0-1 fraction. The single-target
  * path supplies that fraction (getBarriersBetween normalizes absorbPercentage to
- * `value / 100`), but the AOE path used to assign the raw 1-100 `absorbPercentage`
- * integer directly. That made AOE hits deal ~100x the intended damage to barriers,
- * instantly destroying them. This test pins the AOE path to the fractional contract.
+ * `value / 100`), and the AOE path must assign the same fraction: the raw 1-100
+ * `absorbPercentage` integer would make AOE hits deal ~100x the intended damage
+ * to barriers, instantly destroying them.
  */
 
 import { insertAction } from "@/libs/combat/actions";
-import { getBattleGrid } from "@/libs/combat/util";
-import { DamageTag } from "@/validators/combat";
-import { makeCombatAction } from "./helpers/battleScenario";
 import type {
   CombatAction,
   CompleteBattle,
   GroundEffect,
   ReturnedBattle,
 } from "@/libs/combat/types";
+import { getBattleGrid } from "@/libs/combat/util";
+import { DamageTag } from "@/validators/combat";
+import { makeCombatAction } from "../../setup/combat";
 
 const ABSORB_PERCENTAGE = 50;
 
@@ -119,9 +117,9 @@ describe("AOE barrier absorption scaling", () => {
     );
     expect(barrierEffect).toBeDefined();
 
-    // The fix: AOE assigns the fraction, matching damageBarrier's contract.
+    // AOE assigns the fraction, matching damageBarrier's contract.
     expect(barrierEffect!.barrierAbsorb).toBeCloseTo(ABSORB_PERCENTAGE / 100, 10);
-    // Guard against the original 100x bug: the raw 1-100 percentage must never leak through.
+    // The raw 1-100 percentage must never leak through.
     expect(barrierEffect!.barrierAbsorb).toBeLessThanOrEqual(1);
   });
 });

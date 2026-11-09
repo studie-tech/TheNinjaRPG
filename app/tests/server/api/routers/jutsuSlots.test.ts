@@ -188,7 +188,9 @@ describeWithDatabase("purchased and consumed jutsu slots", () => {
     // account and stack, so the test exercises the stale claim deterministically.
     const client = beforeStatements(db, userItem, [
       async () => {
-        expect((await items.consume({ userItemId: "owned-scroll" })).success).toBe(true);
+        expect((await items.consume({ userItemId: "owned-scroll" })).success).toBe(
+          true,
+        );
       },
     ]);
     const result = await callerForDatabase(itemRouter, userId, client).consume({

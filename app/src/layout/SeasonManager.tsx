@@ -32,12 +32,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import SeasonForm from "@/layout/SeasonForm";
 import { getRewardArray } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { isWithinDateRange } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
-import SeasonForm from "./SeasonForm";
 
 type RankedSeasonRecord = RouterOutputs["pvpRank"]["getSeasons"][number];
 
@@ -57,7 +57,6 @@ export function SeasonManager() {
   const deleteInFlightRef = useRef(false);
   const { data: userData } = useUserData();
   const canEditContent = canChangeContent(userData?.role ?? "USER");
-  const canEndSeason = canChangeContent(userData?.role ?? "USER");
 
   const utils = api.useUtils();
 
@@ -242,7 +241,7 @@ export function SeasonManager() {
                   </DialogContent>
                 </Dialog>
 
-                {isSeasonActive && canEndSeason && (
+                {isSeasonActive && (
                   <AlertDialog
                     open={isEndDialogOpen}
                     onOpenChange={(open) => {
@@ -473,6 +472,6 @@ const SeasonStatusBadge: React.FC<SeasonStatusBadgeProps> = ({ season }) => {
     );
   }
 
-  // Upcoming seasons – no badge for now
+  // Upcoming seasons render no badge
   return null;
 };

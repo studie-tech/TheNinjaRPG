@@ -16,7 +16,10 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { TowerDefenseCharacterDb } from "@/drizzle/schema";
-import { useTowerDefenseCharacterEditForm } from "@/hooks/towerDefenseCharacter";
+import {
+  type AnimationPatch,
+  useTowerDefenseCharacterEditForm,
+} from "@/hooks/towerDefenseCharacter";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
@@ -27,9 +30,10 @@ import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { useUploadThing } from "@/utils/uploadthing";
-import type {
-  CharacterAnimationState,
-  CharacterAssetConfig,
+import {
+  type CharacterAnimationState,
+  type CharacterAssetConfig,
+  characterAnimationStates,
 } from "@/validators/towerDefense";
 import type { InsertTowerDefenseCharacter } from "@/validators/towerDefenseCharacter";
 import { insertTowerDefenseCharacterSchema } from "@/validators/towerDefenseCharacter";
@@ -68,18 +72,14 @@ export default function TowerDefenseCharacterEdit(props: {
     );
   }
 
-  return <SingleEditCharacter character={data} refetch={refetch} />;
+  return <SingleEditCharacter character={data} />;
 }
 
 interface SingleEditCharacterProps {
   character: TowerDefenseCharacterDb;
-  refetch: () => void;
 }
 
-const SingleEditCharacter: React.FC<SingleEditCharacterProps> = ({
-  character,
-  refetch,
-}) => {
+const SingleEditCharacter: React.FC<SingleEditCharacterProps> = ({ character }) => {
   const {
     form,
     formData,
@@ -87,11 +87,9 @@ const SingleEditCharacter: React.FC<SingleEditCharacterProps> = ({
     isPlayer,
     isUpdating,
     setAssetConfig,
-    updateAnimationState,
-    updateAnimationSettings,
+    updateAnimation,
     handleCharacterSubmit,
-    characterAnimationStates,
-  } = useTowerDefenseCharacterEditForm(character, refetch);
+  } = useTowerDefenseCharacterEditForm(character);
 
   const typeLabel = isPlayer ? "Player" : "Enemy";
 
@@ -110,9 +108,10 @@ const SingleEditCharacter: React.FC<SingleEditCharacterProps> = ({
           buttonTxt="Save to Database"
           type="towerDefenseCharacter"
           relationId={character.id}
+          submitLoading={isUpdating}
+          submitLoadingText="Saving"
           onAccept={handleCharacterSubmit}
         />
-        {isUpdating && <Loader explanation="Saving..." />}
       </ContentBox>
 
       <ContentBox
@@ -124,9 +123,7 @@ const SingleEditCharacter: React.FC<SingleEditCharacterProps> = ({
           characterId={character.id}
           assetConfig={assetConfig as CharacterAssetConfig | null}
           setAssetConfig={setAssetConfig}
-          updateAnimationState={updateAnimationState}
-          updateAnimationSettings={updateAnimationSettings}
-          characterAnimationStates={characterAnimationStates}
+          updateAnimation={updateAnimation}
           onSave={handleCharacterSubmit}
         />
       </ContentBox>
@@ -138,12 +135,7 @@ interface CharacterAssetManagerProps {
   characterId: string;
   assetConfig: TowerDefenseCharacterDb["assetConfig"];
   setAssetConfig: (config: TowerDefenseCharacterDb["assetConfig"]) => void;
-  updateAnimationState: (index: number, state: CharacterAnimationState) => void;
-  updateAnimationSettings: (
-    index: number,
-    settings: { frameDurationMs?: number; loop?: boolean },
-  ) => void;
-  characterAnimationStates: readonly CharacterAnimationState[];
+  updateAnimation: (index: number, patch: AnimationPatch) => void;
   onSave: () => void;
 }
 
@@ -151,9 +143,7 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
   characterId,
   assetConfig,
   setAssetConfig,
-  updateAnimationState,
-  updateAnimationSettings,
-  characterAnimationStates,
+  updateAnimation,
   onSave,
 }) => {
   const [isUploading, setIsUploading] = useState(false);
@@ -300,7 +290,9 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
                         <Select
                           value={anim.state}
                           onValueChange={(v) =>
-                            updateAnimationState(index, v as CharacterAnimationState)
+                            updateAnimation(index, {
+                              state: v as CharacterAnimationState,
+                            })
                           }
                         >
                           <SelectTrigger className="w-32">
@@ -327,7 +319,7 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
                         id={`duration-${index}`}
                         value={anim.frameDurationMs}
                         onValueChange={(value) =>
-                          updateAnimationSettings(index, {
+                          updateAnimation(index, {
                             frameDurationMs: value,
                           })
                         }
@@ -339,7 +331,7 @@ const CharacterAssetManager: React.FC<CharacterAssetManagerProps> = ({
                         id={`loop-${index}`}
                         checked={anim.loop}
                         onCheckedChange={(checked) =>
-                          updateAnimationSettings(index, { loop: checked })
+                          updateAnimation(index, { loop: checked })
                         }
                       />
                       <Label htmlFor={`loop-${index}`} className="text-sm">

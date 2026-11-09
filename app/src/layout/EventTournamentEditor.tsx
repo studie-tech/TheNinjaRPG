@@ -1,7 +1,7 @@
 "use client";
 
 import { sentenceCase as label } from "change-case";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,12 +13,14 @@ import {
   MAX_PVP_BRACKET,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
-import { RewardFormWrapper } from "@/layout/EditContent";
+import { RewardFormWrapper } from "@/layout/RewardEditor";
 import { showMutationToast } from "@/libs/toast";
-import { formatLocalDateTimeInput } from "@/utils/time";
+import { DAY_S, formatLocalDateTimeInput } from "@/utils/time";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
+  EVENT_TOURNAMENT_SERIES_LENGTHS,
   type EventTournamentConfig,
+  type EventTournamentSeriesLength,
   eventTournamentConfigSchema,
 } from "@/validators/tournament";
 
@@ -36,6 +38,7 @@ export const EventTournamentEditor = ({
     initial ?? defaultConfig(),
   );
   const [message, setMessage] = useState("");
+  const formRef = useRef<HTMLDivElement>(null);
   const mutation = api.tournament.saveEvent.useMutation({
     onSuccess: (result) => {
       showMutationToast(result);
@@ -71,7 +74,7 @@ export const EventTournamentEditor = ({
       title={tournamentId ? "Edit tournament draft" : "Create tournament"}
       defaultBackHref="/manual/tournaments"
     >
-      <div className="space-y-4">
+      <div ref={formRef} className="space-y-4">
         <label htmlFor="event-name" className="block space-y-1">
           Name
           <Input
@@ -123,9 +126,11 @@ export const EventTournamentEditor = ({
             <select
               className="block w-full rounded-md border bg-background p-2"
               value={config.bestOf}
-              onChange={(e) => update("bestOf", Number(e.target.value) as 1 | 3 | 5)}
+              onChange={(e) =>
+                update("bestOf", Number(e.target.value) as EventTournamentSeriesLength)
+              }
             >
-              {[1, 3, 5].map((n) => (
+              {EVENT_TOURNAMENT_SERIES_LENGTHS.map((n) => (
                 <option value={n} key={n}>
                   Best of {n}
                 </option>
@@ -141,7 +146,9 @@ export const EventTournamentEditor = ({
                 update(
                   "roundBestOf",
                   e.target.value.trim()
-                    ? (e.target.value.split(",").map(Number) as (1 | 3 | 5)[])
+                    ? (e.target.value
+                        .split(",")
+                        .map(Number) as EventTournamentSeriesLength[])
                     : [],
                 )
               }
@@ -212,10 +219,7 @@ export const EventTournamentEditor = ({
           </p>
         )}
         <div className="flex gap-2">
-          <Button
-            disabled={mutation.isPending}
-            onClick={(e) => save(e.currentTarget.closest(".space-y-4"))}
-          >
+          <Button disabled={mutation.isPending} onClick={() => save(formRef.current)}>
             Save draft
           </Button>
           <Button variant="outline" onClick={onSaved}>
@@ -244,8 +248,8 @@ const defaultConfig = (): EventTournamentConfig => ({
   minPvpWins: 0,
   minWinRate: 0,
   minMasteredJutsu: 0,
-  registrationClosesAt: Date.now() + 86400_000,
-  endsAt: Date.now() + 7 * 86400_000,
+  registrationClosesAt: Date.now() + DAY_S * 1000,
+  endsAt: Date.now() + 7 * DAY_S * 1000,
   rewards: {
     winner: ObjectiveReward.parse({}),
     runnerUp: ObjectiveReward.parse({}),

@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { masteryTrainingEndsAt } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
@@ -17,14 +16,8 @@ export const useMasteryQueueRefresh = (
   const elementalFinishesAt = user
     ? masteryTrainingEndsAt(user, "ELEMENT")?.getTime()
     : null;
-  // Preserve the pending refresh through unrelated profile renders, including
-  // useRefreshAt's grace period just after the server deadline.
-  const deadlines = useMemo(
-    () => [finishesAt, elementalFinishesAt],
-    [finishesAt, elementalFinishesAt],
-  );
   useRefreshAt(
-    deadlines,
+    [finishesAt, elementalFinishesAt],
     onRefresh,
     timeDiff,
     enabled && !!user && ["AWAKE", "ASLEEP"].includes(user.status),

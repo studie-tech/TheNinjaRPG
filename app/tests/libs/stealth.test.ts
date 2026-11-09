@@ -29,12 +29,15 @@ describe("stealth and sensory scaling", () => {
     [1999, 60, 5, 5, 120],
     [2000, 120, 7.75, 7.75, 115],
     [5500, 300, 16, 16, 100],
-  ])("scales stat %d in whole 1000-point steps", (stat, duration, keep, detect, cooldown) => {
-    expect(calcStealthDuration(stat)).toBe(duration);
-    expect(calcStealthKeepChance(stat)).toBeCloseTo(keep);
-    expect(calcSensoryDetectChance(stat)).toBeCloseTo(detect);
-    expect(calcSensoryCooldown(stat)).toBe(cooldown);
-  });
+  ])(
+    "scales stat %d in whole 1000-point steps",
+    (stat, duration, keep, detect, cooldown) => {
+      expect(calcStealthDuration(stat)).toBe(duration);
+      expect(calcStealthKeepChance(stat)).toBeCloseTo(keep);
+      expect(calcSensoryDetectChance(stat)).toBeCloseTo(detect);
+      expect(calcSensoryCooldown(stat)).toBe(cooldown);
+    },
+  );
 
   it("caps every scale", () => {
     expect(calcStealthDuration(Number.MAX_SAFE_INTEGER)).toBeLessThanOrEqual(1200);

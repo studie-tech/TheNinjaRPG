@@ -53,8 +53,8 @@ export const createReservedNameField = ({
     .refine((name) => !isReserved(name, reserved), { error: errorMessage });
 
 /**
- * Loose validator for clan/squad name fields on edit endpoints. Older records
- * may contain spaces or other characters that the create-time validator now
+ * Loose validator for clan/squad name fields on edit endpoints. Stored legacy
+ * names may contain spaces or other characters that the create-time validator
  * rejects; this lets the owner still edit non-name fields (e.g. image) without
  * being blocked. Strict validation is re-applied server-side when the name
  * actually changes.

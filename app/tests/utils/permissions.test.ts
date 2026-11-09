@@ -7,19 +7,21 @@ import {
   canAwardReputation,
   canChangeContent,
   canClearReport,
-  canModerateReports,
-  canSuggestContent,
   canDeleteConceptArt,
   canDeletePollOptions,
   canEditSeichiSilver,
   canManageRewards,
+  canModerateReports,
   canModifyCombatSettings,
   canModifyEventGains,
   canRemoveBloodlineFromPool,
+  canSuggestContent,
   canViewAllApplications,
   getApprovalGroup,
   getConversationComposeRestriction,
   getMessagingRestriction,
+  isRestrictedToSelf,
+  isSiteOwnerAccount,
   RESTRICTED_STAFF_CONVERSATION_MESSAGE,
   RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE,
 } from "@/utils/permissions";
@@ -162,7 +164,13 @@ test("seichi silver + bloodline-pool admin actions gate to their own admin role 
 });
 
 test("moderation roles cannot suggest content while other staff retain access", () => {
-  const denied: UserRole[] = ["USER", "MODERATOR", "MODERATOR-ADMIN", "HEAD_MODERATOR", "JR_MODERATOR"];
+  const denied: UserRole[] = [
+    "USER",
+    "MODERATOR",
+    "MODERATOR-ADMIN",
+    "HEAD_MODERATOR",
+    "JR_MODERATOR",
+  ];
   for (const role of UserRoles) {
     expect(canSuggestContent(role)).toBe(!denied.includes(role));
   }
@@ -197,14 +205,27 @@ test("trade bans can be managed and cleared by the roles that impose them", () =
 test("report moderation follows the role table for every report state", () => {
   const reportAdmins = ["MODERATOR-ADMIN", "OWNER", "CODING-ADMIN"];
   const expected: Record<BanState, string[]> = {
-    UNVIEWED: [...reportAdmins, "CONTENT-ADMIN", "EVENT-ADMIN", "HEAD_MODERATOR", "MODERATOR", "JR_MODERATOR"],
+    UNVIEWED: [
+      ...reportAdmins,
+      "CONTENT-ADMIN",
+      "EVENT-ADMIN",
+      "HEAD_MODERATOR",
+      "MODERATOR",
+      "JR_MODERATOR",
+    ],
     OFFICIAL_WARNING: [...reportAdmins, "MODERATOR"],
     BAN_ACTIVATED: [...reportAdmins, "HEAD_MODERATOR"],
     BAN_ESCALATED: [...reportAdmins, "HEAD_MODERATOR"],
     TRADE_BAN_ACTIVATED: [...reportAdmins, "HEAD_MODERATOR", "MODERATOR"],
     SILENCE_ACTIVATED: [...reportAdmins, "HEAD_MODERATOR", "MODERATOR"],
     SILENCE_ESCALATED: [...reportAdmins, "HEAD_MODERATOR"],
-    TIMEOUT_ACTIVATED: [...reportAdmins, "CONTENT-ADMIN", "EVENT-ADMIN", "HEAD_MODERATOR", "MODERATOR"],
+    TIMEOUT_ACTIVATED: [
+      ...reportAdmins,
+      "CONTENT-ADMIN",
+      "EVENT-ADMIN",
+      "HEAD_MODERATOR",
+      "MODERATOR",
+    ],
     REPORT_CLEARED: [],
   };
   for (const status of BanStates) {
@@ -213,7 +234,9 @@ test("report moderation follows the role table for every report state", () => {
       canModerateReports({ role, userId: "moderator" } as UserData, report),
     );
     expect([...allowed].sort()).toEqual([...expected[status]].sort() as UserRole[]);
-    expect(canModerateReports({ role: "OWNER", userId: "reported" } as UserData, report)).toBe(false);
+    expect(
+      canModerateReports({ role: "OWNER", userId: "reported" } as UserData, report),
+    ).toBe(false);
   }
 });
 
@@ -234,6 +257,23 @@ test("conversation compose restriction lets banned users reply to their own tick
   expect(compose(banned, publicConvo, "me")).toBe(getMessagingRestriction(banned));
   expect(compose(lowLevel, staffConvo, "me")).toBe(getMessagingRestriction(lowLevel));
   expect(compose(banned, staffConvo, "me")).toBeNull();
-  expect(compose(banned, staffConvo, "other")).toBe(RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE);
+  expect(compose(banned, staffConvo, "other")).toBe(
+    RESTRICTED_SUPPORT_TICKET_REPLY_MESSAGE,
+  );
   expect(compose(banned, staffConvo, null)).toBe(RESTRICTED_STAFF_CONVERSATION_MESSAGE);
+});
+
+test("isSiteOwnerAccount matches only the owner's exact username", () => {
+  expect(isSiteOwnerAccount({ username: "Terriator" })).toBe(true);
+  for (const username of ["terriator", "Terriator2", " Terriator", "Terr"]) {
+    expect(isSiteOwnerAccount({ username })).toBe(false);
+  }
+});
+
+test("isRestrictedToSelf limits self-only editors to their own account", () => {
+  expect(isRestrictedToSelf("CONTENT", "me", "other")).toBe(true);
+  expect(isRestrictedToSelf("CONTENT", "me", "me")).toBe(false);
+  expect(isRestrictedToSelf("CONTENT", undefined, "other")).toBe(true);
+  expect(isRestrictedToSelf("CONTENT-ADMIN", "me", "other")).toBe(false);
+  expect(isRestrictedToSelf("USER", "me", "other")).toBe(false);
 });

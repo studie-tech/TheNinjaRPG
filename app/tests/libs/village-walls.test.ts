@@ -3,9 +3,9 @@ import type { NormalizedSectorTile, SectorCoordinate } from "@/libs/sector-map/t
 import { getNeighborCoordinates, getSectorTileKey } from "@/libs/sector-map/validation";
 import {
   getOddQHexDistance,
+  getVillageWallAxis,
   getVillageWallDecorationClearanceKeys,
   getVillageWallFoundationKeys,
-  getVillageWallAxis,
   isVillageStructurePlacementAllowed,
   planVillageWalls,
   planVillageWallWindow,
@@ -27,16 +27,16 @@ describe("usesVillageWalls", () => {
 
 describe("getVillageWallAxis", () => {
   it("maps odd-q directions to signed screen-space sprite slopes", () => {
-    expect(Array.from({ length: 6 }, (_, direction) => getVillageWallAxis(direction))).toEqual(
-      [
-        "horizontal",
-        "horizontal",
-        "diagonalUp",
-        "diagonalDown",
-        "diagonalDown",
-        "diagonalUp",
-      ],
-    );
+    expect(
+      Array.from({ length: 6 }, (_, direction) => getVillageWallAxis(direction)),
+    ).toEqual([
+      "horizontal",
+      "horizontal",
+      "diagonalUp",
+      "diagonalDown",
+      "diagonalDown",
+      "diagonalUp",
+    ]);
   });
 });
 
@@ -53,35 +53,79 @@ const physical = (x: number, y: number) => ({
 
 describe("wall foundations across sector borders", () => {
   it("keeps local footings without projecting onto an incompatible neighboring lattice", () => {
-    const plans=planVillageWallWindow([
-      {sector:1,dx:0,dy:0,map:makeMap(12,12),structures:[physical(11,6)],villageType:"VILLAGE"},
-      {sector:2,dx:1,dy:0,map:makeMap(24,12),structures:[],villageType:null},
+    const plans = planVillageWallWindow([
+      {
+        sector: 1,
+        dx: 0,
+        dy: 0,
+        map: makeMap(12, 12),
+        structures: [physical(11, 6)],
+        villageType: "VILLAGE",
+      },
+      {
+        sector: 2,
+        dx: 1,
+        dy: 0,
+        map: makeMap(24, 12),
+        structures: [],
+        villageType: null,
+      },
     ]);
     expect(getVillageWallFoundationKeys(plans.get(1)!)).toContain("11,6");
     expect(plans.get(2)).toBeNull();
   });
 
-  it.each([[6,0],[6,11],[0,6],[11,6],[0,0],[0,11],[11,0],[11,11]])(
+  it.each([
+    [6, 0],
+    [6, 11],
+    [0, 6],
+    [11, 6],
+    [0, 0],
+    [0, 11],
+    [11, 0],
+    [11, 11],
+  ])(
     "supports walls at boundary position (%s,%s) in every receiving sector",
-    (x,y) => {
-      const entries = Array.from({length:9},(_,index)=>({ sector:index, dx:index%3-1, dy:Math.floor(index/3)-1,
-        map:makeMap(12,12), structures:index===4?[physical(x!,y!)]:[], villageType:index===4?"VILLAGE":null }));
+    (x, y) => {
+      const entries = Array.from({ length: 9 }, (_, index) => ({
+        sector: index,
+        dx: (index % 3) - 1,
+        dy: Math.floor(index / 3) - 1,
+        map: makeMap(12, 12),
+        structures: index === 4 ? [physical(x!, y!)] : [],
+        villageType: index === 4 ? "VILLAGE" : null,
+      }));
       const plans = planVillageWallWindow(entries);
       const source = plans.get(4)!;
       let imported = 0;
-      for (const key of getVillageWallFoundationKeys({edges:source.edges})) {
-        const [col,row]=key.split(',').map(Number) as [number,number];
-        if(col>=0&&col<12&&row>=0&&row<12)continue;
-        const target=entries.find(entry=>entry.dx===Math.floor(col/12)&&entry.dy===Math.floor(row/12))!;
-        const local=getSectorTileKey((col+12)%12,(row+12)%12);
-        expect(getVillageWallFoundationKeys(plans.get(target.sector)!)).toContain(local);
+      for (const key of getVillageWallFoundationKeys({ edges: source.edges })) {
+        const [col, row] = key.split(",").map(Number) as [number, number];
+        if (col >= 0 && col < 12 && row >= 0 && row < 12) continue;
+        const target = entries.find(
+          (entry) =>
+            entry.dx === Math.floor(col / 12) && entry.dy === Math.floor(row / 12),
+        )!;
+        const local = getSectorTileKey((col + 12) % 12, (row + 12) % 12);
+        expect(getVillageWallFoundationKeys(plans.get(target.sector)!)).toContain(
+          local,
+        );
         expect(plans.get(target.sector)!.edges).toHaveLength(0);
         imported++;
       }
       expect(imported).toBeGreaterThan(0);
-      const reversed=planVillageWallWindow([...entries].reverse());
-      for(const entry of entries)expect([...getVillageWallFoundationKeys(plans.get(entry.sector)??{edges:[]})].sort())
-        .toEqual([...getVillageWallFoundationKeys(reversed.get(entry.sector)??{edges:[]})].sort());
+      const reversed = planVillageWallWindow([...entries].reverse());
+      for (const entry of entries)
+        expect(
+          [
+            ...getVillageWallFoundationKeys(plans.get(entry.sector) ?? { edges: [] }),
+          ].sort(),
+        ).toEqual(
+          [
+            ...getVillageWallFoundationKeys(
+              reversed.get(entry.sector) ?? { edges: [] },
+            ),
+          ].sort(),
+        );
     },
   );
 });

@@ -20,20 +20,20 @@ import { itemRouter } from "@/server/api/routers/item";
 import { DialogObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
+  insertDefaultAiProfile,
   insertItems,
   insertQuestHistory,
   insertQuests,
   insertUserItems,
   insertUsers,
-  insertDefaultAiProfile,
 } from "../../../../setup/factories";
+import { beforeTransaction } from "../../../../setup/statements";
 import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { beforeTransaction } from "../../../../setup/statements";
 
 describeWithDatabase("quest battle entry item identity", () => {
   beforeEach(async () => {
@@ -131,10 +131,12 @@ describeWithDatabase("quest battle entry item identity", () => {
       // The transaction begins after battle and entry inventory have been preloaded.
       const raced = beforeTransaction(client, async () => {
         expect(
-          (await caller.evolveItem({
-            userItemId: "b",
-            evolutionItemId: "evolved",
-          })).success,
+          (
+            await caller.evolveItem({
+              userItemId: "b",
+              evolutionItemId: "evolved",
+            })
+          ).success,
         ).toBe(true);
         expect(
           await client.query.userItem.findFirst({ where: eq(userItem.id, "b") }),

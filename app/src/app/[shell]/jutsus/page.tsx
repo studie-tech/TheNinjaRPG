@@ -139,6 +139,14 @@ export default function MyJutsu() {
     },
   });
 
+  // Hold the reskin draft while the player confirms it
+  const confirmReskin = () => {
+    const data = reskinForm.getValues();
+    setReskinData(data);
+    setIsReskinOpen(false);
+    setIsConfirmOpen(true);
+  };
+
   // Watch reskin image for React Compiler compatibility
   const watchedReskinImage = useWatch({
     control: reskinForm.control,
@@ -154,6 +162,11 @@ export default function MyJutsu() {
     jutsuInput,
     { enabled: !!userData, placeholderData: (previousData) => previousData },
   );
+  // Open the details modal of one owned jutsu
+  const openJutsu = (id: string) => {
+    setUserJutsu(userJutsus?.find((uj) => uj.id === id));
+    setIsOpen(true);
+  };
   const { data: userItems, isFetching: l2 } = api.item.getUserItems.useQuery(
     undefined,
     { enabled: !!userData },
@@ -556,10 +569,7 @@ export default function MyJutsu() {
                 categorizedJutsus.equipped.some((j) => j.id === c.id),
               )}
               labelSingles={true}
-              onClick={(id) => {
-                setUserJutsu(userJutsus?.find((uj) => uj.id === id));
-                setIsOpen(true);
-              }}
+              onClick={openJutsu}
               showBgColor={false}
               showLabels={true}
               emptyText="No jutsu equipped. Select jutsu from the categories below to equip."
@@ -577,66 +587,18 @@ export default function MyJutsu() {
         {/* Accordion Sections for Non-Equipped Jutsu */}
         {categorizedJutsus && (
           <div>
-            <JutsuCategorySection
-              title="Bloodline Jutsu"
-              jutsus={categorizedJutsus.bloodline}
-              isOpen={openSections.has("bloodline")}
-              onToggle={() => toggleSection("bloodline")}
-              onClick={(id) => {
-                setUserJutsu(userJutsus?.find((uj) => uj.id === id));
-                setIsOpen(true);
-              }}
-              counts={userJutsuCounts}
-              transformToActionItems={transformToActionItems}
-            />
-            <JutsuCategorySection
-              title="PVP Jutsu"
-              jutsus={categorizedJutsus.pvpOnly}
-              isOpen={openSections.has("pvpOnly")}
-              onToggle={() => toggleSection("pvpOnly")}
-              onClick={(id) => {
-                setUserJutsu(userJutsus?.find((uj) => uj.id === id));
-                setIsOpen(true);
-              }}
-              counts={userJutsuCounts}
-              transformToActionItems={transformToActionItems}
-            />
-            <JutsuCategorySection
-              title="PVE Jutsu"
-              jutsus={categorizedJutsus.pveOnly}
-              isOpen={openSections.has("pveOnly")}
-              onToggle={() => toggleSection("pveOnly")}
-              onClick={(id) => {
-                setUserJutsu(userJutsus?.find((uj) => uj.id === id));
-                setIsOpen(true);
-              }}
-              counts={userJutsuCounts}
-              transformToActionItems={transformToActionItems}
-            />
-            <JutsuCategorySection
-              title="General Jutsu"
-              jutsus={categorizedJutsus.general}
-              isOpen={openSections.has("general")}
-              onToggle={() => toggleSection("general")}
-              onClick={(id) => {
-                setUserJutsu(userJutsus?.find((uj) => uj.id === id));
-                setIsOpen(true);
-              }}
-              counts={userJutsuCounts}
-              transformToActionItems={transformToActionItems}
-            />
-            <JutsuCategorySection
-              title="Unavailable Jutsu"
-              jutsus={categorizedJutsus.unavailable}
-              isOpen={openSections.has("unavailable")}
-              onToggle={() => toggleSection("unavailable")}
-              onClick={(id) => {
-                setUserJutsu(userJutsus?.find((uj) => uj.id === id));
-                setIsOpen(true);
-              }}
-              counts={userJutsuCounts}
-              transformToActionItems={transformToActionItems}
-            />
+            {JUTSU_SECTIONS.map(([key, title]) => (
+              <JutsuCategorySection
+                key={key}
+                title={title}
+                jutsus={categorizedJutsus[key]}
+                isOpen={openSections.has(key)}
+                onToggle={() => toggleSection(key)}
+                onClick={openJutsu}
+                counts={userJutsuCounts}
+                transformToActionItems={transformToActionItems}
+              />
+            ))}
           </div>
         )}
 
@@ -665,7 +627,7 @@ export default function MyJutsu() {
                     : "Unequip other first"
                 : undefined
             }
-            isValid={false}
+            keepOpenOnAccept
             onAccept={() => {
               if (canEquip || userjutsu.equipped) {
                 if (loadoutRequestInFlightRef.current) return;
@@ -770,7 +732,7 @@ export default function MyJutsu() {
                           setTransferTarget(undefined);
                           setTransferValue(1);
                         }}
-                        isValid={false}
+                        keepOpenOnAccept
                         onAccept={(e) => {
                           e.preventDefault();
                           if (transferTarget) {
@@ -1030,12 +992,7 @@ export default function MyJutsu() {
             isValid={reskinForm.formState.isValid}
             className="max-h-[99%] w-[800px] max-w-[99%]"
             onAccept={() => {
-              if (!isReskinning && userjutsu) {
-                const data = reskinForm.getValues();
-                setReskinData(data);
-                setIsReskinOpen(false);
-                setIsConfirmOpen(true);
-              }
+              if (!isReskinning && userjutsu) confirmReskin();
             }}
           >
             <div className="flex flex-col gap-4">
@@ -1043,12 +1000,7 @@ export default function MyJutsu() {
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    if (!isFetching && reskinForm.formState.isValid) {
-                      const data = reskinForm.getValues();
-                      setReskinData(data);
-                      setIsReskinOpen(false);
-                      setIsConfirmOpen(true);
-                    }
+                    if (!isFetching && reskinForm.formState.isValid) confirmReskin();
                   }}
                   className="grid grid-cols-3 gap-4 space-y-4"
                 >
@@ -1136,8 +1088,11 @@ export default function MyJutsu() {
                   <br />
                   <ul className="list-disc pl-6">
                     <li>
-                      <code>%user</code> or <code>%target</code>: The acting user&apos;s
-                      username.
+                      <code>%user</code>: The acting user&apos;s username.
+                    </li>
+                    <li>
+                      <code>%target</code>: The targets&apos; usernames, separated by
+                      commas.
                     </li>
                     <li>
                       <code>%user_subject</code> or <code>%target_subject</code>: (
@@ -1348,6 +1303,15 @@ const JutsuCategorySection = memo((props: JutsuCategorySectionProps) => {
 JutsuCategorySection.displayName = "JutsuCategorySection";
 
 // Helper types and functions
+
+/** Accordion sections for jutsu that are not equipped, in display order. */
+const JUTSU_SECTIONS = [
+  ["bloodline", "Bloodline Jutsu"],
+  ["pvpOnly", "PVP Jutsu"],
+  ["pveOnly", "PVE Jutsu"],
+  ["general", "General Jutsu"],
+  ["unavailable", "Unavailable Jutsu"],
+] as const;
 
 // Categorization types for organizing jutsu by usage type
 interface CategorizedJutsus {

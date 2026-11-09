@@ -1,4 +1,3 @@
-
 import { beforeEach, expect, it } from "bun:test";
 import {
   quest,
@@ -19,7 +18,13 @@ import {
 
 describeWithDatabase("profile dashboard raid history", () => {
   beforeEach(async () => {
-    await resetTables(raidDamageThreshold, raidParticipation, questHistory, quest, userData);
+    await resetTables(
+      raidDamageThreshold,
+      raidParticipation,
+      questHistory,
+      quest,
+      userData,
+    );
     await insertUsers([{ userId: "dashboard-user" }]);
   });
 
@@ -30,15 +35,32 @@ describeWithDatabase("profile dashboard raid history", () => {
       { id: "story", name: "Story", questType: "story" },
     ]);
     await database.insert(raidParticipation).values([
-      { id: "orphan", userId: "dashboard-user", questId: "deleted-raid", damageDealt: 200 },
-      { id: "existing", userId: "dashboard-user", questId: "existing-raid", damageDealt: 200 },
+      {
+        id: "orphan",
+        userId: "dashboard-user",
+        questId: "deleted-raid",
+        damageDealt: 200,
+      },
+      {
+        id: "existing",
+        userId: "dashboard-user",
+        questId: "existing-raid",
+        damageDealt: 200,
+      },
     ]);
     await database.insert(raidDamageThreshold).values({
-      id: "threshold", questId: "existing-raid", damageRequired: 100, rewards: ObjectiveReward.parse({}),
+      id: "threshold",
+      questId: "existing-raid",
+      damageRequired: 100,
+      rewards: ObjectiveReward.parse({}),
     });
 
-    const result = await (await callerFor(profileRouter, "dashboard-user")).getDashboard();
-    expect(result.raidProgress).toEqual([{ raidId: "existing-raid", damageDealt: 200 }]);
+    const result = await (
+      await callerFor(profileRouter, "dashboard-user")
+    ).getDashboard();
+    expect(result.raidProgress).toEqual([
+      { raidId: "existing-raid", damageDealt: 200 },
+    ]);
     expect(result.raidRewards).toEqual([
       { raidId: "existing-raid", raidName: "Existing raid", claimableCount: 1 },
     ]);
@@ -49,9 +71,14 @@ describeWithDatabase("profile dashboard raid history", () => {
   it("returns empty raid summaries when every participation belongs to a deleted raid", async () => {
     const database = await getTestDatabase();
     await database.insert(raidParticipation).values({
-      id: "orphan", userId: "dashboard-user", questId: "deleted-raid", damageDealt: 200,
+      id: "orphan",
+      userId: "dashboard-user",
+      questId: "deleted-raid",
+      damageDealt: 200,
     });
-    const result = await (await callerFor(profileRouter, "dashboard-user")).getDashboard();
+    const result = await (
+      await callerFor(profileRouter, "dashboard-user")
+    ).getDashboard();
     expect(result.raidProgress).toEqual([]);
     expect(result.raidRewards).toEqual([]);
   });

@@ -102,7 +102,7 @@ EDIT A SECTOR
   3. Objects layer (trees, rocks, spawns, exits, ...):
      - DECORATIONS show as their actual sprites. To add one, just drag it from
        the "decorations" tileset onto the map - it carries its class and
-       assetKey automatically. Optional properties: scale, offsetX.
+       assetKey automatically. Optional properties: scale, offsetX, offsetY.
      - ANCHOR / STRUCTURE / SHRINE: the object's NAME is its key
        (e.g. spawn.default, structure.hospital, shrine.default).
      - EXIT: name it with its key (e.g. exit.north) and set targetSector,
@@ -111,7 +111,7 @@ EDIT A SECTOR
 
 PUBLISH
   1. Save the .json in Tiled (File > Save).
-  2. In the game: Manual > Travel > Sector Maps.
+  2. In the game: Manual > World > Sector Maps.
   3. Upload the .json, click Validate, then Save Draft or Publish.
 
 The terrain colours are only an editing aid - the game renders its own art.

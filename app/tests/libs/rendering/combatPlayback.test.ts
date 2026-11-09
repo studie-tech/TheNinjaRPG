@@ -1,11 +1,17 @@
 import { describe, expect, it } from "bun:test";
-import type { ReturnedBattle } from "@/libs/combat/types";
 import type { CombatPlaybackStep } from "@/libs/combat/playback";
+import type { ReturnedBattle } from "@/libs/combat/types";
 import { createCombatPlayback } from "@/libs/rendering/scenes/combatPlayback";
 
 const cue = (id: string) => ({ id, animation: "slash", longitude: 0, latitude: 0 });
 const fighter = (health = 100, spriteAction?: ReturnType<typeof cue>) =>
-  ({ userId: "foe", longitude: 0, latitude: 0, curHealth: health, spriteAction }) as never;
+  ({
+    userId: "foe",
+    longitude: 0,
+    latitude: 0,
+    curHealth: health,
+    spriteAction,
+  }) as never;
 const battle = (version: number, overrides: Partial<ReturnedBattle> = {}) =>
   ({
     id: "battle",
@@ -69,12 +75,16 @@ describe("combat replay director", () => {
     const playback = createCombatPlayback(battle(1));
     const first = battle(2, { usersState: [fighter(100, cue("a"))] });
     first.playback = [step(1, [{ userId: "foe", spriteAction: cue("a") }])];
-    const second = battle(3, { usersState: [{ ...(fighter() as object), longitude: 4 }] as never });
+    const second = battle(3, {
+      usersState: [{ ...(fighter() as object), longitude: 4 }] as never,
+    });
     second.playback = [step(2, [{ userId: "foe", longitude: 4 }])];
     playback.receive(first);
     playback.tick({ ...idle, now: 0, cue: () => 0 });
     playback.receive(second);
-    expect(playback.tick({ ...idle, now: 10, cue: () => 0 }).usersState[0]?.longitude).toBe(0);
+    expect(
+      playback.tick({ ...idle, now: 10, cue: () => 0 }).usersState[0]?.longitude,
+    ).toBe(0);
     playback.tick({ ...idle, now: 20 });
     playback.tick({ ...idle, now: 200 });
     expect(playback.tick({ ...idle, now: 210 }).usersState[0]?.longitude).toBe(4);
@@ -108,12 +118,20 @@ describe("combat replay director", () => {
   it("lands a long authored clip's hit promptly, then lets the clip finish", () => {
     const playback = createCombatPlayback(battle(1));
     const next = battle(2, { usersState: [fighter(40, cue("a"))] });
-    next.playback = [step(1, [{ userId: "foe", curHealth: 40, spriteAction: cue("a") }])];
+    next.playback = [
+      step(1, [{ userId: "foe", curHealth: 40, spriteAction: cue("a") }]),
+    ];
     playback.receive(next);
     playback.tick({ ...idle, now: 0, cue: () => 0 });
-    expect(playback.tick({ ...idle, now: 100, cue: () => 0.05 }).usersState[0]?.curHealth).toBe(100);
-    expect(playback.tick({ ...idle, now: 649, cue: () => 0.3 }).usersState[0]?.curHealth).toBe(100);
-    expect(playback.tick({ ...idle, now: 650, cue: () => 0.31 }).usersState[0]?.curHealth).toBe(40);
+    expect(
+      playback.tick({ ...idle, now: 100, cue: () => 0.05 }).usersState[0]?.curHealth,
+    ).toBe(100);
+    expect(
+      playback.tick({ ...idle, now: 649, cue: () => 0.3 }).usersState[0]?.curHealth,
+    ).toBe(100);
+    expect(
+      playback.tick({ ...idle, now: 650, cue: () => 0.31 }).usersState[0]?.curHealth,
+    ).toBe(40);
     expect(playback.isPlaying()).toBe(true);
     playback.tick({ ...idle, now: 1000, cue: () => 0.8 });
     expect(playback.isPlaying()).toBe(true);
@@ -124,7 +142,9 @@ describe("combat replay director", () => {
   it("releases an action whose artwork never reports back", () => {
     const playback = createCombatPlayback(battle(1));
     const next = battle(2, { usersState: [fighter(40, cue("a"))] });
-    next.playback = [step(1, [{ userId: "foe", curHealth: 40, spriteAction: cue("a") }])];
+    next.playback = [
+      step(1, [{ userId: "foe", curHealth: 40, spriteAction: cue("a") }]),
+    ];
     playback.receive(next);
     playback.tick({ ...idle, now: 0, cue: () => 0 });
     expect(playback.tick({ ...idle, now: 4000, cue: () => 0 })).toBe(next);

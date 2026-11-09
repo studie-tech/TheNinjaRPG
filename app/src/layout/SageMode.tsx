@@ -12,11 +12,6 @@ import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 
-/**
- * Equipped sage mode card plus paid removal. Hidden modes still load via
- * `sageMode.get`. Set `embedded` when the parent already provides a titled box
- * (profile edit accordion) so this does not wrap a second `ContentBox`.
- */
 interface CurrentSageModeProps {
   sageModeId: string;
   initialBreak?: boolean;
@@ -24,7 +19,11 @@ interface CurrentSageModeProps {
   embedded?: boolean;
 }
 
-/** Equipped-mode viewer and reputation-paid removal control. */
+/**
+ * Equipped sage mode card plus reputation-paid removal. Hidden modes still load via
+ * `sageMode.get`. Set `embedded` when the parent already provides a titled box
+ * (profile edit accordion) so this does not wrap a second `ContentBox`.
+ */
 export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
   const {
     data: userData,
@@ -44,6 +43,7 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
           await updateUser(result, { revision });
         if (result.success) {
           await updateUser(
+            // Patch locally only when removal leaves every quest's availability unchanged.
             (current) => {
               const patch = { sageModeId: null, sageMode: null };
               const afterRemoval = { ...current, ...patch };

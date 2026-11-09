@@ -1,4 +1,3 @@
-import { timerClaimFixture } from "../../../setup/gameTimers";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { GET } from "@/app/api/shrine-maintenance/route";
 import {
@@ -17,10 +16,8 @@ import {
 import * as gamesettings from "@/libs/gamesettings";
 import { getCurrentSlotBoundary, getSlotIndex } from "@/utils/time";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
-import {
-  resetServerModuleStubs,
-  stubCronAuth,
-} from "../../../setup/serverModules";
+import { timerClaimFixture } from "../../../setup/gameTimers";
+import { resetServerModuleStubs, stubCronAuth } from "../../../setup/serverModules";
 import {
   describeWithDatabase,
   getTestDatabase,
@@ -69,11 +66,13 @@ describeWithDatabase("shrine boost template reserve locks", () => {
         unlockedAiIds: [],
         activeBoosts: {},
         activeAiIds: [],
-        boostTemplate: [{
-          boostType: "Training",
-          dayOfWeek: now.getUTCDay(),
-          slotIndex: getSlotIndex(now.getUTCHours()),
-        }],
+        boostTemplate: [
+          {
+            boostType: "Training",
+            dayOfWeek: now.getUTCDay(),
+            slotIndex: getSlotIndex(now.getUTCHours()),
+          },
+        ],
       },
     });
     await db.insert(sector).values({

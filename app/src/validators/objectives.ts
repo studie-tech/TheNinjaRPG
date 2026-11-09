@@ -218,11 +218,8 @@ export type RaidTask = (typeof RaidTasks)[number];
 
 // Curated subset of combat effect types (`tagTypes` in @/validators/combat) that can
 // be applied during a winnable battle, used by the tag_usage_win objective picker + schema.
-// Excludes non-combat / out-of-battle tag types (noncombat*, marriage, reskin,
-// unlockitemvariant, repair, rollbloodline) AND combat tags that never resolve on a user
-// target (barrier, clone, summon, move — ground-only / special handlers). Locked to the
-// canonical list by tests/validators/objective_tag_types.test.ts (fails if a new effect type
-// is added).
+// tests/validators/objective_tag_types.test.ts lists every excluded type and fails when a
+// new effect type is added to neither list.
 export const OBJECTIVE_TAG_TYPES = [
   "absorb",
   "activatesagemode",
@@ -743,7 +740,7 @@ export const CompleteSpecificQuest = z.object({
   ...questRewardFields,
 });
 
-// contentId stores the purchased item id (matched against buyItemIds). NPC shop only (v1).
+// contentId stores the purchased item id (matched against buyItemIds); only NPC shop purchases count.
 export const BuyItem = z.object({
   ...baseObjectiveFields,
   task: z.literal("buy_item"),

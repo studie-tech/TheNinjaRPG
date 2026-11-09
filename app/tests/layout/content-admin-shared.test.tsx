@@ -32,17 +32,21 @@ beforeEach(() => {
       </section>
     ),
   );
-  vi.spyOn(EditContent, "EffectFormWrapper").mockImplementation(({ idx }) => <p>form {idx}</p>);
-  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(Modal, "default").mockImplementation(({ title, children, proceed_label, onAccept }) => (
-    <div>
-      <h3>{title}</h3>
-      {children}
-      <button type="button" onClick={onAccept as never}>
-        {proceed_label}
-      </button>
-    </div>
+  vi.spyOn(EditContent, "EffectFormWrapper").mockImplementation(({ idx }) => (
+    <p>form {idx}</p>
   ));
+  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+  vi.spyOn(Modal, "default").mockImplementation(
+    ({ title, children, proceed_label, onAccept }) => (
+      <div>
+        <h3>{title}</h3>
+        {children}
+        <button type="button" onClick={onAccept as never}>
+          {proceed_label}
+        </button>
+      </div>
+    ),
+  );
 });
 
 afterEach(() => {
@@ -52,22 +56,26 @@ afterEach(() => {
 
 describe("EditorQueryFeedback", () => {
   it("reports a missing record without a retry", () => {
-    const view = render(<EditorQueryFeedback {...feedback} isError={false} onRetry={vi.fn()} />);
+    const view = render(
+      <EditorQueryFeedback {...feedback} isError={false} onRetry={vi.fn()} />,
+    );
     expect(view.getByRole("heading", { name: "Item not found" })).toBeTruthy();
     expect(view.getByRole("alert").textContent).toContain("may have been removed");
-    expect(
-      view.getByRole("link", { name: "Back to list" }).getAttribute("href"),
-    ).toBe(feedback.backHref);
+    expect(view.getByRole("link", { name: "Back to list" }).getAttribute("href")).toBe(
+      feedback.backHref,
+    );
     expect(view.queryByRole("button")).toBeNull();
   });
 
   it("offers a retry after a failed load", () => {
     const onRetry = vi.fn();
-    const view = render(<EditorQueryFeedback {...feedback} isError onRetry={onRetry} />);
+    const view = render(
+      <EditorQueryFeedback {...feedback} isError onRetry={onRetry} />,
+    );
     expect(view.getByRole("heading", { name: "Unable to load item" })).toBeTruthy();
-    expect(
-      view.getByRole("link", { name: "Back to list" }).getAttribute("href"),
-    ).toBe(feedback.backHref);
+    expect(view.getByRole("link", { name: "Back to list" }).getAttribute("href")).toBe(
+      feedback.backHref,
+    );
     fireEvent.click(view.getByRole("button", { name: "Retry" }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
@@ -103,7 +111,9 @@ describe("EffectTagListEditor", () => {
 
   it("adds the caller's placeholder from the empty state", () => {
     const setEffects = vi.fn();
-    const view = render(<EffectTagListEditor {...base} effects={[]} setEffects={setEffects} />);
+    const view = render(
+      <EffectTagListEditor {...base} effects={[]} setEffects={setEffects} />,
+    );
     expect(view.getByText("Please add effects to this item")).toBeTruthy();
     fireEvent.click(icons(view.container)[0] as Element);
     expect(setEffects).toHaveBeenCalledWith([tag]);
@@ -113,7 +123,11 @@ describe("EffectTagListEditor", () => {
     const other = { type: "heal" } as ZodAllTags;
     const setEffects = vi.fn();
     const view = render(
-      <EffectTagListEditor {...base} effects={[tag, undefined, other]} setEffects={setEffects} />,
+      <EffectTagListEditor
+        {...base}
+        effects={[tag, undefined, other]}
+        setEffects={setEffects}
+      />,
     );
     expect(view.getByText("Item Tag #2")).toBeTruthy();
     expect(view.queryByText("Item Tag #3")).toBeNull();
@@ -125,7 +139,12 @@ describe("EffectTagListEditor", () => {
   it("ignores add and remove while disabled", () => {
     const setEffects = vi.fn();
     const view = render(
-      <EffectTagListEditor {...base} disabled effects={[tag]} setEffects={setEffects} />,
+      <EffectTagListEditor
+        {...base}
+        disabled
+        effects={[tag]}
+        setEffects={setEffects}
+      />,
     );
     for (const icon of icons(view.container)) fireEvent.click(icon);
     expect(setEffects).not.toHaveBeenCalled();
@@ -133,7 +152,12 @@ describe("EffectTagListEditor", () => {
 
   it("hides add, remove and the empty state when the structure is locked", () => {
     const view = render(
-      <EffectTagListEditor {...base} lockStructure effects={[tag]} setEffects={vi.fn()} />,
+      <EffectTagListEditor
+        {...base}
+        lockStructure
+        effects={[tag]}
+        setEffects={vi.fn()}
+      />,
     );
     expect(view.getByText("form 0")).toBeTruthy();
     expect(icons(view.container)).toHaveLength(0);
@@ -147,7 +171,9 @@ describe("EffectTagListEditor", () => {
 
 describe("ConfirmedCloneControl", () => {
   const source = { id: "a", name: "Fireball" };
-  const setup = (clone: (id: string) => Promise<{ success: boolean; message: string }>) => {
+  const setup = (
+    clone: (id: string) => Promise<{ success: boolean; message: string }>,
+  ) => {
     const onCloned = vi.fn();
     const view = render(
       <ConfirmedCloneControl
@@ -176,10 +202,14 @@ describe("ConfirmedCloneControl", () => {
   });
 
   it("refuses a second submission while one is in flight", async () => {
-    let settle: (value: { success: boolean; message: string }) => void = () => undefined;
-    const clone = vi.fn(() => new Promise<{ success: boolean; message: string }>((resolve) => {
-      settle = resolve;
-    }));
+    let settle: (value: { success: boolean; message: string }) => void = () =>
+      undefined;
+    const clone = vi.fn(
+      () =>
+        new Promise<{ success: boolean; message: string }>((resolve) => {
+          settle = resolve;
+        }),
+    );
     const { view } = setup(clone);
     accept(view);
     accept(view);
@@ -209,20 +239,27 @@ describe("ContentLinksCell", () => {
 
   it("links to statistics and, for editors, the edit page", () => {
     const editor = render(<ContentLinksCell type="jutsu" id="a" canEdit />);
-    expect(hrefs(editor.container)).toEqual(["/manual/jutsu/statistics/a", "/manual/jutsu/edit/a"]);
+    expect(hrefs(editor.container)).toEqual([
+      "/manual/jutsu/statistics/a",
+      "/manual/jutsu/edit/a",
+    ]);
     cleanup();
     const viewer = render(<ContentLinksCell type="jutsu" id="a" canEdit={false} />);
     expect(hrefs(viewer.container)).toEqual(["/manual/jutsu/statistics/a"]);
   });
 
   it("omits the statistics link for content without that route", () => {
-    const view = render(<ContentLinksCell type="skillTree" id="a" canEdit hideStatistics />);
+    const view = render(
+      <ContentLinksCell type="skillTree" id="a" canEdit hideStatistics />,
+    );
     expect(hrefs(view.container)).toEqual(["/manual/skillTree/edit/a"]);
   });
 
   it("opens details from the info icon", () => {
     const onInfo = vi.fn();
-    const view = render(<ContentLinksCell type="item" id="a" canEdit={false} onInfo={onInfo} />);
+    const view = render(
+      <ContentLinksCell type="item" id="a" canEdit={false} onInfo={onInfo} />,
+    );
     fireEvent.click(view.container.querySelector("svg.lucide-info") as Element);
     expect(onInfo).toHaveBeenCalledTimes(1);
   });
@@ -242,7 +279,11 @@ describe("ClearBattleDataButton", () => {
       },
     });
     const view = render(
-      <ClearBattleDataButton type={type} label={label} onCleared={async () => undefined} />,
+      <ClearBattleDataButton
+        type={type}
+        label={label}
+        onCleared={async () => undefined}
+      />,
     );
     expect(view.getByText(title)).toBeTruthy();
     expect(view.container.textContent).toContain(

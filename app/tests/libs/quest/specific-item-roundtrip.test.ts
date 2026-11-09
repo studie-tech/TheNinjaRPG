@@ -4,8 +4,7 @@ import { AllObjectives } from "@/validators/objectives";
 import { trackerQuest, trackerUser } from "../../setup/quest";
 
 // The real save path validates each objective through `AllObjectives` (quests.ts content
-// schema). Prior tests built the objective as a raw JS object, skipping this parse. This
-// exercises parse (save) → serialize → parse (load) → getNewTrackers, to catch a field being
+// schema). This exercises parse (save) → serialize → parse (load) → getNewTrackers, to catch a field being
 // dropped or coerced away in the schema round-trip.
 const roundTrip = (raw: Record<string, unknown>) =>
   AllObjectives.parse(JSON.parse(JSON.stringify(AllObjectives.parse(raw))));

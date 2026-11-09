@@ -52,17 +52,16 @@ export default function TowerDefenseUpgradeEdit(props: {
     );
   }
 
-  return <SingleEditUpgrade upgrade={data} refetch={refetch} />;
+  return <SingleEditUpgrade upgrade={data} />;
 }
 
 interface SingleEditUpgradeProps {
   upgrade: TowerDefenseUpgrade;
-  refetch: () => void;
 }
 
-const SingleEditUpgrade: React.FC<SingleEditUpgradeProps> = ({ upgrade, refetch }) => {
+const SingleEditUpgrade: React.FC<SingleEditUpgradeProps> = ({ upgrade }) => {
   const { form, formData, isUpdating, handleUpgradeSubmit } =
-    useTowerDefenseUpgradeEditForm(upgrade, refetch);
+    useTowerDefenseUpgradeEditForm(upgrade);
 
   return (
     <ContentBox
@@ -94,9 +93,10 @@ const SingleEditUpgrade: React.FC<SingleEditUpgradeProps> = ({ upgrade, refetch 
         type="towerDefenseUpgrade"
         relationId={upgrade.id}
         allowImageUpload={false}
+        submitLoading={isUpdating}
+        submitLoadingText="Saving"
         onAccept={handleUpgradeSubmit}
       />
-      {isUpdating && <Loader explanation="Saving..." />}
     </ContentBox>
   );
 };

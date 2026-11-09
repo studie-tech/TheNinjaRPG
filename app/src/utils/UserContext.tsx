@@ -17,7 +17,6 @@ import {
   useRef,
   useState,
 } from "react";
-import type { AchievementProgress, UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import type { StructureRoute } from "@/drizzle/constants";
@@ -30,6 +29,7 @@ import type { ReturnedBattle } from "@/libs/combat/types";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { getTerritoryWarBoostUntil } from "@/libs/territoryWar";
 import { showMutationToast } from "@/libs/toast";
+import type { AchievementProgress, UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
 import {
   prepareUserUpdate as captureUserUpdate,
@@ -39,7 +39,7 @@ import { withoutUserPosition } from "@/utils/userCacheSharing";
 import { canAccessStructure } from "@/utils/village";
 
 /**
- * Atom for storing combat action¨
+ * Atom for storing combat action
  */
 export const combatActionIdAtom = atom<string | undefined>(undefined);
 
@@ -150,7 +150,7 @@ const UserInfoContext =
 
 /**
  * UserContextProvider component provides a context for managing user-related data and functionality.
- * It includes features such as managing Clerk token, Pusher connection, current user battle, time difference between client and server, and user data retrieval.
+ * It includes the Pusher connection, the time difference between client and server, and user data retrieval.
  *
  * @param props - The component props.
  * @param props.children - The child components.
@@ -223,16 +223,12 @@ export function UserContextProvider(props: {
   const territoryWarBoostUntil = data?.userData
     ? getTerritoryWarBoostUntil(data.userData)?.getTime()
     : undefined;
-  const timedDeadlines = useMemo(
-    () => [
+  useRefreshAt(
+    [
       territoryWarBoostUntil,
       ...(data?.userData?.raidBuffs?.map((buff) => buff.expiresAt) ?? []),
       ...(data?.userData?.cookingJobs?.map((job) => job.finishesAt) ?? []),
     ],
-    [territoryWarBoostUntil, data?.userData?.raidBuffs, data?.userData?.cookingJobs],
-  );
-  useRefreshAt(
-    timedDeadlines,
     () => {
       void refetch({ cancelRefetch: false });
     },

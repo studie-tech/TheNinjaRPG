@@ -5,15 +5,12 @@ import { serverError } from "@/server/api/trpc";
 import { plan2FedStatus } from "@/utils/paypal";
 import { addDays, DAY_S, secondsFromNow } from "@/utils/time";
 
-/**
- * Fetch a subscrioption from paypal
- */
+/** Fetch PayPal reporting transactions within 14 days of `transactionDate`, optionally for one transaction ID. */
 export const getPaypalTransactions = async (
   transactionDate: Date,
   token: string,
   transactionId?: string,
 ) => {
-  // Current date in 2014-07-12T00:00:00-0700 format
   const startDate = addDays(transactionDate, -14);
   const endDate = addDays(transactionDate, 14);
   let path = `/v1/reporting/transactions?start_date=${startDate.toISOString()}&end_date=${endDate.toISOString()}`;
@@ -39,10 +36,10 @@ export const getPaypalSubscriptionStatus = (
 };
 
 /**
- * Fetch a subscrioption from paypal
+ * Fetch a subscription from paypal
  * @param subscriptionId - The subscription ID to fetch
  * @param token - The access token to use
- * @returns The subscription data
+ * @returns The subscription data, or undefined when PayPal does not know the subscription
  */
 export const getPaypalSubscription = async (subscriptionId: string, token: string) => {
   const response = await paypalFetch(
@@ -58,7 +55,7 @@ export const getPaypalSubscription = async (subscriptionId: string, token: strin
 };
 
 /**
- * Cancel a subscrioption from paypal
+ * Cancel a subscription from paypal
  */
 export const cancelPaypalSubscription = async (
   subscriptionId: string,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
 import type { CompleteBattle, UserEffect } from "@/libs/combat/types";
 import { calcPoolCost } from "@/libs/combat/util";
-import { makeBattleUser, makeCombatAction, makeEffect } from "./helpers/battleScenario";
+import { makeBattleUser, makeCombatAction, makeEffect } from "../../setup/combat";
 
 const runtime = (id: string, creatorId: string) => ({
   id,
@@ -95,7 +95,10 @@ describe("pool cost floor", () => {
   const costs = (modifiers: UserEffect[]) => calcPoolCost(action, modifiers, user);
 
   it("makes an action free, never a refund, under a static reduction past its cost", () => {
-    const modifier = poolCost("decreasepoolcost", { power: 250, calculation: "static" });
+    const modifier = poolCost("decreasepoolcost", {
+      power: 250,
+      calculation: "static",
+    });
     expect(costs([modifier])).toEqual({ hpCost: 0, cpCost: 0, spCost: 50 });
   });
 
@@ -118,7 +121,10 @@ describe("pool cost floor", () => {
   });
 
   it("deals no poison damage for an action made free", () => {
-    const modifier = poolCost("decreasepoolcost", { power: 500, calculation: "static" });
+    const modifier = poolCost("decreasepoolcost", {
+      power: 500,
+      calculation: "static",
+    });
     expect(poisonDamage(modifier)).toEqual({ spent: 0, damage: 0 });
   });
 });

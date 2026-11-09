@@ -450,13 +450,6 @@ export const addDecorationTileset = (
 };
 
 /**
- * Build and download a `sector-<n>.zip`: the Tiled map (terrain tileset pointed
- * at a generated swatch image, decorations as visible tile-objects), the
- * bundled decoration sprites, the .tiled-project (object classes + assetKey
- * dropdown built from the shared asset library) and a README. Unzip and open
- * the .json in Tiled.
- */
-/**
  * Convert a game-convention Tiled map (staggerindex "odd": row 0 is the row
  * the game renders at the BOTTOM of the screen) into the WYSIWYG convention
  * the kit ships: rows reversed and staggerindex "even", which is the exact
@@ -532,6 +525,13 @@ export const toWysiwygTiledJson = (rawTiledJson: unknown): Record<string, unknow
   return map;
 };
 
+/**
+ * Build and download a `sector-<n>.zip`: the Tiled map (terrain tileset pointed
+ * at a generated swatch image, decorations as visible tile-objects), the
+ * bundled decoration sprites, the .tiled-project (object classes + assetKey
+ * dropdown built from the shared asset library) and a README. Unzip and open
+ * the .json in Tiled.
+ */
 export const downloadSectorForTiled = async (
   rawTiledJson: unknown,
   sector: number,

@@ -1,9 +1,13 @@
-import { timerClaimFixture } from "../../../setup/gameTimers";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
 import { GET } from "@/app/api/daily-bank/route";
 import * as gamesettings from "@/libs/gamesettings";
-import { resetServerModuleStubs, stubCronAuth, stubDatabase } from "../../../setup/serverModules";
+import { timerClaimFixture } from "../../../setup/gameTimers";
+import {
+  resetServerModuleStubs,
+  stubCronAuth,
+  stubDatabase,
+} from "../../../setup/serverModules";
 
 const request = () => new Request("https://example.com/api/daily-bank");
 const dailyClaim = (claim: ReturnType<typeof timerClaimFixture>) => ({

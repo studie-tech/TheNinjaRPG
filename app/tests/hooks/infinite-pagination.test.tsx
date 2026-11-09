@@ -1,5 +1,5 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { useInfinitePagination } from "@/libs/pagination";
 
 // Reports an observed element as intersecting while `visible` is true, the way a real

@@ -9,7 +9,7 @@ the role requires the application's `linked` metadata, which the game pushes whe
 links. A bot token (REST only, no gateway) sets each member's nickname to the character name,
 manages village roles and mirrors indefinite in-game sanctions as server bans.
 
-Code: `app/src/server/utils/discord/` (config, REST client, rules, links, sync),
+Code: `app/src/server/utils/discord/`,
 `app/src/app/api/discord/{authorize,callback}`, `app/src/app/api/hourly-discord-sync`,
 the `discord` tRPC router, `/discord/link`, the Discord section in profile settings and the
 staff page `/reports/discord`.

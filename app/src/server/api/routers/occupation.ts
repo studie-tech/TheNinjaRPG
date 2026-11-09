@@ -10,6 +10,7 @@ import {
 import {
   CRAFTING_TIMES_MINS,
   MAP_WAKE_ISLAND_SECTOR,
+  MAX_COOKING_BATCHES,
   OCCUPATIONS,
 } from "@/drizzle/constants";
 import { userData, userItem } from "@/drizzle/schema";
@@ -105,13 +106,31 @@ import {
   getSecondPrecisionDate,
 } from "@/utils/time";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
-import { cookItemInputSchema } from "@/validators/cooking";
 import {
   type CraftingQueueMaterial,
   cancelQueuedJobInputSchema,
-  craftingQueueOutputSchema,
+  queuedJobSchema,
 } from "@/validators/train";
 import { userDeltaResponseSchema } from "@/validators/userCache";
+
+const craftingQueueOutputSchema = z.object({
+  capacity: z.number(),
+  waiting: z.array(
+    queuedJobSchema.extend({
+      itemId: z.string(),
+      name: z.string(),
+      image: z.string().nullable(),
+      quantity: z.number(),
+      materials: z.array(z.object({ name: z.string(), quantity: z.number() })),
+    }),
+  ),
+});
+
+/** Shared production input counts batches; meal output quantity comes from the recipe. */
+const cookItemInputSchema = z.object({
+  itemId: z.string(),
+  quantity: z.int().min(1).max(MAX_COOKING_BATCHES).prefault(1),
+});
 
 export const occupationRouter = createTRPCRouter({
   /** Visible crafting recipes; public for the crafting manual page. */
@@ -494,6 +513,9 @@ export const occupationRouter = createTRPCRouter({
         : undefined;
       const craftedAt = getNextUserSnapshotAt(user.updatedAt);
       const materialConflict = Symbol("materialConflict");
+      // One statement cannot claim the user snapshot, debit a variable set of material
+      // stacks (each an UPDATE or a DELETE) and insert the crafted stacks and cooking job;
+      // a failed debit must roll back the claim and every earlier debit.
       try {
         const craftCommitted = await ctx.drizzle.transaction(async (tx) => {
           const claimResult = await updateUserDataForCraftItem(

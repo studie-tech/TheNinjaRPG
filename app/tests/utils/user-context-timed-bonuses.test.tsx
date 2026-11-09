@@ -1,16 +1,28 @@
-import { act, cleanup, render } from "@testing-library/react";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+  vi,
+} from "bun:test";
 import * as clerk from "@clerk/nextjs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, render } from "@testing-library/react";
 import * as trpc from "@trpc/react-query";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { type ContextType, type ReactNode, useContext, useState } from "react";
 import * as client from "@/app/_trpc/client";
 import * as pusher from "@/layout/PusherHandler";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
-import { UserContextProvider, useUserData, useUserInfo, useUserDataSelector } from "@/utils/UserContext";
+import {
+  UserContextProvider,
+  useUserData,
+  useUserDataSelector,
+  useUserInfo,
+} from "@/utils/UserContext";
 
 const BASE = Date.UTC(2026, 9, 24, 12);
-let nowMs = BASE;
 const refetch = vi.fn();
 const otherBoostNotice = {
   href: "/clanhall",
@@ -18,15 +30,11 @@ const otherBoostNotice = {
   group: "Active boosts",
   color: "green" as const,
 };
-const advance = (ms: number) => {
-  nowMs += ms;
-  vi.advanceTimersByTime(ms);
-};
+const advance = (ms: number) => vi.advanceTimersByTime(ms);
 
 beforeEach(() => {
-  nowMs = BASE;
   vi.useFakeTimers();
-  vi.spyOn(Date, "now").mockImplementation(() => nowMs);
+  setSystemTime(BASE);
   refetch.mockClear();
   vi.spyOn(trpc, "getQueryKey").mockReturnValue([["profile", "getUser"]]);
   vi.spyOn(clerk, "useUser").mockReturnValue({
@@ -50,7 +58,12 @@ const mount = (
     serverTime: BASE - 2000,
     notifications: [
       otherBoostNotice,
-      { href: "/territory-war", name: "Territory War bonus", group: "Active boosts", color: "green" },
+      {
+        href: "/territory-war",
+        name: "Territory War bonus",
+        group: "Active boosts",
+        color: "green",
+      },
     ],
     userData: {
       userId: "crafter",
@@ -63,10 +76,15 @@ const mount = (
     useUtils: () => ({}),
     profile: {
       getUser: {
-        useQuery: (_input: unknown, options: { select?: (value: typeof response) => unknown }) => {
+        useQuery: (
+          _input: unknown,
+          options: { select?: (value: typeof response) => unknown },
+        ) => {
           const [notifications, setNotifications] = useState(response.notifications);
           return {
-            data: options?.select ? options.select({ ...response, notifications }) : { ...response, notifications },
+            data: options?.select
+              ? options.select({ ...response, notifications })
+              : { ...response, notifications },
             status: "success",
             refetch: () => {
               refetch();

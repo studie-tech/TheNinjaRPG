@@ -1,8 +1,8 @@
 //
 // tRPC validates a procedure's input before the resolver runs. A top-level
 // `z.object({...}).optional()` accepts a missing input but rejects an explicit
-// `null`, which clients legitimately send for "no arguments" — that turned every
-// such call into a BAD_REQUEST. `.nullish()` accepts both.
+// `null`, which clients legitimately send for "no arguments", so such a call
+// fails with BAD_REQUEST. `.nullish()` accepts both.
 
 import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";

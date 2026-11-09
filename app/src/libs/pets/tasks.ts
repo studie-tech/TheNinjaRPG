@@ -6,8 +6,19 @@ import {
   type PET_TASK_QUEST_TYPES,
 } from "@/drizzle/constants";
 import type { Quest, UserData, UserPet } from "@/drizzle/schema";
-import { getMaxPetRank, isPetAppearanceReady } from "@/libs/pets/progression";
+import {
+  getMaxPetRank,
+  getPetRank,
+  isPetAppearanceReady,
+} from "@/libs/pets/progression";
 import type { PetTask } from "@/validators/petTasks";
+
+/** Name of the lowest companion rank that can take profession contracts. */
+export const PET_TASK_MIN_RANK_NAME = getPetRank(PET_TASK_MIN_RANK).name;
+
+/** Why a dispatched companion cannot return yet; the task panel shows its countdown instead. */
+export const PET_TASK_IN_PROGRESS_MESSAGE =
+  "Your companion is still working on this task.";
 
 /** Only opted-in hunting and gathering contracts have an unattended completion contract. */
 export const isPetTaskContract = <
@@ -54,7 +65,7 @@ export const petTaskDispatchBlockMessage = (
     return "Become a Hunter or Gatherer to send companions on profession tasks.";
   if (!pet) return "Choose an owned companion.";
   if (pet.rank < PET_TASK_MIN_RANK)
-    return "Companion tasks require Hunter rank or higher.";
+    return `Companion tasks require ${PET_TASK_MIN_RANK_NAME} rank or higher.`;
   if (pet.rank > getMaxPetRank(user.rank))
     return "Your rank does not support this companion rank.";
   if (!isPetAppearanceReady(pet))

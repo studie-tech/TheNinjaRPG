@@ -2,9 +2,9 @@
  * Registered via bunfig.toml, ahead of every suite.
  *
  * bun keeps one module registry for the whole run, so a `vi.mock` in any file replaces that
- * module for every other file too. When a suite stubbed `@/routers/profile` so it could run
- * without a database, every other suite silently inherited a `fetchUser` returning undefined
- * -- fatal for anything driving a real tRPC router, because the first guard then rejects.
+ * module for every other file too. A suite stubbing `@/routers/profile` to run without a
+ * database would hand every other suite a `fetchUser` returning undefined -- fatal for anything
+ * driving a real tRPC router, because the first guard then rejects.
  *
  * The stub lives here instead: registered once, and delegating to the real implementation
  * until a suite asks for something else. Suites opt in with `stubProfile` and hand the module
@@ -12,14 +12,14 @@
  */
 import { vi } from "bun:test";
 import * as actualNextServer from "next/server";
-import * as actualDb from "@/server/db";
-import * as actualProfile from "@/routers/profile";
-import * as actualSparring from "@/routers/sparring";
 import * as actualProfileQueries from "@/queries/profile";
 import * as actualSparringQueries from "@/queries/sparring";
+import * as actualProfile from "@/routers/profile";
+import * as actualSparring from "@/routers/sparring";
+import * as actualDb from "@/server/db";
 import * as actualCron from "@/server/utils/cron";
-import { peekTestDatabase, withEmptyIsolationHistory } from "./testDatabase";
 import { afterTasks } from "./after";
+import { peekTestDatabase, withEmptyIsolationHistory } from "./testDatabase";
 
 type AnyFn = (...args: never[]) => unknown;
 
@@ -57,8 +57,7 @@ vi.mock("@/server/utils/cron", () => delegating(actualCron));
 
 /**
  * `drizzleDB` is a module-level singleton, so suites that exercise cron routes cannot inject a
- * client and used to replace the whole module -- globally, for everyone. Reads now resolve, in
- * order: whatever the current suite passed to `stubDatabase`, the throwaway database once it is
+ * client, and replacing the module would replace it for every suite. Reads resolve, in order: whatever the current suite passed to `stubDatabase`, the throwaway database once it is
  * connected, and only then the real export. A suite that never opts in therefore talks to the
  * test database rather than the developer's own, and a suite that does opt in keeps its stub to
  * itself.

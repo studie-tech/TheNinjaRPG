@@ -1,7 +1,7 @@
+import { afterEach, expect, it, vi } from "bun:test";
 import * as resolvers from "@hookform/resolvers/zod";
 import { QueryClient, QueryClientProvider, useMutation } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
 import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
@@ -10,7 +10,10 @@ import * as characterPreview from "@/layout/CharacterPreview";
 import { BOTID_BLOCKED_MESSAGE } from "@/libs/botid";
 import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 const { default: RegisterPage } = await import("@/app/[shell]/register/page");
 
@@ -42,14 +45,19 @@ const mount = (createCharacter: () => Promise<Outcome>) => {
   for (const part of ["CarouselNext", "CarouselPrevious"] as const) {
     vi.spyOn(carousel, part).mockReturnValue(null as never);
   }
-  const mutationToast = vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+  const mutationToast = vi
+    .spyOn(toast, "showMutationToast")
+    .mockImplementation(() => undefined);
   mutationToast.mockClear();
   vi.spyOn(resolvers, "zodResolver").mockReturnValue((async (values: object) => ({
     values,
     errors: {},
   })) as never);
   vi.spyOn(characterPreview, "CharacterPreview").mockReturnValue(null as never);
-  vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn(), replace: vi.fn() } as never);
+  vi.spyOn(navigation, "useRouter").mockReturnValue({
+    push: vi.fn(),
+    replace: vi.fn(),
+  } as never);
   vi.spyOn(userContext, "useUserData").mockReturnValue({
     data: undefined,
     status: "success",
@@ -58,13 +66,16 @@ const mount = (createCharacter: () => Promise<Outcome>) => {
     userId: "new-player",
   } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({ profile: { getUser: { invalidate: vi.fn(async () => undefined) } } }),
+    useUtils: () => ({
+      profile: { getUser: { invalidate: vi.fn(async () => undefined) } },
+    }),
     avatar: { createAvatar: { useMutation: () => ({ mutate: vi.fn() }) } },
     profile: { getUsername: { useQuery: () => ({ data: undefined }) } },
     bloodline: { getAll: { useInfiniteQuery: () => ({ data: undefined }) } },
     register: {
       createCharacter: {
-        useMutation: (options: object) => useMutation({ ...options, mutationFn: createCharacter }),
+        useMutation: (options: object) =>
+          useMutation({ ...options, mutationFn: createCharacter }),
       },
     },
   });
@@ -75,7 +86,13 @@ const mount = (createCharacter: () => Promise<Outcome>) => {
   );
   const createButton = view.container.querySelector("#create");
   if (!createButton?.closest("form")) throw new Error("The final step did not render");
-  return { view, createButton, form: createButton.closest("form")!, globalOnError, mutationToast };
+  return {
+    view,
+    createButton,
+    form: createButton.closest("form")!,
+    globalOnError,
+    mutationToast,
+  };
 };
 
 it("stays on the final step and keeps the server's reason after a rejected submission", async () => {
@@ -94,7 +111,10 @@ it("stays on the final step and keeps the server's reason after a rejected submi
 it("keeps the steps mounted behind the loader while the character is created", async () => {
   let finish: (outcome: Outcome) => void = () => undefined;
   const { view, form, createButton } = mount(
-    () => new Promise<Outcome>((resolve) => { finish = resolve; }),
+    () =>
+      new Promise<Outcome>((resolve) => {
+        finish = resolve;
+      }),
   );
 
   fireEvent.submit(form);
@@ -144,4 +164,39 @@ it("clears the reason once a retry succeeds", async () => {
 
   fireEvent.submit(form);
   await waitFor(() => expect(view.queryByRole("alert")).toBeNull());
+});
+
+it("renders one trait picker per attribute slot, each showing its own choice", () => {
+  const { view } = mount(async () => ({ success: true, message: "OK" }));
+  const pickers = [1, 2, 3].map((slot) => {
+    const label = view.getByText(`Trait ${slot}`);
+    const trigger = label
+      .closest("[data-slot='form-item'], div")
+      ?.querySelector("button[role='combobox']");
+    if (!trigger) throw new Error(`Trait ${slot} has no picker`);
+    return trigger.textContent;
+  });
+  expect(pickers.every(Boolean)).toBe(true);
+  expect(new Set(pickers).size).toBe(3);
+});
+
+it("offers hair, eye and skin colours before the three traits", () => {
+  const { view } = mount(async () => ({ success: true, message: "Created" }));
+  const labels = [
+    "Hair color",
+    "Eye color",
+    "Skin color",
+    "Trait 1",
+    "Trait 2",
+    "Trait 3",
+  ];
+  const all = Array.from(view.container.querySelectorAll("label")).map(
+    (label) => label.textContent,
+  );
+  expect(all.filter((label) => labels.includes(label ?? ""))).toEqual(labels);
+  for (const label of labels) {
+    expect(
+      view.getByText(label).closest("div")?.querySelector("[role=combobox]"),
+    ).toBeTruthy();
+  }
 });

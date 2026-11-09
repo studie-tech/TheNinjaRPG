@@ -1,25 +1,20 @@
 import { describe, expect, it } from "bun:test";
 
-// Does using a GROUND-targeted item (e.g. Smoke Bomb) record it in `usedActions`? That array
-// is what buildCombatTrackerTasks reads for the use_specific_item_combat tracker. The reported
-// "used the item but it didn't count" objective targets a GROUND consumable, so this pins down
-// whether the real action pipeline captures such usage.
+// Using a GROUND-targeted item (e.g. Smoke Bomb) through the real action pipeline records
+// it in `usedActions`, which buildCombatTrackerTasks reads for the use_specific_item_combat
+// tracker.
 
 import type { Item } from "@/drizzle/schema";
 import { insertAction } from "@/libs/combat/actions";
+import type { CombatAction, CompleteBattle, ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import { VisualTag } from "@/validators/combat";
-import type {
-  CombatAction,
-  CompleteBattle,
-  ReturnedBattle,
-} from "@/libs/combat/types";
 import {
   makeBattleUser,
   makeBattleUserItem,
   makeCombatAction,
   makeCompleteBattle,
-} from "./helpers/battleScenario";
+} from "../../setup/combat";
 
 const ITEM_ID = "smoke-bomb-item";
 
@@ -42,7 +37,9 @@ const makeBattle = (actor: ReturnType<typeof makeActor>): CompleteBattle =>
     roundStartAt: new Date("2020-01-01T00:00:00Z"),
     usersState: [actor],
     extraState: {
-      items: { [ITEM_ID]: { id: ITEM_ID, name: "Smoke Bomb", destroyOnUse: false } as Item },
+      items: {
+        [ITEM_ID]: { id: ITEM_ID, name: "Smoke Bomb", destroyOnUse: false } as Item,
+      },
     },
   });
 
@@ -76,7 +73,10 @@ describe("GROUND-targeted item usage records into usedActions", () => {
     });
 
     expect(result).toBe(true);
-    expect(battle.extraState.revealedActions).toEqual({ jutsuIds: [], itemIds: [ITEM_ID] });
+    expect(battle.extraState.revealedActions).toEqual({
+      jutsuIds: [],
+      itemIds: [ITEM_ID],
+    });
     const itemUses = actor.usedActions.filter((a) => a.type === "item");
     expect(itemUses.map((a) => a.id)).toContain(ITEM_ID);
   });

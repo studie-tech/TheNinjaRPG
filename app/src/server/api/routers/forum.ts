@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { after } from "next/server";
 import { z } from "zod";
 import { FORUM_MIN_LEVEL, forumLevelMessage } from "@/drizzle/constants";
 import { forumPost, type forumThread, poll } from "@/drizzle/schema";
@@ -452,10 +453,12 @@ export const forumRouter = createTRPCRouter({
           mentionedUserNames: forumMentionNames(content),
         });
         if (board.name === "News" && board.publicRead) {
-          void Promise.allSettled(
-            publishNewsToSocialMedia(input.title, content, user.avatar, input.image),
-          );
-          void notifyNewsSubscribers(ctx.drizzle, content);
+          deferNewsFanOut(ctx.drizzle, {
+            title: input.title,
+            content,
+            avatar: user.avatar,
+            image: input.image,
+          });
         }
       }
       return {
@@ -1662,18 +1665,28 @@ function deferForumPublication(
   publication: Awaited<ReturnType<typeof prepareForumPublication>>,
 ) {
   for (const post of publication.approvedPosts) deferForumAlerts(db, post);
-  for (const news of publication.approvedNews) {
-    void Promise.allSettled(
-      publishNewsToSocialMedia(news.title, news.content, news.avatar, news.image),
-    );
-    void notifyNewsSubscribers(db, news.content);
-  }
+  for (const news of publication.approvedNews) deferNewsFanOut(db, news);
 }
 
-/**
- * Push the news announcement to every registered device. Listing tokens and sending
- * both stay off the mutation response path; sendPushToUsers never throws.
- */
+/** Post public News to social media and push subscribers once the response is sent. */
+function deferNewsFanOut(
+  db: DrizzleClient,
+  news: {
+    title: string;
+    content: string;
+    avatar: string | null;
+    image?: string | null;
+  },
+) {
+  after(() =>
+    Promise.allSettled([
+      ...publishNewsToSocialMedia(news.title, news.content, news.avatar, news.image),
+      notifyNewsSubscribers(db, news.content),
+    ]),
+  );
+}
+
+/** Push the news announcement to every registered device; sendPushToUsers never throws. */
 const notifyNewsSubscribers = async (client: DrizzleClient, content: string) => {
   if (!isPushEnabled()) return;
   const devices = await q.selectDistinctUserDeviceForNotifyNewsSubscribers(client);

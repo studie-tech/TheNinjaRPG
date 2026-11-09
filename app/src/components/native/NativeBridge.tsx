@@ -4,11 +4,6 @@ import { useSetAtom } from "jotai";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MIN_NATIVE_APP_VERSION } from "@/drizzle/constants";
-import {
-  safeLocalStorageGetItem,
-  safeLocalStorageRemoveItem,
-  safeLocalStorageSetItem,
-} from "@/hooks/localstorage";
 import { useLiveActivity } from "@/hooks/useLiveActivity";
 import { useNativePush } from "@/hooks/useNativePush";
 import { calcUserHealFinish } from "@/libs/hospital";
@@ -31,6 +26,11 @@ import {
 import { nativeHomeRedirectAtom } from "@/libs/native/homeRedirect";
 import { createNativeWidgetOperations } from "@/libs/native/widgetOperations";
 import { usePublicPathname } from "@/utils/routing";
+import {
+  safeLocalStorageGetItem,
+  safeLocalStorageRemoveItem,
+  safeLocalStorageSetItem,
+} from "@/utils/storage";
 import { type useUserData, useUserDataSelector } from "@/utils/UserContext";
 
 /**

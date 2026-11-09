@@ -1,8 +1,8 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { httpBatchLink } from "@trpc/client";
 import { getQueryKey } from "@trpc/react-query";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { ReactNode } from "react";
 import superjson from "superjson";
 import * as clientModule from "@/app/_trpc/client";
@@ -11,7 +11,7 @@ import * as toast from "@/libs/toast";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { testApi, TrpcTestProviders } from "../setup/trpc";
+import { TrpcTestProviders, testApi } from "../setup/trpc";
 
 const key = getQueryKey(testApi.profile.getUser, undefined, "query");
 let client: QueryClient;
@@ -36,14 +36,20 @@ beforeEach(() => {
   });
   // Fresh hooks preserve mutation lifecycles after other suites replace the shared API.
   Object.assign(vi.spyOn(clientModule, "api" as never), { profile: testApi.profile });
-  trpc = testApi.createClient({ links: [httpBatchLink({
-    url: "http://localhost/api/trpc", transformer: superjson,
-    fetch: async () => Response.json([{ result: { data: superjson.serialize(response()) } }]),
-  })] });
+  trpc = testApi.createClient({
+    links: [
+      httpBatchLink({
+        url: "http://localhost/api/trpc",
+        transformer: superjson,
+        fetch: async () =>
+          Response.json([{ result: { data: superjson.serialize(response()) } }]),
+      }),
+    ],
+  });
   vi.spyOn(userContext, "useUserDataSelector").mockImplementation((select) => {
     const { data } = testApi.profile.getUser.useQuery(undefined, {
       enabled: false,
-      select: (snapshot) => snapshot.userData ? select(snapshot.userData) : undefined,
+      select: (snapshot) => (snapshot.userData ? select(snapshot.userData) : undefined),
     });
     return {
       data,
@@ -57,12 +63,16 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   client.clear();
-  document.querySelectorAll("iframe[data-user-iframe]").forEach((iframe) => iframe.remove());
+  document
+    .querySelectorAll("iframe[data-user-iframe]")
+    .forEach((iframe) => iframe.remove());
   vi.restoreAllMocks();
 });
 
 const wrapper = ({ children }: { children: ReactNode }) => (
-  <TrpcTestProviders client={trpc} queryClient={client}>{children}</TrpcTestProviders>
+  <TrpcTestProviders client={trpc} queryClient={client}>
+    {children}
+  </TrpcTestProviders>
 );
 
 it("shares a saved iframe mute preference with mounted and newly opened audio controls", async () => {
@@ -71,7 +81,10 @@ it("shares a saved iframe mute preference with mounted and newly opened audio co
   act(() => panel.result.current.setIframesMuted(true));
 
   await waitFor(() => expect(existingControl.result.current.isIframesMuted).toBe(true));
-  expect(client.getQueryData<{ userData: { iframesMuted: boolean } }>(key)?.userData.iframesMuted).toBe(true);
+  expect(
+    client.getQueryData<{ userData: { iframesMuted: boolean } }>(key)?.userData
+      .iframesMuted,
+  ).toBe(true);
   const quickAudio = renderHook(() => useIframeMute(), { wrapper });
   expect(quickAudio.result.current.isIframesMuted).toBe(true);
 
@@ -138,5 +151,8 @@ it("reports rejected saves without applying a successful profile patch", async (
   act(() => panel.result.current.setIframesMuted(true));
 
   await waitFor(() => expect(toast.showMutationToast).toHaveBeenCalledWith(response()));
-  expect(client.getQueryData<{ userData: { iframesMuted: boolean } }>(key)?.userData.iframesMuted).toBe(false);
+  expect(
+    client.getQueryData<{ userData: { iframesMuted: boolean } }>(key)?.userData
+      .iframesMuted,
+  ).toBe(false);
 });

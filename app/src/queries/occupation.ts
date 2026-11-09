@@ -3,7 +3,7 @@ import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
  * Database access for occupation; authorization and transaction scopes stay in callers.
  */
 
-import { and, asc, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, exists, gt, isNull, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
 import {
@@ -217,20 +217,30 @@ export const findUserItemImbuementForRemoveImbuement = (
 
 /** Build the `userItemImbuement` deletion for `removeImbuement`, using predicates on `id` and `userItemId`. */
 export const deleteUserItemImbuementForRemoveImbuement = (
-  client: Pick<DrizzleClient, "delete">,
+  client: Pick<DrizzleClient, "delete" | "select">,
   input: { userItemImbuementId: string },
   ownedUserItem: { id: string },
   ctx: { userId: string },
 ) =>
-  client
-    .delete(userItemImbuement)
-    .where(
-      and(
-        eq(userItemImbuement.id, input.userItemImbuementId),
-        eq(userItemImbuement.userItemId, ownedUserItem.id),
-        sql`EXISTS (SELECT 1 FROM UserItem WHERE UserItem.id = ${ownedUserItem.id} AND UserItem.userId = ${ctx.userId} AND UserItem.isInAuction = 0 AND UserItem.equipped = 'NONE')`,
+  client.delete(userItemImbuement).where(
+    and(
+      eq(userItemImbuement.id, input.userItemImbuementId),
+      eq(userItemImbuement.userItemId, ownedUserItem.id),
+      exists(
+        client
+          .select({ id: userItem.id })
+          .from(userItem)
+          .where(
+            and(
+              eq(userItem.id, ownedUserItem.id),
+              eq(userItem.userId, ctx.userId),
+              eq(userItem.isInAuction, false),
+              eq(userItem.equipped, "NONE"),
+            ),
+          ),
       ),
-    );
+    ),
+  );
 
 /** Build the `userItem` insert for `removeImbuement`. */
 export const insertUserItemForRemoveImbuement = (

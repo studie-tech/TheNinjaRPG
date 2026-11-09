@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs/server";
 import * as jose from "jose";
-import { appleClientCredentials, prepareAppleDeletion } from "@/server/utils/accountDeletion/apple";
+import {
+  appleClientCredentials,
+  prepareAppleDeletion,
+} from "@/server/utils/accountDeletion/apple";
 
 const originalEnv = { ...process.env };
 

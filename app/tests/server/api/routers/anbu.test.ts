@@ -1,16 +1,9 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { and, eq, type SQL, sql } from "drizzle-orm";
+import { MySqlDialect } from "drizzle-orm/mysql-core";
+import { anbuSquad, userData, userRequest } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { reassignPendingAnbuRequestsOnPromotion } from "@/queries/anbu";
-import { and, eq, sql, type SQL } from "drizzle-orm";
-import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { anbuSquad, userData, userRequest } from "@/drizzle/schema";
-import * as nativePush from "@/server/utils/push/defer";
-import { membershipUpdate } from "@/server/utils/push/messages";
-import {
-  resetServerModuleStubs,
-  stubProfile,
-  stubSparring,
-} from "../../../setup/serverModules";
 import {
   acceptAnbuRequest,
   createAnbuRequest,
@@ -20,6 +13,13 @@ import {
   rejectAnbuRequest,
   removeFromSquad,
 } from "@/routers/anbu";
+import * as nativePush from "@/server/utils/push/defer";
+import { membershipUpdate } from "@/server/utils/push/messages";
+import {
+  resetServerModuleStubs,
+  stubProfile,
+  stubSparring,
+} from "../../../setup/serverModules";
 
 const fetchActorMock = vi.fn();
 const fetchPendingRequestMock = vi.fn();
@@ -36,16 +36,6 @@ const describeSql = (node: unknown) => {
 };
 
 describe("ANBU request squad identity", () => {
-  afterEach(resetServerModuleStubs);
-  beforeEach(() => {
-    stubProfile("fetchUser", fetchUserMock);
-    stubProfile("updateNindo", (() => undefined) as never);
-    stubSparring("fetchRequest", fetchRequestMock);
-    stubSparring("fetchRequests", fetchRequestsMock);
-    stubSparring("insertRequest", insertRequestMock);
-    vi.clearAllMocks();
-  });
-
   it("resolves the squad from relatedId after a leader change", async () => {
     const squad = {
       id: "squad-1",
@@ -102,7 +92,11 @@ describe("ANBU request squad identity", () => {
       update: vi.fn().mockReturnValue({ set }),
     };
 
-    await reassignPendingAnbuRequestsOnPromotion(client as never, "squad-1", "new-leader");
+    await reassignPendingAnbuRequestsOnPromotion(
+      client as never,
+      "squad-1",
+      "new-leader",
+    );
 
     expect(client.update).toHaveBeenCalledWith(userRequest);
     expect(set).toHaveBeenCalledWith({ receiverId: "new-leader" });
@@ -199,16 +193,9 @@ function makeDrizzleMock(
 
 describe("ANBU router request permissions and concurrency", () => {
   const queuePush = vi.fn();
-  afterEach(resetServerModuleStubs);
   beforeEach(() => {
     queuePush.mockReset();
     vi.spyOn(nativePush, "deferPushToUsers").mockImplementation(queuePush);
-    stubProfile("fetchUser", fetchUserMock);
-    stubProfile("updateNindo", (() => undefined) as never);
-    stubSparring("fetchRequest", fetchRequestMock);
-    stubSparring("fetchRequests", fetchRequestsMock);
-    stubSparring("insertRequest", insertRequestMock);
-    vi.clearAllMocks();
   });
 
   it("queues a request alert only after insertion succeeds", async () => {
@@ -594,16 +581,6 @@ describe("ANBU router request permissions and concurrency", () => {
 });
 
 describe("ANBU membership invariants", () => {
-  afterEach(resetServerModuleStubs);
-  beforeEach(() => {
-    stubProfile("fetchUser", fetchUserMock);
-    stubProfile("updateNindo", (() => undefined) as never);
-    stubSparring("fetchRequest", fetchRequestMock);
-    stubSparring("fetchRequests", fetchRequestsMock);
-    stubSparring("insertRequest", insertRequestMock);
-    vi.clearAllMocks();
-  });
-
   it("atomically refuses to remove the last member", async () => {
     const squad = makeSquad({ leaderId: "member-1", memberCount: 1 });
     const { client, updates } = makeDrizzleMock(squad, [
@@ -660,8 +637,17 @@ describe("ANBU membership invariants", () => {
   });
 });
 
-// Notification transport belongs to the current test, including nested suites.
+// Notification transport and router dependencies belong to the current test, including nested suites.
 beforeEach(() => {
   vi.spyOn(Pusher.prototype, "trigger").mockImplementation(notifyMock);
+  stubProfile("fetchUser", fetchUserMock);
+  stubProfile("updateNindo", (() => undefined) as never);
+  stubSparring("fetchRequest", fetchRequestMock);
+  stubSparring("fetchRequests", fetchRequestsMock);
+  stubSparring("insertRequest", insertRequestMock);
+  vi.clearAllMocks();
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  resetServerModuleStubs();
+  vi.restoreAllMocks();
+});

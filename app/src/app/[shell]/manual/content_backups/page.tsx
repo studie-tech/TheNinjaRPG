@@ -80,30 +80,15 @@ export default function ManualBackupPage() {
       padding={false}
       topRightContent={
         <div className="flex gap-2">
-          <Button
-            onClick={() => createBackupMutation.mutate({ type: "bloodline" })}
-            disabled={createBackupMutation.isPending}
-          >
-            <DatabaseBackup className="mr-2 h-6 w-6" /> Bloodlines
-          </Button>
-          <Button
-            onClick={() => createBackupMutation.mutate({ type: "jutsu" })}
-            disabled={createBackupMutation.isPending}
-          >
-            <DatabaseBackup className="mr-2 h-6 w-6" /> Jutsu
-          </Button>
-          <Button
-            onClick={() => createBackupMutation.mutate({ type: "item" })}
-            disabled={createBackupMutation.isPending}
-          >
-            <DatabaseBackup className="mr-2 h-6 w-6" /> Items
-          </Button>
-          <Button
-            onClick={() => createBackupMutation.mutate({ type: "ai" })}
-            disabled={createBackupMutation.isPending}
-          >
-            <DatabaseBackup className="mr-2 h-6 w-6" /> AI
-          </Button>
+          {BACKUP_TYPES.map(([type, label]) => (
+            <Button
+              key={type}
+              onClick={() => createBackupMutation.mutate({ type })}
+              disabled={createBackupMutation.isPending}
+            >
+              <DatabaseBackup className="mr-2 h-6 w-6" /> {label}
+            </Button>
+          ))}
         </div>
       }
     >
@@ -111,3 +96,10 @@ export default function ManualBackupPage() {
     </ContentBox>
   );
 }
+
+const BACKUP_TYPES = [
+  ["bloodline", "Bloodlines"],
+  ["jutsu", "Jutsu"],
+  ["item", "Items"],
+  ["ai", "AI"],
+] as const;

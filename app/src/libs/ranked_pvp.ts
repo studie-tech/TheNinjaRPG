@@ -7,11 +7,17 @@ import {
   RANKED_LOADOUT_MAX_JUTSUS,
   RANKED_LOADOUT_MAX_POISON_ITEMS,
   RANKED_LOADOUT_MAX_WEAPONS,
+  RANKED_LOSS_PROTECTION_FACTOR,
+  RANKED_LOSS_PROTECTION_RANK_GAP,
   RANKED_MIN_LP_GAIN,
   RANKED_QUEUE_MAX_WAIT_SECS,
+  RANKED_RADIUS_MAX_LP,
+  RANKED_RADIUS_STEP_LP,
+  RANKED_RADIUS_STEP_SECS,
   RANKED_RANKS,
   RANKED_SANNIN_TOP_PLAYERS,
   RANKED_STREAK_BONUS,
+  RANKED_UPSET_BONUS_PER_RANK,
 } from "@/drizzle/constants";
 import type { Item, Jutsu, UserData } from "@/drizzle/schema";
 import {
@@ -78,12 +84,12 @@ export function calculateLpEloChange(
 
   // Bonus LP for beating a higher-ranked opponent
   if (playerWon && rankDifference > 0) {
-    lpChange += rankDifference * 10;
+    lpChange += rankDifference * RANKED_UPSET_BONUS_PER_RANK;
   }
 
-  // LP Protection: Reduce loss if losing to an opponent 2+ ranks above
-  if (!playerWon && rankDifference <= -2) {
-    lpChange *= 0.5;
+  // LP protection: soften a loss to an opponent ranked far enough above the loser
+  if (!playerWon && rankDifference >= RANKED_LOSS_PROTECTION_RANK_GAP) {
+    lpChange *= RANKED_LOSS_PROTECTION_FACTOR;
   }
 
   // Apply streak bonus
@@ -108,16 +114,9 @@ export const getRankedRadius = (secondsInQueue: number): number => {
   if (secondsInQueue >= RANKED_QUEUE_MAX_WAIT_SECS) {
     return Infinity;
   }
-  if (secondsInQueue < 60) {
-    return 50;
-  } else if (secondsInQueue < 120) {
-    return 100;
-  } else if (secondsInQueue < 180) {
-    return 150;
-  } else if (secondsInQueue < 240) {
-    return 200;
-  }
-  return 250;
+  // A negative wait (clock skew between instances) counts as just queued.
+  const steps = Math.floor(Math.max(0, secondsInQueue) / RANKED_RADIUS_STEP_SECS);
+  return Math.min(RANKED_RADIUS_MAX_LP, RANKED_RADIUS_STEP_LP * (steps + 1));
 };
 
 /**

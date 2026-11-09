@@ -6,7 +6,16 @@ import type {
   ContentProposalStatus,
   ItemType,
 } from "@/drizzle/constants";
-import { CONTENT_REVIEW_SFX_SEARCH_RESULTS } from "@/drizzle/constants";
+import {
+  CONTENT_PROPOSAL_NOTE_MAX_LENGTH,
+  CONTENT_REVIEW_BULK_LIMIT,
+  CONTENT_REVIEW_SFX_SEARCH_RESULTS,
+  ContentProposalCategories,
+  ContentProposalEntityTypes,
+  ContentProposalRejectReasons,
+  ContentProposalSources,
+  ContentProposalStatuses,
+} from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
 import { contentProposal, type gameAsset } from "@/drizzle/schema";
 import {
@@ -19,6 +28,7 @@ import {
   normalizeEditable,
 } from "@/libs/contentReview/entities";
 import { isEpidemicConfigured, searchEpidemicSfx } from "@/libs/contentReview/epidemic";
+import { ENTITY_LABELS } from "@/libs/contentReview/labels";
 import { importEpidemicSfx, materializeChoice } from "@/libs/contentReview/media";
 import {
   refreshProposalFreshness,
@@ -27,7 +37,7 @@ import {
 import {
   getAtPath,
   isSceneCharacterPath,
-  sceneAssetIds,
+  questSceneAssetIds,
   setAtPath,
   topLevelField,
 } from "@/libs/contentReview/paths";
@@ -78,20 +88,70 @@ import type {
   JutsuValidator,
 } from "@/validators/combat";
 import {
-  type ApproveProposalInput,
-  approveProposalSchema,
-  bulkApproveSchema,
-  proposalIdSchema,
-  rejectProposalSchema,
-  reviewQueueSchema,
   reviewStatsSchema,
-  sfxImportSchema,
-  sfxSearchSchema,
   staffCreateProposalSchema,
-  unrejectProposalSchema,
 } from "@/validators/contentReview";
 import type { QuestValidator } from "@/validators/objectives";
 import type { TitleValidator } from "@/validators/title";
+
+const reviewQueueSchema = z.object({
+  status: z.enum(ContentProposalStatuses),
+  category: z.enum(ContentProposalCategories).nullish(),
+  source: z.enum(ContentProposalSources).nullish(),
+  entityType: z.enum(ContentProposalEntityTypes).nullish(),
+  /** Offset of the page's first row. */
+  cursor: z.number().int().min(0).nullish(),
+  limit: z.number().int().min(1).max(50).prefault(25),
+});
+
+const approveProposalSchema = z.object({
+  id: z.string(),
+  expectedStatusChangedAt: z.iso.datetime().optional(),
+  /** Fields the reviewer unticked, per change. */
+  exclude: z
+    .array(z.object({ changeId: z.string(), field: z.string() }))
+    .max(80)
+    .prefault([]),
+  /** Reviewer edits to proposed top-level values, per change. */
+  edits: z
+    .array(z.object({ changeId: z.string(), field: z.string(), value: z.unknown() }))
+    .max(80)
+    .prefault([]),
+  /** Chosen media candidate per field; the first candidate is used when absent. */
+  media: z
+    .array(z.object({ mediaId: z.string() }))
+    .max(12)
+    .prefault([]),
+});
+
+type ApproveProposalInput = z.infer<typeof approveProposalSchema>;
+
+const rejectProposalSchema = z.object({
+  id: z.string(),
+  expectedStatusChangedAt: z.iso.datetime().optional(),
+  reason: z.enum(ContentProposalRejectReasons),
+  note: z.string().max(CONTENT_PROPOSAL_NOTE_MAX_LENGTH).nullish(),
+});
+
+const unrejectProposalSchema = z.object({
+  id: z.string(),
+  expectedStatusChangedAt: z.iso.datetime(),
+});
+
+const bulkApproveSchema = z.object({
+  ids: z.array(z.string()).min(1).max(CONTENT_REVIEW_BULK_LIMIT),
+});
+
+const proposalIdSchema = z.object({ id: z.string() });
+
+const sfxSearchSchema = z.object({
+  term: z.string().trim().min(2).max(100),
+});
+
+const sfxImportSchema = z.object({
+  epidemicId: z.string().min(1).max(191),
+  title: z.string().min(1).max(191),
+});
 
 export const contentReviewRouter = createTRPCRouter({
   /**
@@ -206,7 +266,7 @@ export const contentReviewRouter = createTRPCRouter({
           change.after,
           change.applied,
         ]) {
-          for (const id of sceneAssetIds(fields)) assetIds.add(id);
+          for (const id of questSceneAssetIds(fields)) assetIds.add(id);
         }
       }
       assetIds.delete("");
@@ -226,7 +286,7 @@ export const contentReviewRouter = createTRPCRouter({
             entityType: change.entityType,
             entityId: change.entityId,
             operation: change.operation,
-            label: config.label,
+            label: ENTITY_LABELS[change.entityType],
             name: entity?.name ?? (draftName(change.after) || "New"),
             detailHref: change.entityId ? config.detailHref(change.entityId) : null,
             before: change.before,
@@ -255,7 +315,7 @@ export const contentReviewRouter = createTRPCRouter({
             entityType: basis.entityType,
             entityId: basis.entityId,
             role: basis.role,
-            label: ENTITY_CONFIG[basis.entityType].label,
+            label: ENTITY_LABELS[basis.entityType],
             name: entity?.name ?? basis.entityId,
             version: basis.version,
             fresh: entity?.version === basis.version,
@@ -419,7 +479,7 @@ export const contentReviewRouter = createTRPCRouter({
         const entity = entities.get(
           entityKey(change.entityType, change.entityId as string),
         );
-        const label = ENTITY_CONFIG[change.entityType].label;
+        const label = ENTITY_LABELS[change.entityType];
         if (!entity) {
           if (change.operation === "CREATE") continue;
           return errorResponse(`${label} ${change.entityId} no longer exists`);
@@ -498,7 +558,7 @@ export const contentReviewRouter = createTRPCRouter({
           if (!outcome.success) {
             await restore(undone);
             return errorResponse(
-              `${ENTITY_CONFIG[change.entityType].label}: ${outcome.message}`,
+              `${ENTITY_LABELS[change.entityType]}: ${outcome.message}`,
             );
           }
           undone.push(change);
@@ -616,7 +676,9 @@ const applyProposal = async (
     const config = ENTITY_CONFIG[change.entityType];
     const entity = entityOfChange(entities, change);
     if (change.operation === "UPDATE" && !entity) {
-      return errorResponse(`${config.label} ${change.entityId} no longer exists`);
+      return errorResponse(
+        `${ENTITY_LABELS[change.entityType]} ${change.entityId} no longer exists`,
+      );
     }
     const excluded = new Set(
       choices.exclude
@@ -660,7 +722,10 @@ const applyProposal = async (
       config.validator,
       entity ? { ...entity.payload, ...editable } : editable,
     );
-    if (invalid) return errorResponse(`${config.label} would be invalid: ${invalid}`);
+    if (invalid)
+      return errorResponse(
+        `${ENTITY_LABELS[change.entityType]} would be invalid: ${invalid}`,
+      );
     plans.push({ change, entity, fields, editable });
   }
   if (plans.length === 0) return errorResponse("Tick at least one change to apply");
@@ -701,7 +766,7 @@ const applyProposal = async (
       const entityId = plan.entity?.id ?? outcome.id;
       if (!outcome.success || !entityId) {
         await rollback(ctx, proposal.id, done, added, startedAt);
-        return errorResponse(`${ENTITY_CONFIG[type].label}: ${outcome.message}`);
+        return errorResponse(`${ENTITY_LABELS[type]}: ${outcome.message}`);
       }
       done.push({ plan, entityId });
       current = undefined;
@@ -1032,7 +1097,7 @@ const toSummary = (
       entityType: change.entityType,
       entityId: change.entityId,
       operation: change.operation,
-      label: ENTITY_CONFIG[change.entityType].label,
+      label: ENTITY_LABELS[change.entityType],
       name: entity?.name ?? (draftName(change.after) || "New"),
       image: entity?.image ?? null,
       fields: Object.keys(change.after),

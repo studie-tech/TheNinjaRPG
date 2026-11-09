@@ -3,7 +3,7 @@ import {
   FARM_MAX_SHOP_PURCHASE_QUANTITY,
   FARM_SHOP_ENTRY_TYPES,
 } from "@/drizzle/constants";
-import { userRecoverySchema } from "@/validators/base";
+import { baseServerResponse } from "@/validators/base";
 import { inventoryQuantityChangeSchema } from "@/validators/inventory";
 import {
   userDeltaSchema,
@@ -187,11 +187,7 @@ export const farmInventoryDeltaSchema = z.object({
   quantityDelta: z.number().int(),
 });
 
-export const farmMutationResponseSchema = z.object({
-  success: z.boolean(),
-  message: z.string(),
-  actionNotice: z.string().optional(),
-  userRecovery: userRecoverySchema,
+export const farmMutationResponseSchema = baseServerResponse.extend({
   userPatch: userPatchSchema.optional(),
   userDelta: userDeltaSchema.optional(),
   userExpected: userExpectedSchema.optional(),

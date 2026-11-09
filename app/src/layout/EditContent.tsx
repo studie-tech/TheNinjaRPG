@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, ChevronsUpDown, Loader2, Plus, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import type React from "react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { FieldValues, Path, PathValue, UseFormReturn } from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -29,7 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MultiSelect, type OptionType } from "@/components/ui/multi-select";
-import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -45,145 +45,34 @@ import {
   type IMG_ORIENTATION,
   STARTER_VILLAGES,
 } from "@/drizzle/constants";
-import type { Quest } from "@/drizzle/schema";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentAudioSelector from "@/layout/ContentAudioSelector";
 import ContentImage from "@/layout/ContentImage";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import { CoordinateTargetingEditor } from "@/layout/CoordinateTargetingEditor";
 import { EpidemicSfxSearch } from "@/layout/EpidemicSfxSearch";
-import { MapLocationPreview } from "@/layout/MapLocationPreview";
 import { MethodSizeEditor } from "@/layout/MethodSizeEditor";
 import Modal from "@/layout/Modal";
-import { RewardEditor } from "@/layout/RewardEditor";
 import RichInput from "@/layout/RichInput";
-import { SearchSelect } from "@/layout/SearchSelect";
-import type { ColumnDefinitionType } from "@/layout/Table";
-import Table from "@/layout/Table";
 import { WeightedCacheEditor } from "@/layout/WeightedCacheEditor";
 import { damageModifierTypes } from "@/libs/combat/constants";
 import { POTENCY_TAG_LABELS } from "@/libs/combat/potency";
 import type { CombatAction } from "@/libs/combat/types";
-import {
-  isSupportedOverworldBindingTask,
-  placementsForObjective,
-} from "@/libs/overworldAi";
 import { cn } from "@/libs/shadui";
-import { showMutationToast } from "@/libs/toast";
 import { defaultWeightedCache, getWeightedCacheIssues } from "@/libs/weightedCache";
 import { calculateContentDiff } from "@/utils/diff";
-import { isRetryableTrpcError } from "@/utils/error";
 import { canAwardReputation } from "@/utils/permissions";
-import type { DeepPartial } from "@/utils/typeutils";
 import { objectKeys } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
 import { showUploadError, UploadButton } from "@/utils/uploadthing";
-import type {
-  ZodAllTags,
-  ZodBloodlineType,
-  ZodItemType,
-  ZodJutsuType,
-} from "@/validators/combat";
+import type { ZodAllTags } from "@/validators/combat";
 import {
   activityBonusPowerLabel,
-  BloodlineValidator,
   getTagSchema,
-  ItemValidator,
   isActivityBonus,
-  JutsuValidator,
-  questBuffTypes,
-  questDebuffTypes,
 } from "@/validators/combat";
 import type { CoordinateTargeting } from "@/validators/coordinateTargeting";
-import { supportsMapStructure } from "@/validators/mapLocation";
 import type { MethodSize } from "@/validators/methodSize";
-import type { AllObjectivesType } from "@/validators/objectives";
-import {
-  getObjectiveSchema,
-  InstantTasks,
-  type RaidTask,
-  RaidTasks,
-  type SimpleTask,
-  SimpleTasks,
-} from "@/validators/objectives";
-import type { ObjectiveRewardType } from "@/validators/rewards";
-import { ObjectiveReward } from "@/validators/rewards";
-
-export type FormDbValue = { id: string; name: string };
-
-/**
- * Whether a combobox field has a selected value. `0` is a real choice (e.g. sage
- * Tier 2 "None"); only `undefined` / `null` / `""` count as empty.
- */
-const hasComboboxValue = (value: unknown) =>
-  value !== undefined && value !== null && value !== "";
-
-export type FormEntry<K> = {
-  id: K;
-  label?: string;
-  doubleWidth?: boolean;
-  /** Span every grid track at all breakpoints, including implicit mobile tracks. */
-  fullWidth?: boolean;
-  resetButton?: boolean;
-  searchable?: boolean;
-  readonly?: boolean;
-} & (
-  | { type: "coordinate_targeting" }
-  | { type: "method_size" }
-  | { type: "text" }
-  | { type: "textarea"; rows?: number }
-  | { type: "richinput"; height?: string }
-  | { type: "date" }
-  | { type: "number" }
-  | { type: "boolean" }
-  | { type: "audio"; href?: string | null }
-  | { type: "avatar"; href?: string | null; size?: IMG_ORIENTATION; maxDim?: number }
-  | {
-      type: "str_array";
-      values: readonly string[];
-      multiple?: boolean;
-      allowAddNew?: boolean;
-    }
-  | {
-      type: "db_values";
-      values: FormDbValue[] | undefined;
-      multiple?: boolean;
-      current?: string;
-      /** Save the empty option as null instead of the generic None sentinel. */
-      nullable?: boolean;
-    }
-  | {
-      type: "db_values_with_number";
-      values: FormDbValue[] | undefined;
-    }
-  | {
-      type: "dialog_options";
-      objectiveIds: string[];
-    }
-);
-
-interface EditContentProps<T, K, S extends FieldValues> {
-  schema: T;
-  form: UseFormReturn<S, any>;
-  formData: FormEntry<K>[];
-  showSubmit: boolean;
-  /** Render controls without a nested form when embedded in another editor. */
-  fieldsOnly?: boolean;
-  /** Expose occupation drops in generic packages, which have no hunting/gathering quest type. */
-  allowMaterialRewards?: boolean;
-  /** Additional controls sharing this form's submission and disabled state. */
-  children?: React.ReactNode;
-  buttonTxt?: string;
-  allowImageUpload?: boolean;
-  relationId?: string;
-  type?: ContentType;
-  onAccept?: (
-    e: React.BaseSyntheticEvent<object, any, any> | undefined,
-  ) => Promise<void>;
-  submitDisabled?: boolean;
-  submitLoading?: boolean;
-  submitLoadingText?: string;
-}
 
 /**
  * Generic edit content component, used for creating and editing e.g. jutsu, bloodline, item, AI
@@ -360,6 +249,21 @@ export const EditContent = <
     return "default";
   };
 
+  // Prompt for image generation, based on name, title and description
+  let prompt = "";
+  if (currentValues?.name) {
+    prompt += `${currentValues?.name} `;
+  }
+  if (currentValues?.username) {
+    prompt += `${currentValues?.username} `;
+  }
+  if (currentValues?.title) {
+    prompt += `${currentValues?.title} `;
+  }
+  if (currentValues?.description) {
+    prompt += `${currentValues?.description} `;
+  }
+
   const FormTag = props.fieldsOnly ? "div" : "form";
   // Count how many columns have been used
   let columnCount = 0;
@@ -419,7 +323,7 @@ export const EditContent = <
               {assetPickerType === "SFX" ? (
                 <>
                   <div className="grid max-h-96 grid-cols-2 gap-3 overflow-auto md:grid-cols-3">
-                    {(allPickerAssets || [])
+                    {allPickerAssets
                       .filter((a) => a.type === "SFX")
                       .map((a) => {
                         const selected =
@@ -476,7 +380,7 @@ export const EditContent = <
                 </>
               ) : (
                 <ActionSelector
-                  items={allPickerAssets?.map((a) => ({
+                  items={allPickerAssets.map((a) => ({
                     ...a,
                     type: "asset" as const,
                   }))}
@@ -544,22 +448,6 @@ export const EditContent = <
               value: o.value !== "" ? o.value : "None",
             }));
 
-            // Prompt for image generation
-            let prompt = "";
-            // Generate based on name, title and description
-            if (currentValues?.name) {
-              prompt += `${currentValues?.name} `;
-            }
-            if (currentValues?.username) {
-              prompt += `${currentValues?.username} `;
-            }
-            if (currentValues?.title) {
-              prompt += `${currentValues?.title} `;
-            }
-            if (currentValues?.description) {
-              prompt += `${currentValues?.description} `;
-            }
-
             // Figure out if we need to add a spacer
             let includeSpacer = false;
             if (formEntry.category !== lastCategory) {
@@ -585,34 +473,7 @@ export const EditContent = <
                       : formEntry.doubleWidth
                         ? "md:col-span-2"
                         : "",
-                    // Rewards drawn in green
-                    formEntry.category === "reward"
-                      ? "rounded-lg border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20"
-                      : "",
-                    // Oppoenents drawn in red
-                    formEntry.category === "opponent"
-                      ? "rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20"
-                      : "",
-                    // Attackers drawn in red
-                    formEntry.category === "attackers"
-                      ? "rounded-lg border border-pink-200 bg-pink-100 dark:border-pink-800 dark:bg-pink-900/20"
-                      : "",
-                    // Raid things in orange
-                    formEntry.category === "raid"
-                      ? "rounded-lg border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/20"
-                      : "",
-                    // Location things in blue
-                    formEntry.category === "location"
-                      ? "rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20"
-                      : "",
-                    // Graph things in purple
-                    formEntry.category === "graph"
-                      ? "rounded-lg border border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-900/20"
-                      : "",
-                    // Description things in yellow
-                    formEntry.category === "scene"
-                      ? "rounded-lg border border-yellow-200 bg-yellow-50 text-black dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-white"
-                      : "",
+                    CATEGORY_CLASSES[formEntry.category],
                   )}
                 >
                   {["text", "number", "date"].includes(type) && (
@@ -1557,23 +1418,6 @@ export const EditContent = <
   );
 };
 
-interface EffectFormWrapperProps {
-  /** Offer permanent slot grants only for noncombat consumables. */
-  allowJutsuSlotGrants?: boolean;
-  /** Opt in only for sources that the runtime includes in passive activity aggregation. */
-  allowActivityBonuses?: boolean;
-  allowCoordinateTargeting?: boolean;
-  idx: number;
-  type: "jutsu" | "bloodline" | "item" | "skillTree" | "sageMode";
-  availableTags: readonly string[];
-  hideTagType?: boolean;
-  editableFields?: readonly string[];
-  tag: ZodAllTags;
-  effects: ZodAllTags[];
-  setEffects: (effects: ZodAllTags[]) => void;
-  submitLoading?: boolean;
-}
-
 /**
  * Render one effect tag with schema-derived editor fields.
  * @returns React.ReactNode
@@ -1820,63 +1664,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   const formData: FormEntry<Attribute>[] = attributes
     .filter((value) => !ignore.includes(value))
     .filter((value) => !props.editableFields || props.editableFields.includes(value))
-    .filter((value) => {
-      return (
-        !["noncombatconsumereward", "noncombatgainskill", "noncombatquest"].includes(
-          watchType,
-        ) ||
-        ![
-          "staticAnimation",
-          "animationScale",
-          "staticAssetPath",
-          "appearAnimation",
-          "disappearAnimation",
-          "rounds",
-          "target",
-          "friendlyFire",
-          "calculation",
-          "power",
-          "powerPerLevel",
-        ].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
-        !["repair"].includes(watchType) ||
-        ![
-          "staticAnimation",
-          "animationScale",
-          "staticAssetPath",
-          "appearAnimation",
-          "disappearAnimation",
-          "rounds",
-          "target",
-          "friendlyFire",
-          "calculation",
-        ].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
-        ![
-          "rollbloodline",
-          "rollsagemode",
-          "removebloodline",
-          "marriageslotincrease",
-        ].includes(watchType) ||
-        ![
-          "staticAnimation",
-          "animationScale",
-          "staticAssetPath",
-          "appearAnimation",
-          "disappearAnimation",
-          "rounds",
-          "target",
-          "friendlyFire",
-          "calculation",
-        ].includes(value)
-      );
-    })
+    .filter((value) => !OUT_OF_BATTLE_HIDDEN_FIELDS.get(watchType)?.includes(value))
     .map((value) => {
       const rewardCatalogEntry = rewardCatalogFormEntry(value, rewardCatalogs);
       if (rewardCatalogEntry) return rewardCatalogEntry;
@@ -2275,731 +2063,11 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   );
 };
 
-interface ObjectiveFormWrapperProps {
-  idx: number;
-  quest: DeepPartial<Quest>;
-  availableTags: readonly string[];
-  hideTagType?: boolean;
-  objective: AllObjectivesType;
-  objectives: AllObjectivesType[];
-  setObjectives: (content: AllObjectivesType[]) => void;
-  submitLoading?: boolean;
-}
-
-/**
- * Render one objective with schema-derived editor fields.
- * Enemy, ally and random-encounter NPC entries share the existing template/count
- * selector; field labels retain their distinct combatant-count or chance semantics.
- * @returns React.ReactNode
- */
-export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props) => {
-  // Destructure props
-  const { idx, objective, objectives, setObjectives } = props;
-
-  // Get user data for permission checks
-  const { data: userData } = useUserData();
-  const userRole = userData?.role ?? "USER";
-  const hasReputationPermission = canAwardReputation(userRole);
-
-  // Get the schema & parse the tag
-  const objectiveSchema = getObjectiveSchema(objective.task as string);
-  const parsedTag = objectiveSchema.safeParse(objective);
-  const shownTag = parsedTag.success ? parsedTag.data : objective;
-
-  // Queries
-  const fields = Object.keys(shownTag);
-  const hasAIs =
-    fields.includes("attackers") ||
-    fields.includes("opponentAIs") ||
-    fields.includes("allyAIs");
-  const { data: aiData } = api.profile.getAllAiNames.useQuery(undefined, {
-    enabled: hasAIs,
-  });
-
-  const { data: jutsuData } = api.jutsu.getAllNames.useQuery(undefined, {
-    enabled:
-      fields.includes("reward_jutsus") ||
-      fields.includes("trainJutsuIds") ||
-      fields.includes("useJutsuIds"),
-  });
-
-  const { data: titleData } = api.title.getAllNames.useQuery(undefined, {
-    enabled: fields.includes("reward_titles"),
-  });
-
-  const { data: badgeData } = api.badge.getAll.useQuery(undefined, {
-    enabled: fields.includes("reward_badges"),
-  });
-
-  const { data: itemData } = api.item.getAllNames.useQuery(undefined, {
-    enabled:
-      fields.includes("reward_items") ||
-      fields.includes("collectItemIds") ||
-      fields.includes("deliverItemIds") ||
-      fields.includes("craftItemIds") ||
-      fields.includes("buyItemIds") ||
-      fields.includes("useItemIds"),
-  });
-
-  const { data: sceneBackgrounds } = api.gameAsset.getAllNames.useQuery(
-    { type: "SCENE_BACKGROUND", folderPrefix: true },
-    { enabled: fields.includes("sceneBackground") },
-  );
-
-  const { data: sceneCharacters } = api.gameAsset.getAllNames.useQuery(
-    { type: "SCENE_CHARACTER", folderPrefix: true },
-    { enabled: fields.includes("sceneCharacters") },
-  );
-
-  const { data: quests } = api.quests.getAllNames.useQuery(undefined, {
-    enabled: fields.includes("newQuestIds") || fields.includes("completeQuestIds"),
-  });
-
-  const { data: structureAssets = [] } = api.mapAsset.getAll.useQuery(undefined, {
-    enabled: supportsMapStructure(objective.task),
-  });
-
-  const { data: placementNames } = api.overworldAi.getAllPlacementNames.useQuery(
-    undefined,
-    { enabled: isSupportedOverworldBindingTask(objective.task) },
-  );
-
-  const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined, {
-    enabled: fields.includes("reward_bloodlines"),
-  });
-
-  const { data: sageModes } = api.sageMode.getAllNames.useQuery(undefined, {
-    enabled: fields.includes("reward_sage_modes"),
-  });
-
-  // Form for handling the specific tag
-  const form = useForm<any>({
-    defaultValues: shownTag,
-    values: shownTag,
-    resolver: zodResolver(objectiveSchema),
-    mode: "all",
-    reValidateMode: "onBlur",
-  });
-
-  // A few fields we need to watch
-  const watchAll = useWatch({ control: form.control });
-  const watchTask = watchAll.task;
-  const watchPlacementId = watchAll.overworldPlacementId;
-  const watchOpponentAis = watchAll.opponentAIs;
-  const [showStructureDraftFields, setShowStructureDraftFields] = useState(false);
-
-  // When user changes type, we need to update the effects array to re-render form
-  useEffect(() => {
-    if (watchTask && watchTask !== objective.task) {
-      const newObjectives = [...objectives];
-      const curObjective = newObjectives?.[idx];
-      if (curObjective && watchTask) {
-        const tagSchema = getObjectiveSchema(watchTask);
-        const parsedTag = tagSchema.safeParse({ id: objective.id, task: watchTask });
-        const shownTag = parsedTag.success ? parsedTag.data : objective;
-        shownTag.task = watchTask;
-        newObjectives[idx] = shownTag;
-      }
-      setObjectives(newObjectives);
-    }
-  }, [objective, watchTask, idx, objectives]);
-
-  // Trigger re-validation after type changes
-  useEffect(() => {
-    void form.trigger(undefined, { shouldFocus: true });
-  }, [objective.task]);
-
-  // Automatically update the effects whenever dirty
-  useEffect(() => {
-    const newObjectives = [...objectives];
-    const parsedTag = objectiveSchema.safeParse(watchAll);
-    // Keep cleared artwork's invalid drafts repairable through correction and blur.
-    if (watchAll.structureAssetId) {
-      setShowStructureDraftFields(false);
-    } else if (
-      !parsedTag.success &&
-      parsedTag.error.issues.some((issue) =>
-        ["locationName", "locationDescription", "structureScale"].includes(
-          String(issue.path[0]),
-        ),
-      )
-    ) {
-      setShowStructureDraftFields(true);
-    }
-    const shownTag = parsedTag.success ? parsedTag.data : watchAll;
-    if ("id" in shownTag && shownTag.id) {
-      newObjectives[idx] = shownTag as AllObjectivesType;
-      const diff = calculateContentDiff(objectives, newObjectives);
-      if (diff.length > 0) {
-        if (objective.task === watchTask) {
-          if (form.formState.isDirty) {
-            void form.trigger();
-          }
-          // Parent save validation must see current drafts, including invalid numbers.
-          setObjectives(newObjectives);
-          // Invalid NaN drafts diff as changed; resetting them would repeat this effect.
-          if (parsedTag.success) form.reset(watchAll);
-        }
-      }
-    }
-  }, [watchAll]);
-
-  // Attributes on this tag, each of which we should show a form field for
-  type Attribute = keyof AllObjectivesType;
-  const attributes = Object.keys(objectiveSchema.shape) as Attribute[];
-
-  const sectorType = "sectorType" in watchAll ? watchAll.sectorType : undefined;
-  const locationType = "locationType" in watchAll ? watchAll.locationType : undefined;
-
-  // Parse how to present the tag form
-  const rewardCatalogs = {
-    items: itemData,
-    jutsus: jutsuData,
-    bloodlines: bloodlines,
-    sageModes: sageModes,
-    titles: titleData,
-    badges: badgeData?.data,
-  };
-  const formData: FormEntry<Attribute>[] = attributes
-    .filter((value) => value !== "reward_packages")
-    .filter(
-      (value) =>
-        ![
-          "structureAssetId",
-          "locationName",
-          "locationDescription",
-          "structureScale",
-        ].includes(String(value)) || supportsMapStructure(watchTask),
-    )
-    .filter(
-      (value) =>
-        !["locationName", "locationDescription", "structureScale"].includes(
-          String(value),
-        ) ||
-        !!watchAll.structureAssetId ||
-        showStructureDraftFields ||
-        !objectiveSchema.shape[value].safeParse(watchAll[value]).success,
-    )
-    .filter(
-      (value) =>
-        String(value) !== "durationSeconds" ||
-        ["espionage", "sabotage"].includes(watchTask),
-    )
-    .filter(
-      (value) =>
-        ![
-          "applyBuffs",
-          "applyDebuffs",
-          "task",
-          "id",
-          "image",
-          "item_name",
-          "reward",
-          "completed",
-          // Mastery promotions are claimed only with the quest's final reward.
-          "reward_mastery_stat",
-          "reward_mastery_rank",
-        ].includes(value),
-    )
-    .filter((value) => {
-      return (
-        (!SimpleTasks.includes(watchTask as SimpleTask) &&
-          watchTask !== "bloodline_collection") ||
-        !["latitude", "longitude", "sector"].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
-        !sectorType ||
-        (sectorType === "specific" && !["sectorList"].includes(value)) ||
-        (sectorType === "from_list" && !["sector"].includes(value)) ||
-        (sectorType === "random" && !["sector", "sectorList"].includes(value)) ||
-        (sectorType === "user_village" && !["sector", "sectorList"].includes(value)) ||
-        (sectorType === "current_sector" && !["sector", "sectorList"].includes(value))
-      );
-    })
-    .filter((value) => {
-      return (
-        props?.quest?.consecutiveObjectives ||
-        !["nextObjectiveId", "failObjectiveId", "resetObjectiveId"].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
-        !["fail_quest", "win_quest", "reset_quest"].includes(watchTask) ||
-        !["nextObjectiveId"].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
-        !([...InstantTasks, "dialog"] as string[]).includes(watchTask) ||
-        !["sector", "longitude", "latitude"].includes(value)
-      );
-    })
-    .filter((value) => {
-      return (
-        !locationType ||
-        locationType === "specific" ||
-        (locationType === "random" && !["longitude", "latitude"].includes(value))
-      );
-    })
-    .filter((value) => {
-      // Hide longitude/latitude for raid tasks - these are set via shrine placement
-      return (
-        !RaidTasks.includes(watchTask as RaidTask) ||
-        !["longitude", "latitude"].includes(value)
-      );
-    })
-    .filter((value) => {
-      // The field is part of the shared base schema, but only these tasks have defined
-      // overworld interaction semantics. Hiding it prevents invalid content at the source;
-      // server save validation is the authoritative backstop.
-      return (
-        value !== "overworldPlacementId" || isSupportedOverworldBindingTask(watchTask)
-      );
-    })
-    .filter((value) => {
-      // Opponent is derived from the bound placement at save; hide manual opponentAIs entry
-      // for a placement-bound defeat_opponents objective to avoid double configuration.
-      return (
-        (value as string) !== "opponentAIs" ||
-        watchTask !== "defeat_opponents" ||
-        !watchPlacementId
-      );
-    })
-    .map((value) => {
-      const innerType = unwrapFieldSchema(objectiveSchema.shape[value]);
-      const rewardCatalogEntry = rewardCatalogFormEntry(value, rewardCatalogs);
-      if (rewardCatalogEntry) return rewardCatalogEntry;
-      if (value === "structureAssetId")
-        return {
-          id: value,
-          type: "db_values",
-          label: "Map structure (optional)",
-          values: structureAssets,
-          searchable: true,
-          resetButton: true,
-        };
-      if (value === "locationName")
-        return { id: value, type: "text", label: "Location name" };
-      if (value === "locationDescription")
-        return {
-          id: value,
-          type: "textarea",
-          label: "Location description (Inspect)",
-          doubleWidth: true,
-        };
-      if (value === "structureScale")
-        return { id: value, type: "number", label: "Structure size multiplier" };
-
-      if (
-        (["attackers", "opponentAIs", "allyAIs"] as string[]).includes(value) &&
-        aiData
-      ) {
-        return {
-          id: value,
-          values: [...aiData]
-            .sort((a, b) => a.level - b.level)
-            .map((ai) => ({
-              id: ai.userId,
-              name: `lvl ${ai.level}: ${ai.username}`,
-            })),
-          doubleWidth: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values_with_number",
-        };
-      } else if (
-        [
-          "collectItemIds",
-          "deliverItemIds",
-          "craftItemIds",
-          "buyItemIds",
-          "useItemIds",
-        ].includes(value) &&
-        itemData
-      ) {
-        return {
-          id: value,
-          values: itemData,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
-        };
-      } else if (["trainJutsuIds", "useJutsuIds"].includes(value) && jutsuData) {
-        return {
-          id: value,
-          values: jutsuData,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
-        };
-      } else if (["sceneBackground"].includes(value) && sceneBackgrounds) {
-        return {
-          id: value,
-          values: sceneBackgrounds,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
-        };
-      } else if (["sceneCharacters"].includes(value) && sceneCharacters) {
-        return {
-          id: value,
-          values: sceneCharacters,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values",
-        };
-      } else if (value === "nextObjectiveId" && props.objectives) {
-        const obejctiveIds = props.objectives.map((objective) => objective.id);
-        if (innerType instanceof z.ZodArray) {
-          // Dialog objective: nextObjectiveId is an array of {text, nextObjectiveId}
-          return {
-            id: value,
-            doubleWidth: true,
-            label: FORM_LABEL_MAP[value] ?? value,
-            type: "dialog_options",
-            objectiveIds: obejctiveIds,
-          };
-        } else {
-          return {
-            id: value,
-            values: obejctiveIds,
-            type: "str_array",
-            label: FORM_LABEL_MAP[value] ?? value,
-            resetButton: true,
-          };
-        }
-      } else if (
-        ["failObjectiveId", "resetObjectiveId"].includes(value) &&
-        props.objectives
-      ) {
-        const obejctiveIds = props.objectives.map((objective) => objective.id);
-        return {
-          id: value,
-          values: obejctiveIds,
-          type: "str_array",
-          label: FORM_LABEL_MAP[value] ?? value,
-          resetButton: true,
-        };
-      } else if (["newQuestIds", "completeQuestIds"].includes(value) && quests) {
-        return {
-          id: value,
-          values: quests,
-          multiple: true,
-          type: "db_values",
-          label: FORM_LABEL_MAP[value] ?? value,
-        };
-      } else if (value === "overworldPlacementId") {
-        // Always render a select (never a free-text fallback) so an arbitrary placement id
-        // can't be saved while the names query is still loading or has failed.
-        //
-        // Narrow the list to placements for the AI chosen in opponentAIs (AI -> placement),
-        // so an author picks the AI then its placement. This stays filtered even after a
-        // placement is bound: opponentAIs hides (see the filter above) but its value persists,
-        // so re-opening the dropdown still shows that enemy's placements, not the full list.
-        // deliver_item/dialog instead show only FRIENDLY placements (placementsForObjective).
-        const selectedAiIds = (
-          (watchOpponentAis as { ids?: string[] }[] | undefined) ?? []
-        ).flatMap((o) => o.ids ?? []);
-        const matching = placementsForObjective(placementNames ?? [], {
-          task: watchTask,
-          selectedAiIds,
-        });
-        return {
-          id: value,
-          values: matching.map((p) => ({ id: p.id, name: p.label })),
-          type: "db_values",
-          label: FORM_LABEL_MAP[value] ?? value,
-          resetButton: true,
-        };
-      } else if (["description", "successDescription"].includes(value)) {
-        return {
-          id: value,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "richinput",
-          doubleWidth: true,
-        };
-      } else if (
-        innerType instanceof z.ZodLiteral ||
-        innerType instanceof z.ZodString
-      ) {
-        return { id: value, label: FORM_LABEL_MAP[value] ?? value, type: "text" };
-      } else if (innerType instanceof z.ZodNumber) {
-        // Check if this is the reward_reputation field
-        const valueStr = String(value);
-        const isReputationField = valueStr === "reward_reputation";
-        return {
-          id: value,
-          label:
-            valueStr === "value" && watchTask === "espionage"
-              ? "Espionage points"
-              : valueStr === "value" && watchTask === "sabotage"
-                ? "Sabotage damage"
-                : (FORM_LABEL_MAP[value] ?? value),
-          type: "number",
-          readonly: isReputationField && !hasReputationPermission,
-        };
-      } else if (innerType instanceof z.ZodEnum) {
-        return {
-          id: value,
-          type: "str_array",
-          values: innerType.options as string[],
-          label: FORM_LABEL_MAP[value] ?? value,
-        };
-      } else if (
-        innerType instanceof z.ZodArray &&
-        innerType.element instanceof z.ZodEnum
-      ) {
-        const values = (innerType.element as unknown as { options: string[] }).options;
-        return {
-          id: value,
-          type: "str_array",
-          values: values,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-        };
-      } else if (
-        innerType instanceof z.ZodArray &&
-        innerType.element instanceof z.ZodString
-      ) {
-        return {
-          id: value,
-          type: "str_array",
-          values: [],
-          multiple: true,
-          allowAddNew: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-        };
-      } else if (innerType instanceof z.ZodBoolean) {
-        return { id: value, label: FORM_LABEL_MAP[value] ?? value, type: "boolean" };
-      } else {
-        return { id: value, label: FORM_LABEL_MAP[value] ?? value, type: "text" };
-      }
-    });
-
-  // Add tag type as first entry
-  if (!props.hideTagType) {
-    formData.unshift({
-      id: "task",
-      type: "str_array",
-      values: props.availableTags,
-    });
-  }
-
-  // Re-used EditContent component for actually showing the form
-  return (
-    <>
-      {"applyBuffs" in shownTag && (
-        <>
-          <QuestBattleEffects
-            title="Starting buffs"
-            effects={watchAll.applyBuffs ?? []}
-            availableTags={questBuffTypes}
-            setEffects={(effects) =>
-              form.setValue("applyBuffs", effects, {
-                shouldDirty: true,
-                shouldValidate: true,
-              })
-            }
-            disabled={props.submitLoading}
-          />
-          <QuestBattleEffects
-            title="Starting debuffs"
-            effects={watchAll.applyDebuffs ?? []}
-            availableTags={questDebuffTypes}
-            setEffects={(effects) =>
-              form.setValue("applyDebuffs", effects, {
-                shouldDirty: true,
-                shouldValidate: true,
-              })
-            }
-            disabled={props.submitLoading}
-          />
-        </>
-      )}
-      {watchAll.structureAssetId && (
-        <MapLocationPreview
-          isDynamic={Boolean(
-            (watchAll.sectorType && watchAll.sectorType !== "specific") ||
-              (watchAll.locationType && watchAll.locationType !== "specific") ||
-              watchAll.overworldPlacementId,
-          )}
-          location={{
-            id: objective.id,
-            sector: Number(watchAll.sector),
-            longitude: Number(watchAll.longitude),
-            latitude: Number(watchAll.latitude),
-            name: watchAll.locationName || "Quest location",
-            description: watchAll.locationDescription || "",
-            assetId: watchAll.structureAssetId,
-            scale: Number(watchAll.structureScale) || 1,
-          }}
-        />
-      )}
-      <EditContent
-        schema={objectiveSchema}
-        form={form}
-        formData={formData.filter((entry) => !String(entry.id).startsWith("reward_"))}
-        showSubmit={false}
-        submitLoading={props.submitLoading}
-      >
-        <RewardEditor
-          form={form}
-          formData={formData}
-          hideFields={["reward_mastery_stat", "reward_mastery_rank"]}
-          isObjectiveReward
-        />
-      </EditContent>
-    </>
-  );
-};
-
-interface RewardFormWrapperProps {
-  /** Use node groups for package payloads without recursively offering more packages. */
-  grouped?: boolean;
-  idx: number;
-  reward: ObjectiveRewardType;
-  rewards: ObjectiveRewardType[];
-  setRewards: (rewards: ObjectiveRewardType[]) => void;
-  hideFields?: string[];
-}
-
-/**
- * A wrapper component around EditContent for creating a form for reward fields
- * @returns React.ReactNode
- */
-export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
-  const { idx, reward, rewards, setRewards, hideFields = [] } = props;
-
-  const { data: rewardUser } = useUserData();
-  // Parse reward with schema
-  const parsedReward = ObjectiveReward.safeParse(reward);
-  const shownReward = parsedReward.success ? parsedReward.data : reward;
-
-  // Queries for db-backed fields
-  const { data: itemData } = api.item.getAllNames.useQuery();
-  const { data: jutsuData } = api.jutsu.getAllNames.useQuery();
-  const { data: badgeData } = api.badge.getAll.useQuery();
-  const { data: titleData } = api.title.getAllNames.useQuery();
-  const { data: bloodlineData } = api.bloodline.getAllNames.useQuery();
-  const { data: sageModeData } = api.sageMode.getAllNames.useQuery();
-
-  // Form for handling the reward
-  const form = useForm<any>({
-    defaultValues: shownReward,
-    values: shownReward,
-    resolver: zodResolver(ObjectiveReward),
-    mode: "all",
-  });
-
-  // Watch form values
-  const watchAll = useWatch({ control: form.control });
-
-  // Sync changed drafts; grouped editors include invalid values for parent validation.
-  useEffect(() => {
-    const newRewards = [...rewards];
-    const parsed = ObjectiveReward.safeParse(watchAll);
-    if (parsed.success || props.grouped) {
-      newRewards[idx] = parsed.success
-        ? parsed.data
-        : (watchAll as ObjectiveRewardType);
-      const diff = calculateContentDiff(rewards, newRewards);
-      if (diff.length > 0) {
-        setRewards(newRewards);
-        // Keep invalid drafts without repeatedly resetting NaN values that diff as changed.
-        if (parsed.success) form.reset(watchAll);
-      }
-    }
-  }, [watchAll]);
-
-  // Attributes on this reward schema
-  type Attribute = keyof ObjectiveRewardType;
-  const attributes = Object.keys(ObjectiveReward.shape) as Attribute[];
-
-  // Generate form data dynamically
-  const rewardCatalogs = {
-    items: itemData,
-    jutsus: jutsuData,
-    bloodlines: bloodlineData,
-    sageModes: sageModeData,
-    titles: titleData,
-    badges: badgeData?.data,
-  };
-  const formData: FormEntry<Attribute>[] = attributes
-    .filter((value) => !hideFields.includes(value))
-    .map((value) => {
-      const innerType = unwrapFieldSchema(ObjectiveReward.shape[value]);
-      const rewardCatalogEntry = rewardCatalogFormEntry(value, rewardCatalogs);
-      if (rewardCatalogEntry) return rewardCatalogEntry;
-
-      // Special handling for db-backed array fields
-      if (
-        (value === "reward_hunter_items_ids" ||
-          value === "reward_gathering_items_ids") &&
-        itemData
-      ) {
-        return {
-          id: value,
-          values: itemData,
-          multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "db_values" as const,
-        };
-      } else if (innerType instanceof z.ZodNumber) {
-        return {
-          id: value,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "number" as const,
-          readonly:
-            value === "reward_reputation" &&
-            !canAwardReputation(rewardUser?.role ?? "USER"),
-        };
-      } else if (innerType instanceof z.ZodBoolean) {
-        return {
-          id: value,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "boolean" as const,
-        };
-      } else if (innerType instanceof z.ZodEnum) {
-        return {
-          id: value,
-          type: "str_array" as const,
-          values: innerType.options as string[],
-          label: FORM_LABEL_MAP[value] ?? value,
-        };
-      } else {
-        return {
-          id: value,
-          label: FORM_LABEL_MAP[value] ?? value,
-          type: "text" as const,
-        };
-      }
-    });
-
-  if (props.grouped)
-    return (
-      <RewardEditor
-        form={form}
-        formData={formData}
-        allowPackages={false}
-        hideFields={hideFields}
-      />
-    );
-  return (
-    <EditContent
-      fieldsOnly
-      schema={ObjectiveReward}
-      form={form}
-      formData={formData}
-      showSubmit={false}
-    />
-  );
-};
-
 /**
  * Entry of a catalog-backed reward field, or undefined for any other field and until
  * its catalog has loaded, so the caller falls through to its schema-based handling.
  */
-const rewardCatalogFormEntry = <K extends string | number | symbol>(
+export const rewardCatalogFormEntry = <K extends string | number | symbol>(
   field: K,
   catalogs: RewardCatalogs,
 ): FormEntry<K> | undefined => {
@@ -3105,665 +2173,8 @@ export const FORM_LABEL_MAP: Record<string, string> = {
   delayRounds: "Diffuse Repayment Turns",
 };
 
-/**
- * EFFECT FIELD RENDERER (generic): Renders a single effect field input based on its zod type
- */
-export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
-  effect: E;
-  field: string;
-  onChange: (value: unknown) => void;
-  options?: {
-    animation?: OptionType[];
-    staticAsset?: OptionType[];
-  };
-  disabled?: boolean;
-}) => {
-  const { effect, field, onChange } = opts;
-  const schema = getTagSchema(effect.type);
-  const fieldSchema = (schema.shape as Record<string, z.ZodType>)[field] as
-    | z.ZodType
-    | undefined;
-  if (!fieldSchema) return <div className="text-muted-foreground">N/A</div>;
-  const inner = unwrapFieldSchema(fieldSchema);
-  const eff = effect as unknown as Record<string, unknown>;
-
-  if (["appearAnimation", "disappearAnimation", "staticAnimation"].includes(field)) {
-    const raw = eff[field];
-    const value = typeof raw === "string" ? raw : "";
-    return (
-      <SearchSelect
-        label={field}
-        placeholder="Select"
-        value={value}
-        onChange={(v) => onChange(v)}
-        options={opts.options?.animation || []}
-        disabled={opts.disabled}
-      />
-    );
-  }
-  if (field === "staticAssetPath") {
-    const raw = eff[field];
-    const value = typeof raw === "string" ? raw : "";
-    return (
-      <SearchSelect
-        label={field}
-        placeholder="Select"
-        value={value}
-        onChange={(v) => onChange(v)}
-        options={opts.options?.staticAsset || []}
-        disabled={opts.disabled}
-      />
-    );
-  }
-
-  // Primitives
-  if (inner instanceof z.ZodNumber) {
-    const value = eff[field];
-    const numVal =
-      typeof value === "number"
-        ? value
-        : Number(value ?? (field === "animationScale" ? 1 : 0));
-    return (
-      <NumberInput
-        value={numVal}
-        disabled={opts.disabled}
-        onValueChange={onChange}
-        step="any"
-      />
-    );
-  }
-  if (inner instanceof z.ZodBoolean) {
-    const value = eff[field];
-    const boolVal = typeof value === "boolean" ? value : Boolean(value);
-    return (
-      <Switch
-        checked={boolVal}
-        onCheckedChange={(v) => onChange(v)}
-        disabled={opts.disabled}
-      />
-    );
-  }
-  if (inner instanceof z.ZodEnum) {
-    const values = inner.options as string[];
-    const options = values.map((v) => ({ label: v, value: v }));
-    const raw = eff[field];
-    const cur = typeof raw === "string" ? raw : "";
-    const handle = (v: string) => onChange(v);
-    return (
-      <SearchSelect
-        label={field}
-        placeholder="Select"
-        value={cur}
-        onChange={handle}
-        options={options}
-        disabled={opts.disabled}
-      />
-    );
-  }
-  if (inner instanceof z.ZodArray) {
-    const elementSchema = unwrapFieldSchema(inner.element as z.ZodType);
-    if (elementSchema instanceof z.ZodEnum) {
-      const values = (elementSchema as unknown as { options: string[] }).options || [];
-      const options = values.map((v) => ({ label: String(v), value: String(v) }));
-      const selected = Array.isArray(eff[field])
-        ? (eff[field] as unknown[]).filter((x): x is string => typeof x === "string")
-        : [];
-      const onChangeMs: React.Dispatch<React.SetStateAction<string[]>> = (v) =>
-        onChange(v);
-      return (
-        <MultiSelect
-          selected={selected}
-          onChange={onChangeMs}
-          options={options}
-          disabled={opts.disabled}
-        />
-      );
-    }
-    if (elementSchema instanceof z.ZodString) {
-      const selected = Array.isArray(eff[field])
-        ? (eff[field] as unknown[]).filter((x): x is string => typeof x === "string")
-        : [];
-      const onChangeMs: React.Dispatch<React.SetStateAction<string[]>> = (v) =>
-        onChange(v);
-      return (
-        <MultiSelect
-          selected={selected}
-          onChange={onChangeMs}
-          options={[]}
-          allowAddNew
-          disabled={opts.disabled}
-        />
-      );
-    }
-  }
-  const rawFinal = eff[field];
-  const textVal =
-    typeof rawFinal === "string" || typeof rawFinal === "number"
-      ? String(rawFinal)
-      : "";
-  return (
-    <Input
-      type="text"
-      value={textVal}
-      onChange={(e) => onChange(e.target.value)}
-      disabled={opts.disabled}
-    />
-  );
-};
-
-/**
- * MassEffectEditor (re-exported) - generic mass editor that reuses EffectFieldInputGeneric
- */
-export const MassEffectEditor = <
-  T extends { id: string; name: string; effects: ZodAllTags[]; updatedAt: Date },
->(props: {
-  kind: "item" | "jutsu" | "bloodline";
-  entries: T[] | undefined;
-  selectedFields: string[];
-  onEntriesUpdated?: () => unknown;
-  onPendingChange?: (pending: boolean) => void;
-  filterEffectTypes?: string[];
-}) => {
-  const { kind, entries, selectedFields } = props;
-
-  const editorRef = useRef<HTMLDivElement>(null);
-  const [modified, setModified] = useState<Record<string, ZodAllTags[]>>({});
-  const [committed, setCommitted] = useState<
-    Record<string, { effects: ZodAllTags[]; baseUpdatedAt: number }>
-  >({});
-  const [pendingItemId, setPendingItemId] = useState<string | null>(null);
-  const [pendingJutsuId, setPendingJutsuId] = useState<string | null>(null);
-  const [pendingBloodlineId, setPendingBloodlineId] = useState<string | null>(null);
-  const itemSaveInFlight = useRef(false);
-  const jutsuSaveInFlight = useRef(false);
-  const bloodlineSaveInFlight = useRef(false);
-  const itemEditorPending = kind === "item" && pendingItemId !== null;
-  const jutsuEditorPending = kind === "jutsu" && pendingJutsuId !== null;
-  const bloodlineEditorPending = kind === "bloodline" && pendingBloodlineId !== null;
-  const editorPending =
-    itemEditorPending || jutsuEditorPending || bloodlineEditorPending;
-
-  useEffect(
-    () => () => {
-      props.onPendingChange?.(false);
-    },
-    [props.onPendingChange],
-  );
-
-  // A successful save becomes the local source of truth immediately. Retain it
-  // only while the list still carries the exact pre-save revision. Once the
-  // server revision advances it is authoritative, including when another editor
-  // has since committed different effects.
-  useEffect(() => {
-    setCommitted((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      for (const entry of entries ?? []) {
-        const snapshot = next[entry.id];
-        if (
-          snapshot &&
-          (entry.updatedAt.getTime() > snapshot.baseUpdatedAt ||
-            JSON.stringify(entry.effects) === JSON.stringify(snapshot.effects))
-        ) {
-          delete next[entry.id];
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [entries, kind]);
-
-  // Options: the field selector lists damage-tag fields, so only asset pickers need data
-  const { data: assetData } = api.misc.getAllGameAssetNames.useQuery(undefined);
-
-  const options = useMemo(
-    () =>
-      ({
-        animation: (assetData || [])
-          .filter((a) => a.type === "ANIMATION")
-          .map((a) => ({ label: a.id, value: a.id })),
-        staticAsset: (assetData || [])
-          .filter((a) => a.type === "STATIC")
-          .map((a) => ({ label: a.id, value: a.id })),
-      }) as const,
-    [assetData],
-  );
-
-  type Row = {
-    id: string;
-    name: string;
-    effectType: string;
-    entryId: string;
-    effectIndex: number;
-  } & Record<string, React.ReactNode>;
-  const rows: Row[] = useMemo(() => {
-    const out: Row[] = [];
-    (entries || []).forEach((entry) => {
-      entry.effects.forEach((effect, idx) => {
-        // If effect type filter is set, only include matching effect rows
-        if (props.filterEffectTypes && props.filterEffectTypes.length > 0) {
-          if (!props.filterEffectTypes.includes(effect.type)) return;
-        }
-        const row: Row = {
-          id: `${entry.id}:${idx}`,
-          name: entry.name,
-          effectType: effect.type,
-          entryId: entry.id,
-          effectIndex: idx,
-        };
-        selectedFields.forEach((f) => {
-          row[f] = (
-            <div data-effect-entry-id={entry.id}>
-              <EffectFieldInputGeneric
-                effect={
-                  modified[entry.id]?.[idx] ??
-                  committed[entry.id]?.effects[idx] ??
-                  effect
-                }
-                field={f}
-                onChange={(v) =>
-                  setModified((prev) => {
-                    const next: Record<string, ZodAllTags[]> = { ...prev };
-                    const baseEffs =
-                      next[entry.id] ?? committed[entry.id]?.effects ?? entry.effects;
-                    const effsArray = Array.isArray(baseEffs)
-                      ? baseEffs
-                      : entry.effects;
-                    const updated = [...effsArray];
-                    const current = updated[idx] ?? effect;
-                    updated[idx] = { ...current, [f]: v } as ZodAllTags;
-                    next[entry.id] = updated;
-                    return next;
-                  })
-                }
-                options={options}
-                disabled={editorPending}
-              />
-            </div>
-          );
-        });
-        out.push(row);
-      });
-    });
-    return out;
-  }, [entries, selectedFields, modified, committed, options, editorPending]);
-
-  // Mutations
-  const itemUpdate = api.item.update.useMutation();
-  const jutsuUpdate = api.jutsu.update.useMutation();
-  const bloodlineUpdate = api.bloodline.update.useMutation();
-
-  const saveRow = async (row: Row) => {
-    const entry = (entries || []).find((e) => e.id === row.entryId);
-    if (!entry) return;
-    // Saving one row submits every effect for its entry, including sibling rows.
-    const fields = editorRef.current?.querySelectorAll<HTMLElement>(
-      "[data-effect-entry-id]",
-    );
-    for (const field of fields ?? []) {
-      if (field.dataset.effectEntryId === entry.id && !validateNumberInputs(field)) {
-        return;
-      }
-    }
-    const effects =
-      modified[row.entryId] ?? committed[row.entryId]?.effects ?? entry.effects;
-    const validator =
-      kind === "item"
-        ? ItemValidator
-        : kind === "jutsu"
-          ? JutsuValidator
-          : BloodlineValidator;
-    // Drafts remain in the payload when their field or effect row is hidden.
-    const parsed = validator.shape.effects.safeParse(effects);
-    if (!parsed.success) {
-      showMutationToast({
-        success: false,
-        message: parsed.error.issues.map((issue) => issue.message).join("; "),
-      });
-      return;
-    }
-    if (kind === "item") {
-      if (itemSaveInFlight.current) return;
-      itemSaveInFlight.current = true;
-      setPendingItemId(entry.id);
-      props.onPendingChange?.(true);
-      try {
-        const data = { ...(entry as unknown as ZodItemType), effects } as ZodItemType;
-        const res = await itemUpdate.mutateAsync({ id: entry.id, data });
-        showMutationToast(res);
-        if (!res.success) return;
-        setCommitted((prev) => ({
-          ...prev,
-          [entry.id]: { effects, baseUpdatedAt: entry.updatedAt.getTime() },
-        }));
-        setModified((prev) => {
-          const next = { ...prev };
-          delete next[row.entryId];
-          return next;
-        });
-        try {
-          await props.onEntriesUpdated?.();
-        } catch {
-          // The committed local snapshot keeps the successful write truthful if
-          // the authoritative list cannot be refreshed immediately.
-        }
-      } catch (error) {
-        showMutationToast({
-          success: false,
-          message:
-            error instanceof Error ? error.message : "Unable to save item effects",
-        });
-      } finally {
-        itemSaveInFlight.current = false;
-        setPendingItemId(null);
-        props.onPendingChange?.(false);
-      }
-      return;
-    } else if (kind === "jutsu") {
-      if (jutsuSaveInFlight.current) return;
-      jutsuSaveInFlight.current = true;
-      setPendingJutsuId(entry.id);
-      props.onPendingChange?.(true);
-      try {
-        const data = {
-          ...(entry as unknown as ZodJutsuType),
-          effects,
-        } as ZodJutsuType;
-        const res = await jutsuUpdate.mutateAsync({ id: entry.id, data });
-        showMutationToast(res);
-        if (!res.success) return;
-        setCommitted((prev) => ({
-          ...prev,
-          [entry.id]: { effects, baseUpdatedAt: entry.updatedAt.getTime() },
-        }));
-        setModified((prev) => {
-          const next = { ...prev };
-          delete next[row.entryId];
-          return next;
-        });
-        try {
-          await props.onEntriesUpdated?.();
-        } catch {
-          // Preserve the committed local snapshot if the authoritative list
-          // cannot be refreshed immediately.
-        }
-      } catch (error) {
-        // The global mutation handler intentionally suppresses retryable
-        // transport/CDN failures. Surface those here so the retained draft has
-        // an actionable explanation, while server errors remain globally handled.
-        if (error instanceof Error && isRetryableTrpcError(error)) {
-          showMutationToast({
-            success: false,
-            message: error.message || "Unable to save jutsu effects",
-          });
-        }
-      } finally {
-        jutsuSaveInFlight.current = false;
-        setPendingJutsuId(null);
-        props.onPendingChange?.(false);
-      }
-      return;
-    } else {
-      if (bloodlineSaveInFlight.current) return;
-      bloodlineSaveInFlight.current = true;
-      setPendingBloodlineId(entry.id);
-      props.onPendingChange?.(true);
-      const data = {
-        ...(entry as unknown as ZodBloodlineType),
-        effects,
-      } as ZodBloodlineType;
-      try {
-        const res = await bloodlineUpdate.mutateAsync({ id: entry.id, data });
-        showMutationToast(res);
-        if (!res.success) return;
-        setCommitted((prev) => ({
-          ...prev,
-          [entry.id]: { effects, baseUpdatedAt: entry.updatedAt.getTime() },
-        }));
-        setModified((prev) => {
-          const next = { ...prev };
-          delete next[row.entryId];
-          return next;
-        });
-        try {
-          await props.onEntriesUpdated?.();
-        } catch {
-          // Preserve the committed local snapshot if the authoritative list
-          // cannot be refreshed immediately.
-        }
-      } catch (error) {
-        // Server/validation errors are already handled by the global mutation
-        // handler. It intentionally suppresses retryable transport/CDN errors,
-        // so surface only those here while retaining the exact draft.
-        if (error instanceof Error && isRetryableTrpcError(error)) {
-          showMutationToast({
-            success: false,
-            message: error.message || "Unable to save bloodline effects",
-          });
-        }
-      } finally {
-        bloodlineSaveInFlight.current = false;
-        setPendingBloodlineId(null);
-        props.onPendingChange?.(false);
-      }
-      return;
-    }
-  };
-
-  const columns: ColumnDefinitionType<Row, keyof Row>[] = useMemo(() => {
-    const base: ColumnDefinitionType<Row, keyof Row>[] = [
-      { key: "name", header: "Name", type: "string" },
-      { key: "effectType", header: "Effect", type: "string" },
-    ];
-    selectedFields.forEach((f) => {
-      base.push({ key: f, header: f, type: "jsx" });
-    });
-    return base;
-  }, [selectedFields]);
-
-  return (
-    <div ref={editorRef} className="flex flex-col gap-2" aria-busy={editorPending}>
-      <Table<Row, keyof Row>
-        data={rows}
-        columns={columns}
-        buttons={
-          kind === "item"
-            ? [
-                {
-                  label: (row: Row) =>
-                    pendingItemId === row.entryId ? (
-                      <>
-                        <Loader2
-                          className="mr-2 h-4 w-4 animate-spin"
-                          aria-hidden="true"
-                        />
-                        Saving
-                      </>
-                    ) : (
-                      "Save"
-                    ),
-                  ariaLabel: (row: Row) =>
-                    pendingItemId === row.entryId
-                      ? `Saving item effects for ${row.name}`
-                      : `Save item effects for ${row.name}`,
-                  disabled: () => itemEditorPending,
-                  onClick: (r: Row) => void saveRow(r),
-                },
-              ]
-            : kind === "jutsu"
-              ? [
-                  {
-                    label: (row: Row) =>
-                      pendingJutsuId === row.entryId ? (
-                        <>
-                          <Loader2
-                            className="mr-2 h-4 w-4 animate-spin"
-                            aria-hidden="true"
-                          />
-                          Saving
-                        </>
-                      ) : (
-                        "Save"
-                      ),
-                    ariaLabel: (row: Row) =>
-                      pendingJutsuId === row.entryId
-                        ? `Saving jutsu effects for ${row.name}`
-                        : `Save jutsu effects for ${row.name}`,
-                    disabled: () => jutsuEditorPending,
-                    onClick: (r: Row) => void saveRow(r),
-                  },
-                ]
-              : [
-                  {
-                    label: (row: Row) =>
-                      pendingBloodlineId === row.entryId ? (
-                        <>
-                          <Loader2
-                            className="mr-2 h-4 w-4 animate-spin"
-                            aria-hidden="true"
-                          />
-                          Saving
-                        </>
-                      ) : (
-                        "Save"
-                      ),
-                    ariaLabel: (row: Row) =>
-                      pendingBloodlineId === row.entryId
-                        ? `Saving bloodline effects for ${row.name}`
-                        : `Save bloodline effects for ${row.name}`,
-                    disabled: () => bloodlineEditorPending,
-                    onClick: (r: Row) => void saveRow(r),
-                  },
-                ]
-        }
-      />
-      {itemEditorPending && (
-        <p
-          className="px-3 pb-2 text-muted-foreground text-sm"
-          role="status"
-          aria-live="polite"
-        >
-          Saving
-        </p>
-      )}
-      {jutsuEditorPending && (
-        <p
-          className="px-3 pb-2 text-muted-foreground text-sm"
-          role="status"
-          aria-live="polite"
-        >
-          Saving
-        </p>
-      )}
-      {bloodlineEditorPending && (
-        <p
-          className="px-3 pb-2 text-muted-foreground text-sm"
-          role="status"
-          aria-live="polite"
-        >
-          Saving
-        </p>
-      )}
-    </div>
-  );
-};
-
-export const EffectFieldSelector: React.FC<{
-  selected: string[];
-  setSelected: React.Dispatch<React.SetStateAction<string[]>>;
-  className?: string;
-  disabled?: boolean;
-}> = ({ selected, setSelected, className, disabled }) => {
-  // The selectable fields are the damage tag's fields
-  const fieldOptions = useMemo<OptionType[]>(() => {
-    const all = getTagSchema("damage").shape as Record<string, unknown>;
-    return Object.keys(all)
-      .filter((k) => !["type", "timeTracker"].includes(k))
-      .sort((a, b) => a.localeCompare(b))
-      .map((f) => ({ label: f, value: f }));
-  }, []);
-
-  return (
-    <div className={cn("min-w-[240px]", className)}>
-      <MultiSelect
-        selected={selected}
-        options={fieldOptions}
-        onChange={setSelected}
-        isDirty={false}
-        disabled={disabled}
-      />
-    </div>
-  );
-};
-
-/** Reuse full combat tag configuration while keeping authored starting effects player-only. */
-const QuestBattleEffects = ({
-  title,
-  effects,
-  setEffects,
-  availableTags,
-  disabled,
-}: {
-  title: string;
-  effects: ZodAllTags[];
-  setEffects: (effects: ZodAllTags[]) => void;
-  availableTags: readonly ZodAllTags["type"][];
-  disabled?: boolean;
-}) => (
-  <div className="my-4 space-y-3 rounded border p-3">
-    <div className="flex items-center justify-between">
-      <h3 className="font-bold">{title}</h3>
-      <Button
-        type="button"
-        size="sm"
-        disabled={disabled}
-        onClick={() => {
-          const type = availableTags[0];
-          if (type)
-            setEffects([
-              ...effects,
-              getTagSchema(type).parse({ target: "SELF", rounds: 3 }) as ZodAllTags,
-            ]);
-        }}
-      >
-        Add effect
-      </Button>
-    </div>
-    <p className="text-muted-foreground text-sm">
-      Applies to the player. Duration includes the opening round.
-    </p>
-    {effects.map((effect, idx) => (
-      <div key={`${effect.type}-${idx}`} className="rounded border p-3">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled}
-          onClick={() => setEffects(effects.filter((_, i) => i !== idx))}
-        >
-          Remove effect {idx + 1}
-        </Button>
-        <EffectFormWrapper
-          idx={idx}
-          type="jutsu"
-          tag={effect}
-          effects={effects}
-          availableTags={availableTags}
-          editableFields={Object.keys(getTagSchema(effect.type).shape).filter(
-            (field) => field !== "target" && field !== "friendlyFire",
-          )}
-          submitLoading={disabled}
-          setEffects={(values) =>
-            setEffects(values.map((tag) => ({ ...tag, target: "SELF" })))
-          }
-        />
-      </div>
-    ))}
-  </div>
-);
-
 /** Resolve a field control's schema without removing refinements or transforms. */
-const unwrapFieldSchema = (schema: z.ZodType): z.ZodType => {
+export const unwrapFieldSchema = (schema: z.ZodType): z.ZodType => {
   let inner = schema;
   while (
     inner instanceof z.ZodDefault ||
@@ -3795,6 +2206,30 @@ const isMaterialRewardFieldVisible = (
   return true;
 };
 
+/** Frame of each form-entry category; default entries have none. */
+const CATEGORY_CLASSES: Record<string, string> = {
+  // Rewards drawn in green
+  reward:
+    "rounded-lg border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20",
+  // Opponents drawn in red
+  opponent:
+    "rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20",
+  // Attackers drawn in pink
+  attackers:
+    "rounded-lg border border-pink-200 bg-pink-100 dark:border-pink-800 dark:bg-pink-900/20",
+  // Raid things in orange
+  raid: "rounded-lg border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-900/20",
+  // Location things in blue
+  location:
+    "rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20",
+  // Graph things in purple
+  graph:
+    "rounded-lg border border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-900/20",
+  // Description things in yellow
+  scene:
+    "rounded-lg border border-yellow-200 bg-yellow-50 text-black dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-white",
+};
+
 /** Effect fields edited through the game-asset picker instead of a combobox. */
 const ASSET_PICKER_FIELDS: readonly string[] = [
   "appearAnimation",
@@ -3804,6 +2239,127 @@ const ASSET_PICKER_FIELDS: readonly string[] = [
   "appearSfx",
   "disappearSfx",
 ];
+
+/** Battle presentation, targeting and timing fields, which out-of-battle tags never use. */
+const BATTLE_ONLY_FIELDS = [
+  "staticAnimation",
+  "animationScale",
+  "staticAssetPath",
+  "appearAnimation",
+  "disappearAnimation",
+  "rounds",
+  "target",
+  "friendlyFire",
+  "calculation",
+];
+
+/** Noncombat tags also hide power and its per-level scaling. */
+const NONCOMBAT_HIDDEN_FIELDS = [...BATTLE_ONLY_FIELDS, "power", "powerPerLevel"];
+
+/** Fields hidden from the editor of each tag that resolves outside battle. */
+const OUT_OF_BATTLE_HIDDEN_FIELDS = new Map<string, readonly string[]>([
+  ["noncombatconsumereward", NONCOMBAT_HIDDEN_FIELDS],
+  ["noncombatgainskill", NONCOMBAT_HIDDEN_FIELDS],
+  ["noncombatquest", NONCOMBAT_HIDDEN_FIELDS],
+  ["repair", BATTLE_ONLY_FIELDS],
+  ["rollbloodline", BATTLE_ONLY_FIELDS],
+  ["rollsagemode", BATTLE_ONLY_FIELDS],
+  ["removebloodline", BATTLE_ONLY_FIELDS],
+  ["marriageslotincrease", BATTLE_ONLY_FIELDS],
+]);
+
+/**
+ * Whether a combobox field has a selected value. `0` is a real choice (e.g. sage
+ * Tier 2 "None"); only `undefined` / `null` / `""` count as empty.
+ */
+const hasComboboxValue = (value: unknown) =>
+  value !== undefined && value !== null && value !== "";
+
+export type FormDbValue = { id: string; name: string };
+
+export type FormEntry<K> = {
+  id: K;
+  label?: string;
+  doubleWidth?: boolean;
+  /** Span every grid track at all breakpoints, including implicit mobile tracks. */
+  fullWidth?: boolean;
+  resetButton?: boolean;
+  searchable?: boolean;
+  readonly?: boolean;
+} & (
+  | { type: "coordinate_targeting" }
+  | { type: "method_size" }
+  | { type: "text" }
+  | { type: "textarea"; rows?: number }
+  | { type: "richinput"; height?: string }
+  | { type: "date" }
+  | { type: "number" }
+  | { type: "boolean" }
+  | { type: "audio"; href?: string | null }
+  | { type: "avatar"; href?: string | null; size?: IMG_ORIENTATION; maxDim?: number }
+  | {
+      type: "str_array";
+      values: readonly string[];
+      multiple?: boolean;
+      allowAddNew?: boolean;
+    }
+  | {
+      type: "db_values";
+      values: FormDbValue[] | undefined;
+      multiple?: boolean;
+      current?: string;
+      /** Save the empty option as null instead of the generic None sentinel. */
+      nullable?: boolean;
+    }
+  | {
+      type: "db_values_with_number";
+      values: FormDbValue[] | undefined;
+    }
+  | {
+      type: "dialog_options";
+      objectiveIds: string[];
+    }
+);
+
+interface EditContentProps<T, K, S extends FieldValues> {
+  schema: T;
+  form: UseFormReturn<S, any>;
+  formData: FormEntry<K>[];
+  showSubmit: boolean;
+  /** Render controls without a nested form when embedded in another editor. */
+  fieldsOnly?: boolean;
+  /** Expose occupation drops in generic packages, which have no hunting/gathering quest type. */
+  allowMaterialRewards?: boolean;
+  /** Additional controls sharing this form's submission and disabled state. */
+  children?: React.ReactNode;
+  buttonTxt?: string;
+  allowImageUpload?: boolean;
+  relationId?: string;
+  type?: ContentType;
+  onAccept?: (
+    e: React.BaseSyntheticEvent<object, any, any> | undefined,
+  ) => Promise<void>;
+  submitDisabled?: boolean;
+  submitLoading?: boolean;
+  submitLoadingText?: string;
+}
+
+interface EffectFormWrapperProps {
+  /** Offer permanent slot grants only for noncombat consumables. */
+  allowJutsuSlotGrants?: boolean;
+  /** Opt in only for sources that the runtime includes in passive activity aggregation. */
+  allowActivityBonuses?: boolean;
+  allowCoordinateTargeting?: boolean;
+  idx: number;
+  type: "jutsu" | "bloodline" | "item" | "skillTree" | "sageMode";
+  availableTags: readonly string[];
+  hideTagType?: boolean;
+  editableFields?: readonly string[];
+  tag: ZodAllTags;
+  effects: ZodAllTags[];
+  setEffects: (effects: ZodAllTags[]) => void;
+  submitLoading?: boolean;
+}
 
 interface RewardCatalogs {
   items: FormDbValue[] | undefined;

@@ -1,19 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs/server";
+import * as Sentry from "@sentry/nextjs";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import * as nextServer from "next/server";
 import superjson from "superjson";
 import type { z } from "zod";
 import { accountDeletionRouter } from "@/server/api/routers/accountDeletion";
 import { drizzleDB } from "@/server/db";
-import type { accountDeletionSchema } from "@/validators/accountDeletion";
-import { ACCOUNT_DELETION_REVERIFICATION } from "@/validators/accountDeletion";
-import {
-  resetServerModuleStubs,
-  stubDatabase,
-} from "../../../setup/serverModules";
 import * as apple from "@/server/utils/accountDeletion/apple";
 import * as processor from "@/server/utils/accountDeletion/process";
+import type { accountDeletionSchema } from "@/validators/accountDeletion";
+import { ACCOUNT_DELETION_REVERIFICATION } from "@/validators/accountDeletion";
+import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
 
 const originalEnv = { ...process.env };
 
@@ -222,12 +220,17 @@ describe("native account deletion authorization", () => {
     expect(mocks.after).not.toHaveBeenCalled();
   });
   it("does not expose unexpected provider errors", async () => {
-    mocks.prepare.mockRejectedValueOnce(new Error("private provider details"));
+    const captured = vi.spyOn(Sentry, "captureException").mockReturnValue("test-event");
+    const failure = new Error("private provider details");
+    mocks.prepare.mockRejectedValueOnce(failure);
     expect(await request()).toEqual({
       success: false,
       message:
         "We could not save your request. Nothing has been confirmed; please try again.",
     });
     expect(mocks.insert).not.toHaveBeenCalled();
+    expect(captured).toHaveBeenCalledWith(failure, {
+      tags: { task: "account-deletion-request" },
+    });
   });
 });

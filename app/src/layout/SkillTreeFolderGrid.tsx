@@ -1,18 +1,11 @@
 "use client";
 
 import { Folder } from "lucide-react";
-import Image from "next/image";
+import type { RouterOutputs } from "@/app/_trpc/client";
 import type { OptionType } from "@/components/ui/multi-select";
 import { MultiSelect } from "@/components/ui/multi-select";
 import type { SkillTree, SkillTreeFolder } from "@/drizzle/schema";
-
-interface FolderStats {
-  folderId: string;
-  folderName: string;
-  folderImage: string;
-  totalSkills: number;
-  ownedSkills: number;
-}
+import Image from "@/layout/Image";
 
 interface SkillTreeFolderGridProps {
   folders: SkillTreeFolder[];
@@ -145,3 +138,5 @@ export const SkillTreeFolderGrid: React.FC<SkillTreeFolderGridProps> = ({
 };
 
 export default SkillTreeFolderGrid;
+
+type FolderStats = RouterOutputs["skillTree"]["getFolderStats"][number];

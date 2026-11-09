@@ -8,13 +8,13 @@ import {
   getExtractorCropCapacity,
   getFarmGrowTimeSeconds,
   getFarmHarvestExperience,
+  getFarmingLevel,
+  getFarmingLevelProgress,
   getFarmPlantExperience,
   getFarmPlotStatus,
   getFarmPrimaryAction,
   getFarmQuantityPrice,
   getFertilizerExperience,
-  getFarmingLevel,
-  getFarmingLevelProgress,
   getLivePlotTiming,
   getMaxExtractors,
   getMaxPurchasablePlots,
@@ -31,7 +31,7 @@ import {
   summarizeFarmPlots,
 } from "@/libs/farming";
 import { calcLevelRequirements } from "@/libs/profile";
-import { farmMutationResponseSchema, type FarmPlotState } from "@/validators/farming";
+import { type FarmPlotState, farmMutationResponseSchema } from "@/validators/farming";
 
 describe("farming", () => {
   it.each(["water", "fertilizer"] as const)(
@@ -39,20 +39,33 @@ describe("farming", () => {
     (reduction) => {
       const now = new Date(1500);
       const finishAt = new Date(60_100);
-      const plot = mapPlotToState({
-        id: "plot", userId: "farmer", slotIndex: 0, seedItemId: "seed",
-        plantedAt: new Date(100), lastWateredAt: null,
-        createdAt: new Date(100), updatedAt: now,
-        fertilizerApplied: reduction === "fertilizer",
-        finishAt: reduction === "water"
-          ? applyWaterReduction(finishAt, now)
-          : applyFertilizerReduction(finishAt, 60, now),
-      }, now);
+      const plot = mapPlotToState(
+        {
+          id: "plot",
+          userId: "farmer",
+          slotIndex: 0,
+          seedItemId: "seed",
+          plantedAt: new Date(100),
+          lastWateredAt: null,
+          createdAt: new Date(100),
+          updatedAt: now,
+          fertilizerApplied: reduction === "fertilizer",
+          finishAt:
+            reduction === "water"
+              ? applyWaterReduction(finishAt, now)
+              : applyFertilizerReduction(finishAt, 60, now),
+        },
+        now,
+      );
       expect(plot.finishAt).toEqual(now);
       expect(plot.isReady).toBe(true);
-      expect(farmMutationResponseSchema.safeParse({
-        success: true, message: "Reduced", updatedPlot: plot,
-      }).success).toBe(true);
+      expect(
+        farmMutationResponseSchema.safeParse({
+          success: true,
+          message: "Reduced",
+          updatedPlot: plot,
+        }).success,
+      ).toBe(true);
       expect(plot.growTimeSeconds).toBe(2);
     },
   );
@@ -105,9 +118,9 @@ describe("farming", () => {
 
   it("does not reduce grow time for lower federal tiers", () => {
     for (const federalStatus of ["NONE", "NORMAL", "SILVER"] as const) {
-      expect(
-        getFarmGrowTimeSeconds(100, { staffAccount: false, federalStatus }),
-      ).toBe(100);
+      expect(getFarmGrowTimeSeconds(100, { staffAccount: false, federalStatus })).toBe(
+        100,
+      );
     }
   });
 
@@ -122,12 +135,10 @@ describe("farming", () => {
 
   it("spreads plot purchases across the full farming progression", () => {
     expect(getMaxPurchasablePlots(1)).toBe(0);
-    Array.from({ length: 15 }, (_, index) => 10 + index * 6).forEach(
-      (level, index) => {
-        expect(getMaxPurchasablePlots(level - 1)).toBe(index);
-        expect(getMaxPurchasablePlots(level)).toBe(index + 1);
-      },
-    );
+    Array.from({ length: 15 }, (_, index) => 10 + index * 6).forEach((level, index) => {
+      expect(getMaxPurchasablePlots(level - 1)).toBe(index);
+      expect(getMaxPurchasablePlots(level)).toBe(index + 1);
+    });
     expect(getMaxPurchasablePlots(100)).toBe(15);
   });
 
@@ -175,15 +186,9 @@ describe("farming", () => {
     expect(getPvpFarmActivityReductionSeconds("COMBAT", "Won", true)).toBe(90);
     expect(getPvpFarmActivityReductionSeconds("COMBAT", "Lost", true)).toBe(60);
     expect(getPvpFarmActivityReductionSeconds("COMBAT", "Draw", true)).toBe(60);
-    expect(getPvpFarmActivityReductionSeconds("RANKED_PVP", "Won", true)).toBe(
-      90,
-    );
-    expect(getPvpFarmActivityReductionSeconds("RANKED_PVP", "Lost", true)).toBe(
-      60,
-    );
-    expect(getPvpFarmActivityReductionSeconds("RANKED_PVP", "Draw", true)).toBe(
-      60,
-    );
+    expect(getPvpFarmActivityReductionSeconds("RANKED_PVP", "Won", true)).toBe(90);
+    expect(getPvpFarmActivityReductionSeconds("RANKED_PVP", "Lost", true)).toBe(60);
+    expect(getPvpFarmActivityReductionSeconds("RANKED_PVP", "Draw", true)).toBe(60);
   });
 
   it("does not reward fleeing, other battle types, or AI-only battles", () => {
@@ -221,12 +226,14 @@ describe("farming", () => {
     const finishAt = new Date(plantedAt.getTime() + cycleMs * 2);
     const plot = { seedItemId: "seed", plantedAt, finishAt, lastWateredAt: plantedAt };
 
-    expect(getLivePlotTiming(plot, new Date(plantedAt.getTime() + 1000))).toEqual(expect.objectContaining({
-      isReady: false,
-      canWater: false,
-      nextWateringAt: new Date(cycleMs * 11),
-      growthStage: 1,
-    }));
+    expect(getLivePlotTiming(plot, new Date(plantedAt.getTime() + 1000))).toEqual(
+      expect.objectContaining({
+        isReady: false,
+        canWater: false,
+        nextWateringAt: new Date(cycleMs * 11),
+        growthStage: 1,
+      }),
+    );
     expect(getLivePlotTiming(plot, new Date(cycleMs * 11))).toMatchObject({
       isReady: false,
       canWater: true,
@@ -326,7 +333,12 @@ describe("farming", () => {
 });
 
 describe("farm seed dropping", () => {
-  const marketSeed = { isFarmSeed: true, inShop: false, hidden: false, farmSellValue: 10 };
+  const marketSeed = {
+    isFarmSeed: true,
+    inShop: false,
+    hidden: false,
+    farmSellValue: 10,
+  };
 
   it("recognises seeds the farm market sells", () => {
     expect(isFarmMarketSeed(marketSeed)).toBe(true);
@@ -387,9 +399,10 @@ describe("next farm events", () => {
     "omits watering when the crop finishes at %i before it can be watered",
     (finishTime) => {
       const finishAt = new Date(finishTime);
-      expect(
-        getNextFarmEvents([plot({ finishAt, lastWateredAt: now })], now),
-      ).toEqual({ nextHarvestAt: finishAt, nextWateringAt: null });
+      expect(getNextFarmEvents([plot({ finishAt, lastWateredAt: now })], now)).toEqual({
+        nextHarvestAt: finishAt,
+        nextWateringAt: null,
+      });
     },
   );
 

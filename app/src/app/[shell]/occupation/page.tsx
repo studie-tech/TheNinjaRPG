@@ -199,11 +199,7 @@ interface OccupationSelectorProps {
   isChanging?: boolean;
 }
 
-/**
- * Occupation selector component
- * @param param0
- * @returns
- */
+/** Occupation selector component */
 const OccupationSelector: React.FC<OccupationSelectorProps> = ({
   selectedOccupation,
   onOccupationSelect,

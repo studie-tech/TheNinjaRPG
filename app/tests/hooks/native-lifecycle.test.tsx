@@ -1,12 +1,16 @@
-import type { Clerk } from "@clerk/shared/types";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import type { Clerk } from "@clerk/nextjs/types";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as navigation from "next/navigation";
 import superjson from "superjson";
 import type { AppRouter } from "@/api/root";
+import type { RouterInputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
+import { useLiveActivity } from "@/hooks/useLiveActivity";
+import { useNativePush } from "@/hooks/useNativePush";
 import { createTrpcSession, trpcSessionLink } from "@/libs/trpcSession";
 import type { UserWithRelations } from "@/routers/profile";
-import type { RegisterDeviceInput } from "@/validators/push";
 import { deferred } from "../setup/deferred";
 import { capacitorWindow, installCapacitor, removeCapacitor } from "../setup/native";
 
@@ -30,28 +34,22 @@ interface NativeLifecycleMocks {
   stateListeners: Array<(payload: { isActive: boolean }) => void>;
 }
 
-function getMocks(): NativeLifecycleMocks {
-  const globals = globalThis as typeof globalThis & {
-    __nativeLifecycleMocks?: NativeLifecycleMocks;
-  };
-  globals.__nativeLifecycleMocks ??= {
-    actionListeners: [],
-    detachToken: vi.fn(),
-    endActivity: vi.fn(),
-    endKind: vi.fn(),
-    endLiveActivity: vi.fn(),
-    liveStart: vi.fn(),
-    liveTokenListeners: [],
-    pushCheckPermissions: vi.fn(),
-    pushRegister: vi.fn(),
-    registrationErrorListeners: [],
-    registrationListeners: [],
-    registerActivity: vi.fn(),
-    sendToken: vi.fn(),
-    stateListeners: [],
-  };
-  return globals.__nativeLifecycleMocks;
-}
+const mocks: NativeLifecycleMocks = {
+  actionListeners: [],
+  detachToken: vi.fn(),
+  endActivity: vi.fn(),
+  endKind: vi.fn(),
+  endLiveActivity: vi.fn(),
+  liveStart: vi.fn(),
+  liveTokenListeners: [],
+  pushCheckPermissions: vi.fn(),
+  pushRegister: vi.fn(),
+  registrationErrorListeners: [],
+  registrationListeners: [],
+  registerActivity: vi.fn(),
+  sendToken: vi.fn(),
+  stateListeners: [],
+};
 
 const subscribe = <T,>(
   listeners: Array<(payload: T) => void>,
@@ -64,38 +62,28 @@ const subscribe = <T,>(
   };
 };
 
-vi.mock("next/navigation", () => {
-  const router = { push: vi.fn() };
-  return { useRouter: () => router };
-});
-
-vi.mock("@/app/_trpc/client", () => ({
-  api: {
-    push: {
-      registerDevice: {
-        useMutation: () => ({ mutateAsync: getMocks().sendToken }),
-      },
-      unregisterDevice: {
-        useMutation: () => ({ mutateAsync: getMocks().detachToken }),
-      },
-      registerActivity: {
-        useMutation: (options?: Record<string, unknown>) => {
-          getMocks().registerActivityOptions = options;
-          return { mutateAsync: getMocks().registerActivity };
-        },
-      },
-      endActivity: {
-        useMutation: () => ({ mutate: getMocks().endActivity }),
+const router = { push: vi.fn() };
+const api = {
+  push: {
+    registerDevice: {
+      useMutation: () => ({ mutateAsync: mocks.sendToken }),
+    },
+    unregisterDevice: {
+      useMutation: () => ({ mutateAsync: mocks.detachToken }),
+    },
+    registerActivity: {
+      useMutation: (options?: Record<string, unknown>) => {
+        mocks.registerActivityOptions = options;
+        return { mutateAsync: mocks.registerActivity };
       },
     },
+    endActivity: {
+      useMutation: () => ({ mutate: mocks.endActivity }),
+    },
   },
-}));
-
-import { useLiveActivity } from "@/hooks/useLiveActivity";
-import { useNativePush } from "@/hooks/useNativePush";
+};
 
 const TOKEN = "a".repeat(64);
-const mocks = getMocks();
 const profile = (status: "AWAKE" | "HOSPITALIZED", userId = "user-a") =>
   ({
     regenAt: new Date(),
@@ -105,6 +93,8 @@ const profile = (status: "AWAKE" | "HOSPITALIZED", userId = "user-a") =>
   }) as unknown as UserWithRelations;
 
 beforeEach(() => {
+  vi.spyOn(navigation, "useRouter").mockReturnValue(router as never);
+  Object.assign(vi.spyOn(client, "api" as never), api);
   localStorage.clear();
   mocks.actionListeners.length = 0;
   mocks.liveTokenListeners.length = 0;
@@ -124,10 +114,7 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ success: true, widgetToken: "widget-token" });
 
-  const listener = <T,>(
-    listeners: Array<(payload: T) => void>,
-    callback: unknown,
-  ) => {
+  const listener = <T,>(listeners: Array<(payload: T) => void>, callback: unknown) => {
     const remove = subscribe(listeners, callback as (payload: T) => void);
     return { remove: async () => remove() };
   };
@@ -165,6 +152,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   removeCapacitor();
+  vi.restoreAllMocks();
 });
 
 describe("native push ownership", () => {
@@ -204,11 +192,16 @@ describe("native push ownership", () => {
                 device = { token: input.token, widgetToken: credential };
                 started();
                 await responseReady;
-                return Response.json([{
-                  result: {
-                    data: superjson.serialize({ success: true, widgetToken: credential }),
+                return Response.json([
+                  {
+                    result: {
+                      data: superjson.serialize({
+                        success: true,
+                        widgetToken: credential,
+                      }),
+                    },
                   },
-                }]);
+                ]);
               }
               exposedWidgetToken = localStorage.getItem("native-widget-token");
               if (
@@ -217,17 +210,20 @@ describe("native push ownership", () => {
               ) {
                 device = undefined;
               }
-              return Response.json([{
-                result: { data: superjson.serialize({ success: true }) },
-              }]);
+              return Response.json([
+                {
+                  result: { data: superjson.serialize({ success: true }) },
+                },
+              ]);
             },
           }),
         ],
       });
     };
     const firstClient = createClient();
-    mocks.sendToken.mockImplementation((input: RegisterDeviceInput) =>
-      firstClient.push.registerDevice.mutate(input),
+    mocks.sendToken.mockImplementation(
+      (input: RouterInputs["push"]["registerDevice"]) =>
+        firstClient.push.registerDevice.mutate(input),
     );
     const first = renderHook(() =>
       useNativePush({ enabled: true, accountId: "account-a" }),
@@ -391,9 +387,7 @@ describe("native push ownership", () => {
       mocks.registrationListeners[0]?.({ value: TOKEN });
     });
     await waitFor(() => expect(mocks.sendToken).toHaveBeenCalledTimes(1));
-    await waitFor(() =>
-      expect(localStorage.getItem("native-push-token")).toBe(TOKEN),
-    );
+    await waitFor(() => expect(localStorage.getItem("native-push-token")).toBe(TOKEN));
 
     let unregister: Promise<void> | undefined;
     act(() => {
@@ -505,8 +499,9 @@ describe("native push ownership", () => {
     expect(mocks.detachToken).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem("native-push-token")).toBe(TOKEN);
     expect(localStorage.getItem("native-push-owner-token")).toBe("widget-token");
-    expect(JSON.parse(localStorage.getItem("native-push-pending-detach") ?? "{}"))
-      .toEqual({ token: TOKEN, widgetToken: "widget-token" });
+    expect(
+      JSON.parse(localStorage.getItem("native-push-pending-detach") ?? "{}"),
+    ).toEqual({ token: TOKEN, widgetToken: "widget-token" });
 
     rerender({ enabled: false, accountId: null });
     act(() => {
@@ -566,9 +561,7 @@ describe("native push ownership", () => {
       mocks.registrationListeners[0]?.({ value: TOKEN });
     });
     await waitFor(() =>
-      expect(localStorage.getItem("native-push-owner-token")).toBe(
-        "widget-token-b",
-      ),
+      expect(localStorage.getItem("native-push-owner-token")).toBe("widget-token-b"),
     );
 
     act(() => {
@@ -585,11 +578,17 @@ describe("native push ownership", () => {
 
 describe("native Live Activity lifecycle", () => {
   it("does not start or register activities when the shell omits the unsupported plugin", async () => {
-    Object.assign(window, { Capacitor: {
-      isNativePlatform: () => true, getPlatform: () => "ios", Plugins: {},
-    } });
+    Object.assign(window, {
+      Capacitor: {
+        isNativePlatform: () => true,
+        getPlatform: () => "ios",
+        Plugins: {},
+      },
+    });
     renderHook(() => useLiveActivity(profile("HOSPITALIZED"), 0));
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(mocks.liveStart).not.toHaveBeenCalled();
     expect(mocks.registerActivity).not.toHaveBeenCalled();
     expect(mocks.liveTokenListeners).toHaveLength(0);
@@ -623,10 +622,9 @@ describe("native Live Activity lifecycle", () => {
   });
 
   it("ends an orphaned hospital activity after a recovered profile loads", async () => {
-    const { rerender } = renderHook(
-      ({ user }) => useLiveActivity(user, 0),
-      { initialProps: { user: undefined as UserWithRelations | undefined } },
-    );
+    const { rerender } = renderHook(({ user }) => useLiveActivity(user, 0), {
+      initialProps: { user: undefined as UserWithRelations | undefined },
+    });
     expect(mocks.endKind).not.toHaveBeenCalled();
 
     rerender({ user: profile("AWAKE") });
@@ -638,10 +636,9 @@ describe("native Live Activity lifecycle", () => {
   });
 
   it("ends only the current device's registered activity after recovery", async () => {
-    const { rerender } = renderHook(
-      ({ user }) => useLiveActivity(user, 0),
-      { initialProps: { user: profile("HOSPITALIZED") } },
-    );
+    const { rerender } = renderHook(({ user }) => useLiveActivity(user, 0), {
+      initialProps: { user: profile("HOSPITALIZED") },
+    });
     await waitFor(() => expect(mocks.liveStart).toHaveBeenCalledTimes(1));
     await act(async () => {
       await Promise.resolve();
@@ -657,10 +654,9 @@ describe("native Live Activity lifecycle", () => {
     mocks.liveStart
       .mockResolvedValueOnce({ activityId: "activity-a" })
       .mockResolvedValueOnce({ activityId: "activity-b" });
-    const { rerender } = renderHook(
-      ({ user }) => useLiveActivity(user, 0),
-      { initialProps: { user: profile("HOSPITALIZED", "user-a") } },
-    );
+    const { rerender } = renderHook(({ user }) => useLiveActivity(user, 0), {
+      initialProps: { user: profile("HOSPITALIZED", "user-a") },
+    });
     await waitFor(() => expect(mocks.liveStart).toHaveBeenCalledTimes(1));
 
     rerender({ user: profile("HOSPITALIZED", "user-b") });

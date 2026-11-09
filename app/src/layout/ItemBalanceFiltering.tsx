@@ -14,32 +14,31 @@ interface ItemBalanceFilteringProps {
 }
 
 /** Define the item balance filters and their initial battle sample. */
-const makeSchema = () =>
-  defineFilteringSchema({
-    fields: [
-      battleTypesField(["RANKED_PVP", "COMBAT", "RANKED_SPARRING", "SPARRING"]),
-      minCountField,
-      {
-        id: "itemTypes",
-        label: "Item Types",
-        type: "multi-select",
-        defaultValue: [],
-        options: toOptions(ItemTypes),
-      },
-      {
-        id: "bloodlineIds",
-        label: "Bloodlines",
-        type: "multi-select",
-        defaultValue: [],
-        dataSource: "bloodlines",
-      },
-    ] as const,
-  });
+const ITEM_BALANCE_FILTERING_SCHEMA = defineFilteringSchema({
+  fields: [
+    battleTypesField(["RANKED_PVP", "COMBAT", "RANKED_SPARRING", "SPARRING"]),
+    minCountField,
+    {
+      id: "itemTypes",
+      label: "Item Types",
+      type: "multi-select",
+      defaultValue: [],
+      options: toOptions(ItemTypes),
+    },
+    {
+      id: "bloodlineIds",
+      label: "Bloodlines",
+      type: "multi-select",
+      defaultValue: [],
+      dataSource: "bloodlines",
+    },
+  ] as const,
+});
 
 const ItemBalanceFiltering: React.FC<ItemBalanceFilteringProps> = (props) => {
   return (
     <ContentFiltering
-      schema={makeSchema()}
+      schema={ITEM_BALANCE_FILTERING_SCHEMA}
       state={props.state.cf}
       triggerButtonId="filter-item-balance"
     />
@@ -49,10 +48,10 @@ const ItemBalanceFiltering: React.FC<ItemBalanceFilteringProps> = (props) => {
 export default ItemBalanceFiltering;
 
 export const getFilter = (state: ItemBalanceFilteringState) =>
-  buildFilter(state.cf, makeSchema());
+  buildFilter(state.cf, ITEM_BALANCE_FILTERING_SCHEMA);
 
 export const useFiltering = () => {
-  const cf = useContentFiltering(makeSchema());
+  const cf = useContentFiltering(ITEM_BALANCE_FILTERING_SCHEMA);
   return {
     ...cf.values,
     cf,

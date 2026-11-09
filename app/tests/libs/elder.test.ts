@@ -57,7 +57,9 @@ describe("isElderCandidateWithoutCutoff", () => {
   });
 
   it("refuses an idle clan the rotation would never promote", () => {
-    expect(isElderCandidateWithoutCutoff([clan("idle", 0)], "idle", 10, 2026)).toBe(false);
+    expect(isElderCandidateWithoutCutoff([clan("idle", 0)], "idle", 10, 2026)).toBe(
+      false,
+    );
   });
 
   it("treats an existing snapshot as final for the whole village", () => {

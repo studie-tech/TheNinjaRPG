@@ -1,15 +1,15 @@
 import "dotenv/config";
 import { drizzleDB } from "@/server/db";
-import { seedVillages } from "./seeds/village";
-import { seedForum } from "./seeds/forum";
-import { seedJutsus } from "./seeds/jutsu";
-import { seedBloodlines } from "./seeds/bloodline";
-import { seedItems } from "./seeds/items";
-import { seedQuests } from "./seeds/quests";
 import { seedAI } from "./seeds/ai";
-import { seedLpcAssets } from "./seeds/lpc";
 import { seedAssets } from "./seeds/assets";
+import { seedBloodlines } from "./seeds/bloodline";
+import { seedForum } from "./seeds/forum";
 import { seedGuides } from "./seeds/guide";
+import { seedItems } from "./seeds/items";
+import { seedJutsus } from "./seeds/jutsu";
+import { seedLpcAssets } from "./seeds/lpc";
+import { seedQuests } from "./seeds/quests";
+import { seedVillages } from "./seeds/village";
 
 /** Populate game content and import the stable LPC design catalog. */
 async function main() {
@@ -25,7 +25,7 @@ async function main() {
   await seedGuides(drizzleDB);
 }
 
-// Run the seeding & close databse connection
+// Run all seeds, then exit the process
 main()
   .then(() => process.exit(0))
   .catch((e) => {

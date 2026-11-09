@@ -28,7 +28,7 @@ export const fetchImage = async (
   return result;
 };
 
-import { and, gte, sql } from "drizzle-orm";
+import { and, gt, gte, sql } from "drizzle-orm";
 import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
 import { userData, userLikes } from "@/drizzle/schema";
 
@@ -255,7 +255,10 @@ export const listConceptImageForGetAll = (
       ...[
         input.only_own ? eq(conceptImage.userId, userSearch) : undefined,
         secondsBack
-          ? sql`createdAt > DATE_SUB(NOW(), INTERVAL ${secondsBack} SECOND)`
+          ? gt(
+              conceptImage.createdAt,
+              sql`DATE_SUB(NOW(), INTERVAL ${secondsBack} SECOND)`,
+            )
           : undefined,
       ],
     ),
@@ -269,9 +272,9 @@ export const listConceptImageForGetAll = (
         where: (userLikes) => eq(userLikes.userId, userSearch),
       },
     },
-    orderBy: (_image, { desc }) => [
+    orderBy: (image, { desc }) => [
       ...(input.sort === "Most Liked" ? [desc(sql`total_reaction`)] : []),
-      ...(input.sort === "Most Recent" ? [desc(sql`createdAt`)] : []),
+      ...(input.sort === "Most Recent" ? [desc(image.createdAt)] : []),
     ],
   });
 

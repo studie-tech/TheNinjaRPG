@@ -1,12 +1,21 @@
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { useVisualEffects } from "@/hooks/visual-effects";
-import { VISUAL_EFFECT_KEYS, readVisualEffects, setVisualEffect, subscribeVisualEffects } from "@/libs/visualEffects";
+import {
+  readVisualEffects,
+  setVisualEffect,
+  subscribeVisualEffects,
+  VISUAL_EFFECT_KEYS,
+} from "@/libs/visualEffects";
 
 const OverlayProbe = () => {
-  const { visualEffects: { dayNight: showDayNightMapOverlays } } = useVisualEffects();
-  return <div data-enabled={showDayNightMapOverlays}>{String(showDayNightMapOverlays)}</div>;
+  const {
+    visualEffects: { dayNight: showDayNightMapOverlays },
+  } = useVisualEffects();
+  return (
+    <div data-enabled={showDayNightMapOverlays}>{String(showDayNightMapOverlays)}</div>
+  );
 };
 
 describe("useVisualEffects", () => {
@@ -39,59 +48,95 @@ describe("useVisualEffects", () => {
     },
   );
 
-  it.each([true, false])("preserves explicit split choices over grouped %s", (enabled) => {
-    for (const effect of ["dayNight", "spriteAnimations"] as const)
-      window.localStorage.setItem(VISUAL_EFFECT_KEYS[effect], String(enabled));
-    for (const effect of ["sunlight", "weather"] as const)
-      window.localStorage.setItem(VISUAL_EFFECT_KEYS[effect], "true");
-    for (const effect of ["localLights", "wind"] as const)
-      window.localStorage.setItem(VISUAL_EFFECT_KEYS[effect], "false");
-    expect(readVisualEffects()).toEqual({
-      sunlight: true, dayNight: enabled, localLights: false, shadows: true,
-      weather: true, wind: false, spriteAnimations: enabled, wildlife: enabled,
-    });
-  });
-
-  it.each([true, false])("keeps split choices independent after changing groups from %s and remounting", (enabled) => {
-    for (const effect of ["dayNight", "spriteAnimations"] as const)
-      window.localStorage.setItem(VISUAL_EFFECT_KEYS[effect], String(enabled));
-    const hook = renderHook(() => useVisualEffects());
-    const changes: unknown[] = [];
-    const unsubscribe = subscribeVisualEffects((...change) => changes.push(change));
-    try {
-      act(() => {
-        hook.result.current.setVisualEffect("dayNight", !enabled);
-        hook.result.current.setVisualEffect("spriteAnimations", !enabled);
+  it.each([true, false])(
+    "preserves explicit split choices over grouped %s",
+    (enabled) => {
+      for (const effect of ["dayNight", "spriteAnimations"] as const)
+        window.localStorage.setItem(VISUAL_EFFECT_KEYS[effect], String(enabled));
+      for (const effect of ["sunlight", "weather"] as const)
+        window.localStorage.setItem(VISUAL_EFFECT_KEYS[effect], "true");
+      for (const effect of ["localLights", "wind"] as const)
+        window.localStorage.setItem(VISUAL_EFFECT_KEYS[effect], "false");
+      expect(readVisualEffects()).toEqual({
+        sunlight: true,
+        dayNight: enabled,
+        localLights: false,
+        shadows: true,
+        weather: true,
+        wind: false,
+        spriteAnimations: enabled,
+        wildlife: enabled,
       });
-      hook.unmount();
-      const remounted = renderHook(() => useVisualEffects());
-      expect(remounted.result.current.visualEffects).toEqual({
-        sunlight: enabled, dayNight: !enabled, localLights: enabled, shadows: true,
-        weather: enabled, wind: enabled, spriteAnimations: !enabled, wildlife: enabled,
-      });
-      expect(changes).toEqual([["dayNight", !enabled], ["spriteAnimations", !enabled]]);
-    } finally {
-      unsubscribe();
-    }
-  });
+    },
+  );
 
-  it.each([true, false])("materializes siblings before a setter changes saved groups from %s", (enabled) => {
-    for (const effect of ["dayNight", "spriteAnimations"] as const)
-      window.localStorage.setItem(VISUAL_EFFECT_KEYS[effect], String(enabled));
-    setVisualEffect("dayNight", !enabled);
-    setVisualEffect("spriteAnimations", !enabled);
-    expect(readVisualEffects()).toEqual({
-      sunlight: enabled, dayNight: !enabled, localLights: enabled, shadows: true,
-      weather: enabled, wind: enabled, spriteAnimations: !enabled, wildlife: enabled,
-    });
-  });
+  it.each([true, false])(
+    "keeps split choices independent after changing groups from %s and remounting",
+    (enabled) => {
+      for (const effect of ["dayNight", "spriteAnimations"] as const)
+        window.localStorage.setItem(VISUAL_EFFECT_KEYS[effect], String(enabled));
+      const hook = renderHook(() => useVisualEffects());
+      const changes: unknown[] = [];
+      const unsubscribe = subscribeVisualEffects((...change) => changes.push(change));
+      try {
+        act(() => {
+          hook.result.current.setVisualEffect("dayNight", !enabled);
+          hook.result.current.setVisualEffect("spriteAnimations", !enabled);
+        });
+        hook.unmount();
+        const remounted = renderHook(() => useVisualEffects());
+        expect(remounted.result.current.visualEffects).toEqual({
+          sunlight: enabled,
+          dayNight: !enabled,
+          localLights: enabled,
+          shadows: true,
+          weather: enabled,
+          wind: enabled,
+          spriteAnimations: !enabled,
+          wildlife: enabled,
+        });
+        expect(changes).toEqual([
+          ["dayNight", !enabled],
+          ["spriteAnimations", !enabled],
+        ]);
+      } finally {
+        unsubscribe();
+      }
+    },
+  );
+
+  it.each([true, false])(
+    "materializes siblings before a setter changes saved groups from %s",
+    (enabled) => {
+      for (const effect of ["dayNight", "spriteAnimations"] as const)
+        window.localStorage.setItem(VISUAL_EFFECT_KEYS[effect], String(enabled));
+      setVisualEffect("dayNight", !enabled);
+      setVisualEffect("spriteAnimations", !enabled);
+      expect(readVisualEffects()).toEqual({
+        sunlight: enabled,
+        dayNight: !enabled,
+        localLights: enabled,
+        shadows: true,
+        weather: enabled,
+        wind: enabled,
+        spriteAnimations: !enabled,
+        wildlife: enabled,
+      });
+    },
+  );
 
   it("keeps fresh-device siblings on when the first action disables the reused keys", () => {
     setVisualEffect("dayNight", false);
     setVisualEffect("spriteAnimations", false);
     expect(readVisualEffects()).toEqual({
-      sunlight: true, dayNight: false, localLights: true, shadows: true,
-      weather: true, wind: true, spriteAnimations: false, wildlife: true,
+      sunlight: true,
+      dayNight: false,
+      localLights: true,
+      shadows: true,
+      weather: true,
+      wind: true,
+      spriteAnimations: false,
+      wildlife: true,
     });
   });
 
@@ -105,8 +150,12 @@ describe("useVisualEffects", () => {
 
   it("retains defaults and immediate subscribers when storage is unavailable", () => {
     const storage = Object.getPrototypeOf(window.localStorage);
-    const read = spyOn(storage, "getItem").mockImplementation(() => { throw new Error("blocked"); });
-    const write = spyOn(storage, "setItem").mockImplementation(() => { throw new Error("blocked"); });
+    const read = spyOn(storage, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    const write = spyOn(storage, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     const changes: unknown[] = [];
     const unsubscribe = subscribeVisualEffects((...change) => changes.push(change));
@@ -116,7 +165,9 @@ describe("useVisualEffects", () => {
       expect(changes).toEqual([["wind", false]]);
     } finally {
       unsubscribe();
-      read.mockRestore(); write.mockRestore(); warn.mockRestore();
+      read.mockRestore();
+      write.mockRestore();
+      warn.mockRestore();
     }
   });
 
@@ -144,16 +195,21 @@ describe("useVisualEffects", () => {
     act(() => first.result.current.setVisualEffect("dayNight", false));
 
     expect(second.result.current.visualEffects.dayNight).toBe(false);
-    expect(window.localStorage.getItem(VISUAL_EFFECT_KEYS.dayNight)).toBe(
-      "false",
-    );
+    expect(window.localStorage.getItem(VISUAL_EFFECT_KEYS.dayNight)).toBe("false");
   });
 
   it("updates active renderer subscribers for each independent effect and removes listeners", () => {
     const hook = renderHook(() => useVisualEffects());
     const changes: unknown[] = [];
     const unsubscribe = subscribeVisualEffects((...change) => changes.push(change));
-    for (const effect of ["shadows", "weather", "wind", "spriteAnimations", "sunlight", "localLights"] as const) {
+    for (const effect of [
+      "shadows",
+      "weather",
+      "wind",
+      "spriteAnimations",
+      "sunlight",
+      "localLights",
+    ] as const) {
       act(() => hook.result.current.setVisualEffect(effect, false));
       expect(hook.result.current.visualEffects[effect]).toBe(false);
       expect(window.localStorage.getItem(VISUAL_EFFECT_KEYS[effect])).toBe("false");
@@ -167,12 +223,21 @@ describe("useVisualEffects", () => {
 
   it("handles other-tab changes, removed preferences and malformed values", () => {
     const hook = renderHook(() => useVisualEffects());
-    const publish = (value: string | null) => act(() => window.dispatchEvent(new window.StorageEvent("storage", { key: VISUAL_EFFECT_KEYS.shadows, newValue: value })));
+    const publish = (value: string | null) =>
+      act(() =>
+        window.dispatchEvent(
+          new window.StorageEvent("storage", {
+            key: VISUAL_EFFECT_KEYS.shadows,
+            newValue: value,
+          }),
+        ),
+      );
     publish("false");
     expect(hook.result.current.visualEffects.shadows).toBe(false);
     publish("invalid");
     expect(hook.result.current.visualEffects.shadows).toBe(true);
-    publish("false"); publish(null);
+    publish("false");
+    publish(null);
     expect(hook.result.current.visualEffects.shadows).toBe(true);
   });
 });

@@ -32,7 +32,7 @@ services:
       context: ./phpmyadmin
     restart: always
     ports:
-      - "3001:80"
+      - "3005:80"
     env_file:
       - .env
     depends_on:

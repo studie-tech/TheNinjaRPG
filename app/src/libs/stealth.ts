@@ -33,9 +33,9 @@ import {
 import { boostPvpGain } from "@/libs/pvpExperience";
 
 /**
- * Calculate the maximum stealth duration in seconds based on stealth stat
- * Base: 60 seconds (1 min), +60 seconds per 1000 points above default (1000), capped at 1200 seconds (20 min)
- * At default stat (1000), players get only the base duration
+ * Calculate the maximum stealth duration in seconds based on stealth stat:
+ * STEALTH_BASE_DURATION_SECONDS plus STEALTH_DURATION_PER_1000_POINTS per 1000 points
+ * above STEALTH_SENSORY_DEFAULT, capped at STEALTH_MAX_DURATION_SECONDS
  */
 export const calcStealthDuration = (stealthStat: number): number => {
   const duration =
@@ -45,9 +45,9 @@ export const calcStealthDuration = (stealthStat: number): number => {
 };
 
 /**
- * Calculate the chance to maintain stealth when performing an action
- * Base: 5%, +2.75% per 1000 points above default (1000)
- * At default stat (1000), players get only the base chance
+ * Calculate the chance to maintain stealth when performing an action:
+ * STEALTH_BASE_KEEP_CHANCE_PERC plus STEALTH_KEEP_CHANCE_PER_1000_POINTS per 1000 points
+ * above STEALTH_SENSORY_DEFAULT
  * Returns a percentage (0-100)
  */
 export const calcStealthKeepChance = (stealthStat: number): number =>
@@ -55,9 +55,9 @@ export const calcStealthKeepChance = (stealthStat: number): number =>
   intervalsAboveDefault(stealthStat) * STEALTH_KEEP_CHANCE_PER_1000_POINTS;
 
 /**
- * Calculate the chance to detect a stealthed player
- * Base: 5%, +2.75% per 1000 points above default (1000), capped at 60%
- * At default stat (1000), players get only the base chance
+ * Calculate the chance to detect a stealthed player:
+ * SENSORY_BASE_DETECT_CHANCE_PERC plus SENSORY_DETECT_CHANCE_PER_1000_POINTS per 1000
+ * points above STEALTH_SENSORY_DEFAULT, capped at SENSORY_MAX_DETECT_CHANCE_PERC
  * Returns a percentage (0-100)
  */
 export const calcSensoryDetectChance = (sensoryStat: number): number => {
@@ -68,10 +68,9 @@ export const calcSensoryDetectChance = (sensoryStat: number): number => {
 };
 
 /**
- * Calculate the cooldown between sensory uses in seconds
- * Base: 120 seconds (2 min), -5 seconds per 1000 points above default (1000)
- * At default stat (1000), players get the base cooldown
- * Minimum cooldown is 30 seconds
+ * Calculate the cooldown between sensory uses in seconds:
+ * SENSORY_BASE_COOLDOWN_SECONDS minus SENSORY_COOLDOWN_REDUCTION_PER_1000_POINTS per 1000
+ * points above STEALTH_SENSORY_DEFAULT, never below SENSORY_MIN_COOLDOWN_SECONDS
  */
 export const calcSensoryCooldown = (sensoryStat: number): number => {
   const cooldown =
@@ -312,7 +311,7 @@ export const getStealthStatus = (
   };
 };
 
-/** Whole 1000-point steps of a capped stat above the default: 1000 gives 0, 2000 gives 1. */
+/** Whole 1000-point steps of a capped stat above STEALTH_SENSORY_DEFAULT. */
 const intervalsAboveDefault = (stat: number) =>
   Math.max(
     0,

@@ -31,9 +31,9 @@ const Countdown: React.FC<CountdownProps> = (props) => {
     onFinishRef.current = onFinish;
   }, [onFinish]);
 
-  // "Done" is decided on the raw millisecond remainder. getDaysHoursMinutesSeconds floors
-  // each part, so summing them reads 0 while up to 999 ms still remain, which made onFinish
-  // fire before the server-side deadline it was waiting for (e.g. quest collect timers).
+  // "Done" is decided on the raw millisecond remainder: the floored parts from
+  // getDaysHoursMinutesSeconds sum to 0 while up to 999 ms remain, which would fire
+  // onFinish before the server-side deadline (e.g. quest collect timers).
   const calcCountString = () => {
     const msLeft = targetTime - Date.now();
     if (msLeft <= 0) {

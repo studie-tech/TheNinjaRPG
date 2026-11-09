@@ -1,5 +1,5 @@
-import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, renderHook } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { useLpcCatalogInvalidation, useLpcCatalogLoader } from "@/hooks/lpc";
 import { buildLpcCatalog } from "@/libs/lpc/catalog";
@@ -15,7 +15,7 @@ const fixture = (cached?: typeof lpcAssets) => {
   let resolve!: (assets: typeof lpcAssets) => void;
   let reject!: (error: Error) => void;
   const pending = new Promise<ReturnType<typeof buildLpcCatalog>>((complete, fail) => {
-    resolve = assets => complete(buildLpcCatalog(assets));
+    resolve = (assets) => complete(buildLpcCatalog(assets));
     reject = fail;
   });
   let compiled = cached ? buildLpcCatalog(cached) : undefined;
@@ -23,9 +23,17 @@ const fixture = (cached?: typeof lpcAssets) => {
     compiled = await pending;
     return compiled;
   });
-  const discoveryInvalidation = vi.fn(async () => {}), sceneInvalidation = vi.fn(async () => {});
+  const discoveryInvalidation = vi.fn(async () => {}),
+    sceneInvalidation = vi.fn(async () => {});
   const utils = {
-    gameAsset: { getLpcCatalog: { invalidate: discoveryInvalidation }, getLpcSceneCatalog: { getData: () => compiled, fetch, invalidate: sceneInvalidation } },
+    gameAsset: {
+      getLpcCatalog: { invalidate: discoveryInvalidation },
+      getLpcSceneCatalog: {
+        getData: () => compiled,
+        fetch,
+        invalidate: sceneInvalidation,
+      },
+    },
   };
   Object.assign(vi.spyOn(client, "api" as never), { useUtils: () => utils });
   return { resolve, reject, fetch, pending, discoveryInvalidation, sceneInvalidation };
@@ -62,7 +70,9 @@ describe("scene character catalog loading", () => {
 
   it("waits for artwork on a cold cache", async () => {
     const request = fixture();
-    const { result } = renderHook(() => useLpcCatalogLoader({ revalidateInBackground: true }));
+    const { result } = renderHook(() =>
+      useLpcCatalogLoader({ revalidateInBackground: true }),
+    );
     let loaded = false;
     const loading = result.current().then((catalog) => {
       loaded = true;
@@ -76,7 +86,9 @@ describe("scene character catalog loading", () => {
 
   it("returns cached artwork during revalidation and uses saved edits in the next scene", async () => {
     const request = fixture(lpcAssets);
-    const { result } = renderHook(() => useLpcCatalogLoader({ revalidateInBackground: true }));
+    const { result } = renderHook(() =>
+      useLpcCatalogLoader({ revalidateInBackground: true }),
+    );
     expect(await result.current()).toEqual(buildLpcCatalog(lpcAssets));
     expect(request.fetch).toHaveBeenCalledTimes(1);
     const edited = [{ ...lpcAssets[0]!, id: "saved-artwork" }];
@@ -87,7 +99,9 @@ describe("scene character catalog loading", () => {
 
   it("keeps cached travel artwork usable after a refresh failure", async () => {
     const request = fixture(lpcAssets);
-    const { result } = renderHook(() => useLpcCatalogLoader({ revalidateInBackground: true }));
+    const { result } = renderHook(() =>
+      useLpcCatalogLoader({ revalidateInBackground: true }),
+    );
     expect(await result.current()).toEqual(buildLpcCatalog(lpcAssets));
     request.reject(new Error("Catalog temporarily unavailable"));
     await Promise.resolve();
@@ -111,7 +125,9 @@ describe("scene character catalog loading", () => {
 
   it("rejects an unavailable cold catalog", async () => {
     const request = fixture();
-    const { result } = renderHook(() => useLpcCatalogLoader({ revalidateInBackground: true }));
+    const { result } = renderHook(() =>
+      useLpcCatalogLoader({ revalidateInBackground: true }),
+    );
     const loading = result.current();
     request.reject(new Error("Catalog unavailable"));
     await expect(loading).rejects.toThrow("Catalog unavailable");

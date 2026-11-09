@@ -1,8 +1,10 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
+  LIVE_ACTIVITY_KINDS,
   PUSH_CATEGORIES,
   PUSH_MAX_DEVICES_PER_USER,
+  PUSH_PLATFORMS,
   type PushCategory,
 } from "@/drizzle/constants";
 import { findUserIdentityById } from "@/queries/profile";
@@ -27,13 +29,35 @@ import {
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
 import { deliveryTest, isPushEnabled, sendPushToUsers } from "@/server/utils/push";
-import {
-  endActivitySchema,
-  registerActivitySchema,
-  registerDeviceSchema,
-  setPushPreferenceSchema,
-  unregisterDeviceSchema,
-} from "@/validators/push";
+import { unregisterDeviceSchema } from "@/validators/push";
+
+/**
+ * APNs tokens are 64 hex characters; FCM registration tokens are longer and documented as
+ * variable length, so the upper bound matches the column rather than either format.
+ */
+const registerDeviceSchema = z.object({
+  token: z.string().min(32).max(512),
+  platform: z.enum(PUSH_PLATFORMS),
+  appVersion: z.string().max(32).optional(),
+  locale: z.string().max(16).optional(),
+});
+
+const setPushPreferenceSchema = z.object({
+  category: z.enum(PUSH_CATEGORIES),
+  enabled: z.boolean(),
+});
+
+const registerActivitySchema = z.object({
+  activityId: z.string().min(1).max(191),
+  kind: z.enum(LIVE_ACTIVITY_KINDS),
+  /** APNs token addressing this one activity, not the device. */
+  pushToken: z.string().min(32).max(512),
+  endsAt: z.date(),
+});
+
+const endActivitySchema = z.object({
+  activityId: z.string().min(1).max(191),
+});
 
 export const pushRouter = createTRPCRouter({
   /**
@@ -65,7 +89,6 @@ export const pushRouter = createTRPCRouter({
       );
       // The row this would evict is one the account owns, and a retirement purges the lot.
       const others = await selectUserDeviceForRegisterDevice(ctx.drizzle, ctx, input);
-      // One slot is spoken for by the device above, hence the cap less one.
       await evictExcessDevices(ctx.drizzle, others);
       return {
         success: true,

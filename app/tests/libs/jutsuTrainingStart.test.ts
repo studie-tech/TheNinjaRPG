@@ -37,7 +37,9 @@ describe("isJutsuInTraining", () => {
   const serverNow = finishTraining.getTime() + 1_000;
 
   it("treats a training as finished once the server clock passes finishTraining", () => {
-    expect(isJutsuInTraining({ finishTraining }, finishTraining.getTime() - 1)).toBe(true);
+    expect(isJutsuInTraining({ finishTraining }, finishTraining.getTime() - 1)).toBe(
+      true,
+    );
     expect(isJutsuInTraining({ finishTraining }, finishTraining.getTime())).toBe(false);
     expect(isJutsuInTraining({ finishTraining: null }, serverNow)).toBe(false);
   });

@@ -64,12 +64,16 @@ describeWithDatabase("staff kage takeover", () => {
   it("uses canonical recovery for the SQL-conditional takeover rank", async () => {
     const db = await getTestDatabase();
     await fetchUpdatedUser({ client: db, userId: "staff" });
-    const result = await (await callerFor(kageRouter, "staff")).takeKage({ reason: "Testing village wars" });
+    const result = await (await callerFor(kageRouter, "staff")).takeKage({
+      reason: "Testing village wars",
+    });
     expect(result.success).toBe(true);
     expect(result).not.toHaveProperty("userPatch");
     expect(result).not.toHaveProperty("userDelta");
     expect(await db.query.village.findFirst()).toMatchObject({ kageId: "staff" });
-    expect(await db.query.userData.findFirst({ where: eq(userData.userId, "staff") })).toMatchObject({ rank: "JONIN", villagePrestige: KAGE_DEFAULT_PRESTIGE });
+    expect(
+      await db.query.userData.findFirst({ where: eq(userData.userId, "staff") }),
+    ).toMatchObject({ rank: "JONIN", villagePrestige: KAGE_DEFAULT_PRESTIGE });
     expect(await db.query.actionLog.findMany()).toHaveLength(1);
   });
 });

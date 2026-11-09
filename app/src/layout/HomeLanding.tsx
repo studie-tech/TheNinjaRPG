@@ -43,13 +43,11 @@ export const HomeLanding: React.FC = () => {
     // Character data may outlive the session for a render during sign-out.
     if (!isClerkLoaded || !isSignedIn || !userId) return;
     // When user is signed in (Clerk) but has not created a character yet, set referral immediately
-    if (isSignedIn && !userData && userStatus === "success") {
-      setReferral.mutate({ utmSource: readCampaignSource() });
-    }
     if (userStatus === "success" && !userData) {
+      setReferral.mutate({ utmSource: readCampaignSource() });
       void router.push("/register");
     }
-    if (userData && userId) {
+    if (userData) {
       // Read at navigation time: a native callback can arrive after this render but
       // before its effect, and its destination must win over the default Profile.
       // NativeBridge already issued this destination. Even one duplicate push can
@@ -98,12 +96,7 @@ export const HomeLanding: React.FC = () => {
     );
   }
 
-  // Guard
-  if (!isSignedIn) {
-    return <Welcome />;
-  } else {
-    return <Loader explanation="Forwarding to profile" />;
-  }
+  return isSignedIn ? <Loader explanation="Forwarding to profile" /> : <Welcome />;
 };
 
 export default HomeLanding;

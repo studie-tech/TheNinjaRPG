@@ -1,5 +1,6 @@
-
 import { beforeEach, describe, expect, it } from "bun:test";
+import { POST } from "@/app/api/content-review/proposals/route";
+import { GET } from "@/app/api/content-review/snapshot/route";
 import {
   badge,
   contentProposal,
@@ -7,10 +8,12 @@ import {
   contentProposalChange,
   contentProposalMedia,
 } from "@/drizzle/schema";
-import { POST } from "@/app/api/content-review/proposals/route";
-import { GET } from "@/app/api/content-review/snapshot/route";
-import { describeWithDatabase, getTestDatabase, resetTables } from "../../../setup/testDatabase";
 import { restoreEnvAfterEach } from "../../../setup/env";
+import {
+  describeWithDatabase,
+  getTestDatabase,
+  resetTables,
+} from "../../../setup/testDatabase";
 
 const SECRET = "test-content-review-secret";
 restoreEnvAfterEach("CRON_SECRET");
@@ -23,7 +26,10 @@ const snapshotRequest = (auth?: string, focus = "grammar") =>
 const submitRequest = (auth: string | undefined, body: string) =>
   new Request("https://example.com/api/content-review/proposals", {
     method: "POST",
-    headers: { ...(auth ? { authorization: auth } : {}), "content-type": "application/json" },
+    headers: {
+      ...(auth ? { authorization: auth } : {}),
+      "content-type": "application/json",
+    },
     body,
   });
 
@@ -41,9 +47,9 @@ describe("content review routes authenticate like the crons", () => {
   it("refuse malformed submissions before touching the database", async () => {
     const auth = `Bearer ${SECRET}`;
     expect((await POST(submitRequest(auth, "not json"))).status).toBe(400);
-    expect((await POST(submitRequest(auth, JSON.stringify({ proposals: 1 })))).status).toBe(
-      400,
-    );
+    expect(
+      (await POST(submitRequest(auth, JSON.stringify({ proposals: 1 })))).status,
+    ).toBe(400);
     expect((await GET(snapshotRequest(auth, "everything"))).status).toBe(400);
   });
 });
@@ -72,7 +78,12 @@ describeWithDatabase("content review routes end to end", () => {
     const snapshot = (await response.json()) as {
       focus: string;
       proposalSchema: object;
-      entities: { type: string; id: string; v: string; fields: Record<string, unknown> }[];
+      entities: {
+        type: string;
+        id: string;
+        v: string;
+        fields: Record<string, unknown>;
+      }[];
     };
     expect(snapshot.focus).toBe("grammar");
     expect(snapshot.proposalSchema).toHaveProperty("properties.proposals");

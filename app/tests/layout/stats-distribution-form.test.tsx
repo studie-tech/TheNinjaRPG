@@ -1,12 +1,20 @@
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setDefaultTimeout,
+  vi,
+} from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, setDefaultTimeout, vi } from "bun:test";
 import type { ComponentProps } from "react";
 import { ELEMENTAL_MASTERY_CAP } from "@/drizzle/constants";
 import * as tutorial from "@/hooks/tutorial";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import type { UserWithRelations } from "@/routers/profile";
-import { deferred } from "../setup/deferred";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { deferred } from "../setup/deferred";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);
@@ -86,96 +94,124 @@ describe("advanced experience assignment drafts", () => {
     await waitFor(() => expect(next).toHaveBeenCalledWith("assignStats"));
   });
 
-  it.each([false, undefined])("does not advance the tutorial after an unaccepted allocation (%s)", async (accepted) => {
-    const next = vi.fn(async () => {});
-    vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
-      currentStep: { advanceOn: "assignStats" },
-      completeTutorialAction: next,
-    } as unknown as ReturnType<typeof tutorial.useTutorialStep>);
-    const accept = vi.fn(async () => accepted);
-    const view = render(form(accept));
-    fireEvent.input(view.getByRole("spinbutton", { name: /^Offence/ }), {
-      target: { value: String(trainee.earnedExperience) },
-    });
-    fireEvent.click(view.getByRole("button", { name: "Assign points" }));
-    await waitFor(() => expect(accept).toHaveBeenCalledTimes(1));
-    expect(next).not.toHaveBeenCalled();
-    expect((view.getByRole("spinbutton", { name: /^Offence/ }) as HTMLInputElement).value).toBe(String(trainee.earnedExperience));
-  });
+  it.each([false, undefined])(
+    "does not advance the tutorial after an unaccepted allocation (%s)",
+    async (accepted) => {
+      const next = vi.fn(async () => {});
+      vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
+        currentStep: { advanceOn: "assignStats" },
+        completeTutorialAction: next,
+      } as unknown as ReturnType<typeof tutorial.useTutorialStep>);
+      const accept = vi.fn(async () => accepted);
+      const view = render(form(accept));
+      fireEvent.input(view.getByRole("spinbutton", { name: /^Offence/ }), {
+        target: { value: String(trainee.earnedExperience) },
+      });
+      fireEvent.click(view.getByRole("button", { name: "Assign points" }));
+      await waitFor(() => expect(accept).toHaveBeenCalledTimes(1));
+      expect(next).not.toHaveBeenCalled();
+      expect(
+        (view.getByRole("spinbutton", { name: /^Offence/ }) as HTMLInputElement).value,
+      ).toBe(String(trainee.earnedExperience));
+    },
+  );
 
-  it.each([false, true])("explains an over-budget allocation and allows correction with masteries=%s", async (includeMasteries) => {
-    const accept = vi.fn();
-    const view = render(
-      <DistributeStatsForm
-        includeMasteries={includeMasteries}
-        showWrapper={false}
-        userData={trainee}
-        availableStats={8000}
-        onAccept={accept}
-        isPending={false}
-      />,
-    );
-    if (!includeMasteries) fireEvent.click(view.getByRole("button", { name: "Advanced" }));
-    const offence = view.getByRole("spinbutton", { name: /^Offence/ }) as HTMLInputElement;
-    await act(async () => {
-      fireEvent.input(offence, { target: { value: "9000" } });
-    });
-    expect(offence.value).toBe("9000");
-    await waitFor(() => expect(view.getByRole("button", { name: "Remove 1,000 points" }).hasAttribute("disabled")).toBe(true));
-    expect(view.queryByText(/received NaN/)).toBeNull();
-    await act(async () => {
-      fireEvent.submit(view.container.querySelector("form")!);
-    });
-    expect(accept).not.toHaveBeenCalled();
-    await act(async () => {
-      fireEvent.input(offence, { target: { value: "7000" } });
-    });
-    fireEvent.click(view.getByRole("button", { name: "Assign points" }));
-    await waitFor(() => expect(accept).toHaveBeenCalledTimes(1));
-    expect(accept.mock.lastCall?.[0]).toMatchObject({ offence: 7000 });
-  });
+  it.each([false, true])(
+    "explains an over-budget allocation and allows correction with masteries=%s",
+    async (includeMasteries) => {
+      const accept = vi.fn();
+      const view = render(
+        <DistributeStatsForm
+          includeMasteries={includeMasteries}
+          showWrapper={false}
+          userData={trainee}
+          availableStats={8000}
+          onAccept={accept}
+          isPending={false}
+        />,
+      );
+      if (!includeMasteries)
+        fireEvent.click(view.getByRole("button", { name: "Advanced" }));
+      const offence = view.getByRole("spinbutton", {
+        name: /^Offence/,
+      }) as HTMLInputElement;
+      await act(async () => {
+        fireEvent.input(offence, { target: { value: "9000" } });
+      });
+      expect(offence.value).toBe("9000");
+      await waitFor(() =>
+        expect(
+          view
+            .getByRole("button", { name: "Remove 1,000 points" })
+            .hasAttribute("disabled"),
+        ).toBe(true),
+      );
+      expect(view.queryByText(/received NaN/)).toBeNull();
+      await act(async () => {
+        fireEvent.submit(view.container.querySelector("form")!);
+      });
+      expect(accept).not.toHaveBeenCalled();
+      await act(async () => {
+        fireEvent.input(offence, { target: { value: "7000" } });
+      });
+      fireEvent.click(view.getByRole("button", { name: "Assign points" }));
+      await waitFor(() => expect(accept).toHaveBeenCalledTimes(1));
+      expect(accept.mock.lastCall?.[0]).toMatchObject({ offence: 7000 });
+    },
+  );
 
   it.each([
-    ["input", "cap"], ["slider", "cap"],
-    ["input", "provided element"], ["slider", "provided element"],
-  ] as const)("keeps a stale %s allocation recoverable after a %s refresh", async (mode, change) => {
-    localStorage.setItem(inputPreferenceKey, String(mode === "input"));
-    const accept = vi.fn();
-    const view = render(form(accept));
-    const role = mode === "input" ? "spinbutton" : "slider";
-    const lightning = view.getByRole(role, { name: /^Lightning/ });
-    const offence = view.getByRole(role, { name: /^Offence/ });
-    await act(async () => {
-      if (mode === "input") {
-        fireEvent.input(lightning, { target: { value: "1" } });
-        fireEvent.input(offence, { target: { value: "10" } });
-      } else {
-        fireEvent.change(lightning, { target: { value: "1" } });
-        fireEvent.change(offence, { target: { value: "10" } });
-      }
-      view.rerender(form(accept, {
-        ...trainee,
-        ...(change === "cap"
-          ? { elementalMastery: { Lightning: ELEMENTAL_MASTERY_CAP } }
-          : { primaryElement: "Lightning" }),
-      }));
-    });
-    const stale = view.getByRole(role, { name: /^Lightning/ });
-    expect((view.getByRole(role, { name: /^Offence/ }) as HTMLInputElement).value).toBe("10");
-    expect((stale as HTMLInputElement).max).toBe(mode === "slider" ? "1" : "0");
-    expect((stale as HTMLInputElement).value).toBe("1");
-    fireEvent.submit(view.container.querySelector("form")!);
-    await waitFor(() => expect(view.queryAllByText(/Too big/).length).toBeGreaterThan(0));
-    expect(accept).not.toHaveBeenCalled();
-    await act(async () => {
-      if (mode === "input") fireEvent.input(stale, { target: { value: "0" } });
-      else fireEvent.change(stale, { target: { value: "0" } });
-    });
-    expect(view.queryByRole(role, { name: /^Lightning/ })).toBeNull();
-    fireEvent.click(view.getByRole("button", { name: "Assign points" }));
-    await waitFor(() => expect(accept).toHaveBeenCalledTimes(1));
-    expect(accept.mock.lastCall?.[0]).toMatchObject({ offence: 10, Lightning: 0 });
-  });
+    ["input", "cap"],
+    ["slider", "cap"],
+    ["input", "provided element"],
+    ["slider", "provided element"],
+  ] as const)(
+    "keeps a stale %s allocation recoverable after a %s refresh",
+    async (mode, change) => {
+      localStorage.setItem(inputPreferenceKey, String(mode === "input"));
+      const accept = vi.fn();
+      const view = render(form(accept));
+      const role = mode === "input" ? "spinbutton" : "slider";
+      const lightning = view.getByRole(role, { name: /^Lightning/ });
+      const offence = view.getByRole(role, { name: /^Offence/ });
+      await act(async () => {
+        if (mode === "input") {
+          fireEvent.input(lightning, { target: { value: "1" } });
+          fireEvent.input(offence, { target: { value: "10" } });
+        } else {
+          fireEvent.change(lightning, { target: { value: "1" } });
+          fireEvent.change(offence, { target: { value: "10" } });
+        }
+        view.rerender(
+          form(accept, {
+            ...trainee,
+            ...(change === "cap"
+              ? { elementalMastery: { Lightning: ELEMENTAL_MASTERY_CAP } }
+              : { primaryElement: "Lightning" }),
+          }),
+        );
+      });
+      const stale = view.getByRole(role, { name: /^Lightning/ });
+      expect(
+        (view.getByRole(role, { name: /^Offence/ }) as HTMLInputElement).value,
+      ).toBe("10");
+      expect((stale as HTMLInputElement).max).toBe(mode === "slider" ? "1" : "0");
+      expect((stale as HTMLInputElement).value).toBe("1");
+      fireEvent.submit(view.container.querySelector("form")!);
+      await waitFor(() =>
+        expect(view.queryAllByText(/Too big/).length).toBeGreaterThan(0),
+      );
+      expect(accept).not.toHaveBeenCalled();
+      await act(async () => {
+        if (mode === "input") fireEvent.input(stale, { target: { value: "0" } });
+        else fireEvent.change(stale, { target: { value: "0" } });
+      });
+      expect(view.queryByRole(role, { name: /^Lightning/ })).toBeNull();
+      fireEvent.click(view.getByRole("button", { name: "Assign points" }));
+      await waitFor(() => expect(accept).toHaveBeenCalledTimes(1));
+      expect(accept.mock.lastCall?.[0]).toMatchObject({ offence: 10, Lightning: 0 });
+    },
+  );
 
   it("keeps an invalid input draft editable when its element becomes unavailable", async () => {
     const accept = vi.fn();
@@ -250,17 +286,23 @@ describe("advanced experience assignment drafts", () => {
     expect(accept.mock.lastCall?.[0]).toMatchObject({ offence: 10, Lightning: 0 });
   });
 
-  it.each([false, undefined])("retains the draft when submission returns %s", async (result) => {
-    const accept = vi.fn(async () => result);
-    const view = render(form(accept));
-    fireEvent.input(view.getByRole("spinbutton", { name: /^Lightning/ }), {
-      target: { value: "1" },
-    });
-    fireEvent.click(view.getByRole("button", { name: "Assign points" }));
-    await waitFor(() => expect(accept).toHaveBeenCalledTimes(1));
-    expect((view.getByRole("spinbutton", { name: /^Lightning/ }) as HTMLInputElement).value).toBe("1");
-    expect(view.getByRole("button", { name: "Assign points" })).toBeTruthy();
-  });
+  it.each([false, undefined])(
+    "retains the draft when submission returns %s",
+    async (result) => {
+      const accept = vi.fn(async () => result);
+      const view = render(form(accept));
+      fireEvent.input(view.getByRole("spinbutton", { name: /^Lightning/ }), {
+        target: { value: "1" },
+      });
+      fireEvent.click(view.getByRole("button", { name: "Assign points" }));
+      await waitFor(() => expect(accept).toHaveBeenCalledTimes(1));
+      expect(
+        (view.getByRole("spinbutton", { name: /^Lightning/ }) as HTMLInputElement)
+          .value,
+      ).toBe("1");
+      expect(view.getByRole("button", { name: "Assign points" })).toBeTruthy();
+    },
+  );
 
   it("keeps a draft through an unrelated unused-XP update", async () => {
     const accept = vi.fn();
@@ -271,7 +313,9 @@ describe("advanced experience assignment drafts", () => {
       });
       view.rerender(form(accept, { ...trainee, earnedExperience: 5000 }));
     });
-    expect((view.getByRole("spinbutton", { name: /^Offence/ }) as HTMLInputElement).value).toBe("10");
+    expect(
+      (view.getByRole("spinbutton", { name: /^Offence/ }) as HTMLInputElement).value,
+    ).toBe("10");
     expect(accept).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,10 @@
 import { vi } from "bun:test";
 
 /** Answer the rate limiter's Upstash commands, including pipelined requests. */
-export const rateLimitResponse = (init?: RequestInit, remaining = 59): Response | null => {
+export const rateLimitResponse = (
+  init?: RequestInit,
+  remaining = 59,
+): Response | null => {
   if (typeof init?.body !== "string" || !init.body.includes("trpc-ratelimit"))
     return null;
   const commands = JSON.parse(init.body) as unknown[];
@@ -37,7 +40,9 @@ export const stubRateLimitTransport = (
       throw new Error(options.unexpectedRequestMessage);
     if (options.answerOtherRequests)
       return Response.json(
-        String(input).endsWith("/pipeline") ? [{ result: [59, 60] }] : { result: [59, 60] },
+        String(input).endsWith("/pipeline")
+          ? [{ result: [59, 60] }]
+          : { result: [59, 60] },
       );
     return realFetch(input, init);
   });

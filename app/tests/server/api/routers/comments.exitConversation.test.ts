@@ -9,6 +9,7 @@ import {
 } from "@/drizzle/schema";
 import { commentsRouter } from "@/server/api/routers/comments";
 import { insertUsers } from "../../../setup/factories";
+import { beforeStatements } from "../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -63,14 +64,20 @@ describeWithDatabase("comments.exitConversation", () => {
       createdByUserId: "player",
     });
 
-    const result = await callerForDatabase(commentsRouter, "player", db).exitConversation({
+    const result = await callerForDatabase(
+      commentsRouter,
+      "player",
+      db,
+    ).exitConversation({
       convo_id: "ticket-convo",
     });
 
     expect(result.success).toBe(true);
     expect(await db.query.user2conversation.findMany()).toHaveLength(0);
     expect(
-      await db.query.conversation.findFirst({ where: eq(conversation.id, "ticket-convo") }),
+      await db.query.conversation.findFirst({
+        where: eq(conversation.id, "ticket-convo"),
+      }),
     ).toBeDefined();
     expect(await db.query.conversationComment.findMany()).toHaveLength(1);
 
@@ -82,7 +89,9 @@ describeWithDatabase("comments.exitConversation", () => {
       });
     const creatorView = await read("player");
     expect(creatorView.convo?.id).toBe("ticket-convo");
-    expect(creatorView.data.map((comment) => comment.id)).toEqual(["ticket-convo-comment"]);
+    expect(creatorView.data.map((comment) => comment.id)).toEqual([
+      "ticket-convo-comment",
+    ]);
     expect((await read("other")).convo).toBeNull();
   });
 
@@ -90,7 +99,11 @@ describeWithDatabase("comments.exitConversation", () => {
     const db = await getTestDatabase();
     await insertSoloConversation("plain-convo", false);
 
-    const result = await callerForDatabase(commentsRouter, "player", db).exitConversation({
+    const result = await callerForDatabase(
+      commentsRouter,
+      "player",
+      db,
+    ).exitConversation({
       convo_id: "plain-convo",
     });
 
@@ -98,5 +111,55 @@ describeWithDatabase("comments.exitConversation", () => {
     expect(await db.query.user2conversation.findMany()).toHaveLength(0);
     expect(await db.query.conversation.findMany()).toHaveLength(0);
     expect(await db.query.conversationComment.findMany()).toHaveLength(0);
+  });
+
+  it("keeps a conversation another member joins before the cleanup", async () => {
+    const db = await getTestDatabase();
+    await insertSoloConversation("plain-convo", false);
+    // Both cleanup deletes wait for the same join, whichever starts first.
+    let joined: Promise<unknown> | undefined;
+    const join = () =>
+      (joined ??= db
+        .insert(user2conversation)
+        .values({ conversationId: "plain-convo", userId: "other" })
+        .then(() => undefined));
+    const raced = beforeStatements(
+      beforeStatements(db, conversation, [join], { operations: ["delete"] }),
+      conversationComment,
+      [join],
+      { operations: ["delete"] },
+    );
+
+    const result = await callerForDatabase(
+      commentsRouter,
+      "player",
+      raced,
+    ).exitConversation({
+      convo_id: "plain-convo",
+    });
+
+    expect(result.success).toBe(true);
+    expect(await db.query.conversation.findMany()).toHaveLength(1);
+    expect(await db.query.conversationComment.findMany()).toHaveLength(1);
+  });
+
+  it("searches comment text and author names", async () => {
+    const db = await getTestDatabase();
+    await insertSoloConversation("plain-convo", false);
+    await db
+      .update(userData)
+      .set({ username: "Searcher" })
+      .where(eq(userData.userId, "player"));
+    const search = async (searchQuery: string) =>
+      (
+        await callerForDatabase(commentsRouter, "player", db).getConversationComments({
+          convo_id: "plain-convo",
+          limit: 10,
+          searchQuery,
+        })
+      ).data.map((comment) => comment.id);
+    expect(await search("help")).toEqual(["plain-convo-comment"]);
+    expect(await search("searcher")).toEqual(["plain-convo-comment"]);
+    expect(await search("nothing")).toEqual([]);
   });
 });

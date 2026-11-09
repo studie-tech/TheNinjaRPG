@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { Mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { cloneElement } from "react";
 import * as client from "@/app/_trpc/client";
 import GraphBankLedger from "@/layout/GraphBankLedger";
@@ -33,9 +33,9 @@ beforeEach(() => {
     blackmarket: { getGraph },
     combat: { getGraph },
   });
-  graphMock = vi.spyOn(graph, "default").mockReturnValue(
-    <div data-testid="graph">Graph</div>,
-  );
+  graphMock = vi
+    .spyOn(graph, "default")
+    .mockReturnValue(<div data-testid="graph">Graph</div>);
 });
 
 afterEach(() => {

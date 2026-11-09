@@ -8,6 +8,7 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
+import { deferred } from "../../../../setup/deferred";
 import { insertUsers } from "../../../../setup/factories";
 import { beforeStatements, failStatements } from "../../../../setup/statements";
 import {
@@ -17,7 +18,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
 
 const USER = "ranked-player";
 
@@ -45,7 +45,11 @@ describeWithDatabase("ranked queue claims and cleanup", () => {
     expect(await caller.getRankedQueueCount()).toBe(0);
     expect((await caller.queueForRankedPvp()).success).toBe(true);
     expect(await caller.getRankedQueueCount()).toBe(1);
-    expect(Pusher.prototype.trigger).toHaveBeenCalledWith("ranked-queue", "updated", {});
+    expect(Pusher.prototype.trigger).toHaveBeenCalledWith(
+      "ranked-queue",
+      "updated",
+      {},
+    );
     expect((await storedUser())?.status).toBe("QUEUED");
     expect(await storedQueue()).toHaveLength(1);
     expect(await caller.queueForRankedPvp()).toMatchObject({
@@ -181,7 +185,12 @@ describeWithDatabase("ranked queue claims and cleanup", () => {
   it("counts claimed entries within expiry without requiring cleaner deletion", async () => {
     const db = await getTestDatabase();
     await db.insert(rankedPvpQueue).values([
-      { id: "expired", userId: "expired", rankedLp: 1000, createdAt: new Date(Date.now() - 25 * 3_600_000) },
+      {
+        id: "expired",
+        userId: "expired",
+        rankedLp: 1000,
+        createdAt: new Date(Date.now() - 25 * 3_600_000),
+      },
       { id: "live", userId: "live", rankedLp: 1000 },
       { id: "provisional", userId: "provisional", rankedLp: 1000, hasClaimed: false },
     ]);
@@ -194,7 +203,9 @@ describeWithDatabase("ranked queue claims and cleanup", () => {
   });
 
   it("keeps committed joins and leaves successful when push delivery fails", async () => {
-    vi.spyOn(Pusher.prototype, "trigger").mockRejectedValue(new Error("Socket unavailable"));
+    vi.spyOn(Pusher.prototype, "trigger").mockRejectedValue(
+      new Error("Socket unavailable"),
+    );
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     const caller = await callerFor(pvpRankRouter, USER);
     expect((await caller.queueForRankedPvp()).success).toBe(true);

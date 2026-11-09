@@ -14,6 +14,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { NumberInput } from "@/components/ui/number-input";
+import { TRAINING_ARENA_DUMMY_ID } from "@/drizzle/constants";
 import { useAutoCombatSetting } from "@/hooks/combat";
 import { useSleepToggle } from "@/hooks/sleep";
 import { useStartArenaBattle } from "@/hooks/useStartArenaBattle";
@@ -59,7 +60,7 @@ export function TrainingMode({
   const values = useWatch({ control: form.control });
 
   const submit = (data: StatSchemaType) => {
-    if (start({ aiId: TRAINING_DUMMY_ID, stats: data, autoCombat }))
+    if (start({ aiId: TRAINING_ARENA_DUMMY_ID, stats: data, autoCombat }))
       setStatDistribution(data);
   };
 
@@ -204,8 +205,6 @@ export function TrainingMode({
   );
 }
 
-/** The training dummy fought from the arena. */
-const TRAINING_DUMMY_ID = "tra93opw09262024jut5ufa8f";
 const MIN_STAT = 10;
 const PRESETS: DummyPreset[] = ["Minimum", "Like me", "Maximum", "Custom"];
 

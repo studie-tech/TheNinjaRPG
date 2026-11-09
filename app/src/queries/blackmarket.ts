@@ -39,7 +39,7 @@ export const fetchActiveUserOffers = async (client: DrizzleClient, userId: strin
   });
 };
 
-import { asc, desc, gte, isNotNull, lte, sql } from "drizzle-orm";
+import { asc, desc, gte, isNotNull, lte, ne, sql, sum } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import {
@@ -119,8 +119,8 @@ export const selectRyoTradeForGetGraph = (client: Pick<DrizzleClient, "select">)
       receiverUsername: receiver.username,
       senderAvatar: sender.avatar,
       receiverAvatar: receiver.avatar,
-      totalReps: sql<number>`SUM(${ryoTrade.repsForSale})`,
-      totalRyo: sql<number>`SUM(${ryoTrade.requestedRyo})`,
+      totalReps: sum(ryoTrade.repsForSale).mapWith(Number),
+      totalRyo: sum(ryoTrade.requestedRyo).mapWith(Number),
     })
     .from(ryoTrade)
     .innerJoin(sender, eq(ryoTrade.creatorUserId, sender.userId))
@@ -168,118 +168,42 @@ export const deleteRyoTradeForDelistOffer = (
   input: { offerId: string },
 ) => client.delete(ryoTrade).where(eq(ryoTrade.id, input.offerId));
 
-/** Build the `userData` lookup for `takeOffer`, selecting only `userId` and `bank`, using predicates on `userId`. */
-export const findUserDataForTakeOffer = (
+/** Build the `ryoTrade` lookup for `takeOffer`, with the seller's bank for the capacity check. */
+export const findRyoTradeForTakeOffer = (
   client: Pick<DrizzleClient, "query">,
-  offer: { creatorUserId: string },
+  input: { offerId: string },
 ) =>
-  client.query.userData.findFirst({
-    where: eq(userData.userId, offer.creatorUserId),
-    columns: { userId: true, bank: true },
+  client.query.ryoTrade.findFirst({
+    where: eq(ryoTrade.id, input.offerId),
+    with: { creator: { columns: { bank: true } } },
   });
 
 /**
- * Build the `ryoTrade` update for `takeOffer`, setting `purchaserUserId`, using
- * predicates on `id` and `purchaserUserId`.
+ * Execute the `takeOffer` trade as one statement: claim the open offer, debit the buyer's
+ * pocket and credit the seller's bank. Every balance guard sits in the WHERE, so a lost race
+ * on any of the three rows moves nothing.
  */
-export const updateRyoTradeForTakeOffer = (
-  client: Pick<DrizzleClient, "update">,
-  ctx: { userId: string },
-  input: { offerId: string },
+export const executeResultForTakeOffer = (
+  client: Pick<DrizzleClient, "execute">,
+  offer: { id: string; requestedRyo: number; repsForSale: number },
+  buyerId: string,
 ) =>
-  client
-    .update(ryoTrade)
-    .set({ purchaserUserId: ctx.userId })
-    .where(and(eq(ryoTrade.id, input.offerId), isNull(ryoTrade.purchaserUserId)));
-
-/**
- * Build the `userData` update for `takeOffer`, setting `money` and `reputationPoints`,
- * using predicates on `userId` and `money`.
- */
-export const updateUserDataForTakeOffer = (
-  client: Pick<DrizzleClient, "update">,
-  offer: { requestedRyo: number; repsForSale: number },
-  ctx: { userId: string },
-) =>
-  client
-    .update(userData)
-    .set({
-      money: sql`${userData.money} - ${offer.requestedRyo}`,
-      reputationPoints: sql`${userData.reputationPoints} + ${offer.repsForSale}`,
-    })
-    .where(
-      and(eq(userData.userId, ctx.userId), gte(userData.money, offer.requestedRyo)),
-    );
-
-/** Build the `userData` update for `takeOffer`, setting `bank`, using predicates on `userId` and `bank`. */
-export const updateUserDataForTakeOffer2 = (
-  client: Pick<DrizzleClient, "update">,
-  offer: { requestedRyo: number; creatorUserId: string },
-) =>
-  client
-    .update(userData)
-    .set({ bank: sql`${userData.bank} + ${offer.requestedRyo}` })
-    .where(
-      and(
-        eq(userData.userId, offer.creatorUserId),
-        sql`${userData.bank} + ${offer.requestedRyo} <= ${RYO_CAP}`,
-      ),
-    );
-
-/** Build the `ryoTrade` update for `takeOffer`, setting `purchaserUserId`, using predicates on `id`. */
-export const updateRyoTradeForTakeOffer2 = (
-  client: Pick<DrizzleClient, "update">,
-  input: { offerId: string },
-) =>
-  client
-    .update(ryoTrade)
-    .set({ purchaserUserId: null })
-    .where(eq(ryoTrade.id, input.offerId));
-
-/** Build the `userData` update for `takeOffer`, setting `bank`, using predicates on `userId`. */
-export const updateUserDataForTakeOffer3 = (
-  client: Pick<DrizzleClient, "update">,
-  offer: { requestedRyo: number; creatorUserId: string },
-) =>
-  client
-    .update(userData)
-    .set({ bank: sql`${userData.bank} - ${offer.requestedRyo}` })
-    .where(eq(userData.userId, offer.creatorUserId));
-
-/** Build the `userData` update for `takeOffer`, setting `money` and `reputationPoints`, using predicates on `userId`. */
-export const updateUserDataForTakeOffer4 = (
-  client: Pick<DrizzleClient, "update">,
-  offer: { requestedRyo: number; repsForSale: number },
-  ctx: { userId: string },
-) =>
-  client
-    .update(userData)
-    .set({
-      money: sql`${userData.money} + ${offer.requestedRyo}`,
-      reputationPoints: sql`${userData.reputationPoints} - ${offer.repsForSale}`,
-    })
-    .where(eq(userData.userId, ctx.userId));
-
-/** Build the `actionLog` insert for `takeOffer`. */
-export const insertActionLogForTakeOffer = (
-  client: Pick<DrizzleClient, "insert">,
-  ctx: { userId: string },
-  input: { offerId: string },
-  buyerFailed: false | true,
-  sellerFailed: false | true,
-) =>
-  client.insert(actionLog).values({
-    id: nanoid(),
-    userId: ctx.userId,
-    tableName: "ryoTrade",
-    changes: [
-      `Rollback of offer ${input.offerId}`,
-      `Buyer update: ${buyerFailed ? "failed" : "success"}`,
-      `Seller update: ${sellerFailed ? "failed" : "success"}`,
-    ],
-    relatedId: input.offerId,
-    relatedMsg: `Rollback: buyer=${buyerFailed ? "fail" : "ok"}, seller=${sellerFailed ? "fail" : "ok"}`,
-  });
+  client.execute(sql`
+    UPDATE ${ryoTrade}
+    INNER JOIN ${userData} AS buyer ON ${buyer.userId} = ${buyerId}
+    INNER JOIN ${userData} AS creator ON ${creator.userId} = ${ryoTrade.creatorUserId}
+    SET ${ryoTrade.purchaserUserId} = ${buyerId},
+        ${buyer.money} = ${buyer.money} - ${offer.requestedRyo},
+        ${buyer.reputationPoints} = ${buyer.reputationPoints} + ${offer.repsForSale},
+        ${creator.bank} = ${creator.bank} + ${offer.requestedRyo}
+    WHERE ${and(
+      eq(ryoTrade.id, offer.id),
+      isNull(ryoTrade.purchaserUserId),
+      ne(creator.userId, buyer.userId),
+      gte(buyer.money, offer.requestedRyo),
+      lte(creator.bank, RYO_CAP - offer.requestedRyo),
+    )}
+  `);
 
 /** Build the `actionLog` insert for `takeOffer`. */
 export const insertActionLogForTakeOffer2 = (
@@ -314,7 +238,7 @@ export const updateUserDataForChangeUserGender = (
     .update(userData)
     .set({
       gender: input.gender,
-      reputationPoints: sql`reputationPoints - ${COST_CHANGE_GENDER}`,
+      reputationPoints: sql`${userData.reputationPoints} - ${COST_CHANGE_GENDER}`,
     })
     .where(
       and(
@@ -339,7 +263,7 @@ export const updateUserDataForBuySlot = (
     .update(userData)
     .set({
       [slot.column]: sql`${userData[slot.column]} + 1`,
-      reputationPoints: sql`reputationPoints - ${slot.cost}`,
+      reputationPoints: sql`${userData.reputationPoints} - ${slot.cost}`,
     })
     .where(
       and(
@@ -396,7 +320,7 @@ export const updateUserDataForRerollElement = (
   client
     .update(userData)
     .set({
-      reputationPoints: sql`reputationPoints - ${COST_REROLL_ELEMENT}`,
+      reputationPoints: sql`${userData.reputationPoints} - ${COST_REROLL_ELEMENT}`,
       ...element,
     })
     .where(

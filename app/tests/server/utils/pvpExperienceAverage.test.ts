@@ -70,7 +70,9 @@ describe("fetchPvpExperienceAverage instance cache", () => {
         }),
       }),
     } as unknown as Pick<DrizzleClient, "select">;
-    await expect(fetchPvpExperienceAverage(client)).rejects.toThrow("connection dropped");
+    await expect(fetchPvpExperienceAverage(client)).rejects.toThrow(
+      "connection dropped",
+    );
     expect((await fetchPvpExperienceAverage(client)).value).toBe(1500);
     expect(calls).toBe(2);
   });
@@ -89,9 +91,9 @@ describe("fetchPvpExperienceAverage instance cache", () => {
     const covering = getTableConfig(userData).indexes.find(
       (index) => index.config.name === "UserData_pvpExperienceAverage_idx",
     );
-    expect(covering?.config.columns.map((column) => "name" in column && column.name)).toEqual(
-      ["isAi", "pvpExperience"],
-    );
+    expect(
+      covering?.config.columns.map((column) => "name" in column && column.name),
+    ).toEqual(["isAi", "pvpExperience"]);
     expect(hint).toEqual({ forceIndex: covering?.config.name });
   });
 });

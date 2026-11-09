@@ -169,7 +169,6 @@ export const DECORATION_ASSETS_BY_KEY = new Map(
  * placements into the authored Tiled JSON. `chance` gates whether a tile can
  * host the species at all; `scale`/`scaleVariation` produce the stored
  * per-object size; `posVariation` produces the stored horizontal offset.
- * Density and species mix match the legacy runtime scatter.
  */
 export interface DecorationSpecies {
   key: string;
@@ -329,10 +328,10 @@ interface DecorationTileInput {
 }
 
 /**
- * Bake decoration placements for a sector (generator-side). Mirrors the
- * legacy runtime scatter: one roll per tile gates the candidate species,
- * the roll's proximity to each species' half-scale picks the winner, and
- * size/offset jitter is stored explicitly so the render is fully authored.
+ * Bake decoration placements for a sector (generator-side). One roll per
+ * tile gates the candidate species, a second affinity roll's proximity to
+ * each candidate's half-scale picks the winner, and size/offset jitter is
+ * stored explicitly so the render is fully authored.
  * Tiles that are blocked, roads, water, or flagged decoration=false stay
  * clear. Iteration is row-major so output is deterministic per prng seed.
  */
@@ -353,7 +352,7 @@ export const generateDecorationPlacements = (
     if (candidates.length === 0) continue;
     // Pick the species whose size class sits closest to the tile's affinity
     // roll; the jitter breaks ties between same-sized species so all of
-    // them appear (mirrors the legacy runtime scatter)
+    // them appear.
     const affinity = prng();
     const winner = candidates
       .map((candidate) => ({

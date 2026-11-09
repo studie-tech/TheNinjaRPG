@@ -1,5 +1,16 @@
 import { createHash } from "node:crypto";
-import { and, eq, gte, inArray, like, ne, or, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  like,
+  ne,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import {
@@ -246,9 +257,9 @@ import {
   canChangeContent,
   canEditJutsus,
   canModerateReskin,
-  canOnlyEditSelf,
   canReskinFreely,
   canTransferJutsu,
+  isRestrictedToSelf,
 } from "@/utils/permissions";
 import { getNextUserSnapshotAt } from "@/utils/time";
 import {
@@ -258,36 +269,67 @@ import {
 } from "@/validators/combat";
 import {
   createLinkedJutsuSchema,
-  evolveJutsuSchema,
-  getEvolutionsSchema,
-  getJutsuReskinSchema,
   type JutsuFilteringSchema,
   jutsuFilteringSchema,
   jutsuReskinCreateSchema,
+  jutsuReskinUpdateSchema,
   type UserJutsuFilteringSchema,
-  updateJutsuReskinSchema,
-  updateJutsuSchema,
   userJutsuFilteringSchema,
 } from "@/validators/jutsu";
 import {
-  importJutsuLoadoutSchema,
-  previewJutsuLoadoutSchema,
+  LOADOUT_SHARE_MAX_LENGTH,
   renameLoadoutSchema,
   setLoadoutHotkeysSchema,
+  sharedIdSchema,
   sharedJutsuLoadoutTextSchema,
 } from "@/validators/loadout";
 import { idSchema } from "@/validators/misc";
 import { QuestTracker } from "@/validators/objectives";
-import {
-  cancelQueuedJobInputSchema,
-  jutsuTrainingQueueOutputSchema,
-} from "@/validators/train";
+import { cancelQueuedJobInputSchema, queuedJobSchema } from "@/validators/train";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 import { fetchUpdatedUser } from "./profile";
 
-/** "level 3" or "levels 3-5" */
-const formatLevelRange = (from: number, to: number) =>
-  from === to ? `level ${from}` : `levels ${from}-${to}`;
+const jutsuTrainingQueueOutputSchema = z.object({
+  capacity: z.number(),
+  waiting: z.array(
+    queuedJobSchema.extend({
+      jutsuId: z.string(),
+      name: z.string(),
+      image: z.string().nullable(),
+      reservedRyo: z.number(),
+      /** The level this entry trains the jutsu to */
+      level: z.number(),
+    }),
+  ),
+});
+
+/** Defer JSON decoding to preparation so malformed text uses the normal mutation response. */
+const previewJutsuLoadoutSchema = z.object({
+  loadoutId: sharedIdSchema,
+  text: z.string().min(1).max(LOADOUT_SHARE_MAX_LENGTH),
+});
+
+/** Carry the preview fingerprint; the import endpoint recomputes recipient authorization. */
+const importJutsuLoadoutSchema = previewJutsuLoadoutSchema.extend({
+  previewToken: z.string().regex(/^[a-f0-9]{64}$/),
+});
+
+const getEvolutionsSchema = z.object({
+  jutsuId: z.string(),
+});
+
+const evolveJutsuSchema = z.object({
+  userJutsuId: z.string(),
+  evolutionJutsuId: z.string(),
+});
+
+const getJutsuReskinSchema = z.object({ reskinId: z.string() });
+
+const updateJutsuReskinSchema = getJutsuReskinSchema.extend({
+  data: jutsuReskinUpdateSchema,
+});
+
+const updateJutsuSchema = z.object({ id: z.string(), data: JutsuValidator });
 
 export const jutsuRouter = createTRPCRouter({
   getRecentTransfers: protectedProcedure
@@ -515,11 +557,9 @@ export const jutsuRouter = createTRPCRouter({
     .input(idSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      // fetchUpdatedUser (not fetchUser) so the full relations canUseJutsu reads
-      // (bloodline/village/elements) are present for validation, mirroring
-      // toggleEquip. Note this makes the mutation no longer read-only on the user
-      // row: fetchUpdatedUser may persist the usual throttled regen/quest
-      // maintenance (never money/XP/loadout state).
+      // fetchUpdatedUser loads the relations canUseJutsu reads (bloodline/village/
+      // elements), as in toggleEquip. It may persist the usual throttled regen/quest
+      // maintenance on the user row, never money/XP/loadout state.
       const [caps, loadouts, data, userjutsus] = await Promise.all([
         fetchJutsuEquipCaps(ctx.drizzle),
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
@@ -710,7 +750,7 @@ export const jutsuRouter = createTRPCRouter({
       await insertJutsuForCreate(ctx.drizzle, id);
       return { success: true, message: id };
     } else {
-      return { success: false, message: `Not allowed to create jutsu` };
+      return errorResponse(`Not allowed to create jutsu`);
     }
   }),
 
@@ -764,7 +804,9 @@ export const jutsuRouter = createTRPCRouter({
           `Jutsu is being used by: ${blockers.join(", ")}. So you cannot delete it.`,
         );
       }
-      // Mutate
+      // Mutate. The transaction locks the jutsu row before re-reading its reskins, the
+      // lock reskin creation takes first, so no reskin can link to it between the child
+      // check and the delete; a plain DELETE ... NOT EXISTS would check a stale snapshot.
       const deleted = await retryOnDeadlock(() =>
         ctx.drizzle.transaction(async (tx) => {
           await selectJutsuForDelete(tx, input);
@@ -810,7 +852,7 @@ export const jutsuRouter = createTRPCRouter({
           return { success: true, message: "Jutsu forgotten" };
         }
       }
-      return { success: false, message: `Could not find jutsu to delete` };
+      return errorResponse(`Could not find jutsu to delete`);
     }),
 
   getEvolutions: publicProcedure
@@ -1249,7 +1291,7 @@ export const jutsuRouter = createTRPCRouter({
         return errorResponse("Not allowed to edit public user");
       }
       // Roles that can only edit themselves
-      if (canOnlyEditSelf(user.role) && user.userId !== input.userId) {
+      if (isRestrictedToSelf(user.role, user.userId, input.userId)) {
         return errorResponse("You can only edit your own jutsus");
       }
       const userjutsu = userjutsus.find((j) => j.jutsuId === input.jutsuId);
@@ -1651,7 +1693,7 @@ export const jutsuRouter = createTRPCRouter({
       ]);
       const userjutsuObj = findJutsuInTraining(userjutsus, Date.now());
       if (!userjutsuObj) {
-        return { success: false, message: "Not training any jutsu" };
+        return errorResponse("Not training any jutsu");
       }
       await updateUserJutsuForStopTraining(ctx.drizzle, userjutsuObj, ctx);
       // The next queued level starts now instead of in the stopped training's slot.
@@ -2284,7 +2326,7 @@ export const jutsuRouter = createTRPCRouter({
         input,
       );
 
-      // Map back to the previous shape used by the frontend consumer
+      // Nest the joined jutsu, bloodline and user columns as the reskin list expects
       const results = rows
         .filter(
           (row) =>
@@ -2567,7 +2609,7 @@ export const fetchUserJutsus = async (
 };
 
 /**
- * Build the DB filtering array, including new EXCLUSIONS.
+ * Build the include and exclude filter conditions for jutsu queries.
  */
 export const jutsuDatabaseFilter = (
   input?: JutsuFilteringSchema,
@@ -2576,15 +2618,13 @@ export const jutsuDatabaseFilter = (
 ) => {
   return [
     // -----------------------------
-    // Existing "include" conditions
+    // Include conditions
     // -----------------------------
     ...(input?.name
       ? [
           or(
-            like(sql`LOWER(${jutsu.name})`, `%${input.name.toLowerCase()}%`),
-            additionalName
-              ? like(sql`LOWER(${additionalName})`, `%${input.name.toLowerCase()}%`)
-              : undefined,
+            like(jutsu.name, `%${input.name}%`),
+            additionalName ? like(additionalName, `%${input.name}%`) : undefined,
           ),
         ]
       : []),
@@ -2670,28 +2710,10 @@ export const jutsuDatabaseFilter = (
     // Exclude: Single-value cols
     // ---------------------------
     ...(input?.excludedJutsuTypes?.length
-      ? input.excludedJutsuTypes.map((excludedType) =>
-          ne(
-            jutsu.jutsuType,
-            excludedType as
-              | "NORMAL"
-              | "EVENT"
-              | "CLAN"
-              | "SPECIAL"
-              | "BLOODLINE"
-              | "FORBIDDEN"
-              | "LOYALTY"
-              | "AI",
-          ),
-        )
+      ? [notInArray(jutsu.jutsuType, input.excludedJutsuTypes)]
       : []),
     ...(input?.excludedClassifications?.length
-      ? input.excludedClassifications.map((c) =>
-          ne(
-            jutsu.statClassification,
-            c as "None" | "Ninjutsu" | "Genjutsu" | "Taijutsu" | "Bukijutsu",
-          ),
-        )
+      ? [notInArray(jutsu.statClassification, input.excludedClassifications)]
       : []),
     ...(input?.excludedRarities?.length
       ? input.excludedRarities.map((r) =>
@@ -2699,49 +2721,13 @@ export const jutsuDatabaseFilter = (
         )
       : []),
     ...(input?.excludedRanks?.length
-      ? input.excludedRanks.map((r) =>
-          ne(
-            jutsu.requiredRank,
-            r as
-              | "STUDENT"
-              | "GENIN"
-              | "CHUNIN"
-              | "JONIN"
-              | "ELITE JONIN"
-              | "ELDER"
-              | "NONE",
-          ),
-        )
+      ? [notInArray(jutsu.requiredRank, input.excludedRanks)]
       : []),
     ...(input?.excludedMethods?.length
-      ? input.excludedMethods.map((m) =>
-          ne(
-            jutsu.method,
-            m as
-              | "ALL"
-              | "SINGLE"
-              | "AOE_CIRCLE_SPAWN"
-              | "AOE_LINE_SHOOT"
-              | "AOE_WALL_SHOOT"
-              | "AOE_CIRCLE_SHOOT"
-              | "AOE_SPIRAL_SHOOT",
-          ),
-        )
+      ? [notInArray(jutsu.method, input.excludedMethods)]
       : []),
     ...(input?.excludedTargets?.length
-      ? input.excludedTargets.map((t) =>
-          ne(
-            jutsu.target,
-            t as
-              | "SELF"
-              | "OTHER_USER"
-              | "OPPONENT"
-              | "ALLY"
-              | "CHARACTER"
-              | "GROUND"
-              | "EMPTY_GROUND",
-          ),
-        )
+      ? [notInArray(jutsu.target, input.excludedTargets)]
       : []),
 
     // --------------------------
@@ -2925,6 +2911,8 @@ export const rollbackEquipIfOverCap = async (args: {
   return rollback.rowsAffected === 0;
 };
 
+export type TryEquipUserJutsuResult = "equipped" | "already-equipped" | "cap-reached";
+
 /**
  * Equip a single userJutsu row under live equip-cap guards.
  *
@@ -2935,8 +2923,6 @@ export const rollbackEquipIfOverCap = async (args: {
  * back only when it sits outside the first-N kept slots for an exceeded cap
  * (so one concurrent racer keeps the slot).
  */
-export type TryEquipUserJutsuResult = "equipped" | "already-equipped" | "cap-reached";
-
 export const tryEquipUserJutsuAtomically = async (args: {
   client: DrizzleClient;
   userId: string;
@@ -3197,3 +3183,7 @@ const saveJutsuFamily = async (
       };
     }),
   );
+
+/** "level 3" or "levels 3-5" */
+const formatLevelRange = (from: number, to: number) =>
+  from === to ? `level ${from}` : `levels ${from}-${to}`;

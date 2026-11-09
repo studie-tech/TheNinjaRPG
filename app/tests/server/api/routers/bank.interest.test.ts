@@ -1,20 +1,17 @@
-/// <reference types="bun-types/test" />
-
-import { setSystemTime } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, setSystemTime } from "bun:test";
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { RYO_CAP } from "@/drizzle/constants";
 import { dailyBankInterest, userData } from "@/drizzle/schema";
 import { bankRouter, claimBankInterest } from "@/server/api/routers/bank";
 import { getBankInterestDateRange } from "@/utils/time";
 import { insertUsers } from "../../../setup/factories";
+import { failStatements, inTransactions } from "../../../setup/statements";
 import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { inTransactions, failStatements } from "../../../setup/statements";
 
 describe("bank interest UTC window", () => {
   it.each([

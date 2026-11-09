@@ -6,7 +6,6 @@ import {
   GeneralTypes,
   MAX_MASTERY_CAP,
   MAX_MUTED_CONVERSATIONS,
-  SEICHI_SILVER_ADJUST_LIMIT,
   TavernColorPresets,
   UserRanks,
   UserRoles,
@@ -159,21 +158,3 @@ export const tavernColorChangeSchema = z.object({
   currentColor: z.enum(TavernColorPresets),
 });
 export type TavernColorChangeSchema = z.infer<typeof tavernColorChangeSchema>;
-
-export const adjustSeichiSilverSchema = z.object({
-  userId: z.string(),
-  delta: z.coerce
-    .number()
-    .int()
-    .min(-SEICHI_SILVER_ADJUST_LIMIT)
-    .max(SEICHI_SILVER_ADJUST_LIMIT)
-    .refine((d) => d !== 0, { message: "Delta cannot be zero" }),
-  reason: z.string().trim().min(10).max(500),
-});
-
-/** Identify the owner's companion and require an auditable reason for restoring attempts. */
-export const resetPetImageGenerationSchema = z.object({
-  userId: z.string().min(1),
-  petId: z.string().min(1),
-  reason: z.string().trim().min(10).max(500),
-});

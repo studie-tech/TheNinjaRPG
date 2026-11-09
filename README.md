@@ -1,6 +1,6 @@
 # :tada: TheNinja-RPG - Core 4 :tada:
 
-This is the official source code for the game [www.TheNinja-RPG.com](www.TheNinja-RPG.com).
+This is the official source code for the game [www.TheNinja-RPG.com](https://www.theninja-rpg.com).
 
 # :computer: Setting up locally
 
@@ -21,7 +21,7 @@ make start PORT=3000 # Start development server in the foreground
 ```
 
 - Go to `http://localhost:3000` to view the site (use `localhost`, not `127.0.0.1`, or Next.js chunks 403)
-- Go to `http://127.0.0.1:3001` to manage the database
+- Go to `http://127.0.0.1:3005` to manage the database
 
 For parallel Git worktrees, use `make dev-up` to allocate a port and start or reuse a
 background server. `make dev-status` prints its URL and live log path; `make dev-down`
@@ -38,21 +38,11 @@ the minimum version in `app/package.json`. Installation uses the committed lockf
 with `--frozen-lockfile`; dependency changes go through `make bun add <package>`.
 
 `make deps-upgrade` uses the pinned `npm-check-updates` to query the registry's
-`latest` releases for both npm manifests, including overrides and resolutions,
+`latest` releases for both npm manifests, including overrides,
 then refreshes their Bun lockfiles. `node scripts/deps-upgrade.mjs --check` checks
 the manifests without changing files. Review upstream migration guides and rebase
 versioned patches before running `make check` and `make test`. Native dependencies
 also require `make mobile-sync` and the checks documented in `mobile/README.md`.
-
-The PlanetScale client factory in `app/src/server/dbClient.ts` adapts Drizzle's
-parameterized calls to driver 2's SQL-only `execute` API. It binds values with
-`sql-escaper` in UTC on the client and its transaction objects, retaining Drizzle's
-result modes and transaction handling. Use the factory when constructing clients
-for Drizzle; `tests/server/planetscaleDriver.test.ts` covers the integration.
-
-Content editor hooks explicitly register parent-owned object fields even while
-their conditional editors are hidden. This preserves dirty tracking and validation
-when clearing targeting drafts; see `tests/hooks/coordinate-targeting.test.tsx`.
 
 The [dev-server skill](.agents/skills/tnr-dev-server/SKILL.md) documents disposable users,
 authenticated endpoint calls, Chrome coordination and Codex local environments.
@@ -68,12 +58,10 @@ shows all five designs. Their identifiers are `default`, `pixel`,
 `app/src/libs/gameLayouts.ts` defines their names, appearance, frame selection and
 responsive behavior; every game frame uses the same controller and layout preference.
 
-Visitors without a saved choice receive the existing welcome design. To set a different
-welcome default, set `NEXT_PUBLIC_WELCOME_LAYOUT` to any layout identifier
-and restart the dev server or rebuild the deployment. A visitor's explicit choice takes
-precedence. Unset or unrecognized values preserve the existing default. Search crawlers
-continue to receive the default public shell. Signing out returns to the public welcome
-page and preserves the selected layout.
+`NEXT_PUBLIC_WELCOME_LAYOUT` sets the welcome design for visitors without a saved choice;
+unset or unrecognized values use `default`, and changes need a dev server restart or a
+rebuild. A visitor's explicit choice takes precedence. Search crawlers receive the default
+public shell. Signing out returns to the public welcome page with the selected layout.
 
 # :books: Learning Guide
 

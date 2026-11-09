@@ -1,13 +1,13 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
 import {
   QueryClient,
   QueryClientProvider,
-  useQuery,
   type UseQueryOptions,
+  useQuery,
 } from "@tanstack/react-query";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import * as trpc from "@trpc/react-query";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import * as pusher from "@/layout/PusherHandler";
@@ -19,7 +19,10 @@ type Snapshot = {
   userData: { userId: string } | null;
 };
 
-const key: ReturnType<typeof trpc.getQueryKey> = [["profile", "getUser"], { type: "query" }];
+const key: ReturnType<typeof trpc.getQueryKey> = [
+  ["profile", "getUser"],
+  { type: "query" },
+];
 const clients: QueryClient[] = [];
 const push = vi.fn();
 

@@ -9,26 +9,6 @@ import { calculateContentDiff } from "@/utils/diff";
 import type { ZodGuideArticleInput, ZodGuideArticleType } from "@/validators/guide";
 import { GuideArticleValidator } from "@/validators/guide";
 
-const toFormValues = (article: GuideArticle): ZodGuideArticleInput => ({
-  slug: article.slug,
-  title: article.title,
-  subtitle: article.subtitle ?? "",
-  excerpt: article.excerpt ?? "",
-  seoTitle: article.seoTitle ?? "",
-  seoDescription: article.seoDescription ?? "",
-  category: article.category,
-  content: article.content,
-  image: article.image ?? "",
-  faq: article.faq ?? [],
-  sortOrder: article.sortOrder,
-  published: article.published,
-  relatedBloodlineId: article.relatedBloodlineId ?? "",
-  relatedItemId: article.relatedItemId ?? "",
-  relatedJutsuId: article.relatedJutsuId ?? "",
-  sourceUrl: article.sourceUrl ?? "",
-  reviewNotes: article.reviewNotes ?? "",
-});
-
 export const useGuideEditForm = (article: GuideArticle, refetch: () => void) => {
   const form = useForm<ZodGuideArticleInput, unknown, ZodGuideArticleType>({
     mode: "all",
@@ -139,3 +119,23 @@ export const useGuideEditForm = (article: GuideArticle, refetch: () => void) => 
 
   return { article, form, formData, handleGuideSubmit, isPending };
 };
+
+const toFormValues = (article: GuideArticle): ZodGuideArticleInput => ({
+  slug: article.slug,
+  title: article.title,
+  subtitle: article.subtitle ?? "",
+  excerpt: article.excerpt ?? "",
+  seoTitle: article.seoTitle ?? "",
+  seoDescription: article.seoDescription ?? "",
+  category: article.category,
+  content: article.content,
+  image: article.image ?? "",
+  faq: article.faq ?? [],
+  sortOrder: article.sortOrder,
+  published: article.published,
+  relatedBloodlineId: article.relatedBloodlineId ?? "",
+  relatedItemId: article.relatedItemId ?? "",
+  relatedJutsuId: article.relatedJutsuId ?? "",
+  sourceUrl: article.sourceUrl ?? "",
+  reviewNotes: article.reviewNotes ?? "",
+});

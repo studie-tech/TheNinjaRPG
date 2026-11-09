@@ -1,10 +1,15 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs/server";
 import * as ai from "ai";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { POST } from "@/app/api/chat/support/route";
 import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
 
-const mocks = { auth: Object.assign(vi.fn(), { protect: vi.fn() }), streamText: vi.fn(), update: vi.fn(), claim: vi.fn() };
+const mocks = {
+  auth: Object.assign(vi.fn(), { protect: vi.fn() }),
+  streamText: vi.fn(),
+  update: vi.fn(),
+  claim: vi.fn(),
+};
 
 const post = () =>
   POST(

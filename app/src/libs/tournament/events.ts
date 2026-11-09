@@ -139,6 +139,11 @@ export const generateEventBracket = (
       seriesId: series.id,
       result,
     });
+    // Single elimination numbers winners rounds r + 1. Double elimination numbers rounds
+    // on one timeline shared by both brackets: winners rounds 1, 2, 4, 6, ..., the first
+    // losers round 2, each drop-in losers round r * 2 + 1, each merge round r * 2 + 2,
+    // and the final after the last of them. Series with the same number form one event
+    // round, and roundBestOf[round - 1] applies to all of them in both brackets.
     for (let r = 0; 2 ** r < size; r++) {
       const round = r < 2 ? r + 1 : r * 2;
       const previous = winners[r - 1];

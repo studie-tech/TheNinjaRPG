@@ -190,10 +190,9 @@ const transferRyo = async (
   if (block) return errorResponse(block);
   const result = await updateUserDataForTransferRyo(client, fromPocket, value, userId);
   if (result.rowsAffected === 0) {
-    return {
-      success: false,
-      message: fromPocket ? "Not enough money in pocket" : "Not enough money in bank",
-    };
+    return errorResponse(
+      fromPocket ? "Not enough money in pocket" : "Not enough money in bank",
+    );
   }
   const updatedUser = await fetchUserBalances(client, userId);
   return {

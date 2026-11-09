@@ -1,12 +1,12 @@
-import { tryToParsePath } from "next/dist/lib/try-to-parse-path";
 import { describe, expect, it } from "bun:test";
+import { tryToParsePath } from "next/dist/lib/try-to-parse-path";
 import { SHELL_PARAMS } from "@/libs/shell";
 import { config, isUnshelledPath } from "../../src/proxy";
 
 describe("isUnshelledPath", () => {
   // The matcher admits these so Clerk can attach its context; rewriting them to a
-  // shell variant turned every tRPC call into a 404 page, which the client parsed as an
-  // error and sent signed-in visitors to /500.
+  // shell variant would turn every tRPC call into a 404 page, which the client parses as
+  // an error and sends signed-in visitors to /500.
   it.each([
     "/api/trpc/profile.getUser",
     "/api/trpc/profile.getUser,home.getUserHome",
@@ -70,9 +70,7 @@ describe("proxy matcher", () => {
     // Vercel BotID's challenge and proxy paths, rewritten by withBotId in next.config.mjs.
     "/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/a-4-a/c.js",
     "/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/fp",
-  ])("skips %s, which is served without the middleware",
-    (path) => {
-      expect(admits(path)).toBe(false);
-    },
-  );
+  ])("skips %s, which is served without the middleware", (path) => {
+    expect(admits(path)).toBe(false);
+  });
 });

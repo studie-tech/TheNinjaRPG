@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { setAtPath as setInPlace } from "../../../.github/scripts/proposal-paths.mjs";
 import { setAtPath } from "@/libs/contentReview/paths";
+import { setAtPath as setInPlace } from "../../../.github/scripts/proposal-paths.mjs";
 
 const fields = () => ({
   name: "Fireball",

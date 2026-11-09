@@ -1,7 +1,6 @@
-
+import { beforeEach, describe, expect, it } from "bun:test";
 import { asc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { beforeEach, describe, expect, it } from "bun:test";
 import {
   actionLog,
   historicalIp,
@@ -65,10 +64,16 @@ describe("isKnownIp", () => {
 describe("toRecruitEligibilityDisplay", () => {
   it("never shows more than eligible, shared IP or unverified", () => {
     expect(
-      toRecruitEligibilityDisplay({ isEligible: true, eligibilityReason: "IP_UNKNOWN" }),
+      toRecruitEligibilityDisplay({
+        isEligible: true,
+        eligibilityReason: "IP_UNKNOWN",
+      }),
     ).toBe("ELIGIBLE");
     expect(
-      toRecruitEligibilityDisplay({ isEligible: false, eligibilityReason: "SHARED_IP" }),
+      toRecruitEligibilityDisplay({
+        isEligible: false,
+        eligibilityReason: "SHARED_IP",
+      }),
     ).toBe("SHARED_IP");
     expect(
       toRecruitEligibilityDisplay({
@@ -83,7 +88,10 @@ describe("toRecruitEligibilityDisplay", () => {
       }),
     ).toBe("UNVERIFIED");
     expect(
-      toRecruitEligibilityDisplay({ isEligible: false, eligibilityReason: "SELF_REFERRAL" }),
+      toRecruitEligibilityDisplay({
+        isEligible: false,
+        eligibilityReason: "SELF_REFERRAL",
+      }),
     ).toBe("UNVERIFIED");
     expect(toRecruitEligibilityDisplay(undefined)).toBe("UNVERIFIED");
   });
@@ -123,9 +131,12 @@ const insertReferral = async (
     : "SHARED_IP",
 ) => {
   const database = await getTestDatabase();
-  await database
-    .insert(recruitReferral)
-    .values({ recruitUserId: RECRUIT, recruiterId: RECRUITER, isEligible, eligibilityReason });
+  await database.insert(recruitReferral).values({
+    recruitUserId: RECRUIT,
+    recruiterId: RECRUITER,
+    isEligible,
+    eligibilityReason,
+  });
 };
 
 const award = async (rank: Parameters<typeof milestonesReachedAt>[0]) =>
@@ -194,7 +205,11 @@ describeWithDatabase("awardRecruitRankMilestones", () => {
 
   it("pays every milestone below a rank reached by skipping ranks", async () => {
     await insertReferral(true);
-    expect((await award("ELDER")).map((o) => o.rank)).toEqual(["GENIN", "CHUNIN", "JONIN"]);
+    expect((await award("ELDER")).map((o) => o.rank)).toEqual([
+      "GENIN",
+      "CHUNIN",
+      "JONIN",
+    ]);
     expect((await recruiterRow()).reputationPointsTotal).toBe(16);
     expect((await award("ELITE JONIN")).map((o) => o.rank)).toEqual(["ELITE JONIN"]);
     expect((await recruiterRow()).reputationPointsTotal).toBe(26);
@@ -296,8 +311,18 @@ describeWithDatabase("awardRecruitRankMilestones", () => {
     await insertReferral(true);
     const database = await getTestDatabase();
     await database.insert(recruitRankMilestone).values([
-      { recruitUserId: RECRUIT, recruiterId: RECRUITER, rank: "GENIN", status: "PRE_EXISTING" },
-      { recruitUserId: RECRUIT, recruiterId: RECRUITER, rank: "CHUNIN", status: "PRE_EXISTING" },
+      {
+        recruitUserId: RECRUIT,
+        recruiterId: RECRUITER,
+        rank: "GENIN",
+        status: "PRE_EXISTING",
+      },
+      {
+        recruitUserId: RECRUIT,
+        recruiterId: RECRUITER,
+        rank: "CHUNIN",
+        status: "PRE_EXISTING",
+      },
     ]);
     expect(await award("CHUNIN")).toEqual([]);
     expect(await award("JONIN")).toEqual([
@@ -329,7 +354,10 @@ describeWithDatabase("awardRecruitRankMilestones", () => {
   it("summarises eligibility and milestones for the recruiter only", async () => {
     await insertReferral(true);
     await award("GENIN");
-    const summary = await fetchRecruitMilestoneSummary(await getTestDatabase(), RECRUITER);
+    const summary = await fetchRecruitMilestoneSummary(
+      await getTestDatabase(),
+      RECRUITER,
+    );
     expect(summary).toEqual([
       {
         recruitUserId: RECRUIT,
@@ -345,7 +373,7 @@ describeWithDatabase("awardRecruitRankMilestones", () => {
           },
           ...(["CHUNIN", "JONIN", "ELITE JONIN"] as const).map((rank) => ({
             rank,
-            reputation: rank === "CHUNIN" ? 5 as const : 10 as const,
+            reputation: rank === "CHUNIN" ? (5 as const) : (10 as const),
             reached: false,
             paid: false,
             status: null,
@@ -354,7 +382,9 @@ describeWithDatabase("awardRecruitRankMilestones", () => {
         ],
       },
     ]);
-    expect(await fetchRecruitMilestoneSummary(await getTestDatabase(), OTHER)).toEqual([]);
+    expect(await fetchRecruitMilestoneSummary(await getTestDatabase(), OTHER)).toEqual(
+      [],
+    );
   });
 });
 
@@ -364,7 +394,12 @@ describeWithDatabase("checkRecruitSignupEligibility", () => {
     await insertUsers([
       { userId: RECRUITER, username: "recruiter", lastIp: "198.51.100.1" },
       { userId: OTHER, username: "other", lastIp: "198.51.100.2" },
-      { userId: RECRUIT, username: "recruit", lastIp: SIGNUP_IP, recruiterId: RECRUITER },
+      {
+        userId: RECRUIT,
+        username: "recruit",
+        lastIp: SIGNUP_IP,
+        recruiterId: RECRUITER,
+      },
     ]);
   });
 
@@ -384,7 +419,10 @@ describeWithDatabase("checkRecruitSignupEligibility", () => {
         .values({ userId: RECRUIT, ip: SIGNUP_IP, ipHash: hashIp(SIGNUP_IP) }),
       database.insert(visitorLog).values({ id: nanoid(), ipHash: hashIp(SIGNUP_IP) }),
     ]);
-    expect(await check(SIGNUP_IP)).toEqual({ isEligible: true, reason: "IP_NOT_SHARED" });
+    expect(await check(SIGNUP_IP)).toEqual({
+      isEligible: true,
+      reason: "IP_NOT_SHARED",
+    });
   });
 
   it("is ineligible when another account's IP history holds the signup IP", async () => {

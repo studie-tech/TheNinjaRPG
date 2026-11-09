@@ -1,23 +1,23 @@
 import { describe, expect, it } from "bun:test";
 import {
-  MASTERY_RANKS,
   MASTERY_RANK_CAPS,
+  MASTERY_RANKS,
   MasteryNames,
   TOTAL_MASTERY_CAP,
 } from "@/drizzle/constants";
+import type { UserData } from "@/drizzle/schema";
+import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
 import {
   allocateMasteryGains,
   canPromoteMastery,
   masteryGainRoom,
   masteryTotal,
 } from "@/libs/masteryProgression";
-import { masteryQuestTemplates } from "../setup/mastery";
-import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
 import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { collapseRewards } from "@/libs/rewards";
-import { ObjectiveReward } from "@/validators/rewards";
 import { QuestReward } from "@/validators/rewardPackages";
-import type { UserData } from "@/drizzle/schema";
+import { ObjectiveReward } from "@/validators/rewards";
+import { masteryQuestTemplates } from "../setup/mastery";
 
 const masteries = (value = 0) =>
   Object.fromEntries(MasteryNames.map((stat) => [stat, value]));
@@ -212,7 +212,9 @@ describe("earned mastery progression", () => {
     expect(
       isAvailableUserQuests(
         packaged,
-        user({ masteryRanks: { ninjutsuMastery: "NOVICE", genjutsuMastery: "NOVICE" } }),
+        user({
+          masteryRanks: { ninjutsuMastery: "NOVICE", genjutsuMastery: "NOVICE" },
+        }),
       ).check,
     ).toBe(true);
     expect(
@@ -226,24 +228,53 @@ describe("earned mastery progression", () => {
   it("keeps alternative choice promotions out of the fixed completion gate", () => {
     const template = masteryQuestTemplates()[1]!;
     const packages = ["ninjutsuMastery", "genjutsuMastery"].map((stat) => ({
-      id: stat, packageId: stat, name: stat, description: "",
-      rewards: ObjectiveReward.parse({ reward_mastery_stat: stat, reward_mastery_rank: "ADEPT" }),
+      id: stat,
+      packageId: stat,
+      name: stat,
+      description: "",
+      rewards: ObjectiveReward.parse({
+        reward_mastery_stat: stat,
+        reward_mastery_rank: "ADEPT",
+      }),
     }));
     const player = user({ masteryRanks: { genjutsuMastery: "NOVICE" } });
     const choice = {
-      ...template, hidden: false, requiredNinjutsuMastery: 0,
-      content: { ...template.content, rewardMode: "choose" as const,
-        reward: QuestReward.parse({ reward_packages: packages }) },
+      ...template,
+      hidden: false,
+      requiredNinjutsuMastery: 0,
+      content: {
+        ...template.content,
+        rewardMode: "choose" as const,
+        reward: QuestReward.parse({ reward_packages: packages }),
+      },
     };
     for (const alternatives of [packages, [...packages].reverse()]) {
-      const quest = { ...choice, content: { ...choice.content,
-        reward: QuestReward.parse({ reward_packages: alternatives }) } };
+      const quest = {
+        ...choice,
+        content: {
+          ...choice.content,
+          reward: QuestReward.parse({ reward_packages: alternatives }),
+        },
+      };
       expect(isAvailableUserQuests(quest, player).check).toBe(true);
-      const fixed = { ...quest, content: { ...quest.content,
-        reward: QuestReward.parse({ reward_mastery_stat: "ninjutsuMastery",
-          reward_mastery_rank: "ADEPT", reward_packages: alternatives }) } };
+      const fixed = {
+        ...quest,
+        content: {
+          ...quest.content,
+          reward: QuestReward.parse({
+            reward_mastery_stat: "ninjutsuMastery",
+            reward_mastery_rank: "ADEPT",
+            reward_packages: alternatives,
+          }),
+        },
+      };
       expect(isAvailableUserQuests(fixed, player).check).toBe(false);
-      expect(isAvailableUserQuests(fixed, user({ masteryRanks: { ninjutsuMastery: "NOVICE" } })).check).toBe(true);
+      expect(
+        isAvailableUserQuests(
+          fixed,
+          user({ masteryRanks: { ninjutsuMastery: "NOVICE" } }),
+        ).check,
+      ).toBe(true);
     }
   });
 

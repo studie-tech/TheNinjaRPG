@@ -3,25 +3,47 @@ import { eq } from "drizzle-orm";
 import { battleHistory, userData } from "@/drizzle/schema";
 import { combatRouter } from "@/server/api/routers/combat";
 import { insertUsers } from "../../../../setup/factories";
-import { callerFor, describeWithDatabase, getTestDatabase, recordQueries, resetTables } from "../../../../setup/testDatabase";
+import {
+  callerFor,
+  describeWithDatabase,
+  getTestDatabase,
+  recordQueries,
+  resetTables,
+} from "../../../../setup/testDatabase";
 
 const createdAt = new Date("2026-01-01T12:00:00.123Z");
-const seed = async (ids: number[], extra: Partial<typeof battleHistory.$inferInsert> = {}) => {
+const seed = async (
+  ids: number[],
+  extra: Partial<typeof battleHistory.$inferInsert> = {},
+) => {
   const db = await getTestDatabase();
-  await db.insert(battleHistory).values(ids.map((id) => ({
-    id, createdAt, battleId: `battle-${id}`, battleType: "COMBAT" as const,
-    attackedId: "actor", defenderId: "opponent", ...extra,
-  })));
+  await db.insert(battleHistory).values(
+    ids.map((id) => ({
+      id,
+      createdAt,
+      battleId: `battle-${id}`,
+      battleType: "COMBAT" as const,
+      attackedId: "actor",
+      defenderId: "opponent",
+      ...extra,
+    })),
+  );
 };
 
-const page = async (input: Parameters<ReturnType<typeof combatRouter.createCaller>["getBattleHistory"]>[0] = {}) =>
-  (await callerFor(combatRouter, "actor")).getBattleHistory(input);
+const page = async (
+  input: Parameters<
+    ReturnType<typeof combatRouter.createCaller>["getBattleHistory"]
+  >[0] = {},
+) => (await callerFor(combatRouter, "actor")).getBattleHistory(input);
 
 describeWithDatabase("battle history pagination", () => {
   afterEach(() => vi.restoreAllMocks());
   beforeEach(async () => {
     await resetTables(battleHistory, userData);
-    await insertUsers([{ userId: "actor", username: "Actor" }, { userId: "opponent", username: "Opponent" }]);
+    await insertUsers([
+      { userId: "actor", username: "Actor" },
+      { userId: "opponent", username: "Opponent" },
+    ]);
   });
 
   it("orders equal timestamps by ID and continues after inserts and deleting the cursor row", async () => {
@@ -35,7 +57,9 @@ describeWithDatabase("battle history pagination", () => {
     await db.delete(battleHistory).where(eq(battleHistory.id, 4));
     const second = await page({ limit: 2, cursor: first.nextCursor });
     const third = await page({ limit: 2, cursor: second.nextCursor });
-    expect([...first.data, ...second.data, ...third.data].map((row) => row.id)).toEqual([5, 4, 3, 2, 1, 6]);
+    expect([...first.data, ...second.data, ...third.data].map((row) => row.id)).toEqual(
+      [5, 4, 3, 2, 1, 6],
+    );
     expect(third.nextCursor).toBeUndefined();
     expect((await page()).data[0]?.id).toBe(7);
   });
@@ -58,12 +82,24 @@ describeWithDatabase("battle history pagination", () => {
 
   it("retains user/type filters on every page, including defender and deleted-user history", async () => {
     await seed([1, 2], { battleType: "RANKED_PVP" });
-    await seed([3], { attackedId: "deleted-user", defenderId: "actor", battleType: "RANKED_PVP" });
+    await seed([3], {
+      attackedId: "deleted-user",
+      defenderId: "actor",
+      battleType: "RANKED_PVP",
+    });
     await seed([4], { battleType: "ARENA" });
     await seed([5], { attackedId: "other", battleType: "RANKED_PVP" });
     const first = await page({ combatTypes: ["RANKED_PVP"], limit: 1 });
-    expect(first.data[0]).toMatchObject({ id: 3, attacker: null, defender: { userId: "actor" } });
-    const second = await page({ combatTypes: ["RANKED_PVP"], limit: 1, cursor: first.nextCursor });
+    expect(first.data[0]).toMatchObject({
+      id: 3,
+      attacker: null,
+      defender: { userId: "actor" },
+    });
+    const second = await page({
+      combatTypes: ["RANKED_PVP"],
+      limit: 1,
+      cursor: first.nextCursor,
+    });
     expect(second.data.map((row) => row.id)).toEqual([2]);
     expect((await page({ userId: "other" })).data.map((row) => row.id)).toEqual([5]);
     expect((await page({ combatTypes: [] })).data).toEqual([]);
@@ -75,14 +111,22 @@ describeWithDatabase("battle history pagination", () => {
     await seed([2], { createdAt: new Date(now - 120_000) });
     await seed([3], { createdAt: new Date(now - 4 * 3600_000) });
     expect((await page({ secondsBack: 60 })).data.map((row) => row.id)).toEqual([1]);
-    expect((await page({ secondsBack: 10800 })).data.map((row) => row.id)).toEqual([1, 2]);
+    expect((await page({ secondsBack: 10800 })).data.map((row) => row.id)).toEqual([
+      1, 2,
+    ]);
     expect((await page({ secondsBack: 0 })).data).toEqual([]);
     expect((await page()).data.map((row) => row.id)).toEqual([1, 2, 3]);
   });
 
   it("rejects invalid sizes, cursors and negative windows", async () => {
-    for (const input of [{ limit: 0 }, { limit: 101 }, { limit: 1.5 }, { secondsBack: -1 },
-      { cursor: { id: 0, createdAt } }, { cursor: { id: 1.5, createdAt } }]) {
+    for (const input of [
+      { limit: 0 },
+      { limit: 101 },
+      { limit: 1.5 },
+      { secondsBack: -1 },
+      { cursor: { id: 0, createdAt } },
+      { cursor: { id: 1.5, createdAt } },
+    ]) {
       await expect(page(input)).rejects.toMatchObject({ code: "BAD_REQUEST" });
     }
   });

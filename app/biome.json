@@ -10,7 +10,13 @@
     "ignoreUnknown": true,
     "includes": [
       "src/**/*.ts",
-      "src/**/*.tsx"
+      "src/**/*.tsx",
+      "tests/**/*.ts",
+      "tests/**/*.tsx",
+      "tests/**/*.mjs",
+      "drizzle/**/*.ts",
+      "!drizzle/migrations/**",
+      "drizzle.config.ts"
     ]
   },
   "formatter": {
@@ -93,12 +99,46 @@
       "includes": [
         "src/libs/native/**",
         "src/layout/Link.tsx",
-        "src/utils/routing.ts"
+        "src/utils/routing.ts",
+        "tests/libs/native/**",
+        "tests/layout/navigation.test.tsx"
       ],
       "linter": {
         "rules": {
           "style": {
             "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "tests/**"
+      ],
+      "linter": {
+        "rules": {
+          "a11y": "off",
+          "correctness": {
+            "noComponentHookFactories": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off"
+          },
+          "suspicious": {
+            "noThenProperty": "off",
+            "useIterableCallbackReturn": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "tests/server/**"
+      ],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useHookAtTopLevel": "off"
           }
         }
       }

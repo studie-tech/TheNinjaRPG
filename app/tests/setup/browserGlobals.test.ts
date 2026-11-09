@@ -23,7 +23,12 @@ describe("browser globals", () => {
   it("removes stubs for globals that did not exist and restores replaced ones", () => {
     const hadResizeObserver = "ResizeObserver" in globalThis;
     const scroll = () => undefined;
-    installBrowserGlobals({ events: ["CustomEvent"], resizeObserver: true, scrollIntoView: scroll, animationFrame: true });
+    installBrowserGlobals({
+      events: ["CustomEvent"],
+      resizeObserver: true,
+      scrollIntoView: scroll,
+      animationFrame: true,
+    });
     expect(globalThis.Event).toBe(nativeEvent);
     expect(globalThis.CustomEvent).toBe(window.CustomEvent);
     expect(new ResizeObserver(() => undefined).observe).toBeTypeOf("function");

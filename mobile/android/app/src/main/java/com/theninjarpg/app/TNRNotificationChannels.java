@@ -19,8 +19,10 @@ import java.util.List;
  * Having one channel per category is also what makes the in-app toggles and the OS
  * notification settings agree: muting "Village wars" in either place mutes the same thing.
  *
- * The one channel that is not a category is LIVE_UPDATES_CHANNEL, which carries the
- * ongoing countdown cards this app posts locally rather than anything the server sends.
+ * The one channel in this list that is not a category is LIVE_UPDATES_CHANNEL, which
+ * carries the ongoing countdown cards this app posts locally rather than anything the
+ * server sends. TNRAudioService registers its own "playback" channel when the service
+ * is created.
  */
 final class TNRNotificationChannels {
 

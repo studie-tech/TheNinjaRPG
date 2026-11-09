@@ -96,6 +96,7 @@ import {
 } from "@/queries/village";
 import { initiateBattle } from "@/routers/combat";
 import { fetchUpdatedUser } from "@/routers/profile";
+import { fetchActiveWars } from "@/routers/war";
 import {
   createTRPCRouter,
   errorResponse,
@@ -112,11 +113,18 @@ import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { shrineLobbyFreshAfter } from "@/server/utils/shrine";
 // Pusher instance
 import { findRelationship } from "@/utils/alliance";
+import { isKage } from "@/utils/kage";
 import { canSeeSecretData } from "@/utils/permissions";
 import { secondsFromDate } from "@/utils/time";
-import { getBoostTemplateSchema, setBoostTemplateSchema } from "@/validators/shrine";
+import { boostTemplateSchema } from "@/validators/shrine";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-import { fetchActiveWars } from "./war";
+
+const getBoostTemplateSchema = z.object({ villageId: z.string() });
+
+const setBoostTemplateSchema = z.object({
+  villageId: z.string(),
+  template: boostTemplateSchema,
+});
 
 const pusher = getServerPusher();
 
@@ -167,7 +175,7 @@ export const shrineRouter = createTRPCRouter({
       if (targetSector.shrineLevel >= SHRINE_MAX_LEVEL) {
         return errorResponse(`Shrine level cannot exceed ${SHRINE_MAX_LEVEL}`);
       }
-      if (user.village?.kageId !== user.userId) {
+      if (!user.village || !isKage(user)) {
         return errorResponse("Only the Kage can upgrade shrines");
       }
       if (user.village.tokens < SHRINE_UPGRADE_COST) {
@@ -235,7 +243,7 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse("You can only activate boosts for your own village");
       }
       if (!user.village) return errorResponse("Village not found");
-      if (user.village.kageId !== user.userId && user.rank !== "ELDER") {
+      if (!isKage(user) && user.rank !== "ELDER") {
         return errorResponse("Only the Kage or Elders can activate boosts");
       }
       if (!hasShrine) {
@@ -304,7 +312,7 @@ export const shrineRouter = createTRPCRouter({
       if (!user) return errorResponse("User not found");
       if (!user.village || !user.villageId)
         return errorResponse("You must be in a village");
-      if (user.village.kageId !== user.userId) {
+      if (!isKage(user)) {
         return errorResponse("Only the Kage can unlock AI defenders");
       }
       if (user.village.tokens < SHRINE_AI_UNLOCK_COST) {
@@ -364,7 +372,7 @@ export const shrineRouter = createTRPCRouter({
       if (!user) return errorResponse("User not found");
       if (!user.village || !user.villageId)
         return errorResponse("You must be in a village");
-      if (user.village.kageId !== user.userId) {
+      if (!isKage(user)) {
         return errorResponse("Only the Kage can manage AI defenders");
       }
 
@@ -444,7 +452,7 @@ export const shrineRouter = createTRPCRouter({
           "You can only pay maintenance for your own village's sectors",
         );
       }
-      if (user.village.kageId !== user.userId) {
+      if (!isKage(user)) {
         return errorResponse("Only the Kage can pay shrine maintenance");
       }
       if (targetSector.shrineLevel <= 0) {
@@ -552,7 +560,7 @@ export const shrineRouter = createTRPCRouter({
         return errorResponse("You can only set boost templates for your own village");
       }
       if (!user.village) return errorResponse("Village not found");
-      if (user.village.kageId !== user.userId && user.rank !== "ELDER") {
+      if (!isKage(user) && user.rank !== "ELDER") {
         return errorResponse("Only the Kage or Elders can set boost templates");
       }
       if (!hasShrine) {
@@ -1052,7 +1060,6 @@ export const shrineRouter = createTRPCRouter({
     }),
 
   // Initiate shrine battle (start the battle after lobby time)
-  // Fixed double-start race with atomic claim BEFORE initiateBattle()
   initiateShrineBattle: protectedProcedure
     .meta({ mcp: { description: "Start a shrine battle" } })
     .input(z.object({ shrineBattleId: z.string() }))

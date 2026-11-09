@@ -10,13 +10,19 @@ describe("deriveOverworldOpponents", () => {
       aiByPlacement,
     );
     const [first] = objectives;
-    expect(first?.opponentAIs).toEqual<Array<{ ids: string[]; number: number }>>([{ ids: ["ai-1"], number: 1 }]);
+    expect(first?.opponentAIs).toEqual<Array<{ ids: string[]; number: number }>>([
+      { ids: ["ai-1"], number: 1 },
+    ]);
     expect(missing).toEqual([]);
   });
 
   it("leaves unbound objectives untouched", () => {
     const input = [
-      { task: "defeat_opponents", overworldPlacementId: "", opponentAIs: [{ ids: ["x"], number: 2 }] },
+      {
+        task: "defeat_opponents",
+        overworldPlacementId: "",
+        opponentAIs: [{ ids: ["x"], number: 2 }],
+      },
       { task: "dialog", overworldPlacementId: "place-1" },
     ];
     const { objectives, missing } = deriveOverworldOpponents(input, aiByPlacement);
