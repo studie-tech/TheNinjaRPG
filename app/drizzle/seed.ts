@@ -25,7 +25,7 @@ async function main() {
   await seedGuides(drizzleDB);
 }
 
-// Run the seeding & close databse connection
+// Run all seeds, then exit the process
 main()
   .then(() => process.exit(0))
   .catch((e) => {

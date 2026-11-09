@@ -2,7 +2,7 @@ import { quest } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { executeSqlDump } from "./sqlDump";
 
-// Delete anything not in above list, and insert those missing
+/** Reloads the Quest catalogue from its checked-in SQL content dump. */
 export const seedQuests = async (client: DrizzleClient) => {
   console.log("\nClearing old quests...");
   await client.delete(quest);

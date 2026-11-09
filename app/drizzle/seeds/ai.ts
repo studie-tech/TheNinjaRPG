@@ -3,7 +3,10 @@ import { eq, notExists } from "drizzle-orm";
 import type { DrizzleClient } from "@/server/db";
 import { executeSqlDump } from "./sqlDump";
 
-// Delete anything not in above list, and insert those missing
+/**
+ * Replaces the Default AI profile, all AI users and orphaned user jutsu with the
+ * checked-in ai.sql and userjutsu.sql dumps.
+ */
 export const seedAI = async (client: DrizzleClient) => {
   console.log("\nClearing AIs...");
   await client.delete(aiProfile).where(eq(aiProfile.id, "Default"));
