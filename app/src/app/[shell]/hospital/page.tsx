@@ -106,7 +106,7 @@ export default function Hospital() {
           </p>
           <div className="grid grid-cols-2 gap-2 py-3" id="tutorial-hospital-buttons">
             <Button
-              id="check"
+              id="hospital-check-out"
               className="w-full"
               disabled={!isFullyHealed && healFinishAt && healFinishAt > new Date()}
               onClick={() => heal({ villageId: userData.villageId })}
@@ -121,7 +121,7 @@ export default function Hospital() {
               </div>
             </Button>
             <Button
-              id="check"
+              id="hospital-pay"
               className="w-full"
               color={canAfford ? "default" : "red"}
               disabled={isFullyHealed || (healFinishAt && healFinishAt <= new Date())}
