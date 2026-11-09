@@ -6,19 +6,38 @@ import {
 } from "@/deltas/resourceSilos";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
+import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /** Bind shrine claims to their spawn and reconcile arbitrary package effects authoritatively. */
 export const useResourceSilo = () => {
   const utils = api.useUtils();
+  const {
+    data: userData,
+    timeDiff,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserData();
   const status = api.resourceSilos.getStatus.useQuery(undefined, {
-    refetchInterval: 15000,
+    refetchInterval: (query) =>
+      query.state.status !== "error" &&
+      query.state.data?.window.active === false &&
+      new Date(query.state.data.window.next).getTime() + timeDiff > Date.now()
+        ? 5 * 60_000
+        : 15_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
   });
+  useRefreshAt(
+    [status.data?.window.active ? status.data.window.end : status.data?.window.next],
+    () => void status.refetch({ cancelRefetch: false }),
+    timeDiff,
+  );
   const cache = useQueryCacheUpdate<RouterOutputs["resourceSilos"]["getStatus"]>(
     getQueryKey(api.resourceSilos.getStatus, undefined, "query"),
   );
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const { invalidateInventory } = useInventoryCacheUpdate();
   const reconcileOwnership = (userId: string | undefined) =>
     Promise.all([
