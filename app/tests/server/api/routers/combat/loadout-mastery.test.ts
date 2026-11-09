@@ -1,11 +1,19 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
 import {
-  jutsuEquipLimit,
+  type BattleType,
+  MAX_PLAYER_LEVEL,
+  RANKED_PVP_STATS,
+  REGEN_SECONDS,
+} from "@/drizzle/constants";
+import {
   aiProfile,
   battle,
   bloodlineReskin,
   item,
   itemLoadout,
   jutsu,
+  jutsuEquipLimit,
   jutsuLoadout,
   jutsuReskin,
   title,
@@ -14,42 +22,34 @@ import {
   userJutsu,
   userTitle,
 } from "@/drizzle/schema";
-import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
-import { fetchBattleEssentials } from "@/queries/combat";
-import { eq } from "drizzle-orm";
-import {
-  type BattleType,
-  MAX_PLAYER_LEVEL,
-  RANKED_PVP_STATS,
-  REGEN_SECONDS,
-} from "@/drizzle/constants";
 import { userJutsuToAction } from "@/libs/combat/actions";
-import { applyEffects } from "@/libs/combat/process";
 import { refreshMasteries } from "@/libs/combat/mastery";
-import { effectiveMasteries } from "@/libs/mastery";
-import { jutsuRequirementWarning } from "@/libs/jutsuRequirements";
-import type { UserWithRelations } from "@/routers/profile";
-import { calcCP, calcHP, calcSP, manuallyAssignUserStats } from "@/libs/profile";
-import { validateItemLoadout } from "@/libs/ranked_pvp";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { applyEffects } from "@/libs/combat/process";
 import type { CombatQueryUser } from "@/libs/combat/types";
+import { jutsuRequirementWarning } from "@/libs/jutsuRequirements";
+import { effectiveMasteries } from "@/libs/mastery";
+import { calcCP, calcHP, calcSP, manuallyAssignUserStats } from "@/libs/profile";
 import { Pusher } from "@/libs/pusher";
+import { validateItemLoadout } from "@/libs/ranked_pvp";
+import { fetchBattleEssentials } from "@/queries/combat";
+import type { UserWithRelations } from "@/routers/profile";
 import { combatRouter } from "@/server/api/routers/combat";
 import { fetchUserJutsus } from "@/server/api/routers/jutsu";
 import { getTagSchema } from "@/validators/combat";
-import { makeCompleteBattle } from "../../../../setup/combat";
 import {
   insertSnapshotLobby,
   loadCombatant,
   preloadLobby,
 } from "../../../../libs/combat/helpers/preload";
+import { makeCompleteBattle } from "../../../../setup/combat";
 import {
+  insertDefaultAiProfile,
   insertItems,
+  insertJutsus,
   insertUserItems,
   insertUsers,
-  insertJutsus,
-  insertDefaultAiProfile,
 } from "../../../../setup/factories";
+import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 import {
   callerFor,
   describeWithDatabase,

@@ -1,7 +1,7 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { alignBattle, hasNoAvailableActions } from "@/libs/combat/turn";
-import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 /**
  *  1. alignBattle splices orphaned summons on EVERY call, for every battle in the

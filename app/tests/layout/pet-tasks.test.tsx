@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
-import * as client from "@/app/_trpc/client";
+import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import type { RouterOutputs } from "@/app/_trpc/client";
-import { questsRouter } from "@/server/api/routers/quests";
+import * as client from "@/app/_trpc/client";
 import { PetTaskDispatch, PetTasks } from "@/layout/PetTasks";
 import * as RewardChoice from "@/layout/RewardChoice";
 import * as toast from "@/libs/toast";
+import { questsRouter } from "@/server/api/routers/quests";
 import * as UserContext from "@/utils/UserContext";
 import { updateUserCache } from "@/utils/userCache";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 let queryClient: QueryClient;
 let owner: {

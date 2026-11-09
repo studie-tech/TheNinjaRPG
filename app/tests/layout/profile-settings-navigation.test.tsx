@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   act,
   cleanup,
@@ -6,14 +7,13 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { Settings, Shield, UserRound } from "lucide-react";
 import * as navigation from "next/navigation";
 import { useSyncExternalStore } from "react";
 import * as Link from "@/layout/Link";
 import {
-  ProfileSettingsNavigation,
   type ProfileSettingsGroup,
+  ProfileSettingsNavigation,
 } from "@/layout/ProfileSettingsNavigation";
 
 const mounted = vi.fn();

@@ -1,8 +1,7 @@
-import { selectUserWithoutPosition } from "@/utils/UserContext";
+import { describe, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import { describe, expect, it, vi } from "bun:test";
 import reactCompiler, { type LoggerEvent } from "babel-plugin-react-compiler";
 import * as React from "react";
 import {
@@ -15,6 +14,7 @@ import {
   getRemainingSensoryCooldown,
   getStealthStatus,
 } from "@/libs/stealth";
+import { selectUserWithoutPosition } from "@/utils/UserContext";
 
 const require = createRequire(import.meta.url);
 const { c } = require("react/compiler-runtime") as { c: (size: number) => unknown[] };

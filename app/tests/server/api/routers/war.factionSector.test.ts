@@ -17,7 +17,7 @@ import {
   warAlly,
 } from "@/drizzle/schema";
 import { warRouter } from "@/routers/war";
-import { insertUsers, insertClans } from "../../../setup/factories";
+import { insertClans, insertUsers } from "../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,

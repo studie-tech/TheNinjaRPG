@@ -32,12 +32,12 @@ import {
   QuestValidatorRawSchema,
 } from "@/validators/objectives";
 import {
+  insertDefaultAiProfile,
   insertItems,
+  insertJutsus,
   insertQuestHistory,
   insertQuests,
   insertUsers,
-  insertJutsus,
-  insertDefaultAiProfile,
 } from "../../setup/factories";
 import { queueEnergy } from "../../setup/queues";
 import { beforeStatements } from "../../setup/statements";

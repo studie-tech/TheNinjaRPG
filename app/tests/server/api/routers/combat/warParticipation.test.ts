@@ -1,4 +1,3 @@
-import { fetchBattle } from "@/queries/combat";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
@@ -24,17 +23,18 @@ import {
 import { updateUser } from "@/libs/combat/database";
 import { calcBattleResult } from "@/libs/combat/settlement";
 import { Pusher, type PusherClient } from "@/libs/pusher";
+import { fetchBattle } from "@/queries/combat";
 import { initiateBattle } from "@/server/api/routers/combat";
-import { claimDailyQuestSlot } from "@/server/utils/questAssignment";
 import { warRouter } from "@/server/api/routers/war";
+import { claimDailyQuestSlot } from "@/server/utils/questAssignment";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { defaultWarRules } from "@/validators/war";
 import {
+  insertDefaultAiProfile,
   insertQuestHistory,
   insertQuests,
   insertUsers,
-  insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import {
   callerForDatabase,

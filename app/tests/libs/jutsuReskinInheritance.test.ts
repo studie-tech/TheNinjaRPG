@@ -1,15 +1,14 @@
 import { describe, expect, it } from "bun:test";
 import { ElementNames, StatTypes } from "@/drizzle/constants";
-import type { Jutsu } from "@/drizzle/schema";
+import type { Jutsu, UserJutsuWithRelations } from "@/drizzle/schema";
+import { userJutsuToAction } from "@/libs/combat/actions";
+import type { BattleUserJutsu, CompleteBattle } from "@/libs/combat/types";
+import { getReskinnedUserJutsu } from "@/libs/jutsu";
 import {
   applyLinkedJutsuReskin,
   getJutsuReskinMechanics,
   inheritJutsuReskinEffects,
 } from "@/libs/jutsu/reskins";
-import { getReskinnedUserJutsu } from "@/libs/jutsu";
-import { userJutsuToAction } from "@/libs/combat/actions";
-import type { BattleUserJutsu, CompleteBattle } from "@/libs/combat/types";
-import type { UserJutsuWithRelations } from "@/drizzle/schema";
 import { setNullsToEmptyStrings } from "@/utils/typeutils";
 import { DamageTag, HealTag, JutsuValidatorRawSchema } from "@/validators/combat";
 

@@ -12,14 +12,14 @@
  */
 import { vi } from "bun:test";
 import * as actualNextServer from "next/server";
-import * as actualDb from "@/server/db";
-import * as actualProfile from "@/routers/profile";
-import * as actualSparring from "@/routers/sparring";
 import * as actualProfileQueries from "@/queries/profile";
 import * as actualSparringQueries from "@/queries/sparring";
+import * as actualProfile from "@/routers/profile";
+import * as actualSparring from "@/routers/sparring";
+import * as actualDb from "@/server/db";
 import * as actualCron from "@/server/utils/cron";
-import { peekTestDatabase, withEmptyIsolationHistory } from "./testDatabase";
 import { afterTasks } from "./after";
+import { peekTestDatabase, withEmptyIsolationHistory } from "./testDatabase";
 
 type AnyFn = (...args: never[]) => unknown;
 

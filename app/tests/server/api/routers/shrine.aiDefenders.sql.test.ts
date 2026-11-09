@@ -17,7 +17,7 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { shrineRouter } from "@/server/api/routers/shrine";
-import { insertUsers, insertDefaultAiProfile } from "../../../setup/factories";
+import { insertDefaultAiProfile, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { beforeStatements } from "../../../setup/statements";
 import {

@@ -1,5 +1,5 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, render } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
 import * as client from "@/app/_trpc/client";
 import * as mutes from "@/hooks/useChatMutes";

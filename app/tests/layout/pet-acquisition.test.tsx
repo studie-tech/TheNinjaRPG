@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import type { RenderResult } from "@testing-library/react";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import type { RenderResult } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
 import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
-import * as client from "@/app/_trpc/client";
 import type { RouterInputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import * as Confirm from "@/layout/Confirm";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Image from "@/layout/Image";
@@ -16,9 +16,9 @@ import { getDailyPetOptions } from "@/libs/pets/catalogue";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { initialPetSpecies } from "../libs/pets/helpers/species";
-import { deferred } from "../setup/deferred";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import { deferred } from "../setup/deferred";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 const dayKey = "2026-10-16";
 const options = getDailyPetOptions("owner", "NONE", initialPetSpecies, dayKey);

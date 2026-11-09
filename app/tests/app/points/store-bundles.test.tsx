@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   act,
   cleanup,
@@ -6,7 +7,6 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import { StoreBundles } from "@/app/[shell]/points/StoreBundles";
 import * as checkout from "@/app/[shell]/points/StoreCheckout";

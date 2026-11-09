@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { SAGE_MODE_ACTIVATION_JUTSU_ID } from "@/drizzle/constants";
 import {
   aiProfile,
   battle,
@@ -7,7 +8,6 @@ import {
   userData,
   userJutsu,
 } from "@/drizzle/schema";
-import { SAGE_MODE_ACTIVATION_JUTSU_ID } from "@/drizzle/constants";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { ActionEndTurn } from "@/validators/ai";

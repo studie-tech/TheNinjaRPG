@@ -1,22 +1,20 @@
-import { fetchActiveWar, warRaidCombatGuard } from "@/queries/war";
-
-import { and, eq, getTableName, inArray, sql } from "drizzle-orm";
 import { beforeEach, expect, it, vi } from "bun:test";
-import mysql from "mysql2/promise";
 import { setTimeout } from "node:timers/promises";
+import { and, eq, getTableName, inArray, sql } from "drizzle-orm";
+import mysql from "mysql2/promise";
 import {
   ELDER_MIN_VOTING_COUNT,
-  WAR_DECLARATION_COST,
   FACTION_RAID_COST,
   FACTION_RAID_MAX_DAYS,
   FACTION_RAID_MIN_MEMBERS,
   FACTION_RAID_REWARD,
+  WAR_DECLARATION_COST,
   WAR_MINIMUM_TOKENS_FOR_BEING_ATTACKABLE,
 } from "@/drizzle/constants";
 import {
-  notification,
   clan,
   gameSetting,
+  notification,
   userData,
   village,
   villageAlliance,
@@ -26,24 +24,25 @@ import {
   war,
   warAlly,
 } from "@/drizzle/schema";
+import { fetchActiveWar, warRaidCombatGuard } from "@/queries/war";
 import { warRouter } from "@/routers/war";
 import * as serverSentry from "@/server/utils/sentry";
 import { applyVillageMissionShrineDamage } from "@/server/utils/villageMission";
 import {
-  startDeclaredWar,
-  handleWarEnd,
   applyRaidHealthDecay,
+  handleWarEnd,
+  startDeclaredWar,
 } from "@/server/utils/war";
-import { insertUsers, insertClans } from "../../../setup/factories";
+import { insertClans, insertUsers } from "../../../setup/factories";
+import { beforeTransaction } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
-  resetTables,
   lockWaitObserved,
+  resetTables,
 } from "../../../setup/testDatabase";
-import { beforeTransaction } from "../../../setup/statements";
 
 const FACTION = "faction-hideout";
 const TARGET = "target-village";

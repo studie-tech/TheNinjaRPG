@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
 import * as nextServer from "next/server";
 import { MEDNIN_EXP_CAP, MEDNIN_REQUIRED_EXP } from "@/drizzle/constants";
-import * as training from "@/libs/train";
 import { Pusher } from "@/libs/pusher";
+import * as training from "@/libs/train";
 import { hospitalRouter } from "@/server/api/routers/hospital";
-import { trainRouter } from "@/server/api/routers/train";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import { trainRouter } from "@/server/api/routers/train";
+import { deferred as createDeferred } from "../../../setup/deferred";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { callerForDatabase } from "../../../setup/testDatabase";
-import { deferred as createDeferred } from "../../../setup/deferred";
 
 const startedAt = new Date(Date.now() - 60_000);
 const deferred: Array<() => unknown> = [];

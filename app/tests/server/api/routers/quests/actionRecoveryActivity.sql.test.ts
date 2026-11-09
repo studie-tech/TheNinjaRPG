@@ -1,5 +1,5 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
 import {
   aiProfile,
@@ -27,12 +27,12 @@ import {
 } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
+  insertDefaultAiProfile,
   insertItems,
   insertQuestHistory,
   insertQuests,
   insertUserItems,
   insertUsers,
-  insertDefaultAiProfile,
   insertUserVotes,
 } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";

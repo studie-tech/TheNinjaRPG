@@ -1,7 +1,7 @@
-import { reduceActiveFarmPlotTimers } from "@/queries/farming";
 import { describe, expect, it, vi } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
+import { reduceActiveFarmPlotTimers } from "@/queries/farming";
 import type { DrizzleClient } from "@/server/db";
 import {
   buildFarmCollectionState,

@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { Provider } from "jotai";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as nextLink from "next/link";
@@ -14,8 +14,8 @@ import {
 } from "react";
 import { useNavigationRouter } from "@/hooks/navigation";
 import { NavigationProvider } from "@/layout/NavigationProvider";
-import { actualLink as Link } from "../setup/preload";
 import { deferred } from "../setup/deferred";
+import { actualLink as Link } from "../setup/preload";
 
 // Model the public Link event contract without importing Next's bundled RSC runtime.
 const TestNextLink = ({

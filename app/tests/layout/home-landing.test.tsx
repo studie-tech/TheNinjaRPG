@@ -1,6 +1,6 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
+import { cleanup, render } from "@testing-library/react";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import HomeLanding from "@/layout/HomeLanding";

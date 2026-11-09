@@ -7,9 +7,9 @@ import {
 } from "@/drizzle/constants";
 import { getTargetUser } from "@/libs/combat/actions";
 import { checkFriendlyFire } from "@/libs/combat/process";
+import { calcBattleResult, getOpposingBattleWars } from "@/libs/combat/settlement";
 import type { CombatAction } from "@/libs/combat/types";
 import { getDistanceToClosestEnemy, isValidMove } from "@/libs/combat/util";
-import { calcBattleResult, getOpposingBattleWars } from "@/libs/combat/settlement";
 import { TerrainHex } from "@/libs/hexgrid";
 import { makeBattleUser, makeCompleteBattle, makeEffect } from "../../setup/combat";
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import type { DrizzleClient } from "@/server/db";
 import { itemRouter } from "@/server/api/routers/item";
+import type { DrizzleClient } from "@/server/db";
 import { NonCombatConsumeRewardTag, NonCombatQuestTag } from "@/validators/combat";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { callerForDatabase } from "../../../../setup/testDatabase";

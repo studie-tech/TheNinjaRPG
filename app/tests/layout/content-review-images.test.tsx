@@ -1,19 +1,19 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
   cleanup,
   fireEvent,
   render as renderInteractive,
 } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
+import type { ContentProposalStatus } from "@/drizzle/constants";
 import * as battlefieldPreview from "@/layout/BattlefieldPreview";
 import * as ContentImage from "@/layout/ContentImage";
 import { ContentReviewDetail } from "@/layout/ContentReviewDetail";
 import * as ItemWithEffects from "@/layout/ItemWithEffects";
-import { spyOnToasts } from "../setup/toastMock";
-import type { ContentProposalStatus } from "@/drizzle/constants";
 import * as logbook from "@/layout/Logbook";
 import * as UserContext from "@/utils/UserContext";
+import { spyOnToasts } from "../setup/toastMock";
 
 const state: {
   before: Record<string, unknown>;

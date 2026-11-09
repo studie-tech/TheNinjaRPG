@@ -1,6 +1,6 @@
-import { cleanup, render, waitFor } from "@testing-library/react";
-import * as Google from "@next/third-parties/google";
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import * as Google from "@next/third-parties/google";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import PWAManager from "@/components/pwa/PWAManager";
 import * as NativeShell from "@/hooks/useNativeShell";
 import { WebAnalytics } from "@/layout/WebAnalytics";

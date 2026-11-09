@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { applyEffects } from "@/libs/combat/process";
 import { DAMAGE_LEECH_CAP_RATIO } from "@/libs/combat/constants";
+import { applyEffects } from "@/libs/combat/process";
 import type { BattleUserState, CompleteBattle, UserEffect } from "@/libs/combat/types";
 import {
   makeBattleUser,

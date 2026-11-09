@@ -1,11 +1,9 @@
-import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import * as combat from "@/routers/combat";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { stubRateLimitTransport } from "../../../../setup/rateLimit";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import {
   conversation,
   mpvpBattleQueue,
@@ -17,16 +15,22 @@ import {
   userData,
   userQueue,
 } from "@/drizzle/schema";
-import * as raidQueries from "@/queries/raids";
-import { getRaidChatConversationId } from "@/libs/raids";
 import { AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { Pusher } from "@/libs/pusher";
-import { raidsRouter } from "@/server/api/routers/raids";
+import { getRaidChatConversationId } from "@/libs/raids";
+import * as raidQueries from "@/queries/raids";
+import * as combat from "@/routers/combat";
+import { fetchUpdatedUser } from "@/routers/profile";
 import { profileRouter } from "@/server/api/routers/profile";
+import { raidsRouter } from "@/server/api/routers/raids";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives, RaidObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuests, insertUsers } from "../../../../setup/factories";
+import { queueEnergy } from "../../../../setup/queues";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
+import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
+import { beforeStatements } from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -35,10 +39,6 @@ import {
   recordQueries,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { beforeStatements } from "../../../../setup/statements";
-import { fetchUpdatedUser } from "@/routers/profile";
-import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
-import { queueEnergy } from "../../../../setup/queues";
 import { countUserReads } from "../../../../setup/userReads";
 
 describe("raid join cache reconciliation", () => {

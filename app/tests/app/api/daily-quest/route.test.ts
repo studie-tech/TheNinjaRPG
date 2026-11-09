@@ -1,3 +1,7 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { MySqlDialect } from "drizzle-orm/mysql-core";
+import { GET } from "@/app/api/daily-quest/route";
 import * as gameSettings from "@/libs/gamesettings";
 import * as quests from "@/server/utils/questAssignment";
 import {
@@ -5,10 +9,6 @@ import {
   stubCronAuth,
   stubDatabase,
 } from "../../../setup/serverModules";
-import type { SQL } from "drizzle-orm";
-import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { GET } from "@/app/api/daily-quest/route";
 
 type DailyQuestTestMocks = {
   lock: ReturnType<typeof vi.fn>;

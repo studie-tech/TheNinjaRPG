@@ -1,6 +1,6 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { QueryClient, QueryClientProvider, useMutation } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import * as combatHooks from "@/hooks/combat";
@@ -8,7 +8,6 @@ import * as gameScene from "@/hooks/game-scene";
 import * as lpc from "@/hooks/lpc";
 import * as navigation from "@/hooks/navigation";
 import * as tutorialHooks from "@/hooks/tutorial";
-import * as tutorialSteps from "@/libs/tutorialSteps";
 import * as inventoryCache from "@/hooks/useInventoryCacheUpdate";
 import * as pageActive from "@/hooks/usePageActive";
 import * as sectorCache from "@/hooks/useSectorCacheUpdate";
@@ -24,11 +23,12 @@ import * as jutsuLoadout from "@/layout/JutsuLoadoutSelector";
 import * as logbook from "@/layout/Logbook";
 import { maskBattle } from "@/libs/combat/masking";
 import type { BattleState, CombatResult, ReturnedBattle } from "@/libs/combat/types";
-import * as tutorialLib from "@/libs/tutorial";
 import * as toast from "@/libs/toast";
+import * as tutorialLib from "@/libs/tutorial";
+import * as tutorialSteps from "@/libs/tutorialSteps";
 import * as UserContext from "@/utils/UserContext";
-import { makeCompleteBattle, makeUser } from "../setup/combat";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { makeCompleteBattle, makeUser } from "../setup/combat";
 
 type Profile = {
   userId: string;

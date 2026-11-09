@@ -1,9 +1,11 @@
-import { huntingBattleState } from "../../../../setup/hunting";
-import { huntingVictoryReceipt } from "@/libs/hunting/contracts";
-
+import { beforeEach, expect, it } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { beforeEach, expect, it } from "bun:test";
+import {
+  OPENAI_REPORT_EMBEDDING_MODEL,
+  REPORT_EMBEDDING_DIMENSIONS,
+  STARTING_REPUTATION_POINTS,
+} from "@/drizzle/constants";
 import {
   auctionOffer,
   bloodline,
@@ -11,12 +13,11 @@ import {
   huntingProgress,
   huntingReceipt,
   huntingSession,
-  rankedUserRewards,
-  recruitReferral,
-  userSkill,
-  warKill,
   notification,
   paypalSubscription,
+  petSpecies,
+  rankedUserRewards,
+  recruitReferral,
   storeEntitlementRevocation,
   storeEntitlementState,
   storePurchase,
@@ -28,23 +29,20 @@ import {
   userHome,
   userLiveActivity,
   userPet,
-  petSpecies,
   userPushPreference,
   userReport,
   userReportEmbedding,
+  userSkill,
   userTitle,
   village,
+  warKill,
 } from "@/drizzle/schema";
-import {
-  OPENAI_REPORT_EMBEDDING_MODEL,
-  REPORT_EMBEDDING_DIMENSIONS,
-  STARTING_REPUTATION_POINTS,
-} from "@/drizzle/constants";
+import { huntingVictoryReceipt } from "@/libs/hunting/contracts";
+import { petsRouter } from "@/server/api/routers/pets";
+import { pushRouter } from "@/server/api/routers/push";
 import { registerRouter } from "@/server/api/routers/register";
 import { staffRouter } from "@/server/api/routers/staff";
 import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
-import { pushRouter } from "@/server/api/routers/push";
-import { petsRouter } from "@/server/api/routers/pets";
 import { reconcileFederalStatuses } from "@/server/utils/purchases/federalStatus";
 import {
   extendStoreSubscription,
@@ -56,9 +54,10 @@ import { canonicalStoreUserId } from "@/server/utils/purchases/storeIdentity";
 import { initialPetSpecies } from "../../../../libs/pets/helpers/species";
 import {
   insertPetSpecies,
-  insertUsers,
   insertUserPets,
+  insertUsers,
 } from "../../../../setup/factories";
+import { huntingBattleState } from "../../../../setup/hunting";
 import {
   characterInput,
   insertRegistrationContent,

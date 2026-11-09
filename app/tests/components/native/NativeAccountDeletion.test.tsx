@@ -4,11 +4,11 @@ import * as clerkErrors from "@clerk/nextjs/errors";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import React from "react";
 import * as client from "@/app/_trpc/client";
+import { NativeAccountDeletion } from "@/components/native/NativeAccountDeletion";
 import * as input from "@/components/ui/input";
 import * as shell from "@/hooks/useNativeShell";
 import * as contentBox from "@/layout/ContentBox";
 import { appleAuth } from "@/libs/native";
-import { NativeAccountDeletion } from "@/components/native/NativeAccountDeletion";
 import { stubDialog } from "../../setup/dialog";
 
 let screen: ReturnType<typeof within>;

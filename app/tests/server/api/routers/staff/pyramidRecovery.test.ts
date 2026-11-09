@@ -19,8 +19,8 @@ import { getIsolatedPyramid } from "@/libs/questRun";
 import { combatRouter } from "@/server/api/routers/combat";
 import { huntingRouter } from "@/server/api/routers/hunting";
 import { profileRouter } from "@/server/api/routers/profile";
-import { createTRPCRouter } from "@/server/api/trpc";
 import { staffRouter } from "@/server/api/routers/staff";
+import { createTRPCRouter } from "@/server/api/trpc";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { DialogObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
@@ -32,6 +32,7 @@ import {
 } from "../../../../setup/factories";
 import { huntingBattleState, huntingHabitatContent } from "../../../../setup/hunting";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
+import { interceptExecute } from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -40,7 +41,6 @@ import {
   resetTables,
   runRawSql,
 } from "../../../../setup/testDatabase";
-import { interceptExecute } from "../../../../setup/statements";
 
 describeWithDatabase("staff Pyramid recovery", () => {
   beforeEach(async () => {

@@ -1,18 +1,18 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import type { Clerk } from "@clerk/nextjs/types";
-import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import type { Clerk } from "@clerk/nextjs/types";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import superjson from "superjson";
 import type { AppRouter } from "@/api/root";
-import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import NotifyUsers from "@/app/[shell]/event/page";
+import * as toastUi from "@/components/ui/use-toast";
 import * as ContentBox from "@/layout/ContentBox";
 import * as RichInput from "@/layout/RichInput";
 import * as SliderField from "@/layout/SliderField";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
-import * as toastUi from "@/components/ui/use-toast";
 import * as toast from "@/libs/toast";
 import {
   createTrpcSession,
@@ -21,8 +21,8 @@ import {
 } from "@/libs/trpcSession";
 import * as UserContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { actualShowMutationToast } from "../../setup/preload";
 import { deferred } from "../../setup/deferred";
+import { actualShowMutationToast } from "../../setup/preload";
 
 const key = [["profile", "getUser"], { type: "query" }];
 type Result = RouterOutputs["misc"]["submitNotification"];

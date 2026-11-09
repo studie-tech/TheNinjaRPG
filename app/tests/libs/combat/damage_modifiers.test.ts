@@ -9,20 +9,20 @@ import {
   buildDamageModifierEligibilityById,
   buildDamagePacketModifierLists,
   computeDamagePacket,
-  type DamageModifierEligibility,
   consolidatePreBattleDamageModifiers,
+  type DamageModifierEligibility,
   isConsolidatedStage1PercentageModifier,
 } from "@/libs/combat/damagePipeline";
 import { getAffected } from "@/libs/combat/tags";
-import { getStatTypeLabels } from "@/libs/combat/util";
 import type { Consequence, UserEffect } from "@/libs/combat/types";
+import { getStatTypeLabels } from "@/libs/combat/util";
 import {
   defaultTestGearModifiers,
   gearMods,
   makeBattleUser,
   makeDamageEffect,
-  makeDamageModifierEffect as makeModifierEffect,
   makeEffect,
+  makeDamageModifierEffect as makeModifierEffect,
 } from "../../setup/combat";
 
 /**

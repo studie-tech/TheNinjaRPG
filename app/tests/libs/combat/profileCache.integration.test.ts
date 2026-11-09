@@ -1,5 +1,6 @@
-import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
+import { captureCombatCacheSnapshot, combatProfilePatch } from "@/deltas/combat";
 import {
   aiProfile,
   battle,
@@ -13,7 +14,6 @@ import {
 } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
 import { filterCombatQuests } from "@/libs/combat/quests";
-import { captureCombatCacheSnapshot, combatProfilePatch } from "@/deltas/combat";
 import { Pusher, type PusherClient } from "@/libs/pusher";
 import { getActiveObjectives, getNewTrackers } from "@/libs/quest";
 import { mockAchievementHistoryEntries } from "@/libs/quest/projection";
@@ -22,14 +22,15 @@ import { initiateBattle } from "@/server/api/routers/combat";
 import { profileRouter, type UserWithRelations } from "@/server/api/routers/profile";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import {
+  insertDefaultAiProfile,
   insertItems,
   insertQuestHistory,
   insertQuests,
   insertUserItems,
-  insertUsers,
-  insertDefaultAiProfile,
   insertUserPets,
+  insertUsers,
 } from "../../setup/factories";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import {
@@ -39,7 +40,6 @@ import {
   recordQueries,
   resetTables,
 } from "../../setup/testDatabase";
-import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import { observeProfile, soloPveResult } from "./helpers/profileCache";
 
 describeWithDatabase("combat profile cache inventory confirmation", () => {

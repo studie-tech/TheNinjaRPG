@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { MySqlDialect } from "drizzle-orm/mysql-core";
 import type { SQL } from "drizzle-orm";
+import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { IMG_AVATAR_DEFAULT, SECTOR_HEIGHT, SECTOR_WIDTH } from "@/drizzle/constants";
 import { warCamp } from "@/drizzle/schema";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
@@ -11,10 +11,10 @@ import {
   invalidatePublishedMapCache,
 } from "@/server/utils/sectorMap";
 import { defaultWarRules } from "@/validators/war";
+import { deferred } from "../../../../setup/deferred";
 import { sectorMap } from "../../../../setup/sectorMap";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { callerForDatabase } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
 
 const SECTOR = 1538;
 const neighbors = getSectorNeighborIds(SECTOR);

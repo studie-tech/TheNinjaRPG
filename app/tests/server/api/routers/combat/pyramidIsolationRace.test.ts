@@ -14,6 +14,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+
 const router = createTRPCRouter({ combat: combatRouter, quests: questsRouter });
 describeWithDatabase("Battle Arena healing and isolated Pyramid entry", () => {
   beforeEach(async () => {

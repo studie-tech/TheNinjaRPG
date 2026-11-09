@@ -1,16 +1,16 @@
-import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
   AutoBattleTypes,
-  ManualStartBattleTypes,
   type BattleType,
+  ManualStartBattleTypes,
 } from "@/drizzle/constants";
 import { battle, userData } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
 import { makeCompleteBattle, makeUser } from "../../../../setup/combat";
 import { insertUsers } from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,

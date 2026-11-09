@@ -4,14 +4,7 @@ import {
   ADDITIONAL_MISSION_REWARD_MULTIPLIER,
   QuestRewardMetrics,
 } from "@/drizzle/constants";
-import { dataRouter } from "@/routers/data";
-import { collapseRewards } from "@/libs/rewards";
 import { getRewardArray } from "@/libs/objectives";
-import { masteryQuestTemplates } from "../setup/mastery";
-import { rewardOwnership, rewardUser as makeUser } from "../setup/quest";
-import { resolverOf } from "../setup/testDatabase";
-import { QuestValidator, SimpleObjective } from "@/validators/objectives";
-import { villageMissionContentError } from "@/validators/villageMission";
 import { getReward, postProcessRewards } from "@/libs/quest/rewards";
 import {
   buildRewardChoiceCards,
@@ -20,17 +13,24 @@ import {
   requiredRewardPicks,
   rewardFromChoiceCards,
   toggleRewardPick,
+  validateQuestRewardPackages,
   validateRewardPicks,
   verifyRewardChoiceForSave,
-  validateQuestRewardPackages,
 } from "@/libs/rewardChoice";
+import { collapseRewards } from "@/libs/rewards";
+import { dataRouter } from "@/routers/data";
+import type { QuestContentType } from "@/validators/objectives";
+import { QuestValidator, SimpleObjective } from "@/validators/objectives";
 import {
   QuestReward,
   RewardNodeValidator,
   RewardPackageValidator,
 } from "@/validators/rewardPackages";
 import { hasMasteryPromotion, hasReward, ObjectiveReward } from "@/validators/rewards";
-import type { QuestContentType } from "@/validators/objectives";
+import { villageMissionContentError } from "@/validators/villageMission";
+import { masteryQuestTemplates } from "../setup/mastery";
+import { rewardUser as makeUser, rewardOwnership } from "../setup/quest";
+import { resolverOf } from "../setup/testDatabase";
 
 /** Create a normalized snapshot with distinct attachment and source identities. */
 const packageReward = (id: string, data: object) => ({

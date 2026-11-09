@@ -1,7 +1,7 @@
-import { getQuestRewardDashboardUpdate } from "@/deltas/quests";
-import { eq } from "drizzle-orm";
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { eq } from "drizzle-orm";
+import { getQuestRewardDashboardUpdate } from "@/deltas/quests";
 import { MAX_SKILL_POINTS, SECTOR_MAP_VERSION } from "@/drizzle/constants";
 import {
   item,
@@ -15,12 +15,12 @@ import {
   userQueue,
   userVote,
 } from "@/drizzle/schema";
-import { questsRouter } from "@/server/api/routers/quests";
-import { profileRouter } from "@/server/api/routers/profile";
 import { getEnergyQueue } from "@/libs/queue";
 import * as questQueries from "@/queries/quests";
-import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
+import { profileRouter } from "@/server/api/routers/profile";
+import { questsRouter } from "@/server/api/routers/quests";
 import { consumeUserAnnouncements } from "@/server/utils/profile";
+import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import {
   AllObjectives,
@@ -30,6 +30,7 @@ import {
   SimpleObjective,
 } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
+import { deferred } from "../../../../setup/deferred";
 import {
   insertItems,
   insertQuestHistory,
@@ -47,7 +48,6 @@ import {
   recordQueries,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
 import { countUserReads } from "../../../../setup/userReads";
 
 const playerId = "quest-cache-player";

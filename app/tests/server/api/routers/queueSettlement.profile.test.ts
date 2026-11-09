@@ -1,5 +1,5 @@
-import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 import { DMG_SETTING_DEFAULTS } from "@/drizzle/constants";
 import {
   aiProfile,
@@ -18,22 +18,22 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { calcJutsuTrainCost } from "@/libs/train";
-import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
-import { trainRouter } from "@/server/api/routers/train";
+import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
+import { trainRouter } from "@/server/api/routers/train";
 import { EncountersAtLocation, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import { queueMasteries } from "../../../setup/queues";
 import {
+  insertDefaultAiProfile,
   insertItems,
+  insertJutsus,
   insertQuestHistory,
   insertQuests,
   insertUsers,
-  insertJutsus,
-  insertDefaultAiProfile,
   insertUserVotes,
 } from "../../../setup/factories";
+import { queueMasteries } from "../../../setup/queues";
 import { beforeStatements, overrideQuery } from "../../../setup/statements";
 import {
   callerFor,

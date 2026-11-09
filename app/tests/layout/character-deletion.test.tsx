@@ -1,6 +1,6 @@
-import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as gtm from "@next/third-parties/google";
+import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";

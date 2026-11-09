@@ -1,9 +1,9 @@
 import { expect, it } from "bun:test";
+import type { Quest } from "@/drizzle/schema";
 import { applyEffects } from "@/libs/combat/process";
 import { alignBattle } from "@/libs/combat/turn";
-import { claimVillageMissionPvpKills } from "@/libs/combat/villageMission";
 import type { CombatResult } from "@/libs/combat/types";
-import type { Quest } from "@/drizzle/schema";
+import { claimVillageMissionPvpKills } from "@/libs/combat/villageMission";
 import {
   isVillageMissionAvailable,
   villageMissionCompletionEvents,

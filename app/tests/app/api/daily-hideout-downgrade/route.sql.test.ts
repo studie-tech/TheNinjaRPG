@@ -1,23 +1,23 @@
-import { timerClaimFixture } from "../../../setup/gameTimers";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import { GET } from "@/app/api/daily-hideout-downgrade/route";
 import { STRONGHOLD_MONTHLY_MAINTENANCE } from "@/drizzle/constants";
 import { clan, village } from "@/drizzle/schema";
-import { GET } from "@/app/api/daily-hideout-downgrade/route";
 import * as gamesettings from "@/libs/gamesettings";
+import { insertClans } from "../../../setup/factories";
+import { timerClaimFixture } from "../../../setup/gameTimers";
 import {
   resetServerModuleStubs,
   stubCronAuth,
   stubDatabase,
 } from "../../../setup/serverModules";
+import { barrier } from "../../../setup/statements";
 import {
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { barrier } from "../../../setup/statements";
 
-import { insertClans } from "../../../setup/factories";
 const cost = STRONGHOLD_MONTHLY_MAINTENANCE;
 const dueAt = new Date(Date.now() - 31 * 86400_000);
 const request = () => new Request("https://example.com/api/daily-hideout-downgrade");

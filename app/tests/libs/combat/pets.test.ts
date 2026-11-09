@@ -15,31 +15,23 @@ import {
 } from "@/libs/combat/pets";
 import { applyEffects } from "@/libs/combat/process";
 import { hasLiveSummon, isClone, spliceOrphanedSummons } from "@/libs/combat/summon";
+import { getTurnControl } from "@/libs/combat/turn";
+import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
 import {
   applyPoolAdjustmentsToBase,
   getBattleGrid,
   resolveDamageCreditUser,
 } from "@/libs/combat/util";
-import { getTurnControl } from "@/libs/combat/turn";
-import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
-import {
-  makeBasicAttack,
-  makeBattleUser,
-  makeBattleUserItem,
-  makeCompleteBattle,
-  makeEffect,
-} from "../../setup/combat";
-import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 import { AiRule } from "@/validators/ai";
 import {
   BarrierTag,
   CloneTag,
   DamageTag,
-  IncreaseMaxPoolsTag,
-  InjectJutsusTag,
-  IncreaseStatTag,
   DecreaseStatTag,
+  IncreaseMaxPoolsTag,
+  IncreaseStatTag,
+  InjectJutsusTag,
   MoveTag,
   PoisonTag,
   ShieldTag,
@@ -48,11 +40,19 @@ import {
 } from "@/validators/combat";
 import { updatePetAiSchema } from "@/validators/pets";
 import {
+  makeBasicAttack,
+  makeBattleUser,
+  makeBattleUserItem,
+  makeCompleteBattle,
+  makeEffect,
+} from "../../setup/combat";
+import {
   ownedPetSkill,
   petJutsuFixture,
   petSkillFixture,
 } from "../pets/helpers/abilities";
 import { petSpeciesFixture } from "../pets/helpers/species";
+import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
 
 type BattlePet = Parameters<typeof addPetsToBattle>[0]["pets"][number];
 const petFixture = (patch: Partial<BattlePet> = {}): BattlePet => ({

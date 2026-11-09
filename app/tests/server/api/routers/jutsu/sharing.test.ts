@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { jutsuLoadout, userJutsu } from "@/drizzle/schema";
 import { FED_JUTSU_LOADOUTS_BASE } from "@/drizzle/constants";
-import { exportJutsuLoadout } from "@/libs/loadout";
+import { jutsuLoadout, userJutsu } from "@/drizzle/schema";
 import * as jutsuRequirements from "@/libs/jutsuRequirements";
+import { exportJutsuLoadout } from "@/libs/loadout";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { callerForDatabase } from "../../../../setup/testDatabase";

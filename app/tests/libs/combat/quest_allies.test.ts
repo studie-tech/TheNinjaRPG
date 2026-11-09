@@ -1,9 +1,7 @@
-import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { Grid, rectangle } from "honeycomb-grid";
 import { BattleTypes } from "@/drizzle/constants";
-import { TerrainHex } from "@/libs/hexgrid";
 import {
   aiProfile,
   battle,
@@ -14,29 +12,31 @@ import {
   questHistory,
   userData,
 } from "@/drizzle/schema";
-import { saveUsage, updateBattle, updateUser } from "@/libs/combat/database";
-import { DefeatOpponents, ObjectiveTracker } from "@/validators/objectives";
-import { ObjectiveReward } from "@/validators/rewards";
 import { getTargetUser } from "@/libs/combat/actions";
+import { saveUsage, updateBattle, updateUser } from "@/libs/combat/database";
 import { getBattleSpawnLocations, supportsNpcAllies } from "@/libs/combat/participants";
-import { getDistanceToClosestEnemy } from "@/libs/combat/util";
 import { calcBattleResult } from "@/libs/combat/settlement";
+import { getDistanceToClosestEnemy } from "@/libs/combat/util";
+import { TerrainHex } from "@/libs/hexgrid";
 import { Pusher, type PusherClient } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { dataRouter } from "@/server/api/routers/data";
+import { DefeatOpponents, ObjectiveTracker } from "@/validators/objectives";
+import { ObjectiveReward } from "@/validators/rewards";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import {
-  insertUsers,
-  insertQuests,
-  insertQuestHistory,
   insertDefaultAiProfile,
+  insertQuestHistory,
+  insertQuests,
+  insertUsers,
 } from "../../setup/factories";
+import { stubRateLimitTransport } from "../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
-import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 /** An ally from another village and a same-village enemy expose incorrect allegiance rules. */
 const scenario = (battleType: "QUEST" | "OVERWORLD", enemyHealth = 100) =>

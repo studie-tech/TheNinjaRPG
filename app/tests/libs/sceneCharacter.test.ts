@@ -1,5 +1,5 @@
-import sharp from "sharp";
 import { describe, expect, it } from "bun:test";
+import sharp from "sharp";
 import { validateSceneCharacterImage } from "@/libs/contentReview/sceneCharacter";
 
 const cutout = async (corner = false) => {

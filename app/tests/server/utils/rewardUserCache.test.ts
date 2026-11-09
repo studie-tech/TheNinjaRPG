@@ -1,6 +1,6 @@
 import { expect, it, vi } from "bun:test";
-import { postProcessRewards } from "@/libs/quest/rewards";
 import { getRewardUserUpdate } from "@/deltas/quests";
+import { postProcessRewards } from "@/libs/quest/rewards";
 import { ObjectiveReward } from "@/validators/rewards";
 
 it.each(["experience", "relations", "scalar"] as const)(

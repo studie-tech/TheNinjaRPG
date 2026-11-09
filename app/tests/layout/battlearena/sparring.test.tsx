@@ -1,9 +1,5 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import type { ZodType } from "zod";
-import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
-import { sparringRouter } from "@/server/api/routers/sparring";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import type { UserDeltaResponse } from "@/validators/userCache";
 import {
   act,
   cleanup,
@@ -12,16 +8,20 @@ import {
   screen,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import type { ZodType } from "zod";
 import * as client from "@/app/_trpc/client";
+import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import * as combatHooks from "@/hooks/combat";
-import * as loadoutNames from "@/hooks/useLoadoutNames";
 import * as navigation from "@/hooks/navigation";
+import * as loadoutNames from "@/hooks/useLoadoutNames";
 import { SparringMode } from "@/layout/battlearena/SparringMode";
 import * as image from "@/layout/Image";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import * as jutsuLoadout from "@/layout/JutsuLoadoutSelector";
+import { sparringRouter } from "@/server/api/routers/sparring";
 import * as userContext from "@/utils/UserContext";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import {
   installBrowserGlobals,
   restoreBrowserGlobals,

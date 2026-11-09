@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import {
   act,
@@ -8,15 +9,14 @@ import {
   within,
 } from "@testing-library/react";
 import { observable } from "@trpc/server/observable";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
-import * as client from "@/app/_trpc/client";
 import type { RouterInputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import Forum from "@/app/[shell]/forum/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Link from "@/layout/Link";
 import * as UserContext from "@/utils/UserContext";
-import { testApi, TrpcTestProviders } from "../../setup/trpc";
+import { TrpcTestProviders, testApi } from "../../setup/trpc";
 
 let params: URLSearchParams;
 let originalUrl: string;

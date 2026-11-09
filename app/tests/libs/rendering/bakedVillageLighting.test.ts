@@ -1,15 +1,15 @@
-import published from "@/libs/rendering/bakedWorldSources.json";
 import { describe, expect, it, vi } from "bun:test";
 import { BufferImageSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
-import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
-import * as fields from "@/libs/rendering/villageLightField";
-import type { GameRenderer } from "@/libs/rendering/runtime";
 import { shadowDirectionIndex } from "@/libs/rendering/bakedShadowAtlas";
 import {
   createBakedVillageLighting,
   strongestShadowLights,
   type VillageLight,
 } from "@/libs/rendering/bakedVillageLighting";
+import published from "@/libs/rendering/bakedWorldSources.json";
+import type { GameRenderer } from "@/libs/rendering/runtime";
+import * as fields from "@/libs/rendering/villageLightField";
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { deferred } from "../../setup/deferred";
 
 describe("baked village shadow selection", () => {

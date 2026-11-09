@@ -1,27 +1,27 @@
 import { describe, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
-import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { BufferImageSource, Rectangle, Texture } from "pixi.js";
-import {
-  createCharacterMaterialFrame,
-  worldMaterialFrame,
-  type AuthoredMaterialFrame,
-  type WorldMaterial,
-} from "@/libs/rendering/worldMaterials";
+import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
 import {
   fillLightFragment,
   lightingFragment,
   pointLightFragment,
 } from "@/libs/rendering/worldLightingShaders";
 import {
+  type AuthoredMaterialFrame,
+  createCharacterMaterialFrame,
+  type WorldMaterial,
+  worldMaterialFrame,
+} from "@/libs/rendering/worldMaterials";
+import {
   createWorldOcclusion,
   MAX_CELL_INSTANCES,
   MAX_DIRECT_INSTANCES,
-  SHARED_POSE_FLAG,
   type Occluder,
+  SHARED_POSE_FLAG,
 } from "@/libs/rendering/worldOcclusion";
 import { MAX_SMALL_WORLD_WIND, MAX_WORLD_WIND } from "@/libs/rendering/worldWind";
-import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
+import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 
 const viewport = { minX: 0, minY: 0, maxX: 128, maxY: 128 };
 type Field = ReturnType<typeof createWorldOcclusion>;

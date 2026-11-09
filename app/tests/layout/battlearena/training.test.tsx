@@ -1,10 +1,10 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import * as combatHooks from "@/hooks/combat";
-import * as loadoutNames from "@/hooks/useLoadoutNames";
 import * as navigation from "@/hooks/navigation";
 import * as sleep from "@/hooks/sleep";
+import * as loadoutNames from "@/hooks/useLoadoutNames";
 import { TrainingMode } from "@/layout/battlearena/TrainingMode";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import * as jutsuLoadout from "@/layout/JutsuLoadoutSelector";

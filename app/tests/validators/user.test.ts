@@ -5,13 +5,13 @@ import {
   GeneralTypes,
   TavernColorPresets,
 } from "@/drizzle/constants";
+import { getBloodlineElements } from "@/libs/userElements";
 import type { UserWithRelations } from "@/routers/profile";
 import { AllTags } from "@/validators/combat";
 import { getSearchValidator } from "@/validators/register";
-import { getBloodlineElements } from "@/libs/userElements";
 import {
-  getPublicUsersSchema,
   createAssignedExperienceSchema,
+  getPublicUsersSchema,
   tavernColorChangeSchema,
   updateUserPreferencesSchema,
 } from "@/validators/user";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { getRewardArray } from "@/libs/objectives";
-import { ObjectiveReward, hasReward } from "@/validators/rewards";
+import { hasReward, ObjectiveReward } from "@/validators/rewards";
 
 describe("getRewardArray sage mastery experience", () => {
   it("includes sage mode experience in the reward summary", () => {

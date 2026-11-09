@@ -1,21 +1,21 @@
 import { expect, it, vi } from "bun:test";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import sharp from "sharp";
-import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import { BufferImageSource, Container, Texture } from "pixi.js";
+import sharp from "sharp";
+import published from "@/libs/rendering/bakedVillageLightFields.json";
+import bakedSources from "@/libs/rendering/bakedWorldSources.json";
+import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
+import type { GameRenderer } from "@/libs/rendering/runtime";
 import {
   acquirePrebakedVillageLightField,
   acquireVillageLightField,
   lightOcclusionPolygon,
   unpackVillageLightField,
 } from "@/libs/rendering/villageLightField";
-import published from "@/libs/rendering/bakedVillageLightFields.json";
-import bakedSources from "@/libs/rendering/bakedWorldSources.json";
 import worldSources from "@/libs/rendering/worldAssetSources.json";
-import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
-import type { GameRenderer } from "@/libs/rendering/runtime";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
+import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 
 it("preserves hidden RGB and independent window eligibility across opaque image decoding", () => {
   const packed = new Uint8Array([

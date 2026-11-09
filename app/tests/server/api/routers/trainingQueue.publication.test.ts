@@ -1,25 +1,25 @@
-import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { eq } from "drizzle-orm";
 import { quest, questHistory, userData, userQueue, userVote } from "@/drizzle/schema";
 import { getMasteryQueue } from "@/libs/queue";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { trainRouter } from "@/server/api/routers/train";
 import type { DrizzleClient } from "@/server/db";
+import { deferred } from "../../../setup/deferred";
 import { insertUsers, insertUserVotes } from "../../../setup/factories";
+import {
+  aroundStatements,
+  beforeStatements,
+  beforeTransaction,
+  inTransactions,
+} from "../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
-  resetTables,
   recordQueries,
+  resetTables,
 } from "../../../setup/testDatabase";
-import { deferred } from "../../../setup/deferred";
-import {
-  beforeTransaction,
-  aroundStatements,
-  inTransactions,
-  beforeStatements,
-} from "../../../setup/statements";
 
 const userId = "queue-publication";
 const genjutsu = { stat: "genjutsuMastery" as const, speed: "15min" as const };

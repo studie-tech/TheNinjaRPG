@@ -14,13 +14,13 @@ import {
   userQueue,
   userRaidBuff,
 } from "@/drizzle/schema";
-import { calcCurrent } from "@/libs/regeneration";
 import { Pusher } from "@/libs/pusher";
+import { calcCurrent } from "@/libs/regeneration";
 import { hospitalRouter } from "@/server/api/routers/hospital";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
-import { upsertQuestEntry } from "@/server/utils/questAssignment";
 import { createTRPCRouter } from "@/server/api/trpc";
+import { upsertQuestEntry } from "@/server/utils/questAssignment";
 import {
   getUserRegenerationGain,
   userRegenerationGainSql,
@@ -29,11 +29,12 @@ import { IncreaseRegenerationTag } from "@/validators/combat";
 import { DialogObjective, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
-  insertUsers,
-  insertQuests,
   insertQuestHistory,
+  insertQuests,
+  insertUsers,
 } from "../../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../../setup/queues";
+import { barrier, interceptExecute } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -41,7 +42,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { barrier, interceptExecute } from "../../../setup/statements";
 
 const USER_ID = "timed-recovery";
 const VILLAGE_ID = "timed-recovery-village";

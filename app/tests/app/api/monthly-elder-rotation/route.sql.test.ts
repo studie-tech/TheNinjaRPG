@@ -1,10 +1,10 @@
-import { timerClaimFixture } from "../../../setup/gameTimers";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import { GET } from "@/app/api/monthly-elder-rotation/route";
 import { actionLog, clan, userData, village } from "@/drizzle/schema";
 import * as gamesettings from "@/libs/gamesettings";
-import { insertUsers, insertClans } from "../../../setup/factories";
+import { insertClans, insertUsers } from "../../../setup/factories";
+import { timerClaimFixture } from "../../../setup/gameTimers";
 import { resetServerModuleStubs, stubCronAuth } from "../../../setup/serverModules";
 import {
   describeWithDatabase,

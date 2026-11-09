@@ -1,8 +1,8 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { availableUserActions } from "@/libs/combat/actions";
+import { maskBattle, maskUsersState } from "@/libs/combat/masking";
 import { shouldPilotSummon } from "@/libs/combat/summon";
 import { wantsHumanActionSet } from "@/libs/combat/turn";
-import { maskBattle, maskUsersState } from "@/libs/combat/masking";
 import type { BattleUserState } from "@/libs/combat/types";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 

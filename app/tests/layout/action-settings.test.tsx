@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   QueryClient,
   QueryClientProvider,
@@ -5,9 +6,8 @@ import {
   useQuery,
 } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import type { UserCache } from "@/deltas/profile";
 import { useActionPreferenceCacheUpdate } from "@/hooks/useActionPreferenceCacheUpdate";
 import { ActionSettings } from "@/layout/ActionSettings";

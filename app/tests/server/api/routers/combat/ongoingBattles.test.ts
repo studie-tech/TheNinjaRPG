@@ -3,6 +3,7 @@ import type { BattleType } from "@/drizzle/constants";
 import { battle, tournamentMatch, userRequest } from "@/drizzle/schema";
 import { combatRouter } from "@/server/api/routers/combat";
 import { makeCompleteBattle, makeUser } from "../../../../setup/combat";
+import { interceptExecute } from "../../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -11,7 +12,6 @@ import {
   recordQueries,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { interceptExecute } from "../../../../setup/statements";
 
 describeWithDatabase("combat.listOngoingBattles", () => {
   beforeEach(async () => {

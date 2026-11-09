@@ -1,6 +1,6 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import * as nextServer from "next/server";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { HOSPITAL_RYO_PER_100_HP } from "@/drizzle/constants";
 import { userData, villageStructure } from "@/drizzle/schema";
 import { hospitalRouter } from "@/server/api/routers/hospital";

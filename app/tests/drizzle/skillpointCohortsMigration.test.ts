@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
 import { beforeEach, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
 import { quest, questHistory, userData } from "@/drizzle/schema";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertQuestHistory, insertQuests, insertUsers } from "../setup/factories";

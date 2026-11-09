@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import * as chartLibrary from "chart.js/auto";
 import type { Chart } from "chart.js";
+import * as chartLibrary from "chart.js/auto";
 import * as client from "@/app/_trpc/client";
 import { CombatStatNames, MasteryNames } from "@/drizzle/constants";
 import { BloodlineStatistics } from "@/layout/BloodlineStatistics";

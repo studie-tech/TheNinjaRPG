@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { applySageModeAfterRoundTransition } from "@/libs/combat/process";
 import { cleanse, getPower } from "@/libs/combat/tags";
+import type { UserEffect } from "@/libs/combat/types";
 import { isEffectActive } from "@/libs/combat/util";
 import {
   makeBattleUser,
@@ -9,7 +10,6 @@ import {
   makeTag,
 } from "../../setup/combat";
 import { activateSageMode, makeSageMode, makeSageUser } from "./helpers/sageMode";
-import type { UserEffect } from "@/libs/combat/types";
 
 /** Exhaustion fixture: a simple stat-reduction after-effect. */
 const exhaustionSageMode = () =>

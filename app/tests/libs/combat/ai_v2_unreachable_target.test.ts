@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { Grid, rectangle, ring } from "honeycomb-grid";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import type { BattleUserState, ExtraState } from "@/libs/combat/types";
@@ -8,8 +8,8 @@ import {
   ActionWithEffectHighestPower,
   ConditionDistanceHigherThan,
 } from "@/validators/ai";
-import { makeAiBattle, makeAiUser } from "./helpers/aiScenario";
 import { makeJutsu, makeTag } from "../../setup/combat";
+import { makeAiBattle, makeAiUser } from "./helpers/aiScenario";
 
 /**
  * An AI whose chosen action turns out to be impossible must fall through to its

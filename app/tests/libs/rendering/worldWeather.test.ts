@@ -1,9 +1,9 @@
-import { WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS } from "@/drizzle/constants";
-import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { describe, expect, it } from "bun:test";
 import { Container, type Mesh } from "pixi.js";
+import { WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS } from "@/drizzle/constants";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createWorldWeather, getWorldWeather } from "@/libs/rendering/worldWeather";
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 
 /** Keep the real retained weather mesh; replace only renderer dimensions and lifetime ownership. */
 const fixture = (light = false) => {

@@ -7,8 +7,8 @@ import { getFreeResetAmount } from "@/libs/skillReset";
 import {
   calcFedUgradeCost,
   fedItemLoadouts,
-  fedStatusRepsCost,
   fedJutsuLoadouts,
+  fedStatusRepsCost,
 } from "@/utils/paypal";
 import { calcBankInterest } from "@/utils/village";
 

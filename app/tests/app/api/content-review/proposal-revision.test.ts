@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "bun:test";
 import { GET, PATCH } from "@/app/api/content-review/proposals/[id]/route";
-import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
 import { restoreEnvAfterEach } from "../../../setup/env";
+import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
 
 restoreEnvAfterEach("CRON_SECRET");
 const context = { params: Promise.resolve({ id: "proposal-id" }) };

@@ -9,15 +9,15 @@ import { describe, expect, it } from "bun:test";
  */
 
 import { insertAction } from "@/libs/combat/actions";
-import { getBattleGrid } from "@/libs/combat/util";
-import { DamageTag } from "@/validators/combat";
-import { makeCombatAction } from "../../setup/combat";
 import type {
   CombatAction,
   CompleteBattle,
   GroundEffect,
   ReturnedBattle,
 } from "@/libs/combat/types";
+import { getBattleGrid } from "@/libs/combat/util";
+import { DamageTag } from "@/validators/combat";
+import { makeCombatAction } from "../../setup/combat";
 
 const ABSORB_PERCENTAGE = 50;
 

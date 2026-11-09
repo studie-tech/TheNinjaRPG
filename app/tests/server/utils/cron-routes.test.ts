@@ -1,6 +1,6 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { resolve } from "node:path";
 import { expect, it } from "bun:test";
+import { readdirSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const appRoot = resolve(import.meta.dirname, "../../..");
 const config = JSON.parse(readFileSync(resolve(appRoot, "vercel.json"), "utf8")) as {

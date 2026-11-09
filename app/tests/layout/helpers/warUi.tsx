@@ -1,5 +1,5 @@
 import { vi } from "bun:test";
-import { useState, type ComponentProps } from "react";
+import { type ComponentProps, useState } from "react";
 import * as select from "@/components/ui/select";
 
 type MutationCallbacks<Result> = {

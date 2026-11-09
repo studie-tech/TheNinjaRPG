@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as useSize from "@radix-ui/react-use-size";
 import {
   act,
   cleanup,
@@ -7,7 +8,6 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import * as useSize from "@radix-ui/react-use-size";
 import * as client from "@/app/_trpc/client";
 import {
   buildFilter,

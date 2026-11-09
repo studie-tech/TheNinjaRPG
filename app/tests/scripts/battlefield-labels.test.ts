@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { prepareBattlefieldLabels } from "../../../.github/scripts/battlefield-labels.mjs";
 import { battlefieldSheetsSchema } from "@/validators/contentReview";
+import { prepareBattlefieldLabels } from "../../../.github/scripts/battlefield-labels.mjs";
 
 describe("content audit battlefield labels", () => {
   it("renders multi-effect candidates while preserving their full asset mapping in the index", () => {

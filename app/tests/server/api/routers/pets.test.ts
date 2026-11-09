@@ -1,17 +1,17 @@
-import {
-  getAssignedPetExperience,
-  getAssignedPetCollection,
-  getSavedPetSettings,
-  getSavedPetSettingsCollection,
-} from "@/deltas/pets";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import {
+  getAssignedPetCollection,
+  getAssignedPetExperience,
+  getSavedPetSettings,
+  getSavedPetSettingsCollection,
+} from "@/deltas/pets";
+import {
   ItemRarities,
-  PetRarities,
-  PET_ABILITY_SLOTS_BY_RARITY,
   type ItemRarity,
   MAP_WAKE_ISLAND_SECTOR,
+  PET_ABILITY_SLOTS_BY_RARITY,
+  PET_ART_PROVIDER_SETTING,
   PET_BATTLE_CONFIG,
   PET_COLLECTION_SLOT_COST,
   PET_FEED_COOLDOWN_HOURS,
@@ -22,51 +22,51 @@ import {
   PET_MAX_GENERATION_ATTEMPTS,
   PET_REPLACEMENT_COST,
   PET_SEICHI_SILVER_COST,
-  PET_ART_PROVIDER_SETTING,
   PetArtProviders,
+  PetRarities,
 } from "@/drizzle/constants";
 import {
   gameSetting,
   item,
   jutsu,
+  petSpecies,
   skillTree,
   userData,
   userItem,
   userJutsu,
   userPet,
-  petSpecies,
+  userQueue,
   userSkill,
   userUpload,
-  userQueue,
 } from "@/drizzle/schema";
 import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import * as appearance from "@/libs/pets/appearance";
 import { PET_AURAS, PET_CHARACTERISTICS, PET_PALETTES } from "@/libs/pets/catalogue";
 import * as creation from "@/libs/pets/creation";
-import { AiRule } from "@/validators/ai";
-import type { PetTask } from "@/validators/petTasks";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { petsRouter } from "@/server/api/routers/pets";
 import type { DrizzleClient } from "@/server/db";
 import * as sentry from "@/server/utils/sentry";
 import { getUtcDayKey, HOUR_S, secondsFromNow } from "@/utils/time";
-import { initialPetSpecies } from "../../../libs/pets/helpers/species";
+import { AiRule } from "@/validators/ai";
+import type { PetTask } from "@/validators/petTasks";
 import { petJutsuFixture, petSkillFixture } from "../../../libs/pets/helpers/abilities";
+import { initialPetSpecies } from "../../../libs/pets/helpers/species";
 import {
   insertItems,
   insertPetSpecies,
   insertUserItems,
-  insertUsers,
   insertUserPets,
+  insertUsers,
 } from "../../../setup/factories";
-import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { queueEnergy } from "../../../setup/queues";
+import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import {
   beforeStatements,
-  holdReads,
   beforeTransaction,
-  withoutTransactions,
+  holdReads,
   overrideQuery,
+  withoutTransactions,
 } from "../../../setup/statements";
 import {
   callerForDatabase,

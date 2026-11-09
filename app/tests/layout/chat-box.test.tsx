@@ -1,14 +1,14 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { TextStreamPart, ToolSet } from "ai";
 import { createUIMessageStreamResponse, toUIMessageStream } from "ai";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { PropsWithChildren } from "react";
 import * as client from "@/app/_trpc/client";
 import ChatBox from "@/layout/ChatBox";
 import * as richInput from "@/layout/RichInput";
 import * as userContext from "@/utils/UserContext";
-import { testApi, TrpcTestProviders } from "../setup/trpc";
+import { TrpcTestProviders, testApi } from "../setup/trpc";
 
 const clients: QueryClient[] = [];
 const storageKey = "seichiAiChat:history-reader";

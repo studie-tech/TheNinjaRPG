@@ -2,9 +2,9 @@ import { expect } from "bun:test";
 import { huntingHabitat, huntingSession, sectorMap } from "@/drizzle/schema";
 import { huntingRouter } from "@/routers/hunting";
 import {
-  huntingContractSchema,
   type HuntingBattleState,
   type HuntingHabitatContent,
+  huntingContractSchema,
 } from "@/validators/hunting";
 import { callerForDatabase, getTestDatabase } from "./testDatabase";
 

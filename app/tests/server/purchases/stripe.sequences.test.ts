@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { eq } from "drizzle-orm";
 import {
   paypalSubscription,
   storePurchase,
@@ -13,9 +13,9 @@ import {
 } from "@/server/utils/purchases/federalStatus";
 import {
   grantStripeReceipt,
-  upgradeStripeFederalWithReps,
-  settleStripePayments,
   type StripeReceipt,
+  settleStripePayments,
+  upgradeStripeFederalWithReps,
 } from "@/server/utils/stripe/fulfillment";
 import { insertUsers } from "../../setup/factories";
 import { failStatements, inTransactions } from "../../setup/statements";

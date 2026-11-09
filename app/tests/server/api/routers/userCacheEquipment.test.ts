@@ -1,6 +1,6 @@
-import { getEquippedInventory } from "@/deltas/item";
-import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { eq, sql } from "drizzle-orm";
+import { getEquippedInventory } from "@/deltas/item";
 import {
   COST_EXTRA_ITEM_SLOT,
   COST_EXTRA_JUTSU_SLOT,
@@ -16,24 +16,23 @@ import {
   userData,
   userItem,
   userItemImbuement,
-  userSkill,
   userQueue,
+  userSkill,
   userTitle,
 } from "@/drizzle/schema";
-import { calcEnergy } from "@/libs/profile";
+import { effectiveMasteries } from "@/libs/mastery";
+import { calcEnergy, calcMaxEnergy } from "@/libs/profile";
+import { fetchMasterySources } from "@/queries/skillTree";
 import { blackMarketRouter } from "@/server/api/routers/blackmarket";
 import { bloodrightRouter } from "@/server/api/routers/bloodright";
-import type { DrizzleClient } from "@/server/db";
-import { staffRouter } from "@/server/api/routers/staff";
-import { effectiveMasteries } from "@/libs/mastery";
-import { calcMaxEnergy } from "@/libs/profile";
-import { fetchMasterySources } from "@/queries/skillTree";
 import { itemRouter } from "@/server/api/routers/item";
-import { countUserReads } from "../../../setup/userReads";
-import { beforeStatements, overrideQuery } from "../../../setup/statements";
+import { staffRouter } from "@/server/api/routers/staff";
+import type { DrizzleClient } from "@/server/db";
 import { makeEffect } from "../../../setup/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
+import { queueEnergy } from "../../../setup/queues";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
+import { beforeStatements, overrideQuery } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -41,7 +40,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { queueEnergy } from "../../../setup/queues";
+import { countUserReads } from "../../../setup/userReads";
 
 const userId = "cache-equipment-player";
 

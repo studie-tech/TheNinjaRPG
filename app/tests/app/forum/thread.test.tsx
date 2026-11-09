@@ -1,12 +1,13 @@
 /** Exercise application removal/recovery with real query/tRPC state and controlled transport failures. */
+
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
 import { observable } from "@trpc/server/observable";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
-import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import Thread from "@/app/[shell]/forum/[boardid]/[threadid]/thread";
 import { FORUM_THREAD_POSTS_PER_PAGE } from "@/drizzle/constants";
 import * as Confirm from "@/layout/Confirm";
@@ -16,7 +17,7 @@ import * as Link from "@/layout/Link";
 import * as Post from "@/layout/Post";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { testApi, TrpcTestProviders } from "../../setup/trpc";
+import { TrpcTestProviders, testApi } from "../../setup/trpc";
 
 type ThreadData = RouterOutputs["comments"]["getForumComments"];
 let queryClient: QueryClient;

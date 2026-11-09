@@ -8,7 +8,7 @@ import {
   optimisticGlobalTravelStart,
   SECTOR_BATTLE_STALE_SECONDS,
 } from "@/libs/travel";
-import { sectorMap, sectorTile as makeTile } from "../setup/sectorMap";
+import { sectorTile as makeTile, sectorMap } from "../setup/sectorMap";
 
 const makeMap = (width: number, height: number, blocked: Set<string> = new Set()) =>
   sectorMap(width, height, (x, y) =>

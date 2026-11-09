@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import * as ActiveTimedBuffs from "@/layout/ActiveTimedBuffs";
 import * as Avatar from "@/layout/Avatar";

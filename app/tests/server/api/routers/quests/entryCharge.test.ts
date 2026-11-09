@@ -22,11 +22,11 @@ import { assignQuestToUser } from "@/server/utils/questAssignment";
 import { DialogObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
+  insertDefaultAiProfile,
   insertItems,
   insertQuests,
   insertUserItems,
   insertUsers,
-  insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import {

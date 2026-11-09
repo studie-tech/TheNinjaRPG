@@ -1,9 +1,10 @@
-import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 import { FACTION_REPUTATION_TREASURY_LIMIT } from "@/drizzle/constants";
 import { actionLog, clan, userData, userQueue } from "@/drizzle/schema";
 import { clanRouter } from "@/server/api/routers/clan";
-import { insertUsers, insertClans } from "../../../../setup/factories";
+import { insertClans, insertUsers } from "../../../../setup/factories";
+import { queueEnergy } from "../../../../setup/queues";
 import {
   callerFor,
   callerForDatabase,
@@ -11,7 +12,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { queueEnergy } from "../../../../setup/queues";
 
 describe("clan committed cache responses", () => {
   const databaseFor = (userDelta: object, clanUpdate: object) => ({

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
+import { POST } from "@/app/api/content-review/proposals/route";
+import { GET } from "@/app/api/content-review/snapshot/route";
 import {
   badge,
   contentProposal,
@@ -6,14 +8,12 @@ import {
   contentProposalChange,
   contentProposalMedia,
 } from "@/drizzle/schema";
-import { POST } from "@/app/api/content-review/proposals/route";
-import { GET } from "@/app/api/content-review/snapshot/route";
+import { restoreEnvAfterEach } from "../../../setup/env";
 import {
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { restoreEnvAfterEach } from "../../../setup/env";
 
 const SECRET = "test-content-review-secret";
 restoreEnvAfterEach("CRON_SECRET");

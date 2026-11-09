@@ -1,10 +1,10 @@
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { useSelectGameLayout } from "@/hooks/useGameLayout";
 import { GameLayoutPicker } from "@/layout/GameLayoutPicker";
-import { LAYOUT_PREFERENCE_COOKIE } from "@/libs/layoutPreference";
 import { GAME_LAYOUTS, type GameLayoutId } from "@/libs/gameLayouts";
+import { LAYOUT_PREFERENCE_COOKIE } from "@/libs/layoutPreference";
 import { LayoutContextProvider, useActiveLayout } from "@/utils/LayoutContext";
 import {
   flushRadixFocus,

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
-  COPYABLE_EFFECT_TYPES,
   COPY_MAX_TAGS,
   COPY_PRIORITY_RANK,
   COPY_PRIORITY_TIERS,
+  COPYABLE_EFFECT_TYPES,
   MIRROR_MAX_TAGS,
   MIRROR_PRIORITY_RANK,
   MIRROR_PRIORITY_TIERS,
@@ -12,8 +12,8 @@ import {
 import { copy, mirror, wound } from "@/libs/combat/tags";
 import type { BattleUserState, UserEffect } from "@/libs/combat/types";
 import { selectTransferEffects } from "@/libs/combat/util";
-import { isNegativeUserEffect, isPositiveUserEffect } from "@/validators/combat";
 import type { ZodAllTags } from "@/validators/combat";
+import { isNegativeUserEffect, isPositiveUserEffect } from "@/validators/combat";
 import { makeBattleUser, makeEffect } from "../../setup/combat";
 
 const SELF = "self-1";

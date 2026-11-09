@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   QueryClient,
   QueryClientProvider,
@@ -5,33 +6,32 @@ import {
   useQuery,
 } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { getDefaultStore } from "jotai";
 import * as dynamic from "next/dynamic";
 import * as navigation from "next/navigation";
 import { type ReactNode, Suspense } from "react";
-import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import * as preferences from "@/hooks/combat";
 import * as tutorial from "@/hooks/tutorial";
-import type { BattleState } from "@/libs/combat/types";
-import * as userContext from "@/utils/UserContext";
-import { makeCompleteBattle, makeEffect, makeUser } from "../../setup/combat";
-import { dungeonBattleState } from "../../setup/dungeon";
 import * as battleHotkeys from "@/hooks/useBattleHotkeys";
+import * as gameMenu from "@/hooks/useGameMenu";
 import * as mediaQuery from "@/hooks/useMediaQuery";
-import * as combatSettings from "@/layout/UserCombatSettings";
 import * as avatar from "@/layout/Avatar";
 import MenuBoxProfile from "@/layout/MenuBoxProfile";
 import * as statusBar from "@/layout/StatusBar";
-import * as gameMenu from "@/hooks/useGameMenu";
-import * as toast from "@/libs/toast";
+import * as combatSettings from "@/layout/UserCombatSettings";
 import { resolveHotkeys } from "@/libs/combat/hotkeys";
+import type { BattleState } from "@/libs/combat/types";
+import * as toast from "@/libs/toast";
+import * as userContext from "@/utils/UserContext";
 import {
   flushRadixFocus,
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { makeCompleteBattle, makeEffect, makeUser } from "../../setup/combat";
+import { dungeonBattleState } from "../../setup/dungeon";
 
 // Keep the real page and query lifecycles, substituting only its WebGL scene.
 const loadingEvents: string[] = [];

@@ -2,17 +2,17 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { actionLog, clan, userData, village } from "@/drizzle/schema";
 import * as clans from "@/server/api/routers/clan";
+import { removeAccountGameData } from "@/server/utils/accountDeletion/cleanup";
 import * as deleteUserData from "@/server/utils/accountDeletion/deleteUserData";
+import * as processors from "@/server/utils/accountDeletion/processors";
+import { runDeletionStep } from "@/server/utils/accountDeletion/worker";
 import * as storeIdentity from "@/server/utils/purchases/storeIdentity";
-import { insertUsers, insertClans } from "../../../setup/factories";
+import { insertClans, insertUsers } from "../../../setup/factories";
 import {
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { removeAccountGameData } from "@/server/utils/accountDeletion/cleanup";
-import * as processors from "@/server/utils/accountDeletion/processors";
-import { runDeletionStep } from "@/server/utils/accountDeletion/worker";
 
 const depart = clans.removeFromClan;
 

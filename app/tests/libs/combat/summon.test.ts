@@ -1,13 +1,13 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
+import type { Battle } from "@/drizzle/schema";
+import { maskBattle } from "@/libs/combat/masking";
 import {
-  isSummonTemplate,
   isActiveSummon,
   isLiveSummon,
+  isSummonTemplate,
   spliceOrphanedSummons,
   summonsAllowedInBattle,
 } from "@/libs/combat/summon";
-import { maskBattle } from "@/libs/combat/masking";
-import type { Battle } from "@/drizzle/schema";
 import type { BattleUserState } from "@/libs/combat/types";
 
 const mk = (over: Partial<BattleUserState>): BattleUserState =>

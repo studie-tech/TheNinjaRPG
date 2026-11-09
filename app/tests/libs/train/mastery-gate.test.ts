@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { MAX_DAILY_TRAININGS, TrainingSpeeds } from "@/drizzle/constants";
 import type { Jutsu, UserData } from "@/drizzle/schema";
+import { jutsuRequirementWarning } from "@/libs/jutsuRequirements";
 import {
   getTrainingMultiplierBoost,
   masteryTrainingBlockMessage,
@@ -10,7 +11,6 @@ import {
   trainingMultiplier,
   trainingSpeedSeconds,
 } from "@/libs/train";
-import { jutsuRequirementWarning } from "@/libs/jutsuRequirements";
 import type { UserWithRelations } from "@/routers/profile";
 import type { ZodAllTags } from "@/validators/combat";
 

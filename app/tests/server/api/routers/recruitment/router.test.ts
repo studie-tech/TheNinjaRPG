@@ -1,7 +1,8 @@
+import { beforeEach, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { asc, eq } from "drizzle-orm";
-import { beforeEach, expect, it } from "bun:test";
+import { HOME_FURNITURE_STARTERS } from "@/drizzle/constants";
 import {
   actionLog,
   bloodline,
@@ -16,10 +17,9 @@ import {
   userItem,
   village,
 } from "@/drizzle/schema";
-import { HOME_FURNITURE_STARTERS } from "@/drizzle/constants";
 import { profileRouter } from "@/routers/profile";
-import { updateRewards } from "@/server/utils/questRewards";
 import { hashIp } from "@/server/utils/ipHash";
+import { updateRewards } from "@/server/utils/questRewards";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { insertUsers } from "../../../../setup/factories";
 import {

@@ -1,14 +1,14 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { TD_ENEMY_DIRECTIONS } from "@/drizzle/constants";
 import { useHudStoreValues, useTowerDefense } from "@/hooks/useTowerDefense";
-import * as spacetime from "@/libs/spacetimedb/client";
 import type {
   GameSession,
   SessionState,
   SpacetimeDBEvent,
 } from "@/libs/spacetimedb/client";
+import * as spacetime from "@/libs/spacetimedb/client";
 import {
   getDefaultPlayerBonuses,
   getShurikenAbility,

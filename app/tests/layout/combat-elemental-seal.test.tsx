@@ -1,5 +1,5 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it } from "bun:test";
+import { cleanup, render } from "@testing-library/react";
 import { CombatElementalSealNotice } from "@/layout/CombatElementalSealNotice";
 import { availableUserActions } from "@/libs/combat/actions";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";

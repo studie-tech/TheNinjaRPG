@@ -1,4 +1,3 @@
-import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import {
   afterEach,
   beforeEach,
@@ -8,11 +7,12 @@ import {
   setSystemTime,
   vi,
 } from "bun:test";
+import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as navigation from "next/navigation";
 import { type ReactNode, useState } from "react";
-import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import {
   WAR_ESPIONAGE_TARGET,
   WAR_POINT_CONVERSION_DAYS,
@@ -23,7 +23,7 @@ import { ObjectiveWarPanel } from "@/layout/ObjectiveWarPanel";
 import { WarDashboardNotices } from "@/layout/WarDashboardNotices";
 import { WarFieldActions } from "@/layout/WarFieldActions";
 import { WarMercenaries } from "@/layout/WarMercenaries";
-import { actionStatusMessage, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
+import { AUTO_WAKE_MESSAGE, actionStatusMessage } from "@/libs/actionReadiness";
 import type { UserWithRelations } from "@/routers/profile";
 import * as routing from "@/utils/routing";
 import * as UserContext from "@/utils/UserContext";
@@ -31,8 +31,8 @@ import { SimpleObjective } from "@/validators/objectives";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { defaultWarRules } from "@/validators/war";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-import { controllableMutation, stubSelect } from "./helpers/warUi";
 import { testRouter } from "../setup/router";
+import { controllableMutation, stubSelect } from "./helpers/warUi";
 
 type ObjectiveInfo = NonNullable<RouterOutputs["war"]["getObjectiveWarInfo"]>;
 type MutationResult = UserDeltaResponse & { battleId?: string };

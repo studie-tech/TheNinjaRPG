@@ -1,14 +1,14 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { summonCastBlockedReason } from "@/libs/combat/summon";
+import type { BattleUserState } from "@/libs/combat/types";
 import { makeBattleUser } from "../../setup/combat";
 import {
   DEMON,
-  TIGER,
   SUMMON_OWNER,
   makeSpawnedSummon as spawned,
+  TIGER,
   makeSummonTemplate as template,
 } from "./helpers/summon";
-import type { BattleUserState } from "@/libs/combat/types";
 
 // Two independent caps: one of each CREATURE (so different summon jutsus can
 // coexist), and one PILOTED summon overall (each piloted

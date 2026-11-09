@@ -6,15 +6,15 @@ import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { useEffect, useState } from "react";
 import superjson from "superjson";
-import type { CombatStateUpdate } from "@/deltas/combat";
 import type { AppRouter } from "@/api/root";
-import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
+import type { CombatStateUpdate } from "@/deltas/combat";
 import { useCombatUpdates } from "@/hooks/combat";
 import type { BattleUpdate } from "@/libs/combat/log";
 import type { BattleState } from "@/libs/combat/types";
 import * as UserContext from "@/utils/UserContext";
-import { testApi, TrpcTestProviders } from "../setup/trpc";
+import { TrpcTestProviders, testApi } from "../setup/trpc";
 
 // Keep the real tRPC observer and mutation lifecycle; control network ordering.
 type ActionResponse = RouterOutputs["combat"]["performAction"];

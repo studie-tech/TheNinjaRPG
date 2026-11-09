@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
 import { actionLog, jutsu, jutsuReskin, userData, userJutsu } from "@/drizzle/schema";
 import * as actualModerator from "@/libs/moderator";
 import { jutsuRouter } from "@/server/api/routers/jutsu";

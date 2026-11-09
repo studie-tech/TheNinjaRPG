@@ -8,31 +8,37 @@ import {
 import {
   battle,
   clan,
+  quest,
+  questHistory,
   userData,
   village,
   villageStructure,
-  quest,
-  questHistory,
   war,
   warKill,
 } from "@/drizzle/schema";
 import { updateBattle, updateWars } from "@/libs/combat/database";
-import type { CompleteBattle, CombatResult } from "@/libs/combat/types";
-import { SimpleObjective } from "@/validators/objectives";
-import { ObjectiveReward, PostProcessedRewardSchema } from "@/validators/rewards";
-import { villageMissionRouter } from "@/server/api/routers/villageMission";
+import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
+import * as socials from "@/libs/socials";
 import { kageRouter } from "@/server/api/routers/kage";
 import { questsRouter } from "@/server/api/routers/quests";
+import { villageMissionRouter } from "@/server/api/routers/villageMission";
 import { commitQuestObjectiveRewards } from "@/server/utils/questConsequences";
-import * as socials from "@/libs/socials";
-import { recordVillageMissionProgress } from "@/server/utils/villageMission";
 import { accrueVillageStructureMaintenance } from "@/server/utils/villageMaintenance";
+import { recordVillageMissionProgress } from "@/server/utils/villageMission";
+import { SimpleObjective } from "@/validators/objectives";
+import { ObjectiveReward, PostProcessedRewardSchema } from "@/validators/rewards";
+import { makeBattleUser, makeCompleteBattle } from "../../../setup/combat";
 import {
-  insertUsers,
-  insertQuests,
-  insertQuestHistory,
   insertClans,
+  insertQuestHistory,
+  insertQuests,
+  insertUsers,
 } from "../../../setup/factories";
+import {
+  barrier,
+  interceptExecute,
+  withoutTransactions,
+} from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -42,12 +48,6 @@ import {
   resetTables,
   runRawSql,
 } from "../../../setup/testDatabase";
-import { makeBattleUser, makeCompleteBattle } from "../../../setup/combat";
-import {
-  barrier,
-  withoutTransactions,
-  interceptExecute,
-} from "../../../setup/statements";
 
 const state = async () =>
   (await getTestDatabase()).query.village.findFirst({ where: eq(village.id, "v1") });

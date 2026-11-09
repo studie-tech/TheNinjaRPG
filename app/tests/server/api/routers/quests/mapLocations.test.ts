@@ -1,5 +1,3 @@
-import { stubRateLimitTransport } from "../../../../setup/rateLimit";
-import { QuestReward } from "@/validators/rewardPackages";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { mapAsset, quest } from "@/drizzle/schema";
@@ -11,7 +9,9 @@ import {
   validateQuestStructures,
 } from "@/server/utils/mapLocations";
 import { MoveToObjective } from "@/validators/objectives";
+import { QuestReward } from "@/validators/rewardPackages";
 import { insertQuests } from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,

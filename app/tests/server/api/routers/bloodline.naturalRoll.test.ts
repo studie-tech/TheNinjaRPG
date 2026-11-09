@@ -1,5 +1,5 @@
-import * as crypto from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as crypto from "node:crypto";
 import { eq } from "drizzle-orm";
 import { ROLL_CHANCE } from "@/drizzle/constants";
 import {

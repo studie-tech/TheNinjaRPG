@@ -1,5 +1,5 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, describe, expect, it } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import {
   mergeQueryChanges,
   prepareQueryUpdate,

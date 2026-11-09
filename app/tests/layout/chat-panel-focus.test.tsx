@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
 import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import * as media from "@/hooks/useMediaQuery";

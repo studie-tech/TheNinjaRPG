@@ -1,7 +1,7 @@
-import source from "./catalog.json";
-import credits from "./credits.json";
 import type { LpcConfig, LpcLayout } from "../../../src/validators/lpcAsset";
 import { lpcConfigValidator } from "../../../src/validators/lpcAsset";
+import source from "./catalog.json";
+import credits from "./credits.json";
 
 const catalog = source as unknown as {
   entries: Record<

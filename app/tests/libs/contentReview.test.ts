@@ -1,6 +1,6 @@
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import sharp from "sharp";
-import { afterEach, describe, expect, it, vi } from "bun:test";
 import { ContentAuditFocuses } from "@/drizzle/constants";
 import { ENTITY_CONFIG, normalizeEditable } from "@/libs/contentReview/entities";
 import * as epidemic from "@/libs/contentReview/epidemic";
@@ -9,8 +9,6 @@ import {
   epidemicAssetId,
   materializeChoice,
 } from "@/libs/contentReview/media";
-import * as replicate from "@/libs/replicate";
-import type { DrizzleClient } from "@/server/db";
 import {
   directMediaValue,
   getAtPath,
@@ -31,6 +29,8 @@ import {
   resolveFocus,
 } from "@/libs/contentReview/snapshot";
 import { canonicalJson, contentVersion, sameValue } from "@/libs/contentReview/version";
+import * as replicate from "@/libs/replicate";
+import type { DrizzleClient } from "@/server/db";
 import { agentAuditOutputSchema } from "@/validators/contentReview";
 
 describe("content versions", () => {

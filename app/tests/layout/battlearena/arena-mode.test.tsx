@@ -1,6 +1,5 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import {
   act,
   cleanup,
@@ -9,18 +8,19 @@ import {
   screen,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
+import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import * as combatHooks from "@/hooks/combat";
-import * as loadoutNames from "@/hooks/useLoadoutNames";
 import * as navigation from "@/hooks/navigation";
 import * as sleep from "@/hooks/sleep";
 import * as tutorial from "@/hooks/tutorial";
+import * as loadoutNames from "@/hooks/useLoadoutNames";
 import { ArenaMode } from "@/layout/battlearena/ArenaMode";
 import * as image from "@/layout/Image";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import * as jutsuLoadout from "@/layout/JutsuLoadoutSelector";
 import * as userContext from "@/utils/UserContext";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 
 let mutate: ReturnType<typeof vi.fn>;
 let toggleSleep: ReturnType<typeof vi.fn>;

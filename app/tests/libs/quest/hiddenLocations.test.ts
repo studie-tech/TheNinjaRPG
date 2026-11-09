@@ -1,5 +1,5 @@
-import { SECTOR_WIDTH, SECTOR_HEIGHT } from "@/drizzle/constants";
 import { describe, expect, it } from "bun:test";
+import { SECTOR_HEIGHT, SECTOR_WIDTH } from "@/drizzle/constants";
 import { getNewTrackers } from "@/libs/quest";
 import { getPublicQuestUser } from "@/libs/quest/projection";
 import type { UserWithRelations } from "@/routers/profile";

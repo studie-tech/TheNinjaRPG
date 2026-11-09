@@ -1,6 +1,6 @@
+import { expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { expect } from "bun:test";
 import mysql from "mysql2/promise";
 
 type MigrationQuery = <T extends mysql.QueryResult = mysql.QueryResult>(

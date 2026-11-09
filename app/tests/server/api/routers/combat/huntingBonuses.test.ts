@@ -1,8 +1,13 @@
-import { combatSharedCooldown, jutsuEquipLimit } from "@/drizzle/schema";
-import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 import { afterEach, expect, it, vi } from "bun:test";
 import { getTableColumns } from "drizzle-orm";
-import { battle, item, userData, userItem } from "@/drizzle/schema";
+import {
+  battle,
+  combatSharedCooldown,
+  item,
+  jutsuEquipLimit,
+  userData,
+  userItem,
+} from "@/drizzle/schema";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import type { CompleteBattle } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
@@ -11,6 +16,7 @@ import type { DrizzleClient } from "@/server/db";
 import { IncreaseHuntingYield } from "@/validators/combat";
 import { makeUser } from "../../../../setup/combat";
 import { huntingBattleState } from "../../../../setup/hunting";
+import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 
 const defaults = (table: typeof userData | typeof item | typeof userItem) =>
   Object.fromEntries(

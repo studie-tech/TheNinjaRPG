@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as uploadthing from "uploadthing/server";
-import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
 import { removeAccountProcessorData } from "@/server/utils/accountDeletion/processors";
+import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
 
 const originalEnv = { ...process.env };
 const findMany = vi.fn();

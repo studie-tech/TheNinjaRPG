@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
@@ -10,7 +11,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runInNewContext } from "node:vm";
-import { describe, expect, it } from "bun:test";
 
 const MOBILE_ROOT = join(import.meta.dirname, "../../../mobile");
 const PRODUCTION = "https://www.theninja-rpg.com";

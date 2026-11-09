@@ -1,8 +1,5 @@
-import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
-import * as towerActors from "@/libs/rendering/scenes/towerDefenseActors";
-import * as towerEffects from "@/libs/rendering/scenes/towerDefenseEffects";
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import {
   Assets,
   BufferImageSource,
@@ -13,13 +10,16 @@ import {
 } from "pixi.js";
 import { IMG_FARM_PLOT_SOIL, TD_SHURIKEN_IMAGE_URL } from "@/drizzle/constants";
 import { useGameScene } from "@/hooks/game-scene";
-import * as runtime from "@/libs/rendering/runtime";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
+import * as runtime from "@/libs/rendering/runtime";
 import { createFarmScene } from "@/libs/rendering/scenes/farm";
 import { farmPlotPosition, farmViewScale } from "@/libs/rendering/scenes/farmLayout";
 import { createTowerDefenseScene } from "@/libs/rendering/scenes/towerDefense";
+import * as towerActors from "@/libs/rendering/scenes/towerDefenseActors";
+import * as towerEffects from "@/libs/rendering/scenes/towerDefenseEffects";
 import { createTowerDefenseEffects } from "@/libs/rendering/scenes/towerDefenseEffects";
 import { prepareTowerDefenseTerrain } from "@/libs/rendering/scenes/towerDefenseTerrain";
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import type { FarmPlotState, FarmVisualState } from "@/validators/farming";
 import type { TowerDefenseProjectile } from "@/validators/towerDefense";
 

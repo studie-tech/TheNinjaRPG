@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import LoadoutSelector from "@/layout/LoadoutSelector";
 import * as userContext from "@/utils/UserContext";
 

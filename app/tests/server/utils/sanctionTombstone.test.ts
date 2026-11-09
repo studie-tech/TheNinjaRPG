@@ -1,6 +1,6 @@
-import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { and, eq } from "drizzle-orm";
+import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import {
   accountDeletion,
   actionLog,
@@ -15,8 +15,8 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { profileRouter } from "@/routers/profile";
-import type { DrizzleClient } from "@/server/db";
 import { reportsRouter } from "@/server/api/routers/reports";
+import type { DrizzleClient } from "@/server/db";
 import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
 import { removeAccountIdentity } from "@/server/utils/accountDeletion/identity";
 import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/storeIdentity";
@@ -28,6 +28,7 @@ import {
   removeExpiredSanctionTombstones,
   type SanctionIdentity,
 } from "@/server/utils/sanctionTombstone";
+import { deferred } from "../../setup/deferred";
 import { insertUsers } from "../../setup/factories";
 import { insertRegistrationContent, registerCharacter } from "../../setup/registration";
 import {
@@ -36,12 +37,12 @@ import {
   stubClerkUsers,
 } from "../../setup/sanctions";
 import {
+  aroundStatements,
   beforeStatements,
   failStatements,
   interceptExecute,
-  sqlText,
   overrideQuery,
-  aroundStatements,
+  sqlText,
 } from "../../setup/statements";
 import {
   callerFor,
@@ -49,7 +50,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
-import { deferred } from "../../setup/deferred";
 
 const DAY = 86_400_000;
 const SANCTIONED = "user_sanctioned";

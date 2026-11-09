@@ -1,6 +1,6 @@
+import { describe, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { waitFor } from "@testing-library/react";
 import {
   MutationObserver,
   type MutationObserverOptions,
@@ -8,14 +8,14 @@ import {
   QueryObserver,
   type QueryObserverOptions,
 } from "@tanstack/react-query";
-import { describe, expect, it, vi } from "bun:test";
+import { waitFor } from "@testing-library/react";
 import type { RouterInputs } from "@/app/_trpc/client";
+import { getConsumedRaidBuffs, getInventoryQuantities } from "@/deltas/item";
 import {
   finishItemConsumeRequest,
   getItemConsumeErrorMessage,
 } from "@/libs/itemConsumption";
-import { getInventoryQuantities, getConsumedRaidBuffs } from "@/deltas/item";
-import { updateQueryCache, prepareQueryUpdate } from "@/utils/queryCache";
+import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
 
 const sourceRoot = join(import.meta.dirname, "../../src");
 const read = (file: string) => readFileSync(join(sourceRoot, file), "utf8");

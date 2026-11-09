@@ -1,13 +1,13 @@
+import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "bun:test";
 import globe from "@/data/hexasphere.json";
 import { MAP_WAKE_ISLAND_SECTOR } from "@/drizzle/constants";
+import { type EdgeIndex, sectorMapEdgeForGlobeEdge } from "@/libs/sector-map/crossing";
 import {
   getWorldProtectedLandSectors,
   WORLD_LANDMARKS,
 } from "@/libs/sector-map/landmarks";
-import { type EdgeIndex, sectorMapEdgeForGlobeEdge } from "@/libs/sector-map/crossing";
 import { globalElevation, globalMoisture } from "@/libs/sector-map/worldgen";
 import { buildTiledJson } from "../../scripts/generate-sector-map";
 

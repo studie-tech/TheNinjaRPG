@@ -1,5 +1,5 @@
-import { eq, sql } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 import {
   COST_CHANGE_GENDER,
   COST_CHANGE_USERNAME,

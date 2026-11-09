@@ -1,6 +1,6 @@
+import { describe, expect, it } from "bun:test";
 import { and } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { describe, expect, it } from "bun:test";
 import { skillTreeDatabaseFilter } from "@/server/api/routers/skillTree";
 
 describe("skill tree database filter", () => {

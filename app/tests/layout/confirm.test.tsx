@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
   act,
   cleanup,
@@ -6,7 +7,6 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { ComponentProps } from "react";
 import Confirm from "@/layout/Confirm";
 import * as Modal from "@/layout/Modal";

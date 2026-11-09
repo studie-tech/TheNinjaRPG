@@ -6,8 +6,8 @@ import {
   isConversationMuted,
   isConversationUnread,
   isTavernMuted,
-  unreadForTavern,
   toggleMutedConversation,
+  unreadForTavern,
 } from "@/libs/chatPanel";
 
 const user = (

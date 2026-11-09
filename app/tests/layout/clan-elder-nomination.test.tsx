@@ -1,12 +1,12 @@
-import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
+import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import * as client from "@/app/_trpc/client";
-import * as ContentBox from "@/layout/ContentBox";
+import * as SelectModule from "@/components/ui/select";
 import * as navigation from "@/hooks/navigation";
 import * as AvatarImage from "@/layout/Avatar";
+import * as ContentBox from "@/layout/ContentBox";
 import { ClanInfo } from "@/layout/clan/ClanInfo";
-import * as SelectModule from "@/components/ui/select";
 import * as UserContext from "@/utils/UserContext";
 
 type ClanData = ComponentProps<typeof ClanInfo>["clanData"];

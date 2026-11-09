@@ -1,4 +1,3 @@
-import { fetchBattle } from "@/queries/combat";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { ENERGY_QUEST_REWARDS, TERMINAL_DIALOG_PREFIX } from "@/drizzle/constants";
@@ -13,24 +12,25 @@ import {
 import { updateUser } from "@/libs/combat/database";
 import { calcBattleResult } from "@/libs/combat/settlement";
 import { Pusher, type PusherClient } from "@/libs/pusher";
-import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
+import { fetchBattle } from "@/queries/combat";
 import { bankRouter } from "@/server/api/routers/bank";
+import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
 import { createTRPCRouter } from "@/server/api/trpc";
+import { periodStart } from "@/utils/time";
 import {
   DialogObjective,
   InstantStartBattleObjective,
   QuestTracker,
   ResetQuestObjective,
 } from "@/validators/objectives";
-import { periodStart } from "@/utils/time";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
+  insertDefaultAiProfile,
   insertQuestHistory,
   insertQuests,
   insertUsers,
-  insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import { beforeStatements, failStatements } from "../../../../setup/statements";
 import {

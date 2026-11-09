@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, render, waitFor } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import * as itemWithEffects from "@/layout/ItemWithEffects";
@@ -9,7 +9,7 @@ import * as skillTreeFiltering from "@/layout/SkillTreeFiltering";
 import * as pagination from "@/libs/pagination";
 import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 let queryClient: QueryClient;
 let skills: { id: string; name: string; folder: { name: string } | null }[];

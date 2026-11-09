@@ -1,5 +1,5 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, render } from "@testing-library/react";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import * as tutorial from "@/hooks/tutorial";
 import * as install from "@/hooks/useInstallPrompt";

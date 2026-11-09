@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import * as SelectModule from "@/components/ui/select";
 import * as localstorage from "@/hooks/localstorage";
 import { MobileNavSettings } from "@/layout/profileEdit/MobileNavSettings";

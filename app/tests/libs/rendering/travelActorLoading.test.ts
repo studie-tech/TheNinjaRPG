@@ -1,4 +1,3 @@
-import { lpcCatalog } from "../../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
   Assets,
@@ -18,17 +17,18 @@ import {
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
-import type { WorldBounds } from "@/libs/rendering/visibility";
-import { standingOffset } from "@/libs/rendering/terrainElevation";
 import {
-  travelActorRecipes,
   createTravelActors,
   type TravelActorMovement,
   type TravelActorsSnapshot,
+  travelActorRecipes,
 } from "@/libs/rendering/scenes/travelActors";
+import { standingOffset } from "@/libs/rendering/terrainElevation";
+import type { WorldBounds } from "@/libs/rendering/visibility";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";
 import { deferred } from "../../setup/deferred";
+import { lpcCatalog } from "../../setup/lpc";
 
 const cleanups: (() => void)[] = [];
 const originalCreate = characters.createLpcCharacter;

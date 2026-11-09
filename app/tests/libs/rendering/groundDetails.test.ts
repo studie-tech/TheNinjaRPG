@@ -1,19 +1,19 @@
-import alea from "alea";
 import { describe, expect, it } from "bun:test";
+import alea from "alea";
 import { SECTOR_MAP_VERSION } from "@/drizzle/constants";
 import type { VillageStructure } from "@/drizzle/schema";
 import {
   MAX_SECTOR_GROUND_DETAILS,
   sectorSpriteDescriptions,
 } from "@/libs/rendering/sectorSprites";
-import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
 import { WORLD_UNDERSTORY } from "@/libs/rendering/worldArt";
 import {
   getWorldStructureEntrance,
   resolveWorldStructure,
+  WORLD_STRUCTURE_ART,
 } from "@/libs/rendering/worldStructures";
-import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
+import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import {

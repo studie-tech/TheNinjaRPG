@@ -1,10 +1,12 @@
-import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 import { REMOVAL_COST } from "@/drizzle/constants";
 import { actionLog, userData, userQueue } from "@/drizzle/schema";
 import { sageModeRouter } from "@/server/api/routers/sageMode";
 import { insertUsers } from "../../../setup/factories";
+import { queueEnergy } from "../../../setup/queues";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
+import { beforeStatements } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -12,8 +14,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { beforeStatements } from "../../../setup/statements";
-import { queueEnergy } from "../../../setup/queues";
 
 const userId = "sage-cache-player";
 const snapshot = {

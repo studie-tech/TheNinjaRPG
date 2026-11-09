@@ -1,14 +1,9 @@
-import * as liveActivity from "@/server/utils/push/liveActivity";
-import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
   KAGE_DEFENSE_INSTANT_REQUEST_MINUTES,
   KAGE_PRESTIGE_REQUIREMENT,
 } from "@/drizzle/constants";
-import { Pusher } from "@/libs/pusher";
-import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
-import * as pusherModule from "@/libs/pusher";
 import {
   aiProfile,
   battle,
@@ -19,28 +14,34 @@ import {
   villageElderVote,
   war,
 } from "@/drizzle/schema";
-import * as combat from "@/server/api/routers/combat";
+import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { updateBattle, updateKage } from "@/libs/combat/database";
-import { makeBattleUser, makeCompleteBattle } from "../../../setup/combat";
-import { villageRouter } from "@/server/api/routers/village";
+import { calcBattleResult } from "@/libs/combat/settlement";
+import * as pusherModule from "@/libs/pusher";
+import { Pusher } from "@/libs/pusher";
+import * as combat from "@/server/api/routers/combat";
 import { kageRouter } from "@/server/api/routers/kage";
+import { villageRouter } from "@/server/api/routers/village";
+import type { DrizzleClient } from "@/server/db";
 import {
   syncKageDefense,
   syncLockedKageDefense,
   withinKageChallengeLimits,
   withKageDefense,
 } from "@/server/utils/kage";
-import type { DrizzleClient } from "@/server/db";
-import { calcBattleResult } from "@/libs/combat/settlement";
+import * as liveActivity from "@/server/utils/push/liveActivity";
+import { getKageSlots } from "@/utils/kage";
+import { makeBattleUser, makeCompleteBattle } from "../../../setup/combat";
+import { deferred } from "../../../setup/deferred";
+import { insertDefaultAiProfile, insertUsers } from "../../../setup/factories";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
   beforeStatements,
-  failStatements,
-  inTransactions,
   beforeTransaction,
   failCommits,
+  failStatements,
+  inTransactions,
 } from "../../../setup/statements";
-import { getKageSlots } from "@/utils/kage";
-import { insertUsers, insertDefaultAiProfile } from "../../../setup/factories";
 import {
   callerFor,
   callerForDatabase,
@@ -49,7 +50,6 @@ import {
   recordQueries,
   resetTables,
 } from "../../../setup/testDatabase";
-import { deferred } from "../../../setup/deferred";
 
 const now = new Date("2026-10-12T12:00:00Z");
 const windows = [

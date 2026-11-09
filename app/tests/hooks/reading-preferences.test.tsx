@@ -1,5 +1,5 @@
-import { act, cleanup, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { act, cleanup, render, renderHook } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import {
   ReadingPreferencesProvider,

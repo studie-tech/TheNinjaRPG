@@ -1,5 +1,5 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "bun:test";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { getFilter, useFiltering } from "@/layout/SageModeFiltering";
 
 afterEach(cleanup);

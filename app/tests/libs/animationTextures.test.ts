@@ -1,14 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { Assets, BufferImageSource, Sprite, Texture, TextureSource } from "pixi.js";
-import { spriteGroundContact, textureGroundContact } from "@/libs/rendering/assets";
 import {
   acquireAnimationTexture,
   animationTextureUrl,
   clearUnusedAnimationTextures,
 } from "@/libs/rendering/animationTextures";
+import { spriteGroundContact, textureGroundContact } from "@/libs/rendering/assets";
 import { createCharacterAnimation } from "@/libs/rendering/characterAnimation";
 import type { CharacterAnimation } from "@/libs/spriteAnimations";
 import { deferred } from "../setup/deferred";
+
 const idle: CharacterAnimation = {
   id: "idle",
   name: "Idle",

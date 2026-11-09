@@ -1,6 +1,6 @@
+import { beforeEach, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { beforeEach, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { aiSpriteAnimation, spriteAnimation, userData } from "@/drizzle/schema";

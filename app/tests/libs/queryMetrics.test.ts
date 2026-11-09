@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
+import type * as Sentry from "@sentry/nextjs";
 import {
   InfiniteQueryObserver,
   onlineManager,
   QueryClient,
   QueryObserver,
 } from "@tanstack/react-query";
+import { waitFor } from "@testing-library/react";
 import {
   createTRPCClient,
   getUntypedClient,
   httpBatchLink,
   retryLink,
 } from "@trpc/client";
-import { waitFor } from "@testing-library/react";
-import type * as Sentry from "@sentry/nextjs";
 import superjson from "superjson";
 import type { AppRouter } from "@/api/root";
 import {

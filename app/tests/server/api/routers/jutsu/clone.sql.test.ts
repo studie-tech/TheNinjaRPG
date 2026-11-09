@@ -2,7 +2,7 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq, ne } from "drizzle-orm";
 import { actionLog, jutsu, userData } from "@/drizzle/schema";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
-import { insertUsers, insertJutsus } from "../../../../setup/factories";
+import { insertJutsus, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,

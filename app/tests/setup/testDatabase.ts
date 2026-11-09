@@ -10,8 +10,9 @@
  *   TEST_MYSQL_URL='mysql://root:placeholder@127.0.0.1:3307/tnr_test' bun test
  * With neither set, `describeWithDatabase` skips and nothing here connects.
  */
-import { execFileSync } from "node:child_process";
+
 import { describe } from "bun:test";
+import { execFileSync } from "node:child_process";
 import type {
   AnyProcedure,
   inferProcedureInput,
@@ -20,8 +21,8 @@ import type {
 import { getTableName, type Table } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
-import type { DrizzleClient } from "@/server/db";
 import * as schema from "@/drizzle/schema";
+import type { DrizzleClient } from "@/server/db";
 import { withAfterTasks } from "./after";
 import { pollUntil } from "./statements";
 import { readTestDatabaseUrl } from "./testDatabaseConfig";

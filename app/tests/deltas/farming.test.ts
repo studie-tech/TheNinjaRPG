@@ -6,9 +6,9 @@ import {
   getFarmProfileUpdate,
 } from "@/deltas/farming";
 import { getFarmingLevel } from "@/libs/farming";
+import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
-import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 
 const emptyPlot: FarmPlotState = {
   id: "plot-1",

@@ -1,9 +1,10 @@
-import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 import { historicalAvatar, userData } from "@/drizzle/schema";
 import * as replicate from "@/libs/replicate";
 import { avatarRouter } from "@/server/api/routers/avatar";
 import { insertUsers } from "../../../setup/factories";
+import { beforeStatements } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -11,9 +12,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-
 import { countUserReads } from "../../../setup/userReads";
-import { beforeStatements } from "../../../setup/statements";
 
 const userId = "avatar-cache-user";
 const avatar = "https://example.com/cache-avatar.png";

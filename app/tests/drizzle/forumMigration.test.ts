@@ -1,6 +1,6 @@
 import { expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import mysql from "mysql2/promise";

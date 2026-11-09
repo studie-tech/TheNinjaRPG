@@ -19,7 +19,7 @@ import {
   type PendingRewardChoice,
   type RewardChoiceCard,
 } from "@/validators/rewards";
-import { rewardOwnership as ownership, rewardUser as makeUser } from "../setup/quest";
+import { rewardUser as makeUser, rewardOwnership as ownership } from "../setup/quest";
 
 const reward = (input: Parameters<typeof ObjectiveReward.parse>[0]) =>
   ObjectiveReward.parse(input);

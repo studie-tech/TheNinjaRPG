@@ -1,5 +1,10 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
+import {
+  getJutsuTrainingTimers,
+  getTrainingJutsus,
+  getUnchangedJutsuTrainingQueue,
+} from "@/deltas/jutsu";
 import { TERRITORY_WAR_BOOST_PERCENT } from "@/drizzle/constants";
 import {
   jutsu,
@@ -12,20 +17,15 @@ import {
 } from "@/drizzle/schema";
 import { calcJutsuTrainTime } from "@/libs/train";
 import {
-  getTrainingJutsus,
-  getJutsuTrainingTimers,
-  getUnchangedJutsuTrainingQueue,
-} from "@/deltas/jutsu";
-import {
-  updateUserJutsuForStartTraining,
   updateJutsuLoadoutForAppendJutsuIdToLoadoutAtomically,
   updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically,
+  updateUserJutsuForStartTraining,
 } from "@/queries/jutsu";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { profileRouter } from "@/server/api/routers/profile";
 import {
-  insertUsers,
   insertJutsus,
+  insertUsers,
   insertUserVotes,
 } from "../../../../setup/factories";
 import {

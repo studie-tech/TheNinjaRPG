@@ -1,22 +1,22 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   QueryClient,
   QueryClientProvider,
-  useMutation,
   type UseMutationOptions,
+  useMutation,
 } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { ReactNode } from "react";
-import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import HuntingEditor from "@/app/[shell]/manual/hunting/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as UserContext from "@/utils/UserContext";
-import { huntingHabitatContent } from "../../setup/hunting";
 import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { huntingHabitatContent } from "../../setup/hunting";
 
 type SaveInput = RouterInputs["hunting"]["save"];
 type SaveResult = RouterOutputs["hunting"]["save"];

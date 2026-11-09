@@ -1,11 +1,11 @@
-import {
-  LPC_CONFIG_MAX_BYTES,
-  lpcConfigValidator,
-  type LpcConfig,
-} from "@/validators/lpcAsset";
 import { describe, expect, it } from "bun:test";
 import { previewSpriteDesign, resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { lpcLicenseUrl } from "@/libs/lpc/attribution";
+import {
+  LPC_CONFIG_MAX_BYTES,
+  type LpcConfig,
+  lpcConfigValidator,
+} from "@/validators/lpcAsset";
 import { lpcAssets } from "../../setup/lpc";
 
 describe("LPC design preview and credits", () => {

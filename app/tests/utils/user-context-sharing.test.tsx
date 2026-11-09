@@ -1,27 +1,27 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
 import {
   QueryClient,
   QueryClientProvider,
+  type UseQueryOptions,
   useMutation,
   useQuery,
-  type UseQueryOptions,
 } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import * as trpc from "@trpc/react-query";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { type ContextType, type ReactNode, Profiler, useContext } from "react";
+import { type ContextType, Profiler, type ReactNode, useContext } from "react";
 import * as client from "@/app/_trpc/client";
 import { ActivityStreakPanel } from "@/layout/ActivityStreakPanel";
 import Countdown from "@/layout/Countdown";
 import * as pusher from "@/layout/PusherHandler";
 import * as mutationToast from "@/libs/toast";
 import {
-  UserContextProvider,
-  useUserDataRef,
   selectUserWithoutPosition,
+  UserContextProvider,
   useUserData,
-  useUserInfo,
+  useUserDataRef,
   useUserDataSelector,
+  useUserInfo,
 } from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { shareUserCache } from "@/utils/userCacheSharing";

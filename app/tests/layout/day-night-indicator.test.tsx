@@ -1,11 +1,11 @@
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { createContext, Profiler, useContext, useState } from "react";
 import {
+  type UserRole,
   WORLD_CYCLE_SECONDS,
   WORLD_DAY_SECONDS,
   WORLD_NIGHT_SECONDS,
-  type UserRole,
 } from "@/drizzle/constants";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import { getWorldCyclePosition } from "@/libs/dayNight";

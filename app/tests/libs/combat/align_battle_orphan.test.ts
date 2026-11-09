@@ -1,7 +1,7 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { alignBattle } from "@/libs/combat/turn";
-import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import type { BattleUserState } from "@/libs/combat/types";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 /**
  * alignBattle must remove masterless summons BEFORE it selects the next actor.

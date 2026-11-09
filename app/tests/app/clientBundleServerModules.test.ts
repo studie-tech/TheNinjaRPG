@@ -1,6 +1,6 @@
+import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
-import { describe, expect, it } from "bun:test";
 
 /**
  * Everything a "use client" module imports ships to the browser and runs there, so a

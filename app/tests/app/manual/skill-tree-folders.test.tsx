@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import ManualSkillTreeFolder from "@/app/[shell]/manual/skillTreeFolder/page";
 import type { SkillTreeFolder } from "@/drizzle/schema";

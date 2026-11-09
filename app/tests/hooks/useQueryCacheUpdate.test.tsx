@@ -1,6 +1,6 @@
+import { afterEach, describe, expect, it } from "bun:test";
 import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "bun:test";
 import type { ReactNode } from "react";
 import { getRenamedLoadouts } from "@/deltas/loadout";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";

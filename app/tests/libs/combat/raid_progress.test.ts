@@ -1,15 +1,15 @@
-import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
 import { notification, quest, raidParticipation, userData } from "@/drizzle/schema";
 import { updateRaidProgress } from "@/libs/combat/database";
 import type { CompleteBattle } from "@/libs/combat/types";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import { insertQuests, insertUsers } from "../../setup/factories";
 import {
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
-import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 const USER_ID = "raid-user";
 const QUEST_ID = "raid-quest-1";

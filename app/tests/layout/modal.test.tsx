@@ -1,12 +1,12 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as dialogComponents from "@/components/ui/dialog";
+import { NumberInput } from "@/components/ui/number-input";
 import Modal, {
   modalScrollableBodyClassName,
   modalViewportClassName,
 } from "@/layout/Modal";
-import { NumberInput } from "@/components/ui/number-input";
 import { stubDialog } from "../setup/dialog";
 
 let restoreDialog: () => void;

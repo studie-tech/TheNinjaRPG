@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import * as characterPreview from "@/layout/CharacterPreview";
 import { EquipmentPreview } from "@/layout/EquipmentPreview";
 import { resolveSpriteAppearance, type SpriteUser } from "@/libs/lpc/appearance";
 import type { SpriteAppearance } from "@/validators/lpc";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 beforeEach(() => {

@@ -1,5 +1,5 @@
-import { userData, userJutsu, aiProfile } from "@/drizzle/schema";
 import { eq, notExists } from "drizzle-orm";
+import { aiProfile, userData, userJutsu } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
 import { executeSqlDump } from "./sqlDump";
 

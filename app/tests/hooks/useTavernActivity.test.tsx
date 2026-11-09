@@ -1,5 +1,5 @@
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
 import type Pusher from "pusher-js";
 import * as client from "@/app/_trpc/client";
@@ -12,8 +12,8 @@ import {
   userData,
 } from "@/drizzle/schema";
 import { useConversationViewing } from "@/hooks/useConversationViewing";
-import * as taverns from "@/hooks/useTaverns";
 import { useTavernActivity } from "@/hooks/useTavernActivity";
+import * as taverns from "@/hooks/useTaverns";
 import {
   chatMentionsAtom,
   chatPanelAtom,

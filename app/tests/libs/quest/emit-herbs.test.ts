@@ -1,10 +1,10 @@
-import {
-  trackerQuest as makeQuest,
-  trackerUser as makeUser,
-  trackerGoalValue as goalValue,
-} from "../../setup/quest";
 import { describe, expect, it } from "bun:test";
 import { getNewTrackers } from "@/libs/quest";
+import {
+  trackerGoalValue as goalValue,
+  trackerQuest as makeQuest,
+  trackerUser as makeUser,
+} from "../../setup/quest";
 
 const herbsObjective = (id: string, value = 10) => ({
   id,

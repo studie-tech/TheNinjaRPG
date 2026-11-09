@@ -1,6 +1,7 @@
 /** Ordinary and delayed activity cleanup must preserve another live dungeon's reservation. */
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import { CLAN_LOBBY_SECONDS, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import {
   actionLog,
   aiProfile,
@@ -25,27 +26,26 @@ import {
   war,
   warAlly,
 } from "@/drizzle/schema";
-import { CLAN_LOBBY_SECONDS, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import { dungeonRouter } from "@/server/api/routers/dungeon";
-import { shrineRouter } from "@/server/api/routers/shrine";
-import { clanRouter } from "@/server/api/routers/clan";
-import { territoryWarRouter } from "@/server/api/routers/territoryWar";
-import { petsRouter } from "@/server/api/routers/pets";
-import { wakeQueuedUser } from "@/queries/profile";
+import { Pusher } from "@/libs/pusher";
 import { updateUserDataForInitiateClanBattle } from "@/queries/clan";
 import { updateUserDataForGET3 } from "@/queries/cleaner";
+import { wakeQueuedUser } from "@/queries/profile";
+import { clanRouter } from "@/server/api/routers/clan";
+import { dungeonRouter } from "@/server/api/routers/dungeon";
+import { petsRouter } from "@/server/api/routers/pets";
+import { shrineRouter } from "@/server/api/routers/shrine";
+import { territoryWarRouter } from "@/server/api/routers/territoryWar";
 import { runStaleShrineLobbyCleanup } from "@/server/utils/shrineMaintenance";
-import { resumePendingWarSettlements } from "@/server/utils/war";
 import { cleanupTerritoryWarTeams } from "@/server/utils/territoryWar";
-import { Pusher } from "@/libs/pusher";
-import { dungeonContent } from "../../setup/dungeon";
+import { resumePendingWarSettlements } from "@/server/utils/war";
 import { initialPetSpecies } from "../../libs/pets/helpers/species";
+import { dungeonContent } from "../../setup/dungeon";
 import {
-  insertPetSpecies,
-  insertUsers,
-  insertDefaultAiProfile,
   insertClans,
+  insertDefaultAiProfile,
+  insertPetSpecies,
   insertUserPets,
+  insertUsers,
 } from "../../setup/factories";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import { beforeStatements, interceptExecute, sqlText } from "../../setup/statements";

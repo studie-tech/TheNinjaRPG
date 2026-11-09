@@ -1,10 +1,10 @@
-import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { describe, expect, it, vi } from "bun:test";
 import { BufferImageSource, Container, Rectangle, Sprite, Texture } from "pixi.js";
 import published from "@/libs/rendering/bakedWorldSources.json";
 import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { worldSunlight } from "@/libs/rendering/worldSunlight";
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 
 const viewport = { minX: 0, maxX: 100, minY: 0, maxY: 100 };
 const fixture = () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { ElementNames, type ElementName } from "@/drizzle/constants";
+import { type ElementName, ElementNames } from "@/drizzle/constants";
 import {
   availableUserActions,
   getActionPointCost,

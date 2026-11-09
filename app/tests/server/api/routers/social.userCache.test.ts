@@ -1,6 +1,7 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
+import { getMembershipUserPatch } from "@/deltas/social";
 import {
   aiProfile,
   battle,
@@ -22,15 +23,14 @@ import { findMembershipUserCache } from "@/queries/socialUserCache";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { profileRouter } from "@/server/api/routers/profile";
 import { shrineRouter } from "@/server/api/routers/shrine";
-import { getMembershipUserPatch } from "@/deltas/social";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
+  insertClans,
+  insertDefaultAiProfile,
   insertQuests,
   insertUsers,
-  insertDefaultAiProfile,
-  insertClans,
 } from "../../../setup/factories";
 import {
   callerForDatabase,

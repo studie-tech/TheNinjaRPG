@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { QueryClient, focusManager, onlineManager } from "@tanstack/react-query";
+import { focusManager, onlineManager, QueryClient } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
-import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import { useTerritoryWarNotice } from "@/hooks/useTerritoryWarNotice";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 type Notice = RouterOutputs["territoryWar"]["getNotice"];
 const clients: QueryClient[] = [];

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { createPetFromSpecies } from "@/libs/pets/creation";
 import { PET_AURAS, PET_CHARACTERISTICS, PET_PALETTES } from "@/libs/pets/catalogue";
+import { createPetFromSpecies } from "@/libs/pets/creation";
 import { AiRule } from "@/validators/ai";
 import { petJutsuFixture } from "./helpers/abilities";
 import { petSpeciesFixture } from "./helpers/species";

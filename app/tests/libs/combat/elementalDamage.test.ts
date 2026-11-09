@@ -1,16 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import {
+  type BasicElement,
   BasicElementName,
   type BattleType,
-  type BasicElement,
 } from "@/drizzle/constants";
 import { availableUserActions, insertAction } from "@/libs/combat/actions";
+import { computeDamagePacket } from "@/libs/combat/damagePipeline";
 import {
   getPreferredDamageElement,
   resolveElementalDamage,
 } from "@/libs/combat/elementalDamage";
 import { resolvePotencyTags } from "@/libs/combat/potency";
-import { computeDamagePacket } from "@/libs/combat/damagePipeline";
 import { clone, realizeTag } from "@/libs/combat/tags";
 import type {
   BattleUserJutsu,

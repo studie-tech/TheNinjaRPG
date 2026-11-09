@@ -1,11 +1,11 @@
-import { commitCacheConsumption } from "@/server/utils/cacheConsumption";
-import { fetchItemWithCraftingRequirements } from "@/queries/item";
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { actionLog, item, userData, userItem } from "@/drizzle/schema";
+import { CACHE_RESTRICTED_REWARD_MESSAGE } from "@/libs/weightedCache";
+import { fetchItemWithCraftingRequirements } from "@/queries/item";
 import { itemRouter } from "@/server/api/routers/item";
 import type { DrizzleClient } from "@/server/db";
-import { CACHE_RESTRICTED_REWARD_MESSAGE } from "@/libs/weightedCache";
+import { commitCacheConsumption } from "@/server/utils/cacheConsumption";
 import {
   ItemValidator,
   NonCombatConsumeRewardTag,
@@ -13,16 +13,16 @@ import {
 } from "@/validators/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
 import {
+  beforeTransaction,
+  failStatements,
+  inTransactions,
+} from "../../../../setup/statements";
+import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import {
-  inTransactions,
-  failStatements,
-  beforeTransaction,
-} from "../../../../setup/statements";
 
 /** Exercise repeated bundle grants across both stackable and non-stackable inventory rows. */
 const cacheEffect = () =>

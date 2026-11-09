@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { DIFFUSE_MAX_PERCENTAGE } from "@/drizzle/constants";
 import { applyEffects } from "@/libs/combat/process";
 import { cleanse, clear, copy, mirror } from "@/libs/combat/tags";
-import type { BattleUserState, CompleteBattle, UserEffect } from "@/libs/combat/types";
 import { alignBattle } from "@/libs/combat/turn";
+import type { BattleUserState, CompleteBattle, UserEffect } from "@/libs/combat/types";
 import { DiffuseTag, getTagSchema, tagTypes } from "@/validators/combat";
 import {
   makeBattleUser,

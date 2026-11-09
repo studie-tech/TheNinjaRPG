@@ -1,23 +1,23 @@
-import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { eq } from "drizzle-orm";
 import { MasteryNames, TOTAL_MASTERY_CAP } from "@/drizzle/constants";
-import { userData, quest, questHistory } from "@/drizzle/schema";
-import { masteryQuestTemplates } from "../../setup/mastery";
+import { quest, questHistory, userData } from "@/drizzle/schema";
 import { isAvailableUserQuests } from "@/libs/quest/availability";
-import { QuestReward } from "@/validators/rewardPackages";
-import { ObjectiveReward } from "@/validators/rewards";
+import { fetchQuestDiscoverySummaryCandidates } from "@/queries/quests";
 import {
   masteryGainUpdates,
   masteryRankUpdate,
 } from "@/server/utils/masteryProgression";
+import { QuestReward } from "@/validators/rewardPackages";
+import { ObjectiveReward } from "@/validators/rewards";
 
 import { insertUsers } from "../../setup/factories";
+import { masteryQuestTemplates } from "../../setup/mastery";
 import {
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
-import { fetchQuestDiscoverySummaryCandidates } from "@/queries/quests";
 
 const USER_ID = "mastery-concurrency";
 const readPlayer = async () =>

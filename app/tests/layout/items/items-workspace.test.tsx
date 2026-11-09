@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   act,
   cleanup,
@@ -7,7 +8,6 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
@@ -19,8 +19,8 @@ import * as equipmentPreview from "@/layout/EquipmentPreview";
 import * as hotkeyControls from "@/layout/HotkeyControls";
 import * as image from "@/layout/Image";
 import * as itemWithEffects from "@/layout/ItemWithEffects";
-import * as inspector from "@/layout/items/ItemInspector";
 import { USER_ITEM_DRAG_TYPE } from "@/layout/items/ItemCard";
+import * as inspector from "@/layout/items/ItemInspector";
 import { ItemsWorkspace } from "@/layout/items/ItemsWorkspace";
 import * as itemLib from "@/libs/item";
 import * as mastery from "@/libs/mastery";

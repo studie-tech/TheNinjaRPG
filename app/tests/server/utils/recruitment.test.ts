@@ -1,6 +1,6 @@
+import { beforeEach, describe, expect, it } from "bun:test";
 import { asc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { beforeEach, describe, expect, it } from "bun:test";
 import {
   actionLog,
   historicalIp,

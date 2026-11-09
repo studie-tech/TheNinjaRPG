@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Assets, BufferImageSource, Container, Sprite, Texture } from "pixi.js";
 import type { GameAsset } from "@/drizzle/schema";
+import { applyEffects, expireGroundEffects } from "@/libs/combat/process";
 import type { GroundEffect, ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatEffects } from "@/libs/rendering/scenes/combatEffects";
-import { applyEffects, expireGroundEffects } from "@/libs/combat/process";
 import {
   makeBattleUser,
+  makeCompleteBattle,
   makeDamageEffect,
   makeEffect,
-  makeCompleteBattle,
 } from "../../setup/combat";
 
 let sequence = 0;

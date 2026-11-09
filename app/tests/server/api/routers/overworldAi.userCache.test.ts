@@ -1,35 +1,35 @@
-import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
+import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import { OVERWORLD_QUEST_ROLLS_PER_DAY } from "@/drizzle/constants";
 import {
   aiProfile,
   anbuSquad,
   battle,
   battleHistory,
-  trainingLog,
-  userCookingJob,
-  userQueue,
   overworldAiPlacement,
   overworldAiPlacementQuest,
   quest,
   questHistory,
+  trainingLog,
+  userCookingJob,
   userData,
   userQuestAttempt,
+  userQueue,
 } from "@/drizzle/schema";
+import { updateUserDataForGET } from "@/queries/profile";
 import { overworldAiRouter } from "@/server/api/routers/overworldAi";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
-import { updateUserDataForGET } from "@/queries/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { AllObjectives } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
+  insertDefaultAiProfile,
   insertQuests,
   insertUsers,
-  insertDefaultAiProfile,
 } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";

@@ -1,51 +1,51 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type Stripe from "stripe";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { MAX_REPS_PER_MONTH } from "@/drizzle/constants";
 import {
   paypalSubscription,
   paypalTransaction,
+  storeUserIdAlias,
   stripeCheckout,
   stripePayment,
-  storeUserIdAlias,
   userData,
   webStoreOrder,
 } from "@/drizzle/schema";
-import { MAX_REPS_PER_MONTH } from "@/drizzle/constants";
 import { paypalRouter } from "@/server/api/routers/paypal";
+import { stripeRouter } from "@/server/api/routers/stripe";
 import {
   deliverPaypalReputation,
   reconcilePaypalSubscription,
   syncTransactions,
   updateSubscription,
 } from "@/server/utils/paypal/fulfillment";
-import { reserveStoreOrder, deliverStoreOrder } from "@/server/utils/webStore";
-import { stripeRouter } from "@/server/api/routers/stripe";
-import * as stripeClient from "@/server/utils/stripe/client";
 import {
   reconcileFederalStatuses,
   setFederalStatusWithStoreFloor,
 } from "@/server/utils/purchases/federalStatus";
+import * as stripeClient from "@/server/utils/stripe/client";
 import {
   fulfillStripeInvoice,
   fulfillStripeSession,
 } from "@/server/utils/stripe/fulfillment";
+import { deliverStoreOrder, reserveStoreOrder } from "@/server/utils/webStore";
 import {
   calcFedUgradeCost,
   dollars2reps,
   fedStatusRepsCost,
   reps2dollars,
 } from "@/utils/paypal";
-import { beforeStatements, failStatements } from "../../setup/statements";
+import { restoreEnvAfterEach } from "../../setup/env";
 import { insertUsers } from "../../setup/factories";
+import { beforeStatements, failStatements } from "../../setup/statements";
+import { useStripeTestEnv } from "../../setup/stripe";
 import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
-import { restoreEnvAfterEach } from "../../setup/env";
-import { useStripeTestEnv } from "../../setup/stripe";
 
 const BUYER = "web_buyer";
 const TARGET = "web_recipient";

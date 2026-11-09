@@ -1,7 +1,7 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { resolveControlledActorId } from "@/libs/combat/turn";
-import { makeBattleUser } from "../../setup/combat";
 import type { BattleUserState, ReturnedBattle } from "@/libs/combat/types";
+import { makeBattleUser } from "../../setup/combat";
 
 // isAi matters here: resolveControlledActorId projects getTurnControl, and a
 // summon is isAi=true, so it only reaches the human action set when isPiloted

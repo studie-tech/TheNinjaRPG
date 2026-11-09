@@ -1,9 +1,9 @@
-import { Client } from "@planetscale/database";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { Client } from "@planetscale/database";
 import { staffRouter } from "@/server/api/routers/staff";
+import { restoreEnvAfterEach } from "../../../../setup/env";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { callerForDatabase } from "../../../../setup/testDatabase";
-import { restoreEnvAfterEach } from "../../../../setup/env";
 
 restoreEnvAfterEach("DEV_DATABASE_URL");
 

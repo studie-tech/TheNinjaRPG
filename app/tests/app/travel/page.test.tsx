@@ -1,23 +1,23 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { act, cleanup, fireEvent, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render, renderHook } from "@testing-library/react";
 import * as dynamic from "next/dynamic";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
-import * as UserContext from "@/utils/UserContext";
-import * as sectorVillage from "@/hooks/useSectorVillage";
-import * as map from "@/hooks/map";
+import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import * as lpc from "@/hooks/lpc";
+import * as map from "@/hooks/map";
+import * as tutorial from "@/hooks/tutorial";
+import { useGameMenu } from "@/hooks/useGameMenu";
+import * as itemCache from "@/hooks/useItemConsumptionCacheUpdate";
 import * as assetLibrary from "@/hooks/useMapAssetLibrary";
 import * as sectorCache from "@/hooks/useSectorCacheUpdate";
-import * as itemCache from "@/hooks/useItemConsumptionCacheUpdate";
-import * as tutorial from "@/hooks/tutorial";
+import * as sectorVillage from "@/hooks/useSectorVillage";
 import * as ContentBox from "@/layout/ContentBox";
 import * as TravelPosition from "@/layout/TravelPositionLabel";
 import type { UserWithRelations } from "@/server/api/routers/profile";
-import { useGameMenu } from "@/hooks/useGameMenu";
+import * as UserContext from "@/utils/UserContext";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { BaseServerResponse } from "@/validators/base";
 import {
   flushRadixFocus,

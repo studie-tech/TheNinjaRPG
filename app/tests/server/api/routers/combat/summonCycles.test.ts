@@ -23,9 +23,9 @@ import { JutsuValidator } from "@/validators/combat";
 import { makeTag, makeUser, tableDefaults } from "../../../../setup/combat";
 import { insertFightingDungeonRun } from "../../../../setup/dungeon";
 import {
-  insertUsers,
   insertDefaultAiProfile,
   insertJutsus,
+  insertUsers,
 } from "../../../../setup/factories";
 import {
   callerFor,

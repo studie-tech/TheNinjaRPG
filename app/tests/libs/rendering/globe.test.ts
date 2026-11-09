@@ -1,13 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import globe from "@/data/hexasphere.json";
 import {
+  type GlobeCamera,
   globeCameraBasis,
   globeDistanceLimits,
   globeProject,
   globeRay,
   globeRayHit,
   globeSectorAt,
-  type GlobeCamera,
 } from "@/libs/rendering/scenes/globeProjection";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 

@@ -1,5 +1,5 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it } from "bun:test";
+import { cleanup, render } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ReactionPill } from "@/layout/ReactionPill";
 

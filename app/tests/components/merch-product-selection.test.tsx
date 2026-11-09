@@ -1,7 +1,7 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
-import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import * as navigation from "next/navigation";
+import type { ComponentProps } from "react";
 import * as merchCollection from "@/components/merch/MerchCollection";
 import { MerchProductPage } from "@/components/merch/MerchProductPage";
 import * as merchProvider from "@/components/merch/MerchProvider";

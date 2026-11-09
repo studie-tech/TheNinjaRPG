@@ -1,14 +1,11 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { eq } from "drizzle-orm";
 import type { ZodType } from "zod";
 import type { UserUpdateOptions } from "@/deltas/profile";
 import { getRobPlayerUserUpdate } from "@/deltas/travel";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import type { UserDeltaResponse } from "@/validators/userCache";
-import { stubRateLimitTransport } from "../../../../setup/rateLimit";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { eq } from "drizzle-orm";
 import {
   DMG_SETTING_DEFAULTS,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
@@ -26,8 +23,11 @@ import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness
 import { Pusher } from "@/libs/pusher";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { travelRouter } from "@/server/api/routers/travel";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import { withAfterTasks } from "../../../../setup/after";
-import { insertUsers, insertDefaultAiProfile } from "../../../../setup/factories";
+import { insertDefaultAiProfile, insertUsers } from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { beforeStatements } from "../../../../setup/statements";
 import {
   callerFor,

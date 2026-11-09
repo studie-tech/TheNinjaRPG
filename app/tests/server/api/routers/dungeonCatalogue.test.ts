@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import type { DungeonContent } from "@/validators/dungeon";
 import { dungeonRouter } from "@/server/api/routers/dungeon";
+import type { DungeonContent } from "@/validators/dungeon";
 import { dungeonContent } from "../../../setup/dungeon";
 import { callerForDatabase } from "../../../setup/testDatabase";
 

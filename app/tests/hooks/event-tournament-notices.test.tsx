@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { QueryClient, focusManager, onlineManager } from "@tanstack/react-query";
+import { focusManager, onlineManager, QueryClient } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import type Pusher from "pusher-js";
 import type { PropsWithChildren } from "react";
-import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import { EVENT_TOURNAMENT_READY_SECONDS } from "@/drizzle/constants";
 import {
   useEventTournamentNoticeCache,
   useEventTournamentNotices,
 } from "@/hooks/useEventTournamentNotices";
-import { testApi, TrpcTestProviders } from "../setup/trpc";
+import { TrpcTestProviders, testApi } from "../setup/trpc";
 
 type Notices = RouterOutputs["tournament"]["getEventNotices"];
 const clients: QueryClient[] = [];

@@ -5,10 +5,11 @@ import {
   eliteJoninMilestoneBlockMessage,
   eliteJoninMilestoneUpdate,
 } from "@/libs/eliteJonin";
+import { calcJutsuEquipLimit } from "@/libs/jutsuRequirements";
 import {
   calcHP,
-  canAttackBracket,
   canAssignExperience,
+  canAttackBracket,
   eliteJoninExamBlockMessage,
   experienceAssignmentBlockMessage,
   getEffectiveLevel,
@@ -16,12 +17,11 @@ import {
   levelUpBlockMessage,
   passesBracketFilter,
 } from "@/libs/profile";
-import { getReward } from "@/libs/quest/rewards";
 import { isAvailableUserQuests } from "@/libs/quest/availability";
-import { calcJutsuEquipLimit } from "@/libs/jutsuRequirements";
+import { getReward } from "@/libs/quest/rewards";
 import { ItemValidator, JutsuValidator } from "@/validators/combat";
-import { bracketSliderSchema } from "@/validators/travel";
 import { QuestFormSchema, QuestValidator } from "@/validators/objectives";
+import { bracketSliderSchema } from "@/validators/travel";
 
 const cappedJonin = {
   rank: "JONIN",

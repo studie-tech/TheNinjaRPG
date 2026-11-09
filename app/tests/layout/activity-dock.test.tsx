@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
 import { ActivityDock } from "@/layout/ActivityDock";
 import * as logbook from "@/layout/Logbook";

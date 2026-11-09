@@ -1,6 +1,6 @@
-import alea from "alea";
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
+import alea from "alea";
 import sharp from "sharp";
 import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
 import { boundsOverlap, worldSpriteBounds } from "@/libs/rendering/visibility";

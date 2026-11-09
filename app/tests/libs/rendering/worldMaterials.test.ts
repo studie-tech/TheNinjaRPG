@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "bun:test";
-import { transformImageUrl } from "@/utils/image";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { BufferImageSource, Polygon, Rectangle, Texture } from "pixi.js";
@@ -10,34 +9,35 @@ import type { GameRenderer } from "@/libs/rendering/runtime";
 import {
   BIOME_DECORATIONS,
   GROUND_DETAIL_ART,
-  WOODLAND_DECORATIONS,
   resolveWorldDecoration,
+  WOODLAND_DECORATIONS,
 } from "@/libs/rendering/worldArt";
-import {
-  WORLD_STRUCTURE_ART,
-  resolveWorldStructure,
-} from "@/libs/rendering/worldStructures";
 import {
   WORLD_ASSET_SOURCES,
   worldAssetSource,
 } from "@/libs/rendering/worldAssetSources";
-import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
-import { UPLOADTHING_HOST } from "@/libs/uploadthing";
-import { DECORATION_ASSETS } from "@/libs/sector-map/decorations";
-import { STONE_VILLAGE_WALL_KIT } from "@/libs/sector-map/village-wall-assets";
 import {
+  type AuthoredMaterialFrame,
   acquireCharacterFrameMaterial,
   acquireWorldMaterial,
   canopyShadowFrame,
   createCharacterMaterialFrame,
-  type AuthoredMaterialFrame,
   encodeWorldNormal,
   type WorldMaterial,
   worldMaterialFrame,
 } from "@/libs/rendering/worldMaterials";
+import {
+  resolveWorldStructure,
+  WORLD_STRUCTURE_ART,
+} from "@/libs/rendering/worldStructures";
 import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import { createSunShadows } from "@/libs/rendering/worldSunShadows";
+import { DECORATION_ASSETS } from "@/libs/sector-map/decorations";
+import { STONE_VILLAGE_WALL_KIT } from "@/libs/sector-map/village-wall-assets";
+import { UPLOADTHING_HOST } from "@/libs/uploadthing";
+import { transformImageUrl } from "@/utils/image";
 import { deferred } from "../../setup/deferred";
+import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 
 const material = (width: number, height: number): WorldMaterial => {
   const pixels = new Uint8Array(width * height * 4);

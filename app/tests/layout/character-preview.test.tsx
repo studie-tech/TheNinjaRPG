@@ -1,13 +1,13 @@
-import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
-import * as lpcHooks from "@/hooks/lpc";
-import { lpcCatalog } from "../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "bun:test";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { Container } from "pixi.js";
+import * as lpcHooks from "@/hooks/lpc";
 import { CharacterPreview } from "@/layout/CharacterPreview";
 import * as character from "@/libs/rendering/primitives/character";
-import * as runtime from "@/libs/rendering/runtime";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import * as runtime from "@/libs/rendering/runtime";
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
+import { lpcCatalog } from "../setup/lpc";
 
 const draw = vi.fn();
 const visualEffects = { ...DEFAULT_VISUAL_EFFECTS };

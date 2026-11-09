@@ -1,5 +1,5 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
 import {
   actionLog,
@@ -10,9 +10,9 @@ import {
   huntingProgress,
   huntingSession,
   item,
-  sectorMap,
   quest,
   questHistory,
+  sectorMap,
   trainingLog,
   userCookingJob,
   userData,
@@ -20,17 +20,18 @@ import {
   userQueue,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import { huntingRouter } from "@/routers/hunting";
 import { profileRouter } from "@/routers/profile";
+import type { DrizzleClient } from "@/server/db";
 import * as cookingSettlement from "@/server/utils/cooking";
 import * as queueSettlement from "@/server/utils/userQueue";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { huntingRouter } from "@/routers/hunting";
 import { IncreaseHuntingYield } from "@/validators/combat";
 import {
+  insertDefaultAiProfile,
   insertItems,
   insertUserItems,
   insertUsers,
-  insertDefaultAiProfile,
 } from "../../setup/factories";
 import {
   huntingContract,
@@ -39,7 +40,6 @@ import {
   insertHuntingWorld,
 } from "../../setup/hunting";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
-import type { DrizzleClient } from "@/server/db";
 import {
   beforeStatements,
   failStatements,

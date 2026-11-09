@@ -1,12 +1,12 @@
-import * as lpcHooks from "@/hooks/lpc";
-import { lpcAssets } from "../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, renderHook } from "@testing-library/react";
 import { useForm } from "react-hook-form";
+import * as lpcHooks from "@/hooks/lpc";
 import * as characterPreview from "@/layout/CharacterPreview";
 import { LpcEquipmentFields } from "@/layout/LpcEquipmentFields";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import type { LpcColor, SpriteAppearance } from "@/validators/lpc";
-import { act, cleanup, fireEvent, render, renderHook } from "@testing-library/react";
+import { lpcAssets } from "../setup/lpc";
 
 type Fields = { lpcProfile: string | null; lpcColor: LpcColor | null };
 const item = {

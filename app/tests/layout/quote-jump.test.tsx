@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, type Mock, vi } from "bun:test";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { QuoteJump } from "@/layout/QuoteJump";
 import { showMutationToast } from "@/libs/toast";
 import { createToastMock } from "../setup/toastMock";

@@ -1,5 +1,5 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "bun:test";
+import { cleanup, render } from "@testing-library/react";
 import type { UserStatus } from "@/drizzle/constants";
 import * as router from "@/hooks/navigation";
 import type { UserWithRelations } from "@/routers/profile";

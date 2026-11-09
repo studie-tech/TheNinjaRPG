@@ -1,7 +1,6 @@
-import { describe, it, expect } from "bun:test";
-
-import { damageCalc } from "@/libs/combat/tags";
+import { describe, expect, it } from "bun:test";
 import { dmgConfig } from "@/libs/combat/constants";
+import { damageCalc } from "@/libs/combat/tags";
 import { makeDamageEffect, makeUser } from "../../setup/combat";
 
 describe("damageCalc HP-based formula", () => {

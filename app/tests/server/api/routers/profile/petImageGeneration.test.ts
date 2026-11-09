@@ -4,9 +4,9 @@ import {
   PET_GENERATION_LEASE_MS,
   PET_MAX_GENERATION_ATTEMPTS,
 } from "@/drizzle/constants";
-import { actionLog, userData, userPet, type UserPetInsert } from "@/drizzle/schema";
+import { actionLog, type UserPetInsert, userData, userPet } from "@/drizzle/schema";
 import { profileRouter } from "@/routers/profile";
-import { insertUsers, insertUserPets } from "../../../../setup/factories";
+import { insertUserPets, insertUsers } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import {
   callerForDatabase,

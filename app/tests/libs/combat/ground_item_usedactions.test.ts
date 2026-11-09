@@ -6,9 +6,9 @@ import { describe, expect, it } from "bun:test";
 
 import type { Item } from "@/drizzle/schema";
 import { insertAction } from "@/libs/combat/actions";
+import type { CombatAction, CompleteBattle, ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import { VisualTag } from "@/validators/combat";
-import type { CombatAction, CompleteBattle, ReturnedBattle } from "@/libs/combat/types";
 import {
   makeBattleUser,
   makeBattleUserItem,

@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
   cleanup,
   fireEvent,
@@ -6,14 +7,13 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { useState } from "react";
 import * as pools from "@/hooks/useEffectivePools";
 import * as mediaQuery from "@/hooks/useMediaQuery";
 import * as avatar from "@/layout/Avatar";
 import { BattleFocusView } from "@/layout/BattleFocusView";
-import * as visualizeEffects from "@/layout/VisualizeEffects";
 import * as statusBar from "@/layout/StatusBar";
+import * as visualizeEffects from "@/layout/VisualizeEffects";
 import type { BattleState } from "@/libs/combat/types";
 import * as userContext from "@/utils/UserContext";
 import {

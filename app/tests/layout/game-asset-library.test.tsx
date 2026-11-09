@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
   QueryClient,
   QueryClientProvider,
@@ -13,7 +14,6 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import type { GameAsset } from "@/drizzle/schema";

@@ -1,6 +1,6 @@
-import { describe, it, expect } from "bun:test";
-import { ItemVariantValidator } from "@/validators/item";
+import { describe, expect, it } from "bun:test";
 import { MAX_ITEM_VARIANTS } from "@/drizzle/constants";
+import { ItemVariantValidator } from "@/validators/item";
 
 describe("ItemVariantValidator", () => {
   const valid = {

@@ -1,6 +1,6 @@
+import { afterEach, describe, expect, it } from "bun:test";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it } from "bun:test";
 import { parseHtml } from "@/utils/parse";
 
 const EMBED =

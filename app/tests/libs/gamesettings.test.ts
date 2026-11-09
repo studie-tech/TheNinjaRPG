@@ -3,16 +3,17 @@ import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { PET_ART_PROVIDER_SETTING, PetArtProviders } from "@/drizzle/constants";
 import type { GameSetting } from "@/drizzle/schema";
-import type { DrizzleClient } from "@/server/db";
 import {
   getPetArtProvider,
   lockWithDailyTimer,
+  lockWithGameTimer,
   lockWithHourlyTimer,
   lockWithMinuteTimer,
   lockWithMonthlyTimer,
   lockWithWeeklyTimer,
-  lockWithGameTimer,
 } from "@/libs/gamesettings";
+import type { DrizzleClient } from "@/server/db";
+
 const now = new Date("2026-10-21T10:30:10.000Z");
 const oldTime = new Date("2026-09-01T00:00:00.000Z");
 const dialect = new MySqlDialect();

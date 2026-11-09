@@ -1,24 +1,24 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
-import {
-  prepareUserUpdate as prepareCacheUpdate,
-  updateUserCache,
-} from "@/utils/userCache";
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
-import type { UserStatus } from "@/drizzle/constants";
-import type { UserWithRelations } from "@/server/api/routers/profile";
 import * as client from "@/app/_trpc/client";
+import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
+import type { UserStatus } from "@/drizzle/constants";
+import { IMG_RAMEN_WELCOME } from "@/drizzle/constants";
 import * as navigation from "@/hooks/navigation";
 import * as tutorial from "@/hooks/tutorial";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Image from "@/layout/Image";
 import * as RamenShop from "@/layout/RamenShop";
 import * as toast from "@/libs/toast";
+import type { UserWithRelations } from "@/server/api/routers/profile";
 import * as routing from "@/utils/routing";
 import * as UserContext from "@/utils/UserContext";
-import { IMG_RAMEN_WELCOME } from "@/drizzle/constants";
+import {
+  prepareUserUpdate as prepareCacheUpdate,
+  updateUserCache,
+} from "@/utils/userCache";
 
 type FoodInput = RouterInputs["village"]["buyFood"];
 type FoodResult = RouterOutputs["village"]["buyFood"];

@@ -1,10 +1,10 @@
-import { timerClaimFixture } from "../../setup/gameTimers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
 import { TRPCError } from "@trpc/server";
 import { GET as clean } from "@/app/api/cleaner/route";
 import { GET as index } from "@/app/api/indexer/route";
 import * as settings from "@/libs/gamesettings";
+import { timerClaimFixture } from "../../setup/gameTimers";
 import {
   resetServerModuleStubs,
   stubCronAuth,

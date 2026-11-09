@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import {
   act,
@@ -7,7 +8,6 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { PropsWithChildren } from "react";
 import * as client from "@/app/_trpc/client";
 import * as media from "@/hooks/useMediaQuery";
@@ -19,7 +19,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 const user = {
   userId: "me",

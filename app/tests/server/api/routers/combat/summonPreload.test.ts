@@ -18,18 +18,18 @@ import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { initiateBattle, processUsersForBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
 import { makeTag, makeUser, tableDefaults } from "../../../../setup/combat";
+import { deferred } from "../../../../setup/deferred";
 import { insertFightingDungeonRun } from "../../../../setup/dungeon";
 import {
-  insertUsers,
   insertDefaultAiProfile,
   insertJutsus,
+  insertUsers,
 } from "../../../../setup/factories";
 import {
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
 
 const participant = (userId: string, summons: string[] = []): CombatQueryUser =>
   ({

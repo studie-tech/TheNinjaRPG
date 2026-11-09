@@ -3,26 +3,28 @@ import { eq } from "drizzle-orm";
 import * as nextServer from "next/server";
 import superjson from "superjson";
 import {
-  type BattleAction,
+  buildCombatStateUpdate,
+  type CombatStateUpdate,
+  captureCombatStateUpdate,
+  getCombatEventUpdate,
+} from "@/deltas/combat";
+import {
   aiProfile,
+  type BattleAction,
   battle,
   battleAction,
   battleHistory,
   userData,
 } from "@/drizzle/schema";
-import { Pusher } from "@/libs/pusher";
 import type { BattleUpdate } from "@/libs/combat/log";
-import {
-  buildCombatStateUpdate,
-  captureCombatStateUpdate,
-  getCombatEventUpdate,
-  type CombatStateUpdate,
-} from "@/deltas/combat";
 import { maskBattle } from "@/libs/combat/masking";
+import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { makeEffect } from "../../../../setup/combat";
-import { insertUsers, insertDefaultAiProfile } from "../../../../setup/factories";
+import { deferred } from "../../../../setup/deferred";
+import { insertDefaultAiProfile, insertUsers } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
+import { aroundStatements, failStatements } from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -30,8 +32,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
-import { aroundStatements, failStatements } from "../../../../setup/statements";
 
 describeWithDatabase("lethal combat history", () => {
   let trigger: ReturnType<typeof vi.spyOn<Pusher, "trigger">>;

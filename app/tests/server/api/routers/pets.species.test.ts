@@ -8,16 +8,16 @@ import { petSpeciesRouter } from "@/server/api/routers/petSpecies";
 import { petsRouter } from "@/server/api/routers/pets";
 import {
   insertPetSpecies,
-  insertUsers,
   insertUserPets,
+  insertUsers,
 } from "../../../setup/factories";
+import { overrideQuery } from "../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { overrideQuery } from "../../../setup/statements";
 
 const ownerId = "species-integration-owner";
 const species = {

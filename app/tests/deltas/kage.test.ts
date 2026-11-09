@@ -1,5 +1,5 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { expect, it } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { getCombatAdmissionUserUpdate } from "@/deltas/combat";
 import { getKageDefenseCheckInUserUpdate } from "@/deltas/kage";
 import type { UserCache } from "@/deltas/profile";

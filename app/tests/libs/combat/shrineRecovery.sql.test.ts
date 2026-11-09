@@ -8,13 +8,13 @@ import {
 import { war } from "@/drizzle/schema";
 import { updateWars } from "@/libs/combat/database";
 import type { CombatResult } from "@/libs/combat/types";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import {
   describeWithDatabase,
   getTestDatabase,
   recordQueries,
   resetTables,
 } from "../../setup/testDatabase";
-import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 describeWithDatabase("war shrine recovery", () => {
   beforeEach(async () => resetTables(war));

@@ -2,9 +2,9 @@ import { describe, expect, it } from "bun:test";
 import {
   BUILD_RELOAD_STORAGE_KEY,
   claimBuildReload,
+  getErrorServerBuild,
   isMissingProcedureError,
   isOutdatedBuild,
-  getErrorServerBuild,
   shouldReloadForMissingProcedure,
 } from "@/libs/buildVersion";
 

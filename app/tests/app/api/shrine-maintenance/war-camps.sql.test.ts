@@ -16,6 +16,7 @@ import * as gamesettings from "@/libs/gamesettings";
 import * as villageRouter from "@/queries/village";
 import * as objectiveWar from "@/server/utils/objectiveWar";
 import { defaultWarRules } from "@/validators/war";
+import { restoreEnvAfterEach } from "../../../setup/env";
 import { insertUsers } from "../../../setup/factories";
 import { resetServerModuleStubs } from "../../../setup/serverModules";
 import {
@@ -24,7 +25,6 @@ import {
   recordQueries,
   resetTables,
 } from "../../../setup/testDatabase";
-import { restoreEnvAfterEach } from "../../../setup/env";
 
 const minuteTimer = "shrine-maintenance";
 const dailyTimer = "shrine-maintenance-daily";

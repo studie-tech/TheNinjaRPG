@@ -1,12 +1,12 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
+import { LOADOUT_NAME_MAX_LENGTH } from "@/drizzle/constants";
+import { exportJutsuLoadout } from "@/libs/loadout";
 import {
   LOADOUT_SHARE_MAX_ENTRIES,
   LOADOUT_SHARE_MAX_LENGTH,
   renameLoadoutSchema,
   sharedJutsuLoadoutTextSchema,
 } from "@/validators/loadout";
-import { exportJutsuLoadout } from "@/libs/loadout";
-import { LOADOUT_NAME_MAX_LENGTH } from "@/drizzle/constants";
 
 describe("renameLoadoutSchema", () => {
   it("accepts a normal name", () => {

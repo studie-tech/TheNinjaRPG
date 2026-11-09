@@ -1,12 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import type { UserCache } from "@/deltas/profile";
-import { fetchActionUser } from "@/queries/actionReadiness";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { inferProcedureInput } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
+import type { UserCache } from "@/deltas/profile";
 import { DMG_SETTING_DEFAULTS, HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
 import {
   aiProfile,
@@ -14,6 +11,7 @@ import {
   battleHistory,
   gameSetting,
   jutsu,
+  petSpecies,
   quest,
   questHistory,
   trainingLog,
@@ -21,28 +19,31 @@ import {
   userData,
   userJutsu,
   userPet,
-  petSpecies,
   userQueue,
   userVote,
   village,
 } from "@/drizzle/schema";
+import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { Pusher } from "@/libs/pusher";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { withRequestScope } from "@/server/requestScope";
 import * as liveActivity from "@/server/utils/push/liveActivity";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { statSchema } from "@/validators/combat";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { withAfterTasks } from "../../../../setup/after";
+import { deferred } from "../../../../setup/deferred";
 import {
-  insertQuests,
-  insertUsers,
-  insertJutsus,
   insertDefaultAiProfile,
-  insertUserVotes,
+  insertJutsus,
+  insertQuests,
   insertUserPets,
+  insertUsers,
+  insertUserVotes,
 } from "../../../../setup/factories";
 import { queueEnergy, queueMasteries } from "../../../../setup/queues";
 import { beforeStatements } from "../../../../setup/statements";
@@ -53,7 +54,6 @@ import {
   resetTables,
   resolverOf,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
 
 const userId = "arena-ready";
 const aiId = "arena-ai";

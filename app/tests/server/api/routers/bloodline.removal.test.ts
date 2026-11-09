@@ -18,7 +18,7 @@ import {
 } from "@/drizzle/schema";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
-import { insertUsers, insertJutsus, insertUserVotes } from "../../../setup/factories";
+import { insertJutsus, insertUsers, insertUserVotes } from "../../../setup/factories";
 import { beforeStatements } from "../../../setup/statements";
 import {
   callerForDatabase,

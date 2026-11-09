@@ -1,6 +1,6 @@
+import { expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, it } from "bun:test";
 
 /**
  * These mutations report thrown errors through the QueryClient's default handler, which

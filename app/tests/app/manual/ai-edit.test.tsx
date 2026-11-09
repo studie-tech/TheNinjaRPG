@@ -2,12 +2,14 @@
  * Exercise the real AI route and form hook while isolating unrelated panels and transport.
  * The reset test also renders the shared dropdown controls to verify the submitted values.
  */
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import * as navigation from "next/navigation";
-import { Suspense, type ReactNode } from "react";
+import { type ReactNode, Suspense } from "react";
 import * as client from "@/app/_trpc/client";
 import ManualAisEdit from "@/app/[shell]/manual/ai/edit/[aiid]/page";
+import * as ais from "@/hooks/ai";
 import * as AiProfileEdit from "@/layout/AiProfileEdit";
 import * as AiSpriteAnimations from "@/layout/AiSpriteAnimations";
 import * as AiTransformationEdit from "@/layout/AiTransformationEdit";
@@ -17,7 +19,6 @@ import * as EditContent from "@/layout/EditContent";
 import * as NindoChange from "@/layout/NindoChange";
 import * as StatusBar from "@/layout/StatusBar";
 import * as SuggestChange from "@/layout/SuggestChange";
-import * as ais from "@/hooks/ai";
 import * as toast from "@/libs/toast";
 import type { AiWithRelations } from "@/routers/profile";
 import * as UserContext from "@/utils/UserContext";

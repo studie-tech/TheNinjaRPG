@@ -1,5 +1,5 @@
-import { and, eq, gt } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { and, eq, gt } from "drizzle-orm";
 import {
   item,
   jutsu,
@@ -22,6 +22,7 @@ import {
   settleCraftingQueue,
   settleJutsuTrainingQueue,
 } from "@/server/utils/userQueue";
+import { deferred } from "../../../setup/deferred";
 import {
   insertItems,
   insertJutsus,
@@ -29,6 +30,7 @@ import {
   insertUserVotes,
   jutsuRow,
 } from "../../../setup/factories";
+import { aroundStatements, barrier, overrideQuery } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -36,8 +38,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { barrier, aroundStatements, overrideQuery } from "../../../setup/statements";
-import { deferred } from "../../../setup/deferred";
 
 const userId = "queue-settlement";
 const minute = 60_000;

@@ -4,10 +4,10 @@ import { quest, questHistory, userData } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
-import { handleQuestConsequences } from "@/server/utils/questConsequences";
 import { staffRouter } from "@/server/api/routers/staff";
 import { createTRPCRouter } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { handleQuestConsequences } from "@/server/utils/questConsequences";
 import {
   DialogObjective,
   InstantNewQuestObjective,
@@ -20,6 +20,7 @@ import {
   insertQuests,
   insertUsers,
 } from "../../../../setup/factories";
+import { overrideQuery } from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -27,7 +28,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { overrideQuery } from "../../../../setup/statements";
 
 const router = createTRPCRouter({ quests: questsRouter });
 const hold = DialogObjective.parse({

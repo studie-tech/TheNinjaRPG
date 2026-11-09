@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { Pusher } from "@/libs/pusher";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { makeBattleUser } from "../../../../setup/combat";
+
 const NOW = new Date("2026-09-19T12:00:00Z");
 const member = (days: number) => ({
   isOutlaw: false,

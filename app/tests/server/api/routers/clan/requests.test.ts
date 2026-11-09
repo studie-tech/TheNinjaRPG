@@ -10,7 +10,7 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { clanRouter } from "@/server/api/routers/clan";
-import { insertUsers, insertClans } from "../../../../setup/factories";
+import { insertClans, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,

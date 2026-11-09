@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import { getTestDatabase } from "./testDatabase";
 import { overrideQuery } from "./statements";
+import { getTestDatabase } from "./testDatabase";
 
 /** The stored row for `userId`, through `client` when a test holds an observed connection. */
 export const readUser = async (userId: string, client?: DrizzleClient) =>

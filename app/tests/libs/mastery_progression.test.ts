@@ -1,23 +1,23 @@
 import { describe, expect, it } from "bun:test";
 import {
-  MASTERY_RANKS,
   MASTERY_RANK_CAPS,
+  MASTERY_RANKS,
   MasteryNames,
   TOTAL_MASTERY_CAP,
 } from "@/drizzle/constants";
+import type { UserData } from "@/drizzle/schema";
+import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
 import {
   allocateMasteryGains,
   canPromoteMastery,
   masteryGainRoom,
   masteryTotal,
 } from "@/libs/masteryProgression";
-import { masteryQuestTemplates } from "../setup/mastery";
-import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
 import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { collapseRewards } from "@/libs/rewards";
-import { ObjectiveReward } from "@/validators/rewards";
 import { QuestReward } from "@/validators/rewardPackages";
-import type { UserData } from "@/drizzle/schema";
+import { ObjectiveReward } from "@/validators/rewards";
+import { masteryQuestTemplates } from "../setup/mastery";
 
 const masteries = (value = 0) =>
   Object.fromEntries(MasteryNames.map((stat) => [stat, value]));

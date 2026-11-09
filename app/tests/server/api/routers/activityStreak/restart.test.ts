@@ -6,12 +6,13 @@ import {
   activityStreakConfig,
   activityStreakReward,
   userData,
-  userStreakProgress,
   userQueue,
+  userStreakProgress,
 } from "@/drizzle/schema";
 import { activityStreakRouter } from "@/server/api/routers/activityStreak";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertUsers } from "../../../../setup/factories";
+import { queueEnergy } from "../../../../setup/queues";
 import { beforeStatements } from "../../../../setup/statements";
 import {
   callerFor,
@@ -20,7 +21,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { queueEnergy } from "../../../../setup/queues";
 
 describeWithDatabase("recurring streak cycle timing", () => {
   beforeEach(async () => {

@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { shopifyCartSchema } from "@/validators/merch";
 import { env } from "@/env/server.mjs";
 import {
   completeShopifyCart,
@@ -10,6 +9,8 @@ import {
   reconcileCommittedShopifyCart,
   shopifyRequest,
 } from "@/server/utils/shopify";
+import { shopifyCartSchema } from "@/validators/merch";
+
 const originalConfiguration = {
   SHOPIFY_STORE_DOMAIN: env.SHOPIFY_STORE_DOMAIN,
   SHOPIFY_STOREFRONT_ACCESS_TOKEN: env.SHOPIFY_STOREFRONT_ACCESS_TOKEN,

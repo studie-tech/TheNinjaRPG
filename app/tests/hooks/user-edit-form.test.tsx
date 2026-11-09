@@ -1,5 +1,5 @@
-import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, renderHook } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { UserRanks } from "@/drizzle/constants";
 import { useUserEditForm } from "@/hooks/profile";

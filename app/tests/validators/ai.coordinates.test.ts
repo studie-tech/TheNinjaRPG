@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import {
-  AiRule,
-  getActionSchema,
   AiActionTypes,
-  type ZodAllAiAction,
+  AiRule,
   ConditionDistanceHigherThan,
+  getActionSchema,
   updateAiProfileSchema,
+  type ZodAllAiAction,
 } from "@/validators/ai";
 
 describe("AI coordinate validation", () => {

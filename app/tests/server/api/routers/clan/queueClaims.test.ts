@@ -1,9 +1,9 @@
-import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import {
   battle,
   battleAction,
@@ -16,19 +16,20 @@ import {
   rankedSeason,
   userData,
 } from "@/drizzle/schema";
-import { Pusher } from "@/libs/pusher";
 import { AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
+import { Pusher } from "@/libs/pusher";
 import { clanRouter } from "@/server/api/routers/clan";
-import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { profileRouter } from "@/server/api/routers/profile";
+import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { insertUsers, insertClans } from "../../../../setup/factories";
+import { deferred } from "../../../../setup/deferred";
+import { insertClans, insertUsers } from "../../../../setup/factories";
 import {
   beforeStatements,
   failStatements,
-  pollUntil,
   overrideQuery,
+  pollUntil,
 } from "../../../../setup/statements";
 import {
   callerForDatabase,
@@ -36,7 +37,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
 
 describeWithDatabase("clan queue claim ownership", () => {
   beforeEach(async () => {

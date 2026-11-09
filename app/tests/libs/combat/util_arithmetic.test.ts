@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { BattleTypes } from "@/drizzle/constants";
+import { calcApReduction, hasNoAvailableActions } from "@/libs/combat/turn";
 import type {
   CombatAction,
   Consequence,
@@ -13,7 +14,6 @@ import {
   getDefaultBattleSizes,
   rollInitiative,
 } from "@/libs/combat/util";
-import { calcApReduction, hasNoAvailableActions } from "@/libs/combat/turn";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 afterEach(() => {

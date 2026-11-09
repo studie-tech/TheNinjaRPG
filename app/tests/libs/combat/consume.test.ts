@@ -1,9 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import { SHIELD_MAX_HEALTH } from "@/drizzle/constants";
 import { insertAction } from "@/libs/combat/actions";
-import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { applyEffects } from "@/libs/combat/process";
+import type {
+  BattleUserState,
+  CombatAction,
+  CompleteBattle,
+  UserEffect,
+} from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
+import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import {
   ClearTag,
   ConsumeTag,
@@ -11,12 +17,6 @@ import {
   JutsuValidatorRawSchema,
   SageModeValidator,
 } from "@/validators/combat";
-import type {
-  BattleUserState,
-  CombatAction,
-  CompleteBattle,
-  UserEffect,
-} from "@/libs/combat/types";
 import {
   makeBattleUser,
   makeCombatAction,

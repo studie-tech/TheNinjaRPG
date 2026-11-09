@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { createStore, Provider } from "jotai";
 import { useState } from "react";
 import * as client from "@/app/_trpc/client";
@@ -8,14 +8,14 @@ import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
 import { HuntingArrival } from "@/layout/HuntingArrival";
 import * as HuntingBoard from "@/layout/HuntingBoard";
 import * as Modal from "@/layout/Modal";
-import * as UserContext from "@/utils/UserContext";
 import * as routing from "@/utils/routing";
-import { huntingContract } from "../setup/hunting";
+import * as UserContext from "@/utils/UserContext";
 import {
   flushRadixFocus,
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
+import { huntingContract } from "../setup/hunting";
 
 let store: ReturnType<typeof createStore>;
 let isLoading: boolean;

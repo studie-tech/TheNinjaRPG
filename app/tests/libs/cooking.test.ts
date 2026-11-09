@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import type { Item, UserData } from "@/drizzle/schema";
 import {
   getCookingExperience,
   getCookingLevel,
@@ -6,14 +7,13 @@ import {
   getCookingSeconds,
 } from "@/libs/cooking";
 import {
-  getInventoryBucket,
-  getHomeStorageBucket,
-  nonCombatConsume,
-  isEquippableUserItem,
-  getEquipBlockReason,
   canEquipAdditional,
+  getEquipBlockReason,
+  getHomeStorageBucket,
+  getInventoryBucket,
+  isEquippableUserItem,
+  nonCombatConsume,
 } from "@/libs/item";
-import type { Item, UserData } from "@/drizzle/schema";
 
 describe("Cooking progression", () => {
   it.each([

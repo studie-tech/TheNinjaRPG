@@ -1,5 +1,5 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "bun:test";
+import { cleanup, render } from "@testing-library/react";
 import * as tavernActivity from "@/hooks/useTavernActivity";
 import { TavernActivity } from "@/layout/TavernActivity";
 import * as context from "@/utils/UserContext";

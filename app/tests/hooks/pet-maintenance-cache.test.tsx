@@ -1,12 +1,12 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { ReactNode } from "react";
 import type { AppRouter } from "@/api/root";
 import * as appClient from "@/app/_trpc/client";
-import { getSavedPetSettingsUpdate } from "@/deltas/pets";
 import { getStructureMaintenanceUserUpdate } from "@/deltas/kage";
+import { getSavedPetSettingsUpdate } from "@/deltas/pets";
 import type { UserCache } from "@/deltas/profile";
 import { usePetCacheUpdate } from "@/hooks/usePetCacheUpdate";
 import { useVillageMaintenanceCacheUpdate } from "@/hooks/useVillageMaintenanceCacheUpdate";

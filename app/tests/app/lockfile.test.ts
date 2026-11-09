@@ -1,6 +1,6 @@
+import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "bun:test";
 
 /**
  * `package.json` pins bun via `packageManager`, but nothing enforces it, and an older bun does

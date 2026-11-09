@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   act,
   cleanup,
@@ -6,7 +7,6 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as nextNavigation from "next/navigation";
 import Arena from "@/app/[shell]/battlearena/page";
 import { TUTORIAL_ARENA_DUMMY_ID } from "@/drizzle/constants";
@@ -20,11 +20,11 @@ import * as sparringMode from "@/layout/battlearena/SparringMode";
 import * as trainingMode from "@/layout/battlearena/TrainingMode";
 import * as contentBox from "@/layout/ContentBox";
 import * as userContext from "@/utils/UserContext";
-import { actualContentBox } from "../../setup/preload";
 import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { actualContentBox } from "../../setup/preload";
 
 let tutorialStep: unknown;
 let arenaProps: { aiId?: string } = {};

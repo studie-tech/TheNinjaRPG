@@ -1,5 +1,5 @@
-import { eq, sql } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 import { actionLog, userData } from "@/drizzle/schema";
 import { profileRouter } from "@/routers/profile";
 import { insertUsers } from "../../../../setup/factories";

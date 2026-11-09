@@ -3,13 +3,13 @@ import { readdir } from "node:fs/promises";
 import {
   BrowserClient,
   browserTracingIntegration,
+  type Event,
   getActiveSpan,
   resolveCurrentRoute,
   resolveRoute,
   spanToJSON,
   startBrowserTracingNavigationSpan,
   withScope,
-  type Event,
 } from "@sentry/browser";
 import type { StartSpanOptions } from "@sentry/core";
 import {

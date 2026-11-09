@@ -1,12 +1,12 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { Clerk } from "@clerk/nextjs/types";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
 import superjson from "superjson";
 import type { AppRouter } from "@/api/root";
-import * as client from "@/app/_trpc/client";
 import type { RouterInputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import { useLiveActivity } from "@/hooks/useLiveActivity";
 import { useNativePush } from "@/hooks/useNativePush";
 import { createTrpcSession, trpcSessionLink } from "@/libs/trpcSession";

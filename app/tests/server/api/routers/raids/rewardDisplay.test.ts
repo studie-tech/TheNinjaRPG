@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
 import {
   badge,
   bloodline,
@@ -21,9 +21,9 @@ import { raidsRouter } from "@/server/api/routers/raids";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
   insertItems,
+  insertJutsus,
   insertQuests,
   insertUsers,
-  insertJutsus,
   insertUserVotes,
 } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";

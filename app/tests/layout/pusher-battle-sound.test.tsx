@@ -13,7 +13,7 @@ import * as preferences from "@/libs/audioPreferences";
 import * as audio from "@/utils/audio";
 import * as routing from "@/utils/routing";
 import { testRouter } from "../setup/router";
-import { testApi, TrpcTestProviders } from "../setup/trpc";
+import { TrpcTestProviders, testApi } from "../setup/trpc";
 
 const clients: QueryClient[] = [];
 const hiddenDescriptor = Object.getOwnPropertyDescriptor(document, "hidden");

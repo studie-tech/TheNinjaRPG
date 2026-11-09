@@ -18,7 +18,7 @@ import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { profileRouter } from "@/server/api/routers/profile";
 import { spriteAnimationRouter } from "@/server/api/routers/spriteAnimation";
-import { insertUsers, insertDefaultAiProfile } from "../../setup/factories";
+import { insertDefaultAiProfile, insertUsers } from "../../setup/factories";
 import {
   callerForDatabase,
   describeWithDatabase,

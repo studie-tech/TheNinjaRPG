@@ -1,5 +1,6 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
+import { applyFarmMutationPatch } from "@/deltas/farming";
 import {
   CRAFTING_TIMES_MINS,
   FARM_STARTING_PLOTS,
@@ -28,7 +29,6 @@ import {
   village,
 } from "@/drizzle/schema";
 import { farmingRouter } from "@/server/api/routers/farming";
-import { applyFarmMutationPatch } from "@/deltas/farming";
 import { hospitalRouter } from "@/server/api/routers/hospital";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
@@ -36,8 +36,8 @@ import { settleCraftingQueue } from "@/server/utils/userQueue";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
 import {
   insertItems,
-  insertUsers,
   insertUserItems,
+  insertUsers,
   insertUserVotes,
 } from "../../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../../setup/queues";

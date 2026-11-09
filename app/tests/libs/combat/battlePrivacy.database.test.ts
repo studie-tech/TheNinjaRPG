@@ -3,12 +3,12 @@ import { eq } from "drizzle-orm";
 import { battle } from "@/drizzle/schema";
 import { updateBattle } from "@/libs/combat/database";
 import { maskBattle } from "@/libs/combat/masking";
+import { makeCompleteBattle } from "../../setup/combat";
 import {
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
-import { makeCompleteBattle } from "../../setup/combat";
 
 // Revealed definitions must survive a later request even after their caster despawns.
 describeWithDatabase("persisted battle privacy", () => {

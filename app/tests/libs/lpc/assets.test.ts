@@ -1,9 +1,9 @@
-import { lpcCatalog } from "../../setup/lpc";
 import { describe, expect, it } from "bun:test";
 import { existsSync } from "node:fs";
-import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { lpcFacing, lpcFrame } from "@/libs/lpc/catalog";
+import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import credits from "../../../drizzle/data/lpc/credits.json";
+import { lpcCatalog } from "../../setup/lpc";
 
 // Publication verifies decoded RGBA pixels; runtime tests validate our atlas/frame manifest offline.
 describe("published LPC artwork", () => {

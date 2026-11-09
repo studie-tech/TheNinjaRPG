@@ -1,7 +1,7 @@
+import { afterEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import * as trpc from "@trpc/react-query";
-import { afterEach, expect, it, vi } from "bun:test";
 import { Profiler } from "react";
 import * as clientApi from "@/app/_trpc/client";
 import NavTabs from "@/layout/NavTabs";

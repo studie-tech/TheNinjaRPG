@@ -1,5 +1,5 @@
-import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, render } from "@testing-library/react";
 import { Profiler, StrictMode } from "react";
 import Countdown from "@/layout/Countdown";
 

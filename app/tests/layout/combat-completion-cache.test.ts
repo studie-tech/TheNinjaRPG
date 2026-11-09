@@ -1,16 +1,16 @@
+import { expect, it, vi } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { waitFor } from "@testing-library/react";
 import { createTRPCClient } from "@trpc/client";
 import { createTRPCQueryUtils } from "@trpc/react-query";
-import { waitFor } from "@testing-library/react";
-import { expect, it, vi } from "bun:test";
+import { getCombatInventoryUpdate } from "@/deltas/combat";
 import { shouldInvalidateEndedBattleCaches } from "@/libs/combat/battleMaps";
 import { maskBattle } from "@/libs/combat/masking";
 import type { AppRouter } from "@/server/api/root";
-import { makeCompleteBattle } from "../setup/combat";
-import { guardianVictory } from "../setup/territoryWar";
-import { getCombatInventoryUpdate } from "@/deltas/combat";
 import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
+import { makeCompleteBattle } from "../setup/combat";
 import { readSource, runInScope, sliceCall } from "../setup/sourceSlice";
+import { guardianVictory } from "../setup/territoryWar";
 
 // Execute the real completion effect without mounting its unrelated WebGL scene,
 // following combat-render-lifecycle.test.ts. Keep masking and query utilities real.

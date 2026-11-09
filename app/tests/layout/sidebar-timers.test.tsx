@@ -1,4 +1,3 @@
-import { cleanup, render, screen } from "@testing-library/react";
 import {
   afterEach,
   beforeEach,
@@ -8,13 +7,14 @@ import {
   setSystemTime,
   vi,
 } from "bun:test";
+import { cleanup, render, screen } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import * as pools from "@/hooks/useEffectivePools";
+import * as gameMenu from "@/hooks/useGameMenu";
 import * as Avatar from "@/layout/Avatar";
 import * as Image from "@/layout/Image";
 import MenuBoxProfile from "@/layout/MenuBoxProfile";
 import * as PoolStatusBars from "@/layout/PoolStatusBars";
-import * as gameMenu from "@/hooks/useGameMenu";
 import * as userContext from "@/utils/UserContext";
 
 const localNow = new Date("2026-06-01T12:00:00.000Z");

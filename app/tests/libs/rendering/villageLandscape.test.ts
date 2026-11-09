@@ -1,5 +1,5 @@
-import alea from "alea";
 import { describe, expect, it } from "bun:test";
+import alea from "alea";
 import { SECTOR_MAP_VERSION } from "@/drizzle/constants";
 import type { VillageStructure } from "@/drizzle/schema";
 import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
@@ -8,26 +8,26 @@ import {
   sectorSpriteDescriptions,
   type WorldSpriteDescription,
 } from "@/libs/rendering/sectorSprites";
-import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
-import {
-  getWorldForecourtPoint,
-  getWorldStructureEntrance,
-  resolveWorldStructure,
-} from "@/libs/rendering/worldStructures";
 import {
   getVillageRoadLayout,
   isOnVillageRoad,
   planVillageLandscape,
 } from "@/libs/rendering/villageLandscape";
-import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
+import {
+  getWorldForecourtPoint,
+  getWorldStructureEntrance,
+  resolveWorldStructure,
+  WORLD_STRUCTURE_ART,
+} from "@/libs/rendering/worldStructures";
 import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
+import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
 import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
-import { planVillageWalls } from "@/libs/sector-map/village-walls";
 import {
   getVillageWallSpriteSpec,
   STONE_VILLAGE_WALL_KIT,
 } from "@/libs/sector-map/village-wall-assets";
+import { planVillageWalls } from "@/libs/sector-map/village-walls";
 
 /** A dry town split by a river with one crossing exercises decorative route planning. */
 const town = () => {

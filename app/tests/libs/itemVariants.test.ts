@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { applyActiveVariant } from "@/libs/item";
 import { DEFAULT_FURNITURE_DATA, type FurnitureData } from "@/validators/itemFurniture";
 

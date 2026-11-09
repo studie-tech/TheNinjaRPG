@@ -1,10 +1,10 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, render } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import type { GenericObject } from "@/layout/ItemWithEffects";
+import ItemWithEffects from "@/layout/ItemWithEffects";
 import * as UserContext from "@/utils/UserContext";
 import { CurseTag } from "@/validators/combat";
-import ItemWithEffects from "@/layout/ItemWithEffects";
 
 const names = { useQuery: () => ({ data: [] }) };
 

@@ -8,7 +8,7 @@ import {
 import { getNewTrackers, getUserQuests } from "@/libs/quest";
 import { getReward } from "@/libs/quest/rewards";
 import { DialogObjective, QuestTracker } from "@/validators/objectives";
-import { petTaskMinutesSchema, type PetTask } from "@/validators/petTasks";
+import { type PetTask, petTaskMinutesSchema } from "@/validators/petTasks";
 import { QuestReward } from "@/validators/rewardPackages";
 
 const task: PetTask = {

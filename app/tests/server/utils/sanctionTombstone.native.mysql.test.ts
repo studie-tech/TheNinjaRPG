@@ -8,13 +8,14 @@ import {
   historicalIp,
   sanctionTombstone,
   storeUserIdAlias,
+  type UserReport,
   userData,
   userReport,
-  type UserReport,
   userReportComment,
   village,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import { fetchActiveSanctionTombstones } from "@/queries/reports";
 import { profileRouter } from "@/server/api/routers/profile";
 import { reportsRouter } from "@/server/api/routers/reports";
 import { removeAccountGameData } from "@/server/utils/accountDeletion/cleanup";
@@ -26,8 +27,7 @@ import {
   recordSanctionTombstone,
   type SanctionIdentity,
 } from "@/server/utils/sanctionTombstone";
-import { fetchActiveSanctionTombstones } from "@/queries/reports";
-
+import { deferred } from "../../setup/deferred";
 import { insertUsers } from "../../setup/factories";
 import { insertRegistrationContent, registerCharacter } from "../../setup/registration";
 import {
@@ -36,9 +36,9 @@ import {
   stubClerkUsers,
 } from "../../setup/sanctions";
 import {
+  aroundStatements,
   beforeStatements,
   interceptExecute,
-  aroundStatements,
 } from "../../setup/statements";
 import {
   callerFor,
@@ -47,7 +47,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
-import { deferred } from "../../setup/deferred";
 
 const DAY = 86_400_000;
 const NATIVE_USER = "native-deleting";

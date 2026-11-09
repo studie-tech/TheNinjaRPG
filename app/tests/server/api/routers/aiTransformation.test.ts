@@ -9,9 +9,9 @@ import {
   userData,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import { deleteAiTransformationsFor } from "@/queries/ai";
 import { aiRouter } from "@/server/api/routers/ai";
 import { initiateBattle } from "@/server/api/routers/combat";
-import { deleteAiTransformationsFor } from "@/queries/ai";
 import { insertDefaultAiProfile, insertUsers } from "../../../setup/factories";
 import {
   callerFor,

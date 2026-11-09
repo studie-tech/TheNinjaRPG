@@ -1,6 +1,4 @@
-import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { lpcCatalog } from "../../setup/lpc";
 import * as pixi from "pixi.js";
 import {
   BufferImageSource,
@@ -11,25 +9,25 @@ import {
   Texture,
   UniformGroup,
 } from "pixi.js";
-import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import {
   WORLD_DAY_BRIGHTNESS,
   WORLD_DAY_SECONDS,
   WORLD_NIGHT_BRIGHTNESS,
 } from "@/drizzle/constants";
 import type { ReturnedBattle } from "@/libs/combat/types";
+import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as sceneAssets from "@/libs/rendering/assets";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import * as runtime from "@/libs/rendering/runtime";
 import {
-  createCombatScene,
   type CombatSceneSnapshot,
+  createCombatScene,
 } from "@/libs/rendering/scenes/combat";
 import * as combatTerrain from "@/libs/rendering/scenes/combatTerrain";
 import { createSectorPreview } from "@/libs/rendering/scenes/sectorPreview";
 import { createTravelScene, type TravelSnapshot } from "@/libs/rendering/scenes/travel";
-import * as sectorSprites from "@/libs/rendering/sectorSprites";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
+import * as sectorSprites from "@/libs/rendering/sectorSprites";
 import * as worldMaterials from "@/libs/rendering/worldMaterials";
 import * as worldOcclusion from "@/libs/rendering/worldOcclusion";
 import * as worldShadows from "@/libs/rendering/worldShadows";
@@ -37,8 +35,10 @@ import { buildWindowNav } from "@/libs/sector-map/navigation";
 import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import type { SectorUser } from "@/libs/sector-map/world-types";
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import type { UserWithRelations } from "@/routers/profile";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
+import { lpcCatalog } from "../../setup/lpc";
 
 const cleanups: (() => void)[] = [];
 const map: NormalizedSectorMap = {

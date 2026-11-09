@@ -1,7 +1,7 @@
-import type Stripe from "stripe";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { nanoid } from "nanoid";
 import { eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import type Stripe from "stripe";
 import {
   paypalTransaction,
   stripeCheckout,
@@ -12,13 +12,13 @@ import { paypalRouter } from "@/server/api/routers/paypal";
 import { stripeRouter } from "@/server/api/routers/stripe";
 import * as stripeClient from "@/server/utils/stripe/client";
 import { insertUsers } from "../../setup/factories";
+import { useStripeTestEnv } from "../../setup/stripe";
 import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
-import { useStripeTestEnv } from "../../setup/stripe";
 
 const BUYER = "stripe-buyer";
 const RECIPIENT = "stripe-target";

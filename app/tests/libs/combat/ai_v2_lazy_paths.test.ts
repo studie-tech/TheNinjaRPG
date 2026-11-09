@@ -7,11 +7,11 @@ import {
   ActionEndTurn,
   ActionMoveTowardsOpponent,
   ActionWithEffectHighestPower,
+  type AiRuleType,
   ConditionDistanceHigherThan,
   ConditionDistanceLowerThan,
   ConditionHealthBelow,
   ConditionSpecificRound,
-  type AiRuleType,
 } from "@/validators/ai";
 import { makeBattleUser, makeCompleteBattle, makeEffect } from "../../setup/combat";
 

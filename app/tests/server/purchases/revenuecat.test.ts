@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import { STORE_FEDERAL_PRODUCTS, STORE_REP_PRODUCTS } from "@/drizzle/constants";
-import { dollars2reps } from "@/utils/paypal";
 import {
   classifyEvent,
   expirationAt,
@@ -11,12 +10,13 @@ import {
   occurredAt,
   paidThroughAt,
   purchasedAt,
-  transferOccurredAt,
-  transferSandboxScopes,
   resolveTransferStore,
   storePlatformFromAppId,
   toStorePlatform,
+  transferOccurredAt,
+  transferSandboxScopes,
 } from "@/server/utils/purchases/revenuecat";
+import { dollars2reps } from "@/utils/paypal";
 
 describe("store catalogue", () => {
   it("gives the same reputation per dollar as the web checkout", () => {

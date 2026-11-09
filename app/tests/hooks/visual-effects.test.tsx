@@ -1,12 +1,12 @@
+import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { useVisualEffects } from "@/hooks/visual-effects";
 import {
-  VISUAL_EFFECT_KEYS,
   readVisualEffects,
   setVisualEffect,
   subscribeVisualEffects,
+  VISUAL_EFFECT_KEYS,
 } from "@/libs/visualEffects";
 
 const OverlayProbe = () => {

@@ -1,17 +1,17 @@
-import { readFile } from "node:fs/promises";
 import { beforeEach, expect, it } from "bun:test";
+import { readFile } from "node:fs/promises";
 import { inArray } from "drizzle-orm";
 import {
   CREATOR_TRIAL_FIRST_FORM,
-  TRANSFORMATION_ACTION,
-  USER_CAPS,
   getCombatStatCap,
   getUserCaps,
+  TRANSFORMATION_ACTION,
+  USER_CAPS,
 } from "@/drizzle/constants";
 import {
   aiProfile,
-  aiTransformation,
   aiSpriteAnimation,
+  aiTransformation,
   jutsu,
   spriteAnimation,
   userData,
@@ -19,8 +19,8 @@ import {
 } from "@/drizzle/schema";
 import { bossFormsFrom } from "@/libs/combat/bossFight";
 import { AiRule } from "@/validators/ai";
-import { bossArrivalSchema } from "@/validators/coop";
 import { JutsuValidator } from "@/validators/combat";
+import { bossArrivalSchema } from "@/validators/coop";
 import {
   describeWithDatabase,
   getTestDatabase,

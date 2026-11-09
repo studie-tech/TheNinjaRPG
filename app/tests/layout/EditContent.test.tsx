@@ -1067,7 +1067,13 @@ describe("effect drafts", () => {
     const legacy = DamageTag.parse({});
     delete (legacy as Partial<typeof legacy>).animationScale;
     const onChange = vi.fn();
-    const view = render(<EffectFieldInputGeneric effect={legacy} field="animationScale" onChange={onChange} />);
+    const view = render(
+      <EffectFieldInputGeneric
+        effect={legacy}
+        field="animationScale"
+        onChange={onChange}
+      />,
+    );
     const input = view.getByRole("spinbutton") as HTMLInputElement;
     expect(input.value).toBe("1");
     fireEvent.input(input, { target: { value: "1.375" } });
@@ -1081,12 +1087,30 @@ describe("effect drafts", () => {
     const initial = [legacy, HealTag.parse({})];
     const Fixture = () => {
       const [effects, setEffects] = useState<ZodAllTags[]>(initial);
-      return <>
-        <EffectFormWrapper type="jutsu" idx={0} tag={effects[0]!} effects={effects} setEffects={(next) => { onChange(next); setEffects(next); }} availableTags={["damage"]} />
-        <button type="button" onClick={() => {
-          if (JutsuValidatorRawSchema.shape.effects.safeParse(effects).success) void save({ id: "sizes", data: { effects } });
-        }}>Save sizes</button>
-      </>;
+      return (
+        <>
+          <EffectFormWrapper
+            type="jutsu"
+            idx={0}
+            tag={effects[0]!}
+            effects={effects}
+            setEffects={(next) => {
+              onChange(next);
+              setEffects(next);
+            }}
+            availableTags={["damage"]}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (JutsuValidatorRawSchema.shape.effects.safeParse(effects).success)
+                void save({ id: "sizes", data: { effects } });
+            }}
+          >
+            Save sizes
+          </button>
+        </>
+      );
     };
     const view = render(<Fixture />);
     const input = view.getByLabelText("Animation scale (1–3×)");
@@ -1094,18 +1118,24 @@ describe("effect drafts", () => {
     await act(async () => {});
     expect(onChange).not.toHaveBeenCalled();
     fireEvent.input(input, { target: { value: "1.375" } });
-    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith([
-      expect.objectContaining({ animationScale: 1.375 }),
-      initial[1],
-    ]));
+    await waitFor(() =>
+      expect(onChange).toHaveBeenLastCalledWith([
+        expect.objectContaining({ animationScale: 1.375 }),
+        initial[1],
+      ]),
+    );
     for (const scale of [0.99, 3.01]) {
       fireEvent.input(input, { target: { value: String(scale) } });
-      await waitFor(() => expect(onChange.mock.calls.at(-1)?.[0][0]?.animationScale).toBe(scale));
+      await waitFor(() =>
+        expect(onChange.mock.calls.at(-1)?.[0][0]?.animationScale).toBe(scale),
+      );
       fireEvent.click(view.getByRole("button", { name: "Save sizes" }));
       expect(save).not.toHaveBeenCalled();
     }
     fireEvent.input(input, { target: { value: "" } });
-    await waitFor(() => expect(onChange.mock.calls.at(-1)?.[0][0]?.animationScale).toBeNaN());
+    await waitFor(() =>
+      expect(onChange.mock.calls.at(-1)?.[0][0]?.animationScale).toBeNaN(),
+    );
     fireEvent.click(view.getByRole("button", { name: "Save sizes" }));
     expect(save).not.toHaveBeenCalled();
     fireEvent.input(input, { target: { value: "3" } });

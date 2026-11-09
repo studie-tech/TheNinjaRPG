@@ -1,6 +1,6 @@
+import { afterEach, expect, it, vi } from "bun:test";
 import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "bun:test";
 import { Profiler } from "react";
 import { useSceneMutation } from "@/hooks/useSceneMutation";
 

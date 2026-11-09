@@ -1,16 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import {
-  isPlaceableSector,
-  resolveOverworldPosition,
-  snapOverworldPositionToWalkable,
-} from "@/libs/overworldAi";
-import type { NormalizedSectorMap } from "@/libs/sector-map/types";
-import {
   MAP_TOTAL_SECTORS,
   MAP_WAKE_ISLAND_SECTOR,
   SECTOR_HEIGHT,
   SECTOR_WIDTH,
 } from "@/drizzle/constants";
+import {
+  isPlaceableSector,
+  resolveOverworldPosition,
+  snapOverworldPositionToWalkable,
+} from "@/libs/overworldAi";
+import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 
 describe("isPlaceableSector", () => {
   it("rejects reserved sectors", () => {

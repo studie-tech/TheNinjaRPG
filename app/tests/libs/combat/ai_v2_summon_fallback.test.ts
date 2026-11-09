@@ -4,8 +4,8 @@ import { performAIaction } from "@/libs/combat/ai_v2";
 import type { BattleUserState, CompleteBattle, ExtraState } from "@/libs/combat/types";
 import { TerrainHex } from "@/libs/hexgrid";
 import { ActionEndTurn, AiRule } from "@/validators/ai";
-import { makeAiBattle, makeAiUser } from "./helpers/aiScenario";
 import { makeEffect } from "../../setup/combat";
+import { makeAiBattle, makeAiUser } from "./helpers/aiScenario";
 
 /**
  * Safety nets for summons whose AI cannot pick an action. A summon is the

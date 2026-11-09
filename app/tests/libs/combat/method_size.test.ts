@@ -1,20 +1,20 @@
 import { describe, expect, it } from "bun:test";
 import { AttackMethods } from "@/drizzle/constants";
-import { getTargetTiles } from "@/libs/combat/targeting";
-import { getAffectedTiles, getBattleGrid } from "@/libs/combat/util";
-import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { insertAction } from "@/libs/combat/actions";
+import { getTargetTiles } from "@/libs/combat/targeting";
+import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
+import { getAffectedTiles, getBattleGrid } from "@/libs/combat/util";
 import {
   DamageTag,
-  JutsuValidatorRawSchema,
   JutsuValidator,
+  JutsuValidatorRawSchema,
   MoveTag,
 } from "@/validators/combat";
 import { methodSizeSchema } from "@/validators/methodSize";
 import {
+  makeBattleUser,
   makeCombatAction,
   makeCompleteBattle,
-  makeBattleUser,
   makeJutsu,
 } from "../../setup/combat";
 

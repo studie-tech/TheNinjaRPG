@@ -1,6 +1,5 @@
-import { stubRateLimitTransport } from "../../../../setup/rateLimit";
-import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
 import {
   actionLog,
   contentProposal,
@@ -13,6 +12,7 @@ import {
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { DamageTag, JutsuValidator } from "@/validators/combat";
 import { insertJutsus, insertUsers } from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,

@@ -1,7 +1,7 @@
+import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "bun:test";
 import {
   TUTORIAL_ARENA_DUMMY_ID,
   TUTORIAL_GENIN_EXAM_QUEST_ID,
@@ -12,17 +12,17 @@ import { WORLD_LANDMARKS } from "@/libs/sector-map/landmarks";
 import {
   canPositionTutorialHighlight,
   GENIN_QUEST_OBJECTIVES,
-  getTutorialPortraitSide,
   getStarterQuestProgress,
   getTutorialBattleReturnPage,
   getTutorialCatchUpStepIndex,
-  getTutorialRewindStepIndex,
-  hasOutgrownTutorial,
   getTutorialChapterProgress,
   getTutorialCombatGuidance,
   getTutorialHighlightedQuestId,
+  getTutorialPortraitSide,
+  getTutorialRewindStepIndex,
   getTutorialStepPath,
   getTutorialTakeQuestId,
+  hasOutgrownTutorial,
   isStarterObjectiveSatisfied,
   isTutorialActive,
   isTutorialCaptureStep,

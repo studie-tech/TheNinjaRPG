@@ -13,11 +13,11 @@ import { auctionRouter, completeAuctionInternal } from "@/server/api/routers/auc
 import * as nativePush from "@/server/utils/push/defer";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
 import {
-  beforeStatements,
-  failStatements,
   barrier,
-  inTransactions,
+  beforeStatements,
   beforeTransaction,
+  failStatements,
+  inTransactions,
   interceptExecute,
 } from "../../../../setup/statements";
 import {

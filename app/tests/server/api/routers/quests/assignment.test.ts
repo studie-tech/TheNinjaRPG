@@ -1,6 +1,6 @@
+import { describe, expect, it, vi } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { describe, expect, it, vi } from "bun:test";
 import {
   assignQuestToUser,
   upsertQuestEntries,

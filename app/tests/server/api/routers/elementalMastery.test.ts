@@ -14,12 +14,12 @@ import {
   userQueue,
   userVote,
 } from "@/drizzle/schema";
+import { getUserElements } from "@/libs/elementalMastery";
 import { masteryTotal } from "@/libs/masteryProgression";
-import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { getMasteryQueue } from "@/libs/queue";
+import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { trainRouter } from "@/server/api/routers/train";
 import { IncreaseDamageGivenTag } from "@/validators/combat";
-import { getUserElements } from "@/libs/elementalMastery";
 import { insertUsers, insertUserVotes } from "../../../setup/factories";
 import {
   callerFor,

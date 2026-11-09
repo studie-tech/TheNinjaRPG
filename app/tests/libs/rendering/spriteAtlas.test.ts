@@ -1,30 +1,30 @@
-import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import {
   Assets,
   BufferImageSource,
-  Sprite,
   Container,
-  RenderLayer,
-  Texture,
   Rectangle,
+  RenderLayer,
+  Sprite,
+  Texture,
 } from "pixi.js";
-import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
-import * as shadows from "@/libs/rendering/primitives/shadow";
 import { WORLD_DAY_BRIGHTNESS, WORLD_NIGHT_BRIGHTNESS } from "@/drizzle/constants";
-import type { GameRenderer } from "@/libs/rendering/runtime";
-import { WOODLAND_DECORATIONS } from "@/libs/rendering/worldArt";
-import * as maskedTextures from "@/libs/rendering/maskedTextures";
-import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
-import { sampleWorldWind } from "@/libs/rendering/worldWind";
 import {
   createSceneAssets,
-  stabilizeNearestTexture,
-  textureOpaqueFrame,
-  textureGroundContact,
   NEAREST_TEXTURE_UV_BIAS,
+  stabilizeNearestTexture,
+  textureGroundContact,
+  textureOpaqueFrame,
 } from "@/libs/rendering/assets";
+import * as maskedTextures from "@/libs/rendering/maskedTextures";
+import * as shadows from "@/libs/rendering/primitives/shadow";
+import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
+import type { GameRenderer } from "@/libs/rendering/runtime";
+import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
+import { WOODLAND_DECORATIONS } from "@/libs/rendering/worldArt";
 import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
+import type { WorldShadows } from "@/libs/rendering/worldShadows";
+import { sampleWorldWind } from "@/libs/rendering/worldWind";
 import { textureImageUrl } from "@/utils/image";
 
 const cleanups: (() => void)[] = [];

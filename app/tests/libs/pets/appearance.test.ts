@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
-import sharp from "sharp";
 import { Moderations } from "openai/resources/moderations";
-import * as moderator from "@/libs/moderator";
-import { PIXEL_ART_RENDERING } from "@/libs/imagePrompts";
+import sharp from "sharp";
 import { PET_RANKS } from "@/drizzle/constants";
+import { PIXEL_ART_RENDERING } from "@/libs/imagePrompts";
+import * as moderator from "@/libs/moderator";
 import {
   downloadPetImage,
   generatePetAppearance,

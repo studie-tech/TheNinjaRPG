@@ -21,9 +21,9 @@ import { skillTreeRouter } from "@/server/api/routers/skillTree";
 import { HealTag, RepairTag } from "@/validators/combat";
 import {
   insertItems,
+  insertJutsus,
   insertUserItems,
   insertUsers,
-  insertJutsus,
 } from "../../../setup/factories";
 import {
   callerFor,

@@ -1,9 +1,9 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import * as navigation from "next/navigation";
-import Shrine from "@/app/[shell]/shrine/page";
-import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
+import Shrine from "@/app/[shell]/shrine/page";
 import { MAP_RESERVED_SECTORS, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import * as contentBox from "@/layout/ContentBox";
 import * as countdown from "@/layout/Countdown";

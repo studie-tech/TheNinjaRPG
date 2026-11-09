@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { WAR_SHRINE_IMAGE_BY_BIOME } from "@/drizzle/constants";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import {
-  WORLD_STRUCTURE_ART,
   resolveWorldStructure,
+  WORLD_STRUCTURE_ART,
 } from "@/libs/rendering/worldStructures";
 import { createShrineStructure, withSectorShrine } from "@/libs/sector-map/structures";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";

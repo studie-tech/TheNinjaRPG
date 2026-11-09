@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { Images } from "openai/resources/images";
 import Replicate from "replicate";
 import sharp from "sharp";
 import { UTApi } from "uploadthing/server";
-import { Images } from "openai/resources/images";
 import {
   createThumbnail,
   fastTxt2imgReplicate,

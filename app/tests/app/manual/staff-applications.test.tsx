@@ -1,8 +1,9 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   QueryClient,
   QueryClientProvider,
-  useMutation,
   type UseMutationOptions,
+  useMutation,
 } from "@tanstack/react-query";
 import {
   act,
@@ -12,10 +13,9 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
-import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import ApplicationsPage from "@/app/[shell]/manual/staff/applications/page";
 import * as ApplicationsFiltering from "@/layout/ApplicationsFiltering";
 import * as Avatar from "@/layout/Avatar";

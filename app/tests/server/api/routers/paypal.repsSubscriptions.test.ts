@@ -4,7 +4,6 @@ import { paypalSubscription, quest, questHistory, userData } from "@/drizzle/sch
 import { paypalRouter } from "@/server/api/routers/paypal";
 import { calcFedUgradeCost, fedStatusRepsCost } from "@/utils/paypal";
 import { insertUsers } from "../../../setup/factories";
-import { readUser } from "../../../setup/userReads";
 import {
   callerFor,
   callerForDatabase,
@@ -12,6 +11,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
+import { readUser } from "../../../setup/userReads";
 
 /** Reputation-funded subscriptions charge once per entitlement, even under concurrent requests. */
 const BUYER = "reps-buyer";

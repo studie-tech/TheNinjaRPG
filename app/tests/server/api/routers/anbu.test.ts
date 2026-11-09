@@ -1,16 +1,9 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { and, eq, type SQL, sql } from "drizzle-orm";
+import { MySqlDialect } from "drizzle-orm/mysql-core";
+import { anbuSquad, userData, userRequest } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { reassignPendingAnbuRequestsOnPromotion } from "@/queries/anbu";
-import { and, eq, sql, type SQL } from "drizzle-orm";
-import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { anbuSquad, userData, userRequest } from "@/drizzle/schema";
-import * as nativePush from "@/server/utils/push/defer";
-import { membershipUpdate } from "@/server/utils/push/messages";
-import {
-  resetServerModuleStubs,
-  stubProfile,
-  stubSparring,
-} from "../../../setup/serverModules";
 import {
   acceptAnbuRequest,
   createAnbuRequest,
@@ -20,6 +13,13 @@ import {
   rejectAnbuRequest,
   removeFromSquad,
 } from "@/routers/anbu";
+import * as nativePush from "@/server/utils/push/defer";
+import { membershipUpdate } from "@/server/utils/push/messages";
+import {
+  resetServerModuleStubs,
+  stubProfile,
+  stubSparring,
+} from "../../../setup/serverModules";
 
 const fetchActorMock = vi.fn();
 const fetchPendingRequestMock = vi.fn();

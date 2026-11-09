@@ -1,15 +1,15 @@
 import { describe, expect, it } from "bun:test";
-import type { Jutsu, SkillTree } from "@/drizzle/schema";
 import { PetRarities } from "@/drizzle/constants";
+import type { Jutsu, SkillTree } from "@/drizzle/schema";
 import {
   getPetAbilityCapacity,
   getPetJutsuCost,
   getPetSkillCost,
   isPetJutsuAllowed,
   isPetSkillAllowed,
+  type PetAbilityLoadout,
   selectPetBattleAbilities,
   validatePetAbilities,
-  type PetAbilityLoadout,
 } from "@/libs/pets/abilities";
 import { DamageTag, SummonTag } from "@/validators/combat";
 import { ownedPetSkill, petJutsuFixture, petSkillFixture } from "./helpers/abilities";

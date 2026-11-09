@@ -11,6 +11,7 @@ import {
 } from "@/drizzle/schema";
 import { auctionRouter } from "@/server/api/routers/auction";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
+import { overrideQuery } from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -18,7 +19,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { overrideQuery } from "../../../../setup/statements";
 
 describeWithDatabase("auction listing quantities", () => {
   beforeEach(async () => {

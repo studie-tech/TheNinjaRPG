@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { COST_STREAK_CATCHUP_DAY } from "@/drizzle/constants";
 import {
+  type ActivityStreakPopupState,
+  formatEventPassCost,
   getStreakClaimState,
   isActivityStreakPopupBlocking,
   isEventPassCompletion,
@@ -11,8 +13,6 @@ import {
   resolveActivityStreakPopupOpen,
   resolveStreakClaim,
   shouldFetchActivityStreaksForPopup,
-  type ActivityStreakPopupState,
-  formatEventPassCost,
 } from "@/libs/activityStreak";
 
 describe("event pass completion history", () => {

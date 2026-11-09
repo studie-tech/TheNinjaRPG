@@ -1,5 +1,5 @@
-import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import * as Sentry from "@sentry/nextjs";
 import { eq } from "drizzle-orm";
 import {
   conversation,
@@ -14,14 +14,15 @@ import {
   village,
   villageStructure,
 } from "@/drizzle/schema";
-import { profileRouter, fetchUpdatedUser } from "@/routers/profile";
-import * as Sentry from "@sentry/nextjs";
-import { AllObjectives, QuestTracker, ObjectiveTracker } from "@/validators/objectives";
-import { coopRouter } from "@/server/api/routers/coop";
 import { Pusher } from "@/libs/pusher";
+import { fetchUpdatedUser, profileRouter } from "@/routers/profile";
+import { coopRouter } from "@/server/api/routers/coop";
+import { AllObjectives, ObjectiveTracker, QuestTracker } from "@/validators/objectives";
 import { dungeonContent } from "../../../setup/dungeon";
 import { insertUsers } from "../../../setup/factories";
 import { insertQuestTeamWorld, insertTeamQuest } from "../../../setup/questParty";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
+import { aroundStatements } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -29,7 +30,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { aroundStatements } from "../../../setup/statements";
 
 describeWithDatabase("co-op activity adapters", () => {
   beforeEach(async () => {

@@ -1,5 +1,5 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { beforeEach, expect, it } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
 import {
   userCookingJob,
@@ -8,8 +8,8 @@ import {
   village,
   villageStructure,
 } from "@/drizzle/schema";
-import { villageRouter } from "@/server/api/routers/village";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import { villageRouter } from "@/server/api/routers/village";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { insertUsers } from "../../../setup/factories";
 import {

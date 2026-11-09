@@ -2,9 +2,9 @@ import { describe, expect, it } from "bun:test";
 import { IMG_BADGE_DAYS_IN_VILLAGE, IMG_BADGE_PVPKILLS } from "@/drizzle/constants";
 import { getObjectiveImage } from "@/libs/objectives";
 import {
+  type AllObjectivesType,
   allObjectiveTasks,
   objectiveImageMap,
-  type AllObjectivesType,
 } from "@/validators/objectives";
 
 describe("objectiveImageMap / getObjectiveImage", () => {

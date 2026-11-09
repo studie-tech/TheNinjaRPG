@@ -11,7 +11,7 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
-import { insertUsers, insertClans } from "../../../../setup/factories";
+import { insertClans, insertUsers } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import {
   describeWithDatabase,

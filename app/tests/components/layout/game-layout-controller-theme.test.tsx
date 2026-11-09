@@ -1,5 +1,5 @@
-import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, render } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import GameLayoutController from "@/components/layout/shared/GameLayoutController";
 import type { GameLayoutRenderProps } from "@/components/layout/shared/layoutTypes";

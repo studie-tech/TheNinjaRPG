@@ -1,8 +1,8 @@
-import { lpcSeedAssets } from "../data/lpc/seed";
-import { listGameAssetForGetSceneAssets, insertLpcSeedAsset } from "@/queries/asset";
+import { insertLpcSeedAsset, listGameAssetForGetSceneAssets } from "@/queries/asset";
 import type { DrizzleClient } from "@/server/db";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { chunkArray } from "@/utils/array";
+import { lpcSeedAssets } from "../data/lpc/seed";
 
 /** Import published LPC designs without uploading files or replacing staff edits. */
 export const seedLpcAssets = async (client: DrizzleClient) => {

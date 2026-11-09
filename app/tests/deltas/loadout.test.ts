@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import { getEquippedJutsuProfilePatch } from "@/deltas/jutsu";
 import {
   getEquippedJutsuLoadouts,
-  getOrderedJutsuLoadouts,
   getLoadoutsWithHotkeys,
+  getOrderedJutsuLoadouts,
 } from "@/deltas/loadout";
-import { getEquippedJutsuProfilePatch } from "@/deltas/jutsu";
 
 it("applies confirmed equip membership against its server baseline without replacing other loadouts", () => {
   const rows = [

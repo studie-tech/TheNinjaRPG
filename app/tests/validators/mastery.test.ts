@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { MASTERY_REQUIREMENT_FIELDS } from "@/libs/mastery";
-import { masteryQuestTemplates } from "../setup/mastery";
 import { QuestValidator } from "@/validators/objectives";
+import { masteryQuestTemplates } from "../setup/mastery";
 
 describe("quest earned-mastery prerequisites", () => {
   const template = masteryQuestTemplates()[0]!;

@@ -1,5 +1,3 @@
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import type { ComponentProps } from "react";
 import {
   afterEach,
   beforeEach,
@@ -9,6 +7,8 @@ import {
   setSystemTime,
   vi,
 } from "bun:test";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import * as client from "@/app/_trpc/client";
 import type { ItemRarity } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";

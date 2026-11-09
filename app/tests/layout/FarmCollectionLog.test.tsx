@@ -1,6 +1,6 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { FarmCollectionLog } from "@/layout/FarmCollectionLog";
 import * as Image from "@/layout/Image";
 import { stubDialog } from "../setup/dialog";

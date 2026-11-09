@@ -1,7 +1,7 @@
-import { rateLimitResponse } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
+import { GET as authorizeDiscord } from "@/app/api/discord/authorize/route";
 import { DISCORD_INDEFINITE_SANCTION_DAYS } from "@/drizzle/constants";
 import {
   actionLog,
@@ -11,22 +11,21 @@ import {
   userData,
   userReport,
 } from "@/drizzle/schema";
-import { GET as authorizeDiscord } from "@/app/api/discord/authorize/route";
 import { DISCORD_RELINK_REQUIRED, needsDiscordRelink } from "@/libs/discordLink";
 import { discordRouter } from "@/server/api/routers/discord";
 import { deleteUser } from "@/server/utils/accountDeletion/deleteUserData";
 import { getDiscordConfig } from "@/server/utils/discord/config";
+import {
+  completeDiscordLink,
+  exchangeDiscordCode,
+  resolveClerkDiscordGrant,
+} from "@/server/utils/discord/linking";
 import {
   archiveDiscordLink,
   discordTombstoneHash,
   insertDiscordLink,
   loadLinkCandidate,
 } from "@/server/utils/discord/links";
-import {
-  completeDiscordLink,
-  exchangeDiscordCode,
-  resolveClerkDiscordGrant,
-} from "@/server/utils/discord/linking";
 import { encryptToken } from "@/server/utils/discord/secrets";
 import {
   fetchLinksNeedingSync,
@@ -34,7 +33,9 @@ import {
   syncDiscordMember,
 } from "@/server/utils/discord/sync";
 import { recordSanctionTombstone } from "@/server/utils/sanctionTombstone";
+import { restoreEnvAfterEach } from "../../../setup/env";
 import { insertUsers } from "../../../setup/factories";
+import { rateLimitResponse } from "../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,
@@ -42,7 +43,6 @@ import {
   indexColumns,
   resetTables,
 } from "../../../setup/testDatabase";
-import { restoreEnvAfterEach } from "../../../setup/env";
 
 const DAY = 86_400_000;
 const GUILD = "2222222222222222222";

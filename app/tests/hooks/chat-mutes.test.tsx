@@ -1,18 +1,18 @@
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { MutationCache, QueryClient } from "@tanstack/react-query";
-import { httpBatchLink } from "@trpc/client";
 import { afterEach, expect, it, vi } from "bun:test";
+import { MutationCache, QueryClient } from "@tanstack/react-query";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { httpBatchLink } from "@trpc/client";
 import { getDefaultStore } from "jotai";
-import { chatMutePendingAtom } from "@/libs/chatPanel";
 import type { ReactNode } from "react";
 import superjson from "superjson";
 import * as clientModule from "@/app/_trpc/client";
 import { MAX_MUTED_CONVERSATIONS } from "@/drizzle/constants";
 import { useChatMutes } from "@/hooks/useChatMutes";
+import { chatMutePendingAtom } from "@/libs/chatPanel";
 import * as toast from "@/libs/toast";
 import { mergeQueryChanges } from "@/utils/queryCache";
 import * as userContext from "@/utils/UserContext";
-import { testApi, TrpcTestProviders } from "../setup/trpc";
+import { TrpcTestProviders, testApi } from "../setup/trpc";
 
 type PreferenceResponse = {
   success: boolean;

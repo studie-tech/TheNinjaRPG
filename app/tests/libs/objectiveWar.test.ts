@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { MAP_RESERVED_SECTORS, WAR_OBJECTIVES_PER_SIDE } from "@/drizzle/constants";
+import type { War } from "@/drizzle/schema";
 import {
   findObjectiveWarForSector,
   findShrineAttackWar,
@@ -10,7 +11,6 @@ import {
   withMercenaryParticipation,
 } from "@/libs/objectiveWar";
 import { defaultWarRules, warRulesSchema } from "@/validators/war";
-import type { War } from "@/drizzle/schema";
 
 describe("objective war rules", () => {
   it("validates role damage, health and bounded duration", () => {

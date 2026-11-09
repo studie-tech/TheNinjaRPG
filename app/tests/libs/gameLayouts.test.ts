@@ -2,10 +2,10 @@ import { describe, expect, it } from "bun:test";
 import { runInNewContext } from "node:vm";
 import {
   GAME_LAYOUTS,
+  type GameLayoutId,
   getGameLayoutScript,
   getWelcomeLayout,
   toGameLayoutId,
-  type GameLayoutId,
 } from "@/libs/gameLayouts";
 import { storedValueToLayout } from "@/libs/layoutPreference";
 

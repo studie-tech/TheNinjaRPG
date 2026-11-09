@@ -1,18 +1,18 @@
+import { beforeEach, expect, it } from "bun:test";
+import { eq } from "drizzle-orm";
 import {
-  jutsuEquipLimit,
   jutsu,
+  jutsuEquipLimit,
   jutsuLoadout,
   userData,
   userJutsu,
 } from "@/drizzle/schema";
-import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
-import { beforeEach, expect, it } from "bun:test";
-import { eq } from "drizzle-orm";
 import { exportJutsuLoadout } from "@/libs/loadout";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import type { DrizzleClient } from "@/server/db";
-import { insertUsers, insertJutsus } from "../../../../setup/factories";
-import { beforeStatements, aroundStatements } from "../../../../setup/statements";
+import { insertJutsus, insertUsers } from "../../../../setup/factories";
+import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
+import { aroundStatements, beforeStatements } from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,

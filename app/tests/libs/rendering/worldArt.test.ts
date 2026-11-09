@@ -6,15 +6,15 @@ import {
   resolveWorldDecoration,
   resolveWorldTerrain,
 } from "@/libs/rendering/worldArt";
-import {
-  WORLD_STRUCTURE_ART,
-  resolveWorldStructure,
-} from "@/libs/rendering/worldStructures";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
-import { transformImageUrl } from "@/utils/image";
-import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
+import {
+  resolveWorldStructure,
+  WORLD_STRUCTURE_ART,
+} from "@/libs/rendering/worldStructures";
 import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
 import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
+import { transformImageUrl } from "@/utils/image";
+import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 
 describe("world art skinning", () => {
   it("calibrates stock ground cover without rewriting authored art or its registry", () => {

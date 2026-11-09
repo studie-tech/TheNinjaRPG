@@ -1,6 +1,5 @@
-import { beforeStatements } from "../../../../setup/statements";
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
 import { HIDEOUT_COST, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import {
@@ -18,26 +17,27 @@ import {
 } from "@/drizzle/schema";
 import * as clanLogic from "@/libs/clan";
 import { clanRouter } from "@/server/api/routers/clan";
-import { profileRouter } from "@/server/api/routers/profile";
 import * as profileApi from "@/server/api/routers/profile";
-import type { UserDeltaResponse } from "@/validators/userCache";
+import { profileRouter } from "@/server/api/routers/profile";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import {
+  insertClans,
   insertQuests,
   insertUsers,
   insertUserVotes,
-  insertClans,
 } from "../../../../setup/factories";
 import { comparableTrackers } from "../../../../setup/quest";
-import { countUserReads } from "../../../../setup/userReads";
+import { beforeStatements } from "../../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { countUserReads } from "../../../../setup/userReads";
 
 const userId = "clan-membership-actor";
 const clanId = "membership-faction";

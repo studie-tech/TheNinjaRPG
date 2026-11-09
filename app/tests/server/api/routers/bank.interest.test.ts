@@ -5,13 +5,13 @@ import { dailyBankInterest, userData } from "@/drizzle/schema";
 import { bankRouter, claimBankInterest } from "@/server/api/routers/bank";
 import { getBankInterestDateRange } from "@/utils/time";
 import { insertUsers } from "../../../setup/factories";
+import { failStatements, inTransactions } from "../../../setup/statements";
 import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { inTransactions, failStatements } from "../../../setup/statements";
 
 describe("bank interest UTC window", () => {
   it.each([

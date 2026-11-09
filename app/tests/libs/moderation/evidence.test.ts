@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import sanitize, { htmlToModerationInput } from "@/utils/sanitize";
 import { buildModerationEvidence } from "@/libs/moderation/evidence";
+import sanitize, { htmlToModerationInput } from "@/utils/sanitize";
 import { moderationDecisionSchema } from "@/validators/moderation";
 import type { AdditionalContext } from "@/validators/reports";
 

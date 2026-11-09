@@ -1,7 +1,7 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { observable } from "@trpc/server/observable";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { getDefaultStore } from "jotai";
 import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
@@ -14,7 +14,7 @@ import { chatTavernActivityAtom, chatViewedConversationsAtom } from "@/libs/chat
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-import { testApi, TrpcTestProviders } from "../setup/trpc";
+import { TrpcTestProviders, testApi } from "../setup/trpc";
 
 const store = getDefaultStore();
 const clients: QueryClient[] = [];

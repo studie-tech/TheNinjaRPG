@@ -1,4 +1,3 @@
-import { getNextUserSnapshotAt } from "@/utils/time";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
@@ -11,17 +10,18 @@ import {
   quest,
   questHistory,
   trainingLog,
+  type UserQuest,
   userData,
   userItem,
   userQueue,
-  type UserQuest,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { overworldAiRouter } from "@/server/api/routers/overworldAi";
 import { questsRouter } from "@/server/api/routers/quests";
-import type { DrizzleClient } from "@/server/db";
 import { createTRPCRouter } from "@/server/api/trpc";
+import type { DrizzleClient } from "@/server/db";
+import { getNextUserSnapshotAt } from "@/utils/time";
 
 import {
   DefeatOpponents,
@@ -29,13 +29,14 @@ import {
   QuestTracker,
 } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
+import { deferred } from "../../../../setup/deferred";
 import {
+  insertDefaultAiProfile,
   insertItems,
   insertQuestHistory,
   insertQuests,
   insertUserItems,
   insertUsers,
-  insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../../../setup/queues";
 import {
@@ -51,7 +52,6 @@ import {
   resetTables,
   runRawSql,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
 
 const router = createTRPCRouter({ quests: questsRouter });
 

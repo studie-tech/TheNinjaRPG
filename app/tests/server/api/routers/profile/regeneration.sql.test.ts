@@ -13,8 +13,8 @@ import {
   village,
   villageStructure,
 } from "@/drizzle/schema";
-import { calcCurrent } from "@/libs/regeneration";
 import { Pusher } from "@/libs/pusher";
+import { calcCurrent } from "@/libs/regeneration";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { travelRouter } from "@/server/api/routers/travel";
 import { IncreaseRegenerationTag } from "@/validators/combat";

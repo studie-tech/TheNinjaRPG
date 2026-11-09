@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
+import type { UserUpdate } from "@/deltas/profile";
 import { CRAFTING_REQUIRED_EXP, ITEM_LEVEL_CAP } from "@/drizzle/constants";
 import {
   item,
@@ -16,22 +17,21 @@ import {
   userQueue,
   userVote,
 } from "@/drizzle/schema";
-import type { UserUpdate } from "@/deltas/profile";
 import { Pusher } from "@/libs/pusher";
 import { itemRouter } from "@/server/api/routers/item";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { profileRouter } from "@/server/api/routers/profile";
-import { getTagSchema } from "@/validators/combat";
-import { beforeStatements } from "../../../setup/statements";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { getTagSchema } from "@/validators/combat";
 import {
   insertItems,
+  insertJutsus,
   insertUserItems,
   insertUsers,
-  insertJutsus,
   insertUserVotes,
 } from "../../../setup/factories";
+import { beforeStatements } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,

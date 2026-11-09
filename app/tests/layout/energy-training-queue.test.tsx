@@ -1,7 +1,7 @@
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import { getUserCaps } from "@/drizzle/constants";
 import * as ContentBox from "@/layout/ContentBox";
@@ -10,9 +10,9 @@ import {
   useEnergyTrainingQueue,
 } from "@/layout/EnergyTrainingQueue";
 import type { UserWithRelations } from "@/routers/profile";
-import type { UserDeltaResponse } from "@/validators/userCache";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import * as userContext from "@/utils/UserContext";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import { spyOnToasts } from "../setup/toastMock";
 
 type Result = UserDeltaResponse;

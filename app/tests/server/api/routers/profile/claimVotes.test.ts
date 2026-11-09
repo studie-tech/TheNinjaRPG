@@ -5,6 +5,7 @@ import { userData, userVote } from "@/drizzle/schema";
 import { profileRouter } from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { insertUsers, insertUserVotes } from "../../../../setup/factories";
+import { overrideQuery, withoutTransactions } from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -12,7 +13,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { overrideQuery, withoutTransactions } from "../../../../setup/statements";
 
 /** A completed vote set is credited exactly once, however many claims race for it. */
 const VOTER = "vote-claimer";

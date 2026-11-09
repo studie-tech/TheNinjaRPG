@@ -1,15 +1,15 @@
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
-import { afterEach, beforeAll, beforeEach, expect, it, vi } from "bun:test";
 import type { ReactNode } from "react";
 import * as appClient from "@/app/_trpc/client";
-import type { UserItem } from "@/drizzle/schema";
 import { getEquippedInventory } from "@/deltas/item";
+import type { UserItem } from "@/drizzle/schema";
 import type { useInventoryCacheUpdate as InventoryCacheHook } from "@/hooks/useInventoryCacheUpdate";
 import { useJutsuCacheUpdate } from "@/hooks/useJutsuCacheUpdate";
-import { testApi, TrpcTestProviders } from "../setup/trpc";
+import { TrpcTestProviders, testApi } from "../setup/trpc";
 
 let useInventoryCacheUpdate: typeof InventoryCacheHook;
 /** Bind the real typed procedures to this suite's provider without retaining other suites' mocks. */

@@ -1,6 +1,7 @@
 import { expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 import type { Pool, RowDataPacket } from "mysql2/promise";
+import { deferred } from "./deferred";
 import {
   describeWithDatabase,
   dropEveryTrigger,
@@ -9,7 +10,6 @@ import {
   runRawSql,
   triggerNames,
 } from "./testDatabase";
-import { deferred } from "./deferred";
 
 describeWithDatabase("SQL query recorder", () => {
   it("counts parallel requests once even when the local pool queues them", async () => {

@@ -16,7 +16,7 @@ import {
   isReachableCoordinate,
   validateNormalizedSectorMap,
 } from "@/libs/sector-map/validation";
-import { sectorMap, sectorTile as makeTestTile } from "../setup/sectorMap";
+import { sectorTile as makeTestTile, sectorMap } from "../setup/sectorMap";
 
 const makeTestMap = (
   width: number,

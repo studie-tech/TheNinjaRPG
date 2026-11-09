@@ -1,7 +1,7 @@
-import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import * as dynamic from "next/dynamic";
+import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import * as dynamic from "next/dynamic";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import {
@@ -27,8 +27,8 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
-import { controllableMutation, stubSelect } from "./helpers/warUi";
 import { testRouter } from "../setup/router";
+import { controllableMutation, stubSelect } from "./helpers/warUi";
 
 // Exercise declarations through WarMap while isolating map rendering and transport.
 vi.spyOn(dynamic, "default").mockImplementation(

@@ -2,10 +2,10 @@ import { describe, expect, it } from "bun:test";
 import { applyEffects } from "@/libs/combat/process";
 import { getPower, realizeTag } from "@/libs/combat/tags";
 import {
+  getRegenerationPeriodGain,
   getTimedRegeneration,
   getTimedRegenerationGain,
   getTimedRegenerationPeriods,
-  getRegenerationPeriodGain,
 } from "@/libs/timedBuffs";
 import { IncreaseRegenerationTag } from "@/validators/combat";
 import { makeCompleteBattle, makeEffect, makeUser } from "../../setup/combat";

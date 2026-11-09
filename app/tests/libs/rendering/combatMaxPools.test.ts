@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { getEffectiveMaxPool } from "@/libs/combat/util";
 import type {
   ReturnedBattle,
   ReturnedUserState,
   UserEffect,
 } from "@/libs/combat/types";
+import { getEffectiveMaxPool } from "@/libs/combat/util";
 import { createCombatMaxPoolCache } from "@/libs/rendering/combatMaxPools";
 import { makeBattleUser, makeCompleteBattle, makeEffect } from "../../setup/combat";
 

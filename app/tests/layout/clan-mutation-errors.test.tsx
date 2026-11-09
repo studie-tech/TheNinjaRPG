@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
 import type { ComponentProps } from "react";
 import * as client from "@/app/_trpc/client";
@@ -8,7 +8,7 @@ import { ClanOrders } from "@/layout/clan/ClanOrders";
 import * as groupOrders from "@/layout/GroupOrders";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 let queryClient: QueryClient;
 let fallback: ReturnType<typeof vi.fn>;

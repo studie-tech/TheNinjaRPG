@@ -1,9 +1,9 @@
-import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-import { item, userItem, userData } from "@/drizzle/schema";
+import { item, userData, userItem } from "@/drizzle/schema";
 import { profileRouter } from "@/server/api/routers/profile";
-import { insertUsers, insertItems, insertUserItems } from "../../../../setup/factories";
+import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,

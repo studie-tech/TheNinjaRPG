@@ -1,8 +1,8 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import * as contentImage from "@/layout/ContentImage";
 import { ActionSelector } from "@/layout/CombatActions";
+import * as contentImage from "@/layout/ContentImage";
 import { battleActionGrid } from "@/libs/combat/actionGrid";
 import type { CombatAction } from "@/libs/combat/types";
 import * as userContext from "@/utils/UserContext";

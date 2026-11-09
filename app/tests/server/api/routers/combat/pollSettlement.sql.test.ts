@@ -13,9 +13,9 @@ import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import {
-  insertUsers,
-  insertDefaultAiProfile,
   insertClans,
+  insertDefaultAiProfile,
+  insertUsers,
 } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {

@@ -1,8 +1,8 @@
-import { timerClaimFixture } from "../../../setup/gameTimers";
 import { afterEach, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
 import { GET } from "@/app/api/daily-ranked-pvp/route";
 import * as gamesettings from "@/libs/gamesettings";
+import { timerClaimFixture } from "../../../setup/gameTimers";
 import {
   resetServerModuleStubs,
   stubCronAuth,

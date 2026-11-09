@@ -1,10 +1,10 @@
-import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import * as moderation from "@/libs/moderation/defer";
 import * as pusher from "@/libs/pusher";
 import { commentsRouter } from "@/routers/comments";
 import type { DrizzleClient } from "@/server/db";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { callerForDatabase } from "../../../setup/testDatabase";
 
 const user = {

@@ -1,9 +1,5 @@
-import {
-  getAssignExperienceUserUpdate,
-  getSavedPetSettingsUpdate,
-} from "@/deltas/pets";
-import type { UserUpdateOptions } from "@/deltas/profile";
 import { afterEach, beforeEach, expect, it, setDefaultTimeout, vi } from "bun:test";
+import { QueryClient } from "@tanstack/react-query";
 import {
   act,
   cleanup,
@@ -12,14 +8,18 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { QueryClient } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
 import { getQueryKey } from "@trpc/react-query";
 import * as navigation from "next/navigation";
-import * as client from "@/app/_trpc/client";
-import * as toastUi from "@/components/ui/use-toast";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import PetProfilePage from "@/app/[shell]/profile/pet/page";
+import * as toastUi from "@/components/ui/use-toast";
+import {
+  getAssignExperienceUserUpdate,
+  getSavedPetSettingsUpdate,
+} from "@/deltas/pets";
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import {
   MAP_WAKE_ISLAND_SECTOR,
   PET_ABILITY_SLOTS_BY_RARITY,
@@ -36,26 +36,25 @@ import * as ItemWithEffects from "@/layout/ItemWithEffects";
 import * as Link from "@/layout/Link";
 import { PetProfile } from "@/layout/PetProfile";
 import * as PetTasks from "@/layout/PetTasks";
-import * as petGender from "@/libs/pets/gender";
 import * as StatsDistributionForm from "@/layout/StatsDistributionForm";
+import { AUTO_WAKE_MESSAGE, actionStatusMessage } from "@/libs/actionReadiness";
 import { getPetAbilityCapacity } from "@/libs/pets/abilities";
 import { getDailyPetOptions, PET_PALETTES } from "@/libs/pets/catalogue";
+import * as petGender from "@/libs/pets/gender";
 import * as toast from "@/libs/toast";
-import { actionStatusMessage, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import * as UserContext from "@/utils/UserContext";
-import type { UserPatch } from "@/deltas/profile";
 import {
   prepareUserUpdate as captureUserUpdate,
   updateUserCache,
 } from "@/utils/userCache";
-import { petSpeciesFixture } from "../libs/pets/helpers/species";
-import { petJutsuFixture, petSkillFixture } from "../libs/pets/helpers/abilities";
 import { IncreaseStatTag } from "@/validators/combat";
 import type { PetTask } from "@/validators/petTasks";
-import { actualShowMutationToast } from "../setup/preload";
-import { deferred } from "../setup/deferred";
+import { petJutsuFixture, petSkillFixture } from "../libs/pets/helpers/abilities";
+import { petSpeciesFixture } from "../libs/pets/helpers/species";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import { deferred } from "../setup/deferred";
+import { actualShowMutationToast } from "../setup/preload";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);

@@ -1,5 +1,5 @@
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it } from "bun:test";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createStore } from "jotai";
 import { useEffect } from "react";
 import { useGameScene } from "@/hooks/game-scene";

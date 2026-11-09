@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import {
-  CONFETTI_OVERLAY_ID,
   applyParticleOverlayStyle,
+  CONFETTI_OVERLAY_ID,
   ensureParticleOverlayCanvas,
   particleOverlayStyle,
 } from "@/libs/particleOverlay";

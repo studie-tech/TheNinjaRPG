@@ -1,7 +1,7 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { Grid, rectangle } from "honeycomb-grid";
 import { performAIaction } from "@/libs/combat/ai_v2";
-import type { CompleteBattle, BattleUserState } from "@/libs/combat/types";
+import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
 import { TerrainHex } from "@/libs/hexgrid";
 import { makeAiBattle, makeAiUser } from "./helpers/aiScenario";
 

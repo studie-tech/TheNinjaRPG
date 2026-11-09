@@ -1,11 +1,11 @@
-import { makeAiBattle, makeAiUser as mkUser } from "./helpers/aiScenario";
-import { makeJutsu, makeTag } from "../../setup/combat";
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { Grid, rectangle } from "honeycomb-grid";
 import { performAIaction } from "@/libs/combat/ai_v2";
-import { ActionEndTurn, ActionUseSpecificJutsu } from "@/validators/ai";
-import type { BattleUserState, CompleteBattle, ExtraState } from "@/libs/combat/types";
 import { maskBattle } from "@/libs/combat/masking";
+import type { BattleUserState, CompleteBattle, ExtraState } from "@/libs/combat/types";
+import { ActionEndTurn, ActionUseSpecificJutsu } from "@/validators/ai";
+import { makeJutsu, makeTag } from "../../setup/combat";
+import { makeAiBattle, makeAiUser as mkUser } from "./helpers/aiScenario";
 
 /**
  * Integration cover for auto combat at the ai_v2 CALL SITE: a human with

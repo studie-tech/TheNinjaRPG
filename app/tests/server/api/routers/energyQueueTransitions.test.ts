@@ -1,22 +1,22 @@
-import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
+import { eq } from "drizzle-orm";
 import {
   aiProfile,
   battle,
   battleHistory,
   gameSetting,
-  quest,
-  questHistory,
   item,
   jutsu,
-  userJutsu,
-  userItem,
+  quest,
+  questHistory,
   sectorMap,
   trainingLog,
   userData,
+  userItem,
+  userJutsu,
   userQueue,
-  userVote,
   userRaidBuff,
+  userVote,
   village,
   villageStructure,
   war,
@@ -27,37 +27,36 @@ import { getEnergyQueue } from "@/libs/queue";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { trainRouter } from "@/server/api/routers/train";
-import { IncreaseRegenerationTag } from "@/validators/combat";
-import { defaultWarRules } from "@/validators/war";
 import { completeExpiredGlobalTravel, travelRouter } from "@/server/api/routers/travel";
 import {
-  invalidatePublishedMapCache,
   getSectorNeighborIds,
+  invalidatePublishedMapCache,
 } from "@/server/utils/sectorMap";
+import { IncreaseRegenerationTag } from "@/validators/combat";
+import { defaultWarRules } from "@/validators/war";
+import { makeEffect } from "../../../setup/combat";
+import { deferred } from "../../../setup/deferred";
 import {
+  insertDefaultAiProfile,
   insertItems,
+  insertJutsus,
   insertUserItems,
   insertUsers,
-  insertJutsus,
-  insertDefaultAiProfile,
   insertUserVotes,
 } from "../../../setup/factories";
-import { beforeStatements, aroundStatements } from "../../../setup/statements";
 import {
   queueEnergy,
   queueMasteries,
   readEnergyQueue,
   readMasteryQueue,
 } from "../../../setup/queues";
+import { aroundStatements, beforeStatements } from "../../../setup/statements";
 import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-
-import { makeEffect } from "../../../setup/combat";
-import { deferred } from "../../../setup/deferred";
 
 const HOME = 30;
 const AWAY = getSectorNeighborIds(HOME).east;

@@ -22,16 +22,15 @@ import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { deleteClanBattle, rewardClanBattleVictory } from "@/server/utils/clanBattle";
 import { clanPointConversionSchema } from "@/validators/clan";
 import {
-  insertUsers,
-  insertDefaultAiProfile,
   insertClans,
+  insertDefaultAiProfile,
+  insertUsers,
 } from "../../../../setup/factories";
 import {
   beforeStatements,
   failStatements,
   pollUntil,
 } from "../../../../setup/statements";
-import { readUser } from "../../../../setup/userReads";
 import {
   callerFor,
   callerForDatabase,
@@ -39,6 +38,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
+import { readUser } from "../../../../setup/userReads";
 
 describe("clan conversion input", () => {
   for (const points of [0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 2147483648]) {

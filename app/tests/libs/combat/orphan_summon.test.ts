@@ -1,8 +1,8 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import {
+  hasLiveSummon,
   isOrphanedSummon,
   spliceOrphanedSummons,
-  hasLiveSummon,
 } from "@/libs/combat/summon";
 import type { BattleUserState } from "@/libs/combat/types";
 

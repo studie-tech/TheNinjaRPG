@@ -1,4 +1,3 @@
-import { act, renderHook } from "@testing-library/react";
 import {
   afterEach,
   beforeEach,
@@ -8,6 +7,7 @@ import {
   setSystemTime,
   vi,
 } from "bun:test";
+import { act, renderHook } from "@testing-library/react";
 import { useNow } from "@/hooks/useNow";
 
 const START = Date.UTC(2026, 0, 1);

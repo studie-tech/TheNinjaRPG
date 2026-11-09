@@ -1,12 +1,12 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { FarmMarket } from "@/layout/FarmMarket";
 import { FarmPlotInspector } from "@/layout/FarmPlotInspector";
 import * as Image from "@/layout/Image";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import { getFarmGrowTimeSeconds } from "@/libs/farming";
-import { DecreaseFarmingTime } from "@/validators/combat";
 import * as userContext from "@/utils/UserContext";
+import { DecreaseFarmingTime } from "@/validators/combat";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 
 const plot = (patch: Partial<FarmPlotState> = {}): FarmPlotState => ({

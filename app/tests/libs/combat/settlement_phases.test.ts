@@ -10,8 +10,8 @@ import {
   WAR_SECTORWAR_PVP_SHRINE_REDUCE,
   WAR_TORN_SECTOR_BASE_MONEY,
 } from "@/drizzle/constants";
-import type { BattleUserState } from "@/libs/combat/types";
 import { calcBattleResult } from "@/libs/combat/settlement";
+import type { BattleUserState } from "@/libs/combat/types";
 import { makeCompleteBattle, makeUser } from "../../setup/combat";
 
 const villages = {

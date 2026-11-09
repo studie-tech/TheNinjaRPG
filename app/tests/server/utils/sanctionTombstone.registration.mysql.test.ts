@@ -1,40 +1,40 @@
-import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq, sql } from "drizzle-orm";
+import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import {
   accountDeletion,
   actionLog,
   bloodline,
   bloodlineRolls,
-  forumPost,
   forumBoard,
+  forumPost,
   forumSection,
   forumThread,
   questHistory,
   sanctionTombstone,
   storeUserIdAlias,
+  type UserReportComment,
   userAttribute,
   userData,
   userItem,
   userReport,
   userReportComment,
-  type UserReportComment,
   village,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import * as sanctionQueries from "@/queries/reports";
 import { commentsRouter } from "@/server/api/routers/comments";
 import { profileRouter } from "@/server/api/routers/profile";
 import { reportsRouter } from "@/server/api/routers/reports";
 import type { DrizzleClient } from "@/server/db";
+import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
+import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/storeIdentity";
 import * as sanctions from "@/server/utils/sanctionTombstone";
 import {
   hashSanctionIdentifier,
   type SanctionIdentity,
 } from "@/server/utils/sanctionTombstone";
-import * as sanctionQueries from "@/queries/reports";
-import { processAccountDeletions } from "@/server/utils/accountDeletion/process";
-import { DELETED_STORE_USER_PREFIX } from "@/server/utils/purchases/storeIdentity";
-
+import { deferred } from "../../setup/deferred";
 import { insertUsers } from "../../setup/factories";
 import { insertRegistrationContent, registerCharacter } from "../../setup/registration";
 import {
@@ -43,20 +43,19 @@ import {
   stubClerkUsers,
 } from "../../setup/sanctions";
 import {
-  callerFor,
-  callerForDatabase,
-  recordQueries,
-  describeWithDatabase,
-  getTestDatabase,
-  resetTables,
-} from "../../setup/testDatabase";
-import { deferred } from "../../setup/deferred";
-import {
   aroundStatements,
   interceptExecute,
-  sqlText,
   overrideQuery,
+  sqlText,
 } from "../../setup/statements";
+import {
+  callerFor,
+  callerForDatabase,
+  describeWithDatabase,
+  getTestDatabase,
+  recordQueries,
+  resetTables,
+} from "../../setup/testDatabase";
 
 const DAY = 86_400_000;
 const EMAIL = "registration-appeal@example.com";

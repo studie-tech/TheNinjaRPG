@@ -1,5 +1,5 @@
-import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, render } from "@testing-library/react";
 import { Suspense } from "react";
 import * as client from "@/app/_trpc/client";
 import ANBUDetails from "@/app/[shell]/anbu/[anbuid]/page";

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient } from "@tanstack/react-query";
 import {
   act,
   cleanup,
@@ -7,12 +8,11 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { QueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import * as navigation from "next/navigation";
-import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import HomePage from "@/app/[shell]/home/page";
 import {
   type HomeType,
@@ -23,6 +23,7 @@ import {
 import * as sleep from "@/hooks/sleep";
 import * as ContentBox from "@/layout/ContentBox";
 import * as Image from "@/layout/Image";
+import * as Kitchen from "@/layout/Kitchen";
 import * as Link from "@/layout/Link";
 import {
   getHomeFurnitureGeometry,
@@ -31,16 +32,15 @@ import {
 } from "@/libs/home";
 import { getHomeRooms } from "@/libs/homeProperty";
 import { HOME_FLOOR_PROJECTION } from "@/libs/homeRoomGeometry";
-import * as Kitchen from "@/layout/Kitchen";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
-import { deferred } from "../../setup/deferred";
 import {
   flushRadixFocus,
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
-import { testApi, TrpcTestProviders } from "../../setup/trpc";
+import { deferred } from "../../setup/deferred";
+import { TrpcTestProviders, testApi } from "../../setup/trpc";
 
 const furniture: HomeFurniture[] = [
   {

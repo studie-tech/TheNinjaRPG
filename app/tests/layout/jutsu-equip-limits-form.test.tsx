@@ -1,6 +1,6 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as useSize from "@radix-ui/react-use-size";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as controller from "@/hooks/useJutsuEquipLimits";
 import { JutsuEquipLimitsForm } from "@/layout/JutsuEquipLimitsForm";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";

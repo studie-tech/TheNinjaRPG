@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from "bun:test";
 import type { Quest } from "@/drizzle/schema";
 import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { questsRouter } from "@/routers/quests";
+import { deferred } from "../../../../setup/deferred";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import { callerForDatabase } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
 
 const input = {
   type: "crime" as const,

@@ -1,8 +1,8 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { type NativeAuthResult, useNativeAuth } from "@/hooks/useNativeAuth";
 import { useGlobalOnMutateProtect } from "@/app/_trpc/client";
+import { type NativeAuthResult, useNativeAuth } from "@/hooks/useNativeAuth";
 import * as handoff from "@/hooks/useNativeAuthHandoff";
 import * as native from "@/libs/native";
 import { appEvents, oauthBrowser } from "@/libs/native";

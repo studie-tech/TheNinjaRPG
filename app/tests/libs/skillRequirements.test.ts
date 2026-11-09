@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import type { Jutsu, UserItemWithRelations } from "@/drizzle/schema";
 import { computeAutoEquipAssignments, computeLoadoutAssignments } from "@/libs/item";
+import { canTrainJutsu, jutsuRequirementWarning } from "@/libs/jutsuRequirements";
 import { effectiveMasteries } from "@/libs/mastery";
 import { getRepairKits } from "@/libs/repair";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
-import { canTrainJutsu, jutsuRequirementWarning } from "@/libs/jutsuRequirements";
 import type { UserWithRelations } from "@/routers/profile";
 
 const user = {

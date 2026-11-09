@@ -1,9 +1,5 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it, setSystemTime } from "bun:test";
-import type {
-  AchievementProgress,
-  UserWithRelations,
-} from "@/server/api/routers/profile";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import {
   getUserCaps,
   KAGE_DEFENSE_REMINDER_HOURS,
@@ -12,11 +8,15 @@ import {
 } from "@/drizzle/constants";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { getUserFactionNotifications } from "@/libs/userNotifications";
-import { QuestTracker } from "@/validators/objectives";
+import type {
+  AchievementProgress,
+  UserWithRelations,
+} from "@/server/api/routers/profile";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { KageDefenseSchedule } from "@/validators/kage";
-import type { WarMissionAttempt } from "@/validators/war";
+import { QuestTracker } from "@/validators/objectives";
 import { userDeltaResponseSchema } from "@/validators/userCache";
-import { updateUserCache, prepareUserUpdate } from "@/utils/userCache";
+import type { WarMissionAttempt } from "@/validators/war";
 
 const key = [["profile", "getUser"], { type: "query" }];
 const profile = (money: number) => ({

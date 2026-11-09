@@ -1,39 +1,39 @@
-import {
-  dashboardContentGroups,
-  dashboardContentPrioritySchema,
-} from "@/validators/dashboard";
-import { canStartStatTraining } from "@/libs/train";
-import { isWarMissionAvailable } from "@/libs/quest/missionHall";
 import { describe, expect, it } from "bun:test";
 import {
+  CombatStatNames,
+  getUserCaps,
   MAP_WAKE_ISLAND_SECTOR,
   MAX_DAILY_TRAININGS,
   MAX_EXPERIENCE_LEVEL,
   MAX_PLAYER_LEVEL,
-  CombatStatNames,
   type UserStatName,
   UserStatNames,
   WAR_MISSIONS_PER_DAY,
-  getUserCaps,
 } from "@/drizzle/constants";
+import { calcLevelRequirements } from "@/libs/profile";
+import type { DashboardContentSummary } from "@/libs/profileDashboard";
 import {
+  buildDashboardCatalogue,
   condenseDashboardMissionContent,
   dashboardContentActionLabel,
   dashboardContentHref,
-  buildDashboardCatalogue,
-  dashboardTrainingAction,
   dashboardLevelPercent,
   dashboardLevelProgress,
   dashboardRaidAction,
+  dashboardTrainingAction,
   describeOccupationLine,
+  getDashboardContentPriority,
+  orderDashboardContent,
   raidContinueHref,
   selectDashboardHighlights,
-  orderDashboardContent,
-  getDashboardContentPriority,
 } from "@/libs/profileDashboard";
+import { isWarMissionAvailable } from "@/libs/quest/missionHall";
+import { canStartStatTraining } from "@/libs/train";
+import {
+  dashboardContentGroups,
+  dashboardContentPrioritySchema,
+} from "@/validators/dashboard";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
-import type { DashboardContentSummary } from "@/libs/profileDashboard";
-import { calcLevelRequirements } from "@/libs/profile";
 import { huntingContract } from "../setup/hunting";
 
 const availableDailyCounts = {

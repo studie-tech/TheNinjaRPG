@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { getFacingDirection } from "@/libs/combat/util";
 import type { ReturnedUserState } from "@/libs/combat/types";
+import { getFacingDirection } from "@/libs/combat/util";
 
 /** Minimal battle user for facing checks. */
 const user = (overrides: Partial<ReturnedUserState>): ReturnedUserState =>

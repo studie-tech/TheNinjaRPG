@@ -1,5 +1,6 @@
 import { vi } from "bun:test";
 import { eq, type SQL } from "drizzle-orm";
+import { captureCombatCacheSnapshot } from "@/deltas/combat";
 import type { BattleType } from "@/drizzle/constants";
 import {
   type AiProfile,
@@ -9,20 +10,19 @@ import {
   jutsuEquipLimit,
   userData,
 } from "@/drizzle/schema";
-import { captureCombatCacheSnapshot } from "@/deltas/combat";
+import { refreshMasteries } from "@/libs/combat/mastery";
 import type {
   CombatQueryUser,
   CombatQueryUserJutsu,
   CompleteBattle,
 } from "@/libs/combat/types";
-import { refreshMasteries } from "@/libs/combat/mastery";
 import type { fetchBattleEssentials } from "@/queries/combat";
 import { processUsersForBattle } from "@/server/api/routers/combat";
 import { fetchUserItemsWithVariants } from "@/server/api/routers/item";
 import { fetchUserJutsus } from "@/server/api/routers/jutsu";
 import type { DrizzleClient } from "@/server/db";
-import { equipLimitFixture } from "../../../setup/jutsuEquipLimits";
 import { makeBattleUser, makeUser, tableDefaults } from "../../../setup/combat";
+import { equipLimitFixture } from "../../../setup/jutsuEquipLimits";
 
 type PreloadOptions = Parameters<typeof processUsersForBattle>[1];
 type Essentials = Awaited<ReturnType<typeof fetchBattleEssentials>>;

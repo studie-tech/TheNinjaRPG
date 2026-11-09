@@ -1,11 +1,11 @@
-import { Pusher } from "@/libs/pusher";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { tournament, tournamentMatch, tournamentRecord } from "@/drizzle/schema";
-import { resetServerModuleStubs } from "../../../../setup/serverModules";
+import { Pusher } from "@/libs/pusher";
 import {
   archivedTournamentRecordName,
   syncTournamentState,
 } from "@/routers/tournament";
+import { resetServerModuleStubs } from "../../../../setup/serverModules";
 
 const FINALIZATION_INCOMPLETE =
   "Tournament finalization incomplete. Staff recovery required.";

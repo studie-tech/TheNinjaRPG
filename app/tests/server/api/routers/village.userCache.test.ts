@@ -1,5 +1,5 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import {
@@ -11,9 +11,9 @@ import {
   userVote,
   village,
 } from "@/drizzle/schema";
+import * as profileApi from "@/server/api/routers/profile";
 import { profileRouter } from "@/server/api/routers/profile";
 import { villageRouter } from "@/server/api/routers/village";
-import * as profileApi from "@/server/api/routers/profile";
 import {
   InstantNewQuestObjective,
   MoveToObjective,

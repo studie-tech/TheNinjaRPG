@@ -1,7 +1,7 @@
 /// <reference types="bun-types/test" />
 
-import { desc, eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { desc, eq } from "drizzle-orm";
 import { damageSimulation } from "@/drizzle/schema";
 import { simulatorRouter } from "@/server/api/routers/simulator";
 import { damageSimulationStateSchema } from "@/validators/combat";

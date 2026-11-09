@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import Tavern from "@/app/[shell]/tavern/page";
 import * as localStorage from "@/hooks/localstorage";
 import * as mutes from "@/hooks/useChatMutes";

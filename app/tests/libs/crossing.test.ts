@@ -12,6 +12,7 @@ import {
   EDGE_NORTH,
   EDGE_SOUTH,
   EDGE_WEST,
+  type EdgeIndex,
   edgeCell,
   edgeLength,
   edgeParam,
@@ -22,7 +23,6 @@ import {
   sectorMapEdgeCell,
   sectorMapEdgeForGlobeEdge,
   sectorMapEdgeOffset,
-  type EdgeIndex,
 } from "@/libs/sector-map/crossing";
 import {
   sectorGridEntryEdges,

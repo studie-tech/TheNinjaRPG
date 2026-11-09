@@ -17,7 +17,7 @@ import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
 import { UserContextProvider, useUserData } from "@/utils/UserContext";
 import { actualUserContext } from "../setup/preload";
-import { testApi, TrpcTestProviders } from "../setup/trpc";
+import { TrpcTestProviders, testApi } from "../setup/trpc";
 
 const clients: QueryClient[] = [];
 let userId = "player";

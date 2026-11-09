@@ -1,12 +1,12 @@
-import { trackerQuest as makeQuest } from "../../setup/quest";
 import { describe, expect, it } from "bun:test";
 import {
   buildCombatTrackerTasks,
   hydrateUserForQuests,
 } from "@/libs/combat/settlement";
+import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 import { getNewTrackers } from "@/libs/quest";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
-import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
+import { trackerQuest as makeQuest } from "../../setup/quest";
 
 // Exercise combat task construction, quest hydration and objective credit together.
 const makeResult = (didWin: number): CombatResult =>

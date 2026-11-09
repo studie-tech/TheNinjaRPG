@@ -9,8 +9,8 @@ import {
   fetchPublishedSectorMaps,
   invalidatePublishedMapCache,
 } from "@/server/utils/sectorMap";
-import { planetScaleFixture } from "../../setup/planetscale";
 import { deferred } from "../../setup/deferred";
+import { planetScaleFixture } from "../../setup/planetscale";
 
 const makeMap = (sector: number, name = "map"): NormalizedSectorMap => ({
   formatVersion: SECTOR_MAP_VERSION,

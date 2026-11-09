@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
-import { Redis } from "@upstash/redis";
 import * as Sentry from "@sentry/nextjs";
+import { Redis } from "@upstash/redis";
 import { HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
 import { userDevice } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
@@ -12,8 +12,8 @@ import {
   createTimedPushSender,
   deliverDueTimedPushes,
   dueTimedPushEvents,
-  timedPushKey,
   type TimedPushEvent,
+  timedPushKey,
 } from "@/server/utils/push/timed";
 import { secondsFromDate } from "@/utils/time";
 import { hasLocalRedis, startLocalRedis } from "../../setup/localRedis";

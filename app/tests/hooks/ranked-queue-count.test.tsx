@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   focusManager,
   onlineManager,
@@ -7,7 +8,6 @@ import {
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type Pusher from "pusher-js";
 import type { ReactNode } from "react";
 import type { AppRouter } from "@/api/root";

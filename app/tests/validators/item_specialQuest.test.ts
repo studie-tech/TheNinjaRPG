@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { nonCombatConsume } from "@/libs/item";
 import {
+  getTagSchema,
   ItemValidator,
   NonCombatQuestTag,
-  getTagSchema,
   tagTypes,
 } from "@/validators/combat";
 import { QuestValidator } from "@/validators/objectives";

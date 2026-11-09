@@ -1,5 +1,6 @@
-import { beforeEach, expect, it } from "bun:test";
+import { beforeEach, expect, it, setSystemTime } from "bun:test";
 import { eq } from "drizzle-orm";
+import { getFarmBulkMutationUpdate } from "@/deltas/farming";
 import {
   FARM_MAX_PLOTS,
   FARM_PLOT_PURCHASE_COST,
@@ -19,30 +20,28 @@ import {
   userQueue,
   userSkill,
 } from "@/drizzle/schema";
-import { getFarmBulkMutationUpdate } from "@/deltas/farming";
-import { setSystemTime } from "bun:test";
 import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { getFarmGrowTimeSeconds } from "@/libs/farming";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { farmingRouter } from "@/server/api/routers/farming";
 import { itemRouter } from "@/server/api/routers/item";
 import { DecreaseFarmingTime } from "@/validators/combat";
+import { deferred } from "../../../setup/deferred";
+import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
 import {
   beforeStatements,
   failStatements,
   overrideQuery,
 } from "../../../setup/statements";
-import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import {
   callerFor,
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
-  resetTables,
   recordQueries,
+  resetTables,
 } from "../../../setup/testDatabase";
-import { deferred } from "../../../setup/deferred";
 
 /**
  * The farming router carries the economy: level gates, purchase caps, compare-and-swap

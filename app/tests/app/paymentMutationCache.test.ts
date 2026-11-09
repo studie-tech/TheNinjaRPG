@@ -1,8 +1,8 @@
-import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
+import { describe, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { describe, expect, it, vi } from "bun:test";
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import type {
   AchievementProgress,
   UserWithRelations,

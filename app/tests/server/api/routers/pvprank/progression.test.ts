@@ -1,5 +1,5 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import {
@@ -17,19 +17,19 @@ import {
   village,
   war,
 } from "@/drizzle/schema";
-import { profileRouter } from "@/server/api/routers/profile";
 import * as profileApi from "@/server/api/routers/profile";
+import { profileRouter } from "@/server/api/routers/profile";
+import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { raidsRouter } from "@/server/api/routers/raids";
 import { withRequestScope } from "@/server/requestScope";
-import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
+  insertClans,
   insertQuests,
   insertUsers,
   insertUserVotes,
-  insertClans,
 } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {

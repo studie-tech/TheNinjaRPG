@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { withContentReviewCount } from "@/utils/userNotificationCounts";
 import type { NavBarDropdownLink } from "@/libs/menus";
+import { withContentReviewCount } from "@/utils/userNotificationCounts";
 
 describe("content review notification counts", () => {
   const entries: NavBarDropdownLink[] = [

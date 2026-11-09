@@ -2,8 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { CombatTargetPreview } from "@/layout/CombatTargetPreview";
 import * as modal from "@/layout/Modal";
-import { getBattleGrid } from "@/libs/combat/util";
 import type { ReturnedBattle } from "@/libs/combat/types";
+import { getBattleGrid } from "@/libs/combat/util";
 import * as battlefield from "@/libs/rendering/scenes/battlefieldPreview";
 
 const dispose = vi.fn();

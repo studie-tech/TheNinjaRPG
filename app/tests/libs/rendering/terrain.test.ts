@@ -1,18 +1,19 @@
-import alea from "alea";
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import alea from "alea";
 import { BufferImageSource, Mesh, Shader, Texture, UniformGroup } from "pixi.js";
 import type { VillageStructure } from "@/drizzle/schema";
-import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
+import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
+import { linearRenderColor } from "@/libs/rendering/color";
+import { createHexTerrain, textureRanges } from "@/libs/rendering/primitives/terrain";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { buildSectorTerrainData } from "@/libs/rendering/sectorData";
-import { resolveWorldTerrain } from "@/libs/rendering/worldArt";
+import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import {
   hexTerrainAt,
   KIND,
   LAND_SEGMENT,
   sectorFieldCell,
 } from "@/libs/rendering/terrainData";
-import { textureRanges } from "@/libs/rendering/primitives/terrain";
 import {
   createTerrainField,
   LAND_STEP,
@@ -21,18 +22,16 @@ import {
   standingOffset,
   WATER_FIELD_REACH,
 } from "@/libs/rendering/terrainElevation";
-import { linearRenderColor } from "@/libs/rendering/color";
-import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
-import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
-import { PathCalculator, type TerrainHex } from "@/libs/hexgrid";
+import { resolveWorldTerrain } from "@/libs/rendering/worldArt";
 import { buildWindowNav } from "@/libs/sector-map/navigation";
+import { prepareSectorGrid } from "@/libs/sector-map/sector-grid";
+import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
+import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import {
   getNeighborCoordinates,
   isReachableCoordinate,
   isWalkableCoordinate,
 } from "@/libs/sector-map/validation";
-import { mergeTerrainSpecs } from "@/libs/sector-map/terrains";
-import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { sectorMap } from "../../setup/sectorMap";
 
 const mapOf = (width: number, height: number): NormalizedSectorMap =>

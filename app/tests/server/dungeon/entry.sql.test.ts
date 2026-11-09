@@ -1,24 +1,24 @@
 /** Cover atomic entry publication, compensation, queue ownership and companion XP. */
 import { beforeEach, expect, it } from "bun:test";
-import { DUNGEON_LOBBY_SECONDS } from "@/drizzle/constants";
 import { eq, sql } from "drizzle-orm";
+import { DUNGEON_LOBBY_SECONDS } from "@/drizzle/constants";
 import {
   battle,
   dungeonMember,
   dungeonRun,
   item,
   mpvpBattleUser,
+  questHistory,
   rankedPvpQueue,
   userData,
   userItem,
-  questHistory,
   userPet,
 } from "@/drizzle/schema";
 import { updateUserDataForGET3 } from "@/queries/cleaner";
 import { grantDungeonPetExperience, listExpiredDungeonRuns } from "@/queries/dungeon";
 import { wakeQueuedUser } from "@/queries/profile";
 import { updateUserDataForGetRankedPvpQueue } from "@/queries/pvprank";
-import { rollbackDungeonStart, expireDungeonRun } from "@/server/utils/dungeon";
+import { expireDungeonRun, rollbackDungeonStart } from "@/server/utils/dungeon";
 import {
   commitDungeonEntryBattle,
   dungeonAdmission,
@@ -29,16 +29,16 @@ import { dungeonBattleState, dungeonContent } from "../../setup/dungeon";
 import {
   insertItems,
   insertUserItems,
-  insertUsers,
   insertUserPets,
+  insertUsers,
 } from "../../setup/factories";
+import { withoutTransactions } from "../../setup/statements";
 import {
   describeWithDatabase,
   getTestDatabase,
   recordQueries,
   resetTables,
 } from "../../setup/testDatabase";
-import { withoutTransactions } from "../../setup/statements";
 
 describeWithDatabase("dungeon admission receipts and queue ownership", () => {
   beforeEach(async () => {

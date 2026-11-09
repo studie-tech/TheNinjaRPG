@@ -1,6 +1,6 @@
+import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { forumBoard, forumSection } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
 import type { DrizzleClient } from "@/server/db";
 
 // Match the migration's stable legacy-group IDs so repeated seeds do not duplicate sections.

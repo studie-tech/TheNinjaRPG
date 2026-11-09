@@ -1,6 +1,6 @@
+import { afterEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "bun:test";
 import type { Dispatch, SetStateAction } from "react";
 import * as clientModule from "@/app/_trpc/client";
 import * as modal from "@/layout/Modal";

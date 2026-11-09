@@ -8,6 +8,9 @@ import {
   vi,
 } from "bun:test";
 import { STATS_PER_ENERGY } from "@/drizzle/constants";
+import { combatMasteryGains } from "@/libs/combat/mastery";
+import { calcBattleResult } from "@/libs/combat/settlement";
+import { getReward, postProcessRewards } from "@/libs/quest/rewards";
 import {
   calcMasteryTrainingAmount,
   settleEnergyTrainingQueue,
@@ -15,9 +18,6 @@ import {
   trainingBoost,
 } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
-import { combatMasteryGains } from "@/libs/combat/mastery";
-import { calcBattleResult } from "@/libs/combat/settlement";
-import { getReward, postProcessRewards } from "@/libs/quest/rewards";
 import { QuestValidator } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import { makeBattleUser, makeCompleteBattle } from "../setup/combat";

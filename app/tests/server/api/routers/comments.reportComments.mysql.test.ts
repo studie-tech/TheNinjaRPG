@@ -1,9 +1,9 @@
-import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { TERR_BOT_ID } from "@/drizzle/constants";
 import { userData, userReport, userReportComment } from "@/drizzle/schema";
 import { commentsRouter } from "@/server/api/routers/comments";
 import { insertUsers } from "../../../setup/factories";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,

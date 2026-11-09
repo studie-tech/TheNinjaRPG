@@ -1,7 +1,6 @@
 import { beforeEach, expect, it } from "bun:test";
-import { eq } from "drizzle-orm";
 import { QueryClient } from "@tanstack/react-query";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { eq } from "drizzle-orm";
 import {
   actionLog,
   sectorMap,
@@ -11,6 +10,7 @@ import {
 } from "@/drizzle/schema";
 import { worldMapRouter } from "@/server/api/routers/worldMap";
 import { invalidatePublishedMapCache } from "@/server/utils/sectorMap";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { insertUsers } from "../../../setup/factories";
 import { huntingMap } from "../../../setup/hunting";
 import {

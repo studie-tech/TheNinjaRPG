@@ -14,7 +14,7 @@ import * as finish from "@/libs/spriteSheetFinish";
 import { spriteStudioRouter } from "@/server/api/routers/spriteStudio";
 import * as gameAsset from "@/server/utils/gameAsset";
 import * as spriteSheets from "@/server/utils/spriteSheets";
-import { insertUsers, insertDefaultAiProfile } from "../../setup/factories";
+import { insertDefaultAiProfile, insertUsers } from "../../setup/factories";
 import {
   callerForDatabase,
   describeWithDatabase,

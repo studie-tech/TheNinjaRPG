@@ -4,10 +4,10 @@ import {
   SAGE_MODE_ACTIVATION_JUTSU_ID,
 } from "@/drizzle/constants";
 import { handleInjectedJutsus } from "@/libs/combat/actions";
+import type { BattleUserState } from "@/libs/combat/types";
 import { SAGE_MODE_ACTIVATION_JUTSU } from "@/libs/sageMode";
 import { makeInjectBattle } from "../../setup/combat";
 import { activateSageMode, makeSageMode, makeSageUser } from "./helpers/sageMode";
-import type { BattleUserState } from "@/libs/combat/types";
 
 const activationJutsus = {
   [SAGE_MODE_ACTIVATION_JUTSU_ID]: SAGE_MODE_ACTIVATION_JUTSU,

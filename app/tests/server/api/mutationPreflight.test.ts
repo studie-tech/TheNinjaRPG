@@ -1,16 +1,16 @@
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "bun:test";
 import {
-  SELF_GUARDED_PYRAMID_PROCEDURES,
   ISOLATED_PYRAMID_MESSAGE,
   isPyramidRestrictedProcedure,
+  SELF_GUARDED_PYRAMID_PROCEDURES,
 } from "@/libs/questRun";
 import { combatRouter } from "@/server/api/routers/combat";
 import { homeRouter } from "@/server/api/routers/home";
 import { fetchUserItems } from "@/server/api/routers/item";
-import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { miscRouter } from "@/server/api/routers/misc";
+import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
 import { travelRouter } from "@/server/api/routers/travel";
 import {
@@ -18,9 +18,9 @@ import {
   QUERY_RATE_LIMIT_MESSAGE,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { deferred } from "../../setup/deferred";
 import { resetServerModuleStubs } from "../../setup/serverModules";
 import { callerForDatabase } from "../../setup/testDatabase";
-import { deferred } from "../../setup/deferred";
 
 const source = (path: string) =>
   readFileSync(join(import.meta.dirname, "../../../src", path), "utf8");

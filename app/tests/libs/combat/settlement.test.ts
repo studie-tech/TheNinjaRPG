@@ -1,22 +1,21 @@
-import { fetchBattle } from "@/queries/combat";
-import * as nextServer from "next/server";
-import { eq, sql } from "drizzle-orm";
-import superjson from "superjson";
-import type { UserRecovery } from "@/validators/base";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { eq, sql } from "drizzle-orm";
+import * as nextServer from "next/server";
+import superjson from "superjson";
+import { captureCombatCacheSnapshot } from "@/deltas/combat";
 import {
   aiProfile,
   battle,
   battleAction,
   battleHistory,
-  logBattleLengths,
   item,
+  logBattleLengths,
   userData,
   userItem,
   userItemImbuement,
   userQueue,
 } from "@/drizzle/schema";
-import { captureCombatCacheSnapshot } from "@/deltas/combat";
+import type { UserEvent } from "@/layout/PusherHandler";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import {
   combatEnergyRecoverySql,
@@ -24,26 +23,34 @@ import {
   updateUser,
 } from "@/libs/combat/database";
 import { applyEffects } from "@/libs/combat/process";
-import type { CompleteBattle } from "@/libs/combat/types";
-import { alignBattle } from "@/libs/combat/turn";
 import { calcBattleResult } from "@/libs/combat/settlement";
-import type { UserEvent } from "@/layout/PusherHandler";
+import { alignBattle } from "@/libs/combat/turn";
+import type { CompleteBattle } from "@/libs/combat/types";
 import { Pusher, type PusherClient } from "@/libs/pusher";
+import { fetchBattle } from "@/queries/combat";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
-import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import type { UserWithRelations } from "@/server/api/routers/profile";
+import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { updateUserCache } from "@/utils/userCache";
+import type { UserRecovery } from "@/validators/base";
 import { getTagSchema } from "@/validators/combat";
 import {
+  makeBattleUser,
+  makeBattleUserItem,
+  makeCompleteBattle,
+  makeEffect,
+} from "../../setup/combat";
+import { deferred } from "../../setup/deferred";
+import {
+  insertDefaultAiProfile,
   insertItems,
   insertUserItems,
   insertUsers,
-  insertDefaultAiProfile,
 } from "../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../setup/queues";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
-import { beforeStatements, aroundStatements } from "../../setup/statements";
+import { aroundStatements, beforeStatements } from "../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -52,13 +59,6 @@ import {
   recordQueries,
   resetTables,
 } from "../../setup/testDatabase";
-import {
-  makeBattleUser,
-  makeBattleUserItem,
-  makeCompleteBattle,
-  makeEffect,
-} from "../../setup/combat";
-import { deferred } from "../../setup/deferred";
 import { observeProfile, soloPveResult } from "./helpers/profileCache";
 
 const trigger = vi.fn(async () => {});

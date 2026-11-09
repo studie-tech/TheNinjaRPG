@@ -9,8 +9,8 @@ import {
   isWornGearDisabled,
   missingMasteryRequirement,
 } from "@/libs/mastery";
-import type { ZodAllTags } from "@/validators/combat";
 import { calcEnergy, calcMaxEnergy } from "@/libs/profile";
+import type { ZodAllTags } from "@/validators/combat";
 
 const emptyMasteries = (value = 0): Record<MasteryName, number> =>
   Object.fromEntries(MasteryNames.map((name) => [name, value])) as Record<

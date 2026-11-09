@@ -1,5 +1,5 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, render } from "@testing-library/react";
 import { PoolStatusBars } from "@/layout/PoolStatusBars";
 import StatusBar from "@/layout/StatusBar";
 

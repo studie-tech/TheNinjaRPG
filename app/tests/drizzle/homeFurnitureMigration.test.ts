@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { expect, it } from "bun:test";
+import { readFile } from "node:fs/promises";
 import type mysql from "mysql2/promise";
 import { readMigration, withMigrationSandbox } from "../setup/migrations";
 import { describeWithDatabase } from "../setup/testDatabase";

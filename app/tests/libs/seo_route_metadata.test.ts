@@ -1,8 +1,8 @@
-import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { dirname, join } from "node:path";
 import { describe, expect, it } from "bun:test";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { isProfileIndexable, profileIndexCutoff } from "@/libs/profileIndexing";
-import { SITE_URL, buildMetadata, noindexMetadata, stripSiteName } from "@/libs/seo";
+import { buildMetadata, noindexMetadata, SITE_URL, stripSiteName } from "@/libs/seo";
 
 // Every page lives under the shell segment; what remains at the app root is route
 // handlers and metadata files, which have no metadata of their own to declare.

@@ -1,9 +1,9 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { useState } from "react";
-import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import * as ContentImageSelector from "@/layout/ContentImageSelector";
 import { FurnitureViewsEditor } from "@/layout/FurnitureViewsEditor";
 import * as Image from "@/layout/Image";

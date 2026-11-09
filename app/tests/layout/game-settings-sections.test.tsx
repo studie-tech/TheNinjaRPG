@@ -1,6 +1,6 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import { SignedInIcons } from "@/components/layout/shared/LayoutSidebars";
 import * as nativeEntry from "@/components/native/NativeSettingsEntry";

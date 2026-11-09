@@ -1,5 +1,5 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "bun:test";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { useRecipientPicker, useUserPicker } from "@/utils/search";
 import type { UserSearchResult } from "@/validators/register";
 

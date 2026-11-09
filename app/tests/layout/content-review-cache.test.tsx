@@ -1,5 +1,5 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as client from "@/app/_trpc/client";
 import * as ContentBox from "@/layout/ContentBox";

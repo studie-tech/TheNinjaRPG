@@ -1,5 +1,3 @@
-import { NEAREST_TEXTURE_UV_BIAS } from "@/libs/rendering/assets";
-import { lpcCatalog } from "../../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "bun:test";
 import {
   Assets,
@@ -12,8 +10,9 @@ import {
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
-import { lpcFrame, spriteLayerSheets } from "@/libs/lpc/catalog";
 import * as lpc from "@/libs/lpc/catalog";
+import { lpcFrame, spriteLayerSheets } from "@/libs/lpc/catalog";
+import { NEAREST_TEXTURE_UV_BIAS } from "@/libs/rendering/assets";
 import * as characters from "@/libs/rendering/primitives/character";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import { createCombatActors } from "@/libs/rendering/scenes/combatActors";
@@ -27,6 +26,7 @@ import type { SpriteAppearance } from "@/validators/lpc";
 import type { LpcLayout } from "@/validators/lpcAsset";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import { deferred } from "../../setup/deferred";
+import { lpcCatalog } from "../../setup/lpc";
 
 const cleanups: (() => void)[] = [];
 const originalCreate = characters.createLpcCharacter;

@@ -1,5 +1,5 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, render } from "@testing-library/react";
 import ManualMain from "@/app/[shell]/manual/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as ImageLinkGrid from "@/layout/ImageLinkGrid";

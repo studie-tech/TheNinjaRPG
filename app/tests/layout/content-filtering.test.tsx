@@ -1,5 +1,5 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { StrictMode } from "react";
 import {
   battleTypesField,

@@ -1,6 +1,6 @@
-import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq, sql } from "drizzle-orm";
+import { CHARACTER_DELETION_CONFIRMATION } from "@/drizzle/constants";
 import {
   actionLog,
   aiProfile,
@@ -19,19 +19,20 @@ import {
   userData,
   userItem,
 } from "@/drizzle/schema";
-import { Pusher } from "@/libs/pusher";
 import type { CompleteBattle } from "@/libs/combat/types";
+import { Pusher } from "@/libs/pusher";
 import { combatRouter } from "@/server/api/routers/combat";
 import { huntingRouter } from "@/server/api/routers/hunting";
 import { itemRouter } from "@/server/api/routers/item";
 import { profileRouter } from "@/server/api/routers/profile";
 import { staffRouter } from "@/server/api/routers/staff";
 import type { DrizzleClient } from "@/server/db";
+import { deferred } from "../../setup/deferred";
 import {
-  insertItems,
-  insertUsers,
-  insertUserItems,
   insertDefaultAiProfile,
+  insertItems,
+  insertUserItems,
+  insertUsers,
 } from "../../setup/factories";
 import {
   acceptReadySession,
@@ -42,8 +43,8 @@ import {
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import {
   beforeStatements,
-  holdReads,
   beforeTransaction,
+  holdReads,
   overrideQuery,
 } from "../../setup/statements";
 import {
@@ -53,7 +54,6 @@ import {
   recordQueries,
   resetTables,
 } from "../../setup/testDatabase";
-import { deferred } from "../../setup/deferred";
 
 describeWithDatabase("staff changes during hunting admission", () => {
   beforeEach(async () => {

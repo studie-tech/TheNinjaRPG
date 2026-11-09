@@ -1,9 +1,9 @@
-import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { and, eq } from "drizzle-orm";
 import {
   CombatStatNames,
-  getUserCaps,
   ELEMENTAL_MASTERY_CAP,
+  getUserCaps,
   MAX_MASTERY_CAP,
   TRAINING_CAPTCHA_REFRESHES_PER_MINUTE,
 } from "@/drizzle/constants";
@@ -12,34 +12,36 @@ import {
   captcha,
   gameSetting,
   item,
-  userItem,
   quest,
   questHistory,
   trainingLog,
   userData,
+  userItem,
   userQueue,
   userVote,
 } from "@/drizzle/schema";
 import { getEnergyQueue } from "@/libs/queue";
-import { fetchUpdatedUser } from "@/server/api/routers/profile";
+import { appRouter } from "@/server/api/root";
 import {
   generateCaptcha,
   refreshCaptcha,
   validateCaptcha,
 } from "@/server/api/routers/misc";
+import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { trainRouter } from "@/server/api/routers/train";
-import { appRouter } from "@/server/api/root";
 import { InstantNewQuestObjective, SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
+import type { EnergyTrainingQueueEntry } from "@/validators/train";
 import {
   insertItems,
+  insertQuestHistory,
+  insertQuests,
   insertUserItems,
   insertUsers,
-  insertQuests,
-  insertQuestHistory,
   insertUserVotes,
 } from "../../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../../setup/queues";
+import { beforeStatements, failStatements } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -48,8 +50,7 @@ import {
   recordQueries,
   resetTables,
 } from "../../../setup/testDatabase";
-import { beforeStatements, failStatements } from "../../../setup/statements";
-import type { EnergyTrainingQueueEntry } from "@/validators/train";
+
 const USER_ID = "trainee";
 const SESSION_GAIN = 100;
 const MINUTE = 60 * 1000;

@@ -1,7 +1,7 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as useSize from "@radix-ui/react-use-size";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { act } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import { SuggestChange } from "@/layout/SuggestChange";
 import * as UserContext from "@/utils/UserContext";

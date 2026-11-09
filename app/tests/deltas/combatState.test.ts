@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import type { RouterOutputs } from "@/app/_trpc/client";
 import superjson from "superjson";
+import type { RouterOutputs } from "@/app/_trpc/client";
 import {
   buildCombatStateUpdate,
   captureCombatStateUpdate,

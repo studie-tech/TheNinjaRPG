@@ -1,16 +1,16 @@
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { httpBatchLink } from "@trpc/client";
 import type { ReactNode } from "react";
 import superjson from "superjson";
 import * as clientModule from "@/app/_trpc/client";
 import { useSleepToggle } from "@/hooks/sleep";
+import type { UserWithRelations } from "@/server/api/routers/profile";
 import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import type { UserWithRelations } from "@/server/api/routers/profile";
 import { deferred } from "../setup/deferred";
-import { testApi, TrpcTestProviders } from "../setup/trpc";
+import { TrpcTestProviders, testApi } from "../setup/trpc";
 
 afterEach(() => {
   cleanup();

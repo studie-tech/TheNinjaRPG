@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { RouterInputs } from "@/app/_trpc/client";
-import type { BattleAction } from "@/drizzle/schema";
 import { mergeBattleEntries } from "@/deltas/combat";
+import type { BattleAction } from "@/drizzle/schema";
 
 const entry = (version: number, userId = "me", actionId = "jutsu") =>
   ({

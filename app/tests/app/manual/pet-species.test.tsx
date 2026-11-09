@@ -1,29 +1,29 @@
 import { afterEach, beforeEach, expect, it, setDefaultTimeout, vi } from "bun:test";
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import * as navigation from "next/navigation";
 import { Suspense } from "react";
-import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
-import ManualCompanions from "@/app/[shell]/manual/companions/page";
+import * as client from "@/app/_trpc/client";
 import PetSpeciesEdit from "@/app/[shell]/manual/companions/edit/[speciesid]/page";
+import ManualCompanions from "@/app/[shell]/manual/companions/page";
 import type { UserRole } from "@/drizzle/constants";
+import * as petSpecies from "@/hooks/petSpecies";
 import * as AiProfileEdit from "@/layout/AiProfileEdit";
 import * as ContentBox from "@/layout/ContentBox";
 import * as EditContent from "@/layout/EditContent";
 import * as Modal from "@/layout/Modal";
-import * as petSpecies from "@/hooks/petSpecies";
+import { PET_RANK_APPEARANCES } from "@/libs/pets/catalogue";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { ActionEndTurn } from "@/validators/ai";
 import { IncreaseStatTag } from "@/validators/combat";
-import { PET_RANK_APPEARANCES } from "@/libs/pets/catalogue";
 import { PetSpeciesValidator } from "@/validators/petSpecies";
 import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../../setup/trpc";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../../setup/trpc";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);

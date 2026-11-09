@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
-  afterburn,
   absorb,
+  afterburn,
   getEfficiencyRatio,
   lifesteal,
   recoil,

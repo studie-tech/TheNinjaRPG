@@ -1,5 +1,3 @@
-import * as socials from "@/libs/socials";
-import { reportsRouter } from "@/routers/reports";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
@@ -15,11 +13,11 @@ import {
   forumSection,
   forumThread,
   forumWatch,
-  userData,
-  userReport,
   poll,
   pollOption,
+  userData,
   userPollVote,
+  userReport,
   userUpload,
 } from "@/drizzle/schema";
 import {
@@ -30,13 +28,20 @@ import {
 } from "@/libs/forum";
 import * as moderation from "@/libs/moderation/defer";
 import { getVoteCountsForPolls } from "@/libs/poll";
+import * as socials from "@/libs/socials";
+import { listForumAudit } from "@/queries/forum";
 import { commentsRouter } from "@/routers/comments";
 import { forumRouter } from "@/routers/forum";
 import { pollRouter } from "@/routers/poll";
-import { listForumAudit } from "@/queries/forum";
+import { reportsRouter } from "@/routers/reports";
 import type { DrizzleClient } from "@/server/db";
 import { insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
+import {
+  beforeTransaction,
+  failStatements,
+  inTransactions,
+} from "../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -44,11 +49,6 @@ import {
   recordQueries,
   resetTables,
 } from "../../../setup/testDatabase";
-import {
-  beforeTransaction,
-  inTransactions,
-  failStatements,
-} from "../../../setup/statements";
 
 const playerId = "forum-player";
 const adminId = "forum-admin";

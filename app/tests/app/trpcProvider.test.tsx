@@ -1,31 +1,31 @@
-import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as clerk from "@clerk/nextjs";
-import * as Sentry from "@sentry/nextjs";
 import type { Clerk } from "@clerk/nextjs/types";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import * as Sentry from "@sentry/nextjs";
 import {
   type MutationOptions,
   type QueryClient,
   QueryObserver,
   useQueryClient,
 } from "@tanstack/react-query";
-import { type TRPCClient, TRPCClientError } from "@trpc/client";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import * as trpcClient from "@trpc/client";
+import { type TRPCClient, TRPCClientError } from "@trpc/client";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { toast as sonnerToast } from "sonner";
 import superjson from "superjson";
 import type { AppRouter } from "@/api/root";
 import * as clientModule from "@/app/_trpc/client";
 import TrpcClientProvider from "@/app/_trpc/Provider";
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import { BOTID_BLOCKED_MESSAGE, BOTID_RELOAD_REQUIRED_MESSAGE } from "@/libs/botid";
+import { QUERY_METRICS_HEADER } from "@/libs/queryTelemetry";
 import * as toast from "@/libs/toast";
 import { SESSION_CHANGED_MESSAGE, SESSION_EXPIRED_MESSAGE } from "@/libs/trpcSession";
-import { QUERY_METRICS_HEADER } from "@/libs/queryTelemetry";
-import { shareUserCache } from "@/utils/userCacheSharing";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { shareUserCache } from "@/utils/userCacheSharing";
 import { actualShowMutationToast } from "../setup/preload";
 
 const testApi = createTRPCReact<AppRouter>();

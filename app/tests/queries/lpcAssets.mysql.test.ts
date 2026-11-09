@@ -1,19 +1,19 @@
-import { json, mysqlTable, varchar } from "drizzle-orm/mysql-core";
-import type { LpcConfig } from "@/validators/lpcAsset";
-import { findLpcDesignForSelection } from "@/queries/lpc";
-import { lpcSelectionError } from "@/libs/lpc/appearance";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { afterEach, vi, beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
+import { json, mysqlTable, varchar } from "drizzle-orm/mysql-core";
 import sharp from "sharp";
-import { gameAsset, item, itemVariant, userData, actionLog } from "@/drizzle/schema";
-import { seedLpcAssets } from "../../drizzle/seeds/lpc";
+import { actionLog, gameAsset, item, itemVariant, userData } from "@/drizzle/schema";
+import { lpcSelectionError } from "@/libs/lpc/appearance";
 import { buildLpcCatalog, spriteLayerSheets } from "@/libs/lpc/catalog";
-import { deleteUnreferencedLpcAsset, listLpcAssets } from "@/queries/asset";
-import { gameAssetRouter } from "@/routers/asset";
-import { gameAssetValidator } from "@/validators/asset";
 import { UPLOADTHING_HOST } from "@/libs/uploadthing";
+import { deleteUnreferencedLpcAsset, listLpcAssets } from "@/queries/asset";
+import { findLpcDesignForSelection } from "@/queries/lpc";
+import { gameAssetRouter } from "@/routers/asset";
 import * as ssrf from "@/server/utils/ssrf";
+import { gameAssetValidator } from "@/validators/asset";
+import type { LpcConfig } from "@/validators/lpcAsset";
+import { seedLpcAssets } from "../../drizzle/seeds/lpc";
 import { insertItems, insertUsers } from "../setup/factories";
 import { rateLimitResponse, stubRateLimitTransport } from "../setup/rateLimit";
 import { beforeStatements, failStatements } from "../setup/statements";
@@ -22,8 +22,8 @@ import {
   describeWithDatabase,
   getTestDatabase,
   recordQueries,
-  runRawSql,
   resetTables,
+  runRawSql,
 } from "../setup/testDatabase";
 
 const migrationAsset = mysqlTable("LpcGameAssetMigrationTest", {

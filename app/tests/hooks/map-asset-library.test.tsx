@@ -1,11 +1,11 @@
-import { QueryClient, focusManager, onlineManager } from "@tanstack/react-query";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { focusManager, onlineManager, QueryClient } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { getQueryKey } from "@trpc/react-query";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { PropsWithChildren } from "react";
 import * as client from "@/app/_trpc/client";
 import { useMapAssetLibrary } from "@/hooks/useMapAssetLibrary";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 const artwork = {
   id: "tower",

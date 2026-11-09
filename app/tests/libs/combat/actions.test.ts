@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { actionPointsAfterAction, getActionPointCost } from "@/libs/combat/actions";
 import type { ElementName } from "@/drizzle/constants";
+import { actionPointsAfterAction, getActionPointCost } from "@/libs/combat/actions";
 import type {
   CombatAction,
   ReturnedBattle,

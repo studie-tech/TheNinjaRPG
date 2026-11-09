@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { CRAFTING_REQUIRED_EXP, CRAFTING_RANKS } from "@/drizzle/constants";
+import { CRAFTING_RANKS, CRAFTING_REQUIRED_EXP } from "@/drizzle/constants";
 import type { Item, UserData, UserItem } from "@/drizzle/schema";
 import {
   calculateItemConsumption,

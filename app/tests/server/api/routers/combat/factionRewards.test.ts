@@ -18,19 +18,21 @@ import {
   villageAlliance,
 } from "@/drizzle/schema";
 import { calcBattleResult } from "@/libs/combat/settlement";
-import { raidsRouter } from "@/server/api/routers/raids";
-import { RaidObjective } from "@/validators/objectives";
-import { ObjectiveReward } from "@/validators/rewards";
 import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
+import { raidsRouter } from "@/server/api/routers/raids";
 import { shrineRouter } from "@/server/api/routers/shrine";
+import { RaidObjective } from "@/validators/objectives";
+import { ObjectiveReward } from "@/validators/rewards";
+import { deferred } from "../../../../setup/deferred";
 import {
+  insertClans,
+  insertDefaultAiProfile,
   insertQuests,
   insertUsers,
-  insertDefaultAiProfile,
-  insertClans,
 } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
+import { aroundStatements } from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -38,8 +40,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
-import { aroundStatements } from "../../../../setup/statements";
 
 const participants = ["credit-actor", "credit-ally", "credit-enemy"];
 const winners = participants.slice(0, 2);

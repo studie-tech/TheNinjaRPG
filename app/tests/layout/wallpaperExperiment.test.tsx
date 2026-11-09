@@ -1,5 +1,5 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "bun:test";
+import { renderToStaticMarkup } from "react-dom/server";
 import { LayoutBackground } from "@/components/layout/shared/LayoutBackground";
 import { WALLPAPER_IMAGES, WALLPAPER_VARIANTS } from "@/libs/wallpaperExperiment";
 import { bunnyImageUrl } from "@/utils/image";

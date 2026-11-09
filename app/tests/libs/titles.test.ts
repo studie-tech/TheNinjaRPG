@@ -1,23 +1,23 @@
 import { describe, expect, it } from "bun:test";
 import { effectiveMasteries } from "@/libs/mastery";
 import {
-  getTimedRegeneration,
-  getTimedRegenerationGain,
-  getTimedRegenerationPeriods,
-  getRegenerationPeriodGain,
-} from "@/libs/timedBuffs";
-import { regenerationBuffs } from "@/libs/titles";
-import {
   buildRewardChoiceCards,
   getUnavailableRewardCards,
   rewardFromChoiceCards,
 } from "@/libs/rewardChoice";
 import { collapseRewards } from "@/libs/rewards";
-import { ObjectiveReward, hasReward } from "@/validators/rewards";
-import { TitleEffectSchema, TitleValidator } from "@/validators/title";
+import {
+  getRegenerationPeriodGain,
+  getTimedRegeneration,
+  getTimedRegenerationGain,
+  getTimedRegenerationPeriods,
+} from "@/libs/timedBuffs";
+import { regenerationBuffs } from "@/libs/titles";
 import { IncreaseRegenerationTag } from "@/validators/combat";
-import { rewardOwnership } from "../setup/quest";
+import { hasReward, ObjectiveReward } from "@/validators/rewards";
+import { TitleEffectSchema, TitleValidator } from "@/validators/title";
 import { makeUser } from "../setup/combat";
+import { rewardOwnership } from "../setup/quest";
 
 const from = new Date("2026-01-01T00:00:00Z");
 const acquired = new Date("2026-01-01T00:02:00Z");

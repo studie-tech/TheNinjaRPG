@@ -1,4 +1,3 @@
-import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import { describe, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import {
@@ -19,21 +18,22 @@ import {
   WORLD_CYCLE_TRANSITION_SECONDS,
   WORLD_DAY_SECONDS,
 } from "@/drizzle/constants";
-import type { GameRenderer } from "@/libs/rendering/runtime";
 import * as sceneAssets from "@/libs/rendering/assets";
-import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
+import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
+import type { GameRenderer } from "@/libs/rendering/runtime";
+import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
+import type { HexTerrainData } from "@/libs/rendering/terrainData";
+import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import * as worldMaterials from "@/libs/rendering/worldMaterials";
 import * as worldFields from "@/libs/rendering/worldOcclusion";
-import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
-import type { NormalizedSectorMap } from "@/libs/sector-map/types";
-import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
-import type { HexTerrainData } from "@/libs/rendering/terrainData";
 import { createWorldShadows } from "@/libs/rendering/worldShadows";
 import { worldSunlight } from "@/libs/rendering/worldSunlight";
-import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
-import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
+import { DECORATION_ASSETS_BY_KEY } from "@/libs/sector-map/decorations";
+import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import * as visualEffects from "@/libs/visualEffects";
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
+import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 
 const viewport = { minX: 0, maxX: 100, minY: 0, maxY: 100 };
 /** Occlusion tables exist for every scene, whichever point-light shader samples them. */

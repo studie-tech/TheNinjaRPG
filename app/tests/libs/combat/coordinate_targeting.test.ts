@@ -1,9 +1,11 @@
 import { describe, expect, it } from "bun:test";
+import type { Item, Jutsu } from "@/drizzle/schema";
 import {
   insertAction,
   userItemToAction,
   userJutsuToAction,
 } from "@/libs/combat/actions";
+import { validateActionTarget } from "@/libs/combat/targetValidation";
 import type { CombatAction, GroundEffect, ReturnedBattle } from "@/libs/combat/types";
 import {
   getActionAffectedTiles,
@@ -11,27 +13,25 @@ import {
   getBattleGrid,
 } from "@/libs/combat/util";
 import { getPossibleActionTiles } from "@/libs/hexgrid";
-import { validateActionTarget } from "@/libs/combat/targetValidation";
 import {
   DamageTag,
   HealTag,
-  MoveTag,
-  JutsuValidatorRawSchema,
   JutsuValidator,
+  JutsuValidatorRawSchema,
+  MoveTag,
   SuperRefinePassiveEffects,
 } from "@/validators/combat";
 import {
-  coordinateTargetingSchema,
   type CoordinateTargeting,
+  coordinateTargetingSchema,
 } from "@/validators/coordinateTargeting";
 import {
+  makeBattleUser,
   makeCombatAction,
   makeCompleteBattle,
-  makeBattleUser,
   makeEffect,
   makeJutsu,
 } from "../../setup/combat";
-import type { Item, Jutsu } from "@/drizzle/schema";
 
 const coordinate = (longitude: number, latitude: number) => ({ longitude, latitude });
 const pattern = (

@@ -2,11 +2,11 @@ import { describe, expect, it } from "bun:test";
 import type { VillageStructure } from "@/drizzle/schema";
 import { sectorSpriteDescriptions } from "@/libs/rendering/sectorSprites";
 import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
+import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import {
   createGenericStructure,
   createShrineStructure,
 } from "@/libs/sector-map/structures";
-import type { DecorationAsset } from "@/libs/sector-map/decorations";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import type { MapLocation } from "@/validators/mapLocation";
 

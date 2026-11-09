@@ -1,5 +1,5 @@
-import alea from "alea";
 import { describe, expect, it } from "bun:test";
+import alea from "alea";
 import { COMBAT_BIOMES } from "@/drizzle/constants";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { getProceduralTerrain } from "@/libs/rendering/proceduralBiomes";

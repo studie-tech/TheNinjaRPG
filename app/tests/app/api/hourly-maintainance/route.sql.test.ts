@@ -16,12 +16,12 @@ import * as dataQueries from "@/queries/data";
 import { getUtcMonthKey } from "@/utils/time";
 import { insertUsers } from "../../../setup/factories";
 import { resetServerModuleStubs, stubCronAuth } from "../../../setup/serverModules";
+import { pollUntil } from "../../../setup/statements";
 import {
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { pollUntil } from "../../../setup/statements";
 
 const TOKENS = 1_000_000;
 const previousHour = new Date(Date.now() - 2 * 3600_000);

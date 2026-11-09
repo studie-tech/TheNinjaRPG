@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryError } from "@/layout/QueryError";
 
 afterEach(cleanup);

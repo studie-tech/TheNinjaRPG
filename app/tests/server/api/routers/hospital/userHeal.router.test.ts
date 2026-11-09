@@ -1,9 +1,7 @@
-import { eq } from "drizzle-orm";
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import type { UserCache } from "@/deltas/profile";
-import { fetchActionUser } from "@/queries/actionReadiness";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { eq } from "drizzle-orm";
+import type { UserCache } from "@/deltas/profile";
 import {
   HOSPITAL_BASE_HEAL_SECONDS,
   MEDNIN_REQUIRED_EXP,
@@ -20,16 +18,19 @@ import {
 } from "@/drizzle/schema";
 import { AUTO_CHECKOUT_MESSAGE } from "@/libs/actionReadiness";
 import { Pusher } from "@/libs/pusher";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { hospitalRouter } from "@/server/api/routers/hospital";
 import { questsRouter } from "@/server/api/routers/quests";
 import type { DrizzleClient } from "@/server/db";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import {
   DialogObjective,
   QuestTracker,
   SimpleObjective,
 } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
+import { deferred } from "../../../../setup/deferred";
 import {
   insertQuestHistory,
   insertQuests,
@@ -37,21 +38,20 @@ import {
 } from "../../../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../../../setup/serverModules";
 import {
+  aroundStatements,
   beforeStatements,
   inTransactions,
-  aroundStatements,
   interceptExecute,
 } from "../../../../setup/statements";
-import { readUser } from "../../../../setup/userReads";
 import {
   callerFor,
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
-  resetTables,
   lockWaitObserved,
+  resetTables,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
+import { readUser } from "../../../../setup/userReads";
 
 const USER_ID = "hospital-self-heal-user";
 const TARGET_ID = "hospital-heal-target";

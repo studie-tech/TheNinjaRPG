@@ -1,7 +1,7 @@
-import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { createStore, Provider } from "jotai";
 import * as clerk from "@clerk/nextjs";
+import { act, cleanup, render } from "@testing-library/react";
+import { createStore, Provider } from "jotai";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import NativeBridge from "@/components/native/NativeBridge";
@@ -11,8 +11,8 @@ import HomeLanding from "@/layout/HomeLanding";
 import * as Loader from "@/layout/Loader";
 import * as Welcome from "@/layout/Welcome";
 import * as native from "@/libs/native";
-import * as UserContext from "@/utils/UserContext";
 import * as routing from "@/utils/routing";
+import * as UserContext from "@/utils/UserContext";
 
 const navigate = vi.fn();
 let onUrl: (url: string) => void;

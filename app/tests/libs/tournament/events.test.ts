@@ -13,9 +13,9 @@ import {
   isSeriesAwaitingBegin,
 } from "@/libs/tournament/events";
 import {
-  eventTournamentConfigSchema,
   type EventTournamentConfig,
   type EventTournamentState,
+  eventTournamentConfigSchema,
 } from "@/validators/tournament";
 
 const makeEvent = (count = 8, overrides: Partial<EventTournamentConfig> = {}) => {

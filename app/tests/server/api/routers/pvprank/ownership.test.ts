@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { readFile } from "node:fs/promises";
 import { eq, sql } from "drizzle-orm";
 import {
   aiProfile,
@@ -19,20 +19,20 @@ import { Pusher } from "@/libs/pusher";
 import { clanRouter } from "@/server/api/routers/clan";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { deleteUserRankedQueueRow, pvpRankRouter } from "@/server/api/routers/pvprank";
-import * as ranked from "@/server/utils/ranked";
 import { deleteClanBattle } from "@/server/utils/clanBattle";
 import { battleClaimRollbackStatus } from "@/server/utils/concurrency";
+import * as ranked from "@/server/utils/ranked";
+import { deferred } from "../../../../setup/deferred";
 import {
-  insertUsers,
-  insertDefaultAiProfile,
   insertClans,
+  insertDefaultAiProfile,
+  insertUsers,
 } from "../../../../setup/factories";
 import {
   beforeStatements,
   interceptExecute,
   overrideQuery,
 } from "../../../../setup/statements";
-import { readUser } from "../../../../setup/userReads";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -40,7 +40,7 @@ import {
   resetTables,
   runRawSql,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
+import { readUser } from "../../../../setup/userReads";
 
 describeWithDatabase("ranked queue ownership across clan cleanup", () => {
   beforeEach(async () => {

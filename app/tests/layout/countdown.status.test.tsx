@@ -1,4 +1,3 @@
-import { act, cleanup, render } from "@testing-library/react";
 import {
   afterEach,
   beforeEach,
@@ -8,6 +7,7 @@ import {
   setSystemTime,
   vi,
 } from "bun:test";
+import { act, cleanup, render } from "@testing-library/react";
 import Countdown from "@/layout/Countdown";
 
 const BASE = Date.UTC(2026, 8, 16, 12, 0, 0);

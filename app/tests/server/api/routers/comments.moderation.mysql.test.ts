@@ -1,4 +1,3 @@
-import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
 import * as next from "next/server";
@@ -6,8 +5,8 @@ import OpenAI from "openai";
 import { FORUM_MIN_LEVEL } from "@/drizzle/constants";
 import {
   forumBoard,
-  forumSection,
   forumPost,
+  forumSection,
   forumThread,
   moderationScan,
   userData,
@@ -16,6 +15,7 @@ import { classifyNsfwImage, moderateContent } from "@/libs/moderator";
 import { commentsRouter } from "@/server/api/routers/comments";
 import { insertUsers } from "../../../setup/factories";
 import { unflaggedModeration } from "../../../setup/moderation";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
   callerForDatabase,
   describeWithDatabase,

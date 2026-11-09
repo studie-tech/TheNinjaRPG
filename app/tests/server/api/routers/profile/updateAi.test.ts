@@ -1,10 +1,10 @@
-import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
 import { actionLog, jutsu, userData, userJutsu } from "@/drizzle/schema";
 import * as socials from "@/libs/socials";
 import { profileRouter } from "@/server/api/routers/profile";
 import type { InsertAiSchemaInput } from "@/validators/aiInput";
-import { insertUsers, insertJutsus } from "../../../../setup/factories";
+import { insertJutsus, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,

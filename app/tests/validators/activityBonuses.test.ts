@@ -9,8 +9,8 @@ import {
   DecreaseCraftingTime,
   DecreaseFarmingTime,
   DecreaseGatheringTime,
-  IncreaseHuntingYield,
   IncreaseGatheringYield,
+  IncreaseHuntingYield,
   rejectActivityBonuses,
   SkillTreeValidator,
 } from "@/validators/combat";

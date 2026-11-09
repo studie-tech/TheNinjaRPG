@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 
 type Purchase = { itemId: string; stack: number; villageId?: string | null };
@@ -47,18 +47,18 @@ const purchase = vi.fn((input: Purchase) =>
 );
 
 import * as client from "@/app/_trpc/client";
-import * as UserContext from "@/utils/UserContext";
-import * as routing from "@/utils/routing";
 import * as tutorial from "@/hooks/tutorial";
-import * as pagination from "@/libs/pagination";
-import * as toast from "@/libs/toast";
 import * as ContentBox from "@/layout/ContentBox";
 import * as ContentImage from "@/layout/ContentImage";
 import * as Image from "@/layout/Image";
+import * as ItemShopFiltering from "@/layout/ItemShopFiltering";
 import * as ItemWithEffects from "@/layout/ItemWithEffects";
 import * as Modal from "@/layout/Modal";
-import * as ItemShopFiltering from "@/layout/ItemShopFiltering";
 import Shop from "@/layout/Shop";
+import * as pagination from "@/libs/pagination";
+import * as toast from "@/libs/toast";
+import * as routing from "@/utils/routing";
+import * as UserContext from "@/utils/UserContext";
 
 const user = {
   level: 50,

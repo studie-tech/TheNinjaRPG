@@ -1,7 +1,7 @@
-import * as clerk from "@clerk/nextjs";
-import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "bun:test";
+import * as clerk from "@clerk/nextjs";
 import { QueryClient } from "@tanstack/react-query";
+import { act, cleanup, render } from "@testing-library/react";
 import { atom, useAtom } from "jotai";
 import * as navigation from "next/navigation";
 import { StrictMode, useState } from "react";

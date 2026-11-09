@@ -1,8 +1,6 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { queueEnergy } from "../../../../setup/queues";
-import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { eq } from "drizzle-orm";
 import {
   actionLog,
   activityStreakConfig,
@@ -12,8 +10,10 @@ import {
   userStreakProgress,
 } from "@/drizzle/schema";
 import { activityStreakRouter } from "@/server/api/routers/activityStreak";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { ObjectiveReward } from "@/validators/rewards";
 import { insertUsers } from "../../../../setup/factories";
+import { queueEnergy } from "../../../../setup/queues";
 import {
   callerFor,
   describeWithDatabase,

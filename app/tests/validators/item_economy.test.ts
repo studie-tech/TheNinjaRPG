@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import { editableOf } from "@/libs/contentReview/entities";
 import { ItemValidatorRawSchema } from "@/validators/combat";
 import { refineItemEconomy } from "@/validators/itemEconomy";
-import { editableOf } from "@/libs/contentReview/entities";
 
 const economy = ItemValidatorRawSchema.pick({
   auctionMinPrice: true,

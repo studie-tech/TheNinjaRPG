@@ -1,7 +1,7 @@
 import { DUNGEON_FLOORS_PER_TIER } from "@/drizzle/constants";
 import { dungeon, dungeonRun } from "@/drizzle/schema";
-import { dungeonContentSchema } from "@/validators/dungeon";
 import type { DungeonBattleState } from "@/libs/dungeon";
+import { dungeonContentSchema } from "@/validators/dungeon";
 import { getTestDatabase } from "./testDatabase";
 
 type Waves = ReturnType<typeof dungeonContent>["tiers"][number][number]["waves"];

@@ -17,23 +17,23 @@ import { villageRouter } from "@/server/api/routers/village";
 import type { DrizzleClient } from "@/server/db";
 import { startDeclaredWar } from "@/server/utils/war";
 import { defaultWarRules } from "@/validators/war";
+import { deferred } from "../../../setup/deferred";
 import { insertUsers } from "../../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
+import {
+  inTransactions,
+  interceptExecute,
+  overrideQuery,
+  withoutTransactions,
+} from "../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
+  lockWaitObserved,
   recordQueries,
   resetTables,
-  lockWaitObserved,
 } from "../../../setup/testDatabase";
-import { deferred } from "../../../setup/deferred";
-import {
-  interceptExecute,
-  withoutTransactions,
-  inTransactions,
-  overrideQuery,
-} from "../../../setup/statements";
 
 const sectorId = 205;
 const leader = "defender-kage";

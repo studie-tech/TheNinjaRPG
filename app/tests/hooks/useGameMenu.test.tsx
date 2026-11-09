@@ -1,9 +1,9 @@
-import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, renderHook } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
+import { useGameMenu } from "@/hooks/useGameMenu";
 import * as sector from "@/hooks/useSectorVillage";
 import { chatMentionsAtom, chatTavernActivityAtom } from "@/libs/chatPanel";
-import { useGameMenu } from "@/hooks/useGameMenu";
 import * as routing from "@/utils/routing";
 import * as context from "@/utils/UserContext";
 

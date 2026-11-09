@@ -1,7 +1,7 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { combatProfilePatch, type CombatProfileUpdate } from "@/deltas/combat";
-import type { CompleteBattle } from "@/libs/combat/types";
+import { type CombatProfileUpdate, combatProfilePatch } from "@/deltas/combat";
 import { calcBattleResult } from "@/libs/combat/settlement";
+import type { CompleteBattle } from "@/libs/combat/types";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 
 /**

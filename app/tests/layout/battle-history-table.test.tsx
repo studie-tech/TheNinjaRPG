@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import * as navigation from "next/navigation";
-import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import * as Avatar from "@/layout/Avatar";
 import { BattleHistoryTable } from "@/layout/BattleHistoryTable";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 type Input = RouterInputs["combat"]["getBattleHistory"];
 type Row = RouterOutputs["combat"]["getBattleHistory"]["data"][number];

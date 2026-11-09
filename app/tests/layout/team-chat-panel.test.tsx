@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, render } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
+import { cleanup, render } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { MESSAGING_MIN_LEVEL, messagingLevelMessage } from "@/drizzle/constants";
 import { TeamChatPanel } from "@/layout/TeamChatPanel";
 import * as UserContext from "@/utils/UserContext";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 let queryClient: QueryClient;
 let user: { userId: string; level: number; isBanned: boolean; isSilenced: boolean };

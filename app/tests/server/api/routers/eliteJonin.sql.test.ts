@@ -1,30 +1,29 @@
-import { canBootstrapQuestType } from "@/deltas/profile";
-import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import { canBootstrapQuestType } from "@/deltas/profile";
 import { quest, questHistory, userData } from "@/drizzle/schema";
 import { calcHP } from "@/libs/profile";
 import { isAvailableUserQuests } from "@/libs/quest/availability";
+import { fetchQuestDiscoveryCandidates } from "@/queries/quests";
 import { fetchQuestBootstrap } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
-import { commitQuestObjectiveRewards } from "@/server/utils/questConsequences";
 import { fetchUncompletedQuests } from "@/server/utils/questAssignment";
-
-import { QuestReward } from "@/validators/rewardPackages";
+import { commitQuestObjectiveRewards } from "@/server/utils/questConsequences";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
+import { QuestReward } from "@/validators/rewardPackages";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import {
   insertQuestHistory,
   insertQuests,
   insertUsers,
 } from "../../../setup/factories";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { fetchQuestDiscoveryCandidates } from "@/queries/quests";
 
 describeWithDatabase("Elite Jonin milestone claims", () => {
   beforeEach(async () => resetTables(questHistory, quest, userData));

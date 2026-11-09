@@ -8,13 +8,13 @@ import {
   getExtractorCropCapacity,
   getFarmGrowTimeSeconds,
   getFarmHarvestExperience,
+  getFarmingLevel,
+  getFarmingLevelProgress,
   getFarmPlantExperience,
   getFarmPlotStatus,
   getFarmPrimaryAction,
   getFarmQuantityPrice,
   getFertilizerExperience,
-  getFarmingLevel,
-  getFarmingLevelProgress,
   getLivePlotTiming,
   getMaxExtractors,
   getMaxPurchasablePlots,
@@ -31,7 +31,7 @@ import {
   summarizeFarmPlots,
 } from "@/libs/farming";
 import { calcLevelRequirements } from "@/libs/profile";
-import { farmMutationResponseSchema, type FarmPlotState } from "@/validators/farming";
+import { type FarmPlotState, farmMutationResponseSchema } from "@/validators/farming";
 
 describe("farming", () => {
   it.each(["water", "fertilizer"] as const)(

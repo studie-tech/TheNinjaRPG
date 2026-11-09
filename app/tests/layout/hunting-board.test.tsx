@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import * as navigation from "next/navigation";
 import type { ReactNode } from "react";
 import { useState } from "react";
@@ -8,7 +8,7 @@ import * as ContentBox from "@/layout/ContentBox";
 import { HuntingArrival } from "@/layout/HuntingArrival";
 import { HuntingBoard } from "@/layout/HuntingBoard";
 import * as Modal from "@/layout/Modal";
-import { actionStatusMessage, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
+import { AUTO_WAKE_MESSAGE, actionStatusMessage } from "@/libs/actionReadiness";
 import * as toast from "@/libs/toast";
 import { optimisticGlobalTravelStart } from "@/libs/travel";
 import { pushToCombat } from "@/utils/routing";

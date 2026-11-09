@@ -1,7 +1,5 @@
-import { fetchEvent, fetchEventNoticeState } from "@/queries/tournamentEvents";
-import * as eventQueries from "@/queries/tournamentEvents";
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
 import * as nextServer from "next/server";
 import {
@@ -16,30 +14,32 @@ import {
 } from "@/drizzle/constants";
 import {
   aiProfile,
-  item,
-  rankedLoadout,
-  jutsuEquipLimit,
   battle,
   battleHistory,
-  questHistory,
+  item,
+  jutsuEquipLimit,
   quest,
+  questHistory,
+  rankedLoadout,
   tournament,
   tournamentMatch,
   tournamentRewardClaim,
   trainingLog,
-  userData,
   userCookingJob,
+  userData,
   userQueue,
 } from "@/drizzle/schema";
 import { updateUser } from "@/libs/combat/database";
 import { calcBattleResult } from "@/libs/combat/settlement";
-import { getServerPusher, Pusher } from "@/libs/pusher";
 import * as pusherModule from "@/libs/pusher";
+import { getServerPusher, Pusher } from "@/libs/pusher";
 import {
   beginEventRound,
   createEventState,
   generateEventBracket,
 } from "@/libs/tournament/events";
+import * as eventQueries from "@/queries/tournamentEvents";
+import { fetchEvent, fetchEventNoticeState } from "@/queries/tournamentEvents";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { profileRouter } from "@/server/api/routers/profile";
 import { tournamentRouter } from "@/server/api/routers/tournament";
@@ -48,17 +48,18 @@ import {
   syncEventTournament,
 } from "@/server/api/routers/tournamentEvents";
 import type { DrizzleClient } from "@/server/db";
-import {
-  eventTournamentConfigSchema,
-  type EventParticipant,
-} from "@/validators/tournament";
-import { ObjectiveReward } from "@/validators/rewards";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import { withAfterTasks } from "../../../setup/after";
+import { ObjectiveReward } from "@/validators/rewards";
 import {
+  type EventParticipant,
+  eventTournamentConfigSchema,
+} from "@/validators/tournament";
+import { withAfterTasks } from "../../../setup/after";
+import { deferred } from "../../../setup/deferred";
+import {
+  insertDefaultAiProfile,
   insertItems,
   insertUsers,
-  insertDefaultAiProfile,
 } from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
@@ -68,10 +69,9 @@ import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
-  resetTables,
   recordQueries,
+  resetTables,
 } from "../../../setup/testDatabase";
-import { deferred } from "../../../setup/deferred";
 
 describeWithDatabase("event tournament persistence", () => {
   beforeEach(async () => {

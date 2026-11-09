@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { transitionCoopParty, type CoopParty } from "@/libs/coop";
+import { type CoopParty, transitionCoopParty } from "@/libs/coop";
 
 const party = (overrides: Partial<CoopParty> = {}): CoopParty => ({
   leaderId: "a",

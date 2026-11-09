@@ -2,9 +2,9 @@ import { describe, expect, it } from "bun:test";
 import { CREATOR_USERNAME, IMG_SECTOR_VS_ICON } from "@/drizzle/constants";
 import {
   isAloneOnTile,
-  travelActorRecipes,
-  travelActionAvailability,
   type TravelActorsSnapshot,
+  travelActionAvailability,
+  travelActorRecipes,
 } from "@/libs/rendering/scenes/travelActors";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";

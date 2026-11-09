@@ -1,6 +1,6 @@
+import { describe, expect, it } from "bun:test";
 import { isValidElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "bun:test";
 import { parseHtml } from "@/utils/parse";
 
 const render = (html: string) =>

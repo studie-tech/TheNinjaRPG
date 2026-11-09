@@ -1,7 +1,5 @@
 import { describe, expect, it, mock, vi } from "bun:test";
 import { readFileSync } from "node:fs";
-import sharp from "sharp";
-import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 import {
   BufferImageSource,
   Container,
@@ -10,21 +8,23 @@ import {
   Sprite,
   Texture,
 } from "pixi.js";
-import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
-import { createBakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
-import sources from "@/libs/rendering/bakedWorldSources.json";
+import sharp from "sharp";
 import {
   bakedShadowBasis,
   bakedShadowBounds,
   bakedShadowKey,
   bakedShadowTransform,
-  placeBakedShadow,
   hasBakedShadow,
   loadBakedShadowAtlas,
+  placeBakedShadow,
 } from "@/libs/rendering/bakedShadowAtlas";
+import { createBakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
+import sources from "@/libs/rendering/bakedWorldSources.json";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import type { WorldSpriteDescription } from "@/libs/rendering/sectorSprites";
 import { WORLD_ASSET_SOURCES } from "@/libs/rendering/worldAssetSources";
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
+import { worldArtDirectory, worldArtFile } from "../../setup/worldArt";
 
 const first = () => {
   const entry = Object.entries(sources)[0];

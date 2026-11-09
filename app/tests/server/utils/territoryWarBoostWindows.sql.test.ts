@@ -22,7 +22,7 @@ import {
   resolveTerritoryWar,
   territoryWarBoostWindowsSql,
 } from "@/server/utils/territoryWar";
-import { insertUsers, insertClans } from "../../setup/factories";
+import { insertClans, insertUsers } from "../../setup/factories";
 import {
   describeWithDatabase,
   getTestDatabase,

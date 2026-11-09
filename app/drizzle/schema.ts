@@ -1,82 +1,80 @@
-import type { LpcConfig } from "../src/validators/lpcAsset";
-import type { ForumPolicy, ForumCapability } from "@/validators/forum";
-import type { StoreContents } from "@/validators/points";
-import type { TitleEffect } from "@/validators/title";
-import type { MethodSize } from "@/validators/methodSize";
-import type { EventTournamentState } from "@/validators/tournament";
-import type { CoordinateTargeting } from "@/validators/coordinateTargeting";
-import type { CraftingQueueMaterial } from "@/validators/train";
+import type { ModelMessage } from "ai";
+import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
-  mysqlTable,
+  bigint,
   boolean,
   customType,
+  date,
+  datetime,
+  double,
+  float,
+  index,
+  int,
+  json,
+  mediumtext,
+  mysqlEnum,
+  mysqlTable,
+  primaryKey,
+  smallint,
+  text,
+  tinyint,
+  unique,
   uniqueIndex,
   varchar,
-  datetime,
-  date,
-  mysqlEnum,
-  json,
-  int,
-  bigint,
-  smallint,
-  index,
-  float,
-  text,
-  mediumtext,
-  tinyint,
-  double,
-  primaryKey,
-  unique,
 } from "drizzle-orm/mysql-core";
 import * as consts from "@/drizzle/constants";
-import { relations } from "drizzle-orm";
-import { sql } from "drizzle-orm";
-import type { DashboardContentGroup } from "@/validators/dashboard";
-import type { ZodAllTags } from "@/validators/combat";
 import type {
-  ExtraState,
-  BattleUserState,
-  UserEffect,
-  GroundEffect,
   ActionEffect,
+  BattleUserState,
+  ExtraState,
+  GroundEffect,
+  UserEffect,
 } from "@/libs/combat/types";
-import type { QuestContentType, QuestTrackerType } from "@/validators/objectives";
-import type { ObjectiveRewardType, PendingRewardChoice } from "@/validators/rewards";
-import type {
-  RankedSeasonDivisionReward,
-  RankedLoadoutSchema,
-} from "@/validators/pvpRank";
-import type { AiRuleType } from "@/validators/ai";
-import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
-import type { AdditionalContext } from "@/validators/reports";
-import type { ModelMessage } from "ai";
-import type {
-  TowerDefenseState,
-  CharacterAssetConfig,
-} from "@/validators/towerDefense";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
-import type { GuideFaqItem } from "@/validators/guide";
-import type { FurnitureData, FurnitureVariantData } from "@/validators/itemFurniture";
-import type { HomeRoomStyle } from "@/validators/home";
-import type {
-  ObjectiveWarState,
-  WarRules,
-  WarMissionAttempt,
-  WarSettlement,
-} from "@/validators/war";
+import type { AiRuleType } from "@/validators/ai";
+import type { ZodAllTags } from "@/validators/combat";
+import type { CoordinateTargeting } from "@/validators/coordinateTargeting";
+import type { DashboardContentGroup } from "@/validators/dashboard";
 import type {
   DungeonContent,
-  DungeonRunState,
   DungeonRewardReceipt,
+  DungeonRunState,
 } from "@/validators/dungeon";
-import type { PetTask } from "@/validators/petTasks";
-import type { ZodPetSpeciesEffect } from "@/validators/petSpecies";
-
+import type { ForumCapability, ForumPolicy } from "@/validators/forum";
+import type { GuideFaqItem } from "@/validators/guide";
+import type { HomeRoomStyle } from "@/validators/home";
 import type {
   HuntingHabitatContent,
   HuntingReceipt,
   HuntingSessionContent,
 } from "@/validators/hunting";
+import type { FurnitureData, FurnitureVariantData } from "@/validators/itemFurniture";
+import type { MethodSize } from "@/validators/methodSize";
+import type { QuestContentType, QuestTrackerType } from "@/validators/objectives";
+import type { ZodPetSpeciesEffect } from "@/validators/petSpecies";
+import type { PetTask } from "@/validators/petTasks";
+import type { StoreContents } from "@/validators/points";
+import type {
+  RankedLoadoutSchema,
+  RankedSeasonDivisionReward,
+} from "@/validators/pvpRank";
+import type { AdditionalContext } from "@/validators/reports";
+import type { ObjectiveRewardType, PendingRewardChoice } from "@/validators/rewards";
+import type { TitleEffect } from "@/validators/title";
+import type { EventTournamentState } from "@/validators/tournament";
+import type {
+  CharacterAssetConfig,
+  TowerDefenseState,
+} from "@/validators/towerDefense";
+import type { CraftingQueueMaterial } from "@/validators/train";
+import type {
+  ObjectiveWarState,
+  WarMissionAttempt,
+  WarRules,
+  WarSettlement,
+} from "@/validators/war";
+import type { LpcConfig } from "../src/validators/lpcAsset";
 
 /** Per-category jutsu caps; NULL means unlimited in that mode. */
 export const jutsuEquipLimit = mysqlTable("JutsuEquipLimit", {

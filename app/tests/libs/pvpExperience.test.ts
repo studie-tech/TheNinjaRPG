@@ -1,21 +1,21 @@
 import { describe, expect, it } from "bun:test";
 import {
-  PVP_EXPERIENCE_AVERAGE_SETTING,
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
+  PVP_EXPERIENCE_AVERAGE_SETTING,
 } from "@/drizzle/constants";
 import type { GameSetting } from "@/drizzle/schema";
+import { combatMasteryGains } from "@/libs/combat/mastery";
+import { calcBattleResult } from "@/libs/combat/settlement";
+import { calcActiveUserRegen } from "@/libs/profile";
 import {
   boostPvpGain,
   boostPvpRewards,
   getPvpBoost,
   pvpExperienceReward,
 } from "@/libs/pvpExperience";
-import { trainingBoost } from "@/libs/train";
-import { calcActiveUserRegen } from "@/libs/profile";
 import { getReward } from "@/libs/quest/rewards";
-import { combatMasteryGains } from "@/libs/combat/mastery";
-import { calcBattleResult } from "@/libs/combat/settlement";
-import { makeUser, makeCompleteBattle } from "../setup/combat";
+import { trainingBoost } from "@/libs/train";
+import { makeCompleteBattle, makeUser } from "../setup/combat";
 
 const now = new Date("2026-10-11T12:00:00Z");
 const settings: GameSetting[] = [

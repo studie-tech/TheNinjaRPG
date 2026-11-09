@@ -1,13 +1,12 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import type { ItemWithEffectsProps } from "@/layout/ItemWithEffects";
-
+import { cleanup, render } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
-import * as UserContext from "@/utils/UserContext";
 import * as ContentImage from "@/layout/ContentImage";
 import * as DurabilityBar from "@/layout/DurabilityBar";
-import { NonCombatConsumeRewardTag } from "@/validators/combat";
+import type { ItemWithEffectsProps } from "@/layout/ItemWithEffects";
 import ItemWithEffects from "@/layout/ItemWithEffects";
+import * as UserContext from "@/utils/UserContext";
+import { NonCombatConsumeRewardTag } from "@/validators/combat";
 
 const names = { useQuery: () => ({ data: [] }) };
 const evolutions = { useQuery: vi.fn(() => ({ data: [] })) };

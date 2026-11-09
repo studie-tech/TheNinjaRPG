@@ -1,5 +1,5 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, render } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import TownHall from "@/app/[shell]/townhall/page";
 import { KAGE_ELDER_REMOVAL_LOCK_SECS } from "@/drizzle/constants";

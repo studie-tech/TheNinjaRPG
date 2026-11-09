@@ -1,6 +1,6 @@
+import { afterEach, describe, expect, it } from "bun:test";
 import { renderHook, waitFor } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
-import { afterEach, describe, expect, it } from "bun:test";
 import { useNativeShell } from "@/hooks/useNativeShell";
 
 const Probe = () => {

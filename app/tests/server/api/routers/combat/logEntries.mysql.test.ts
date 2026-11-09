@@ -1,6 +1,6 @@
 import { beforeEach, expect, it } from "bun:test";
-import { battleAction } from "@/drizzle/schema";
 import { AdjustableBasicActions } from "@/drizzle/constants";
+import { battleAction } from "@/drizzle/schema";
 import { combatRouter } from "@/server/api/routers/combat";
 import {
   callerFor,

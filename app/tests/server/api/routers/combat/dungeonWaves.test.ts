@@ -1,4 +1,3 @@
-import { advanceEncounterWave } from "@/libs/combat/encounters";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import {
@@ -13,10 +12,11 @@ import {
   userItem,
   userJutsu,
 } from "@/drizzle/schema";
-import { performAIaction } from "@/libs/combat/ai_v2";
 import { calcActiveUser } from "@/libs/combat/actions";
-import { getBattleGrid } from "@/libs/combat/util";
+import { performAIaction } from "@/libs/combat/ai_v2";
+import { advanceEncounterWave } from "@/libs/combat/encounters";
 import { maskBattle } from "@/libs/combat/masking";
+import { getBattleGrid } from "@/libs/combat/util";
 
 import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
@@ -24,11 +24,11 @@ import { ActionUseSpecificJutsu } from "@/validators/ai";
 import { makeTag } from "../../../../setup/combat";
 import { insertFightingDungeonRun } from "../../../../setup/dungeon";
 import {
+  insertDefaultAiProfile,
   insertItems,
+  insertJutsus,
   insertUserItems,
   insertUsers,
-  insertJutsus,
-  insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import {
   callerFor,

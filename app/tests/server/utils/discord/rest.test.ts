@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import type { DiscordConfig } from "@/server/utils/discord/config";
 import {
   addGuildMember,
   discordRequest,
@@ -7,7 +8,6 @@ import {
   setNickname,
   unbanMember,
 } from "@/server/utils/discord/rest";
-import type { DiscordConfig } from "@/server/utils/discord/config";
 
 const config = {
   clientId: "1111111111111111111",

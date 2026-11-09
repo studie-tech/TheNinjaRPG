@@ -1,4 +1,3 @@
-import { timerClaimFixture } from "../../../setup/gameTimers";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { GET } from "@/app/api/hourly-war/route";
@@ -9,6 +8,7 @@ import {
 } from "@/drizzle/constants";
 import { gameSetting, village, villageStructure, war } from "@/drizzle/schema";
 import * as gamesettings from "@/libs/gamesettings";
+import { timerClaimFixture } from "../../../setup/gameTimers";
 import {
   resetServerModuleStubs,
   stubCronAuth,

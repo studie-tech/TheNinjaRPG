@@ -1,11 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import { applyEffects, applySingleEffect } from "@/libs/combat/process";
-import {
-  makeBattleUser,
-  makeCompleteBattle,
-  makeDamageModifierEffect,
-  makeEffect,
-} from "../../setup/combat";
 import type {
   ActionEffect,
   CompleteBattle,
@@ -13,6 +7,12 @@ import type {
   GroundEffect,
   UserEffect,
 } from "@/libs/combat/types";
+import {
+  makeBattleUser,
+  makeCompleteBattle,
+  makeDamageModifierEffect,
+  makeEffect,
+} from "../../setup/combat";
 
 const makeStun = (): UserEffect =>
   makeEffect(

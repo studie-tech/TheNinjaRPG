@@ -1,8 +1,8 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, render } from "@testing-library/react";
 import {
-  FederalStatuses,
   type FederalStatus,
+  FederalStatuses,
   type UserRole,
   UserRoles,
 } from "@/drizzle/constants";

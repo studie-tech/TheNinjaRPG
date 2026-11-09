@@ -11,8 +11,8 @@ import {
   canShowMapAttack,
   findRelationship,
   findVillageUserRelationship,
-  getAllyStatus,
   getAlliedVillageIds,
+  getAllyStatus,
   isAutoAttackTarget,
   mapAttackRelation,
 } from "@/utils/alliance";

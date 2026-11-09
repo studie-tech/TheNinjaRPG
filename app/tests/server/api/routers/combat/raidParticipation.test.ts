@@ -13,9 +13,9 @@ import { updateRaidProgress } from "@/libs/combat/database";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import {
+  insertDefaultAiProfile,
   insertQuests,
   insertUsers,
-  insertDefaultAiProfile,
 } from "../../../../setup/factories";
 import {
   describeWithDatabase,

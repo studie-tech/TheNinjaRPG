@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import { SHRINE_BOOST_BASE_PERC, SHRINE_BOOST_COST } from "@/drizzle/constants";

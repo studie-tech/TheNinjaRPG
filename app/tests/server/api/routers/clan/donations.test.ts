@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { eq } from "drizzle-orm";
 import { FACTION_REPUTATION_TREASURY_LIMIT } from "@/drizzle/constants";
 import { actionLog, clan, userData } from "@/drizzle/schema";
 import { clanRouter } from "@/server/api/routers/clan";

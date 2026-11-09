@@ -1,9 +1,9 @@
-import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import {
   aiProfile,
   battle,
@@ -30,12 +30,12 @@ import {
 } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
+  insertDefaultAiProfile,
   insertItems,
   insertQuestHistory,
   insertQuests,
   insertUserItems,
   insertUsers,
-  insertDefaultAiProfile,
   insertUserVotes,
 } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";

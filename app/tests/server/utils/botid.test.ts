@@ -1,5 +1,5 @@
-import { TRPCError } from "@trpc/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { TRPCError } from "@trpc/server";
 import { env } from "@/env/server.mjs";
 import {
   BOTID_BLOCKED_MESSAGE,
@@ -23,11 +23,11 @@ const checkBotId = getCheckBotId();
 vi.mock("botid/server", () => ({ checkBotId: getCheckBotId() }));
 
 import {
+  BOTID_DEEP_ANALYSIS_TIMEOUT_MS,
+  BOTID_TIMEOUT_MS,
   createBotIdGuard,
   enforceBotId,
   isBotIdEnforced,
-  BOTID_DEEP_ANALYSIS_TIMEOUT_MS,
-  BOTID_TIMEOUT_MS,
   runBotIdCheck,
   shouldGuardTrpcRequest,
   shouldLogBotIdTiming,

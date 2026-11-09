@@ -1,7 +1,3 @@
-import { act, cleanup, render } from "@testing-library/react";
-import * as clerk from "@clerk/nextjs";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import * as trpc from "@trpc/react-query";
 import {
   afterEach,
   beforeEach,
@@ -11,6 +7,10 @@ import {
   setSystemTime,
   vi,
 } from "bun:test";
+import * as clerk from "@clerk/nextjs";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, render } from "@testing-library/react";
+import * as trpc from "@trpc/react-query";
 import { type ContextType, type ReactNode, useContext, useState } from "react";
 import * as client from "@/app/_trpc/client";
 import * as pusher from "@/layout/PusherHandler";
@@ -18,8 +18,8 @@ import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import {
   UserContextProvider,
   useUserData,
-  useUserInfo,
   useUserDataSelector,
+  useUserInfo,
 } from "@/utils/UserContext";
 
 const BASE = Date.UTC(2026, 9, 24, 12);

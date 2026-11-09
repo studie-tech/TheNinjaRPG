@@ -3,8 +3,8 @@ import { resolveRememberedTab } from "@/layout/NavTabs";
 import { getTrainingSections } from "@/libs/train";
 import {
   getJutsuStatQuickFilter,
-  jutsuStatQuickFilters,
   jutsuStatQuickFilterSelection,
+  jutsuStatQuickFilters,
 } from "@/validators/statFilters";
 
 describe("training grounds sections", () => {

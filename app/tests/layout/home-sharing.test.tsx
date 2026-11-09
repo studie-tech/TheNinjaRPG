@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient } from "@tanstack/react-query";
 import {
   act,
   cleanup,
@@ -7,7 +8,6 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { QueryClient } from "@tanstack/react-query";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import * as navigation from "next/navigation";
 import * as Pusher from "pusher-js";
@@ -21,7 +21,7 @@ import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
 import { deferred } from "../setup/deferred";
 import { testRouter } from "../setup/router";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 type HomeRequest = ComponentProps<typeof UserRequestSystem>["requests"][number];
 type Result = { success: boolean; message: string };

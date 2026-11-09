@@ -1,7 +1,7 @@
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { AutoCombatBadge, AutoCombatControl } from "@/layout/AutoCombatControl";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { AutoCombatBadge, AutoCombatControl } from "@/layout/AutoCombatControl";
 import {
   flushRadixFocus,
   installBrowserGlobals,

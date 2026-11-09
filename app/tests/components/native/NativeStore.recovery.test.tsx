@@ -1,6 +1,6 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import NativeStore from "@/components/native/NativeStore";
 import { STORE_FEDERAL_PRODUCTS } from "@/drizzle/constants";
@@ -11,8 +11,8 @@ import { purchases as nativePurchases } from "@/libs/native";
 import type { StorePackage } from "@/libs/native/purchases";
 import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
-import { spyOnToasts } from "../../setup/toastMock";
 import { capacitorWindow, installCapacitor, removeCapacitor } from "../../setup/native";
+import { spyOnToasts } from "../../setup/toastMock";
 
 type AsyncMock = ReturnType<typeof vi.fn<(...args: unknown[]) => Promise<unknown>>>;
 type SyncMock = ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;

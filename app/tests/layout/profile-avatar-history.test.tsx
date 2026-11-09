@@ -1,9 +1,9 @@
-import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import * as Avatar from "@/layout/Avatar";
-import * as Modal from "@/layout/Modal";
 import { HistoricalAiAvatar } from "@/layout/HistoricalAiAvatar";
+import * as Modal from "@/layout/Modal";
 import * as pagination from "@/libs/pagination";
 import * as UserContext from "@/utils/UserContext";
 

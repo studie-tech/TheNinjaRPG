@@ -1,14 +1,14 @@
-import { act, cleanup, render, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import * as nextNavigation from "next/navigation";
-import * as Link from "@/layout/Link";
 import * as client from "@/app/_trpc/client";
-import * as navigation from "@/hooks/navigation";
-import * as UserContext from "@/utils/UserContext";
-import * as ContentBox from "@/layout/ContentBox";
-import * as Image from "@/layout/Image";
 import TerritoryWarPage from "@/app/[shell]/territory-war/page";
+import * as navigation from "@/hooks/navigation";
+import * as ContentBox from "@/layout/ContentBox";
 import { ClanBattles } from "@/layout/clan/ClanBattles";
+import * as Image from "@/layout/Image";
+import * as Link from "@/layout/Link";
+import * as UserContext from "@/utils/UserContext";
 
 let actor: Record<string, unknown>;
 const mutate = vi.fn(async () => ({ success: false }));

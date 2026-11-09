@@ -9,10 +9,10 @@ import {
   village,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
-import { updateRewards } from "@/server/utils/questRewards";
 import { syncTournamentState, tournamentRouter } from "@/server/api/routers/tournament";
+import { updateRewards } from "@/server/utils/questRewards";
 import { ObjectiveReward, PostProcessedRewardSchema } from "@/validators/rewards";
-import { insertUsers, insertClans } from "../../../../setup/factories";
+import { insertClans, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,

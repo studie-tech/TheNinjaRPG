@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { insertAction } from "@/libs/combat/actions";
+import { applyEffects } from "@/libs/combat/process";
+import type { ReturnedBattle, UserEffect } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import {
   BarrierTag,
@@ -12,13 +14,12 @@ import {
   SummonTag,
   VisualTag,
 } from "@/validators/combat";
-import { applyEffects } from "@/libs/combat/process";
-import type { ReturnedBattle, UserEffect } from "@/libs/combat/types";
 import {
   makeBasicAttack,
   makeBattleUser,
   makeCompleteBattle,
 } from "../../setup/combat";
+
 const setup = () => {
   const stats = { curHealth: 1000, maxHealth: 1000, offence: 100, defence: 100 };
   const actor = makeBattleUser("actor", {

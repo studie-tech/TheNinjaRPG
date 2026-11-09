@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import {
   act,
@@ -8,9 +9,8 @@ import {
   within,
 } from "@testing-library/react";
 import { observable } from "@trpc/server/observable";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import * as client from "@/app/_trpc/client";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import ForumManagement from "@/app/[shell]/forum/manage/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
@@ -20,7 +20,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
-import { testApi, TrpcTestProviders } from "../../setup/trpc";
+import { TrpcTestProviders, testApi } from "../../setup/trpc";
 
 let queryClient: QueryClient;
 let hasLocations: boolean;

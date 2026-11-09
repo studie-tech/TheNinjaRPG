@@ -7,6 +7,7 @@ import {
 } from "@/libs/combat/actions";
 import { applyEffects } from "@/libs/combat/process";
 import { applyFinalStandDamage, applyPreventTag, heal } from "@/libs/combat/tags";
+import { alignBattle } from "@/libs/combat/turn";
 import type { CompleteBattle, UserEffect } from "@/libs/combat/types";
 import {
   calcPoolCost,
@@ -15,7 +16,6 @@ import {
   hasActiveEffectOfType,
   isEffectActive,
 } from "@/libs/combat/util";
-import { alignBattle } from "@/libs/combat/turn";
 import {
   makeBattleUser,
   makeCompleteBattle,

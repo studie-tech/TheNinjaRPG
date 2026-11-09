@@ -25,7 +25,7 @@ import { Pusher } from "@/libs/pusher";
 import * as combatRouter from "@/server/api/routers/combat";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { startDeclaredWar } from "@/server/utils/war";
-import { insertUsers, insertDefaultAiProfile } from "../../../setup/factories";
+import { insertDefaultAiProfile, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
   callerForDatabase,

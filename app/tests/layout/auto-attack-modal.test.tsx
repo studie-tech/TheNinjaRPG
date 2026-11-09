@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { AUTO_ATTACK_SETTINGS, readAutoAttackSetting } from "@/hooks/autoAttack";
 import AutoAttackModal from "@/layout/AutoAttackModal";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";

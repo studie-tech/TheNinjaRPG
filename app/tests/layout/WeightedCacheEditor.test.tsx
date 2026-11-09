@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { WeightedCacheEditor } from "@/layout/WeightedCacheEditor";
 import { CACHE_RESTRICTED_REWARD_MESSAGE } from "@/libs/weightedCache";
 import type { WeightedCache } from "@/validators/weightedCache";
-import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const scroll = vi.fn();

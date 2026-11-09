@@ -1,14 +1,19 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import { captureCombatCacheSnapshot } from "@/deltas/combat";
 import type { BattleType } from "@/drizzle/constants";
 import { MAP_WAR_TORN_BATTLEGROUND_SECTOR } from "@/drizzle/constants";
 import { battle, item, jutsu, userData, userItem, userJutsu } from "@/drizzle/schema";
-import { captureCombatCacheSnapshot } from "@/deltas/combat";
 import { updateUser } from "@/libs/combat/database";
-import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
 import { calcBattleResult } from "@/libs/combat/settlement";
+import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
 import type { PusherClient } from "@/libs/pusher";
 import * as quest from "@/libs/quest";
+import {
+  makeBattleUser,
+  makeBattleUserItem,
+  makeCompleteBattle,
+} from "../../setup/combat";
 import {
   insertItems,
   insertJutsus,
@@ -21,11 +26,6 @@ import {
   recordQueries,
   resetTables,
 } from "../../setup/testDatabase";
-import {
-  makeBattleUser,
-  makeBattleUserItem,
-  makeCompleteBattle,
-} from "../../setup/combat";
 import { soloPveResult } from "./helpers/profileCache";
 
 const pusher = { trigger: async () => {} } as unknown as PusherClient;

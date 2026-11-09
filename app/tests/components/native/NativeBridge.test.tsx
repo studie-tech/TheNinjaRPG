@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { cleanup, render } from "@testing-library/react";
 import * as navigation from "next/navigation";
+import NativeBridge from "@/components/native/NativeBridge";
 import * as liveActivity from "@/hooks/useLiveActivity";
 import * as push from "@/hooks/useNativePush";
 import * as native from "@/libs/native";
 import * as userContext from "@/utils/UserContext";
-import NativeBridge from "@/components/native/NativeBridge";
 
 const back = vi.fn();
 const exit = vi.fn();

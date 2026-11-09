@@ -1,13 +1,13 @@
-import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import {
   LayoutLeftSidebar,
   LayoutRightSidebarContent,
 } from "@/components/layout/shared/LayoutSidebars";
-import { GAME_LAYOUTS } from "@/libs/gameLayouts";
 import { DISCORD_INVITE_URL } from "@/drizzle/constants";
 import * as Image from "@/layout/Image";
+import { GAME_LAYOUTS } from "@/libs/gameLayouts";
 
 const variants = GAME_LAYOUTS.map((layout) => layout.id);
 const invalidate = vi.fn(async () => {});

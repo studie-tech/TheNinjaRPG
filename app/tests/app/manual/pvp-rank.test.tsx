@@ -1,16 +1,16 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, render } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import RankedManualPage from "@/app/[shell]/manual/pvp_rank/page";
 import {
   RANKED_DIVISIONS,
+  RANKED_DRAW_LP,
   RANKED_LOADOUT_MAX_CONSUMABLES,
   RANKED_LOSS_PROTECTION_FACTOR,
   RANKED_LOSS_PROTECTION_RANK_GAP,
   RANKED_MIN_LP_GAIN,
   RANKED_STREAK_BONUS,
   RANKED_UPSET_BONUS_PER_RANK,
-  RANKED_DRAW_LP,
 } from "@/drizzle/constants";
 import * as LocalStorage from "@/hooks/localstorage";
 import * as ContentBox from "@/layout/ContentBox";

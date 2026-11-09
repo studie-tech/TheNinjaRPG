@@ -1,26 +1,26 @@
-import { advanceEncounterWave } from "@/libs/combat/encounters";
-import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
-import type { ReturnedBattle } from "@/libs/combat/types";
 import { describe, expect, it } from "bun:test";
-import { periodStart } from "@/utils/time";
+import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
+import { advanceEncounterWave } from "@/libs/combat/encounters";
+import { maskBattle } from "@/libs/combat/masking";
+import { getBattleSpawnLocations } from "@/libs/combat/participants";
+import { applyEffects } from "@/libs/combat/process";
+import { calcBattleResult } from "@/libs/combat/settlement";
+import { alignBattle } from "@/libs/combat/turn";
+import type { ReturnedBattle } from "@/libs/combat/types";
+import { findUser } from "@/libs/combat/util";
 import {
-  dungeonEntryError,
   dungeonBattleOutcome,
+  dungeonEntryError,
   dungeonNextState,
 } from "@/libs/dungeon";
-import { findUser } from "@/libs/combat/util";
-import { alignBattle } from "@/libs/combat/turn";
-import { calcBattleResult } from "@/libs/combat/settlement";
-import { maskBattle } from "@/libs/combat/masking";
-import { applyEffects } from "@/libs/combat/process";
-import { getBattleSpawnLocations } from "@/libs/combat/participants";
+import { periodStart } from "@/utils/time";
 import { dungeonContentSchema } from "@/validators/dungeon";
+import { makeCompleteBattle, makeEffect, makeUser } from "../setup/combat";
 import {
   dungeonBattleState,
-  encounterWaveState,
   dungeonContent,
+  encounterWaveState,
 } from "../setup/dungeon";
-import { makeCompleteBattle, makeEffect, makeUser } from "../setup/combat";
 
 const floorBattle = () =>
   makeCompleteBattle({

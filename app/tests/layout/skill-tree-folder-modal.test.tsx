@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { SkillTree, SkillTreeFolder } from "@/drizzle/schema";
 import * as Modal from "@/layout/Modal";
 import { SkillTreeFolderModal } from "@/layout/SkillTreeFolderModal";

@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "bun:test";
-import type { Redis } from "@upstash/redis";
 import * as Sentry from "@sentry/nextjs";
+import type { Redis } from "@upstash/redis";
 import type { CombatResult, ReturnedBattle } from "@/libs/combat/types";
 import { createCombatCompletionStore } from "@/server/utils/combatCompletion";
 import { makeCompleteBattle } from "../../setup/combat";

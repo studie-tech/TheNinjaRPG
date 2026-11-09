@@ -3,6 +3,7 @@ import { buildCombatTrackerTasks } from "@/libs/combat/settlement";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 import { filterQuestTrackersForDbPersist, getNewTrackers } from "@/libs/quest";
 import { getReward } from "@/libs/quest/rewards";
+import type { AllObjectiveTask } from "@/validators/objectives";
 import {
   CombatActivityTasks,
   getObjectiveSchema,
@@ -10,9 +11,8 @@ import {
   QuestCompletionTasks,
   QuestTracker,
 } from "@/validators/objectives";
-import type { AllObjectiveTask } from "@/validators/objectives";
-import { trackerQuest, trackerUser } from "../setup/quest";
 import { makeBattleUser, makeCompleteBattle } from "../setup/combat";
+import { trackerQuest, trackerUser } from "../setup/quest";
 
 const completionTasks = [
   ...Object.values(QuestCompletionTasks),

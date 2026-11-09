@@ -1,8 +1,6 @@
-import { readAgentProposal } from "@/queries/contentReview";
-
-import { CONTENT_PROPOSAL_RETENTION_DAYS } from "@/drizzle/constants";
-import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
+import { CONTENT_PROPOSAL_RETENTION_DAYS } from "@/drizzle/constants";
 import {
   actionLog,
   badge,
@@ -18,19 +16,20 @@ import {
 } from "@/drizzle/schema";
 import { cleanupContentProposals } from "@/libs/contentReview/cleanup";
 import { entityKey, loadEntities } from "@/libs/contentReview/entities";
-import { refreshProposalFreshness } from "@/libs/contentReview/outdate";
 import * as media from "@/libs/contentReview/media";
 import { epidemicAssetId, importEpidemicSfx } from "@/libs/contentReview/media";
-
+import { refreshProposalFreshness } from "@/libs/contentReview/outdate";
 import {
   ingestAgentSubmission,
   reviseAgentProposal,
 } from "@/libs/contentReview/submit";
 import * as socials from "@/libs/socials";
+import { readAgentProposal } from "@/queries/contentReview";
 import { badgeRouter } from "@/server/api/routers/badge";
 import { contentReviewRouter } from "@/server/api/routers/contentReview";
 import { profileRouter } from "@/server/api/routers/profile";
 import type { AgentSubmission } from "@/validators/contentReview";
+import { deferred } from "../../../setup/deferred";
 import { insertItems, insertQuests, insertUsers } from "../../../setup/factories";
 import {
   callerFor,
@@ -38,7 +37,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { deferred } from "../../../setup/deferred";
 
 const EDITOR = "review-editor";
 const MODERATOR = "review-moderator";

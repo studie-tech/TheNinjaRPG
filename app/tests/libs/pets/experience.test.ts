@@ -3,12 +3,12 @@ import { eq, sql } from "drizzle-orm";
 import { PET_MAX_GENERATION_ATTEMPTS } from "@/drizzle/constants";
 import {
   gameSetting,
+  petSpecies,
   quest,
   questHistory,
   trainingLog,
   userData,
   userPet,
-  petSpecies,
   userQueue,
   userVote,
 } from "@/drizzle/schema";
@@ -17,16 +17,16 @@ import { calcBattleResult } from "@/libs/combat/settlement";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import type { PusherClient } from "@/libs/pusher";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
-import { updateRewards } from "@/server/utils/questRewards";
 import { trainRouter } from "@/server/api/routers/train";
+import { updateRewards } from "@/server/utils/questRewards";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import { createAssignedExperienceSchema } from "@/validators/user";
-import { initialPetSpecies } from "./helpers/species";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import {
   insertPetSpecies,
+  insertUserPets,
   insertUsers,
   insertUserVotes,
-  insertUserPets,
 } from "../../setup/factories";
 import { queueEnergy } from "../../setup/queues";
 import {
@@ -35,7 +35,7 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
-import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
+import { initialPetSpecies } from "./helpers/species";
 
 const userId = "pet-owner";
 const petId = "owned-pet";

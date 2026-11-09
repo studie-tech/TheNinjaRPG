@@ -1,8 +1,8 @@
-import type Stripe from "stripe";
 import { describe, expect, it } from "bun:test";
+import type Stripe from "stripe";
 import type { stripeCheckout } from "@/drizzle/schema";
-import { invoiceCoverage } from "@/server/utils/stripe/fulfillment";
 import { validFederalPrice } from "@/server/utils/stripe/client";
+import { invoiceCoverage } from "@/server/utils/stripe/fulfillment";
 import { stripePurchaseSchema } from "@/validators/stripe";
 
 const checkout = {

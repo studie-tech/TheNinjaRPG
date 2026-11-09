@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { buildCombatTrackerTasks } from "@/libs/combat/settlement";
-import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
+import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 const makeResult = (didWin: number): CombatResult =>
   ({ didWin, outcome: didWin > 0 ? "Won" : "Lost" }) as unknown as CombatResult;

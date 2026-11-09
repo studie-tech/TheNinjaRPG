@@ -15,8 +15,8 @@ import {
   village,
 } from "@/drizzle/schema";
 import { updateBattle } from "@/libs/combat/database";
-import type { CombatResult } from "@/libs/combat/types";
 import { calcBattleResult } from "@/libs/combat/settlement";
+import type { CombatResult } from "@/libs/combat/types";
 import type { DrizzleClient } from "@/server/db";
 import {
   cleanupTerritoryWarTeams,
@@ -25,13 +25,13 @@ import {
   syncTerritoryWars,
   territoryWarBoostWindowsSql,
 } from "@/server/utils/territoryWar";
-import { guardianVictory } from "../../setup/territoryWar";
-import { insertUsers, insertClans } from "../../setup/factories";
+import { insertClans, insertUsers } from "../../setup/factories";
 import {
   failStatements,
   inTransactions,
   withoutTransactions,
 } from "../../setup/statements";
+import { guardianVictory } from "../../setup/territoryWar";
 import {
   describeWithDatabase,
   getTestDatabase,

@@ -1,5 +1,5 @@
-import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, render } from "@testing-library/react";
 import ManualCombat from "@/app/[shell]/manual/combat/page";
 import * as BattleLengthHistogram from "@/layout/BattleLengthHistogram";
 import * as ContentBox from "@/layout/ContentBox";

@@ -12,9 +12,9 @@ import {
   DialogObjective,
   InstantStartBattleObjective,
   InstantWinLoseObjective,
-  SimpleObjective,
   QuestTracker,
   QuestValidator,
+  SimpleObjective,
 } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {

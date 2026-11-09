@@ -1,9 +1,9 @@
-import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { QueryClient, QueryObserver, type QueryKey } from "@tanstack/react-query";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient, type QueryKey, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import { STORE_REP_PRODUCTS } from "@/drizzle/constants";
 import {
   gameSetting,
@@ -17,10 +17,10 @@ import {
   userData,
   userVote,
 } from "@/drizzle/schema";
-import * as purchaseQueries from "@/queries/purchases";
 import * as profileQueries from "@/queries/profile";
-import * as profileApi from "@/server/api/routers/profile";
+import * as purchaseQueries from "@/queries/purchases";
 import { paypalRouter } from "@/server/api/routers/paypal";
+import * as profileApi from "@/server/api/routers/profile";
 import { profileRouter } from "@/server/api/routers/profile";
 import { purchasesRouter } from "@/server/api/routers/purchases";
 import { getPurchaseUserUpdate } from "@/server/utils/purchases/cache";

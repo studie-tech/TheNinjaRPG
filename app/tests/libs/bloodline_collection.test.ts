@@ -1,8 +1,8 @@
+import { describe, expect, it, vi } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { describe, expect, it, vi } from "bun:test";
+import { type LetterRank, LetterRanks } from "@/drizzle/constants";
 import type { Bloodline } from "@/drizzle/schema";
-import { LetterRanks, type LetterRank } from "@/drizzle/constants";
 import {
   buildBloodlineCollectionProgress,
   getBloodlineSwapAllowance,

@@ -1,27 +1,27 @@
-import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { RouterOutputs } from "@/app/_trpc/client";
+import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import {
   aiProfile,
   battle,
   battleHistory,
   clan,
-  quest,
-  questHistory,
   item,
-  userItem,
-  userQueue,
-  trainingLog,
   mpvpBattleQueue,
   mpvpBattleUser,
+  quest,
+  questHistory,
   territoryWar,
+  trainingLog,
   userCookingJob,
   userData,
+  userItem,
+  userQueue,
   userVote,
   village,
 } from "@/drizzle/schema";
@@ -35,18 +35,18 @@ import { territoryWarRouter } from "@/server/api/routers/territoryWar";
 import { cleanupTerritoryWarTeams } from "@/server/utils/territoryWar";
 
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
-import type { UserDeltaResponse } from "@/validators/userCache";
 import { IncreaseMaxPoolsTag } from "@/validators/combat";
 import { SimpleObjective } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
+import type { UserDeltaResponse } from "@/validators/userCache";
 import {
+  insertClans,
+  insertDefaultAiProfile,
   insertItems,
+  insertQuestHistory,
+  insertQuests,
   insertUserItems,
   insertUsers,
-  insertQuests,
-  insertQuestHistory,
-  insertDefaultAiProfile,
-  insertClans,
 } from "../../../setup/factories";
 import { queueEnergy } from "../../../setup/queues";
 import { beforeStatements, interceptExecute } from "../../../setup/statements";

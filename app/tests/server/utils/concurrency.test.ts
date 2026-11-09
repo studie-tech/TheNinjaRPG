@@ -1,10 +1,8 @@
-import { getNextUserSnapshotAt } from "@/utils/time";
-import { clearActiveNpcQuest, refundPityCredit } from "@/queries/concurrency";
-
+import { describe, expect, it, vi } from "bun:test";
 import { and, eq, type SQL } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/mysql-core";
-import { describe, expect, it, vi } from "bun:test";
 import { bloodlineRolls, userData, userItem } from "@/drizzle/schema";
+import { clearActiveNpcQuest, refundPityCredit } from "@/queries/concurrency";
 import {
   adjustSeichiSilverAtomically,
   battleClaimRollbackStatus,
@@ -18,6 +16,7 @@ import {
   updateUserItemQuantityAtomically,
   userItemMergeQuantityCase,
 } from "@/server/utils/concurrency";
+import { getNextUserSnapshotAt } from "@/utils/time";
 
 /** An `update().set().where()` chain whose write reports `rowsAffected`. */
 const updateChain = (rowsAffected: number) => {

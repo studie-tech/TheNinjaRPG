@@ -1,4 +1,3 @@
-import { timerClaimFixture } from "../../../setup/gameTimers";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
 import { eq } from "drizzle-orm";
@@ -15,6 +14,7 @@ import { refundBountyContribution } from "@/queries/bounty";
 import { bountyRouter, refundBountyContributions } from "@/server/api/routers/bounty";
 import { addBountyMoneySchema } from "@/validators/bounty";
 import { insertUsers } from "../../../setup/factories";
+import { timerClaimFixture } from "../../../setup/gameTimers";
 import {
   resetServerModuleStubs,
   stubCronAuth,

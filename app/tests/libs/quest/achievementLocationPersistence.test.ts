@@ -8,8 +8,8 @@ import {
 } from "@/libs/quest";
 import { mockAchievementHistoryEntries } from "@/libs/quest/projection";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
-import { DefeatOpponents, QuestTracker } from "@/validators/objectives";
 import type { QuestTrackerType } from "@/validators/objectives";
+import { DefeatOpponents, QuestTracker } from "@/validators/objectives";
 import { trackerQuest, trackerUser } from "../../setup/quest";
 
 const makeUser = (questData: QuestTrackerType[] = [], randomLocation = false) => {

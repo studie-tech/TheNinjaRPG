@@ -4,11 +4,11 @@ import {
   aiProfile,
   battle,
   jutsu,
+  petSpecies,
   skillTree,
   userData,
   userJutsu,
   userPet,
-  petSpecies,
   userSkill,
 } from "@/drizzle/schema";
 import { getEffectiveMaxPool } from "@/libs/combat/util";
@@ -21,16 +21,16 @@ import {
   IncreaseStatTag,
   SummonTag,
 } from "@/validators/combat";
-import { initialPetSpecies } from "../../../../libs/pets/helpers/species";
 import {
   petJutsuFixture,
   petSkillFixture,
 } from "../../../../libs/pets/helpers/abilities";
+import { initialPetSpecies } from "../../../../libs/pets/helpers/species";
 import {
-  insertPetSpecies,
-  insertUsers,
   insertDefaultAiProfile,
+  insertPetSpecies,
   insertUserPets,
+  insertUsers,
 } from "../../../../setup/factories";
 import {
   describeWithDatabase,

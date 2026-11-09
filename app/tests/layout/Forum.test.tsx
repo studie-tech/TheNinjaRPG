@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { useController } from "react-hook-form";
 import { ForumComposer, ForumSearch } from "@/layout/Forum";
 import * as RichInput from "@/layout/RichInput";

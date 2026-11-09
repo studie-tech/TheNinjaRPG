@@ -1,9 +1,9 @@
+import { afterEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, expect, it, vi } from "bun:test";
-import * as client from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import * as popover from "@/components/ui/popover";
 import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import * as Avatar from "@/layout/Avatar";

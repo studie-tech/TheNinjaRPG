@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
 import {
   act,
@@ -8,41 +9,40 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { getQueryKey } from "@trpc/react-query";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { getDefaultStore } from "jotai";
 import type { PropsWithChildren } from "react";
 import { useController } from "react-hook-form";
 import * as client from "@/app/_trpc/client";
 import * as mutes from "@/hooks/useChatMutes";
-import * as tavernActivity from "@/hooks/useTavernActivity";
 import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
+import * as media from "@/hooks/useMediaQuery";
+import * as tavernActivity from "@/hooks/useTavernActivity";
 import * as taverns from "@/hooks/useTaverns";
-import * as conversationComments from "@/layout/ConversationComments";
 import * as chatConversation from "@/layout/ChatConversation";
 import ChatPanelBody from "@/layout/ChatPanelContent";
 import { CompactComment } from "@/layout/CompactComment";
 import { useConversation } from "@/layout/Conversation";
+import * as conversationComments from "@/layout/ConversationComments";
 import * as modal from "@/layout/Modal";
 import * as richInput from "@/layout/RichInput";
 import { TeamChatPanel } from "@/layout/TeamChatPanel";
 import * as userSearch from "@/layout/UserSearchSelect";
 import {
   chatDraftsAtom,
+  chatPanelAtom,
   chatViewedConversationsAtom,
   isConversationUnread,
-  chatPanelAtom,
 } from "@/libs/chatPanel";
-import * as media from "@/hooks/useMediaQuery";
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
-import * as uploadthing from "@/utils/uploadthing";
 import * as userContext from "@/utils/UserContext";
+import * as uploadthing from "@/utils/uploadthing";
 import {
   flushRadixFocus,
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 const clients: QueryClient[] = [];
 /** Procedures a test did not expect; the query error alone would pass unnoticed. */

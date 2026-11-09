@@ -3,8 +3,8 @@ import { IMG_BATTLEFIELD_TOMBSTONE } from "@/drizzle/constants";
 import type { ReturnedBattle, ReturnedUserState } from "@/libs/combat/types";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
-import { combatActorParts } from "@/libs/rendering/scenes/combatActors";
 import { createStatusMeter } from "@/libs/rendering/primitives/statusMeter";
+import { combatActorParts } from "@/libs/rendering/scenes/combatActors";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 
 const tile = { width: 40, height: 20 } as TerrainHex;

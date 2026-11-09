@@ -1,16 +1,16 @@
-import { getReward } from "@/libs/quest/rewards";
-import { QuestValidator } from "@/validators/objectives";
 import { describe, expect, it } from "bun:test";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
-import type { UserWithRelations } from "@/server/api/routers/profile";
 import { getCookingSeconds } from "@/libs/cooking";
+import { getReward } from "@/libs/quest/rewards";
 import {
   getTerritoryCompetitor,
   getTerritoryWarBoost,
   getTerritoryWarPeriodBoost,
 } from "@/libs/territoryWar";
 import { calcJutsuTrainTime, trainingBoost } from "@/libs/train";
+import type { UserWithRelations } from "@/server/api/routers/profile";
 import { territoryWarAwards } from "@/server/utils/territoryWar";
+import { QuestValidator } from "@/validators/objectives";
 import { competitor, guardianVictory } from "../setup/territoryWar";
 
 const start = new Date("2026-10-24T12:00:00Z");

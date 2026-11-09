@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import type { PoolType } from "@/drizzle/constants";
 import { applyEffects } from "@/libs/combat/process";
 import type { BattleUserState, CompleteBattle, UserEffect } from "@/libs/combat/types";
 import { applyPoolAdjustmentsToBase, getEffectiveMaxPool } from "@/libs/combat/util";
-import type { PoolType } from "@/drizzle/constants";
 import {
   makeBattleUser,
   makeCombatAction,

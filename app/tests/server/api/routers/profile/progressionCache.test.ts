@@ -1,6 +1,6 @@
-import { getUserProgressionUpdate } from "@/deltas/profile";
-import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { eq } from "drizzle-orm";
+import { getUserProgressionUpdate } from "@/deltas/profile";
 import {
   MASTERY_RANK_CAPS,
   MAX_SKILL_POINTS,
@@ -30,8 +30,8 @@ import { ObjectiveReward } from "@/validators/rewards";
 import {
   insertItems,
   insertQuests,
-  insertUsers,
   insertUserItems,
+  insertUsers,
   insertUserVotes,
 } from "../../../../setup/factories";
 import { queueEnergy, readEnergyQueue } from "../../../../setup/queues";

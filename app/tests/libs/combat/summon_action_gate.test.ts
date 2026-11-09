@@ -1,14 +1,14 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { summonActionBlockedReason } from "@/libs/combat/summon";
+import type { CombatAction } from "@/libs/combat/types";
 import { makeBattleUser } from "../../setup/combat";
 import {
   DEMON,
-  TIGER,
   SUMMON_OWNER,
   makeSpawnedSummon as spawned,
+  TIGER,
   makeSummonTemplate as template,
 } from "./helpers/summon";
-import type { CombatAction } from "@/libs/combat/types";
 
 /**
  * The router calls this before performBattleAction, which spends pools inside

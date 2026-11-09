@@ -8,19 +8,19 @@
  */
 import { afterAll, beforeAll, beforeEach } from "bun:test";
 import { useAbVariant } from "@/hooks/useAbVariant";
-import Link from "@/layout/Link";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
+// Bun preserves loaded exports when a suite supplies a partial module mock.
+// Load the toast module before any suite can hide exports needed by another suite.
+import * as toast from "@/libs/toast";
 import { resetPvpExperienceAverageCache } from "@/server/utils/pvpExperience";
+import * as userContext from "@/utils/UserContext";
 import {
   closeTestDatabase,
   hasTestDatabase,
   prepareTestDatabase,
 } from "./testDatabase";
-// Bun preserves loaded exports when a suite supplies a partial module mock.
-// Load the toast module before any suite can hide exports needed by another suite.
-import * as toast from "@/libs/toast";
-import * as userContext from "@/utils/UserContext";
 
 // UI suites can restore real components and feedback after another suite mocks their module.
 export const actualLink = Link;

@@ -2,12 +2,11 @@ import { describe, expect, it } from "bun:test";
 import type { Bloodline } from "@/drizzle/schema";
 import { performAIaction } from "@/libs/combat/ai_v2";
 import { advanceEncounterWave } from "@/libs/combat/encounters";
+import { maskBattle } from "@/libs/combat/masking";
 import type { CompleteBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
-import { maskBattle } from "@/libs/combat/masking";
 import { dungeonBattleOutcome } from "@/libs/dungeon";
 import { AiRule, type ZodAllAiAction } from "@/validators/ai";
-import { dungeonBattleState, encounterWaveState } from "../../setup/dungeon";
 import {
   makeBattleUser,
   makeBattleUserItem,
@@ -17,6 +16,7 @@ import {
   makeTag,
   makeWeapon,
 } from "../../setup/combat";
+import { dungeonBattleState, encounterWaveState } from "../../setup/dungeon";
 
 describe("AI action catalog isolation", () => {
   it.each(["end_turn", "use_specific_jutsu", "use_specific_item"] as const)(

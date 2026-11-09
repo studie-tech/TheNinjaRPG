@@ -1,28 +1,28 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
 import {
   HOME_FURNITURE_MAX_PLACEMENTS,
-  HOME_FURNITURE_POSITION_MIN,
   HOME_FURNITURE_POSITION_MAX,
+  HOME_FURNITURE_POSITION_MIN,
 } from "@/drizzle/constants";
 import {
-  DEFAULT_HOME_FURNITURE_GEOMETRY,
   clampHomeFurniturePlacement,
+  DEFAULT_HOME_FURNITURE_GEOMETRY,
   fitHomeFurniturePlacement,
-  getHomeLayout,
   getHomeFurnitureGeometry,
   getHomeFurnitureRotations,
   getHomeFurnitureView,
+  getHomeLayout,
+  type HomeFurniture,
   homeLayoutOrientationError,
   homeLayoutOwnershipError,
   homeLayoutPlacementError,
   projectHomePlacement,
   recoverHomeLayout,
   unprojectHomePlacement,
-  type HomeFurniture,
 } from "@/libs/home";
-import { homeFurnitureSaveInputSchema } from "@/validators/home";
 import { getHomeRooms } from "@/libs/homeProperty";
+import { homeFurnitureSaveInputSchema } from "@/validators/home";
 import { furnitureDataSchema } from "@/validators/itemFurniture";
 
 const fixture = (id: string, patch: Partial<HomeFurniture> = {}): HomeFurniture => ({

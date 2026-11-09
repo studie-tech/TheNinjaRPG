@@ -1,7 +1,7 @@
-import * as clerk from "@clerk/nextjs";
-import * as navigation from "next/navigation";
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import * as clerk from "@clerk/nextjs";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import * as navigation from "next/navigation";
 import NativeSignIn from "@/components/native/NativeSignIn";
 import * as auth from "@/hooks/useNativeAuth";
 import * as shell from "@/hooks/useNativeShell";

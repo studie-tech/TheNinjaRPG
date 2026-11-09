@@ -1,5 +1,5 @@
-import * as clerk from "@clerk/nextjs/server";
 import { vi } from "bun:test";
+import * as clerk from "@clerk/nextjs/server";
 import { userReport } from "@/drizzle/schema";
 import type { SanctionIdentity } from "@/server/utils/sanctionTombstone";
 import { getTestDatabase } from "./testDatabase";

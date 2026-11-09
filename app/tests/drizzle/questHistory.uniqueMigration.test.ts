@@ -1,7 +1,7 @@
+import { afterEach, beforeEach, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { asc } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it } from "bun:test";
 import { questHistory } from "@/drizzle/schema";
 import { insertQuestHistory } from "../setup/factories";
 import {

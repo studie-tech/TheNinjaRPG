@@ -3,9 +3,9 @@ import { HOME_FURNITURE_MAX_PLACEMENTS, HomeTypes } from "@/drizzle/constants";
 import {
   clampHomeFurniturePlacement,
   getHomeFurnitureGeometry,
+  type HomeFurniture,
   homeLayoutPlacementError,
   recoverHomeLayout,
-  type HomeFurniture,
 } from "@/libs/home";
 import {
   boundHomeCamera,

@@ -1,12 +1,12 @@
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
-  forumSection,
   forumBoard,
   forumGrant,
   forumPost,
   forumRead,
   forumRestriction,
+  forumSection,
   forumThread,
   userData,
 } from "@/drizzle/schema";

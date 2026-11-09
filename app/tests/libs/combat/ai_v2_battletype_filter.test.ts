@@ -1,11 +1,11 @@
-import { makeAiBattle, makeAiUser as mkUser } from "./helpers/aiScenario";
-import { makeJutsu, makeTag } from "../../setup/combat";
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { Grid, rectangle } from "honeycomb-grid";
-import { performAIaction } from "@/libs/combat/ai_v2";
-import { ActionUseSpecificJutsu } from "@/validators/ai";
 import type { BattleType } from "@/drizzle/constants";
+import { performAIaction } from "@/libs/combat/ai_v2";
 import type { CompleteBattle, ExtraState } from "@/libs/combat/types";
+import { ActionUseSpecificJutsu } from "@/validators/ai";
+import { makeJutsu, makeTag } from "../../setup/combat";
+import { makeAiBattle, makeAiUser as mkUser } from "./helpers/aiScenario";
 
 /**
  * Integration cover for the ai_v2 candidate filter -- the CALL SITE, not just the

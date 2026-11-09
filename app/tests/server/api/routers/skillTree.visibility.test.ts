@@ -1,7 +1,7 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { MySqlDialect, QueryBuilder } from "drizzle-orm/mysql-core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { UserRoles, type UserRole } from "@/drizzle/constants";
+import { type UserRole, UserRoles } from "@/drizzle/constants";
 import { actionLog } from "@/drizzle/schema";
 import * as socials from "@/libs/socials";
 import { dataRouter } from "@/server/api/routers/data";

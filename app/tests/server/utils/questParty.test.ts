@@ -7,9 +7,9 @@ import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { commitQuestObjectiveRewards } from "@/server/utils/questConsequences";
 import {
-  synchronizeQuestParty,
   type LoadedQuestParty,
   saveQuestPartyMember,
+  synchronizeQuestParty,
 } from "@/server/utils/questParty";
 import { AllObjectives, ObjectiveTracker, QuestTracker } from "@/validators/objectives";
 import { ObjectiveReward, PostProcessedRewardSchema } from "@/validators/rewards";

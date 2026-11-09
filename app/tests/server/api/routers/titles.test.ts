@@ -1,41 +1,42 @@
-import { stubRateLimitTransport } from "../../../setup/rateLimit";
-import { fetchRewardChoiceOwnership } from "@/queries/quests";
-import { readFile } from "node:fs/promises";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { readFile } from "node:fs/promises";
 import { and, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import {
+  type CombatProfileUpdate,
+  captureCombatCacheSnapshot,
+  combatCacheDerived,
+} from "@/deltas/combat";
+import {
   actionLog,
+  quest,
+  questHistory,
   title,
   userData,
   userTitle,
-  quest,
-  questHistory,
 } from "@/drizzle/schema";
-import { titleRouter } from "@/server/api/routers/title";
+import { ENTITY_CONFIG } from "@/libs/contentReview/entities";
+import { effectiveMasteries } from "@/libs/mastery";
+import { postProcessRewards } from "@/libs/quest/rewards";
+import { buildRewardChoiceCards, getUnavailableRewardCards } from "@/libs/rewardChoice";
+import { fetchRewardChoiceOwnership } from "@/queries/quests";
+import type { UserWithRelations } from "@/server/api/routers/profile";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
-import { updateRewards } from "@/server/utils/questRewards";
-import { grantTitles } from "@/server/utils/titleGrants";
-import { displayTitleSql } from "@/server/utils/titleDisplay";
-import { validateTitleRewardIds } from "@/server/utils/titleRewards";
+import { titleRouter } from "@/server/api/routers/title";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
-import { getUnavailableRewardCards, buildRewardChoiceCards } from "@/libs/rewardChoice";
-import { postProcessRewards } from "@/libs/quest/rewards";
-import { ENTITY_CONFIG } from "@/libs/contentReview/entities";
+import { updateRewards } from "@/server/utils/questRewards";
+import { displayTitleSql } from "@/server/utils/titleDisplay";
+import { grantTitles } from "@/server/utils/titleGrants";
+import { validateTitleRewardIds } from "@/server/utils/titleRewards";
 import { ObjectiveReward } from "@/validators/rewards";
+import { observeProfile } from "../../../libs/combat/helpers/profileCache";
 import {
-  captureCombatCacheSnapshot,
-  combatCacheDerived,
-  type CombatProfileUpdate,
-} from "@/deltas/combat";
-import { effectiveMasteries } from "@/libs/mastery";
-import type { UserWithRelations } from "@/server/api/routers/profile";
-import {
-  insertUsers,
-  insertQuests,
   insertQuestHistory,
+  insertQuests,
+  insertUsers,
 } from "../../../setup/factories";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,
@@ -43,7 +44,6 @@ import {
   resetTables,
   runRawSql,
 } from "../../../setup/testDatabase";
-import { observeProfile } from "../../../libs/combat/helpers/profileCache";
 
 const player = "title-player";
 const effects = [

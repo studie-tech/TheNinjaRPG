@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { addQuestStartingEffects } from "@/libs/combat/questEffects";
 import { applyEffects } from "@/libs/combat/process";
+import { addQuestStartingEffects } from "@/libs/combat/questEffects";
 import { flee, realizeTag } from "@/libs/combat/tags";
+import { calcApReduction } from "@/libs/combat/turn";
 import type { UserEffect } from "@/libs/combat/types";
 import { getEffectiveMaxPool } from "@/libs/combat/util";
-import { calcApReduction } from "@/libs/combat/turn";
 import {
   getTagSchema,
   PreventTagTypes,

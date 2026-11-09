@@ -1,6 +1,6 @@
+import { beforeEach, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { beforeEach, expect, it } from "bun:test";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { skillTree, userData, userSkill } from "@/drizzle/schema";
 import { getActivityBonuses } from "@/libs/activityBonuses";

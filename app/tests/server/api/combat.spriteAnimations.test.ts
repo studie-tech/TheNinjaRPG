@@ -19,9 +19,9 @@ import { spriteAnimationRouter } from "@/server/api/routers/spriteAnimation";
 import { ActionEndTurn, ActionUseSpecificJutsu } from "@/validators/ai";
 import { makeTag } from "../../setup/combat";
 import {
-  insertUsers,
-  insertJutsus,
   insertDefaultAiProfile,
+  insertJutsus,
+  insertUsers,
 } from "../../setup/factories";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
 import {

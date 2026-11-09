@@ -1,5 +1,5 @@
-import { initTRPC, TRPCError } from "@trpc/server";
 import { describe, expect, it, vi } from "bun:test";
+import { initTRPC, TRPCError } from "@trpc/server";
 import { DrizzleQueryError } from "drizzle-orm";
 import { z } from "zod";
 import { buildToolRegistry, handleCallEndpoint } from "@/libs/mcp/meta-tools";

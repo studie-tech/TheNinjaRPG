@@ -5,18 +5,18 @@ import {
   copyFile,
   mkdir,
   mkdtemp,
-  readFile,
   readdir,
+  readFile,
   rm,
   symlink,
   writeFile,
 } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import mysql from "mysql2/promise";
 import type { RowDataPacket } from "mysql2/promise";
-import { describeWithDatabase } from "../setup/testDatabase";
+import mysql from "mysql2/promise";
 import { pollUntil } from "../setup/statements";
+import { describeWithDatabase } from "../setup/testDatabase";
 
 const application = resolve(import.meta.dirname, "../..");
 const directories: string[] = [];

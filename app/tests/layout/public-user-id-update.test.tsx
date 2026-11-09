@@ -1,7 +1,7 @@
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import type { ComponentProps } from "react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import * as nextNavigation from "next/navigation";
+import type { ComponentProps } from "react";
 import * as client from "@/app/_trpc/client";
 import * as Modal from "@/layout/Modal";
 import { UpdateUserIdButton } from "@/layout/publicUser/UpdateUserIdButton";

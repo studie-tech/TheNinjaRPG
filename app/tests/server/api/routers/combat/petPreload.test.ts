@@ -5,22 +5,23 @@ import {
   aiProfile,
   battle,
   jutsu,
+  petSpecies,
   userData,
   userJutsu,
   userPet,
-  petSpecies,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import { petsRouter } from "@/server/api/routers/pets";
 import type { DrizzleClient } from "@/server/db";
-import { initialPetSpecies } from "../../../../libs/pets/helpers/species";
 import { petJutsuFixture } from "../../../../libs/pets/helpers/abilities";
+import { initialPetSpecies } from "../../../../libs/pets/helpers/species";
+import { deferred } from "../../../../setup/deferred";
 import {
-  insertPetSpecies,
-  insertUsers,
   insertDefaultAiProfile,
+  insertPetSpecies,
   insertUserPets,
+  insertUsers,
 } from "../../../../setup/factories";
 import { beforeStatements, overrideQuery } from "../../../../setup/statements";
 import {
@@ -29,7 +30,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
 
 const ownerId = "defender";
 

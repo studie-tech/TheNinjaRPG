@@ -1,6 +1,6 @@
+import { beforeEach, expect, it, spyOn } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { beforeEach, expect, it, spyOn } from "bun:test";
 import { eq } from "drizzle-orm";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { HIDEOUT_COST, VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
@@ -15,7 +15,7 @@ import {
 import * as clanLogic from "@/libs/clan";
 import { fetchStructures } from "@/queries/village";
 import { clanRouter } from "@/server/api/routers/clan";
-import { insertUsers, insertClans } from "../setup/factories";
+import { insertClans, insertUsers } from "../setup/factories";
 import {
   callerFor,
   describeWithDatabase,

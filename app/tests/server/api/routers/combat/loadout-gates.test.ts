@@ -1,6 +1,3 @@
-import { jutsuEquipLimit } from "@/drizzle/schema";
-import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
-import { fetchBattleEssentials } from "@/queries/combat";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { BattleType } from "@/drizzle/constants";
@@ -8,13 +5,15 @@ import {
   aiProfile,
   battle,
   jutsu,
+  jutsuEquipLimit,
   jutsuLoadout,
   userData,
   userJutsu,
 } from "@/drizzle/schema";
+import { battleJutsuGateFailure } from "@/libs/jutsuRequirements";
 import { effectiveMasteries } from "@/libs/mastery";
 import { Pusher } from "@/libs/pusher";
-import { battleJutsuGateFailure } from "@/libs/jutsuRequirements";
+import { fetchBattleEssentials } from "@/queries/combat";
 import { combatRouter } from "@/server/api/routers/combat";
 import { jutsuRouter } from "@/server/api/routers/jutsu";
 import {
@@ -27,6 +26,7 @@ import {
   insertJutsus,
   insertUsers,
 } from "../../../../setup/factories";
+import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 import {
   callerFor,
   describeWithDatabase,

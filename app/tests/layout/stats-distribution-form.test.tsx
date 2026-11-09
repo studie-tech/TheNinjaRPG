@@ -1,4 +1,3 @@
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import {
   afterEach,
   beforeEach,
@@ -8,13 +7,14 @@ import {
   setDefaultTimeout,
   vi,
 } from "bun:test";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { ELEMENTAL_MASTERY_CAP } from "@/drizzle/constants";
 import * as tutorial from "@/hooks/tutorial";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import type { UserWithRelations } from "@/routers/profile";
-import { deferred } from "../setup/deferred";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { deferred } from "../setup/deferred";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);

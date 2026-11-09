@@ -12,11 +12,11 @@ import {
 import { getBoundObjectiveCandidates, getNewTrackers } from "@/libs/quest";
 import { getPublicQuestUser } from "@/libs/quest/projection";
 import { verifyQuestContentForSave } from "@/libs/quest/validation";
+import { travelActorRecipes } from "@/libs/rendering/scenes/travelActors";
 import {
   sectorSpriteDescriptions,
   type WorldSpriteDescription,
 } from "@/libs/rendering/sectorSprites";
-import { travelActorRecipes } from "@/libs/rendering/scenes/travelActors";
 import type { UserWithRelations } from "@/routers/profile";
 import { updateUserCache } from "@/utils/userCache";
 import {

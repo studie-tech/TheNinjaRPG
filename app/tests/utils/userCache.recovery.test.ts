@@ -1,8 +1,8 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { expect, it } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { UserCache } from "@/deltas/profile";
-import type { UserWithRelations } from "@/server/api/routers/profile";
 import { AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
+import type { UserWithRelations } from "@/server/api/routers/profile";
 import { actionReadinessResponse } from "@/server/utils/actionReadiness";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { UserRecovery } from "@/validators/base";

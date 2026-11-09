@@ -1,21 +1,21 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
+  type AiProfile,
+  overworldAiPlacement,
+  overworldAiPlacementQuest,
   quest,
   questHistory,
   userData,
-  overworldAiPlacement,
-  overworldAiPlacementQuest,
-  type AiProfile,
 } from "@/drizzle/schema";
 import type { CombatQueryUser } from "@/libs/combat/types";
-import { Pusher } from "@/libs/pusher";
 import { calcEnergy } from "@/libs/profile";
+import { Pusher } from "@/libs/pusher";
 import { processUsersForBattle } from "@/server/api/routers/combat";
+import { overworldAiRouter } from "@/server/api/routers/overworldAi";
 import { fetchUpdatedUser, profileRouter } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
 import { upsertQuestEntry } from "@/server/utils/questAssignment";
-import { overworldAiRouter } from "@/server/api/routers/overworldAi";
 import {
   DialogObjective,
   InstantNewQuestObjective,
@@ -23,17 +23,17 @@ import {
 } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
-  insertUsers,
-  insertQuests,
   insertQuestHistory,
+  insertQuests,
+  insertUsers,
 } from "../../../../setup/factories";
+import { failCommits } from "../../../../setup/statements";
 import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { failCommits } from "../../../../setup/statements";
 
 describeWithDatabase("Pyramid entry recovery", () => {
   beforeEach(async () => {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
 import { availableUserActions } from "@/libs/combat/actions";
+import { dmgConfig } from "@/libs/combat/constants";
+import { refreshMasteries } from "@/libs/combat/mastery";
 import { applyEffects } from "@/libs/combat/process";
 import {
   damageCalc,
@@ -9,15 +11,13 @@ import {
   increaseStats,
   updateStatUsage,
 } from "@/libs/combat/tags";
-import { dmgConfig } from "@/libs/combat/constants";
+import { alignBattle } from "@/libs/combat/turn";
 import type {
   BattleUserState,
   CompleteBattle,
   GroundEffect,
   UserEffect,
 } from "@/libs/combat/types";
-import { refreshMasteries } from "@/libs/combat/mastery";
-import { alignBattle } from "@/libs/combat/turn";
 import { effectiveMasteries } from "@/libs/mastery";
 import type { ZodAllTags } from "@/validators/combat";
 import {

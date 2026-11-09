@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { SITE_URL } from "@/libs/seo";
 import {
-  SITEMAP_SECTIONS,
-  type SitemapEntry,
   renderSitemapIndex,
   renderUrlset,
+  SITEMAP_SECTIONS,
+  type SitemapEntry,
   sitemapSectionUrl,
   xmlResponse,
 } from "@/libs/sitemapXml";

@@ -1,12 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import {
+  type CharacterAnimation,
   resolveSpriteAnimation,
   snapshotSpriteAnimations,
   spriteActionKey,
   spriteAnimationFrame,
-  type CharacterAnimation,
 } from "@/libs/spriteAnimations";
 import { spriteAnimationSchema } from "@/validators/spriteAnimation";
+
 const idle: CharacterAnimation = {
   id: "idle",
   name: "Idle",

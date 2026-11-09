@@ -1,19 +1,19 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import * as ContentBox from "@/layout/ContentBox";
 import * as userContext from "@/utils/UserContext";
 import {
-  ActionMoveTowardsOpponent,
   ActionEndTurn,
+  ActionMoveTowardsOpponent,
   ActionSpecificCombo,
   ActionUseSpecificJutsu,
+  type AiRuleType,
   ConditionDistanceHigherThan,
   ConditionPlayerWithinRange,
   getBackupRules,
-  type AiRuleType,
 } from "@/validators/ai";
 import {
   flushRadixFocus,

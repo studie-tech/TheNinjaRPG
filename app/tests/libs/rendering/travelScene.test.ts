@@ -1,6 +1,3 @@
-import * as bakedLighting from "@/libs/rendering/bakedVillageLighting";
-import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
-import { lpcCatalog } from "../../setup/lpc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
   Assets,
@@ -12,11 +9,8 @@ import {
 } from "pixi.js";
 import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
+import * as bakedLighting from "@/libs/rendering/bakedVillageLighting";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
-import * as terrainElevation from "@/libs/rendering/terrainElevation";
-import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
-import * as navigation from "@/libs/sector-map/navigation";
-import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
 import * as terrain from "@/libs/rendering/primitives/terrain";
 import * as runtime from "@/libs/rendering/runtime";
 import {
@@ -25,10 +19,16 @@ import {
   type TravelWindowEntry,
 } from "@/libs/rendering/scenes/travel";
 import { createTravelActors } from "@/libs/rendering/scenes/travelActors";
+import * as terrainElevation from "@/libs/rendering/terrainElevation";
+import { WORLD_STRUCTURE_ART } from "@/libs/rendering/worldStructures";
 import type { DecorationAsset } from "@/libs/sector-map/decorations";
+import * as navigation from "@/libs/sector-map/navigation";
+import { BUILTIN_TERRAINS_BY_KEY } from "@/libs/sector-map/terrains";
 import type { SectorUser } from "@/libs/sector-map/world-types";
+import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
 import type { UserWithRelations } from "@/routers/profile";
 import { deferred } from "../../setup/deferred";
+import { lpcCatalog } from "../../setup/lpc";
 
 const cleanups: (() => void)[] = [];
 const frame = (now = 1000, reducedMotion = true): runtime.GameFrame => ({

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import type { Quest } from "@/drizzle/schema";
 import {
   buildObjectiveEdges,
   findCompletedPredecessor,
@@ -8,7 +9,6 @@ import {
   isQuestObjectiveAvailable,
   objectiveLinks,
 } from "@/libs/objectives";
-import type { Quest } from "@/drizzle/schema";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 
 const battle = {

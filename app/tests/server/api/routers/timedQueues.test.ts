@@ -1,6 +1,6 @@
+import { beforeEach, expect, it } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { COOKING_BASE_SLOTS, JUTSU_LEVEL_CAP } from "@/drizzle/constants";
-import { beforeEach, expect, it } from "bun:test";
 import {
   bloodline,
   craftingRequirement,
@@ -30,13 +30,14 @@ import {
   settleCraftingQueue,
   settleJutsuTrainingQueue,
 } from "@/server/utils/userQueue";
+import type { MasteryTrainingQueueEntry } from "@/validators/train";
 import {
   insertItems,
   insertJutsus,
   insertUserItems,
   insertUsers,
-  jutsuRow,
   insertUserVotes,
+  jutsuRow,
 } from "../../../setup/factories";
 import { queueMasteries, readMasteryQueue } from "../../../setup/queues";
 import {
@@ -44,8 +45,6 @@ import {
   failStatements,
   inTransactions,
 } from "../../../setup/statements";
-import type { MasteryTrainingQueueEntry } from "@/validators/train";
-import { requireUser } from "../../../setup/userReads";
 import {
   callerFor,
   callerForDatabase,
@@ -54,6 +53,7 @@ import {
   recordQueries,
   resetTables,
 } from "../../../setup/testDatabase";
+import { requireUser } from "../../../setup/userReads";
 
 const USER_ID = "queuer";
 const MINUTE = 60_000;

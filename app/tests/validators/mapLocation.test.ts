@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { QuestValidator } from "@/validators/objectives";
 import { isQuestPresentationOnlyChange } from "@/libs/mapLocations";
+import { QuestValidator } from "@/validators/objectives";
 
 const draft = {
   name: "Tower quest",

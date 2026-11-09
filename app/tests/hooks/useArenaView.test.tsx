@@ -1,5 +1,5 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { useArenaView } from "@/hooks/useArenaView";
 
 const eventDescriptor = Object.getOwnPropertyDescriptor(globalThis, "PopStateEvent");

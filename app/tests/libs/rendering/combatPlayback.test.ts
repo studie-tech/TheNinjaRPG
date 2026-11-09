@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import type { ReturnedBattle } from "@/libs/combat/types";
 import type { CombatPlaybackStep } from "@/libs/combat/playback";
+import type { ReturnedBattle } from "@/libs/combat/types";
 import { createCombatPlayback } from "@/libs/rendering/scenes/combatPlayback";
 
 const cue = (id: string) => ({ id, animation: "slash", longitude: 0, latitude: 0 });

@@ -1,5 +1,5 @@
-import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "bun:test";
+import { renderHook } from "@testing-library/react";
 import { actualUseAbVariant as useAbVariant } from "../setup/preload";
 
 const COOKIE = "ab_test_variant";

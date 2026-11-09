@@ -1,14 +1,15 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { extractRouterConfig, UploadThingError } from "uploadthing/server";
 import { ourFileRouter } from "@/app/api/uploadthing/core";
 import { AVATAR_UPLOAD_DAILY_LIMIT } from "@/drizzle/constants";
 import { historicalAvatar, historicalSoundEffect, userData } from "@/drizzle/schema";
-import * as tavernUploads from "@/server/utils/tavernUploads";
 import * as moderator from "@/libs/moderator";
 import * as replicate from "@/libs/replicate";
 import { servedUfsUrl } from "@/libs/uploadthing";
+import * as tavernUploads from "@/server/utils/tavernUploads";
+import { restoreEnvAfterEach } from "../../../setup/env";
 import { insertUsers } from "../../../setup/factories";
 import { resetServerModuleStubs, stubDatabase } from "../../../setup/serverModules";
 import {
@@ -17,7 +18,6 @@ import {
   resetTables,
 } from "../../../setup/testDatabase";
 import { countUserReads } from "../../../setup/userReads";
-import { restoreEnvAfterEach } from "../../../setup/env";
 
 const userId = "upload-avatar-cache-user";
 const file = {

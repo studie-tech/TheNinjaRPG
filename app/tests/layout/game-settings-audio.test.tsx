@@ -1,5 +1,5 @@
-import { act, cleanup, render, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, render, renderHook, waitFor } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { MUSIC_HALLOWEEN_THEME, MUSIC_WELCOME_TO_SEICHI } from "@/drizzle/constants";
 import * as audioHook from "@/hooks/useAudio";
@@ -13,9 +13,9 @@ import type { UserWithRelations } from "@/routers/profile";
 import * as audioUtils from "@/utils/audio";
 import * as timeUtils from "@/utils/time";
 import {
+  type CapacitorBridge,
   capacitorWindow,
   removeCapacitor,
-  type CapacitorBridge,
 } from "../setup/native";
 
 /** Audio hook state and native session fakes the provider reads; reset after each test. */

@@ -2,7 +2,7 @@ import { beforeEach, expect, it } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { clan, tournament, userData } from "@/drizzle/schema";
 import { tournamentRouter } from "@/server/api/routers/tournament";
-import { insertUsers, insertClans } from "../../../../setup/factories";
+import { insertClans, insertUsers } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import {
   callerForDatabase,

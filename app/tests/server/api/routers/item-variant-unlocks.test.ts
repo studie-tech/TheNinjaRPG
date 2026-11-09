@@ -12,8 +12,8 @@ import {
 import { itemRouter } from "@/server/api/routers/item";
 import { UnlockItemVariantTag } from "@/validators/combat";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
-import { beforeStatements, failStatements } from "../../../setup/statements";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
+import { beforeStatements, failStatements } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,

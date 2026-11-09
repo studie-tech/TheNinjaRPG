@@ -1,18 +1,17 @@
+import { describe, expect, it, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it, test } from "bun:test";
 import {
-  CombatStatNames,
-  getUserCaps,
   CLAN_BOOST_MAX_LEVEL,
   CLAN_BOOST_PERCENT_PER_LEVEL,
+  CombatStatNames,
+  getUserCaps,
   MAX_MASTERY_CAP,
   MAX_STORED_POOL,
   RANKED_PVP_STATS,
   SCALED_AI_STAT_BUDGET_SHARE,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
-import type { SectorUser } from "@/libs/sector-map/world-types";
 import {
   calcActiveUserRegen,
   calcLevel,
@@ -22,17 +21,18 @@ import {
   capUserStats,
   clampStoredPools,
   experienceToNextLevel,
+  formatPvpWinRate,
   getAssignedCombatStatTotal,
   getExpBracket,
+  getPvpWinRate,
   getScoutingUsers,
   levelExperienceProgress,
   manuallyAssignUserStats,
   passesBracketFilter,
   scaleUserStats,
   unassignedExperienceTowardLevel,
-  formatPvpWinRate,
-  getPvpWinRate,
 } from "@/libs/profile";
+import type { SectorUser } from "@/libs/sector-map/world-types";
 
 test("calcLevel lags stored level: the experience that leaves level L still derives L", () => {
   for (const level of [

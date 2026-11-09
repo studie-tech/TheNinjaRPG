@@ -1,13 +1,4 @@
-import { rankedCaps } from "../setup/jutsuEquipLimits";
-import { describe, it, expect } from "bun:test";
-import {
-  calculateLpEloChange,
-  getRankedRadius,
-  getRankedRank,
-  validateItemLoadout,
-  validateJutsuLoadout as validateJutsuLoadoutWithCaps,
-} from "@/libs/ranked_pvp";
-import type { Item, Jutsu } from "@/drizzle/schema";
+import { describe, expect, it } from "bun:test";
 import {
   RANKED_LEGEND_LP_REQUIREMENT,
   RANKED_LOSS_PROTECTION_RANK_GAP,
@@ -15,6 +6,15 @@ import {
   RANKED_QUEUE_MAX_WAIT_SECS,
   RANKED_SANNIN_TOP_PLAYERS,
 } from "@/drizzle/constants";
+import type { Item, Jutsu } from "@/drizzle/schema";
+import {
+  calculateLpEloChange,
+  getRankedRadius,
+  getRankedRank,
+  validateItemLoadout,
+  validateJutsuLoadout as validateJutsuLoadoutWithCaps,
+} from "@/libs/ranked_pvp";
+import { rankedCaps } from "../setup/jutsuEquipLimits";
 
 const sanninThreshold = 950;
 const sanninTopPlayersLP = [

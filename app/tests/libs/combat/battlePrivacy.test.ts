@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import { SAGE_MODE_ACTIVATION_JUTSU_ID } from "@/drizzle/constants";
 import type {
   Bloodline,
   Item,
@@ -8,11 +9,10 @@ import type {
   SageMode,
   UserQuest,
 } from "@/drizzle/schema";
-import { SAGE_MODE_ACTIVATION_JUTSU_ID } from "@/drizzle/constants";
 import { availableUserActions, handleInjectedJutsus } from "@/libs/combat/actions";
+import { maskBattle } from "@/libs/combat/masking";
 import type { BattleUserJutsu } from "@/libs/combat/types";
 import { getJutsu } from "@/libs/combat/util";
-import { maskBattle } from "@/libs/combat/masking";
 import { InjectJutsusTag, VisualTag } from "@/validators/combat";
 import {
   makeBattleUser,

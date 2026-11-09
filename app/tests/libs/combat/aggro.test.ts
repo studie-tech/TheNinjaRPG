@@ -1,15 +1,15 @@
 import { describe, expect, it } from "bun:test";
+import { z } from "zod";
 import { creditDamageEnmity } from "@/libs/combat/aggro";
+import { maskBattle } from "@/libs/combat/masking";
 import { applyEffects } from "@/libs/combat/process";
+import { clone } from "@/libs/combat/tags";
+import type { GroundEffect } from "@/libs/combat/types";
 import {
-  IncreaseAggroTag,
   DecreaseAggroTag,
+  IncreaseAggroTag,
   SuperRefinePassiveEffects,
 } from "@/validators/combat";
-import { z } from "zod";
-import { clone } from "@/libs/combat/tags";
-import { maskBattle } from "@/libs/combat/masking";
-import type { GroundEffect } from "@/libs/combat/types";
 import { makeBattleUser, makeCompleteBattle, makeEffect } from "../../setup/combat";
 
 const damage = (power = 100) =>

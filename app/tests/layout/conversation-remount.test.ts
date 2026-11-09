@@ -1,12 +1,12 @@
+import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { waitFor } from "@testing-library/react";
 import {
+  type InfiniteData,
   InfiniteQueryObserver,
   QueryClient,
-  type InfiniteData,
 } from "@tanstack/react-query";
-import { describe, expect, it } from "bun:test";
+import { waitFor } from "@testing-library/react";
 import { conversationQueryOptions } from "../setup/conversationQueryOptions";
 
 type ChatPage = {

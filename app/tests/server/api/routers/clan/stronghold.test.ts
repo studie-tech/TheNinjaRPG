@@ -1,6 +1,6 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { STRONGHOLD_REESTABLISH_COST } from "@/drizzle/constants";
 import { actionLog, clan, userData, village } from "@/drizzle/schema";
@@ -9,7 +9,8 @@ import { clanRouter } from "@/server/api/routers/clan";
 import { profileRouter } from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { syncStrongholdMembership } from "@/server/utils/faction";
-import { insertUsers, insertClans } from "../../../../setup/factories";
+import { insertClans, insertUsers } from "../../../../setup/factories";
+import { holdReads } from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -19,7 +20,6 @@ import {
   resetTables,
   runRawSql,
 } from "../../../../setup/testDatabase";
-import { holdReads } from "../../../../setup/statements";
 
 const legacyDowngradeBackfill = readFileSync(
   resolve(process.cwd(), "drizzle/migrations/0076_brave_nico_minoru.sql"),

@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import {
   focusManager,
   onlineManager,
@@ -8,11 +9,10 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { PropsWithChildren } from "react";
 import type { AppRouter } from "@/api/root";
-import * as appClient from "@/app/_trpc/client";
 import type { RouterOutputs } from "@/app/_trpc/client";
+import * as appClient from "@/app/_trpc/client";
 import { useDungeonAvailability } from "@/hooks/useDungeonAvailability";
 import { dungeonContent } from "../setup/dungeon";
 

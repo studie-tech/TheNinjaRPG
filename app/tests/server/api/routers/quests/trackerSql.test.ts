@@ -1,8 +1,8 @@
-import { eq, inArray } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { eq, inArray } from "drizzle-orm";
 import { questHistory, userData } from "@/drizzle/schema";
-import { QuestTracker } from "@/validators/objectives";
 import { upsertQuestEntries } from "@/server/utils/questAssignment";
+import { QuestTracker } from "@/validators/objectives";
 import { insertQuestHistory, insertUsers } from "../../../../setup/factories";
 import {
   describeWithDatabase,

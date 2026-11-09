@@ -1,8 +1,5 @@
-import { unrankedCaps as caps } from "../setup/jutsuEquipLimits";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-
 import type { UserJutsuWithRelations } from "@/drizzle/schema";
-
 import {
   canEquipUnderCaps,
   computeJutsuLoadoutAssignments,
@@ -12,8 +9,9 @@ import {
   findExceededJutsuEquipCap,
   getJutsuCapFlags,
 } from "@/libs/jutsu";
-import type { UserWithRelations } from "@/routers/profile";
 import * as jutsuRequirements from "@/libs/jutsuRequirements";
+import type { UserWithRelations } from "@/routers/profile";
+import { unrankedCaps as caps } from "../setup/jutsuEquipLimits";
 
 let calcJutsuEquipLimitMock: {
   mockReturnValue: (value: number) => void;

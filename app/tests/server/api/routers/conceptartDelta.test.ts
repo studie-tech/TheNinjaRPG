@@ -1,6 +1,6 @@
-import { DrizzleQueryError, eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
+import { DrizzleQueryError, eq } from "drizzle-orm";
 import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
 import { conceptImage, userData, userQueue } from "@/drizzle/schema";
 import * as moderator from "@/libs/moderator";
@@ -8,13 +8,13 @@ import * as replicate from "@/libs/replicate";
 import { CONCEPT_PROMPT, conceptartRouter } from "@/server/api/routers/conceptart";
 import { DATABASE_FAILURE_MESSAGE } from "@/server/utils/mysqlErrors";
 import { insertUsers } from "../../../setup/factories";
+import { queueEnergy } from "../../../setup/queues";
 import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
-import { queueEnergy } from "../../../setup/queues";
 
 const userId = "conceptart-delta-player";
 const imageInput = { prompt: "A ninja", seed: 1 };

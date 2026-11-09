@@ -1,4 +1,3 @@
-import { fetchItemWithCraftingRequirements } from "@/queries/item";
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
@@ -11,6 +10,7 @@ import {
   userItem,
   userPet,
 } from "@/drizzle/schema";
+import { fetchItemWithCraftingRequirements } from "@/queries/item";
 import { itemRouter } from "@/server/api/routers/item";
 import type { DrizzleClient } from "@/server/db";
 import { AiRule } from "@/validators/ai";
@@ -19,13 +19,13 @@ import { petJutsuFixture } from "../../../../libs/pets/helpers/abilities";
 import {
   insertItems,
   insertUserItems,
-  insertUsers,
   insertUserPets,
+  insertUsers,
 } from "../../../../setup/factories";
 import {
   beforeStatements,
-  inTransactions,
   failStatements,
+  inTransactions,
 } from "../../../../setup/statements";
 import {
   callerForDatabase,

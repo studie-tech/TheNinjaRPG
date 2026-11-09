@@ -1,5 +1,5 @@
-import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "bun:test";
+import { cleanup, renderHook } from "@testing-library/react";
 import { getFilter, useFiltering } from "@/layout/StatisticsFiltering";
 import { getLocalDateStringMonthsAgo } from "@/utils/time";
 

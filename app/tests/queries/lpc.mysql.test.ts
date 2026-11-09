@@ -1,20 +1,20 @@
-import { seedLpcAssets } from "../../drizzle/seeds/lpc";
 import { beforeEach, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { item, itemVariant, userAttribute, userData, userItem } from "@/drizzle/schema";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
-import { updateSpriteBodyStyle } from "@/queries/lpc";
-import { fetchItemWithCraftingRequirements } from "@/queries/item";
-import { itemRouter } from "@/routers/item";
-import { ItemValidator } from "@/validators/combat";
-import { ItemVariantValidator } from "@/validators/item";
 import {
+  fetchItemWithCraftingRequirements,
   listUserItemForFetchUserItems,
   listUserItemForFetchUserItemsWithVariants,
 } from "@/queries/item";
+import { updateSpriteBodyStyle } from "@/queries/lpc";
 import { findUserDataForQueryUpdatedUser } from "@/queries/profile";
 import { fetchSectorWindowData } from "@/queries/travel";
+import { itemRouter } from "@/routers/item";
 import type { DrizzleClient } from "@/server/db";
+import { ItemValidator } from "@/validators/combat";
+import { ItemVariantValidator } from "@/validators/item";
+import { seedLpcAssets } from "../../drizzle/seeds/lpc";
 import { insertItems, insertUserItems, insertUsers } from "../setup/factories";
 import {
   callerForDatabase,

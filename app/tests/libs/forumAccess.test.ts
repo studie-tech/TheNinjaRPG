@@ -1,7 +1,8 @@
-import { forumMentionNames, hasForumContent } from "@/libs/forumContent";
 import { describe, expect, it } from "bun:test";
 import { forumPermissions } from "@/libs/forumAccess";
+import { forumMentionNames, hasForumContent } from "@/libs/forumContent";
 import type { ForumCapability } from "@/validators/forum";
+
 const board = { id: "board", sectionId: "section", policy: {}, archived: false };
 const section = { policy: {}, archived: false };
 const actor = { userId: "player", role: "USER" as const };

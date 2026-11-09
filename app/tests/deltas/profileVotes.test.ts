@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
-import { VOTE_REWARD_REPUTATION } from "@/drizzle/constants";
 import { getClaimedVotesPatch, getClaimVotesUserUpdate } from "@/deltas/profile";
+import { VOTE_REWARD_REPUTATION } from "@/drizzle/constants";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 
 const key = [["profile", "getUser"], { type: "query" }];

@@ -1,10 +1,10 @@
-import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as Sentry from "@sentry/nextjs";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
+import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import {
   BLOODLINE_COST,
   ELEMENTAL_MASTERY_CAP,
@@ -34,7 +34,6 @@ import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { IncreaseMasteryTag, IncreaseMaxPoolsTag } from "@/validators/combat";
 import { petSkillFixture } from "../../../libs/pets/helpers/abilities";
 import { insertUsers, insertUserVotes } from "../../../setup/factories";
-import { countUserReads } from "../../../setup/userReads";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -42,6 +41,7 @@ import {
   recordQueries,
   resetTables,
 } from "../../../setup/testDatabase";
+import { countUserReads } from "../../../setup/userReads";
 
 const userId = "progress-cache";
 const effects = [

@@ -1,7 +1,7 @@
+import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { parse } from "@babel/parser";
-import { describe, expect, it } from "bun:test";
 
 const source = join(import.meta.dirname, "../../src");
 const cacheFields = new Set([

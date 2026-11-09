@@ -1,35 +1,35 @@
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
+  type InfiniteData,
   InfiniteQueryObserver,
   QueryClient,
-  type InfiniteData,
 } from "@tanstack/react-query";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { type Control, useController } from "react-hook-form";
 import * as client from "@/app/_trpc/client";
-import { CommentOnConversation } from "@/layout/Comment";
-import * as CommentModule from "@/layout/Comment";
 import * as Avatar from "@/layout/Avatar";
+import * as CommentModule from "@/layout/Comment";
+import { CommentOnConversation } from "@/layout/Comment";
 import { CompactComment } from "@/layout/CompactComment";
-import * as PostModule from "@/layout/Post";
 import * as Confirm from "@/layout/Confirm";
+import { ConversationComments } from "@/layout/ConversationComments";
 import * as EmojiPicker from "@/layout/EmojiPicker";
 import * as ModerationSummary from "@/layout/ModerationSummary";
-import { ConversationComments } from "@/layout/ConversationComments";
 import type { PostProps } from "@/layout/Post";
+import * as PostModule from "@/layout/Post";
 import * as Report from "@/layout/Report";
 import * as RichInput from "@/layout/RichInput";
-import type { MutateCommentSchema } from "@/validators/comments";
 import * as Parse from "@/utils/parse";
 import * as UserContext from "@/utils/UserContext";
-import { conversationQueryOptions } from "../setup/conversationQueryOptions";
-import { spyOnToasts } from "../setup/toastMock";
+import type { MutateCommentSchema } from "@/validators/comments";
 import {
   flushRadixFocus,
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
+import { conversationQueryOptions } from "../setup/conversationQueryOptions";
+import { spyOnToasts } from "../setup/toastMock";
 
 const edit = vi.fn();
 const api = {

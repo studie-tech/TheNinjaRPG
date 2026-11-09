@@ -5,13 +5,13 @@ import { villageRouter } from "@/server/api/routers/village";
 import { insertUsers } from "../../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { beforeStatements } from "../../../setup/statements";
-import { readUser } from "../../../setup/userReads";
 import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../setup/testDatabase";
+import { readUser } from "../../../setup/userReads";
 
 const MEMBER = "moving-member";
 

@@ -8,6 +8,7 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
+import { deferred } from "../../../../setup/deferred";
 import { insertUsers } from "../../../../setup/factories";
 import { beforeStatements, failStatements } from "../../../../setup/statements";
 import {
@@ -17,7 +18,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
 
 const USER = "ranked-player";
 

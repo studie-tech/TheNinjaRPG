@@ -1,11 +1,11 @@
-import {
-  trackerQuest,
-  trackerUser as makeUser,
-  trackerGoal as goal,
-} from "../../setup/quest";
 import { describe, expect, it } from "bun:test";
 import { TERMINAL_DIALOG_PREFIX } from "@/drizzle/constants";
 import { getNewTrackers } from "@/libs/quest";
+import {
+  trackerGoal as goal,
+  trackerUser as makeUser,
+  trackerQuest,
+} from "../../setup/quest";
 
 const makeQuest = (id: string, objectives: object[]) =>
   trackerQuest(id, objectives, "mission");

@@ -1,6 +1,7 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { beforeEach, expect, it } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
+import { getInventoryQuantities } from "@/deltas/item";
 import {
   item,
   skillTree,
@@ -12,9 +13,9 @@ import {
   userSkill,
   userVote,
 } from "@/drizzle/schema";
-import { getInventoryQuantities } from "@/deltas/item";
 import { itemRouter } from "@/server/api/routers/item";
 import { profileRouter } from "@/server/api/routers/profile";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import {
   HealTag,
   IncreaseJutsuSlots,
@@ -22,7 +23,6 @@ import {
   NonCombatGainSkill,
 } from "@/validators/combat";
 import { MEAL_ITEM_DEFAULTS } from "@/validators/cooking";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,

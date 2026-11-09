@@ -4,7 +4,7 @@ import { jutsu, jutsuLoadout, userData, userJutsu } from "@/drizzle/schema";
 import { fetchUserJutsus, jutsuRouter } from "@/server/api/routers/jutsu";
 import { DamageTag } from "@/validators/combat";
 import type { JutsuFilteringSchema } from "@/validators/jutsu";
-import { insertUsers, insertJutsus } from "../../../../setup/factories";
+import { insertJutsus, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,

@@ -1,6 +1,6 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as navigation from "next/navigation";
 import NativeSignIn from "@/components/native/NativeSignIn";
 import * as handoff from "@/hooks/useNativeAuthHandoff";

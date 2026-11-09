@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { QueryClient } from "@tanstack/react-query";
 import {
   act,
   cleanup,
@@ -7,14 +8,13 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { QueryClient } from "@tanstack/react-query";
 import { TRPCClientError } from "@trpc/client";
-import * as client from "@/app/_trpc/client";
 import type { RouterInputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import { ResetPetImageGeneration } from "@/layout/publicUser/ResetPetImageGeneration";
 import * as toast from "@/libs/toast";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 let queryClient: QueryClient;
 let reset: ReturnType<typeof vi.fn>;

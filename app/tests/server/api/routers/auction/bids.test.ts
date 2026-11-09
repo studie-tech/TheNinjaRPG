@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { eq } from "drizzle-orm";
 import * as Sentry from "@sentry/nextjs";
+import { eq } from "drizzle-orm";
 import {
   actionLog,
   auctionBid,
@@ -25,8 +25,8 @@ import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
-  resetTables,
   recordQueries,
+  resetTables,
 } from "../../../../setup/testDatabase";
 
 describeWithDatabase("auction bid atomicity", () => {

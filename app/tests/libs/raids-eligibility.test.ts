@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
+import { getWarSide } from "@/libs/objectiveWar";
 import {
   createBattleClaimId,
   isBattleClaimId,
   raidCaptureClosedMessage,
 } from "@/libs/raids";
-import { getWarSide } from "@/libs/objectiveWar";
 
 describe("raidCaptureClosedMessage", () => {
   const now = new Date("2026-06-15T12:00:00Z");

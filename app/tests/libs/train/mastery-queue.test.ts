@@ -1,10 +1,10 @@
-import { MASTERY_RANK_CAPS } from "@/drizzle/constants";
 import { describe, expect, it } from "bun:test";
 import {
   ELEMENTAL_MASTERY_CAP,
+  MASTERY_RANK_CAPS,
   MAX_DAILY_TRAININGS,
-  TOTAL_MASTERY_CAP,
   type MasteryQueueKind,
+  TOTAL_MASTERY_CAP,
 } from "@/drizzle/constants";
 import type { UserQueue } from "@/drizzle/schema";
 import {

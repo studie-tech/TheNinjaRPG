@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from "bun:test";
 import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import type { AiProfile, Jutsu } from "@/drizzle/schema";
 import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
-import type { BattleWar, ReturnedBattle } from "@/libs/combat/types";
-import { hasNoAvailableActions } from "@/libs/combat/turn";
 import { maskBattle } from "@/libs/combat/masking";
+import { hasNoAvailableActions } from "@/libs/combat/turn";
+import type { BattleWar, ReturnedBattle } from "@/libs/combat/types";
 import {
   flatCombatStats,
   makeBattleUser,

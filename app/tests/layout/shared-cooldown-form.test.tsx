@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import * as controller from "@/hooks/useSharedCooldowns";
 import { SharedCooldownForm } from "@/layout/SharedCooldownForm";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";

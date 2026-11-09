@@ -1,12 +1,12 @@
-import { readFile } from "node:fs/promises";
 import { beforeEach, expect, it } from "bun:test";
+import { readFile } from "node:fs/promises";
 import { eq } from "drizzle-orm";
 import {
   petSpecies,
+  type UserPetInsert,
   userData,
   userPet,
   userUpload,
-  type UserPetInsert,
 } from "@/drizzle/schema";
 import { insertPetSpecies, insertUsers } from "../setup/factories";
 import {

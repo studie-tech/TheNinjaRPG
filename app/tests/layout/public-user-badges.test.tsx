@@ -1,9 +1,9 @@
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import * as client from "@/app/_trpc/client";
-import * as ContentBox from "@/layout/ContentBox";
 import * as CombatActions from "@/layout/CombatActions";
+import * as ContentBox from "@/layout/ContentBox";
 import * as Image from "@/layout/Image";
 import * as Modal from "@/layout/Modal";
 import { BadgesTab } from "@/layout/publicUser/BadgesTab";

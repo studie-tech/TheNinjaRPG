@@ -1,4 +1,3 @@
-import { act, cleanup, renderHook } from "@testing-library/react";
 import {
   afterEach,
   beforeEach,
@@ -8,6 +7,7 @@ import {
   setSystemTime,
   vi,
 } from "bun:test";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { nextUtcDayAt } from "@/utils/time";
 

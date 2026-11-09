@@ -2,10 +2,10 @@ import { describe, expect, it } from "bun:test";
 import { type BasicElement, ELEMENTAL_MASTERY_CAP } from "@/drizzle/constants";
 import {
   activeTrainedElement,
-  elementalGainRoom,
   type ElementalMasterySource,
-  providedElements,
+  elementalGainRoom,
   getUserElements,
+  providedElements,
 } from "@/libs/elementalMastery";
 import { AllTags } from "@/validators/combat";
 

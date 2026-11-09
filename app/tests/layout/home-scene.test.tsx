@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
   act,
   cleanup,
@@ -6,23 +7,22 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { type ImgHTMLAttributes, type ComponentProps, useState } from "react";
+import { type ComponentProps, type ImgHTMLAttributes, useState } from "react";
 import {
   HOME_FLOOR_TILES,
   HOME_FURNITURE_MAX_PLACEMENTS,
   HOME_WALL_PAINTS,
   type HomeType,
-  HomeTypes,
   HomeTypeDetails,
+  HomeTypes,
   IMG_HOME_PROPERTIES,
 } from "@/drizzle/constants";
 import { HomeScene as ResidenceScene } from "@/layout/HomeScene";
 import * as Image from "@/layout/Image";
 import {
+  type HomeFurniture,
   homeLayoutPlacementError,
   projectHomePlacement,
-  type HomeFurniture,
   unprojectHomePlacement,
 } from "@/libs/home";
 import {
@@ -37,8 +37,8 @@ import {
 import { HOME_ART_PLANS, HOME_FLOOR_PROJECTION } from "@/libs/homeRoomGeometry";
 import { bunnyImageUrl, transformImageUrl } from "@/utils/image";
 import { type HomePlacement, homeFurnitureSaveInputSchema } from "@/validators/home";
-import { deferred } from "../setup/deferred";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { deferred } from "../setup/deferred";
 
 /** The page header owns decoration; this wrapper keeps that state through scene rerenders. */
 const HomeScene = (

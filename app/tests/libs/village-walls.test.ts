@@ -3,9 +3,9 @@ import type { NormalizedSectorTile, SectorCoordinate } from "@/libs/sector-map/t
 import { getNeighborCoordinates, getSectorTileKey } from "@/libs/sector-map/validation";
 import {
   getOddQHexDistance,
+  getVillageWallAxis,
   getVillageWallDecorationClearanceKeys,
   getVillageWallFoundationKeys,
-  getVillageWallAxis,
   isVillageStructurePlacementAllowed,
   planVillageWalls,
   planVillageWallWindow,

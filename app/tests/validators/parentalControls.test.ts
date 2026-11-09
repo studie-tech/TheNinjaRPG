@@ -1,11 +1,11 @@
 import { expect, it } from "bun:test";
-import { parentalSettingsSchema } from "@/validators/parentalControls";
 import {
+  type CommunicationPolicy,
   conversationReadRestriction,
   privateConversationRestriction,
-  type CommunicationPolicy,
 } from "@/libs/parentalControls";
 import { hashParentalPin, verifyParentalPin } from "@/server/utils/parentalControls";
+import { parentalSettingsSchema } from "@/validators/parentalControls";
 
 const policy: CommunicationPolicy = {
   userId: "child",

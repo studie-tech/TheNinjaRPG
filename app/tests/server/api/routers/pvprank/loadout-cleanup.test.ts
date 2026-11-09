@@ -1,11 +1,9 @@
-import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
-import { jutsuEquipLimit } from "@/drizzle/schema";
 import { afterEach, beforeEach, expect, it, setSystemTime, vi } from "bun:test";
 import { eq } from "drizzle-orm";
-
 import {
   item,
   jutsu,
+  jutsuEquipLimit,
   rankedLoadout,
   rankedPvpQueue,
   rankedSeason,
@@ -15,7 +13,8 @@ import { Pusher } from "@/libs/pusher";
 import { pvpRankRouter } from "@/server/api/routers/pvprank";
 import { cleanRankedProhibitedSelections } from "@/server/utils/ranked";
 import { HealTag, PoisonTag } from "@/validators/combat";
-import { insertItems, insertUsers, insertJutsus } from "../../../../setup/factories";
+import { insertItems, insertJutsus, insertUsers } from "../../../../setup/factories";
+import { equipLimitFixture } from "../../../../setup/jutsuEquipLimits";
 import {
   callerFor,
   describeWithDatabase,

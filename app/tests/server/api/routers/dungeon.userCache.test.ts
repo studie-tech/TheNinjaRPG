@@ -1,10 +1,10 @@
-import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { RouterOutputs } from "@/app/_trpc/client";
+import type { UserPatch, UserUpdateOptions } from "@/deltas/profile";
 import {
   battle,
   clan,
@@ -35,14 +35,16 @@ import {
   userDeltaResponseSchema,
 } from "@/validators/userCache";
 import { makeCompleteBattle, makeUser } from "../../../setup/combat";
+import { deferred } from "../../../setup/deferred";
 import { dungeonBattleState, dungeonContent } from "../../../setup/dungeon";
 import {
+  insertClans,
   insertQuests,
   insertUsers,
   insertUserVotes,
-  insertClans,
 } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
+import { overrideQuery } from "../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -50,8 +52,6 @@ import {
   recordQueries,
   resetTables,
 } from "../../../setup/testDatabase";
-import { deferred } from "../../../setup/deferred";
-import { overrideQuery } from "../../../setup/statements";
 
 type Profile = RouterOutputs["profile"]["getUser"];
 type DungeonState = RouterOutputs["coop"]["dungeon"]["getState"];

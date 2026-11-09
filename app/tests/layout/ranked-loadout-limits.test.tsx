@@ -1,9 +1,9 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { AppRouter } from "@/api/root";
 import * as appClient from "@/app/_trpc/client";
 import type { Jutsu } from "@/drizzle/schema";

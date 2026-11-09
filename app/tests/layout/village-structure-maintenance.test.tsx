@@ -1,13 +1,13 @@
+import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryClientProvider, QueryObserver } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { createTRPCReact, getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import type { AppRouter } from "@/api/root";
 import * as appClient from "@/app/_trpc/client";
 import { getStructureMaintenanceUserUpdate } from "@/deltas/kage";
-import { VillageStructureMaintenance } from "@/layout/VillageStructureMaintenance";
 import * as ContentBox from "@/layout/ContentBox";
+import { VillageStructureMaintenance } from "@/layout/VillageStructureMaintenance";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";

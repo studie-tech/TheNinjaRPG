@@ -1,6 +1,3 @@
-import * as clerk from "@clerk/nextjs";
-import { cleanup, fireEvent, render, within } from "@testing-library/react";
-import { readFileSync } from "node:fs";
 import {
   afterAll,
   afterEach,
@@ -11,27 +8,30 @@ import {
   it,
   vi,
 } from "bun:test";
+import { readFileSync } from "node:fs";
+import * as clerk from "@clerk/nextjs";
+import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import * as navigation from "next/navigation";
-import { useCombatPreferences } from "@/hooks/combat";
-import { UserCombatSettings } from "@/layout/UserCombatSettings";
-import * as iframeMute from "@/hooks/useIframeMute";
 import * as client from "@/app/_trpc/client";
 import { ClassicGameLayout } from "@/components/layout/ClassicGameLayout";
 import { PanelGameLayout } from "@/components/layout/PanelGameLayout";
 import { PixelGameLayout } from "@/components/layout/PixelGameLayout";
+import * as LayoutSidebars from "@/components/layout/shared/LayoutSidebars";
 import type { GameLayoutRenderProps } from "@/components/layout/shared/layoutTypes";
 import { layoutVariantClasses } from "@/components/layout/shared/layoutVariants";
-import * as LayoutSidebars from "@/components/layout/shared/LayoutSidebars";
+import { useCombatPreferences } from "@/hooks/combat";
+import * as iframeMute from "@/hooks/useIframeMute";
 import * as Footer from "@/layout/Footer";
 import { GameSettingsPanel } from "@/layout/GameSettings";
 import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
-import * as HelpButton from "@/layout/LowerRightHelpBtn";
 import * as Image from "@/layout/Image";
-import { DEFAULT_MOBILE_NAV_CONFIG } from "@/libs/mobileNavConfig";
+import * as HelpButton from "@/layout/LowerRightHelpBtn";
+import { UserCombatSettings } from "@/layout/UserCombatSettings";
 import {
   SWAP_SIDEBARS_ATTRIBUTE,
   SWAP_SIDEBARS_STORAGE_KEY,
 } from "@/libs/layoutPreference";
+import { DEFAULT_MOBILE_NAV_CONFIG } from "@/libs/mobileNavConfig";
 import { VISUAL_EFFECT_KEYS } from "@/libs/visualEffects";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";

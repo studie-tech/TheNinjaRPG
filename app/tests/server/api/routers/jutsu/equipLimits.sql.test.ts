@@ -5,7 +5,7 @@ import { fetchJutsuEquipCaps } from "@/queries/jutsuEquipLimit";
 import { tryEquipUserJutsuAtomically } from "@/server/api/routers/jutsu";
 import { miscRouter } from "@/server/api/routers/misc";
 import { DamageTag } from "@/validators/combat";
-import { insertUsers, insertJutsus } from "../../../../setup/factories";
+import { insertJutsus, insertUsers } from "../../../../setup/factories";
 import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import {
   callerFor,

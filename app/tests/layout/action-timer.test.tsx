@@ -1,5 +1,3 @@
-import { act, cleanup, render } from "@testing-library/react";
-import { Profiler, type ProfilerOnRenderCallback } from "react";
 import {
   afterEach,
   beforeEach,
@@ -9,6 +7,8 @@ import {
   setSystemTime,
   vi,
 } from "bun:test";
+import { act, cleanup, render } from "@testing-library/react";
+import { Profiler, type ProfilerOnRenderCallback } from "react";
 import ActionTimer from "@/layout/ActionTimer";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import * as userContext from "@/utils/UserContext";

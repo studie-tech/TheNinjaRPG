@@ -4,9 +4,9 @@ import {
   clampHomeFurniturePlacement,
   fitHomeFurniturePlacement,
   getHomeFurnitureGeometry,
+  type HomeFurniture,
   homeLayoutPlacementError,
   unprojectHomePlacement,
-  type HomeFurniture,
 } from "@/libs/home";
 import {
   getHomeFloorAnchors,

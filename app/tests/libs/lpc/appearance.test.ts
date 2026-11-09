@@ -1,4 +1,3 @@
-import { lpcAssets, lpcCatalog } from "../../setup/lpc";
 import { describe, expect, it } from "bun:test";
 import {
   anonymousSpriteAppearance,
@@ -9,9 +8,10 @@ import {
   withSpriteEquipment,
 } from "@/libs/lpc/appearance";
 import { buildLpcCatalog, spriteLayerSheets } from "@/libs/lpc/catalog";
-import { attributes, colors, skin_colors } from "@/validators/register";
 import { lpcColors } from "@/validators/lpc";
 import { lpcConfigValidator } from "@/validators/lpcAsset";
+import { attributes, colors, skin_colors } from "@/validators/register";
+import { lpcAssets, lpcCatalog } from "../../setup/lpc";
 
 describe("character appearances", () => {
   it("accepts new saved equipment designs and rejects hidden or invalid assignments", () => {

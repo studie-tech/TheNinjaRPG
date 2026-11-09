@@ -1,34 +1,35 @@
-import { makeAiBattle, makeAiUser as mkUser } from "./helpers/aiScenario";
-import { makeEffect, makeJutsu, makeTag } from "../../setup/combat";
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { Grid, rectangle } from "honeycomb-grid";
-import { applyPoolAdjustmentsToBase } from "@/libs/combat/util";
 import { performAIaction } from "@/libs/combat/ai_v2";
-import { TerrainHex } from "@/libs/hexgrid";
 import type {
   BattleUserState,
   CompleteBattle,
   ExtraState,
   UserEffect,
 } from "@/libs/combat/types";
+import { applyPoolAdjustmentsToBase } from "@/libs/combat/util";
+import { TerrainHex } from "@/libs/hexgrid";
 import {
-  getActionSchema,
-  type ZodAllAiAction,
+  ActionEndTurn,
   ActionMoveTowardsOpponent,
   ActionUseSpecificJutsu,
-  ActionEndTurn,
   AiRule,
+  type AvailableTarget,
   ConditionHasEffect,
+  ConditionHealthBelow,
   ConditionPlayerWithinRange,
+  ConditionSpecificRound,
   ConditionSummonWithinRange,
   ConditionTargetHasEffect,
-  ConditionSpecificRound,
-  ConditionHealthBelow,
-  getBackupRules,
   enforceExtraRules,
-  type AvailableTarget,
+  getActionSchema,
+  getBackupRules,
+  type ZodAllAiAction,
   type ZodAllAiCondition,
 } from "@/validators/ai";
+import { makeEffect, makeJutsu, makeTag } from "../../setup/combat";
+import { makeAiBattle, makeAiUser as mkUser } from "./helpers/aiScenario";
+
 const DAMAGE_JUTSU = "j-damage";
 const PROFILE = "profile-1";
 

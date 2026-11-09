@@ -20,8 +20,8 @@ import {
   userItemVariant,
 } from "@/drizzle/schema";
 import { updateBattle } from "@/libs/combat/database";
-import type { CompleteBattle } from "@/libs/combat/types";
 import { calcBattleResult } from "@/libs/combat/settlement";
+import type { CompleteBattle } from "@/libs/combat/types";
 import { Pusher, type PusherClient } from "@/libs/pusher";
 import { auctionRouter } from "@/routers/auction";
 import { farmingRouter } from "@/routers/farming";
@@ -35,22 +35,22 @@ import {
   RepairTag,
   UnlockItemVariantTag,
 } from "@/validators/combat";
+import { deferred } from "../../setup/deferred";
 import {
+  insertDefaultAiProfile,
   insertItems,
   insertUserItems,
   insertUsers,
-  insertDefaultAiProfile,
 } from "../../setup/factories";
 import { acceptReadySession, insertHuntingWorld } from "../../setup/hunting";
 import { stubRateLimitTransport } from "../../setup/rateLimit";
-import { beforeStatements, pollUntil, overrideQuery } from "../../setup/statements";
+import { beforeStatements, overrideQuery, pollUntil } from "../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../setup/testDatabase";
-import { deferred } from "../../setup/deferred";
 
 /** Pause a real endpoint after its equipment or inventory preload has completed. */
 const pauseRead = (db: DrizzleClient, equipment: boolean) => {

@@ -1,4 +1,3 @@
-import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import type { Table } from "drizzle-orm";
 import { FORUM_MIN_LEVEL, MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
@@ -15,8 +14,9 @@ import { commentsRouter } from "@/routers/comments";
 import { forumRouter } from "@/routers/forum";
 import { profileRouter, updateNindo } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
-import { callerForDatabase } from "../../../setup/testDatabase";
 import { deferred } from "../../../setup/deferred";
+import { stubRateLimitTransport } from "../../../setup/rateLimit";
+import { callerForDatabase } from "../../../setup/testDatabase";
 
 const user = {
   userId: "poster",

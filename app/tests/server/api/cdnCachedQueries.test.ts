@@ -1,6 +1,6 @@
+import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { describe, expect, it } from "bun:test";
 import { CDN_CACHED_QUERY_PATHS } from "@/api/root";
 
 /**

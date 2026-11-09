@@ -1,6 +1,7 @@
-import { and, eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, it } from "bun:test";
+import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import type { FederalStatus, StorePlatform } from "@/drizzle/constants";
 import {
   paypalSubscription,
   storeEntitlementRevocation,
@@ -10,7 +11,6 @@ import {
   storeUserIdAlias,
   userData,
 } from "@/drizzle/schema";
-import type { FederalStatus, StorePlatform } from "@/drizzle/constants";
 import { env } from "@/env/server.mjs";
 import {
   reconcileFederalStatuses,
@@ -19,11 +19,11 @@ import {
 import {
   extendStoreSubscription,
   grantStorePurchase,
-  reconcileStorePurchaseOwner,
-  type RevocationScope,
   revokeFederalStatus as persistRevocation,
-  type StoreTransfer,
   transferStorePurchases as persistStoreTransfer,
+  type RevocationScope,
+  reconcileStorePurchaseOwner,
+  type StoreTransfer,
 } from "@/server/utils/purchases/grant";
 import {
   migrateStoreEntitlementStates,

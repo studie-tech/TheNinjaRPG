@@ -1,12 +1,7 @@
-import { GAME_LAYOUTS } from "@/libs/gameLayouts";
-import { LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
-import {
-  drawWallpaperVariant,
-  WALLPAPER_EXPERIMENT,
-  WALLPAPER_VARIANTS,
-} from "@/libs/wallpaperExperiment";
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import { GAME_LAYOUTS } from "@/libs/gameLayouts";
 import { LAYOUT_PREFERENCE_COOKIE } from "@/libs/layoutPreference";
+import { LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
 import {
   chooseShell,
   parseShellParam,
@@ -15,6 +10,11 @@ import {
   type ShellRequest,
   shellParam,
 } from "@/libs/shell";
+import {
+  drawWallpaperVariant,
+  WALLPAPER_EXPERIMENT,
+  WALLPAPER_VARIANTS,
+} from "@/libs/wallpaperExperiment";
 
 describe("shell variants", () => {
   it("round-trips every variant through its URL segment", () => {

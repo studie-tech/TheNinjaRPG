@@ -1,53 +1,52 @@
-import { stubRateLimitTransport } from "../../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import * as Sentry from "@sentry/nextjs";
 import { and, eq, sql } from "drizzle-orm";
 import {
-  type UserItem,
   aiProfile,
   battle,
   battleHistory,
+  item,
+  overworldAiPlacement,
   quest,
   questHistory,
   questParty,
-  overworldAiPlacement,
-  item,
-  userItem,
-  userData,
+  type UserItem,
   user2conversation,
+  userData,
+  userItem,
   village,
   villageStructure,
 } from "@/drizzle/schema";
-
-import * as Sentry from "@sentry/nextjs";
+import { Pusher } from "@/libs/pusher";
 import { getNewTrackers } from "@/libs/quest";
 import { getReward } from "@/libs/quest/rewards";
 import { verifyQuestContentForSave } from "@/libs/quest/validation";
 import { projectPartyTracker } from "@/libs/questParty";
-import { Pusher } from "@/libs/pusher";
+import { questPartyRelations } from "@/queries/questParty";
+import { overworldAiRouter } from "@/routers/overworldAi";
 import { fetchUpdatedUser, profileRouter } from "@/routers/profile";
 import { questPartyRouter } from "@/routers/questParty";
-import { overworldAiRouter } from "@/routers/overworldAi";
 import { questsRouter } from "@/routers/quests";
+import type { DrizzleClient } from "@/server/db";
+import * as liveActivity from "@/server/utils/push/liveActivity";
 import {
   commitQuestObjectiveRewards,
   handleQuestConsequences,
 } from "@/server/utils/questConsequences";
-import type { DrizzleClient } from "@/server/db";
-import * as liveActivity from "@/server/utils/push/liveActivity";
 import {
   type LoadedQuestParty,
   synchronizeQuestParty,
 } from "@/server/utils/questParty";
-import { questPartyRelations } from "@/queries/questParty";
 import { AllObjectives, QuestTracker, QuestValidator } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
+import { deferred } from "../../../../setup/deferred";
 import {
+  insertDefaultAiProfile,
   insertItems,
   insertQuestHistory,
   insertQuests,
-  insertUsers,
   insertUserItems,
-  insertDefaultAiProfile,
+  insertUsers,
 } from "../../../../setup/factories";
 import {
   insertQuestTeamWorld,
@@ -55,6 +54,12 @@ import {
   questTeamMember,
   teamQuest,
 } from "../../../../setup/questParty";
+import { stubRateLimitTransport } from "../../../../setup/rateLimit";
+import {
+  aroundStatements,
+  beforeStatements,
+  failStatements,
+} from "../../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -62,12 +67,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
-import {
-  aroundStatements,
-  beforeStatements,
-  failStatements,
-} from "../../../../setup/statements";
 
 describeWithDatabase(
   "quest team membership, departures, shared deliveries and outcomes",

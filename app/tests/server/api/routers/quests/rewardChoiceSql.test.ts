@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "bun:test";
+import { eq } from "drizzle-orm";
 import {
   badge,
   item,
@@ -11,8 +11,8 @@ import {
   userItem,
   userQueue,
 } from "@/drizzle/schema";
-import { questsRouter } from "@/server/api/routers/quests";
 import { requiredRewardPicks } from "@/libs/rewardChoice";
+import { questsRouter } from "@/server/api/routers/quests";
 import type { PendingRewardChoice } from "@/validators/rewards";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
@@ -21,13 +21,13 @@ import {
   insertQuests,
   insertUsers,
 } from "../../../../setup/factories";
+import { queueEnergy } from "../../../../setup/queues";
 import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { queueEnergy } from "../../../../setup/queues";
 
 /**
  * The claim consumes the stored offer with a JSON_EXTRACT compare-and-swap. A mocked client would

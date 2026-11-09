@@ -1,16 +1,16 @@
-import { rateLimitResponse } from "../../../setup/rateLimit";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { eq } from "drizzle-orm";
 import { towerDefenseClaimReceipt, towerDefenseRun, userData } from "@/drizzle/schema";
 import { env } from "@/env/server.mjs";
 import { towerDefenseRouter } from "@/server/api/routers/towerDefense";
+import { TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE } from "@/server/utils/towerDefenseClaims";
 import {
   type SessionParams,
   signSessionParams,
 } from "@/server/utils/towerDefenseCrypto";
-import { TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE } from "@/server/utils/towerDefenseClaims";
 import type { SpacetimeCompletedRun } from "@/validators/towerDefense";
 import { insertUsers } from "../../../setup/factories";
+import { rateLimitResponse } from "../../../setup/rateLimit";
 import {
   callerFor,
   describeWithDatabase,

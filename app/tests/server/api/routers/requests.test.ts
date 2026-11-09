@@ -1,6 +1,6 @@
-import { deleteRequests } from "@/queries/sparring";
 import { beforeEach, expect, it } from "bun:test";
 import { userData, userRequest, village } from "@/drizzle/schema";
+import { deleteRequests } from "@/queries/sparring";
 
 import { fetchRequest } from "@/server/api/routers/sparring";
 import { insertUsers } from "../../../setup/factories";

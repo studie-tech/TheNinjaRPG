@@ -24,8 +24,8 @@ import {
   insertPetSpecies,
   insertQuests,
   insertUserItems,
-  insertUsers,
   insertUserPets,
+  insertUsers,
 } from "../../../setup/factories";
 import { beforeStatements } from "../../../setup/statements";
 import {

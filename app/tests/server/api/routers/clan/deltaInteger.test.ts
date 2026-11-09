@@ -1,8 +1,8 @@
-import { eq, sql } from "drizzle-orm";
 import { beforeEach, expect, it } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 import { actionLog, clan, userData } from "@/drizzle/schema";
 import { clanRouter } from "@/server/api/routers/clan";
-import { insertUsers, insertClans } from "../../../../setup/factories";
+import { insertClans, insertUsers } from "../../../../setup/factories";
 import { beforeStatements } from "../../../../setup/statements";
 import {
   callerForDatabase,

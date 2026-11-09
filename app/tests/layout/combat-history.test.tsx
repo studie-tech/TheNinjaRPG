@@ -3,8 +3,8 @@ import { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { getQueryKey } from "@trpc/react-query";
 import superjson from "superjson";
-import * as client from "@/app/_trpc/client";
 import type { RouterInputs } from "@/app/_trpc/client";
+import * as client from "@/app/_trpc/client";
 import type { BattleAction } from "@/drizzle/schema";
 import { useCombatUpdates } from "@/hooks/combat";
 import CombatHistory from "@/layout/CombatHistory";
@@ -12,7 +12,7 @@ import type { BattleUpdate } from "@/libs/combat/log";
 import type { BattleState } from "@/libs/combat/types";
 import * as UserContext from "@/utils/UserContext";
 import { deferred } from "../setup/deferred";
-import { fakeTrpcClient, testApi, TrpcTestProviders } from "../setup/trpc";
+import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 // Keep the real history component, subscription hook and tRPC query lifecycle;
 // control only websocket delivery, user context and the server's log responses.

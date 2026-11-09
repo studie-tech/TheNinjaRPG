@@ -1,8 +1,8 @@
-import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { and, eq } from "drizzle-orm";
+import { combatCacheEnergy } from "@/deltas/combat";
 import { REGEN_SECONDS } from "@/drizzle/constants";
 import {
   craftingRequirement,
@@ -15,11 +15,11 @@ import {
   userVote,
 } from "@/drizzle/schema";
 import { combatEnergyRecoverySql } from "@/libs/combat/database";
-import { combatCacheEnergy } from "@/deltas/combat";
 import { itemRouter } from "@/server/api/routers/item";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { consumeMeal, settleCookingExperience } from "@/server/utils/cooking";
+import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import {
   DecreaseCookingTime,
   DecreaseCraftingTime,
@@ -37,8 +37,8 @@ import {
 import { queueEnergy } from "../../../setup/queues";
 import {
   beforeStatements,
-  failStatements,
   beforeTransaction,
+  failStatements,
 } from "../../../setup/statements";
 import {
   callerFor,
