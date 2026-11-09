@@ -30,7 +30,7 @@ beforeEach(() => {
   vi.spyOn(image, "default").mockImplementation(() => null);
   vi.spyOn(link, "default").mockImplementation(((props: ComponentProps<"a">) => <a {...props} />) as never);
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
-  vi.spyOn(merchCollection, "MerchProductCard").mockImplementation(() => null);
+  vi.spyOn(merchCollection, "MerchProductCard").mockImplementation((() => null) as never);
   vi.spyOn(merchProvider, "useMerch").mockReturnValue({
     products: [product], loading: false, error: false, retry: vi.fn(),
     preview: false, busy: false, message: "", add: vi.fn(),
