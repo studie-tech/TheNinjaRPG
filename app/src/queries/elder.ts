@@ -1,7 +1,7 @@
 /**
  * Database access for elder; authorization and transaction scopes stay in callers.
  */
-import { and, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   actionLog,
@@ -73,7 +73,10 @@ export const fetchElderVote = async (client: DrizzleClient, voteId: string) => {
   });
 };
 
-/** Build the `villageElderVoteEntry` insert for `castElderVoteEntry`, updating duplicate keys. */
+/**
+ * Build the `villageElderVoteEntry` insert for `castElderVoteEntry`. A repeat ballot is
+ * ignored, so `rowsAffected` is 0 for it on every driver, with or without CLIENT_FOUND_ROWS.
+ */
 export const insertVillageElderVoteEntryForCastElderVoteEntry = (
   client: Pick<DrizzleClient, "insert">,
   voteId: string,
@@ -82,8 +85,8 @@ export const insertVillageElderVoteEntryForCastElderVoteEntry = (
 ) =>
   client
     .insert(villageElderVoteEntry)
-    .values({ id: nanoid(), voteId, userId, vote })
-    .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+    .ignore()
+    .values({ id: nanoid(), voteId, userId, vote });
 
 /**
  * Fetch all pending elder votes whose deadline has passed

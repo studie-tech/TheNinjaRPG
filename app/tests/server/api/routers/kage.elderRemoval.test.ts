@@ -218,7 +218,10 @@ describeWithDatabase("elder kage removal protection", () => {
     expect(
       await elder.voteOnKageRemoval({ voteId: vote.id, vote: "YES" }),
     ).toMatchObject({ success: true });
-    await elder.voteOnKageRemoval({ voteId: vote.id, vote: "NO" });
+    expect(await elder.voteOnKageRemoval({ voteId: vote.id, vote: "NO" })).toEqual({
+      success: false,
+      message: "You have already voted",
+    });
     expect(await db.select().from(villageElderVoteEntry)).toMatchObject([
       { userId: "elder-1", vote: "YES" },
     ]);
