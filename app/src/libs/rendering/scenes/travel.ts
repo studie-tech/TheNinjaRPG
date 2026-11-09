@@ -178,6 +178,21 @@ export const createTravelScene = async (options: {
     const revealed = new Map<Container, number>();
     let covered: { bounds: WorldBounds; depth: number; art: number } | null = null,
       artRevision = 0;
+    /** Scenery that can cover a figure, per placed art set: ground details and character art never do. */
+    const candidatesByArt = new WeakMap<
+      TravelSector["art"],
+      TravelSector["art"]["entries"]
+    >();
+    const revealCandidates = (art: TravelSector["art"]) => {
+      let candidates = candidatesByArt.get(art);
+      if (!candidates) {
+        candidates = art.entries.filter(
+          (entry) => !entry.description.small && !entry.character,
+        );
+        candidatesByArt.set(art, candidates);
+      }
+      return candidates;
+    };
     /** Ease scenery that hides the viewer translucent, and back once the viewer has moved on. */
     const revealViewer = (frame: GameFrame, userId: string | undefined) => {
       const body = userId ? actors.body(userId) : undefined;
@@ -199,16 +214,14 @@ export const createTravelScene = async (options: {
               minY > rendered.height + rendered.margin
             )
               continue;
-            for (const entry of rendered.art.entries) {
+            for (const entry of revealCandidates(rendered.art)) {
               if (entry.sprite.zIndex <= body.depth) continue;
               const { bounds } = entry;
               if (
                 bounds.maxX < minX ||
                 bounds.minX > maxX ||
                 bounds.maxY < minY ||
-                bounds.minY > maxY ||
-                entry.description.small ||
-                entry.character
+                bounds.minY > maxY
               )
                 continue;
               covering.add(entry.sprite);
@@ -527,16 +540,30 @@ export const createTravelScene = async (options: {
         if (disposed || token !== generation) return;
         const existing = sectors.get(entry.sector);
         if (existing?.key === key) {
-          existing.position = position;
-          existing.terrain.container.position.copyFrom(position);
-          existing.terrain.setOrigin(position.x, position.y);
+          // A crossing keeps a retained sector's world position but changes its row in the
+          // window, which orders sector terrain back to front.
           existing.terrain.setDepthBias(sectorDepthBias(entry.dy));
-          existing.art.container.position.copyFrom(position);
-          placeArt(existing.art, position);
+          // Unchanged sectors keep their placement; re-placing every sprite costs a frame.
+          if (
+            existing.position.x !== position.x ||
+            existing.position.y !== position.y
+          ) {
+            existing.position = position;
+            existing.terrain.container.position.copyFrom(position);
+            existing.terrain.setOrigin(position.x, position.y);
+            existing.art.container.position.copyFrom(position);
+            placeArt(existing.art, position);
+          }
           // A retained neighbor may become occupied before the previous sector finishes its artwork.
           if (entry.sector === snapshot.sector)
             currentSceneryReady = existing.startScenery();
           continue;
+        }
+        // Each rebuilt sector is its own task, so the map keeps presenting frames while a
+        // crossing builds the new edge of the window.
+        if (!initial) {
+          await yieldToFrame();
+          if (disposed || token !== generation) return;
         }
         const scope = createRenderScope(game);
         pending.add(scope);
@@ -1275,6 +1302,9 @@ const terrainResultKey = (
   }
   return key;
 };
+
+/** Hands the main thread back to the browser for at least one task boundary. */
+const yieldToFrame = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 /** Whether the viewer's body and the placed artwork are unchanged since covering scenery was found. */
 const sameCover = (

@@ -87,10 +87,26 @@ export const buildWindowNav = (
     tile.cost = (mapTile.walkCost || 1) + 1;
     return tile;
   });
+  // Offset-indexed tiles: honeycomb's getHex builds a throwaway hex per lookup, and
+  // terrain building looks up every tile of the window several times.
+  const columns = 3 * W,
+    rows = 3 * H;
+  const byCell = new Array<TerrainHex | undefined>(columns * rows);
+  for (const tile of grid) byCell[tile.row * columns + tile.col] = tile;
   return {
     pathFinder: new PathCalculator(grid),
-    toUnified: (dx, dy, col, row) =>
-      grid.getHex({ col: (dx + 1) * W + col, row: (dy + 1) * H + row }),
+    toUnified: (dx, dy, col, row) => {
+      const unifiedCol = (dx + 1) * W + col,
+        unifiedRow = (dy + 1) * H + row;
+      if (
+        unifiedCol < 0 ||
+        unifiedCol >= columns ||
+        unifiedRow < 0 ||
+        unifiedRow >= rows
+      )
+        return undefined;
+      return byCell[unifiedRow * columns + unifiedCol];
+    },
     fromUnified: (tile) => {
       const dx = Math.floor(tile.col / W) - 1;
       const dy = Math.floor(tile.row / H) - 1;

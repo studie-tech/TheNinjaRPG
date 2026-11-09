@@ -408,32 +408,36 @@ export const emptySegment = (order: number) => mergeItems(order, []);
 
 /** Concatenates painter-ordered items into one vertex stream, rebasing tile ranges. */
 const mergeItems = (order: number, entries: [number, TerrainItem][]) => {
-  const merged = emptyItem();
+  // Each stream is sized once and copied into directly; vertex counts reach the hundreds of thousands.
+  const merged = (key: Exclude<keyof TerrainItem, "tiles">) => {
+    const values = new Float32Array(
+      entries.reduce((total, [, entry]) => total + entry[key].length, 0),
+    );
+    let offset = 0;
+    for (const [, entry] of entries) {
+      const source = entry[key];
+      for (let index = 0; index < source.length; index++)
+        values[offset + index] = source[index] ?? 0;
+      offset += source.length;
+    }
+    return values;
+  };
+  const tiles: TerrainItem["tiles"] = [];
+  let base = 0;
   for (const [, entry] of entries) {
-    const base = merged.positions.length / 2;
-    for (const tile of entry.tiles)
-      merged.tiles.push({ ...tile, start: tile.start + base });
-    for (const key of [
-      "positions",
-      "uvs",
-      "colors",
-      "kinds",
-      "slots",
-      "waves",
-      "relief",
-    ] as const)
-      for (const value of entry[key]) merged[key].push(value);
+    for (const tile of entry.tiles) tiles.push({ ...tile, start: tile.start + base });
+    base += entry.positions.length / 2;
   }
   return {
     order,
-    positions: new Float32Array(merged.positions),
-    uvs: new Float32Array(merged.uvs),
-    colors: new Float32Array(merged.colors),
-    kinds: new Float32Array(merged.kinds),
-    slots: new Float32Array(merged.slots),
-    waves: new Float32Array(merged.waves),
-    relief: new Float32Array(merged.relief),
-    tiles: merged.tiles,
+    positions: merged("positions"),
+    uvs: merged("uvs"),
+    colors: merged("colors"),
+    kinds: merged("kinds"),
+    slots: merged("slots"),
+    waves: merged("waves"),
+    relief: merged("relief"),
+    tiles,
   };
 };
 

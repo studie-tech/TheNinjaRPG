@@ -21,6 +21,18 @@ const makeMap = (
 const HEXSIZE = 10;
 
 describe("buildWindowNav", () => {
+  it("finds every unified tile by window offset as a grid lookup does, and nothing outside", () => {
+    const nav = buildWindowNav([{ dx: 0, dy: 0, map: makeMap(4, 6) }], HEXSIZE)!;
+    const grid = nav.pathFinder.grid;
+    for (let dx = -2; dx <= 2; dx++)
+      for (let dy = -2; dy <= 2; dy++)
+        for (const [col, row] of [[0, 0], [3, 5], [-1, 2], [4, 0], [2, 6]] as const) {
+          const unified = grid.getHex({ col: (dx + 1) * 4 + col, row: (dy + 1) * 6 + row });
+          const inside = (dx + 1) * 4 + col >= 0 && (dx + 1) * 4 + col < 12 && (dy + 1) * 6 + row >= 0 && (dy + 1) * 6 + row < 18;
+          expect(nav.toUnified(dx, dy, col, row)).toBe(inside ? unified : undefined);
+        }
+  });
+
   it("round-trips unified <-> local coordinates (non-square maps)", () => {
     // Non-square so any width/height transposition in the unified-grid math fails
     const nav = buildWindowNav(

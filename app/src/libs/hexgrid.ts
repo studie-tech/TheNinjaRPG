@@ -47,6 +47,33 @@ export class TerrainHex extends Hex {
   frozen?: boolean;
   /** Integer terrain step from the terrain field: land rises 0..3, stock seabeds sink -1..-5 */
   terrace?: number;
+  // A hex never moves once created, so its derived geometry is computed once. Honeycomb
+  // otherwise rebuilds these points on every access, which dominates sector builds.
+  #corners?: Point[];
+  #point?: Point;
+  #center?: Point;
+
+  override get corners(): Point[] {
+    this.#corners ??= Object.freeze(
+      super.corners.map((corner) => Object.freeze(corner)),
+    ) as Point[];
+    return this.#corners;
+  }
+
+  override get x(): number {
+    this.#point ??= Object.freeze({ x: super.x, y: super.y });
+    return this.#point.x;
+  }
+
+  override get y(): number {
+    this.#point ??= Object.freeze({ x: super.x, y: super.y });
+    return this.#point.y;
+  }
+
+  override get center(): Point {
+    this.#center ??= Object.freeze(super.center);
+    return this.#center;
+  }
 }
 
 /**
@@ -58,9 +85,14 @@ export function defineHex(hexOptions?: Partial<HexOptions>): typeof TerrainHex {
     ...hexOptions,
   };
 
+  // Every hex of the class shares one size and origin, resolved on first use so an
+  // invalid size still fails only where a hex is measured.
+  let hexDimensions: Ellipse | undefined;
+  let hexOrigin: Point | undefined;
   return class extends TerrainHex {
     get dimensions(): Ellipse {
-      return createHexDimensions(dimensions as BoundingBox, orientation);
+      hexDimensions ??= createHexDimensions(dimensions as BoundingBox, orientation);
+      return hexDimensions;
     }
 
     get orientation(): Orientation {
@@ -68,7 +100,8 @@ export function defineHex(hexOptions?: Partial<HexOptions>): typeof TerrainHex {
     }
 
     get origin(): Point {
-      return createHexOrigin(origin as "topLeft", this);
+      hexOrigin ??= createHexOrigin(origin as "topLeft", this);
+      return hexOrigin;
     }
 
     get offset(): HexOffset {

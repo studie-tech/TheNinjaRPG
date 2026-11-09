@@ -584,10 +584,25 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     refreshDungeonEntrances,
     recoverDungeonEntrances,
   ]);
+  // Quest locations read only quest progress, the sector and the role; the profile object
+  // itself changes on every step, and a new list rebuilds the travel window.
+  const userQuests = userData?.userQuests;
+  const questData = userData?.questData;
+  const userSector = userData?.sector;
+  const userRole = userData?.role;
   const questLocations = useMemo<MapLocation[]>(
     () => [
-      ...(userData
-        ? getQuestMapLocations(userData, publicLocations, data?.questPlacements ?? [])
+      ...(userQuests && userSector !== undefined && userRole
+        ? getQuestMapLocations(
+            {
+              userQuests,
+              questData: questData ?? null,
+              sector: userSector,
+              role: userRole,
+            },
+            publicLocations,
+            data?.questPlacements ?? [],
+          )
         : []),
       ...(sectorDungeons ?? [])
         .filter((d) => d.content.structureAssetId)
@@ -602,7 +617,15 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           scale: d.content.structureScale ?? 1,
         })),
     ],
-    [userData, publicLocations, sectorDungeons, data?.questPlacements],
+    [
+      userQuests,
+      questData,
+      userSector,
+      userRole,
+      publicLocations,
+      sectorDungeons,
+      data?.questPlacements,
+    ],
   );
   const questLocationsRef = useRef(questLocations);
   questLocationsRef.current = questLocations;

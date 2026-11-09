@@ -428,6 +428,30 @@ describe("travel scene ground depth", () => {
     expect(alphas.at(-1)).toBe(1);
   });
 
+  it("leaves retained sectors in place when the window is reconciled without changes", async () => {
+    const { scene, state } = await sceneFixture();
+    state.window.push(windowEntry(725, 1)); await scene.updateWindow();
+    const sectors = [...scene.sectors.values()];
+    const attaches = sectors.map((sector) => vi.spyOn(sector.art, "attachLayers"));
+    const terrains = sectors.map((sector) => sector.terrain);
+    await scene.updateWindow(); await scene.updateWindow();
+    for (const attach of attaches) expect(attach).not.toHaveBeenCalled();
+    expect([...scene.sectors.values()].map((sector) => sector.terrain)).toEqual(terrains);
+  });
+
+  it("reorders a retained sector's terrain by its new row when the window recentres", async () => {
+    const { scene, state, advance } = await sceneFixture();
+    state.window.push(windowEntry(725, 1)); await scene.updateWindow();
+    const original = scene.sectors.get(724)!, neighbor = scene.sectors.get(725)!;
+    const biases = [vi.spyOn(original.terrain, "setDepthBias"), vi.spyOn(neighbor.terrain, "setDepthBias")];
+    state.sector = 725;
+    state.window = [windowEntry(725), windowEntry(724, -1)];
+    await scene.updateWindow(); advance(); await settle();
+    expect(scene.sectors.get(724)).toBe(original);
+    expect(biases[0]).toHaveBeenLastCalledWith(0.001);
+    expect(biases[1]!.mock.lastCall?.[0]).toBeCloseTo(0);
+  });
+
   it("refreshes retained scenery and actor depths on sector offsets and world rebasing, and detaches disposed sectors", async () => {
     const { scene, state, depth, advance } = await sceneFixture();
     state.window.push(windowEntry(725, 1)); await scene.updateWindow();

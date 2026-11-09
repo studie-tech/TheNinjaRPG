@@ -58,7 +58,8 @@ const AvatarImage: React.FC<AvatarImageProps> = (props) => {
       <div
         className={cn(
           AVATAR_BOX,
-          "background-animate bg-linear-to-r from-slate-500 to-slate-400 opacity-20",
+          // An opacity pulse runs on the compositor; a moving gradient repaints the page every frame.
+          "animate-pulse bg-linear-to-r from-slate-500 to-slate-400 opacity-20",
           props.className,
         )}
       ></div>
