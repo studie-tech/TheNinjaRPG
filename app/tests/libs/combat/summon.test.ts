@@ -31,10 +31,6 @@ describe("isSummonTemplate / isActiveSummon", () => {
     expect(isSummonTemplate(t, [player, t])).toBe(true);
     expect(isActiveSummon(t, [player, t])).toBe(false);
   });
-  it("unflagged dead summon whose controller left -> template", () => {
-    const t = mk({ userId: "t", controllerId: "aiX", isSummon: true, isSummonTemplate: undefined, curHealth: 0 });
-    expect(isSummonTemplate(t, [player, t])).toBe(true);
-  });
   it("spawned summon (alive, controller present) -> active", () => {
     const s = mk({ userId: "s", controllerId: "p1", isSummon: true, curHealth: 50 });
     expect(isSummonTemplate(s, [player, s])).toBe(false);

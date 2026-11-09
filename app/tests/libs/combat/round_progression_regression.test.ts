@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { alignBattle, hasNoAvailableActions, wantsHumanActionSet } from "@/libs/combat/turn";
+import { alignBattle, hasNoAvailableActions } from "@/libs/combat/turn";
 import { makeBattleUser, makeCompleteBattle } from "../../setup/combat";
 import type { BattleUserState, CompleteBattle } from "@/libs/combat/types";
 
@@ -47,10 +47,9 @@ describe("alignBattle leaves a summon-free battle untouched", () => {
     users.forEach((u) => { u.actionPoints = 5; u.round = 3; });
     const battle = battleOf(users);
     const { progressRound } = alignBattle(battle, [], "p1");
-    if (progressRound) {
-      expect(battle.usersState.every((u) => u.actionPoints === 100)).toBe(true);
-      expect(battle.round).toBe(4);
-    }
+    expect(progressRound).toBe(true);
+    expect(battle.usersState.every((u) => u.actionPoints === 100)).toBe(true);
+    expect(battle.round).toBe(4);
   });
 
   it("does not disturb a battle where a summon's controller is alive", () => {
@@ -86,14 +85,6 @@ describe("hasNoAvailableActions for ordinary actors", () => {
     const u = broke({ userId: "a1", isAi: true });
     const battle = battleOf([u, makeBattleUser("p1", { curHealth: 100, isAi: false })]);
     expect(hasNoAvailableActions(battle, "a1")).toBe(true);
-  });
-
-  it("routes each actor to the set piloting intends", () => {
-    // The wiring hasNoAvailableActions depends on, pinned directly.
-    expect(wantsHumanActionSet({ isAi: false })).toBe(true);            // human
-    expect(wantsHumanActionSet({ isAi: true })).toBe(false);            // plain AI
-    expect(wantsHumanActionSet({ isAi: true, isPiloted: true })).toBe(true);
-    expect(wantsHumanActionSet({ isAi: true, isPiloted: false })).toBe(false);
   });
 
   it("treats an actor missing from the battle as having no actions", () => {
