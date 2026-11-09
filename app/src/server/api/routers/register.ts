@@ -185,8 +185,8 @@ export const registerRouter = createTRPCRouter({
       // dozens of statements apart, so slipping a character past the alias read would take
       // the same identity deleting and registering at once, with the whole deletion landing
       // in between. The ledger records around a tombstone rather than dropping, so what that
-      // would cost is push registration until the alias row is removed; closing it would
-      // take an insert the builder cannot express.
+      // would cost is push registration until the alias row is removed. That cost is
+      // confined to one account and support can undo it, so the race is accepted.
       if (storeAlias && !isDeletedStoreUserId(storeAlias.newUserId)) {
         return errorResponse(
           "This account is linked to another character and cannot create a new one",
