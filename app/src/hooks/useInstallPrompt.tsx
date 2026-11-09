@@ -79,8 +79,8 @@ export function InstallPromptProvider({ children }: { children: ReactNode }) {
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleAppInstalled);
 
-    // Safari never fires beforeinstallprompt, so without its own trigger the iOS
-    // "Add to Home Screen" instructions in InstallPrompt were unreachable.
+    // Safari never fires beforeinstallprompt, so iOS schedules the prompt directly to
+    // show InstallPrompt's "Add to Home Screen" instructions.
     if (iOS) scheduleAutoShow();
 
     return () => {
