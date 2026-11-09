@@ -101,6 +101,7 @@ export const prepareActionReadiness = <T extends UserData>(
   );
   const set: ActionReadinessWrite["set"] = {
     status: "AWAKE",
+    ...(checksOut ? { warTornRespawn: false } : {}),
     curHealth: checksOut
       ? initial.maxHealth
       : Math.round(Math.min(initial.maxHealth, initial.curHealth + gain)),

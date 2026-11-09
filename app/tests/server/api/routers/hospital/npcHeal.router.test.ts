@@ -24,6 +24,7 @@ const patient = (patch: Record<string, unknown>) => ({
   username: "NpcHealPatient",
   villageId: VILLAGE_ID,
   status: "HOSPITALIZED" as const,
+  warTornRespawn: true,
   curHealth: 0,
   maxHealth: 100,
   regeneration: 60,
@@ -54,7 +55,12 @@ describeWithDatabase("hospital npc checkout", () => {
       message: "You have been healed",
       data: { curHealth: 100, money: 7 },
     });
-    expect(await saved()).toMatchObject({ status: "AWAKE", curHealth: 100, money: 7 });
+    expect(await saved()).toMatchObject({
+      status: "AWAKE",
+      warTornRespawn: false,
+      curHealth: 100,
+      money: 7,
+    });
   });
 
   it("rejects an early checkout the player cannot afford", async () => {
@@ -70,6 +76,7 @@ describeWithDatabase("hospital npc checkout", () => {
     });
     expect(await saved()).toMatchObject({
       status: "HOSPITALIZED",
+      warTornRespawn: true,
       money: HOSPITAL_RYO_PER_100_HP - 1,
     });
   });
@@ -82,6 +89,7 @@ describeWithDatabase("hospital npc checkout", () => {
     expect(result).toMatchObject({ success: true, data: { money: -50 } });
     expect(await saved()).toMatchObject({
       status: "AWAKE",
+      warTornRespawn: false,
       curHealth: 100,
       money: -50,
     });
@@ -116,7 +124,11 @@ describeWithDatabase("hospital npc checkout", () => {
       success: false,
       message: "You don't have enough money",
     });
-    expect(await saved()).toMatchObject({ status: "HOSPITALIZED", money: 0 });
+    expect(await saved()).toMatchObject({
+      status: "HOSPITALIZED",
+      warTornRespawn: true,
+      money: 0,
+    });
   });
 
   it("does not release a patient who already left", async () => {
