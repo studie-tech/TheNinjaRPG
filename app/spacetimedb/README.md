@@ -8,12 +8,15 @@ All game logic runs server-side on SpacetimeDB. Clients connect via WebSocket, s
 
 ### Tables
 
-- `game_session` - Active game sessions with player stats
-- `enemy` - Enemies currently in the game
-- `projectile` - Active projectiles (shurikens)
+- `game_session` - Session identity, signed definitions, initial stats and final results
+- `session_state` - Volatile per-session state (wave, score, health, current stats)
 - `session_upgrade` - In-run upgrades purchased during a session
+- `enemy_queued` - Enemies queued to spawn during the current wave
+- `enemy_spawn` - Static data for a spawned enemy (path, max health), written once
+- `enemy` - Volatile enemy state (position, health, movement progress)
+- `projectile` - Active projectiles (shurikens); clients compute flight progress from `spawned_at`
 - `completed_run` - Finished games (claimed via tRPC with HMAC verification)
-- `game_loop_schedule` - Scheduler for the 20 TPS game loop
+- `game_loop_schedule` - Scheduler for the 10 TPS game loop
 
 ### Reducers
 
@@ -22,7 +25,8 @@ All game logic runs server-side on SpacetimeDB. Clients connect via WebSocket, s
 - `throw_shuriken` - Manual attack (auto-fire is also implemented)
 - `purchase_upgrade` - Buy in-run upgrades using signed definitions
 - `abandon_session` - Quit the current game
-- `game_loop` - Scheduled reducer running at 20 TPS (50ms)
+- `delete_completed_run` - Delete a session and all of its rows after its reward is claimed
+- `game_loop` - Scheduled reducer running at 10 TPS (`GAME_TICK_MS` = 100ms)
 
 Every reducer that acts on an existing session only accepts calls from the identity that
 created it (`game_session.spacetimedb_identity`). The web client keeps its SpacetimeDB token
@@ -37,9 +41,9 @@ reads the result from `completed_run` itself and verifies the session signature.
 The CLI, server, Rust module and TypeScript SDK must use the same SpacetimeDB
 release. The Make targets select the CLI version from `app/package.json` without
 changing the machine's global default. `make spacetime-install` installs that
-version; override `SPACETIME_BIN` for a different installation location. Existing
-1.x servers must be upgraded before deploying the 2.x client and module together;
-follow the [upstream migration guide](https://spacetimedb.com/docs/upgrade/).
+version; override `SPACETIME_BIN` for a different installation location. A 1.x
+server must be upgraded before it runs the 2.x module and client; follow the
+[upstream migration guide](https://spacetimedb.com/docs/upgrade/).
 
 ## Local Development
 
@@ -52,11 +56,8 @@ make spacetime-install
 # Start local SpacetimeDB server (in a separate terminal)
 make spacetime-start
 
-# Build and publish the module
+# Build and publish the module, then generate TypeScript bindings
 make spacetime-publish-local
-
-# Generate TypeScript bindings
-make spacetime-generate
 ```
 
 ### Development Workflow
@@ -64,13 +65,10 @@ make spacetime-generate
 ```bash
 # After making changes to src/lib.rs:
 
-# 1. Publish updated module (will rebuild automatically)
+# 1. Rebuild, republish and regenerate the TypeScript bindings
 make spacetime-publish-local
 
-# 2. Regenerate TypeScript bindings
-make spacetime-generate
-
-# 3. Watch logs (in separate terminal)
+# 2. Watch logs (in separate terminal)
 make spacetime-logs-follow
 ```
 
@@ -78,11 +76,21 @@ make spacetime-logs-follow
 
 ```bash
 make spacetime-build        # Build the module without publishing
+make spacetime-generate     # Regenerate TypeScript bindings only
 make spacetime-logs         # View recent logs
 make spacetime-logs-follow  # Follow logs in real-time
 ```
 
 ---
+
+## Deployment Targets
+
+The web client connects to `NEXT_PUBLIC_SPACETIMEDB_HOST`, which defaults to
+`wss://maincloud.spacetimedb.com` in production builds and `ws://127.0.0.1:3001`
+otherwise (`app/src/libs/spacetimedb/config.ts`). `make spacetime-publish-prod`
+publishes to the CLI's default server (Maincloud unless changed with
+`spacetime server set-default`). The section below
+covers self-hosting instead, with the host variable pointing at your own server.
 
 ## Self-Hosted EC2 Deployment
 
@@ -114,7 +122,7 @@ ssh -i your-key.pem ec2-user@<EC2-PUBLIC-IP>
 #### 2. Clone the Repository
 
 ```bash
-git clone https://github.com/MathiasGruworked/TheNinjaRPG.git
+git clone https://github.com/studie-tech/TheNinjaRPG.git
 cd TheNinjaRPG/app/spacetimedb
 ```
 
@@ -163,7 +171,12 @@ In your Next.js environment (`.env` or Vercel settings):
 ```env
 NEXT_PUBLIC_SPACETIMEDB_HOST=wss://spacetimedb.theninja-rpg.com
 NEXT_PUBLIC_SPACETIMEDB_MODULE=towerdefense
+TOWER_DEFENSE_HMAC_SECRET=<random secret>
+TOWER_DEFENSE_CLAIMS_ENABLED=true
 ```
+
+`TOWER_DEFENSE_HMAC_SECRET` signs session data and is required in production.
+Reward claims are refused unless `TOWER_DEFENSE_CLAIMS_ENABLED` is exactly `true`.
 
 ### Server Management
 
@@ -313,17 +326,22 @@ The TypeScript bindings are generated to `app/src/libs/spacetimedb/bindings/`. T
 The client:
 
 1. Connects to SpacetimeDB via WebSocket
-2. Subscribes to relevant tables (game_session, enemy, projectile)
+2. Subscribes to the user's `game_session` and `completed_run` rows (a guest's session by
+   its seed) and to `session_state`;
+   once a session is active, to that session's `enemy`, `enemy_spawn`, `projectile`,
+   `session_upgrade`, `session_state` and `game_session` rows
 3. Receives real-time updates as tables change
 4. Calls reducers to perform actions
 
 ## Game Loop
 
-The game runs at 20 ticks per second (50ms interval). Each tick:
+The game runs at 10 ticks per second (`GAME_TICK_MS` = 100ms). For each active session
+with a wave in progress, a tick:
 
-1. Applies health regeneration
-2. Auto-fires shuriken at nearest enemy in range
-3. Updates projectile positions and applies damage
-4. Updates enemy positions and attacks
-5. Applies lifesteal from damage dealt
-6. Checks for wave completion or game over
+1. Spawns the next queued enemy when its spawn time has come
+2. Applies health regeneration
+3. Auto-fires shuriken at nearest enemy in range
+4. Resolves projectile hits and applies damage
+5. Updates enemy positions and attacks
+6. Applies lifesteal from damage dealt
+7. Checks for wave completion or game over
