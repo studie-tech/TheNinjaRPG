@@ -1044,6 +1044,13 @@
       "when": 1794131711417,
       "tag": "0149_seed_wildlife",
       "breakpoints": false
+    },
+    {
+      "idx": 150,
+      "version": "5",
+      "when": 1794061924623,
+      "tag": "0147_limit_40_ap_jutsu",
+      "breakpoints": false
     }
   ]
 }

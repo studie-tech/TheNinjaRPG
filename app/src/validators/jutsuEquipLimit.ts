@@ -1,7 +1,13 @@
 import { z } from "zod";
 import { tagTypes } from "@/validators/combat";
 
-export const equipLimitCategories = [...tagTypes, "residual", "event", "forbidden"];
+export const equipLimitCategories = [
+  ...tagTypes,
+  "residual",
+  "event",
+  "forbidden",
+  "40 AP",
+];
 export const equipLimitCategorySchema = z
   .string()
   .refine(
