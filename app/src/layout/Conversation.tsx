@@ -165,9 +165,9 @@ export const useConversation = (props: ConversationLogicProps) => {
   }, [conversation?.id, lastReadAt, recordConversationRead]);
 
   /**
-   * Shared infinite-query cache writer for conversation comments. The
-   * `pages[0].convo` guard and ValidPage cast live here only — callers just
-   * map each page's `data` array.
+   * Shared infinite-query cache writer for conversation comments. It applies the
+   * `pages[0].convo` guard and ValidPage cast, so callers just map each page's
+   * `data` array.
    */
   const updateCachedComments = useCallback(
     (
@@ -285,11 +285,7 @@ export const useConversation = (props: ConversationLogicProps) => {
     [isSearchOpen, searchForm, searchQuery, clearSearch, onSearchSubmit],
   );
 
-  /**
-   * Perform an optimistic update of the conversation reactions
-   * @param newMessage
-   * @returns
-   */
+  /** Optimistically toggle a user's emoji reaction on a cached comment. */
   const optimisticReactionUpdate = async (
     commentId: string,
     emoji: string,
@@ -546,7 +542,7 @@ export const useConversation = (props: ConversationLogicProps) => {
       },
     });
 
-  // Create comment & optimistically update the interface
+  // Fetch a comment announced over the websocket and prepend it to the cache
   const { mutate: fetchComment } = api.comments.fetchConversationComment.useMutation({
     onSuccess: async (data) => {
       if (!data) return;
@@ -812,8 +808,8 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                   {isCommenting && <Loader />}
                 </div>
               </div>
-              {/* The line is kept when nobody is typing: it comes and goes every few
-                  seconds in a busy chat, and each time it moved every message below. */}
+              {/* Reserve the line's height even when nobody is typing, so the indicator
+                  appearing and disappearing in a busy chat does not shift the messages below. */}
               {conversation?.isPublic && (
                 <div className="mt-1 min-h-4 text-muted-foreground text-xs italic">
                   {typingUsers.size > 0 &&
