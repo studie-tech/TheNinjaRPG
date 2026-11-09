@@ -2,11 +2,22 @@ import { Chart as ChartJS } from "chart.js/auto";
 import type React from "react";
 import { useEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
+import type { RankedRank } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import RankedRankDistributionFiltering, {
   getFilter,
   useFiltering,
 } from "@/layout/RankedRankDistributionFiltering";
+
+/** Bar color per rank, so a rank absent from the data leaves the others unchanged. */
+const RANK_COLORS: Record<RankedRank, string> = {
+  Unranked: "#9ca3af",
+  Wood: "#8e5ea2",
+  Adept: "#3cba9f",
+  Master: "#e8c3b9",
+  Legend: "#c45850",
+  Sannin: "#ff6384",
+};
 
 export const RankedRankDistributionHistogram: React.FC = () => {
   const chartRef = useRef<HTMLCanvasElement>(null);
@@ -20,9 +31,6 @@ export const RankedRankDistributionHistogram: React.FC = () => {
   useEffect(() => {
     const ctx = chartRef?.current?.getContext("2d");
     if (ctx && rankDistributionData && rankDistributionData.length > 0) {
-      // Bar colors, assigned by position among the ranks returned
-      const colors = ["#8e5ea2", "#3cba9f", "#e8c3b9", "#c45850", "#ff6384"];
-
       const myChart = new ChartJS(ctx, {
         type: "bar",
         options: {
@@ -76,11 +84,9 @@ export const RankedRankDistributionHistogram: React.FC = () => {
               label: "Players",
               data: rankDistributionData.map((item) => item.count),
               backgroundColor: rankDistributionData.map(
-                (_, index) => `${colors[index % colors.length]}80`, // Add transparency
+                (item) => `${RANK_COLORS[item.rank]}80`, // Add transparency
               ),
-              borderColor: rankDistributionData.map(
-                (_, index) => colors[index % colors.length],
-              ),
+              borderColor: rankDistributionData.map((item) => RANK_COLORS[item.rank]),
               borderWidth: 1,
             },
           ],

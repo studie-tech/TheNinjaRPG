@@ -1320,7 +1320,7 @@ export const dataRouter = createTRPCRouter({
       ]);
 
       // Calculate ranks for each user and ignore Unranked players
-      const rankCounts = new Map<string, number>();
+      const rankCounts = new Map<RankedRank, number>();
 
       users.forEach((user) => {
         const rank = getRankedRank(user.rankedLp, topPlayersLPArray);
@@ -1336,9 +1336,7 @@ export const dataRouter = createTRPCRouter({
         .filter((item) => item.count >= input.minCount)
         .sort((a, b) => {
           // Sort by rank order (Wood, Adept, Master, Legend, Sannin)
-          const rankOrder =
-            RANKED_RANKS.indexOf(a.rank as RankedRank) -
-            RANKED_RANKS.indexOf(b.rank as RankedRank);
+          const rankOrder = RANKED_RANKS.indexOf(a.rank) - RANKED_RANKS.indexOf(b.rank);
           return rankOrder !== 0 ? rankOrder : b.count - a.count;
         });
 
