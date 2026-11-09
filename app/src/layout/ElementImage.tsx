@@ -12,7 +12,6 @@ import {
   HeartPulse,
   LoaderPinwheel,
   type LucideIcon,
-  Rabbit,
   Shield,
   Sparkles,
   SquarePlus,
@@ -37,10 +36,7 @@ import type {
   StatType,
 } from "@/drizzle/constants";
 import {
-  AdjustableBasicActions,
-  CombatStatTypes,
   ElementNames,
-  GeneralTypes,
   IMG_ELEMENT_BOIL,
   IMG_ELEMENT_CRYSTAL,
   IMG_ELEMENT_DUST,
@@ -62,9 +58,6 @@ import {
   IMG_ELEMENT_WIND,
   IMG_ELEMENT_WOOD,
   IMG_ELEMENT_YINYANG,
-  MasteryTypes,
-  PoolTypes,
-  StatTypes,
 } from "@/drizzle/constants";
 import Image from "@/layout/Image";
 import { cn } from "@/libs/shadui";
@@ -111,6 +104,7 @@ const ELEMENT_IMAGES: Record<ElementName, string> = {
   Metal: IMG_ELEMENT_METAL,
 };
 
+/** Return the configured image URL for a supported element name, including None. */
 export const getElementImg = (element: ElementName): string => ELEMENT_IMAGES[element];
 
 /** Icon and background colour of each stat, pool, mastery and basic action badge. */
@@ -124,7 +118,6 @@ const ICON_BADGES: Partial<
   meditate: { Icon: Brain, background: "bg-purple-600" },
   clear: { Icon: Eraser, background: "bg-stone-500" },
   cleanse: { Icon: Sparkles, background: "bg-yellow-400" },
-  flee: { Icon: Rabbit, background: "bg-pink-400" },
   move: { Icon: Footprints, background: "bg-cyan-600" },
   replacementTechnique: { Icon: LoaderPinwheel, background: "bg-orange-500" },
   Taijutsu: { Icon: Grab, background: "bg-green-600" },
@@ -160,17 +153,7 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
         className={props.className}
       />
     );
-  } else if (
-    isInArray(element, [
-      ...StatTypes.filter((type) => type !== "None"),
-      ...CombatStatTypes,
-      ...MasteryTypes,
-      ...GeneralTypes,
-      ...PoolTypes,
-      ...AdjustableBasicActions,
-      "All",
-    ])
-  ) {
+  } else {
     const base = "rounded-full p-1 text-white";
     if (element === "Highest") {
       return (
@@ -187,7 +170,9 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
         />
       );
     } else {
-      const badge = ICON_BADGES[element];
+      const badge = Object.hasOwn(ICON_BADGES, element)
+        ? ICON_BADGES[element]
+        : undefined;
       if (badge) {
         image = (
           <badge.Icon
