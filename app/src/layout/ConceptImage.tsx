@@ -60,14 +60,20 @@ const ConceptImage: React.FC<InputProps> = (props) => {
   const emotionInFlightRef = useRef<{ imageId: string; requestId: number } | null>(
     null,
   );
-  const previousImageIdRef = useRef(image?.id);
   const [pendingEmotion, setPendingEmotion] = useState<{
     imageId: string;
     type: ConceptEmotion;
   } | null>(null);
   const deleteInFlightRef = useRef<string | null>(null);
-  const currentImageIdRef = useRef(image?.id);
-  currentImageIdRef.current = image?.id;
+  // Callers key this component by image id, so all per-image state starts fresh.
+  // Cleared on unmount so a delete finishing after the viewer left does not navigate.
+  const isMountedRef = useRef(false);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deletedImageId, setDeletedImageId] = useState<string | null>(null);
 
@@ -146,18 +152,6 @@ const ConceptImage: React.FC<InputProps> = (props) => {
   // UI remains response-driven and reconciles both query surfaces after success.
   const emotion = api.conceptart.toggleEmotion.useMutation();
 
-  useEffect(() => {
-    if (previousImageIdRef.current === image?.id) return;
-
-    previousImageIdRef.current = image?.id;
-    currentImageIdRef.current = image?.id;
-    emotionInFlightRef.current = null;
-    deleteInFlightRef.current = null;
-    setPendingEmotion(null);
-    setDeleteTargetId(null);
-    setDeletedImageId(null);
-  }, [image?.id]);
-
   const toggleEmotion = async (type: ConceptEmotion) => {
     if (
       !user ||
@@ -218,7 +212,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
       setDeletedImageId(imageId);
       close();
       props.onDeleted?.(imageId);
-      if (showDetails && currentImageIdRef.current === imageId) {
+      if (showDetails && isMountedRef.current) {
         router.replace("/conceptart");
       }
 
