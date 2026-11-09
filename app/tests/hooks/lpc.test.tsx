@@ -54,6 +54,7 @@ describe("scene character catalog loading", () => {
     // The slow catalog travels in its own request rather than holding up a batch.
     expect(request.fetch).toHaveBeenCalledWith(undefined, {
       staleTime: 0,
+      gcTime: Infinity,
       trpc: { context: { skipBatch: true } },
     });
     const loading = result.current();

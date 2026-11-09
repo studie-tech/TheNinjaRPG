@@ -276,9 +276,10 @@ function Travel() {
   } | null>(null);
   // Sector needing a full bootstrap window fetch (initial load, global travel)
   const [bootSector, setBootSector] = useState<number | null>(null);
+  // Kept for the session, so returning from a battle reassembles the window without a download.
   const { data: bootWindow } = api.worldMap.getSectorWindow.useQuery(
     { sector: bootSector ?? 0 },
-    { enabled: bootSector !== null },
+    { enabled: bootSector !== null, gcTime: Infinity },
   );
 
   // Ingest a bootstrap window: layouts + all its entries into the store

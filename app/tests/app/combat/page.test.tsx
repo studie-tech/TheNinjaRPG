@@ -36,6 +36,7 @@ import { dungeonBattleState } from "../../setup/dungeon";
 // Keep the real page and query lifecycles, substituting only its WebGL scene.
 const loadingEvents: string[] = [];
 let sceneCatalogLoader: (() => Promise<unknown>) | undefined;
+let heldSceneCatalog: unknown;
 const actualDynamic = dynamic.default;
 const CombatScene = (({
   battleState,
@@ -85,6 +86,7 @@ afterEach(async () => {
   clients.splice(0).forEach((queryClient) => queryClient.clear());
   loadingEvents.length = 0;
   sceneCatalogLoader = undefined;
+  heldSceneCatalog = undefined;
   vi.restoreAllMocks();
   restoreBrowserGlobals();
 });
@@ -139,7 +141,7 @@ const mount = (
   });
   const utils = {
     gameAsset: {
-      getLpcSceneCatalog: { fetch: fetchSceneCatalog, getData: () => undefined },
+      getLpcSceneCatalog: { fetch: fetchSceneCatalog, getData: () => heldSceneCatalog },
     },
     profile: { getUser: { invalidate: refetchProfile } },
     combat: {
@@ -488,6 +490,29 @@ it("requests the battlefield's artwork catalog alongside the battle and hands it
   );
   // The first scene consumes that request instead of starting another one.
   expect(await sceneCatalogLoader!()).toBe(sceneCatalog);
+  expect(fetchSceneCatalog).toHaveBeenCalledTimes(1);
+});
+
+it("draws with the catalog the travel map already holds while refreshing it", async () => {
+  const held = { designs: { held: {} }, layouts: {} };
+  heldSceneCatalog = held;
+  const battle = makeCompleteBattle({
+    id: "held-catalog",
+    usersState: [makeUser({ userId: "player" })],
+  });
+  const { view, fetchSceneCatalog } = mount(
+    battle.id,
+    async () =>
+      ({
+        battle,
+        result: null,
+      }) as unknown as Response,
+  );
+  await waitFor(() =>
+    expect(view.getByText("Active battle held-catalog")).toBeDefined(),
+  );
+  expect(await sceneCatalogLoader!()).toBe(held);
+  // The refreshed copy is for later scenes; this one does not wait for it.
   expect(fetchSceneCatalog).toHaveBeenCalledTimes(1);
 });
 

@@ -126,8 +126,12 @@ export default function CombatPage() {
     if (userData?.battleId) setLastBattleId(userData.battleId);
   }, [userData?.battleId]);
   const requestedBattleId = userData?.battleId ?? lastBattleId;
-  // The battlefield's artwork catalog loads alongside the battle rather than after it.
-  const loadLpcCatalog = useLpcCatalogLoader({ preload: !!requestedBattleId });
+  // The battlefield reuses the catalog travel already holds, refreshing it for later scenes;
+  // a cold cache loads it alongside the battle rather than after it.
+  const loadLpcCatalog = useLpcCatalogLoader({
+    revalidateInBackground: true,
+    preload: !!requestedBattleId,
+  });
   const { data, isLoading, isSuccess, isError, isFetching, refetch } =
     api.combat.getBattle.useQuery(
       { battleId: requestedBattleId },

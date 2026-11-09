@@ -32,8 +32,12 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
   const battleId = params.battleid;
   const utils = api.useUtils();
   const setBattleAtom = useSetAtom(userBattleAtom);
-  // The battlefield's artwork catalog loads alongside the battle rather than after it.
-  const loadLpcCatalog = useLpcCatalogLoader({ preload: true });
+  // The battlefield reuses a held catalog, refreshing it for later scenes; a cold cache
+  // loads it alongside the battle rather than after it.
+  const loadLpcCatalog = useLpcCatalogLoader({
+    revalidateInBackground: true,
+    preload: true,
+  });
 
   // Shared combat handlers can publish snapshots while this viewer is mounted.
   useEffect(
