@@ -60,8 +60,8 @@ import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { canAlly, canEnemy, canSurrender, findRelationship } from "@/utils/alliance";
 import { isKage } from "@/utils/kage";
 import { canAdministrateWars, canSwapVillage } from "@/utils/permissions";
-import { calcRamenCost, getRamenHealPercentage, ramenOptions } from "@/utils/ramen";
-import { canAccessStructure, getStrucBoost } from "@/utils/village";
+import { calcRamenPrice, getRamenHealPercentage, ramenOptions } from "@/utils/ramen";
+import { canAccessStructure } from "@/utils/village";
 import { idSchema } from "@/validators/misc";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -148,19 +148,14 @@ export const villageRouter = createTRPCRouter({
       });
       let user = updatedUser.user;
       if (!user) return errorResponse("User does not exist");
-      // Get structures of the visiting village, or Syndicate when the sector has none
+      // The visiting village's structures discount the price, as on the menu
       const sectorVillage = await fetchSectorVillage(
         ctx.drizzle,
         user.sector,
         user.isOutlaw,
       );
-      const structures =
-        sectorVillage?.structures ?? (await fetchStructures(ctx.drizzle));
-      // Calculate cost
-      const discount = getStrucBoost("ramenDiscountPerLvl", structures);
-      const factor = (100 - discount) / 100;
       const healPercentage = getRamenHealPercentage(input.ramen);
-      const cost = calcRamenCost(input.ramen, user) * factor;
+      const cost = calcRamenPrice(input.ramen, user, sectorVillage?.structures);
       // Guard
       if (user.isBanned) return errorResponse("You are banned");
       const readiness = prepareActionReadiness(user, updatedUser.settings);

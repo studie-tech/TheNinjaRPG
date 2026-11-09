@@ -1,6 +1,7 @@
 import { beforeEach, expect, it } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { eq } from "drizzle-orm";
+import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import {
   userCookingJob,
   userData,
@@ -10,6 +11,7 @@ import {
 } from "@/drizzle/schema";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { villageRouter } from "@/server/api/routers/village";
+import { calcRamenPrice } from "@/utils/ramen";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { insertUsers } from "../../../setup/factories";
 import {
@@ -113,4 +115,40 @@ describeWithDatabase("confirmed ramen cache updates", () => {
       }
     },
   );
+
+  it("charges the menu's undiscounted price in a sector without a village", async () => {
+    const db = await getTestDatabase();
+    await db.insert(village).values({
+      id: VILLAGE_SYNDICATE_ID,
+      name: "Syndicate",
+      sector: 200,
+      type: "OUTLAW",
+      kageId: "",
+    });
+    await db.insert(villageStructure).values({
+      id: "syndicate-ramen",
+      name: "Ramen Shop",
+      image: "",
+      villageId: VILLAGE_SYNDICATE_ID,
+      level: 5,
+      ramenDiscountPerLvl: 10,
+    });
+    await db
+      .update(userData)
+      .set({ isOutlaw: false, sector: 77, maxHealth: 1000 })
+      .where(eq(userData.userId, userId));
+    const before = (await db.query.userData.findFirst({
+      where: eq(userData.userId, userId),
+    }))!;
+    const menuPrice = calcRamenPrice("small", before);
+    expect(menuPrice).toBe(20);
+    const response = await (await callerFor(villageRouter, userId)).buyFood({
+      ramen: "small",
+    });
+    expect(response.success).toBe(true);
+    const saved = (await db.query.userData.findFirst({
+      where: eq(userData.userId, userId),
+    }))!;
+    expect(saved.money).toBe(before.money - menuPrice);
+  });
 });
