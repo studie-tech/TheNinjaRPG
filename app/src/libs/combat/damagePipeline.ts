@@ -289,7 +289,8 @@ export const buildDamagePacketModifierLists = (
     const isStatic = effect.calculation === "static";
     const isPercentage = effect.calculation === "percentage";
 
-    // Keep scoped gear in its existing additive stage, evaluated per damage packet.
+    // Element-scoped percentage gear and keystone modifiers join the additive
+    // gear/keystone point sums, evaluated per damage packet.
     if (
       isPercentage &&
       "fromType" in effect &&
