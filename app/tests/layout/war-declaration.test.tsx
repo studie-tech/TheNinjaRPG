@@ -619,7 +619,7 @@ describe("objective war townhall health", () => {
     expect(
       labels.map(
         (label) =>
-          (label.parentElement?.querySelector(".bg-red-500") as HTMLElement).style
+          (label.parentElement!.querySelector(".bg-red-500") as HTMLElement).style
             .width,
       ),
     ).toEqual(health.map((current) => `${(current / 10000) * 100}%`));

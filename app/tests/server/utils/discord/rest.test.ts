@@ -57,7 +57,7 @@ describe("discordRequest", () => {
     ).resolves.toEqual({ id: "ok" });
     expect(calls).toHaveLength(2);
     expect(Date.now() - started).toBeGreaterThanOrEqual(9);
-    expect((calls[0]?.init.headers as Record<string, string>).Authorization).toBe(
+    expect((calls[0]!.init.headers as Record<string, string>).Authorization).toBe(
       "Bearer token",
     );
   });

@@ -763,7 +763,7 @@ describeWithDatabase("content review", () => {
     expect(await database.query.gameAsset.findMany()).toHaveLength(0);
     const candidate = (await readAgentProposal(database, id))!;
     expect(
-      (candidate.changes[0]?.after.content as { sceneCharacters: string[] })
+      (candidate.changes[0]!.after.content as { sceneCharacters: string[] })
         .sceneCharacters[0],
     ).toMatch(/^media:/);
     collector.mockClear();
@@ -999,7 +999,7 @@ describeWithDatabase("content review", () => {
     const live = (await loadEntities(database, [ref])).get(
       entityKey("ITEM", ref.entityId),
     );
-    const [effect] = live?.editable.effects as Record<string, unknown>[];
+    const [effect] = live!.editable.effects as Record<string, unknown>[];
     const author = await callerFor(contentReviewRouter, AUTHOR);
     await author.create({
       ...ref,

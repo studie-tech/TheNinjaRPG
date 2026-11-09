@@ -224,7 +224,7 @@ export const queryRawSql = async <Row>(statement: string) => {
 /** Triggers present in the test database, sorted by name. */
 export const triggerNames = async () => {
   await getTestDatabase();
-  const [rows] = (await pool?.query(
+  const [rows] = (await pool!.query(
     "SELECT trigger_name AS name FROM information_schema.triggers WHERE trigger_schema = DATABASE()",
   )) as [mysql.RowDataPacket[], unknown];
   return rows.map((row) => row.name as string).sort();
@@ -241,7 +241,7 @@ export const dropEveryTrigger = async () => {
 /** Current index columns for a table, so a suite can assert on constraints. */
 export const indexColumns = async (table: string, keyName: string) => {
   await getTestDatabase();
-  const [rows] = (await pool?.query(
+  const [rows] = (await pool!.query(
     "SELECT COLUMN_NAME AS col, NON_UNIQUE AS nonUnique FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? ORDER BY SEQ_IN_INDEX",
     [table, keyName],
   )) as [{ col: string; nonUnique: number }[], unknown];
@@ -278,7 +278,7 @@ export const lockWaitObserved = async ({
   ];
   return pollUntil(
     async () => {
-      const [rows] = (await pool?.query(
+      const [rows] = (await pool!.query(
         `SELECT COUNT(*) AS waiting FROM performance_schema.data_lock_waits AS waits
        INNER JOIN performance_schema.data_locks AS requested
          ON requested.ENGINE_LOCK_ID = waits.REQUESTING_ENGINE_LOCK_ID

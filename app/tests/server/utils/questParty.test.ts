@@ -289,12 +289,12 @@ it("retries departure after a concurrent personal update and saves shared progre
   expect(writes).toBe(2);
   expect(updates[1]?.questPartyId).toBeNull();
   expect(updates[1]?.updatedAt).toBeInstanceOf(Date);
-  expect((updates[1]?.questData as typeof next.questData)[0]).toEqual(
+  expect((updates[1]!.questData as typeof next.questData)[0]).toEqual(
     next.questData[1],
   );
-  expect((updates[1]?.questData as typeof next.questData)[1]?.goals[0]).toMatchObject({
+  expect((updates[1]!.questData as typeof next.questData)[1]?.goals[0]).toMatchObject({
     done: true,
     value: 10,
   });
-  expect((updates[1]?.questData as typeof next.questData)[1]?.party).toBeUndefined();
+  expect((updates[1]!.questData as typeof next.questData)[1]?.party).toBeUndefined();
 });

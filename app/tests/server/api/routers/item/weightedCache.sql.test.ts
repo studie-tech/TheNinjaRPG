@@ -200,7 +200,7 @@ describeWithDatabase("weighted cache consumption", () => {
     expect(rows.find((row) => row.id === "cache-stack")?.quantity).toBe(1);
     const logs = await db.select().from(actionLog);
     expect(logs).toHaveLength(1);
-    expect(JSON.parse((logs[0]?.changes as string[])[0]!)).toMatchObject({
+    expect(JSON.parse((logs[0]!.changes as string[])[0]!)).toMatchObject({
       selections: [
         {
           rollCount: 2,

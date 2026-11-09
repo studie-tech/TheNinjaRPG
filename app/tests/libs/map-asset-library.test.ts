@@ -136,7 +136,7 @@ describe("WYSIWYG decoration tileset export", () => {
     // firstgid sits above the terrain tileset's id range (1 + 3)
     expect(deco?.firstgid).toBe(4);
     expect(deco?.objectalignment).toBe("bottom");
-    expect((deco?.tiles as unknown[]).length).toBe(1);
+    expect((deco!.tiles as unknown[]).length).toBe(1);
 
     const layers = map.layers as Record<string, unknown>[];
     const objects = layers[1]?.objects as Record<string, unknown>[];
