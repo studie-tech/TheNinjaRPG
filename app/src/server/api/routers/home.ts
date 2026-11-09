@@ -83,13 +83,13 @@ const homeVisitInputSchema = z.strictObject({
   userId: z.string().min(1).max(191),
 });
 
-/** Visibility edits retain the layout revision guard; invitations use shared request identities. */
+/** Visibility edits are guarded by the furniture revision. */
 const homeSharingInputSchema = z.strictObject({
   revision: z.int().nonnegative(),
   isPublic: z.boolean(),
 });
 
-/** The existing request system resolves active recipients by their current username. */
+/** Invitees are addressed by their current username. */
 const homeInvitationInputSchema = z.strictObject({
   username: z.string().trim().min(1).max(191),
 });
@@ -146,7 +146,7 @@ export const homeRouter = createTRPCRouter({
     fetchRequests(ctx.drizzle, ["HOME"], undefined, ctx.userId),
   ),
 
-  /** Send the existing request type instead of granting access through an account JSON list. */
+  /** Invite a player to visit; access is a HOME user request the invitee must accept. */
   inviteHomeVisitor: protectedProcedure
     .input(homeInvitationInputSchema)
     .output(baseServerResponse)
@@ -220,7 +220,7 @@ export const homeRouter = createTRPCRouter({
       );
     }),
 
-  /** Rejection changes the same shared request rather than maintaining a second access list. */
+  /** The invitee rejects a pending HOME request. */
   rejectHomeInvitation: protectedProcedure
     .input(idSchema)
     .output(baseServerResponse)
@@ -270,7 +270,7 @@ export const homeRouter = createTRPCRouter({
       );
     }),
 
-  /** Visibility and the account revision publish together without placing home settings on the account. */
+  /** Set home visibility and bump the furniture revision in one guarded statement. */
   setHomeSharing: protectedProcedure
     .input(homeSharingInputSchema)
     .output(baseServerResponse)
