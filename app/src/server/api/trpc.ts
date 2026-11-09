@@ -1,8 +1,3 @@
-import {
-  fetchUserDataForEnforceRateLimit,
-  insertActionLogForEnforceRateLimit,
-  updateUserDataForEnforceRateLimit,
-} from "@/queries/concurrency";
 import { fetchIsolatedPyramid } from "@/queries/quests";
 /**
  * YOU PROBABLY DON'T NEED TO EDIT THIS FILE, UNLESS:
@@ -49,7 +44,7 @@ import {
  * processing a request
  *
  */
-import { type DrizzleClient, drizzleDB } from "@/server/db";
+import { drizzleDB } from "@/server/db";
 import { enforceBotId } from "@/server/utils/botid";
 import { clientErrorMessage } from "@/server/utils/mysqlErrors";
 
@@ -164,7 +159,7 @@ export const sentryMiddleware = t.middleware((opts) =>
   ),
 );
 
-/** Enforce the shared limiter and penalty before running a handler. */
+/** Enforce the shared limiter before running a handler. */
 export const ratelimitMiddleware = t.middleware(
   async ({ ctx: context, path, type, next }) => {
     await enforceRateLimit(context, path, type);
@@ -176,7 +171,7 @@ export const ratelimitMiddleware = t.middleware(
 export const deferredRatelimitMiddleware = t.middleware(
   async ({ ctx, path, type, next }) => {
     // Observe rejection immediately: input validation or the initial read may fail before
-    // the handler awaits the gate. Keep the original limiter/penalty error in that case too.
+    // the handler awaits the gate. Keep the original limiter error in that case too.
     const rateLimit = enforceRateLimit(ctx, path, type);
     void rateLimit.catch(() => {});
     try {
@@ -187,122 +182,25 @@ export const deferredRatelimitMiddleware = t.middleware(
   },
 );
 
-/** Message for a rate-limited read: reads carry no penalty (see enforceRateLimit). */
+/** Player-facing message for a rate-limited read. */
 export const QUERY_RATE_LIMIT_MESSAGE =
   "Too many requests for this page. Please wait a moment and try again.";
 
-/** Fraction of pocket money and bank taken by a rate-limit fine. */
-export const RATE_LIMIT_FINE_RATE = 0.01;
-
-/**
- * At most one fine per user per this many seconds, across all procedures. Matches the
- * limiter window, so a burst of rejected clicks costs 1% once instead of 1% per click.
- */
-export const RATE_LIMIT_FINE_COOLDOWN_SECONDS = 60;
-
-/** Whole-ryo fine for a balance; never negative. */
-export const rateLimitFine = (balance: number) =>
-  Math.max(Math.floor(balance * RATE_LIMIT_FINE_RATE), 0);
-
-/** Player-facing message for a penalized (mutation) rate-limit violation. */
-export const rateLimitFineMessage = (
-  fine: { moneyFine: number; bankFine: number } | null,
-) =>
-  fine
-    ? `You're moving too fast! You were fined ${fine.moneyFine.toLocaleString("en-US")} ryo (pocket) and ${fine.bankFine.toLocaleString("en-US")} ryo (bank). Slow down to avoid further fines.`
-    : `You're moving too fast! You were already fined in the last ${RATE_LIMIT_FINE_COOLDOWN_SECONDS} seconds, so no further fine this time. Slow down to avoid further fines.`;
-
-/**
- * Claim the per-user fine slot (SET NX EX on the limiter's Redis). Returns false while
- * a previous fine is still cooling down, and also if Redis errors: an infrastructure
- * hiccup must never cost a player money.
- */
-const claimRateLimitFineSlot = async (userId: string) => {
-  try {
-    const claimed = await ratelimitRedis.set(`trpc-ratelimit-fine:${userId}`, "1", {
-      nx: true,
-      ex: RATE_LIMIT_FINE_COOLDOWN_SECONDS,
-    });
-    return Boolean(claimed);
-  } catch (error) {
-    console.warn(
-      `Rate-limit fine cooldown unavailable, skipping fine: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    return false;
-  }
-};
-
-/**
- * Count the infraction and, at most once per cooldown window, fine 1% of pocket
- * money and bank. The exact amounts are returned (for the player message) and
- * recorded in ActionLog (for staff). Returns null when no fine was taken.
- */
-const penalizeRateLimitViolation = async (
-  client: Pick<DrizzleClient, "query" | "transaction">,
-  userId: string,
-  path: string,
-) => {
-  const user = await fetchUserDataForEnforceRateLimit(client, { userId });
-  if (!user) {
-    throw new TRPCError({
-      message: `User not found for rate limit penalty`,
-      code: "NOT_FOUND",
-    });
-  }
-  const fined = await claimRateLimitFineSlot(userId);
-  const moneyFine = fined ? rateLimitFine(user.money) : 0;
-  const bankFine = fined ? rateLimitFine(user.bank) : 0;
-  // The debit and its audit row commit together: a failed ActionLog insert must not
-  // leave an unrecorded fine on the account.
-  await client.transaction(async (tx) => {
-    const result = await updateUserDataForEnforceRateLimit(tx, {
-      userId,
-      moneyFine,
-      bankFine,
-    });
-    if (result.rowsAffected === 0) {
-      throw new TRPCError({
-        message: `User not found for rate limit penalty`,
-        code: "NOT_FOUND",
-      });
-    }
-    if (moneyFine > 0 || bankFine > 0) {
-      await insertActionLogForEnforceRateLimit(tx, {
-        userId,
-        path,
-        moneyFine,
-        bankFine,
-      });
-    }
-  });
-  if (!fined) return null;
-  return { moneyFine, bankFine };
-};
-
-/**
- * Whether a rate-limit violation debits the caller. Only mutations do: queries are
- * also fired by the client on its own (polling, invalidations, retries, remounts),
- * so a burst of reads is not evidence of a player or bot acting too fast. Sign-in
- * retries never debit an existing character either.
- */
-export const isPenalizedRateLimitViolation = (path: string, type: string) =>
-  type === "mutation" && !path.startsWith("nativeAuth.");
+/** Player-facing message for a rate-limited action. */
+export const MUTATION_RATE_LIMIT_MESSAGE =
+  "You're moving too fast! Please wait a moment and try again.";
 
 /**
  * Sliding-window rate limit keyed per procedure path + identity (userId, or IP
- * for anonymous callers). Every procedure type is limited; violations of
- * mutations by logged-in users also incur a 1% money/bank fine (at most once per
- * RATE_LIMIT_FINE_COOLDOWN_SECONDS), reported in the error and in ActionLog. If
- * the Redis limiter is unreachable, development fails open (local shim may not
- * be running) while production fails closed. The SDK resolves its own timeout as
- * success, so a slow Redis lets requests through rather than failing every one;
+ * for anonymous callers). Every procedure type is limited without changing player
+ * balances or recording infractions. If the Redis limiter is unreachable,
+ * development fails open (the local shim may not be running) while production
+ * fails closed. The SDK resolves its own timeout as success, so a slow Redis lets
+ * requests through rather than failing every one;
  * tavern image uploads deliberately refuse that case instead.
  */
 const enforceRateLimit = async (
-  context: Pick<
-    Awaited<ReturnType<typeof createAppTRPCContext>>,
-    "userId" | "userIp" | "drizzle"
-  >,
+  context: Pick<Awaited<ReturnType<typeof createAppTRPCContext>>, "userId" | "userIp">,
   path: string,
   type: string,
 ) => {
@@ -327,28 +225,16 @@ const enforceRateLimit = async (
   }
   if (!success) {
     if (path.startsWith("nativeAuth.")) {
-      // Authentication retries must never debit an existing character (and a newly
-      // authenticated identity may not have created a character yet).
+      // Sign-in attempts keep their authentication-specific retry guidance.
       throw serverError(
         "TOO_MANY_REQUESTS",
         "Too many sign-in attempts. Please wait a minute and try again.",
       );
     }
-    if (!isPenalizedRateLimitViolation(path, type)) {
-      throw serverError("TOO_MANY_REQUESTS", QUERY_RATE_LIMIT_MESSAGE);
-    }
-    if (!context.userId) {
-      throw serverError(
-        "TOO_MANY_REQUESTS",
-        "You are acting too fast. Please wait a moment and try again.",
-      );
-    }
-    const fine = await penalizeRateLimitViolation(
-      context.drizzle,
-      context.userId,
-      path,
+    throw serverError(
+      "TOO_MANY_REQUESTS",
+      type === "mutation" ? MUTATION_RATE_LIMIT_MESSAGE : QUERY_RATE_LIMIT_MESSAGE,
     );
-    throw serverError("TOO_MANY_REQUESTS", rateLimitFineMessage(fine));
   }
 };
 
