@@ -1,9 +1,9 @@
 import type { MetadataRoute } from "next";
 
 export const createPwaManifest = (): MetadataRoute.Manifest => ({
-  // Relative so it resolves against whichever origin serves the manifest. The previous
-  // absolute value pointed at the apex domain while the site runs on www, which made it
-  // cross-origin and therefore ignored — every deploy looked like a brand new app.
+  // Relative so it resolves against whichever origin serves the manifest. A
+  // cross-origin id (e.g. the apex domain while the site runs on www) is ignored, so
+  // browsers would treat each deploy as a new app.
   id: "/",
   name: "TheNinja-RPG",
   short_name: "TNR",
