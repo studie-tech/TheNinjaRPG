@@ -148,7 +148,7 @@ describe("isTutorialItemBuyStep", () => {
 });
 
 describe("TUTORIAL_HOME_SECTOR", () => {
-  it("tracks the current Horizon landmark, not the remapped 296 sector", () => {
+  it("matches the Horizon landmark sector", () => {
     const horizon = WORLD_LANDMARKS.find((landmark) => landmark.name === "Horizon");
     expect(horizon?.sector).toBe(TUTORIAL_HOME_SECTOR);
     expect(TUTORIAL_HOME_SECTOR).not.toBe(296);
