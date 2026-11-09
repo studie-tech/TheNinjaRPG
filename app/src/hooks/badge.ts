@@ -8,10 +8,7 @@ import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import type { ZodBadgeType } from "@/validators/badge";
 import { BadgeValidator } from "@/validators/badge";
 
-/**
- * Hook used when creating frontend forms for editing badges
- * @param data
- */
+/** Hook used when creating frontend forms for editing badges */
 export const useBadgeEditForm = (badge: Badge, refetch: () => void) => {
   // Form handling
   const submitContent = useContentSubmit();
@@ -42,7 +39,7 @@ export const useBadgeEditForm = (badge: Badge, refetch: () => void) => {
     (errors) => showFormErrorsToast(errors),
   );
 
-  // Watch for changes to avatar
+  // Watch the badge image
   const imageUrl = useWatch({
     control: form.control,
     name: "image",
