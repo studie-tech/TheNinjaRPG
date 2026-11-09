@@ -1714,7 +1714,10 @@ const StealthControls: React.FC<{
   );
 };
 
-/** A player revealed by sensing, with actions to travel to or attack them. */
+/**
+ * Revealed Player Card: a player revealed by sensing, with actions to travel to or
+ * attack them.
+ */
 const RevealedPlayerCard = ({
   player,
   userData,
