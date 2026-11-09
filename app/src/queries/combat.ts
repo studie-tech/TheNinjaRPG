@@ -1399,10 +1399,6 @@ export const updateUserDataForCreateBattle = (
                 ),
             ]
           : []),
-        // Ranked participants are claimed straight from the queue, so require
-        // QUEUED specifically: a player who just left the queue (now AWAKE)
-        // must not be pulled into a ranked battle by a poll whose snapshot
-        // predated their leave.
         ["CLAN_BATTLE", "TERRITORY_WAR"].includes(battleType) && info.clanBattle
           ? and(
               eq(userData.status, "QUEUED"),
@@ -1424,7 +1420,11 @@ export const updateUserDataForCreateBattle = (
               ),
             )
           : battleType === "RANKED_PVP"
-            ? and(
+            ? // Ranked participants are claimed straight from the queue, so require
+              // QUEUED specifically: a player who just left the queue (now AWAKE)
+              // must not be pulled into a ranked battle by a poll whose snapshot
+              // predated their leave.
+              and(
                 eq(userData.status, "QUEUED"),
                 exists(selectClaimedRankedQueueEntry(client, userData.userId)),
               )

@@ -338,7 +338,7 @@ export const combatRouter = createTRPCRouter({
         return { battle: null, result: null };
       }
 
-      // Initial battle version
+      // Rounds this poll has acted in
       const actionRounds: number[] = [];
 
       // Re-read and retry when another request claimed the battle version first
@@ -381,7 +381,6 @@ export const combatRouter = createTRPCRouter({
         }
 
         // Calculate if the battle is over for this user, and if so update user DB
-        // Fetch game settings for multipliers
         let result = calcBattleResult(
           userBattle,
           ctx.userId,
@@ -627,8 +626,8 @@ export const combatRouter = createTRPCRouter({
       const db = ctx.drizzle;
       const actionRounds: number[] = [];
 
-      // OUTER LOOP: Attempt to perform action untill success || error thrown
-      // The primary purpose here is that if the battle version was already updated, we retry the user's action
+      // Runs once: a version conflict returns updateClient so the client refetches;
+      // actions are never retried server-side.
       while (true) {
         // Fetch battle from database
         const [battle] = await Promise.all([
@@ -685,7 +684,7 @@ export const combatRouter = createTRPCRouter({
             actionRound,
             expiredEffects: expiredBeforeAction,
           } = alignBattle(newBattle, actionRounds, suid);
-          // Record all rounds for this endpoint call¨
+          // Record all rounds for this endpoint call
           if (!actionRounds.includes(actionRound)) {
             actionRounds.push(actionRound);
           }
@@ -870,8 +869,8 @@ export const combatRouter = createTRPCRouter({
           // alive. Auto combat is watched and can be taken back at any moment, so it
           // resolves one action at a time. The actor replays a batch from its steps,
           // but other humans only receive the latest state, so each event must reach
-          // them before another action overwrites it; departed participants no
-          // longer cap the batch.
+          // them before another action overwrites it; departed participants do
+          // not cap the batch.
           const fighting = newBattle.usersState.filter(
             (u) => !u.leftBattle && stillInBattle(u),
           );
@@ -2657,8 +2656,8 @@ export const initiateBattle = async (
   const nonAiTargets = users.filter((u) => targetIds.includes(u.userId) && !u.isAi);
 
   // AI rows are excluded from the battle-start claim below (one shared row backs
-  // every fight against a given AI), so the update's location predicate no longer
-  // verifies an AI target's position. Enforce the COMBAT proximity rule against
+  // every fight against a given AI), so the update's location predicate does not
+  // verify an AI target's position. Enforce the COMBAT proximity rule against
   // the fetched snapshot instead, mirroring the SQL predicate applied to players.
   if (battleType === "COMBAT") {
     const movedAiTarget = users.find(
@@ -2794,7 +2793,7 @@ export const initiateBattle = async (
     return errorResponse("One of the targets is immune from combat.");
   }
 
-  // Get previous battles between these two users within last 60min
+  // Repeat fights within 60 minutes divide reward scaling
   // Friendly NPCs do not increase the reward for defeating the authored enemies.
   let rewardScaling = (scaleGains * (users.length - allyAiIds.length)) / 2;
   const repeatOpponentScaling =
