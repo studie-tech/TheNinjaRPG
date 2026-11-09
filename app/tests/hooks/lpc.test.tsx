@@ -51,6 +51,11 @@ describe("scene character catalog loading", () => {
     const request = fixture();
     const { result } = renderHook(() => useLpcCatalogLoader({ preload: true }));
     expect(request.fetch).toHaveBeenCalledTimes(1);
+    // The slow catalog travels in its own request rather than holding up a batch.
+    expect(request.fetch).toHaveBeenCalledWith(undefined, {
+      staleTime: 0,
+      trpc: { context: { skipBatch: true } },
+    });
     const loading = result.current();
     expect(request.fetch).toHaveBeenCalledTimes(1);
     request.resolve(lpcAssets);

@@ -13,7 +13,6 @@ import {
 } from "@/hooks/combat";
 import { useGameScene } from "@/hooks/game-scene";
 import { useLocalStorage } from "@/hooks/localstorage";
-import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePageActive } from "@/hooks/usePageActive";
@@ -49,6 +48,7 @@ import type { BattleState, CombatAction, ReturnedBattle } from "@/libs/combat/ty
 import { isBattleInLobby } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { LIGHT_LAYOUT_STORAGE_KEY } from "@/libs/layoutPreference";
+import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { haptics } from "@/libs/native";
 import { findConsecutiveQuestId } from "@/libs/questRun";
 import {
@@ -91,6 +91,8 @@ interface CombatProps {
   endTurnKey?: string;
   /** Arena retries are owned by the page so layout remounts retain paid actions. */
   arenaActions?: React.ReactNode;
+  /** Pages start the artwork catalog request alongside their battle query. */
+  loadLpcCatalog: () => Promise<LpcCatalog>;
 }
 
 /** Coordinate battle controls and snapshots with the owned battlefield renderer. */
@@ -103,7 +105,6 @@ const Combat: React.FC<CombatProps> = (props) => {
   /** The result screen, once the field has replayed the action that decided the battle. */
   const result = heldResultVersion === undefined ? settledResult : null;
   const utils = api.useUtils();
-  const loadLpcCatalog = useLpcCatalogLoader();
 
   // State
   const [logbookModalQuestId, setLogbookModalQuestId] = useState<string | null>(null);
@@ -877,7 +878,7 @@ const Combat: React.FC<CombatProps> = (props) => {
     async (mount, signal, onError) =>
       createCombatScene({
         // Keep one artwork snapshot for this scene; later scene loads pick up saved edits.
-        lpcCatalog: await loadLpcCatalog(),
+        lpcCatalog: await props.loadLpcCatalog(),
         mount,
         signal,
         onError,

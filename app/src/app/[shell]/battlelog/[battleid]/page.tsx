@@ -7,6 +7,7 @@ import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { type CombatLayoutComponentId, useCombatPreferences } from "@/hooks/combat";
+import { useLpcCatalogLoader } from "@/hooks/lpc";
 import ActionTimer from "@/layout/ActionTimer";
 import CombatHistory from "@/layout/CombatHistory";
 import ContentBox from "@/layout/ContentBox";
@@ -31,6 +32,8 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
   const battleId = params.battleid;
   const utils = api.useUtils();
   const setBattleAtom = useSetAtom(userBattleAtom);
+  // The battlefield's artwork catalog loads alongside the battle rather than after it.
+  const loadLpcCatalog = useLpcCatalogLoader({ preload: true });
 
   // Shared combat handlers can publish snapshots while this viewer is mounted.
   useEffect(
@@ -90,10 +93,11 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
           userId={userId}
           setBattleState={setBattleState}
           config={config}
+          loadLpcCatalog={loadLpcCatalog}
         />
       )
     );
-  }, [battleState, userId, config.showGridNumbers]);
+  }, [battleState, userId, config.showGridNumbers, loadLpcCatalog]);
 
   // Render functions for layout components
   const renderTimer = useCallback(() => {

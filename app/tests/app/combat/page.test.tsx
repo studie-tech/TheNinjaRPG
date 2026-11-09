@@ -35,15 +35,19 @@ import { dungeonBattleState } from "../../setup/dungeon";
 
 // Keep the real page and query lifecycles, substituting only its WebGL scene.
 const loadingEvents: string[] = [];
+let sceneCatalogLoader: (() => Promise<unknown>) | undefined;
 const actualDynamic = dynamic.default;
 const CombatScene = (({
   battleState,
   arenaActions,
+  loadLpcCatalog,
 }: {
   battleState: BattleState;
   arenaActions?: ReactNode;
+  loadLpcCatalog: () => Promise<unknown>;
 }) => {
   loadingEvents.push(`scene:${battleState.battle?.id}`);
+  sceneCatalogLoader = loadLpcCatalog;
   return (
     <>
       <p>
@@ -80,6 +84,7 @@ afterEach(async () => {
   getDefaultStore().set(userContext.userBattleAtom, undefined);
   clients.splice(0).forEach((queryClient) => queryClient.clear());
   loadingEvents.length = 0;
+  sceneCatalogLoader = undefined;
   vi.restoreAllMocks();
   restoreBrowserGlobals();
 });
@@ -127,7 +132,15 @@ const mount = (
   const prefetchAssets = vi.fn(async ({ ids }: { ids: string[] }) => {
     loadingEvents.push(`assets:${ids.join(",")}`);
   });
+  const sceneCatalog = { designs: {}, layouts: {} };
+  const fetchSceneCatalog = vi.fn(async () => {
+    loadingEvents.push("catalog");
+    return sceneCatalog;
+  });
   const utils = {
+    gameAsset: {
+      getLpcSceneCatalog: { fetch: fetchSceneCatalog, getData: () => undefined },
+    },
     profile: { getUser: { invalidate: refetchProfile } },
     combat: {
       getBattle: {
@@ -221,6 +234,8 @@ const mount = (
     toggleAutoCombat,
     queryClient,
     prefetchAssets,
+    fetchSceneCatalog,
+    sceneCatalog,
     changeLayout: (next: Partial<typeof combatConfig>) => {
       combatConfig = { ...combatConfig, ...next };
       view.rerender(tree());
@@ -449,6 +464,31 @@ it("starts asset loading before mounting each new battle scene, preserving the q
     expect(request).toBeGreaterThanOrEqual(0);
     expect(request).toBeLessThan(loadingEvents.indexOf(`scene:${id}`));
   }
+});
+
+it("requests the battlefield's artwork catalog alongside the battle and hands it to the scene", async () => {
+  let respond!: (value: Response) => void;
+  const { view, fetchSceneCatalog, sceneCatalog } = mount(
+    "catalog",
+    () =>
+      new Promise((resolve) => {
+        respond = resolve;
+      }),
+  );
+  // The catalog is in flight while the battle query is still pending.
+  await waitFor(() => expect(fetchSceneCatalog).toHaveBeenCalledTimes(1));
+  const battle = makeCompleteBattle({
+    id: "catalog",
+    usersState: [makeUser({ userId: "player" })],
+  });
+  await act(async () => respond({ battle, result: null } as unknown as Response));
+  await waitFor(() => expect(view.getByText("Active battle catalog")).toBeDefined());
+  expect(loadingEvents.indexOf("catalog")).toBeLessThan(
+    loadingEvents.indexOf("scene:catalog"),
+  );
+  // The first scene consumes that request instead of starting another one.
+  expect(await sceneCatalogLoader!()).toBe(sceneCatalog);
+  expect(fetchSceneCatalog).toHaveBeenCalledTimes(1);
 });
 
 it("recovers a settled battle missing behind a cached character ID", async () => {
