@@ -6,6 +6,7 @@ import type React from "react";
 export interface AppEmojiPickerProps {
   onSelect: (native: string) => void;
   onClickOutside?: () => void;
+  /** Focus the search field when the lazy picker mounts; disabled unless requested. */
   autoFocus?: boolean;
   perLine?: number;
 }

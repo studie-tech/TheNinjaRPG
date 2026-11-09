@@ -213,7 +213,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
                 >
                   <EmojiPicker
                     perLine={12}
-                    // Focus inside the shadow root after the lazy picker mounts.
+                    // Radix cannot scan shadow-root controls; let the loaded picker focus search.
                     autoFocus
                     onSelect={(native) => {
                       props.toggleReaction?.(native);

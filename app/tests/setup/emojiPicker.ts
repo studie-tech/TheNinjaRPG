@@ -1,6 +1,9 @@
 import { installBrowserGlobals, restoreBrowserGlobals } from "./browserGlobals";
 
-/** Supply layout observers and the color-scheme query for the real shadow-DOM picker in jsdom. */
+/**
+ * Supply layout observers and the color-scheme query for the real shadow-DOM picker in jsdom.
+ * Run the returned cleanup to restore API descriptors and the shared browser globals.
+ */
 export const installEmojiPickerBrowserGlobals = () => {
   installBrowserGlobals({ resizeObserver: true });
   const apis = {
