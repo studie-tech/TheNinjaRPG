@@ -47,7 +47,7 @@ const PARTICLE_OPTIONS: ISourceOptions = {
   autoPlay: true,
   clear: true,
   // We own a reserved, position:fixed host so the engine must not also apply
-  // fullScreen (that is what inserted #tsparticles>canvas in document flow).
+  // fullScreen, which would insert #tsparticles>canvas into the document flow.
   // Resize stays on so the drawing buffer tracks the overlay after a viewport
   // change; the host CSS keeps that from shifting layout.
   fullScreen: {
@@ -148,7 +148,8 @@ export const LayoutParticles = () => {
     ensureParticleOverlayCanvas(CONFETTI_OVERLAY_ID, CONFETTI_OVERLAY_Z_INDEX);
   }, []);
 
-  // this should be run only once per application lifetime
+  // Load the engine (once per page, via loadParticles) whenever the overlay becomes
+  // eligible; release this component's engine state when it stops being eligible.
   useEffect(() => {
     if (!shouldRender) {
       setParticles(null);
