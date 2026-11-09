@@ -22,8 +22,8 @@ const cardFor = (id: string) => ({
 
 // Cached so generateMetadata and the page render share a single lookup. The columns
 // beyond `prompt` are what the page hands the client component to render before its own
-// query resolves -- without them the server sent every concept-art URL an identical
-// spinner.
+// query resolves, so each concept-art URL's HTML carries its own art rather than an
+// identical spinner.
 const fetchArt = cache(async (id: string) => {
   return await findIndexableConceptImageMetadata(drizzleDB, id);
 });
@@ -71,7 +71,7 @@ export default async function ConceptArtImage(props: Props) {
   // Deliberately not notFound() when this misses, unlike the forum and profile routes:
   // indexableConceptArt also excludes images that are still generating, and the client
   // query has no such filter, so 404ing here would break the page a user watches their
-  // own generation on. A miss just means no seed, and the loader stands in as before.
+  // own generation on. A miss renders without a seed and the client query shows its loader.
   const image = await fetchArt(params.imageid);
   return (
     <ConceptBox_ConceptImage
