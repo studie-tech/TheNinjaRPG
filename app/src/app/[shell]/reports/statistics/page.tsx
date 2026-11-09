@@ -38,7 +38,6 @@ export default function ReportStatistics() {
       </ContentBox>
     );
 
-  // Wrangle a little bit
   const { staff, timesReported, timesReporting, decisions } = data;
   const processed = staff
     .map((member) => {

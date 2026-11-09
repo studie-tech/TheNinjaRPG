@@ -13,9 +13,9 @@ const TD = "border-b px-2 py-1 align-top";
 const LINK = "font-bold text-orange-500 hover:text-orange-700";
 
 /**
- * Server-rendered tables that give a guide hub the content its category's individual
- * pages used to spread across dozens of stubs. Rendered by the guide route and handed
- * into the client view as a node, so the rows are in the HTML Googlebot receives.
+ * Server-rendered tables that give a guide hub one catalog of its category, built from
+ * live game data. Rendered by the guide route and handed into the client view as a node,
+ * so the rows are in the HTML Googlebot receives.
  */
 export const FarmCatalog: React.FC<{ rows: FarmRow[] }> = ({ rows }) => {
   if (rows.length === 0) return null;
