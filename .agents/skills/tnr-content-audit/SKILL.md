@@ -27,8 +27,8 @@ downloaded to `audit/snapshot.json`.
   `SCENE_BACKGROUND`; inspect their pixels, not just their names. Include an asset
   in `basis` as `GAME_ASSET` with its `v` when your choice relies on it.
 - `openSuggestions[]`: every suggestion still waiting for review, however old.
-- `recentlyRejected[]`, `recentlyOutdated[]`, `recentlyApplied[]`: what was decided in the last
-  10 days, with reject reasons and notes.
+- `recentlyRejected[]`, `recentlyOutdated[]`, `recentlyApplied[]`: suggestions decided within the
+  retention window (`CONTENT_PROPOSAL_RETENTION_DAYS`, 90 days), with reject reasons and notes.
 - `capabilities`: whether Epidemic Sound search and generation are available.
 - `proposalSchema`: the JSON schema your answer must match.
 - `visualCheckSchema`: the JSON schema of the battlefield check (see below).
