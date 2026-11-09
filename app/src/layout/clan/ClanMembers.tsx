@@ -359,7 +359,7 @@ export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
           <div className="flex flex-row gap-1">
             {member.userId !== userId && (
               <>
-                {/* KICK BUTTON (Now allows kicking leaders if canEdit is true) */}
+                {/* Kick: staff with canEdit may also kick leaders */}
                 {canKick && (
                   <Button
                     id={`kick-${member.userId}`}

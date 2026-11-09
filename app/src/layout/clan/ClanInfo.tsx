@@ -87,14 +87,12 @@ import {
   factionEditSchema,
 } from "@/validators/clan";
 
-/**
- * Show the profile of the user's clan
- */
 interface ClanInfoProps {
   clanData: NonNullable<ClanRouter["get"]>;
   defaultBackHref?: string;
 }
 
+/** Clan overview card with leadership actions. */
 export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   // Destructure
   const { data: userData, updateUser, prepareUserUpdate } = useRequiredUserData();
@@ -794,8 +792,8 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                   {userData.isOutlaw && (
                     <p>
                       Once the faction has {HIDEOUT_COST} ryo, it becomes possible for
-                      the leader to purchase its a hideout on the global map. At this
-                      point the faction detaches from the Syndicate, and effectively
+                      the leader to purchase a hideout on the global map. At this point
+                      the faction detaches from the Syndicate, and effectively
                       establishes their own base of operation.
                     </p>
                   )}

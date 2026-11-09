@@ -371,7 +371,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
             </TooltipProvider>
           </div>
         )}
-        {/* Warning icon - top right corner */}
+        {/* Reskin indicator - bottom centre */}
         {isReskinned && (
           <div className="absolute right-1/2 bottom-0 translate-x-1/2">
             <TooltipProvider delayDuration={50}>

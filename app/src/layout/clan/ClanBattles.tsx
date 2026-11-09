@@ -45,17 +45,12 @@ import { secondsFromDate } from "@/utils/time";
 import { useRequiredUserData, useUserData } from "@/utils/UserContext";
 import { type ClanSearchSchema, getClanSearchSchema } from "@/validators/clan";
 
-/**
- * Renders the Clan Orders component.
- *
- * @param props - The component props.
- * @returns The rendered component.
- */
 interface ClanBattlesProps {
   clanId: string;
   canCreate: boolean;
 }
 
+/** Clan battle lobbies: challenge, join, leave, kick, start and delete. */
 export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
   // Data
   const { clanId, canCreate } = props;

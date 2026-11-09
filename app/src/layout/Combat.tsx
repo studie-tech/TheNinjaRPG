@@ -404,7 +404,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       // away from) another actor — e.g. to/from a piloted summon. On the
       // player's own consecutive actions the controlled actor is unchanged, so
       // the highlight persists and the same jutsu/item can be chained across AP
-      // spends (matching pre-pilot behaviour). No-op responses (e.g. "Not your
+      // spends. No-op responses (e.g. "Not your
       // turn") omit battleUpdate and so never clear it. Reset here in onSuccess
       // rather than a useEffect (React Compiler lints the effect form).
       if (data.updateClient && data.battleUpdate) {
@@ -536,9 +536,8 @@ const Combat: React.FC<CombatProps> = (props) => {
     if (battleRef.current && suid && !resultRef.current) {
       // Read the refs rather than render-scope state: this listener only
       // re-registers on [suid, timeDiff], so a captured value would go stale.
-      // Both refs are kept current, which also lets the precompute be reused on
-      // the summon's turn (the old precomputedUserId: suid only ever hit on the
-      // player's own turn, and dropping it recomputed actions on every keypress).
+      // Both refs are kept current, so the precomputed actions apply on the
+      // player's own turn and on the piloted summon's turn.
       const { actor } = calcActiveUser(battleRef.current, suid, timeDiff, {
         precomputedUserId: userIdRef.current,
         precomputedActions: precomputedActionsRef.current,
@@ -652,8 +651,8 @@ const Combat: React.FC<CombatProps> = (props) => {
         // falsy, so they stay AI-driven.
         // Never auto-fire while the battle lobby is still counting down: the
         // server rejects early actions ("Battle has not started yet"), so
-        // firing would only spam error toasts — relevant now that a player on
-        // auto combat can be the initiative winner of a PvP lobby battle.
+        // firing would only spam error toasts. A player on auto combat can win
+        // initiative in a PvP lobby battle.
         const inLobby = isBattleInLobby(battleRef.current, timeDiff);
         const { isAITurn } = getTurnControl(actor, suid);
         // Spectators follow the battle's channel; only its fighters drive its AI turns.
@@ -671,7 +670,7 @@ const Combat: React.FC<CombatProps> = (props) => {
           }
         } else if (now - lastBattleCheckRef.current >= BATTLE_CHECK_MS) {
           lastBattleCheckRef.current = now;
-          // Scenario 2: more than 10 seconds passed, or actor is no longer the same as active user - refetch
+          // Scenario 2: the round timer (COMBAT_SECONDS) elapsed after the lobby, or the active actor changed - refetch
           const updatePassed =
             Date.now() - timeDiff - battleRef.current.roundStartAt.getTime();
           const createPassed =

@@ -16,14 +16,12 @@ import { useRequiredUserData } from "@/utils/UserContext";
 import { checkClanLeadership } from "@/validators/clan";
 import { ObjectiveReward } from "@/validators/rewards";
 
-/**
- * Show the profile of the user's clan
- */
 interface ClanProfileProps {
   clanId: string;
   defaultBackHref?: string;
 }
 
+/** Clan page with the overview card and its tabs. */
 export const ClanProfile: React.FC<ClanProfileProps> = (props) => {
   // Destructure & state
   const [showActive, setShowActive] = useLocalStorage<string>("clanPageTab", "orders");
