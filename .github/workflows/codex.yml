@@ -92,7 +92,6 @@ jobs:
               '',
               'IMPORTANT RULES:',
               '- Write your response as if you are posting a GitHub comment. Use markdown formatting.',
-              '- Do NOT write files to .claude/tasks/ or follow any plan/approval workflow from CLAUDE.md — those instructions are for human developers, not for you.',
               '- Do NOT say "suggested reply" or wrap your answer in a code block as a template. Your output IS the reply.',
               '- Do NOT create task files, plan files, or any other files unless the user explicitly asks you to implement code changes.',
               '- Be direct and helpful. Respond to what the user asked.',
