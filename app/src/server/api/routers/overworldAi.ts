@@ -720,8 +720,7 @@ export const overworldAiRouter = createTRPCRouter({
         );
       }
 
-      // 2) Plain HOSTILE fight (no matching bound objective) — existing behavior via the
-      // shared helper.
+      // 2) Plain HOSTILE fight (no matching bound objective).
       if (placement.interactionType === "HOSTILE") {
         const battle = await startOverworldBattle({
           client: ctx.drizzle,
@@ -823,8 +822,8 @@ const rollOverworldQuestGiver = async ({
   const questsById = new Map(pool.map((q) => [q.id, q]));
   const allowedRanks = availableQuestLetterRanks(activeUser.rank);
 
-  // Build the eligible pool, keeping each entry's chance. isAvailableUserQuests now
-  // includes the per-period cap, so period-capped quests drop out here automatically.
+  // Build the eligible pool, keeping each entry's chance; isAvailableUserQuests applies
+  // the per-period cap.
   const eligible = placement.questPool
     .map((p) => {
       const q = questsById.get(p.questId);
@@ -956,9 +955,6 @@ const rollOverworldQuestGiver = async ({
       ctx.drizzle,
     );
   }
-  // Release the slot we just claimed on ANY assign failure — a `!success` return or an
-  // unexpected throw — so a failed assign never strands the player behind a claim that
-  // produced no quest.
   /** Releases the NPC-mission slot claimed for this quest when assignment does not complete. */
   const releaseClaimedSlot = () =>
     clearActiveNpcQuest({

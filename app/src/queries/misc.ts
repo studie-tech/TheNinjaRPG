@@ -32,12 +32,7 @@ import type { DrizzleClient } from "@/server/db";
 import { hashIp } from "@/server/utils/ipHash";
 import { DAY_S, secondsFromNow } from "@/utils/time";
 
-/**
- * Fetches game assets from the database.
- *
- * @param client - The DrizzleClient instance used to query the database.
- * @returns A promise that resolves to an array of game assets, each containing the id, name, and image.
- */
+/** Visible non-LPC game assets, optionally limited to `ids`, ordered by name descending. */
 export const fetchGameAssets = async (client: DrizzleClient, ids?: string[]) => {
   return await client.query.gameAsset.findMany({
     where: and(
