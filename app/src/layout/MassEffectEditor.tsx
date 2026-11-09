@@ -14,9 +14,9 @@ import { unwrapFieldSchema } from "@/layout/EditContent";
 import { SearchSelect } from "@/layout/SearchSelect";
 import type { ColumnDefinitionType } from "@/layout/Table";
 import Table from "@/layout/Table";
+import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { isRetryableTrpcError } from "@/utils/error";
 import type {
   ZodAllTags,
   ZodBloodlineType,
@@ -158,9 +158,15 @@ export const MassEffectEditor = <
   }, [entries, selectedFields, modified, committed, options, editorPending]);
 
   // Mutations
-  const itemUpdate = api.item.update.useMutation();
-  const jutsuUpdate = api.jutsu.update.useMutation();
-  const bloodlineUpdate = api.bloodline.update.useMutation();
+  const itemUpdate = api.item.update.useMutation({
+    meta: { handlesTransportError: true },
+  });
+  const jutsuUpdate = api.jutsu.update.useMutation({
+    meta: { handlesTransportError: true },
+  });
+  const bloodlineUpdate = api.bloodline.update.useMutation({
+    meta: { handlesTransportError: true },
+  });
 
   const saveRow = async (row: Row) => {
     const entry = (entries || []).find((e) => e.id === row.entryId);
@@ -233,20 +239,11 @@ export const MassEffectEditor = <
         // the authoritative list cannot be refreshed immediately.
       }
     } catch (error) {
-      // The draft is retained. Item saves report every thrown error here; jutsu and
-      // bloodline saves report only retryable transport errors.
-      if (kind === "item") {
-        showMutationToast({
-          success: false,
-          message:
-            error instanceof Error ? error.message : "Unable to save item effects",
-        });
-      } else if (error instanceof Error && isRetryableTrpcError(error)) {
-        showMutationToast({
-          success: false,
-          message: error.message || `Unable to save ${kind} effects`,
-        });
-      }
+      // The draft is retained for a retry.
+      showRetryableErrorToast(
+        error,
+        `Could not confirm whether the ${kind} effects saved. Refresh before retrying.`,
+      );
     } finally {
       saveFlight.release(entry.id);
       props.onPendingChange?.(false);

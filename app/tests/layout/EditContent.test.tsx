@@ -69,7 +69,7 @@ const rewardCatalogQuery = {
   }),
 };
 const update: {
-  useMutation: () => {
+  useMutation: (options?: { meta?: Record<string, unknown> }) => {
     mutateAsync: (...args: Parameters<typeof save>) => ReturnType<typeof save>;
     isPending?: boolean;
   };
@@ -2096,7 +2096,8 @@ describe("schema-derived field visibility", () => {
 
 describe("MassEffectEditor save failures", () => {
   for (const kind of ["item", "jutsu", "bloodline"] as const) {
-    it(`reports ${kind} save failures and releases the pending state`, async () => {
+    it(`reports ${kind} save failures once and releases the pending state`, async () => {
+      const mutation = vi.spyOn(update, "useMutation");
       const retryable = vi
         .spyOn(errorUtils, "isRetryableTrpcError")
         .mockImplementation((error) => error.message === "Network down");
@@ -2141,15 +2142,18 @@ describe("MassEffectEditor save failures", () => {
         [true],
         [false],
       ]);
-      expect(toast.mock.calls).toEqual(
-        kind === "item"
-          ? [
-              [{ success: false, message: "Server rejected" }],
-              [{ success: false, message: "Network down" }],
-              [{ success: false, message: "Unable to save item effects" }],
-            ]
-          : [[{ success: false, message: "Network down" }]],
-      );
+      // The global tRPC handler reports every failure except retryable transport errors.
+      expect(mutation).toHaveBeenCalled();
+      for (const [options] of mutation.mock.calls)
+        expect(options?.meta).toEqual({ handlesTransportError: true });
+      expect(toast.mock.calls).toEqual([
+        [
+          {
+            success: false,
+            message: `Could not confirm whether the ${kind} effects saved. Refresh before retrying.`,
+          },
+        ],
+      ]);
       retryable.mockRestore();
     });
   }
