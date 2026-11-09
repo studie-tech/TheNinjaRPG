@@ -17,12 +17,21 @@ export const useResourceSilo = () => {
   const cache = useQueryCacheUpdate<RouterOutputs["resourceSilos"]["getStatus"]>(
     getQueryKey(api.resourceSilos.getStatus, undefined, "query"),
   );
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
   const { invalidateInventory } = useInventoryCacheUpdate();
+  const reconcileOwnership = (userId: string | undefined) =>
+    Promise.all([
+      invalidateInventory(),
+      utils.jutsu.getUserJutsus.invalidate(),
+      utils.jutsu.getAll.invalidate({ ownedFirst: true }),
+      utils.bloodline.getUserHistoricBloodlines.invalidate(),
+      userId ? utils.profile.getPublicUser.invalidate({ userId }) : undefined,
+    ]);
   const claim = api.resourceSilos.claim.useMutation({
     onMutate: () => ({
       status: cache.prepareUpdate(),
       user: prepareUserUpdate(),
+      userId: userData?.userId,
     }),
     onSuccess: async (result, _input, snapshot) => {
       if (!snapshot) return;
@@ -36,11 +45,7 @@ export const useResourceSilo = () => {
       if (result.success) {
         // Packages may change membership, rank, mastery, equipment and collection-derived effects.
         await updateUser(undefined, { revision: snapshot.user });
-        await Promise.all([
-          invalidateInventory(),
-          utils.jutsu.getUserJutsus.invalidate(),
-          utils.jutsu.getAll.invalidate({ ownedFirst: true }),
-        ]);
+        await reconcileOwnership(snapshot.userId);
       }
     },
     onError: async (_error, _input, snapshot) => {
@@ -48,9 +53,7 @@ export const useResourceSilo = () => {
       await Promise.all([
         cache.updateCache(undefined, snapshot.status),
         updateUser(undefined, { revision: snapshot.user }),
-        invalidateInventory(),
-        utils.jutsu.getUserJutsus.invalidate(),
-        utils.jutsu.getAll.invalidate({ ownedFirst: true }),
+        reconcileOwnership(snapshot.userId),
       ]);
     },
   });
