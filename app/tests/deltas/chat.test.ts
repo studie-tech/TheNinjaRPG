@@ -26,3 +26,27 @@ it("matches a live comment by content or author name, ignoring case, like the se
   expect(matchesConversationSearch("FINDER", comment)).toBe(true);
   expect(matchesConversationSearch("ramen", comment)).toBe(false);
 });
+
+it.each(["%", "_", "\\"])(
+  "matches %j literally in content or author names",
+  (symbol) => {
+    expect(
+      matchesConversationSearch(symbol, {
+        content: "Another message",
+        username: "Peer",
+      }),
+    ).toBe(false);
+    expect(
+      matchesConversationSearch(symbol, {
+        content: `Found ${symbol}`,
+        username: "Peer",
+      }),
+    ).toBe(true);
+    expect(
+      matchesConversationSearch(symbol, {
+        content: "Another message",
+        username: `Peer${symbol}`,
+      }),
+    ).toBe(true);
+  },
+);

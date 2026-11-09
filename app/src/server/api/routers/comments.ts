@@ -442,11 +442,12 @@ export const commentsRouter = createTRPCRouter({
 
       // Add search filter if searchQuery is provided
       if (input.searchQuery && input.searchQuery.trim() !== "") {
+        const pattern = `%${input.searchQuery.replace(/[\\%_]/g, "\\$&")}%`;
         whereConditions = and(
           whereConditions,
           or(
-            like(conversationComment.content, `%${input.searchQuery}%`),
-            like(userData.username, `%${input.searchQuery}%`),
+            like(conversationComment.content, pattern),
+            like(userData.username, pattern),
           ),
         );
       }
