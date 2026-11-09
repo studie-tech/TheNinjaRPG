@@ -3,7 +3,6 @@ import { createTRPCClient } from "@trpc/client";
 import { createTRPCQueryUtils } from "@trpc/react-query";
 import { waitFor } from "@testing-library/react";
 import { expect, it, vi } from "bun:test";
-import { readFileSync } from "node:fs";
 import { shouldInvalidateEndedBattleCaches } from "@/libs/combat/battleMaps";
 import { maskBattle } from "@/libs/combat/masking";
 import type { AppRouter } from "@/server/api/root";
@@ -11,17 +10,12 @@ import { makeCompleteBattle } from "../setup/combat";
 import { guardianVictory } from "../setup/territoryWar";
 import { getCombatInventoryUpdate } from "@/deltas/combat";
 import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
+import { readSource, runInScope, sliceCall } from "../setup/sourceSlice";
 
 // Execute the real completion effect without mounting its unrelated WebGL scene,
 // following combat-render-lifecycle.test.ts. Keep masking and query utilities real.
-const source = readFileSync(new URL("../../src/layout/Combat.tsx", import.meta.url), "utf8");
-const start = source.indexOf("  useEffect(() => {\n    const endedBattleId");
-const end = source.indexOf("\n\n  // Lobby for non-arena battles", start);
-if (start < 0 || end < 0) throw new Error("Combat completion effect is missing");
-const transpiler = new (require("bun").Transpiler)({ loader: "ts" }) as {
-  transformSync(source: string): string;
-};
-const complete = new Function("scope", `with (scope) { ${transpiler.transformSync(source.slice(start, end))} }`) as (scope: object) => void;
+const effect = sliceCall(readSource("layout/Combat.tsx"), /useEffect\(\(\)\s*=>\s*\{\s*const endedBattleId\b/);
+const complete = (scope: object) => runInScope(effect, scope);
 
 it.each([
   { type: "TERRITORY_WAR", snapshot: true, hasResult: true, invalidates: true },

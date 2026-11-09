@@ -1,8 +1,6 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it } from "bun:test";
 import { createStore } from "jotai";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { useEffect } from "react";
 import { useGameScene } from "@/hooks/game-scene";
 import { maskBattle } from "@/libs/combat/masking";
@@ -11,19 +9,14 @@ import { createFrameLoop } from "@/libs/rendering/frameLoop";
 import { userBattleAtom } from "@/utils/UserContext";
 import { makeCompleteBattle } from "../setup/combat";
 import { deferred } from "../setup/deferred";
+import { readSource, runInScope, sliceCall } from "../setup/sourceSlice";
 
 afterEach(cleanup);
-const source = readFileSync(join(import.meta.dirname, "../../src/layout/Combat.tsx"), "utf8");
-const sourceBetween = (start: string, end: string) => {
-  const from = source.indexOf(start), to = source.indexOf(end, from);
-  if (from < 0 || to < 0) throw new Error(`Combat lifecycle source missing: ${start}`);
-  return source.slice(from, to);
-};
-const transpiler = new (require("bun").Transpiler)({ loader: "ts" }) as { transformSync(source: string): string };
+const source = readSource("layout/Combat.tsx");
 
 it("keeps shared battle state when the battlefield scene unmounts", () => {
-  const effects = sourceBetween("  useEffect(() => {\n    combat.scene.current?.refresh();", "\n  useEffect(() => {\n    lastHoverKeyRef.current = null;");
-  const runEffects = new Function("scope", `with (scope) { ${transpiler.transformSync(effects)} }`);
+  const effects = sliceCall(source, /useEffect\(\(\)\s*=>\s*\{\s*combat\.scene\.current\?\.refresh\(\);\s*\}/);
+  const runEffects = (scope: object) => runInScope(effects, scope);
   const store = createStore();
   const battle = maskBattle(makeCompleteBattle(), "player-0");
   store.set(userBattleAtom, battle);
@@ -77,7 +70,7 @@ it("never initializes held results and cancels late scene completion", async () 
 });
 
 it("still drives live auto combat while its scene is paused in the background", () => {
-  const driver = sourceBetween("  useEffect(() => {\n    if (!isPageActive && !hasAutoCombat)", "\n\n  useEffect(() => {\n    actionRef.current");
+  const driver = sliceCall(source, /useEffect\(\(\)\s*=>\s*\{\s*if \(!isPageActive && !hasAutoCombat\)/);
   let drive = () => {};
   let actions = 0;
   const scope = {
@@ -96,7 +89,7 @@ it("still drives live auto combat while its scene is paused in the background", 
     canPerformAction: () => true, canDrive: () => true,
     performAction: () => { actions++; },
   };
-  new Function("scope", `with (scope) { ${transpiler.transformSync(driver)} }`)(scope);
+  runInScope(driver, scope);
   drive();
   expect(actions).toBe(1);
   // Requests stay inside the rate limit however quickly a replay finishes.
@@ -117,7 +110,7 @@ it("still drives live auto combat while its scene is paused in the background", 
 });
 
 it("lets only the battle's fighters drive its AI turns, never a spectator", () => {
-  const driver = sourceBetween("  useEffect(() => {\n    if (!isPageActive && !hasAutoCombat)", "\n\n  useEffect(() => {\n    actionRef.current");
+  const driver = sliceCall(source, /useEffect\(\(\)\s*=>\s*\{\s*if \(!isPageActive && !hasAutoCombat\)/);
   let drive = () => {};
   let actions = 0;
   const scope = {
@@ -138,7 +131,7 @@ it("lets only the battle's fighters drive its AI turns, never a spectator", () =
     canPerformAction: () => true, canDrive: () => true,
     performAction: () => { actions++; },
   };
-  new Function("scope", `with (scope) { ${transpiler.transformSync(driver)} }`)(scope);
+  runInScope(driver, scope);
   drive();
   expect(actions).toBe(0);
   scope.battleRef.current.usersState.push({ controllerId: "spectator" });
@@ -147,7 +140,7 @@ it("lets only the battle's fighters drive its AI turns, never a spectator", () =
 });
 
 it("resolves nothing autonomously until a visible field can show it", () => {
-  const driver = sourceBetween("  useEffect(() => {\n    if (!isPageActive && !hasAutoCombat)", "\n\n  useEffect(() => {\n    actionRef.current");
+  const driver = sliceCall(source, /useEffect\(\(\)\s*=>\s*\{\s*if \(!isPageActive && !hasAutoCombat\)/);
   let drive = () => {};
   let actions = 0;
   const scope = {
@@ -166,7 +159,7 @@ it("resolves nothing autonomously until a visible field can show it", () => {
     canPerformAction: () => true, canDrive: () => true,
     performAction: () => { actions++; },
   };
-  new Function("scope", `with (scope) { ${transpiler.transformSync(driver)} }`)(scope);
+  runInScope(driver, scope);
   drive();
   expect(actions).toBe(0);
   scope.combat.scene.current = { isPresenting: () => false };
@@ -181,14 +174,14 @@ it("resolves nothing autonomously until a visible field can show it", () => {
 });
 
 it.each([false, true])("displays committed rewards before history recovery and retains them if recovery fails=%s", async (fails) => {
-  const handlers = sourceBetween("  // User Action\n", "\n  const performAction = ");
+  const handlers = sliceCall(source, /const \{\s*mutate: mutateAction,\s*isPending\s*\}\s*=\s*api\.combat\.performAction\.useMutation\(/);
   const battle = { id: "settled-arena", version: 2 };
   const result = { outcome: "Won", notifications: [] };
   let state: { battle: typeof battle; result: typeof result | null; isPending: boolean } = { battle, result: null, isPending: true };
   let options!: { onSuccess: (data: object, input: object, context: object) => Promise<void>; onError: () => void };
   const { promise: held, resolve: finish } = deferred<void>();
   const events: string[] = [];
-  new Function("scope", `with (scope) { ${transpiler.transformSync(handlers)} }`)({
+  runInScope(handlers, {
     api: { combat: { performAction: { useMutation: (value: typeof options) => { options = value; return {}; } } } },
     battleRef: { current: battle }, resultRef: { current: null }, completionRevisionRef: { current: null }, suid: "player",
     actionInFlightRef: { current: true }, setPendingAction() {}, combat: { scene: { current: {} } },
@@ -214,12 +207,12 @@ it.each([false, true])("displays committed rewards before history recovery and r
 });
 
 it("retains a peer's terminal result when an earlier action response arrives", async () => {
-  const handlers = sourceBetween("  // User Action\n", "\n  const performAction = ");
+  const handlers = sliceCall(source, /const \{\s*mutate: mutateAction,\s*isPending\s*\}\s*=\s*api\.combat\.performAction\.useMutation\(/);
   const battle = { id: "shared", version: 3 };
   const result = { outcome: "Won" };
   let state = { battle, result, isPending: true };
   let success!: (data: object) => Promise<void>;
-  new Function("scope", `with (scope) { ${transpiler.transformSync(handlers)} }`)({
+  runInScope(handlers, {
     api: { combat: { performAction: { useMutation: (options: { onSuccess: typeof success }) => { success = options.onSuccess; return {}; } } } },
     resultRef: { current: result }, actionInFlightRef: { current: true }, setPendingAction() {}, combat: { scene: { current: {} } },
     setBattleState: (update: (current: typeof state) => typeof state) => { state = update(state); },
