@@ -49,9 +49,9 @@ type ModelContextProtocolHandlerOptions = {
  * 3. Get the schema for an endpoint
  * 4. Call an endpoint
  *
- * @param server - The underlying MCP Server instance
+ * @param modelContextProtocolServer - The underlying MCP Server instance
  * @param tools - Array of extracted MCP tools (used to build the registry)
- * @param createCaller - Factory function to create a fresh tRPC caller for each request
+ * @param createTrpcCaller - Factory function to create a fresh tRPC caller for each request
  * @param getScopes - Optional function to get current OAuth scopes for authorization
  * @param getIsAuthenticated - Optional function to check if the user is authenticated
  */

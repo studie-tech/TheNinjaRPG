@@ -145,6 +145,7 @@ export const moderateContent = async (
  * @param system - The system of the content
  * @param timestamp - The timestamp of the content
  * @param conversationId - The ID of the conversation
+ * @param excludeId - The ID of the content itself, left out of its context
  * @returns The additional context
  */
 export const getAdditionalContext = async (
@@ -179,8 +180,9 @@ export const getAdditionalContext = async (
 };
 
 /**
- * Generate a summary of the content
- * @param content - The content to summarize
+ * Generate a summary of the moderation evidence
+ * @param evidence - The moderation evidence to summarize
+ * @param abortSignal - Cancels the request; defaults to a 20 second timeout
  * @returns The summary
  */
 export const generateAiSummary = async (
