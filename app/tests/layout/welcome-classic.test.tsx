@@ -52,6 +52,24 @@ afterEach(() => {
 });
 
 describe("classic welcome page", () => {
+  it("keeps a legacy recruiter's attribution when the visitor proceeds to signup", () => {
+    const storedRef = localStorage.getItem("ref");
+    try {
+      localStorage.removeItem("ref");
+      vi.spyOn(navigation, "useSearchParams").mockReturnValue(
+        new URLSearchParams("ref=legacy-recruiter") as never,
+      );
+      const view = render(<Welcome />);
+      expect(localStorage.getItem("ref")).toBe("legacy-recruiter");
+      expect(view.container.querySelector("#signup_btn")?.closest("a")?.href).toEndWith(
+        "/signup",
+      );
+    } finally {
+      if (storedRef === null) localStorage.removeItem("ref");
+      else localStorage.setItem("ref", storedRef);
+    }
+  });
+
   it.each(GAME_LAYOUTS)(
     "includes readable beginner answers in the $id server markup",
     ({ id }) => {

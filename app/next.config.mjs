@@ -95,7 +95,8 @@ const config = {
       },
       {
         source: "/register.php",
-        destination: "/signup",
+        // Welcome stores recruiter and consented campaign attribution before signup.
+        destination: "/",
         permanent: true,
       },
       {
