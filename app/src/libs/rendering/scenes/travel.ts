@@ -762,12 +762,23 @@ export const createTravelScene = async (options: {
           const leg = wanderLeg({ ...wander, spots }, user.npcMember ?? 0, cycle);
           const point = (tile: WanderTile, offset: WanderTile) => {
             const hex = entry.grid.getHex({ col: tile.x, row: tile.y });
-            return hex
-              ? {
-                  x: -hex.center.x + offset.x * hex.width,
-                  y: -hex.center.y + offset.y * hex.height,
-                }
-              : null;
+            if (!hex) return null;
+            // A herd member's offset from its leader's land spot pulls in rather than stand in water.
+            let share = 1;
+            for (; share > 0; share -= 0.5) {
+              const under = entry.grid.pointToHex(
+                {
+                  x: hex.x + offset.x * hex.width * share,
+                  y: hex.y + offset.y * hex.height * share,
+                },
+                { allowOutside: false },
+              );
+              if (!under?.spec?.isWater) break;
+            }
+            return {
+              x: -hex.center.x + offset.x * hex.width * share,
+              y: -hex.center.y + offset.y * hex.height * share,
+            };
           };
           walk = {
             seed: wander.seed,
@@ -973,20 +984,31 @@ export const createTravelScene = async (options: {
         route.set(points, tile?.width ?? 50);
       }
       route.animate(frame, actors.feet(snapshot.viewer?.userId ?? ""), scale());
+      const currentWeather =
+        snapshot.weather ??
+        getWorldWeather(
+          getBiomeFromTileType(
+            snapshot.window.find((region) => region.sector === snapshot.sector)
+              ?.globalTileType ?? 1,
+          ),
+          snapshot.weatherTime ?? Number.NaN,
+        );
       weather.update(
         sourceFrame,
-        snapshot.weather ??
-          getWorldWeather(
-            getBiomeFromTileType(
-              snapshot.window.find((region) => region.sector === snapshot.sector)
-                ?.globalTileType ?? 1,
-            ),
-            snapshot.weatherTime ?? Number.NaN,
-          ),
+        currentWeather,
         world.position,
         snapshot.brightness,
         scale(),
       );
+      // Raindrops ring open water only while the rain itself is drawn.
+      const rain =
+        game.visualEffects.weather &&
+        !sourceFrame.reducedMotion &&
+        currentWeather.kind === "rain" &&
+        Number.isFinite(currentWeather.intensity)
+          ? currentWeather.intensity
+          : 0;
+      for (const rendered of sectors.values()) rendered.terrain.setRain(rain);
       // World lighting excludes the canvas UI and the actors' identity markers.
       bakedLighting?.blendSun(worldSunlight(snapshot.lightDate));
       const sun = worldSunlight(snapshot.lightDate, 60_000);

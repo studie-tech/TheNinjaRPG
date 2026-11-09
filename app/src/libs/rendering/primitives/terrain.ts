@@ -56,6 +56,7 @@ export const createHexTerrain = async (
   const origin = new UniformGroup({
     uOrigin: { value: new Float32Array([0, 0]), type: "vec2<f32>" },
   });
+  const weather = new UniformGroup({ uRain: { value: 0, type: "f32" } });
   const ambient = new UniformGroup({
     uAmbient: { value: new Float32Array([1, 1, 1]), type: "vec3<f32>" },
   });
@@ -108,6 +109,7 @@ export const createHexTerrain = async (
         resources: {
           ambient,
           origin,
+          weather,
           animation: game.animation,
           uNoise: noise.source,
           uRelief: relief.source,
@@ -194,6 +196,13 @@ export const createHexTerrain = async (
       for (const update of recolor) update(tints);
     },
     /** World offset of this terrain's local origin, so relief, seabeds and ice continue across sectors. */
+    /** Rain strength in [0, 1] for drop rings on open water; 0 keeps the surface dry. */
+    setRain: (strength: number) => {
+      const rain = Math.round(Math.max(0, Math.min(1, strength)) * 64) / 64;
+      if (weather.uniforms.uRain === rain) return;
+      weather.uniforms.uRain = rain;
+      weather.update();
+    },
     setOrigin: (x: number, y: number) => {
       const value = origin.uniforms.uOrigin;
       if (value[0] === x && value[1] === y) return;
@@ -326,7 +335,7 @@ vec3 seabed(vec2 ground, float depth, float frozen, vec3 tint, float still, floa
   float shallow = (1.0 - depth) * (1.0 - depth);
   return color + step(1.4, light) * shallow * (1.0 - frozen) * 0.06;
 }
-vec4 waterSurface(vec2 ground, float shore, float frozen, vec3 tint, float grain, float still, float time) {
+vec4 waterSurface(vec2 ground, float shore, float frozen, vec3 tint, float grain, float still, float time, float rain) {
   float edge = frozen + (heightField(ground * 3.1 + 211.0) - 0.5) * 0.9 - 0.5;
   if (edge > 0.0) {
     // Clear ice over deeper water lets the terraced bed show; wind packs snow along the shore.
@@ -349,16 +358,39 @@ vec4 waterSurface(vec2 ground, float shore, float frozen, vec3 tint, float grain
     float rim = step(edge, 0.05);
     return vec4(mix(ice, ICE_SNOW, rim), max(alpha, rim * 0.95));
   }
-  vec3 water = tint * (0.9 + grain * 0.2) + step(0.8, grain) * 0.035;
+  vec3 water = tint * (0.93 + grain * 0.14);
   float alpha = 0.32 + shore * 0.14;
   float swash = 0.08 + 0.035 * sin(time * 1.3 + heightField(ground * 2.0) * 12.0);
   float foam = step(shore, swash);
   water = mix(water, FOAM, foam * 0.55);
   alpha = mix(alpha, 0.7, foam);
-  float sparkle = hash2(floor(ground / 4.5)).x;
-  float glint = step(0.992, sparkle) * step(0.96, sin(time * 2.3 + sparkle * 917.0)) * shore;
-  water += glint * 0.25;
-  alpha = max(alpha, glint);
+  // Wave crests: a sparse scatter of one-pixel dashes, each on its own clock, that stretch,
+  // drift a pixel or two and fade, so the surface stays lively without pulsing in unison.
+  vec2 crestCell = floor(ground / vec2(24.0, 15.0));
+  vec2 crestSeed = hash2(crestCell);
+  float crestLife = fract(time / (2.6 + crestSeed.y * 3.4) + crestSeed.x);
+  float crestRise = sin(crestLife * 3.14159);
+  vec2 crestAt = ground - crestCell * vec2(24.0, 15.0) - vec2(3.0 + crestSeed.x * 15.0 + crestLife * 1.5, 3.0 + crestSeed.y * 9.0);
+  float crest = step(0.72, hash2(crestCell + 17.0).x) * step(0.0, crestAt.x) * step(crestAt.x, 1.5 + floor(crestRise * 2.0) * 1.5)
+    * step(0.0, crestAt.y) * step(crestAt.y, 1.4) * step(0.45, crestRise);
+  water = mix(water, FOAM, crest * (0.25 + shore * 0.2));
+  alpha = max(alpha, crest * 0.6);
+  // Rain lands as sparse rings that open from a splash pixel; uRain scales how many cells catch a drop.
+  if (rain > 0.01) {
+    vec2 dropCell = floor(ground / 21.0);
+    vec2 dropSeed = hash2(dropCell + 31.0);
+    float dropRate = 1.0 / (0.8 + dropSeed.y * 0.9);
+    float dropClock = time * dropRate + dropSeed.x * 9.0;
+    float dropLife = fract(dropClock);
+    vec2 spot = (dropCell + 0.3 + 0.4 * hash2(dropCell + floor(dropClock))) * 21.0;
+    float reach = length(ground - spot);
+    float falling = step(hash2(dropCell + floor(dropClock) + 5.0).x, rain * 0.35);
+    float ring = step(abs(reach - 0.75 - dropLife * 4.5), 0.75) * (1.0 - dropLife) * step(0.08, dropLife);
+    float splash = step(reach, 0.8) * step(dropLife, 0.1);
+    float drop = falling * max(ring * 0.32, splash * 0.5);
+    water = mix(water, FOAM, drop);
+    alpha = max(alpha, drop);
+  }
   // Open water darkens against the floe edge.
   water *= 1.0 - step(-0.12, edge) * step(0.01, frozen) * 0.15;
   return vec4(water, alpha);
@@ -372,7 +404,7 @@ precision mediump float;
 #endif
 varying vec2 vUV; varying vec4 vColor; varying float vKind; varying float vSlot; varying float vWave; varying vec2 vRelief; varying vec2 vGround; varying vec2 vLocal;
 uniform sampler2D uNoise; uniform sampler2D uRelief; uniform sampler2D uImage1; uniform sampler2D uImage2; uniform sampler2D uImage3; uniform sampler2D uImage4;
-uniform float uTime; uniform vec3 uAmbient;
+uniform float uTime; uniform float uRain; uniform vec3 uAmbient;
 ${displayColorShader}
 ${waterUVShader}
 ${terrainReliefShader}
@@ -394,7 +426,7 @@ void main() {
       float still = texture2D(uNoise, vec2(fract(vUV.x), 1.0 - fract(vUV.y))).r;
       if (vKind > 3.5) color = seabed(ground, vRelief.x, vRelief.y, color, still, uTime);
       else {
-        vec4 surface = waterSurface(ground, vRelief.x, vRelief.y, color, texture2D(uNoise, uv).r, still, uTime);
+        vec4 surface = waterSurface(ground, vRelief.x, vRelief.y, color, texture2D(uNoise, uv).r, still, uTime, uRain);
         color = surface.rgb;
         alpha = surface.a;
       }

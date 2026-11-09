@@ -62,7 +62,7 @@ const gameFixture = () => {
     const container = new Container();
     const dispose = () => { if (!container.destroyed) container.destroy({ children: true }); };
     scope.own(dispose);
-    return { container, dispose, isAnimated: false, setLighting: () => {}, setTints: () => {}, setOrigin: () => {}, setDepthBias: () => {} };
+    return { container, dispose, isAnimated: false, setLighting: () => {}, setTints: () => {}, setOrigin: () => {}, setDepthBias: () => {}, setRain: () => {} };
   });
   const event = (type: string, x: number, y: number) => {
     const pointer = new window.MouseEvent(type, { button: 0, clientX: x, clientY: y });
@@ -329,6 +329,28 @@ describe("travel scene ground depth", () => {
     depth.sortRenderLayerChildren();
     expect(depth.renderLayerChildren.indexOf(actor)).toBeGreaterThan(depth.renderLayerChildren.indexOf(building.sprite));
     expect(building.sprite).toMatchObject(placement);
+  });
+
+  it("keeps every member of a shore herd on land, pulling offsets in from the water", async () => {
+    const state = snapshotFixture(), entry = state.window[0]!;
+    entry.map = { ...entry.map, objects: [], tiles: Array.from({ length: 144 }, (_, index) => {
+      const x = index % 12, y = Math.floor(index / 12);
+      return { x, y, terrain: x >= 7 ? "ocean" : "ground", walkCost: 1, blocked: false, zone: "wilderness" as const, battleBiome: x >= 7 ? "ocean" as const : "ground" as const };
+    }) };
+    entry.structures = [];
+    state.terrains = new Map([["ocean", BUILTIN_TERRAINS_BY_KEY.get("ocean")!]]);
+    const deer = (member: number) => player({ userId: "deer", isNpc: true, npcPlacementId: "herd", npcCopy: 0, npcMember: member, npcInteractionType: "AMBIENT", longitude: 6, latitude: 5,
+      npcWander: { seed: "herd:shore", anchor: { x: 6, y: 5 }, radius: 0, wildOnly: true } });
+    state.users = [player(), ...Array.from({ length: 6 }, (_, member) => deer(member))];
+    const { scene, depth, advance } = await sceneFixture(state);
+    advance(); await settle(); advance();
+    const grid = scene.sectors.get(724)!.grid, anchor = grid.getHex({ col: 6, row: 5 })!;
+    const herd = depth.renderLayerChildren.filter((child) => child.label.startsWith("npc:herd"));
+    expect(herd).toHaveLength(6);
+    for (const member of herd) {
+      const under = grid.pointToHex({ x: anchor.x + anchor.center.x + member.x, y: anchor.y + anchor.center.y + member.y }, { allowOutside: false });
+      expect(under?.spec?.isWater).toBe(false);
+    }
   });
 
   it("interleaves the same moving actor with trees and buildings at their ground baselines", async () => {
