@@ -35,7 +35,8 @@ import { dungeonBattleState } from "../../setup/dungeon";
 
 // Keep the real page and query lifecycles, substituting only its WebGL scene.
 const loadingEvents: string[] = [];
-const scene = vi.spyOn(dynamic, "default").mockReturnValue((({
+const actualDynamic = dynamic.default;
+const CombatScene = (({
   battleState,
   arenaActions,
 }: {
@@ -53,7 +54,13 @@ const scene = vi.spyOn(dynamic, "default").mockReturnValue((({
       {arenaActions}
     </>
   );
-}) as never);
+}) as never;
+const scene = vi.spyOn(dynamic, "default").mockImplementation((loader, options) => {
+  if (typeof loader === "function" && loader.name === "loadCombat") {
+    return CombatScene;
+  }
+  return actualDynamic(loader, options);
+});
 const { default: CombatPage } = await import("@/app/[shell]/combat/page");
 const { default: BattleLog } = await import("@/app/[shell]/battlelog/[battleid]/page");
 scene.mockRestore();
