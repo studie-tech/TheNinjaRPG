@@ -31,7 +31,12 @@ describe("optional tab remembering", () => {
           current="Character"
           options={iconOptions}
           icons={Object.fromEntries(
-            iconOptions.map((option) => [option, <span aria-hidden="true">★</span>]),
+            iconOptions.map((option) => [
+              option,
+              <span key={option} aria-hidden="true">
+                ★
+              </span>,
+            ]),
           )}
           iconOnlyOptions={iconOptions}
           labelClassName={(option) =>
