@@ -1,9 +1,12 @@
 /**
  * Database access for badge; authorization and transaction scopes stay in callers.
  */
-import { eq } from "drizzle-orm";
-import { badge } from "@/drizzle/schema";
+import { asc, countDistinct, desc, eq, min } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import { actionLog, badge, userBadge, userData } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import type { ZodBadgeType } from "@/validators/badge";
 
 /** Load a badge definition by ID; no match yields undefined. */
 export const fetchBadge = async (client: DrizzleClient, id: string) => {
@@ -12,10 +15,43 @@ export const fetchBadge = async (client: DrizzleClient, id: string) => {
   });
 };
 
-import { asc } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
-import { actionLog, userBadge } from "@/drizzle/schema";
+/**
+ * List public holder fields once per user, using the earliest duplicate award.
+ * The profile join excludes orphan assignments; user IDs stabilize timestamp ties.
+ */
+export const listBadgeAchievers = (
+  client: Pick<DrizzleClient, "select">,
+  input: { badgeId: string; page: number; limit: number; order: "newest" | "oldest" },
+) => {
+  const achievedAt = min(userBadge.createdAt);
+  const orderByTime = input.order === "newest" ? desc : asc;
+  return client
+    .select({
+      userId: userData.userId,
+      username: userData.username,
+      avatar: userData.avatar,
+      level: userData.level,
+      achievedAt,
+    })
+    .from(userBadge)
+    .innerJoin(userData, eq(userData.userId, userBadge.userId))
+    .where(eq(userBadge.badgeId, input.badgeId))
+    .groupBy(userData.userId, userData.username, userData.avatar, userData.level)
+    .orderBy(orderByTime(achievedAt), asc(userData.userId))
+    .offset(input.page * input.limit)
+    .limit(input.limit);
+};
+
+/** Count the same distinct, existing profiles as the paginated holder query. */
+export const countBadgeAchievers = (
+  client: Pick<DrizzleClient, "select">,
+  badgeId: string,
+) =>
+  client
+    .select({ total: countDistinct(userBadge.userId) })
+    .from(userBadge)
+    .innerJoin(userData, eq(userData.userId, userBadge.userId))
+    .where(eq(userBadge.badgeId, badgeId));
 
 /** Build the `badge` listing for `getAllNames`. */
 export const listBadgeForGetAllNames = (client: Pick<DrizzleClient, "query">) =>
@@ -49,7 +85,7 @@ export const findBadgeForUpdate = (
 /** Build the `badge` update for `update`, using predicates on `id`. */
 export const updateBadgeForUpdate = (
   client: Pick<DrizzleClient, "update">,
-  input: { data: import("@/validators/badge").ZodBadgeType },
+  input: { data: ZodBadgeType },
   entry: { id: string },
 ) => client.update(badge).set(input.data).where(eq(badge.id, entry.id));
 

@@ -8,6 +8,7 @@ import {
 } from "@/libs/contentReview/outdate";
 import { callDiscordContent } from "@/libs/socials";
 import {
+  countBadgeAchievers,
   deleteBadgeForDelete,
   deleteUserBadgeForDelete,
   fetchBadge,
@@ -15,6 +16,7 @@ import {
   insertActionLogForDelete,
   insertActionLogForUpdate,
   insertBadgeForCreate,
+  listBadgeAchievers,
   listBadgeForGetAll,
   listBadgeForGetAllNames,
   updateBadgeForUpdate,
@@ -37,6 +39,28 @@ import { BadgeValidator } from "@/validators/badge";
 import { idSchema } from "@/validators/misc";
 
 export const badgeRouter = createTRPCRouter({
+  /** Public, read-only holder pages and totals; independent reads run concurrently. */
+  getAchievers: publicProcedure
+    .input(
+      z.object({
+        badgeId: z.string().min(1).max(191),
+        page: z.number().int().min(0).max(100_000).default(0),
+        limit: z.number().int().min(1).max(50).default(10),
+        order: z.enum(["newest", "oldest"]).default("newest"),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const [users, counts] = await Promise.all([
+        listBadgeAchievers(ctx.drizzle, input),
+        countBadgeAchievers(ctx.drizzle, input.badgeId),
+      ]);
+      const total = counts[0]?.total ?? 0;
+      return {
+        users,
+        total,
+        hasMore: (input.page + 1) * input.limit < total,
+      };
+    }),
   getAllNames: publicProcedure
     .meta({ mcp: { description: "Get all badge names and images" } })
     .query(async ({ ctx }) => {
