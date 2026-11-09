@@ -2022,6 +2022,7 @@ describe("schema-derived field visibility", () => {
     ["random", false, false],
     ["user_village", false, false],
     ["current_sector", false, false],
+    ["enemy_village", false, false],
   ] as const)(
     "shows location fields for the %s sector type",
     (sectorType, showsSector, showsSectorList) => {
