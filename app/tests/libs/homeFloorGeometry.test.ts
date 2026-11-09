@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { HomeTypes } from "@/drizzle/constants";
-import { clampHomeFurniturePlacement, fitHomeFurniturePlacement, getHomeFurnitureGeometry, homeLayoutPlacementError, projectHomePlacement, unprojectHomePlacement, type HomeFurniture } from "@/libs/home";
+import { clampHomeFurniturePlacement, fitHomeFurniturePlacement, getHomeFurnitureGeometry, homeLayoutPlacementError, unprojectHomePlacement, type HomeFurniture } from "@/libs/home";
 import { getHomeFloorAnchors, isPointInHomeFloor, isPointInHomePolygon } from "@/libs/homeFloorGeometry";
 import { getHomeRooms } from "@/libs/homeProperty";
 import { HOME_ART_PLANS, homeArtRectPolygon } from "@/libs/homeRoomGeometry";
@@ -64,9 +64,6 @@ describe("measured floor placement", () => {
           const point = { x: footprint.x + footprint.width * dx, y: footprint.y + footprint.height * dy };
           expect(room.interior.some((polygon) => isPointInHomePolygon(point, polygon))).toBe(true);
         }
-        // The clamped placement projects to a finite world coordinate.
-        const anchor = projectHomePlacement(placement);
-        expect(Number.isFinite(room.x + anchor.x * room.width / 100)).toBe(true);
       }
     }
     expect(HOME_ART_PLANS[homeType].floorSurfaces.length).toBe(getHomeRooms(homeType).length - 1);

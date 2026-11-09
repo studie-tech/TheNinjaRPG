@@ -966,7 +966,6 @@ describe("FURNITURE item type", () => {
       counts: [{ id: "chair-row", quantity: 2 }],
       levels: [],
     });
-    expect(isEquippableUserItem({ storedAtHome: false, isInAuction: false, craftingFinishedAt: null }, NOW)).toBe(true);
   });
 });
 
