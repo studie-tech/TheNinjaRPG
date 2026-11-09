@@ -58,12 +58,25 @@ import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import type { GuideFaqItem } from "@/validators/guide";
 import type { FurnitureData, FurnitureVariantData } from "@/validators/itemFurniture";
 import type { HomeRoomStyle } from "@/validators/home";
-import type { ObjectiveWarState, WarRules, WarMissionAttempt, WarSettlement } from "@/validators/war";
-import type { DungeonContent, DungeonRunState, DungeonRewardReceipt } from "@/validators/dungeon";
+import type {
+  ObjectiveWarState,
+  WarRules,
+  WarMissionAttempt,
+  WarSettlement,
+} from "@/validators/war";
+import type {
+  DungeonContent,
+  DungeonRunState,
+  DungeonRewardReceipt,
+} from "@/validators/dungeon";
 import type { PetTask } from "@/validators/petTasks";
 import type { ZodPetSpeciesEffect } from "@/validators/petSpecies";
 
-import type { HuntingHabitatContent, HuntingReceipt, HuntingSessionContent } from "@/validators/hunting";
+import type {
+  HuntingHabitatContent,
+  HuntingReceipt,
+  HuntingSessionContent,
+} from "@/validators/hunting";
 
 /** Per-category jutsu caps; NULL means unlimited in that mode. */
 export const jutsuEquipLimit = mysqlTable("JutsuEquipLimit", {
@@ -85,39 +98,51 @@ export const huntingHabitat = mysqlTable("HuntingHabitat", {
   updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).notNull(),
 });
 /** Personal location, preparation timer and accepted terms, independent of contract allowances. */
-export const huntingSession = mysqlTable("HuntingSession", {
-  userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
-  id: varchar("id", { length: 191 }).notNull(),
-  habitatId: varchar("habitatId", { length: 191 }).notNull(),
-  contractId: varchar("contractId", { length: 191 }).notNull(),
-  // NULL permits finishing legacy sessions without recoverable accepted terms.
-  content: json("content").$type<HuntingSessionContent>(),
-  sector: smallint("sector").notNull(),
-  readyAt: datetime("readyAt", { mode: "date", fsp: 3 }),
-  battleId: varchar("battleId", { length: 191 }),
-  version: int("version").default(0).notNull(),
-  startedAt: datetime("startedAt", { mode: "date", fsp: 3 }).notNull(),
-  lastResult: json("lastResult").$type<HuntingReceipt>(),
-}, (t) => ({ habitat: index("HuntingSession_habitat_idx").on(t.habitatId) }));
+export const huntingSession = mysqlTable(
+  "HuntingSession",
+  {
+    userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
+    id: varchar("id", { length: 191 }).notNull(),
+    habitatId: varchar("habitatId", { length: 191 }).notNull(),
+    contractId: varchar("contractId", { length: 191 }).notNull(),
+    // NULL permits finishing legacy sessions without recoverable accepted terms.
+    content: json("content").$type<HuntingSessionContent>(),
+    sector: smallint("sector").notNull(),
+    readyAt: datetime("readyAt", { mode: "date", fsp: 3 }),
+    battleId: varchar("battleId", { length: 191 }),
+    version: int("version").default(0).notNull(),
+    startedAt: datetime("startedAt", { mode: "date", fsp: 3 }).notNull(),
+    lastResult: json("lastResult").$type<HuntingReceipt>(),
+  },
+  (t) => ({ habitat: index("HuntingSession_habitat_idx").on(t.habitatId) }),
+);
 /** Partial allowances survive finishing, changing contracts and changing occupations. */
-export const huntingProgress = mysqlTable("HuntingProgress", {
-  userId: varchar("userId", { length: 191 }).notNull(),
-  contractId: varchar("contractId", { length: 191 }).notNull(),
-  used: int("used").default(0).notNull(),
-  cooldownUntil: datetime("cooldownUntil", { mode: "date", fsp: 3 }),
-  version: int("version").default(0).notNull(),
-}, (t) => ({
-  pk: primaryKey({ columns: [t.userId, t.contractId] }),
-  contract: index("HuntingProgress_contract_idx").on(t.contractId),
-}));
+export const huntingProgress = mysqlTable(
+  "HuntingProgress",
+  {
+    userId: varchar("userId", { length: 191 }).notNull(),
+    contractId: varchar("contractId", { length: 191 }).notNull(),
+    used: int("used").default(0).notNull(),
+    cooldownUntil: datetime("cooldownUntil", { mode: "date", fsp: 3 }),
+    version: int("version").default(0).notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.contractId] }),
+    contract: index("HuntingProgress_contract_idx").on(t.contractId),
+  }),
+);
 /** Battle-keyed receipts commit with allowance consumption and material delivery. */
-export const huntingReceipt = mysqlTable("HuntingReceipt", {
-  battleId: varchar("battleId", { length: 191 }).primaryKey().notNull(),
-  userId: varchar("userId", { length: 191 }).notNull(),
-  contractId: varchar("contractId", { length: 191 }).notNull(),
-  result: json("result").$type<HuntingReceipt>().notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull(),
-}, (t) => ({ user: index("HuntingReceipt_user_idx").on(t.userId) }));
+export const huntingReceipt = mysqlTable(
+  "HuntingReceipt",
+  {
+    battleId: varchar("battleId", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    contractId: varchar("contractId", { length: 191 }).notNull(),
+    result: json("result").$type<HuntingReceipt>().notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (t) => ({ user: index("HuntingReceipt_user_idx").on(t.userId) }),
+);
 
 /** Staff-authored definitions; each lobby captures its own immutable content snapshot. */
 export const dungeon = mysqlTable("Dungeon", {
@@ -126,30 +151,46 @@ export const dungeon = mysqlTable("Dungeon", {
   updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).notNull(),
 });
 /** Shared party progress guarded by version CAS; battleId ties settlement to the active floor. */
-export const dungeonRun = mysqlTable("DungeonRun", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  dungeonId: varchar("dungeonId", { length: 191 }).notNull(),
-  leaderId: varchar("leaderId", { length: 191 }).notNull(),
-  content: json("content").$type<DungeonContent>().notNull(),
-  state: json("state").$type<DungeonRunState>().notNull(),
-  status: mysqlEnum("status", ["LOBBY", "STARTING", "FIGHTING", "BETWEEN", "PAUSED", "COMPLETED", "ENDED"]).notNull(),
-  version: int("version").default(0).notNull(),
-  battleId: varchar("battleId", { length: 191 }),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull(),
-  expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }),
-}, (table) => ({ status: index("DungeonRun_status_idx").on(table.status) }));
+export const dungeonRun = mysqlTable(
+  "DungeonRun",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    dungeonId: varchar("dungeonId", { length: 191 }).notNull(),
+    leaderId: varchar("leaderId", { length: 191 }).notNull(),
+    content: json("content").$type<DungeonContent>().notNull(),
+    state: json("state").$type<DungeonRunState>().notNull(),
+    status: mysqlEnum("status", [
+      "LOBBY",
+      "STARTING",
+      "FIGHTING",
+      "BETWEEN",
+      "PAUSED",
+      "COMPLETED",
+      "ENDED",
+    ]).notNull(),
+    version: int("version").default(0).notNull(),
+    battleId: varchar("battleId", { length: 191 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).notNull(),
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }),
+  },
+  (table) => ({ status: index("DungeonRun_status_idx").on(table.status) }),
+);
 /** Exclusive active-party reservations and durable, per-member completion receipts. */
-export const dungeonMember = mysqlTable("DungeonMember", {
-  runId: varchar("runId", { length: 191 }).notNull(),
-  userId: varchar("userId", { length: 191 }).notNull(),
-  // NULL releases the player for another run while retaining their completion receipt.
-  activeUserId: varchar("activeUserId", { length: 191 }),
-  reward: json("reward").$type<DungeonRewardReceipt>(),
-}, (table) => ({
-  pk: primaryKey({columns: [table.runId, table.userId]}),
-  active: uniqueIndex("DungeonMember_active_idx").on(table.activeUserId),
-  user: index("DungeonMember_user_idx").on(table.userId),
-}));
+export const dungeonMember = mysqlTable(
+  "DungeonMember",
+  {
+    runId: varchar("runId", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    // NULL releases the player for another run while retaining their completion receipt.
+    activeUserId: varchar("activeUserId", { length: 191 }),
+    reward: json("reward").$type<DungeonRewardReceipt>(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.runId, table.userId] }),
+    active: uniqueIndex("DungeonMember_active_idx").on(table.activeUserId),
+    user: index("DungeonMember_user_idx").on(table.userId),
+  }),
+);
 /** Persisted run snapshot used by versioned transitions, start recovery and expiration. */
 export type DungeonRun = InferSelectModel<typeof dungeonRun>;
 
@@ -165,7 +206,10 @@ export const vector = customType<{
   fromDriver(value) {
     // mysql2 decodes VECTOR into floats; PlanetScale returns binary bytes.
     if (Array.isArray(value)) return new Float32Array(value).buffer;
-    return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
+    return value.buffer.slice(
+      value.byteOffset,
+      value.byteOffset + value.byteLength,
+    ) as ArrayBuffer;
   },
   toDriver(value) {
     return Buffer.from(value);
@@ -215,25 +259,37 @@ export const spriteAnimation = mysqlTable("SpriteAnimation", {
   frameCount: smallint("frameCount").notNull(),
   fps: float("fps").notNull(),
   facing: mysqlEnum("facing", consts.AvatarFacings).notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
   createdByUserId: varchar("createdByUserId", { length: 191 }).notNull(),
 });
 /** Stored library entry, including staff attribution and rendering metadata. */
 export type SpriteAnimation = InferSelectModel<typeof spriteAnimation>;
 
 /** One replaceable override per AI/action; clearing it leaves the shared sheet intact. */
-export const aiSpriteAnimation = mysqlTable("AiSpriteAnimation", {
-  userId: varchar("userId", { length: 191 }).notNull(),
-  actionKey: varchar("actionKey", { length: 191 }).notNull(),
-  animationId: varchar("animationId", { length: 191 }).notNull(),
-}, (table) => ({
-  pk: primaryKey({ columns: [table.userId, table.actionKey] }),
-  animation: index("AiSpriteAnimation_animation_idx").on(table.animationId),
-}));
+export const aiSpriteAnimation = mysqlTable(
+  "AiSpriteAnimation",
+  {
+    userId: varchar("userId", { length: 191 }).notNull(),
+    actionKey: varchar("actionKey", { length: 191 }).notNull(),
+    animationId: varchar("animationId", { length: 191 }).notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.userId, table.actionKey] }),
+    animation: index("AiSpriteAnimation_animation_idx").on(table.animationId),
+  }),
+);
 /** Resolve shared sheets at battle initiation rather than fetching them during actions. */
 export const aiSpriteAnimationRelations = relations(aiSpriteAnimation, ({ one }) => ({
-  user: one(userData, { fields: [aiSpriteAnimation.userId], references: [userData.userId] }),
-  animation: one(spriteAnimation, { fields: [aiSpriteAnimation.animationId], references: [spriteAnimation.id] }),
+  user: one(userData, {
+    fields: [aiSpriteAnimation.userId],
+    references: [userData.userId],
+  }),
+  animation: one(spriteAnimation, {
+    fields: [aiSpriteAnimation.animationId],
+    references: [spriteAnimation.id],
+  }),
 }));
 
 /** When this AI falls it rises again as `nextAiId`; the rest stages that arrival. */
@@ -255,42 +311,57 @@ export const aiTransformation = mysqlTable(
 export type AiTransformation = InferSelectModel<typeof aiTransformation>;
 
 /** Staff requests to gameasset.dev; a reviewed result becomes one `SpriteAnimation`. */
-export const spriteGeneration = mysqlTable("SpriteGeneration", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  name: varchar("name", { length: 191 }).notNull(),
-  prompt: varchar("prompt", { length: 2000 }).notNull(),
-  motion: mysqlEnum("motion", consts.SpriteGenerationMotions).notNull(),
-  frames: smallint("frames").notNull(),
-  facing: mysqlEnum("facing", consts.AvatarFacings).notNull(),
-  sourceUrl: varchar("sourceUrl", { length: 2048 }).notNull(),
-  remoteImageId: varchar("remoteImageId", { length: 191 }).notNull(),
-  remoteAssetId: varchar("remoteAssetId", { length: 191 }).notNull(),
-  /** Set together when the sprite is meant for one AI action. */
-  aiUserId: varchar("aiUserId", { length: 191 }),
-  actionKey: varchar("actionKey", { length: 191 }),
-  status: mysqlEnum("status", consts.SpriteGenerationStatuses).default("QUEUED").notNull(),
-  stage: varchar("stage", { length: 191 }),
-  error: varchar("error", { length: 500 }),
-  /** Finished sheets on our own CDN, stored at the same sizes as `SpriteAnimation`. */
-  url: varchar("url", { length: 2048 }),
-  smallUrl: varchar("smallUrl", { length: 2048 }),
-  columns: smallint("columns"),
-  rows: smallint("rows"),
-  frameCount: smallint("frameCount"),
-  fps: float("fps"),
-  animationId: varchar("animationId", { length: 191 }),
-  createdByUserId: varchar("createdByUserId", { length: 191 }).notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-}, (table) => ({
-  remoteAsset: uniqueIndex("SpriteGeneration_remoteAssetId_key").on(table.remoteAssetId),
-  status: index("SpriteGeneration_status_idx").on(table.status),
-  createdAt: index("SpriteGeneration_createdAt_idx").on(table.createdAt),
-}));
+export const spriteGeneration = mysqlTable(
+  "SpriteGeneration",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    prompt: varchar("prompt", { length: 2000 }).notNull(),
+    motion: mysqlEnum("motion", consts.SpriteGenerationMotions).notNull(),
+    frames: smallint("frames").notNull(),
+    facing: mysqlEnum("facing", consts.AvatarFacings).notNull(),
+    sourceUrl: varchar("sourceUrl", { length: 2048 }).notNull(),
+    remoteImageId: varchar("remoteImageId", { length: 191 }).notNull(),
+    remoteAssetId: varchar("remoteAssetId", { length: 191 }).notNull(),
+    /** Set together when the sprite is meant for one AI action. */
+    aiUserId: varchar("aiUserId", { length: 191 }),
+    actionKey: varchar("actionKey", { length: 191 }),
+    status: mysqlEnum("status", consts.SpriteGenerationStatuses)
+      .default("QUEUED")
+      .notNull(),
+    stage: varchar("stage", { length: 191 }),
+    error: varchar("error", { length: 500 }),
+    /** Finished sheets on our own CDN, stored at the same sizes as `SpriteAnimation`. */
+    url: varchar("url", { length: 2048 }),
+    smallUrl: varchar("smallUrl", { length: 2048 }),
+    columns: smallint("columns"),
+    rows: smallint("rows"),
+    frameCount: smallint("frameCount"),
+    fps: float("fps"),
+    animationId: varchar("animationId", { length: 191 }),
+    createdByUserId: varchar("createdByUserId", { length: 191 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    remoteAsset: uniqueIndex("SpriteGeneration_remoteAssetId_key").on(
+      table.remoteAssetId,
+    ),
+    status: index("SpriteGeneration_status_idx").on(table.status),
+    createdAt: index("SpriteGeneration_createdAt_idx").on(table.createdAt),
+  }),
+);
 /** Stored sprite request, including its review state and remote identifiers. */
 export type SpriteGeneration = InferSelectModel<typeof spriteGeneration>;
 export const spriteGenerationRelations = relations(spriteGeneration, ({ one }) => ({
-  createdBy: one(userData, { fields: [spriteGeneration.createdByUserId], references: [userData.userId] }),
+  createdBy: one(userData, {
+    fields: [spriteGeneration.createdByUserId],
+    references: [userData.userId],
+  }),
 }));
 
 export const gameAssetTag = mysqlTable(
@@ -380,7 +451,10 @@ export const overworldAiPlacement = mysqlTable(
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
     aiTemplateUserId: varchar("aiTemplateUserId", { length: 191 }).notNull(),
-    interactionType: mysqlEnum("interactionType", consts.OverworldInteractionTypes).notNull(),
+    interactionType: mysqlEnum(
+      "interactionType",
+      consts.OverworldInteractionTypes,
+    ).notNull(),
     isActive: boolean("isActive").default(true).notNull(),
     sectorType: mysqlEnum("sectorType", consts.OverworldSectorTypes)
       .default("specific")
@@ -443,7 +517,9 @@ export const overworldAiPlacementQuest = mysqlTable(
     };
   },
 );
-export type OverworldAiPlacementQuest = InferSelectModel<typeof overworldAiPlacementQuest>;
+export type OverworldAiPlacementQuest = InferSelectModel<
+  typeof overworldAiPlacementQuest
+>;
 
 export const overworldAiPlacementRelations = relations(
   overworldAiPlacement,
@@ -585,11 +661,9 @@ export const battleAction = mysqlTable(
       ),
       createdAtIdx: index("BattleAction_createdAt_idx").on(table.createdAt),
       battleIdIdx: index("BattleAction_battleId_idx").on(table.battleId),
-      battleIdRoundVersionIdx: index("BattleAction_battleId_battleRound_battleVersion_idx").on(
-        table.battleId,
-        table.battleRound,
-        table.battleVersion,
-      ),
+      battleIdRoundVersionIdx: index(
+        "BattleAction_battleId_battleRound_battleVersion_idx",
+      ).on(table.battleId, table.battleRound, table.battleVersion),
       updatedAtBattleIdIdx: index("BattleAction_updatedAt_battleId_idx").on(
         table.updatedAt,
         table.battleId,
@@ -829,7 +903,9 @@ export const skillTree = mysqlTable(
     tier: tinyint("tier").default(1).notNull(),
     requiredSkillIds: json("requiredSkillIds").$type<string[]>().default([]).notNull(),
     costSkillPoints: int("costSkillPoints").default(1).notNull(),
-    pathType: mysqlEnum("pathType", consts.SkillTreePathTypes).default("SKILL").notNull(),
+    pathType: mysqlEnum("pathType", consts.SkillTreePathTypes)
+      .default("SKILL")
+      .notNull(),
     bloodlineId: varchar("bloodlineId", { length: 191 }),
     seichiSilverCost: int("seichiSilverCost").default(0).notNull(),
     hidden: boolean("hidden").default(false).notNull(),
@@ -859,7 +935,10 @@ export type SkillTree = InferSelectModel<typeof skillTree>;
 
 export const skillTreeRelations = relations(skillTree, ({ one, many }) => ({
   userSkills: many(userSkill),
-  bloodline: one(bloodline, { fields: [skillTree.bloodlineId], references: [bloodline.id] }),
+  bloodline: one(bloodline, {
+    fields: [skillTree.bloodlineId],
+    references: [bloodline.id],
+  }),
   folder: one(skillTreeFolder, {
     fields: [skillTree.folderId],
     references: [skillTreeFolder.id],
@@ -919,7 +998,9 @@ export const bloodlineRolls = mysqlTable(
     goal: mysqlEnum("rank", consts.LetterRanks),
     // Stored generated column: userId when type is NATURAL, NULL otherwise.
     // MySQL allows multiple NULLs in UNIQUE indexes, so ITEM/PITY rows are unaffected.
-    naturalRollDedupeKey: varchar("naturalRollDedupeKey", { length: 191 }).generatedAlwaysAs(
+    naturalRollDedupeKey: varchar("naturalRollDedupeKey", {
+      length: 191,
+    }).generatedAlwaysAs(
       sql`CASE WHEN \`type\` = 'NATURAL' THEN \`userId\` ELSE NULL END`,
       { mode: "stored" },
     ),
@@ -928,9 +1009,9 @@ export const bloodlineRolls = mysqlTable(
     return {
       userIdKey: index("BloodlineRolls_userId_idx").on(table.userId),
       bloodlineIdIdx: index("BloodlineRolls_bloodlineId_idx").on(table.bloodlineId),
-      naturalRollPerUserKey: uniqueIndex(
-        "BloodlineRolls_natural_roll_per_user_key",
-      ).on(table.naturalRollDedupeKey),
+      naturalRollPerUserKey: uniqueIndex("BloodlineRolls_natural_roll_per_user_key").on(
+        table.naturalRollDedupeKey,
+      ),
     };
   },
 );
@@ -1080,7 +1161,10 @@ export const clan = mysqlTable(
     craftingTimeBoost: double("craftingTimeBoost").default(0).notNull(),
     craftingExpBoost: double("craftingExpBoost").default(0).notNull(),
     hunterExpBoost: double("hunterExpBoost").default(0).notNull(),
-    territoryWarBoostUntil: datetime("territoryWarBoostUntil", { mode: "date", fsp: 3 }),
+    territoryWarBoostUntil: datetime("territoryWarBoostUntil", {
+      mode: "date",
+      fsp: 3,
+    }),
     gathererExpBoost: double("gathererExpBoost").default(0).notNull(),
     elderNomineeId: varchar("elderNomineeId", { length: 191 }),
     elderCutoffMonth: tinyint("elderCutoffMonth"),
@@ -1157,7 +1241,9 @@ export const mpvpBattleQueue = mysqlTable(
       battleIdIdx: index("MpvpBattleQueue_battleId_idx").on(table.battleId),
       winnerIdIdx: index("MpvpBattleQueue_winnerId_idx").on(table.winnerId),
       battleTypeIdx: index("MpvpBattleQueue_battleType_idx").on(table.battleType),
-      territoryWarIdx: index("MpvpBattleQueue_territoryWar_idx").on(table.territoryWarId),
+      territoryWarIdx: index("MpvpBattleQueue_territoryWar_idx").on(
+        table.territoryWarId,
+      ),
       sectorIdx: index("MpvpBattleQueue_sector_idx").on(table.sector),
       attackerEntityIdIdx: index("MpvpBattleQueue_attackerEntityId_idx").on(
         table.attackerEntityId,
@@ -1254,12 +1340,22 @@ export const tournament = mysqlTable(
 );
 
 // A receipt and its quest-style grants commit in one transaction.
-export const tournamentRewardClaim = mysqlTable("TournamentRewardClaim", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  tournamentId: varchar("tournamentId", { length: 191 }).notNull(),
-  userId: varchar("userId", { length: 191 }).notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-}, (table) => ({ tournamentIdx: index("TournamentRewardClaim_tournamentId_idx").on(table.tournamentId) }));
+export const tournamentRewardClaim = mysqlTable(
+  "TournamentRewardClaim",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    tournamentId: varchar("tournamentId", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    tournamentIdx: index("TournamentRewardClaim_tournamentId_idx").on(
+      table.tournamentId,
+    ),
+  }),
+);
 
 export const tournamentRelations = relations(tournament, ({ many }) => ({
   matches: many(tournamentMatch),
@@ -1476,146 +1572,254 @@ export const forumSection = mysqlTable("ForumSection", {
   policy: json("policy").$type<ForumPolicy>().default({}).notNull(),
 });
 /** A stable hierarchy node with inherited policy overrides and cached visible-topic/post totals. */
-export const forumBoard = mysqlTable("ForumBoard", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  name: varchar("name", { length: 191 }).notNull(),
-  summary: text("summary").notNull(),
-  sectionId: varchar("sectionId", { length: 191 }).notNull(),
-  parentId: varchar("parentId", { length: 191 }),
-  position: int("position").default(0).notNull(),
-  archived: boolean("archived").default(false).notNull(),
-  rules: text("rules").default("").notNull(),
-  policy: json("policy").$type<ForumPolicy>().default({}).notNull(),
-  slowModeSeconds: int("slowModeSeconds").default(0).notNull(),
-  requireApproval: boolean("requireApproval").default(false).notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-  nPosts: int("nPosts").default(0).notNull(),
-  nThreads: int("nThreads").default(0).notNull(),
-}, (t) => ({ nameKey: uniqueIndex("ForumBoard_name_key").on(t.name), sectionIdx: index("ForumBoard_sectionId_idx").on(t.sectionId) }));
-export const forumBoardRelations = relations(forumBoard, ({ one }) => ({ section: one(forumSection, { fields: [forumBoard.sectionId], references: [forumSection.id] }) }));
+export const forumBoard = mysqlTable(
+  "ForumBoard",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    summary: text("summary").notNull(),
+    sectionId: varchar("sectionId", { length: 191 }).notNull(),
+    parentId: varchar("parentId", { length: 191 }),
+    position: int("position").default(0).notNull(),
+    archived: boolean("archived").default(false).notNull(),
+    rules: text("rules").default("").notNull(),
+    policy: json("policy").$type<ForumPolicy>().default({}).notNull(),
+    slowModeSeconds: int("slowModeSeconds").default(0).notNull(),
+    requireApproval: boolean("requireApproval").default(false).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    nPosts: int("nPosts").default(0).notNull(),
+    nThreads: int("nThreads").default(0).notNull(),
+  },
+  (t) => ({
+    nameKey: uniqueIndex("ForumBoard_name_key").on(t.name),
+    sectionIdx: index("ForumBoard_sectionId_idx").on(t.sectionId),
+  }),
+);
+export const forumBoardRelations = relations(forumBoard, ({ one }) => ({
+  section: one(forumSection, {
+    fields: [forumBoard.sectionId],
+    references: [forumSection.id],
+  }),
+}));
 
 /** Keep authorship and moderation state separate from displayed identity; removal preserves recoverable content. */
-export const forumPost = mysqlTable("ForumPost", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  content: text("content").notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-  editedAt: datetime("editedAt", { mode: "date", fsp: 3 }),
-  deletedAt: datetime("deletedAt", { mode: "date", fsp: 3 }),
-  removedBy: varchar("removedBy", { length: 191 }),
-  removalReason: text("removalReason"),
-  isLocked: boolean("isLocked").default(false).notNull(),
-  isApproved: boolean("isApproved").default(true).notNull(),
-  /** Retain original opening identity while approval and visibility are deferred. */
-  publicationIntent: json("publicationIntent").$type<{ threadId: string; opening: boolean }>(),
-  userId: varchar("userId", { length: 191 }).notNull(),
-  threadId: varchar("threadId", { length: 191 }).notNull(),
-  authorId: varchar("authorId", { length: 191 }).notNull(),
-  isReported: boolean("isReported").default(false).notNull(),
-}, (t) => ({ userIdIdx: index("ForumPost_userId_idx").on(t.userId), threadIdIdx: index("ForumPost_threadId_idx").on(t.threadId, t.createdAt, t.id) }));
+export const forumPost = mysqlTable(
+  "ForumPost",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    content: text("content").notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    editedAt: datetime("editedAt", { mode: "date", fsp: 3 }),
+    deletedAt: datetime("deletedAt", { mode: "date", fsp: 3 }),
+    removedBy: varchar("removedBy", { length: 191 }),
+    removalReason: text("removalReason"),
+    isLocked: boolean("isLocked").default(false).notNull(),
+    isApproved: boolean("isApproved").default(true).notNull(),
+    /** Retain original opening identity while approval and visibility are deferred. */
+    publicationIntent: json("publicationIntent").$type<{
+      threadId: string;
+      opening: boolean;
+    }>(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    threadId: varchar("threadId", { length: 191 }).notNull(),
+    authorId: varchar("authorId", { length: 191 }).notNull(),
+    isReported: boolean("isReported").default(false).notNull(),
+  },
+  (t) => ({
+    userIdIdx: index("ForumPost_userId_idx").on(t.userId),
+    threadIdIdx: index("ForumPost_threadId_idx").on(t.threadId, t.createdAt, t.id),
+  }),
+);
 export const forumPostRelations = relations(forumPost, ({ one, many }) => ({
   user: one(userData, { fields: [forumPost.userId], references: [userData.userId] }),
-  thread: one(forumThread, { fields: [forumPost.threadId], references: [forumThread.id] }),
+  thread: one(forumThread, {
+    fields: [forumPost.threadId],
+    references: [forumThread.id],
+  }),
   reactions: many(forumReaction),
 }));
 /** Store topic metadata and activity derived from visible posts; metadata edits do not advance activity. */
-export const forumThread = mysqlTable("ForumThread", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  title: varchar("title", { length: 191 }).notNull(),
-  image: varchar("image", { length: 512 }),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-  deletedAt: datetime("deletedAt", { mode: "date", fsp: 3 }),
-  boardId: varchar("boardId", { length: 191 }).notNull(),
-  userId: varchar("userId", { length: 191 }).notNull(),
-  nPosts: int("nPosts").default(0).notNull(),
-  isPinned: boolean("isPinned").default(false).notNull(),
-  isLocked: boolean("isLocked").default(false).notNull(),
-  isApproved: boolean("isApproved").default(true).notNull(),
-  kind: mysqlEnum("kind", ["DISCUSSION", "QUESTION", "ANNOUNCEMENT"]).default("DISCUSSION").notNull(),
-  tags: json("tags").$type<string[]>().default([]).notNull(),
-  acceptedPostId: varchar("acceptedPostId", { length: 191 }),
-  lastPostId: varchar("lastPostId", { length: 191 }),
-  pollId: varchar("pollId", { length: 191 }),
-  summary: text("summary"),
-  summaryUpdatedAt: datetime("summaryUpdatedAt", { mode: "date", fsp: 3 }),
-}, (t) => ({ boardIdIdx: index("ForumThread_boardId_idx").on(t.boardId, t.updatedAt, t.id), userIdIdx: index("ForumThread_userId_idx").on(t.userId) }));
+export const forumThread = mysqlTable(
+  "ForumThread",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    title: varchar("title", { length: 191 }).notNull(),
+    image: varchar("image", { length: 512 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    deletedAt: datetime("deletedAt", { mode: "date", fsp: 3 }),
+    boardId: varchar("boardId", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    nPosts: int("nPosts").default(0).notNull(),
+    isPinned: boolean("isPinned").default(false).notNull(),
+    isLocked: boolean("isLocked").default(false).notNull(),
+    isApproved: boolean("isApproved").default(true).notNull(),
+    kind: mysqlEnum("kind", ["DISCUSSION", "QUESTION", "ANNOUNCEMENT"])
+      .default("DISCUSSION")
+      .notNull(),
+    tags: json("tags").$type<string[]>().default([]).notNull(),
+    acceptedPostId: varchar("acceptedPostId", { length: 191 }),
+    lastPostId: varchar("lastPostId", { length: 191 }),
+    pollId: varchar("pollId", { length: 191 }),
+    summary: text("summary"),
+    summaryUpdatedAt: datetime("summaryUpdatedAt", { mode: "date", fsp: 3 }),
+  },
+  (t) => ({
+    boardIdIdx: index("ForumThread_boardId_idx").on(t.boardId, t.updatedAt, t.id),
+    userIdIdx: index("ForumThread_userId_idx").on(t.userId),
+  }),
+);
 export const forumThreadRelations = relations(forumThread, ({ one, many }) => ({
   user: one(userData, { fields: [forumThread.userId], references: [userData.userId] }),
-  board: one(forumBoard, { fields: [forumThread.boardId], references: [forumBoard.id] }),
+  board: one(forumBoard, {
+    fields: [forumThread.boardId],
+    references: [forumBoard.id],
+  }),
   posts: many(forumPost),
   readPositions: many(forumRead),
 }));
 /** One grant/deny set per account and scope; global recovery and purge are evaluated separately. */
-export const forumGrant = mysqlTable("ForumGrant", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  userId: varchar("userId", { length: 191 }).notNull(),
-  scope: mysqlEnum("scope", ["GLOBAL", "SECTION", "BOARD"]).notNull(),
-  scopeId: varchar("scopeId", { length: 191 }).notNull(),
-  permissions: json("permissions").$type<ForumCapability[]>().notNull(),
-  denies: json("denies").$type<ForumCapability[]>().notNull(),
-}, t => ({ userScopeKey: uniqueIndex("ForumGrant_user_scope_key").on(t.userId, t.scope, t.scopeId) }));
+export const forumGrant = mysqlTable(
+  "ForumGrant",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    scope: mysqlEnum("scope", ["GLOBAL", "SECTION", "BOARD"]).notNull(),
+    scopeId: varchar("scopeId", { length: 191 }).notNull(),
+    permissions: json("permissions").$type<ForumCapability[]>().notNull(),
+    denies: json("denies").$type<ForumCapability[]>().notNull(),
+  },
+  (t) => ({
+    userScopeKey: uniqueIndex("ForumGrant_user_scope_key").on(
+      t.userId,
+      t.scope,
+      t.scopeId,
+    ),
+  }),
+);
 /** Forum-only posting restriction; a null board applies globally without banning the game account. */
-export const forumRestriction = mysqlTable("ForumRestriction", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  userId: varchar("userId", { length: 191 }).notNull(),
-  boardId: varchar("boardId", { length: 191 }),
-  reason: text("reason").notNull(),
-  expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
-}, t => ({ userIdx: index("ForumRestriction_userId_idx").on(t.userId) }));
+export const forumRestriction = mysqlTable(
+  "ForumRestriction",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    boardId: varchar("boardId", { length: 191 }),
+    reason: text("reason").notNull(),
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (t) => ({ userIdx: index("ForumRestriction_userId_idx").on(t.userId) }),
+);
 /** Account-owned resume cursor ordered by post creation time and stable ID, not the visit timestamp. */
-export const forumRead = mysqlTable("ForumRead", {
-  userId: varchar("userId", { length: 191 }).notNull(),
-  threadId: varchar("threadId", { length: 191 }).notNull(),
-  readAt: datetime("readAt", { mode: "date", fsp: 3 }).notNull(),
-  postId: varchar("postId", { length: 191 }).notNull(),
-}, t => ({ pk: primaryKey({ columns: [t.userId, t.threadId] }), threadReadIdx: index("ForumRead_thread_read_idx").on(t.threadId, t.readAt) }));
+export const forumRead = mysqlTable(
+  "ForumRead",
+  {
+    userId: varchar("userId", { length: 191 }).notNull(),
+    threadId: varchar("threadId", { length: 191 }).notNull(),
+    readAt: datetime("readAt", { mode: "date", fsp: 3 }).notNull(),
+    postId: varchar("postId", { length: 191 }).notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.threadId] }),
+    threadReadIdx: index("ForumRead_thread_read_idx").on(t.threadId, t.readAt),
+  }),
+);
 export const forumReadRelations = relations(forumRead, ({ one }) => ({
-  thread: one(forumThread, { fields: [forumRead.threadId], references: [forumThread.id] }),
+  thread: one(forumThread, {
+    fields: [forumRead.threadId],
+    references: [forumThread.id],
+  }),
 }));
 /** Account-owned board/topic subscription; push delivery is an optional preference. */
-export const forumWatch = mysqlTable("ForumWatch", {
-  userId: varchar("userId", { length: 191 }).notNull(),
-  scope: mysqlEnum("scope", ["BOARD", "THREAD"]).notNull(),
-  scopeId: varchar("scopeId", { length: 191 }).notNull(),
-  push: boolean("push").default(false).notNull(),
-}, t => ({ pk: primaryKey({ columns: [t.userId, t.scope, t.scopeId] }) }));
+export const forumWatch = mysqlTable(
+  "ForumWatch",
+  {
+    userId: varchar("userId", { length: 191 }).notNull(),
+    scope: mysqlEnum("scope", ["BOARD", "THREAD"]).notNull(),
+    scopeId: varchar("scopeId", { length: 191 }).notNull(),
+    push: boolean("push").default(false).notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.scope, t.scopeId] }) }),
+);
 /** One notification per account/post; moves retain its read state and resolve current destination access. */
-export const forumAlert = mysqlTable("ForumAlert", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  userId: varchar("userId", { length: 191 }).notNull(),
-  threadId: varchar("threadId", { length: 191 }).notNull(),
-  postId: varchar("postId", { length: 191 }).notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-  readAt: datetime("readAt", { mode: "date", fsp: 3 }),
-}, t => ({ userPostKey: uniqueIndex("ForumAlert_user_post_key").on(t.userId, t.postId), userIdx: index("ForumAlert_user_created_idx").on(t.userId, t.createdAt), postIdx: index("ForumAlert_postId_idx").on(t.postId), threadIdx: index("ForumAlert_threadId_idx").on(t.threadId) }));
+export const forumAlert = mysqlTable(
+  "ForumAlert",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    threadId: varchar("threadId", { length: 191 }).notNull(),
+    postId: varchar("postId", { length: 191 }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    readAt: datetime("readAt", { mode: "date", fsp: 3 }),
+  },
+  (t) => ({
+    userPostKey: uniqueIndex("ForumAlert_user_post_key").on(t.userId, t.postId),
+    userIdx: index("ForumAlert_user_created_idx").on(t.userId, t.createdAt),
+    postIdx: index("ForumAlert_postId_idx").on(t.postId),
+    threadIdx: index("ForumAlert_threadId_idx").on(t.threadId),
+  }),
+);
 /** Independent reaction choices keyed by account, post and reaction; toggles need no read-modify-write. */
-export const forumReaction = mysqlTable("ForumReaction", {
-  userId: varchar("userId", { length: 191 }).notNull(),
-  postId: varchar("postId", { length: 191 }).notNull(),
-  reaction: varchar("reaction", { length: 32 }).notNull(),
-}, t => ({ pk: primaryKey({ columns: [t.userId, t.postId, t.reaction] }), postIdx: index("ForumReaction_postId_idx").on(t.postId) }));
+export const forumReaction = mysqlTable(
+  "ForumReaction",
+  {
+    userId: varchar("userId", { length: 191 }).notNull(),
+    postId: varchar("postId", { length: 191 }).notNull(),
+    reaction: varchar("reaction", { length: 32 }).notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.postId, t.reaction] }),
+    postIdx: index("ForumReaction_postId_idx").on(t.postId),
+  }),
+);
 /** Preserve the replaced post content with its editing actor and reason in the same commit as the edit. */
-export const forumRevision = mysqlTable("ForumRevision", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  postId: varchar("postId", { length: 191 }).notNull(),
-  actorId: varchar("actorId", { length: 191 }).notNull(),
-  content: text("content").notNull(),
-  reason: text("reason").notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-}, t => ({ postIdx: index("ForumRevision_postId_idx").on(t.postId) }));
+export const forumRevision = mysqlTable(
+  "ForumRevision",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    postId: varchar("postId", { length: 191 }).notNull(),
+    actorId: varchar("actorId", { length: 191 }).notNull(),
+    content: text("content").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (t) => ({ postIdx: index("ForumRevision_postId_idx").on(t.postId) }),
+);
 /** Append moderation/access evidence independently of content lifetime, including after permanent purge. */
-export const forumAudit = mysqlTable("ForumAudit", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  actorId: varchar("actorId", { length: 191 }).notNull(),
-  boardId: varchar("boardId", { length: 191 }),
-  action: varchar("action", { length: 64 }).notNull(),
-  targetId: varchar("targetId", { length: 191 }).notNull(),
-  reason: text("reason").notNull(),
-  before: json("before").$type<unknown>(),
-  after: json("after").$type<unknown>(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-}, t => ({ boardIdx: index("ForumAudit_board_created_idx").on(t.boardId, t.createdAt), targetIdx: index("ForumAudit_target_idx").on(t.targetId) }));
+export const forumAudit = mysqlTable(
+  "ForumAudit",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    actorId: varchar("actorId", { length: 191 }).notNull(),
+    boardId: varchar("boardId", { length: 191 }),
+    action: varchar("action", { length: 64 }).notNull(),
+    targetId: varchar("targetId", { length: 191 }).notNull(),
+    reason: text("reason").notNull(),
+    before: json("before").$type<unknown>(),
+    after: json("after").$type<unknown>(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (t) => ({
+    boardIdx: index("ForumAudit_board_created_idx").on(t.boardId, t.createdAt),
+    targetIdx: index("ForumAudit_target_idx").on(t.targetId),
+  }),
+);
 
 export const historicalAvatar = mysqlTable(
   "HistoricalAvatar",
@@ -1710,8 +1914,12 @@ export const item = mysqlTable(
     stackSize: int("stackSize").default(1).notNull(),
     image: varchar("image", { length: 191 }).notNull(),
     destroyOnUse: boolean("destroyOnUse").default(false).notNull(),
-    lpcProfile: varchar("lpcProfile", { length: 32 }).$type<import("@/validators/lpc").LpcEquipmentProfile>(),
-    lpcColor: varchar("lpcColor", { length: 16 }).$type<import("@/validators/lpc").LpcColor>(),
+    lpcProfile: varchar("lpcProfile", { length: 32 }).$type<
+      import("@/validators/lpc").LpcEquipmentProfile
+    >(),
+    lpcColor: varchar("lpcColor", { length: 16 }).$type<
+      import("@/validators/lpc").LpcColor
+    >(),
     range: int("range").default(0).notNull(),
     chakraCost: double("chakraCost").default(0).notNull(),
     staminaCost: double("staminaCost").default(0).notNull(),
@@ -1720,9 +1928,7 @@ export const item = mysqlTable(
     chakraCostReducePerLvl: double("chakraCostReducePerLvl").default(0).notNull(),
     healthCostReducePerLvl: double("healthCostReducePerLvl").default(0).notNull(),
     actionCostPerc: double("actionCostPerc").default(60).notNull(),
-    battleDescription: text("battleDescription")
-      .default(sql`('')`)
-      .notNull(),
+    battleDescription: text("battleDescription").default(sql`('')`).notNull(),
     canStack: boolean("canStack").default(false).notNull(),
     maxImbueNumber: int("maxImbueNumber").default(1).notNull(),
     maxDurability: smallint("maxDurability", { unsigned: true })
@@ -1870,8 +2076,12 @@ export const itemVariant = mysqlTable(
     image: varchar("image", { length: 512 }).notNull(),
     requiredItemId: varchar("requiredItemId", { length: 191 }),
     costType: mysqlEnum("costType", consts.VARIANT_COST_TYPES).notNull(),
-    lpcProfile: varchar("lpcProfile", { length: 32 }).$type<import("@/validators/lpc").LpcEquipmentProfile>(),
-    lpcColor: varchar("lpcColor", { length: 16 }).$type<import("@/validators/lpc").LpcColor>(),
+    lpcProfile: varchar("lpcProfile", { length: 32 }).$type<
+      import("@/validators/lpc").LpcEquipmentProfile
+    >(),
+    lpcColor: varchar("lpcColor", { length: 16 }).$type<
+      import("@/validators/lpc").LpcColor
+    >(),
     cost: int("cost").default(0).notNull(),
     order: smallint("order", { unsigned: true }).default(1).notNull(),
     description: text("description"),
@@ -2060,8 +2270,12 @@ export const jutsu = mysqlTable(
       requiredSkillIdIdx: index("Jutsu_requiredSkillId_idx").on(table.requiredSkillId),
       villageIdIdx: index("Jutsu_villageId_idx").on(table.villageId),
       injectableIdx: index("Jutsu_injectable_idx").on(table.injectableInBattle),
-      reskinParentIdx: index("Jutsu_reskinParentJutsuId_idx").on(table.reskinParentJutsuId),
-      bloodlineReskinIdx: index("Jutsu_bloodlineReskinId_idx").on(table.bloodlineReskinId),
+      reskinParentIdx: index("Jutsu_reskinParentJutsuId_idx").on(
+        table.reskinParentJutsuId,
+      ),
+      bloodlineReskinIdx: index("Jutsu_bloodlineReskinId_idx").on(
+        table.bloodlineReskinId,
+      ),
       parentJutsuIdIdx: index("Jutsu_parentJutsuId_idx").on(table.parentJutsuId),
       parentJutsuIdHiddenIdx: index("Jutsu_parentJutsuId_hidden_idx").on(
         table.parentJutsuId,
@@ -2360,7 +2574,9 @@ export const recruitRankMilestone = mysqlTable(
         table.recruitUserId,
         table.rank,
       ),
-      recruiterIdIdx: index("RecruitRankMilestone_recruiterId_idx").on(table.recruiterId),
+      recruiterIdIdx: index("RecruitRankMilestone_recruiterId_idx").on(
+        table.recruiterId,
+      ),
     };
   },
 );
@@ -2401,44 +2617,60 @@ export const notificationRelations = relations(notification, ({ one }) => ({
 }));
 
 /** Server-authored checkout terms; Stripe metadata contains only this durable id. */
-export const stripeCheckout = mysqlTable("StripeCheckout", {
-  closedAt: datetime("closedAt", { mode: "date", fsp: 3 }),
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  sessionId: varchar("sessionId", { length: 191 }).unique(),
-  createdById: varchar("createdById", { length: 191 }).notNull(),
-  affectedUserId: varchar("affectedUserId", { length: 191 }).notNull(),
-  reputationPoints: int("reputationPoints").default(0).notNull(),
-  amountCents: int("amountCents").notNull(),
-  federalStatus: mysqlEnum("federalStatus", consts.FederalStatuses).default("NONE").notNull(),
-  priceId: varchar("priceId", { length: 191 }),
-  subscriptionId: varchar("subscriptionId", { length: 191 }).unique(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-}, (table) => ({
-  buyerIdx: index("StripeCheckout_createdById_idx").on(table.createdById),
-  recipientIdx: index("StripeCheckout_affectedUserId_idx").on(table.affectedUserId),
-}));
+export const stripeCheckout = mysqlTable(
+  "StripeCheckout",
+  {
+    closedAt: datetime("closedAt", { mode: "date", fsp: 3 }),
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    sessionId: varchar("sessionId", { length: 191 }).unique(),
+    createdById: varchar("createdById", { length: 191 }).notNull(),
+    affectedUserId: varchar("affectedUserId", { length: 191 }).notNull(),
+    reputationPoints: int("reputationPoints").default(0).notNull(),
+    amountCents: int("amountCents").notNull(),
+    federalStatus: mysqlEnum("federalStatus", consts.FederalStatuses)
+      .default("NONE")
+      .notNull(),
+    priceId: varchar("priceId", { length: 191 }),
+    subscriptionId: varchar("subscriptionId", { length: 191 }).unique(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    buyerIdx: index("StripeCheckout_createdById_idx").on(table.createdById),
+    recipientIdx: index("StripeCheckout_affectedUserId_idx").on(table.affectedUserId),
+  }),
+);
 
 /** A payment intent or paid invoice has one receipt and one atomic delivery marker. */
-export const stripePayment = mysqlTable("StripePayment", {
-  reviewRequired: boolean("reviewRequired").default(false).notNull(),
-  federalStatusOverride: mysqlEnum("federalStatusOverride", consts.FederalStatuses),
-  isSandbox: boolean("isSandbox").default(false).notNull(),
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  checkoutId: varchar("checkoutId", { length: 191 }).notNull(),
-  createdById: varchar("createdById", { length: 191 }).notNull(),
-  affectedUserId: varchar("affectedUserId", { length: 191 }).notNull(),
-  amountCents: int("amountCents").notNull(),
-  reputationPoints: int("reputationPoints").default(0).notNull(),
-  federalStatus: mysqlEnum("federalStatus", consts.FederalStatuses).default("NONE").notNull(),
-  purchasedAt: datetime("purchasedAt", { mode: "date", fsp: 3 }).notNull(),
-  expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }),
-  grantedAt: datetime("grantedAt", { mode: "date", fsp: 3 }),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-}, (table) => ({
-  buyerIdx: index("StripePayment_createdById_idx").on(table.createdById),
-  recipientIdx: index("StripePayment_affectedUserId_idx").on(table.affectedUserId),
-  checkoutIdx: index("StripePayment_checkoutId_idx").on(table.checkoutId),
-}));
+export const stripePayment = mysqlTable(
+  "StripePayment",
+  {
+    reviewRequired: boolean("reviewRequired").default(false).notNull(),
+    federalStatusOverride: mysqlEnum("federalStatusOverride", consts.FederalStatuses),
+    isSandbox: boolean("isSandbox").default(false).notNull(),
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    checkoutId: varchar("checkoutId", { length: 191 }).notNull(),
+    createdById: varchar("createdById", { length: 191 }).notNull(),
+    affectedUserId: varchar("affectedUserId", { length: 191 }).notNull(),
+    amountCents: int("amountCents").notNull(),
+    reputationPoints: int("reputationPoints").default(0).notNull(),
+    federalStatus: mysqlEnum("federalStatus", consts.FederalStatuses)
+      .default("NONE")
+      .notNull(),
+    purchasedAt: datetime("purchasedAt", { mode: "date", fsp: 3 }).notNull(),
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }),
+    grantedAt: datetime("grantedAt", { mode: "date", fsp: 3 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    buyerIdx: index("StripePayment_createdById_idx").on(table.createdById),
+    recipientIdx: index("StripePayment_affectedUserId_idx").on(table.affectedUserId),
+    checkoutIdx: index("StripePayment_checkoutId_idx").on(table.checkoutId),
+  }),
+);
 
 export const paypalSubscription = mysqlTable(
   "PaypalSubscription",
@@ -2735,7 +2967,10 @@ export const userAttribute = mysqlTable(
 );
 
 export const userAttributeRelations = relations(userAttribute, ({ one }) => ({
-  user: one(userData, { fields: [userAttribute.userId], references: [userData.userId] }),
+  user: one(userData, {
+    fields: [userAttribute.userId],
+    references: [userData.userId],
+  }),
 }));
 
 export const userAssociation = mysqlTable(
@@ -2810,7 +3045,10 @@ export const userData = mysqlTable(
     // Lifetime adoptions keep releasing a companion from renewing the free first adoption.
     petAcquisitions: int("petAcquisitions", { unsigned: true }).default(0).notNull(),
     /** Sanctuary species claimed this UTC day remain consumed after their pets are released. */
-    petDailyClaims: json("petDailyClaims").$type<{ dayKey: string; speciesIds: string[] }>(),
+    petDailyClaims: json("petDailyClaims").$type<{
+      dayKey: string;
+      speciesIds: string[];
+    }>(),
     activePetId: varchar("activePetId", { length: 191 }),
     petSlots: tinyint("petSlots", { unsigned: true }).default(1).notNull(),
     /** One attempt-bound profession delegation; the companion returns when results are collected. */
@@ -2856,19 +3094,22 @@ export const userData = mysqlTable(
       .default(consts.STARTING_REPUTATION_POINTS)
       .notNull(),
     seichiSilver: int("seichiSilver").default(0).notNull(),
-    bloodright: json("bloodright").$type<{ skillId: string; cost: number }[]>().default([]).notNull(),
+    bloodright: json("bloodright")
+      .$type<{ skillId: string; cost: number }[]>()
+      .default([])
+      .notNull(),
     bloodrightSpent: int("bloodrightSpent").default(0).notNull(),
     // Drizzle orders SET by declaration: refund Silver and clear Bloodright before replacing the bloodline.
     bloodlineId: varchar("bloodlineId", { length: 191 }),
-    monthlySkillResets: json("monthlySkillResets").$type<{ month: string; count: number }>().default({ month: "", count: 0 }).notNull(),
+    monthlySkillResets: json("monthlySkillResets")
+      .$type<{ month: string; count: number }>()
+      .default({ month: "", count: 0 })
+      .notNull(),
     villagePrestige: float("villagePrestige").default(0).notNull(),
     federalStatus: mysqlEnum("federalStatus", consts.FederalStatuses)
       .default("NONE")
       .notNull(),
-    tavernUsernameColor: mysqlEnum(
-      "tavernUsernameColor",
-      consts.TavernColorPresets,
-    )
+    tavernUsernameColor: mysqlEnum("tavernUsernameColor", consts.TavernColorPresets)
       .default("DEFAULT")
       .notNull(),
     tavernTitleColor: mysqlEnum("tavernTitleColor", consts.TavernColorPresets)
@@ -2930,7 +3171,10 @@ export const userData = mysqlTable(
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
     // Drizzle emits SET in schema order: restore the lift before clearing its pause.
-    bracketImmunityPausedAt: datetime("bracketImmunityPausedAt", { mode: "date", fsp: 3 }),
+    bracketImmunityPausedAt: datetime("bracketImmunityPausedAt", {
+      mode: "date",
+      fsp: 3,
+    }),
     warParticipantUntil: datetime("warParticipantUntil", {
       mode: "date",
       fsp: 3,
@@ -2947,12 +3191,17 @@ export const userData = mysqlTable(
     /** Last consumed MASTERY `UserQueue.position`; rows at or below it are dead. */
     masteryQueueHead: int("masteryQueueHead", { unsigned: true }).default(0).notNull(),
     /** Last consumed ELEMENT `UserQueue.position`; rows at or below it are dead. */
-    elementalQueueHead: int("elementalQueueHead", { unsigned: true }).default(0).notNull(),
+    elementalQueueHead: int("elementalQueueHead", { unsigned: true })
+      .default(0)
+      .notNull(),
     elementalTrainingStartedAt: datetime("elementalTrainingStartedAt", {
       mode: "date",
       fsp: 3,
     }),
-    currentlyTrainingElement: mysqlEnum("currentlyTrainingElement", consts.BasicElementName),
+    currentlyTrainingElement: mysqlEnum(
+      "currentlyTrainingElement",
+      consts.BasicElementName,
+    ),
     elementalTrainingSpeed: mysqlEnum("elementalTrainingSpeed", consts.TrainingSpeeds)
       .default("15min")
       .notNull(),
@@ -2988,7 +3237,10 @@ export const userData = mysqlTable(
     // Settings
     preferredGeneral1: mysqlEnum("preferredGeneral1", consts.GeneralTypes),
     preferredGeneral2: mysqlEnum("preferredGeneral2", consts.GeneralTypes),
-    preferredDamageElement: mysqlEnum("preferredDamageElement", consts.BasicElementName),
+    preferredDamageElement: mysqlEnum(
+      "preferredDamageElement",
+      consts.BasicElementName,
+    ),
     showBattleDescription: boolean("showBattleDescription").default(true).notNull(),
     defaultAutoCombat: boolean("defaultAutoCombat").default(true).notNull(),
     showPvpRecord: boolean("showPvpRecord").default(false).notNull(),
@@ -2999,9 +3251,13 @@ export const userData = mysqlTable(
     pvpWins: int("pvpWins").default(0).notNull(),
     pvpLosses: int("pvpLosses").default(0).notNull(),
     pvpExperience: float("pvpExperience").default(0).notNull(),
-    pvpExperienceDecayAt: datetime("pvpExperienceDecayAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+    pvpExperienceDecayAt: datetime("pvpExperienceDecayAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
     weeklyPvpKills: int("weeklyPvpKills", { unsigned: true }).default(0).notNull(),
-    weeklyPvpKillsAt: datetime("weeklyPvpKillsAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+    weeklyPvpKillsAt: datetime("weeklyPvpKillsAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
     errands: smallint("errands", { unsigned: true }).default(0).notNull(),
     missionsD: smallint("missionsD", { unsigned: true }).default(0).notNull(),
     missionsC: smallint("missionsC", { unsigned: true }).default(0).notNull(),
@@ -3049,7 +3305,10 @@ export const userData = mysqlTable(
     effects: json("effects").$type<ZodAllTags[]>().default([]).notNull(),
     aiCalls: int("openaiCalls").default(0).notNull(),
     tavernMessages: int("tavernMessages").default(0).notNull(),
-    dashboardContentPriority: json("dashboardContentPriority").$type<DashboardContentGroup[]>().default([]).notNull(),
+    dashboardContentPriority: json("dashboardContentPriority")
+      .$type<DashboardContentGroup[]>()
+      .default([])
+      .notNull(),
     autoWakeUp: boolean("autoWakeUp").default(true).notNull(),
     rememberProfileTab: boolean("rememberProfileTab").default(false).notNull(),
     musicOn: boolean("musicOn").default(true).notNull(),
@@ -3057,13 +3316,18 @@ export const userData = mysqlTable(
     buttonSfxOn: boolean("buttonSfxOn").default(true).notNull(),
     iframesMuted: boolean("iframesMuted").default(false).notNull(),
     chatMuted: boolean("chatMuted").default(false).notNull(),
-    mutedConversationIds: json("mutedConversationIds").$type<string[]>().default([]).notNull(),
+    mutedConversationIds: json("mutedConversationIds")
+      .$type<string[]>()
+      .default([])
+      .notNull(),
     // Taverns notify only on pings until the player unmutes them here.
     unmutedTavernIds: json("unmutedTavernIds").$type<string[]>().default([]).notNull(),
     tutorialStep: tinyint("tutorialStep", { unsigned: true }).default(0).notNull(),
     tutorialOn: boolean("tutorialOn").default(true).notNull(),
     homeType: mysqlEnum("homeType", consts.HomeTypes).default("NONE").notNull(),
-    homeFurnitureRevision: int("homeFurnitureRevision", { unsigned: true }).default(0).notNull(),
+    homeFurnitureRevision: int("homeFurnitureRevision", { unsigned: true })
+      .default(0)
+      .notNull(),
     staffAccount: boolean("staffAccount").default(false).notNull(),
     rankedLp: int("rankedLp").default(0).notNull(),
     rankedBattles: int("rankedBattles").default(0).notNull(),
@@ -3117,7 +3381,10 @@ export const userData = mysqlTable(
       experienceIdx: index("UserData_experience_idx").on(table.experience),
       levelIdx: index("UserData_level_idx").on(table.level),
       usernameKey: uniqueIndex("UserData_username_key").on(table.username),
-      pvpExperienceAverageIdx: index("UserData_pvpExperienceAverage_idx").on(table.isAi, table.pvpExperience),
+      pvpExperienceAverageIdx: index("UserData_pvpExperienceAverage_idx").on(
+        table.isAi,
+        table.pvpExperience,
+      ),
       bloodlineIdIdx: index("UserData_bloodlineId_idx").on(table.bloodlineId),
       bloodlineReskinIdIdx: index("UserData_bloodlineReskinId_idx").on(
         table.bloodlineReskinId,
@@ -3162,14 +3429,21 @@ export const petSpecies = mysqlTable(
     rankConcepts: json("rankConcepts").$type<string[]>().default([]).notNull(),
     rarity: mysqlEnum("rarity", consts.PetRarities).default("COMMON").notNull(),
     role: mysqlEnum("role", consts.PetRoles).default("ASSAULT").notNull(),
-    preferredDamageElement: mysqlEnum("preferredDamageElement", consts.BasicElementName),
+    preferredDamageElement: mysqlEnum(
+      "preferredDamageElement",
+      consts.BasicElementName,
+    ),
     defaultJutsuIds: json("defaultJutsuIds").$type<string[]>().default([]).notNull(),
     aiRules: json("aiRules").$type<AiRuleType[]>().default([]).notNull(),
     includeDefaultRules: boolean("includeDefaultRules").default(true).notNull(),
     effects: json("effects").$type<ZodPetSpeciesEffect[]>().default([]).notNull(),
     isActive: boolean("isActive").default(true).notNull(),
-    createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
   },
   (table) => ({ nameKey: uniqueIndex("PetSpecies_name_key").on(table.name) }),
 );
@@ -3206,20 +3480,32 @@ export const userPet = mysqlTable(
     intelligence: double("intelligence").default(consts.PET_BASE_STAT).notNull(),
     willpower: double("willpower").default(consts.PET_BASE_STAT).notNull(),
     avatar: varchar("avatar", { length: 191 }),
-    avatarFacing: mysqlEnum("avatarFacing", consts.AvatarFacings).default("left").notNull(),
+    avatarFacing: mysqlEnum("avatarFacing", consts.AvatarFacings)
+      .default("left")
+      .notNull(),
     battleEnabled: boolean("battleEnabled").default(true).notNull(),
-    spawnPosition: mysqlEnum("spawnPosition", consts.PetSpawnPositions).default("BEHIND").notNull(),
+    spawnPosition: mysqlEnum("spawnPosition", consts.PetSpawnPositions)
+      .default("BEHIND")
+      .notNull(),
     aiRules: json("aiRules").$type<AiRuleType[]>().default([]).notNull(),
     includeDefaultRules: boolean("includeDefaultRules").default(true).notNull(),
-    generationStatus: mysqlEnum("generationStatus", consts.PetGenerationStatuses).default("PENDING").notNull(),
+    generationStatus: mysqlEnum("generationStatus", consts.PetGenerationStatuses)
+      .default("PENDING")
+      .notNull(),
     generationToken: varchar("generationToken", { length: 191 }),
     generationStartedAt: datetime("generationStartedAt", { mode: "date", fsp: 3 }),
-    generationAttempts: tinyint("generationAttempts", { unsigned: true }).default(0).notNull(),
+    generationAttempts: tinyint("generationAttempts", { unsigned: true })
+      .default(0)
+      .notNull(),
     // Evolution keeps the previous accepted image until artRank catches up to rank.
     artRank: tinyint("artRank", { unsigned: true }).default(0).notNull(),
     revision: int("revision", { unsigned: true }).default(0).notNull(),
-    createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
   },
   (table) => ({ userIdIdx: index("UserPet_userId_idx").on(table.userId) }),
 );
@@ -3227,14 +3513,20 @@ export type UserPet = InferSelectModel<typeof userPet>;
 export type UserPetInsert = InferInsertModel<typeof userPet>;
 export const userPetRelations = relations(userPet, ({ one }) => ({
   user: one(userData, { fields: [userPet.userId], references: [userData.userId] }),
-  species: one(petSpecies, { fields: [userPet.speciesId], references: [petSpecies.id] }),
+  species: one(petSpecies, {
+    fields: [userPet.speciesId],
+    references: [petSpecies.id],
+  }),
 }));
 
 export const userDataRelations = relations(userData, ({ one, many }) => ({
   attributes: many(userAttribute),
   spriteAnimationBindings: many(aiSpriteAnimation),
   home: one(userHome, { fields: [userData.userId], references: [userHome.userId] }),
-  questParty: one(questParty, { fields: [userData.questPartyId], references: [questParty.id] }),
+  questParty: one(questParty, {
+    fields: [userData.questPartyId],
+    references: [questParty.id],
+  }),
   pets: many(userPet),
   queue: many(userQueue),
   ips: many(historicalIp),
@@ -3452,7 +3744,9 @@ export const userItem = mysqlTable(
         table.userId,
         table.equipped,
       ),
-      activeVariantIdIdx: index("UserItem_activeVariantId_idx").on(table.activeVariantId),
+      activeVariantIdIdx: index("UserItem_activeVariantId_idx").on(
+        table.activeVariantId,
+      ),
     };
   },
 );
@@ -3470,7 +3764,10 @@ export type UserItemWithVariants = UserItem & {
 };
 
 export const userItemRelations = relations(userItem, ({ one, many }) => ({
-  activeVariant: one(itemVariant, { fields: [userItem.activeVariantId], references: [itemVariant.id] }),
+  activeVariant: one(itemVariant, {
+    fields: [userItem.activeVariantId],
+    references: [itemVariant.id],
+  }),
   item: one(item, {
     fields: [userItem.itemId],
     references: [item.id],
@@ -3535,22 +3832,45 @@ export const auctionOffer = mysqlTable(
     offeredUserItemId: varchar("offeredUserItemId", { length: 191 }),
     offeredQuantity: int("offeredQuantity", { unsigned: true }),
     ryo: int("ryo", { unsigned: true }).default(0).notNull(),
-    status: mysqlEnum("status", consts.AUCTION_LISTING_STATES).default("ACTIVE").notNull(),
-    createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+    status: mysqlEnum("status", consts.AUCTION_LISTING_STATES)
+      .default("ACTIVE")
+      .notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
   },
   (table) => ({
     ownerIdIdx: index("AuctionOffer_ownerId_idx").on(table.ownerId),
-    statusTypeCreatedIdx: index("AuctionOffer_status_offerType_createdAt_idx").on(table.status, table.offerType, table.createdAt),
-    requestedItemIdIdx: index("AuctionOffer_requestedItemId_idx").on(table.requestedItemId),
-    offeredUserItemIdIdx: index("AuctionOffer_offeredUserItemId_idx").on(table.offeredUserItemId),
+    statusTypeCreatedIdx: index("AuctionOffer_status_offerType_createdAt_idx").on(
+      table.status,
+      table.offerType,
+      table.createdAt,
+    ),
+    requestedItemIdIdx: index("AuctionOffer_requestedItemId_idx").on(
+      table.requestedItemId,
+    ),
+    offeredUserItemIdIdx: index("AuctionOffer_offeredUserItemId_idx").on(
+      table.offeredUserItemId,
+    ),
   }),
 );
 
 export const auctionOfferRelations = relations(auctionOffer, ({ one }) => ({
-  owner: one(userData, { fields: [auctionOffer.ownerId], references: [userData.userId] }),
-  requestedItem: one(item, { fields: [auctionOffer.requestedItemId], references: [item.id] }),
-  offeredUserItem: one(userItem, { fields: [auctionOffer.offeredUserItemId], references: [userItem.id] }),
+  owner: one(userData, {
+    fields: [auctionOffer.ownerId],
+    references: [userData.userId],
+  }),
+  requestedItem: one(item, {
+    fields: [auctionOffer.requestedItemId],
+    references: [item.id],
+  }),
+  offeredUserItem: one(userItem, {
+    fields: [auctionOffer.offeredUserItemId],
+    references: [userItem.id],
+  }),
 }));
 
 // Auction House System Tables
@@ -3847,7 +4167,9 @@ export const userReportEmbedding = mysqlTable("UserReportEmbedding", {
   reportId: varchar("reportId", { length: 191 }).primaryKey().notNull(),
   sourceText: text("sourceText").notNull(),
   model: varchar("model", { length: 191 }).notNull(),
-  embedding: vector("embedding", { length: consts.REPORT_EMBEDDING_DIMENSIONS }).notNull(),
+  embedding: vector("embedding", {
+    length: consts.REPORT_EMBEDDING_DIMENSIONS,
+  }).notNull(),
 });
 
 export const userReportRelations = relations(userReport, ({ one }) => ({
@@ -3900,10 +4222,18 @@ export const moderationScan = mysqlTable(
     relationId: varchar("relationId", { length: 191 }).notNull(),
     relationType: mysqlEnum("relationType", consts.AutomoderationCategories).notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
-      .default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
     completedAt: datetime("completedAt", { mode: "date", fsp: 3 }),
-    outcome: mysqlEnum("outcome", ["CHECKING", "GATE_CLEAR", "DECISION_CLEAR", "REPORTED", "ERROR"])
-      .default("CHECKING").notNull(),
+    outcome: mysqlEnum("outcome", [
+      "CHECKING",
+      "GATE_CLEAR",
+      "DECISION_CLEAR",
+      "REPORTED",
+      "ERROR",
+    ])
+      .default("CHECKING")
+      .notNull(),
     flagged: boolean("flagged"),
     categoryScores: json("categoryScores").$type<Record<string, number>>(),
     reportId: varchar("reportId", { length: 191 }),
@@ -4131,11 +4461,20 @@ export const village = mysqlTable(
     description: varchar("description", { length: 512 }).default("").notNull(),
     kageId: varchar("kageId", { length: 191 }).notNull(),
     tokens: int("tokens").default(0).notNull(),
-    territoryWarBoostUntil: datetime("territoryWarBoostUntil", { mode: "date", fsp: 3 }),
+    territoryWarBoostUntil: datetime("territoryWarBoostUntil", {
+      mode: "date",
+      fsp: 3,
+    }),
     structureMaintenanceDue: int("structureMaintenanceDue").default(0).notNull(),
     structureMaintenanceMonth: varchar("structureMaintenanceMonth", { length: 7 }),
-    activeMission: json("activeMission").$type<import("@/validators/villageMission").VillageMission>(),
-    missionCounters: json("missionCounters").$type<Partial<Record<consts.VillageMissionTask, number>>>().default({}).notNull(),
+    activeMission:
+      json("activeMission").$type<
+        import("@/validators/villageMission").VillageMission
+      >(),
+    missionCounters: json("missionCounters")
+      .$type<Partial<Record<consts.VillageMissionTask, number>>>()
+      .default({})
+      .notNull(),
     type: mysqlEnum("type", consts.SECTOR_TYPES).default("VILLAGE").notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
@@ -4156,13 +4495,24 @@ export const village = mysqlTable(
     lastMaintenancePaidAt: datetime("lastMaintenancePaidAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
-    belowMemberMinimumSince: datetime("belowMemberMinimumSince", { mode: "date", fsp: 3 }),
-    raidRetryCooldowns: json("raidRetryCooldowns").$type<Record<string, string>>().default({}).notNull(),
+    belowMemberMinimumSince: datetime("belowMemberMinimumSince", {
+      mode: "date",
+      fsp: 3,
+    }),
+    raidRetryCooldowns: json("raidRetryCooldowns")
+      .$type<Record<string, string>>()
+      .default({})
+      .notNull(),
     wasDowngraded: boolean("wasDowngraded").default(false).notNull(),
-    kageSchedule: json("kageSchedule").$type<import("@/validators/kage").KageDefenseSchedule>(),
+    kageSchedule:
+      json("kageSchedule").$type<import("@/validators/kage").KageDefenseSchedule>(),
     kageScheduleVersion: int("kageScheduleVersion").default(0).notNull(),
-    kageScheduleAvailableAt: datetime("kageScheduleAvailableAt", { mode: "date", fsp: 3 })
-      .default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+    kageScheduleAvailableAt: datetime("kageScheduleAvailableAt", {
+      mode: "date",
+      fsp: 3,
+    })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
     wallpaperOverwrite: varchar("wallpaperOverwrite", { length: 191 }),
     warExhaustionEndedAt: datetime("warExhaustionEndedAt", { mode: "date", fsp: 3 }),
     lastWarEndedAt: datetime("lastWarEndedAt", { mode: "date", fsp: 3 }),
@@ -4217,7 +4567,8 @@ export const villageStructure = mysqlTable(
     image: varchar("image", { length: 191 }).notNull(),
     villageId: varchar("villageId", { length: 191 }).notNull(),
     // Atlas, numerical material and stair geometry travel with each structure's published artwork.
-    worldArt: json("worldArt").$type<import("@/libs/rendering/worldStructures").StructureArt>(),
+    worldArt:
+      json("worldArt").$type<import("@/libs/rendering/worldStructures").StructureArt>(),
     // Signed: -1/-1 marks structures without a map position (Walls, Protectors)
     longitude: smallint("longitude").default(10).notNull(),
     latitude: smallint("latitude").default(10).notNull(),
@@ -4426,8 +4777,12 @@ export const rewardPackage = mysqlTable("RewardPackage", {
   name: varchar("name", { length: 191 }).notNull(),
   description: text("description").notNull(),
   rewards: json("rewards").$type<ObjectiveRewardType>().notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+  createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
 });
 /** Named editor grouping of existing reward fields, with no independent payout behavior. */
 export const rewardNode = mysqlTable("RewardNode", {
@@ -4477,7 +4832,9 @@ export const quest = mysqlTable(
     retryDelay: mysqlEnum("retryDelay", consts.RetryQuestDelays)
       .default("none")
       .notNull(),
-    attemptDelay: mysqlEnum("attemptDelay", consts.RetryQuestDelays).default("none").notNull(),
+    attemptDelay: mysqlEnum("attemptDelay", consts.RetryQuestDelays)
+      .default("none")
+      .notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3))`)
       .notNull(),
@@ -4499,7 +4856,10 @@ export const quest = mysqlTable(
     return {
       tierLevel: unique("tierLevel").on(table.tierLevel),
       questTypeIdx: index("Quest_questType_idx").on(table.questType),
-      publicLocationsIdx: index("Quest_publicLocations_hidden_idx").on(table.publicLocations, table.hidden),
+      publicLocationsIdx: index("Quest_publicLocations_hidden_idx").on(
+        table.publicLocations,
+        table.hidden,
+      ),
       questRankIdx: index("Quest_questRank_idx").on(table.questRank),
       requiredLevelIdx: index("Quest_requiredLevel_idx").on(table.requiredLevel),
       requiredFarmingLevelIdx: index("Quest_requiredFarmingLevel_idx").on(
@@ -4549,19 +4909,27 @@ export const questRelations = relations(quest, ({ one, many }) => ({
 }));
 
 /** Canonical quest progress and acknowledged member contributions, guarded by party version CAS. */
-export const questParty = mysqlTable("QuestParty", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  questId: varchar("questId", { length: 191 }).notNull(),
-  leaderId: varchar("leaderId", { length: 191 }).notNull(),
-  isPublic: boolean("isPublic").default(false).notNull(),
-  memberIds: json("memberIds").$type<string[]>().notNull(),
-  invitedUserIds: json("invitedUserIds").$type<string[]>().notNull(),
-  tracker: json("tracker").$type<QuestTrackerType>().notNull(),
-  contributions: json("contributions").$type<Record<string, QuestTrackerType["goals"]>>().notNull(),
-  version: int("version").default(0).notNull(),
-  battleId: varchar("battleId", { length: 191 }),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-}, (table) => ({ questIdIdx: index("QuestParty_questId_idx").on(table.questId) }));
+export const questParty = mysqlTable(
+  "QuestParty",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    questId: varchar("questId", { length: 191 }).notNull(),
+    leaderId: varchar("leaderId", { length: 191 }).notNull(),
+    isPublic: boolean("isPublic").default(false).notNull(),
+    memberIds: json("memberIds").$type<string[]>().notNull(),
+    invitedUserIds: json("invitedUserIds").$type<string[]>().notNull(),
+    tracker: json("tracker").$type<QuestTrackerType>().notNull(),
+    contributions: json("contributions")
+      .$type<Record<string, QuestTrackerType["goals"]>>()
+      .notNull(),
+    version: int("version").default(0).notNull(),
+    battleId: varchar("battleId", { length: 191 }),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({ questIdIdx: index("QuestParty_questId_idx").on(table.questId) }),
+);
 /** Persisted team progress; personal reward and side-effect receipts stay on each character. */
 export type QuestParty = InferSelectModel<typeof questParty>;
 /** Hydrate the quest definition and attached character snapshots with the party's initial read. */
@@ -4754,10 +5122,18 @@ export const userCookingJob = mysqlTable(
     experience: int("experience").notNull(),
     finishesAt: datetime("finishesAt", { mode: "date", fsp: 3 }).notNull(),
   },
-  (table) => ({ userFinishIdx: index("UserCookingJob_userId_finishesAt_idx").on(table.userId, table.finishesAt) }),
+  (table) => ({
+    userFinishIdx: index("UserCookingJob_userId_finishesAt_idx").on(
+      table.userId,
+      table.finishesAt,
+    ),
+  }),
 );
 export const userCookingJobRelations = relations(userCookingJob, ({ one }) => ({
-  user: one(userData, { fields: [userCookingJob.userId], references: [userData.userId] }),
+  user: one(userData, {
+    fields: [userCookingJob.userId],
+    references: [userData.userId],
+  }),
 }));
 
 export const userRaidBuff = mysqlTable(
@@ -4825,7 +5201,12 @@ export const discordEventDelivery = mysqlTable(
     claimedAt: datetime("claimedAt", { mode: "date", fsp: 3 }),
     delivered: boolean("delivered").default(false).notNull(),
   },
-  (table) => ({ pendingIdx: index("DiscordEventDelivery_delivered_createdAt_idx").on(table.delivered, table.createdAt) }),
+  (table) => ({
+    pendingIdx: index("DiscordEventDelivery_delivered_createdAt_idx").on(
+      table.delivered,
+      table.createdAt,
+    ),
+  }),
 );
 export type DiscordEventDelivery = InferSelectModel<typeof discordEventDelivery>;
 
@@ -4976,28 +5357,44 @@ export const dailyBankInterestRelations = relations(dailyBankInterest, ({ one })
 }));
 
 /** Staff catalog; legacy labels belong to one player and stay out of catalog tools. */
-export const title = mysqlTable("Title", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  name: varchar("name", { length: 191 }).notNull(),
-  description: varchar("description", { length: 512 }).default("").notNull(),
-  effects: json("effects").$type<TitleEffect[]>().default([]).notNull(),
-  legacyOwnerId: varchar("legacyOwnerId", { length: 191 }),
-  archived: boolean("archived").default(false).notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-}, (table) => ({ catalog: index("Title_catalog_idx").on(table.legacyOwnerId, table.archived) }));
+export const title = mysqlTable(
+  "Title",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    description: varchar("description", { length: 512 }).default("").notNull(),
+    effects: json("effects").$type<TitleEffect[]>().default([]).notNull(),
+    legacyOwnerId: varchar("legacyOwnerId", { length: 191 }),
+    archived: boolean("archived").default(false).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    catalog: index("Title_catalog_idx").on(table.legacyOwnerId, table.archived),
+  }),
+);
 export type Title = InferSelectModel<typeof title>;
 
 /** Snapshot permanent bonuses at acquisition so content edits cannot rewrite accrued recovery. */
-export const userTitle = mysqlTable("UserTitle", {
-  userId: varchar("userId", { length: 191 }).notNull(),
-  titleId: varchar("titleId", { length: 191 }).notNull(),
-  effects: json("effects").$type<TitleEffect[]>().default([]).notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-}, (table) => ({
-  pk: primaryKey({ columns: [table.userId, table.titleId] }),
-  title: index("UserTitle_title_idx").on(table.titleId),
-}));
+export const userTitle = mysqlTable(
+  "UserTitle",
+  {
+    userId: varchar("userId", { length: 191 }).notNull(),
+    titleId: varchar("titleId", { length: 191 }).notNull(),
+    effects: json("effects").$type<TitleEffect[]>().default([]).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.userId, table.titleId] }),
+    title: index("UserTitle_title_idx").on(table.titleId),
+  }),
+);
 export type UserTitle = InferSelectModel<typeof userTitle>;
 export const userTitleRelations = relations(userTitle, ({ one }) => ({
   title: one(title, { fields: [userTitle.titleId], references: [title.id] }),
@@ -5073,7 +5470,9 @@ export const userRequest = mysqlTable(
     value: int("value").default(0),
     relatedId: varchar("relatedId", { length: 191 }),
     // Terminal invitations release this slot; the same owner cannot grant duplicate active access.
-    activeHomeReceiverId: varchar("activeHomeReceiverId", { length: 191 }).generatedAlwaysAs(
+    activeHomeReceiverId: varchar("activeHomeReceiverId", {
+      length: 191,
+    }).generatedAlwaysAs(
       sql`CASE WHEN \`type\` = 'HOME' AND \`status\` IN ('PENDING', 'ACCEPTED') THEN \`receiverId\` ELSE NULL END`,
       { mode: "stored" },
     ),
@@ -5098,13 +5497,18 @@ export const userRequest = mysqlTable(
       challengerIdIdx: index("UserRequest_senderId_idx").on(table.senderId),
       challengedIdIdx: index("UserRequest_receiverId_idx").on(table.receiverId),
       typeIdx: index("UserRequest_type_idx").on(table.type),
-      relatedIdTypeCreatedAtIdx: index(
-        "UserRequest_relatedId_type_createdAt_idx",
-      ).on(table.relatedId, table.type, table.createdAt),
+      relatedIdTypeCreatedAtIdx: index("UserRequest_relatedId_type_createdAt_idx").on(
+        table.relatedId,
+        table.type,
+        table.createdAt,
+      ),
       pendingAnbuSenderUnique: unique("UserRequest_pending_anbu_sender_unique").on(
         table.pendingAnbuSenderId,
       ),
-      activeHomePairUnique: unique("UserRequest_active_home_pair_unique").on(table.senderId, table.activeHomeReceiverId),
+      activeHomePairUnique: unique("UserRequest_active_home_pair_unique").on(
+        table.senderId,
+        table.activeHomeReceiverId,
+      ),
     };
   },
 );
@@ -5378,34 +5782,56 @@ export const warAllyRelations = relations(warAlly, ({ one }) => ({
 }));
 
 /** Invitations reserve one of three slots; accepted contracts reserve the player globally. */
-export const warMercenary = mysqlTable("WarMercenary", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  warId: varchar("warId", { length: 191 }).notNull(),
-  sideVillageId: varchar("sideVillageId", { length: 191 }).notNull(),
-  userId: varchar("userId", { length: 191 }).notNull(),
-  invitedById: varchar("invitedById", { length: 191 }).notNull(),
-  tokens: int("tokens", { unsigned: true }).notNull(),
-  slot: tinyint("slot", { unsigned: true }).notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-  acceptedAt: datetime("acceptedAt", { mode: "date", fsp: 3 }),
-  endedAt: datetime("endedAt", { mode: "date", fsp: 3 }),
-  activeSlot: tinyint("activeSlot", { unsigned: true }).generatedAlwaysAs(
-    sql`CASE WHEN \`endedAt\` IS NULL THEN \`slot\` ELSE NULL END`, { mode: "stored" }),
-  activeUserId: varchar("activeUserId", { length: 191 }).generatedAlwaysAs(
-    sql`CASE WHEN \`acceptedAt\` IS NOT NULL AND \`endedAt\` IS NULL THEN \`userId\` ELSE NULL END`, { mode: "stored" }),
-  invitedUserId: varchar("invitedUserId", { length: 191 }).generatedAlwaysAs(
-    sql`CASE WHEN \`endedAt\` IS NULL THEN \`userId\` ELSE NULL END`, { mode: "stored" }),
-}, (table) => ({
-  slots: uniqueIndex("WarMercenary_slot_key").on(table.warId, table.sideVillageId, table.activeSlot),
-  activeUser: uniqueIndex("WarMercenary_active_user_key").on(table.activeUserId),
-  invitation: uniqueIndex("WarMercenary_invitation_key").on(table.warId, table.invitedUserId),
-  user: index("WarMercenary_user_idx").on(table.userId),
-}));
+export const warMercenary = mysqlTable(
+  "WarMercenary",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    warId: varchar("warId", { length: 191 }).notNull(),
+    sideVillageId: varchar("sideVillageId", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    invitedById: varchar("invitedById", { length: 191 }).notNull(),
+    tokens: int("tokens", { unsigned: true }).notNull(),
+    slot: tinyint("slot", { unsigned: true }).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    acceptedAt: datetime("acceptedAt", { mode: "date", fsp: 3 }),
+    endedAt: datetime("endedAt", { mode: "date", fsp: 3 }),
+    activeSlot: tinyint("activeSlot", { unsigned: true }).generatedAlwaysAs(
+      sql`CASE WHEN \`endedAt\` IS NULL THEN \`slot\` ELSE NULL END`,
+      { mode: "stored" },
+    ),
+    activeUserId: varchar("activeUserId", { length: 191 }).generatedAlwaysAs(
+      sql`CASE WHEN \`acceptedAt\` IS NOT NULL AND \`endedAt\` IS NULL THEN \`userId\` ELSE NULL END`,
+      { mode: "stored" },
+    ),
+    invitedUserId: varchar("invitedUserId", { length: 191 }).generatedAlwaysAs(
+      sql`CASE WHEN \`endedAt\` IS NULL THEN \`userId\` ELSE NULL END`,
+      { mode: "stored" },
+    ),
+  },
+  (table) => ({
+    slots: uniqueIndex("WarMercenary_slot_key").on(
+      table.warId,
+      table.sideVillageId,
+      table.activeSlot,
+    ),
+    activeUser: uniqueIndex("WarMercenary_active_user_key").on(table.activeUserId),
+    invitation: uniqueIndex("WarMercenary_invitation_key").on(
+      table.warId,
+      table.invitedUserId,
+    ),
+    user: index("WarMercenary_user_idx").on(table.userId),
+  }),
+);
 export type WarMercenary = InferSelectModel<typeof warMercenary>;
 export const warMercenaryRelations = relations(warMercenary, ({ one }) => ({
   war: one(war, { fields: [warMercenary.warId], references: [war.id] }),
   user: one(userData, { fields: [warMercenary.userId], references: [userData.userId] }),
-  village: one(village, { fields: [warMercenary.sideVillageId], references: [village.id] }),
+  village: one(village, {
+    fields: [warMercenary.sideVillageId],
+    references: [village.id],
+  }),
 }));
 
 // Village elder vote (war declaration or kage removal proposals)
@@ -5425,7 +5851,9 @@ export const villageElderVote = mysqlTable(
     // Only set for WAR_DECLARATION votes
     warType: mysqlEnum("warType", consts.WAR_TYPES),
     targetStructureRoute: varchar("targetStructureRoute", { length: 191 }),
-    status: mysqlEnum("status", consts.ELDER_VOTE_STATUSES).notNull().default("PENDING"),
+    status: mysqlEnum("status", consts.ELDER_VOTE_STATUSES)
+      .notNull()
+      .default("PENDING"),
     // Stored generated column: 1 when PENDING, NULL otherwise.
     // NULL values are ignored by MySQL unique indexes, so only one PENDING motion
     // per (villageId, type, targetId) is enforced atomically at the DB level.
@@ -5478,28 +5906,34 @@ export const villageElderVoteEntry = mysqlTable(
 );
 export type VillageElderVoteEntry = InferSelectModel<typeof villageElderVoteEntry>;
 
-export const villageElderVoteRelations = relations(villageElderVote, ({ one, many }) => ({
-  village: one(village, {
-    fields: [villageElderVote.villageId],
-    references: [village.id],
+export const villageElderVoteRelations = relations(
+  villageElderVote,
+  ({ one, many }) => ({
+    village: one(village, {
+      fields: [villageElderVote.villageId],
+      references: [village.id],
+    }),
+    initiatedBy: one(userData, {
+      fields: [villageElderVote.initiatedByUserId],
+      references: [userData.userId],
+    }),
+    entries: many(villageElderVoteEntry),
   }),
-  initiatedBy: one(userData, {
-    fields: [villageElderVote.initiatedByUserId],
-    references: [userData.userId],
-  }),
-  entries: many(villageElderVoteEntry),
-}));
+);
 
-export const villageElderVoteEntryRelations = relations(villageElderVoteEntry, ({ one }) => ({
-  vote: one(villageElderVote, {
-    fields: [villageElderVoteEntry.voteId],
-    references: [villageElderVote.id],
+export const villageElderVoteEntryRelations = relations(
+  villageElderVoteEntry,
+  ({ one }) => ({
+    vote: one(villageElderVote, {
+      fields: [villageElderVoteEntry.voteId],
+      references: [villageElderVote.id],
+    }),
+    user: one(userData, {
+      fields: [villageElderVoteEntry.userId],
+      references: [userData.userId],
+    }),
   }),
-  user: one(userData, {
-    fields: [villageElderVoteEntry.userId],
-    references: [userData.userId],
-  }),
-}));
+);
 
 export const warKill = mysqlTable(
   "WarKill",
@@ -6087,11 +6521,9 @@ export const abEvent = mysqlTable(
       experimentIdx: index("AbEvent_experiment_idx").on(table.experiment),
       eventIdx: index("AbEvent_event_idx").on(table.event),
       sourceIdx: index("AbEvent_source_idx").on(table.source),
-      experimentEventIpHashUnique: uniqueIndex("AbEvent_experiment_event_ipHash_key").on(
-        table.experiment,
-        table.event,
-        table.ipHash,
-      ),
+      experimentEventIpHashUnique: uniqueIndex(
+        "AbEvent_experiment_event_ipHash_key",
+      ).on(table.experiment, table.event, table.ipHash),
       createdAtIdx: index("AbEvent_createdAt_idx").on(table.createdAt),
     };
   },
@@ -6266,7 +6698,9 @@ export const towerDefenseClaimReceipt = mysqlTable(
     };
   },
 );
-export type TowerDefenseClaimReceipt = InferSelectModel<typeof towerDefenseClaimReceipt>;
+export type TowerDefenseClaimReceipt = InferSelectModel<
+  typeof towerDefenseClaimReceipt
+>;
 
 export const towerDefenseCharacter = mysqlTable(
   "TowerDefenseCharacter",
@@ -6487,19 +6921,16 @@ export const farmCollectionLog = mysqlTable(
 );
 export type FarmCollectionLog = InferSelectModel<typeof farmCollectionLog>;
 
-export const farmCollectionLogRelations = relations(
-  farmCollectionLog,
-  ({ one }) => ({
-    user: one(userData, {
-      fields: [farmCollectionLog.userId],
-      references: [userData.userId],
-    }),
-    item: one(item, {
-      fields: [farmCollectionLog.itemId],
-      references: [item.id],
-    }),
+export const farmCollectionLogRelations = relations(farmCollectionLog, ({ one }) => ({
+  user: one(userData, {
+    fields: [farmCollectionLog.userId],
+    references: [userData.userId],
   }),
-);
+  item: one(item, {
+    fields: [farmCollectionLog.itemId],
+    references: [item.id],
+  }),
+}));
 
 export const farmExtraction = mysqlTable(
   "FarmExtraction",
@@ -6787,9 +7218,7 @@ export const storeEntitlementState = mysqlTable(
       .notNull(),
   },
   (table) => ({
-    userStoreKey: uniqueIndex(
-      "StoreEntitlementState_userId_store_isSandbox_key",
-    ).on(
+    userStoreKey: uniqueIndex("StoreEntitlementState_userId_store_isSandbox_key").on(
       table.userId,
       table.store,
       table.isSandbox,
@@ -6825,9 +7254,12 @@ export const storeEntitlementRevocation = mysqlTable(
     eventUserStoreKey: uniqueIndex(
       "StoreEntitlementRevocation_eventId_userId_store_isSandbox_key",
     ).on(table.eventId, table.userId, table.store, table.isSandbox),
-    ownerStoreCutoffIdx: index(
-      "StoreEntitlementRevocation_owner_env_cutoff_idx",
-    ).on(table.userId, table.store, table.isSandbox, table.revokedThrough),
+    ownerStoreCutoffIdx: index("StoreEntitlementRevocation_owner_env_cutoff_idx").on(
+      table.userId,
+      table.store,
+      table.isSandbox,
+      table.revokedThrough,
+    ),
   }),
 );
 export type StoreEntitlementRevocation = InferSelectModel<
@@ -6871,15 +7303,8 @@ export const storePurchaseTransfer = mysqlTable(
   (table) => ({
     eventSourceStoreKey: uniqueIndex(
       "StorePurchaseTransfer_eventId_sourceUserId_store_isSandbox_key",
-    ).on(
-      table.eventId,
-      table.sourceUserId,
-      table.store,
-      table.isSandbox,
-    ),
-    sourceStoreTimeIdx: index(
-      "StorePurchaseTransfer_source_env_time_idx",
-    ).on(
+    ).on(table.eventId, table.sourceUserId, table.store, table.isSandbox),
+    sourceStoreTimeIdx: index("StorePurchaseTransfer_source_env_time_idx").on(
       table.sourceUserId,
       table.store,
       table.isSandbox,
@@ -6962,17 +7387,25 @@ export const accountDeletion = mysqlTable(
     appleRevokedSubject: varchar("appleRevokedSubject", { length: 191 }),
     userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
     phase: mysqlEnum("phase", ["QUEUED", "IDENTITY_DELETED", "COMPLETE"])
-      .default("QUEUED").notNull(),
+      .default("QUEUED")
+      .notNull(),
     createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
-      .default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
     nextAttemptAt: datetime("nextAttemptAt", { mode: "date", fsp: 3 })
-      .default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
     leaseId: varchar("leaseId", { length: 191 }),
     leaseUntil: datetime("leaseUntil", { mode: "date", fsp: 3 }),
     attempts: int("attempts").default(0).notNull(),
     completedAt: datetime("completedAt", { mode: "date", fsp: 3 }),
   },
-  (table) => ({ pendingIdx: index("AccountDeletion_pending_idx").on(table.phase, table.nextAttemptAt) }),
+  (table) => ({
+    pendingIdx: index("AccountDeletion_pending_idx").on(
+      table.phase,
+      table.nextAttemptAt,
+    ),
+  }),
 );
 
 /**
@@ -7285,19 +7718,25 @@ export const contentProposalChangeRelations = relations(
   }),
 );
 
-export const contentProposalBasisRelations = relations(contentProposalBasis, ({ one }) => ({
-  proposal: one(contentProposal, {
-    fields: [contentProposalBasis.proposalId],
-    references: [contentProposal.id],
+export const contentProposalBasisRelations = relations(
+  contentProposalBasis,
+  ({ one }) => ({
+    proposal: one(contentProposal, {
+      fields: [contentProposalBasis.proposalId],
+      references: [contentProposal.id],
+    }),
   }),
-}));
+);
 
-export const contentProposalMediaRelations = relations(contentProposalMedia, ({ one }) => ({
-  proposal: one(contentProposal, {
-    fields: [contentProposalMedia.proposalId],
-    references: [contentProposal.id],
+export const contentProposalMediaRelations = relations(
+  contentProposalMedia,
+  ({ one }) => ({
+    proposal: one(contentProposal, {
+      fields: [contentProposalMedia.proposalId],
+      references: [contentProposal.id],
+    }),
   }),
-}));
+);
 
 /** PIN credentials stay separate from public profiles and general preferences. */
 export const parentalControl = mysqlTable("ParentalControl", {
@@ -7305,26 +7744,38 @@ export const parentalControl = mysqlTable("ParentalControl", {
   enabled: boolean("enabled").default(false).notNull(),
   tavernDisabled: boolean("tavernDisabled").default(false).notNull(),
   privateMessages: mysqlEnum("privateMessages", ["EVERYONE", "APPROVED", "NONE"])
-    .default("EVERYONE").notNull(),
+    .default("EVERYONE")
+    .notNull(),
   approvedUserIds: json("approvedUserIds").$type<string[]>().default([]).notNull(),
   pinHash: varchar("pinHash", { length: 191 }),
   failedAttempts: int("failedAttempts").default(0).notNull(),
   attemptWindowStart: datetime("attemptWindowStart", { mode: "date", fsp: 3 })
-    .default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
   version: int("version").default(0).notNull(),
 });
 export type ParentalControl = InferSelectModel<typeof parentalControl>;
 
-
 /** Personal historical contributions survive conversion and balance expiry. */
-export const warContribution = mysqlTable("WarContribution", {
-  warId: varchar("warId", { length: 191 }).notNull(),
-  userId: varchar("userId", { length: 191 }).notNull(),
-  damage: int("damage").default(0).notNull(),
-  recovery: int("recovery").default(0).notNull(),
-  convertedAt: datetime("convertedAt", { mode: "date", fsp: 3 }),
-  expiredAt: datetime("expiredAt", { mode: "date", fsp: 3 }),
-}, (table) => ({ pk: primaryKey({ columns: [table.warId, table.userId] }), userClaimsIdx: index("WarContribution_user_claim_idx").on(table.userId, table.convertedAt, table.expiredAt) }));
+export const warContribution = mysqlTable(
+  "WarContribution",
+  {
+    warId: varchar("warId", { length: 191 }).notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    damage: int("damage").default(0).notNull(),
+    recovery: int("recovery").default(0).notNull(),
+    convertedAt: datetime("convertedAt", { mode: "date", fsp: 3 }),
+    expiredAt: datetime("expiredAt", { mode: "date", fsp: 3 }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.warId, table.userId] }),
+    userClaimsIdx: index("WarContribution_user_claim_idx").on(
+      table.userId,
+      table.convertedAt,
+      table.expiredAt,
+    ),
+  }),
+);
 
 /** A unique combat/mission receipt makes retrying strategic effects harmless. */
 export const warActionReceipt = mysqlTable("WarActionReceipt", {
@@ -7337,17 +7788,24 @@ export const warActionReceipt = mysqlTable("WarActionReceipt", {
   warId: varchar("warId", { length: 191 }).notNull(),
 });
 /** One uniquely keyed slot per war; scores and the resolution receipt settle together. */
-export const warCamp = mysqlTable("WarCamp", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  warId: varchar("warId", { length: 191 }).notNull(),
-  sector: smallint("sector").notNull(),
-  guardianId: varchar("guardianId", { length: 191 }).notNull(),
-  startsAt: datetime("startsAt", { mode: "date", fsp: 3 }).notNull(),
-  endsAt: datetime("endsAt", { mode: "date", fsp: 3 }).notNull(),
-  attackerScore: int("attackerScore").default(0).notNull(),
-  defenderScore: int("defenderScore").default(0).notNull(),
-  resolvedAt: datetime("resolvedAt", { mode: "date", fsp: 3 }),
-}, (table) => ({ warIdx: index("WarCamp_warId_idx").on(table.warId), unresolvedIdx: index("WarCamp_unresolved_idx").on(table.resolvedAt, table.endsAt) }));
+export const warCamp = mysqlTable(
+  "WarCamp",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    warId: varchar("warId", { length: 191 }).notNull(),
+    sector: smallint("sector").notNull(),
+    guardianId: varchar("guardianId", { length: 191 }).notNull(),
+    startsAt: datetime("startsAt", { mode: "date", fsp: 3 }).notNull(),
+    endsAt: datetime("endsAt", { mode: "date", fsp: 3 }).notNull(),
+    attackerScore: int("attackerScore").default(0).notNull(),
+    defenderScore: int("defenderScore").default(0).notNull(),
+    resolvedAt: datetime("resolvedAt", { mode: "date", fsp: 3 }),
+  },
+  (table) => ({
+    warIdx: index("WarCamp_warId_idx").on(table.warId),
+    unresolvedIdx: index("WarCamp_unresolved_idx").on(table.resolvedAt, table.endsAt),
+  }),
+);
 export type WarCamp = InferSelectModel<typeof warCamp>;
 
 /** Published web store offers. Orders copy their payload so later edits cannot alter delivery. */
@@ -7360,58 +7818,101 @@ export const webStoreBundle = mysqlTable("WebStoreBundle", {
   /** Maximum lifetime purchases per buyer; zero means unlimited. */
   purchaseLimit: int("purchaseLimit").default(0).notNull(),
   contents: json("contents").$type<StoreContents>().notNull(),
-  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+    .default(sql`(CURRENT_TIMESTAMP(3))`)
+    .notNull(),
 });
 
 /** Immutable checkout snapshot and expiring reputation-cap reservation. */
-export const webStoreOrder = mysqlTable("WebStoreOrder", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  buyerId: varchar("buyerId", { length: 191 }).notNull(),
-  recipientId: varchar("recipientId", { length: 191 }).notNull(),
-  name: varchar("name", { length: 100 }).notNull(),
-  /** Published offer identity; null for custom or unattributed historical quotes. */
-  bundleId: varchar("bundleId", { length: 191 }),
-  priceCents: int("priceCents").notNull(),
-  contents: json("contents").$type<StoreContents>().notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 }).default(sql`(CURRENT_TIMESTAMP(3))`).notNull(),
-  expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
-  /** Attempt CAS token; keeps pending captures reserved beyond quote expiry. */
-  captureAttemptId: varchar("captureAttemptId", { length: 191 }),
-  grantedAt: datetime("grantedAt", { mode: "date", fsp: 3 }),
-  captureId: varchar("captureId", { length: 191 }),
-}, table => [index("WebStoreOrder_buyerId_idx").on(table.buyerId), index("WebStoreOrder_recipientId_idx").on(table.recipientId), index("WebStoreOrder_buyer_bundle_idx").on(table.buyerId, table.bundleId), uniqueIndex("WebStoreOrder_captureId_key").on(table.captureId)]);
+export const webStoreOrder = mysqlTable(
+  "WebStoreOrder",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    buyerId: varchar("buyerId", { length: 191 }).notNull(),
+    recipientId: varchar("recipientId", { length: 191 }).notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    /** Published offer identity; null for custom or unattributed historical quotes. */
+    bundleId: varchar("bundleId", { length: 191 }),
+    priceCents: int("priceCents").notNull(),
+    contents: json("contents").$type<StoreContents>().notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
+    /** Attempt CAS token; keeps pending captures reserved beyond quote expiry. */
+    captureAttemptId: varchar("captureAttemptId", { length: 191 }),
+    grantedAt: datetime("grantedAt", { mode: "date", fsp: 3 }),
+    captureId: varchar("captureId", { length: 191 }),
+  },
+  (table) => [
+    index("WebStoreOrder_buyerId_idx").on(table.buyerId),
+    index("WebStoreOrder_recipientId_idx").on(table.recipientId),
+    index("WebStoreOrder_buyer_bundle_idx").on(table.buyerId, table.bundleId),
+    uniqueIndex("WebStoreOrder_captureId_key").on(table.captureId),
+  ],
+);
 
 /** A unique predecessor prevents concurrent scheduler ticks from opening two global events. */
-export const territoryWar = mysqlTable("TerritoryWar", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  predecessorId: varchar("predecessorId", { length: 191 }).notNull(),
-  sector: smallint("sector").notNull(),
-  guardianId: varchar("guardianId", { length: 191 }).notNull(),
-  startsAt: datetime("startsAt", { mode: "date", fsp: 3 }).notNull(),
-  endsAt: datetime("endsAt", { mode: "date", fsp: 3 }).notNull(),
-  resolvedAt: datetime("resolvedAt", { mode: "date", fsp: 3 }),
-  version: int("version").default(0).notNull(),
-}, table => [uniqueIndex("TerritoryWar_predecessor_key").on(table.predecessorId), index("TerritoryWar_startsAt_idx").on(table.startsAt)]);
+export const territoryWar = mysqlTable(
+  "TerritoryWar",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    predecessorId: varchar("predecessorId", { length: 191 }).notNull(),
+    sector: smallint("sector").notNull(),
+    guardianId: varchar("guardianId", { length: 191 }).notNull(),
+    startsAt: datetime("startsAt", { mode: "date", fsp: 3 }).notNull(),
+    endsAt: datetime("endsAt", { mode: "date", fsp: 3 }).notNull(),
+    resolvedAt: datetime("resolvedAt", { mode: "date", fsp: 3 }),
+    version: int("version").default(0).notNull(),
+  },
+  (table) => [
+    uniqueIndex("TerritoryWar_predecessor_key").on(table.predecessorId),
+    index("TerritoryWar_startsAt_idx").on(table.startsAt),
+  ],
+);
 export type TerritoryWar = InferSelectModel<typeof territoryWar>;
 
 /** Stable village:/clan: identity per event; rewarded is claimed with treasury/boost delivery. */
-export const territoryWarScore = mysqlTable("TerritoryWarScore", {
-  warId: varchar("warId", { length: 191 }).notNull(),
-  competitorId: varchar("competitorId", { length: 191 }).notNull(),
-  name: varchar("name", { length: 191 }).notNull(),
-  clanId: varchar("clanId", { length: 191 }),
-  villageId: varchar("villageId", { length: 191 }),
-  points: int("points").default(0).notNull(),
-  rewarded: boolean("rewarded").default(false).notNull(),
-}, table => [primaryKey({ columns: [table.warId, table.competitorId] }), index("TerritoryWarScore_competitor_rewarded_idx").on(table.competitorId, table.rewarded)]);
+export const territoryWarScore = mysqlTable(
+  "TerritoryWarScore",
+  {
+    warId: varchar("warId", { length: 191 }).notNull(),
+    competitorId: varchar("competitorId", { length: 191 }).notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    clanId: varchar("clanId", { length: 191 }),
+    villageId: varchar("villageId", { length: 191 }),
+    points: int("points").default(0).notNull(),
+    rewarded: boolean("rewarded").default(false).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.warId, table.competitorId] }),
+    index("TerritoryWarScore_competitor_rewarded_idx").on(
+      table.competitorId,
+      table.rewarded,
+    ),
+  ],
+);
 
 /** Immutable decided-combat receipt, committed with the battle version claim and score delivery. */
-export const territoryWarReceipt = mysqlTable("TerritoryWarReceipt", {
-  battleId: varchar("battleId", { length: 191 }).primaryKey().notNull(),
-  warId: varchar("warId", { length: 191 }).notNull(),
-}, table => [index("TerritoryWarReceipt_warId_idx").on(table.warId)]);
+export const territoryWarReceipt = mysqlTable(
+  "TerritoryWarReceipt",
+  {
+    battleId: varchar("battleId", { length: 191 }).primaryKey().notNull(),
+    warId: varchar("warId", { length: 191 }).notNull(),
+  },
+  (table) => [index("TerritoryWarReceipt_warId_idx").on(table.warId)],
+);
 
-export const forumGrantRelations = relations(forumGrant, ({ one }) => ({ user: one(userData, { fields: [forumGrant.userId], references: [userData.userId] }) }));
-export const forumRestrictionRelations = relations(forumRestriction, ({ one }) => ({ user: one(userData, { fields: [forumRestriction.userId], references: [userData.userId] }) }));
+export const forumGrantRelations = relations(forumGrant, ({ one }) => ({
+  user: one(userData, { fields: [forumGrant.userId], references: [userData.userId] }),
+}));
+export const forumRestrictionRelations = relations(forumRestriction, ({ one }) => ({
+  user: one(userData, {
+    fields: [forumRestriction.userId],
+    references: [userData.userId],
+  }),
+}));
 
-export const forumReactionRelations = relations(forumReaction, ({ one }) => ({ post: one(forumPost, { fields: [forumReaction.postId], references: [forumPost.id] }) }));
+export const forumReactionRelations = relations(forumReaction, ({ one }) => ({
+  post: one(forumPost, { fields: [forumReaction.postId], references: [forumPost.id] }),
+}));

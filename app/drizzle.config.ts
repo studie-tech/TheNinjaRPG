@@ -12,5 +12,5 @@ export default defineConfig({
   ...(mysqlUrl ? { dbCredentials: { url: mysqlUrl.toString() } } : {}),
   // Keep SQL directly pasteable into database consoles, without statement-breakpoint markers.
   breakpoints: false,
-  verbose: true, 
+  verbose: true,
 });

@@ -5,9 +5,24 @@ import type { DrizzleClient } from "@/server/db";
 
 // Match the migration's stable legacy-group IDs so repeated seeds do not duplicate sections.
 const sections = {
-  broadcast: { id: "section-32f9596501250c0c374c9d58850aeb0fc01e4e81b2834cdbe3b77c26d53dbcf4", name: "Main Broadcast", summary: "General boards for TNR", position: 0 },
-  roleplay: { id: "section-7c478ab1fd7a0edca25c27f1d2c5b600fd7935bc09a1722e4e31eb1a1d3204ce", name: "Text-Based RPG", summary: "Village Boards", position: 1 },
-  lounge: { id: "section-19f6bef2ec092b7bf4fd17c488d7e19a26fd1f3ec8ee0ee37c85ae024847d80a", name: "The Chat Lounge", summary: "Fun boards for TNR", position: 2 },
+  broadcast: {
+    id: "section-32f9596501250c0c374c9d58850aeb0fc01e4e81b2834cdbe3b77c26d53dbcf4",
+    name: "Main Broadcast",
+    summary: "General boards for TNR",
+    position: 0,
+  },
+  roleplay: {
+    id: "section-7c478ab1fd7a0edca25c27f1d2c5b600fd7935bc09a1722e4e31eb1a1d3204ce",
+    name: "Text-Based RPG",
+    summary: "Village Boards",
+    position: 1,
+  },
+  lounge: {
+    id: "section-19f6bef2ec092b7bf4fd17c488d7e19a26fd1f3ec8ee0ee37c85ae024847d80a",
+    name: "The Chat Lounge",
+    summary: "Fun boards for TNR",
+    position: 2,
+  },
 } as const;
 
 const boards = [
@@ -71,11 +86,22 @@ const insertMissingBoard = async (
   client: DrizzleClient,
   board: { name: string; summary: string; section: keyof typeof sections },
 ) => {
-  const existing = await client.query.forumBoard.findFirst({ where: eq(forumBoard.name, board.name) });
+  const existing = await client.query.forumBoard.findFirst({
+    where: eq(forumBoard.name, board.name),
+  });
   if (existing) return;
   const section = sections[board.section];
-  await client.insert(forumSection).values({ ...section, policy: {} }).onDuplicateKeyUpdate({ set: { id: section.id } });
-  await client.insert(forumBoard).values({ id: nanoid(), name: board.name, summary: board.summary, sectionId: section.id, policy: board.name === "News" ? { create: "STAFF" } : {} });
+  await client
+    .insert(forumSection)
+    .values({ ...section, policy: {} })
+    .onDuplicateKeyUpdate({ set: { id: section.id } });
+  await client.insert(forumBoard).values({
+    id: nanoid(),
+    name: board.name,
+    summary: board.summary,
+    sectionId: section.id,
+    policy: board.name === "News" ? { create: "STAFF" } : {},
+  });
 };
 
 /** Ensure built-in destinations exist while preserving their stable migrated hierarchy. */
