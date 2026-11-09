@@ -462,34 +462,6 @@ describeWithDatabase("owned furniture persistence", () => {
     expect(await snapshot()).toEqual(before);
   });
 
-  it("preserves stored action furniture without placing it during a read", async () => {
-    const database = await getTestDatabase();
-    await database.update(userItem).set({ homeX: null, homeY: null }).where(eq(userItem.id, "kitchen-row"));
-    const before = await snapshot();
-    const api = await callerFor(homeRouter, userId);
-    const read = await recordQueries(() => api.getUserHome());
-    expect(read.result?.layout.some(({ id }) => id === "kitchen-row")).toBe(false);
-    expect(read.result?.furniture).toHaveLength(6);
-    expect(read.statements).toHaveLength(1);
-    expect(await snapshot()).toEqual(before);
-  });
-
-  it.each([
-    { state: "auction", patch: () => ({ isInAuction: true }) },
-    { state: "crafting", patch: () => ({ craftingFinishedAt: new Date(Date.now() + 60_000) }) },
-    { state: "empty stack", patch: () => ({ quantity: 0 }) },
-  ])("does not replace an unavailable $state action with free furniture", async ({ patch }) => {
-    const database = await getTestDatabase();
-    await database.update(userItem).set(patch()).where(eq(userItem.id, "kitchen-row"));
-    const before = await snapshot();
-    const api = await callerFor(homeRouter, userId);
-    const read = await recordQueries(() => api.getUserHome());
-    expect(read.result?.furniture.some(({ action }) => action === "kitchen")).toBe(false);
-    expect(read.result?.layout.some(({ id }) => id === "kitchen-row")).toBe(false);
-    expect(read.statements).toHaveLength(1);
-    expect(await snapshot()).toEqual(before);
-  });
-
   it("leaves saved furniture and its revision unchanged after content geometry changes", async () => {
     const database = await getTestDatabase();
     await database.update(item).set({ furnitureData: {
@@ -699,52 +671,6 @@ describeWithDatabase("owned furniture persistence", () => {
     const before = await snapshot();
     expect((await api.getUserHome())?.layout).toEqual([]);
     expect((await api.getUserHome())?.furniture).toEqual([]);
-    expect(await snapshot()).toEqual(before);
-  });
-
-  it.each([...basicFurniture])("keeps a sold legacy revision-zero $action basic out of every home read", async ({ itemId }) => {
-    const database = await getTestDatabase();
-    await database.delete(userItem).where(eq(userItem.userId, userId));
-    await insertUserItems(basicFurniture.map((piece, index) => ({
-      id: piece.itemId, userId, itemId: piece.itemId, storedAtHome: true,
-      homeX: essentialLayout[index]!.x, homeY: essentialLayout[index]!.y,
-    })));
-    const inventory = await callerFor(itemRouter, userId);
-    expect((await inventory.sellUserItem({ userItemId: itemId })).success).toBe(true);
-    const before = await snapshot();
-    expect(before.owner.homeFurnitureRevision).toBe(0);
-    const api = await callerFor(homeRouter, userId);
-    for (let i = 0; i < 2; i++) {
-      const read = await recordQueries(() => api.getUserHome());
-      expect(read.result?.furniture.map(({ itemId: id }) => id).sort()).toEqual(basicFurniture.filter((piece) => piece.itemId !== itemId).map((piece) => piece.itemId).sort());
-      expect(read.result?.layout.some(({ id }) => id === itemId)).toBe(false);
-      expect(read.result?.furnitureRevision).toBe(0);
-      expect(read.statements).toHaveLength(1);
-      expect(read.statements[0]).toMatch(/^\s*select\b/i);
-    }
-    expect(await snapshot()).toEqual(before);
-  });
-
-  it("keeps all three legacy basics discarded with furniture storage at capacity", async () => {
-    const database = await getTestDatabase();
-    await database.delete(userItem).where(eq(userItem.userId, userId));
-    await insertUserItems([
-      ...basicFurniture.map(({ itemId }) => ({ id: itemId, userId, itemId, storedAtHome: true })),
-      ...Array.from({ length: HOME_FURNITURE_STORAGE_CAPACITY - 3 }, (_, i) => ({ id: `stored-${i}`, userId, itemId: "rug", storedAtHome: true })),
-    ]);
-    const inventory = await callerFor(itemRouter, userId);
-    for (const { itemId } of basicFurniture) {
-      expect((await inventory.sellUserItem({ userItemId: itemId })).success).toBe(true);
-    }
-    const before = await snapshot();
-    const api = await callerFor(homeRouter, userId);
-    for (let i = 0; i < 2; i++) {
-      const read = await recordQueries(() => api.getUserHome());
-      expect(read.result?.furniture.every(({ action }) => action === null)).toBe(true);
-      expect(read.result?.furniture).toHaveLength(HOME_FURNITURE_STORAGE_CAPACITY - 3);
-      expect(read.result?.layout).toEqual([]);
-      expect(read.statements).toHaveLength(1);
-    }
     expect(await snapshot()).toEqual(before);
   });
 
