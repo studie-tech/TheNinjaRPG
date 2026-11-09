@@ -1,9 +1,9 @@
+// @ts-check
 import { withSentryConfig } from "@sentry/nextjs/config";
 import { withBotId } from "botid/next/config";
 import { cdnOrigin, contentSecurityPolicy } from "./src/libs/cdn.mjs";
 import { SITEMAP_SECTIONS } from "./src/libs/sitemapSections.mjs";
 
-// @ts-check
 /**
  * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation.
  * This is especially useful for Docker builds.
@@ -173,7 +173,7 @@ export default withSentryConfig(withBotId(config), {
 
   // Sourcemaps
   sourcemaps: {
-    deleteSourceMapsAfterUpload: true,
+    deleteSourcemapsAfterUpload: true,
   },
 
   webpack: {
