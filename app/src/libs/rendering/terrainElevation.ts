@@ -41,6 +41,8 @@ export type WaterSample = { depth: number; frozen: number };
 export type TerrainField = {
   level: (tile: TerrainHex) => number;
   sample: (point: { x: number; y: number }) => WaterSample;
+  /** The cell containing a point, which may lie in a neighbouring sector; null past the field's edge. */
+  at: (point: { x: number; y: number }) => { water: boolean; level: number } | null;
 };
 
 /**
@@ -146,6 +148,13 @@ export const createTerrainField = (
   }
   return {
     level: (tile) => levels.get(tile) ?? 0,
+    at: (point) => {
+      const tile = grid.pointToHex(point, { allowOutside: false });
+      const cell = tile && cells.get(tile);
+      return tile && cell
+        ? { water: !!cell.isWater, level: levels.get(tile) ?? 0 }
+        : null;
+    },
     sample: (point) => {
       const sample = vertices.get(vertexKey(point));
       return sample

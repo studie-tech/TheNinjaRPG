@@ -255,6 +255,9 @@ export const hasWorldWaterDepth = (spec: TerrainSpec | undefined) =>
   spec.colors.join(",").toLowerCase() === STOCK_TERRAIN_COLORS.ocean?.source &&
   spec.textureUrl === BUILTIN_TERRAINS_BY_KEY.get("ocean")?.textureUrl;
 
+/** Recess of the stock ocean's water surface, as a fraction of the tile edge. */
+export const STOCK_OCEAN_DEPRESSION = 0.18;
+
 /** Stock materials share the scenery palette; custom terrain colors remain authoritative. */
 export const resolveWorldTerrain = (spec: TerrainSpec) => {
   const stock = STOCK_TERRAIN_COLORS[spec.key];
@@ -263,7 +266,11 @@ export const resolveWorldTerrain = (spec: TerrainSpec) => {
         ...spec,
         colors: stock.colors,
         depression:
-          spec.key === "ocean" ? 0.18 : spec.key === "ice" ? 0 : spec.depression,
+          spec.key === "ocean"
+            ? STOCK_OCEAN_DEPRESSION
+            : spec.key === "ice"
+              ? 0
+              : spec.depression,
       }
     : spec;
 };

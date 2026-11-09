@@ -513,6 +513,20 @@ export const createTravelScene = async (options: {
               roads,
             });
             const { dx, dy } = entry;
+            // Sector-local points map onto the window grid the field was built on.
+            const toWindow = (point: { x: number; y: number }) =>
+              unifiedOrigin && localOrigin
+                ? {
+                    x:
+                      unifiedOrigin.x +
+                      ((point.x - localOrigin.x) * unifiedOrigin.width) /
+                        localOrigin.width,
+                    y:
+                      unifiedOrigin.y +
+                      ((point.y - localOrigin.y) * unifiedOrigin.height) /
+                        localOrigin.height,
+                  }
+                : point;
             data = buildSectorTerrainData(grid, prng, options.lightLayout, {
               sector: entry.sector,
               sprites: descriptions,
@@ -525,17 +539,8 @@ export const createTravelScene = async (options: {
                         const unified = nav.toUnified(dx, dy, tile.col, tile.row);
                         return unified ? field.level(unified) : 0;
                       },
-                      sample: (point) =>
-                        field.sample({
-                          x:
-                            unifiedOrigin.x +
-                            ((point.x - localOrigin.x) * unifiedOrigin.width) /
-                              localOrigin.width,
-                          y:
-                            unifiedOrigin.y +
-                            ((point.y - localOrigin.y) * unifiedOrigin.height) /
-                              localOrigin.height,
-                        }),
+                      sample: (point) => field.sample(toWindow(point)),
+                      at: (point) => field.at(toWindow(point)),
                     }
                   : undefined,
             });

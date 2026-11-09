@@ -14,6 +14,7 @@ import {
   SEABED_STEP,
   type TerrainField,
 } from "@/libs/rendering/terrainElevation";
+import { STOCK_OCEAN_DEPRESSION } from "@/libs/rendering/worldArt";
 import { parseHexColor } from "@/utils/color";
 
 /**
@@ -221,9 +222,27 @@ export const buildHexTerrainData = (
       boundary.push(first.a.x, first.a.y + top.face, first.b.x, first.b.y + top.face);
       const middle = (first.a.y + first.b.y) / 2;
       if (lightLayout || middle >= first.tile.y) continue;
-      // The window's front rim shows the cut through land, seabed and water like a diorama.
+      // Across a sector border the window field knows the neighbouring tile, so the real drop is drawn.
+      const across = terrain?.at({
+        x: first.a.x + first.b.x - first.tile.x,
+        y: first.a.y + first.b.y - first.tile.y,
+      });
+      if (across) {
+        appendDrops(
+          first,
+          first,
+          top,
+          neighbourTop(first.tile, top, across),
+          piece,
+          sand,
+          deep,
+        );
+        continue;
+      }
+      // The rim shows the cut through land, seabed and water like a diorama. It paints beneath
+      // every sector's terrain, so at a border the neighbouring sector covers it.
       appendWall(
-        piece(top.material.waterDepth ? seabedOrder(top.depth) : wallOrder(top.land)),
+        piece(RIM_ORDER),
         first,
         top.solid,
         floor,
@@ -233,7 +252,7 @@ export const buildHexTerrainData = (
       );
       if (top.material.waterDepth)
         appendWall(
-          piece(WATER_SURFACE_ORDER + 0.01),
+          piece(RIM_ORDER + 0.1),
           first,
           top.face,
           top.solid,
@@ -256,11 +275,19 @@ export const buildHexTerrainData = (
   }
   const ordered = [...items].sort(([a], [b]) => a - b);
   return {
-    // Underwater, the water surface and banks paint first; land, cliffs and outlines follow.
+    // The rim paints first, then underwater, then the water surface and banks; land, cliffs and outlines follow.
     segments: [
       mergeItems(
+        RIM_SEGMENT,
+        ordered.filter(([order]) => order < UNDERWATER_FROM),
+      ),
+      mergeItems(
         UNDERWATER_SEGMENT,
-        ordered.filter(([order]) => order < LAND_FROM),
+        ordered.filter(([order]) => order >= UNDERWATER_FROM && order < SURFACE_FROM),
+      ),
+      mergeItems(
+        SURFACE_SEGMENT,
+        ordered.filter(([order]) => order >= SURFACE_FROM && order < LAND_FROM),
       ),
       mergeItems(
         LAND_SEGMENT,
@@ -311,9 +338,19 @@ export const KIND = {
   flat: 5,
   grain: 6,
 } as const;
-/** Segment draw orders; pieces ordered below LAND_FROM paint with the underwater segment. */
+/**
+ * Segment draw orders: the rim, then everything below the water surface, then the
+ * surface with its pads and banks, then land. Each layer of every sector paints before
+ * the next layer of any sector, so a seabed step hanging across a sector border sits
+ * under the neighbour's water and rims only show at the window's outer edge.
+ */
+const RIM_SEGMENT = 1;
 const UNDERWATER_SEGMENT = 2;
+const SURFACE_SEGMENT = 2.6;
 export const LAND_SEGMENT = 4;
+const RIM_ORDER = 0.5;
+const UNDERWATER_FROM = 1;
+const SURFACE_FROM = 2.6;
 const LAND_FROM = 3;
 const GRID_LINE = "#324b36";
 /** World-unit width of drawn outlines: one scenery pixel. */
@@ -400,6 +437,38 @@ const mix = (a: LinearColor, b: LinearColor, t: number, scale = 1): LinearColor 
   g: (a.g * (1 - t) + b.g * t) * scale,
   b: (a.b * (1 - t) + b.b * t) * scale,
 });
+
+/**
+ * The solid top of a tile in a neighbouring sector, from its field cell and the stock
+ * materials: recessed stock water over its seabed, or land on its terrace.
+ */
+const neighbourTop = (
+  tile: TerrainHex,
+  own: TileTop,
+  across: { water: boolean; level: number },
+): TileTop => {
+  const material = {
+    ...own.material,
+    isWater: across.water,
+    waterDepth: across.water,
+    frost: undefined,
+  };
+  if (!across.water) {
+    const land = Math.max(0, across.level);
+    const face = land * LAND_STEP * tile.height;
+    return { ...own, face, solid: face, land, depth: 0, material };
+  }
+  const depth = Math.max(1, Math.min(MAX_SEABED_DEPTH, -across.level));
+  const face = -own.length * STOCK_OCEAN_DEPRESSION;
+  return {
+    ...own,
+    face,
+    solid: face - depth * SEABED_STEP * tile.height,
+    land: 0,
+    depth,
+    material,
+  };
+};
 
 /** Earthy rock for temperate cliffs; frost keeps a cold grey face and sand stays sandy. */
 const cliffColor = (material: TerrainLook) => {

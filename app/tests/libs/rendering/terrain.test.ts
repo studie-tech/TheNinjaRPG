@@ -120,6 +120,24 @@ describe("shared hex terrain textures", () => {
     expect(meshes.every((mesh, index) => mesh.zIndex === data.segments[index]!.order - 0.001)).toBe(true);
   });
 
+  it("paints each sector's rim beneath every sector's terrain so borders show the neighbour, not a cut", async () => {
+    const map = mapOf(6, 4);
+    map.tiles = map.tiles.map((tile) => ({ ...tile, terrain: tile.x < 3 ? "ground" : "ocean", battleBiome: tile.x < 3 ? "ground" : "ocean" }));
+    const { data } = prepare(map);
+    const [rim, ...terrain] = data.segments;
+    expect(rim!.order).toBeLessThan(Math.min(...terrain.map((segment) => segment.order)));
+    // The rim holds only the cut faces: no tile faces, and sector-local, never inside the grid's footprint.
+    expect(rim!.tiles).toEqual([]);
+    expect([...rim!.kinds].every((kind) => kind === KIND.flat)).toBe(true);
+    const { game } = renderer(async () => Texture.WHITE);
+    const terrainMeshes = await Promise.all([createHexTerrain(game, data), createHexTerrain(game, data)]);
+    terrainMeshes[1]!.setDepthBias(0.001);
+    const zIndices = (index: number) => (terrainMeshes[index]!.container.children as Mesh[]).filter((mesh) => mesh.geometry.attributes.aKind).map((mesh) => mesh.zIndex);
+    // Even a sector further forward keeps its rim below the other sector's underwater and land meshes.
+    expect(Math.max(zIndices(1)[0]!, zIndices(0)[0]!)).toBeLessThan(Math.min(...zIndices(0).slice(1), ...zIndices(1).slice(1)));
+    expect(prepare(map, true).data.segments.every((segment) => segment.order !== rim!.order)).toBe(true);
+  });
+
   it("splits a segment only when it needs more images than a mesh binds", () => {
     const slots = new Float32Array([1, 1, 1, 2, 2, 2, 0, 0, 0, 3, 3, 3, 4, 4, 4, 5, 5, 5, 1, 1, 1]);
     expect(textureRanges(slots, 4)).toEqual([
@@ -134,7 +152,7 @@ describe("shared hex terrain textures", () => {
     const random = alea(3);
     const { grid } = prepareSectorGrid(1024, random, 1, [], map, mergeTerrainSpecs([]), null);
     const plateau = new Set(["2,2", "3,2", "2,3", "3,3"]);
-    const field = { level: (tile: { col: number; row: number }) => (plateau.has(`${tile.col},${tile.row}`) ? 2 : 0), sample: () => ({ depth: 1, frozen: 0 }) };
+    const field = { level: (tile: { col: number; row: number }) => (plateau.has(`${tile.col},${tile.row}`) ? 2 : 0), sample: () => ({ depth: 1, frozen: 0 }), at: () => null };
     const data = buildSectorTerrainData(grid, random, false, { field: field as never });
     const raised = grid.getHex({ col: 2, row: 2 })!;
     expect(raised.terrace).toBe(2);
@@ -307,7 +325,7 @@ describe("shared hex terrain data", () => {
     const map = mapOf(26, 26), before = JSON.stringify(map);
     const { data } = prepare(map);
     expect(JSON.stringify(map)).toBe(before);
-    expect(data.segments.length).toBeLessThanOrEqual(2);
+    expect(data.segments.length).toBeLessThanOrEqual(4);
     expect(data.segments.reduce((sum, segment) => sum + segment.tiles.length, 0)).toBe(26 * 26);
     const all = vertices(data);
     // Each stock water tile adds one seabed block beneath its surface.
@@ -369,15 +387,20 @@ describe("coastal water depth", () => {
       const before = grid.toArray().map((tile) => [tile.cost, tile.blocked, tile.spec]);
       const local = grid.getHex({ col: 0, row: 0 })!;
       const unified = nav.toUnified(dx, 0, 0, 0)!;
+      const toWindow = (point: { x: number; y: number }) => ({
+        x: unified.x + (point.x - local.x) * unified.width / local.width,
+        y: unified.y + (point.y - local.y) * unified.height / local.height,
+      });
       const local_field = {
         level: (tile: { col: number; row: number }) => field.level(nav.toUnified(dx, 0, tile.col, tile.row)!),
-        sample: (point: { x: number; y: number }) => field.sample({
-          x: unified.x + (point.x - local.x) * unified.width / local.width,
-          y: unified.y + (point.y - local.y) * unified.height / local.height,
-        }),
+        sample: (point: { x: number; y: number }) => field.sample(toWindow(point)),
+        at: (point: { x: number; y: number }) => field.at(toWindow(point)),
       };
       const plain = buildSectorTerrainData(grid, alea(1), false);
       const data = buildSectorTerrainData(grid, alea(1), false, { field: local_field as never });
+      // Edges shared with the other sector drop to its real seabed instead of a cut to the floor.
+      const rimOf = (terrain: typeof data) => terrain.segments.find((segment) => segment.tiles.length === 0 && segment.kinds.every((kind) => kind === KIND.flat));
+      expect(rimOf(data)?.positions.length ?? 0).toBeLessThan(rimOf(plain)!.positions.length);
       const surfaces = (terrain: typeof data) => vertices(terrain).filter((vertex) => vertex.kind === KIND.water || vertex.kind === KIND.noise || vertex.kind === KIND.image).map((vertex) => [vertex.x, vertex.y]);
       expect(surfaces(data)).toEqual(surfaces(plain));
       expect(data.faceOffsets).toEqual(plain.faceOffsets);
