@@ -18,18 +18,17 @@ interface LayoutBackgroundProps {
 }
 
 /**
- * Wallpapers cover the whole viewport, so a phone was downloading several times the
- * pixels it can show — and this is the largest contentful paint on most pages.
- * next/image cannot emit a srcSet while images.unoptimized is set, so the renditions are
- * selected here with <picture> media queries and produced by Bunny's optimizer.
+ * Wallpapers cover the whole viewport and are the largest contentful paint on most pages,
+ * so a phone gets a rendition sized for its screen. next/image cannot emit a srcSet while
+ * images.unoptimized is set, so the renditions are selected here with <picture> media
+ * queries and produced by Bunny's optimizer.
  *
  * Two renditions, not three: Bunny re-encodes at quality 85, above what these files were
- * authored at, so a rendition narrower than the source is larger than the source itself
- * (fall: 137,670 B at width=1280, worst at 143,442 B at width=1342, against 94,994 B
- * untouched). Bunny passes the original through once the requested width reaches the
- * source width, so `full` has to stay at or above the widest source — currently 1343px,
- * except summer at 1594px and Horizon at 1792px. An intermediate tablet width sits below that cliff by
- * definition and costs bytes and resolution at once.
+ * authored at, so a rendition narrower than the source is larger than the source itself.
+ * Bunny passes the original through once the requested width reaches the source width,
+ * so `full` has to stay at or above the widest source (Horizon is the exception handled
+ * below). An intermediate tablet width sits below that cliff by definition and costs
+ * bytes and resolution at once.
  */
 const WALLPAPER_WIDTHS = { mobile: 828, full: 1600 } as const;
 
@@ -38,8 +37,8 @@ const WALLPAPER_WIDTHS = { mobile: 828, full: 1600 } as const;
  *
  * The wallpaper is the largest contentful paint on most pages, and marking it eager and
  * high priority only reorders it against other work the browser has already found -- the
- * browser cannot start it until the parser reaches the body. Search Console reported
- * every LCP group at 4.0s, so the fetch is moved into <head>.
+ * browser cannot start it until the parser reaches the body. Preloading it in <head>
+ * starts the fetch before the parser reaches the body.
  *
  * Both queries are written from one breakpoint, the second as the exact complement of the
  * first, so they cannot overlap (which would preload an image the page never shows) and
