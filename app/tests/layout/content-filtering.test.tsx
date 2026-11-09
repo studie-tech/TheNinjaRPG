@@ -138,6 +138,42 @@ describe("content filter timing", () => {
   });
 });
 
+describe("content filter options", () => {
+  it("keeps typed and chosen filters when options arrive with unchanged defaults", () => {
+    const withOptions = (options: string[]) =>
+      defineFilteringSchema({
+        fields: [
+          { id: "name", label: "Name", type: "text", defaultValue: "" },
+          {
+            id: "system",
+            label: "System",
+            type: "single-select",
+            defaultValue: "None",
+            options: options.map((value) => ({ value, label: value })),
+          },
+        ] as const,
+        exclusions: [{ key: "excludedStats", label: "Stats", options }],
+      });
+    const { result, rerender } = renderHook(
+      ({ schema }) => useContentFiltering(schema),
+      { initialProps: { schema: withOptions([]) } },
+    );
+    act(() => {
+      result.current.setters.name("Kunai");
+      result.current.setters.system("Combat");
+      result.current.setExcluded.excludedStats(["Fire"]);
+    });
+    const loaded = withOptions(["Combat", "Chat"]);
+    rerender({ schema: loaded });
+    act(() => vi.advanceTimersByTime(500));
+    expect(buildFilter(result.current, loaded)).toEqual({
+      name: "Kunai",
+      system: "Combat",
+      excludedStats: ["Fire"],
+    });
+  });
+});
+
 describe("shared filter fields", () => {
   it("sends no minimum count below 1", () => {
     expect(minCountField.normalizeForFilter(undefined)).toBeUndefined();

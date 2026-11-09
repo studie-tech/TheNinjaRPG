@@ -294,19 +294,33 @@ export const useContentFiltering = <
     return obj;
   }, [schema]);
 
-  const [{ values, debounced }, setFieldState] = useState({
+  // Options can load after mount; only new fields, defaults or exclusions reset the state.
+  const defaultsKey = useMemo(
+    () =>
+      JSON.stringify([
+        schema.fields.map((field) => [field.id, field.defaultValue]),
+        schema.exclusions?.map((category) => category.key),
+      ]),
+    [schema],
+  );
+
+  const [{ values, debounced, appliedDefaultsKey }, setFieldState] = useState({
     values: initialValues,
     debounced: initialValues,
+    appliedDefaultsKey: defaultsKey,
   });
 
-  // Keep values in sync if schema changes
   useEffect(() => {
     setFieldState((prev) =>
-      prev.values === initialValues && prev.debounced === initialValues
+      prev.appliedDefaultsKey === defaultsKey
         ? prev
-        : { values: initialValues, debounced: initialValues },
+        : {
+            values: initialValues,
+            debounced: initialValues,
+            appliedDefaultsKey: defaultsKey,
+          },
     );
-  }, [initialValues]);
+  }, [defaultsKey, initialValues]);
 
   // Any change restarts the timer; when it fires, every typed input applies at once.
   useEffect(() => {
@@ -341,6 +355,7 @@ export const useContentFiltering = <
           return current === next
             ? prev
             : {
+                ...prev,
                 values: { ...prev.values, [id]: next } as ValuesFromSchema<F>,
                 // Resolve functional updaters once so both maps share the same selection.
                 debounced: isTypingField(field)
@@ -367,8 +382,8 @@ export const useContentFiltering = <
   const [excluded, setExcludedState] = useState<ExcludedFromSchema<E>>(initialExcluded);
 
   useEffect(() => {
-    setExcludedState(initialExcluded);
-  }, [initialExcluded]);
+    if (appliedDefaultsKey !== defaultsKey) setExcludedState(initialExcluded);
+  }, [appliedDefaultsKey, defaultsKey, initialExcluded]);
 
   const setExcluded = useMemo(() => {
     const out = {} as ExcludedSettersFromSchema<E>;
