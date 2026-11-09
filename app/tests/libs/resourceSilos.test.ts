@@ -6,6 +6,7 @@ import { ObjectiveReward } from "@/validators/rewards";
 import { makeBattleUser, makeCompleteBattle } from "../setup/combat";
 
 const friday = new Date("2026-11-13T12:00:00Z");
+/** Create eligible opposing human fighters admitted at the active window's opening. */
 const battle = () => makeCompleteBattle({
   battleType: "COMBAT",
   extraState: { resourceSiloWindowId: friday.toISOString() },
@@ -60,6 +61,7 @@ describe("resource silo PvP points", () => {
 });
 
 describe("independent silo drops", () => {
+  /** Build a saved reward snapshot with a controlled chance and additive scalar payout. */
   const entry = (sourceId: string, chance: number) => ResourceSiloEntry.parse({ kind: "package", sourceId, name: sourceId, chance, rewards: ObjectiveReward.parse({ reward_money: 10 }) });
   it("allows multiple drops and zero drops without normalizing percentages", () => {
     const entries = [entry("a", 50), entry("b", 50), entry("c", 0)];

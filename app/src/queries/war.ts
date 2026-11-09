@@ -2047,10 +2047,18 @@ export const listActiveWarsWithRules = (client: Pick<DrizzleClient, "query">) =>
     where: and(eq(war.status, "ACTIVE"), isNotNull(war.rules)),
   });
 
-/** Raid combat closes at the deadline or the first defeated structure, even before settlement runs. */
-export const warRaidCombatGuard = () =>
+/**
+ * Close raid combat at the deadline or first defeated structure before settlement runs.
+ * Accept a joined alias so atomic multi-table rewards use this same live eligibility gate.
+ */
+export const warRaidCombatGuard = (
+  table: Record<
+    "type" | "startedAt" | "attackerWarHealth" | "defenderWarHealth",
+    SQLWrapper
+  > = war,
+) =>
   // SYSDATE reevaluates wall time after a row-lock wait; NOW freezes it at statement start.
-  sql`(${war.type} != 'WAR_RAID' OR (${war.startedAt} > SYSDATE(3) - INTERVAL ${FACTION_RAID_MAX_DAYS * 24} HOUR AND ${war.attackerWarHealth} > 0 AND ${war.defenderWarHealth} > 0))`;
+  sql`(${table.type} != 'WAR_RAID' OR (${table.startedAt} > SYSDATE(3) - INTERVAL ${FACTION_RAID_MAX_DAYS * 24} HOUR AND ${table.attackerWarHealth} > 0 AND ${table.defenderWarHealth} > 0))`;
 
 /**
  * SQL fragment that extends `userData.warParticipantUntil` to the larger of its current

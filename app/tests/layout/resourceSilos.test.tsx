@@ -55,6 +55,7 @@ describe("Resource Silo", () => {
   });
 });
 
+/** Match the hospital's mutation ownership while testing the conditional revival controls. */
 const Revival = () => <WarTornRevival revival={hooks.useWarTornRevival()} />;
 
 describe("War-Torn revival", () => {

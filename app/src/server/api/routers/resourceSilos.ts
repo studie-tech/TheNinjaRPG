@@ -4,17 +4,22 @@ import {
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   RESOURCE_SILO_POINTS_REQUIRED,
 } from "@/drizzle/constants";
+import type { UserData } from "@/drizzle/schema";
 import { getRewardPreview } from "@/libs/objectives";
+import { getWarSide } from "@/libs/objectiveWar";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
-import { postProcessRewards } from "@/libs/quest/rewards";
+import { boostPvpRewards, getPvpBoost } from "@/libs/pvpExperience";
+import { type GetRewardResult, postProcessRewards } from "@/libs/quest/rewards";
 import { rollResourceSiloRewards } from "@/libs/resourceSilos";
 import { getSectorShrinePosition } from "@/libs/sector-map/structures";
 import { findNearestReachableCoordinate } from "@/libs/sector-map/validation";
 import { isWeightedCacheEffect } from "@/libs/weightedCache";
 import { fetchUser } from "@/queries/profile";
+import { selectVillageForUpdateRewards } from "@/queries/quests";
 import {
   auditResourceSilo,
   claimResourceSilo,
+  claimResourceSiloWithRewards,
   findResourceSilo,
   listResourceSiloCaches,
   resolveWarTornRespawn,
@@ -22,6 +27,7 @@ import {
 } from "@/queries/resourceSilos";
 import { listRewardPackageForGetCatalog } from "@/queries/rewardPackages";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
+import { fetchActiveWars } from "@/server/api/routers/war";
 import {
   createTRPCRouter,
   errorResponse,
@@ -35,6 +41,7 @@ import {
 } from "@/server/utils/actionReadiness";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { pushActivityUpdate } from "@/server/utils/push/liveActivity";
+import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { updateRewards } from "@/server/utils/questRewards";
 import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
 import { validateTitleRewardIds } from "@/server/utils/titleRewards";
@@ -45,10 +52,11 @@ import {
   type ResourceSiloEntryType,
   ResourceSiloSelection,
 } from "@/validators/resourceSilos";
-import { ObjectiveReward } from "@/validators/rewards";
+import { ObjectiveReward, type ObjectiveRewardType } from "@/validators/rewards";
 
 /** Weekend shrine rewards, staff catalog snapshots and the War-Torn death choice. */
 export const resourceSilosRouter = createTRPCRouter({
+  /** Report current-window progress without exposing the configured reward payloads. */
   getStatus: protectedProcedure.query(async ({ ctx }) => {
     const [user, config] = await Promise.all([
       fetchUser(ctx.drizzle, ctx.userId),
@@ -66,6 +74,7 @@ export const resourceSilosRouter = createTRPCRouter({
       configured: !!config?.entries.some((entry) => entry.chance > 0),
     };
   }),
+  /** Load staff catalog choices once so cache-effect filtering stays in memory. */
   getEditor: protectedProcedure.query(async ({ ctx }) => {
     const user = await fetchUser(ctx.drizzle, ctx.userId);
     if (!isStaffRole(user.role))
@@ -82,6 +91,7 @@ export const resourceSilosRouter = createTRPCRouter({
       caches: caches.map(({ id, name }) => ({ id, name })),
     };
   }),
+  /** Validate source rewards and persist a staff-owned catalog snapshot with its audit entry. */
   save: protectedProcedure
     .input(
       z.object({
@@ -156,6 +166,7 @@ export const resourceSilosRouter = createTRPCRouter({
       await auditResourceSilo(ctx.drizzle, ctx.userId, config?.entries ?? [], entries);
       return { success: true, message: "Resource Silos saved", entries };
     }),
+  /** Consume one eligible spawn receipt atomically with its independently rolled payout. */
   claim: protectedProcedure.mutation(async ({ ctx }) => {
     const [snapshot, config] = await Promise.all([
       fetchUpdatedUser({
@@ -194,51 +205,102 @@ export const resourceSilosRouter = createTRPCRouter({
       return errorResponse("You already claimed this silo");
     const { rewards: rawRewards } = rollResourceSiloRewards(config.entries);
     const rewards = postProcessRewards(rawRewards, user);
-    // Package delivery can write inventory, titles and other tables. A single account UPDATE
-    // cannot atomically deliver those grants; the receipt and every grant must roll back together.
-    const outcome = await retryOnDeadlock(() =>
-      ctx.drizzle.transaction(async (tx) => {
-        const client = tx as unknown as DrizzleClient;
-        const claim = await claimResourceSilo(
-          client,
-          readiness.initial,
-          window,
-          readiness,
-        );
-        if (claim.rowsAffected !== 1)
-          return errorResponse("Your character or silo changed. Reload and try again.");
-        const payout = structuredClone(rewards);
-        const granted = await updateRewards({
-          client,
-          user,
-          rewards: payout,
-          reason: "Resource Silo",
-          inTransaction: true,
-          persistQuestData: false,
-        });
-        const preview = getRewardPreview({
-          ...rawRewards,
-          ...payout,
-          reward_items: [],
-        });
-        const items = granted.items.map((item) => item.name).join(", ");
-        return {
-          success: true,
-          message:
-            preview || items
-              ? `Resource Silo: ${[preview, items].filter(Boolean).join("; ")}`
-              : "Resource Silo unlocked. No rewards dropped this time.",
-          claimed: true as const,
-          windowId: window.id,
-        };
-      }),
-    );
+    let outcome:
+      | ReturnType<typeof resourceSiloClaimResponse>
+      | ReturnType<typeof errorResponse>;
+    if (!resourceSiloNeedsTransaction(user, rewards)) {
+      const [pvpAverage, membershipVillage, activeWars] = await Promise.all([
+        (user.pvpExperience ?? 0) > 0
+          ? fetchPvpExperienceAverage(ctx.drizzle)
+          : undefined,
+        rewards.reward_village_membership !== "NONE"
+          ? selectVillageForUpdateRewards(ctx.drizzle, {
+              reward_village_membership: rewards.reward_village_membership,
+            }).then((rows) => rows[0])
+          : undefined,
+        (rewards.reward_war_damage > 0 || rewards.reward_war_healing > 0) &&
+        user.villageId
+          ? fetchActiveWars(ctx.drizzle, user.villageId, user.userId)
+          : [],
+      ]);
+      const payout = structuredClone(rewards);
+      boostPvpRewards(
+        payout,
+        getPvpBoost(user, pvpAverage ? [pvpAverage] : []).totalPercent,
+        true,
+      );
+      const wars = activeWars.flatMap((war) => {
+        const side = getWarSide(war, user.villageId, user.userId);
+        return side && ["VILLAGE_WAR", "WAR_RAID"].includes(war.type)
+          ? [
+              {
+                id: war.id,
+                type: war.type,
+                attackerWarHealth: war.attackerWarHealth,
+                defenderWarHealth: war.defenderWarHealth,
+                side:
+                  side === war.attackerVillageId
+                    ? ("attacker" as const)
+                    : ("defender" as const),
+              },
+            ]
+          : [];
+      });
+      const claim = await claimResourceSiloWithRewards(
+        ctx.drizzle,
+        readiness,
+        window,
+        payout,
+        membershipVillage?.id,
+        wars,
+      );
+      outcome =
+        claim.rowsAffected > 0
+          ? resourceSiloClaimResponse(rawRewards, payout, [], window.id)
+          : errorResponse("Your character or silo changed. Reload and try again.");
+    } else {
+      // MySQL UPDATE cannot insert inventory/acquisition/reputation/recruitment receipts,
+      // or delete promotion requests. These payouts require multiple statements whose
+      // receipt and grants must roll back together; UPDATE-only payouts stay outside.
+      outcome = await retryOnDeadlock(() =>
+        ctx.drizzle.transaction(async (tx) => {
+          const client = tx as unknown as DrizzleClient;
+          const claim = await claimResourceSilo(
+            client,
+            readiness.initial,
+            window,
+            readiness,
+          );
+          if (claim.rowsAffected !== 1)
+            return errorResponse(
+              "Your character or silo changed. Reload and try again.",
+            );
+          // updateRewards boosts its argument in place; each rollback retries an unboosted clone.
+          const payout = structuredClone(rewards);
+          const granted = await updateRewards({
+            client,
+            user,
+            rewards: payout,
+            reason: "Resource Silo",
+            inTransaction: true,
+            persistQuestData: false,
+          });
+          return resourceSiloClaimResponse(
+            rawRewards,
+            payout,
+            granted.items,
+            window.id,
+          );
+        }),
+      );
+    }
     return actionReadinessResponse(
       outcome,
       outcome.success ? readiness : undefined,
       ctx.drizzle,
     );
   }),
+  /** Consume the death choice, charging only an available, immediately awake shrine revival. */
   respawn: protectedProcedure
     .input(z.object({ destination: z.enum(["shrine", "village"]) }))
     .mutation(async ({ ctx, input }) => {
@@ -304,3 +366,37 @@ export const resourceSilosRouter = createTRPCRouter({
       };
     }),
 });
+
+/** Identify payouts whose acquisition records or promotion cleanup cannot share an UPDATE receipt. */
+const resourceSiloNeedsTransaction = (user: UserData, rewards: GetRewardResult) =>
+  rewards.reward_rank !== "NONE" ||
+  rewards.reward_reputation > 0 ||
+  (!!user.recruiterId && rewards.reward_prestige > 0) ||
+  rewards.reward_items.length > 0 ||
+  rewards.reward_jutsus.length > 0 ||
+  rewards.reward_bloodlines.length > 0 ||
+  rewards.reward_badges.length > 0 ||
+  (rewards.reward_titles?.length ?? 0) > 0 ||
+  (!user.sageModeId && rewards.reward_sage_modes.length > 0) ||
+  (rewards.reward_hunter_items && user.occupation === "HUNTER") ||
+  (rewards.reward_gathering_items && user.occupation === "GATHERING");
+
+/** Describe only the payout amounts and item names confirmed by the committed claim. */
+const resourceSiloClaimResponse = (
+  rawRewards: ObjectiveRewardType,
+  payout: GetRewardResult,
+  grantedItems: { name: string }[],
+  windowId: string,
+) => {
+  const preview = getRewardPreview({ ...rawRewards, ...payout, reward_items: [] });
+  const items = grantedItems.map((item) => item.name).join(", ");
+  return {
+    success: true,
+    message:
+      preview || items
+        ? `Resource Silo: ${[preview, items].filter(Boolean).join("; ")}`
+        : "Resource Silo unlocked. No rewards dropped this time.",
+    claimed: true as const,
+    windowId,
+  };
+};

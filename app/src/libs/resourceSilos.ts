@@ -9,7 +9,10 @@ import { collapseRewards } from "@/libs/rewards";
 import { getResourceSiloWindow } from "@/utils/time";
 import type { ResourceSiloEntryType } from "@/validators/resourceSilos";
 
-/** Credit real overworld PvP outcomes within the window captured at battle admission. */
+/**
+ * Credit human overworld PvP only while its admission window is still active at settlement.
+ * Capturing the opening prevents a fight from carrying credit into a later spawn.
+ */
 export const resourceSiloBattlePoints = (
   battle: CompleteBattle,
   userId: string,
@@ -36,7 +39,7 @@ export const resourceSiloBattlePoints = (
       : 0;
 };
 
-/** Roll each entry independently; a claim can grant several rewards or none. */
+/** Roll independent chances without normalizing their sum, returning drops and their merged payout. */
 export const rollResourceSiloRewards = (
   entries: ResourceSiloEntryType[],
   random = Math.random,

@@ -474,7 +474,11 @@ export const getCollectDeadline = (
 export const getNextUserSnapshotAt = (updatedAt: Date, now = new Date()) =>
   new Date(Math.max(now.getTime(), updatedAt.getTime() + 1));
 
-/** UTC weekend silo windows begin every three hours and stay open for one hour. */
+/**
+ * Resolve the UTC silo window without mutating the supplied clock value.
+ * The opening timestamp is its progress key; `next` is that opening while active,
+ * or the next eligible opening while closed.
+ */
 export const getResourceSiloWindow = (now = new Date()) => {
   const start = new Date(now);
   start.setUTCMinutes(0, 0, 0);

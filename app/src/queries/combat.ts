@@ -2695,7 +2695,7 @@ const xpGainOrLevelUpSet = (
   };
 };
 
-/** Userdata columns that put a defeated fighter in their sector's hospital. */
+/** Preserve ordinary hospital placement while offering defeated War-Torn fighters a separate revival. */
 const hospitalPlacement = (
   battle: CompleteBattle,
   fighter: { allyVillage: boolean; sector: number; villageId: null | string },

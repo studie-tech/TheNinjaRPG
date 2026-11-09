@@ -436,7 +436,9 @@ export const useRequiredUserData = () => useRequiredUserDataSelector((user) => u
 /**
  * A hook which requires the user to be in their village,
  * otherwise redirect to the profile page. Can optionally be
- * narrowed further to a specific structure in the village
+ * narrowed further to a specific structure in the village.
+ * `enabled` pauses access redirects while relocation settles; `redirectTo` then
+ * takes precedence over the ordinary structure check for the reconciled profile.
  */
 export const useRequireInVillage = (
   structureRoute?: StructureRoute,

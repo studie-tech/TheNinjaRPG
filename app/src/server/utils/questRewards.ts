@@ -1,18 +1,10 @@
 import { sql } from "drizzle-orm";
-import {
-  MAX_SKILL_POINTS,
-  MasteryNames,
-  MEDNIN_EXP_CAP,
-  RECRUIT_PRESTIGE_SHARE,
-  SAGE_MASTERY_EXP_CAP,
-  VILLAGE_WAR_TYPES,
-} from "@/drizzle/constants";
+import { RECRUIT_PRESTIGE_SHARE, VILLAGE_WAR_TYPES } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
 import { getGatheringItemDrops } from "@/libs/gathering";
 import { getHuntingItemDrops } from "@/libs/hunting";
 import { getEffectiveStackSize, splitIntoStacks } from "@/libs/item";
 import { getWarSide } from "@/libs/objectiveWar";
-import { petExperienceGainSql } from "@/libs/pets/experience";
 import { boostPvpGain, boostPvpRewards, getPvpBoost } from "@/libs/pvpExperience";
 import {
   filterQuestTrackersForDbPersist,
@@ -44,6 +36,7 @@ import {
   updateUserDataForUpdateRewards,
   updateWarDamageForUpdateRewards,
   updateWarHealingForUpdateRewards,
+  userRewardDataUpdate,
 } from "@/queries/quests";
 import { deleteRequests } from "@/queries/sparring";
 import { incrementVillageTokens } from "@/queries/village";
@@ -51,16 +44,11 @@ import type { UserWithRelations } from "@/routers/profile";
 import { fetchActiveWars } from "@/routers/war";
 import type { DrizzleClient } from "@/server/db";
 import { runRewardTasks } from "@/server/utils/concurrency";
-import {
-  masteryGainUpdates,
-  masteryRankUpdate,
-} from "@/server/utils/masteryProgression";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { awardRecruitRankMilestonesSafely } from "@/server/utils/recruitment";
 import { grantTitles } from "@/server/utils/titleGrants";
 import { getRandomElement } from "@/utils/array";
 import type { QuestTrackerType } from "@/validators/objectives";
-import { hasMasteryPromotion, MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 
 /**
  * Callers must win an endpoint-specific idempotency / CAS claim before invoking
@@ -267,44 +255,10 @@ export const updateRewards = async (info: {
   const rolledSageMode =
     !user.sageModeId && sageModes.length > 0 ? getRandomElement(sageModes) : undefined;
 
-  const masteryGains = Object.fromEntries(
-    MasteryNames.map((stat, index) => [
-      stat,
-      rewards[MASTERY_EXPERIENCE_FIELDS[index]!] ?? 0,
-    ]),
-  );
   const updatedUserData: Record<string, unknown> = {
-    ...masteryGainUpdates(masteryGains),
-    ...(hasMasteryPromotion(rewards)
-      ? {
-          masteryRanks: masteryRankUpdate(
-            rewards.reward_mastery_stat,
-            rewards.reward_mastery_rank,
-          ),
-        }
-      : {}),
+    ...userRewardDataUpdate(rewards),
     ...(persistQuestData ? { questData: user.questData } : {}),
-    money: sql`${userData.money} + ${rewards.reward_money ?? 0}`,
-    seichiSilver: sql`${userData.seichiSilver} + ${rewards.reward_seichi_silver ?? 0}`,
-    earnedExperience: sql`${userData.earnedExperience} + ${rewards.reward_exp ?? 0}`,
-    // Round each grant separately; player XP penalties must not offset dedicated pet XP.
-    petExperience: petExperienceGainSql(
-      Math.max(0, Math.round(rewards.reward_exp ?? 0)) +
-        Math.round(rewards.reward_pet_experience ?? 0),
-    ),
-    villagePrestige: sql`${userData.villagePrestige} + ${rewards.reward_prestige ?? 0}`,
-    reputationPoints: sql`${userData.reputationPoints} + ${rewards.reward_reputation ?? 0}`,
-    reputationPointsTotal: sql`${userData.reputationPointsTotal} + ${rewards.reward_reputation ?? 0}`,
-    // Skill points, medical and sage mastery experience are capped in SQL so parallel grants stack.
-    skillPoints: sql`LEAST(${userData.skillPoints} + ${rewards.reward_skillpoints ?? 0}, ${MAX_SKILL_POINTS})`,
-    medicalExperience: sql`LEAST(${userData.medicalExperience} + ${rewards.reward_medical_experience ?? 0}, ${MEDNIN_EXP_CAP})`,
-    huntingExperience: sql`${userData.huntingExperience} + ${rewards.reward_hunting_experience ?? 0}`,
-    craftingExperience: sql`${userData.craftingExperience} + ${rewards.reward_crafting_experience ?? 0}`,
-    gatheringExperience: sql`${userData.gatheringExperience} + ${rewards.reward_gathering_experience ?? 0}`,
-    sageMasteryExperience: sql`LEAST(${userData.sageMasteryExperience} + ${rewards.reward_sage_mastery_experience ?? 0}, ${SAGE_MASTERY_EXP_CAP})`,
-    // Only written when granted: echoing the read values back would revert a promotion or
-    // village change another request committed after this caller loaded `user`.
-    ...(getNewRank ? { rank: rewards.reward_rank } : {}),
+    // Only write membership grants; echoing a snapshot would undo a concurrent village change.
     ...(getNewVillage && villageData ? { villageId: villageData.id } : {}),
     ...(rolledSageMode
       ? { sageModeId: sql`COALESCE(${userData.sageModeId}, ${rolledSageMode.id})` }

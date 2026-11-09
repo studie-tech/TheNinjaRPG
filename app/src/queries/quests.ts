@@ -27,9 +27,13 @@ import {
   IMG_AVATAR_DEFAULT,
   type LetterRank,
   MAX_EXPERIENCE_LEVEL,
+  MAX_SKILL_POINTS,
+  MasteryNames,
+  MEDNIN_EXP_CAP,
   PET_TASK_MIN_RANK,
   type QuestType,
   RESTRICTED_QUEST_TYPES,
+  SAGE_MASTERY_EXP_CAP,
   type UserRole,
   UserRoles,
   VILLAGE_SYNDICATE_ID,
@@ -69,7 +73,9 @@ import {
 } from "@/drizzle/schema";
 import { getFarmingLevel } from "@/libs/farming";
 import { isSupportedOverworldBindingTask } from "@/libs/overworldAi";
+import { petExperienceGainSql } from "@/libs/pets/experience";
 import { filterQuestTrackersForDbPersist, getUserQuests } from "@/libs/quest";
+import type { GetRewardResult } from "@/libs/quest/rewards";
 import {
   type RewardChoiceOwnership,
   rewardChoiceContentIds,
@@ -87,6 +93,10 @@ import {
   completedQuestHistoryRelation,
   userQuestHistoryRelation,
 } from "@/server/utils/achievementObjectives";
+import {
+  masteryGainUpdates,
+  masteryRankUpdate,
+} from "@/server/utils/masteryProgression";
 import { userRegenerationGainSql } from "@/server/utils/regeneration";
 import { canPlayHiddenQuests } from "@/utils/permissions";
 import { getNextUserSnapshotAt } from "@/utils/time";
@@ -97,7 +107,12 @@ import type {
   ZodQuestType,
 } from "@/validators/objectives";
 import type { PetTask } from "@/validators/petTasks";
-import { ObjectiveReward, type RewardChoiceCard } from "@/validators/rewards";
+import {
+  hasMasteryPromotion,
+  MASTERY_EXPERIENCE_FIELDS,
+  ObjectiveReward,
+  type RewardChoiceCard,
+} from "@/validators/rewards";
 
 /** Build the `quest` listing for `GET`, using predicates on `questType`, `content`, `hidden`. */
 export const listQuestForGET = (client: Pick<DrizzleClient, "query">) =>
@@ -1099,6 +1114,48 @@ export const selectSageModeForUpdateRewards = (
         isNull(sageModeRolls.userId),
       ),
     );
+
+/**
+ * Build the account portion of a processed reward using live increments and earned caps.
+ * Callers compose their receipt/readiness guard and any quest, village or sage-mode changes.
+ * Zero gains still normalize the skill-point, medical and sage-mastery balances to their caps.
+ */
+export const userRewardDataUpdate = (rewards: GetRewardResult) => ({
+  ...masteryGainUpdates(
+    Object.fromEntries(
+      MasteryNames.map((stat, index) => {
+        const field = MASTERY_EXPERIENCE_FIELDS[index];
+        return [stat, field ? (rewards[field] ?? 0) : 0];
+      }),
+    ),
+  ),
+  ...(hasMasteryPromotion(rewards)
+    ? {
+        masteryRanks: masteryRankUpdate(
+          rewards.reward_mastery_stat,
+          rewards.reward_mastery_rank,
+        ),
+      }
+    : {}),
+  money: sql`${userData.money} + ${rewards.reward_money ?? 0}`,
+  seichiSilver: sql`${userData.seichiSilver} + ${rewards.reward_seichi_silver ?? 0}`,
+  earnedExperience: sql`${userData.earnedExperience} + ${rewards.reward_exp ?? 0}`,
+  // Round each grant separately; player XP penalties must not offset dedicated pet XP.
+  petExperience: petExperienceGainSql(
+    Math.max(0, Math.round(rewards.reward_exp ?? 0)) +
+      Math.round(rewards.reward_pet_experience ?? 0),
+  ),
+  villagePrestige: sql`${userData.villagePrestige} + ${rewards.reward_prestige ?? 0}`,
+  reputationPoints: sql`${userData.reputationPoints} + ${rewards.reward_reputation ?? 0}`,
+  reputationPointsTotal: sql`${userData.reputationPointsTotal} + ${rewards.reward_reputation ?? 0}`,
+  skillPoints: sql`LEAST(${userData.skillPoints} + ${rewards.reward_skillpoints ?? 0}, ${MAX_SKILL_POINTS})`,
+  medicalExperience: sql`LEAST(${userData.medicalExperience} + ${rewards.reward_medical_experience ?? 0}, ${MEDNIN_EXP_CAP})`,
+  huntingExperience: sql`${userData.huntingExperience} + ${rewards.reward_hunting_experience ?? 0}`,
+  craftingExperience: sql`${userData.craftingExperience} + ${rewards.reward_crafting_experience ?? 0}`,
+  gatheringExperience: sql`${userData.gatheringExperience} + ${rewards.reward_gathering_experience ?? 0}`,
+  sageMasteryExperience: sql`LEAST(${userData.sageMasteryExperience} + ${rewards.reward_sage_mastery_experience ?? 0}, ${SAGE_MASTERY_EXP_CAP})`,
+  ...(rewards.reward_rank !== "NONE" ? { rank: rewards.reward_rank } : {}),
+});
 
 /** Build the `userData` update for `updateRewards`, using predicates on `userId`. */
 export const updateUserDataForUpdateRewards = (

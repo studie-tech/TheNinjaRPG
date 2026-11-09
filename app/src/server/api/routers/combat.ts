@@ -3153,6 +3153,7 @@ export const initiateBattle = async (
       (entry) => !entry.equipped || accepted.includes(entry.jutsuId),
     );
   }
+  // Settlement uses this admission key in its existing account CAS without another database read.
   const siloWindow = getResourceSiloWindow(startTime);
   if (
     battleType === "COMBAT" &&

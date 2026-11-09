@@ -35,9 +35,11 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 
+/** Keep hospital treatment available while resolving the optional War-Torn revival choice. */
 export default function Hospital() {
   // Settings
   const revival = useWarTornRevival();
+  // A confirmed shrine revival must finish profile reconciliation before hospital access redirects.
   const { userData, access, timeDiff, prepareUserUpdate, updateUser } =
     useRequireInVillage("/hospital", {
       enabled: !revival.isPending,

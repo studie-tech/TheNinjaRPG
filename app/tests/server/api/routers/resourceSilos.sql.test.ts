@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { MAX_SKILL_POINTS, MEDNIN_EXP_CAP, SAGE_MASTERY_EXP_CAP } from "@/drizzle/constants";
 import { eq, sql } from "drizzle-orm";
 import { actionLog, item, resourceSilo, rewardPackage, userData, userItem, userRewards, userVote } from "@/drizzle/schema";
 import { resourceSiloProgressUpdate, resolveWarTornRespawn } from "@/queries/resourceSilos";
@@ -10,12 +11,15 @@ import * as time from "@/utils/time";
 import { ObjectiveReward } from "@/validators/rewards";
 import { makeBattleUser, makeCompleteBattle } from "../../../setup/combat";
 import { insertItems, insertUsers, insertUserVotes } from "../../../setup/factories";
-import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, resetTables, runRawSql } from "../../../setup/testDatabase";
+import { callerFor, callerForDatabase, describeWithDatabase, getTestDatabase, recordQueries, resetTables, runRawSql } from "../../../setup/testDatabase";
 
 const userId = "silo-player";
 let window: ReturnType<typeof time.getResourceSiloWindow>;
+/** Build one spawn receipt with explicit points and claim state. */
 const progress = (points = 60, claimed = false) => ({ windowId: window.id, points, claimed });
+/** Read the persisted player without running profile regeneration. */
 const row = async () => (await getTestDatabase()).query.userData.findFirst({ where: eq(userData.userId, userId) });
+/** Bind silo endpoints to the disposable fixture player. */
 const api = () => callerFor(resourceSilosRouter, userId);
 
 describeWithDatabase("resource silo claims and recovery", () => {
@@ -64,6 +68,8 @@ describeWithDatabase("resource silo claims and recovery", () => {
   it("retries a rolled-back delivery without compounding PvP bonuses", async () => {
     const db = await getTestDatabase();
     await db.update(userData).set({ pvpExperience: 100 }).where(eq(userData.userId, userId));
+    await insertItems([{ id: "retry-cache", name: "Cache", itemType: "CONSUMABLE" }]);
+    await db.update(resourceSilo).set({ entries: [{ kind: "cache", sourceId: "retry-cache", name: "Cache", chance: 100, rewards: ObjectiveReward.parse({ reward_money: 123, reward_items: [{ ids: ["retry-cache"], quantity: 1, number: 100 }] }) }] });
     let attempts = 0;
     const retrying = new Proxy(db, {
       get(target, property, receiver) {
@@ -78,6 +84,7 @@ describeWithDatabase("resource silo claims and recovery", () => {
     const result = await callerForDatabase(resourceSilosRouter, userId, retrying).claim();
     expect(result.success).toBe(true);
     expect(attempts).toBe(2);
+    expect(await db.query.userItem.findMany()).toHaveLength(1);
     // This sole active player is at the population mean and receives its one-time 2% tier.
     expect((await row())!.money).toBe(50125);
   });
@@ -108,9 +115,13 @@ describeWithDatabase("resource silo claims and recovery", () => {
   it("consumes a valid no-drop claim and hides stale-window progress", async () => {
     const db = await getTestDatabase();
     await db.update(resourceSilo).set({ entries: [{ kind: "package", sourceId: "zero", name: "Unlucky", chance: 0.000001, rewards: ObjectiveReward.parse({ reward_money: 10 }) }] });
+    await db.update(userData).set({ skillPoints: MAX_SKILL_POINTS + 10, medicalExperience: MEDNIN_EXP_CAP + 10, sageMasteryExperience: SAGE_MASTERY_EXP_CAP + 10 }).where(eq(userData.userId, userId));
     vi.spyOn(Math, "random").mockReturnValue(0.99);
-    expect((await (await api()).claim()).success).toBe(true);
-    expect((await row())!.money).toBe(50000);
+    const caller = await api();
+    const claim = await recordQueries(() => caller.claim());
+    expect(claim.result.success).toBe(true);
+    expect(claim.statements.some(statement => /^(?:begin|start transaction)/i.test(statement))).toBe(false);
+    expect((await row())!).toMatchObject({ money: 50000, skillPoints: MAX_SKILL_POINTS, medicalExperience: MEDNIN_EXP_CAP, sageMasteryExperience: SAGE_MASTERY_EXP_CAP });
     window.id = "next";
     const status = await (await api()).getStatus();
     expect(status.points).toBe(0); expect(status.claimed).toBe(false);
