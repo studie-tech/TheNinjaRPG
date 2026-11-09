@@ -712,7 +712,13 @@ export const isUserImmobilized = (
   userEffects: UserEffect[] | undefined,
 ) => hasActiveEffectOfType(userId, userEffects, "moveprevent");
 
-/** Get a copy of the barriers between two tiles on the grid, as well as the total absorbtion along that path */
+/**
+ * Get copies of the barriers on the shortest path between two tiles, and the total
+ * fraction of damage they absorb (0-1). Barriers are taken in path order; each copy's
+ * absorbPercentage is replaced by its marginal 0-1 share of that total
+ * (remaining share × absorbPercentage / 100), not the schema's 1-100 percentage.
+ * The caster's own barriers are skipped unless they sit on the target tile.
+ */
 export const getBarriersBetween = (
   userId: string,
   aStar: PathCalculator,

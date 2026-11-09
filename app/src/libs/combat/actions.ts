@@ -1163,7 +1163,8 @@ export const insertAction = (info: {
           };
           if (action.method === "SINGLE") {
             // SINGLE: damage barriers on the A* path (projectile-in-path).
-            // getBarriersBetween already reduced absorbPercentage to a 0-1 fraction.
+            // getBarriersBetween replaced absorbPercentage with each barrier's 0-1
+            // marginal share of the path's total absorb.
             barriers.forEach((barrier) => {
               addBarrierHit(
                 barrier,
