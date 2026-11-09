@@ -90,8 +90,6 @@ Sentry.init({
     "Bootstrap Error for", // PayPal SDK zoid bootstrap errors - occur when PayPal's internal component initialization encounters duplicate listener registration
     "Cannot set properties of undefined (setting 'iframeReady')", // Usercentrics (uc.js) consent management error - third-party script timing issue
     "Cannot set properties of undefined (setting 'windowOnloadTriggered')", // Usercentrics (uc.js) consent management error - race condition in signalWindowLoad on older Chrome Mobile WebView
-    "Failed to fetch", // Network errors during navigation - occurs when user navigates away while fetch is in-flight (common on mobile)
-    "network error", // Chrome/Android network error - occurs when fetch fails due to network issues on mobile devices
     /^Load failed/, // iOS Safari network error - occurs when device goes to sleep, network changes, or CDN requests fail (may include domain suffix)
     "Clerk: Failed to load Clerk", // Clerk script load failure - typically on very old browsers (Android 5.x, Chrome 95) that don't support modern JS
     "failed to load script", // Clerk's underlying script loading error (cause of the above) - network issues on mobile devices
@@ -150,6 +148,9 @@ Sentry.init({
     }
     if (isReplicateApiError(event)) {
       return null; // Drop Replicate API gateway errors (502/503/504)
+    }
+    if (isGenericFetchFailure(event)) {
+      return null; // Drop "Failed to fetch" / "network error" failures that did not come from Clerk
     }
     if (isNetworkLoadError(event)) {
       return null; // Drop stackless network errors that ignoreErrors does not match
@@ -600,9 +601,9 @@ const isReplicateApiError = (event: Sentry.ErrorEvent): boolean => {
  * - Silent ignore in tRPC onError prevents alarming toast notifications
  * - Users only see errors if the request fails after all retries for other reasons
  *
- * The "Failed to fetch", "network error" and /^Load failed/ ignoreErrors entries drop
- * those messages whatever their stack, so the shape check here applies only to the
- * other wordings (for example Firefox's "NetworkError when attempting to fetch resource.").
+ * The /^Load failed/ ignoreErrors entry and isGenericFetchFailure drop their messages
+ * whatever their stack, so the shape check here applies only to the other wordings (for
+ * example Firefox's "NetworkError when attempting to fetch resource.").
  *
  * Uses shared error patterns from @/utils/error to ensure consistency with retry logic.
  */
@@ -621,6 +622,82 @@ const isNetworkLoadError = (event: Sentry.ErrorEvent): boolean => {
     !hasStackTrace && (errorType === "TypeError" || errorType === "");
 
   return matchesPattern && isNetworkErrorShape;
+};
+
+/** Network failure wordings Chrome and Android WebView put in a failed fetch's TypeError. */
+const GENERIC_FETCH_FAILURE_MESSAGES = ["Failed to fetch", "network error"];
+
+/**
+ * Check if an error is a Chrome/Android fetch failure that did not come from Clerk.
+ * These occur when the user navigates away while a fetch is in flight or the device
+ * loses connectivity. Like an ignoreErrors entry, the wording matches anywhere in the
+ * message, so errors that wrap the browser's TypeError drop too.
+ *
+ * UX note: tRPC retries failed queries up to 3 times (Provider.tsx); a query that still
+ * fails shows a "Could not load the latest data" toast, and a mutation shows "Could not
+ * confirm whether this action completed", so the user always gets recovery feedback.
+ *
+ * Clerk failures keep reporting: a failed token refresh or sign-in request signs the
+ * user out or blocks sign-in, with no tRPC retry or toast behind it.
+ */
+const isGenericFetchFailure = (event: Sentry.ErrorEvent): boolean => {
+  // ignoreErrors matching reads the last exception, which is the one that was thrown
+  const messages = [event.message, event.exception?.values?.at(-1)?.value];
+  const isFetchFailure = messages.some((message) =>
+    GENERIC_FETCH_FAILURE_MESSAGES.some((wording) => message?.includes(wording)),
+  );
+  return isFetchFailure && !isClerkOriginError(event);
+};
+
+/**
+ * Check if an error came from Clerk: a ClerkJS network error naming a Clerk request
+ * URL, or a stack frame in the clerk-js bundle.
+ */
+const isClerkOriginError = (event: Sentry.ErrorEvent): boolean =>
+  (event.exception?.values ?? []).some(
+    (exception) =>
+      isClerkHostUrl(CLERK_NETWORK_ERROR_URL.exec(exception.value ?? "")?.[1]) ||
+      (exception.stacktrace?.frames ?? []).some(
+        (frame) => isClerkScriptUrl(frame.filename) || isClerkScriptUrl(frame.abs_path),
+      ),
+  );
+
+/** The request URL Clerk quotes in its network errors. */
+const CLERK_NETWORK_ERROR_URL = /^ClerkJS: Network error at "([^"]+)"/;
+
+/**
+ * The path clerk-js and its lazy chunks load from. Frame normalization replaces every
+ * frame's origin with app://, so a frame keeps only this path, never the Clerk host.
+ */
+const CLERK_SCRIPT_PATH = /^\/npm\/@clerk\/clerk-js@[^/]+\/dist\/[^/]+\.js$/;
+
+/** Check if a stack frame URL is a clerk-js script. */
+const isClerkScriptUrl = (value: string | undefined): boolean => {
+  if (!value) return false;
+  try {
+    return CLERK_SCRIPT_PATH.test(new URL(value).pathname);
+  } catch {
+    return false; // Not a URL, so not a loaded script
+  }
+};
+
+/**
+ * Anchored so a lookalike host (clerk.attacker.com) never matches. Covers our Clerk
+ * custom domains (the CSP in next.config.mjs allows the clerk.www.* forms, and
+ * production reports clerk.theninja-rpg.com) plus Clerk's own domains used by preview
+ * deployments.
+ */
+const CLERK_HOST =
+  /^(clerk\.(www\.)?theninja-rpg\.(com|ai)|([a-z0-9-]+\.)+clerk\.(com|accounts\.dev))$/;
+
+/** Check if a URL is served from a Clerk host. */
+const isClerkHostUrl = (value: string | undefined): boolean => {
+  if (!value) return false;
+  try {
+    return CLERK_HOST.test(new URL(value).hostname);
+  } catch {
+    return false; // Not an absolute URL, so not a Clerk request
+  }
 };
 
 /**
@@ -856,9 +933,7 @@ const isNavigationAbortError = (event: Sentry.ErrorEvent): boolean => {
  * "last active at"; it does not mint or refresh the session token, so a failed
  * touch never signs the user out or blocks a request. Clerk simply retries on
  * its next poll. This check is scoped to the touch endpoint because failures on
- * token or sign-in endpoints affect the user. The "Failed to fetch" and "network
- * error" ignoreErrors entries still drop every Clerk network error with those causes,
- * whatever the endpoint; only the Safari and Firefox wordings reach this check.
+ * token or sign-in endpoints affect the user.
  *
  * Detection pattern:
  * - Message begins with "ClerkJS: Network error at"
@@ -874,27 +949,11 @@ const isClerkSessionTouchNetworkError = (event: Sentry.ErrorEvent): boolean => {
 
   // Extract the quoted request URL so the host and path can be validated
   // properly rather than substring-matched (a spoofed path could otherwise pass)
-  const quotedUrl = /^ClerkJS: Network error at "([^"]+)"/.exec(message)?.[1];
-  if (!quotedUrl) return false;
-
-  let isSessionTouchEndpoint = false;
-  try {
-    const url = new URL(quotedUrl);
-    // Anchored so a lookalike host (clerk.attacker.com) cannot suppress reports.
-    // Covers our Clerk custom domains - the CSP in next.config.mjs allows the
-    // clerk.www.* forms, and production currently reports clerk.theninja-rpg.com
-    // - plus Clerk's own domains used by preview deployments.
-    const isClerkHost =
-      /^clerk\.(www\.)?theninja-rpg\.(com|ai)$/.test(url.hostname) ||
-      url.hostname.endsWith(".clerk.com") ||
-      url.hostname.endsWith(".clerk.accounts.dev");
-    isSessionTouchEndpoint =
-      isClerkHost && /^\/v1\/client\/sessions\/[^/]+\/touch$/.test(url.pathname);
-  } catch {
-    // Not a parseable URL - do not filter
-    return false;
-  }
-
+  const quotedUrl = CLERK_NETWORK_ERROR_URL.exec(message)?.[1];
+  if (!quotedUrl || !isClerkHostUrl(quotedUrl)) return false;
+  const isSessionTouchEndpoint = /^\/v1\/client\/sessions\/[^/]+\/touch$/.test(
+    new URL(quotedUrl).pathname,
+  );
   if (!isSessionTouchEndpoint) return false;
 
   // Only transient network failures; anything else from this endpoint is worth seeing

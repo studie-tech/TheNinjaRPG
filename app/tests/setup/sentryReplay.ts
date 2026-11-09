@@ -4,6 +4,7 @@ import {
   defaultStackParser,
   type Event,
   type EventHint,
+  eventFiltersIntegration,
 } from "@sentry/browser";
 import * as Sentry from "@sentry/nextjs";
 // @ts-expect-error The client integration the Next.js SDK installs; it is neither exported nor typed.
@@ -28,14 +29,24 @@ export const chromeStack = (name: string, message: string, url: string) =>
 export const firefoxStack = (_name: string, _message: string, url: string) =>
   `dispatch@${url}:2:1234\nresolve@${url}:2:999`;
 
-/** Send any thrown value through the SDK's event pipeline and the production filter. */
-export const replayException = async (exception: unknown) => {
-  let dropped: boolean | undefined;
+/**
+ * Send any thrown value through the SDK's event pipeline and the production filter.
+ * With `withIgnoreErrors`, the SDK's ignoreErrors matching runs first, as in production,
+ * and an event it drops counts as dropped.
+ */
+export const replayException = async (
+  exception: unknown,
+  { withIgnoreErrors = false }: ReplayOptions = {},
+) => {
+  // An event ignoreErrors drops never reaches beforeSend.
+  let dropped = (withIgnoreErrors ? true : undefined) as boolean | undefined;
   const client = new BrowserClient({
     dsn: "https://key@o1.ingest.sentry.io/1",
     transport: () => ({ send: async () => ({}), flush: async () => true }),
     stackParser: defaultStackParser,
+    ignoreErrors: withIgnoreErrors ? ignoreErrors : [],
     integrations: [
+      ...(withIgnoreErrors ? [eventFiltersIntegration()] : []),
       nextjsClientStackFrameNormalizationIntegration({
         assetPrefix: undefined,
         basePath: undefined,
@@ -55,5 +66,11 @@ export const replayException = async (exception: unknown) => {
 };
 
 /** Send an error through the SDK's event pipeline and the production filter. */
-export const replay = (name: string, message: string, stack: string) =>
-  replayException(Object.assign(new Error(message), { name, stack }));
+export const replay = (
+  name: string,
+  message: string,
+  stack: string,
+  options?: ReplayOptions,
+) => replayException(Object.assign(new Error(message), { name, stack }), options);
+
+type ReplayOptions = { withIgnoreErrors?: boolean };
