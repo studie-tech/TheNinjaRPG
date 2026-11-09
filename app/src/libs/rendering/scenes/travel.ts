@@ -79,6 +79,8 @@ import { getBiomeFromTileType } from "@/libs/travel";
 import { clamp } from "@/utils/math";
 import type { MapLocation } from "@/validators/mapLocation";
 
+/** Neighbouring sectors join seamlessly, so their terrain draws no outline between them. */
+const SECTOR_OUTLINES = false;
 /** Scene-owned providers change only at the authored-village boundary, so other crossings retain their window. */
 export const travelLightingMode = (sector: number) =>
   sector === WORLD_LANDMARKS.find((village) => village.name === "Akikaze")?.sector
@@ -659,7 +661,7 @@ export const createTravelScene = async (options: {
           const terrainScope = createRenderScope(existing.scope);
           let terrain: TravelSector["terrain"];
           try {
-            terrain = await createHexTerrain(terrainScope, data);
+            terrain = await createHexTerrain(terrainScope, data, SECTOR_OUTLINES);
           } catch (error) {
             // Retiring the sector or disposing the scene cancels its pending terrain.
             terrainScope.dispose();
@@ -794,7 +796,7 @@ export const createTravelScene = async (options: {
             currentSceneryReady = scenery.then(() => {});
           const terrainScope = createRenderScope(scope);
           const [terrain, art] = await Promise.all([
-            createHexTerrain(terrainScope, data),
+            createHexTerrain(terrainScope, data, SECTOR_OUTLINES),
             createWorldSprites(scope, [], shadows, true),
           ]);
           if (disposed || token !== generation) {

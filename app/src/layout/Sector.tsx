@@ -2359,9 +2359,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
                 : sectorGridNeighbors(sector)[2]}
             </span>
           </div>
-          <div className="text-muted-foreground mt-1">
-            Gold lines mark sector borders
-          </div>
         </aside>
         <div className="absolute top-3 right-3 z-10 flex items-start gap-2">
           <DayNightIndicator
