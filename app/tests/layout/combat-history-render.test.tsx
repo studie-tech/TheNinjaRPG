@@ -158,3 +158,17 @@ it("renders rounds newest first, with placeholders, separators and highlighted s
   fireEvent.click(rounds[0]!.querySelector("button")!);
   expect(rounds[0]!.querySelectorAll(":scope > div > div")).toHaveLength(0);
 });
+
+it("renders a stat word repeated in one effect without duplicate keys", () => {
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  spies.push(consoleError);
+  const view = render(
+    <CombatHistory battleId="battle" battleVersion={9} results={null} />,
+  );
+  fireEvent.click(view.container.querySelectorAll("ol > li > button")[2]!);
+  expect(view.container.textContent).toContain("Rival heals Taijutsu Taijutsu");
+  const keyWarnings = consoleError.mock.calls.filter((args) =>
+    args.some((arg) => String(arg).includes("same key")),
+  );
+  expect(keyWarnings).toEqual([]);
+});
