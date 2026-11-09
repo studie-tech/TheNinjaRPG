@@ -245,7 +245,7 @@ describe("owned pets in combat", () => {
     expect(spawned?.strength).toBe(600_000);
   });
 
-  it("gives revealed Perfect pets only five percent cap headroom without changing level-derived HP", () => {
+  it("gives revealed Perfect pets only fifty percent cap headroom without changing level-derived HP", () => {
     const battle = scenario();
     const pet = petFixture({
       rank: 10,
@@ -258,11 +258,11 @@ describe("owned pets in combat", () => {
     });
     addPetsToBattle({ ...battle, pets: [pet], ownerRanks: { owner: "ELITE JONIN" } });
     const actor = battle.usersState.find((entry) => entry.petId)!;
-    expect(actor.offence).toBe(1_575_000);
-    expect(actor.strength).toBe(630_000);
+    expect(actor.offence).toBe(2_250_000);
+    expect(actor.strength).toBe(900_000);
     expect(actor.maxHealth).toBe(calcHP(actor.level));
     pet.potentialValue = 1;
-    expect(actor.offence).toBe(1_575_000);
+    expect(actor.offence).toBe(2_250_000);
   });
 
   it("spawns both selected solo dungeon pets with independent actors and distinct cells", () => {

@@ -92,11 +92,23 @@ describeWithDatabase("companion potential and transfers", () => {
     expect((await caller.assignExperience({ petId: sourceId, ...zero, offence: 1 })).success).toBe(false);
     await caller.revealPotential({ petId: sourceId });
     expect((await caller.assignExperience({ petId: sourceId, ...zero, offence: 1 })).success).toBe(true);
-    await db.update(userPet).set({ offence: 20_500 }).where(eq(userPet.id, sourceId));
+    await db.update(userPet).set({ offence: 25_000 }).where(eq(userPet.id, sourceId));
     expect((await caller.assignExperience({ petId: sourceId, ...zero, offence: 1 })).success).toBe(false);
     // A support downgrade must not prevent training other stats with zero gains on the over-cap stat.
     await db.update(userPet).set({ potentialValue: 1 }).where(eq(userPet.id, sourceId));
     expect((await caller.assignExperience({ petId: sourceId, ...zero, speed: 1 })).success).toBe(true);
+  });
+  it.each([{ stat: "offence", cap: 2_250_000 }, { stat: "strength", cap: 900_000 }] as const)("trains Perfect $stat above the player ceiling and stops at $cap", async ({ stat, cap }) => {
+    const db = await getTestDatabase();
+    await db.update(userData).set({ rank: "ELITE JONIN", petExperience: cap - 10 }).where(eq(userData.userId, ownerId));
+    await db.update(userPet).set({ rank: 10, artRank: 10, potentialValue: 5, potentialRevealed: true, [stat]: 10 }).where(eq(userPet.id, sourceId));
+    const caller = callerForDatabase(petsRouter, ownerId, db);
+    expect((await caller.assignExperience({ petId: sourceId, ...zero, [stat]: cap - 10 })).success).toBe(true);
+    expect((await db.query.userPet.findFirst({ where: eq(userPet.id, sourceId) }))?.[stat]).toBe(cap);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, ownerId) }))?.petExperience).toBe(0);
+    await db.update(userData).set({ petExperience: 1 }).where(eq(userData.userId, ownerId));
+    expect((await caller.assignExperience({ petId: sourceId, ...zero, [stat]: 1 })).success).toBe(false);
+    expect((await db.query.userData.findFirst({ where: eq(userData.userId, ownerId) }))?.petExperience).toBe(1);
   });
   it("reveals a saved roll exactly once under concurrent requests", async () => {
     const db = await getTestDatabase(); const caller = callerForDatabase(petsRouter, ownerId, db);

@@ -2192,7 +2192,7 @@ it("reveals a bounded cap bonus with no stat allocation controls", async () => {
     name: "Reveal companion potential",
   });
   fireEvent.click(within(dialog).getByRole("button", { name: "Proceed" }));
-  expect(await view.findByText("Perfect · 105% of rank stat caps")).toBeTruthy();
+  expect(await view.findByText("Perfect · 150% of rank stat caps")).toBeTruthy();
   expect(view.queryByText(/points to allocate/)).toBeNull();
   expect(view.getByText(/HP and abilities are unchanged/)).toBeTruthy();
 });

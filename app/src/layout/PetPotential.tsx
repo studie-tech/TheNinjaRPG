@@ -44,7 +44,7 @@ export const PetPotential = ({
   return (
     <ContentBox
       title="Companion potential"
-      subtitle="Potential adds a small bonus to rank-based training caps."
+      subtitle="Potential raises rank-based training caps."
     >
       <div className="space-y-4">
         <p>
