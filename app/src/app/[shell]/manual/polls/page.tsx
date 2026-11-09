@@ -357,7 +357,7 @@ function PollContent({
   const canDeleteOption = (option: PollOptionWithRelations) => {
     if (!userLoggedIn || !userData) return false;
 
-    // User can delete their own options with no votes
+    // Creators can delete their own options, whatever their votes
     const isCreator = option.createdBy.userId === userData.userId;
 
     // Admin can delete any option based on role permissions
