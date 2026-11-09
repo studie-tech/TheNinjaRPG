@@ -44,7 +44,7 @@ export const conceptVideoPromptSchema = z.object({
 export const conceptArtFilterSchema = z.object({
   only_own: z.boolean().prefault(false),
   sort: z.enum(sortOptions).prefault("Most Recent"),
-  time_frame: z.enum(timeFrame).prefault("Week"),
+  time_frame: z.enum(timeFrame).prefault("Month"),
 });
 
 /** Convert an artwork ranking period to seconds, with null denoting all time. */
