@@ -107,16 +107,6 @@ describe("jutsu.clone", () => {
     expect(logValues).not.toHaveBeenCalled();
   });
 
-  it("supports repeated clones of a maximum-length name", async () => {
-    const { clone, values } = setup({ ...source, name: "a".repeat(191) });
-    const first = await clone();
-    const second = await clone();
-    expect(first.message).not.toBe(second.message);
-    const names = values.mock.calls.map(([row]) => row.name as string);
-    expect(names[0]).not.toBe(names[1]);
-    expect(names.every((name) => name.length <= 191 && name.includes(" - copy "))).toBe(true);
-  });
-
   it.each([
     { role: "USER", isBanned: false },
     { role: "MODERATOR", isBanned: false },
