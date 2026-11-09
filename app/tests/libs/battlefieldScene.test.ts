@@ -30,12 +30,15 @@ describe("battlefieldSceneOf", () => {
     });
     expect(scene?.effects.map((effect) => effect.animationScale)).toEqual([2.5, 1]);
   });
-  it.each([0, -1, 0.99, 3.01, 6, Number.NaN, Number.POSITIVE_INFINITY, "invalid"])("keeps invalid scale drafts drawable: %s", (animationScale) => {
-    const scene = battlefieldSceneOf("JUTSU", "draft", {
-      effects: [{ ...tag({ staticAnimation: "field" }), animationScale }],
-    });
-    expect(scene?.effects[0]?.animationScale).toBe(1);
-  });
+  it.each([0, -1, 0.99, 3.01, 6, Number.NaN, Number.POSITIVE_INFINITY, "invalid"])(
+    "keeps invalid scale drafts drawable: %s",
+    (animationScale) => {
+      const scene = battlefieldSceneOf("JUTSU", "draft", {
+        effects: [{ ...tag({ staticAnimation: "field" }), animationScale }],
+      });
+      expect(scene?.effects[0]?.animationScale).toBe(1);
+    },
+  );
   it("puts a user-targeted jutsu's tags on the target and SELF tags on the caster", () => {
     const scene = battlefieldSceneOf("JUTSU", "j1", {
       target: "OTHER_USER",

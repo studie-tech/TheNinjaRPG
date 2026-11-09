@@ -56,8 +56,17 @@ it("reopens the remembered bag after mount", () => {
 it("restores the home bag when the reused switcher changes inventories", () => {
   window.localStorage.setItem("homeStorageSelection", "materials");
   const onHomeChange = vi.fn();
-  const { rerender } = render(<BagTabs bags={bags} active="normal" onChange={vi.fn()} />);
-  rerender(<BagTabs bags={bags} active="all" onChange={onHomeChange} storageKey="homeStorageSelection" />);
+  const { rerender } = render(
+    <BagTabs bags={bags} active="normal" onChange={vi.fn()} />,
+  );
+  rerender(
+    <BagTabs
+      bags={bags}
+      active="all"
+      onChange={onHomeChange}
+      storageKey="homeStorageSelection"
+    />,
+  );
   expect(onHomeChange).toHaveBeenCalledWith("materials");
 });
 

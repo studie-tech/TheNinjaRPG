@@ -348,19 +348,40 @@ it("shows durability with its repair actions when the item wears", () => {
 
 it("offers to store a carried item at home and explains when it does not fit", () => {
   const onMove = vi.fn();
-  const view = render(<ItemInspector userItem={userItem()} allUserItems={[]} userData={player} onClose={vi.fn()} onEquip={equip} isEquipping={false} homeMove={{ blockedReason: null, isMoving: false, onMove }} />);
+  const view = render(
+    <ItemInspector
+      userItem={userItem()}
+      allUserItems={[]}
+      userData={player}
+      onClose={vi.fn()}
+      onEquip={equip}
+      isEquipping={false}
+      homeMove={{ blockedReason: null, isMoving: false, onMove }}
+    />,
+  );
   fireEvent.click(screen.getByRole("button", { name: "Store at home" }));
   expect(onMove).toHaveBeenCalledTimes(1);
   view.unmount();
-  renderInspector({ homeMove: { blockedReason: "Does not fit: Your home storage is full", isMoving: false, onMove } });
-  expect(screen.getByRole("button", { name: "Store at home" }).hasAttribute("disabled")).toBe(true);
+  renderInspector({
+    homeMove: {
+      blockedReason: "Does not fit: Your home storage is full",
+      isMoving: false,
+      onMove,
+    },
+  });
+  expect(
+    screen.getByRole("button", { name: "Store at home" }).hasAttribute("disabled"),
+  ).toBe(true);
   expect(screen.getByText("Does not fit: Your home storage is full")).toBeDefined();
 });
 
 it("shows a stored item's details with taking it out as the only action", () => {
   const onMove = vi.fn();
   const stored = { ...userItem(), storedAtHome: true } as UserItemWithRelations;
-  renderInspector({ userItem: stored, homeMove: { blockedReason: null, isMoving: false, onMove } });
+  renderInspector({
+    userItem: stored,
+    homeMove: { blockedReason: null, isMoving: false, onMove },
+  });
   expect(screen.getByText("In your home storage")).toBeDefined();
   expect(screen.getByText("Item effects")).toBeDefined();
   expect(screen.queryByRole("button", { name: /^Equip$/ })).toBeNull();

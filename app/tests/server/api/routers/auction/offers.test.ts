@@ -11,25 +11,26 @@ import {
   farmCollectionLog,
   farmPlot,
   item,
+  storeUserIdAlias,
   userData,
   userItem,
   userItemImbuement,
   userQueue,
-  storeUserIdAlias,
   village,
 } from "@/drizzle/schema";
-import { occupationRouter } from "@/server/api/routers/occupation";
 import { auctionRouter } from "@/server/api/routers/auction";
 import { farmingRouter } from "@/server/api/routers/farming";
 import { homeRouter } from "@/server/api/routers/home";
+import { occupationRouter } from "@/server/api/routers/occupation";
 import * as nativePush from "@/server/utils/push/defer";
 import { tradeUpdate } from "@/server/utils/push/messages";
+import { deferred } from "../../../../setup/deferred";
+import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
 import {
   beforeStatements,
   failStatements,
   inTransactions,
 } from "../../../../setup/statements";
-import { insertItems, insertUserItems, insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
   callerForDatabase,
@@ -37,7 +38,6 @@ import {
   getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
-import { deferred } from "../../../../setup/deferred";
 
 describeWithDatabase("Auction House fixed-term requests and trades", () => {
   const queuePush = vi.fn();

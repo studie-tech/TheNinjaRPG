@@ -1,5 +1,12 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as bulkSell from "@/hooks/useBulkSellItems";
 import * as homeMove from "@/hooks/useHomeStorageMove";
@@ -12,11 +19,17 @@ import * as inspector from "@/layout/items/ItemInspector";
 import { type ItemsPlace, ItemsWorkspace } from "@/layout/items/ItemsWorkspace";
 import * as mastery from "@/libs/mastery";
 import * as skills from "@/libs/skillRequirements";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
 let moveItems: ReturnType<typeof vi.fn>;
-let finishMove: (result: { success: boolean; refused: { userItemId: string }[] }) => void;
+let finishMove: (result: {
+  success: boolean;
+  refused: { userItemId: string }[];
+}) => void;
 let inspectorProps: Parameters<typeof inspector.ItemInspector>[0] | undefined;
 
 beforeEach(() => {
@@ -31,11 +44,23 @@ beforeEach(() => {
     finishMove = (result) => onMoved?.(result as never);
     return { moveItems, isMoving: false };
   }) as typeof homeMove.useHomeStorageMove);
-  vi.spyOn(bulkSell, "useBulkSellItems").mockReturnValue({ sellMany: vi.fn(), isSelling: false });
-  vi.spyOn(itemActions, "useItemActions").mockReturnValue({ equip: vi.fn(), merge: vi.fn(), isEquipping: false, isPending: false } as never);
+  vi.spyOn(bulkSell, "useBulkSellItems").mockReturnValue({
+    sellMany: vi.fn(),
+    isSelling: false,
+  });
+  vi.spyOn(itemActions, "useItemActions").mockReturnValue({
+    equip: vi.fn(),
+    merge: vi.fn(),
+    isEquipping: false,
+    isPending: false,
+  } as never);
   installBrowserGlobals({
     resizeObserver: class {
-      constructor(private readonly callback: (entries: { contentRect: { width: number } }[]) => void) {}
+      constructor(
+        private readonly callback: (
+          entries: { contentRect: { width: number } }[],
+        ) => void,
+      ) {}
       observe() {
         this.callback([{ contentRect: { width: 1000 } }]);
       }
@@ -43,9 +68,17 @@ beforeEach(() => {
       disconnect() {}
     },
   });
-  vi.spyOn(hotkeyControls, "useHotkeyAssignment").mockReturnValue({ hotkeys: { byAction: {} }, assign: vi.fn(), dialog: null } as never);
-  vi.spyOn(equipmentPreview, "EquipmentPreview").mockImplementation(() => <button type="button">Preview</button>);
-  vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => <span>{alt} art</span>);
+  vi.spyOn(hotkeyControls, "useHotkeyAssignment").mockReturnValue({
+    hotkeys: { byAction: {} },
+    assign: vi.fn(),
+    dialog: null,
+  } as never);
+  vi.spyOn(equipmentPreview, "EquipmentPreview").mockImplementation(() => (
+    <button type="button">Preview</button>
+  ));
+  vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => (
+    <span>{alt} art</span>
+  ));
   // biome-ignore lint/performance/noImgElement: isolated silhouette fixture
   vi.spyOn(image, "default").mockImplementation(({ alt }) => <img alt={alt} />);
   vi.spyOn(mastery, "gearMissingMastery").mockReturnValue(null as never);
@@ -61,7 +94,8 @@ afterEach(() => {
   document.body.innerHTML = "";
   vi.restoreAllMocks();
   window.localStorage.clear();
-  if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
+  if (originalMatchMedia)
+    Object.defineProperty(window, "matchMedia", originalMatchMedia);
   else Reflect.deleteProperty(window, "matchMedia");
   restoreBrowserGlobals();
 });
@@ -101,7 +135,16 @@ const pill = stack("Chakra Pill");
 const scroll = stack("Old Scroll");
 const ore = stack("Iron Ore", true);
 const herb = stack("Dried Herb", true);
-const player = { userId: "user-1", role: "USER", status: "AWAKE", battleId: null, items: [], anbuId: null, farmCurrency: 0, village: null } as never;
+const player = {
+  userId: "user-1",
+  role: "USER",
+  status: "AWAKE",
+  battleId: null,
+  items: [],
+  anbuId: null,
+  farmCurrency: 0,
+  village: null,
+} as never;
 
 const renderWorkspace = ({
   place = "backpack" as ItemsPlace,
@@ -133,12 +176,18 @@ const renderWorkspace = ({
     />
   );
   const view = render(tree(carried, stored));
-  return { onPlaceChange, rerender: (carried: UserItemWithRelations[], stored: UserItemWithRelations[]) => view.rerender(tree(carried, stored)) };
+  return {
+    onPlaceChange,
+    rerender: (carried: UserItemWithRelations[], stored: UserItemWithRelations[]) =>
+      view.rerender(tree(carried, stored)),
+  };
 };
 
-const card = (name: string) => screen.getByRole("button", { name: new RegExp(`^${name}`) });
+const card = (name: string) =>
+  screen.getByRole("button", { name: new RegExp(`^${name}`) });
 const bar = () => screen.getByRole("region", { name: "Selected items" });
-const startSelecting = () => act(() => fireEvent.click(screen.getByRole("button", { name: "Select" })));
+const startSelecting = () =>
+  act(() => fireEvent.click(screen.getByRole("button", { name: "Select" })));
 
 it("keeps the plain Backpack heading when home storage is out of reach", () => {
   renderWorkspace({ withHome: false });
@@ -148,7 +197,9 @@ it("keeps the plain Backpack heading when home storage is out of reach", () => {
 
 it("switches the backpack column to home storage", () => {
   const { onPlaceChange } = renderWorkspace();
-  expect(screen.getByRole("button", { name: "Backpack" }).getAttribute("aria-pressed")).toBe("true");
+  expect(
+    screen.getByRole("button", { name: "Backpack" }).getAttribute("aria-pressed"),
+  ).toBe("true");
   act(() => fireEvent.click(screen.getByRole("button", { name: "Home · 2" })));
   expect(onPlaceChange).toHaveBeenCalledWith("home");
 });
@@ -170,7 +221,9 @@ it("labels the compact inventory tab with the active storage and its count", () 
 
 it("shows the backpack when leaving an equipment picker from home storage", () => {
   const { onPlaceChange } = renderWorkspace({ place: "home" });
-  act(() => fireEvent.click(document.querySelector<HTMLButtonElement>('[data-slot="HAND_1"]')!));
+  act(() =>
+    fireEvent.click(document.querySelector<HTMLButtonElement>('[data-slot="HAND_1"]')!),
+  );
   act(() => fireEvent.click(screen.getByRole("button", { name: "Show Backpack" })));
   expect(onPlaceChange).toHaveBeenCalledWith("backpack");
 });
@@ -190,7 +243,9 @@ it("stores selected backpack stacks and keeps the ones that stayed selected", ()
   startSelecting();
   act(() => fireEvent.click(card("Chakra Pill")));
   act(() => fireEvent.click(card("Old Scroll")));
-  act(() => fireEvent.click(within(bar()).getByRole("button", { name: "Store at home" })));
+  act(() =>
+    fireEvent.click(within(bar()).getByRole("button", { name: "Store at home" })),
+  );
   expect(moveItems).toHaveBeenCalledWith(["Chakra Pill", "Old Scroll"], true);
   // A refused request moves nothing, so the whole selection stays for a retry.
   act(() => finishMove({ success: false, refused: [] }));
@@ -204,7 +259,9 @@ it("stores selected backpack stacks and keeps the ones that stayed selected", ()
 });
 
 it("offers the inspector a move home with the reason a stack cannot go", () => {
-  const blockReason = vi.fn((_id: string, toHome: boolean) => (toHome ? "Does not fit" : null));
+  const blockReason = vi.fn((_id: string, toHome: boolean) =>
+    toHome ? "Does not fit" : null,
+  );
   renderWorkspace({ blockReason });
   act(() => fireEvent.click(card("Chakra Pill")));
   expect(inspectorProps?.homeMove?.blockedReason).toBe("Does not fit");
@@ -222,25 +279,58 @@ it("inspects a stored stack with taking it out as its move", () => {
 });
 
 it("stores farm-market seeds without replacement coins while keeping sale restrictions", () => {
-  const seed = { ...pill, id: "seed", item: { ...pill.item, name: "Market Seed", isFarmSeed: true, inShop: false, farmSellValue: 100 } };
+  const seed = {
+    ...pill,
+    id: "seed",
+    item: {
+      ...pill.item,
+      name: "Market Seed",
+      isFarmSeed: true,
+      inShop: false,
+      farmSellValue: 100,
+    },
+  };
   renderWorkspace({ carried: [seed, pill] });
   startSelecting();
   expect(card("Market Seed").hasAttribute("disabled")).toBe(false);
   act(() => fireEvent.click(card("Market Seed")));
-  expect(within(bar()).getByRole("button", { name: "Sell / drop…" }).hasAttribute("disabled")).toBe(true);
-  act(() => fireEvent.click(within(bar()).getByRole("button", { name: "Store at home" })));
+  expect(
+    within(bar())
+      .getByRole("button", { name: "Sell / drop…" })
+      .hasAttribute("disabled"),
+  ).toBe(true);
+  act(() =>
+    fireEvent.click(within(bar()).getByRole("button", { name: "Store at home" })),
+  );
   expect(moveItems).toHaveBeenCalledWith(["seed"], true);
   act(() => fireEvent.click(card("Chakra Pill")));
   act(() => fireEvent.click(card("Market Seed")));
-  expect(within(bar()).getByRole("button", { name: "Sell / drop…" }).hasAttribute("disabled")).toBe(false);
+  expect(
+    within(bar())
+      .getByRole("button", { name: "Sell / drop…" })
+      .hasAttribute("disabled"),
+  ).toBe(false);
 });
 
 it("inspects carried gear from a slot picker while viewing home storage", () => {
-  const worn = { ...pill, id: "worn", equipped: "HAND_1", item: { ...pill.item, name: "Worn Sword", slot: "HAND", itemType: "WEAPON", maxEquips: 1 } } as UserItemWithRelations;
+  const worn = {
+    ...pill,
+    id: "worn",
+    equipped: "HAND_1",
+    item: {
+      ...pill.item,
+      name: "Worn Sword",
+      slot: "HAND",
+      itemType: "WEAPON",
+      maxEquips: 1,
+    },
+  } as UserItemWithRelations;
   renderWorkspace({ place: "home", carried: [worn] });
   act(() => fireEvent.click(screen.getByRole("button", { name: /Worn Sword/ })));
   act(() => fireEvent.click(screen.getByRole("button", { name: "Inspect" })));
-  expect(screen.queryByRole("region", { name: "Inspecting Worn Sword" })).not.toBeNull();
+  expect(
+    screen.queryByRole("region", { name: "Inspecting Worn Sword" }),
+  ).not.toBeNull();
 });
 
 it("closes a stored stack's inspector when it moves into the backpack", () => {
@@ -252,11 +342,27 @@ it("closes a stored stack's inspector when it moves into the backpack", () => {
 });
 
 it("inspects a carried candidate at home and closes it when stored", () => {
-  const sword = { ...pill, id: "sword", item: { ...pill.item, name: "Spare Sword", slot: "HAND", itemType: "WEAPON", maxEquips: 1 } } as UserItemWithRelations;
+  const sword = {
+    ...pill,
+    id: "sword",
+    item: {
+      ...pill.item,
+      name: "Spare Sword",
+      slot: "HAND",
+      itemType: "WEAPON",
+      maxEquips: 1,
+    },
+  } as UserItemWithRelations;
   const { rerender } = renderWorkspace({ place: "home", carried: [sword] });
-  act(() => fireEvent.click(document.querySelector<HTMLButtonElement>('[data-slot="HAND_1"]')!));
-  act(() => fireEvent.click(screen.getByRole("button", { name: "Details of Spare Sword" })));
-  expect(screen.queryByRole("region", { name: "Inspecting Spare Sword" })).not.toBeNull();
+  act(() =>
+    fireEvent.click(document.querySelector<HTMLButtonElement>('[data-slot="HAND_1"]')!),
+  );
+  act(() =>
+    fireEvent.click(screen.getByRole("button", { name: "Details of Spare Sword" })),
+  );
+  expect(
+    screen.queryByRole("region", { name: "Inspecting Spare Sword" }),
+  ).not.toBeNull();
   act(() => rerender([], [ore, herb, { ...sword, storedAtHome: true }]));
   expect(screen.queryByRole("region", { name: "Inspecting Spare Sword" })).toBeNull();
 });
