@@ -162,9 +162,6 @@
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2"
   },
-  "ct3aMetadata": {
-    "initVersion": "7.3.2"
-  },
   "nextBundleAnalysis": {
     "budget": null,
     "budgetPercentIncreaseRed": 20,
