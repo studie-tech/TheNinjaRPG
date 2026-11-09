@@ -4,6 +4,10 @@ import { useState } from "react";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
+import {
+  RESOURCE_SILO_DURATION_HOURS,
+  RESOURCE_SILO_INTERVAL_HOURS,
+} from "@/drizzle/constants";
 import { useResourceSiloEditor } from "@/hooks/useResourceSilos";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -29,10 +33,11 @@ export default function ResourceSilosEditor() {
       defaultBackHref="/manual"
     >
       <p className="mb-4">
-        Friday–Sunday UTC, a silo opens every three hours for one hour. Every selected
-        reward has its own percentage chance; totals do not need to add up to 100%. A
-        claim can drop several rewards or none. Saving copies the selected package
-        contents. Cache items are awarded unopened.
+        Friday–Sunday UTC, a silo opens every {RESOURCE_SILO_INTERVAL_HOURS} hours for{" "}
+        {RESOURCE_SILO_DURATION_HOURS} hour. Every selected reward has its own
+        percentage chance; totals do not need to add up to 100%. A claim can drop
+        several rewards or none. Saving copies the selected package contents. Cache
+        items are awarded unopened.
       </p>
       {editor.isPending && <Loader explanation="Loading silo rewards" />}
       {editor.isError && (
@@ -52,6 +57,7 @@ export default function ResourceSilosEditor() {
   );
 }
 
+/** Edit source selections locally; the server validates permissions and snapshots reward contents. */
 const SiloRewardForm = ({
   data,
   save,

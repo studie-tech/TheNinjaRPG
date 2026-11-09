@@ -502,7 +502,12 @@ export const getBalancePeriodStart = (now = new Date()) => {
 /** Exclusive end of a fortnightly balance reporting window. */
 export const getBalancePeriodEnd = (start: number) =>
   start + BALANCE_PERIOD_DAYS * 86400;
-/** UTC weekend silo windows begin every three hours and stay open for one hour. */
+
+/**
+ * Resolve the UTC silo window without mutating the supplied clock value.
+ * The opening timestamp is its progress key; `next` is that opening while active,
+ * or the next eligible opening while closed.
+ */
 export const getResourceSiloWindow = (now = new Date()) => {
   const start = new Date(now);
   start.setUTCMinutes(0, 0, 0);

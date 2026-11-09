@@ -2,6 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import {
+  RESOURCE_SILO_DURATION_HOURS,
+  RESOURCE_SILO_INTERVAL_HOURS,
   RESOURCE_SILO_LOSS_POINTS,
   RESOURCE_SILO_POINTS_REQUIRED,
   RESOURCE_SILO_WIN_POINTS,
@@ -22,9 +24,10 @@ export const ResourceSilo = () => {
   return (
     <ContentBox title="Resource Silo" subtitle="War-Torn Sector · Friday–Sunday UTC">
       <p className="mb-3 text-sm">
-        A silo opens every three hours for one hour. Earn {RESOURCE_SILO_WIN_POINTS}{" "}
-        points for a PvP win and {RESOURCE_SILO_LOSS_POINTS} for a loss or flee in this
-        sector. Draws give no points. Points reset each spawn.
+        A silo opens every {RESOURCE_SILO_INTERVAL_HOURS} hours for{" "}
+        {RESOURCE_SILO_DURATION_HOURS} hour. Earn {RESOURCE_SILO_WIN_POINTS} points for
+        a PvP win and {RESOURCE_SILO_LOSS_POINTS} for a loss or flee in this sector.
+        Draws give no points. Points reset each spawn.
       </p>
       {status.isPending && <Loader explanation="Loading resource silo" />}
       {status.isError && (

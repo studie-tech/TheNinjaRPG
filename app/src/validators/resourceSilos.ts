@@ -12,7 +12,9 @@ export const ResourceSiloEntry = ResourceSiloSelection.extend({
   name: RewardPackageValidator.shape.name,
   rewards: RewardPackageValidator.shape.rewards,
 });
+/** Persisted source selection and the reward snapshot used for independent claim rolls. */
 export type ResourceSiloEntryType = z.infer<typeof ResourceSiloEntry>;
+/** Editable source identity and chance; the server supplies the authoritative reward snapshot. */
 export type ResourceSiloSelectionType = z.infer<typeof ResourceSiloSelection>;
 /** Only the current window's progress is usable; claims preserve progress for display. */
 export type ResourceSiloProgress = {

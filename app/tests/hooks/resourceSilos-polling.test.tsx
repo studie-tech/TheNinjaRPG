@@ -36,6 +36,7 @@ const settle = async () => act(async () => {
     vi.advanceTimersByTime(1);
   }
 });
+/** Advance elapsed timers and the simulated client clock together before settling observers. */
 const advance = async (ms: number) => {
   await act(async () => { now += ms; vi.advanceTimersByTime(ms); });
   await settle();
@@ -110,7 +111,8 @@ it.each([-120_000, 0, 120_000])("refreshes opening and closing boundaries with c
   expect(tab.read).toHaveBeenCalledTimes(2);
   expect(tab.result.current.status.data?.window.active).toBe(true);
   // Deliver an active snapshot shortly before its end, then let the deadline refresh it.
-  now = Date.UTC(2026, 10, 13, 12, 59, 55) + offset;
+  // Elapse the hour rather than jumping the clock: the deadline timer is armed once per boundary.
+  await advance(Date.UTC(2026, 10, 13, 12, 59, 55) + offset - now);
   await act(async () => { await tab.result.current.status.refetch(); });
   await settle();
   const reads = tab.read.mock.calls.length;

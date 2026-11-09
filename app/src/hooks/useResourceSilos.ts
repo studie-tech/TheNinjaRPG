@@ -10,7 +10,10 @@ import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 
-/** Bind shrine claims to their spawn and reconcile arbitrary package effects authoritatively. */
+/**
+ * Bind claims to their captured actor and spawn, then reconcile arbitrary package effects.
+ * Closed windows use bounded recovery polling; server-clock deadlines keep openings timely.
+ */
 export const useResourceSilo = () => {
   const utils = api.useUtils();
   const {
@@ -20,6 +23,7 @@ export const useResourceSilo = () => {
     updateUser,
   } = useRequiredUserData();
   const status = api.resourceSilos.getStatus.useQuery(undefined, {
+    // Active, failed and overdue snapshots need fast recovery; quiet closed windows do not.
     refetchInterval: (query) =>
       query.state.status !== "error" &&
       query.state.data?.window.active === false &&
@@ -27,6 +31,7 @@ export const useResourceSilo = () => {
         ? 5 * 60_000
         : 15_000,
     refetchIntervalInBackground: false,
+    // The shared QueryClient has infinite freshness, so default focus recovery would skip these reads.
     refetchOnWindowFocus: "always",
     refetchOnReconnect: "always",
   });
@@ -39,6 +44,7 @@ export const useResourceSilo = () => {
     getQueryKey(api.resourceSilos.getStatus, undefined, "query"),
   );
   const { invalidateInventory } = useInventoryCacheUpdate();
+  /** Refresh ownership-dependent views for the actor captured before the mutation starts. */
   const reconcileOwnership = (userId: string | undefined) =>
     Promise.all([
       invalidateInventory(),
@@ -48,11 +54,13 @@ export const useResourceSilo = () => {
       userId ? utils.profile.getPublicUser.invalidate({ userId }) : undefined,
     ]);
   const claim = api.resourceSilos.claim.useMutation({
+    /** Keep ownership recovery bound to the initiating actor and cache revisions. */
     onMutate: () => ({
       status: cache.prepareUpdate(),
       user: prepareUserUpdate(),
       userId: userData?.userId,
     }),
+    /** Settle the captured spawn, then reload package effects that cannot be inferred locally. */
     onSuccess: async (result, _input, snapshot) => {
       if (!snapshot) return;
       const windowId = result.success ? result.windowId : undefined;
@@ -68,6 +76,7 @@ export const useResourceSilo = () => {
         await reconcileOwnership(snapshot.userId);
       }
     },
+    /** Recover uncertain delivery before refreshing ownership views changed by profile settlement. */
     onError: async (_error, _input, snapshot) => {
       if (!snapshot) return;
       await Promise.all([
@@ -89,6 +98,7 @@ export const useResourceSiloEditor = (enabled: boolean) => {
   );
   const save = api.resourceSilos.save.useMutation({
     onMutate: cache.prepareUpdate,
+    /** Apply authoritative reward snapshots only to the captured editor revision. */
     onSuccess: async (result, _input, snapshot) => {
       if (snapshot && result.success && result.entries)
         await cache.updateCache(
@@ -109,6 +119,7 @@ export const useWarTornRevival = () => {
   const utils = api.useUtils();
   return api.resourceSilos.respawn.useMutation({
     onMutate: prepareUserUpdate,
+    /** Preserve confirmation across profile reconciliation and reload access after relocation. */
     onSuccess: async (result, _input, revision) => {
       showMutationToast(result);
       if (!result.success) {
@@ -119,6 +130,7 @@ export const useWarTornRevival = () => {
       await updateUser(undefined, { revision });
       await utils.travel.getSectorData.invalidate();
     },
+    /** Display a recoverable error and reconcile whether an uncertain revival already committed. */
     onError: async (error, _input, revision) => {
       showMutationToast({ success: false, message: error.message });
       await updateUser(undefined, { revision });
