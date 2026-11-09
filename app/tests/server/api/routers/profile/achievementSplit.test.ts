@@ -12,7 +12,7 @@ import {
 } from "../../../../setup/testDatabase";
 
 /**
- * `profile.getUser` stops shipping achievement definitions and sends progress rows instead; the
+ * `profile.getUser` sends achievement progress rows rather than definitions; the
  * logbook joins them against the catalogue `quests.getAchievementCatalogue` serves. Both halves
  * are cut from `fetchPublishedAchievements`, so this suite covers that one list deciding the
  * partition, the counters a progress row still has to carry, and the predicate behind the list.

@@ -406,7 +406,7 @@ describeWithDatabase("web store payments", () => {
     expect(await db.query.recruitmentRewards.findMany()).toHaveLength(0);
     expect(await db.query.webStoreOrder.findFirst({ where: eq(webStoreOrder.id, pending.id) })).toMatchObject({ grantedAt: null });
   });
-  it("continues to skip negative legacy payments without granting rewards", async () => {
+  it("skips negative legacy payments without granting rewards", async () => {
     const db = await getTestDatabase();
     const refund = reportingTransaction("legacy-refund");
     Object.assign(refund.transaction_info, {
