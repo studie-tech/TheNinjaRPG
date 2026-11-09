@@ -38,12 +38,20 @@ describeWithDatabase("staff review summaries", () => {
     await insertUsers([
       { userId: "reviewed", username: "Reviewed", role: "MODERATOR" },
       { userId: "unreviewed", username: "Unreviewed", role: "MODERATOR" },
+      { userId: "second", username: "Second", role: "MODERATOR" },
     ] as never);
     await db.insert(userReview).values({
       id: "review-1",
       authorUserId: "author",
       targetUserId: "reviewed",
       review: "Helpful and quick to respond",
+      authorIp: "127.0.0.1",
+    });
+    await db.insert(userReview).values({
+      id: "review-2",
+      authorUserId: "author",
+      targetUserId: "second",
+      review: "Slow to answer tickets",
       authorIp: "127.0.0.1",
     });
     await db
@@ -68,9 +76,12 @@ describeWithDatabase("staff review summaries", () => {
       .spyOn(comments, "createConvo")
       .mockResolvedValue(undefined as never);
     expect((await GET(request())).status).toBe(200);
-    expect(model).toHaveBeenCalledTimes(1);
-    expect(convo).toHaveBeenCalledTimes(1);
-    expect(convo.mock.calls[0]?.[0]).toMatchObject({ receiverUserIds: ["reviewed"] });
+    expect(model).toHaveBeenCalledTimes(2);
+    expect(convo).toHaveBeenCalledTimes(2);
+    expect(convo.mock.calls.map(([input]) => input.receiverUserIds).sort()).toEqual([
+      ["reviewed"],
+      ["second"],
+    ]);
   });
 
   it("hands the period back when a summary fails", async () => {
@@ -81,5 +92,24 @@ describeWithDatabase("staff review summaries", () => {
     expect((await GET(request())).status).toBe(500);
     expect(convo).not.toHaveBeenCalled();
     expect((await readTimer())?.time.getTime()).toBe(LAST_RUN.getTime());
+  });
+
+  it("keeps the period claimed once any summary was delivered", async () => {
+    vi.spyOn(ai, "generateText").mockImplementation((async ({
+      prompt,
+    }: {
+      prompt: string;
+    }) => {
+      if (prompt.includes("Slow to answer")) throw new Error("model unavailable");
+      return { text: "<strong>Strengths:</strong>" };
+    }) as never);
+    const convo = vi
+      .spyOn(comments, "createConvo")
+      .mockResolvedValue(undefined as never);
+    expect((await GET(request())).status).toBe(500);
+    expect(convo).toHaveBeenCalledTimes(1);
+    expect((await readTimer())?.time.getTime()).not.toBe(LAST_RUN.getTime());
+    expect((await GET(request())).status).toBe(200);
+    expect(convo).toHaveBeenCalledTimes(1);
   });
 });

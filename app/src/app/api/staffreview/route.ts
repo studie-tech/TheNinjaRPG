@@ -1,7 +1,11 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import { OPENAI_REVIEW_MODEL, TERR_BOT_ID } from "@/drizzle/constants";
-import { lockWithMonthlyTimer, runClaimedCron } from "@/libs/gamesettings";
+import {
+  handleEndpointError,
+  lockWithMonthlyTimer,
+  runClaimedCron,
+} from "@/libs/gamesettings";
 import { listUserDataForGET, listUserReviewForGET } from "@/queries/reports";
 import { createConvo } from "@/routers/comments";
 import { drizzleDB } from "@/server/db";
@@ -22,14 +26,14 @@ export async function GET(request: Request) {
   return runClaimedCron(timerCheck, "/api/staffreview", async () => {
     const staff = await listUserDataForGET(drizzleDB);
 
-    await Promise.all(
+    const outcomes = await Promise.allSettled(
       staff.map(async (user) => {
         const results = await listUserReviewForGET(
           drizzleDB,
           timerCheck.prevTime,
           user,
         );
-        if (!results.length) return;
+        if (!results.length) return false;
         const allText = results.map((r) => r.review).join("\n");
 
         // Review
@@ -64,9 +68,17 @@ export async function GET(request: Request) {
         <br /><br />${text.replace("```html", "").replace("```", "")}`,
           isStaffAvailable: false,
         });
+        return true;
       }),
     );
 
-    return Response.json(`OK`);
+    const failure = outcomes.find((outcome) => outcome.status === "rejected");
+    if (!failure) return Response.json(`OK`);
+    // Once any summary is delivered the month stays claimed, so a retry cannot send it twice.
+    const delivered = outcomes.some(
+      (outcome) => outcome.status === "fulfilled" && outcome.value,
+    );
+    if (!delivered) throw failure.reason;
+    return handleEndpointError(failure.reason, { endpoint: "/api/staffreview" });
   });
 }
