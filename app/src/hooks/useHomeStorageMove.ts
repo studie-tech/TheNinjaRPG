@@ -25,8 +25,8 @@ export const useHomeStorageMove = ({
     onSuccess: async (data, input, snapshot) => {
       showMutationToast(data);
       onMoved?.(data);
-      // A refusal comes from a fresher read than the cache; read the inventory again.
-      if (!data.success) {
+      // Refused stacks may have changed elsewhere, even when other stacks moved.
+      if (!data.success || data.refused.length > 0) {
         await invalidateInventory();
         return;
       }

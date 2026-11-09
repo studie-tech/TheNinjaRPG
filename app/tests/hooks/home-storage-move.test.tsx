@@ -47,3 +47,16 @@ it("reads the inventory again when the server refuses the move", async () => {
   expect(move.updateInventory).not.toHaveBeenCalled();
   move.queryClient.clear();
 });
+
+it("reconciles refused stacks after a partially successful storage move", async () => {
+  const move = renderMove({
+    success: true,
+    message: "Stored 1 item in your home. 1 stayed: Ore is already in your home storage.",
+    movedUserItemIds: ["pill"],
+    refused: [{ userItemId: "ore", name: "Ore", reason: "is already in your home storage" }],
+  });
+  act(() => move.result.current.moveItems(["ore", "pill"], true));
+  await waitFor(() => expect(move.invalidateInventory).toHaveBeenCalledTimes(1));
+  expect(move.updateInventory).not.toHaveBeenCalled();
+  move.queryClient.clear();
+});

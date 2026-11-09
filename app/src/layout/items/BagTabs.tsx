@@ -11,7 +11,7 @@ export function BagTabs({
   onChange,
   storageKey = BAG_STORAGE_KEY,
 }: BagTabsProps) {
-  // Read after mount so server and client render the same first tab.
+  // Restore after mount or an inventory switch, preserving the server's first tab during hydration.
   const restore = useEffectEvent(() => {
     const stored = safeLocalStorageGetItem(storageKey);
     if (stored && stored !== active && bags.some((bag) => bag.value === stored)) {
@@ -20,7 +20,7 @@ export function BagTabs({
   });
   useEffect(() => {
     restore();
-  }, []);
+  }, [storageKey]);
 
   return (
     <fieldset
