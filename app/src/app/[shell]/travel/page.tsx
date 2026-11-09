@@ -175,6 +175,8 @@ function Travel() {
   const [focusSector, setFocusSector] = useState<number | null>(null);
   const [isWorldExpanded, setWorldExpanded] = useState(false);
   const [cameraFocusRevision, setCameraFocusRevision] = useState(0);
+  // A rejected arrival leaves the finished countdown in place with a manual retry.
+  const [isArrivalRejected, setIsArrivalRejected] = useState(false);
 
   const searchParams = useSearchParams();
   const [locationRequest, setLocationRequest] = useState<TravelLocation | null>(null);
@@ -619,15 +621,21 @@ function Travel() {
 
   const { mutate: finishGlobalMove, isPending: isFinishingTravel } =
     api.travel.finishGlobalMove.useMutation({
-      onMutate: () => ({
-        revision: prepareUserUpdate(),
-        sector: prepareSectorUpdate(),
-        // Starting the trip already stored its server-confirmed destination.
-        arrivalSector: userData?.sector,
-      }),
+      onMutate: () => {
+        setIsArrivalRejected(false);
+        return {
+          revision: prepareUserUpdate(),
+          sector: prepareSectorUpdate(),
+          // Starting the trip already stored its server-confirmed destination.
+          arrivalSector: userData?.sector,
+        };
+      },
       onSuccess: async (result, _variables, context) => {
         showMutationToast(result);
-        if (!result.success) return;
+        if (!result.success) {
+          setIsArrivalRejected(true);
+          return;
+        }
         // Keep the prepared destination mounted while profile and presence reconcile.
         setActiveTab(sectorLink);
         const patch = result.userPatch;
@@ -647,6 +655,7 @@ function Travel() {
           await completeTutorialAction("travelArrive");
         }
       },
+      onError: () => setIsArrivalRejected(true),
     });
 
   const { mutate: joinVillage, isPending: isJoining } =
@@ -1344,6 +1353,17 @@ function Travel() {
                     onFinish={() => {
                       if (!isFinishingTravel && !isStartingTravel) finishGlobalMove();
                     }}
+                    onEndShow={
+                      isArrivalRejected ? (
+                        <Button
+                          className="text-xl"
+                          disabled={isFinishingTravel || isStartingTravel}
+                          onClick={() => finishGlobalMove()}
+                        >
+                          Arrive
+                        </Button>
+                      ) : undefined
+                    }
                   />
                 </p>
               </div>

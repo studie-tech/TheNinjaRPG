@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import type { inferRouterOutputs } from "@trpc/server";
-import { and, eq, gt, isNotNull, lt, sql } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { z } from "zod";
 import * as map from "@/data/hexasphere.json";
@@ -747,6 +747,8 @@ export const travelRouter = createTRPCRouter({
           `Cannot finish travel because your status is: ${user.status.toLowerCase()}`,
         );
       const wasTravelling = user.status === "TRAVEL";
+      if (wasTravelling && user.travelFinishAt && user.travelFinishAt > new Date())
+        return errorResponse("You have not arrived yet");
       // The cleaner can finish travel before profile hydration evaluates arrival goals.
       canProject &&= wasTravelling;
       const projectedQuests = user.userQuests.filter(
@@ -1277,7 +1279,7 @@ const resolveAdjacentCrossing = (
   return { valid: true, direction };
 };
 
-/** Complete travel and consume its recovery ticks without training queued stats. */
+/** Complete due travel and consume its recovery ticks without training queued stats. */
 const completeGlobalTravel = async (
   client: DrizzleClient,
   user: UserData & { raidBuffs?: TimedBuff[] },
@@ -1296,7 +1298,10 @@ const completeGlobalTravel = async (
       client,
       userId: user.userId,
       updatedAt: user.updatedAt,
-      where: [eq(userData.status, "TRAVEL")],
+      where: [
+        eq(userData.status, "TRAVEL"),
+        or(isNull(userData.travelFinishAt), lte(userData.travelFinishAt, new Date())),
+      ],
       set: {
         status: "AWAKE",
         travelFinishAt: null,
