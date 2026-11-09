@@ -42,7 +42,7 @@ describe("checkForBadWords", () => {
   });
 
   it.each(["ali baba", "ang mo", "bounty bar", "choc ice", "full blood"])(
-    "allows removed low-signal phrases: %s",
+    "allows low-signal phrases: %s",
     async (content) => {
       await expectAllowed(content);
     },

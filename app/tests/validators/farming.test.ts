@@ -6,7 +6,7 @@ import {
 } from "@/validators/farming";
 
 describe("farmShopPurchaseInputSchema", () => {
-  it("defaults legacy purchases to a quantity of one", () => {
+  it("defaults the quantity to one", () => {
     expect(
       farmShopPurchaseInputSchema.parse({ type: "SEED", itemId: "seed-1" }),
     ).toEqual({ type: "SEED", itemId: "seed-1", quantity: 1 });

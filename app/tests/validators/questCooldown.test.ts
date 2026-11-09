@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { QuestValidator } from "@/validators/objectives";
 
-// Minimal valid quest body shared by the cases below. `maxCompletes` and
-// `retryDelay` are overridden per-case to exercise the #1348 editor guard.
+// Minimal valid quest body shared by the cases below. Each case overrides
+// `maxCompletes` and `retryDelay`.
 const baseQuest = {
   name: "Test Mission",
   description: "desc",
@@ -16,7 +16,7 @@ const baseQuest = {
   tierLevel: null,
 };
 
-describe("QuestValidator — #1348 maxCompletes/retryDelay guard", () => {
+describe("QuestValidator maxCompletes/retryDelay guard", () => {
   it("rejects maxCompletes < 1 when retryDelay is a real period (weekly)", () => {
     const res = QuestValidator.safeParse({
       ...baseQuest,
@@ -38,7 +38,7 @@ describe("QuestValidator — #1348 maxCompletes/retryDelay guard", () => {
     expect(res.success).toBe(true);
   });
 
-  it("preserves legacy maxCompletes 0 validation when retryDelay is 'none'", () => {
+  it("allows maxCompletes 0 when retryDelay is 'none'", () => {
     const res = QuestValidator.safeParse({
       ...baseQuest,
       retryDelay: "none",

@@ -12,7 +12,7 @@ import {
 } from "@/validators/user";
 
 describe("createAssignedExperienceSchema", () => {
-  it("defaults every element to zero for existing stat-only callers", () => {
+  it("defaults every element to zero when only stats are assigned", () => {
     const { schema, maxValues } = createAssignedExperienceSchema();
     const values = schema.parse({ offence: 10 });
     for (const element of BasicElementName) {

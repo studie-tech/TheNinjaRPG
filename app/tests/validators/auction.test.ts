@@ -12,7 +12,7 @@ describe("listing quantity validation", () => {
   it.each([1, 4, 12])("accepts quantity %i", (quantity) => {
     expect(auctionListingSchemaForItem(item, 12).safeParse({ ...listing, quantity }).success).toBe(true);
   });
-  it("preserves omitted full-stack requests for existing clients", () => {
+  it("accepts a listing without a quantity", () => {
     expect(createAuctionListingSchema.safeParse(listing).success).toBe(true);
   });
   it("does not require quantity for single items", () => {
