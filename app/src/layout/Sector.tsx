@@ -847,15 +847,18 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             }
           }
         }
-      } else {
+      } else if (data.userId !== userRef.current?.userId) {
         // New user enters — do not invent experience; unknown XP fails closed in bracket filters
-        // New identities come from the authenticated, masked sector snapshot.
+        // New identities come from the authenticated, masked sector snapshot. The viewer's
+        // own marker comes from that snapshot's merge, which a refetch cannot change.
         void utils.travel.getSectorData.invalidate();
       }
       // Remove users who are no longer in the sector; compare against the
-      // live sector ref, which crossings advance before the prop catches up
+      // live sector ref, which crossings advance before the prop catches up.
+      // The viewer stands wherever the map is, whatever sector its profile last recorded.
       usersRef.current = usersRef.current.filter(
-        (user) => user.sector === sectorRef.current,
+        (user) =>
+          user.userId === userRef.current?.userId || user.sector === sectorRef.current,
       );
     }
     actorRevisionRef.current++;
@@ -1106,10 +1109,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     snapMovementPosition(data);
     // Update all state only once at the end to avoid excessive re-renders
     setPosition({ x: data.longitude, y: data.latitude });
-    await updateUser(
+    await commitMovePosition(
       {
+        sector: data.sector,
         location: data.location,
-        updatedAt: new Date(),
         longitude: data.longitude,
         latitude: data.latitude,
       },
@@ -1281,13 +1284,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     } else {
       setTarget({ x: data.longitude, y: data.latitude });
     }
-    await updateUser(
+    await commitMovePosition(
       {
         sector: data.sector,
         longitude: data.longitude,
         latitude: data.latitude,
         location: data.location,
-        updatedAt: new Date(),
       },
       mutation,
     );
@@ -1362,6 +1364,29 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     await reconcileCrossing(crossingRes, mutation);
   };
 
+  /**
+   * Record a committed move in the profile. Moves are serialized, so its tile is the latest
+   * position even when another mutation, such as a quest check sent in the same batch,
+   * reconciled the profile first and the move's revision no longer matches. Leaving that
+   * profile on the old sector would hide the viewer's own marker in the new one.
+   */
+  const commitMovePosition = async (
+    position: { sector: number; longitude: number; latitude: number; location: string },
+    mutation: UserUpdateOptions,
+  ) => {
+    const patch = { ...position, updatedAt: new Date() };
+    if (await updateUser(patch, mutation)) return;
+    const current = userRef.current;
+    if (
+      current &&
+      (current.sector !== position.sector ||
+        current.longitude !== position.longitude ||
+        current.latitude !== position.latitude ||
+        current.location !== position.location)
+    )
+      await updateUser(patch);
+  };
+
   /** Restore every movement ref together so the next request uses the server tile. */
   const snapMovementPosition = (data: {
     sector: number;
@@ -1410,13 +1435,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       // Clear the completed route before a queued request uses the new sector's grid.
       setTarget(null);
       setPosition({ x: d.longitude, y: d.latitude });
-      await updateUser(
+      await commitMovePosition(
         {
           sector: d.sector,
           longitude: d.longitude,
           latitude: d.latitude,
           location: d.location,
-          updatedAt: new Date(),
         },
         { ...mutation, userRecovery: res.userRecovery ?? mutation.userRecovery },
       );
