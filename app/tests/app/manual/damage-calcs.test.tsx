@@ -111,4 +111,6 @@ it("recalculates the damage when formula parameters change, including a damage o
     target: { value: "1000000000" },
   });
   await waitFor(() => expect(damage()).toBe("Damage: 0"));
+  fireEvent.input(view!.getByLabelText("ep_normalization"), { target: { value: "" } });
+  await waitFor(() => expect(damage()).toBeUndefined());
 });

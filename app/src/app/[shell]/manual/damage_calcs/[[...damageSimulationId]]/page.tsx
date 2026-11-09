@@ -463,12 +463,19 @@ export default function Simulator(props: {
         </div>
         <hr />
         <div className="mx-2 my-2 grid grid-cols-2 items-center">
-          <div>
-            <p className="mt-3 text-center font-bold text-2xl">Damage: {selectedDmg}</p>
-            <p className="mb-3 text-center italic">
-              [{((100 * selectedDmg) / defHp).toFixed(1)}% of Defender HP]
-            </p>
-          </div>
+          {/* A cleared number field leaves no damage to show until it is filled in again. */}
+          {Number.isFinite(selectedDmg) ? (
+            <div>
+              <p className="mt-3 text-center font-bold text-2xl">
+                Damage: {selectedDmg}
+              </p>
+              <p className="mb-3 text-center italic">
+                [{((100 * selectedDmg) / defHp).toFixed(1)}% of Defender HP]
+              </p>
+            </div>
+          ) : (
+            <div />
+          )}
           {!isPending && userData && (
             <Button id="return" onClick={onSubmit}>
               <Save className="mr-2 h-5 w-5" />
