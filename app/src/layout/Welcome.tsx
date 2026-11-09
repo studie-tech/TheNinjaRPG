@@ -25,7 +25,7 @@ import { IllustratedWelcome } from "@/layout/IllustratedWelcome";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { WelcomeQuestions } from "@/layout/WelcomeQuestions";
-import { readCampaignSource, storeCampaignSource } from "@/libs/campaignSource";
+import { readCampaignSource, storeLandingAttribution } from "@/libs/campaignSource";
 import { getGameLayout } from "@/libs/gameLayouts";
 import { LEGAL_LINKS } from "@/libs/legalLinks";
 import { cn } from "@/libs/shadui";
@@ -35,7 +35,7 @@ import {
   useIsPixelLanding,
   useWallpaperVariant,
 } from "@/utils/LayoutContext";
-import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
+import { safeLocalStorageGetItem } from "@/utils/storage";
 
 /**
  * The feature screenshots are 900x700 sources in a column that never renders wider than
@@ -699,12 +699,9 @@ const SetReferal = () => {
     },
   });
   useEffect(() => {
-    // Recruiter whose referral link the visitor followed, credited at registration
-    const ref = searchParams?.get("ref");
-    if (ref) safeLocalStorageSetItem("ref", ref);
-    // Campaign source for registration attribution; reruns once consent arrives
+    // Reruns once consent arrives to retain the campaign source for registration.
+    storeLandingAttribution(searchParams);
     const utmSource = searchParams?.get("utm_source") ?? undefined;
-    if (utmSource && hasStatisticsConsent) storeCampaignSource(utmSource);
     if (!isVisitReported && isLoaded && !isSignedIn) {
       isVisitReported = true;
       trackVisitor({

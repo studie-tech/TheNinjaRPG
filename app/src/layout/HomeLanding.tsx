@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Welcome from "@/layout/Welcome";
-import { readCampaignSource } from "@/libs/campaignSource";
+import { readCampaignSource, storeLandingAttribution } from "@/libs/campaignSource";
 import { nativeHomeRedirectAtom } from "@/libs/native/homeRedirect";
 import { useUserData } from "@/utils/UserContext";
 
@@ -44,6 +44,7 @@ export const HomeLanding: React.FC = () => {
     if (!isClerkLoaded || !isSignedIn || !userId) return;
     // When user is signed in (Clerk) but has not created a character yet, set referral immediately
     if (userStatus === "success" && !userData) {
+      storeLandingAttribution(new URLSearchParams(window.location.search));
       setReferral.mutate({ utmSource: readCampaignSource() });
       void router.push("/register");
     }

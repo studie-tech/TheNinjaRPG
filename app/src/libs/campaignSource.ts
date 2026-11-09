@@ -7,6 +7,16 @@ import {
 
 const CAMPAIGN_SOURCE_KEY = "utm_source";
 
+/** Keep recruiter and consented campaign attribution before leaving a referral landing. */
+export const storeLandingAttribution = (
+  searchParams: Pick<URLSearchParams, "get"> | null,
+) => {
+  const ref = searchParams?.get("ref");
+  if (ref) safeLocalStorageSetItem("ref", ref);
+  const source = searchParams?.get("utm_source");
+  if (source) storeCampaignSource(source);
+};
+
 /**
  * The campaign a visitor arrived from is kept on the device until registration only with
  * statistics consent. Without it, registration attributes the account to the visit logged
