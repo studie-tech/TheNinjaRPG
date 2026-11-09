@@ -42,11 +42,11 @@ const SITE_NAME_TRAILING = new RegExp(
  * stripSiteName
  * - Removes the brand from the start or end of a page title so buildMetadata can append
  *   it exactly once. Guide articles store an seoTitle written as the whole browser-tab
- *   title ("Aerathiel TheNinja-RPG", "Bloodlines in TheNinja-RPG"), and passing that
- *   through a template that adds the brand again produced
- *   "Aerathiel TheNinja-RPG | TheNinja-RPG" on every guide page. A joining preposition
- *   goes with the brand -- "Bloodlines in TheNinja-RPG" becomes "Bloodlines", which the
- *   suffix then completes -- because "Bloodlines in | TheNinja-RPG" is worse than either.
+ *   title ("Aerathiel TheNinja-RPG", "Bloodlines in TheNinja-RPG"), and a template that
+ *   appends the brand would print it twice ("Aerathiel TheNinja-RPG | TheNinja-RPG"). A
+ *   joining preposition goes with the brand -- "Bloodlines in TheNinja-RPG" becomes
+ *   "Bloodlines", which the suffix then completes -- because "Bloodlines in |
+ *   TheNinja-RPG" is worse than either.
  * @param title - Page title that may or may not already carry the brand
  */
 export const stripSiteName = (title: string) => {
@@ -115,7 +115,7 @@ export const buildMetadata = ({
     : [{ url: absoluteUrl(OG_IMAGE_PATH), width: 1200, height: 630, alt: SITE_NAME }];
   // Built with `absolute` rather than relying on the root title.template: a segment
   // layout that sets a plain string title (e.g. /manual) replaces the template for all
-  // of its children, which left nested pages without the brand suffix.
+  // of its children, which would drop the brand suffix from nested pages.
   const fullTitle = `${stripSiteName(title)} | ${SITE_NAME}`;
   return {
     title: { absolute: fullTitle },
@@ -156,10 +156,10 @@ export const noindexMetadata = (title: string): Metadata => ({
   robots: NOINDEX_ROBOTS,
   // Next resolves each metadata key against the nearest ancestor that declares it, so
   // omitting `alternates` here does not mean "no canonical" -- it means the parent
-  // segment's canonical is inherited. That made every staff route under /manual answer
-  // `noindex` while naming an indexable page as its canonical (/manual/logs pointed at
-  // /manual, /manual/item/balance at /manual/item), which is the one combination Google
-  // asks you not to ship: the noindex can be consolidated onto the canonical target.
+  // segment's canonical is inherited. A staff route under /manual would then answer
+  // `noindex` while naming an indexable page as its canonical (e.g. /manual/logs naming
+  // /manual), the one combination Google asks you not to ship: the noindex can be
+  // consolidated onto the canonical target.
   // Declaring the key with a null value replaces the inherited one and emits no tag.
   alternates: { canonical: null },
 });
