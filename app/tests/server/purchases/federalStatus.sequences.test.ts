@@ -35,8 +35,8 @@ import { beforeStatements, failStatements } from "../../setup/statements";
 import { describeWithDatabase, getTestDatabase, resetTables } from "../../setup/testDatabase";
 
 /**
- * federalStatus is one column with two paying sources and five writers, and the ordering
- * between them is where every bug in it has lived. These drive real webhook sequences
+ * federalStatus is one column with two paying sources and five writers, so the ordering
+ * between them is what these tests pin. They drive real webhook sequences
  * against real tables rather than checking a helper in isolation.
  */
 const USER = "federal-seq-user";
@@ -786,7 +786,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
     });
     expect(destination?.federalStatus).toBe("NONE");
 
-    // Even a stale acceptance marker from an older deployment cannot make a sandbox
+    // Even a stale acceptance marker left in an existing row cannot make a sandbox
     // receipt count for an account which is not currently allowlisted.
     await database
       .update(storePurchase)
@@ -1920,7 +1920,7 @@ describeWithDatabase("federal status across real webhook sequences", () => {
       .set({ expiresAt: new Date(Date.now() - MINUTE) })
       .where(eq(storePurchase.transactionId, goldTransactionId));
     await buyFederal("SILVER");
-    // Simulate stale derived state from an interrupted or older grant implementation.
+    // Simulate stale derived state, e.g. from an interrupted grant.
     await setStatus("GOLD");
 
     await reconcileFederalStatuses(database);

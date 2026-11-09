@@ -49,7 +49,7 @@ const declare = async (userId: string, userVillageId: string) =>
 
 /**
  * A faction hideout led by LEADER and an enemy village, each with enough members and
- * tokens to go to war. Factions never get elders, which is what used to block them.
+ * tokens to go to war. Factions never get elders, so a faction's leader declares alone.
  */
 const seedWorld = async (attackerType: "HIDEOUT" | "VILLAGE" = "HIDEOUT") => {
   const database = await getTestDatabase();

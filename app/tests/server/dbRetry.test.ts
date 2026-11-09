@@ -9,7 +9,7 @@ import {
 // Tiny backoff so retry tests run in milliseconds with real timers
 const FAST = { maxRetries: 2, baseDelayMs: 1, deadlineMs: 5_000 };
 
-// Verbatim body PlanetScale returned in THENINJARPG-2D1
+// Verbatim body PlanetScale returns for a connection reset
 const RESET_BODY = JSON.stringify({
   error: {
     message:
@@ -27,7 +27,7 @@ const FAILOVER_BODY = JSON.stringify({
   },
 });
 
-// Verbatim body PlanetScale returns for a deadlock (THENINJARPG-2D1)
+// Verbatim body PlanetScale returns for a deadlock
 const DEADLOCK_BODY = JSON.stringify({
   error: {
     message:

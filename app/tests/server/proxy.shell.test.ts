@@ -5,8 +5,8 @@ import { config, isUnshelledPath } from "../../src/proxy";
 
 describe("isUnshelledPath", () => {
   // The matcher admits these so Clerk can attach its context; rewriting them to a
-  // shell variant turned every tRPC call into a 404 page, which the client parsed as an
-  // error and sent signed-in visitors to /500.
+  // shell variant would turn every tRPC call into a 404 page, which the client parses as
+  // an error and sends signed-in visitors to /500.
   it.each([
     "/api/trpc/profile.getUser",
     "/api/trpc/profile.getUser,home.getUserHome",
