@@ -17,7 +17,6 @@ const Toaster = ({ ...props }: ToasterProps) => {
     return () => observer.disconnect();
   }, []);
 
-  // Feel free to tweak default props globally here.
   return (
     <SonnerToaster
       richColors
