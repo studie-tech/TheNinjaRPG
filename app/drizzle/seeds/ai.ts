@@ -4,8 +4,8 @@ import type { DrizzleClient } from "@/server/db";
 import { executeSqlDump } from "./sqlDump";
 
 /**
- * Replaces the Default AI profile, all AI users and orphaned user jutsu with the
- * checked-in ai.sql and userjutsu.sql dumps.
+ * Deletes the Default AI profile, all AI users and user jutsu left without a user, then
+ * loads the checked-in ai.sql and userjutsu.sql dumps.
  */
 export const seedAI = async (client: DrizzleClient) => {
   console.log("\nClearing AIs...");
