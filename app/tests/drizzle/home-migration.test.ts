@@ -5,7 +5,7 @@ import { HomeTypeDetails, HomeTypes } from "@/drizzle/constants";
 import { homeUpgradeInputSchema } from "@/validators/home";
 import { describeWithDatabase, getTestDatabase, runRawSql } from "../setup/testDatabase";
 
-it("offers Mansion with the former Large Estate benefits and rejects retired tiers", () => {
+it("defines Mansion's benefits and rejects retired tiers", () => {
   expect(HomeTypeDetails.MANSION).toEqual({ regen: 200, storage: 60, cost: 100000000, name: "Mansion" });
   expect(HomeTypes).toEqual(["NONE", "STUDIO_APARTMENT", "ONE_BED_APARTMENT", "TWO_BED_HOUSE", "TOWN_HOUSE", "MANSION", "PALACE", "MARSHMALLOWOPOLIS"]);
   for (const homeType of ["SMALL_MANSION", "SMALL_ESTATE", "LARGE_ESTATE"]) {

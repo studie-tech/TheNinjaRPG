@@ -702,7 +702,7 @@ describeWithDatabase("owned furniture persistence", () => {
     expect(await snapshot()).toEqual(before);
   });
 
-  it.each([...basicFurniture])("keeps a legacy revision-zero $action basic discarded before the first home read", async ({ itemId }) => {
+  it.each([...basicFurniture])("keeps a sold legacy revision-zero $action basic out of every home read", async ({ itemId }) => {
     const database = await getTestDatabase();
     await database.delete(userItem).where(eq(userItem.userId, userId));
     await insertUserItems(basicFurniture.map((piece, index) => ({
@@ -748,7 +748,7 @@ describeWithDatabase("owned furniture persistence", () => {
     expect(await snapshot()).toEqual(before);
   });
 
-  it.each(["bed-row", "storage-row", "kitchen-row"])("keeps existing revision-zero fixture %s discarded before the first home visit", async (id) => {
+  it.each(["bed-row", "storage-row", "kitchen-row"])("keeps a sold revision-zero fixture %s out of every home read", async (id) => {
     const inventory = await callerFor(itemRouter, userId);
     expect((await inventory.sellUserItem({ userItemId: id })).success).toBe(true);
     const before = await snapshot();
@@ -763,7 +763,7 @@ describeWithDatabase("owned furniture persistence", () => {
     expect(await snapshot()).toEqual(before);
   });
 
-  it("provides creation-time starter fixtures and preserves their removal before the first home visit", async () => {
+  it("provides creation-time starter fixtures and keeps sold ones out of home reads", async () => {
     const database = await getTestDatabase();
     await database.delete(userItem).where(eq(userItem.userId, userId));
     await insertItems([

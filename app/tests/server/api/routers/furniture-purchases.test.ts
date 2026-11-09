@@ -47,7 +47,8 @@ describeWithDatabase("standard furniture purchases", () => {
   const buy = async () => (await callerFor(itemRouter, userId)).buy({ itemId: "furniture", villageId, stack: 1 });
 
   it("charges the standard item price and delivers an unplaced, unequipped home row", async () => {
-    // Checkout remains safe even for content authored before cosmetic guards existed.
+    // Furniture authored with an equip slot, equip count or durability still arrives as
+    // unequipped home storage.
     const database = await getTestDatabase();
     await database.update(item).set({ slot: "ITEM", maxEquips: 3, maxDurability: 100 }).where(eq(item.id, "furniture"));
     const result = await buy();

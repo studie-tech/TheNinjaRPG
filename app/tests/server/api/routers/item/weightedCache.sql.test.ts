@@ -127,7 +127,7 @@ describeWithDatabase("weighted cache consumption", () => {
     expect((await db.select().from(userItem))[0]?.quantity).toBe(2);
     expect(await db.select().from(actionLog)).toHaveLength(0);
   });
-  it("supports multiple cache effects, self-rewards and legacy independent rewards together", async () => {
+  it("supports multiple cache effects, self-rewards and standard rewards together", async () => {
     const db = await getTestDatabase(); const effect = cacheEffect(); effect.weightedCache!.tiers[0]!.entries = [{ items: [{ itemId: "cache", quantity: 1 }] }];
     await db.update(item).set({ effects: [cacheEffect(), effect, NonCombatConsumeRewardTag.parse({ reward_money: 7, reward_items: [{ ids: ["pill"], number: 100, quantity: 1 }] })] }).where(eq(item.id, "cache"));
     const response = await callerForDatabase(itemRouter, "opener", db).consume({ userItemId: "cache-stack", requestId: "multiple-cache-effects" });
