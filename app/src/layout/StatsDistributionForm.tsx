@@ -453,9 +453,6 @@ const SimpleDistribution: React.FC<SimpleDistributionProps> = (props) => {
   );
 };
 
-/**
- * Advanced Distribution Component - Original slider-based stat distribution
- */
 interface AdvancedDistributionProps {
   userData: NonNullable<UserWithRelations>;
   availableStats: number;
@@ -467,6 +464,7 @@ interface AdvancedDistributionProps {
   pendingLabel?: string;
 }
 
+/** Per-stat slider allocation; the only form for redistribution. */
 const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
   const {
     includeMasteries = false,
