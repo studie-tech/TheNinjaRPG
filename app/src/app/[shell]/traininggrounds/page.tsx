@@ -191,8 +191,8 @@ export default function Training() {
       ? "Stats"
       : section;
 
-  // Every user-driven section change is remembered, including Radix keyboard navigation and
-  // the shortcut links below, which bypass the NavTabs click handler.
+  // Every user-driven section change is remembered, including Radix keyboard navigation,
+  // which bypasses the NavTabs click handler.
   const sectionStorageKey = `trainingTab:${userData.userId}`;
   const selectSection = (value: string) => {
     safeLocalStorageSetItem(sectionStorageKey, value);
@@ -275,11 +275,7 @@ interface TrainingProps {
   timeDiff: number;
 }
 
-/**
- * Component for sensei system
- * @param props
- * @returns
- */
+/** Component for sensei system */
 const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
   // Settings
@@ -488,7 +484,7 @@ const TRAINING_SPEED_LABELS = Object.fromEntries(
   ]),
 );
 
-/** Each tile gets its own art; the per-type images are matched by look, not by name */
+/** Timed stat, mastery and element training sessions. */
 const StatsTraining: React.FC<
   TrainingProps & { section: "Stats" | "Masteries" | "Elements" }
 > = (props) => {
@@ -1071,11 +1067,7 @@ const StatsTraining: React.FC<
   );
 };
 
-/**
- * Component for jutsu training
- * @param props
- * @returns
- */
+/** Component for jutsu training */
 const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Settings
   const { userData, timeDiff } = props;
@@ -1633,11 +1625,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   );
 };
 
-/**
- * Component for covert operations training (stealth & sensory)
- * @param props
- * @returns
- */
+/** Component for covert operations training (stealth & sensory) */
 const CovertTraining: React.FC<TrainingProps> = (props) => {
   const { userData, timeDiff } = props;
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
@@ -1895,6 +1883,7 @@ const TrainingCaptchaGate: React.FC<{
   );
 };
 
+/** Each tile gets its own art; the per-type images are matched by look, not by name */
 const getTrainingImage = (stat: CombatStatName | TimedMasteryName) => {
   if (isInArray(stat, BasicElementName)) return getElementImg(stat);
   switch (stat) {
@@ -1964,9 +1953,3 @@ const getTrainingLabel = (stat: CombatStatName | TimedMasteryName) => {
       return stat.charAt(0).toUpperCase() + stat.slice(1);
   }
 };
-
-/**
- * Component for stats training
- * @param props
- * @returns
- */

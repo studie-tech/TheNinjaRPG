@@ -1714,18 +1714,7 @@ const StealthControls: React.FC<{
   );
 };
 
-/**
- * Revealed Player Card
- * @param player - The revealed player
- * @param userData - The user data
- * @param villageData - The village data
- * @param isAttackingRevealed - Whether the user is attacking a revealed player
- * @param pendingAttackTarget - The target of the pending attack
- * @param attackRevealedUser - The function to attack a revealed player
- * @param setPendingAttackTarget - The function to set the pending attack target
- * @param setTargetPosition - The function to set the target position
- * @returns
- */
+/** A player revealed by sensing, with actions to travel to or attack them. */
 const RevealedPlayerCard = ({
   player,
   userData,
