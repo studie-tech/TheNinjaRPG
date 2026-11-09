@@ -229,7 +229,7 @@ it("inserts own messages optimistically with the poster's details and removes th
   await waitFor(() => expect(hook.result.current.allComments).toHaveLength(2));
 });
 
-it("keeps a non-matching own message out of search results but prepends a fetched one", async () => {
+it("keeps non-matching new messages out of search results and shows matching ones", async () => {
   const hook = mount();
   await loaded(hook);
   fireEvent.click(screen.getByRole("button", { name: "Search messages" }));
@@ -256,11 +256,63 @@ it("keeps a non-matching own message out of search results but prepends a fetche
   await act(async () => finishCreate({ success: false, message: "Nope" }));
   await waitFor(() => expect(hook.result.current.allComments).toHaveLength(2));
 
-  fetched = row("incoming", "Peer message", "Peer");
+  fetched = row("unrelated", "Peer message", "Peer");
+  await act(async () =>
+    receive({ message: "new", fromId: "peer", commentId: "unrelated" }),
+  );
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+  expect(hook.result.current.allComments).toHaveLength(2);
+
+  fetched = row("incoming", "Peer message", "Pathfinder");
   await act(async () =>
     receive({ message: "new", fromId: "peer", commentId: "incoming" }),
   );
   await waitFor(() =>
     expect(hook.result.current.allComments?.[0]?.id).toBe("incoming"),
   );
+});
+
+it("gives an AI sender's missing details defaults rather than the poster's", async () => {
+  const hook = mount();
+  await loaded(hook);
+  act(() =>
+    hook.result.current.userSearchMethods.setValue("users", [
+      {
+        userId: "ai",
+        username: "Kakashi",
+        rank: "JONIN",
+        level: 80,
+        federalStatus: "NONE",
+      },
+    ]),
+  );
+  await act(async () => {
+    hook.result.current.setValue("comment", "Hello");
+    await hook.result.current.handleSubmitComment();
+  });
+  await waitFor(() => expect(hook.result.current.allComments).toHaveLength(3));
+  expect(hook.result.current.allComments?.[0]).toEqual(
+    expect.objectContaining({
+      userId: "ai",
+      authorId: "me",
+      username: "Kakashi",
+      avatar: null,
+      rank: "JONIN",
+      level: 80,
+      role: "USER",
+      isOutlaw: false,
+      displayTitle: "",
+      villageName: null,
+      villageHexColor: null,
+      villageKageId: null,
+      tavernUsernameColor: "DEFAULT",
+      tavernTitleColor: "DEFAULT",
+      nRecruited: 0,
+      tavernMessages: 0,
+    }),
+  );
+  expect(createInputs[0]).toEqual(expect.objectContaining({ senderId: "ai" }));
+  await act(async () => finishCreate({ success: false, message: "Nope" }));
 });

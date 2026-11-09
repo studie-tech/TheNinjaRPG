@@ -60,3 +60,19 @@ export const retainTavernActivity = (
 export const clearInboxNotifications = (
   notifications: NavBarDropdownLink[] | undefined,
 ) => notifications?.filter((entry) => entry.href !== "/inbox");
+
+/**
+ * Whether a live comment belongs in the active search results, matching the server's
+ * case-insensitive search of the content and the author's username.
+ */
+export const matchesConversationSearch = (
+  searchQuery: string,
+  comment: { content: string; username: string },
+) => {
+  if (searchQuery.trim() === "") return true;
+  const query = searchQuery.toLowerCase();
+  return (
+    comment.content.toLowerCase().includes(query) ||
+    comment.username.toLowerCase().includes(query)
+  );
+};
