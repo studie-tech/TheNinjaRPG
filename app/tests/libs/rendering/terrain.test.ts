@@ -384,6 +384,29 @@ describe("shared hex terrain textures", () => {
     expect(image.source.destroyed).toBe(false);
   });
 
+  it("leaves no unhandled rejection when a deferred build is cancelled before it subscribes", async () => {
+    const { data } = textured(mapOf(3, 2));
+    const failure = new DOMException("Image load cancelled", "AbortError");
+    const loads = data.textures.map(() => deferred<Texture>());
+    let next = 0;
+    const { game, controller } = renderer(() => loads[next++]!.promise);
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", record);
+    try {
+      controller.abort();
+      await expect(
+        createHexTerrain(game, data, true, { deferTextures: true }),
+      ).rejects.toThrow("Terrain cancelled");
+      for (const load of loads) load.reject(failure);
+      for (let tick = 0; tick < 5; tick++)
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", record);
+    }
+  });
+
   it("draws tinted faces before deferred images arrive and binds each image as it loads", async () => {
     const { data } = textured(mapOf(3, 2));
     expect(data.textures.length).toBeGreaterThan(1);

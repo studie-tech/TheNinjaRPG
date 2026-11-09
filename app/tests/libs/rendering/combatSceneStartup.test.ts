@@ -197,13 +197,18 @@ describe("combat scene startup", () => {
     fixture.tick();
     // Without the battle's asset names the field draws, but effects wait for them.
     expect(phases).toEqual([]);
+    // Visible fighters alone do not release autonomous turns before the active effects sync.
+    fixture.fighterArt.resolve(Texture.WHITE);
+    await settle();
+    expect(fixture.isDrawing()).toBe(true);
+    expect(fixture.isResolved()).toBe(false);
     fixture.patchSnapshot({ assets: [asset], requestedIds: new Set([asset.id]) });
     fixture.tick();
     expect(phases).toEqual([true]);
+    await fixture.scene;
+    expect(fixture.isResolved()).toBe(true);
     fixture.patchSnapshot({ revision: 1 });
     fixture.tick();
     expect(phases).toEqual([true, false]);
-    fixture.fighterArt.resolve(Texture.WHITE);
-    await fixture.scene;
   });
 });

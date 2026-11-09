@@ -55,6 +55,8 @@ export const createHexTerrain = async (
   const images: (Texture | null)[] = deferTextures
     ? loads.map(() => null)
     : await Promise.all(loads);
+  // Deferred loads have no consumer when setup ends early; their later handlers still see them.
+  if (deferTextures) for (const load of loads) void load.catch(() => undefined);
   if (game.signal.aborted || game.isDisposed())
     throw new DOMException("Terrain cancelled", "AbortError");
   /** Shader samplers waiting for each deferred image. */

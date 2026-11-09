@@ -62,7 +62,8 @@ const NO_HITS: CombatHit[] = [];
 const PRESENTATION_STALL_MS = 500;
 
 /**
- * Owns a battle canvas and awaits its initial actors and known effects. The field draws
+ * Owns a battle canvas and awaits its initial actors and first effect synchronization,
+ * which follows the battle's asset names. The field draws
  * from its first frame, with tinted terrain and fighter markers filling in as artwork arrives.
  * Reads live snapshots; refresh invalidates a paused scene after external changes.
  * Construction inputs (battle geometry, seed, viewport) require a new scene.
@@ -228,6 +229,13 @@ export const createCombatScene = async (options: {
       effectsShown = false,
       effectArtPreloaded = false;
     let effectsReady: Promise<unknown> = Promise.resolve();
+    /** Settles with the first effect synchronization, which needs the battle's asset names. */
+    let settleFirstEffects: (ready: Promise<unknown>) => void = () => {};
+    const firstEffectsReady = new Promise<unknown>((resolve) => {
+      settleFirstEffects = resolve;
+    });
+    // A scene closed before its asset names arrive still settles.
+    game.own(() => settleFirstEffects(Promise.resolve()));
     let wasMoving = false;
     let previous: CombatSceneSnapshot | null = null,
       highlightKey = "",
@@ -335,11 +343,12 @@ export const createCombatScene = async (options: {
       // Effects present before their first painted frame appear without replaying their arrival,
       // including those whose asset list reaches the scene after it has started drawing.
       if (known) {
-        effectsKnown = true;
         effectsReady = effects.sync(
           { ...snapshot, sound: snapshot.active && snapshot.sound },
           !effectsShown && !options.showInitialAppearance,
         );
+        if (!effectsKnown) settleFirstEffects(effectsReady);
+        effectsKnown = true;
       }
       dirty = false;
       previous = snapshot;
@@ -347,7 +356,7 @@ export const createCombatScene = async (options: {
       preloadEffectArt();
     };
     sync(initial);
-    const fightersReady = Promise.all([actors.ready(), effectsReady]);
+    const fightersReady = Promise.all([actors.ready(), firstEffectsReady]);
     void fightersReady.then(
       () => {
         fightersSettled = true;
@@ -638,7 +647,8 @@ export const createCombatScene = async (options: {
     game.setUpdate(updateFrame);
     game.setAnimating(initial.active);
     game.invalidate();
-    // Autonomous turns wait for the scene, so it resolves once its fighters can be seen.
+    // Autonomous turns wait for the scene, so it resolves once its fighters and active effects
+    // can be seen; a turn landing earlier would lose its effects' arrival.
     await fightersReady;
     return {
       dispose: game.dispose,
