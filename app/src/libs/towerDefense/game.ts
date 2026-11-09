@@ -2,7 +2,8 @@
  * Tower Defense Game Utilities
  *
  * Hex geometry, projectile, direction and upgrade-cost helpers shared by the client and
- * the tower-defense router. All game logic (spawning, combat, movement) is handled by SpacetimeDB.
+ * the tower-defense router. All game logic (spawning, combat, movement) is handled by
+ * SpacetimeDB.
  */
 
 import {
@@ -127,7 +128,7 @@ export const calculateEnemyDirection = (
 };
 
 // ============================================
-// Seed Generation
+// Upgrade Costs
 // ============================================
 
 /**
