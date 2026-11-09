@@ -20,7 +20,11 @@ import { createMapControls } from "@/libs/rendering/mapControls";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
 import { createProjectedWorldLighting } from "@/libs/rendering/projectedWorldLighting";
-import { createGameRenderer, type GameRenderer } from "@/libs/rendering/runtime";
+import {
+  createGameRenderer,
+  type GameFrame,
+  type GameRenderer,
+} from "@/libs/rendering/runtime";
 import {
   createTravelActors,
   type TravelActorHit,
@@ -168,9 +172,72 @@ export const createTravelScene = async (options: {
     const sectors = new Map<number, TravelSector>();
     const movements = new Map<string, TravelActorMovement>();
     let sceneryScale = Number.NaN;
+    /** Scenery currently painted over the viewer's actor. */
+    const covering = new Set<Container>();
+    /** Faded or easing scenery, with the opacity each sprite returns to. */
+    const revealed = new Map<Container, number>();
+    let covered: { bounds: WorldBounds; depth: number; art: number } | null = null,
+      artRevision = 0;
+    /** Ease scenery that hides the viewer translucent, and back once the viewer has moved on. */
+    const revealViewer = (frame: GameFrame, userId: string | undefined) => {
+      const body = userId ? actors.body(userId) : undefined;
+      if (!sameCover(covered, body, artRevision)) {
+        covered = body ? { ...body, art: artRevision } : null;
+        covering.clear();
+        if (body)
+          for (const rendered of sectors.values()) {
+            const { x, y } = rendered.position;
+            // Sector-local extent of the body, so each placed sprite is tested without allocating.
+            const minX = body.bounds.minX - x,
+              maxX = body.bounds.maxX - x,
+              minY = body.bounds.minY - y,
+              maxY = body.bounds.maxY - y;
+            if (
+              maxX < -rendered.margin ||
+              minX > logicalWidth + rendered.margin ||
+              maxY < -rendered.margin ||
+              minY > rendered.height + rendered.margin
+            )
+              continue;
+            for (const entry of rendered.art.entries) {
+              if (entry.sprite.zIndex <= body.depth) continue;
+              const { bounds } = entry;
+              if (
+                bounds.maxX < minX ||
+                bounds.minX > maxX ||
+                bounds.maxY < minY ||
+                bounds.minY > maxY ||
+                entry.description.small ||
+                entry.character
+              )
+                continue;
+              covering.add(entry.sprite);
+            }
+          }
+      }
+      for (const sprite of covering)
+        if (!revealed.has(sprite)) revealed.set(sprite, sprite.alpha);
+      if (!revealed.size) return;
+      const blend = frame.reducedMotion ? 1 : -Math.expm1(-REVEAL_RATE * frame.delta);
+      for (const [sprite, opacity] of revealed) {
+        if (sprite.destroyed) {
+          revealed.delete(sprite);
+          continue;
+        }
+        const target = covering.has(sprite) ? opacity * REVEAL_OPACITY : opacity;
+        if (sprite.alpha === target) {
+          if (target === opacity) revealed.delete(sprite);
+          continue;
+        }
+        const alpha = sprite.alpha + (target - sprite.alpha) * blend;
+        sprite.alpha = Math.abs(target - alpha) < 0.01 ? target : alpha;
+        game.invalidate();
+      }
+    };
     /** Keep draw order global while retained sector scopes continue owning their sprites. */
     const placeArt = (art: TravelSector["art"], position: { x: number; y: number }) => {
       sceneryScale = Number.NaN;
+      artRevision++;
       art.attachLayers(
         { ground: groundArtLayer, world: depthLayer, ui: uiLayer },
         position.y,
@@ -895,6 +962,7 @@ export const createTravelScene = async (options: {
       }
       // Zoom can reclassify foreground scenery before actor contact order is resolved.
       actors.animate(frame, movements);
+      revealViewer(frame, snapshot.viewer?.userId);
       sceneryScale = scale();
       const pointer = controls.pointer();
       let hoverTile: TravelPick["tile"] = null;
@@ -1213,6 +1281,26 @@ const terrainResultKey = (
   }
   return key;
 };
+
+/** Whether the viewer's body and the placed artwork are unchanged since covering scenery was found. */
+const sameCover = (
+  previous: { bounds: WorldBounds; depth: number; art: number } | null,
+  body: { bounds: WorldBounds; depth: number } | undefined,
+  art: number,
+) =>
+  previous && body
+    ? previous.art === art &&
+      previous.depth === body.depth &&
+      previous.bounds.minX === body.bounds.minX &&
+      previous.bounds.maxX === body.bounds.maxX &&
+      previous.bounds.minY === body.bounds.minY &&
+      previous.bounds.maxY === body.bounds.maxY
+    : !previous && !body;
+
+/** Opacity factor of scenery painted over the viewer's own actor. */
+const REVEAL_OPACITY = 0.45;
+/** Exponential easing rate, per second, of scenery fading over and back from the viewer. */
+const REVEAL_RATE = 10;
 
 /** Sectors further back paint first, so raised terraces along a border cover the sector behind. */
 const sectorDepthBias = (dy: number) => -dy * 0.001;

@@ -817,6 +817,21 @@ export const createTravelActors = (
       const feet = actorFeet(record);
       return { x: feet.x + container.x, y: feet.y + container.y };
     },
+    /** World-space extent and paint depth of a user's actor; scenery above that depth covers it. */
+    body: (userId: string) => {
+      const record = records.get(`user:${userId}`);
+      if (!record) return undefined;
+      const body = actorBody(record);
+      return {
+        bounds: {
+          minX: body.minX + container.x,
+          maxX: body.maxX + container.x,
+          minY: body.minY + container.y,
+          maxY: body.maxY + container.y,
+        },
+        depth: record.depth,
+      };
+    },
     setLighting: (next: number) => {
       brightness = next;
       for (const record of records.values()) record.art?.setLighting(next);
@@ -838,6 +853,30 @@ const actorFeet = (record: ActorRecord) => {
     y:
       record.root.y +
       (body ? body.y - (body.size * 28) / 64 : record.recipe.tile.height / 2),
+  };
+};
+
+/**
+ * Container-local box of a character's visible figure within its sprite frame, from the feet up;
+ * other art uses its live bounds.
+ */
+const actorBody = (record: ActorRecord): WorldBounds => {
+  const body = record.recipe.parts.find((part) => part.character);
+  if (!body) {
+    const local = record.root.getLocalBounds();
+    return {
+      minX: local.minX + record.root.x,
+      maxX: local.maxX + record.root.x,
+      minY: local.minY + record.root.y,
+      maxY: local.maxY + record.root.y,
+    };
+  }
+  const feet = actorFeet(record);
+  return {
+    minX: feet.x - body.size * LPC_FIGURE_HALF_WIDTH,
+    maxX: feet.x + body.size * LPC_FIGURE_HALF_WIDTH,
+    minY: feet.y,
+    maxY: feet.y + body.size * LPC_FIGURE_HEIGHT,
   };
 };
 
@@ -1012,6 +1051,9 @@ const LPC_TRAVEL_SCALE = 0.7;
 const LPC_TRAVEL_HEIGHT = 1.8 * LPC_TRAVEL_SCALE;
 const LPC_TRAVEL_FOOT_Y = 0.1;
 const LPC_TRAVEL_CONTACT_Y = LPC_TRAVEL_FOOT_Y + (LPC_TRAVEL_HEIGHT * 4) / 64;
+/** A walking LPC figure spans about 24 of its frame's 64 columns and 48 of its rows. */
+const LPC_FIGURE_HALF_WIDTH = 12 / 64;
+const LPC_FIGURE_HEIGHT = 48 / 64;
 const NPC_TRAVEL_HEIGHT = 1.3;
 const PLAYER_TRAVEL_SHADOW = 0.16;
 const PLAYER_TRAVEL_LIGHT = 0.65;

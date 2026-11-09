@@ -377,6 +377,35 @@ describe("travel scene ground depth", () => {
     for (const entry of [tree, building]) expect(depth.renderLayerChildren.indexOf(actor)).toBeLessThan(depth.renderLayerChildren.indexOf(entry.sprite));
   });
 
+  it("fades scenery that paints over the viewer and restores it once the viewer stands clear", async () => {
+    const { scene, state, depth, advance } = await sceneFixture();
+    const sector = scene.sectors.get(724)!;
+    const tree = sector.art.entries.find((entry) => entry.description.id === "tree")!;
+    const building = sector.art.entries.find((entry) => entry.description.id === "building")!;
+    const walk = (latitude: number) => {
+      state.users = [player({ latitude })]; state.row = latitude; state.actorRevision++;
+      for (let tick = 0; tick < 8; tick++) advance(frame(1200 + tick));
+    };
+    walk(4);
+    expect(tree.sprite.alpha).toBe(1);
+    walk(6);
+    depth.sortRenderLayerChildren();
+    const actor = depth.renderLayerChildren.find((child) => child.label === "user:self")!;
+    expect(depth.renderLayerChildren.indexOf(tree.sprite)).toBeGreaterThan(depth.renderLayerChildren.indexOf(actor));
+    expect(tree.sprite.alpha).toBeCloseTo(0.45);
+    expect(building.sprite.alpha).toBe(1);
+    // Live frames ease back rather than popping.
+    state.users = [player({ latitude: 4 })]; state.row = 4; state.actorRevision++;
+    const alphas: number[] = [];
+    for (let tick = 0; tick < 120; tick++) {
+      advance(frame(1300 + tick * 16, false));
+      alphas.push(tree.sprite.alpha);
+    }
+    expect(alphas.some((alpha) => alpha > 0.5 && alpha < 0.95)).toBe(true);
+    for (let index = 1; index < alphas.length; index++) expect(alphas[index]!).toBeGreaterThanOrEqual(alphas[index - 1]!);
+    expect(alphas.at(-1)).toBe(1);
+  });
+
   it("refreshes retained scenery and actor depths on sector offsets and world rebasing, and detaches disposed sectors", async () => {
     const { scene, state, depth, advance } = await sceneFixture();
     state.window.push(windowEntry(725, 1)); await scene.updateWindow();
