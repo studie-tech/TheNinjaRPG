@@ -315,15 +315,16 @@ export const updateAiProfileSchema = z.object({
 export type AiRuleType = z.infer<typeof AiRule>;
 
 /**
- * Get a set of backup AI rules to the provided rules array.
+ * Returns the catch-all rules enforced at the end of user AI profiles and profiles with
+ * includeDefaultRules:
+ * 1-3. distance_higher_than 2: move towards the opponent (three identical rules).
+ * 4. distance_lower_than 2: use the highest-power damage action.
+ * 5. No conditions: use the highest-power damage action on the barrier blocking the
+ *    closest opponent.
  *
- * The rules are as follows:
- * 1. If the distance to the opponent is greater than 2, move towards the opponent.
- * 2. If the distance to the opponent is less than 2, perform an action with the highest power effect that causes damage.
- * 3. If no conditions are met, perform an action with the highest power effect
- *
- * @param rules - The array of AI rules to which the backup rules will be added.
- * @returns void
+ * The AI evaluates rules from the first on every call, so the second and third move rules
+ * evaluate exactly as the first. Saved profiles store this tail, and the profile editor
+ * counts and locks the trailing getBackupRules().length rules.
  */
 export const getBackupRules = () => {
   const rules: AiRuleType[] = [];
