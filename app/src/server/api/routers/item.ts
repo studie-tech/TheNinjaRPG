@@ -1852,7 +1852,7 @@ export const itemRouter = createTRPCRouter({
 
       return { success: result.success, message: result.message };
     }),
-  // Drop user item
+  // Sell a user item (dropped when it has no resale value)
   sellUserItem: protectedProcedure
     .meta({ mcp: { description: "Sell or drop a user item" } })
     .input(z.object({ userItemId: z.string() }))
@@ -2023,7 +2023,7 @@ export const itemRouter = createTRPCRouter({
         ...(unconfirmed.length > 0 ? {} : getBulkSellUserUpdate(ryo)),
       };
     }),
-  // Use user item
+  // Equip or unequip a user item
   toggleEquip: protectedProcedure
     .meta({ mcp: { description: "Toggle item equip status" } })
     .input(z.object({ userItemId: z.string(), slot: z.enum(ItemSlots).optional() }))
@@ -2096,7 +2096,7 @@ export const itemRouter = createTRPCRouter({
     })
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
-      // Equipped rows only (not fetchUserItems — it omits hidden items). `ctx.userId` is the session user; no extra userId guard.
+      // Equipped rows only (fetchUserItems omits hidden items).
       const [user, loadouts] = await Promise.all([
         fetchUserEquipmentSnapshot(ctx.drizzle, ctx.userId),
         fetchItemLoadouts(ctx.drizzle, ctx.userId),
@@ -2674,7 +2674,7 @@ export const itemRouter = createTRPCRouter({
       };
       // Quest history may need insertion, and entry costs/rewards can touch more rows.
       // These must commit with the scroll debit and replay receipt; one guarded UPDATE
-      // cannot cover inserts. Reuse the existing cache/collection receipt transaction.
+      // cannot cover inserts, so they share the cache/collection receipt transaction.
       if ((caches.length > 0 || petReward || grantedQuest) && receiptId) {
         return await commitCacheConsumption({
           client: ctx.drizzle,
@@ -2706,7 +2706,7 @@ export const itemRouter = createTRPCRouter({
           throw error;
         });
       }
-      // Ordinary consumables retain the existing guarded claim and parallel mutation path.
+      // Ordinary consumables use the guarded claim and parallel mutation path.
       const response = await commitConsumption(ctx.drizzle, false);
       return response.success
         ? actionReadinessResponse(response, readiness, ctx.drizzle)
@@ -3350,13 +3350,11 @@ export const itemRouter = createTRPCRouter({
           return errorResponse(getInventoryBucketFullMessage(purchaseBucket));
         }
       }
-      // buy_item quest tracker. Source questData + userQuests/completedQuests together from
-      // the single fetchQuestTrackerState read above (NOT fetchUpdatedUser, which pulls
-      // achievements/wars/raids and runs regen writes) — one snapshot keeps the tracker read
-      // internally consistent, instead of pairing questData from one fetch with userQuests
-      // from another. If that fetch failed (null), SKIP tracking entirely — writing an empty
-      // questData would wipe the user's existing quest progress. NPC item shop only; auction
-      // buyouts are a separate, out-of-scope path.
+      // buy_item quest tracker (NPC item shop purchases; auction buyouts do not advance it).
+      // questData and userQuests/completedQuests come from the single
+      // fetchQuestTrackerState read above, so the tracker read is internally consistent.
+      // If that fetch failed (null), skip tracking entirely: writing an empty questData
+      // would wipe the user's existing quest progress.
       // Only touch questData when the purchase can actually advance a buy_item
       // objective for this item: buy_item is content-gated (unlike the always-on
       // counters in craft/train), so any other purchase would re-serialize an
@@ -3366,8 +3364,7 @@ export const itemRouter = createTRPCRouter({
       // completed achievements stay in fetchQuestTrackerState's result forever, so
       // without the done-check every later matching purchase would re-open the
       // redundant-write window. When it does advance, the full-snapshot write
-      // matches every other tracker path (hospital/jutsu/occupation), which all
-      // accept that same window.
+      // accepts that window.
       const advancesBuyItemObjective = questState?.userQuests.some((uq) =>
         uq.quest?.content?.objectives?.some((o) => {
           if (o.task !== "buy_item" || !objectiveContentIds(o).includes(iid)) {
@@ -4358,7 +4355,7 @@ const refundUserMoney = async (
   await incrementUserMoney(drizzle, amount, userId);
 };
 
-// --- Stack merge (used by mergeStacks / mergeAllStacks; kept at bottom with other helpers)
+// --- Stack merge (used by mergeStacks / mergeAllStacks)
 
 type MergeEligibleUserItemForStackMerge = UserItem & {
   imbuements: readonly unknown[];
