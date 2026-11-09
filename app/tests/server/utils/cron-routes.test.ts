@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 const appRoot = resolve(import.meta.dirname, "../../..");
 const config = JSON.parse(readFileSync(resolve(appRoot, "vercel.json"), "utf8")) as {
-  crons: { path: string }[];
+  crons: { path: string; schedule: string }[];
 };
 // Include periodic maintenance routes that are currently not in the deployment schedule.
 const periodic = readdirSync(resolve(appRoot, "src/app/api"))
@@ -41,3 +41,17 @@ it.each([...routes])("%s authenticates before timers or other work", (route) => 
     /export (?:async function GET\(request: Request\)|const GET = async \(request: Request\) =>) \{\s*const authError = authenticateCronRequest\(request\);\s*if \(authError\) return authError;/,
   );
 });
+
+// An hourly lock only claims one run per hour, so its schedule must fire in every hour.
+const hourlyLocked = config.crons.filter((cron) =>
+  readFileSync(resolve(appRoot, `src/app${cron.path}/route.ts`), "utf8").includes(
+    "lockWithHourlyTimer(",
+  ),
+);
+
+it.each(hourlyLocked.map((cron) => [cron.path, cron.schedule]))(
+  "%s runs in every hour (%s)",
+  (_path, schedule) => {
+    expect(schedule.split(" ")[1]).toBe("*");
+  },
+);
