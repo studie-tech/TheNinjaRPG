@@ -72,7 +72,7 @@ const entryClient = (entry: object) => {
 /** Minimal write client for the successful upsert + daily-counter assignment path. */
 const makeClient = (assignedQuest: { questId: string } | null = { questId: quest.id }) => {
   const where = vi.fn().mockResolvedValue({ rowsAffected: 1 });
-  // Hoisted so tests can inspect what was written, not just that a write happened.
+  // Exposed so tests can inspect the written values.
   const set = vi.fn((_update: Record<string, unknown>) => ({ where }));
   const update = vi.fn(() => ({ set }));
   const onDuplicateKeyUpdate = vi.fn().mockResolvedValue(undefined);
@@ -174,7 +174,7 @@ const makeBulkClient = (
   };
 };
 
-describe("assignQuestToUser compatibility", () => {
+describe("quest assignment", () => {
   it("initializes a collection objective from bloodlines owned before quest acceptance", async () => {
     const { client, set } = makeClient();
     const collector = { ...user, bloodlineId: "line-2", userQuests: [] };
@@ -193,7 +193,7 @@ describe("assignQuestToUser compatibility", () => {
     ]);
   });
 
-  it("preserves the successful UI mission path: history upsert, tracker write, and counter", async () => {
+  it("starts a UI mission with a history upsert, tracker write and counter", async () => {
     const { client, update, insert } = makeClient();
 
     const result = await assignQuestToUser({

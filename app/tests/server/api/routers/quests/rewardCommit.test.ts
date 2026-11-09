@@ -191,7 +191,7 @@ const makeGatheringClient = () => {
   };
 };
 
-describe("commitQuestObjectiveRewards compatibility", () => {
+describe("quest reward commit", () => {
   it("grants gathering bonus units through the shared reward payout", async () => {
     vi.spyOn(Math, "random").mockReturnValue(0);
     const { user } = makeUser();
@@ -373,7 +373,7 @@ describe("commitQuestObjectiveRewards compatibility", () => {
     },
   );
 
-  it("keeps completion, snapshot claim, and payout in the legacy order", async () => {
+  it("writes the completion, snapshot claim and payout in that order", async () => {
     const { user, missionHistory } = makeUser();
     const { client, sets } = makeClient([
       { rowsAffected: 1 },
