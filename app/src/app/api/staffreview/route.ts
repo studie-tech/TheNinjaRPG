@@ -25,6 +25,7 @@ export async function GET(request: Request) {
 
   return runClaimedCron(timerCheck, "/api/staffreview", async () => {
     const staff = await listUserDataForGET(drizzleDB);
+    let hasAttemptedDelivery = false;
 
     const outcomes = await Promise.allSettled(
       staff.map(async (user) => {
@@ -33,7 +34,7 @@ export async function GET(request: Request) {
           timerCheck.prevTime,
           user,
         );
-        if (!results.length) return false;
+        if (!results.length) return;
         const allText = results.map((r) => r.review).join("\n");
 
         // Review
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
 
         // Create conversation
         const now = new Date();
+        hasAttemptedDelivery = true;
         await createConvo({
           client: drizzleDB,
           authorUserId: TERR_BOT_ID,
@@ -68,17 +70,14 @@ export async function GET(request: Request) {
         <br /><br />${text.replace("```html", "").replace("```", "")}`,
           isStaffAvailable: false,
         });
-        return true;
       }),
     );
 
     const failure = outcomes.find((outcome) => outcome.status === "rejected");
     if (!failure) return Response.json(`OK`);
-    // Once any summary is delivered the month stays claimed, so a retry cannot send it twice.
-    const delivered = outcomes.some(
-      (outcome) => outcome.status === "fulfilled" && outcome.value,
-    );
-    if (!delivered) throw failure.reason;
+    // Conversation writes can partially succeed even when createConvo rejects. Only
+    // failures before any delivery attempt can safely release the month for a retry.
+    if (!hasAttemptedDelivery) throw failure.reason;
     return handleEndpointError(failure.reason, { endpoint: "/api/staffreview" });
   });
 }
