@@ -1,9 +1,10 @@
 /**
- * Live Activities (iOS 16.1+), driven by the `tnr-live-activity` plugin in `mobile/`.
+ * Live Activities, driven by the native `TNRLiveActivity` plugin in `mobile/`: ActivityKit
+ * on iOS 16.2+, and an ongoing countdown notification on Android.
  *
- * The device starts an activity and reports back a per-activity push token; the server
- * then updates and ends it over APNs with `apns-push-type: liveactivity`. Everything here
- * resolves to `undefined` on Android and on the web.
+ * On iOS the device starts an activity and reports back a per-activity push token; the
+ * server then updates and ends it over APNs with `apns-push-type: liveactivity`. Every
+ * call resolves to `undefined` on the web and wherever the plugin is not registered.
  */
 
 import type { LiveActivityKind } from "@/drizzle/constants";
