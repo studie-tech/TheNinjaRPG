@@ -946,14 +946,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     walkAnimatingRef.current = false;
   };
 
-  /** Window offset (dx,dy) of a sector currently in the 3x3 window */
-  const offsetOfSector = (sector: number): { dx: number; dy: number } | null => {
-    const entry = sectorWindowRef.current.sectors.find(
-      (candidate) => candidate.sector === sector,
-    );
-    return entry ? { dx: entry.dx, dy: entry.dy } : null;
-  };
-
   /**
    * Re-anchor the character into an already-rendered window sector (no server
    * round trip): re-point the grid/pathfinder and the marker layer,
@@ -1006,22 +998,20 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         }),
       };
       const local = nav.fromUnified(unifiedTile);
-      const entry = sectorWindowRef.current.sectors.find(
-        (candidate) => candidate.dx === local.dx && candidate.dy === local.dy,
-      );
-      if (!entry) break;
-      if (entry.sector !== sectorRef.current) {
-        if (!reAnchorToSector(entry.sector, local.col, local.row)) break;
+      const sector = nav.sectorAt(local.dx, local.dy);
+      if (sector === undefined) break;
+      if (sector !== sectorRef.current) {
+        if (!reAnchorToSector(sector, local.col, local.row)) break;
       }
       const hex = gridRef.current?.getHex({ col: local.col, row: local.row });
       if (!hex) continue;
       const motion = publishMotionStep(
         userData.userId,
         before,
-        { sector: entry.sector, x: local.col, y: local.row },
+        { sector, x: local.col, y: local.row },
         heading,
       );
-      placeOwnMarker(hex, entry.sector, location);
+      placeOwnMarker(hex, sector, location);
       await sleep(SECTOR_WALK_STEP_MS);
       if (motion && motionStepsRef.current.get(userData.userId) === motion)
         motionStepsRef.current.delete(userData.userId);
@@ -1317,10 +1307,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   ) => {
     const nav = windowNavRef.current;
     // Every cylindrical-grid neighbor is aligned, so a click into an adjacent
-    // sector can animate across the border without a scene rebuild.
+    // sector can animate across the border without a scene rebuild. Rapid
+    // crossings can leave the window centered elsewhere, so the edge sits at
+    // its own sector's offset rather than the center's.
     if (crossDest && nav) {
-      const destOffset = offsetOfSector(crossDest.sector);
-      const startU = nav.toUnified(0, 0, edge.x, edge.y);
+      const here = nav.offsetOf(sectorRef.current);
+      const destOffset = nav.offsetOf(crossDest.sector);
+      const startU = here && nav.toUnified(here.dx, here.dy, edge.x, edge.y);
       const goalU = destOffset
         ? nav.toUnified(destOffset.dx, destOffset.dy, crossDest.x, crossDest.y)
         : undefined;

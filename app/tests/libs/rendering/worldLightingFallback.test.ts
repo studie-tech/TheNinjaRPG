@@ -229,7 +229,7 @@ describe("world lighting precision fallback", () => {
   });
   it("keeps the selected journey below bodies without a pointer and clears it when interaction is disabled", async () => {
     const fixture = rendererFixture(), snapshot = travelSnapshot();
-    snapshot.nav = buildWindowNav([{ dx: 0, dy: 0, map }], 10);
+    snapshot.nav = buildWindowNav([{ sector: map.sector, dx: 0, dy: 0, map }], 10);
     snapshot.enabled = true;
     snapshot.routeTarget = { sector: map.sector, x: 2, y: 1 };
     const scene = await startTravel(snapshot);
