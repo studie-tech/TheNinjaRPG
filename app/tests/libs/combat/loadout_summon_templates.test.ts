@@ -127,8 +127,9 @@ const process = (client: DrizzleClient, users: CombatQueryUser[], left?: string[
 
 /**
  * Initiate a PvP battle with no summon jutsu equipped, then swap in a loadout
- * holding Reptile Zoo, merging the reprocessed player exactly like
- * updateCombatLoadout does.
+ * holding Reptile Zoo, merging the reprocessed player's participants, effects
+ * and extraState the way updateCombatLoadout does. Pool, initiative, mastery,
+ * gear-modifier and skill-lock handling are not replicated.
  */
 const battleAfterLoadoutSwap = async () => {
   const thabiento = queryUser("user_thab");
