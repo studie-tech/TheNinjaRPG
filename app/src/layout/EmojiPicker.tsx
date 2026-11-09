@@ -6,6 +6,7 @@ import type React from "react";
 export interface AppEmojiPickerProps {
   onSelect: (native: string) => void;
   onClickOutside?: () => void;
+  autoFocus?: boolean;
   perLine?: number;
 }
 
@@ -49,6 +50,7 @@ const EmojiMartPicker = dynamic(
 export const EmojiPicker: React.FC<AppEmojiPickerProps> = (props) => (
   <div style={{ width: PICKER_WIDTH }}>
     <EmojiMartPicker
+      autoFocus={props.autoFocus}
       perLine={props.perLine ?? DEFAULT_PER_LINE}
       emojiSize={24}
       emojiButtonSize={36}

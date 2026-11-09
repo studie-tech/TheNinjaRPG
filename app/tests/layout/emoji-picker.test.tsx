@@ -1,15 +1,22 @@
-import { afterEach, expect, it, vi } from "bun:test";
-import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, expect, it } from "bun:test";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import { EmojiPicker } from "@/layout/EmojiPicker";
-
-vi.mock("@/layout/EmojiPickerImpl", () => ({
-  EmojiPickerImpl: () => <section data-testid="emoji-mart" />,
-}));
+import { installEmojiPickerBrowserGlobals } from "../setup/emojiPicker";
 
 afterEach(cleanup);
 
-it("gives the picker a fixed width so hovering a long emoji name cannot resize it", async () => {
-  render(<EmojiPicker onSelect={() => {}} />);
-  const picker = await screen.findByTestId("emoji-mart");
-  expect(picker.parentElement?.style.width).toBe("300px");
+it("gives the picker a fixed width without moving focus unless requested", async () => {
+  const restorePickerGlobals = installEmojiPickerBrowserGlobals();
+  const view = render(<EmojiPicker onSelect={() => {}} />);
+  try {
+    await waitFor(() => {
+      const picker = view.container.querySelector("em-emoji-picker");
+      expect(picker?.shadowRoot?.querySelector("input")).toBeTruthy();
+      expect(picker?.shadowRoot?.activeElement).toBeNull();
+    });
+    expect((view.container.firstElementChild as HTMLElement).style.width).toBe("300px");
+  } finally {
+    view.unmount();
+    restorePickerGlobals();
+  }
 });

@@ -213,6 +213,8 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
                 >
                   <EmojiPicker
                     perLine={12}
+                    // Focus inside the shadow root after the lazy picker mounts.
+                    autoFocus
                     onSelect={(native) => {
                       props.toggleReaction?.(native);
                       setEmojiOpen(false);

@@ -29,8 +29,10 @@ import {
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
 import { conversationQueryOptions } from "../setup/conversationQueryOptions";
+import { installEmojiPickerBrowserGlobals } from "../setup/emojiPicker";
 import { spyOnToasts } from "../setup/toastMock";
 
+const actualEmojiPicker = EmojiPicker.EmojiPicker;
 const edit = vi.fn();
 const api = {
   useUtils: () => ({ comments: { getConversationComments: { invalidate: vi.fn() } } }),
@@ -219,6 +221,47 @@ describe("editing a message that quotes another", () => {
 });
 
 describe("conversation emoji picker", () => {
+  it("focuses the real lazy picker's search field on opening and reopening, and restores its trigger on Escape", async () => {
+    const restorePickerGlobals = installEmojiPickerBrowserGlobals();
+    vi.spyOn(EmojiPicker, "EmojiPicker").mockImplementation(actualEmojiPicker);
+    const toggleReaction = vi.fn();
+    const view = render(
+      <CommentOnConversation
+        comment={comment}
+        user={user}
+        toggleReaction={toggleReaction}
+      >
+        {comment.content}
+      </CommentOnConversation>,
+    );
+    try {
+      const trigger = view.getByRole("button", { name: "Add reaction" });
+      for (let opening = 0; opening < 2; opening++) {
+        await act(async () => {
+          fireEvent.click(trigger);
+        });
+        await waitFor(() => {
+          const picker = view.getByRole("dialog").querySelector("em-emoji-picker");
+          const search = picker?.shadowRoot?.querySelector("input");
+          expect(search).toBeTruthy();
+          expect(picker?.shadowRoot?.activeElement).toBe(search);
+          expect(document.activeElement).toBe(picker);
+        });
+        await act(async () => {
+          fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+          await flushRadixFocus();
+        });
+        await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
+        expect(document.activeElement).toBe(trigger);
+      }
+      expect(toggleReaction).not.toHaveBeenCalled();
+    } finally {
+      view.unmount();
+      await act(flushRadixFocus);
+      restorePickerGlobals();
+    }
+  });
+
   it("opens from the reaction button, survives rerenders, and closes on an outside press or a second click", async () => {
     installBrowserGlobals({ resizeObserver: true });
     const toggleReaction = vi.fn();
