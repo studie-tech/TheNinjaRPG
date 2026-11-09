@@ -5,7 +5,7 @@ import { literalType } from "@/validators/base";
 import { isActivityBonus, tagTypes } from "@/validators/combat";
 import { bossArrivalSchema } from "@/validators/coop";
 
-/** Shared content-generation input; existing callers retain the default provider. */
+/** Shared content-image generation input; provider defaults to NANO_BANANA. */
 export const contentImageInputSchema = z.object({
   preprompt: z.string(),
   prompt: z.string(),

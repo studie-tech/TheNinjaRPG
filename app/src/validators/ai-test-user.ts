@@ -1,8 +1,10 @@
 /**
- * Zod schemas for the AI test-user broker API (`/api/ai-test-user`).
+ * Zod schemas for the AI test-user broker API (`/api/ai-test-user` and
+ * `/api/ai-test-user/call-endpoint`).
  *
- * Shared between the Next.js route handler (server) and the Codex agent's
- * curl-based requests, so the shape is kept intentionally simple / JSON-safe.
+ * Shared by the route handlers, the local `make dev-user` / `make dev-call` client
+ * (app/scripts/dev-user.ts) and the preview reviewer's curl requests, so the shape
+ * is kept intentionally simple / JSON-safe.
  */
 import { z } from "zod";
 import { UserRanks, UserRoles } from "@/drizzle/constants";
@@ -36,8 +38,8 @@ export const aiTestUserProfileSchema = z
 
 /**
  * Collapse non-alphanumeric chars so "Red Team" and "red_team" are treated as dupes.
- * Shared with ai-test-users.ts (imported as `sanitizeKey`) to ensure both validation
- * and provisioning use the same normalisation — avoiding silent divergence.
+ * Provisioning (ai-test-users.ts) uses the same function, so validation and
+ * provisioning share one normalisation.
  */
 export const sanitizeKey = (value: string) =>
   value.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase();
