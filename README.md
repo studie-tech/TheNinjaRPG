@@ -38,7 +38,7 @@ the minimum version in `app/package.json`. Installation uses the committed lockf
 with `--frozen-lockfile`; dependency changes go through `make bun add <package>`.
 
 `make deps-upgrade` uses the pinned `npm-check-updates` to query the registry's
-`latest` releases for both npm manifests, including overrides and resolutions,
+`latest` releases for both npm manifests, including overrides,
 then refreshes their Bun lockfiles. `node scripts/deps-upgrade.mjs --check` checks
 the manifests without changing files. Review upstream migration guides and rebase
 versioned patches before running `make check` and `make test`. Native dependencies
