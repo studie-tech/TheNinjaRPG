@@ -41,8 +41,8 @@ import {
 
 /**
  * Render one objective with schema-derived editor fields.
- * Enemy, ally and random-encounter NPC entries share the existing template/count
- * selector; field labels retain their distinct combatant-count or chance semantics.
+ * Enemy, ally and random-encounter NPC entries use the db_values_with_number
+ * template/count selector; their labels distinguish combatant counts from encounter chances.
  * @returns React.ReactNode
  */
 export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props) => {
