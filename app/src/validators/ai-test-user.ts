@@ -16,7 +16,7 @@ export const aiTestUserProfileSchema = z
     rank: z.enum(UserRanks),
     /** Look up village by ID — takes precedence over villageName. */
     villageId: z.string().trim().min(1).max(191).optional(),
-    /** Look up village by display name (e.g. "Shine"). */
+    /** Look up village by display name (e.g. "Shirohana"). */
     villageName: z.string().trim().min(1).max(191).optional(),
     /** Optional Clerk username override; must be alphanumeric 3-24 chars. */
     preferredUsername: z
