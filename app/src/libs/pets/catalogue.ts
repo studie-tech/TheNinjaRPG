@@ -20,7 +20,16 @@ export type PetAppearanceOption = {
 /** Species additionally participate in rarity-weighted daily sampling. */
 export type PetSpeciesOption = Pick<
   PetSpecies,
-  "id" | "name" | "description" | "rarity" | "isActive"
+  | "id"
+  | "name"
+  | "description"
+  | "rarity"
+  | "isActive"
+  | "potentialMode"
+  | "potentialValue"
+  | "potentialMin"
+  | "potentialMax"
+  | "potentialWeights"
 >;
 
 // Cosmetic array positions are persisted trait IDs; append new entries without reordering.

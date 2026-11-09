@@ -100,6 +100,7 @@ import { UpdateUserIdButton } from "@/layout/publicUser/UpdateUserIdButton";
 import { UserTrainingLog } from "@/layout/publicUser/UserTrainingLog";
 import ReportUser from "@/layout/Report";
 import RichInput from "@/layout/RichInput";
+import { StaffPetPotential } from "@/layout/StaffPetPotential";
 import { publicUserIntro } from "@/layout/seoTexts";
 import { TransactionHistory } from "@/layout/TransactionHistory";
 import UserSearchSelect from "@/layout/UserSearchSelect";
@@ -112,6 +113,7 @@ import {
   canAwardReputation,
   canClearUserNindo,
   canCloneUser,
+  canEditPetPotential,
   canEditSeichiSilver,
   canRemoveBloodlineFromPool,
   canResetPetImageGeneration,
@@ -1012,6 +1014,14 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
 
             {userData && canEditSeichiSilver(userData.role) && !profile.isAi && (
               <AdjustSeichiSilver userId={profile.userId} username={profile.username} />
+            )}
+
+            {userData && canEditPetPotential(userData.role) && !profile.isAi && (
+              <StaffPetPotential
+                key={`potential:${profile.userId}`}
+                userId={profile.userId}
+                username={profile.username}
+              />
             )}
 
             {userData && canResetPetImageGeneration(userData.role) && !profile.isAi && (
