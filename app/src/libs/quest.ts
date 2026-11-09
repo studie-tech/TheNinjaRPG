@@ -622,7 +622,7 @@ export const getNewTrackers = (
       }
 
       // Missing map entry means deleted; false means present but deactivated; true means active.
-      // Omitting the map preserves the pre-overworld behavior for callers that do not load it.
+      // Callers that do not load the map skip this check.
       const boundPlacementId = objective.overworldPlacementId;
       if (
         boundPlacementStatus &&
