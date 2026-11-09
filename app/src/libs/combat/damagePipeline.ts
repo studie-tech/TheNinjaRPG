@@ -396,6 +396,8 @@ export const applyDiffuseToConsequences = ({
   const packets: DiffusePacket[] = [];
   const affected = new Set<Consequence>();
   for (const [effectId, consequence] of consequences) {
+    // Fallbacks follow the consequence keys built in tags.ts: wound writes
+    // `wound-<effectId>`, drain writes `drain-<creatorId>-<targetId>`.
     const source =
       battle.usersEffects.find(
         (e) => e.id === (consequence.diffuseSourceEffectId ?? effectId),
