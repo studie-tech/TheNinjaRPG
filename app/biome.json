@@ -130,6 +130,18 @@
           }
         }
       }
+    },
+    {
+      "includes": [
+        "tests/server/**"
+      ],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useHookAtTopLevel": "off"
+          }
+        }
+      }
     }
   ],
   "tailwind": {
