@@ -20,14 +20,8 @@ export const RankedRankDistributionHistogram: React.FC = () => {
   useEffect(() => {
     const ctx = chartRef?.current?.getContext("2d");
     if (ctx && rankDistributionData && rankDistributionData.length > 0) {
-      // Create datasets for the histogram
-      const colors = [
-        "#8e5ea2", // Wood - Purple
-        "#3cba9f", // Adept - Green
-        "#e8c3b9", // Master - Pink
-        "#c45850", // Legend - Red
-        "#ff6384", // Sannin - Bright Pink
-      ];
+      // Bar colors, assigned by position among the ranks returned
+      const colors = ["#8e5ea2", "#3cba9f", "#e8c3b9", "#c45850", "#ff6384"];
 
       const myChart = new ChartJS(ctx, {
         type: "bar",
