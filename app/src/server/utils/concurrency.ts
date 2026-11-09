@@ -317,9 +317,8 @@ export const claimActiveNpcQuest = async ({
  *   their claimed `rankedPvpQueue` row still exists (the user may have left the queue).
  * - TERRITORY_WAR rows return to QUEUED while their membership still owns the
  *   reserved lobby and its event remains active.
- * - Every other battle type falls back to AWAKE (pre-existing behavior: e.g.
- *   CLAN_BATTLE and RAID claim QUEUED rows, but their queue entries are managed
- *   by their own flows).
+ * - Every other battle type returns to AWAKE; CLAN_BATTLE and RAID also claim
+ *   QUEUED rows, but their own flows manage those queue entries.
  */
 export const battleClaimRollbackStatus = (
   client: DrizzleClient,

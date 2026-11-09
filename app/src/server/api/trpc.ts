@@ -1,13 +1,3 @@
-import { fetchIsolatedPyramid } from "@/queries/quests";
-/**
- * YOU PROBABLY DON'T NEED TO EDIT THIS FILE, UNLESS:
- * 1. You want to modify request context (see Part 1)
- * 2. You want to create a new middleware or type of procedure (see Part 3)
- *
- * tl;dr - this is where all the tRPC server stuff is created and plugged in.
- * The pieces you will need to use are documented accordingly near the end
- */
-
 import { auth } from "@clerk/nextjs/server";
 import * as Sentry from "@sentry/nextjs";
 import { initTRPC, TRPCError } from "@trpc/server";
@@ -36,15 +26,7 @@ import {
   parseWallpaperVariant,
   WALLPAPER_EXPERIMENT,
 } from "@/libs/wallpaperExperiment";
-/**
- * 1. CONTEXT
- *
- * This section defines the "contexts" that are available in the backend API
- *
- * These allow you to access things like the database, the session, etc, when
- * processing a request
- *
- */
+import { fetchIsolatedPyramid } from "@/queries/quests";
 import { drizzleDB } from "@/server/db";
 import { enforceBotId } from "@/server/utils/botid";
 import { clientErrorMessage } from "@/server/utils/mysqlErrors";
@@ -61,7 +43,6 @@ export const createAppTRPCContext = async (options: {
   readCookies: ReadonlyRequestCookies;
   procedureTypes: ReadonlyMap<string, string>;
 }) => {
-  // Get user ID - SIMPLE
   const session = await auth();
   const userId = trpcSessionUserId(session.userId, options.readHeaders);
   // Get IP
@@ -106,12 +87,6 @@ export const createCdnTRPCContext = (readHeaders: ReadonlyHeaders) => ({
   wallpaperVariant: undefined,
 });
 
-/**
- * 2. INITIALIZATION
- *
- * This is where the tRPC API is initialized, connecting the context and transformer.
- */
-
 const t = initTRPC
   .context<typeof createAppTRPCContext>()
   .meta<ProcedureMeta>()
@@ -129,12 +104,6 @@ const t = initTRPC
     },
   });
 
-/**
- * 3. ROUTER & PROCEDURE (THE IMPORTANT BIT)
- *
- * These are the pieces you use to build your tRPC API. You should import these a lot in the
- * "/src/server/api/routers" directory.
- */
 const ratelimitRedis = Redis.fromEnv();
 const ratelimit = new Ratelimit({
   redis: ratelimitRedis,
@@ -306,7 +275,8 @@ const enforcePyramidIsolation = t.middleware(async ({ ctx, path, type, next }) =
     const isolated = await fetchIsolatedPyramid(ctx.drizzle, ctx.userId);
     if (isolated) {
       // Some activities allow ordinary BATTLE players. Restrict isolated runs to their
-      // own progression and combat controls; the existing response contract permits recovery.
+      // own progression and combat controls. Answering with errorResponse without running
+      // the procedure needs tRPC's internal middlewareMarker result shape.
       return {
         ok: true,
         data: errorResponse(ISOLATED_PYRAMID_MESSAGE),
@@ -323,9 +293,6 @@ export const protectedProcedure = t.procedure
   .use(botIdMiddleware)
   .use(sentryMiddleware);
 
-/**
- * 4. EXPORTS
- */
 export const serverError = (code: TRPC_ERROR_CODE_KEY, message: string) => {
   return new TRPCError({
     code,

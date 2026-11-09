@@ -94,12 +94,12 @@ export const removeAccountGameData = async (userId: string) => {
       battleAction,
     ].map((table) => deleteRowsForUser(drizzleDB, table, userId)),
   );
-  // This is the existing account-scoped cleanup, including the permanent receipt
-  // tombstone, push tokens, conversations, inventory and character. It intentionally
-  // retains the purchase ledger so delayed receipts cannot grant rewards again.
+  // deleteUser is the account-scoped cleanup: receipt tombstone, push tokens,
+  // conversations, inventory and character. It keeps the purchase ledger so delayed
+  // receipts cannot grant rewards again.
   const rejected = await deleteUser(drizzleDB, userId);
   if (rejected) throw new Error(rejected.message);
-  // The old character-reset flow does not remove support records. Permanent account
+  // deleteUser (shared with character deletion) leaves support records; permanent account
   // deletion also removes authored support content and releases assigned tickets.
   const tickets = await listSupportTicketForRemoveAccountGameData(drizzleDB, userId);
   if (tickets.length)
