@@ -51,7 +51,7 @@ const gameFixture = () => {
     own: (cleanup: () => void) => { owned.add(cleanup); },
     disown: (cleanup: () => void) => { owned.delete(cleanup); },
     isDisposed: () => disposed,
-    setResize: () => {}, setBackground: () => {}, invalidate: vi.fn(), setAnimating: vi.fn(),
+    setResize: () => {}, setBackground: () => {}, invalidate: vi.fn(), setAnimating: vi.fn(), compileShaders: vi.fn(),
     listen: (type: string, callback: EventListener) => canvas.addEventListener(type, callback, { signal: listeners.signal }),
     setUpdate: (next: typeof update) => { update = next; },
     dispose: () => { if (disposed) return; disposed = true; controller.abort(); listeners.abort(); for (const cleanup of owned) cleanup(); stage.destroy({ children: true, texture: false, textureSource: false }); },
@@ -428,6 +428,40 @@ describe("travel scene ground depth", () => {
     expect(alphas.at(-1)).toBe(1);
   });
 
+  it("rebuilds only the terrain of a retained sector whose edge gains a neighbour, matching a full build", async () => {
+    const { scene, state } = await sceneFixture();
+    state.window.push(windowEntry(725, 1)); await scene.updateWindow();
+    const retained = scene.sectors.get(725)!;
+    const { art, terrain, scope } = retained;
+    state.window.push({ ...windowEntry(726, 1), dx: 1 }); await scene.updateWindow();
+    expect(scene.sectors.get(725)).toBe(retained);
+    expect(retained.art).toBe(art);
+    expect(retained.scope).toBe(scope);
+    expect(retained.terrain).not.toBe(terrain);
+    expect(terrain.container.destroyed).toBe(true);
+    // A fresh scene over the same window (new library version, so no cached build) agrees.
+    const fresh = snapshotFixture();
+    fresh.libraryVersion = "fresh-build";
+    fresh.window = [...state.window];
+    const reference = await sceneFixture(fresh);
+    await reference.scene.updateWindow();
+    const built = reference.scene.sectors.get(725)!;
+    expect(built.sourceKey).not.toBe(retained.sourceKey);
+    expect(retained.data.segments).toEqual(built.data.segments);
+    expect(retained.data.surface).toEqual(built.data.surface);
+  });
+
+  it("reconciles window requests that arrive together once", async () => {
+    const { scene, state } = await sceneFixture();
+    const field = vi.spyOn(terrainElevation, "createTerrainField");
+    state.window.push(windowEntry(725, 1));
+    const requests = [scene.updateWindow(), scene.updateWindow(), scene.updateWindow()];
+    expect(new Set(requests).size).toBe(1);
+    await Promise.all(requests);
+    expect(field).toHaveBeenCalledTimes(1);
+    expect(scene.sectors.has(725)).toBe(true);
+  });
+
   it("leaves retained sectors in place when the window is reconciled without changes", async () => {
     const { scene, state } = await sceneFixture();
     state.window.push(windowEntry(725, 1)); await scene.updateWindow();
@@ -626,7 +660,8 @@ describe("travel scene window updates", () => {
     const invalidate = game.invalidate as ReturnType<typeof vi.fn>;
     invalidate.mockClear(); state.window.push(ready, held);
     const updating = scene.updateWindow();
-    for (let i = 0; i < 20 && !scene.sectors.has(725); i++) await settle();
+    // Window requests are coalesced briefly before the first neighbor is built.
+    for (let i = 0; i < 40 && !scene.sectors.has(725); i++) await new Promise((resolve) => setTimeout(resolve, 5));
     expect(scene.sectors.has(725)).toBe(true);
     await updating;
     expect(scene.sectors.has(726)).toBe(true);

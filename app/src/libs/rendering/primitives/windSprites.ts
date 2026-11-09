@@ -236,24 +236,36 @@ const createWindUniforms = () =>
     { isStatic: true },
   );
 
+// Every batcher and texture-slot change shares one program per slot count. A fresh
+// program per batcher is a distinct GL program, linked again on its first draw.
+const windPrograms = new Map<number, ReturnType<typeof compileHighShaderGlProgram>>();
+const windProgram = (maxTextures: number) => {
+  let program = windPrograms.get(maxTextures);
+  if (!program) {
+    program = compileHighShaderGlProgram({
+      name: "world-wind-sprite",
+      bits: [
+        colorBitGl,
+        generateTextureBatchBitGl(maxTextures),
+        roundPixelsBitGl,
+        {
+          name: "world-wind",
+          vertex: {
+            header: `in vec3 aWind;\n${worldWindShader}`,
+            main: "position += aWind.yz * worldWind(aWind.x);",
+          },
+        },
+      ],
+    });
+    windPrograms.set(maxTextures, program);
+  }
+  return program;
+};
+
 const createWindShader = (maxTextures: number, wind = createWindUniforms()) =>
   Object.assign(
     new Shader({
-      glProgram: compileHighShaderGlProgram({
-        name: "world-wind-sprite",
-        bits: [
-          colorBitGl,
-          generateTextureBatchBitGl(maxTextures),
-          roundPixelsBitGl,
-          {
-            name: "world-wind",
-            vertex: {
-              header: `in vec3 aWind;\n${worldWindShader}`,
-              main: "position += aWind.yz * worldWind(aWind.x);",
-            },
-          },
-        ],
-      }),
+      glProgram: windProgram(maxTextures),
       resources: { wind, batchSamplers: getBatchSamplersUniformGroup(maxTextures) },
     }),
     { maxTextures },

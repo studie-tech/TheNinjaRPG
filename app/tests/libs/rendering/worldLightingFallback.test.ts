@@ -81,7 +81,7 @@ const rendererFixture = () => {
     assets: sceneAssets.createSceneAssets(),
     own: (cleanup: () => void) => owned.add(cleanup),
     disown: (cleanup: () => void) => owned.delete(cleanup),
-    isDisposed: () => disposed, invalidate() {}, setAnimating() {}, setBackground() {}, listen() {},
+    isDisposed: () => disposed, invalidate() {}, setAnimating() {}, setBackground() {}, listen() {}, compileShaders() {},
     setResize: (callback: (width: number, height: number) => void) => callback(800, 600),
     setUpdate: (callback: typeof update) => { update = callback; },
     dispose: () => {

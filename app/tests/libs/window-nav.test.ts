@@ -22,7 +22,7 @@ const HEXSIZE = 10;
 
 describe("buildWindowNav", () => {
   it("finds every unified tile by window offset as a grid lookup does, and nothing outside", () => {
-    const nav = buildWindowNav([{ dx: 0, dy: 0, map: makeMap(4, 6) }], HEXSIZE)!;
+    const nav = buildWindowNav([{ sector: 100, dx: 0, dy: 0, map: makeMap(4, 6) }], HEXSIZE)!;
     const grid = nav.pathFinder.grid;
     for (let dx = -2; dx <= 2; dx++)
       for (let dy = -2; dy <= 2; dy++)

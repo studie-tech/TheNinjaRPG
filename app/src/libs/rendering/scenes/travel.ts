@@ -152,6 +152,8 @@ export const createTravelScene = async (options: {
         sceneryBounds,
       );
     game.own(route.dispose);
+    // The route appears on the first tap; its program is linked before that frame.
+    game.compileShaders(route.shader);
     // Sector scopes own artwork while terrain, scenery and actors share one lit world.
     lightingLayer.addChild(
       terrainDrawLayer,
@@ -246,6 +248,25 @@ export const createTravelScene = async (options: {
         sprite.alpha = Math.abs(target - alpha) < 0.01 ? target : alpha;
         game.invalidate();
       }
+    };
+    /** Lights a sector's terrain mesh and interleaves it with every sector's terrain by row. */
+    const showTerrain = (
+      terrainScope: GameRenderer,
+      terrain: TravelSector["terrain"],
+      data: HexTerrainData,
+      position: { x: number; y: number },
+      dy: number,
+    ) => {
+      // The lit world supplies ambient color to neutral terrain and scenery together.
+      terrain.setLighting(1);
+      terrainScope.own(shadows.registerTerrain(terrain.container, data));
+      terrain.container.position.copyFrom(position);
+      terrain.setOrigin(position.x, position.y);
+      terrain.setDepthBias(sectorDepthBias(dy));
+      terrainLayer.addChild(terrain.container);
+      // Interleave sector depths while retaining each sector's transform and ownership.
+      terrainDrawLayer.attach(...terrain.container.children);
+      terrainDrawLayer.sortRenderLayerChildren();
     };
     /** Keep draw order global while retained sector scopes continue owning their sprites. */
     const placeArt = (art: TravelSector["art"], position: { x: number; y: number }) => {
@@ -379,7 +400,7 @@ export const createTravelScene = async (options: {
       nav: ReturnType<typeof buildWindowNav>;
       cells: Map<TerrainHex, TerrainCell>;
       field: TerrainField | null;
-      keys: Map<number, string>;
+      keys: Map<number, ReturnType<typeof terrainResultKey>>;
     } | null = null;
     /** Latest request wins; completed sectors remain usable until departure or successful replacement. */
     const updateWindow = async (initial = false) => {
@@ -429,7 +450,7 @@ export const createTravelScene = async (options: {
           sourceKey: string;
           grid: Grid<TerrainHex>;
           villageWallPlan: ReturnType<typeof prepareSectorGrid>["villageWallPlan"];
-          prng?: () => number;
+          prng?: ReturnType<typeof alea>;
         }
       >(
         (hasTerrainField ? snapshot.window : ordered).map((entry) => {
@@ -518,7 +539,7 @@ export const createTravelScene = async (options: {
         const unifiedOrigin = nav?.toUnified(entry.dx, entry.dy, 0, 0),
           localOrigin = grid.getHex({ col: 0, row: 0 });
         // A retained sector keeps its artwork while its own terrain results are unchanged.
-        const shoreKey =
+        const terrainResult =
           shoreline.keys.get(entry.sector) ??
           (field && nav && unifiedOrigin
             ? terrainResultKey(
@@ -528,9 +549,38 @@ export const createTravelScene = async (options: {
                 unifiedOrigin,
                 entry.map,
               )
-            : "");
-        shoreline.keys.set(entry.sector, shoreKey);
-        const key = preparedSector.sourceKey + (field ? `terrain:${shoreKey}` : "");
+            : { inside: "", edge: "" });
+        shoreline.keys.set(entry.sector, terrainResult);
+        // Scenery stands on the sector's own terraces; its edge walls also read the tiles
+        // across its borders, which change whenever the window moves past it.
+        const artKey =
+          preparedSector.sourceKey + (field ? `terrain:${terrainResult.inside}` : "");
+        const key = artKey + (field ? `|${terrainResult.edge}` : "");
+        const { dx, dy } = entry;
+        // Sector-local points map onto the window grid the field was built on.
+        const toWindow = (point: { x: number; y: number }) =>
+          unifiedOrigin && localOrigin
+            ? {
+                x:
+                  unifiedOrigin.x +
+                  ((point.x - localOrigin.x) * unifiedOrigin.width) / localOrigin.width,
+                y:
+                  unifiedOrigin.y +
+                  ((point.y - localOrigin.y) * unifiedOrigin.height) /
+                    localOrigin.height,
+              }
+            : point;
+        const sectorField: TerrainField | undefined =
+          field && nav && unifiedOrigin && localOrigin
+            ? {
+                level: (tile) => {
+                  const unified = nav.toUnified(dx, dy, tile.col, tile.row);
+                  return unified ? field.level(unified) : 0;
+                },
+                sample: (point) => field.sample(toWindow(point)),
+                at: (point) => field.at(toWindow(point)),
+              }
+            : undefined;
         const position = {
           x: origin.x + entry.dx * spanX,
           y: origin.y + entry.dy * spanY,
@@ -559,6 +609,57 @@ export const createTravelScene = async (options: {
             currentSceneryReady = existing.startScenery();
           continue;
         }
+        // Only the edge changed: rebuild the terrain mesh under the sector's retained scenery.
+        if (existing?.artKey === artKey && sectorField) {
+          if (!initial) {
+            await yieldToFrame();
+            if (disposed || token !== generation) return;
+          }
+          const { roads, wall, seed, descriptions } = existing.terrainInputs;
+          const prng = alea(entry.sector + 1);
+          prng.importState(seed);
+          const data = buildSectorTerrainData(
+            existing.grid,
+            prng,
+            options.lightLayout,
+            {
+              sector: entry.sector,
+              sprites: descriptions,
+              wall,
+              roads,
+              field: sectorField,
+            },
+          );
+          const terrainScope = createRenderScope(existing.scope);
+          const terrain = await createHexTerrain(terrainScope, data);
+          if (
+            disposed ||
+            token !== generation ||
+            sectors.get(entry.sector) !== existing
+          ) {
+            terrainScope.dispose();
+            return;
+          }
+          existing.terrainScope.dispose();
+          showTerrain(terrainScope, terrain, data, existing.position, entry.dy);
+          Object.assign(existing, { key, data, terrain, terrainScope });
+          const cached = cachedSectorData.get(entry.sector);
+          if (cached?.artKey === artKey) Object.assign(cached, { key, data });
+          if (
+            existing.position.x !== position.x ||
+            existing.position.y !== position.y
+          ) {
+            existing.position = position;
+            terrain.container.position.copyFrom(position);
+            terrain.setOrigin(position.x, position.y);
+            existing.art.container.position.copyFrom(position);
+            placeArt(existing.art, position);
+          }
+          if (entry.sector === snapshot.sector)
+            currentSceneryReady = existing.startScenery();
+          game.invalidate();
+          continue;
+        }
         // Each rebuilt sector is its own task, so the map keeps presenting frames while a
         // crossing builds the new edge of the window.
         if (!initial) {
@@ -571,9 +672,11 @@ export const createTravelScene = async (options: {
           const cached = cachedSectorData.get(entry.sector);
           let descriptions: WorldSpriteDescription[];
           let data: HexTerrainData;
+          let terrainInputs: TerrainInputs;
           if (cached?.key === key) {
             descriptions = cached.descriptions;
             data = cached.data;
+            terrainInputs = cached.terrainInputs;
           } else {
             if (!prng) {
               prng = alea(entry.sector + 1);
@@ -600,48 +703,28 @@ export const createTravelScene = async (options: {
               mapAssets: snapshot.mapAssets,
               roads,
             });
-            const { dx, dy } = entry;
-            // Sector-local points map onto the window grid the field was built on.
-            const toWindow = (point: { x: number; y: number }) =>
-              unifiedOrigin && localOrigin
-                ? {
-                    x:
-                      unifiedOrigin.x +
-                      ((point.x - localOrigin.x) * unifiedOrigin.width) /
-                        localOrigin.width,
-                    y:
-                      unifiedOrigin.y +
-                      ((point.y - localOrigin.y) * unifiedOrigin.height) /
-                        localOrigin.height,
-                  }
-                : point;
+            // An edge-only rebuild replays the water phases from the generator's state here.
+            const seed = prng.exportState();
             data = buildSectorTerrainData(grid, prng, options.lightLayout, {
               sector: entry.sector,
               sprites: descriptions,
               wall: villageWallPlan,
               roads,
-              field:
-                field && nav && unifiedOrigin && localOrigin
-                  ? {
-                      level: (tile) => {
-                        const unified = nav.toUnified(dx, dy, tile.col, tile.row);
-                        return unified ? field.level(unified) : 0;
-                      },
-                      sample: (point) => field.sample(toWindow(point)),
-                      at: (point) => field.at(toWindow(point)),
-                    }
-                  : undefined,
+              field: sectorField,
             });
+            terrainInputs = { roads, wall: villageWallPlan, seed, descriptions };
             liftSpritesToTerrain(descriptions, grid);
           }
           // Retain only CPU scenery data across navigation; each scene owns its GPU resources.
           cachedSectorData.delete(entry.sector);
           cachedSectorData.set(entry.sector, {
             key,
+            artKey,
             sourceKey: preparedSector.sourceKey,
             grid,
             data,
             descriptions,
+            terrainInputs,
           });
           while (cachedSectorData.size > 9) {
             const oldest = cachedSectorData.keys().next().value;
@@ -675,8 +758,9 @@ export const createTravelScene = async (options: {
           };
           if (entry.sector === snapshot.sector)
             currentSceneryReady = scenery.then(() => {});
+          const terrainScope = createRenderScope(scope);
           const [terrain, art] = await Promise.all([
-            createHexTerrain(scope, data),
+            createHexTerrain(terrainScope, data),
             createWorldSprites(scope, [], shadows, true),
           ]);
           if (disposed || token !== generation) {
@@ -693,24 +777,18 @@ export const createTravelScene = async (options: {
             transform();
             setBackground(entry.map);
           }
-          // The lit world supplies ambient color to neutral terrain and scenery together.
-          terrain.setLighting(1);
-          scope.own(shadows.registerTerrain(terrain.container, data));
-          terrain.container.position.copyFrom(position);
-          terrain.setOrigin(position.x, position.y);
-          terrain.setDepthBias(sectorDepthBias(entry.dy));
+          showTerrain(terrainScope, terrain, data, position, entry.dy);
           art.container.position.copyFrom(position);
-          terrainLayer.addChild(terrain.container);
-          // Interleave sector depths while retaining each sector's transform and ownership.
-          terrainDrawLayer.attach(...terrain.container.children);
-          terrainDrawLayer.sortRenderLayerChildren();
           artLayer.addChild(art.container);
           placeArt(art, position);
           existing?.scope.dispose();
-          const installed = {
+          const installed: TravelSector = {
             key,
+            artKey,
             sourceKey: preparedSector.sourceKey,
             scope,
+            terrainScope,
+            terrainInputs,
             grid,
             data,
             terrain,
@@ -1118,10 +1196,22 @@ export const createTravelScene = async (options: {
       actors.setLighting(snapshot.brightness);
     });
     await updateWindow(true);
+    // A crossing delivers the new window, its dungeons and its quest placements separately;
+    // requests that arrive together reconcile the window once.
+    let windowRequest: Promise<void> | null = null;
+    const requestWindowUpdate = () => {
+      windowRequest ??= new Promise<void>((resolve) =>
+        setTimeout(resolve, WINDOW_UPDATE_COALESCE_MS),
+      ).then(() => {
+        windowRequest = null;
+        return disposed ? undefined : updateWindow();
+      });
+      return windowRequest;
+    };
     return {
       dispose: game.dispose,
       sectors,
-      updateWindow,
+      updateWindow: requestWindowUpdate,
       setBackground,
       /** Resume smooth character tracking after inspecting the map with a drag. */
       recenter: () => {
@@ -1187,8 +1277,13 @@ type TravelSector = {
   margin: number;
   height: number;
   key: string;
+  /** The source and the sector's own terraces: what its scenery depends on. */
+  artKey: string;
   sourceKey: string;
   scope: GameRenderer;
+  /** Owns the terrain mesh alone, so an edge-only rebuild replaces it under retained scenery. */
+  terrainScope: GameRenderer;
+  terrainInputs: TerrainInputs;
   position: { x: number; y: number };
   grid: Grid<TerrainHex>;
   data: HexTerrainData;
@@ -1261,12 +1356,23 @@ const cachedSectorData = new Map<
   number,
   {
     key: string;
+    artKey: string;
     sourceKey: string;
     grid: Grid<TerrainHex>;
     data: HexTerrainData;
     descriptions: WorldSpriteDescription[];
+    terrainInputs: TerrainInputs;
   }
 >();
+
+/** What a sector's terrain mesh is built from besides its grid and the terrain field. */
+type TerrainInputs = {
+  roads: ReturnType<typeof planVillageLandscape>;
+  wall: ReturnType<typeof prepareSectorGrid>["villageWallPlan"];
+  /** The sector generator's state where terrain building starts consuming it. */
+  seed: ReturnType<ReturnType<typeof alea>["exportState"]>;
+  descriptions: WorldSpriteDescription[];
+};
 
 /**
  * What the terrain field gives one sector: its tiles' terraces, its water's ice and shore
@@ -1280,28 +1386,34 @@ const terrainResultKey = (
   origin: TerrainHex,
   map: Pick<NormalizedSectorMap, "width" | "height">,
 ) => {
-  let key = "";
+  let inside = "",
+    edge = "";
   for (let row = origin.row - 1; row <= origin.row + map.height; row++) {
     for (let col = origin.col - 1; col <= origin.col + map.width; col++) {
-      const tile = grid.getHex({ col, row });
-      const cell = tile && cells.get(tile);
-      if (!tile || !cell) {
-        key += " ";
-        continue;
-      }
-      key += String.fromCharCode(76 + field.level(tile));
-      const inside =
+      const isInside =
         col >= origin.col &&
         col < origin.col + map.width &&
         row >= origin.row &&
         row < origin.row + map.height;
-      if (inside && cell.isWater)
-        for (const corner of tile.corners) key += waterSampleKey(field.sample(corner));
+      const tile = grid.getHex({ col, row });
+      const cell = tile && cells.get(tile);
+      let part = " ";
+      if (tile && cell) {
+        part = String.fromCharCode(76 + field.level(tile));
+        if (isInside && cell.isWater)
+          for (const corner of tile.corners)
+            part += waterSampleKey(field.sample(corner));
+      }
+      if (isInside) inside += part;
+      else edge += part;
     }
-    key += "/";
+    inside += "/";
   }
-  return key;
+  return { inside, edge };
 };
+
+/** Window update requests arriving within this many milliseconds share one reconciliation. */
+const WINDOW_UPDATE_COALESCE_MS = 50;
 
 /** Hands the main thread back to the browser for at least one task boundary. */
 const yieldToFrame = () => new Promise<void>((resolve) => setTimeout(resolve, 0));

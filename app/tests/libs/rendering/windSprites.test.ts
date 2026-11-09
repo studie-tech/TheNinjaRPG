@@ -5,6 +5,20 @@ import { createWindSprite, isWindSprite, updateWindSprites, WindSprite, WindSpri
 beforeEach(() => vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null));
 afterEach(() => vi.restoreAllMocks());
 
+describe("scenery wind programs", () => {
+  it("shares one program per texture-slot count across batchers, so each links once", () => {
+    const batchers = [BatcherPipe.getBatcher("worldWindSprite", 8), BatcherPipe.getBatcher("worldWindSprite", 8), BatcherPipe.getBatcher("worldWindSprite", 4)];
+    try {
+      const programs = batchers.map((batcher) => batcher.shader.glProgram);
+      expect(programs[0]).toBe(programs[1]!);
+      expect(programs[2]).not.toBe(programs[0]!);
+      // Rebuilding a batcher's shader for another slot count reuses that count's program.
+      (batchers[0] as unknown as { _updateMaxTextures: (count: number) => void })._updateMaxTextures(4);
+      expect(batchers[0]!.shader.glProgram).toBe(programs[2]!);
+    } finally { for (const batcher of batchers) batcher.destroy({ shader: true }); }
+  });
+});
+
 describe("scenery wind vertex data", () => {
   it.each([false, true])("matches rooted sprite deformation for trimmed artwork: %s", (trimmed) => {
     const texture = new Texture({
