@@ -108,19 +108,21 @@ const renderWorkspace = ({
   onPlaceChange = vi.fn(),
   blockReason = (_id: string, _toHome: boolean): string | null => null,
   withHome = true,
+  carried = [pill, scroll],
+  stored = [ore, herb],
 } = {}) => {
-  render(
+  const tree = (carried: UserItemWithRelations[], stored: UserItemWithRelations[]) => (
     <ItemsWorkspace
       userData={player}
-      userItems={[pill, scroll]}
-      bagItems={[pill, scroll]}
+      userItems={carried}
+      bagItems={carried.filter((ui) => ui.equipped === "NONE")}
       bag={place === "home" ? "home:all" : "all"}
       home={
         withHome
           ? {
               place,
               onPlaceChange,
-              items: [ore, herb],
+              items: stored,
               count: 2,
               blockReason,
               status: <span>2 / 15</span>,
@@ -128,9 +130,10 @@ const renderWorkspace = ({
             }
           : undefined
       }
-    />,
+    />
   );
-  return { onPlaceChange };
+  const view = render(tree(carried, stored));
+  return { onPlaceChange, rerender: (carried: UserItemWithRelations[], stored: UserItemWithRelations[]) => view.rerender(tree(carried, stored)) };
 };
 
 const card = (name: string) => screen.getByRole("button", { name: new RegExp(`^${name}`) });
@@ -204,4 +207,44 @@ it("inspects a stored stack with taking it out as its move", () => {
   expect(screen.getByRole("region", { name: "Inspecting Iron Ore" })).toBeDefined();
   act(() => inspectorProps?.homeMove?.onMove());
   expect(moveItems).toHaveBeenCalledWith(["Iron Ore"], false);
+});
+
+it("stores farm-market seeds without replacement coins while keeping sale restrictions", () => {
+  const seed = { ...pill, id: "seed", item: { ...pill.item, name: "Market Seed", isFarmSeed: true, inShop: false, farmSellValue: 100 } };
+  renderWorkspace({ carried: [seed, pill] });
+  startSelecting();
+  expect(card("Market Seed").hasAttribute("disabled")).toBe(false);
+  act(() => fireEvent.click(card("Market Seed")));
+  expect(within(bar()).getByRole("button", { name: "Sell / drop…" }).hasAttribute("disabled")).toBe(true);
+  act(() => fireEvent.click(within(bar()).getByRole("button", { name: "Store at home" })));
+  expect(moveItems).toHaveBeenCalledWith(["seed"], true);
+  act(() => fireEvent.click(card("Chakra Pill")));
+  act(() => fireEvent.click(card("Market Seed")));
+  expect(within(bar()).getByRole("button", { name: "Sell / drop…" }).hasAttribute("disabled")).toBe(false);
+});
+
+it("inspects carried gear from a slot picker while viewing home storage", () => {
+  const worn = { ...pill, id: "worn", equipped: "HAND_1", item: { ...pill.item, name: "Worn Sword", slot: "HAND", itemType: "WEAPON", maxEquips: 1 } } as UserItemWithRelations;
+  renderWorkspace({ place: "home", carried: [worn] });
+  act(() => fireEvent.click(screen.getByRole("button", { name: /Worn Sword/ })));
+  act(() => fireEvent.click(screen.getByRole("button", { name: "Inspect" })));
+  expect(screen.queryByRole("region", { name: "Inspecting Worn Sword" })).not.toBeNull();
+});
+
+it("closes a stored stack's inspector when it moves into the backpack", () => {
+  const { rerender } = renderWorkspace({ place: "home" });
+  act(() => fireEvent.click(card("Iron Ore")));
+  expect(screen.queryByRole("region", { name: "Inspecting Iron Ore" })).not.toBeNull();
+  act(() => rerender([pill, scroll, { ...ore, storedAtHome: false }], [herb]));
+  expect(screen.queryByRole("region", { name: "Inspecting Iron Ore" })).toBeNull();
+});
+
+it("inspects a carried candidate at home and closes it when stored", () => {
+  const sword = { ...pill, id: "sword", item: { ...pill.item, name: "Spare Sword", slot: "HAND", itemType: "WEAPON", maxEquips: 1 } } as UserItemWithRelations;
+  const { rerender } = renderWorkspace({ place: "home", carried: [sword] });
+  act(() => fireEvent.click(document.querySelector<HTMLButtonElement>('[data-slot="HAND_1"]')!));
+  act(() => fireEvent.click(screen.getByRole("button", { name: "Details of Spare Sword" })));
+  expect(screen.queryByRole("region", { name: "Inspecting Spare Sword" })).not.toBeNull();
+  act(() => rerender([], [ore, herb, { ...sword, storedAtHome: true }]));
+  expect(screen.queryByRole("region", { name: "Inspecting Spare Sword" })).toBeNull();
 });

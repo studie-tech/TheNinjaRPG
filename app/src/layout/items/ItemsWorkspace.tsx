@@ -53,7 +53,11 @@ export function ItemsWorkspace({
   bagTabs,
   home,
 }: ItemsWorkspaceProps) {
-  const [opened, setOpened] = useState<{ bag: string; view: ItemsView }>({
+  const [opened, setOpened] = useState<{
+    bag: string;
+    view: ItemsView;
+    storedAtHome?: boolean;
+  }>({
     bag,
     view: { kind: "backpack" },
   });
@@ -95,7 +99,7 @@ export function ItemsWorkspace({
   } = useHotkeyAssignment(
     Object.fromEntries(userItems.map((ui) => [ui.itemId, ui.item.name])),
   );
-  // Select mode: backpack cards tick for a bulk sell instead of opening.
+  // Select mode ticks stacks for a bulk sale or storage move instead of opening them.
   const [isSelecting, setIsSelecting] = useState(false);
   const [tickedIds, setTickedIds] = useState<string[]>([]);
   const [reviewIds, setReviewIds] = useState<string[] | null>(null);
@@ -120,12 +124,21 @@ export function ItemsWorkspace({
   });
   // The backpack column lists the open bag or, at home, the open storage bucket.
   const listItems = isHome ? home.items : bagItems;
-  // Any stored stack can be ticked; the server names those that do not fit.
-  const selectBlockReason = (ui: UserItemWithRelations) =>
-    isHome ? null : bulkSellBlockReason(ui, userData.farmCurrency);
+  // Selection permits either action; storing a farm seed does not require buying it back.
+  const selectBlockReason = (ui: UserItemWithRelations) => {
+    if (isHome) return null;
+    const reason = bulkSellBlockReason(ui, userData.farmCurrency);
+    return reason && home && !home.blockReason(ui.id, true) ? null : reason;
+  };
   // Stacks sold elsewhere or in another bag leave the selection.
   const selectedItems = listItems.filter((ui) => tickedIds.includes(ui.id));
   const selectedIds = selectedItems.map((ui) => ui.id);
+  const sellBlockedReason = selectedItems
+    .map((ui) => {
+      const reason = bulkSellBlockReason(ui, userData.farmCurrency);
+      return reason ? `${applyActiveVariant(ui).name} ${reason}` : undefined;
+    })
+    .find(Boolean);
   // One request takes a limited number of stacks; a larger selection is trimmed first.
   const isOverLimit = selectedItems.length > MAX_BULK_SELL_ITEMS;
   const toggleTicked = (userItemId: string) =>
@@ -143,14 +156,17 @@ export function ItemsWorkspace({
     home?.onPlaceChange(place);
   };
 
-  // A panel belongs to the bag it was opened in, and an item panel to an item still carried
-  // or stored. A stack moved between backpack and home closes its panel.
-  const inspectable = isHome ? home.items : userItems;
+  // Equipment can be inspected from either list. Keep the opened storage side so a moved
+  // stack closes its panel even when it appears in the other inventory immediately.
+  const inspectable = [...userItems, ...(home?.items ?? [])];
   const view: ItemsView =
     opened.bag !== bag ||
     (opened.view.kind === "item" &&
       !inspectable.some(
-        (ui) => opened.view.kind === "item" && ui.id === opened.view.userItemId,
+        (ui) =>
+          opened.view.kind === "item" &&
+          ui.id === opened.view.userItemId &&
+          ui.storedAtHome === opened.storedAtHome,
       ))
       ? { kind: "backpack" }
       : opened.view;
@@ -184,7 +200,14 @@ export function ItemsWorkspace({
     if (opener instanceof HTMLElement && !panelRef.current?.contains(opener)) {
       returnFocusRef.current = opener;
     }
-    setOpened({ bag, view: next });
+    setOpened({
+      bag,
+      view: next,
+      storedAtHome:
+        next.kind === "item"
+          ? inspectable.find((ui) => ui.id === next.userItemId)?.storedAtHome
+          : undefined,
+    });
   };
   const closeView = () => {
     setOpened({ bag, view: { kind: "backpack" } });
@@ -478,7 +501,10 @@ export function ItemsWorkspace({
                   ref={sellTriggerRef}
                   variant="destructive"
                   size="sm"
-                  disabled={selectedItems.length === 0 || isOverLimit}
+                  disabled={
+                    selectedItems.length === 0 || isOverLimit || !!sellBlockedReason
+                  }
+                  hoverText={sellBlockedReason}
                   onClick={() => setReviewIds(selectedIds)}
                 >
                   Sell / drop…
