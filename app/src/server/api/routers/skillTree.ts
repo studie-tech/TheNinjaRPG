@@ -40,6 +40,7 @@ import {
   insertUserSkillForPurchaseSkill,
   listItemForDelete,
   listJutsuForDelete,
+  listSkillTreeFolderAssignments,
   listSkillTreeFolderForGetAllFolders,
   listSkillTreeForDelete,
   listSkillTreeForDeleteFolder,
@@ -706,19 +707,40 @@ export const skillTreeRouter = createTRPCRouter({
   // Get all folders (with optional hidden filter for admins)
   getAllFolders: publicProcedure
     .meta({ mcp: { description: "Get all skill tree folders" } })
-    .input(z.object({ includeHidden: z.boolean().optional() }).nullish())
+    .input(
+      z
+        .object({
+          includeHidden: z.boolean().optional(),
+          skillFoldersOnly: z.boolean().optional(),
+        })
+        .nullish(),
+    )
     .query(async ({ ctx, input }) => {
-      const [viewerRole, folders] = await Promise.all([
+      const [viewerRole, folders, assignments] = await Promise.all([
         fetchViewerRole(ctx.drizzle, ctx.userId),
         listSkillTreeFolderForGetAllFolders(ctx.drizzle),
+        input?.skillFoldersOnly
+          ? listSkillTreeFolderAssignments(ctx.drizzle)
+          : Promise.resolve([]),
       ]);
       const isStaff = canAccessHiddenSkillTree(viewerRole);
-
-      // Filter out hidden folders unless staff requested them
-      if (!input?.includeHidden || !isStaff) {
-        return folders.filter((folder) => !folder.hidden);
-      }
-      return folders;
+      const skillIds = new Set(
+        assignments
+          .filter((entry) => entry.pathType === "SKILL")
+          .map((entry) => entry.folderId),
+      );
+      const bloodrightIds = new Set(
+        assignments
+          .filter((entry) => entry.pathType === "BLOODRIGHT")
+          .map((entry) => entry.folderId),
+      );
+      return folders.filter(
+        (folder) =>
+          ((input?.includeHidden && isStaff) || !folder.hidden) &&
+          (!input?.skillFoldersOnly ||
+            !bloodrightIds.has(folder.id) ||
+            skillIds.has(folder.id)),
+      );
     }),
 
   // Get folder stats (owned/total skill counts per folder for current user)

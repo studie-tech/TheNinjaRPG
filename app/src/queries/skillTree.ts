@@ -476,6 +476,10 @@ export const listSkillTreeFolderForGetAllFolders = (
     orderBy: [asc(skillTreeFolder.order), asc(skillTreeFolder.name)],
   });
 
+/** List folder assignments to distinguish bloodright-only folders from skill folders. */
+export const listSkillTreeFolderAssignments = (client: Pick<DrizzleClient, "query">) =>
+  client.query.skillTree.findMany({ columns: { folderId: true, pathType: true } });
+
 /** Build the `skillTree` listing for `getFolderStats`, using predicates on `pathType`. */
 export const listSkillTreeForGetFolderStats = (client: Pick<DrizzleClient, "query">) =>
   client.query.skillTree.findMany({
