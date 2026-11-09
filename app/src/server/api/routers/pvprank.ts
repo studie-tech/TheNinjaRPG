@@ -583,13 +583,11 @@ export const pvpRankRouter = createTRPCRouter({
       if (user.status !== "QUEUED") {
         return errorResponse("Not in the queue");
       }
-      // Mutation. Capture the CAS result: if a concurrent match claimed us into a
-      // battle between the guard read above and this update, the QUEUED-guarded
-      // status update matches no rows.
+      // Mutation. The status update is guarded on QUEUED, so a concurrent match that
+      // claimed us into a battle (status BATTLE) between the guard read above and this
+      // update is not clobbered back to AWAKE; the update then matches no rows.
       const [, leaveResult] = await Promise.all([
         deleteUserRankedQueueRow(ctx.drizzle, ctx.userId),
-        // Guard on QUEUED so a concurrent match that already claimed us into a
-        // battle (status BATTLE) is not clobbered back to AWAKE.
         wakeQueuedUser(ctx.drizzle, ctx.userId),
       ]);
       // No row matched: status changed between the guard read and this update.

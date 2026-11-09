@@ -3060,8 +3060,8 @@ const fetchUpdatedUserOnce = async (
   // Rewards, e.g. for activity streak
   const toastMessages: string[] = [];
 
-  // If more than 5min since last user update, update the user with regen. We do not need this to be synchronous
-  // and it is mostly done to keep user updated on the overview pages
+  // Settle passive regen, queued training and activity rewards for awake or sleeping users;
+  // the conditions for persisting the result follow below.
   if (
     user &&
     !settlement.hasRejectedPassiveRegen &&

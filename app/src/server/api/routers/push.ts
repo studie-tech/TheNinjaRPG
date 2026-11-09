@@ -89,7 +89,6 @@ export const pushRouter = createTRPCRouter({
       );
       // The row this would evict is one the account owns, and a retirement purges the lot.
       const others = await selectUserDeviceForRegisterDevice(ctx.drizzle, ctx, input);
-      // One slot is spoken for by the device above, hence the cap less one.
       await evictExcessDevices(ctx.drizzle, others);
       return {
         success: true,
