@@ -8,9 +8,10 @@ const opponent = makeUser({ userId: "enemy", isAi: false });
 
 describe("combat mastery rewards", () => {
   it("splits the fixed PvP win/loss budget by used disciplines without XP", () => {
-    expect(combatMasteryGains({ battleType: "COMBAT", rewardScaling: 1 }, user(), [opponent], "Won", 9999)).toMatchObject({ ninjutsuMastery: 100, taijutsuMastery: 100 });
-    expect(combatMasteryGains({ battleType: "COMBAT", rewardScaling: 1 }, user(), [opponent], "Lost", 9999)).toMatchObject({ ninjutsuMastery: 50, taijutsuMastery: 50 });
-    expect(user().experience).toBe(0);
+    // The whole gain is mastery: no experience or other stat is granted.
+    const unused = { genjutsuMastery: 0, bukijutsuMastery: 0, bloodlineMastery: 0, sageMastery: 0 };
+    expect(combatMasteryGains({ battleType: "COMBAT", rewardScaling: 1 }, user(), [opponent], "Won", 9999)).toEqual({ ...unused, ninjutsuMastery: 100, taijutsuMastery: 100 });
+    expect(combatMasteryGains({ battleType: "COMBAT", rewardScaling: 1 }, user(), [opponent], "Lost", 9999)).toEqual({ ...unused, ninjutsuMastery: 50, taijutsuMastery: 50 });
   });
   it("uses the existing PvE growth budget instead of the fixed PvP budget", () => {
     expect(combatMasteryGains({ battleType: "ARENA", rewardScaling: 1 }, user(), [makeUser({ isAi: true })], "Won", 20)).toMatchObject({ ninjutsuMastery: 10, taijutsuMastery: 10 });
