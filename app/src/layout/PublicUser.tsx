@@ -135,8 +135,8 @@ const EditUserComponent = dynamic(
  * The handful of profile fields a server component can resolve before this one mounts.
  *
  * The full profile is fetched client-side, so without a seed the server render of every
- * /username/* URL is the same skeleton -- which Search Console read as a soft 404, and
- * where it saw several of them, folded together as duplicates. Routes that already load
+ * /username/* URL is the same skeleton, which search engines treat as a soft 404 and
+ * fold together as duplicates. Routes that already load
  * a profile for their metadata pass what they have so the first paint carries the
  * player's own name, rank and village.
  */
@@ -456,7 +456,6 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     });
   };
 
-  // mutations related to badges and activity events were relocated to their tab components.
   const awardMutation = api.misc.awardReputation.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (result, input, revision) => {
@@ -1383,7 +1382,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
       {canSeeSecrets && (
         <div className="text-center text-sm italic">Unique ID: {profile.userId}</div>
       )}
-      {/* Badges are now displayed directly below the profile */}
+      {/* Badges */}
       {showBadges && (
         <BadgesTab
           userId={profile.userId}
@@ -1391,7 +1390,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
           currentBadges={profile.badges}
         />
       )}
-      {/* Marriages, Students, and Badges sections are now rendered inside tabs below */}
+      {/* Detail tabs */}
       {(showNindo ||
         showCombatLogs ||
         showTransactions ||

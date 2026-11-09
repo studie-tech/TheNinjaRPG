@@ -137,7 +137,7 @@ export const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
   return (
     <ContentBox
       title="Training Log"
-      subtitle="User activity last 7 days"
+      subtitle="User activity last 24 hours"
       initialBreak={true}
     >
       <div className="relative w-[99%] p-3">
