@@ -10,6 +10,7 @@ import { useRequiredUserData } from "@/utils/UserContext";
 
 /** Bind shrine claims to their spawn and reconcile arbitrary package effects authoritatively. */
 export const useResourceSilo = () => {
+  const utils = api.useUtils();
   const status = api.resourceSilos.getStatus.useQuery(undefined, {
     refetchInterval: 15000,
   });
@@ -35,7 +36,11 @@ export const useResourceSilo = () => {
       if (result.success) {
         // Packages may change membership, rank, mastery, equipment and collection-derived effects.
         await updateUser(undefined, { revision: snapshot.user });
-        await invalidateInventory();
+        await Promise.all([
+          invalidateInventory(),
+          utils.jutsu.getUserJutsus.invalidate(),
+          utils.jutsu.getAll.invalidate({ ownedFirst: true }),
+        ]);
       }
     },
     onError: async (_error, _input, snapshot) => {
@@ -44,6 +49,8 @@ export const useResourceSilo = () => {
         cache.updateCache(undefined, snapshot.status),
         updateUser(undefined, { revision: snapshot.user }),
         invalidateInventory(),
+        utils.jutsu.getUserJutsus.invalidate(),
+        utils.jutsu.getAll.invalidate({ ownedFirst: true }),
       ]);
     },
   });
