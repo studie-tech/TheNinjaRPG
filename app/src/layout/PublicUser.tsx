@@ -150,6 +150,10 @@ const EditUserComponent = dynamic(
   { loading: () => <Loader explanation="Loading user editor" /> },
 );
 
+const BadgeStatisticsModal = dynamic(() =>
+  import("@/layout/BadgeStatisticsModal").then((module) => module.BadgeStatisticsModal),
+);
+
 /**
  * The handful of profile fields a server component can resolve before this one mounts.
  *
@@ -2436,6 +2440,11 @@ const badgeAssignmentKey = (badgeId: string, createdAt: Date) =>
 const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }) => {
   const { data: currentUser } = useUserData();
   const canModify = currentUser && canModifyUserBadges(currentUser.role);
+  const [statisticsBadge, setStatisticsBadge] = useState<Pick<
+    Badge,
+    "id" | "name" | "image"
+  > | null>(null);
+  const statisticsTrigger = useRef<HTMLButtonElement | null>(null);
 
   // Only fetch the list of all badges when the add-badge popover is opened
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -2503,6 +2512,7 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
       setAssignmentNeedsRetry(false);
     }
     setPopoverOpen(false);
+    setStatisticsBadge(null);
     setOptimisticBadges(new Map());
     if (!removalFlight.current()) {
       setRemoval(null);
@@ -2727,6 +2737,20 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
               <div>
                 <div className="font-bold">{displayedBadge.name}</div>
               </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`View statistics for ${displayedBadge.name}`}
+                title="Badge statistics"
+                className="absolute top-0 left-[8%] h-9 w-9 rounded-full border-2 border-black bg-amber-100 p-0 text-slate-700 hover:bg-amber-200 hover:text-orange-700"
+                onClick={(event) => {
+                  statisticsTrigger.current = event.currentTarget;
+                  setStatisticsBadge(displayedBadge);
+                }}
+              >
+                <BarChart2 aria-hidden="true" className="h-5 w-5" />
+              </Button>
               {canModify && userBadge && (
                 <Button
                   type="button"
@@ -2748,6 +2772,18 @@ const BadgesTab: React.FC<BadgesTabProps> = ({ userId, username, currentBadges }
           ))}
         </div>
       </ContentBox>
+
+      {statisticsBadge && (
+        <BadgeStatisticsModal
+          key={statisticsBadge.id}
+          badge={statisticsBadge}
+          returnFocusRef={statisticsTrigger}
+          setIsOpen={(open) => {
+            if (!(typeof open === "function" ? open(true) : open))
+              setStatisticsBadge(null);
+          }}
+        />
+      )}
 
       <Modal
         id="insert-user-badge"
