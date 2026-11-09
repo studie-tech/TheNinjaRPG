@@ -5,6 +5,7 @@ import type {
 } from "@/libs/sector-map/types";
 
 export interface WindowNavEntry {
+  sector: number;
   dx: number;
   dy: number;
   map: NormalizedSectorMap;
@@ -32,6 +33,12 @@ export interface WindowNav {
     col: number;
     row: number;
   };
+  /**
+   * Offsets and sectors of the window this grid was built from. The window recenters as the
+   * character crosses borders, so a path resolves its offsets here rather than in a newer window.
+   */
+  offsetOf: (sector: number) => { dx: number; dy: number } | undefined;
+  sectorAt: (dx: number, dy: number) => number | undefined;
 }
 
 /**
@@ -89,5 +96,11 @@ export const buildWindowNav = (
       const dy = Math.floor(tile.row / H) - 1;
       return { dx, dy, col: tile.col - (dx + 1) * W, row: tile.row - (dy + 1) * H };
     },
+    offsetOf: (sector) => {
+      const entry = entries.find((candidate) => candidate.sector === sector);
+      return entry ? { dx: entry.dx, dy: entry.dy } : undefined;
+    },
+    sectorAt: (dx, dy) =>
+      entries.find((candidate) => candidate.dx === dx && candidate.dy === dy)?.sector,
   };
 };

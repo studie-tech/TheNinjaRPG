@@ -25,8 +25,8 @@ describe("buildWindowNav", () => {
     // Non-square so any width/height transposition in the unified-grid math fails
     const nav = buildWindowNav(
       [
-        { dx: 0, dy: 0, map: makeMap(4, 6) },
-        { dx: 1, dy: 0, map: makeMap(4, 6) },
+        { sector: 100, dx: 0, dy: 0, map: makeMap(4, 6) },
+        { sector: 101, dx: 1, dy: 0, map: makeMap(4, 6) },
       ],
       HEXSIZE,
     );
@@ -49,8 +49,8 @@ describe("buildWindowNav", () => {
   it("finds a walkable path that crosses from the center into the east neighbor", () => {
     const nav = buildWindowNav(
       [
-        { dx: 0, dy: 0, map: makeMap(4, 4) },
-        { dx: 1, dy: 0, map: makeMap(4, 4) },
+        { sector: 100, dx: 0, dy: 0, map: makeMap(4, 4) },
+        { sector: 101, dx: 1, dy: 0, map: makeMap(4, 4) },
       ],
       HEXSIZE,
     );
@@ -76,9 +76,40 @@ describe("buildWindowNav", () => {
     });
   });
 
+  it("resolves sectors and offsets in the window it was built from, wherever its center is", () => {
+    // A window centered on 230 while the character still stands in 158 (its north-west neighbor).
+    const nav = buildWindowNav(
+      [
+        { sector: 230, dx: 0, dy: 0, map: makeMap(4, 4) },
+        { sector: 231, dx: 1, dy: 0, map: makeMap(4, 4) },
+        { sector: 158, dx: 0, dy: -1, map: makeMap(4, 4) },
+        { sector: 159, dx: 1, dy: -1, map: makeMap(4, 4) },
+      ],
+      HEXSIZE,
+    );
+    if (!nav) throw new Error("no nav");
+    expect(nav.offsetOf(158)).toEqual({ dx: 0, dy: -1 });
+    expect(nav.offsetOf(159)).toEqual({ dx: 1, dy: -1 });
+    expect(nav.offsetOf(160)).toBeUndefined();
+    expect(nav.sectorAt(1, -1)).toBe(159);
+    expect(nav.sectorAt(-1, 0)).toBeUndefined();
+    // A step east from 158's edge lands in 159, not in the center's neighbor 231.
+    const here = nav.offsetOf(158)!;
+    const edge = nav.toUnified(here.dx, here.dy, 3, 1)!;
+    const goal = nav.toUnified(1, -1, 0, 1)!;
+    const path = nav.pathFinder.getShortestPath(edge, goal)!;
+    const sectors = path.map((tile) => {
+      const local = nav.fromUnified(tile);
+      return nav.sectorAt(local.dx, local.dy);
+    });
+    expect(sectors[0]).toBe(158);
+    expect(sectors.at(-1)).toBe(159);
+    expect(sectors).not.toContain(231);
+  });
+
   it("treats a missing (polar) neighbor as an impassable wall", () => {
     // Only the center sector is present; the east neighbor is absent
-    const nav = buildWindowNav([{ dx: 0, dy: 0, map: makeMap(4, 4) }], HEXSIZE);
+    const nav = buildWindowNav([{ sector: 100, dx: 0, dy: 0, map: makeMap(4, 4) }], HEXSIZE);
     if (!nav) throw new Error("no nav");
     const start = nav.toUnified(0, 0, 0, 1);
     const goalInMissing = nav.toUnified(1, 0, 0, 1);
@@ -90,8 +121,8 @@ describe("buildWindowNav", () => {
   it("crosses freely into an aligned neighbor", () => {
     const nav = buildWindowNav(
       [
-        { dx: 0, dy: 0, map: makeMap(4, 4) },
-        { dx: 1, dy: 0, map: makeMap(4, 4) },
+        { sector: 100, dx: 0, dy: 0, map: makeMap(4, 4) },
+        { sector: 101, dx: 1, dy: 0, map: makeMap(4, 4) },
       ],
       HEXSIZE,
     );
@@ -106,8 +137,8 @@ describe("buildWindowNav", () => {
   it("crosses shaded terrain on a neighbor's map at the standard walking cost", () => {
     const nav = buildWindowNav(
       [
-        { dx: 0, dy: 0, map: makeMap(5, 5) },
-        { dx: 1, dy: 0, map: makeMap(5, 5, () => true) },
+        { sector: 100, dx: 0, dy: 0, map: makeMap(5, 5) },
+        { sector: 101, dx: 1, dy: 0, map: makeMap(5, 5, () => true) },
       ],
       HEXSIZE,
     );
@@ -133,8 +164,8 @@ describe("buildWindowNav", () => {
     // northward, so the north neighbor is dy=+1.
     const nav = buildWindowNav(
       [
-        { dx: 0, dy: 0, map: makeMap(4, 6) },
-        { dx: 0, dy: 1, map: makeMap(4, 6) },
+        { sector: 100, dx: 0, dy: 0, map: makeMap(4, 6) },
+        { sector: 110, dx: 0, dy: 1, map: makeMap(4, 6) },
       ],
       HEXSIZE,
     );
@@ -161,8 +192,8 @@ describe("buildWindowNav", () => {
   it("crosses south from the bottom row into the neighbor's top row", () => {
     const nav = buildWindowNav(
       [
-        { dx: 0, dy: 0, map: makeMap(4, 6) },
-        { dx: 0, dy: -1, map: makeMap(4, 6) },
+        { sector: 100, dx: 0, dy: 0, map: makeMap(4, 6) },
+        { sector: 90, dx: 0, dy: -1, map: makeMap(4, 6) },
       ],
       HEXSIZE,
     );
@@ -191,7 +222,7 @@ describe("buildWindowNav", () => {
     // via the bottom row. Equal land/water costs should choose the wet shortcut.
     const isOcean = (x: number, y: number) => (x === 3 || x === 4) && y <= 2;
     const map = makeMap(8, 4, () => false, isOcean);
-    const nav = buildWindowNav([{ dx: 0, dy: 0, map }], HEXSIZE);
+    const nav = buildWindowNav([{ sector: 100, dx: 0, dy: 0, map }], HEXSIZE);
     if (!nav) throw new Error("no nav");
     const start = nav.toUnified(0, 0, 1, 1);
     const goal = nav.toUnified(0, 0, 6, 1);

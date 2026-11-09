@@ -274,7 +274,7 @@ describe("shared hex terrain data", () => {
     const map = mapOf(1, 1);
     map.tiles[0]!.walkCost = 0.5;
     expect(prepare(map).grid.getHex({ col: 0, row: 0 })?.cost).toBe(1.5);
-    expect(buildWindowNav([{ dx: 0, dy: 0, map }], 10)?.toUnified(0, 0, 0, 0)?.cost).toBe(1.5);
+    expect(buildWindowNav([{ sector: map.sector, dx: 0, dy: 0, map }], 10)?.toUnified(0, 0, 0, 0)?.cost).toBe(1.5);
   });
 
   it.each(["ground", "dessert", "snow", "ice", "ocean"] as const)("keeps shaded %s walkable in rendering, window navigation and server validation", (terrain) => {
@@ -286,7 +286,7 @@ describe("shared hex terrain data", () => {
     expect(tile.blocked).toBe(false);
     expect(tile.cost).toBe(2);
     expect(new PathCalculator(grid).getShortestPath(grid.getHex({ col: 0, row: 0 })!, tile)).toBeDefined();
-    const nav = buildWindowNav([{ dx: 0, dy: 0, map }], 10)!;
+    const nav = buildWindowNav([{ sector: map.sector, dx: 0, dy: 0, map }], 10)!;
     expect(nav.toUnified(0, 0, 1, 0)?.blocked).toBe(false);
     expect(isWalkableCoordinate(map, { x: 1, y: 0 })).toBe(true);
     expect(isReachableCoordinate(map, { x: 0, y: 0 }, { x: 2, y: 0 })).toBe(true);
@@ -409,7 +409,7 @@ describe("coastal water depth", () => {
 
   it("keeps shared water vertices continuous across a sector boundary without changing faces or navigation", () => {
     const maps = [coast(222, true), coast(223, false)];
-    const nav = buildWindowNav(maps.map((map, dx) => ({ dx, dy: 0, map })), 10)!;
+    const nav = buildWindowNav(maps.map((map, dx) => ({ sector: map.sector, dx, dy: 0, map })), 10)!;
     const grids = maps.map((map) => prepare(map).grid);
     const cells = new Map();
     for (const [dx, grid] of grids.entries())
