@@ -1151,7 +1151,7 @@ describeWithDatabase("scheduled Kage defenses", () => {
       expect(stored?.status).toBe("SCHEDULED");
       expect(stored?.startedAt).toBeNull();
       expect(stored?.rescheduled).toBe(false);
-      expect(stored?.scheduledAt!.getTime()).toBeGreaterThan(m.scheduledAt!.getTime());
+      expect(stored!.scheduledAt!.getTime()).toBeGreaterThan(m.scheduledAt!.getTime());
       expect((await db.query.village.findFirst())?.kageSchedule?.missedStarts).toBe(0);
     },
   );

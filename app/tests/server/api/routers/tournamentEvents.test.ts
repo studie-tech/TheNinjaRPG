@@ -1815,7 +1815,7 @@ describeWithDatabase("event tournament persistence", () => {
       expect(saved.eventData?.status).toBe(status);
       expect(saved.status).toBe(expired ? "COMPLETED" : "IN_PROGRESS");
       expect(saved.eventData?.finishedAt).toBe(expired ? now : null);
-      expect(saved.eventData?.series[0]!.games).toHaveLength(expired ? 0 : 1);
+      expect(saved.eventData!.series[0]!.games).toHaveLength(expired ? 0 : 1);
       expect(listing[0]?.eventData?.status).toBe(status);
       if (expired) expect(notices).toEqual([]);
       else

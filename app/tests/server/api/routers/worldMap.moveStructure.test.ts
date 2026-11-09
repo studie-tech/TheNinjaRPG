@@ -81,7 +81,7 @@ describeWithDatabase("structure relocation profile updates", () => {
     const saved = await db.query.villageStructure.findFirst({
       where: eq(villageStructure.id, "move-cache-structure"),
     });
-    expect(saved).toMatchObject(result.userDelta?.village?.structures?.update[0]!);
+    expect(saved).toMatchObject(result.userDelta!.village!.structures!.update[0]!);
     const cache = new QueryClient();
     const key = ["profile", "structure-update"];
     const unchanged = { id: "other-structure", longitude: 9, latitude: 9 };
