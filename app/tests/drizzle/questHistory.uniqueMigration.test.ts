@@ -52,8 +52,8 @@ const at = (iso: string) => new Date(iso);
 describeWithDatabase("QuestHistory unique (userId, questId) migration", () => {
   beforeEach(async () => {
     await resetTables(questHistory);
-    // The schema already carries the constraint, so drop it to reach the pre-migration shape
-    // the deployed database is in.
+    // The schema already carries the constraint; drop it to recreate the pre-0039 shape the
+    // migration expects.
     await runRawSql("ALTER TABLE `QuestHistory` DROP INDEX `uniqueUserIdQuestId`");
   });
 
