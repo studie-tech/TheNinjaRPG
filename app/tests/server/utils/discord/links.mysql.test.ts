@@ -269,7 +269,7 @@ describeWithDatabase("Discord links (SQL)", () => {
         id: "second-link-for-user",
       }),
     ).toBe(false);
-    // A link written without a slot (as before slots existed) takes slot 1.
+    // A link written without a slot takes slot 1.
     expect(await insertDiscordLink(database, linkValues("user-b", OLD_DISCORD))).toBe(false);
     expect(
       await insertDiscordLink(database, { ...linkValues("user-b", OLD_DISCORD), slot: 2 }),
@@ -486,7 +486,7 @@ describeWithDatabase("Discord links (SQL)", () => {
     expect(await database.query.discordLinkHistory.findMany()).toEqual([
       expect.objectContaining({ userId: "user-b", discordId: OLD_DISCORD }),
     ]);
-    // The last link behaves as before: unlinked metadata and a revoked token.
+    // Unlinking the last remaining character clears the metadata and revokes the token.
     calls = [];
     expect((await (await callerFor(discordRouter, "user-a")).unlink()).success).toBe(true);
     expect(calls.find((call) => call.path.endsWith("/role-connection"))?.body).toMatchObject({

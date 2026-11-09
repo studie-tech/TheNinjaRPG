@@ -707,7 +707,8 @@ describeWithDatabase("staff user-id rename", () => {
       expiresAt: new Date(now + 10 * DAY),
     }));
     await deleteUser(database, OLD_USER_ID);
-    // No transaction id, the shape that used to land under the tombstone string.
+    // A revocation without a transaction id resolves to the deleted character's id, not the
+    // tombstone.
     await revokeFederalStatus(database, OLD_USER_ID, {
       eventId: "expiry-window",
       occurredAt: new Date(now),
@@ -898,7 +899,7 @@ describeWithDatabase("staff user-id rename", () => {
 
   it("lets a deleted PayPal subscriber's tier follow onto the new character", async () => {
     // PayPal rows survive deletion just as store receipts do, so the same settlement
-    // derives the tier from them; main waited for the cron here.
+    // derives the tier from them.
     const database = await getTestDatabase();
     await database.insert(paypalSubscription).values({
       id: nanoid(),
