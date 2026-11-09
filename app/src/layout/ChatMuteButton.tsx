@@ -14,11 +14,13 @@ export function ChatMuteButton({
   conversationId,
   isTavern = false,
   variant = "ghost",
+  size = "icon",
 }: {
   label: string;
   conversationId: string;
   isTavern?: boolean;
   variant?: ButtonProps["variant"];
+  size?: ButtonProps["size"];
 }) {
   const mutes = useChatMutes();
   const muted = isTavern
@@ -29,11 +31,12 @@ export function ChatMuteButton({
     : muted
       ? `Unmute ${label}`
       : `Mute ${label}`;
+  const Icon = muted ? BellOff : Bell;
   return (
     <Button
       variant={variant}
-      size="icon"
-      className="w-[32px]"
+      size={size}
+      className={size === "icon" ? "w-[32px]" : undefined}
       aria-pressed={muted}
       aria-label={action}
       title={action}
@@ -46,11 +49,7 @@ export function ChatMuteButton({
             : mutes.toggleMute(conversationId)
       }
     >
-      {muted ? (
-        <BellOff className="h-[16px] w-[16px]" />
-      ) : (
-        <Bell className="h-[16px] w-[16px]" />
-      )}
+      <Icon className={size === "icon" ? "h-[16px] w-[16px]" : "h-6 w-6"} />
     </Button>
   );
 }
