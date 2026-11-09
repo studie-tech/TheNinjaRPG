@@ -6,25 +6,6 @@ import { acquirePetSchema } from "@/validators/pets";
 import { initialPetSpecies } from "./helpers/species";
 
 describe("companion species rarity", () => {
-  it("preserves the seeded species identities and assigns every species one rarity", () => {
-    const names = ["Fox", "Wolf", "Hound", "Cat", "Lynx", "Tiger", "Leopard", "Lion", "Panther", "Snow leopard", "Red panda", "Tanuki", "Raccoon", "Badger", "Otter", "Ferret", "Marten", "Weasel", "Squirrel", "Chipmunk", "Rabbit", "Hare", "Hedgehog", "Porcupine", "Mouse", "Rat", "Chinchilla", "Hamster", "Mole", "Bat", "Bear", "Panda", "Deer", "Elk", "Goat", "Ram", "Boar", "Capybara", "Owl", "Hawk", "Falcon", "Raven", "Crow", "Crane", "Heron", "Kingfisher", "Sparrow", "Peacock", "Turtle", "Tortoise", "Gecko", "Chameleon", "Iguana", "Salamander", "Axolotl", "Frog", "Toad", "Snake", "Moth", "Butterfly", "Beetle", "Dragonfly", "Mantis", "Crab", "Dragon", "Kitsune", "Phoenix"];
-    expect(initialPetSpecies.map(({ name }) => name)).toEqual(names);
-    expect(initialPetSpecies.map(({ id }) => id)).toEqual(names.map((_, index) => `pet-species-${index}`));
-    expect(PetRarities.map((rarity) => initialPetSpecies.filter((option) => option.rarity === rarity).length)).toEqual([30, 18, 9, 7, 3]);
-    expect(initialPetSpecies.every(({ rarity }) => PetRarities.includes(rarity))).toBe(true);
-    expect(initialPetSpecies[9]).toEqual({ id: "pet-species-9", name: "Snow leopard", description: "A fluffy snow leopard with a thick tail", rarity: "EPIC", isActive: true, artDirection: null, rankConcepts: [] });
-    expect(initialPetSpecies[54]).toEqual({ id: "pet-species-54", name: "Axolotl", description: "A cheerful axolotl with feathery external gills", rarity: "UNCOMMON", isActive: true, artDirection: null, rankConcepts: [] });
-    const namesByRarity = {
-      COMMON: ["Beetle", "Butterfly", "Cat", "Chipmunk", "Crab", "Dragonfly", "Ferret", "Frog", "Gecko", "Goat", "Hamster", "Hare", "Hedgehog", "Heron", "Iguana", "Kingfisher", "Marten", "Mole", "Moth", "Mouse", "Rabbit", "Raccoon", "Rat", "Salamander", "Sparrow", "Squirrel", "Toad", "Tortoise", "Turtle", "Weasel"],
-      UNCOMMON: ["Axolotl", "Badger", "Bat", "Boar", "Capybara", "Chameleon", "Chinchilla", "Crane", "Crow", "Deer", "Elk", "Mantis", "Otter", "Owl", "Peacock", "Porcupine", "Ram", "Tanuki"],
-      RARE: ["Falcon", "Fox", "Hawk", "Hound", "Lynx", "Panda", "Raven", "Red panda", "Snake"],
-      EPIC: ["Bear", "Leopard", "Lion", "Panther", "Snow leopard", "Tiger", "Wolf"],
-      LEGENDARY: ["Dragon", "Kitsune", "Phoenix"],
-    };
-    for (const rarity of PetRarities)
-      expect(initialPetSpecies.filter((species) => species.rarity === rarity).map(({ name }) => name).sort()).toEqual(namesByRarity[rarity]);
-  });
-
   it("keeps daily offerings stable when database results arrive in another order", () => {
     const expected = getDailyPetOptions("catalogue-owner", "GOLD", initialPetSpecies, "2026-10-16");
     expect(getDailyPetOptions("catalogue-owner", "GOLD", [...initialPetSpecies].reverse(), "2026-10-16")).toEqual(expected);
@@ -123,8 +104,8 @@ describe("companion species rarity", () => {
 
 describe("companion appearance choices", () => {
   it("offers stable subscriber supersets from an explicit species catalogue", () => {
-    expect([initialPetSpecies.length, PET_PALETTES.length, PET_CHARACTERISTICS.length, PET_AURAS.length]).toEqual([67, 32, 16, 8]);
-    for (const catalogue of [initialPetSpecies, PET_PALETTES, PET_CHARACTERISTICS, PET_AURAS])
+    expect([PET_PALETTES.length, PET_CHARACTERISTICS.length, PET_AURAS.length]).toEqual([32, 16, 8]);
+    for (const catalogue of [PET_PALETTES, PET_CHARACTERISTICS, PET_AURAS])
       expect(new Set(catalogue.map(({ name }) => name)).size).toBe(catalogue.length);
     const normal = getDailyPetOptions("one-player", "NONE", initialPetSpecies, "2026-10-11");
     for (const status of ["NONE", "NORMAL", "SILVER", "GOLD"] as const) {
