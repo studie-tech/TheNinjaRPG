@@ -27,7 +27,7 @@ const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA || "unknown";
 
 /** @type {import("next").NextConfig} */
 const config = {
-  reactCompiler: true, // Fix user search, money sending, combat, search jutsu name
+  reactCompiler: true,
   experimental: {
     // TypeScript 7 ships a native CLI rather than the JavaScript compiler API.
     useTypeScriptCli: true,
