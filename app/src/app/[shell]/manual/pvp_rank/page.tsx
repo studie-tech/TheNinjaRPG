@@ -12,11 +12,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   MAX_PLAYER_LEVEL,
   RANKED_BLOODLINE_EFFECT_MULT,
+  RANKED_DIVISIONS,
   RANKED_LOADOUT_MAX_CONSUMABLES,
   RANKED_LOADOUT_MAX_INCREASECOST_ITEMS,
   RANKED_LOADOUT_MAX_JUTSUS,
   RANKED_LOADOUT_MAX_POISON_ITEMS,
   RANKED_LOADOUT_MAX_WEAPONS,
+  RANKED_LOSS_PROTECTION_FACTOR,
+  RANKED_LOSS_PROTECTION_RANK_GAP,
+  RANKED_MIN_LP_GAIN,
+  RANKED_STREAK_BONUS,
+  RANKED_UPSET_BONUS_PER_RANK,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import ContentBox from "@/layout/ContentBox";
@@ -137,13 +143,10 @@ export default function RankedManualPage() {
                     <li>
                       {RANKED_LOADOUT_MAX_JUTSUS} jutsus from their ranked loadout
                     </li>
-
-                    <li>Maximum {RANKED_LOADOUT_MAX_POISON_ITEMS} poison item</li>
-                    <li>
-                      Maximum {RANKED_LOADOUT_MAX_INCREASECOST_ITEMS} increasecost item
-                    </li>
-                    {jutsuLimitEntries}
                   </ul>
+                  <p className="mt-2 text-muted-foreground text-sm">
+                    See the Loadouts tab for the item and jutsu restrictions.
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -206,7 +209,7 @@ export default function RankedManualPage() {
                   <ol className="mt-2 list-inside list-decimal space-y-1 text-muted-foreground text-sm">
                     <li>Visit the battle arena page and click the PVP Rank tab</li>
                     <li>Select your preferred weapons</li>
-                    <li>Choose two different consumables</li>
+                    <li>Choose up to {RANKED_LOADOUT_MAX_CONSUMABLES} consumables</li>
                     <li>Equip your desired jutsus in the ranked jutsu loadout</li>
                   </ol>
                 </div>
@@ -247,16 +250,36 @@ export default function RankedManualPage() {
                 <div>
                   <h3 className="mb-2 font-semibold">LP Gains and Losses</h3>
                   <p className="text-muted-foreground text-sm">
-                    The amount of LP you gain or lose depends on the LP difference
-                    between you and your opponent:
+                    Each result moves your LP by an Elo calculation: the higher your
+                    opponent's LP compared to yours, the more a win gains and the less a
+                    loss costs. The largest possible Elo change (K-factor) depends on
+                    your division:
                   </p>
                   <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground text-sm">
-                    <li>Beating a higher LP opponent: +20-30 LP</li>
-                    <li>Beating a similar LP opponent: +15-20 LP</li>
-                    <li>Beating a lower LP opponent: +10-15 LP</li>
-                    <li>Losing to a higher LP opponent: -10-15 LP</li>
-                    <li>Losing to a similar LP opponent: -15-20 LP</li>
-                    <li>Losing to a lower LP opponent: -20-30 LP</li>
+                    {RANKED_DIVISIONS.filter((division) =>
+                      Number.isFinite(division.rankedLp),
+                    ).map((division) => (
+                      <li key={division.key}>
+                        {division.name} ({division.rankedLp}+ LP): {division.kFactor} LP
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-muted-foreground text-sm">On top of that:</p>
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground text-sm">
+                    <li>
+                      Beating a higher-ranked opponent adds{" "}
+                      {RANKED_UPSET_BONUS_PER_RANK} LP per rank between you
+                    </li>
+                    <li>
+                      Each win adds {RANKED_STREAK_BONUS} LP for every win already in
+                      your current streak
+                    </li>
+                    <li>Every win gains at least {RANKED_MIN_LP_GAIN} LP</li>
+                    <li>
+                      Losing to an opponent at least {RANKED_LOSS_PROTECTION_RANK_GAP}{" "}
+                      ranks above you costs{" "}
+                      {Math.round(RANKED_LOSS_PROTECTION_FACTOR * 100)}% of the usual LP
+                    </li>
                   </ul>
                 </div>
 
