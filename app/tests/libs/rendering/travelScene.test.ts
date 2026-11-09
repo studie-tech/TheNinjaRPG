@@ -451,6 +451,19 @@ describe("travel scene ground depth", () => {
     expect(retained.data.surface).toEqual(built.data.surface);
   });
 
+  it("settles an edge-only rebuild cancelled by disposal without rejecting the window update", async () => {
+    const { scene, state } = await sceneFixture();
+    state.window.push(windowEntry(725, 1)); await scene.updateWindow();
+    const retained = scene.sectors.get(725)!;
+    (terrain.createHexTerrain as unknown as ReturnType<typeof vi.fn>).mockImplementationOnce(async () => {
+      scene.dispose();
+      throw new DOMException("Scene disposed", "AbortError");
+    });
+    state.window.push({ ...windowEntry(726, 1), dx: 1 });
+    await expect(scene.updateWindow()).resolves.toBeUndefined();
+    expect(retained.scope.isDisposed()).toBe(true);
+  });
+
   it("frees sectors leaving the window in their own tasks", async () => {
     const { scene, state } = await sceneFixture();
     state.window.push(windowEntry(725, 1), { ...windowEntry(726, 1), dx: 1 }); await scene.updateWindow();

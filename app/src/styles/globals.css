@@ -72,6 +72,18 @@
   --radius-sm: calc(var(--radius) - 4px);
 
   --animate-home-sleep: home-sleep 3s ease-in-out infinite;
+  /* Loading placeholders pulse below their resting 20% opacity, on the compositor. */
+  --animate-placeholder-pulse: placeholder-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+  @keyframes placeholder-pulse {
+    0%,
+    100% {
+      opacity: 0.2;
+    }
+    50% {
+      opacity: 0.1;
+    }
+  }
 
   @keyframes home-sleep {
     0% {

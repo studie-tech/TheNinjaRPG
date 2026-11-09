@@ -657,7 +657,15 @@ export const createTravelScene = async (options: {
             },
           );
           const terrainScope = createRenderScope(existing.scope);
-          const terrain = await createHexTerrain(terrainScope, data);
+          let terrain: TravelSector["terrain"];
+          try {
+            terrain = await createHexTerrain(terrainScope, data);
+          } catch (error) {
+            // Retiring the sector or disposing the scene cancels its pending terrain.
+            terrainScope.dispose();
+            if (!disposed && token === generation) throw error;
+            return;
+          }
           if (
             disposed ||
             token !== generation ||
