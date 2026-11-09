@@ -128,8 +128,8 @@ beforeEach(() => {
   } as never);
   vi.spyOn(logbook, "LogbookEntry").mockImplementation(() => <p>Current objective</p>);
   vi.spyOn(questTeams, "QuestTeams").mockImplementation(() => null);
-  // biome-ignore lint/performance/noImgElement: isolated art fixture
   vi.spyOn(image, "default").mockImplementation((({ alt }: { alt: string }) => (
+    // biome-ignore lint/performance/noImgElement: isolated art fixture
     <img alt={alt} />
   )) as never);
 });

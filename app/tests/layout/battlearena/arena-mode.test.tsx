@@ -75,8 +75,8 @@ beforeEach(() => {
   vi.spyOn(itemLoadout, "default").mockImplementation((() => (
     <p>Item loadout</p>
   )) as never);
-  // biome-ignore lint/performance/noImgElement: isolated avatar fixture
   vi.spyOn(image, "default").mockImplementation((({ alt }: { alt: string }) => (
+    // biome-ignore lint/performance/noImgElement: isolated avatar fixture
     <img alt={alt} />
   )) as never);
 });
