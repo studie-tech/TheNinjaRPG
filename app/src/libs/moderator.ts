@@ -97,7 +97,7 @@ export const moderateContent = async (
       client,
       evidence,
     );
-    // Keep the existing category audit limited to flagged content.
+    // The category audit is recorded only for flagged content.
     await insertAutomatedModeration(client, {
       userId,
       content,
