@@ -189,7 +189,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
             kind: "imbuement" as const,
             label: "Imbuing",
             title: sidebarTimers.data.imbuement.targetName,
-            href: "/items",
+            href: "/occupation",
             startedAt: sidebarTimers.data.imbuement.craftingStartedAt,
             endsAt: sidebarTimers.data.imbuement.craftingFinishedAt,
           },
