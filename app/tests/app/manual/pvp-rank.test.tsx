@@ -24,9 +24,9 @@ beforeEach(() => {
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
     <div>{children}</div>
   ));
-  vi.spyOn(SeasonManager, "SeasonManager").mockImplementation(() => null);
+  vi.spyOn(SeasonManager, "SeasonManager").mockImplementation(() => <></>);
   vi.spyOn(UnclaimedSeasonRewards, "UnclaimedSeasonRewards").mockImplementation(
-    () => null,
+    () => <></>,
   );
   vi.spyOn(QueueLengthHistogram, "QueueLengthHistogram").mockImplementation(() => null);
   vi.spyOn(
@@ -34,7 +34,7 @@ beforeEach(() => {
     "RankedRankDistributionHistogram",
   ).mockImplementation(() => null);
   vi.spyOn(RankedLoadoutFiltering, "default").mockImplementation(() => null);
-  vi.spyOn(Table, "default").mockImplementation(() => null);
+  vi.spyOn(Table, "default").mockImplementation(() => <></>);
   vi.spyOn(RankedLoadoutFiltering, "useFiltering").mockReturnValue({} as never);
   vi.spyOn(RankedLoadoutFiltering, "getFilter").mockReturnValue({} as never);
   Object.assign(vi.spyOn(client, "api" as never), {
