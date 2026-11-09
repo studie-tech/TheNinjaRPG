@@ -145,12 +145,12 @@ export const listUserDataForGET = (client: Pick<DrizzleClient, "query">) =>
 /** Build the `userReview` listing for `GET`, using predicates on `createdAt`, `review`, `targetUserId`. */
 export const listUserReviewForGET = (
   client: Pick<DrizzleClient, "query">,
-  frequency: number,
+  since: Date,
   user: { userId: string },
 ) =>
   client.query.userReview.findMany({
     where: and(
-      gt(userReview.createdAt, secondsFromNow(-frequency * 60 * 60)),
+      gt(userReview.createdAt, since),
       ne(userReview.review, ""),
       eq(userReview.targetUserId, user.userId),
     ),
