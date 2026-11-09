@@ -120,12 +120,13 @@ export const BOTID_PROTECTED_ROUTES = [...BOTID_PROTECTED_PROCEDURES]
   }));
 
 /**
- * Shown when a protected mutation arrives without a BotID challenge. A browser running
- * the current bundle always attaches one, so the page is out of date and a reload fixes it.
+ * Shown when a protected mutation arrives without a BotID challenge. Either the page is
+ * out of date, or the BotID client script or its headers were blocked (ad or privacy
+ * blockers, script blocking, some VPNs), so the copy points at both fixes.
  */
 export const BOTID_RELOAD_REQUIRED_MESSAGE =
-  "This page is running an outdated version of the game. Please reload the page and try again.";
+  "Our security check didn't load. Please reload the page. If this keeps happening, allow this site in your ad or privacy blocker and turn off any VPN.";
 
 /** Shown to a player whose mutation BotID classified as automated. */
 export const BOTID_BLOCKED_MESSAGE =
-  "Your request was blocked by our bot protection. Please reload the page and try again; contact support if this keeps happening.";
+  "Your browser was flagged as automated. Turn off VPNs, privacy or ad-blocking extensions and auto-clickers for this site, or try a private window or another browser, then reload. Contact support if this keeps happening.";

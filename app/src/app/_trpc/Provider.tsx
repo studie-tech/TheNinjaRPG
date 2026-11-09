@@ -310,8 +310,8 @@ const handleTrpcError = (
       return;
     }
     // A BotID rejection of a mutation: a bot verdict, or no challenge because the page
-    // is out of date. The server records each one, and the toast offers the reload that
-    // loads the current bundle and a fresh challenge. The mutation settles as failed, so
+    // is out of date or a blocker stopped the BotID script. The server records each one,
+    // and the toast offers the reload that loads the current bundle and a fresh challenge. The mutation settles as failed, so
     // its pending state clears like any other rejection.
     if (
       (trpcErrorCode === "FORBIDDEN" && error.message === BOTID_BLOCKED_MESSAGE) ||
