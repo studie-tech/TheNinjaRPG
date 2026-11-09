@@ -211,8 +211,6 @@ describe("game settings sections", () => {
           isOutlaw: false,
           bloodlineId: null,
           status: "AWAKE",
-          preferredGeneral1: null,
-          preferredGeneral2: null,
         }}
         updateUser={async () => undefined}
         onEventClick={() => {}}

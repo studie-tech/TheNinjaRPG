@@ -330,11 +330,8 @@ describe("shared SFX preference action", () => {
     act(() => view.result.current.setSfxEnabled(false));
     expect(view.result.current.sfxOn).toBe(false);
     expect(localStorage.getItem("sfxOn")).toBe("false");
-    expect(updatePreferences).toHaveBeenLastCalledWith({
-      preferredGeneral1: "Strength",
-      preferredGeneral2: null,
-      sfxOn: false,
-    });
+    // Only the toggled field is sent, so a general chosen elsewhere is never overwritten.
+    expect(updatePreferences).toHaveBeenLastCalledWith({ sfxOn: false });
     expect(updateUser).toHaveBeenCalledWith({ sfxOn: false });
 
     // An unrelated profile refresh must preserve the optimistic preference.
@@ -349,11 +346,7 @@ describe("shared SFX preference action", () => {
     act(() => view.result.current.setSfxEnabled(true));
     expect(view.result.current.sfxOn).toBe(true);
     expect(localStorage.getItem("sfxOn")).toBe("true");
-    expect(updatePreferences).toHaveBeenLastCalledWith({
-      preferredGeneral1: null,
-      preferredGeneral2: null,
-      sfxOn: true,
-    });
+    expect(updatePreferences).toHaveBeenLastCalledWith({ sfxOn: true });
     expect(nextUpdateUser).toHaveBeenCalledWith({ sfxOn: true });
     expect(updateUser).toHaveBeenCalledTimes(1);
   });
