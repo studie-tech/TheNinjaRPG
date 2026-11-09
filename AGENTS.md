@@ -70,7 +70,7 @@ Create/edit shared skills only in `.agents/skills/<name>/SKILL.md`. `make ensure
 
 ## Code map
 
-Next.js 15 App Router / React 19 / strict TypeScript; Tailwind, Shadcn/Radix; Drizzle/MySQL; tRPC; Clerk; Jotai; PixiJS.
+Next.js 16 App Router / React 19 / strict TypeScript; Tailwind, Shadcn/Radix; Drizzle/MySQL; tRPC; Clerk; Jotai; PixiJS.
 
 | Path | Responsibility |
 | --- | --- |
