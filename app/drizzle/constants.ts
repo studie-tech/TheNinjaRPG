@@ -1444,7 +1444,7 @@ export const REMOVAL_COST = 5;
 export const Sentiment = ["POSITIVE", "NEGATIVE", "NEUTRAL"] as const;
 export type SentimentType = (typeof Sentiment)[number];
 
-// Starter quest used for recruitment analytics
+/** Tutorial assistant portrait; also the Lemu experiment's control image. */
 export const IMG_URL_ASSISTANT =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIG7HmDxfOewksxBoS1HQCihpL7c42Ky9uUFv.webp" as const;
 /** Tutorial experiment alternatives, in treatment assignment order. */
@@ -2252,9 +2252,9 @@ export const OVERWORLD_QUEST_ROLLS_PER_DAY = MISSIONS_PER_DAY;
  * a terminal dialog branch (a branch with no follow-up objective). The suffix is the dialog
  * objective's own id, so the server completes exactly that objective without routing onward.
  * The prefix distinguishes it from a real next-objective id (plain nanoids, never prefixed),
- * so it can never be mistaken for routing. Terminal branches are no longer saveable, but
- * already-saved legacy content can still contain them, so the runtime honours them instead of
- * re-opening the same dialog forever.
+ * so it can never be mistaken for routing. The quest editor rejects terminal branches; stored
+ * quest content may still contain them, and the runtime completes the objective rather than
+ * re-opening its dialog.
  */
 export const TERMINAL_DIALOG_PREFIX = "__terminal__:";
 
@@ -2380,9 +2380,9 @@ export const SKILL_POINT_MAX_LEVEL =
   SKILL_POINT_MIN_LEVEL + MAX_SKILL_POINTS_FROM_LEVELING - 1; // Maximum level to gain skill points from leveling
 
 export const WAR_SECTORWAR_AI_SHRINE_REDUCE = 10; // KIlling AI shrine hp decrease
-export const WAR_SECTORWAR_AI_SHRINE_RECOVER = 3; // Shrine hp recover per day
+export const WAR_SECTORWAR_AI_SHRINE_RECOVER = 3; // Shrine HP regained per shrine (SHRINE_WAR) battle that goes the owner's way
 export const WAR_SECTORWAR_PVP_SHRINE_REDUCE = 20; // Killing a player in a sector war shrine hp decrease
-export const WAR_SECTORWAR_PVP_SHRINE_RECOVER = 7; // Shrine hp remove per day
+export const WAR_SECTORWAR_PVP_SHRINE_RECOVER = 7; // Shrine HP regained per PvP battle at a contested shrine that goes the owner's way
 export const WAR_RAID_SHRINE_HP = 500; // Fixed HP for Village Wars and Raids (abstract mechanic)
 export const WAR_SHRINE_CAPTURE_WARHEALTH_DMG = 200; // Damage to war health when shrine is captured (HP <= 0)
 export const WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL = 150; // Heal to war health when shrine is recaptured (HP > 25%)
@@ -2658,9 +2658,9 @@ export const KAGE_MIN_PRESTIGE = 10000; // Remove kage if below
 export const KAGE_PRESTIGE_COST = 10000; // Cost of failed challenge
 export const KAGE_PRESTIGE_REQUIREMENT = 100000; // To challeng kage
 export const KAGE_RANK_REQUIREMENT = "JONIN";
-export const KAGE_WAR_DECLARE_COST = 10000; // Declare war cost
+export const KAGE_WAR_DECLARE_COST = 10000; // Kage prestige spent to declare an enemy
 export const KAGE_CHALLENGE_WIN_PRESTIGE = 5000; // Kage prestige gain of winning challenge
-export const WAR_FUNDS_COST = 10000; // Prestige cost of declaring war
+export const WAR_FUNDS_COST = 10000; // Village tokens spent to declare an enemy
 
 // Ranked PVP config
 export const RANKED_REQUIRED_RANK: UserRank = "CHUNIN";
@@ -2763,7 +2763,7 @@ export const SITE_URL = "https://www.theninja-rpg.com";
 export const GITHUB_REPO_URL = "https://github.com/studie-tech/TheNinjaRPG";
 export const GITHUB_ISSUES_URL = `${GITHUB_REPO_URL}/issues`;
 
-// GitHub issue token
+// GitHub REST endpoint for this repository (support issue escalation)
 export const GITHUB_API_ENDPOINT =
   "https://api.github.com/repos/studie-tech/TheNinjaRPG";
 
