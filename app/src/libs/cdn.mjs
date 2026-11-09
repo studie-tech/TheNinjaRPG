@@ -19,9 +19,10 @@ export const cdnOrigin = (env) => {
 
 /**
  * Cross-origin assets are fetched in CORS mode, because Next marks its chunks
- * `crossorigin`, so the directives that name 'self' have to name the zone as well. Only
- * scripts and styles are served from it today; fonts and workers are named defensively,
- * since `public/` and `/sw.js` stay on the origin.
+ * `crossorigin`, so the directives that name 'self' have to name the zone as well. The
+ * zone serves `/_next/static` only. font-src and worker-src also name it so any font or
+ * worker emitted under `/_next/static` loads; `public/` and `/sw.js` are served from
+ * the origin.
  *
  * @param {string | undefined} origin
  * @returns {string}
