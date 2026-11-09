@@ -111,8 +111,10 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
   const canRepairAll =
     itemsNeedingRepair.length > 0 && (repairKits.length > 0 || isCrafter);
 
+  // Distinct keys keep an open confirmation from changing actions after a refresh.
   const autoEquipAction = (
     <Confirm
+      key="auto-equip"
       title="Auto Equip"
       proceed_label={isAutoEquipping ? undefined : "Auto equip"}
       isValid={!isAutoEquipping}
@@ -141,6 +143,7 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
   );
   const repairAllAction = (
     <Confirm
+      key="repair-all"
       title="Repair All Items"
       proceed_label={
         canRepairWithKits && !isRepairAllPending ? "Repair with Kits" : null

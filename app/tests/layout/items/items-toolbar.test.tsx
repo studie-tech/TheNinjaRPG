@@ -1,14 +1,15 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from "bun:test";
 import * as client from "@/app/_trpc/client";
 import type { UserItemWithRelations } from "@/drizzle/schema";
+import type { ItemsToolbar as ItemsToolbarComponent } from "@/layout/items/ItemsToolbar";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import * as mergeAll from "@/layout/MergeAllStacksButton";
 import * as userContext from "@/utils/UserContext";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import { flushRadixFocus, installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
 
 const mutation = () => ({ useMutation: () => ({ mutate: vi.fn(), isPending: false }) });
-let ItemsToolbar: typeof import("@/layout/items/ItemsToolbar").ItemsToolbar;
+let ItemsToolbar: typeof ItemsToolbarComponent;
 
 const mockClient = () =>
   Object.assign(vi.spyOn(client, "api" as never), {
@@ -40,8 +41,9 @@ beforeEach(() => {
   ));
 });
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  await flushRadixFocus();
   document.body.innerHTML = "";
   vi.restoreAllMocks();
   restoreBrowserGlobals();
@@ -96,4 +98,17 @@ it("keeps auto equip in view when damaged gear cannot be repaired here", () => {
   expect(buttons(screen, /Repair all/)).toHaveLength(0);
   expect(buttons(moreActions(), /Auto equip/)).toHaveLength(0);
   expect(buttons(screen, /Auto equip/)).toHaveLength(1);
+});
+
+it.each([
+  { initialDurability: 100, updatedDurability: 40, action: /Auto equip/ },
+  { initialDurability: 40, updatedDurability: 100, action: /Repair all items/ },
+])("closes the $action confirmation when inventory changes the leading action", ({ initialDurability, updatedDurability, action }) => {
+  const view = render(<ItemsToolbar userData={player("CRAFTING")} userItems={[sword(initialDurability)]} />);
+  fireEvent.click(buttons(screen, action)[0]!);
+  expect(screen.getByRole("dialog")).toBeDefined();
+
+  view.rerender(<ItemsToolbar userData={player("CRAFTING")} userItems={[sword(updatedDurability)]} />);
+
+  expect(screen.queryByRole("dialog")).toBeNull();
 });
