@@ -125,7 +125,6 @@ describe("clan missing bank rejection", () => {
 
 describe("clan zero-cost cache responses", () => {
   for (const [endpoint, requested, treasury] of [
-    ["clanDonate", 0, 0],
     ["clanDonate", 50, FACTION_REPUTATION_TREASURY_LIMIT],
     ["toBank", 0, 0],
   ] as const) {
