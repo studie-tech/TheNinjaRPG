@@ -172,9 +172,6 @@ const main = async () => {
     const now = new Date();
     const id = nanoid();
     const version = (latestVersion.get(sector) ?? 0) + 1;
-    // Insert the new PUBLISHED version FIRST, then archive the sector's prior
-    // published rows. If the insert fails the sector keeps its existing published
-    // map instead of being left all-archived.
     await drizzleDB.insert(sectorMap).values({
       id,
       sector,

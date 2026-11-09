@@ -3,7 +3,7 @@
  *
  * The output matches the format consumed by `normalizeTiledSectorMap`
  * (hexagonal orientation, flat-top hexes, odd-q stagger) and can be
- * uploaded directly on /manual/travel/sector-maps or imported via the
+ * uploaded directly on /manual/world/sector-maps or imported via the
  * worldMap.saveTiledSectorMap endpoint.
  *
  * Usage (from the /app directory):
@@ -145,8 +145,6 @@ const generateCells = (options: GeneratorOptions) => {
   if (!spawn) throw new Error("Missing spawn anchor");
   const midY = Math.floor(height / 2);
 
-  // Coherent world fields, sampled at each tile's true 3D position so features
-  // and biomes line up with neighbouring sectors along every shared edge.
   const corners = cornerVecs(sector);
   // Authored/rendered map y increases northward, whereas tilePosition follows
   // the globe corner order with y=0 at geographic north. Reflect exactly once
