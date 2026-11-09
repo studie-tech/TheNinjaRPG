@@ -249,6 +249,27 @@ export const createTravelScene = async (options: {
         game.invalidate();
       }
     };
+    // Sectors leaving the window are freed one per task: destroying a sector's sprites and
+    // meshes is long work, and a crossing retires a whole row of them.
+    const retiring = new Map<number, TravelSector>();
+    let retiringTimer: ReturnType<typeof setTimeout> | null = null;
+    const disposeRetired = () => {
+      retiringTimer = null;
+      const next = retiring.entries().next().value;
+      if (!next) return;
+      retiring.delete(next[0]);
+      next[1].scope.dispose();
+      if (retiring.size) retiringTimer = setTimeout(disposeRetired, 0);
+    };
+    const retireSector = (id: number, sector: TravelSector) => {
+      retiring.set(id, sector);
+      retiringTimer ??= setTimeout(disposeRetired, 0);
+    };
+    game.own(() => {
+      if (retiringTimer !== null) clearTimeout(retiringTimer);
+      for (const sector of retiring.values()) sector.scope.dispose();
+      retiring.clear();
+    });
     /** Lights a sector's terrain mesh and interleaves it with every sector's terrain by row. */
     const showTerrain = (
       terrainScope: GameRenderer,
@@ -431,9 +452,14 @@ export const createTravelScene = async (options: {
       const wanted = new Map(snapshot.window.map((entry) => [entry.sector, entry]));
       for (const [id, entry] of sectors)
         if (!wanted.has(id)) {
-          entry.scope.dispose();
           sectors.delete(id);
+          retireSector(id, entry);
         }
+      // A sector walking back into the window replaces its retiring self at once.
+      for (const id of wanted.keys()) {
+        retiring.get(id)?.scope.dispose();
+        retiring.delete(id);
+      }
       // Load the current sector first, then neighbors. Each completed sector is immediately usable.
       const ordered = snapshot.window
         .filter((entry) => !initial || entry.sector === snapshot.sector)

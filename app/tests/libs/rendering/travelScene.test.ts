@@ -451,6 +451,16 @@ describe("travel scene ground depth", () => {
     expect(retained.data.surface).toEqual(built.data.surface);
   });
 
+  it("frees sectors leaving the window in their own tasks", async () => {
+    const { scene, state } = await sceneFixture();
+    state.window.push(windowEntry(725, 1), { ...windowEntry(726, 1), dx: 1 }); await scene.updateWindow();
+    const disposals = [scene.sectors.get(725)!, scene.sectors.get(726)!].map((sector) => vi.spyOn(sector.scope, "dispose"));
+    state.window = [windowEntry(724)]; await scene.updateWindow();
+    expect(scene.sectors.has(725) || scene.sectors.has(726)).toBe(false);
+    await settle(); await settle(); await settle();
+    for (const dispose of disposals) expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
   it("reconciles window requests that arrive together once", async () => {
     const { scene, state } = await sceneFixture();
     const field = vi.spyOn(terrainElevation, "createTerrainField");
@@ -513,6 +523,8 @@ describe("travel scene ground depth", () => {
     expect(neighborArt.sprite.parentRenderLayer).toBeNull();
     expect(depth.renderLayerChildren.includes(neighborArt.sprite)).toBe(false);
     state.window = [windowEntry(725)]; await scene.updateWindow();
+    // A sector leaving the window is freed in its own task.
+    await settle();
     expect(art.sprite.destroyed).toBe(true);
     expect(depth.renderLayerChildren).not.toContain(art.sprite);
     scene.dispose();
