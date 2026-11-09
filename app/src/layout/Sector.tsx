@@ -273,12 +273,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const pendingWorldTargetRef = useRef<{ sector: number; x: number; y: number } | null>(
     null,
   );
-  // Client-authoritative sector id: updated imperatively the moment a
-  // crossing commits (the prop lags a render behind), synced on prop change
   const walkAnimatingRef = useRef(false);
   const motionStepsRef = useRef(new Map<string, TravelMotionStep>());
   const movePendingRef = useRef(false);
   const mountedRef = useRef(true);
+  // Client-authoritative sector id: updated imperatively the moment a
+  // crossing commits (the prop lags a render behind), synced on prop change
   const sectorRef = useRef(sector);
   useEffect(() => {
     sectorRef.current = sector;
@@ -779,7 +779,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           }
         }
       } else if (data.userId !== userRef.current?.userId) {
-        // New user enters — do not invent experience; unknown XP fails closed in bracket filters
         // New identities come from the authenticated, masked sector snapshot. The viewer's
         // own marker comes from that snapshot's merge, which a refetch cannot change.
         void utils.travel.getSectorData.invalidate();
@@ -1336,9 +1335,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         { ...mutation, userRecovery: res.userRecovery ?? mutation.userRecovery },
       );
       publishSurroundings();
-      // runQuestTriggers with forceCheck already issues checkQuest(), so calling
-      // it here too fired the location-quest mutation twice per crossing (and,
-      // through its invalidation, refetched the user's items twice)
+      // runQuestTriggers(…, true) issues checkQuest itself
       runQuestTriggers(d, true);
     } else {
       // Attacked (success without data) or rejected: re-sync from the server
@@ -1616,8 +1613,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     return true;
   };
 
-  // Listening to webcket events
-  // Dispose the live scene when the component unmounts
+  // Track mount state and reset the cursor on unmount
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -1626,6 +1622,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     };
   }, []);
 
+  // Listen to websocket events for this sector
   useEffect(() => {
     if (pusher) {
       const channel = pusher.subscribe(props.sector.toString());

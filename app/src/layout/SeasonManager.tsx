@@ -472,6 +472,6 @@ const SeasonStatusBadge: React.FC<SeasonStatusBadgeProps> = ({ season }) => {
     );
   }
 
-  // Upcoming seasons – no badge for now
+  // Upcoming seasons render no badge
   return null;
 };
