@@ -25,10 +25,10 @@ import {
  * that matches it, so the root layout never reads the request: nothing in a document is
  * specific to the visitor, and a copy rendered for one can be served to the next. A
  * variant is the set of things that change the markup before hydration -- whether the
- * frame is the signed-in one, which layout it uses, which wallpaper it shows,
- * and which client it is for,
- * as the native shells load Clerk through a proxy and Android takes a different
- * viewport. Everything the visitor actually sees arrives through tRPC after hydration.
+ * frame is the signed-in one, which layout it uses, which wallpaper it shows, and which
+ * client it is for, as the native shells load Clerk through a proxy and Android takes a
+ * different viewport. Everything the visitor actually sees arrives through tRPC after
+ * hydration.
  */
 export interface ShellVariant {
   client: "web" | "ios" | "android";
@@ -64,13 +64,17 @@ export const parseShellParam = (param: string): ShellVariant | null => {
   };
 };
 
-/** Every variant, for generateStaticParams. */
+/** Variants without a wallpaper arm. */
 const BASE_SHELL_PARAMS = SHELL_CLIENTS.flatMap((client) =>
   SHELL_LAYOUTS.flatMap((layout) =>
     [false, true].map((signedIn) => shellParam({ client, layout, signedIn })),
   ),
 );
 
+/**
+ * Every variant, for generateStaticParams. Wallpaper arms exist only for the signed-out
+ * web Classic shell.
+ */
 export const SHELL_PARAMS = [
   ...BASE_SHELL_PARAMS,
   ...WALLPAPER_VARIANTS.map((wallpaper) =>
@@ -141,11 +145,10 @@ const clientHasSession = (cookies: ReadonlyMap<string, string>) => {
  *
  * Layout preferences apply both in game and on public pages. Visitors without a choice
  * receive the site's welcome default; signed-in players without a choice receive Classic.
- * Crawlers always receive the default. A person
- * whose browser string happens to match the crawler pattern is told apart by their
- * session cookies. A signed-out visitor arriving on the landing page without an
- * assignments for the tutorial and wallpaper experiments is given them here so the document and the
- * cookie agree.
+ * Crawlers always receive the default. A person whose browser string happens to match the
+ * crawler pattern is told apart by their session cookies. A signed-out visitor arriving on
+ * the landing page without assignments for the Lemu and wallpaper experiments is given them
+ * here so the document and the cookie agree.
  */
 export const chooseShell = (
   request: ShellRequest,
