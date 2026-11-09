@@ -29,6 +29,7 @@ interface TabComponentProps {
   isActive: boolean;
 }
 
+/** Fetch and display reports against the player only while the tab is active. */
 export const ReportsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
   const { data: reports, isPending } = api.reports.getUserReports.useQuery(
     { userId },
@@ -71,6 +72,7 @@ export const ReportsTab: React.FC<TabComponentProps> = ({ userId, isActive }) =>
   );
 };
 
+/** Load the staff-visible connection history when its profile tab is active. */
 export const HistoricalIpsTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
   const { data: historicalIps, isPending } = api.staff.getUserHistoricalIps.useQuery(
     { userId },
@@ -113,6 +115,7 @@ export const HistoricalIpsTab: React.FC<TabComponentProps> = ({ userId, isActive
   );
 };
 
+/** Load claimed activity-event history only for the active staff profile tab. */
 export const ActivityEventsTab: React.FC<TabComponentProps> = ({
   userId,
   isActive,
@@ -152,6 +155,7 @@ export const ActivityEventsTab: React.FC<TabComponentProps> = ({
   );
 };
 
+/** Load logged bloodline changes only while their profile tab is active. */
 export const BloodlineHistoryTab: React.FC<TabComponentProps> = ({
   userId,
   isActive,
@@ -201,6 +205,7 @@ interface StudentsTabProps {
   }>;
 }
 
+/** Display the already-loaded student roster without another profile query. */
 export const StudentsTab: React.FC<StudentsTabProps> = ({ students }) => {
   return (
     <ContentBox title="Students" subtitle="Past and present" initialBreak={true}>
@@ -220,6 +225,7 @@ interface MarriagesTabProps extends TabComponentProps {
   username: string;
 }
 
+/** Load marriage relationships only while the player's marriage tab is active. */
 export const MarriagesTab: React.FC<MarriagesTabProps> = ({
   userId,
   username,
@@ -257,6 +263,7 @@ export const MarriagesTab: React.FC<MarriagesTabProps> = ({
 
 // ---------------- Ranked Matches Tab ----------------
 
+/** Load ranked battle history only while its public-profile tab is active. */
 export const RankedMatchesTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
   return (
     <ContentBox
@@ -277,6 +284,7 @@ export const RankedMatchesTab: React.FC<TabComponentProps> = ({ userId, isActive
 
 // ---------------- Combat History Tab ----------------
 
+/** Browse battle-type-filtered history without fetching for an inactive profile tab. */
 export const CombatHistoryTab: React.FC<TabComponentProps> = ({ userId, isActive }) => {
   const [selectedType, setSelectedType] = useState<string>("all");
 

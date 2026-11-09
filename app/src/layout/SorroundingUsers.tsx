@@ -36,6 +36,7 @@ import { canShowMapAttack } from "@/utils/alliance";
 import { round } from "@/utils/math";
 import { type BracketSliderSchema, bracketSliderSchema } from "@/validators/travel";
 
+/** Show scouted users and bracket filters with the actions available at the selected hex. */
 export const SorroundingUsers: React.FC<SorroundingUsersProps> = (props) => {
   // Destructure props
   const { userData, storedBracket, setStoredBracket } = props;

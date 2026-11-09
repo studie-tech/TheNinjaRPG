@@ -9,6 +9,7 @@ import { isStaffRole } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 
+/** Display staff report aggregates with role gating before enabling the query. */
 export default function ReportStatistics() {
   const { data: userData } = useRequiredUserData();
   const canView = !!userData && isStaffRole(userData.role);

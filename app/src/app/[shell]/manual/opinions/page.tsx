@@ -17,6 +17,7 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import { useUserData } from "@/utils/UserContext";
 import { type UserReviewSchema, userReviewSchema } from "@/validators/reports";
 
+/** Let players submit staff reviews and inspect their existing submissions. */
 export default function ManualOpinions() {
   // User state
   const { data: userData } = useUserData();

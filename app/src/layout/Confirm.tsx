@@ -35,7 +35,10 @@ interface ConfirmProps {
   onClose?: () => void;
 }
 
-/** Clickable wrapper that opens a Modal and runs onAccept once the user confirms. */
+/**
+ * Open a Modal and run onAccept once confirmed. The mounted trigger also restores
+ * keyboard focus on dismissal, including confirmations nested inside another Modal.
+ */
 export const Confirm: React.FC<ConfirmProps> = (props) => {
   const triggerRef = useRef<HTMLDivElement>(null);
   const [showModal, setShowModal] = useState<boolean>(false);

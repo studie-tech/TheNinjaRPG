@@ -639,6 +639,7 @@ interface RaidThresholdsProps {
   onClaim: (thresholdId: string) => void;
 }
 
+/** Show damage-reward progress and forward claims through the raid controller. */
 const RaidThresholds: React.FC<RaidThresholdsProps> = ({
   thresholds,
   participation,
@@ -719,6 +720,7 @@ interface RaidLeaderboardProps {
   leaderboard: RouterOutputs["raids"]["getRaidLeaderboard"]["participations"];
 }
 
+/** Display raid damage standings while retaining entries for deleted accounts. */
 const RaidLeaderboard: React.FC<RaidLeaderboardProps> = ({ leaderboard }) => {
   return (
     <div className="rounded-lg border p-3">

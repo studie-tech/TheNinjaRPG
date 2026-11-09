@@ -69,4 +69,5 @@ const streakSteps = INITIATIVE_PVP_STREAK_BONUSES.slice(0, -1);
 const streakTail =
   INITIATIVE_PVP_STREAK_BONUSES[INITIATIVE_PVP_STREAK_BONUSES.length - 1] ?? 0;
 
+/** Display initiative rule fractions as percentages without redundant trailing zeroes. */
 const formatPercent = (fraction: number) => `${Number((fraction * 100).toFixed(2))}%`;

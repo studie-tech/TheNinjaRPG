@@ -628,5 +628,6 @@ const ProfileSharing = lazy(() =>
   })),
 );
 
+/** Identify fixed profile tabs whose visible labels do not come from the tab value. */
 const isLabelledProfileTab = (option: string) =>
   (labelledProfileTabs as readonly string[]).includes(option);

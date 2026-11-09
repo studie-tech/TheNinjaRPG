@@ -1,5 +1,6 @@
 import type React from "react";
 
+/** Render a sidebar heading with the desktop and mobile layout's text contrast. */
 export const SideBannerTitle: React.FC<{
   children: React.ReactNode;
   break?: boolean;

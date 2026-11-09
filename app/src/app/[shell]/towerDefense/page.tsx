@@ -523,6 +523,7 @@ const TowerDefensePage: React.FC = () => {
 
 export default TowerDefensePage;
 
+/** Reuse the leaderboard navigation control across tower-defense screen states. */
 const LeaderboardLink = () => (
   <Link href="/manual/towerDefense/leaderboard">
     <Button size="sm">
@@ -532,6 +533,7 @@ const LeaderboardLink = () => (
   </Link>
 );
 
+/** Keep a recoverable tower-defense error visible until the player dismisses it. */
 const ErrorBanner = ({
   message,
   onDismiss,

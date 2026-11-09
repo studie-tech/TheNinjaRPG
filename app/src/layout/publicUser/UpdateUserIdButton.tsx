@@ -26,6 +26,7 @@ interface UpdateUserIdButtonProps {
   updateUserIdMutation: ReturnType<typeof api.staff.updateUserId.useMutation>;
 }
 
+/** Submit staff account-ID changes and keep responses tied to the original account. */
 export const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
   userId,
   username,

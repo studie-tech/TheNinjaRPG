@@ -16,6 +16,7 @@ interface BracketEligibilityBadgeProps {
   targetWarParticipantUntil: Date;
 }
 
+/** Explain PvP bracket eligibility and refresh when temporary protection windows expire. */
 export const BracketEligibilityBadge: React.FC<BracketEligibilityBadgeProps> = ({
   viewerExperience,
   viewerRank,

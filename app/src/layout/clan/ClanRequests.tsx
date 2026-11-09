@@ -11,19 +11,13 @@ import { showMutationToast } from "@/libs/toast";
 import type { BaseServerResponse } from "@/server/api/trpc";
 import { useRequiredUserData } from "@/utils/UserContext";
 
-/**
- * Renders a component that displays clan requests for a clan.
- *
- * @component
- * @param {ClanRequestsProps} props - The component props.
- * @returns {React.ReactNode} The rendered component.
- */
 interface ClanRequestsProps {
   clanId: string;
   clanLeaderId: string;
   isLeaderOrColeader: boolean;
 }
 
+/** Manage clan or faction invitations and applications using the viewer's membership role. */
 export const ClanRequests: React.FC<ClanRequestsProps> = (props) => {
   // Destructure
   const { data: userData } = useRequiredUserData();

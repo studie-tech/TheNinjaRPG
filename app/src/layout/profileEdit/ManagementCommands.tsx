@@ -27,6 +27,7 @@ import { useRequiredUserData } from "@/utils/UserContext";
 interface ManagementCommandsProps {
   user: NonNullable<UserWithRelations>;
 }
+/** Expose permission-gated account and world management actions in profile settings. */
 export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) => {
   // State for sector selection
   const [sectorNumber, setSectorNumber] = useState<number>(1);

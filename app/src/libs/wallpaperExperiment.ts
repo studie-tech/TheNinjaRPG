@@ -49,6 +49,7 @@ export const parseWallpaperVariant = (
 ): WallpaperVariant | undefined =>
   WALLPAPER_VARIANTS.find((variant) => variant === value);
 
+/** Pick a configured wallpaper assignment, falling back to the control variant. */
 export const drawWallpaperVariant = (): WallpaperVariant =>
   getRandomElement(WALLPAPER_VARIANTS) ?? "control";
 

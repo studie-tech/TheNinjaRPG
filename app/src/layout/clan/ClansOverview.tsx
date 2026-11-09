@@ -6,6 +6,7 @@ import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData } from "@/utils/UserContext";
 
+/** List the viewer's village clans or syndicate factions with leaders and member counts. */
 export const ClansOverview: React.FC = () => {
   const { data: userData } = useRequiredUserData();
   const locationLabel = userData?.isOutlaw ? "syndicate" : "village";

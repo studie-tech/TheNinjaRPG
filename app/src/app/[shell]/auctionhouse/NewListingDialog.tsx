@@ -63,6 +63,7 @@ import {
 } from "@/validators/auction";
 import { formatAuctionCurrency } from "./format";
 
+/** Create auction or fixed-price listings from eligible inventory and listing terms. */
 export const NewAuctionListingDialog: React.FC<{
   defaultListingType?: CreateAuctionListingSchema["listingType"];
   onCreated?: () => void;

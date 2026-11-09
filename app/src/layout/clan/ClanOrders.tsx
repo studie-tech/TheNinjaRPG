@@ -7,18 +7,13 @@ import { GroupOrders } from "@/layout/GroupOrders";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 
-/**
- * Renders the Clan Orders component.
- *
- * @param props - The component props.
- * @returns The rendered component.
- */
 interface ClanOrdersProps {
   clanId: string;
   order: UserNindo | null;
   canPost: boolean;
 }
 
+/** Display clan or faction orders and allow authorized members to update the notice. */
 export const ClanOrders: React.FC<ClanOrdersProps> = (props) => {
   // Destructure
   const { clanId, order, canPost } = props;

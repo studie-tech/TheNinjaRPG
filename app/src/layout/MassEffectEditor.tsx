@@ -51,6 +51,7 @@ export const MassEffectEditor = <
   const [committed, setCommitted] = useState<
     Record<string, { effects: ZodAllTags[]; baseUpdatedAt: number }>
   >({});
+  // Hold the same entry's claim through both the write and its awaited list refresh.
   const saveFlight = useSingleFlight<string>();
   const { pending: pendingId, isPending: editorPending } = saveFlight;
 
@@ -301,6 +302,7 @@ export const MassEffectEditor = <
   );
 };
 
+/** Select editable effect columns from the combat damage schema's shared field names. */
 export const EffectFieldSelector: React.FC<{
   selected: string[];
   setSelected: React.Dispatch<React.SetStateAction<string[]>>;

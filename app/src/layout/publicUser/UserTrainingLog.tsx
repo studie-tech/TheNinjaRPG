@@ -18,6 +18,7 @@ interface TrainingStatsComponentProps {
 /** The x axis of the training log: one point per hour of the day. */
 const HOURS_OF_DAY = [...Array(24).keys()];
 
+/** Chart a player's training history, fetching only while its profile tab is active. */
 export const UserTrainingLog: React.FC<TrainingStatsComponentProps> = ({
   userId,
   isActive,

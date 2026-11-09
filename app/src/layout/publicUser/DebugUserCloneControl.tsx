@@ -17,6 +17,7 @@ type DebugCloneSource = {
   username: string;
 };
 
+/** Confirm copying a player's state into the viewer's separate staff/debug character. */
 export const DebugUserCloneControl: React.FC<{
   source: DebugCloneSource;
   cloneUserId: string;

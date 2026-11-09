@@ -23,6 +23,7 @@ interface AdjustSeichiSilverProps {
   username: string;
 }
 
+/** Validate signed staff silver adjustments and require a reason for the audit trail. */
 export const AdjustSeichiSilver: React.FC<AdjustSeichiSilverProps> = ({
   userId,
   username,

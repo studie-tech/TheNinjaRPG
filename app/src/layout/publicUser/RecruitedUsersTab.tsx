@@ -30,6 +30,7 @@ interface RecruitedUsersTabProps {
   parentRecruitedCount: number;
 }
 
+/** Show referrals and retain confirmed removals while their cached roster reconciles. */
 export const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
   recruits,
   parentUserId,
@@ -96,6 +97,7 @@ interface ReferralRemovalRequest {
   expectedRecruiterId: string;
 }
 
+/** Confirm referral removal while retaining the submitted identity for recovery. */
 export const RemoveReferralButton: React.FC<RemoveReferralButtonProps> = ({
   recruit,
   recruiterId,

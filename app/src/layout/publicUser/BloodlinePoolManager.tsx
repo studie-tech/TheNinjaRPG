@@ -23,6 +23,7 @@ interface BloodlinePoolManagerProps {
   equippedBloodlineId: string | null;
 }
 
+/** Let staff inspect and remove historic bloodlines with an audit reason. */
 export const BloodlinePoolManager: React.FC<BloodlinePoolManagerProps> = ({
   userId,
   username,

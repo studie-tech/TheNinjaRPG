@@ -6,6 +6,7 @@ import Link from "@/layout/Link";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import type { ArrayElement } from "@/utils/typeutils";
 
+/** Link staff to usage, power and completeness reports for each content type. */
 export default function ManualBalance() {
   const data = [
     {
@@ -82,6 +83,7 @@ export default function ManualBalance() {
   );
 }
 
+/** Render the shared report-link control used throughout the balance summary table. */
 const linkCell = (href: string) => (
   <Link href={href}>
     <SquareArrowOutUpRight className="h-4 w-4" />

@@ -55,8 +55,10 @@ export const evaluateExpression = (
 };
 
 const closers: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
+// Repeated slices of the same complete source module share one parser pass.
 const tokenCache = new Map<string, ReturnType<typeof parse>["tokens"]>();
 
+/** Find a bracket's closing token in valid TSX, ignoring punctuation inside literal text. */
 const closingIndex = (source: string, open: number) => {
   const opening = source[open]!;
   const closing = closers[opening];
@@ -74,6 +76,7 @@ const closingIndex = (source: string, open: number) => {
   for (const token of tokens) {
     if (token.start < open) continue;
     const label = token.type.label;
+    // Template interpolation opens a brace scope with its own token label.
     if (label === opening || (opening === "{" && label === "${")) depth++;
     else if (label === closing && --depth === 0) return token.end - 1;
   }

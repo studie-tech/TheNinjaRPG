@@ -8,6 +8,7 @@ export const metadata: Metadata = buildMetadata({
   path: "/manual/sageMode",
 });
 
+/** Supply public sage-mode guide metadata without adding another UI wrapper. */
 export default function Layout({ children }: { children: React.ReactNode }) {
   return children;
 }

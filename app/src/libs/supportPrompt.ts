@@ -49,6 +49,7 @@ const {
   basicFlee,
 } = getDefaultBasicActions({ rank: "GENIN" });
 const studentBasicAttack = getDefaultBasicActions({ rank: "STUDENT" }).basicAttack;
+/** Describe baseline rank slots without staff, federal or purchased slot bonuses. */
 const jutsuSlots = (rank: "GENIN" | "CHUNIN" | "JONIN" | "ELITE JONIN") =>
   calcJutsuEquipLimit({
     rank,
@@ -65,6 +66,7 @@ const trainingIntervals = TrainingSpeeds.map((speed) => {
       : `${hours} hour${hours === 1 ? "" : "s"}`;
   return `  - ${length}: ${efficiency}% efficiency.`;
 }).join("\n");
+/** Keep training experience amounts compact in the support chat's rule summary. */
 const thousands = (exp: number) => `${exp / 1000}k`;
 
 /** System instructions for the Seichi AI support chat: a player-facing guide to the game. */

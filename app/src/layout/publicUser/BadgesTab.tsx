@@ -49,6 +49,7 @@ type BadgeRemovalSnapshot = {
 const badgeAssignmentKey = (badgeId: string, createdAt: Date) =>
   `${badgeId}:${createdAt.toISOString()}`;
 
+/** Manage badge assignments with retryable edits tied to each assignment's identity. */
 export const BadgesTab: React.FC<BadgesTabProps> = ({
   userId,
   username,

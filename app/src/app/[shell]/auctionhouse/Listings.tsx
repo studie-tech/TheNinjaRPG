@@ -41,6 +41,7 @@ import {
 } from "./format";
 import { AuctionDetailsDialog } from "./ListingDetailsDialog";
 
+/** Browse filtered auction lots and open details for the selected entry. */
 export const AuctionListing: React.FC<AuctionListingProps> = ({
   selectedStatus,
   browseTab,
@@ -287,6 +288,7 @@ export const AuctionListing: React.FC<AuctionListingProps> = ({
   );
 };
 
+/** Summarize pricing, bid standing and bidder eligibility before opening lot details. */
 const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
   listing,
   timeDiff,

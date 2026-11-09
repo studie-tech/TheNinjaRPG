@@ -1,5 +1,6 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
 
+/** Format an auction total with the player-facing name of its currency. */
 export function formatAuctionCurrency(
   amount: number,
   currencyType: AuctionListingRow["currencyType"],
@@ -7,6 +8,7 @@ export function formatAuctionCurrency(
   return `${amount.toLocaleString()} ${auctionCurrencyUnit(currencyType)}`;
 }
 
+/** Show per-unit pricing for stacks; a single item needs no additional price line. */
 export function formatAuctionPerUnitLine(
   totalAmount: number,
   quantity: number,
@@ -22,6 +24,7 @@ export function formatAuctionPerUnitLine(
   return `${perStr} ${suffix}/unit · ×${quantity.toLocaleString()}`;
 }
 
+/** Resolve the currency label shared by lot cards, listing forms and details. */
 export function auctionCurrencyUnit(currencyType: AuctionListingRow["currencyType"]) {
   return currencyType === "MONEY" ? "ryo" : "reputation";
 }

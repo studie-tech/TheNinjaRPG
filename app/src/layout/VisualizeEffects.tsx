@@ -48,6 +48,7 @@ interface VisualizeEffectsProps {
   diffuseDamage?: BattleUserState["diffuseDamage"];
 }
 
+/** Summarize active user effects by source and polarity, including diffuse damage. */
 export const VisualizeEffects: React.FC<VisualizeEffectsProps> = ({
   effects,
   userId,
@@ -605,11 +606,11 @@ const EffectRow: React.FC<EffectRowProps> = ({
   );
 };
 
-/** Ground effects grouped into buffs, debuffs and other effects */
 interface VisualizeGroundEffectsProps {
   effects: GroundEffect[];
 }
 
+/** Group visible ground effects into buffs, debuffs and neutral effects. */
 export const VisualizeGroundEffects: React.FC<VisualizeGroundEffectsProps> = ({
   effects,
 }) => {

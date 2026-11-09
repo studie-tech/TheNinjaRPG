@@ -19,14 +19,12 @@ import { canEditClans } from "@/utils/permissions";
 import { useRequiredUserData } from "@/utils/UserContext";
 import { checkAssassin, checkCoLeader } from "@/validators/clan";
 
-/**
- * Members in a clan
- */
 interface ClanMembersProps {
   userId: string;
   clanId: string;
 }
 
+/** List clan or faction members and reconcile confirmed membership and role changes. */
 export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
   // Destructure
   const { userId, clanId } = props;

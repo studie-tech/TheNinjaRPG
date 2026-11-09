@@ -21,8 +21,10 @@ export const { beforeSend, ignoreErrors } = init.mock.calls[0]![0] as unknown as
 };
 init.mockRestore();
 
+/** Build a Chrome-shaped error stack for exercising the application's Sentry filter. */
 export const chromeStack = (name: string, message: string, url: string) =>
   `${name}: ${message}\n    at dispatch (${url}:2:1234)\n    at resolve (${url}:2:999)`;
+/** Build a Firefox-shaped error stack for the same application filter scenarios. */
 export const firefoxStack = (_name: string, _message: string, url: string) =>
   `dispatch@${url}:2:1234\nresolve@${url}:2:999`;
 
