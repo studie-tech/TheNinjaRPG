@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Modal from "@/layout/Modal";
 import { cn } from "@/libs/shadui";
 
@@ -37,6 +37,7 @@ interface ConfirmProps {
 
 /** Clickable wrapper that opens a Modal and runs onAccept once the user confirms. */
 export const Confirm: React.FC<ConfirmProps> = (props) => {
+  const triggerRef = useRef<HTMLDivElement>(null);
   const [showModal, setShowModal] = useState<boolean>(false);
   const { onAccept } = props;
   const close = () => setShowModal(false);
@@ -48,6 +49,7 @@ export const Confirm: React.FC<ConfirmProps> = (props) => {
     <>
       {/* biome-ignore lint/a11y/useSemanticElements: wrapper for button children - using button would create invalid nested buttons */}
       <div
+        ref={triggerRef}
         role="button"
         tabIndex={props.disabled ? -1 : 0}
         aria-disabled={props.disabled}
@@ -77,6 +79,7 @@ export const Confirm: React.FC<ConfirmProps> = (props) => {
 
       <Modal
         id={props.id}
+        returnFocusRef={triggerRef}
         title={props.title}
         isOpen={showModal}
         setIsOpen={setShowModal}
