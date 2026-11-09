@@ -31,7 +31,7 @@ describe("event pass completion history", () => {
   });
 });
 
-/** Builds popup state with the legacy closed, loaded, and eligible defaults. */
+/** Builds popup state that defaults to closed, loaded, ineligible and outside the tutorial. */
 const state = (
   patch: Partial<ActivityStreakPopupState> = {},
 ): ActivityStreakPopupState => ({
@@ -44,7 +44,7 @@ const state = (
   ...patch,
 });
 
-describe("activity streak popup compatibility", () => {
+describe("activity streak popup state", () => {
   it("opens when rewards become available", () => {
     expect(
       resolveActivityStreakPopupOpen(state({ shouldShowPopup: true })),

@@ -40,7 +40,7 @@ describe("battlefield aggro comparison", () => {
     expect(display.get("tank")?.ratio).toBe(1);
   });
 
-  it("leaves empty rings for zero or legacy scores and shows tied leaders equally", () => {
+  it("leaves empty rings for zero or unset enmity and shows tied leaders equally", () => {
     const empty = pveDisplay([user({ enmity: undefined }), user({ userId: "zero", enmity: 0 })]);
     expect(empty.get("tank")).toEqual({ enmity: 0, ratio: 0, isHighest: false });
     expect(empty.get("zero")?.ratio).toBe(0);

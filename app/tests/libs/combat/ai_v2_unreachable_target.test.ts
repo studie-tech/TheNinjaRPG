@@ -16,9 +16,8 @@ import { makeJutsu, makeTag } from "../../setup/combat";
  * next rule instead of aborting the whole turn. Scenario: the player stands in a
  * corner and AIs occupy every neighbouring tile, so one more AI can neither step
  * closer nor reach with its range-1 basic attack, and its 60 AP jutsu is
- * unaffordable on 40 AP. Throwing there surfaced as an "Action Basic Attack no
- * longer possible" notification that the client re-fired every second until the
- * round timer passed the turn on.
+ * unaffordable on 40 AP. Throwing there would surface as a repeating "Action Basic
+ * Attack no longer possible" notification until the round timer passes the turn on.
  */
 
 const PROFILE = "profile-dragon";

@@ -129,7 +129,7 @@ describe("AI targeting and clauses", () => {
     expect(run().nextBattle.usersState.find((user) => user.userId === "boss")!.curHealth).toBeLessThan(3000);
   });
 
-  it.each(["HIGHEST_ENMITY_OPPONENT", "LOWEST_ENMITY_OPPONENT"] as const)("%s ignores unavailable opponents and handles legacy battles", (target) => {
+  it.each(["HIGHEST_ENMITY_OPPONENT", "LOWEST_ENMITY_OPPONENT"] as const)("%s ignores unavailable opponents and handles unset enmity", (target) => {
     const { battle, run } = setup(target);
     battle.usersState.push(mkUser({ userId: "dead", villageId: "enemy", direction: "left", curHealth: 0, enmity: 9999 }), mkUser({ userId: "fled", villageId: "enemy", direction: "left", fledBattle: true, enmity: 0 }));
     const expected = target === "HIGHEST_ENMITY_OPPONENT" ? "boss" : "minion";
@@ -165,10 +165,11 @@ describe("AI targeting and clauses", () => {
       battle.extraState.aiProfiles[PROFILE]!.rules[0]!.conditions = [schema.parse({ minRange: distance + offset, maxRange: distance + offset })];
       expect(run().nextActionId).toBe(expected ? DAMAGE_JUTSU : "wait");
     });
-    it(`${type} range excludes allies and dead enemies`, () => {
+    it(`${type} range excludes allies, dead enemies and other combatant kinds`, () => {
       const { battle, run } = setup("CLOSEST_OPPONENT", [schema.parse({ maxRange: 20 })]);
       for (const user of battle.usersState) { user.isAi = type !== "player"; user.isSummon = type === "summon"; }
-      // Keep the actor AI-driven and both opponents dead.
+      // Keep the actor AI-driven, kill the minion, and leave the boss alive as an AI
+      // non-summon, so it is neither a player nor a summon.
       battle.usersState[0]!.isAi = true;
       battle.usersState[1]!.curHealth = 0;
       battle.usersState[2]!.curHealth = 0;

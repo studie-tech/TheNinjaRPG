@@ -55,8 +55,7 @@ describe("alignBattle orphan cleanup ordering", () => {
   });
 
   it("cleans up orphans even when the round does not progress", () => {
-    // Previously the splice was gated on progressRound, so a summon orphaned
-    // mid-round lingered until the next round boundary.
+    // A summon orphaned mid-round is removed immediately, not at the next round boundary.
     const battle = makeCompleteBattle({
       usersState: scenario(),
       activeUserId: "enemy",

@@ -175,8 +175,8 @@ describe("performAIaction auto combat", () => {
     const foe = battle.usersState.find((u) => u.userId === "foe");
     if (foe) foe.curHealth = 0;
     // The caller settles a decided battle on this same tick, but it asks for the
-    // turn first: reducing the empty enemy list used to throw here, and the
-    // endpoint turned that into a notification the client retried forever.
+    // turn first, so an empty enemy list must not throw: the endpoint would turn
+    // the throw into a notification the client retries forever.
     const { nextBattle } = performAIaction(battle, grid, "user_h1");
     const after = nextBattle.usersState.find((u) => u.userId === "user_h1");
     expect(after?.curHealth).toBe(5000);
