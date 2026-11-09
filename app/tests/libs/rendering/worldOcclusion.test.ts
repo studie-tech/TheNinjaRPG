@@ -288,9 +288,9 @@ const instanceIntersects = (
   while (node < endNode) {
     if (++visited > 8192) throw new Error("Invalid BVH escape graph");
     const i = node * 4,
-      escape = uint24(mesh.data, i + 12),
+      escapeNode = uint24(mesh.data, i + 12),
       count = mesh.data[i + 15]!;
-    if (escape <= node || escape > endNode)
+    if (escapeNode <= node || escapeNode > endNode)
       throw new Error("Invalid BVH escape address");
     const lower: Point = [
       x + (uint16(mesh.data, i) / 65535) * width,
@@ -303,7 +303,7 @@ const instanceIntersects = (
       (uint16(mesh.data, i + 10) / 65535) * range,
     ];
     if (!boundsIntersect(localOrigin, localEnd, lower, upper)) {
-      node = escape;
+      node = escapeNode;
       continue;
     }
     if (count > 0) {
@@ -313,7 +313,7 @@ const instanceIntersects = (
           prismIntersects(decodedTriangle(mesh, first + i * 6), localOrigin, localEnd)
         )
           return true;
-      node = escape;
+      node = escapeNode;
     } else node += 5;
   }
   return false;

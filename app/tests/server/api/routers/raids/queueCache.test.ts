@@ -516,13 +516,13 @@ describeWithDatabase("raid join committed queue", () => {
       },
     ]);
     const profile = await (await callerFor(profileRouter, "queue-sql-user")).getUser();
-    const valueOf = (
+    const reputationOf = (
       trackers: NonNullable<typeof profile.userData>["questData"] | undefined,
     ) =>
       trackers
         ?.find((entry) => entry.id === "cache-reputation-achievement")
         ?.goals.find((goal) => goal.id === "reputation")?.value;
-    expect(valueOf(profile.userData?.questData)).toBe(10);
+    expect(reputationOf(profile.userData?.questData)).toBe(10);
     await db
       .update(userData)
       .set({ reputationPointsTotal: 20 })
@@ -551,7 +551,7 @@ describeWithDatabase("raid join committed queue", () => {
       await callerFor(raidsRouter, "queue-sql-user")
     ).startRaidBattle({ teamId: "cache-team" });
     expect(result.success).toBe(true);
-    expect(valueOf(result.userPatch?.questData)).toBe(20);
+    expect(reputationOf(result.userPatch?.questData)).toBe(20);
     expect(result.userPatch).not.toHaveProperty("persistedQuestData");
     expect(
       result.achievementProgress?.some(
@@ -564,7 +564,7 @@ describeWithDatabase("raid join committed queue", () => {
       achievementProgress: result.achievementProgress,
     });
     const cached = client.getQueryData<typeof profile>(key);
-    expect(valueOf(cached?.userData?.questData)).toBe(20);
+    expect(reputationOf(cached?.userData?.questData)).toBe(20);
     expect(cached?.achievementProgress).toEqual(result.achievementProgress);
     expect(refetch).not.toHaveBeenCalled();
     client.clear();

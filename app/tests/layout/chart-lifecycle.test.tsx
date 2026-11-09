@@ -31,14 +31,16 @@ beforeEach(() => {
   charts = [];
   attempts = 0;
   failAt = undefined;
-  const constructor = vi.spyOn(chartLibrary, "Chart").mockImplementation(function () {
-    attempts += 1;
-    if (attempts === failAt) throw new Error("Chart initialization failed");
-    const chart = { destroy: vi.fn() };
-    charts.push(chart);
-    return chart as unknown as Chart;
-  } as never);
-  Object.assign(constructor, { defaults: { ...chartDefaults } });
+  const chartConstructor = vi
+    .spyOn(chartLibrary, "Chart")
+    .mockImplementation(function () {
+      attempts += 1;
+      if (attempts === failAt) throw new Error("Chart initialization failed");
+      const chart = { destroy: vi.fn() };
+      charts.push(chart);
+      return chart as unknown as Chart;
+    } as never);
+  Object.assign(chartConstructor, { defaults: { ...chartDefaults } });
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
     () => ({}) as never,
   );
