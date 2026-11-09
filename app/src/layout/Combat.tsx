@@ -40,6 +40,8 @@ import {
   ITEM_BROKEN_NOTICE,
   ITEM_DURABILITY_CRITICAL_NOTICE,
   ITEM_DURABILITY_NOTICE,
+  SHRINE_CAPTURED_NOTICE,
+  SHRINE_RECAPTURED_NOTICE,
 } from "@/libs/combat/constants";
 import { isBattleHotkeyBlocked } from "@/libs/combat/hotkeys";
 import { validateActionTarget } from "@/libs/combat/targetValidation";
@@ -461,7 +463,8 @@ const Combat: React.FC<CombatProps> = (props) => {
           const isBrokenItem = notification.includes(ITEM_BROKEN_NOTICE);
           // Check if this is a war notification
           const isWarNotification =
-            notification.includes("townhall") || notification.includes("Shrine");
+            notification.includes(SHRINE_CAPTURED_NOTICE) ||
+            notification.includes(SHRINE_RECAPTURED_NOTICE);
           showMutationToast({
             success: !isDurabilityWarning, // Durability warnings are not "success" (they're warnings)
             title: isDurabilityWarning
