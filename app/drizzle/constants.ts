@@ -3107,15 +3107,15 @@ export const IMG_MERCH_ARTWORK = {
 export const TOTAL_PLAYERS_MILESTONE = 1000000;
 
 export const IMG_FRONTPAGE_SCREENSHOT_COMBAT =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJliyD90rWYxAsuC7ofQn9pM45OD0ERqkdBXJU.webp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeX9BhWyV3OvUJQExAi0bGoIZDF74LqSnHRdp";
 export const IMG_FRONTPAGE_SCREENSHOT_JUTSUS =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJyD4wioukVH2MI5Lo4ehEfAXvZdcmtWqPg7rp.webp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ1YiSNU6bo95WClq4K0wxZUmJcvThgdVenO3P";
 export const IMG_FRONTPAGE_SCREENSHOT_GLOBAL =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeCMiuXvyV3OvUJQExAi0bGoIZDF74LqSnHRd.webp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJIBaK03xfOewksxBoS1HQCihpL7c42Ky9uUFv";
 export const IMG_FRONTPAGE_SCREENSHOT_SECTOR =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYfcD9oOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d.webp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrbqP58huJPmdY8zI2ptZXAoEj1c6BMKvrQOx";
 export const IMG_FRONTPAGE_SCREENSHOT_VILLAGE =
-  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJzuU9cvZemvaQu94EYJs8HpxVzofny6iPtbgC.webp";
+  "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYWrHYFOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d";
 
 export const IMG_REGISTRATIN_STEP1 =
   "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeKNAEEyV3OvUJQExAi0bGoIZDF74LqSnHRdp.webp";

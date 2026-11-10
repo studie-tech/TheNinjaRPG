@@ -38,12 +38,8 @@ import {
 import { safeLocalStorageGetItem } from "@/utils/storage";
 
 /**
- * The feature screenshots are 900x700 sources in a column that never renders wider than
- * about 676 CSS px at any supported font scale -- the sidebars cap it well inside the
- * `max-w-[768px]` on its wrapper, so that class is not what binds. 768 is the smallest
- * rendition comfortably above that which Bunny will actually produce; 1024 asked it to
- * upscale and got the untouched original back. Bunny answers 768x597, which is the box
- * these attributes have to name.
+ * A 768px rendition covers the classic content column without sending the full
+ * 1800x1400 capture. Its dimensions preserve the screenshots' 9:7 aspect ratio.
  */
 const FEATURE_SHOT = { width: 768, height: 597 } as const;
 
@@ -305,9 +301,9 @@ const PixelWelcome: React.FC = () => {
             data-pixel-parallax="0.08"
           >
             <Image
-              src="/screenshots/global.webp"
-              width={512}
-              height={372}
+              src={IMG_FRONTPAGE_SCREENSHOT_GLOBAL}
+              width={768}
+              height={597}
               alt="Intro artwork"
               className={screenshotClass}
             />
@@ -334,9 +330,9 @@ const PixelWelcome: React.FC = () => {
             data-pixel-parallax="0.06"
           >
             <Image
-              src="/screenshots/village.webp"
-              width={512}
-              height={340}
+              src={IMG_FRONTPAGE_SCREENSHOT_VILLAGE}
+              width={768}
+              height={597}
               alt="Village Artwork"
               className={screenshotClass}
             />
@@ -382,9 +378,9 @@ const PixelWelcome: React.FC = () => {
               Combat Artwork
             </p>
             <Image
-              src="/screenshots/combat.webp"
-              width={512}
-              height={351}
+              src={IMG_FRONTPAGE_SCREENSHOT_COMBAT}
+              width={768}
+              height={597}
               alt="Combat Artwork"
               className={screenshotClass}
             />
@@ -410,9 +406,9 @@ const PixelWelcome: React.FC = () => {
               Exploration Artwork
             </p>
             <Image
-              src="/screenshots/sector.webp"
-              width={512}
-              height={366}
+              src={IMG_FRONTPAGE_SCREENSHOT_SECTOR}
+              width={768}
+              height={597}
               alt="Exploration Artwork"
               className={screenshotClass}
             />
@@ -455,9 +451,9 @@ const PixelWelcome: React.FC = () => {
               Global Map
             </p>
             <Image
-              src="/screenshots/global.webp"
-              width={512}
-              height={372}
+              src={IMG_FRONTPAGE_SCREENSHOT_GLOBAL}
+              width={768}
+              height={597}
               alt="Global map gameplay screenshot"
               className={screenshotClass}
             />
