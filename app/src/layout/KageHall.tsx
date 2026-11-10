@@ -110,7 +110,6 @@ export const KageHall: React.FC<{
         subtitle="Kage Challenge"
         defaultBackHref="/village"
         topRightContent={navTabs}
-        stackTopRight
       >
         <p>
           The &quot;Kage&quot; is the village&apos;s most potent and skilled ninja,

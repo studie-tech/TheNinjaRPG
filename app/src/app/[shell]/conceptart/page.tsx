@@ -234,7 +234,6 @@ export default function ConceptArt() {
     <ContentBox
       title="Concept Art"
       subtitle="Create AI art"
-      stackTopRight
       topRightContent={
         <div className="flex flex-row items-center gap-1">
           <div>

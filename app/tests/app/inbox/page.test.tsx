@@ -1,12 +1,15 @@
-import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import Inbox from "@/app/[shell]/inbox/page";
 import * as newConversation from "@/layout/NewConversationPrompt";
 import * as blacklist from "@/layout/UserBlacklistControl";
 import * as userContext from "@/utils/UserContext";
-import { installBrowserGlobals, restoreBrowserGlobals } from "../../setup/browserGlobals";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 
 const updateNotifications = vi.fn();
 const inboxNews = { href: "/inbox", name: "2 messages", notificationCount: 2 };
@@ -32,7 +35,9 @@ beforeEach(() => {
     notifications: [inboxNews, otherNews],
     updateNotifications,
   } as never);
-  vi.spyOn(navigation, "useSearchParams").mockReturnValue(new URLSearchParams() as never);
+  vi.spyOn(navigation, "useSearchParams").mockReturnValue(
+    new URLSearchParams() as never,
+  );
   vi.spyOn(navigation, "useRouter").mockReturnValue({ replace: vi.fn() } as never);
   vi.spyOn(newConversation, "NewConversationPrompt").mockImplementation(() => null);
   vi.spyOn(blacklist, "UserBlacklistPopover").mockImplementation(() => null);

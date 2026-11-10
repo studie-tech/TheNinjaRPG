@@ -103,7 +103,7 @@ export default function ManualItems() {
         initialBreak={true}
         subtitle="All known items"
         topRightContent={
-          <div className="items-center sm:flex sm:flex-row">
+          <div className="flex flex-row items-center gap-1">
             {userData && canChangeContent(userData.role) && (
               <div className="flex flex-row gap-2">
                 <Button
@@ -126,7 +126,7 @@ export default function ManualItems() {
                 </Link>
               </div>
             )}
-            <div className="ml-2">
+            <div className="ml-1">
               <ItemFiltering state={state} />
             </div>
           </div>

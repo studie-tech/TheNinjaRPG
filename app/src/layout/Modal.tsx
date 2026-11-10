@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { validateNumberInputs } from "@/components/ui/number-input";
+import { useHeaderActionsFocus } from "@/hooks/useHeaderActionsFocus";
 import { cn } from "@/libs/shadui";
 
 export const modalViewportClassName =
@@ -78,6 +79,8 @@ interface ModalProps {
  */
 export const Modal: React.FC<ModalProps> = (props) => {
   const bodyRef = useRef<HTMLDivElement>(null);
+  const headerFocusRef = useHeaderActionsFocus();
+  const returnFocusRef = props.returnFocusRef ?? headerFocusRef;
 
   const isProceedDisabled = props.isLoading || props.proceedDisabled;
 
@@ -172,9 +175,9 @@ export const Modal: React.FC<ModalProps> = (props) => {
         aria-busy={props.isLoading}
         onCloseAutoFocus={(event) => {
           // Override Radix's trigger focus only while the caller's target is still mounted.
-          if (props.returnFocusRef?.current?.isConnected) {
+          if (returnFocusRef?.current?.isConnected) {
             event.preventDefault();
-            props.returnFocusRef.current.focus();
+            returnFocusRef.current.focus();
           }
         }}
         onEscapeKeyDown={(event) => {
