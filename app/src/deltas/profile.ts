@@ -17,7 +17,11 @@ import { getQuestMaxLevel } from "@/libs/quest/availability";
 import { getPublicQuestUser } from "@/libs/quest/projection";
 import { hasEnergyQueue } from "@/libs/queue";
 import { getReducedGainsDays } from "@/libs/train";
-import { getUserFactionNotifications } from "@/libs/userNotifications";
+import {
+  getNoJutsuEquippedNotifications,
+  getUserFactionNotifications,
+  NO_JUTSU_EQUIPPED_NOTIFICATION,
+} from "@/libs/userNotifications";
 import type { fetchUser, findUserDataForQueryUpdatedUser } from "@/queries/profile";
 import type { fetchQuestBootstrap } from "@/routers/profile";
 import type {
@@ -334,7 +338,10 @@ const mergeUserCache = (
   const previousFactionNames = new Set(
     getUserFactionNotifications(old.userData ?? undefined).map((entry) => entry.name),
   );
-  const desired: NavBarDropdownLink[] = [...factionNotifications];
+  const desired: NavBarDropdownLink[] = [
+    ...factionNotifications,
+    ...getNoJutsuEquippedNotifications(user),
+  ];
   if (user.activeDungeonRunId) desired.push(activeDungeonNotification);
   if (
     UserRanks.includes(user.rank) &&
@@ -393,6 +400,7 @@ const mergeUserCache = (
         "Banned!",
         "Trade Banned!",
         activeDungeonNotification.name,
+        NO_JUTSU_EQUIPPED_NOTIFICATION.name,
       ].includes(entry.name) &&
       !(entry.href === "/village" && /^Slowed \d+ days$/.test(entry.name)) &&
       !previousFactionNames.has(entry.name) &&

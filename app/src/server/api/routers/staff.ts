@@ -61,6 +61,7 @@ import {
   insertActionLogForDeleteReferral,
   insertActionLogForForceAwake,
   insertActionLogForInsertUserBadge,
+  insertActionLogForMassUnequip,
   insertActionLogForRemoveUserBadge,
   insertContentBackupForCreateBackup,
   insertContentBackupForCreateBackup2,
@@ -371,10 +372,15 @@ export const staffRouter = createTRPCRouter({
       // IN (isAi = false) would materialize essentially every human userId.
       // Orphan userJutsu/loadout rows (userId missing from UserData) are included —
       // harmless for unequip-all.
-      await Promise.all([
+      const [equipped, loadouts] = await Promise.all([
         updateUserJutsuForUnequipAllJutsus(ctx.drizzle),
         updateJutsuLoadoutForUnequipAllJutsus(ctx.drizzle),
       ]);
+      await insertActionLogForMassUnequip(ctx.drizzle, user, {
+        kind: "jutsu",
+        equippedRows: equipped.rowsAffected,
+        loadoutRows: loadouts.rowsAffected,
+      });
       return {
         ...getUnequipAllJutsusUserUpdate({
           userIsAi: user.isAi,
@@ -399,10 +405,15 @@ export const staffRouter = createTRPCRouter({
       // Non-AI only — AI opponents keep their equipped gear for combat.
       // Clear every item loadout (not only the active pointer), matching unequipAllJutsus.
       // Same NOT IN (isAi = true) pattern as unequipAllJutsus (small AI set vs all humans).
-      await Promise.all([
+      const [equipped, loadouts] = await Promise.all([
         updateUserItemForUnequipAllGear(ctx.drizzle),
         updateItemLoadoutForUnequipAllGear(ctx.drizzle),
       ]);
+      await insertActionLogForMassUnequip(ctx.drizzle, user, {
+        kind: "gear",
+        equippedRows: equipped.rowsAffected,
+        loadoutRows: loadouts.rowsAffected,
+      });
       return {
         ...getUnequipAllGearUserUpdate({ user, sources }),
         success: true,
