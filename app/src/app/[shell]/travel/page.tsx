@@ -117,7 +117,10 @@ import {
   travelLocationSchema,
 } from "@/validators/travel";
 
-const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
+const GlobalMap = dynamic(() => import("@/layout/Map"), {
+  ssr: false,
+  loading: () => <Loader explanation="Loading world map" />,
+});
 const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
 /** Bootstrap sector windows stay cached this long after travel unmounts. */
 const BOOT_WINDOW_RETENTION_MS = 30 * MINUTE_S * 1000;
@@ -563,6 +566,7 @@ function Travel() {
         };
         // startGlobalMoveSchema coerces the sector, so the mutate input type is unknown.
         const destinationSector = Number(variables.sector);
+        setTargetSector(destinationSector);
         const travelTime = globe
           ? calcGlobalTravelTime(userData.sector, destinationSector, globe)
           : 0;
@@ -591,7 +595,7 @@ function Travel() {
           setTargetPosition(null);
           setTargetSector(null);
           setShowModal(false);
-          setActiveTab(sectorLink);
+          setActiveTab(globalLink);
 
           await updateUser(result.data, {
             revision: previous?.revision,
@@ -769,12 +773,15 @@ function Travel() {
     setShowModal(true);
   }, []);
 
-  const isGlobal = activeTab === globalLink;
+  const isTraveling = userData?.status === "TRAVEL";
+  const isGlobal = isTraveling || activeTab === globalLink;
   const showGlobal = villages && globe && isGlobal;
   // Admission supplies the destination coordinates. Prepare its scene during the
   // countdown, after admission settles, and keep that instance for arrival.
-  const isPreparingSector = userData?.status === "TRAVEL" && !isStartingTravel;
-  const showSectorPreview = isPreparingSector && !isGlobal;
+  const isPreparingSector = isTraveling && !isStartingTravel;
+  const globeFocusSector = isTraveling
+    ? (targetSector ?? userData?.sector)
+    : focusSector;
   const showSector =
     villages &&
     hasCurrentSector &&
@@ -821,7 +828,10 @@ function Travel() {
           userLocation={true}
           showOwnership={showOwnership && !userData?.tutorialOn}
           autoRotate={false}
-          focusSector={focusSector}
+          focusSector={globeFocusSector}
+          actionExplanation={
+            isTraveling ? "You are traveling to your destination" : undefined
+          }
           routeTarget={showModal ? targetSector : null}
           onTileClick={(sector) => initiateTravelToSector(sector)}
           hexasphere={globe}
@@ -833,7 +843,8 @@ function Travel() {
     globe,
     trackedBounties,
     showOwnership,
-    focusSector,
+    globeFocusSector,
+    isTraveling,
     showModal,
     targetSector,
     userData?.tutorialOn,
@@ -1069,9 +1080,9 @@ function Travel() {
                 )}
               </>
             )}
-            {activeTab === globalLink && (
+            {isGlobal && !isTraveling && (
               <FindSectorPopover
-                focusSector={focusSector}
+                focusSector={globeFocusSector}
                 onFocusSector={setFocusSector}
                 trigger={
                   <Locate
@@ -1237,7 +1248,7 @@ function Travel() {
                 <Maximize2 className="h-7 w-7" />
               </button>
             )}
-            {activeTab === globalLink && (
+            {isGlobal && (
               <TooltipProvider delayDuration={50}>
                 <Tooltip>
                   <TooltipTrigger onClick={() => setShowOwnership(!showOwnership)}>
@@ -1285,8 +1296,8 @@ function Travel() {
             )}
 
             <NavTabs
-              current={activeTab}
-              options={[sectorLink, globalLink]}
+              current={isGlobal ? globalLink : activeTab}
+              options={isTraveling ? [globalLink] : [sectorLink, globalLink]}
               labels={{ [sectorLink]: <TravelPositionLabel /> }}
               setValue={setActiveTab}
               onChange={(value) => {
@@ -1301,24 +1312,17 @@ function Travel() {
         <div className={userData.travelFinishAt ? "relative min-h-80" : "relative"}>
           {showGlobal && MapComponent}
           {mapError && <MapError />}
-          {/* Preview the destination without accepting input until arrival is confirmed. */}
+          {/* Prepare the destination offscreen so its scene is ready on arrival. */}
           {(showSector || isPreparingSector) && (
             <div
-              aria-hidden={!showSector && !showSectorPreview}
+              aria-hidden={!showSector}
               inert={!showSector}
-              className={
-                !showSector && !showSectorPreview
-                  ? "invisible absolute inset-0"
-                  : undefined
-              }
+              className={!showSector ? "invisible absolute inset-0" : undefined}
             >
               {SectorComponent}
             </div>
           )}
           {!villages && <Loader explanation="Loading data" />}
-          {showSectorPreview && !SectorComponent && (
-            <Loader explanation="Loading destination" />
-          )}
           {showModal && globe && userData && targetSector !== null && (
             <Modal
               id="tutorial-global-travel"

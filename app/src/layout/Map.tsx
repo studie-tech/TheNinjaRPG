@@ -172,10 +172,15 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           hover={hover}
           map={hexasphere}
           villages={props.highlights}
-          fromSector={props.userLocation ? userData?.sector : undefined}
+          fromSector={
+            props.userLocation && userData?.status !== "TRAVEL"
+              ? userData?.sector
+              : undefined
+          }
           quests={hasQuestMarkers ? questGoals : NO_GOALS}
           targets={props.usersHighlighted}
           focusSector={props.focusSector}
+          focusLabel={userData?.status === "TRAVEL" ? "Destination" : "Search target"}
           explanation={actionExplanation}
         />
       )}
@@ -237,6 +242,7 @@ const SectorCard: React.FC<{
   quests: QuestGoal[];
   targets?: { sector: number; username?: string }[];
   focusSector?: number | null;
+  focusLabel: string;
   explanation: string;
 }> = ({
   hover,
@@ -246,6 +252,7 @@ const SectorCard: React.FC<{
   quests,
   targets,
   focusSector,
+  focusLabel,
   explanation,
 }) => {
   const hovered = useSyncExternalStore(hover.subscribe, hover.get, hover.get);
@@ -310,7 +317,7 @@ const SectorCard: React.FC<{
       )}
       {focusSector === sector && (
         <span className="border-l-2 border-purple-400 pl-2 text-sm text-purple-200">
-          Search target
+          {focusLabel}
         </span>
       )}
       {sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR && (

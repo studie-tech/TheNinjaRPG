@@ -21,7 +21,7 @@ export const TravelArrivalStatus = ({
   isArrivalRejected: boolean;
   onArrive: () => void;
 }) => (
-  <div className="pointer-events-none absolute inset-x-3 bottom-3 z-20 flex justify-center">
+  <div className="pointer-events-none absolute inset-x-3 top-3 z-20 flex justify-center">
     <div
       id="tutorial-travel-arrival"
       className="bg-background/95 text-foreground pointer-events-auto flex w-full max-w-md flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border px-4 py-3 shadow-lg backdrop-blur-sm"
