@@ -776,6 +776,18 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
               </div>
             </div>
           )}
+        {/* Placement-bound dialog: point the player to the NPC instead of showing nothing. */}
+        {canProgress &&
+          activeObjective?.task === "dialog" &&
+          !!activeObjective.overworldPlacementId && (
+            <p
+              role="status"
+              className={cn("font-semibold text-orange-500", showScene ? "px-3" : "")}
+            >
+              This conversation continues in person: walk up to the NPC on the travel
+              map and talk to them to choose your answer.
+            </p>
+          )}
 
         {quest.content.objectives && (
           <div
