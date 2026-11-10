@@ -2,6 +2,14 @@ import { describe, expect, it } from "bun:test";
 import { createTravelCharacterBudget } from "@/libs/rendering/travelCharacterBudget";
 
 describe("travel character budget", () => {
+  it("ignores intentional on-demand cadence and starts fresh continuous measurement", () => {
+    const budget = createTravelCharacterBudget();
+    for (let now = 0; now <= 440_000; now += 10_000)
+      expect(budget.sample(now, false)).toBe(false);
+    expect(budget.limit).toBe(100);
+    for (let now = 450_000; now <= 452_100; now += 1000 / 30) budget.sample(now, true);
+    expect(budget.limit).toBe(96);
+  });
   it("starts at the crowd ceiling and grows only after sustained headroom following backoff", () => {
     const budget = createTravelCharacterBudget();
     expect(budget.limit).toBe(100);

@@ -113,10 +113,13 @@ export const advanceVillageDutyPursuits = async (
       entry.user &&
       entry.user.userId !== visitor.userId &&
       isVillageDutyIntruder(home, entry.user, wars)
-        ? [entry.user]
+        ? [{ ...entry.user, expiresAt: entry.expiresAt.getTime() }]
         : [],
     ),
-    visitor,
+    {
+      ...visitor,
+      expiresAt: secondsFromDate(VILLAGE_DUTY_PRESENCE_SECONDS, now).getTime(),
+    },
   ];
   const patrols = planVillageDutyPursuits(
     shift.patrols,

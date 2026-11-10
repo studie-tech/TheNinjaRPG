@@ -18,7 +18,12 @@ import {
 } from "@/drizzle/schema";
 import { WANDER_STEP_MS } from "@/libs/overworldWander";
 import { Pusher } from "@/libs/pusher";
-import { isOnVillageDuty } from "@/libs/villageDuty";
+import {
+  isOnVillageDuty,
+  villageDutyPatrols,
+  villageDutyPosition,
+  villageDutyPursuitPosition,
+} from "@/libs/villageDuty";
 import {
   claimVillageDutyPatrol,
   countVillageDuty,
@@ -34,7 +39,10 @@ import {
 import { combatRouter } from "@/server/api/routers/combat";
 import { villageDutyRouter } from "@/server/api/routers/villageDuty";
 import * as sectorMaps from "@/server/utils/sectorMap";
-import { ensureVillageDutyShift } from "@/server/utils/villageDuty";
+import {
+  advanceVillageDutyPursuits,
+  ensureVillageDutyShift,
+} from "@/server/utils/villageDuty";
 import { getUtcHourStart, secondsFromDate } from "@/utils/time";
 import { insertDefaultAiProfile, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
@@ -321,6 +329,91 @@ describeWithDatabase("village duty hourly patrol", () => {
       }),
     ).toBeNull();
   });
+  it("resumes roaming after the last visitor expires without allied heartbeat reads or writes", async () => {
+    const db = await getTestDatabase();
+    await enrollCurrent();
+    const now = new Date();
+    const active = await shift(now);
+    await db
+      .insert(village)
+      .values({ id: "foreign", name: "Foreign", sector: 456, kageId: "enemy" });
+    await db.insert(villageAlliance).values({
+      id: "hostile",
+      villageIdA: "home",
+      villageIdB: "foreign",
+      status: "ENEMY",
+    });
+    await insertUsers([
+      {
+        userId: "enemy",
+        username: "Enemy",
+        villageId: "foreign",
+        sector: 123,
+        location: "Village",
+        status: "AWAKE",
+      },
+    ]);
+    const home = (await fetchVillageDutyHome(db, "home"))!;
+    const owners = await listVillageDutyRoster(db, "home", now);
+    const map = sectorMap(10, 10, () => ({ zone: "village" }), { anchors: [] });
+    const visitor = {
+      userId: "enemy",
+      villageId: "foreign",
+      sector: 123,
+      location: "Village",
+      status: "AWAKE",
+      isAi: false,
+      isBanned: false,
+      longitude: 9,
+      latitude: 9,
+    };
+    const advanced = await advanceVillageDutyPursuits(
+      db,
+      { ...home, dutyShift: active },
+      owners,
+      [],
+      map,
+      visitor,
+      now,
+    );
+    expect(advanced?.patrols[0]?.pursuit?.targetUserId).toBe("enemy");
+    const expired = secondsFromDate(26, now);
+    expect(await listVillageDutyVisitors(db, 123, expired)).toEqual([]);
+    const trace = await recordQueries(() =>
+      advanceVillageDutyPursuits(
+        db,
+        { ...home, dutyShift: advanced! },
+        owners,
+        [],
+        map,
+        { ...visitor, userId: "protector", villageId: "home" },
+        expired,
+      ),
+    );
+    expect(trace.result).toBeNull();
+    expect(trace.statements).toHaveLength(0);
+    const stored = (await findVillageDutyShift(db, "home"))!;
+    const actor = villageDutyPatrols(
+      await listVillageDutyPatrols(db, 123, now),
+      map,
+      123,
+      "home",
+      stored.patrols,
+    )[0]!;
+    expect(
+      villageDutyPursuitPosition(actor.npcWander!.pursuit!, expired.getTime()),
+    ).toBeNull();
+    expect(
+      villageDutyPosition(stored.patrols[0]!, actor, map, expired.getTime()),
+    ).toEqual(
+      villageDutyPosition(
+        { ...stored.patrols[0]!, pursuit: null },
+        actor,
+        map,
+        expired.getTime(),
+      ),
+    );
+  });
   it("pursues an active enemy without a roll and globally spends the copy after combat", async () => {
     const db = await getTestDatabase();
     const map = sectorMap(20, 20, () => ({ zone: "village" }), {
@@ -368,6 +461,9 @@ describeWithDatabase("village duty hourly patrol", () => {
     expect(first.success).toBe(true);
     let stored = (await findVillageDutyShift(db, "home"))!;
     expect(stored.patrols[0]?.pursuit?.targetUserId).toBe("invader");
+    expect(first.patrolUpdate?.patrols[0]?.pursuit?.expiresAt).toBe(
+      stored.patrols[0]?.pursuit?.expiresAt,
+    );
     if (!first.battleId) {
       const patrols = stored.patrols.map((entry) => ({
         ...entry,

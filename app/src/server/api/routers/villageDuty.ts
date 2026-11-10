@@ -117,6 +117,7 @@ export const villageDutyRouter = createTRPCRouter({
                   .object({
                     targetUserId: z.string(),
                     startedAt: z.number(),
+                    expiresAt: z.number().optional(),
                     path: z.array(z.object({ x: z.number(), y: z.number() })),
                   })
                   .nullable(),

@@ -1184,7 +1184,8 @@ export const shrineRouter = createTRPCRouter({
             ? await ensureVillageDutyShift(ctx.drizzle, defenderVillage)
             : null;
         const roster =
-          shift?.startedAt.getTime() === defenderVillage?.dutyShift?.startedAt.getTime()
+          !shift ||
+          shift.startedAt.getTime() === defenderVillage?.dutyShift?.startedAt.getTime()
             ? eligible
             : await listVillageDutyRoster(ctx.drizzle, shrineBattle.defenderEntityId);
         const slot =

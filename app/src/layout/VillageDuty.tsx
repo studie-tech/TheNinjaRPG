@@ -68,7 +68,9 @@ export const VillageDuty = ({
                 </p>
                 <p className="text-muted-foreground text-sm">
                   {data.count.toLocaleString()} signed up
-                  {data.defeated > 0 ? ` · ${data.defeated} copies defeated` : ""}
+                  {data.defeated > 0
+                    ? ` · ${data.defeated} ${data.defeated === 1 ? "copy" : "copies"} defeated`
+                    : ""}
                   {data.enrolled && (
                     <span className="block">
                       {data.patrolStatus === "PATROLLING"

@@ -1,6 +1,7 @@
 import {
   VILLAGE_DUTY_MAX_PATROLS,
   VILLAGE_DUTY_MIN_RANK,
+  VILLAGE_DUTY_PRESENCE_SECONDS,
   VILLAGE_DUTY_WANDER_RADIUS,
 } from "@/drizzle/constants";
 import type { UserData } from "@/drizzle/schema";
@@ -127,15 +128,21 @@ export type VillageDutyPatrol = {
   pursuit?: {
     targetUserId: string;
     startedAt: number;
+    expiresAt?: number;
     path: SectorCoordinate[];
   } | null;
 };
 
-/** A pursuit advances at the existing NPC pace and clamps at its last reachable tile. */
+/** A pursuit advances at the NPC pace until its travel presence expires, then resumes shared roaming. */
 export const villageDutyPursuitPosition = (
   pursuit: NonNullable<VillageDutyPatrol["pursuit"]>,
   now: number,
 ) => {
+  if (
+    now >=
+    (pursuit.expiresAt ?? pursuit.startedAt + VILLAGE_DUTY_PRESENCE_SECONDS * 1000)
+  )
+    return null;
   const progress = Math.max(0, (now - pursuit.startedAt) / WANDER_STEP_MS);
   const index = Math.min(pursuit.path.length - 1, Math.floor(progress));
   const from = pursuit.path[index];
@@ -198,7 +205,12 @@ export const planVillageDutyPursuits = (
   patrols: readonly VillageDutyPatrol[],
   owners: readonly { userId: string }[],
   map: NormalizedSectorMap,
-  intruders: readonly { userId: string; longitude: number; latitude: number }[],
+  intruders: readonly {
+    userId: string;
+    longitude: number;
+    latitude: number;
+    expiresAt?: number;
+  }[],
   now: number,
 ): VillageDutyPatrol[] => {
   const tiles = map.tiles.filter(
@@ -231,13 +243,17 @@ export const planVillageDutyPursuits = (
     const from = villageDutyPosition(patrol, actor, map, now);
     const target = nearestVillageDutyIntruder(from, intruders);
     if (!target) return patrol.pursuit ? { ...patrol, pursuit: null } : patrol;
+    const expiresAt = target.expiresAt ?? now + VILLAGE_DUTY_PRESENCE_SECONDS * 1000;
     const last = patrol.pursuit?.path.at(-1);
     if (
       patrol.pursuit?.targetUserId === target.userId &&
+      villageDutyPursuitPosition(patrol.pursuit, now) &&
       last &&
       oddQHexDistance(last.x, last.y, target.longitude, target.latitude) <= 1
     )
-      return patrol;
+      return patrol.pursuit.expiresAt === expiresAt
+        ? patrol
+        : { ...patrol, pursuit: { ...patrol.pursuit, expiresAt } };
     // Most heartbeats retain their pursuit; build routing state only for a changed destination.
     if (!paths) {
       const grid = createHexGrid(1, map.width, map.height);
@@ -282,6 +298,7 @@ export const planVillageDutyPursuits = (
           pursuit: {
             targetUserId: target.userId,
             startedAt: now,
+            expiresAt,
             path: path.map((tile) => ({ x: tile.col, y: tile.row })),
           },
         };

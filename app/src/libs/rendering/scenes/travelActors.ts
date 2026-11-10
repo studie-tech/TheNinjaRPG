@@ -130,6 +130,9 @@ export const createTravelActors = (
   let viewport: WorldBounds | null = null;
   let stableViewport: Record<keyof WorldBounds, [number, number]> | null = null;
   let visibleKey = "";
+  let actorMovements: ReadonlyMap<string, TravelActorMovement> | undefined;
+  let pursuingUsers: SectorUser[] = [];
+  let pursuitVisibilityKey = "";
   const movementOrder = new Map<
     string,
     {
@@ -146,6 +149,41 @@ export const createTravelActors = (
   let paintedOriginY = container.y;
   let lastDepthSortAt = Number.NEGATIVE_INFINITY;
   let lastActorSortAt = Number.NEGATIVE_INFINITY;
+  const membership = (x: number, y: number, width: number, height: number) => {
+    const bounds = viewport;
+    const within = (reach: number) =>
+      !bounds ||
+      (x >= bounds.minX - width * reach &&
+        x <= bounds.maxX + width * reach &&
+        y >= bounds.minY - height * reach &&
+        y <= bounds.maxY + height * reach);
+    return {
+      visible: within(LOAD_TILES),
+      retained: within(RETAIN_TILES),
+      onScreen:
+        !bounds ||
+        boundsOverlap(bounds, {
+          minX: x - width,
+          maxX: x + width * 2,
+          minY: y - height,
+          maxY: y + height * 2.4,
+        }),
+    };
+  };
+  /** Moving pursuits cross visibility boundaries independently of the static camera cache. */
+  const movingVisibilityKey = () =>
+    pursuingUsers
+      .map((user) => {
+        const movement = actorMovements?.get(travelActorKey(user));
+        const tile = sourceSnapshot?.grid.getHex({
+          col: user.longitude,
+          row: user.latitude,
+        });
+        if (!movement || !tile) return "";
+        const state = membership(movement.x, movement.y, tile.width, tile.height);
+        return `${Number(state.visible)}${Number(state.retained)}${Number(state.onScreen)}`;
+      })
+      .join("|");
   /** Cull before acquiring artwork; padding preloads nearby actors and the viewer stays present. */
   const visibleSnapshot = (snapshot: TravelActorsSnapshot) => {
     const bounds = viewport;
@@ -171,46 +209,36 @@ export const createTravelActors = (
     >();
     const tileFor = (user: SectorUser) => {
       // A roaming NPC can be anywhere within its radius of the anchor tile it reports.
-      const reach = user.npcWander?.radius ?? 0;
-      const key = `${user.longitude},${user.latitude},${reach}`;
+      const movement = user.npcWander?.pursuit
+        ? actorMovements?.get(travelActorKey(user))
+        : undefined;
+      const reach = movement ? 0 : (user.npcWander?.radius ?? 0);
+      const key = movement
+        ? `pursuit:${movement.x},${movement.y}`
+        : `${user.longitude},${user.latitude},${reach}`;
       if (tiles.has(key)) return tiles.get(key);
       const tile = snapshot.grid.getHex({ col: user.longitude, row: user.latitude });
       if (!tile) {
         tiles.set(key, undefined);
         return undefined;
       }
-      const x = -tile.center.x,
-        y = -tile.center.y,
+      const x = movement?.x ?? -tile.center.x,
+        y = movement?.y ?? -tile.center.y,
         width = tile.width * (1 + reach),
         height = tile.height * (1 + reach);
+      // Dynamic boundaries are checked separately so they cannot stale the camera's stable domain.
+      const fixedBoundary = movement ? () => {} : boundary;
       for (const reachTiles of [LOAD_TILES, RETAIN_TILES]) {
-        boundary("minX", x + width * reachTiles);
-        boundary("maxX", x - width * reachTiles);
-        boundary("minY", y + height * reachTiles);
-        boundary("maxY", y - height * reachTiles);
+        fixedBoundary("minX", x + width * reachTiles);
+        fixedBoundary("maxX", x - width * reachTiles);
+        fixedBoundary("minY", y + height * reachTiles);
+        fixedBoundary("maxY", y - height * reachTiles);
       }
-      boundary("minX", x + width * 2);
-      boundary("maxX", x - width);
-      boundary("minY", y + height * 2.4);
-      boundary("maxY", y - height);
-      const within = (reachTiles: number) =>
-        !bounds ||
-        (x >= bounds.minX - width * reachTiles &&
-          x <= bounds.maxX + width * reachTiles &&
-          y >= bounds.minY - height * reachTiles &&
-          y <= bounds.maxY + height * reachTiles);
-      const entry = {
-        visible: within(LOAD_TILES),
-        retained: within(RETAIN_TILES),
-        onScreen:
-          !bounds ||
-          boundsOverlap(bounds, {
-            minX: x - width,
-            maxX: x + width * 2,
-            minY: y - height,
-            maxY: y + height * 2.4,
-          }),
-      };
+      fixedBoundary("minX", x + width * 2);
+      fixedBoundary("maxX", x - width);
+      fixedBoundary("minY", y + height * 2.4);
+      fixedBoundary("maxY", y - height);
+      const entry = membership(x, y, width, height);
       tiles.set(key, entry);
       return entry;
     };
@@ -387,7 +415,10 @@ export const createTravelActors = (
         counterLabel: null,
         effects,
         // Roaming NPC copies share a template userId, so their movement is keyed per actor.
-        movementKey: recipe.user?.isNpc ? recipe.key : (recipe.user?.userId ?? ""),
+        movementKey:
+          recipe.user?.npcWander || recipe.user?.isNpc
+            ? recipe.key
+            : (recipe.user?.userId ?? ""),
         character: undefined,
         loops: false,
         tile: previous?.tile ?? recipe.tile,
@@ -739,8 +770,15 @@ export const createTravelActors = (
   const animate = (
     frame: GameFrame,
     movements?: ReadonlyMap<string, TravelActorMovement>,
+    continuous = true,
   ) => {
-    if (characterBudget.sample(frame.now) && sourceSnapshot) {
+    actorMovements = movements;
+    const movingKey = movingVisibilityKey();
+    if (movingKey !== pursuitVisibilityKey) {
+      pursuitVisibilityKey = movingKey;
+      refreshVisibility();
+    }
+    if (characterBudget.sample(frame.now, continuous) && sourceSnapshot) {
       selectionKey = null;
       sync(sourceSnapshot);
     }
@@ -888,6 +926,7 @@ export const createTravelActors = (
     if (sourceSnapshot?.sector !== snapshot.sector) {
       movementOrder.clear();
       selectionKey = null;
+      actorMovements = undefined;
     }
     if (sourceSnapshot?.viewer?.userId !== snapshot.viewer?.userId) selectionKey = null;
     const present = new Set<string>();
@@ -918,8 +957,19 @@ export const createTravelActors = (
     for (const key of movementOrder.keys())
       if (!present.has(key)) movementOrder.delete(key);
     sourceSnapshot = snapshot;
+    pursuingUsers = snapshot.users.filter((user) => user.npcWander?.pursuit);
+    pursuitVisibilityKey = movingVisibilityKey();
     const visible = visibleSnapshot(snapshot);
     visibleKey = userKey(visible);
+    reconcile(visible);
+  };
+  /** Reconcile only membership or body-priority changes; stable artwork stays owned by its actor. */
+  const refreshVisibility = () => {
+    if (!sourceSnapshot) return;
+    const visible = visibleSnapshot(sourceSnapshot);
+    const key = userKey(visible);
+    if (key === visibleKey) return;
+    visibleKey = key;
     reconcile(visible);
   };
   return {
@@ -934,23 +984,23 @@ export const createTravelActors = (
       const domain = stableViewport;
       viewport = { ...bounds };
       if (!sourceSnapshot) return;
+      const movingKey = movingVisibilityKey();
       if (
-        (previous &&
+        movingKey === pursuitVisibilityKey &&
+        ((previous &&
           bounds.minX === previous.minX &&
           bounds.maxX === previous.maxX &&
           bounds.minY === previous.minY &&
           bounds.maxY === previous.maxY) ||
-        (domain &&
-          (Object.keys(domain) as (keyof WorldBounds)[]).every(
-            (axis) => bounds[axis] > domain[axis][0] && bounds[axis] < domain[axis][1],
-          ))
+          (domain &&
+            (Object.keys(domain) as (keyof WorldBounds)[]).every(
+              (axis) =>
+                bounds[axis] > domain[axis][0] && bounds[axis] < domain[axis][1],
+            )))
       )
         return;
-      const visible = visibleSnapshot(sourceSnapshot);
-      const key = userKey(visible);
-      if (key === visibleKey) return;
-      visibleKey = key;
-      reconcile(visible);
+      pursuitVisibilityKey = movingKey;
+      refreshVisibility();
     },
     hit,
     animate,

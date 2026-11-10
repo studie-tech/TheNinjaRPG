@@ -13,7 +13,13 @@ export const createTravelCharacterBudget = () => {
       return limit;
     },
     /** Sample monotonic frame time in milliseconds; return whether the scene needs a new limit. */
-    sample(now: number) {
+    sample(now: number, continuous = true) {
+      // Intentional on-demand intervals measure invalidation cadence, not rendering capacity.
+      if (!continuous) {
+        previous = undefined;
+        elapsed = frames = healthyWindows = longestGap = 0;
+        return false;
+      }
       const interval = previous === undefined ? 0 : now - previous;
       previous = now;
       if (interval <= 0) {

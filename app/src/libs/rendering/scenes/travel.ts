@@ -1049,7 +1049,7 @@ export const createTravelScene = async (options: {
           rendered.art.animate(frame, scale(), null, breeze);
       }
       // Zoom can reclassify foreground scenery before actor contact order is resolved.
-      actors.animate(frame, movements);
+      actors.animate(frame, movements, !isStill);
       revealViewer(frame, snapshot.viewer?.userId);
       sceneryScale = scale();
       const pointer = controls.pointer();
