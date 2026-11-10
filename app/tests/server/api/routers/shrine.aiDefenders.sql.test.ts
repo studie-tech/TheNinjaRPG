@@ -155,9 +155,22 @@ describeWithDatabase("shrine AI defenders", () => {
     expect(human).toMatchObject({ status: "AWAKE", battleId: null });
   });
 
-  it.each([true, false])(
-    "uses a duty copy only for the village's home shrine (home=%s)",
-    async (home) => {
+  it.each(["OUTLAW", "HIDEOUT", "STRONGHOLD"] as const)(
+    "uses stored shrine defenders for a %s faction",
+    async (type) => {
+      const db = await getTestDatabase();
+      await db.update(village).set({ type }).where(eq(village.id, "b"));
+      expect(await startLobby(["shrine-a"])).toEqual(["shrine-a"]);
+    },
+  );
+
+  it.each([
+    [true, "VILLAGE"],
+    [false, "VILLAGE"],
+    [true, "OUTLAW"],
+  ] as const)(
+    "uses a duty copy only for a village home shrine (home=%s, type=%s)",
+    async (home, type) => {
       const db = await getTestDatabase();
       await db
         .update(userData)
@@ -169,7 +182,7 @@ describeWithDatabase("shrine AI defenders", () => {
         })
         .where(eq(userData.userId, "human"));
       if (home) {
-        await db.update(village).set({ sector: 101 }).where(eq(village.id, "b"));
+        await db.update(village).set({ sector: 101, type }).where(eq(village.id, "b"));
         await db.insert(war).values({
           id: "home-war",
           attackerVillageId: "a",
@@ -187,7 +200,14 @@ describeWithDatabase("shrine AI defenders", () => {
         patrolSlotsPerLvl: 2,
       });
       const defenders = await startLobby(["shrine-a"]);
-      expect(defenders).toEqual(home ? ["duty:human"] : ["shrine-a"]);
+      expect(defenders).toEqual(
+        home && type === "VILLAGE" ? ["duty:human"] : ["shrine-a"],
+      );
+      expect(
+        (await db.query.villageDutyShift.findFirst({
+          where: eq(villageDutyShift.villageId, "b"),
+        })) !== undefined,
+      ).toBe(home && type === "VILLAGE");
       expect(
         await db.query.userData.findFirst({ where: eq(userData.userId, "human") }),
       ).toMatchObject({

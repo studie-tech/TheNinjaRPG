@@ -27,7 +27,10 @@ import { getUtcHourStart, secondsFromDate } from "@/utils/time";
 /** Lazily publish a fixed hourly roster; only initialization losers reconcile another writer's result. */
 export const ensureVillageDutyShift = async (
   client: DrizzleClient,
-  home: NonNullable<Awaited<ReturnType<typeof fetchVillageDutyHome>>>,
+  home: Pick<
+    NonNullable<Awaited<ReturnType<typeof fetchVillageDutyHome>>>,
+    "id" | "structures" | "dutyShift"
+  >,
   now = new Date(),
 ) => {
   const startedAt = getUtcHourStart(now);

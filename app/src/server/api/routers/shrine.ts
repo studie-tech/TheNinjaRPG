@@ -69,6 +69,7 @@ import {
   findSectorWithVillage,
   findUserDataForJoinShrineBattle,
   findVillageForGetBoostTemplate,
+  findVillageForInitiateShrineBattle,
   insertMpvpBattleQueueForChallengeShrine,
   insertMpvpBattleUserForJoinShrineBattle,
   listMpvpBattleQueueForGetShrineBattles,
@@ -91,7 +92,7 @@ import {
 } from "@/queries/shrine";
 import { findVillageBoostUserCache } from "@/queries/socialUserCache";
 import { fetchAlliances, findVillageBySector } from "@/queries/village";
-import { fetchVillageDutyHome, listVillageDutyRoster } from "@/queries/villageDuty";
+import { listVillageDutyRoster } from "@/queries/villageDuty";
 import { initiateBattle, initiateVillageDutyBattle } from "@/routers/combat";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { fetchActiveWars } from "@/routers/war";
@@ -1163,7 +1164,10 @@ export const shrineRouter = createTRPCRouter({
       if (defenderIds.length === 0) {
         // Use defenderEntityId directly - it's the village ID for shrine battles
         const [defenderVillage, shrineAis, eligible] = await Promise.all([
-          fetchVillageDutyHome(ctx.drizzle, shrineBattle.defenderEntityId),
+          findVillageForInitiateShrineBattle(
+            ctx.drizzle,
+            shrineBattle.defenderEntityId,
+          ),
           listUserDataForStartShrineBattle(ctx.drizzle),
           shrineBattle.sector != null
             ? listVillageDutyRoster(ctx.drizzle, shrineBattle.defenderEntityId)
@@ -1180,7 +1184,8 @@ export const shrineRouter = createTRPCRouter({
           SHRINE_BATTLE_MAX_USERS_PER_SIDE,
         );
         const shift =
-          defenderVillage?.sector === shrineBattle.sector
+          defenderVillage?.type === "VILLAGE" &&
+          defenderVillage.sector === shrineBattle.sector
             ? await ensureVillageDutyShift(ctx.drizzle, defenderVillage)
             : null;
         const roster =
