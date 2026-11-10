@@ -346,7 +346,6 @@ export const createGlobeScene = async (options: {
             clickable: true,
           });
         }
-      // Markers sharing a sector with a banner step beside its pole instead of covering it.
       const avatar = (user: GlobeUser, border: string, clickable: boolean) => {
         const point = surfacePoint(map, user.sector);
         if (!point) return;
@@ -357,7 +356,6 @@ export const createGlobeScene = async (options: {
           image: user.avatarLight || user.avatar || IMG_AVATAR_DEFAULT,
           border,
           clickable,
-          nudge: bannerSectors.has(user.sector) ? 0.7 : 0,
         });
       };
       for (const user of state.usersHighlighted ?? []) avatar(user, "#dc2626", true);
@@ -372,13 +370,16 @@ export const createGlobeScene = async (options: {
         });
         avatar(state.user, "white", false);
       }
+      // A quest or target in a village's sector is pinned onto that village's banner,
+      // so every marker stays on its own sector instead of standing beside the pole.
+      const tags: GlobeMarker[] = [];
       for (const pin of uniquePins) {
         const point = surfacePoint(map, pin.sector);
         if (!point) continue;
-        const nudge = bannerSectors.has(pin.sector) ? -0.75 : 0;
+        const hasBanner = bannerSectors.has(pin.sector);
         if (pin.type === "war") {
           ground.push({ kind: "glow", sector: pin.sector, point, pulse: true });
-          if (!nudge)
+          if (!hasBanner)
             standing.push({
               kind: "pin",
               sector: pin.sector,
@@ -386,7 +387,15 @@ export const createGlobeScene = async (options: {
               clickable: true,
               image: IMG_MAP_WAR_ICON,
             });
-        } else
+        } else if (hasBanner)
+          tags.push({
+            kind: pin.type === "quest" ? "questTag" : "targetTag",
+            sector: pin.sector,
+            point,
+            clickable: true,
+            pulse: true,
+          });
+        else
           standing.push({
             kind: pin.type === "quest" ? "quest" : "target",
             sector: pin.sector,
@@ -394,10 +403,9 @@ export const createGlobeScene = async (options: {
             clickable: true,
             pulse: true,
             edge: true,
-            nudge,
           });
       }
-      const nextMarkers = [...ground, ...standing, ...banners, ...avatars];
+      const nextMarkers = [...ground, ...standing, ...banners, ...tags, ...avatars];
       const markersKey = JSON.stringify(nextMarkers);
       if (markersKey !== previousMarkersKey) {
         previousMarkersKey = markersKey;

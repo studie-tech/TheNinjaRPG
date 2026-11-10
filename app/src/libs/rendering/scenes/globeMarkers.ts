@@ -69,7 +69,7 @@ export const createGlobeMarkers = (
       ] as const) {
         centers.push(marker.point.x, marker.point.y, marker.point.z);
         offsets.push(
-          ((u - 0.5) * layout.width + (marker.nudge ?? 0)) * lift,
+          ((u - 0.5) * layout.width + (layout.shift ?? 0)) * lift,
           (layout.lift + (1 - v) * layout.height) * lift,
         );
         uvs.push((x + u * layout.texels[0]) / 1024, (y + v * layout.texels[1]) / 1024);
@@ -174,10 +174,18 @@ void main() {
           drawRing(context, marker.border ?? "#ffffff", x, y);
         } else if (marker.kind === "glow") {
           drawGlow(context, marker.fill ?? "#ff3b1f", x, y);
-        } else if (marker.kind === "quest") {
-          drawBadge(context, "#f59e0b", "#7c2d12", "!", x, y);
-        } else if (marker.kind === "target") {
-          drawBadge(context, "#a855f7", "#3b0764", "\u25ce", x, y);
+        } else if (marker.kind === "quest" || marker.kind === "questTag") {
+          drawBadge(context, "#f59e0b", "#7c2d12", "!", x, y, marker.kind === "quest");
+        } else if (marker.kind === "target" || marker.kind === "targetTag") {
+          drawBadge(
+            context,
+            "#a855f7",
+            "#3b0764",
+            "\u25ce",
+            x,
+            y,
+            marker.kind === "target",
+          );
         } else if (marker.image) {
           const lease = assets;
           void Promise.all([
@@ -237,7 +245,7 @@ void main() {
       for (const { marker, anchor, projected } of candidates) {
         const layout = MARKER_LAYOUT[marker.kind];
         const [bottom, top] = layout.hit ?? [layout.lift, layout.lift + layout.height];
-        const dx = (x - projected.x) / projected.scale - (marker.nudge ?? 0),
+        const dx = (x - projected.x) / projected.scale - (layout.shift ?? 0),
           dy = (projected.y - y) / projected.scale;
         if (Math.abs(dx) > layout.width / 2 || dy < bottom || dy > top) continue;
         return marker.sector;
@@ -297,12 +305,17 @@ const MARKER_LAYOUT: Record<
     lift: number;
     texels: [number, number];
     hit?: [number, number];
+    /** Screen-right offset of the billboard centre from the anchor. */
+    shift?: number;
   }
 > = {
   label: { width: 2.2, height: 1.99, lift: 0, texels: [124, 112], hit: [0.95, 1.99] },
   avatar: { width: 1, height: 1, lift: 0.05, texels: [64, 64] },
   quest: { width: 0.85, height: 1.13, lift: 0, texels: [72, 96] },
   target: { width: 0.85, height: 1.13, lift: 0, texels: [72, 96] },
+  // Pinned on a banner's upper-left corner (see label), without a peg.
+  questTag: { width: 0.72, height: 0.72, lift: 1.5, shift: -1.02, texels: [72, 72] },
+  targetTag: { width: 0.72, height: 0.72, lift: 1.5, shift: -1.02, texels: [72, 72] },
   pin: { width: 1, height: 1, lift: 0.1, texels: [64, 64] },
   ring: { width: 1.6, height: 0.8, lift: -0.4, texels: [96, 48] },
   glow: { width: 2.6, height: 2.6, lift: -1.3, texels: [120, 120] },
@@ -381,7 +394,10 @@ const drawRing = (
   context.restore();
 };
 
-/** Round map badge with a glyph, standing on a short peg whose tip is the anchor. */
+/**
+ * Round map badge with a glyph. With a peg it stands on the surface, the peg's tip
+ * at the anchor; without one it is a tag pinned onto a banner.
+ */
 const drawBadge = (
   context: CanvasRenderingContext2D,
   fill: string,
@@ -389,20 +405,23 @@ const drawBadge = (
   glyph: string,
   x: number,
   y: number,
+  hasPeg: boolean,
 ) => {
   context.save();
   context.translate(x, y);
-  context.beginPath();
-  context.ellipse(36, 92, 10, 4, 0, 0, Math.PI * 2);
-  context.fillStyle = "rgba(0, 0, 0, 0.4)";
-  context.fill();
-  context.beginPath();
-  context.moveTo(28, 60);
-  context.lineTo(36, 92);
-  context.lineTo(44, 60);
-  context.closePath();
-  context.fillStyle = rim;
-  context.fill();
+  if (hasPeg) {
+    context.beginPath();
+    context.ellipse(36, 92, 10, 4, 0, 0, Math.PI * 2);
+    context.fillStyle = "rgba(0, 0, 0, 0.4)";
+    context.fill();
+    context.beginPath();
+    context.moveTo(28, 60);
+    context.lineTo(36, 92);
+    context.lineTo(44, 60);
+    context.closePath();
+    context.fillStyle = rim;
+    context.fill();
+  }
   context.beginPath();
   context.arc(36, 34, 30, 0, Math.PI * 2);
   context.fillStyle = rim;
@@ -485,7 +504,16 @@ const drawAvatar = (
  * marker visible on the rim in its direction.
  */
 export type GlobeMarker = {
-  kind: "label" | "avatar" | "pin" | "ring" | "glow" | "quest" | "target";
+  kind:
+    | "label"
+    | "avatar"
+    | "pin"
+    | "ring"
+    | "glow"
+    | "quest"
+    | "target"
+    | "questTag"
+    | "targetTag";
   sector: number;
   point: GlobalPoint;
   text?: string;
@@ -497,6 +525,4 @@ export type GlobeMarker = {
   pulse?: boolean;
   clickable?: boolean;
   edge?: boolean;
-  /** Screen-right offset in globe units, so markers sharing a sector stand side by side. */
-  nudge?: number;
 };
