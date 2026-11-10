@@ -21,6 +21,7 @@ import {
   getTutorialPortraitSide,
   getTutorialRewindStepIndex,
   getTutorialStepPath,
+  getTutorialStrandedBattleStepId,
   getTutorialTakeQuestId,
   hasOutgrownTutorial,
   isStarterObjectiveSatisfied,
@@ -943,5 +944,105 @@ describe("getTutorialCatchUpStepIndex on Road to Genin", () => {
   it("does not skip ahead for a student who has not started the quest", () => {
     const user = { rank: "STUDENT", userQuests: [], questData: [] };
     expect(getTutorialCatchUpStepIndex(steps, 0, user)).toBeUndefined();
+  });
+});
+
+describe("getTutorialStrandedBattleStepId", () => {
+  const O = STARTER_QUEST_OBJECTIVES;
+  const activeQuest = { questId: TUTORIAL_STARTER_QUEST_ID, completed: 0, endAt: null };
+  // Same shape as the combat chapter and the pup fight in TUTORIAL_STEPS.
+  const outcomes = {
+    onCombatWin: "combat-claim-reward",
+    onCombatLoss: "combat-enter-arena",
+  };
+  const steps = [
+    { id: "combat-arena-building", page: "/village" },
+    { id: "combat-enter-arena", page: "/battlearena" },
+    { id: "combat-battlefield", page: "/combat", ...outcomes },
+    { id: "combat-turns", page: "/combat", ...outcomes },
+    { id: "combat-fight", page: "/combat", ...outcomes },
+    { id: "combat-claim-reward", page: "/profile", objectiveId: O.arena },
+    {
+      id: TUTORIAL_CAPTURE_STEP_ID,
+      page: "/travel",
+      objectiveId: O.pup,
+      onCombatWin: "mission-claim-pup",
+      onCombatLoss: TUTORIAL_CAPTURE_TRAVEL_STEP_ID,
+    },
+    { id: "mission-claim-pup", page: "/travel", objectiveId: O.pup },
+  ];
+  const battleIndex = 4;
+  const awake = (goals: { id: string; done?: boolean; collected?: boolean }[]) => ({
+    status: "AWAKE",
+    battleId: null,
+    userQuests: [activeQuest],
+    questData: [{ id: TUTORIAL_STARTER_QUEST_ID, goals }],
+  });
+  const accepted = { id: O.accept, done: true, collected: true };
+
+  it("sends a player whose fight ended elsewhere back to the arena", () => {
+    for (const index of [2, 3, 4]) {
+      expect(
+        getTutorialStrandedBattleStepId(
+          steps,
+          index,
+          awake([accepted, { id: O.arena }]),
+          "/profile",
+        ),
+      ).toBe("combat-enter-arena");
+    }
+  });
+
+  it("moves on to the reward when the arena fight was won while away", () => {
+    expect(
+      getTutorialStrandedBattleStepId(
+        steps,
+        battleIndex,
+        awake([accepted, { id: O.arena, done: true }]),
+        "/village",
+      ),
+    ).toBe("combat-claim-reward");
+  });
+
+  it("leaves a running fight, the battle page and the hospital alone", () => {
+    const user = awake([accepted, { id: O.arena }]);
+    const inBattle = { ...user, status: "BATTLE", battleId: "battle-1" };
+    expect(
+      getTutorialStrandedBattleStepId(steps, battleIndex, inBattle, "/profile"),
+    ).toBeUndefined();
+    expect(
+      getTutorialStrandedBattleStepId(steps, battleIndex, user, "/combat"),
+    ).toBeUndefined();
+    const hospitalized = { ...user, status: "HOSPITALIZED" };
+    expect(
+      getTutorialStrandedBattleStepId(steps, battleIndex, hospitalized, "/hospital"),
+    ).toBeUndefined();
+  });
+
+  it("treats a stale battle status without a battle as over", () => {
+    const user = { ...awake([accepted, { id: O.arena }]), status: "BATTLE" };
+    expect(getTutorialStrandedBattleStepId(steps, battleIndex, user, "/profile")).toBe(
+      "combat-enter-arena",
+    );
+  });
+
+  it("waits for user and quest data", () => {
+    expect(
+      getTutorialStrandedBattleStepId(steps, battleIndex, undefined, "/profile"),
+    ).toBeUndefined();
+    const loading = { status: "AWAKE", battleId: null, userQuests: null };
+    expect(
+      getTutorialStrandedBattleStepId(steps, battleIndex, loading, "/profile"),
+    ).toBeUndefined();
+  });
+
+  it("only applies to lessons that live on the battle page", () => {
+    const user = awake([accepted, { id: O.arena }]);
+    // The walk to the pup fights on the travel map; being away from /combat is normal there.
+    const pupIndex = 6;
+    expect(
+      getTutorialStrandedBattleStepId(steps, pupIndex, user, "/travel"),
+    ).toBeUndefined();
+    expect(getTutorialStrandedBattleStepId(steps, 0, user, "/village")).toBeUndefined();
   });
 });
