@@ -117,6 +117,7 @@ export const repayDiffuseDamage = (
       txt: `${target.username} takes ${damage.toFixed(2)} diffuse damage`,
       color: "red",
       types: ["diffuse"],
+      hp: { userId: target.userId, amount: -damage },
     });
   }
   target.diffuseDamage = target.diffuseDamage.filter((debt) => debt.remainingTurns > 0);

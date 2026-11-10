@@ -1,8 +1,10 @@
 import { isSummonTemplate } from "@/libs/combat/summon";
 import type {
+  ActionEffect,
   BattleUserState,
   CompleteBattle,
   GroundEffect,
+  LoggedHealth,
   ReturnedBattle,
   ReturnedUserState,
   UserEffect,
@@ -49,6 +51,8 @@ export type CombatPlaybackStep = {
   users: PlaybackUser[];
   addedEffectIds: string[];
   removedEffectIds: string[];
+  /** Health lines this action's log entry reports, in order; absent when not recorded. */
+  hits?: LoggedHealth[];
 };
 
 /** One replayed action: the actor winds up in `windup`, and `battle` lands at the strike. */
@@ -59,6 +63,8 @@ export type CombatPlaybackFrame = {
   impact: number;
   windup?: ReturnedBattle;
   battle: ReturnedBattle;
+  /** Health lines logged by the actions this frame lands, which its numbers show. */
+  hits?: LoggedHealth[];
 };
 
 /** How hard a hit reads, by the share of the fighter's health it took. */
@@ -69,26 +75,45 @@ export type CombatHit = { userId: string; amount: number; severity: HitSeverity 
 const HEAVY_HIT_SHARE = 0.08;
 const CRUSHING_HIT_SHARE = 0.25;
 
-/** Whole-point health changes, read as the health meters read them. */
+/**
+ * Numbers for the health changes between two battles the field showed. With the landed
+ * actions' logged lines, each fighter gets one number per line, matching the battle log;
+ * without them (or for a change no line names) it gets its whole-point net change.
+ */
 export const combatHits = (
   previous: ReturnedBattle,
   next: ReturnedBattle,
+  logged?: LoggedHealth[],
 ): CombatHit[] =>
   next.usersState.flatMap((user) => {
     const before = previous.usersState.find((row) => row.userId === user.userId);
     if (!before) return [];
     const health = getEffectiveCurPool(user, "Health");
-    const amount = Math.round(health - getEffectiveCurPool(before, "Health"));
-    if (!amount) return [];
-    const share = -amount / Math.max(1, user.maxHealth);
-    const severity =
-      health <= 0 || share >= CRUSHING_HIT_SHARE
-        ? "crushing"
-        : share >= HEAVY_HIT_SHARE
-          ? "heavy"
-          : "light";
-    return [{ userId: user.userId, amount, severity }];
+    const lines = (logged ?? [])
+      .filter((line) => line.userId === user.userId)
+      .map((line) => Math.round(line.amount))
+      .filter((amount) => amount !== 0);
+    const net = Math.round(health - getEffectiveCurPool(before, "Health"));
+    const amounts = lines.length ? lines : net ? [net] : [];
+    const lastDamage = amounts.reduce(
+      (last, amount, index) => (amount < 0 ? index : last),
+      -1,
+    );
+    return amounts.map((amount, index) => {
+      const share = -amount / Math.max(1, user.maxHealth);
+      const severity: HitSeverity =
+        (health <= 0 && index === lastDamage) || share >= CRUSHING_HIT_SHARE
+          ? "crushing"
+          : share >= HEAVY_HIT_SHARE
+            ? "heavy"
+            : "light";
+      return { userId: user.userId, amount, severity };
+    });
   });
+
+/** The health lines an action's log entry carries, for its replay step. */
+const loggedHealth = (effects: ActionEffect[]) =>
+  effects.flatMap(({ hp }) => (hp ? [{ userId: hp.userId, amount: hp.amount }] : []));
 
 /** Effects clone fighters between actions, so cues compare by their own identity. */
 const isSameValue = (a: unknown, b: unknown) =>
@@ -111,7 +136,13 @@ export const createCombatPlaybackRecorder = (battle: CompleteBattle) => {
   const steps: CombatPlaybackStep[] = [];
   return {
     steps,
-    record: (state: CompleteBattle, version: number, actorId: string) => {
+    record: (
+      state: CompleteBattle,
+      version: number,
+      actorId: string,
+      /** The action's log lines; their health tags become the step's numbers. */
+      logged?: ActionEffect[],
+    ) => {
       const nextUsers = new Map(
         fighters(state).map((user) => [user.userId, values(user)]),
       );
@@ -136,6 +167,7 @@ export const createCombatPlaybackRecorder = (battle: CompleteBattle) => {
         }),
         addedEffectIds: [...nextEffects].filter((id) => !effects.has(id)),
         removedEffectIds: [...effects].filter((id) => !nextEffects.has(id)),
+        ...(logged ? { hits: loggedHealth(logged) } : {}),
       });
       users = nextUsers;
       effects = nextEffects;
@@ -231,17 +263,25 @@ export const buildPlaybackFrames = (
       ...(cue && actor ? { cueId: cue.id, windup: windupOf(before, actor) } : {}),
       battle: index === steps.length - 1 ? next : viewOf(next, users, effects),
       isWalk: !cue && isWalkStep(step),
+      hits: step.hits,
     };
   });
   // Fighters step one hex per action; joined, those steps share one uninterrupted walk.
-  return frames
-    .filter(
-      (frame, index) =>
-        !frame.isWalk ||
-        !frames[index + 1]?.isWalk ||
-        frames[index + 1]?.actorId !== frame.actorId,
-    )
-    .map(({ isWalk: _, ...frame }) => frame);
+  // A joined step's logged lines land with the walk that absorbs it.
+  let carried: LoggedHealth[] | undefined = [];
+  return frames.flatMap(({ isWalk, ...frame }, index) => {
+    const joined =
+      isWalk &&
+      frames[index + 1]?.isWalk &&
+      frames[index + 1]?.actorId === frame.actorId;
+    const hits = carried && frame.hits ? [...carried, ...frame.hits] : undefined;
+    if (joined) {
+      carried = hits;
+      return [];
+    }
+    carried = [];
+    return [{ ...frame, hits }];
+  });
 };
 
 /** Only the actor changed position, with nothing else on the field to reveal along the way. */

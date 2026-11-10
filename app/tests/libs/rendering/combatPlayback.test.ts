@@ -166,4 +166,53 @@ describe("combat replay director", () => {
     expect(seen.has(20)).toBe(true);
     expect(playback.presented()).toBe(next);
   });
+
+  it("hands the scene each landed strike's logged lines once", () => {
+    const playback = createCombatPlayback(battle(1));
+    const next = battle(2, { usersState: [fighter(20, cue("a"))] });
+    next.playback = [
+      {
+        ...step(1, [{ userId: "foe", curHealth: 20, spriteAction: cue("a") }]),
+        hits: [
+          { userId: "foe", amount: -550 },
+          { userId: "foe", amount: -250 },
+        ],
+      },
+    ];
+    playback.receive(next);
+    playback.tick({ ...idle, now: 0, cue: () => 0 });
+    // The windup lands nothing, so the scene measures it by its net change.
+    expect(playback.takeHits()).toBeUndefined();
+    playback.tick({ ...idle, now: 10, cue: () => 0.6 });
+    expect(playback.takeHits()).toEqual([
+      { userId: "foe", amount: -550 },
+      { userId: "foe", amount: -250 },
+    ]);
+    expect(playback.takeHits()).toBeUndefined();
+  });
+
+  it("falls back to net change when a skip leaves lines unlanded", () => {
+    const playback = createCombatPlayback(battle(1));
+    const next = battle(2, { usersState: [fighter(40, cue("a"))] });
+    next.playback = [
+      {
+        ...step(1, [{ userId: "foe", spriteAction: cue("a") }]),
+        hits: [{ userId: "foe", amount: -60 }],
+      },
+    ];
+    playback.receive(next);
+    playback.tick({ ...idle, now: 0, cue: () => 0 });
+    playback.takeHits();
+    playback.tick({ ...idle, now: 1, instant: true });
+    expect(playback.takeHits()).toBeUndefined();
+  });
+
+  it("leaves steps without lines to the net change", () => {
+    const playback = createCombatPlayback(battle(1));
+    const next = battle(2, { usersState: [fighter(40)] });
+    next.playback = [step(1, [{ userId: "foe", curHealth: 40 }])];
+    playback.receive(next);
+    playback.tick({ ...idle, now: 0 });
+    expect(playback.takeHits()).toBeUndefined();
+  });
 });

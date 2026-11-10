@@ -819,6 +819,7 @@ export const combatRouter = createTRPCRouter({
             newBattle,
             newBattle.version + nActions,
             performedByUserId ?? actor.userId,
+            actionEffects,
           );
           nActions += 1;
         }
@@ -847,6 +848,7 @@ export const combatRouter = createTRPCRouter({
             newBattle,
             newBattle.version + nActions,
             transformedForm.userId,
+            [],
           );
           nActions += 1;
         }
