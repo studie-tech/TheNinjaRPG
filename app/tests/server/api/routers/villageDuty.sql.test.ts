@@ -147,7 +147,7 @@ describeWithDatabase("village duty enrollment", () => {
       userId: eligible[0]!.userId,
       attribute: "appearance-hair",
     });
-    const patrols = await listVillageDutyPatrols(db, "home");
+    const patrols = await listVillageDutyPatrols(db, 123);
     expect(patrols[0]?.attributes).toEqual([{ attribute: "appearance-hair" }]);
     const trace = await recordQueries(() =>
       resolverOf(villageDutyRouter.get)({
@@ -194,7 +194,7 @@ describeWithDatabase("village duty enrollment", () => {
     expect(await listVillageDutyRoster(db, "foreign")).toEqual([]);
     await db.update(village).set({ type: "OUTLAW" }).where(eq(village.id, "home"));
     expect(await listVillageDutyRoster(db, "home")).toEqual([]);
-    expect(await listVillageDutyPatrols(db, "home")).toEqual([]);
+    expect(await listVillageDutyPatrols(db, 123)).toEqual([]);
     expect(
       await callerForDatabase(villageDutyRouter, "protector", db).get({
         villageId: "home",

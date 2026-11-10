@@ -41,10 +41,7 @@ export const listVillageDutyRoster = (client: DrizzleClient, villageId: string) 
   });
 
 /** Load a bounded public patrol sample and the private inputs needed to resolve its appearance. */
-export const listVillageDutyPatrols = (
-  client: DrizzleClient,
-  villageOrSector: string | number,
-) =>
+export const listVillageDutyPatrols = (client: DrizzleClient, sector: number) =>
   client.query.userData.findMany({
     columns: {
       userId: true,
@@ -69,14 +66,7 @@ export const listVillageDutyPatrols = (
         client
           .select({ id: village.id })
           .from(village)
-          .where(
-            and(
-              typeof villageOrSector === "number"
-                ? eq(village.sector, villageOrSector)
-                : eq(village.id, villageOrSector),
-              eq(village.type, "VILLAGE"),
-            ),
-          ),
+          .where(and(eq(village.sector, sector), eq(village.type, "VILLAGE"))),
       ),
     ),
     orderBy: [asc(userData.villageDutyStartedAt), asc(userData.userId)],
