@@ -179,6 +179,7 @@ export const privateState = [
   "skillLockedJutsuIds",
   "anbuId",
   "basicActions",
+  "sharedCooldownLocks",
   "sageModeId",
   "sageMasteryExperience",
   "dailySageActivations",

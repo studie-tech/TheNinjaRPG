@@ -55,6 +55,7 @@ import type {
   GroundEffect,
   ReturnedBattle,
   ReturnedUserState,
+  SharedCooldownLock,
   UserEffect,
 } from "@/libs/combat/types";
 import {
@@ -926,6 +927,17 @@ export const handleInjectedJutsus = (
   );
   const toBeAddedIds = [...new Set(Object.keys(toBeAddedJutsuPower))];
 
+  // A newly granted jutsu starts under the longest global cooldown running on one of its
+  // tags, as it would had it been in the loadout when the lock started.
+  const runningLock = (jutsu: Jutsu) =>
+    jutsu.effects.reduce<SharedCooldownLock | undefined>((longest, effect) => {
+      const lock = user.sharedCooldownLocks?.[effect.type];
+      if (!lock || lock.round + lock.rounds - battle.round <= 0) return longest;
+      return !longest || lock.round + lock.rounds > longest.round + longest.rounds
+        ? lock
+        : longest;
+    }, undefined);
+
   // Define the user available jutsus
   const activeJutsus = [
     ...(user?.jutsus?.filter(
@@ -934,17 +946,20 @@ export const handleInjectedJutsus = (
     ...toBeAddedIds
       .map((id) => allJutsus[id])
       .filter((j): j is Jutsu => j !== undefined)
-      .map((jutsu) => ({
-        id: nanoid(),
-        jutsuId: jutsu.id,
-        level: toBeAddedJutsuPower[jutsu.id] ?? 1,
-        experience: 0,
-        equipped: true,
-        origin: "injected" as const,
-        lastUsedRound: -jutsu.cooldown,
-        originalCooldown: jutsu.cooldown,
-        reskinId: null,
-      })),
+      .map((jutsu) => {
+        const lock = runningLock(jutsu);
+        return {
+          id: nanoid(),
+          jutsuId: jutsu.id,
+          level: toBeAddedJutsuPower[jutsu.id] ?? 1,
+          experience: 0,
+          equipped: true,
+          origin: "injected" as const,
+          lastUsedRound: lock ? lock.round : -jutsu.cooldown,
+          originalCooldown: lock ? lock.rounds : jutsu.cooldown,
+          reskinId: null,
+        };
+      }),
   ];
   return activeJutsus;
 };
@@ -1469,6 +1484,22 @@ export const applyActionCooldowns = (
   // Mirrors availableUserActions, which treats a falsy lastUsedRound as never used
   const lockedFor = (lastUsedRound: number, cooldown: number) =>
     lastUsedRound ? lastUsedRound + cooldown - round : 0;
+
+  // Remember each running lock, so jutsu injected while it runs start under it.
+  const locks = Object.fromEntries(
+    Object.entries(user.sharedCooldownLocks ?? {}).filter(
+      ([, lock]) => lockedFor(lock.round, lock.rounds) > 0,
+    ),
+  );
+  sharedTags.forEach((tag) => {
+    const rounds = config[tag] ?? 0;
+    const current = locks[tag];
+    if (rounds > 0 && (!current || lockedFor(current.round, current.rounds) < rounds)) {
+      locks[tag] = { round, rounds };
+    }
+  });
+  if (Object.keys(locks).length > 0) user.sharedCooldownLocks = locks;
+  else delete user.sharedCooldownLocks;
 
   user.jutsus.forEach((uj) => {
     const jutsu = getJutsu(battle, uj.jutsuId);

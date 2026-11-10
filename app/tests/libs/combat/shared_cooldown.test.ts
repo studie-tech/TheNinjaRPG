@@ -30,7 +30,8 @@ type SharedTag =
   | "debuffprevent"
   | "clear"
   | "damage"
-  | "elementaldamage";
+  | "elementaldamage"
+  | "stun";
 
 const sharedJutsu = (id: string, cooldown: number, tag: SharedTag) =>
   makeJutsu({
@@ -282,6 +283,54 @@ describe("global cooldown", () => {
     perform(battle, 1, "source");
     expect(usable(battle, "basicAttack")).toBe(true);
     expect(usableRounds(battle, "peer", 1, 5)).toEqual([4, 5]);
+  });
+
+  /** A user who learned `stunner` and is granted `injected` by a later inject effect. */
+  const injectLaterBattle = () => {
+    const battle = makeGcdBattle([
+      sharedJutsu("stunner", 0, "stun"),
+      sharedJutsu("injected", 7, "stun"),
+    ]);
+    battle.usersState[0]!.jutsus = battle.usersState[0]!.jutsus.filter(
+      (jutsu) => jutsu.jutsuId !== "injected",
+    );
+    const grant = () =>
+      battle.usersEffects.push(
+        makeEffect(
+          "injectjutsus",
+          { jutsuIds: ["injected"], rounds: 10 },
+          { targetId: USER },
+        ),
+      );
+    return { battle, grant };
+  };
+
+  it("starts a jutsu injected during a running global cooldown under that lock", () => {
+    const { battle, grant } = injectLaterBattle();
+    perform(battle, 1, "stunner");
+    battle.round = 2;
+    grant();
+    expect(usableRounds(battle, "injected", 2, 6)).toEqual([4, 5, 6]);
+  });
+
+  it("injects a jutsu ready once the global cooldown has run out", () => {
+    const { battle, grant } = injectLaterBattle();
+    perform(battle, 1, "stunner");
+    battle.round = 4;
+    grant();
+    expect(usable(battle, "injected")).toBe(true);
+    expect(battle.usersState[0]!.sharedCooldownLocks).toEqual({
+      stun: { round: 1, rounds: SHARED_COOLDOWN_ROUNDS },
+    });
+  });
+
+  it("keeps the injected jutsu's own cooldown after it is used", () => {
+    const { battle, grant } = injectLaterBattle();
+    battle.round = 1;
+    grant();
+    perform(battle, 1, "injected");
+    expect(usableRounds(battle, "stunner", 1, 5)).toEqual([4, 5]);
+    expect(usableRounds(battle, "injected", 1, 9)).toEqual([8, 9]);
   });
 
   it("matches raw basic actions against authored peer tags without selection metadata", () => {
