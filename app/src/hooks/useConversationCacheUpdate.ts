@@ -60,11 +60,18 @@ export const useConversationCacheUpdate = () => {
   };
 };
 
-/** Mirror the inbox counter reset performed by a successful conversation listing. */
-export function useInboxConversations() {
+/**
+ * List the player's conversations and mirror the inbox counter reset that the listing
+ * performs on the server.
+ * @param options - How the listing refetches; the inbox page refreshes it on every mount
+ */
+export function useInboxConversations(
+  options: { staleTime?: number; refetchOnMount?: "always" } = {},
+) {
   const { data: userData, notifications, updateNotifications } = useUserData();
   const result = api.comments.getUserConversations.useQuery(undefined, {
     enabled: !!userData,
+    ...options,
   });
   useEffect(() => {
     if (result.data && getInboxNews(notifications) > 0) {

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, startTransition, useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { useInboxConversations } from "@/hooks/useConversationCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import Conversation from "@/layout/Conversation";
@@ -104,11 +105,7 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
     data: allConversations,
     refetch,
     isPending,
-  } = api.comments.getUserConversations.useQuery(undefined, {
-    enabled: !!userData,
-    staleTime: 30_000,
-    refetchOnMount: "always",
-  });
+  } = useInboxConversations({ staleTime: 30_000, refetchOnMount: "always" });
 
   // Mutations
   const {
