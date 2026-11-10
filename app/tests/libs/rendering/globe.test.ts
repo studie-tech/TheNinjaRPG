@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import globe from "@/data/hexasphere.json";
+import { globeMarkerAnchor } from "@/libs/rendering/scenes/globeMarkers";
 import {
   type GlobeCamera,
   globeCameraBasis,
@@ -92,5 +93,36 @@ describe("globe projection and picking", () => {
         Math.tan(Math.asin(radius / (after ?? 1))) / Math.tan((50 * Math.PI) / 360);
       expect(nextRadius).toBeCloseTo(oldRadius, 10);
     }
+  });
+});
+
+describe("globe marker anchors", () => {
+  const camera: GlobeCamera = {
+    longitude: 0,
+    latitude: 0,
+    distance: limits.max,
+    width: 390,
+    height: 390,
+  };
+  const facing = { x: radius, y: 0, z: 0 };
+  const behind = { x: -radius, y: 0.5, z: 0.5 };
+
+  it("keeps a facing marker on its own surface point", () => {
+    expect(globeMarkerAnchor(facing, camera, radius, true)).toEqual({
+      point: facing,
+      isVisible: true,
+      isClamped: false,
+    });
+  });
+
+  it("hides far-side markers unless they wait on the rim toward their sector", () => {
+    expect(globeMarkerAnchor(behind, camera, radius, false).isVisible).toBe(false);
+    const rim = globeMarkerAnchor(behind, camera, radius, true);
+    expect(rim.isClamped).toBe(true);
+    const length = Math.hypot(rim.point.x, rim.point.y, rim.point.z);
+    // On the visible horizon: the direction makes cos = radius / distance with the camera.
+    expect(rim.point.x / length).toBeCloseTo(radius / camera.distance, 6);
+    expect(Math.sign(rim.point.y)).toBe(1);
+    expect(Math.sign(rim.point.z)).toBe(1);
   });
 });

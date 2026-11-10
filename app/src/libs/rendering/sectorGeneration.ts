@@ -2,6 +2,7 @@ import alea from "alea";
 import type { Grid } from "honeycomb-grid";
 import type { MapAsset, VillageStructure } from "@/drizzle/schema";
 import type { TerrainHex } from "@/libs/hexgrid";
+import { buildGlobeClimate } from "@/libs/rendering/globeClimate";
 import { buildSectorTerrainData } from "@/libs/rendering/sectorData";
 import {
   sectorSpriteDescriptions,
@@ -163,6 +164,10 @@ export const createSectorWorkerHandler = () => {
     message: SectorWorkerRequest,
   ): { reply: SectorWorkerReply; transfer: ArrayBuffer[] } => {
     try {
+      if (message.type === "globe") {
+        const result = buildGlobeClimate(message.request.protectedSectors);
+        return { reply: { id: message.id, result }, transfer: [result.buffer] };
+      }
       if (message.type === "window") {
         const { request } = message;
         if (request.library) library = request.library;
@@ -408,6 +413,9 @@ export type WindowRequest = {
   nav?: WindowNav | null;
 };
 
+/** The globe climate field (`globeClimate.ts`) for the map's protected land sectors. */
+export type GlobeClimateRequest = { protectedSectors: number[] };
+
 export type SectorRequest = {
   /** Key of the window request whose field the sector's terrain stands on. */
   window: string;
@@ -445,10 +453,14 @@ export type WorkerWindowRequest = Omit<WindowRequest, "library" | "entries" | "n
 
 export type SectorWorkerRequest =
   | { id: number; type: "window"; request: WorkerWindowRequest }
-  | { id: number; type: "sector"; request: SectorRequest };
+  | { id: number; type: "sector"; request: SectorRequest }
+  | { id: number; type: "globe"; request: GlobeClimateRequest };
 
 export type SectorWorkerReply =
-  | { id: number; result: Map<number, TerrainResultKey> | SectorGenerationResult }
+  | {
+      id: number;
+      result: Map<number, TerrainResultKey> | SectorGenerationResult | Uint8Array;
+    }
   | { id: number; error: { message: string; stack?: string } };
 
 type GenerationWindow = {

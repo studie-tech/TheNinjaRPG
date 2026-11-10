@@ -416,8 +416,8 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "mission",
     title: "The world map",
     description:
-      "This globe is the world of Seichi, and the \u{1F4DC} marks your objective. Journeys between sectors take a little time. Don't worry, I'm coming with you.",
-    action: "Open Global, tap the \u{1F4DC} marker, then confirm the trip.",
+      "This globe is the world of Seichi, and the orange \u2757 badge marks your objective. Journeys between sectors take a little time. Don't worry, I'm coming with you.",
+    action: "Open Global, tap the orange \u2757 badge, then confirm the trip.",
     elementIds: globalTravelElements,
     page: "/travel",
     relatedValue: TUTORIAL_CAPTURE_SECTOR,

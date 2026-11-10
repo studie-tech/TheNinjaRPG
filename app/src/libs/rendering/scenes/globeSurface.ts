@@ -31,19 +31,24 @@ const interpolateEdge = (
 export const buildGlobeSurfaceData = (
   hexasphere: GlobalMapData,
   sectorTint?: (sector: number) => LinearColor | null,
+  colorStep = 1,
 ) => {
   const tiles = hexasphere.tiles;
   const radius = hexasphere.radius / 3;
 
   // Every sector is a quad subdivided into scale^2 cells, so it contributes
-  // (scale + 1)^2 vertices and scale^2 quads.
-  const scale = hexasphere.visualScale;
+  // (scale + 1)^2 vertices and scale^2 quads. A colorStep above 1 keeps every
+  // colorStep-th climate sample, for a lighter mesh whose colour detail comes
+  // from elsewhere (the globe's painted climate field).
+  const scale = Math.max(1, Math.round(hexasphere.visualScale / colorStep));
   const stride = scale + 1;
+  const sampleStride = hexasphere.visualScale + 1;
   const vertexTotal = tiles.length * stride * stride;
   const indexTotal = tiles.length * scale * scale * 6;
 
   const positions = new Float32Array(vertexTotal * 3);
   const colors = new Float32Array(vertexTotal * 3);
+  const water = new Float32Array(vertexTotal);
   const indices = new Uint32Array(indexTotal);
   const vertexRanges = new Int32Array(tiles.length * 2).fill(-1);
   let vertexCursor = 0;
@@ -84,13 +89,14 @@ export const buildGlobeSurfaceData = (
         positions[offset + 1] = (py / length) * radius;
         positions[offset + 2] = (pz / length) * radius;
 
-        const packed = tile.vc[y * stride + x] ?? 0;
+        const packed = tile.vc[y * colorStep * sampleStride + x * colorStep] ?? 0;
         const red = ((packed >> 16) & 0xff) / 255;
         const green = ((packed >> 8) & 0xff) / 255;
         const blue = (packed & 0xff) / 255;
         colors[offset] = tint ? red * tint.r : red;
         colors[offset + 1] = tint ? green * tint.g : green;
         colors[offset + 2] = tint ? blue * tint.b : blue;
+        water[base + y * stride + x] = tint ? 0 : surfaceWater(red, blue);
       }
     }
 
@@ -114,7 +120,16 @@ export const buildGlobeSurfaceData = (
     vertexCursor += stride * stride;
   }
 
-  return { positions, colors, indices, vertexRanges };
+  return { positions, colors, water, indices, vertexRanges };
+};
+
+/**
+ * Share of open water in a climate color: the generator blends water and land
+ * across coasts, so mid values trace the shoreline and 1 is open ocean.
+ */
+export const surfaceWater = (red: number, blue: number) => {
+  const amount = Math.max(0, Math.min(1, (blue - red - 0.3) / 0.25));
+  return amount * amount * (3 - 2 * amount);
 };
 
 /** Bilinear cap RGB in [0, 1] from a point's direction; points below cap latitude return null. */

@@ -820,6 +820,7 @@ function Travel() {
           showOwnership={showOwnership && !userData?.tutorialOn}
           autoRotate={false}
           focusSector={focusSector}
+          routeTarget={showModal ? targetSector : null}
           onTileClick={(sector) => initiateTravelToSector(sector)}
           hexasphere={globe}
         />
@@ -831,6 +832,8 @@ function Travel() {
     trackedBounties,
     showOwnership,
     focusSector,
+    showModal,
+    targetSector,
     userData?.tutorialOn,
   ]);
 
