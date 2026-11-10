@@ -2267,13 +2267,6 @@ export const initiateBattle = async (
 
   const dutyEnrollment = info.villageDuty;
   if (
-    dutyEnrollment?.passive &&
-    preloadedUsers.some(
-      (user) => userIds.includes(user.userId) && isUserCurrentlyStealthed(user),
-    )
-  )
-    return errorResponse("Stealth keeps you hidden from this patrol.");
-  if (
     dutyEnrollment &&
     (!["SHRINE_WAR", "VILLAGE_PROTECTOR"].includes(battleType) ||
       userIds.includes(dutyEnrollment.userId) ||
@@ -2380,6 +2373,15 @@ export const initiateBattle = async (
       });
     }
   }
+
+  // Check the final participant snapshot so settlement reloads cannot admit a hidden visitor.
+  if (
+    dutyEnrollment?.passive &&
+    fetchedUsers.some(
+      (user) => userIds.includes(user.userId) && isUserCurrentlyStealthed(user),
+    )
+  )
+    return errorResponse("Stealth keeps you hidden from this patrol.");
 
   // Settlement reloads can observe a cancelled enrollment. Reject before writing battle rows or claims.
   if (

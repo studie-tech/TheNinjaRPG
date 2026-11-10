@@ -9,6 +9,7 @@ import {
   battle,
   battleHistory,
   userAttribute,
+  userCookingJob,
   userData,
   village,
   villageAlliance,
@@ -73,6 +74,7 @@ describeWithDatabase("village duty hourly patrol", () => {
       villageDutyShift,
       villageStructure,
       userAttribute,
+      userCookingJob,
       userData,
       village,
     );
@@ -709,7 +711,7 @@ describeWithDatabase("village duty hourly patrol", () => {
     expect(advanced?.patrols[0]?.pursuit?.targetUserId).toBe("visible");
   });
 
-  it.each(["before preload", "before claim"])(
+  it.each(["before preload", "during cooking settlement", "before claim"])(
     "honors stealth activated %s and releases the reserved copy",
     async (timing) => {
       const db = await getTestDatabase();
@@ -729,18 +731,31 @@ describeWithDatabase("village duty hourly patrol", () => {
       ]);
       await enrollCurrent();
       const active = await shift();
+      const ownerBefore = await load();
+      if (timing === "during cooking settlement")
+        await db.insert(userCookingJob).values({
+          id: "due-cooking",
+          userId: "invader",
+          experience: 30,
+          finishesAt: secondsFromDate(-1, new Date()),
+        });
       const activate = () =>
         db
           .update(userData)
           .set({ stealthActive: true, stealthActivatedAt: new Date() })
           .where(eq(userData.userId, "invader"));
       if (timing === "before preload") await activate();
+      const activateDuringSettlement = vi.fn(activate);
       const guarded =
-        timing === "before claim"
-          ? beforeStatements(db, userData, [activate], {
-              when: (values) => values.status === "BATTLE",
+        timing === "during cooking settlement"
+          ? beforeStatements(db, userCookingJob, [activateDuringSettlement], {
+              operations: ["delete"],
             })
-          : db;
+          : timing === "before claim"
+            ? beforeStatements(db, userData, [activate], {
+                when: (values) => values.status === "BATTLE",
+              })
+            : db;
       const result = await initiateVillageDutyBattle(
         {
           client: guarded,
@@ -755,6 +770,11 @@ describeWithDatabase("village duty hourly patrol", () => {
         "VILLAGE_PROTECTOR",
       );
       expect(result.success).toBe(false);
+      if (timing === "during cooking settlement") {
+        expect(activateDuringSettlement).toHaveBeenCalledTimes(1);
+        expect(result.message).toBe("Stealth keeps you hidden from this patrol.");
+        expect(await db.query.userCookingJob.findMany()).toEqual([]);
+      }
       const user = await db.query.userData.findFirst({
         where: eq(userData.userId, "invader"),
       });
@@ -763,7 +783,9 @@ describeWithDatabase("village duty hourly patrol", () => {
         battleId: null,
         stealthActive: true,
         pveFights: 0,
+        cookingExperience: timing === "during cooking settlement" ? 30 : 0,
       });
+      expect(await load()).toEqual(ownerBefore);
       expect((await findVillageDutyShift(db, "home"))?.patrols[0]).toMatchObject({
         defeated: false,
         battleId: null,
