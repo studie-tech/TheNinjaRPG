@@ -41,7 +41,6 @@ export const VillageDuty = ({
       subtitle="Village Duty"
       defaultBackHref="/village"
       topRightContent={navTabs}
-      stackTopRight
     >
       <p className="text-muted-foreground mb-4 text-sm">
         Sign up your character's AI copy for the hourly patrol rotation. Village
