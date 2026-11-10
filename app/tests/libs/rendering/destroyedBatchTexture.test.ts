@@ -59,4 +59,32 @@ describe("destroyed sources in retained batches", () => {
     system.bind(source, 0);
     expect(bound).toEqual([Texture.EMPTY.source]);
   });
+
+  it("never re-creates a destroyed source from its null style on other bind paths", () => {
+    // Render targets, unbind and text uploads reach getGlSource without bind's guard.
+    const source = new TextureSource({ width: 4, height: 4 });
+    source.destroy();
+    const created: TextureSource[] = [];
+    const system = Object.assign(Object.create(GlTextureSystem.prototype), {
+      _renderer: { uid: 9001, gc: { now: 0 } },
+      _initSource: (next: TextureSource) => {
+        created.push(next);
+        return { texture: "empty" };
+      },
+    }) as { getGlSource: (source: TextureSource) => unknown };
+    expect(system.getGlSource(source)).toEqual({ texture: "empty" });
+    expect(created).toEqual([Texture.EMPTY.source]);
+  });
+
+  it("skips style parameters for a source without a style", () => {
+    const source = new TextureSource({ width: 4, height: 4 });
+    source.destroy();
+    expect(source.style).toBeNull();
+    const system = Object.assign(Object.create(GlTextureSystem.prototype), {
+      getGlSource: () => {
+        throw new Error("style update must not touch the GPU texture");
+      },
+    }) as { updateStyle: (source: TextureSource, firstCreation: boolean) => void };
+    expect(() => system.updateStyle(source, false)).not.toThrow();
+  });
 });

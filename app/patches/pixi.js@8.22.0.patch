@@ -1,5 +1,5 @@
 diff --git a/lib/rendering/renderers/gl/texture/GlTextureSystem.js b/lib/rendering/renderers/gl/texture/GlTextureSystem.js
-index 3aafc1a4a579a6d9a0ba5d0ef616329920a9cbc5..2ed713bda70c36ebdf5f59228484d5273b6a3d70 100644
+index 3aafc1a4a579a6d9a0ba5d0ef616329920a9cbc5..f161df0c247279f47bd5439411616d035de2e66f 100644
 --- a/lib/rendering/renderers/gl/texture/GlTextureSystem.js
 +++ b/lib/rendering/renderers/gl/texture/GlTextureSystem.js
 @@ -81,6 +81,8 @@ const _GlTextureSystem = class _GlTextureSystem {
@@ -11,8 +11,26 @@ index 3aafc1a4a579a6d9a0ba5d0ef616329920a9cbc5..2ed713bda70c36ebdf5f59228484d527
      const source = texture.source;
      if (texture) {
        this.bindSource(source, location);
+@@ -206,6 +208,8 @@ const _GlTextureSystem = class _GlTextureSystem {
+     this.updateStyle(source, false);
+   }
+   updateStyle(source, firstCreation) {
++    // Only a destroyed source lacks a style, and nothing samples it.
++    if (!source.style) return;
+     const gl = this._gl;
+     const glTexture = this.getGlSource(source);
+     gl.bindTexture(glTexture.target, glTexture.texture);
+@@ -396,6 +400,8 @@ const _GlTextureSystem = class _GlTextureSystem {
+     return this._glSamplers[sampler._resourceId] || this._initSampler(sampler);
+   }
+   getGlSource(source) {
++    // A destroyed source has dropped its GPU data and style; re-creating it would read the null style.
++    if (source.destroyed && !source._gpuData[this._renderer.uid] && source !== Texture.Texture.EMPTY.source) source = Texture.Texture.EMPTY.source;
+     source._gcLastUsed = this._renderer.gc.now;
+     return source._gpuData[this._renderer.uid] || this._initSource(source);
+   }
 diff --git a/lib/rendering/renderers/gl/texture/GlTextureSystem.mjs b/lib/rendering/renderers/gl/texture/GlTextureSystem.mjs
-index 61607c8dcaa7e3229fb92fa9b9699ef0a9d38c86..e605959f789b929e63837ff5ec5a77c83023e5f7 100644
+index 61607c8dcaa7e3229fb92fa9b9699ef0a9d38c86..bb97f65886f54f5fcc0c91c51b8761b7b6e533d5 100644
 --- a/lib/rendering/renderers/gl/texture/GlTextureSystem.mjs
 +++ b/lib/rendering/renderers/gl/texture/GlTextureSystem.mjs
 @@ -79,6 +79,8 @@ const _GlTextureSystem = class _GlTextureSystem {
@@ -24,6 +42,24 @@ index 61607c8dcaa7e3229fb92fa9b9699ef0a9d38c86..e605959f789b929e63837ff5ec5a77c8
      const source = texture.source;
      if (texture) {
        this.bindSource(source, location);
+@@ -204,6 +206,8 @@ const _GlTextureSystem = class _GlTextureSystem {
+     this.updateStyle(source, false);
+   }
+   updateStyle(source, firstCreation) {
++    // Only a destroyed source lacks a style, and nothing samples it.
++    if (!source.style) return;
+     const gl = this._gl;
+     const glTexture = this.getGlSource(source);
+     gl.bindTexture(glTexture.target, glTexture.texture);
+@@ -394,6 +398,8 @@ const _GlTextureSystem = class _GlTextureSystem {
+     return this._glSamplers[sampler._resourceId] || this._initSampler(sampler);
+   }
+   getGlSource(source) {
++    // A destroyed source has dropped its GPU data and style; re-creating it would read the null style.
++    if (source.destroyed && !source._gpuData[this._renderer.uid] && source !== Texture.EMPTY.source) source = Texture.EMPTY.source;
+     source._gcLastUsed = this._renderer.gc.now;
+     return source._gpuData[this._renderer.uid] || this._initSource(source);
+   }
 diff --git a/lib/rendering/renderers/gl/texture/utils/applyStyleParams.js b/lib/rendering/renderers/gl/texture/utils/applyStyleParams.js
 index b7101b6734389111a303bed538166a129b1946ed..be5ab547a2a75cc20920892f49e34872f9f0a49d 100644
 --- a/lib/rendering/renderers/gl/texture/utils/applyStyleParams.js
