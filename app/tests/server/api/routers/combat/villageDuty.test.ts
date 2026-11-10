@@ -5,7 +5,7 @@ import { availableUserActions, userItemToAction } from "@/libs/combat/actions";
 import { prepareVillageDutyDefender } from "@/libs/combat/initiation";
 import { refreshMasteries } from "@/libs/combat/mastery";
 import { applyEffects } from "@/libs/combat/process";
-import { getPower } from "@/libs/combat/tags";
+import { clone, getPower } from "@/libs/combat/tags";
 import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
@@ -88,7 +88,7 @@ describe("village duty combat isolation", () => {
     },
   );
   it.each(["VILLAGE_PROTECTOR", "SHRINE_WAR"] as const)(
-    "preserves owned equipment scaling in %s copies and character scaling for authored AI",
+    "preserves owned equipment scaling in %s copies and character scaling for authored AI and clones",
     async (battleType) => {
       const defender = {
         ...owner(),
@@ -115,6 +115,8 @@ describe("village duty combat isolation", () => {
             battleUsageType: "ALL",
             slot,
             lpcProfile: "NONE",
+            chakraCost: 120,
+            chakraCostReducePerLvl: 1,
             ...(itemType !== "WEAPON"
               ? {
                   effects: [
@@ -145,11 +147,13 @@ describe("village duty combat isolation", () => {
       for (const [index, result] of results.entries()) {
         const user = result.usersState[0]!;
         const weapon = user.items.find((item) => item.itemId === "WEAPON")!;
-        const action = userItemToAction(
-          weapon,
-          user,
-          makeCompleteBattle({ extraState: result.extraState }),
-        );
+        const battle = makeCompleteBattle({
+          battleType,
+          usersState: result.usersState,
+          usersEffects: result.userEffects,
+          extraState: result.extraState,
+        });
+        const action = userItemToAction(weapon, user, battle);
         for (const item of user.items.filter((item) => item.itemId !== "WEAPON")) {
           const effect = result.userEffects.find(
             (effect) => effect.actionId === item.itemId,
@@ -163,6 +167,37 @@ describe("village duty combat isolation", () => {
         expect(
           getPower({ ...action.effects[0], level: action.level } as UserEffect).power,
         ).toBe(22 + level);
+        expect(action.chakraCost).toBe(120 - level);
+        const original = structuredClone(user);
+        clone(
+          battle.usersState,
+          {
+            ...makeEffect(
+              "clone",
+              { power: 100, rounds: 5 },
+              { creatorId: user.userId, isNew: true },
+            ),
+            longitude: 1,
+            latitude: 1,
+          },
+          battle.extraState,
+        );
+        const standIn = battle.usersState[1]!;
+        const clonedWeapon = standIn.items.find((item) => item.itemId === "WEAPON")!;
+        const clonedAction = userItemToAction(clonedWeapon, standIn, battle);
+        expect(standIn.isAi).toBe(true);
+        expect(standIn.isVillageDutyCopy).toBeUndefined();
+        expect(clonedWeapon.id).toBe(weapon.id);
+        expect(clonedWeapon.level).toBe(weapon.level);
+        expect(clonedAction.level).toBe(user.level);
+        expect(
+          getPower({
+            ...clonedAction.effects[0],
+            level: clonedAction.level,
+          } as UserEffect).power,
+        ).toBe(22 + user.level);
+        expect(clonedAction.chakraCost).toBe(120 - user.level);
+        expect(user).toEqual(original);
       }
       expect(results[1]!.usersState[0]!.isAi).toBe(true);
     },

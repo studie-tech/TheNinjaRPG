@@ -227,11 +227,11 @@ export const getQuestDataFromBattle = (
   return battle.extraState.questData?.[controllerId] ?? [];
 };
 
-/** Duty-namespaced copies retain owned item levels; authored AI gear scales with its character. */
+/** Duty copies retain owned item levels; authored AI and clone gear scales with its character. */
 export const getItemCombatLevel = (
-  item: Pick<BattleUserItem, "id" | "level">,
-  user: Pick<ReturnedUserState, "isAi" | "level">,
-) => (user.isAi && !item.id.startsWith("duty:") ? (user.level ?? 1) : item.level);
+  item: Pick<BattleUserItem, "level">,
+  user: Pick<ReturnedUserState, "isAi" | "isVillageDutyCopy" | "level">,
+) => (user.isAi && !user.isVillageDutyCopy ? (user.level ?? 1) : item.level);
 
 /** Row columns of a UserItem that only matter outside battle, for rows rebuilt in memory. */
 export const inertUserItemColumns = (userId: string, at: Date) => ({
