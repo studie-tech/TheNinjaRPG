@@ -3561,9 +3561,9 @@ export const SOCIAL_LINKS = [
     alt: "Facebook",
   },
   {
-    url: "https://www.youtube.com/@fullstackscientist",
+    url: "https://www.youtube.com/@TheNinjaRPG",
     image: IMG_ICON_YOUTUBE,
-    alt: "Youtube",
+    alt: "YouTube",
   },
   {
     url: "https://twitter.com/RealTheNinjaRPG",
