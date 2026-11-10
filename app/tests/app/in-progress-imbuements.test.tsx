@@ -12,11 +12,11 @@ import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import { AuctionDetailsDialog } from "@/app/[shell]/auctionhouse/ListingDetailsDialog";
 import { AuctionOffers } from "@/app/[shell]/auctionhouse/Offers";
+import Occupations from "@/app/[shell]/occupation/page";
 import { CRAFTING_REQUIRED_EXP, CRAFTING_TIMES_MINS } from "@/drizzle/constants";
 import * as CombatActions from "@/layout/CombatActions";
 import * as ItemDetails from "@/layout/ItemWithEffects";
 import * as Modal from "@/layout/Modal";
-import OccupationCrafting from "@/layout/OccupationCrafting";
 import * as pagination from "@/libs/pagination";
 import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
@@ -47,6 +47,7 @@ const imbuedRow = {
     name: "Sword",
     image: "/sword.webp",
     itemType: "WEAPON",
+    rarity: "COMMON",
     maxDurability: 100,
   },
   imbuements: [
@@ -68,10 +69,12 @@ const stubApi = (
   auction: object = {},
   rows: object[] = [imbuedRow],
   occupation: object = {},
+  item: object = {},
 ) =>
   Object.assign(vi.spyOn(client, "api" as never), {
     item: router({
       getUserItems: { useQuery: () => ({ data: rows, isPending: false }) },
+      ...item,
     }),
     auction: router(auction),
     occupation: router(occupation),
@@ -79,9 +82,7 @@ const stubApi = (
     useUtils: () => router(),
   });
 
-beforeEach(() => {
-  installBrowserGlobals({ resizeObserver: true });
-  vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
+const stubCraftingUser = (data: object = {}) =>
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
     data: {
       userId: "viewer",
@@ -91,11 +92,17 @@ beforeEach(() => {
       reputationPoints: 0,
       money: 0,
       role: "USER",
+      ...data,
     },
     prepareUserUpdate: vi.fn(),
     updateUser: vi.fn(),
     timeDiff: 0,
   } as never);
+
+beforeEach(() => {
+  installBrowserGlobals({ resizeObserver: true });
+  vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
+  stubCraftingUser();
   vi.spyOn(ItemDetails, "default").mockImplementation((({
     item,
   }: {
@@ -114,7 +121,7 @@ afterEach(() => {
 const renderCrafting = () =>
   render(
     <AppRouterContext.Provider value={{} as never}>
-      <OccupationCrafting />
+      <Occupations />
     </AppRouterContext.Provider>,
   );
 
@@ -180,9 +187,19 @@ it("shows only finished imbuements on an offered item", () => {
 it("shows only finished imbuements on an item awaiting repair", () => {
   stubApi();
   renderCrafting();
-  expect(screen.getByText("Repair Items")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Crafting", level: 2 })).toBeTruthy();
+  const repair = screen.getByRole("button", { name: "Repair Items" });
+  expect(repair.getAttribute("aria-expanded")).toBe("true");
   const repairDetails = screen.getAllByTestId("imbuements").at(-1);
   expect(repairDetails?.textContent).toBe("Finished Crystal");
+
+  fireEvent.click(repair);
+  expect(repair.getAttribute("aria-expanded")).toBe("false");
+  for (const name of ["Catalog / Queue", "Imbue"]) {
+    expect(screen.getByRole("button", { name }).getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+  }
 });
 
 /** The details rendered inside the card with this heading. */
@@ -245,6 +262,49 @@ it("leaves an unfinished imbuement off the manage imbuements card", () => {
   expect(cardDetails("Currently Imbuing")[0]?.textContent).toBe(
     "Finished Crystal,Unfinished Crystal",
   );
+});
+
+it("refreshes the inventory when an imbuement finishes with Imbue closed", async () => {
+  const invalidate = vi.fn();
+  const trpc = stubApi({}, [
+    {
+      ...imbuedRow,
+      imbuements: [
+        { ...imbuedRow.imbuements[1], craftingFinishedAt: new Date(Date.now() + 750) },
+      ],
+    },
+  ]);
+  trpc.useUtils = () => ({ item: { getUserItems: { invalidate } } });
+  renderCrafting();
+  const imbue = screen.getByRole("button", { name: "Imbue" });
+  fireEvent.click(imbue);
+  expect(imbue.getAttribute("aria-expanded")).toBe("false");
+  expect(imbue.textContent).toContain("Imbuing Sword");
+  await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(1), { timeout: 2000 });
+});
+
+it("offers a confirmed bulk repair in the occupation header during the change-job cooldown", () => {
+  const mutate = vi.fn();
+  stubApi(
+    {},
+    [settledRow],
+    {},
+    {
+      repairAll: { useMutation: () => ({ mutate, isPending: false }) },
+    },
+  );
+  stubCraftingUser({ occupationSignupAt: new Date(), money: 1e9 });
+  stubModals();
+  renderCrafting();
+  expect(screen.queryByRole("button", { name: "Change Job" })).toBeNull();
+  const repair = screen.getByRole("button", { name: "Repair All" });
+  expect(repair.closest("[data-content-box-header]")).toBeTruthy();
+  fireEvent.click(repair);
+  expect(mutate).not.toHaveBeenCalled();
+  const dialog = within(screen.getByRole("region", { name: "Repair All Items" }));
+  expect(dialog.getByText(/^Repair all 1 item for/)).toBeTruthy();
+  fireEvent.click(dialog.getByRole("button", { name: "Confirm Repair All" }));
+  expect(mutate).toHaveBeenCalledTimes(1);
 });
 
 it("drops a removed imbuement from the card before the inventory refreshes", async () => {
