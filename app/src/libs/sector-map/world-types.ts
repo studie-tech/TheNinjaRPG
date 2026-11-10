@@ -67,6 +67,7 @@ export interface SectorUser {
   bodyMove?: CharacterAnimation;
   /** A village-duty copy has its own map identity and cannot be attacked or healed as a player. */
   isVillageDuty?: boolean;
+  /** Owner ID for profile links, present only when the protector is unmasked. */
   villageDutyUserId?: string;
   userId: string;
   username: string;
@@ -112,6 +113,7 @@ export interface SectorUser {
     anchor: { x: number; y: number };
     radius: number;
     wildOnly: boolean;
+    /** Restrict generated patrol destinations to village-zoned tiles. */
     villageOnly?: boolean;
   };
   /** Drawn height relative to the default NPC height. */

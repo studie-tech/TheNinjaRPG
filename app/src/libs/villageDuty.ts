@@ -50,6 +50,7 @@ export const villageDutyPatrols = (
   );
   if (!tiles.length) return [];
   return users.flatMap((user) => {
+    // Stable anchors prevent patrols from jumping to new tiles on each sector refresh.
     let hash = 0;
     for (const char of user.userId)
       hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;

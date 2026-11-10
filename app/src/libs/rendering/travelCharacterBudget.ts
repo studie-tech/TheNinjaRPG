@@ -1,6 +1,6 @@
 import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 
-/** Adapt visible character count over two-second windows, recovering only after four healthy windows. */
+/** Adapt the character body budget over two seconds of measured frame time; recover after four healthy windows. */
 export const createTravelCharacterBudget = () => {
   let limit = WORLD_DETAIL.travelCharacters;
   let previous: number | undefined;
@@ -20,7 +20,7 @@ export const createTravelCharacterBudget = () => {
         elapsed = frames = healthyWindows = longestGap = 0;
         return false;
       }
-      // Exclude one long gap per window: suspension or an isolated stall is not
+      // Exclude the largest long gap per window: suspension or an isolated stall is not
       // sustained load, but repeated slow frames must still reduce the body count.
       if (interval > 250) {
         if (!longestGap) elapsed = frames = healthyWindows = 0;
@@ -28,6 +28,7 @@ export const createTravelCharacterBudget = () => {
       }
       elapsed += interval;
       frames++;
+      // The excluded gap contributes neither time nor a sample to the pacing average.
       const measured = elapsed - longestGap;
       if (measured < 2000) return false;
       const average = measured / (frames - Number(longestGap > 0));

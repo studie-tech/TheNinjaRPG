@@ -465,7 +465,7 @@ export const prepareVillageDutyDefender = (
     curHealth: copy.maxHealth,
     curChakra: copy.maxChakra,
     curStamina: copy.maxStamina,
-    // Copies carry no receipts, rewards, summons from active pets, or transferable inventory.
+    // Exclude active jobs, pets and reward sources; quest history stays until loadout gating finishes.
     activePetId: null,
     petTask: null,
     queue: [],
