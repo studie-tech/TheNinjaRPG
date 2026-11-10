@@ -2,12 +2,14 @@
 
 import { Shield } from "lucide-react";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { VILLAGE_DUTY_MIN_RANK } from "@/drizzle/constants";
 import { useVillageDuty } from "@/hooks/useVillageDuty";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
+import { FeedbackAlert } from "@/layout/FeedbackAlert";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 
@@ -21,8 +23,13 @@ export const VillageDuty = ({
   sector?: number;
   navTabs: ReactNode;
 }) => {
-  const { data, isPending, isError, refetch, setDuty, isChanging, message } =
+  const [page, setPage] = useState(0);
+  const { data, isPending, isError, refetch, setDuty, isChanging, feedback } =
     useVillageDuty(villageId, sector);
+  const protectors = data?.protectors ?? [];
+  const pageCount = Math.ceil(protectors.length / 4);
+  const currentPage = Math.min(page, Math.max(0, pageCount - 1));
+  const pageProtectors = protectors.slice(currentPage * 4, (currentPage + 1) * 4);
   return (
     <ContentBox
       title="Town Hall"
@@ -74,6 +81,7 @@ export const VillageDuty = ({
                   : "Sign up for duty"}
             </Button>
           </div>
+          {feedback && <FeedbackAlert feedback={feedback} />}
           {!data.onDuty && !data.canEnroll && (
             <p className="text-sm">
               Sign up while awake in your home village at {VILLAGE_DUTY_MIN_RANK} rank
@@ -87,7 +95,7 @@ export const VillageDuty = ({
             other protectors continue patrolling.
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
-            {data.protectors.map((protector) => (
+            {pageProtectors.map((protector) => (
               <Link
                 key={protector.userId}
                 href={`/userid/${protector.userId}`}
@@ -106,6 +114,30 @@ export const VillageDuty = ({
               </Link>
             ))}
           </div>
+          {pageCount > 1 && (
+            <nav
+              aria-label="Village protector pages"
+              className="flex items-center justify-between gap-2"
+            >
+              <Button
+                variant="outline"
+                disabled={currentPage === 0}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                Previous
+              </Button>
+              <span>
+                {currentPage + 1} of {pageCount}
+              </span>
+              <Button
+                variant="outline"
+                disabled={currentPage + 1 >= pageCount}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                Next
+              </Button>
+            </nav>
+          )}
           {data.count === 0 && (
             <p className="text-muted-foreground text-sm">
               No one is on duty yet. Be your village&apos;s first protector.
@@ -113,15 +145,10 @@ export const VillageDuty = ({
           )}
           {data.count > data.protectors.length && (
             <p className="text-muted-foreground text-sm">
-              Showing {data.protectors.length} of {data.count} protectors.
+              Roster includes {data.protectors.length} of {data.count} protectors.
             </p>
           )}
         </div>
-      )}
-      {message && (
-        <p role="status" className="mt-3 text-sm">
-          {message}
-        </p>
       )}
     </ContentBox>
   );

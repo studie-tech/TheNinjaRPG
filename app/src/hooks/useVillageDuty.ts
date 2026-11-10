@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
+import type { MutationFeedback } from "@/layout/FeedbackAlert";
 
 /** Keep the shared roster and map tied to the village/sector captured when enrollment changes. */
 export const useVillageDuty = (villageId: string, sector?: number) => {
   const utils = api.useUtils();
-  const [message, setMessage] = useState("");
+  const [feedback, setFeedback] = useState<MutationFeedback | null>(null);
   const query = api.villageDuty.get.useQuery(
     { villageId },
     {
@@ -13,9 +14,12 @@ export const useVillageDuty = (villageId: string, sector?: number) => {
     },
   );
   const mutation = api.villageDuty.setDuty.useMutation({
-    onMutate: () => ({ villageId, sector }),
+    onMutate: () => {
+      setFeedback(null);
+      return { villageId, sector };
+    },
     onSuccess: async (result, _input, snapshot) => {
-      setMessage(result.message);
+      setFeedback(result);
       if (!result.success || !snapshot) return;
       // The shared roster can change independently and its capped sample can gain an unknown member.
       await Promise.all([
@@ -25,11 +29,11 @@ export const useVillageDuty = (villageId: string, sector?: number) => {
           : []),
       ]);
     },
-    onError: (error) => setMessage(error.message),
+    onError: (error) => setFeedback({ success: false, message: error.message }),
   });
   return {
     ...query,
-    message,
+    feedback,
     isChanging: mutation.isPending,
     setDuty: (enabled: boolean) => mutation.mutate({ villageId, enabled }),
   };
