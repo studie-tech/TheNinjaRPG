@@ -1074,6 +1074,7 @@ const applyConsequence = (
         txt: `${target.username} takes ${c.damage.toFixed(2)} ${c.damageSource ? `${c.damageSource} ` : ""}damage`,
         color: "red",
         types: c.types,
+        hp: { userId: target.userId, amount: -c.damage },
       });
       // Vamp: heal the attacker based on the full pre-shield damage dealt (post-boost,
       // pre-shield; matches lifesteal, so a shield doesn't shrink the vamp heal).
@@ -1088,6 +1089,7 @@ const applyConsequence = (
           actionEffects.push({
             txt: `${user.username} vamps ${vampHeal} damage as health`,
             color: "green",
+            hp: { userId: user.userId, amount: vampHeal },
           });
         }
       }
@@ -1104,6 +1106,7 @@ const applyConsequence = (
         txt: `${target.username} takes ${amount.toFixed(2)} ${key} damage`,
         color: "red",
         types: c.types,
+        hp: { userId: target.userId, amount: -amount },
       });
       wearArmor(battle, target);
     }
@@ -1113,6 +1116,7 @@ const applyConsequence = (
       actionEffects.push({
         txt: `${target.username} heals ${c.heal_hp} HP`,
         color: "green",
+        hp: { userId: target.userId, amount: c.heal_hp },
       });
     }
     if (c.heal_sp !== undefined && c.heal_sp >= 0) {
@@ -1170,6 +1174,7 @@ const applyConsequence = (
       actionEffects.push({
         txt: `${user.username} takes ${finalReflect.toFixed(2)} reflect damage`,
         color: "red",
+        hp: { userId: user.userId, amount: -finalReflect },
       });
     }
     if (c.recoil !== undefined && c.recoil >= 0) {
@@ -1178,6 +1183,7 @@ const applyConsequence = (
       actionEffects.push({
         txt: `${user.username} takes ${c.recoil.toFixed(2)} recoil damage`,
         color: "red",
+        hp: { userId: user.userId, amount: -c.recoil },
       });
     }
     if (c.afterburn !== undefined && c.afterburn >= 0) {
@@ -1188,6 +1194,7 @@ const applyConsequence = (
       actionEffects.push({
         txt: `${target.username} takes ${c.afterburn.toFixed(2)} afterburn damage`,
         color: "red",
+        hp: { userId: target.userId, amount: -c.afterburn },
       });
     }
     // Lifesteal shares the leech budget with vamp: it takes whatever vamp left unused
@@ -1209,6 +1216,7 @@ const applyConsequence = (
         actionEffects.push({
           txt: `${user.username} steals ${finalLifesteal.toFixed(2)} damage as health`,
           color: "green",
+          hp: { userId: user.userId, amount: finalLifesteal },
         });
       }
     }
@@ -1228,6 +1236,7 @@ const applyConsequence = (
       actionEffects.push({
         txt: `${target.username} absorbs ${absorbAmount.toFixed(2)} damage and converts it to health`,
         color: "green",
+        hp: { userId: target.userId, amount: absorbAmount },
       });
     }
     if (
@@ -1262,6 +1271,7 @@ const applyConsequence = (
       actionEffects.push({
         txt: `${target.username} loses ${c.drain_hp.toFixed(2)} HP to drain`,
         color: "purple",
+        hp: { userId: target.userId, amount: -c.drain_hp },
       });
     }
     if (c.drain_cp !== undefined && c.drain_cp >= 0 && target.curChakra > 0) {
@@ -1288,6 +1298,7 @@ const applyConsequence = (
       actionEffects.push({
         txt: `${target.username} takes ${c.poison.toFixed(2)} poison damage`,
         color: "purple",
+        hp: { userId: target.userId, amount: -c.poison },
       });
     }
     // Process disappear animation of characters

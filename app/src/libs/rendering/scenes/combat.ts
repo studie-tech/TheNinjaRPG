@@ -10,7 +10,7 @@ import { ID_SFX_MOVE, WORLD_DAY_BRIGHTNESS } from "@/drizzle/constants";
 import type { GameAsset, UserData } from "@/drizzle/schema";
 import { actionPointsAfterAction, calcActiveUser } from "@/libs/combat/actions";
 import type { AggroDisplay } from "@/libs/combat/aggroDisplay";
-import { type CombatHit, combatHits } from "@/libs/combat/playback";
+import { type CombatHit, combatHits, type HitSeverity } from "@/libs/combat/playback";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { getWorldCycleBrightness } from "@/libs/dayNight";
 import { hexGridHeightRatio, type TerrainHex } from "@/libs/hexgrid";
@@ -57,6 +57,7 @@ import { sampleShadowWind, sampleWorldWind } from "@/libs/rendering/worldWind";
 import { clamp } from "@/utils/math";
 
 const NO_HITS: CombatHit[] = [];
+const SEVERITY_ORDER: Record<HitSeverity, number> = { light: 0, heavy: 1, crushing: 2 };
 
 /** Without a frame for this long the page is not rendering, so nothing is replaying. */
 const PRESENTATION_STALL_MS = 500;
@@ -483,9 +484,11 @@ export const createCombatScene = async (options: {
         presented !== lastPresented.battle ||
         logVersion !== lastPresented.logVersion
       ) {
+        // Taken on every change, so lines never outlive the frames that landed them.
+        const logged = playback.takeHits();
         // Previews and catch-up reads redraw a result without anything landing.
         if (snapshot.active && !capture && !options.staticActors && !options.advance)
-          hits = combatHits(lastPresented.battle, presented);
+          hits = combatHits(lastPresented.battle, presented, logged);
         lastPresented = { battle: presented, logVersion };
         options.onPresent?.(lastPresented);
       }
@@ -505,6 +508,7 @@ export const createCombatScene = async (options: {
       )
         sync(view);
       if (arrival) transformation.start(arrival);
+      const struck = new Map<string, { x: number; y: number; severity: HitSeverity }>();
       for (const { userId, amount, severity } of hits) {
         const head = actors.headPosition(userId);
         if (!head) continue;
@@ -517,8 +521,16 @@ export const createCombatScene = async (options: {
           y: head.y,
           dirX: direction.x,
         });
-        if (amount < 0) actors.react(userId, direction, severity);
+        const strongest = struck.get(userId)?.severity;
+        if (
+          amount < 0 &&
+          (!strongest || SEVERITY_ORDER[severity] > SEVERITY_ORDER[strongest])
+        )
+          struck.set(userId, { ...direction, severity });
       }
+      // One reaction per fighter, however many logged lines struck it.
+      for (const [userId, { severity, ...direction }] of struck)
+        actors.react(userId, direction, severity);
       labels.visible = snapshot.showGridNumbers;
       const pointer = controls.dragging() ? null : controls.pointer();
       const tile = pointer ? tileAt(pointer.x, pointer.y) : null;

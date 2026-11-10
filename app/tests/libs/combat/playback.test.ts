@@ -216,6 +216,66 @@ describe("combat playback frames", () => {
   });
 });
 
+describe("logged health lines", () => {
+  it("records each action's health lines on its step and frame", () => {
+    const previous = setup();
+    const before = structuredClone(previous);
+    const recorder = createCombatPlaybackRecorder(previous);
+    user(previous, "foe").spriteAction = slash;
+    user(previous, "hero").curHealth = 20;
+    recorder.record(previous, 10, "foe", [
+      {
+        txt: "hero takes 550 damage",
+        color: "red",
+        hp: { userId: "hero", amount: -550 },
+      },
+      {
+        txt: "hero takes 250 afterburn damage",
+        color: "red",
+        hp: { userId: "hero", amount: -250 },
+      },
+      { txt: "foe uses a jutsu", color: "blue" },
+    ]);
+    expect(recorder.steps[0]?.hits).toEqual([
+      { userId: "hero", amount: -550 },
+      { userId: "hero", amount: -250 },
+    ]);
+    const next = asReturned({ ...previous, version: 11 });
+    next.playback = recorder.steps;
+    expect(buildPlaybackFrames(asReturned(before), next)[0]?.hits).toEqual([
+      { userId: "hero", amount: -550 },
+      { userId: "hero", amount: -250 },
+    ]);
+  });
+
+  it("lands a joined walk step's lines with the walk that absorbs it", () => {
+    const previous = setup();
+    const before = structuredClone(previous);
+    const recorder = createCombatPlaybackRecorder(previous);
+    user(previous, "foe").longitude = 4;
+    user(previous, "foe").curHealth = 90;
+    recorder.record(previous, 10, "foe", [
+      {
+        txt: "foe takes 10 diffuse damage",
+        color: "red",
+        hp: { userId: "foe", amount: -10 },
+      },
+    ]);
+    user(previous, "foe").longitude = 3;
+    recorder.record(previous, 11, "foe", []);
+    const next = asReturned({ ...previous, version: 12 });
+    next.playback = recorder.steps;
+    const frames = buildPlaybackFrames(asReturned(before), next);
+    expect(frames).toHaveLength(1);
+    expect(frames[0]?.hits).toEqual([{ userId: "foe", amount: -10 }]);
+  });
+
+  it("leaves steps recorded without log lines unstructured", () => {
+    const { steps } = walkThenStrike();
+    expect(steps.every((step) => step.hits === undefined)).toBe(true);
+  });
+});
+
 describe("combat hits", () => {
   it("reports damage only at the frame the strike lands", () => {
     const { previous, next } = walkThenStrike();
@@ -266,6 +326,56 @@ describe("combat hits", () => {
     const next = structuredClone(previous);
     next.usersState.find((row) => row.userId === "hero")!.curHealth = max - lost;
     expect(combatHits(previous, next)[0]?.severity).toBe(severity);
+  });
+
+  it("shows one number per logged line, so direct damage and afterburn match the log", () => {
+    const { previous } = walkThenStrike();
+    const hero = previous.usersState.find((row) => row.userId === "hero")!;
+    hero.maxHealth = 2000;
+    hero.curHealth = 2000;
+    const next = structuredClone(previous);
+    next.usersState.find((row) => row.userId === "hero")!.curHealth = 1200;
+    expect(
+      combatHits(previous, next, [
+        { userId: "hero", amount: -550 },
+        { userId: "hero", amount: -250.4 },
+      ]),
+    ).toEqual([
+      { userId: "hero", amount: -550, severity: "crushing" },
+      { userId: "hero", amount: -250, severity: "heavy" },
+    ]);
+  });
+
+  it("shows a logged overkill as the log states it, crushing on the last blow", () => {
+    const { previous } = walkThenStrike();
+    const hero = previous.usersState.find((row) => row.userId === "hero")!;
+    hero.maxHealth = 5000;
+    hero.curHealth = 447;
+    const next = structuredClone(previous);
+    next.usersState.find((row) => row.userId === "hero")!.curHealth = 0;
+    expect(combatHits(previous, next, [{ userId: "hero", amount: -1200 }])).toEqual([
+      { userId: "hero", amount: -1200, severity: "crushing" },
+    ]);
+  });
+
+  it("keeps a heal that offsets damage as its own number", () => {
+    const { previous } = walkThenStrike();
+    const next = structuredClone(previous);
+    expect(
+      combatHits(previous, next, [
+        { userId: "hero", amount: -30 },
+        { userId: "hero", amount: 30 },
+      ]).map(({ amount }) => amount),
+    ).toEqual([-30, 30]);
+  });
+
+  it("falls back to net change for fighters no logged line names", () => {
+    const { previous } = walkThenStrike();
+    const next = structuredClone(previous);
+    next.usersState.find((row) => row.userId === "foe")!.curHealth = 90;
+    expect(combatHits(previous, next, [])).toEqual([
+      expect.objectContaining({ userId: "foe", amount: -10 }),
+    ]);
   });
 
   it("treats any lethal blow as crushing, however little health was left", () => {

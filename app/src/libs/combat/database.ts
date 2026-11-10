@@ -518,7 +518,8 @@ export const createAction = async (
         actionId: entry.actionId ?? "unknown",
         userId: entry.userId ?? "unknown",
         description: entry.description,
-        appliedEffects: entry.appliedEffects,
+        // Health tags only pace the live replay; the log keeps its text.
+        appliedEffects: entry.appliedEffects.map(({ hp: _, ...effect }) => effect),
       };
     });
   if (newBattle.battleType === "CLAN_BATTLE") {

@@ -1727,6 +1727,7 @@ export const settleCurse = (
     txt: `${target.username}'s Curse expires and restores ${healing.toFixed(2)} HP`,
     color: "green",
     types: ["curse"],
+    hp: { userId: target.userId, amount: healing },
   };
 };
 

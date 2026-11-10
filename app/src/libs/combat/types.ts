@@ -800,4 +800,9 @@ export type ActionEffect = {
   txt: string;
   color: "red" | "green" | "blue" | "yellow" | "purple" | "orange" | "pink" | "gray";
   types?: (GeneralType | StatType | ElementName | PoolType | ZodAllTags["type"])[];
+  /** Health this line reports, negative for damage; feeds the replay's numbers, never stored. */
+  hp?: LoggedHealth;
 };
+
+/** One health line of the battle log, as the field's floating numbers show it. */
+export type LoggedHealth = { userId: string; amount: number };
