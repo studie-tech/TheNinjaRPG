@@ -467,6 +467,8 @@ export type PreBattleGearModifiers = {
  * Static data is stored once at battle initiation and looked up by ID.
  */
 export type ExtraState = {
+  /** Hourly patrol reservation frozen at admission; settlement needs no village read. */
+  villageDuty?: { villageId: string; startedAt: string; userId: string; slot: number };
   hunting?: HuntingBattleState;
   /** Durable scheduled defense and tenure; settlement never needs another fetch. */
   kageMatch?: {
@@ -576,7 +578,7 @@ export type ReturnedUserState = Pick<BattleUserState, (typeof publicState)[numbe
  */
 export type ReturnedExtraState = Omit<
   ExtraState,
-  "villages" | "clans" | "dungeon" | "encounter" | "creatorTrial"
+  "villages" | "clans" | "dungeon" | "encounter" | "creatorTrial" | "villageDuty"
 > & {
   encounter?: Pick<EncounterWaveState, "wave">;
   /** Public progress only; authored future enemies and their loadouts stay server-side. */

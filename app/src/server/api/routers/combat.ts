@@ -49,6 +49,7 @@ import {
   VILLAGE_SYNDICATE_ID,
   WAKE_ISLAND_PVP_PROTECTION,
 } from "@/drizzle/constants";
+import type { VillageDutyShift } from "@/drizzle/schema";
 import {
   type AiProfile,
   type AiTransformation,
@@ -267,8 +268,14 @@ import { fetchQuestEntryInventory, listVisibleRaidQuests } from "@/queries/quest
 import { findSectorWithVillage } from "@/queries/shrine";
 import { fetchUserSkills } from "@/queries/skillTree";
 import { fetchActiveTerritoryWar } from "@/queries/territoryWar";
-import { fetchSectorVillage, findVillageBySector } from "@/queries/village";
-import { findVillageDutyDefender } from "@/queries/villageDuty";
+import { fetchSectorVillage } from "@/queries/village";
+import {
+  claimVillageDutyPatrol,
+  fetchVillageDutyHome,
+  listVillageDutyRoster,
+  listVillageDutyVisitors,
+  releaseVillageDutyPatrol,
+} from "@/queries/villageDuty";
 import { fetchActiveWars } from "@/routers/war";
 import {
   fetchUserItemsWithVariants,
@@ -303,7 +310,13 @@ import {
   getQuestEntryCharges,
 } from "@/server/utils/questEntry";
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
+import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
 import { hasDueTimedJob, settleDueTimedQueues } from "@/server/utils/userQueue";
+import {
+  ensureVillageDutyShift,
+  isVillageDutyIntruder,
+  prepareVillageDutyEncounter,
+} from "@/server/utils/villageDuty";
 import { findRelationship } from "@/utils/alliance";
 import { getKageEligibility } from "@/utils/kage";
 import { fedItemLoadouts, fedJutsuLoadouts } from "@/utils/paypal";
@@ -1656,7 +1669,6 @@ export const combatRouter = createTRPCRouter({
         sectorData,
         shrineAis,
         isHome,
-        dutyDefender,
       ] = await Promise.all([
         fetchUpdatedUser({
           client: ctx.drizzle,
@@ -1665,8 +1677,7 @@ export const combatRouter = createTRPCRouter({
         fetchActiveWars(ctx.drizzle),
         findSectorWithVillage(ctx.drizzle, input.sector),
         listUserDataForStartShrineBattle(ctx.drizzle),
-        findVillageBySector(ctx.drizzle, input.sector),
-        findVillageDutyDefender(ctx.drizzle, input.sector),
+        fetchVillageDutyHome(ctx.drizzle, input.sector),
       ]);
 
       // Check that user was found
@@ -1715,21 +1726,42 @@ export const combatRouter = createTRPCRouter({
           ? validAis.map((ai) => ai.userId)
           : [VILLAGE_PROTECTOR_AI_ID];
 
-      const duty =
+      if (
         isHome &&
-        dutyDefender &&
-        dutyDefender.villageId !== user.villageId &&
-        shrineOwnerVillageId &&
-        dutyDefender.villageId === shrineOwnerVillageId
-          ? { userId: dutyDefender.userId, villageId: shrineOwnerVillageId }
-          : undefined;
+        isHome.id === shrineOwnerVillageId &&
+        isHome.id !== user.villageId
+      ) {
+        const shift = await ensureVillageDutyShift(ctx.drizzle, isHome);
+        const eligible = await listVillageDutyRoster(ctx.drizzle, isHome.id);
+        const slot =
+          shift?.patrols.findIndex(
+            (patrol) =>
+              !patrol.defeated &&
+              !patrol.battleId &&
+              eligible.some((entry) => entry.userId === patrol.userId),
+          ) ?? -1;
+        if (shift && slot >= 0)
+          return await initiateVillageDutyBattle(
+            {
+              client: ctx.drizzle,
+              userIds: [user.userId],
+              actionUserId: ctx.userId,
+              requiresUserRefresh: requiresProgressionRefresh,
+              originSocketId: input.originSocketId,
+              sector: input.sector,
+              forceDefenderVillageId: shrineOwnerVillageId,
+              shift,
+              slot,
+            },
+            "SHRINE_WAR",
+          );
+      }
       // Return battle
       return await initiateBattle(
         {
           sector: input.sector,
           userIds: [user.userId],
-          targetIds: duty ? [villageDutyActorId(duty.userId)] : targetIds,
-          villageDuty: duty,
+          targetIds,
           forceDefenderVillageId: shrineOwnerVillageId,
           client: ctx.drizzle,
           actionUserId: ctx.userId,
@@ -1931,7 +1963,13 @@ export const initiateBattle = async (
     jutsuEquipLimits?: JutsuEquipLimit[];
     forceDefenderVillageId?: string;
     /** Enrolled owner loaded with the participants and converted to an isolated AI copy. */
-    villageDuty?: { userId: string; villageId: string };
+    villageDuty?: {
+      userId: string;
+      villageId: string;
+      startedAt: string;
+      slot: number;
+      battleId: string;
+    };
     biome?: CombatBiome;
     forceKeepPools?: boolean;
     /** Replace the initiating players' HP/CP/SP with this percentage of effective maxima. */
@@ -2082,6 +2120,7 @@ export const initiateBattle = async (
     petJutsus,
     dungeonEntryData,
     aiTransformations,
+    patrolHome,
   ] = await Promise.all([
     info.territoryWar ??
       (battleType === "COMBAT" && sector !== undefined
@@ -2148,7 +2187,80 @@ export const initiateBattle = async (
       (battleType === "COMBAT" && targetIds.length === 1))
       ? listAiTransformations(client)
       : null,
+    battleType === "COMBAT" && sector !== undefined
+      ? fetchVillageDutyHome(client, sector)
+      : undefined,
   ]);
+
+  // All map PvP paths share this barrier, including failed robbery battles and scripted callers.
+  const rawIntruder = preloadedUsers.find(
+    (user) => user.userId === userIds[0] && !user.isAi,
+  );
+  const intruderReadiness =
+    battleType === "COMBAT" &&
+    patrolHome &&
+    rawIntruder &&
+    rawIntruder.villageId !== patrolHome.id &&
+    info.actionUserId === rawIntruder.userId
+      ? prepareActionReadiness(rawIntruder, settings)
+      : undefined;
+  // Automatic waking must not let an invader bypass the same patrol an awake visitor faces.
+  const intruder =
+    intruderReadiness && !intruderReadiness.error
+      ? intruderReadiness.user
+      : rawIntruder;
+  if (
+    battleType === "COMBAT" &&
+    userIds.length === 1 &&
+    patrolHome &&
+    intruder &&
+    isVillageDutyIntruder(patrolHome, intruder, activeWars)
+  ) {
+    const [roster, presence, map] = await Promise.all([
+      listVillageDutyRoster(client, patrolHome.id),
+      listVillageDutyVisitors(client, patrolHome.sector, new Date()),
+      fetchPublishedSectorMap(client, patrolHome.sector).catch(() => null),
+    ]);
+    const interception = await prepareVillageDutyEncounter({
+      client,
+      userId: intruder.userId,
+      sector: patrolHome.sector,
+      force: true,
+      preload: {
+        user: intruder,
+        home: patrolHome,
+        map,
+        roster,
+        presence,
+        wars: activeWars,
+      },
+    });
+    if (interception?.blocked)
+      return errorResponse("The village patrol is updating. Please try again.");
+    if (interception?.remaining) {
+      if (interception.slot < 0)
+        return errorResponse(
+          "Village protectors are defending. Defeat the remaining patrol before attacking players here.",
+        );
+      return await initiateVillageDutyBattle(
+        {
+          client,
+          userIds: [intruder.userId],
+          actionUserId: info.actionUserId,
+          actionReadiness: intruderReadiness,
+          originSocketId: info.originSocketId,
+          sector: intruder.sector,
+          longitude: intruder.longitude,
+          latitude: intruder.latitude,
+          forceDefenderVillageId: patrolHome.id,
+          shift: interception.shift,
+          slot: interception.slot,
+          autoCombatFromDefaults: true,
+        },
+        "VILLAGE_PROTECTOR",
+      );
+    }
+  }
 
   const dutyEnrollment = info.villageDuty;
   if (
@@ -2969,6 +3081,10 @@ export const initiateBattle = async (
   }
 
   if (info.kageMatch) extraState.kageMatch = info.kageMatch;
+  if (info.villageDuty) {
+    const { villageId, userId, startedAt, slot } = info.villageDuty;
+    extraState.villageDuty = { villageId, userId, startedAt, slot };
+  }
 
   if (info.tournamentGame) {
     extraState.tournamentGameId = info.tournamentGame.id;
@@ -3090,6 +3206,7 @@ export const initiateBattle = async (
     info.clanBattle?.battleId ??
     info.tournamentGame?.battleId ??
     info.kageMatch?.battleId ??
+    info.villageDuty?.battleId ??
     nanoid();
 
   // Rows the status update below is expected to claim, used as the CAS guard
@@ -4642,4 +4759,45 @@ export const processUsersForBattle = async (
  */
 const announceLobbyChange = (userBattle: { id: string; version: number }) => {
   void pusher.trigger(userBattle.id, "event", { version: userBattle.version + 1 });
+};
+
+/** Reserve one shared copy and compensate rejected admission without claiming its owner or using a transaction. */
+export const initiateVillageDutyBattle = async (
+  info: Omit<Parameters<typeof initiateBattle>[0], "targetIds" | "villageDuty"> & {
+    shift: VillageDutyShift;
+    slot: number;
+  },
+  battleType: "VILLAGE_PROTECTOR" | "SHRINE_WAR",
+) => {
+  const { shift, slot, ...battleInfo } = info;
+  const patrol = shift.patrols[slot];
+  if (!patrol || patrol.defeated || patrol.battleId)
+    return errorResponse("This protector is no longer available.");
+  const battleId = nanoid();
+  const reference = {
+    villageId: shift.villageId,
+    startedAt: shift.startedAt.toISOString(),
+    slot,
+    battleId,
+  };
+  const claim = await claimVillageDutyPatrol(info.client, shift, slot, battleId);
+  if (claim.rowsAffected !== 1)
+    return errorResponse("The patrol changed. Please try again.");
+  // A process interrupted before compensation quarantines this reversible slot until rotation;
+  // keeping the reservation prevents two enemies from fighting the same copy.
+  try {
+    const result = await initiateBattle(
+      {
+        ...battleInfo,
+        targetIds: [villageDutyActorId(patrol.userId)],
+        villageDuty: { ...reference, userId: patrol.userId },
+      },
+      battleType,
+    );
+    if (!result.success) await releaseVillageDutyPatrol(info.client, reference, false);
+    return result;
+  } catch (error) {
+    await releaseVillageDutyPatrol(info.client, reference, false);
+    throw error;
+  }
 };

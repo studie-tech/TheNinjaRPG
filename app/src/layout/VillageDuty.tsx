@@ -5,10 +5,15 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { VILLAGE_DUTY_MIN_RANK } from "@/drizzle/constants";
+import {
+  VILLAGE_DUTY_MAX_PATROLS,
+  VILLAGE_DUTY_MIN_RANK,
+  VILLAGE_DUTY_SLOTS_PER_LEVEL,
+} from "@/drizzle/constants";
 import { useVillageDuty } from "@/hooks/useVillageDuty";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
+import Countdown from "@/layout/Countdown";
 import { FeedbackAlert } from "@/layout/FeedbackAlert";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
@@ -24,7 +29,7 @@ export const VillageDuty = ({
   navTabs: ReactNode;
 }) => {
   const [page, setPage] = useState(0);
-  const { data, isPending, isError, refetch, setDuty, isChanging, feedback } =
+  const { data, isPending, isError, refetch, setDuty, isChanging, feedback, timeDiff } =
     useVillageDuty(villageId, sector);
   const protectors = data?.protectors ?? [];
   const pageCount = Math.ceil(protectors.length / 4);
@@ -39,10 +44,9 @@ export const VillageDuty = ({
       stackTopRight
     >
       <p className="text-muted-foreground mb-4 text-sm">
-        Put your character on patrol, even while you are away. Your AI copy guards your
-        village against hostile visitors and defends attacks on its home shrine. Duty
-        continues until you stand down or leave the village. Your character can keep
-        playing normally.
+        Sign up your character's AI copy for the hourly patrol rotation. Village
+        Protectors provides {VILLAGE_DUTY_SLOTS_PER_LEVEL} slots per level, up to{" "}
+        {VILLAGE_DUTY_MAX_PATROLS}. You can keep playing normally while enrolled.
       </p>
       {isPending ? (
         <Loader explanation="Loading village protectors" />
@@ -60,39 +64,61 @@ export const VillageDuty = ({
               <Shield className="text-primary size-8 shrink-0" aria-hidden />
               <div>
                 <p className="font-semibold">
-                  {data.count.toLocaleString()} village{" "}
-                  {data.count === 1 ? "protector" : "protectors"}
+                  {data.available}/{data.capacity} patrolling
                 </p>
                 <p className="text-muted-foreground text-sm">
-                  {data.onDuty ? "You are on duty" : "Your village can use your help"}
+                  {data.count.toLocaleString()} signed up
+                  {data.defeated > 0 ? ` · ${data.defeated} copies defeated` : ""}
+                  {data.enrolled && (
+                    <span className="block">
+                      {data.patrolStatus === "PATROLLING"
+                        ? "Your copy is on patrol"
+                        : data.patrolStatus === "FIGHTING"
+                          ? "Your copy is defending"
+                          : data.patrolStatus === "DEFEATED"
+                            ? "Your copy is defeated this shift"
+                            : "You are in reserve"}
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
             <Button
               id="village-duty-toggle"
-              variant={data.onDuty ? "outline" : "default"}
-              disabled={isChanging || (!data.onDuty && !data.canEnroll)}
-              onClick={() => setDuty(!data.onDuty)}
+              variant={data.enrolled ? "outline" : "default"}
+              disabled={isChanging || (!data.enrolled && !data.canEnroll)}
+              onClick={() => setDuty(!data.enrolled)}
             >
               {isChanging
                 ? "Updating duty..."
-                : data.onDuty
+                : data.enrolled
                   ? "Stand down"
                   : "Sign up for duty"}
             </Button>
           </div>
           {feedback && <FeedbackAlert feedback={feedback} />}
-          {!data.onDuty && !data.canEnroll && (
+          {!data.enrolled && !data.canEnroll && (
             <p className="text-sm">
               Sign up while awake in your home village at {VILLAGE_DUTY_MIN_RANK} rank
               or higher.
             </p>
           )}
           <p className="text-muted-foreground text-sm">
-            Your copy uses your equipped gear, jutsu and AI profile when an encounter
-            begins. Patrol battles do not change your own health, items or battle
-            record, and grant you no rewards. One protector defends each encounter;
-            other protectors continue patrolling.
+            Patrols pursue nearby enemies on travel. Each enemy fights one copy at a
+            time; defeated copies stay down village-wide until rotation. Your health,
+            items and battle record stay untouched, and your copy earns no rewards.
+            <span className="mt-1 block">
+              Next rotation:{" "}
+              <Countdown
+                targetDate={data.nextRotationAt}
+                timeDiff={timeDiff}
+                onFinish={() => void refetch()}
+              />
+              {data.nextCapacity !== data.capacity
+                ? ` · ${data.nextCapacity} slots next rotation`
+                : ""}
+              .
+            </span>
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
             {pageProtectors.map((protector) => (
@@ -110,7 +136,13 @@ export const VillageDuty = ({
                 <span className="min-w-0 flex-1 truncate font-semibold">
                   {protector.username}
                 </span>
-                <Badge variant="secondary">Protector</Badge>
+                <Badge variant="secondary">
+                  {protector.defeated
+                    ? "Defeated"
+                    : protector.fighting
+                      ? "Defending"
+                      : "Patrolling"}
+                </Badge>
               </Link>
             ))}
           </div>
@@ -143,9 +175,9 @@ export const VillageDuty = ({
               No one is on duty yet. Be your village&apos;s first protector.
             </p>
           )}
-          {data.count > data.protectors.length && (
+          {data.count > 0 && data.protectors.length === 0 && (
             <p className="text-muted-foreground text-sm">
-              Roster includes {data.protectors.length} of {data.count} protectors.
+              Volunteers are ready for the next hourly selection.
             </p>
           )}
         </div>

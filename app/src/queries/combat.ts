@@ -90,6 +90,7 @@ import {
   userPet,
   village,
   villageAlliance,
+  villageDutyShift,
   war,
   warKill,
 } from "@/drizzle/schema";
@@ -1059,6 +1060,12 @@ export const updateUserDataForCreateBattle = (
   queueUpdate: Record<string, SQL<unknown>>,
   battleId: string,
   info: {
+    villageDuty?: {
+      startedAt: string;
+      slot: number;
+      villageId: string;
+      battleId: string;
+    };
     actionReadiness?: ActionReadiness;
     tournamentGame?: undefined | { id: string; battleId: string; aiOnly: false | true };
     hunting?: undefined | import("@/validators/hunting").HuntingBattleState;
@@ -1172,6 +1179,10 @@ export const updateUserDataForCreateBattle = (
     })
     .where(
       and(
+        // A rotated or released patrol lease must not admit a stale encounter.
+        info.villageDuty
+          ? sql`EXISTS (SELECT 1 FROM ${villageDutyShift} WHERE ${villageDutyShift.villageId} = ${info.villageDuty.villageId} AND ${villageDutyShift.startedAt} = ${new Date(info.villageDuty.startedAt)} AND JSON_UNQUOTE(JSON_EXTRACT(${villageDutyShift.patrols}, ${`$[${info.villageDuty.slot}].battleId`})) = ${info.villageDuty.battleId})`
+          : undefined,
         // Exactly the rows the CAS guard counts (expectedRows), so the
         // predicate and the expected count derive from one source and cannot
         // drift apart. The list already excludes AI rows, so the shared AI

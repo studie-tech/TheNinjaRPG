@@ -14,6 +14,9 @@ import {
   userData,
   village,
   villageAlliance,
+  villageDutyPresence,
+  villageDutyShift,
+  villageStructure,
   war,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
@@ -53,6 +56,9 @@ describeWithDatabase("shrine AI defenders", () => {
       aiProfile,
       battle,
       battleHistory,
+      villageDutyShift,
+      villageDutyPresence,
+      villageStructure,
       mpvpBattleUser,
       mpvpBattleQueue,
       sector,
@@ -157,7 +163,8 @@ describeWithDatabase("shrine AI defenders", () => {
         .update(userData)
         .set({
           villageDutyVillageId: "b",
-          villageDutyStartedAt: new Date(),
+          joinedVillageAt: new Date("2025-01-01"),
+          villageDutyStartedAt: new Date("2026-01-01"),
           status: "ASLEEP",
         })
         .where(eq(userData.userId, "human"));
@@ -171,6 +178,14 @@ describeWithDatabase("shrine AI defenders", () => {
           status: "ACTIVE",
         });
       }
+      await db.insert(villageStructure).values({
+        id: "duty-guards",
+        name: "Village Protectors",
+        image: "guards",
+        villageId: "b",
+        level: 1,
+        patrolSlotsPerLvl: 2,
+      });
       const defenders = await startLobby(["shrine-a"]);
       expect(defenders).toEqual(home ? ["duty:human"] : ["shrine-a"]);
       expect(

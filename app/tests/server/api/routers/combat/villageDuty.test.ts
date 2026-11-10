@@ -75,7 +75,13 @@ describe("village duty combat isolation", () => {
           client,
           userIds: ["attacker"],
           targetIds: ["duty:owner"],
-          villageDuty: { userId: "owner", villageId: "home" },
+          villageDuty: {
+            userId: "owner",
+            villageId: "home",
+            startedAt: new Date("2026-11-10T10:00:00Z").toISOString(),
+            slot: 0,
+            battleId: "copy-fixture-battle",
+          },
           forceDefenderVillageId: "home",
         },
         battleType,
@@ -388,7 +394,13 @@ describe("village duty combat isolation", () => {
         client: fake.client,
         userIds: ["attacker"],
         targetIds: ["duty:owner"],
-        villageDuty: { userId: "owner", villageId: "home" },
+        villageDuty: {
+          userId: "owner",
+          villageId: "home",
+          startedAt: new Date("2026-11-10T10:00:00Z").toISOString(),
+          slot: 0,
+          battleId: "copy-fixture-battle",
+        },
       },
       "VILLAGE_PROTECTOR",
     );
@@ -443,7 +455,13 @@ describe("village duty combat isolation", () => {
           client,
           userIds: ["attacker"],
           targetIds: ["duty:owner"],
-          villageDuty: { userId: "owner", villageId: "home" },
+          villageDuty: {
+            userId: "owner",
+            villageId: "home",
+            startedAt: new Date("2026-11-10T10:00:00Z").toISOString(),
+            slot: 0,
+            battleId: "copy-fixture-battle",
+          },
         },
         battleType,
       );
@@ -622,7 +640,15 @@ describe("village duty combat isolation", () => {
             userIds: ["attacker"],
             targetIds: [kind === "copy" ? "duty:owner" : "owner"],
             ...(kind === "copy"
-              ? { villageDuty: { userId: "owner", villageId: "home" } }
+              ? {
+                  villageDuty: {
+                    userId: "owner",
+                    villageId: "home",
+                    startedAt: new Date("2026-11-10T10:00:00Z").toISOString(),
+                    slot: 0,
+                    battleId: "copy-fixture-battle",
+                  },
+                }
               : {}),
             jutsuEquipLimits: limits,
           },

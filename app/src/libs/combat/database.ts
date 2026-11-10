@@ -116,6 +116,7 @@ import { reduceActiveFarmPlotTimers } from "@/queries/farming";
 import { deleteUserItemsWithPositiveQuantity } from "@/queries/item";
 import { incrementNotificationCounters } from "@/queries/misc";
 import { incrementVillageTokens } from "@/queries/village";
+import { releaseVillageDutyPatrol } from "@/queries/villageDuty";
 import { warRaidCombatGuard } from "@/queries/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
@@ -1169,6 +1170,21 @@ export const settlementWrites = (
   battleOver: boolean,
 ): [ReturnType<typeof updateUser>, ...Promise<unknown>[]] => [
   updateUser(client, pusher, battle, result, userId),
+  ...(battleOver && battle.extraState.villageDuty
+    ? [
+        releaseVillageDutyPatrol(
+          client,
+          { ...battle.extraState.villageDuty, battleId: battle.id },
+          !battle.usersState.some(
+            (user) =>
+              user.isVillageDutyCopy &&
+              !user.isSummon &&
+              user.curHealth > 0 &&
+              !user.fledBattle,
+          ),
+        ),
+      ]
+    : []),
   ...(!battle.extraState.dungeon && !battle.extraState.hunting
     ? [
         saveUsage(client, battle, result, userId),

@@ -5,6 +5,7 @@ import type {
   UserStatus,
 } from "@/drizzle/constants";
 import type { CharacterAnimation } from "@/libs/spriteAnimations";
+import type { VillageDutyPatrol } from "@/libs/villageDuty";
 
 type NonEmptyArray<T> = T[] & { 0: T };
 
@@ -115,6 +116,8 @@ export interface SectorUser {
     wildOnly: boolean;
     /** Restrict generated patrol destinations to village-zoned tiles. */
     villageOnly?: boolean;
+    /** Shared server pursuit; scenes interpolate it without per-frame requests. */
+    pursuit?: NonNullable<VillageDutyPatrol["pursuit"]>;
   };
   /** Drawn height relative to the default NPC height. */
   npcScale?: number;

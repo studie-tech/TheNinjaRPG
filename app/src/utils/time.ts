@@ -471,3 +471,14 @@ export const getCollectDeadline = (
 /** Always advances a millisecond-precision snapshot, even within the same clock tick. */
 export const getNextUserSnapshotAt = (updatedAt: Date, now = new Date()) =>
   new Date(Math.max(now.getTime(), updatedAt.getTime() + 1));
+
+/** Start of the current UTC game hour, independent of the host or browser timezone. */
+export const getUtcHourStart = (now = new Date()) =>
+  new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      now.getUTCHours(),
+    ),
+  );

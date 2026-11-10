@@ -63,6 +63,7 @@ import type { TerrainSpec } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { planVillageWallWindow } from "@/libs/sector-map/village-walls";
 import { getBiomeFromTileType } from "@/libs/travel";
+import { villageDutyPursuitPosition } from "@/libs/villageDuty";
 import { clamp } from "@/utils/math";
 import type { MapLocation } from "@/validators/mapLocation";
 
@@ -861,6 +862,34 @@ export const createTravelScene = async (options: {
         const wander = user.npcWander;
         if (!wander || !wanderMap) continue;
         const actorKey = travelActorKey(user);
+        if (wander.pursuit) {
+          const pose = villageDutyPursuitPosition(wander.pursuit, clock);
+          const from =
+            pose && entry.grid.getHex({ col: pose.from.x, row: pose.from.y });
+          const to = pose && entry.grid.getHex({ col: pose.to.x, row: pose.to.y });
+          if (pose && from && to) {
+            const progress = frame.reducedMotion
+              ? Math.round(pose.progress)
+              : pose.progress;
+            movements.set(actorKey, {
+              x: -from.center.x + (-to.center.x + from.center.x) * progress,
+              y:
+                -from.center.y +
+                standingOffset(from) +
+                (-to.center.y +
+                  standingOffset(to) +
+                  from.center.y -
+                  standingOffset(from)) *
+                  progress,
+              direction:
+                pose.progress > 0 && pose.progress < 1 && !frame.reducedMotion
+                  ? "horizontal"
+                  : null,
+              facing: to.center.x > from.center.x ? 1 : -1,
+            });
+            continue;
+          }
+        }
         const { cycle, into } = wanderClock(wander, clock);
         let walk = wanderWalks.get(actorKey);
         if (walk?.seed !== wander.seed || walk.cycle !== cycle) {

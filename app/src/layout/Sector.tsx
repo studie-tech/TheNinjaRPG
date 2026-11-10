@@ -30,6 +30,7 @@ import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePublicQuestLocations } from "@/hooks/usePublicQuestLocations";
 import { useSceneMutation } from "@/hooks/useSceneMutation";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
+import { useVillageDutyPursuit } from "@/hooks/useVillageDuty";
 import AvatarImage from "@/layout/Avatar";
 import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import HealingPopover from "@/layout/HealingPopover";
@@ -401,6 +402,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       refetchIntervalInBackground: false,
     },
   );
+  useVillageDutyPursuit({
+    sector,
+    enabled: !!data?.patrolThreat && profile?.status === "AWAKE",
+    protectors: data?.protectors ?? [],
+    startedAt: data?.patrolShiftAt,
+    revision: data?.patrolRevision,
+  });
   const villageData = data?.village;
   /** Combines player records and overworld AIs for the shared sector-user rendering path. */
   const fetchedUsers = useMemo(() => {

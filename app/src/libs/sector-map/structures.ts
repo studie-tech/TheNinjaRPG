@@ -39,7 +39,7 @@ export const createGenericStructure = (info: {
     hospitalSpeedupPerLvl: 0,
     itemDiscountPerLvl: 0,
     missionRewardPerLvl: 0,
-    patrolsPerLvl: 0,
+    patrolSlotsPerLvl: 0,
     ramenDiscountPerLvl: 0,
     regenIncreasePerLvl: 0,
     sleepRegenPerLvl: 0,

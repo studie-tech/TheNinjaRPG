@@ -98,7 +98,7 @@ const STRUCTURE_FIELDS = [
   "hospitalSpeedupPerLvl",
   "itemDiscountPerLvl",
   "missionRewardPerLvl",
-  "patrolsPerLvl",
+  "patrolSlotsPerLvl",
   "ramenDiscountPerLvl",
   "regenIncreasePerLvl",
   "sleepRegenPerLvl",

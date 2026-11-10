@@ -9,12 +9,20 @@ import { VillageDuty } from "@/layout/VillageDuty";
 const state = (count: number) => ({
   data: {
     count,
-    protectors: Array.from({ length: Math.min(count, 100) }, (_, i) => ({
+    protectors: Array.from({ length: Math.min(count, 20) }, (_, i) => ({
       userId: `protector-${i}`,
       username: `Protector ${i}`,
       avatar: null,
+      defeated: false,
+      fighting: false,
     })),
-    onDuty: false,
+    available: Math.min(count, 20),
+    capacity: 20,
+    nextCapacity: 20,
+    defeated: 0,
+    nextRotationAt: new Date(Date.now() + 3600000),
+    enrolled: false,
+    patrolStatus: "RESERVE",
     canEnroll: true,
   },
   isPending: false,
@@ -43,12 +51,12 @@ afterEach(() => {
 });
 const panel = () => <VillageDuty villageId="home" navTabs={null} />;
 
-it.each([0, 1, 4, 100, 101])(
+it.each([0, 1, 4, 20, 101])(
   "bounds a roster of %i without losing its count or profile links",
   (count) => {
     current = state(count);
     const view = render(panel());
-    expect(view.container.textContent).toContain(`${count} village protector`);
+    expect(view.container.textContent).toContain(`${count} signed up`);
     const links = () => [...view.container.querySelectorAll('a[href^="/userid/"]')];
     expect(links()).toHaveLength(Math.min(count, 4));
     if (count <= 4) {
@@ -62,18 +70,19 @@ it.each([0, 1, 4, 100, 101])(
     const next = view.getByRole("button", { name: "Next" });
     expect(previous.hasAttribute("disabled")).toBe(true);
     const seen = new Set<string>();
-    for (let page = 0; page < 25; page++) {
+    for (let page = 0; page < 5; page++) {
       expect(links()).toHaveLength(4);
       for (const link of links()) seen.add(link.getAttribute("href")!);
-      if (page < 24) fireEvent.click(next);
+      if (page < 4) fireEvent.click(next);
     }
-    expect(seen.size).toBe(100);
+    expect(seen.size).toBe(20);
     expect(next.hasAttribute("disabled")).toBe(true);
-    expect(links()[3]?.getAttribute("href")).toBe("/userid/protector-99");
+    expect(links()[3]?.getAttribute("href")).toBe("/userid/protector-19");
     fireEvent.click(previous);
-    expect(links()[0]?.getAttribute("href")).toBe("/userid/protector-92");
-    if (count > 100)
-      expect(view.getByText("Roster includes 100 of 101 protectors.")).toBeDefined();
+    expect(links()[0]?.getAttribute("href")).toBe("/userid/protector-12");
+    expect(view.container.textContent).toContain(
+      `${Math.min(count, 20)}/20 patrolling`,
+    );
     current = state(1);
     view.rerender(panel());
     expect(links()[0]?.getAttribute("href")).toBe("/userid/protector-0");
@@ -92,7 +101,7 @@ it.each([true, false])(
     view.rerender(panel());
     const feedback = view.getByRole(success ? "status" : "alert");
     const action = view.getByRole("button", { name: "Sign up for duty" });
-    const roster = view.getByRole("link", { name: "Protector 4 Protector" });
+    const roster = view.getByRole("link", { name: "Protector 4 Patrolling" });
     expect(
       action.compareDocumentPosition(feedback) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
@@ -108,3 +117,16 @@ it.each([true, false])(
     ).toBe(true);
   },
 );
+
+it.each([
+  ["PATROLLING", "Your copy is on patrol"],
+  ["FIGHTING", "Your copy is defending"],
+  ["DEFEATED", "Your copy is defeated this shift"],
+  ["RESERVE", "You are in reserve"],
+])("explains enrolled status %s beside Stand down", (status, text) => {
+  current.data.enrolled = true;
+  current.data.patrolStatus = status!;
+  const view = render(panel());
+  expect(view.getByText(text!)).toBeDefined();
+  expect(view.getByRole("button", { name: "Stand down" })).toBeDefined();
+});

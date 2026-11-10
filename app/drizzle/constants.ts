@@ -1947,10 +1947,14 @@ export const VILLAGE_SYNDICATE_ID = "ryBk0qD4EgvPPyav2K4OC";
 export const VILLAGE_DUTY_RANKS = ["CHUNIN", "JONIN", "ELITE JONIN", "ELDER"] as const;
 /** Minimum rank used by the enrollment UI and in-memory eligibility checks. */
 export const VILLAGE_DUTY_MIN_RANK = VILLAGE_DUTY_RANKS[0];
-/** Minimum patrol chance per travel tile, in percent, when any duty defender is available. */
-export const VILLAGE_DUTY_PATROL_CHANCE = 10;
-/** Maximum roster/map sample; total enrollment counts remain uncapped. */
-export const VILLAGE_DUTY_VISIBLE_LIMIT = 100;
+/** Patrol capacity contributed by each Village Protectors level. */
+export const VILLAGE_DUTY_SLOTS_PER_LEVEL = 2;
+/** Shared cap for active patrol selection, appearance payloads and the town hall roster. */
+export const VILLAGE_DUTY_MAX_PATROLS = 20;
+/** Travel-only presence expires promptly when a visitor leaves or backgrounds the map. */
+export const VILLAGE_DUTY_PRESENCE_SECONDS = 25;
+/** All clients select the same roster for each UTC game hour. */
+export const VILLAGE_DUTY_ROTATION_SECONDS = 3600;
 /** Patrol wander radius in tiles; movement also stays within the village zone. */
 export const VILLAGE_DUTY_WANDER_RADIUS = 5;
 /** Guardian AI behind village protector encounters and the last-resort shrine defence. */

@@ -1065,6 +1065,13 @@
       "when": 1794475441729,
       "tag": "0152_creator_trial_achievement",
       "breakpoints": false
+    },
+    {
+      "idx": 153,
+      "version": "5",
+      "when": 1794469257450,
+      "tag": "0153_village_duty_rotation",
+      "breakpoints": false
     }
   ]
 }

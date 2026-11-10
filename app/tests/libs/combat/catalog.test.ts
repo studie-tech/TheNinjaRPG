@@ -91,7 +91,7 @@ const BOOSTS: StructureAttribute[] = [
   "hospitalSpeedupPerLvl",
   "itemDiscountPerLvl",
   "missionRewardPerLvl",
-  "patrolsPerLvl",
+  "patrolSlotsPerLvl",
   "ramenDiscountPerLvl",
   "regenIncreasePerLvl",
   "sleepRegenPerLvl",

@@ -106,7 +106,12 @@ export const fetchSectorWindowData = (
     }),
     client.query.village.findFirst({
       where: eq(village.sector, sector),
-      with: { structures: true },
+      with: {
+        structures: true,
+        dutyShift: true,
+        relationshipA: true,
+        relationshipB: true,
+      },
     }),
     fetchSector(client, sector),
     client.query.overworldAiPlacement.findMany({
@@ -427,6 +432,7 @@ export const findVillageForMoveInSector = (
   client.query.village.findFirst({
     with: {
       structures: true,
+      dutyShift: true,
       relationshipA: true,
       relationshipB: true,
     },
