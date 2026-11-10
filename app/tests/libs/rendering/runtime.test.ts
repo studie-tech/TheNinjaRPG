@@ -30,6 +30,131 @@ describe("renderer initialization failure", () => {
   });
 });
 
+describe("renderer context loss", () => {
+  const originals = {
+    IntersectionObserver: globalThis.IntersectionObserver,
+    ResizeObserver: globalThis.ResizeObserver,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+    cancelAnimationFrame: globalThis.cancelAnimationFrame,
+    matchMedia: globalThis.matchMedia,
+    AbortController: globalThis.AbortController,
+  };
+  let frame: FrameRequestCallback | null = null;
+  let lost = false;
+  const games: { dispose: () => void }[] = [];
+  afterEach(() => {
+    // The frame loop is shared by the module; leaving a scene subscribed would starve the next.
+    for (const game of games.splice(0)) game.dispose();
+    vi.restoreAllMocks();
+    Object.assign(globalThis, originals);
+    frame = null;
+    lost = false;
+  });
+  const start = async (onError: (error: unknown) => void) => {
+    class NoopObserver {
+      observe() {}
+      disconnect() {}
+    }
+    Object.assign(globalThis, {
+      IntersectionObserver: NoopObserver,
+      ResizeObserver: NoopObserver,
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        frame = callback;
+        return 1;
+      },
+      cancelAnimationFrame: () => {
+        frame = null;
+      },
+      matchMedia: () => ({ matches: false, addEventListener() {} }),
+      // jsdom's canvas listeners only accept jsdom's own signals.
+      AbortController: window.AbortController,
+    });
+    const canvas = document.createElement("canvas");
+    vi.spyOn(WebGLRenderer.prototype, "init").mockImplementation(async function (
+      this: WebGLRenderer,
+    ) {
+      // Only what the runtime reads after initialization; a real GL context is unavailable here.
+      const gl = { isContextLost: () => lost };
+      for (const [key, value] of Object.entries({
+        canvas,
+        gl,
+        context: {
+          get isLost() {
+            return lost;
+          },
+        },
+        width: 100,
+        height: 100,
+        resolution: 1,
+        background: { color: 0, alpha: 0 },
+      })) {
+        Object.defineProperty(this, key, { configurable: true, value });
+      }
+    });
+    const destroy = vi
+      .spyOn(WebGLRenderer.prototype, "destroy")
+      .mockImplementation(() => {});
+    const render = vi.spyOn(WebGLRenderer.prototype, "render");
+    const game = await createGameRenderer({
+      surface: "travel",
+      mount: document.createElement("div"),
+      signal: new window.AbortController().signal,
+      height: () => 100,
+      onError,
+    });
+    games.push(game);
+    return { game, canvas, render, destroy };
+  };
+  const runFrame = (now: number) => {
+    const callback = frame;
+    frame = null;
+    callback?.(now);
+  };
+
+  it("skips frames while the context is lost before its event arrives, then resumes on restore", async () => {
+    const onError = vi.fn();
+    const { canvas, render, destroy } = await start(onError);
+    render.mockImplementation(() => {});
+    lost = true;
+    runFrame(16);
+    expect(render).not.toHaveBeenCalled();
+    expect(frame).toBeNull();
+    lost = false;
+    canvas.dispatchEvent(new window.Event("webglcontextrestored"));
+    runFrame(32);
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+    expect(destroy).not.toHaveBeenCalled();
+  });
+
+  it("keeps the scene when a GL call fails because the context was lost mid-frame", async () => {
+    const onError = vi.fn();
+    const { render, destroy } = await start(onError);
+    render.mockImplementation(() => {
+      lost = true;
+      throw new TypeError(
+        "Argument 1 ('shader') to shaderSource must be a WebGLShader",
+      );
+    });
+    runFrame(16);
+    expect(onError).not.toHaveBeenCalled();
+    expect(destroy).not.toHaveBeenCalled();
+    expect(frame).toBeNull();
+  });
+
+  it("still reports frame failures while the context is live", async () => {
+    const onError = vi.fn();
+    const { render, destroy } = await start(onError);
+    const failure = new Error("broken scene");
+    render.mockImplementation(() => {
+      throw failure;
+    });
+    runFrame(16);
+    expect(onError).toHaveBeenCalledWith(failure);
+    expect(destroy).toHaveBeenCalled();
+  });
+});
+
 describe("shared renderer frame loop", () => {
   it("uses one request for multiple canvases and cancels when the last leaves", () => {
     let callback: FrameRequestCallback = () => {};
