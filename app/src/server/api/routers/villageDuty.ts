@@ -18,7 +18,9 @@ import {
   ratelimitMiddleware,
 } from "@/server/api/trpc";
 
+/** Manage persistent village enrollment without changing the owner's presence or combat state. */
 export const villageDutyRouter = createTRPCRouter({
+  /** Read eligibility, the full count and a bounded public roster in one parallel query wave. */
   get: protectedProcedure
     .input(z.object({ villageId: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
@@ -50,6 +52,7 @@ export const villageDutyRouter = createTRPCRouter({
         })),
       };
     }),
+  /** Enrollment checks live in one guarded UPDATE; cancellation is account-scoped and idempotent. */
   setDuty: protectedProcedure
     .use(ratelimitMiddleware)
     .input(z.object({ villageId: z.string().min(1), enabled: z.boolean() }))

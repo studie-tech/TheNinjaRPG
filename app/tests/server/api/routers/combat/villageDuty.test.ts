@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { type Jutsu, type SkillTree, skillTree, userJutsu } from "@/drizzle/schema";
+import {
+  battle,
+  battleHistory,
+  type Jutsu,
+  type SkillTree,
+  skillTree,
+  userJutsu,
+} from "@/drizzle/schema";
 import { availableUserActions, userItemToAction } from "@/libs/combat/actions";
 import { prepareVillageDutyDefender } from "@/libs/combat/initiation";
 import { refreshMasteries } from "@/libs/combat/mastery";
@@ -10,6 +17,8 @@ import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
+import * as cooking from "@/server/utils/cooking";
+import * as userQueue from "@/server/utils/userQueue";
 import {
   fakeInitiationClient,
   makeInitiationUser,
@@ -26,6 +35,7 @@ import {
 } from "../../../../setup/combat";
 import { trackerQuest, trackerUser } from "../../../../setup/quest";
 
+/** Enrolled offline owner whose battle copy must leave their account untouched. */
 const owner = () =>
   makeInitiationUser({
     userId: "owner",
@@ -385,6 +395,69 @@ describe("village duty combat isolation", () => {
     expect(result.success).toBe(false);
     expect(fake.saved()).toBeUndefined();
   });
+  it.each([
+    ["VILLAGE_PROTECTOR", "queue"],
+    ["VILLAGE_PROTECTOR", "cooking"],
+    ["SHRINE_WAR", "queue"],
+    ["SHRINE_WAR", "cooking"],
+  ] as const)(
+    "rejects %s before battle writes when duty ends during %s settlement",
+    async (battleType, settlement) => {
+      const attacker = makeInitiationUser({ userId: "attacker", villageId: "enemy" });
+      const defender = { ...owner(), joinedVillageAt: new Date("2026-01-01") };
+      // Settlement changes the authoritative rows between the initial read and its reload.
+      Object.assign(attacker, {
+        queue: settlement === "queue" ? [{ kind: "JUTSU", startsAt: new Date(0) }] : [],
+        cookingJobs:
+          settlement === "cooking"
+            ? [{ id: "cooking", experience: 1, finishesAt: new Date(0) }]
+            : [],
+      });
+      const standDown = () => {
+        defender.villageDutyVillageId = null;
+        defender.villageDutyStartedAt = null;
+        attacker.queue.length = attacker.cookingJobs.length = 0;
+      };
+      const queueSettlement = vi
+        .spyOn(userQueue, "settleDueTimedQueues")
+        .mockImplementation(async () => {
+          standDown();
+          return 0;
+        });
+      const cookingSettlement = vi
+        .spyOn(cooking, "settleCookingExperience")
+        .mockImplementation(async () => {
+          standDown();
+          return true;
+        });
+      const fake = fakeInitiationClient([attacker, defender]);
+      const claim = vi.fn(() => ({
+        set: () => ({ where: async () => ({ rowsAffected: 1 }) }),
+      }));
+      const client = Object.create(fake.client) as DrizzleClient;
+      const insert = vi.fn(fake.client.insert);
+      client.insert = insert;
+      client.update = claim as unknown as DrizzleClient["update"];
+      const result = await initiateBattle(
+        {
+          client,
+          userIds: ["attacker"],
+          targetIds: ["duty:owner"],
+          villageDuty: { userId: "owner", villageId: "home" },
+        },
+        battleType,
+      );
+      expect(
+        settlement === "queue" ? queueSettlement : cookingSettlement,
+      ).toHaveBeenCalledTimes(1);
+      expect(result.success).toBe(false);
+      expect(result.message).toContain("stood down or changed villages");
+      expect(insert).not.toHaveBeenCalledWith(battle);
+      expect(insert).not.toHaveBeenCalledWith(battleHistory);
+      expect(claim).not.toHaveBeenCalled();
+      expect(fake.saved()).toBeUndefined();
+    },
+  );
   it("gives the copy independent inventory with no drops, active queues, or reward receipts", () => {
     const defender = {
       ...owner(),

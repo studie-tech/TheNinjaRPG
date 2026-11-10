@@ -2030,6 +2030,7 @@ export const initiateBattle = async (
     ]),
   ];
 
+  /** Rebuild eligible duty copies from owner loadouts on every participant read, including settlement reloads. */
   const queryBattleUsers = async () => {
     const duty = info.villageDuty;
     const participants = await listUserDataForQueryBattleUsers(
@@ -2257,6 +2258,17 @@ export const initiateBattle = async (
       });
     }
   }
+
+  // Settlement reloads can observe a cancelled enrollment. Reject before writing battle rows or claims.
+  if (
+    dutyEnrollment &&
+    !fetchedUsers.some(
+      (user) => user.userId === villageDutyActorId(dutyEnrollment.userId) && user.isAi,
+    )
+  )
+    return errorResponse(
+      "This protector has stood down or changed villages. Try again.",
+    );
 
   // Arena selection overlaps readiness, so recheck its rules on the fresh combat
   // participants. Shared AI templates are excluded from the final player claim.

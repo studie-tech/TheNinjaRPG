@@ -1,6 +1,6 @@
 import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 
-/** Adjust only after sustained frame pacing; hidden-tab gaps and isolated stalls never grow the budget. */
+/** Adapt visible character count over two-second windows, recovering only after four healthy windows. */
 export const createTravelCharacterBudget = () => {
   let limit = WORLD_DETAIL.travelCharacters;
   let previous: number | undefined;
@@ -11,9 +11,11 @@ export const createTravelCharacterBudget = () => {
     get limit() {
       return limit;
     },
+    /** Sample monotonic frame time in milliseconds; return whether the scene needs a new limit. */
     sample(now: number) {
       const interval = previous === undefined ? 0 : now - previous;
       previous = now;
+      // Tab suspension and isolated long stalls must not influence sustained frame pacing.
       if (interval <= 0 || interval > 250) {
         elapsed = frames = healthyWindows = 0;
         return false;

@@ -10,6 +10,7 @@ import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { listVillageDutyPatrols } from "@/queries/villageDuty";
 
+/** Give patrols and combat copies an identity that cannot claim their owner's account row. */
 export const villageDutyActorId = (userId: string) => `duty:${userId}`;
 
 /** Enrollment belongs to one membership tenure and never makes a banned or outlaw account a defender. */
