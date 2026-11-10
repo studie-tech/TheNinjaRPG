@@ -67,7 +67,6 @@ import AutoAttackModal from "@/layout/AutoAttackModal";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
-import Countdown from "@/layout/Countdown";
 import { FindSectorPopover, SectorIdField } from "@/layout/FindSectorPopover";
 import { HuntingArrival } from "@/layout/HuntingArrival";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
@@ -77,6 +76,7 @@ import Loader from "@/layout/Loader";
 import MapError from "@/layout/MapError";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
+import { TravelArrivalStatus } from "@/layout/TravelArrivalStatus";
 import { TravelPositionLabel } from "@/layout/TravelPositionLabel";
 import { WarFieldActions } from "@/layout/WarFieldActions";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
@@ -591,6 +591,7 @@ function Travel() {
           setTargetPosition(null);
           setTargetSector(null);
           setShowModal(false);
+          setActiveTab(sectorLink);
 
           await updateUser(result.data, {
             revision: previous?.revision,
@@ -746,16 +747,16 @@ function Travel() {
   // sector / isStartingTravel change. The guard is read from a ref instead.
   const travelGuardRef = useRef({
     sector: userData?.sector,
-    isStartingTravel,
+    canTravel: canAttemptAwakeAction(userData) && !isStartingTravel,
   });
   travelGuardRef.current = {
     sector: userData?.sector,
-    isStartingTravel,
+    canTravel: canAttemptAwakeAction(userData) && !isStartingTravel,
   };
 
   const initiateTravelToSector = useCallback((sector: number) => {
-    const { sector: current, isStartingTravel: busy } = travelGuardRef.current;
-    if (busy) return;
+    const { sector: current, canTravel } = travelGuardRef.current;
+    if (!canTravel) return;
     if (sector === current) {
       showMutationToast({
         success: false,
@@ -773,6 +774,7 @@ function Travel() {
   // Admission supplies the destination coordinates. Prepare its scene during the
   // countdown, after admission settles, and keep that instance for arrival.
   const isPreparingSector = userData?.status === "TRAVEL" && !isStartingTravel;
+  const showSectorPreview = isPreparingSector && !isGlobal;
   const showSector =
     villages &&
     hasCurrentSector &&
@@ -1299,17 +1301,24 @@ function Travel() {
         <div className={userData.travelFinishAt ? "relative min-h-80" : "relative"}>
           {showGlobal && MapComponent}
           {mapError && <MapError />}
-          {/* Invisible preparation preserves viewport measurements and the arrival canvas. */}
+          {/* Preview the destination without accepting input until arrival is confirmed. */}
           {(showSector || isPreparingSector) && (
             <div
-              aria-hidden={!showSector}
+              aria-hidden={!showSector && !showSectorPreview}
               inert={!showSector}
-              className={!showSector ? "invisible absolute inset-0" : undefined}
+              className={
+                !showSector && !showSectorPreview
+                  ? "invisible absolute inset-0"
+                  : undefined
+              }
             >
               {SectorComponent}
             </div>
           )}
           {!villages && <Loader explanation="Loading data" />}
+          {showSectorPreview && !SectorComponent && (
+            <Loader explanation="Loading destination" />
+          )}
           {showModal && globe && userData && targetSector !== null && (
             <Modal
               id="tutorial-global-travel"
@@ -1342,34 +1351,15 @@ function Travel() {
             </Modal>
           )}
           {userData?.travelFinishAt && (
-            <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">
-              <div className="m-auto text-center text-white">
-                <p className="p-5 text-3xl">
-                  Traveling to Sector {targetSector ?? userData?.sector}
-                </p>
-                <p className="text-5xl">
-                  Time Left:{" "}
-                  <Countdown
-                    targetDate={userData?.travelFinishAt}
-                    timeDiff={timeDiff}
-                    onFinish={() => {
-                      if (!isFinishingTravel && !isStartingTravel) finishGlobalMove();
-                    }}
-                    onEndShow={
-                      isArrivalRejected ? (
-                        <Button
-                          className="text-xl"
-                          disabled={isFinishingTravel || isStartingTravel}
-                          onClick={() => finishGlobalMove()}
-                        >
-                          Arrive
-                        </Button>
-                      ) : undefined
-                    }
-                  />
-                </p>
-              </div>
-            </div>
+            <TravelArrivalStatus
+              sector={targetSector ?? userData.sector}
+              destinationName={sectorNames.get(targetSector ?? userData.sector)}
+              finishAt={userData.travelFinishAt}
+              timeDiff={timeDiff}
+              isBusy={isFinishingTravel || isStartingTravel}
+              isArrivalRejected={isArrivalRejected}
+              onArrive={() => finishGlobalMove()}
+            />
           )}
         </div>
       </ContentBox>
