@@ -5,12 +5,15 @@ import {
   ArrowRightLeft,
   ChevronsDown,
   CircleFadingArrowUp,
+  Download,
+  Ellipsis,
   ListX,
   Loader2,
   Palette,
   SquareChevronLeft,
   SquareChevronRight,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -19,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { getEquippedJutsuProfilePatch } from "@/deltas/jutsu";
 import {
@@ -92,6 +96,12 @@ export default function MyJutsu() {
   // finishTraining is a server timestamp, so compare it on the server clock
   const serverNow = Date.now() - timeDiff;
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const [sharingMode, setSharingMode] = useState<"export" | "import" | null>(null);
+  const [loadoutConfirmation, setLoadoutConfirmation] = useState<
+    "unequip" | "upgrade" | null
+  >(null);
+  const actionsTriggerRef = useRef<HTMLButtonElement>(null);
   const [isReskinOpen, setIsReskinOpen] = useState<boolean>(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [userjutsu, setUserJutsu] = useState<UserJutsuWithRelations | undefined>(
@@ -465,9 +475,9 @@ export default function MyJutsu() {
   const maxEquip = userData && calcJutsuEquipLimit(userData);
   const canEquip = curEquip !== undefined && maxEquip && curEquip < maxEquip;
   const subtitle =
-    curEquip && maxEquip
+    curEquip !== undefined && maxEquip
       ? `Equipped ${curEquip}/${maxEquip}`
-      : "Jutsus you want to use in combat";
+      : "Loading jutsu…";
   // A kept reskin row makes the next reskin of that jutsu a free update
   const hasReskinRecord =
     !!userjutsu && !!userReskins?.some((r) => r.jutsuId === userjutsu.jutsuId);
@@ -488,67 +498,132 @@ export default function MyJutsu() {
       <ContentBox
         title="My Jutsu"
         subtitle={subtitle}
+        noRightAlign
         topRightContent={
           !isOpen && (
-            <div className="flex min-w-0 flex-row flex-wrap items-center gap-2">
-              <JutsuLoadoutSelector compact />
-              <JutsuLoadoutSharing />
-              <JutsuFiltering state={state} />
-              <Confirm
-                title="Unequip all jutsu"
-                proceed_label={isUnequipping ? undefined : "Unequip all"}
-                isValid={!isUnequipping}
-                disabled={isPending || !curEquip}
-                confirmDisabled={isPending}
-                button={
+            <div className="my-2 ml-3 flex min-w-0 items-center gap-1 [&_button]:min-h-[44px] [&_button]:min-w-[44px]">
+              <div className="min-w-0 flex-1">
+                <JutsuLoadoutSelector compact />
+              </div>
+              <JutsuFiltering state={state} compact />
+              <Popover open={isActionsOpen} onOpenChange={setIsActionsOpen}>
+                <PopoverTrigger asChild>
                   <Button
-                    hoverText="Unequip all jutsu"
-                    aria-label="Unequip all jutsu"
-                    disabled={isPending || !curEquip}
+                    ref={actionsTriggerRef}
+                    size="icon"
+                    aria-label="Jutsu options"
+                    hoverText="Jutsu options"
                   >
-                    <ListX className="h-6 w-6 hover:text-orange-500" />
+                    <Ellipsis className="h-6 w-6" aria-hidden />
                   </Button>
-                }
-                onAccept={(e) => {
-                  e.preventDefault();
-                  unequipAll();
-                }}
-              >
-                <p>
-                  Remove all {curEquip} equipped jutsu from your current loadout? You
-                  can equip them again at any time.
-                </p>
-              </Confirm>
-              {userData.extraJutsuSlots < MAX_EXTRA_JUTSU_SLOTS && (
-                <Confirm
-                  title="Extra Jutsu Slot"
-                  proceed_label={
-                    canUpgrade
-                      ? `Purchase for ${COST_EXTRA_JUTSU_SLOT} reps`
-                      : `Need ${COST_EXTRA_JUTSU_SLOT - userData.reputationPoints} more reps`
-                  }
-                  isValid={!isPending}
-                  button={
-                    <Button animation="pulse">
-                      <CircleFadingArrowUp className="h-6 w-6" />
-                    </Button>
-                  }
-                  onAccept={(e) => {
-                    e.preventDefault();
-                    if (canUpgrade) buyJutsuSlot();
+                </PopoverTrigger>
+                <PopoverContent
+                  aria-label="Jutsu options"
+                  align="end"
+                  collisionPadding={8}
+                  className="w-64 space-y-1 p-2 [&_button]:min-h-[44px]"
+                  onCloseAutoFocus={(event) => {
+                    // A selected action transfers focus to its dialog.
+                    if (sharingMode || loadoutConfirmation) event.preventDefault();
                   }}
                 >
-                  <p>
-                    You are about to purchase an extra jutsu slot for{" "}
-                    {COST_EXTRA_JUTSU_SLOT} reputation points. You currently have{" "}
-                    {userData.reputationPoints} points. Are you sure?
-                  </p>
-                </Confirm>
-              )}
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-2"
+                    onClick={() => {
+                      setIsActionsOpen(false);
+                      setSharingMode("export");
+                    }}
+                  >
+                    <Download className="h-5 w-5" aria-hidden /> Export loadout
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-2"
+                    onClick={() => {
+                      setIsActionsOpen(false);
+                      setSharingMode("import");
+                    }}
+                  >
+                    <Upload className="h-5 w-5" aria-hidden /> Import loadout
+                  </Button>
+                  <div className="my-1 border-t" />
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-2"
+                    disabled={isPending || !curEquip}
+                    onClick={() => {
+                      setIsActionsOpen(false);
+                      setLoadoutConfirmation("unequip");
+                    }}
+                  >
+                    <ListX className="h-5 w-5" aria-hidden /> Unequip all jutsu
+                  </Button>
+                  {userData.extraJutsuSlots < MAX_EXTRA_JUTSU_SLOTS && (
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start gap-2"
+                      disabled={isPending}
+                      onClick={() => {
+                        setIsActionsOpen(false);
+                        setLoadoutConfirmation("upgrade");
+                      }}
+                    >
+                      <CircleFadingArrowUp className="h-5 w-5" aria-hidden />
+                      Purchase extra jutsu slot
+                    </Button>
+                  )}
+                </PopoverContent>
+              </Popover>
             </div>
           )
         }
       >
+        <JutsuLoadoutSharing
+          mode={sharingMode}
+          onClose={() => setSharingMode(null)}
+          returnFocusRef={actionsTriggerRef}
+        />
+        <Modal
+          title={
+            loadoutConfirmation === "unequip" ? "Unequip all jutsu" : "Extra Jutsu Slot"
+          }
+          isOpen={loadoutConfirmation !== null}
+          setIsOpen={(open) => {
+            if (!open) setLoadoutConfirmation(null);
+          }}
+          returnFocusRef={actionsTriggerRef}
+          proceed_label={
+            loadoutConfirmation === "unequip"
+              ? isUnequipping
+                ? undefined
+                : "Unequip all"
+              : canUpgrade
+                ? `Purchase for ${COST_EXTRA_JUTSU_SLOT} reps`
+                : `Need ${COST_EXTRA_JUTSU_SLOT - userData.reputationPoints} more reps`
+          }
+          proceedDisabled={
+            isPending || (loadoutConfirmation === "unequip" ? !curEquip : !canUpgrade)
+          }
+          onAccept={(event) => {
+            event.preventDefault();
+            if (loadoutConfirmation === "unequip") unequipAll();
+            else if (loadoutConfirmation === "upgrade" && canUpgrade) buyJutsuSlot();
+          }}
+        >
+          {loadoutConfirmation === "unequip" ? (
+            <p>
+              Remove all {curEquip} equipped jutsu from your current loadout? You can
+              equip them again at any time.
+            </p>
+          ) : (
+            <p>
+              You are about to purchase an extra jutsu slot for {COST_EXTRA_JUTSU_SLOT}{" "}
+              reputation points. You currently have {userData.reputationPoints} points.
+              Are you sure?
+            </p>
+          )}
+        </Modal>
         <JutsuStatQuickFilters state={state} />
 
         {/* Equipped Section - Always Visible */}

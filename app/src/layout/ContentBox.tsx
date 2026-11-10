@@ -98,9 +98,9 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
               )}
             </div>
           )}
-          <div className="flex grow flex-row">
+          <div className="flex min-w-0 grow flex-row">
             {!props.noRightAlign && <div className="grow"></div>}
-            <div className={props.noRightAlign ? "grow" : ""}>
+            <div className={props.noRightAlign ? "min-w-0 grow" : ""}>
               {props.topRightContent}
             </div>
           </div>

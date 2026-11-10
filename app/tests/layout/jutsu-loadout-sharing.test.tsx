@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
+import { useRef, useState } from "react";
 import { JutsuLoadoutSharingDialog } from "@/layout/JutsuLoadoutSharing";
 import { exportJutsuLoadout } from "@/libs/loadout";
 import {
@@ -9,7 +10,10 @@ import {
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
 
-type Props = ComponentProps<typeof JutsuLoadoutSharingDialog>;
+type Props = Omit<
+  ComponentProps<typeof JutsuLoadoutSharingDialog>,
+  "mode" | "onClose" | "returnFocusRef"
+>;
 const preview = {
   token: "a".repeat(64),
   jutsuIds: ["strike"],
@@ -25,7 +29,7 @@ const preview = {
 };
 
 /** Render the real dialog with controlled server outcomes for draft, replacement and focus tests. */
-const setup = (overrides: Partial<Props> = {}) => {
+const setup = (overrides: Partial<Props> = {}, returnToMenu = false) => {
   const props = {
     loadouts: [{ id: "one", name: "My name", jutsuIds: ["old"] }],
     activeId: "one",
@@ -34,7 +38,40 @@ const setup = (overrides: Partial<Props> = {}) => {
     onImported: vi.fn(async () => {}),
     ...overrides,
   };
-  const view = render(<JutsuLoadoutSharingDialog {...props} />);
+  function Harness() {
+    const [mode, setMode] = useState<"export" | "import" | null>(null);
+    const returnFocusRef = useRef<HTMLButtonElement>(null);
+    return (
+      <>
+        {returnToMenu && (
+          <button type="button" ref={returnFocusRef}>
+            Jutsu options
+          </button>
+        )}
+        {(["export", "import"] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            onClick={(event) => {
+              if (!returnToMenu) returnFocusRef.current = event.currentTarget;
+              setMode(value);
+            }}
+          >
+            {value === "export" ? "Export" : "Import"}
+          </button>
+        ))}
+        {mode && (
+          <JutsuLoadoutSharingDialog
+            {...props}
+            mode={mode}
+            onClose={() => setMode(null)}
+            returnFocusRef={returnFocusRef}
+          />
+        )}
+      </>
+    );
+  }
+  const view = render(<Harness />);
   /** Reach the preview step without confirming a replacement. */
   const pasteAndPreview = async () => {
     fireEvent.click(view.getByRole("button", { name: "Import" }));
@@ -58,6 +95,21 @@ afterEach(async () => {
 });
 
 describe("jutsu loadout sharing dialogs", () => {
+  it("returns focus to the persistent menu button after a sharing dialog closes", async () => {
+    const { view } = setup({}, true);
+    fireEvent.click(view.getByRole("button", { name: "Export" }));
+    await waitFor(() =>
+      expect(view.getByRole("dialog").contains(document.activeElement)).toBe(true),
+    );
+    fireEvent.click(view.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        view.getByRole("button", { name: "Jutsu options" }),
+      ),
+    );
+  });
+
   it.each(["Export", "Import"])(
     "returns focus to the %s opener after cancellation",
     async (mode) => {
