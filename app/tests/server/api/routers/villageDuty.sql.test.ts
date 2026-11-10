@@ -18,6 +18,7 @@ import {
 } from "@/drizzle/schema";
 import { WANDER_STEP_MS } from "@/libs/overworldWander";
 import { Pusher } from "@/libs/pusher";
+import { calcStealthDuration } from "@/libs/stealth";
 import {
   isOnVillageDuty,
   villageDutyPatrols,
@@ -36,7 +37,8 @@ import {
   releaseVillageDutyPatrol,
   touchVillageDutyPresence,
 } from "@/queries/villageDuty";
-import { combatRouter } from "@/server/api/routers/combat";
+import { combatRouter, initiateVillageDutyBattle } from "@/server/api/routers/combat";
+import { travelRouter } from "@/server/api/routers/travel";
 import { villageDutyRouter } from "@/server/api/routers/villageDuty";
 import * as sectorMaps from "@/server/utils/sectorMap";
 import {
@@ -48,6 +50,7 @@ import { insertDefaultAiProfile, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { sectorMap } from "../../../setup/sectorMap";
 import { resetServerModuleStubs } from "../../../setup/serverModules";
+import { beforeStatements } from "../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -364,6 +367,9 @@ describeWithDatabase("village duty hourly patrol", () => {
       status: "AWAKE",
       isAi: false,
       isBanned: false,
+      stealthActive: false,
+      stealthActivatedAt: null,
+      stealth: 1000,
       longitude: 9,
       latitude: 9,
     };
@@ -504,9 +510,14 @@ describeWithDatabase("village duty hourly patrol", () => {
     expect(after.battleId).toBeUndefined();
   });
 
-  it.each(["AWAKE", "ASLEEP"] as const)(
-    "intercepts direct PvP from %s before an invader can bypass live village protectors",
-    async (status) => {
+  it.each([
+    ["AWAKE", false],
+    ["ASLEEP", false],
+    ["AWAKE", true],
+    ["ASLEEP", true],
+  ] as const)(
+    "intercepts direct PvP from %s (stealth=%s) before an invader can bypass live village protectors",
+    async (status, stealthActive) => {
       const db = await getTestDatabase();
       vi.spyOn(sectorMaps, "fetchPublishedSectorMap").mockResolvedValue(
         sectorMap(20, 20, () => ({ zone: "village" }), { sector: 123, anchors: [] }),
@@ -532,6 +543,8 @@ describeWithDatabase("village duty hourly patrol", () => {
           latitude: 5,
           location: "Village",
           status,
+          stealthActive,
+          stealthActivatedAt: new Date(),
           autoWakeUp: true,
           rank: "JONIN",
           level: 50,
@@ -572,6 +585,191 @@ describeWithDatabase("village duty hourly patrol", () => {
       ).toBe(true);
       expect((await load())?.status).toBe("AWAKE");
       expect((await load())?.battleId).toBeNull();
+    },
+  );
+
+  it.each(["active", "expired", "revealed", "missing activation"])(
+    "respects %s stealth in travel snapshots and passive patrol admission",
+    async (state) => {
+      const db = await getTestDatabase();
+      vi.spyOn(sectorMaps, "fetchPublishedSectorMap").mockResolvedValue(
+        sectorMap(20, 20, () => ({ zone: "village" }), { sector: 123, anchors: [] }),
+      );
+      vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+      await insertDefaultAiProfile();
+      await db
+        .insert(village)
+        .values({ id: "invaders", name: "Invaders", sector: 456, kageId: "invader" });
+      await db.insert(villageAlliance).values({
+        id: "hostile",
+        villageIdA: "home",
+        villageIdB: "invaders",
+        status: "ENEMY",
+      });
+      const stealth = 1000;
+      await insertUsers([
+        {
+          userId: "invader",
+          username: "Invader",
+          villageId: "invaders",
+          sector: 123,
+          longitude: 19,
+          latitude: 19,
+          location: "Village",
+          status: "AWAKE",
+          rank: "JONIN",
+          stealth,
+          stealthActive: state !== "revealed",
+          stealthActivatedAt:
+            state === "missing activation"
+              ? null
+              : secondsFromDate(
+                  state === "expired" ? -calcStealthDuration(stealth) - 1 : 0,
+                  new Date(),
+                ),
+        },
+      ]);
+      await enrollCurrent();
+      const before = await shift();
+      const snapshot = await callerForDatabase(
+        travelRouter,
+        "invader",
+        db,
+      ).getSectorData({ sector: 123 });
+      expect(snapshot.patrolThreat).toBe(state !== "active");
+      const result = await callerForDatabase(villageDutyRouter, "invader", db).patrol({
+        sector: 123,
+      });
+      expect(result.success, result.message).toBe(true);
+      if (state === "active") {
+        expect(result.battleId).toBeUndefined();
+        expect(result.patrolUpdate).toBeUndefined();
+        expect(await findVillageDutyShift(db, "home")).toEqual(before);
+        expect(await listVillageDutyVisitors(db, 123, new Date())).toEqual([]);
+      } else {
+        expect(
+          (await findVillageDutyShift(db, "home"))?.patrols[0]?.pursuit?.targetUserId,
+        ).toBe("invader");
+      }
+    },
+  );
+
+  it("does not target a hidden visitor retained in shared presence while pursuing a visible enemy", async () => {
+    const db = await getTestDatabase();
+    await enrollCurrent();
+    await shift();
+    await db
+      .insert(village)
+      .values({ id: "invaders", name: "Invaders", sector: 456, kageId: "enemy" });
+    await db.insert(villageAlliance).values({
+      id: "hostile",
+      villageIdA: "home",
+      villageIdB: "invaders",
+      status: "ENEMY",
+    });
+    await insertUsers([
+      {
+        userId: "hidden",
+        username: "Hidden",
+        villageId: "invaders",
+        sector: 123,
+        location: "Village",
+        status: "AWAKE",
+        longitude: 1,
+        latitude: 1,
+        stealthActive: true,
+        stealthActivatedAt: new Date(),
+      },
+      {
+        userId: "visible",
+        username: "Visible",
+        villageId: "invaders",
+        sector: 123,
+        location: "Village",
+        status: "AWAKE",
+        longitude: 19,
+        latitude: 19,
+      },
+    ]);
+    await touchVillageDutyPresence(db, "hidden", 123, secondsFromDate(25, new Date()));
+    const [home, owners, presence, visitor] = await Promise.all([
+      fetchVillageDutyHome(db, "home"),
+      listVillageDutyRoster(db, "home"),
+      listVillageDutyVisitors(db, 123, new Date()),
+      db.query.userData.findFirst({ where: eq(userData.userId, "visible") }),
+    ]);
+    const advanced = await advanceVillageDutyPursuits(
+      db,
+      home!,
+      owners,
+      presence,
+      sectorMap(20, 20, () => ({ zone: "village" }), { anchors: [] }),
+      visitor!,
+    );
+    expect(advanced?.patrols[0]?.pursuit?.targetUserId).toBe("visible");
+  });
+
+  it.each(["before preload", "before claim"])(
+    "honors stealth activated %s and releases the reserved copy",
+    async (timing) => {
+      const db = await getTestDatabase();
+      vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+      await insertDefaultAiProfile();
+      await insertUsers([
+        {
+          userId: "invader",
+          username: "Invader",
+          sector: 123,
+          location: "Village",
+          status: "AWAKE",
+          rank: "JONIN",
+          level: 50,
+          experience: 3339000,
+        },
+      ]);
+      await enrollCurrent();
+      const active = await shift();
+      const activate = () =>
+        db
+          .update(userData)
+          .set({ stealthActive: true, stealthActivatedAt: new Date() })
+          .where(eq(userData.userId, "invader"));
+      if (timing === "before preload") await activate();
+      const guarded =
+        timing === "before claim"
+          ? beforeStatements(db, userData, [activate], {
+              when: (values) => values.status === "BATTLE",
+            })
+          : db;
+      const result = await initiateVillageDutyBattle(
+        {
+          client: guarded,
+          userIds: ["invader"],
+          actionUserId: "invader",
+          sector: 123,
+          longitude: 0,
+          latitude: 0,
+          shift: active,
+          slot: 0,
+        },
+        "VILLAGE_PROTECTOR",
+      );
+      expect(result.success).toBe(false);
+      const user = await db.query.userData.findFirst({
+        where: eq(userData.userId, "invader"),
+      });
+      expect(user).toMatchObject({
+        status: "AWAKE",
+        battleId: null,
+        stealthActive: true,
+        pveFights: 0,
+      });
+      expect((await findVillageDutyShift(db, "home"))?.patrols[0]).toMatchObject({
+        defeated: false,
+        battleId: null,
+      });
+      expect(await db.query.battle.findMany()).toEqual([]);
+      expect(await db.query.battleHistory.findMany()).toEqual([]);
     },
   );
 });

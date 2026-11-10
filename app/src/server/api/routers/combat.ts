@@ -201,7 +201,7 @@ import { hasTrainingInProgress } from "@/libs/queue";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { snapshotSpriteAnimations } from "@/libs/spriteAnimations";
-import { rollStealthKeep } from "@/libs/stealth";
+import { isUserCurrentlyStealthed, rollStealthKeep } from "@/libs/stealth";
 import { getTerritoryCompetitor } from "@/libs/territoryWar";
 import {
   getTimedRegenerationGain,
@@ -1969,6 +1969,8 @@ export const initiateBattle = async (
       startedAt: string;
       slot: number;
       battleId: string;
+      /** Only passive travel interception yields to stealth at admission and atomic claim. */
+      passive?: boolean;
     };
     biome?: CombatBiome;
     forceKeepPools?: boolean;
@@ -2255,6 +2257,7 @@ export const initiateBattle = async (
           forceDefenderVillageId: patrolHome.id,
           shift: interception.shift,
           slot: interception.slot,
+          force: true,
           autoCombatFromDefaults: true,
         },
         "VILLAGE_PROTECTOR",
@@ -2263,6 +2266,13 @@ export const initiateBattle = async (
   }
 
   const dutyEnrollment = info.villageDuty;
+  if (
+    dutyEnrollment?.passive &&
+    preloadedUsers.some(
+      (user) => userIds.includes(user.userId) && isUserCurrentlyStealthed(user),
+    )
+  )
+    return errorResponse("Stealth keeps you hidden from this patrol.");
   if (
     dutyEnrollment &&
     (!["SHRINE_WAR", "VILLAGE_PROTECTOR"].includes(battleType) ||
@@ -4766,10 +4776,11 @@ export const initiateVillageDutyBattle = async (
   info: Omit<Parameters<typeof initiateBattle>[0], "targetIds" | "villageDuty"> & {
     shift: VillageDutyShift;
     slot: number;
+    force?: boolean;
   },
   battleType: "VILLAGE_PROTECTOR" | "SHRINE_WAR",
 ) => {
-  const { shift, slot, ...battleInfo } = info;
+  const { shift, slot, force = false, ...battleInfo } = info;
   const patrol = shift.patrols[slot];
   if (!patrol || patrol.defeated || patrol.battleId)
     return errorResponse("This protector is no longer available.");
@@ -4790,7 +4801,11 @@ export const initiateVillageDutyBattle = async (
       {
         ...battleInfo,
         targetIds: [villageDutyActorId(patrol.userId)],
-        villageDuty: { ...reference, userId: patrol.userId },
+        villageDuty: {
+          ...reference,
+          userId: patrol.userId,
+          passive: battleType === "VILLAGE_PROTECTOR" && !force,
+        },
       },
       battleType,
     );

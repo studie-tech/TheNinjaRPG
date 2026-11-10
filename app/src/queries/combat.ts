@@ -1065,6 +1065,7 @@ export const updateUserDataForCreateBattle = (
       slot: number;
       villageId: string;
       battleId: string;
+      passive?: boolean;
     };
     actionReadiness?: ActionReadiness;
     tournamentGame?: undefined | { id: string; battleId: string; aiOnly: false | true };
@@ -1092,7 +1093,15 @@ export const updateUserDataForCreateBattle = (
   warAggressorIds: string[],
   bracketImmunityAggressorIds: string[],
   allParticipantIds: string[],
-  fetchedUsers: Pick<UserData, "userId" | "activePetId" | "petTask">[],
+  fetchedUsers: Pick<
+    UserData,
+    | "userId"
+    | "activePetId"
+    | "petTask"
+    | "stealthActive"
+    | "stealthActivatedAt"
+    | "stealth"
+  >[],
   sector: undefined | number,
   huntingEquipment: Pick<
     import("@/drizzle/schema").UserItem,
@@ -1189,6 +1198,23 @@ export const updateUserDataForCreateBattle = (
         // row is never even examined (or locked) by this update. Drizzle
         // compiles an empty list to FALSE, matching expectedRows === 0.
         inArray(userData.userId, allParticipantIds),
+        // Stealth activation during preload must win over a passive patrol's stale visibility snapshot.
+        ...(info.villageDuty?.passive
+          ? fetchedUsers
+              .filter((user) => allParticipantIds.includes(user.userId))
+              .map((user) =>
+                or(
+                  ne(userData.userId, user.userId),
+                  and(
+                    eq(userData.stealthActive, user.stealthActive),
+                    user.stealthActivatedAt
+                      ? eq(userData.stealthActivatedAt, user.stealthActivatedAt)
+                      : isNull(userData.stealthActivatedAt),
+                    eq(userData.stealth, user.stealth),
+                  ),
+                ),
+              )
+          : []),
         info.actionReadiness?.notice
           ? or(
               ne(userData.userId, info.actionReadiness.initial.userId),

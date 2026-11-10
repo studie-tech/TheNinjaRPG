@@ -594,6 +594,7 @@ export const travelRouter = createTRPCRouter({
         patrolThreat:
           !!villageData &&
           isVillageDutyIntruder(villageData, user, warData) &&
+          !isUserCurrentlyStealthed(user) &&
           dutyUsers.length > 0,
         village: villageData
           ? (({ dutyShift: _shift, ...publicVillage }) => publicVillage)(villageData)
@@ -1133,10 +1134,14 @@ export const travelRouter = createTRPCRouter({
           readiness,
         ),
         isVillage ? findVillageForMoveInSector(ctx.drizzle, targetSector) : undefined,
-        isVillage && targetSector !== moveUser.village?.sector
+        isVillage &&
+        targetSector !== moveUser.village?.sector &&
+        !isUserCurrentlyStealthed(moveUser)
           ? listVillageDutyRoster(ctx.drizzle, targetSector)
           : [],
-        isVillage && targetSector !== moveUser.village?.sector
+        isVillage &&
+        targetSector !== moveUser.village?.sector &&
+        !isUserCurrentlyStealthed(moveUser)
           ? listVillageDutyVisitors(ctx.drizzle, targetSector, new Date())
           : [],
       ]).catch((error: unknown) => {
@@ -1154,7 +1159,12 @@ export const travelRouter = createTRPCRouter({
       // Check if move was successful
       if (result.rowsAffected === 1) {
         // A committed village move advances the same finite patrol used by idle travel checks.
-        if (isVillage && sectorVillage && user.villageId !== sectorVillage.id) {
+        if (
+          isVillage &&
+          sectorVillage &&
+          user.villageId !== sectorVillage.id &&
+          !isUserCurrentlyStealthed(user)
+        ) {
           const encounter = await prepareVillageDutyEncounter({
             client: ctx.drizzle,
             userId: ctx.userId,

@@ -3,6 +3,7 @@ import { oddQHexDistance } from "@/libs/hexgrid";
 import { getWarRelationship } from "@/libs/objectiveWar";
 import { WANDER_STEP_MS } from "@/libs/overworldWander";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
+import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import {
   planVillageDutyPursuits,
   villageDutyCapacity,
@@ -95,26 +96,33 @@ export const isVillageDutyIntruder = (
           relation.villageIdB === user.villageId),
     ));
 
-/** Advance at most twenty shared pursuits with one guarded write; map visitors supply expiring presence. */
+/** Pursue visible visitors with one guarded write; stealth leaves only an expiring last-known trail. */
 export const advanceVillageDutyPursuits = async (
   client: DrizzleClient,
   home: NonNullable<Awaited<ReturnType<typeof fetchVillageDutyHome>>>,
   owners: Awaited<ReturnType<typeof listVillageDutyRoster>>,
   presence: Awaited<ReturnType<typeof listVillageDutyVisitors>>,
   map: NormalizedSectorMap,
-  visitor: Parameters<typeof isVillageDutyIntruder>[1] & {
-    longitude: number;
-    latitude: number;
-  },
+  visitor: Parameters<typeof isVillageDutyIntruder>[1] &
+    Parameters<typeof isUserCurrentlyStealthed>[0] & {
+      longitude: number;
+      latitude: number;
+    },
   now = new Date(),
   wars: Parameters<typeof getWarRelationship>[0] = [],
 ) => {
   const shift = home.dutyShift;
-  if (!shift || !isVillageDutyIntruder(home, visitor, wars)) return null;
+  if (
+    !shift ||
+    !isVillageDutyIntruder(home, visitor, wars) ||
+    isUserCurrentlyStealthed(visitor)
+  )
+    return null;
   const intruders = [
     ...presence.flatMap((entry) =>
       entry.user &&
       entry.user.userId !== visitor.userId &&
+      !isUserCurrentlyStealthed(entry.user) &&
       isVillageDutyIntruder(home, entry.user, wars)
         ? [{ ...entry.user, expiresAt: entry.expiresAt.getTime() }]
         : [],
@@ -188,6 +196,8 @@ export const prepareVillageDutyEncounter = async ({
         fetchActiveWars(client),
       ]);
   if (!home || !user || !isVillageDutyIntruder(home, user, wars)) return null;
+  // Stealth hides passive travel, while an attempted attack still confronts the shared patrol.
+  if (!force && isUserCurrentlyStealthed(user)) return null;
   if (!map) return { blocked: true as const };
   const initialized = await ensureVillageDutyShift(client, home, now);
   if (!initialized) return { blocked: true as const };
@@ -201,7 +211,7 @@ export const prepareVillageDutyEncounter = async ({
     roster,
     presence,
     map,
-    user,
+    force ? { ...user, stealthActive: false } : user,
     now,
     wars,
   );

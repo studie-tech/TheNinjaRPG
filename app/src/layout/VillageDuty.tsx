@@ -106,9 +106,10 @@ export const VillageDuty = ({
             </p>
           )}
           <p className="text-muted-foreground text-sm">
-            Patrols pursue nearby enemies on travel. Each enemy fights one copy at a
-            time; defeated copies stay down village-wide until rotation. Your health,
-            items and battle record stay untouched, and your copy earns no rewards.
+            Active stealth avoids roaming patrols; attacking players or shrines still
+            confronts them. Each enemy fights one copy at a time; defeated copies stay
+            down village-wide until rotation. Your health, items and battle record stay
+            untouched, and your copy earns no rewards.
             <span className="mt-1 block">
               Next rotation:{" "}
               <Countdown
