@@ -108,8 +108,20 @@ export const createGameRenderer = async (options: {
   /** Work waiting for the next presented frame; it resumes in a task after that frame. */
   const frameWaiters = new Set<() => void>();
 
+  const markContextLost = () => {
+    if (contextLost) return;
+    contextLost = true;
+    telemetry.contextLost();
+  };
   const tick = (now: number) => {
     if (disposed) return;
+    // A frame can run after the context is gone but before its loss event arrives (iOS
+    // Safari after a long background); GL calls then fail, so wait for restoration instead.
+    if (renderer.context.isLost) {
+      markContextLost();
+      updateSubscription();
+      return;
+    }
     dirty = false;
     const startedAt = performance.now();
     const interval = previousTime === null ? 0 : now - previousTime;
@@ -138,8 +150,14 @@ export const createGameRenderer = async (options: {
         telemetry.frame(interval, performance.now() - startedAt);
       }
     } catch (error) {
-      dispose();
-      options.onError(error);
+      // Losing the context mid-frame surfaces as a GL TypeError (e.g. a null shader).
+      if (renderer.context.isLost) {
+        dirty = true;
+        markContextLost();
+      } else {
+        dispose();
+        options.onError(error);
+      }
     } finally {
       updateSubscription();
     }
@@ -201,8 +219,7 @@ export const createGameRenderer = async (options: {
     "webglcontextlost",
     (event) => {
       event.preventDefault();
-      contextLost = true;
-      telemetry.contextLost();
+      markContextLost();
       updateSubscription();
     },
     { signal: listeners.signal },
