@@ -75,7 +75,6 @@ export const AllianceHall: React.FC<{
         subtitle="Alliances & Relations"
         defaultBackHref="/village"
         topRightContent={navTabs}
-        stackTopRight
       >
         <AllianceList
           user={user}

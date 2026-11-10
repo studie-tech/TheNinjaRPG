@@ -79,7 +79,6 @@ export const WarRoom: React.FC<{
         subtitle="Manage Wars"
         defaultBackHref="/village"
         topRightContent={navTabs}
-        stackTopRight
         initialBreak={initialBreak}
       >
         <WarMap

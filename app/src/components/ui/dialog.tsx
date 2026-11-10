@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import type * as React from "react";
 
 import { ignoreToastInteractions } from "@/components/ui/outside-interaction";
+import { dismissHeaderActionsOnEscape } from "@/hooks/useHeaderActionsFocus";
 import { cn } from "@/libs/shadui";
 
 const Dialog = DialogPrimitive.Root;
@@ -44,6 +45,7 @@ const DialogContent = ({
   closeDisabled,
   showCloseButton = true,
   onInteractOutside,
+  onEscapeKeyDown,
   ...props
 }: DialogContentProps) => (
   <DialogPortal>
@@ -55,6 +57,10 @@ const DialogContent = ({
         className,
       )}
       {...props}
+      onEscapeKeyDown={(event) => {
+        onEscapeKeyDown?.(event);
+        if (!event.defaultPrevented) dismissHeaderActionsOnEscape(event);
+      }}
       onInteractOutside={ignoreToastInteractions(onInteractOutside)}
     >
       {children}

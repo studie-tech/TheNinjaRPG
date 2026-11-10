@@ -177,7 +177,6 @@ export const ElderHall: React.FC<{
         subtitle="Elders Council"
         defaultBackHref="/village"
         topRightContent={navTabs}
-        stackTopRight
       >
         <p className="pb-2">
           The Elder Council is composed of representatives from the village&apos;s most

@@ -3,19 +3,15 @@
 import { ChevronsLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type React from "react";
-import { useCallback, useEffect, useState } from "react";
-import { cn } from "@/libs/shadui";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ContentBoxHeaderActions } from "@/layout/ContentBoxHeaderActions";
 
 export interface ContentBoxProps {
   children: React.ReactNode;
   title?: string;
   defaultBackHref?: string;
   subtitle?: string | React.ReactNode;
-  /** Stack the top-right content under the title on phones. */
-  stackTopRight?: boolean;
   topRightContent?: React.ReactNode;
-  /** Allow flexible top-right controls to shrink within the available header width. */
-  canShrinkTopRight?: boolean;
   bottomRightContent?: React.ReactNode;
   padding?: boolean;
   noBorder?: boolean;
@@ -28,6 +24,9 @@ export interface ContentBoxProps {
 }
 
 const ContentBox: React.FC<ContentBoxProps> = (props) => {
+  const headerRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLDivElement>(null);
+
   // State for browser-based back functionality
   const router = useRouter();
   const [canGoBack, setCanGoBack] = useState(false);
@@ -52,7 +51,7 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
   const title = props.defaultBackHref ? (
     <button
       type="button"
-      className="my-[min(0px,calc((2rem-48px)/2))] ml-1 flex min-h-[48px] min-w-[48px] cursor-pointer flex-row items-center hover:text-orange-700 disabled:cursor-wait disabled:opacity-60"
+      className="my-[min(0px,calc((2rem-48px)/2))] ml-1 flex min-h-[48px] min-w-[48px] max-w-full cursor-pointer flex-row items-center hover:text-orange-700 disabled:cursor-wait disabled:opacity-60"
       disabled={props.backDisabled}
       aria-busy={props.backDisabled}
       onClick={() => {
@@ -64,11 +63,15 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
       }}
       suppressHydrationWarning
     >
-      <ChevronsLeft className="h-6 w-6" />
-      {props.title}
+      <ChevronsLeft className="h-6 w-6 shrink-0" />
+      <span className="min-w-0 truncate" data-content-box-title-text>
+        {props.title}
+      </span>
     </button>
   ) : (
-    <div suppressHydrationWarning>{props.title}</div>
+    <div className="truncate" data-content-box-title-text suppressHydrationWarning>
+      {props.title}
+    </div>
   );
   // Show the content box
   return (
@@ -76,44 +79,55 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
       {props.initialBreak && <div className="h-4"></div>}
       <div className="sm:container" data-content-box id={props.id}>
         <div
-          className={`flex ${props.stackTopRight ? "flex-col sm:flex-row sm:items-center" : "flex-row items-center"}`}
+          ref={headerRef}
+          data-content-box-header
+          className="flex min-w-0 flex-row items-center gap-2"
         >
           {props.title && (
-            <div className="self-start">
+            <div ref={titleRef} className="min-w-0">
               {props.initialBreak || props.alreadyHasH1 ? (
-                <h2 className="font-bold text-2xl text-background-foreground">
+                <h2
+                  className="truncate font-bold text-2xl text-background-foreground"
+                  title={props.title}
+                >
                   {title}
                 </h2>
               ) : (
-                <h1 className="font-bold text-2xl text-background-foreground">
+                <h1
+                  className="truncate font-bold text-2xl text-background-foreground"
+                  title={props.title}
+                >
                   {title}
                 </h1>
               )}
               {props.subtitle && !props.initialBreak && !props.alreadyHasH1 && (
-                <h2 className="text-background-foreground" suppressHydrationWarning>
+                <h2
+                  className="truncate text-background-foreground"
+                  suppressHydrationWarning
+                >
                   {props.subtitle}
                 </h2>
               )}
               {props.subtitle && (props.initialBreak || props.alreadyHasH1) && (
-                <h3 className="text-background-foreground" suppressHydrationWarning>
+                <h3
+                  className="truncate text-background-foreground"
+                  suppressHydrationWarning
+                >
                   {props.subtitle}
                 </h3>
               )}
             </div>
           )}
-          <div
-            className={cn("flex grow flex-row", props.canShrinkTopRight && "min-w-0")}
-          >
-            {!props.noRightAlign && <div className="grow"></div>}
-            <div
-              className={cn(
-                props.noRightAlign && "grow",
-                props.canShrinkTopRight && "min-w-0",
-              )}
+          {props.topRightContent && (
+            <ContentBoxHeaderActions
+              headerRef={headerRef}
+              titleRef={titleRef}
+              label={props.title || "Page"}
+              noRightAlign={props.noRightAlign}
             >
               {props.topRightContent}
-            </div>
-          </div>
+            </ContentBoxHeaderActions>
+          )}
         </div>
 
         <div

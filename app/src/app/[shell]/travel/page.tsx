@@ -1014,7 +1014,6 @@ function Travel() {
         title="Travel"
         subtitle={subtitle}
         padding={false}
-        stackTopRight
         topRightContent={
           <div className="flex cursor-pointer flex-row items-center">
             <WarFieldActions />

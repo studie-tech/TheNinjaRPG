@@ -36,6 +36,7 @@ import { useTutorialStep } from "@/hooks/tutorial";
 import { useAbVariant } from "@/hooks/useAbVariant";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { ActivityDock } from "@/layout/ActivityDock";
+import { REVEAL_CONTENT_BOX_CONTROLS } from "@/layout/ContentBoxHeaderActions";
 import { SETTINGS_HREF } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -1956,6 +1957,10 @@ const getUsableHighlightElement = (id: string | undefined) => {
   if (!id) return null;
   const nodes = document.querySelectorAll<HTMLElement>(`[id="${CSS.escape(id)}"]`);
   for (const element of Array.from(nodes)) {
+    if (element.closest("[data-content-box-actions] [inert]")) {
+      element.dispatchEvent(new Event(REVEAL_CONTENT_BOX_CONTROLS, { bubbles: true }));
+      continue;
+    }
     const style = window.getComputedStyle(element);
     if (style.display === "none" || style.visibility === "hidden") continue;
     const rect = element.getBoundingClientRect();
