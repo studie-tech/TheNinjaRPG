@@ -214,6 +214,31 @@ export const updateItemLoadoutForUnequipAllGear = (
     .set({ itemData: [] })
     .where(excludingAiUsers(client, itemLoadout.userId));
 
+/**
+ * Build the `actionLog` insert for `unequipAllJutsus` and `unequipAllGear`, recording
+ * the staff member and how many rows each bulk write changed.
+ */
+export const insertActionLogForMassUnequip = (
+  client: Pick<DrizzleClient, "insert">,
+  staff: { userId: string; username: string; avatarLight: null | string },
+  input: { kind: "jutsu" | "gear"; equippedRows: number; loadoutRows: number },
+) => {
+  const isJutsu = input.kind === "jutsu";
+  return client.insert(actionLog).values({
+    id: nanoid(),
+    userId: staff.userId,
+    tableName: isJutsu ? "userJutsu" : "userItem",
+    changes: [
+      `Mass unequip all ${input.kind} for all non-AI users`,
+      `${isJutsu ? "UserJutsu" : "UserItem"} rows unequipped: ${input.equippedRows}`,
+      `${isJutsu ? "JutsuLoadout" : "ItemLoadout"} rows cleared: ${input.loadoutRows}`,
+    ],
+    relatedId: null,
+    relatedMsg: `Mass unequip all ${input.kind} by ${staff.username}`,
+    relatedImage: staff.avatarLight,
+  });
+};
+
 /** Build the `mpvpBattleUser` lookup for `forceAwake`, using predicates on `userId`. */
 export const findMpvpBattleUserForForceAwake = (
   client: Pick<DrizzleClient, "query">,

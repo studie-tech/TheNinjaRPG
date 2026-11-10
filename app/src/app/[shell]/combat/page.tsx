@@ -29,6 +29,7 @@ import { BattleFocusView } from "@/layout/BattleFocusView";
 import { ActionSelector } from "@/layout/CombatActions";
 import { CombatElementalSealNotice } from "@/layout/CombatElementalSealNotice";
 import CombatHistory from "@/layout/CombatHistory";
+import { CombatNoJutsuNotice } from "@/layout/CombatNoJutsuNotice";
 import CombatTimeline from "@/layout/CombatTimeline";
 import ContentBox from "@/layout/ContentBox";
 import { HotkeyCaptureDialog, type HotkeyTarget } from "@/layout/HotkeyControls";
@@ -724,6 +725,9 @@ export default function CombatPage() {
           className={cn("flex flex-col gap-1", resultShown && "opacity-50")}
           inert={resultShown}
         >
+          {!isTutorialRunning && (
+            <CombatNoJutsuNotice battle={battle} userId={userId} />
+          )}
           <CombatElementalSealNotice battle={battle} userId={controlledActorId} />
           <ActionSelector
             showInfoIcon={true}
@@ -765,6 +769,8 @@ export default function CombatPage() {
       controlledActorId,
       handleActionClick,
       hotkeys.byAction,
+      isTutorialRunning,
+      userId,
     ],
   );
 

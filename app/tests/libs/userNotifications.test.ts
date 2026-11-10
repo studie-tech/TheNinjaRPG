@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { getUserFactionNotifications } from "@/libs/userNotifications";
+import {
+  getNoJutsuEquippedNotifications,
+  getUserFactionNotifications,
+  NO_JUTSU_EQUIPPED_NOTIFICATION,
+} from "@/libs/userNotifications";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 
 const notify = (overrides: Record<string, unknown>) =>
@@ -198,5 +202,36 @@ describe("getUserFactionNotifications", () => {
 
   it("returns nothing for a missing user", () => {
     expect(getUserFactionNotifications(undefined)).toEqual([]);
+  });
+});
+
+describe("getNoJutsuEquippedNotifications", () => {
+  const player = {
+    isAi: false,
+    tutorialOn: false,
+    tutorialStep: 0,
+    loadout: { jutsuIds: [] as string[] },
+  };
+
+  it("warns a player whose active loadout is empty", () => {
+    expect(getNoJutsuEquippedNotifications(player)).toEqual([
+      NO_JUTSU_EQUIPPED_NOTIFICATION,
+    ]);
+    expect(NO_JUTSU_EQUIPPED_NOTIFICATION).toMatchObject({
+      href: "/jutsus",
+      color: "red",
+    });
+  });
+
+  it("stays quiet with jutsu equipped, for AI, without a loadout, or during the tutorial", () => {
+    expect(
+      getNoJutsuEquippedNotifications({ ...player, loadout: { jutsuIds: ["j1"] } }),
+    ).toEqual([]);
+    expect(getNoJutsuEquippedNotifications({ ...player, isAi: true })).toEqual([]);
+    expect(getNoJutsuEquippedNotifications({ ...player, loadout: null })).toEqual([]);
+    expect(getNoJutsuEquippedNotifications({ ...player, tutorialOn: true })).toEqual(
+      [],
+    );
+    expect(getNoJutsuEquippedNotifications(undefined)).toEqual([]);
   });
 });

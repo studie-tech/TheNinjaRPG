@@ -146,7 +146,10 @@ import {
   inferJutsuTrainingStartedAt,
   settleQueuedTraining,
 } from "@/libs/train";
-import { getUserFactionNotifications } from "@/libs/userNotifications";
+import {
+  getNoJutsuEquippedNotifications,
+  getUserFactionNotifications,
+} from "@/libs/userNotifications";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchSquad } from "@/queries/anbu";
 import { incrementUserBank } from "@/queries/bank";
@@ -950,6 +953,7 @@ export const profileRouter = createTRPCRouter({
       }
 
       notifications.push(...getUserFactionNotifications(user, now));
+      notifications.push(...getNoJutsuEquippedNotifications(user));
 
       // Add notification for unvoted polls
       if (

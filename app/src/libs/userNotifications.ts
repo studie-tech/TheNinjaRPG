@@ -1,8 +1,40 @@
 import { KAGE_DEFENSE_REMINDER_HOURS } from "@/drizzle/constants";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import { getWarSide } from "@/libs/objectiveWar";
+import { isTutorialActive } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { getKageSetupDeadline } from "@/utils/kage";
+
+/** Sidebar warning for a player whose active jutsu loadout is empty. */
+export const NO_JUTSU_EQUIPPED_NOTIFICATION: NavBarDropdownLink = {
+  href: "/jutsus",
+  name: "No jutsu equipped!",
+  color: "red",
+};
+
+/**
+ * Warn a player whose active jutsu loadout is empty, so they don't walk into a fight
+ * with basic actions only. Skipped for AI, players without a loadout yet, and
+ * players still in the tutorial.
+ */
+export const getNoJutsuEquippedNotifications = (
+  user:
+    | {
+        isAi: boolean;
+        tutorialOn?: boolean | null;
+        tutorialStep?: number | null;
+        loadout?: { jutsuIds: string[] } | null;
+      }
+    | null
+    | undefined,
+): NavBarDropdownLink[] =>
+  user &&
+  !user.isAi &&
+  user.loadout &&
+  user.loadout.jutsuIds.length === 0 &&
+  !isTutorialActive(user)
+    ? [NO_JUTSU_EQUIPPED_NOTIFICATION]
+    : [];
 
 /** Derive faction activity notices from the same profile snapshot on server and client. */
 export const getUserFactionNotifications = (
