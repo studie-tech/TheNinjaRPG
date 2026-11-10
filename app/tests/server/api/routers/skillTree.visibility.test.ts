@@ -126,8 +126,15 @@ describe("hidden skill-tree permissions", () => {
       { folderId: "visible", pathType: "BLOODRIGHT" },
       { folderId: "bloodright", pathType: "BLOODRIGHT" },
     ] as never);
-    const result = await invoke("getAllFolders", drizzle, { includeHidden: true, skillFoldersOnly: true });
-    expect((result as { id: string }[]).map((folder) => folder.id)).toEqual(["visible", "hidden", "empty"]);
+    const result = await invoke("getAllFolders", drizzle, {
+      includeHidden: true,
+      skillFoldersOnly: true,
+    });
+    expect((result as { id: string }[]).map((folder) => folder.id)).toEqual([
+      "visible",
+      "hidden",
+      "empty",
+    ]);
   });
   it.each([
     { role: "MODERATOR-ADMIN", hidden: true, allowed: false },
