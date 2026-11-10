@@ -701,13 +701,12 @@ export const towerDefenseRouter = createTRPCRouter({
           return errorResponse(
             `Invalid metadata.json rotations: ${rotationPaths.error}`,
           );
-        const missingRotation = Object.values(rotationPaths.record).find(
-          (path) => !zip.file(path) || !isSpriteImagePath(path),
-        );
-        if (missingRotation)
-          return errorResponse(
-            `Rotation image ${missingRotation} is not in the zip file`,
-          );
+        for (const path of Object.values(rotationPaths.record)) {
+          if (!zip.file(path))
+            return errorResponse(`Rotation image ${path} is not in the zip file`);
+          if (!isSpriteImagePath(path))
+            return errorResponse(`Rotation image ${path} has an unsupported format`);
+        }
         const animationPaths: {
           name: string;
           frames: Record<SpriteDirection, string[]>;

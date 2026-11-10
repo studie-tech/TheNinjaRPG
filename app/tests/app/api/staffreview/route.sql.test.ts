@@ -94,7 +94,7 @@ describeWithDatabase("staff review summaries", () => {
     expect((await readTimer())?.time.getTime()).toBe(LAST_RUN.getTime());
   });
 
-  it("keeps the period claimed once any summary was delivered", async () => {
+  it("retries all summaries when one model fails before any delivery", async () => {
     vi.spyOn(ai, "generateText").mockImplementation((async ({
       prompt,
     }: {
@@ -107,9 +107,12 @@ describeWithDatabase("staff review summaries", () => {
       .spyOn(comments, "createConvo")
       .mockResolvedValue(undefined as never);
     expect((await GET(request())).status).toBe(500);
-    expect(convo).toHaveBeenCalledTimes(1);
-    expect((await readTimer())?.time.getTime()).not.toBe(LAST_RUN.getTime());
+    expect(convo).not.toHaveBeenCalled();
+    expect((await readTimer())?.time.getTime()).toBe(LAST_RUN.getTime());
+
+    vi.spyOn(ai, "generateText").mockResolvedValue({ text: "Helpful" } as never);
     expect((await GET(request())).status).toBe(200);
-    expect(convo).toHaveBeenCalledTimes(1);
+    expect(convo).toHaveBeenCalledTimes(2);
+    expect((await readTimer())?.time.getTime()).not.toBe(LAST_RUN.getTime());
   });
 });

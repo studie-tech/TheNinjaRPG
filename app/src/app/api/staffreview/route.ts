@@ -25,9 +25,9 @@ export async function GET(request: Request) {
 
   return runClaimedCron(timerCheck, "/api/staffreview", async () => {
     const staff = await listUserDataForGET(drizzleDB);
-    let hasAttemptedDelivery = false;
 
-    const outcomes = await Promise.allSettled(
+    // Finish every summary before delivery so model failures can release the month safely.
+    const summaries = await Promise.all(
       staff.map(async (user) => {
         const results = await listUserReviewForGET(
           drizzleDB,
@@ -57,9 +57,15 @@ export async function GET(request: Request) {
         `,
         });
 
-        // Create conversation
+        return { user, text };
+      }),
+    );
+
+    const outcomes = await Promise.allSettled(
+      summaries.map(async (summary) => {
+        if (!summary) return;
+        const { user, text } = summary;
         const now = new Date();
-        hasAttemptedDelivery = true;
         await createConvo({
           client: drizzleDB,
           authorUserId: TERR_BOT_ID,
@@ -73,11 +79,15 @@ export async function GET(request: Request) {
       }),
     );
 
-    const failure = outcomes.find((outcome) => outcome.status === "rejected");
-    if (!failure) return Response.json(`OK`);
-    // Conversation writes can partially succeed even when createConvo rejects. Only
-    // failures before any delivery attempt can safely release the month for a retry.
-    if (!hasAttemptedDelivery) throw failure.reason;
-    return handleEndpointError(failure.reason, { endpoint: "/api/staffreview" });
+    // A rejected conversation write may have partially delivered. Report every failure
+    // without throwing, retaining the month instead of risking duplicate deliveries.
+    const responses = await Promise.all(
+      outcomes
+        .filter((outcome) => outcome.status === "rejected")
+        .map(({ reason }) =>
+          handleEndpointError(reason, { endpoint: "/api/staffreview" }),
+        ),
+    );
+    return responses[0] ?? Response.json(`OK`);
   });
 }

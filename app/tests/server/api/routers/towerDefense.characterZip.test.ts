@@ -163,6 +163,20 @@ describeWithDatabase("processCharacterZip", () => {
       },
       "Rotation image missing.png is not in the zip file",
     ],
+    [
+      "an existing non-image rotation file",
+      (frames: MetadataFrames) => {
+        frames.rotations.e = "metadata.json";
+      },
+      "Rotation image metadata.json has an unsupported format",
+    ],
+    [
+      "a directory used as a rotation image",
+      (frames: MetadataFrames) => {
+        frames.rotations.e = "frames/";
+      },
+      "Rotation image frames/ is not in the zip file",
+    ],
   ])("rejects %s before uploading or saving", async (_label, editFrames, message) => {
     validate();
     const uploads = stubUploads(async () => []);

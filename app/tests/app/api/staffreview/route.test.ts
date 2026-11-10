@@ -27,10 +27,12 @@ const timer = {
 };
 const rows = new Map<object, Record<string, unknown>[]>();
 let storageFailure: "counter" | "all" | undefined;
+let staff = [{ userId: "reviewed", username: "Reviewed" }];
 
 beforeEach(() => {
   timer.time = LAST_RUN;
   storageFailure = undefined;
+  staff = [{ userId: "reviewed", username: "Reviewed" }];
   rows.clear();
   for (const table of [conversation, conversationComment, user2conversation]) {
     rows.set(table, []);
@@ -40,7 +42,7 @@ beforeEach(() => {
     query: {
       gameSetting: { findFirst: async () => ({ ...timer }) },
       userData: {
-        findMany: async () => [{ userId: "reviewed", username: "Reviewed" }],
+        findMany: async () => staff,
       },
       userReview: {
         findMany: async () => [{ review: "Helpful and quick to respond" }],
@@ -120,4 +122,29 @@ it("releases the month for a successful retry after a model failure", async () =
   expect((await GET(request())).status).toBe(200);
   expect(ai.generateText).toHaveBeenCalledTimes(2);
   expect(rows.get(conversation)).toHaveLength(1);
+});
+
+it("retries all staff summaries when one model fails before delivery", async () => {
+  staff.push({ userId: "second", username: "Second" });
+  vi.spyOn(ai, "generateText")
+    .mockResolvedValueOnce({ text: "Helpful" } as never)
+    .mockRejectedValueOnce(new Error("Second model unavailable"));
+
+  expect((await GET(request())).status).toBe(500);
+  expect(timer.time.getTime()).toBe(LAST_RUN.getTime());
+  expect(rows.get(conversation)).toHaveLength(0);
+
+  expect((await GET(request())).status).toBe(200);
+  expect(ai.generateText).toHaveBeenCalledTimes(4);
+  expect(rows.get(conversation)).toHaveLength(2);
+});
+
+it("reports every delivery failure without releasing the month", async () => {
+  staff.push({ userId: "second", username: "Second" });
+  storageFailure = "counter";
+
+  expect((await GET(request())).status).toBe(500);
+  expect(Sentry.captureException).toHaveBeenCalledTimes(2);
+  expect(timer.time.getTime()).not.toBe(LAST_RUN.getTime());
+  expect(rows.get(conversation)).toHaveLength(2);
 });
