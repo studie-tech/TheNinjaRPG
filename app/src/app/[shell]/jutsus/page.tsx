@@ -499,6 +499,7 @@ export default function MyJutsu() {
         title="My Jutsu"
         subtitle={subtitle}
         noRightAlign
+        canShrinkTopRight
         topRightContent={
           !isOpen && (
             <div className="my-2 ml-3 flex min-w-0 items-center gap-1 [&_button]:min-h-[44px] [&_button]:min-w-[44px]">

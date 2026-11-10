@@ -4,6 +4,7 @@ import { ChevronsLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
+import { cn } from "@/libs/shadui";
 
 export interface ContentBoxProps {
   children: React.ReactNode;
@@ -13,6 +14,8 @@ export interface ContentBoxProps {
   /** Stack the top-right content under the title on phones. */
   stackTopRight?: boolean;
   topRightContent?: React.ReactNode;
+  /** Allow flexible top-right controls to shrink within the available header width. */
+  canShrinkTopRight?: boolean;
   bottomRightContent?: React.ReactNode;
   padding?: boolean;
   noBorder?: boolean;
@@ -98,9 +101,16 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
               )}
             </div>
           )}
-          <div className="flex min-w-0 grow flex-row">
+          <div
+            className={cn("flex grow flex-row", props.canShrinkTopRight && "min-w-0")}
+          >
             {!props.noRightAlign && <div className="grow"></div>}
-            <div className={props.noRightAlign ? "min-w-0 grow" : ""}>
+            <div
+              className={cn(
+                props.noRightAlign && "grow",
+                props.canShrinkTopRight && "min-w-0",
+              )}
+            >
               {props.topRightContent}
             </div>
           </div>
