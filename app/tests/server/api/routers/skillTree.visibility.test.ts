@@ -114,6 +114,28 @@ const setup = (role: UserRole | null) => {
 };
 
 describe("hidden skill-tree permissions", () => {
+  it("excludes bloodright-only folders from the player skill tree", async () => {
+    const { drizzle } = setup("CONTENT");
+    drizzle.query.skillTreeFolder.findMany.mockResolvedValue([
+      ...folders,
+      { id: "bloodright", name: "Bloodright", image: "", hidden: false },
+      { id: "empty", name: "Empty", image: "", hidden: false },
+    ] as never);
+    drizzle.query.skillTree.findMany.mockResolvedValue([
+      { folderId: "visible", pathType: "SKILL" },
+      { folderId: "visible", pathType: "BLOODRIGHT" },
+      { folderId: "bloodright", pathType: "BLOODRIGHT" },
+    ] as never);
+    const result = await invoke("getAllFolders", drizzle, {
+      includeHidden: true,
+      skillFoldersOnly: true,
+    });
+    expect((result as { id: string }[]).map((folder) => folder.id)).toEqual([
+      "visible",
+      "hidden",
+      "empty",
+    ]);
+  });
   it.each([
     { role: "MODERATOR-ADMIN", hidden: true, allowed: false },
     { role: "MODERATOR-ADMIN", hidden: false, allowed: true },

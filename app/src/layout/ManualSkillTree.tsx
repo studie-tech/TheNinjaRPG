@@ -6,6 +6,7 @@ import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { MAX_BLOODRIGHT_TIERS } from "@/drizzle/constants";
+import { useSkillTreeCatalogInvalidation } from "@/hooks/skillTree";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
@@ -25,7 +26,7 @@ export default function ManualSkillTree({
   isBloodright?: boolean;
 }) {
   // Settings
-  const utils = api.useUtils();
+  const invalidateSkillTreeCatalog = useSkillTreeCatalogInvalidation();
   const { data: userData } = useUserData();
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
@@ -70,7 +71,7 @@ export default function ManualSkillTree({
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.skillTree.getAll.invalidate();
+        await invalidateSkillTreeCatalog();
         router.push(`/manual/skillTree/edit/${data.message}`);
       }
     },
@@ -80,7 +81,7 @@ export default function ManualSkillTree({
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await utils.skillTree.getAll.invalidate();
+        await invalidateSkillTreeCatalog();
       }
     },
   });

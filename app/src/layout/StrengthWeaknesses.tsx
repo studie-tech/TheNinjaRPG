@@ -531,7 +531,10 @@ export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
 
   const { data: userSkills } = api.skillTree.getUserSkills.useQuery();
 
-  const { data: folders } = api.skillTree.getAllFolders.useQuery({ includeHidden });
+  const { data: folders } = api.skillTree.getAllFolders.useQuery({
+    includeHidden,
+    skillFoldersOnly: true,
+  });
 
   const { data: folderStats } = api.skillTree.getFolderStats.useQuery();
 

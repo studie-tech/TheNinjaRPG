@@ -15,13 +15,23 @@ import type {
 } from "@/validators/combat";
 import { SkillTreeValidator } from "@/validators/combat";
 
+/** Refresh skill listings and folders whose visibility depends on skill assignments. */
+export const useSkillTreeCatalogInvalidation = () => {
+  const utils = api.useUtils();
+  return () =>
+    Promise.all([
+      utils.skillTree.getAll.invalidate(),
+      utils.skillTree.getAllFolders.invalidate(),
+    ]);
+};
+
 /**
  * Hook used when creating frontend forms for editing skills
  * @param data
  */
 export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
   // Get utils
-  const utils = api.useUtils();
+  const invalidateSkillTreeCatalog = useSkillTreeCatalogInvalidation();
   const { data: userData } = useRequiredUserData();
 
   const skillTree = { ...data };
@@ -61,7 +71,7 @@ export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
         showMutationToast(data);
         if (data.success) {
           refetch();
-          void utils.skillTree.getAll.invalidate();
+          void invalidateSkillTreeCatalog();
         }
       },
     });
