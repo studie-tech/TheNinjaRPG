@@ -271,6 +271,11 @@ export type CombatUserFields = {
   enmity?: number;
   initiative: number;
   basicActions: BattleBasicAction[];
+  /**
+   * Running global cooldowns by shared tag, as applyActionCooldowns started them, so an
+   * action granted later in the battle (an injected jutsu) starts under the same lock.
+   */
+  sharedCooldownLocks?: Record<string, SharedCooldownLock>;
   hex?: TerrainHex;
   hidden?: boolean;
   keystoneName?: string | null;
@@ -401,6 +406,9 @@ export type BattleBasicAction = {
   lastUsedRound: number;
   cooldown?: number; // Optional GCD override (only set when GCD is applied)
 };
+
+/** A global cooldown started in `round`, locking its tag for `rounds` rounds. */
+export type SharedCooldownLock = { round: number; rounds: number };
 
 /**
  * BattleUserState - The user state stored in battle.usersState.
