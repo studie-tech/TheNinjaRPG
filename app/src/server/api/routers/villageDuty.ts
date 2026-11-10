@@ -8,7 +8,7 @@ import {
   cancelVillageDuty,
   countVillageDuty,
   enrollVillageDuty,
-  listVillageDutyPatrols,
+  listVillageDutyRoster,
 } from "@/queries/villageDuty";
 import {
   baseServerResponse,
@@ -26,7 +26,7 @@ export const villageDutyRouter = createTRPCRouter({
         fetchUser(ctx.drizzle, ctx.userId),
         findVillageById(ctx.drizzle, input.villageId),
         countVillageDuty(ctx.drizzle, input.villageId),
-        listVillageDutyPatrols(ctx.drizzle, input.villageId),
+        listVillageDutyRoster(ctx.drizzle, input.villageId),
       ]);
       if (home?.type !== "VILLAGE" || user.villageId !== home.id || user.isOutlaw)
         return null;

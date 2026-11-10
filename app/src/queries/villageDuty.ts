@@ -16,6 +16,30 @@ export const activeVillageDutyWhere = () =>
     inArray(userData.rank, VILLAGE_DUTY_RANKS),
   );
 
+/** Load the bounded town hall roster without private map appearance inputs. */
+export const listVillageDutyRoster = (client: DrizzleClient, villageId: string) =>
+  client.query.userData.findMany({
+    columns: {
+      userId: true,
+      username: true,
+      avatar: true,
+      avatarLight: true,
+      rank: true,
+    },
+    where: and(
+      activeVillageDutyWhere(),
+      inArray(
+        userData.villageDutyVillageId,
+        client
+          .select({ id: village.id })
+          .from(village)
+          .where(and(eq(village.id, villageId), eq(village.type, "VILLAGE"))),
+      ),
+    ),
+    orderBy: [asc(userData.villageDutyStartedAt), asc(userData.userId)],
+    limit: VILLAGE_DUTY_VISIBLE_LIMIT,
+  });
+
 /** Load a bounded public patrol sample and the private inputs needed to resolve its appearance. */
 export const listVillageDutyPatrols = (
   client: DrizzleClient,
