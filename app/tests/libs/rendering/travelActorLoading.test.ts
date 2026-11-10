@@ -192,6 +192,7 @@ describe("travel actor artwork loading", () => {
   );
 
   it("budgets crowded patrol artwork while retaining the viewer and live players", () => {
+    WORLD_DETAIL.travelCharacters = bodyBudget;
     const { actors, snapshot } = fixture();
     const patrols = Array.from({ length: 100 }, (_, i) =>
       player(i, { userId: `duty:${i}`, isVillageDuty: true }),
@@ -205,14 +206,14 @@ describe("travel actor artwork loading", () => {
     );
     const bodies = () =>
       actors.container.children.filter((child) => child.label.startsWith("user:"));
-    expect(bodies()).toHaveLength(20);
+    expect(bodies()).toHaveLength(100);
     expect(bodies().map((child) => child.label)).toEqual(
       expect.arrayContaining(["user:viewer", "user:active"]),
     );
     for (let now = 0; now < 50_000; now += 1000 / 60)
       actors.animate({ now, delta: 1 / 60, reducedMotion: false });
-    expect(bodies()).toHaveLength(40);
-    for (let now = 50_000; now < 80_000; now += 1000 / 30)
+    expect(bodies()).toHaveLength(100);
+    for (let now = 50_000; now < 110_000; now += 1000 / 30)
       actors.animate({ now, delta: 1 / 30, reducedMotion: false });
     expect(bodies()).toHaveLength(12);
     expect(bodies().map((child) => child.label)).toEqual(

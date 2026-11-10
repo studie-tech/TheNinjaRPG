@@ -142,7 +142,7 @@ export type CombatQueryCompletedQuest = {
  */
 export type CombatQueryUser = UserData &
   ActivityCompletions & {
-    /** Initiation-only provenance: an AI-controlled copy retains its owner's loadout gates. */
+    /** An AI-controlled copy retains its owner's loadout gates throughout combat. */
     isVillageDutyCopy?: true;
     attributes?: { attribute: string }[];
     /** Retained when lobby/loadout processing receives an already frozen combatant. */
@@ -200,6 +200,8 @@ export type ProcessedItem = CombatQueryUserItem & {
  * Shared between ProcessingBattleUser and BattleUserState.
  */
 export type CombatUserFields = {
+  /** An AI-controlled village defender uses player loadout and action requirements. */
+  isVillageDutyCopy?: true;
   /** Private creation/clothing snapshot captured at initiation and retained across loadout edits. */
   spriteBaseAppearance?: SpriteAppearance;
   /** Private item-instance lookup permits in-memory recomposition after consumption or breakage. */

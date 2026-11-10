@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { type Jutsu, type SkillTree, skillTree } from "@/drizzle/schema";
+import { type Jutsu, type SkillTree, skillTree, userJutsu } from "@/drizzle/schema";
 import { availableUserActions, userItemToAction } from "@/libs/combat/actions";
 import { prepareVillageDutyDefender } from "@/libs/combat/initiation";
+import { refreshMasteries } from "@/libs/combat/mastery";
+import { applyEffects } from "@/libs/combat/process";
 import { getPower } from "@/libs/combat/tags";
 import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
@@ -16,6 +18,7 @@ import {
 import {
   makeBattleUserItem,
   makeCompleteBattle,
+  makeEffect,
   makeJutsu,
   makeTag,
   makeWeapon,
@@ -241,7 +244,7 @@ describe("village duty combat isolation", () => {
         expect(actions.includes("gear")).toBe(!!activated);
         expect(actions.includes("gated")).toBe(!!activated);
         expect(user.isAi).toBe(true);
-        expect(user).not.toHaveProperty("isVillageDutyCopy");
+        expect(user.isVillageDutyCopy).toBe(true);
       }
       for (const isSummon of [false, true]) {
         const result = await preloadBattle(
@@ -379,4 +382,157 @@ describe("village duty combat isolation", () => {
     expect(defender.queue).toHaveLength(1);
     expect(defender.userId).toBe("owner");
   });
+  it.each(["VILLAGE_PROTECTOR", "SHRINE_WAR"] as const)(
+    "checks owned item mastery and mastery debuffs throughout %s copies",
+    async (battleType) => {
+      for (const mastery of [0, 600]) {
+        const defender = {
+          ...owner(),
+          joinedVillageAt: new Date("2026-01-01"),
+          bukijutsuMastery: mastery,
+          items: (["WEAPON", "CONSUMABLE"] as const).map((itemType) => ({
+            ...makeBattleUserItem({
+              id: `owned-${itemType}`,
+              itemId: itemType,
+              equipped: "HAND_1",
+              quantity: 3,
+            }),
+            userId: "owner",
+            imbuements: [],
+            item: makeWeapon({ id: itemType, itemType, requiredBukijutsuMastery: 500 }),
+          })),
+          jutsus: [
+            {
+              ...tableDefaults(userJutsu),
+              id: "owned-jutsu",
+              userId: "owner",
+              jutsuId: "mastery-jutsu",
+              equipped: true,
+              level: 1,
+              experience: 0,
+              jutsu: makeJutsu({ id: "mastery-jutsu", requiredBukijutsuMastery: 500 }),
+            },
+          ],
+        };
+        const copy = prepareVillageDutyDefender(
+          defender as unknown as Parameters<typeof prepareVillageDutyDefender>[0],
+          "home",
+        )!;
+        for (const input of [defender, copy]) {
+          const result = await preloadBattle(
+            [structuredClone(input) as CombatQueryUser],
+            { battleType },
+          );
+          // Battle JSON round trips must retain the distinction from authored AI.
+          const battle = JSON.parse(
+            JSON.stringify(
+              makeCompleteBattle({
+                battleType,
+                usersState: result.usersState,
+                usersEffects: result.userEffects,
+                extraState: result.extraState,
+                round: 2,
+              }),
+            ),
+          ) as ReturnType<typeof makeCompleteBattle>;
+          const user = battle.usersState[0]!;
+          refreshMasteries(battle.usersState, battle.usersEffects);
+          const actions = () =>
+            availableUserActions(battle, user.userId, false).map((action) => action.id);
+          for (const id of ["WEAPON", "CONSUMABLE", "mastery-jutsu"]) {
+            expect(actions().includes(id)).toBe(mastery === 600);
+          }
+          if (mastery === 0) continue;
+          battle.usersEffects.push(
+            makeEffect(
+              "decreasemastery",
+              {
+                masteryTypes: ["Bukijutsu"],
+                calculation: "static",
+                power: 300,
+                powerPerLevel: 0,
+                rounds: 5,
+              },
+              {
+                creatorId: user.userId,
+                targetId: user.userId,
+                targetType: "user",
+                isNew: false,
+                castThisRound: false,
+                createdRound: 0,
+              },
+            ),
+          );
+          const { newBattle } = applyEffects(battle, user.userId);
+          expect(newBattle.usersState[0]!.bukijutsuMastery).toBe(300);
+          const after = availableUserActions(newBattle, user.userId, false).map(
+            (action) => action.id,
+          );
+          for (const id of ["WEAPON", "CONSUMABLE", "mastery-jutsu"])
+            expect(after).not.toContain(id);
+        }
+      }
+    },
+  );
+  it.each(["VILLAGE_PROTECTOR", "SHRINE_WAR"] as const)(
+    "applies configured jutsu equip caps to players and copies in %s, preserving authored AI",
+    async (battleType) => {
+      const limits = [
+        { category: "40 AP" as const, unrankedMaxEquipped: 1, rankedMaxEquipped: 1 },
+      ];
+      for (const kind of ["player", "copy", "authored"] as const) {
+        const defender = {
+          ...owner(),
+          status: "AWAKE" as const,
+          curHealth: 1000,
+          joinedVillageAt: new Date("2026-01-01"),
+          isAi: kind === "authored",
+          jutsus: [0, 1].map((index) => ({
+            ...tableDefaults(userJutsu),
+            userId: "owner",
+            id: `owned-cap-${index}`,
+            jutsuId: `capped-${index}`,
+            equipped: true,
+            level: 1,
+            experience: 0,
+            jutsu: makeJutsu({ id: `capped-${index}`, actionCostPerc: 40 }),
+          })) as CombatQueryUser["jutsus"],
+        };
+        const fake = fakeInitiationClient(
+          [makeInitiationUser({ userId: "attacker", villageId: "enemy" }), defender],
+          { equipLimits: limits },
+        );
+        const client = Object.create(fake.client) as DrizzleClient;
+        client.update = (() => ({
+          set: () => ({
+            where: async () => ({ rowsAffected: kind === "player" ? 2 : 1 }),
+          }),
+        })) as unknown as DrizzleClient["update"];
+        const result = await initiateBattle(
+          {
+            client,
+            userIds: ["attacker"],
+            targetIds: [kind === "copy" ? "duty:owner" : "owner"],
+            ...(kind === "copy"
+              ? { villageDuty: { userId: "owner", villageId: "home" } }
+              : {}),
+            jutsuEquipLimits: limits,
+          },
+          battleType,
+        );
+        expect(result.success).toBe(true);
+        const saved = fake.saved()!;
+        const fighter = saved.usersState.find(
+          (user) => user.controllerId === (kind === "copy" ? "duty:owner" : "owner"),
+        )!;
+        const actions = availableUserActions(saved, fighter.userId, false)
+          .filter((action) => action.id.startsWith("capped-"))
+          .map((action) => action.id);
+        expect(actions).toEqual(
+          kind === "authored" ? ["capped-0", "capped-1"] : ["capped-0"],
+        );
+        expect(fake.readEquipLimits).not.toHaveBeenCalled();
+      }
+    },
+  );
 });

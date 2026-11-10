@@ -1199,6 +1199,8 @@ const spawnStandIn = (
   standIn.userId = nanoid();
   standIn.isSummon = true;
   standIn.isAi = true;
+  // Summons and clones use authored AI action requirements, independent of their template.
+  delete standIn.isVillageDutyCopy;
   standIn.controllerId = caster.userId;
   standIn.isSummonTemplate = false; // an active entity, not a template
   standIn.hidden = undefined;

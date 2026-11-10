@@ -5,9 +5,11 @@ describe("travel character budget", () => {
   it("starts at the crowd ceiling and grows only after sustained headroom following backoff", () => {
     const budget = createTravelCharacterBudget();
     expect(budget.limit).toBe(100);
-    for (let now = 0; now < 7000; now += 1000 / 60) budget.sample(now);
-    expect(budget.limit).toBe(100);
-    for (let now = 7000; now < 80_000; now += 1000 / 60) budget.sample(now);
+    for (let now = 0; now < 2100; now += 1000 / 30) budget.sample(now);
+    expect(budget.limit).toBe(96);
+    for (let now = 2100; now < 9100; now += 1000 / 60) budget.sample(now);
+    expect(budget.limit).toBe(96);
+    for (let now = 9100; now < 40_000; now += 1000 / 60) budget.sample(now);
     expect(budget.limit).toBe(100);
   });
   it("backs off quickly under sustained load and preserves a bounded minimum", () => {

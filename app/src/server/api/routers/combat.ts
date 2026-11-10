@@ -3184,7 +3184,7 @@ export const initiateBattle = async (
     RankedBattleTypes.includes(battleType) ? "ranked" : "unranked",
   );
   for (const participant of usersState) {
-    if (participant.isAi) continue;
+    if (participant.isAi && !participant.isVillageDutyCopy) continue;
     const selected = participant.jutsus.filter((entry) => entry.equipped);
     const accepted = computeJutsuLoadoutCapAssignments({
       caps: equipCaps,
@@ -3699,7 +3699,7 @@ export const processUsersForBattle = async (
 
   // Loop through users and transform to ProcessingBattleUser
   const usersState: ProcessingBattleUser[] = users.map((inputUser, index) => {
-    const { isVillageDutyCopy, ...participant } = inputUser;
+    const { isVillageDutyCopy } = inputUser;
     const usesPlayerLoadout = !inputUser.isAi || !!isVillageDutyCopy;
     const dependencies = summonDependencies.get(inputUser.userId) ?? new Set<string>();
     const addSummon = (id: string) => {
@@ -3710,7 +3710,7 @@ export const processUsersForBattle = async (
     };
     // Build the processing user object with all required fields
     const user: ProcessingBattleUser = {
-      ...participant,
+      ...inputUser,
       // Freeze the choice before bloodline processing and later profile edits, including ranked battles.
       preferredDamageElement: getPreferredDamageElement(inputUser),
       spriteAnimations: inputUser.spriteAnimationBindings

@@ -7,6 +7,7 @@ import {
   Rectangle,
   type RenderLayer,
   Sprite,
+  Text,
 } from "pixi.js";
 import {
   type AvatarFacing,
@@ -230,7 +231,7 @@ export const createTravelActors = (
     });
     stableViewport = domain;
     // Every awake candidate gets a body while the crowd fits the budget.
-    if (candidates.length <= WORLD_DETAIL.travelCharacters) {
+    if (candidates.length <= characterBudget.limit) {
       selectionKey = null;
       characterKeys = null;
       return { ...snapshot, users: visibleUsers, characterKeys: undefined };
@@ -550,7 +551,9 @@ export const createTravelActors = (
               isHovered &&
               (alone || target.username === CREATOR_USERNAME) &&
               actions.attack
-            : isHovered && (alone || (kind === "info" && target.isVillageDuty)) && actions[kind];
+            : isHovered &&
+              (alone || (kind === "info" && target.isVillageDuty)) &&
+              actions[kind];
         showControl(record, entry.sprite, !!shown);
       }
     }
