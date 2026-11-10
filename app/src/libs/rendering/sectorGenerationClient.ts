@@ -1,5 +1,7 @@
+import { buildGlobeClimate } from "@/libs/rendering/globeClimate";
 import {
   createSectorGeneration,
+  type GlobeClimateRequest,
   type SectorGenerationResult,
   type SectorRequest,
   type SectorWorkerReply,
@@ -10,7 +12,7 @@ import {
 import { reportRendererFailure } from "@/libs/rendering/telemetry";
 
 /**
- * Sector generation for one travel scene. In the browser it runs in a worker shared by every
+ * Sector generation for one travel scene, and the globe's climate field. In the browser it runs in a worker shared by every
  * scene, so building the sectors a crossing brings into view leaves the main thread free to
  * keep presenting frames. Where no worker can run, including Bun's test runner, whose
  * TypeScript worker would load outside a suite's module mocks, it runs in process. Once the
@@ -46,6 +48,15 @@ export const createSectorGenerator = (
       // A worker lost after building the window's field leaves it behind; build it here.
       if (lastWindow?.key === request.window) inProcess().window(lastWindow);
       return inProcess().sector(request);
+    },
+    globe: async (request) => {
+      if (transport?.isAvailable())
+        try {
+          return await transport.globe(request);
+        } catch (error) {
+          if (!(error instanceof WorkerUnavailableError)) throw error;
+        }
+      return buildGlobeClimate(request.protectedSectors);
     },
   };
 };
@@ -153,6 +164,8 @@ export const createSectorWorkerTransport = (
     },
     sector: (request: SectorRequest) =>
       post<SectorGenerationResult>({ type: "sector", request }),
+    globe: (request: GlobeClimateRequest) =>
+      post<Uint8Array>({ type: "globe", request }),
   };
 };
 
@@ -184,6 +197,7 @@ class WorkerUnavailableError extends Error {}
 export type SectorGenerator = {
   window: (request: WindowRequest) => Promise<Map<number, TerrainResultKey>>;
   sector: (request: SectorRequest) => Promise<SectorGenerationResult>;
+  globe: (request: GlobeClimateRequest) => Promise<Uint8Array>;
 };
 
 export type SectorWorkerTransport = ReturnType<typeof createSectorWorkerTransport>;

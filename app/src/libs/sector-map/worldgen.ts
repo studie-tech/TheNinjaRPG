@@ -220,7 +220,24 @@ export const createWorldLandScore = (options: WorldLandScoreOptions) => {
  * Wake Island sized by its immediate neighbors. The globe and the local sector maps both
  * derive it here, so they make the same decision for every point.
  */
-export const createSectorGridLandScore = (protectedSectors: number[]) => {
+export const createSectorGridLandScore = (protectedSectors: number[]) =>
+  createWorldLandScore({
+    protectedCenters: protectedSectors
+      .filter(
+        (sector) =>
+          sector !== MAP_WAKE_ISLAND_SECTOR && sectorGridPosition(sector) !== null,
+      )
+      .map((sector) => sectorGeometry(sector).center),
+    ...wakeIslandGeometry(),
+  });
+
+/**
+ * Wake Island's radial override in worldgen units: its centre, the island radius
+ * (sized by the nearest neighbour centre) and the ocean moat radius that covers its
+ * four neighbours' corners. The land blends back into the natural field over one
+ * island radius beyond the moat.
+ */
+export const wakeIslandGeometry = () => {
   const wakeIslandCenter = sectorGeometry(MAP_WAKE_ISLAND_SECTOR).center;
   const distanceToWake = (point: Vec3) =>
     Math.hypot(
@@ -231,13 +248,7 @@ export const createSectorGridLandScore = (protectedSectors: number[]) => {
   const wakeNeighbors = sectorGridNeighbors(MAP_WAKE_ISLAND_SECTOR)
     .filter((sector) => sector >= 0)
     .map(sectorGeometry);
-  return createWorldLandScore({
-    protectedCenters: protectedSectors
-      .filter(
-        (sector) =>
-          sector !== MAP_WAKE_ISLAND_SECTOR && sectorGridPosition(sector) !== null,
-      )
-      .map((sector) => sectorGeometry(sector).center),
+  return {
     wakeIslandCenter,
     wakeIslandRadius:
       Math.min(...wakeNeighbors.map(({ center }) => distanceToWake(center))) *
@@ -245,7 +256,7 @@ export const createSectorGridLandScore = (protectedSectors: number[]) => {
     wakeMoatRadius: Math.max(
       ...wakeNeighbors.flatMap(({ corners }) => corners.map(distanceToWake)),
     ),
-  });
+  };
 };
 
 /**

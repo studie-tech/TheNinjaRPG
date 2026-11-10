@@ -11,21 +11,17 @@ import { IMG_SECTOR_USER_SPRITE_MASK } from "@/drizzle/constants";
 import { createSceneAssets } from "@/libs/rendering/assets";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import {
-  GLOBE_HALF_FOV,
   type GlobeCamera,
+  globeCameraBasis,
   globeProject,
-  globeRay,
-  globeRayHit,
 } from "@/libs/rendering/scenes/globeProjection";
-import {
-  globeCameraShader,
-  globeOcclusionShader,
-} from "@/libs/rendering/scenes/globeShaders";
+import { globeCameraShader } from "@/libs/rendering/scenes/globeShaders";
 import type { GlobalPoint } from "@/libs/sector-map/world-types";
 import { contrastingTextColor } from "@/utils/color";
 
 /**
- * Scene-owned atlas batches with spherical occlusion. set replaces marker content;
+ * Scene-owned atlas batches, hidden by whether their anchor faces the camera, so a
+ * marker is always drawn whole. set replaces marker content;
  * images load asynchronously. pick consumes renderer pixels using the same camera.
  */
 export const createGlobeMarkers = (
@@ -59,17 +55,10 @@ export const createGlobeMarkers = (
     for (let index = 0; index < group.length; index++) {
       const marker = group[index];
       if (!marker) continue;
+      const layout = MARKER_LAYOUT[marker.kind];
       const emphasized = hoveredOwner !== null && marker.owner === hoveredOwner;
       const alpha = hoveredOwner !== null && marker.owner && !emphasized ? 0.48 : 1;
       const lift = emphasized ? 1.14 : 1;
-      const size =
-        marker.kind === "label"
-          ? [2.5, 1]
-          : marker.kind === "avatar"
-            ? [1.2, 1.2]
-            : [1, 1];
-      const width = marker.kind === "label" ? 100 : 64,
-        height = marker.kind === "label" ? 40 : 64;
       const x = (index % 8) * 128 + 2,
         y = Math.floor(index / 8) * 128 + 2;
       for (const [u, v] of [
@@ -77,14 +66,14 @@ export const createGlobeMarkers = (
         [1, 0],
         [1, 1],
         [0, 1],
-      ]) {
+      ] as const) {
         centers.push(marker.point.x, marker.point.y, marker.point.z);
         offsets.push(
-          ((u ?? 0) - 0.5) * (size[0] ?? 1) * lift,
-          (0.5 - (v ?? 0)) * (size[1] ?? 1) * lift,
+          ((u - 0.5) * layout.width + (marker.nudge ?? 0)) * lift,
+          (layout.lift + (1 - v) * layout.height) * lift,
         );
-        uvs.push((x + (u ?? 0) * width) / 1024, (y + (v ?? 0) * height) / 1024);
-        metadata.push(marker.pulse ? 1 : 0, alpha);
+        uvs.push((x + u * layout.texels[0]) / 1024, (y + v * layout.texels[1]) / 1024);
+        metadata.push(marker.pulse ? 1 : 0, alpha, marker.edge ? 1 : 0);
       }
       const base = index * 4;
       indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -122,21 +111,35 @@ export const createGlobeMarkers = (
           aPosition: { buffer: new Float32Array(3), format: "float32x3", stride: 12 },
           aOffset: { buffer: new Float32Array(2), format: "float32x2", stride: 8 },
           aUV: { buffer: new Float32Array(2), format: "float32x2", stride: 8 },
-          aMeta: { buffer: new Float32Array(2), format: "float32x2", stride: 8 },
+          aMeta: { buffer: new Float32Array(3), format: "float32x3", stride: 12 },
         },
         indexBuffer: new Uint16Array(6),
       });
       const shader = Shader.from({
         gl: {
           vertex: `precision highp float;
-attribute vec3 aPosition; attribute vec2 aOffset; attribute vec2 aUV; attribute vec2 aMeta;
-varying vec2 vUV; varying vec3 vCamera; varying float vAlpha;
+attribute vec3 aPosition; attribute vec2 aOffset; attribute vec2 aUV; attribute vec3 aMeta;
+varying vec2 vUV; varying float vAlpha;
 uniform float uPhase;
+uniform float uRadius;
 ${globeCameraShader}
 void main() {
   float pulse = 1.0 + aMeta.x * uPhase * 0.15;
-  vec3 world = aPosition + (uRight * aOffset.x + uUp * aOffset.y) * pulse;
-  vCamera = cameraPoint(world); vUV = aUV; vAlpha = aMeta.y;
+  vec3 normal = normalize(aPosition);
+  float horizon = uRadius / uDistance;
+  float facing = dot(normal, uForward) - horizon;
+  vec3 anchor = aPosition;
+  vAlpha = aMeta.y;
+  if (aMeta.z > 0.5 && facing < 0.0) {
+    // Far-side markers wait on the visible rim, toward where they really are.
+    vec3 side = normalize(normal - uForward * dot(normal, uForward) + uUp * 1e-4);
+    anchor = (uForward * horizon + side * sqrt(1.0 - horizon * horizon)) * uRadius * 1.01;
+    vAlpha *= 0.7;
+  } else {
+    vAlpha *= smoothstep(-0.02, 0.12, facing);
+  }
+  vec3 world = anchor + (uRight * aOffset.x + uUp * aOffset.y) * pulse;
+  vUV = aUV;
   gl_Position = globeProject(world);
 }`,
           fragment: `
@@ -145,11 +148,10 @@ precision highp float;
 #else
 precision mediump float;
 #endif
-varying vec2 vUV; varying vec3 vCamera; varying float vAlpha;
+varying vec2 vUV; varying float vAlpha;
 uniform sampler2D uAtlas;
-${globeOcclusionShader}
 void main() {
-  if (behindGlobe(vCamera)) discard;
+  if (vAlpha < 0.004) discard;
   gl_FragColor = texture2D(uAtlas, vUV) * vAlpha;
 }`,
         },
@@ -168,6 +170,14 @@ void main() {
           y = Math.floor(index / 8) * 128 + 2;
         if (marker.kind === "label") {
           drawLabel(context, marker, x, y);
+        } else if (marker.kind === "ring") {
+          drawRing(context, marker.border ?? "#ffffff", x, y);
+        } else if (marker.kind === "glow") {
+          drawGlow(context, marker.fill ?? "#ff3b1f", x, y);
+        } else if (marker.kind === "quest") {
+          drawBadge(context, "#f59e0b", "#7c2d12", "!", x, y);
+        } else if (marker.kind === "target") {
+          drawBadge(context, "#a855f7", "#3b0764", "\u25ce", x, y);
         } else if (marker.image) {
           const lease = assets;
           void Promise.all([
@@ -216,35 +226,89 @@ void main() {
       });
     },
     pick: (x: number, y: number) => {
-      const ray = globeRay(x, y, camera);
-      const hit = globeRayHit(ray, radius);
       const candidates = markers
         .filter((marker) => marker.clickable)
-        .map((marker) => ({ marker, projected: globeProject(marker.point, camera) }))
+        .map((marker) => {
+          const anchor = globeMarkerAnchor(marker.point, camera, radius, !!marker.edge);
+          return { marker, anchor, projected: globeProject(anchor.point, camera) };
+        })
+        .filter(({ anchor }) => anchor.isVisible)
         .sort((a, b) => a.projected.depth - b.projected.depth);
-      for (const { marker, projected } of candidates) {
-        const width = (marker.kind === "label" ? 2.5 : 1) * projected.scale;
-        const height = projected.scale;
-        if (
-          Math.abs(x - projected.x) > width / 2 ||
-          Math.abs(y - projected.y) > height / 2
-        )
-          continue;
-        const focal = camera.height / (2 * Math.tan(GLOBE_HALF_FOV));
-        const planeDistance =
-          projected.depth *
-          Math.hypot(
-            (x - camera.width / 2) / focal,
-            (camera.height / 2 - y) / focal,
-            1,
-          );
-        if (!hit || hit.distance >= planeDistance - 0.01) return marker.sector;
+      for (const { marker, anchor, projected } of candidates) {
+        const layout = MARKER_LAYOUT[marker.kind];
+        const [bottom, top] = layout.hit ?? [layout.lift, layout.lift + layout.height];
+        const dx = (x - projected.x) / projected.scale - (marker.nudge ?? 0),
+          dy = (projected.y - y) / projected.scale;
+        if (Math.abs(dx) > layout.width / 2 || dy < bottom || dy > top) continue;
+        return marker.sector;
       }
       return null;
     },
   };
 };
 
+/**
+ * Where a marker stands this frame, mirroring the marker vertex shader: its own surface
+ * point while that faces the camera, otherwise (for edge markers) the visible rim point
+ * in its direction. Markers past the horizon without `edge` are not visible.
+ */
+export const globeMarkerAnchor = (
+  point: GlobalPoint,
+  camera: GlobeCamera,
+  radius: number,
+  edge: boolean,
+) => {
+  const { forward } = globeCameraBasis(camera);
+  const length = Math.hypot(point.x, point.y, point.z) || 1;
+  const normal = { x: point.x / length, y: point.y / length, z: point.z / length };
+  const horizon = radius / camera.distance;
+  const along = normal.x * forward.x + normal.y * forward.y + normal.z * forward.z;
+  if (along - horizon >= 0)
+    return { point, isVisible: along - horizon > 0.02, isClamped: false };
+  if (!edge) return { point, isVisible: false, isClamped: false };
+  const side = {
+    x: normal.x - forward.x * along,
+    y: normal.y - forward.y * along,
+    z: normal.z - forward.z * along,
+  };
+  const sideLength = Math.hypot(side.x, side.y, side.z) || 1;
+  const rim = Math.sqrt(1 - horizon * horizon);
+  const scale = radius * 1.01;
+  return {
+    point: {
+      x: (forward.x * horizon + (side.x / sideLength) * rim) * scale,
+      y: (forward.y * horizon + (side.y / sideLength) * rim) * scale,
+      z: (forward.z * horizon + (side.z / sideLength) * rim) * scale,
+    },
+    isVisible: true,
+    isClamped: true,
+  };
+};
+
+/**
+ * Billboard size in globe units, its bottom edge's height above the anchor (`lift`),
+ * the atlas texels it occupies and, for labels, the clickable band of the banner.
+ */
+const MARKER_LAYOUT: Record<
+  GlobeMarker["kind"],
+  {
+    width: number;
+    height: number;
+    lift: number;
+    texels: [number, number];
+    hit?: [number, number];
+  }
+> = {
+  label: { width: 2.2, height: 1.99, lift: 0, texels: [124, 112], hit: [0.95, 1.99] },
+  avatar: { width: 1, height: 1, lift: 0.05, texels: [64, 64] },
+  quest: { width: 0.85, height: 1.13, lift: 0, texels: [72, 96] },
+  target: { width: 0.85, height: 1.13, lift: 0, texels: [72, 96] },
+  pin: { width: 1, height: 1, lift: 0.1, texels: [64, 64] },
+  ring: { width: 1.6, height: 0.8, lift: -0.4, texels: [96, 48] },
+  glow: { width: 2.6, height: 2.6, lift: -1.3, texels: [120, 120] },
+};
+
+/** Banner in the village colour flying from a pole whose foot is the anchor. */
 const drawLabel = (
   context: CanvasRenderingContext2D,
   marker: GlobeMarker,
@@ -255,23 +319,127 @@ const drawLabel = (
   context.translate(x, y);
   const fill = marker.fill ?? "#ffffff",
     text = contrastingTextColor(fill);
-  context.globalAlpha = 0.9;
-  context.fillStyle = fill;
-  context.strokeStyle = "black";
-  context.lineWidth = 4;
+  context.fillStyle = "#2b1d12";
+  context.fillRect(59, 44, 6, 62);
   context.beginPath();
-  if (context.roundRect) context.roundRect(2, 2, 96, 36, 4);
-  else context.rect(2, 2, 96, 36);
+  context.ellipse(62, 107, 9, 4, 0, 0, Math.PI * 2);
+  context.fillStyle = "rgba(0, 0, 0, 0.45)";
+  context.fill();
+  context.beginPath();
+  context.moveTo(4, 6);
+  context.lineTo(120, 6);
+  context.lineTo(114, 28);
+  context.lineTo(120, 50);
+  context.lineTo(70, 50);
+  context.lineTo(62, 58);
+  context.lineTo(54, 50);
+  context.lineTo(4, 50);
+  context.lineTo(10, 28);
+  context.closePath();
+  context.fillStyle = fill;
+  context.strokeStyle = "#1a120b";
+  context.lineWidth = 4;
+  context.lineJoin = "round";
   context.stroke();
   context.fill();
-  context.globalAlpha = 1;
+  context.fillStyle = "rgba(255, 255, 255, 0.22)";
+  context.fillRect(8, 9, 108, 6);
+  context.fillStyle = "#d9b45a";
+  for (const end of [6, 118]) {
+    context.beginPath();
+    context.arc(end, 6, 4, 0, Math.PI * 2);
+    context.fill();
+  }
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.fillStyle = text;
   context.strokeStyle = text === "#000000" ? "#F0F0F0" : "#1a1a1a";
-  context.font = `${42 - (marker.nameLength ?? marker.text?.length ?? 0) * 2}px arial narrow`;
-  context.strokeText(marker.text ?? "", 50, 20, 88);
-  context.fillText(marker.text ?? "", 50, 20, 88);
+  context.lineWidth = 3;
+  context.font = `bold ${Math.max(18, 34 - (marker.nameLength ?? marker.text?.length ?? 0) * 1.4)}px arial narrow, arial, sans-serif`;
+  context.strokeText(marker.text ?? "", 62, 29, 96);
+  context.fillText(marker.text ?? "", 62, 29, 96);
+  context.restore();
+};
+
+/** Flattened ring that reads as lying on the surface under the player. */
+const drawRing = (
+  context: CanvasRenderingContext2D,
+  color: string,
+  x: number,
+  y: number,
+) => {
+  context.save();
+  context.strokeStyle = color;
+  context.globalAlpha = 0.9;
+  context.lineWidth = 5;
+  context.beginPath();
+  context.ellipse(x + 48, y + 24, 42, 19, 0, 0, Math.PI * 2);
+  context.stroke();
+  context.globalAlpha = 0.25;
+  context.fillStyle = color;
+  context.fill();
+  context.restore();
+};
+
+/** Round map badge with a glyph, standing on a short peg whose tip is the anchor. */
+const drawBadge = (
+  context: CanvasRenderingContext2D,
+  fill: string,
+  rim: string,
+  glyph: string,
+  x: number,
+  y: number,
+) => {
+  context.save();
+  context.translate(x, y);
+  context.beginPath();
+  context.ellipse(36, 92, 10, 4, 0, 0, Math.PI * 2);
+  context.fillStyle = "rgba(0, 0, 0, 0.4)";
+  context.fill();
+  context.beginPath();
+  context.moveTo(28, 60);
+  context.lineTo(36, 92);
+  context.lineTo(44, 60);
+  context.closePath();
+  context.fillStyle = rim;
+  context.fill();
+  context.beginPath();
+  context.arc(36, 34, 30, 0, Math.PI * 2);
+  context.fillStyle = rim;
+  context.fill();
+  context.beginPath();
+  context.arc(36, 34, 25, 0, Math.PI * 2);
+  context.fillStyle = fill;
+  context.fill();
+  context.beginPath();
+  context.arc(30, 26, 10, 0, Math.PI * 2);
+  context.fillStyle = "rgba(255, 255, 255, 0.35)";
+  context.fill();
+  context.fillStyle = "#ffffff";
+  context.strokeStyle = rim;
+  context.lineWidth = 4;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.font = "bold 36px arial, sans-serif";
+  context.strokeText(glyph, 36, 36);
+  context.fillText(glyph, 36, 36);
+  context.restore();
+};
+
+/** Soft radial glow under a contested sector. */
+const drawGlow = (
+  context: CanvasRenderingContext2D,
+  color: string,
+  x: number,
+  y: number,
+) => {
+  const gradient = context.createRadialGradient(x + 60, y + 60, 4, x + 60, y + 60, 60);
+  gradient.addColorStop(0, color);
+  gradient.addColorStop(0.45, `${color}88`);
+  gradient.addColorStop(1, `${color}00`);
+  context.save();
+  context.fillStyle = gradient;
+  context.fillRect(x, y, 120, 120);
   context.restore();
 };
 
@@ -311,9 +479,13 @@ const drawAvatar = (
   context.restore();
 };
 
-/** Billboard center in scaled globe units; labels and artwork face the shared camera. */
+/**
+ * Billboard anchored on the globe surface in scaled units; labels and artwork face the
+ * shared camera and stand on the anchor (see MARKER_LAYOUT). `edge` keeps a far-side
+ * marker visible on the rim in its direction.
+ */
 export type GlobeMarker = {
-  kind: "label" | "avatar" | "pin";
+  kind: "label" | "avatar" | "pin" | "ring" | "glow" | "quest" | "target";
   sector: number;
   point: GlobalPoint;
   text?: string;
@@ -324,4 +496,7 @@ export type GlobeMarker = {
   border?: string;
   pulse?: boolean;
   clickable?: boolean;
+  edge?: boolean;
+  /** Screen-right offset in globe units, so markers sharing a sector stand side by side. */
+  nudge?: number;
 };
