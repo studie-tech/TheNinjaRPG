@@ -487,6 +487,51 @@ export const getTutorialRewindStepIndex = (
   return index === -1 ? undefined : index;
 };
 
+/**
+ * Step a player should be moved to because the fight the current step teaches
+ * is no longer running, or undefined to stay put.
+ *
+ * The combat lessons live on `/combat` and only move on when the battle page
+ * sees the result. A player whose fight ended while they were elsewhere (a
+ * closed tab, a timed-out turn) is never sent back to `/combat`, since there is
+ * no battle to show, and would sit on a lesson no page can display. They go on
+ * to the win step when the objective the fight pays out is already done, and
+ * back to the lesson that starts the fight otherwise.
+ */
+export const getTutorialStrandedBattleStepId = (
+  steps: readonly {
+    id: string;
+    page: string;
+    objectiveId?: TutorialObjectiveRef;
+    onCombatWin?: string;
+    onCombatLoss?: string;
+  }[],
+  stepIndex: number,
+  user:
+    | (StarterQuestTutorialUser & { status?: string; battleId?: string | null })
+    | null
+    | undefined,
+  pathname: string,
+) => {
+  const step = steps[stepIndex];
+  if (!step?.onCombatLoss || getTutorialStepPath(step.page) !== "/combat") return;
+  // The battle page settles its own outcome, including a fight that just ended.
+  if (pathname === "/combat") return;
+  if (!user?.status || !user.userQuests) return;
+  if (user.status === "BATTLE" && user.battleId) return;
+  // The hospital lesson takes over until the player is discharged.
+  if (user.status === "HOSPITALIZED") return;
+  const winStep = steps.find((candidate) => candidate.id === step.onCombatWin);
+  const progress = getStarterQuestProgress(user);
+  const won =
+    !!winStep?.objectiveId &&
+    !!progress &&
+    toObjectiveIds(winStep.objectiveId).some((id) =>
+      isStarterObjectiveSatisfied(id, progress),
+    );
+  return won ? step.onCombatWin : step.onCombatLoss;
+};
+
 /** One action a player could take this turn, as the combat lesson sees it. */
 export type TutorialCombatOption = {
   id: string;

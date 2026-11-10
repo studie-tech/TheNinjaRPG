@@ -285,7 +285,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Objective complete",
     description:
       "Learning a jutsu completed your next trial. You can use Sonic Slash in battle right away, even while it finishes training.",
-    action: "Claim your reward.",
+    action: "Tap Claim below to collect your reward.",
     page: "/traininggrounds",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.jutsu,
@@ -449,7 +449,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     title: "Safe and sound",
     description:
       "The pup calms the moment the fight is over. Caught in its collar is a sliver of <b>dark metal</b>, threaded with faint violet veins. Strange... Let's get it home first.",
-    action: "Claim your reward.",
+    action: "Tap Claim below to collect your reward.",
     page: "/travel",
     relatedValue: TUTORIAL_STARTER_QUEST_ID,
     objectiveId: STARTER_QUEST_OBJECTIVES.pup,

@@ -58,6 +58,7 @@ import {
   getTutorialChapterProgress,
   getTutorialPortraitSide,
   getTutorialRewindStepIndex,
+  getTutorialStrandedBattleStepId,
   hasOutgrownTutorial,
   isTutorialActive,
   isTutorialJutsuPickStep,
@@ -87,6 +88,12 @@ const DODGED_PANEL_TOP_REM = 5;
 
 /** Seconds a step without a Next button stays up before a "skip" escape appears. */
 const STUCK_STEP_SECONDS = 60;
+
+/**
+ * Grace before a combat lesson without a running fight is moved on, so the
+ * navigation to a battle that just started can land on /combat first.
+ */
+const STRANDED_BATTLE_STEP_MS = 1500;
 
 /** Gap between Lemu and the end of the dock she stands at. */
 const PORTRAIT_INSET_PX = 16;
@@ -332,6 +339,21 @@ const PlayerTutorialAssistant: React.FC<
       userData.status === "AWAKE";
     if (nothingToAssign || alreadyBonded || alreadyThere) void handleNextStepAsync();
   }, [currentStep, userData, pathname]);
+
+  // A combat lesson whose fight ended while the player was away has nothing to
+  // show anywhere: pick the tutorial up at the win, or back at the arena.
+  const strandedBattleStepId =
+    userData?.tutorialOn === true
+      ? getTutorialStrandedBattleStepId(TUTORIAL_STEPS, stepNumber, userData, pathname)
+      : undefined;
+  useEffect(() => {
+    if (!strandedBattleStepId) return;
+    const timer = setTimeout(
+      () => handleNextStep(strandedBattleStepId),
+      STRANDED_BATTLE_STEP_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [strandedBattleStepId, stepNumber]);
 
   const { highlight, panelDodgesHighlight } = useHighlightPlacement({
     currentStep,
@@ -921,6 +943,12 @@ const PlayerTutorialAssistant: React.FC<
                     <Button
                       size="lg"
                       decoration="gold"
+                      // Without a logbook entry on the page, this is the only place to claim.
+                      animation={
+                        currentTutorialStep.elementIds?.length || isCheckingRewards
+                          ? undefined
+                          : "pulse"
+                      }
                       className="w-full"
                       disabled={isCheckingRewards}
                       onClick={(e) => {
