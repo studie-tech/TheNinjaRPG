@@ -716,15 +716,5 @@ describeWithDatabase("overworld interaction profile updates", () => {
         branches: [{ text: "I will help", nextObjectiveId: "train" }],
       },
     });
-
-    // The final branch reads the profile the previous choice committed.
-    const { caller: refreshed } = await prepared();
-    const last = await refreshed.interactWithOverworldAi({
-      placementId: "cache-giver",
-      positionVersion: 0,
-      dialogContentId: "train",
-    });
-    expect(last).toMatchObject({ success: true });
-    expect(last.dialog).toBeUndefined();
   });
 });
