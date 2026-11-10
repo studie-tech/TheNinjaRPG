@@ -278,6 +278,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   /** Latest walk per remote user; a newer move ends the walk it replaces. */
   const remoteWalksRef = useRef(new Map<string, number>());
   const movePendingRef = useRef(false);
+  const moveTargetRef = useRef<TravelSnapshot["routeTarget"]>(null);
   const mountedRef = useRef(true);
   // Client-authoritative sector id: updated imperatively the moment a
   // crossing commits (the prop lags a render behind), synced on prop change
@@ -955,6 +956,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     },
     walk: Promise<void>,
     mutation: UserUpdateOptions,
+    requestTarget: TravelSnapshot["routeTarget"],
   ): Promise<void> => {
     if (!userData || !mountedRef.current) return;
     // The crossing round trip is fired while the steps animate. When the
@@ -965,7 +967,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     let crossingPromise: ReturnType<typeof moveStepAsync> | null = null;
     let crossDest: { sector: number; x: number; y: number } | null = null;
     const cross = pendingCrossRef.current;
-    if (cross) {
+    if (cross && routeTargetRef.current === requestTarget) {
       if (
         isOnSectorMapEdge(sectorMap, cross, { x: data.longitude, y: data.latitude })
       ) {
@@ -997,6 +999,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         { x: data.longitude, y: data.latitude },
         data.location,
         mutation,
+        requestTarget,
       );
       return;
     }
@@ -1118,9 +1121,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       entryLatitude?: number | null;
     },
     mutation: UserUpdateOptions,
+    requestTarget: TravelSnapshot["routeTarget"],
   ) => {
     if (!userData) return;
-    pendingCrossRef.current = null;
+    const hasQueuedTarget = routeTargetRef.current !== requestTarget;
+    if (!hasQueuedTarget) pendingCrossRef.current = null;
     sectorRef.current = data.sector;
     const entry = {
       x: data.entryLongitude ?? data.longitude,
@@ -1153,7 +1158,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     // the movement effect, which must never see the pre-crossing target
     // coordinates against the new sector's grid
     const pendingTarget = pendingWorldTargetRef.current;
-    if (pendingTarget) {
+    // Queued tiles retain their sector; continueMovement routes them from the committed landing.
+    if (!hasQueuedTarget && pendingTarget) {
       // Continue toward the clicked tile; offsets are recomputed relative
       // to the sector just landed in, so diagonal targets take their
       // second hop instead of stopping here
@@ -1176,7 +1182,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         pendingWorldTargetRef.current = null;
         setTarget(null);
       }
-    } else {
+    } else if (!hasQueuedTarget) {
       setTarget({ x: data.longitude, y: data.latitude });
     }
     await commitMovePosition(
@@ -1224,6 +1230,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     edge: SectorPoint,
     location: string,
     mutation: UserUpdateOptions,
+    requestTarget: TravelSnapshot["routeTarget"],
   ) => {
     const nav = windowNavRef.current;
     // Every cylindrical-grid neighbor is aligned, so a click into an adjacent
@@ -1240,23 +1247,34 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       const navPath =
         startU && goalU ? nav.pathFinder.getShortestPath(startU, goalU) : undefined;
       if (navPath && navPath.length > 1) {
-        routeTargetRef.current = crossDest;
-        pendingWorldTargetRef.current = null;
+        const isCurrentTarget = routeTargetRef.current === requestTarget;
+        if (isCurrentTarget) {
+          routeTargetRef.current = crossDest;
+          pendingWorldTargetRef.current = null;
+        }
         await animateWindowPath(navPath, location);
-        await reconcileCrossing(await crossingPromise, mutation);
+        await reconcileCrossing(
+          await crossingPromise,
+          mutation,
+          isCurrentTarget ? crossDest : requestTarget,
+        );
         return;
       }
     }
     // Server-driven fallback: wait for the crossing, then re-anchor
     const crossingRes = await crossingPromise;
     if (crossingRes.success && crossingRes.data) {
-      await applyCrossing(crossingRes.data, {
-        ...mutation,
-        userRecovery: crossingRes.userRecovery ?? mutation.userRecovery,
-      });
+      await applyCrossing(
+        crossingRes.data,
+        {
+          ...mutation,
+          userRecovery: crossingRes.userRecovery ?? mutation.userRecovery,
+        },
+        requestTarget,
+      );
       return;
     }
-    await reconcileCrossing(crossingRes, mutation);
+    await reconcileCrossing(crossingRes, mutation, requestTarget);
   };
 
   /**
@@ -1323,12 +1341,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const reconcileCrossing = async (
     res: Awaited<ReturnType<typeof moveStepAsync>>,
     mutation: UserUpdateOptions,
+    requestTarget: TravelSnapshot["routeTarget"],
   ) => {
     if (res.success && res.data) {
       const d = res.data;
       snapMovementPosition(d);
-      // Clear the completed route before a queued request uses the new sector's grid.
-      setTarget(null);
+      // A completed request owns only its destination; later clicks must survive reconciliation.
+      if (routeTargetRef.current === requestTarget) setTarget(null);
       setPosition({ x: d.longitude, y: d.latitude });
       await commitMovePosition(
         {
@@ -1384,7 +1403,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         ? animateWalk(path, userRef.current?.location ?? "")
         : Promise.resolve();
       void walk.catch(() => undefined);
-      return { walk, sector: prepareSectorUpdate(), userRevision: prepareUserUpdate() };
+      return {
+        walk,
+        target: moveTargetRef.current,
+        sector: prepareSectorUpdate(),
+        userRevision: prepareUserUpdate(),
+      };
     },
     onSuccess: async (res, input, context) => {
       if (res.success && res.data) showActionReadinessToast(res);
@@ -1397,24 +1421,26 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       const data = res.data;
       if (!res.success || !data) {
         await walk;
-        if (mountedRef.current) await reconcileCrossing(res, mutation);
+        if (mountedRef.current) await reconcileCrossing(res, mutation, context?.target);
         return;
       }
       if (data.sector !== input.sector) {
         await walk;
-        if (mountedRef.current) await applyCrossing(data, mutation);
+        if (mountedRef.current) await applyCrossing(data, mutation, context?.target);
         return;
       }
       if (data.longitude !== input.longitude || data.latitude !== input.latitude) {
         await walk;
         if (mountedRef.current) {
-          pendingCrossRef.current = null;
-          pendingWorldTargetRef.current = null;
-          await reconcileCrossing(res, mutation);
+          if (routeTargetRef.current === context?.target) {
+            pendingCrossRef.current = null;
+            pendingWorldTargetRef.current = null;
+          }
+          await reconcileCrossing(res, mutation, context?.target);
         }
         return;
       }
-      await runJourneySegment(data, walk, mutation);
+      await runJourneySegment(data, walk, mutation, context?.target);
       // Crossings retain their destination read; ordinary movement keeps this exact key current.
       if (userRef.current?.sector === input.sector && context?.sector) {
         await updateSector(true, context.sector);
@@ -1448,6 +1474,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   });
 
   const move = (input: Parameters<typeof executeMove>[0]) => {
+    // Global mutation guards may yield before onMutate; reserve the move and its selected route now.
+    movePendingRef.current = true;
+    moveTargetRef.current = routeTargetRef.current;
     void executeMove(input).catch(() => undefined);
   };
 
@@ -1871,6 +1900,25 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     if (!destination || !originRef.current || !pathFinderRef.current || !user) return;
     if (!canAttemptAwakeAction(user)) {
       routeTargetRef.current = null;
+      return;
+    }
+    if (destination.sector !== sectorRef.current) {
+      const worldTarget = pendingWorldTargetRef.current ?? destination;
+      const window = sectorWindowRef.current;
+      const current = window.sectors.find(
+        (entry) => entry.sector === sectorRef.current,
+      );
+      const target = window.sectors.find(
+        (entry) => entry.sector === worldTarget.sector,
+      );
+      if (current && target)
+        routeTowardWorldTarget(
+          worldTarget,
+          originRef.current,
+          current.map,
+          target.dx - current.dx,
+          target.dy - current.dy,
+        );
       return;
     }
     const targetHex = gridRef.current?.getHex({

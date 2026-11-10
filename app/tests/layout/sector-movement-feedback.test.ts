@@ -45,6 +45,7 @@ const setup = () => {
     windowNavRef: { current: null },
     pendingCrossRef: { current: null },
     pendingWorldTargetRef: { current: null },
+    routeTargetRef: { current: undefined },
     publishSurroundingsRef: { current: false },
     publishSurroundings: () => undefined,
     userRef: { current: { sector: 1 } },
