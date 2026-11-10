@@ -404,10 +404,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   useVillageDutyPursuit({
     sector,
-    enabled:
-      !!data?.patrolThreat &&
-      profile?.status === "AWAKE" &&
-      !isUserCurrentlyStealthed(profile, timeDiff),
+    enabled: !!data?.patrolThreat && profile?.status === "AWAKE",
     protectors: data?.protectors ?? [],
     startedAt: data?.patrolShiftAt,
     revision: data?.patrolRevision,
