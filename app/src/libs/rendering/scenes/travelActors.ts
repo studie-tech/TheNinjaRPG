@@ -1,12 +1,12 @@
 import type { Grid } from "honeycomb-grid";
 import {
+  BitmapText,
   Container,
   Graphics,
   Matrix,
   Rectangle,
   type RenderLayer,
   Sprite,
-  Text,
 } from "pixi.js";
 import {
   type AvatarFacing,
@@ -33,6 +33,11 @@ import { getActiveObjectives } from "@/libs/quest";
 import { hasRequiredRank } from "@/libs/rank";
 import { animationTextureUrl } from "@/libs/rendering/animationTextures";
 import { textureOpaqueFrame } from "@/libs/rendering/assets";
+import type { LpcCharacter } from "@/libs/rendering/primitives/character";
+import {
+  acquireContactRingTexture,
+  CONTACT_RING,
+} from "@/libs/rendering/primitives/shadow";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import {
   createWaterRipples,
@@ -68,6 +73,15 @@ export const createTravelActors = (
   sceneryBounds?: WeakMap<Container, WorldBounds>,
 ) => {
   const container = new Container();
+  // Tile counts appear and vanish constantly as a crowd walks; their own render group keeps
+  // that from rebuilding the whole scene. The scene paints it above every layer.
+  const badges = new Container({ isRenderGroup: true, label: "travel-counts" });
+  // Contact rings, shadows and light pools follow their actors from two groups of their own,
+  // so re-sorting the upright world never walks them and their churn rebuilds only these.
+  const groundEffects = {
+    shadows: new Container({ isRenderGroup: true, label: "actor-ground-shadows" }),
+    lights: new Container({ isRenderGroup: true, label: "actor-ground-lights" }),
+  };
   // Rings sit on the water surface beneath every actor, created once a character first stands in water.
   let ripples: ReturnType<typeof createWaterRipples> | null = null;
   const waterRipples = () => {
@@ -82,33 +96,22 @@ export const createTravelActors = (
   const byRoot = new Map<Container, ActorRecord>();
   const appearanceParts = new Map<
     string,
-    { key: string; parts: WorldSpriteDescription[] }
+    { inputs: AppearanceInputs; tile: TerrainHex; parts: WorldSpriteDescription[] }
   >();
   const signatures = new WeakMap<WorldSpriteDescription[], string>();
+  /** Position and health updates arrive every walking step; they retain the actor's artwork. */
   const partsFor = (user: SectorUser, tile: TerrainHex) => {
     const id = travelActorKey(user);
-    // Position and health updates retain artwork; every input used by userParts belongs in this key.
-    const key = JSON.stringify([
-      user.spriteAppearance,
-      user.bodyArt,
-      user.bodyIdle?.id,
-      user.bodyMove?.id,
-      user.npcSheets?.idle?.id,
-      user.npcSheets?.move?.id,
-      user.npcScale,
-      user.avatar,
-      user.avatarLight,
-      user.isNpc,
-      user.rank,
-      user.allianceStatus,
-      user.npcInteractionType,
-      tile.width,
-      tile.height,
-    ]);
     const previous = appearanceParts.get(id);
-    if (previous?.key === key) return previous.parts;
+    if (
+      previous &&
+      previous.tile.width === tile.width &&
+      previous.tile.height === tile.height &&
+      sameAppearance(previous.inputs, user)
+    )
+      return previous.parts;
     const parts = userParts(user, tile);
-    appearanceParts.set(id, { key, parts });
+    appearanceParts.set(id, { inputs: appearanceInputs(user), tile, parts });
     return parts;
   };
   let viewer: UserWithRelations;
@@ -119,6 +122,7 @@ export const createTravelActors = (
   let hovered: string | null = null;
   let paths: PathCalculator | null = null;
   let pathGrid: Grid<TerrainHex> | null = null;
+  let hasOpenWater = false;
   let actorSector: number | null = null;
   let sourceSnapshot: TravelActorsSnapshot | null = null;
   let viewport: WorldBounds | null = null;
@@ -136,9 +140,10 @@ export const createTravelActors = (
     }
   >();
   let selectionKey: string | null = null;
-  let characterKeys = new Set<string>();
+  let characterKeys: Set<string> | null = null;
   let paintedOriginY = container.y;
   let lastDepthSortAt = Number.NEGATIVE_INFINITY;
+  let lastActorSortAt = Number.NEGATIVE_INFINITY;
   /** Cull before acquiring artwork; padding preloads nearby actors and the viewer stays present. */
   const visibleSnapshot = (snapshot: TravelActorsSnapshot) => {
     const bounds = viewport;
@@ -160,7 +165,7 @@ export const createTravelActors = (
     // Occupants share tile geometry and the exact camera boundaries that change membership.
     const tiles = new Map<
       string,
-      { visible: boolean; onScreen: boolean } | undefined
+      { visible: boolean; retained: boolean; onScreen: boolean } | undefined
     >();
     const tileFor = (user: SectorUser) => {
       // A roaming NPC can be anywhere within its radius of the anchor tile it reports.
@@ -176,21 +181,25 @@ export const createTravelActors = (
         y = -tile.center.y,
         width = tile.width * (1 + reach),
         height = tile.height * (1 + reach);
-      boundary("minX", x + width * 3);
+      for (const reachTiles of [LOAD_TILES, RETAIN_TILES]) {
+        boundary("minX", x + width * reachTiles);
+        boundary("maxX", x - width * reachTiles);
+        boundary("minY", y + height * reachTiles);
+        boundary("maxY", y - height * reachTiles);
+      }
       boundary("minX", x + width * 2);
-      boundary("maxX", x - width * 3);
       boundary("maxX", x - width);
-      boundary("minY", y + height * 3);
       boundary("minY", y + height * 2.4);
-      boundary("maxY", y - height * 3);
       boundary("maxY", y - height);
+      const within = (reachTiles: number) =>
+        !bounds ||
+        (x >= bounds.minX - width * reachTiles &&
+          x <= bounds.maxX + width * reachTiles &&
+          y >= bounds.minY - height * reachTiles &&
+          y <= bounds.maxY + height * reachTiles);
       const entry = {
-        visible:
-          !bounds ||
-          (x >= bounds.minX - width * 3 &&
-            x <= bounds.maxX + width * 3 &&
-            y >= bounds.minY - height * 3 &&
-            y <= bounds.maxY + height * 3),
+        visible: within(LOAD_TILES),
+        retained: within(RETAIN_TILES),
         onScreen:
           !bounds ||
           boundsOverlap(bounds, {
@@ -203,19 +212,32 @@ export const createTravelActors = (
       tiles.set(key, entry);
       return entry;
     };
+    // Actors load near the view and stay until well past it, so walkers along that edge
+    // are not rebuilt on every step.
     const visibleUsers = snapshot.users.filter((user) => {
       const tile = tileFor(user);
-      return user.userId === snapshot.viewer?.userId || !!tile?.visible;
+      return (
+        user.userId === snapshot.viewer?.userId ||
+        !!tile?.visible ||
+        (!!tile?.retained && records.has(travelActorKey(user)))
+      );
     });
     const candidates = visibleUsers.flatMap((user) => {
       if (!canShowUser(snapshot, user) || user.status !== "AWAKE") return [];
       const tile = tileFor(user);
       return tile ? [{ user, key: travelActorKey(user), onScreen: tile.onScreen }] : [];
     });
+    stableViewport = domain;
+    // Every awake candidate gets a body while the crowd fits the budget.
+    if (candidates.length <= WORLD_DETAIL.travelCharacters) {
+      selectionKey = null;
+      characterKeys = null;
+      return { ...snapshot, users: visibleUsers, characterKeys: undefined };
+    }
     const key = candidates
       .map((entry) => `${entry.key}:${Number(entry.onScreen)}`)
       .join("|");
-    if (key !== selectionKey) {
+    if (key !== selectionKey || !characterKeys) {
       selectionKey = key;
       if (candidates.length > WORLD_DETAIL.travelCharacters)
         candidates.sort((a, b) => {
@@ -241,7 +263,6 @@ export const createTravelActors = (
         candidates.slice(0, WORLD_DETAIL.travelCharacters).map((entry) => entry.key),
       );
     }
-    stableViewport = domain;
     return { ...snapshot, users: visibleUsers, characterKeys };
   };
   /** Camera movement only reconciles resources when visible actor membership changes. */
@@ -259,6 +280,8 @@ export const createTravelActors = (
       actorSector = snapshot.sector;
       pathGrid = snapshot.grid;
       paths = new PathCalculator(snapshot.grid);
+      // Settlements are usually dry; only sectors with open water look up the ground under feet.
+      hasOpenWater = snapshot.grid.toArray().some(isOpenWater);
     }
     viewer = snapshot.viewer;
     users = snapshot.users;
@@ -293,6 +316,7 @@ export const createTravelActors = (
         if (previous.counterLabel && previous.recipe.counter !== recipe.counter)
           previous.counterLabel.text = String(recipe.counter);
         previous.recipe = recipe;
+        previous.hold = undefined;
         continue;
       }
       previous?.scope.dispose();
@@ -300,8 +324,26 @@ export const createTravelActors = (
       const scope = createRenderScope(game);
       const root = new Container();
       root.label = recipe.key;
-      container.addChild(root);
-      (recipe.user ? layers?.depth : layers?.overlay)?.attach(root);
+      const effects = recipe.user
+        ? {
+            shadows: new Container({ label: `${recipe.key}:ground` }),
+            lights: new Container({ label: `${recipe.key}:lights` }),
+          }
+        : null;
+      if (effects) {
+        groundEffects.shadows.addChild(effects.shadows);
+        groundEffects.lights.addChild(effects.lights);
+        scope.own(() => {
+          for (const group of [effects.shadows, effects.lights])
+            if (!group.destroyed)
+              group.destroy({ children: true, texture: false, textureSource: false });
+        });
+      }
+      if (recipe.counter) badges.addChild(root);
+      else {
+        container.addChild(root);
+        (recipe.user ? layers?.depth : layers?.overlay)?.attach(root);
+      }
       if (recipe.user?.spriteAppearance) {
         const color =
           recipe.user.allianceStatus === "ALLY"
@@ -309,17 +351,24 @@ export const createTravelActors = (
             : recipe.user.allianceStatus === "ENEMY"
               ? 0xb84040
               : 0x3c80bb;
-        root.addChild(
-          new Graphics()
-            .ellipse(
-              recipe.tile.width / 2,
-              recipe.tile.height * LPC_TRAVEL_CONTACT_Y,
-              recipe.tile.height * 0.35 * LPC_TRAVEL_SCALE,
-              recipe.tile.height * 0.12 * LPC_TRAVEL_SCALE,
-            )
-            .fill({ color: 0x081115, alpha: 0.4 })
-            .stroke({ color, alpha: 0.45, width: recipe.tile.height * 0.015 }),
+        // One shared quad per ring keeps a crowd's moving geometry small; the alliance colour
+        // tints its rim and leaves the near-black fill dark.
+        const ringLease = acquireContactRingTexture();
+        scope.own(ringLease.release);
+        const ring = new Sprite(ringLease.texture);
+        ring.scale.set(
+          (recipe.tile.height * 0.35 * LPC_TRAVEL_SCALE) / CONTACT_RING.radiusX,
         );
+        ring.anchor.set(0.5);
+        ring.position.set(
+          recipe.tile.width / 2,
+          recipe.tile.height * LPC_TRAVEL_CONTACT_Y,
+        );
+        ring.tint = color;
+        ring.label = "contact-ring";
+        // The ring lies on the ground with the contact shadows, so upright figures and
+        // scenery batch together in the depth layer.
+        effects?.shadows.addChild(ring);
       }
       scope.own(() => {
         if (!root.destroyed)
@@ -333,6 +382,11 @@ export const createTravelActors = (
         art: null,
         fallback: null,
         counterLabel: null,
+        effects,
+        // Roaming NPC copies share a template userId, so their movement is keyed per actor.
+        movementKey: recipe.user?.isNpc ? recipe.key : (recipe.user?.userId ?? ""),
+        character: undefined,
+        loops: false,
         tile: previous?.tile ?? recipe.tile,
         path: previous?.path ?? [],
         x: previous?.x ?? -recipe.tile.center.x,
@@ -369,7 +423,8 @@ export const createTravelActors = (
       records.set(recipe.key, record);
       byRoot.set(root, record);
       if (recipe.counter) {
-        const label = new Text({
+        // Crowds change tile counts constantly; glyph quads update without redrawing a canvas.
+        const label = new BitmapText({
           text: String(recipe.counter),
           style: {
             fontFamily: "serif",
@@ -380,7 +435,6 @@ export const createTravelActors = (
             padding: 6,
           },
         });
-        // Grouped encounters use a single cached badge text texture.
         const badge = new Container();
         const background = new Graphics()
           .rect(-35, -35, 70, 70)
@@ -400,6 +454,10 @@ export const createTravelActors = (
         (art) => {
           if (scope.isDisposed()) return;
           record.art = art;
+          record.character = art.entries.find((entry) => entry.character)?.character;
+          record.loops = art.entries.some(
+            (entry) => entry.description.loop || entry.description.walk,
+          );
           const avatar = art.entries.find(
             (entry) => entry.description.kind === "avatar",
           );
@@ -413,14 +471,20 @@ export const createTravelActors = (
             cast.label = "cast-shadow";
             cast.tint = CAST_SHADOW_TINT;
             cast.visible = false;
-            root.addChildAt(cast, 0);
-            layers?.ground?.attach(cast);
+            if (record.effects) record.effects.shadows.addChildAt(cast, 0);
+            else root.addChildAt(cast, 0);
             record.cast = cast;
             record.castBody = { sprite: avatar.sprite, groundY: avatar.groundY };
           }
           art.setLighting(brightness);
           root.addChild(art.container);
-          if (layers?.ground) art.attachGroundEffects(layers.ground);
+          // Each art set keeps one container of contact shadows and one of light pools.
+          const shadowsBox = art.entries.find((entry) => entry.shadow)?.shadow?.parent;
+          const lightsBox = art.entries.find((entry) => entry.light)?.light?.parent;
+          if (record.effects) {
+            if (shadowsBox) record.effects.shadows.addChild(shadowsBox);
+            if (lightsBox) record.effects.lights.addChild(lightsBox);
+          } else if (layers?.ground) art.attachGroundEffects(layers.ground);
           if (art.entries.some((entry) => entry.description.kind === "avatar")) {
             record.fallback?.destroy();
             record.fallback = null;
@@ -434,7 +498,7 @@ export const createTravelActors = (
                 entry.description.unlit
               )
                 layers?.overlay.attach(entry.sprite);
-          updateActions();
+          updateActions(record);
           game.invalidate();
         },
         (error) => {
@@ -442,10 +506,15 @@ export const createTravelActors = (
         },
       );
     }
-    updateActions();
+    // Availability follows the snapshot; only the hovered actor shows controls.
+    const target = hovered === null ? undefined : records.get(hovered);
+    if (target) updateActions(target);
   };
-  const updateActions = () => {
-    for (const [key, record] of records) {
+  /** Show the hovered actor's controls; every other actor keeps them hidden. */
+  const updateActions = (...only: (ActorRecord | undefined)[]) => {
+    for (const record of only.length ? only : records.values()) {
+      if (!record) continue;
+      const key = record.recipe.key;
       const target = record.recipe.user;
       const isHovered = key === hovered && !!viewer && target?.userId !== viewer.userId;
       const alone = isHovered && target && isAloneOnTile(users, target, viewer?.userId);
@@ -455,19 +524,44 @@ export const createTravelActors = (
           : { attack: false, heal: false, info: false };
       for (const entry of record.art?.entries ?? []) {
         if (!target || target.isNpc) continue;
-        if (entry.description.kind === "attack")
-          // The creator's trial takes any number of challengers, however crowded the tile.
-          entry.sprite.visible = !!(
-            isHovered &&
-            (alone || target.username === CREATOR_USERNAME) &&
-            actions.attack
-          );
-        if (entry.description.kind === "heal")
-          entry.sprite.visible = !!(isHovered && alone && actions.heal);
-        if (entry.description.kind === "info")
-          entry.sprite.visible = !!(isHovered && alone && actions.info);
+        const kind = entry.description.kind;
+        if (kind !== "attack" && kind !== "heal" && kind !== "info") continue;
+        const shown =
+          kind === "attack"
+            ? // The creator's trial takes any number of challengers, however crowded the tile.
+              isHovered &&
+              (alone || target.username === CREATOR_USERNAME) &&
+              actions.attack
+            : isHovered && alone && actions[kind];
+        showControl(record, entry.sprite, !!shown);
       }
     }
+  };
+  /**
+   * Hidden player controls leave the scene graph, so a crowd's controls cost nothing when the
+   * scene rebuilds its batches; the owning scope destroys them either way.
+   */
+  const showControl = (record: ActorRecord, sprite: Container, shown: boolean) => {
+    if (shown) {
+      if (!sprite.parent && record.art && !record.art.container.destroyed) {
+        record.art.container.addChild(sprite);
+        layers?.overlay.attach(sprite);
+      }
+      sprite.visible = true;
+      return;
+    }
+    sprite.visible = false;
+    if (!sprite.parent) return;
+    if (!record.detached) {
+      const detached = new Set<Container>();
+      record.detached = detached;
+      record.scope.own(() => {
+        for (const control of detached) if (!control.destroyed) control.destroy();
+      });
+    }
+    record.detached.add(sprite);
+    layers?.overlay.detach(sprite);
+    sprite.removeFromParent();
   };
   let sun: CastLight | null = null;
   const castMatrix = new Matrix();
@@ -554,7 +648,12 @@ export const createTravelActors = (
   /** Logical contact order can stay unchanged while interpolated feet move between its neighbours. */
   const contactDepth = (root: Container) => byRoot.get(root)?.depth ?? root.zIndex;
   const depthIndices = new WeakMap<Container, number>();
-  const hasDepthCrossing = (siblings: readonly Container[], spatial = false) => {
+  const hasDepthCrossing = (
+    siblings: readonly Container[],
+    spatial = false,
+    /** Which crossings are due: actors passing scenery, and actors passing each other. */
+    due = { scenery: true, actors: true },
+  ) => {
     if (!spatial || !sceneryBounds)
       return siblings.some((root, index) => {
         const before = siblings[index - 1];
@@ -577,21 +676,18 @@ export const createTravelActors = (
       const before = siblings[index - 1],
         after = siblings[index + 1];
       if (
-        (before && before.zIndex > root.zIndex) ||
-        (after && after.zIndex < root.zIndex)
+        due.scenery &&
+        ((before && before.zIndex > root.zIndex) ||
+          (after && after.zIndex < root.zIndex))
       )
         return true;
       actors.push([index, actor]);
     }
     actors.sort((a, b) => a[0] - b[0]);
-    for (let index = 1; index < actors.length; index++) {
-      const before = actors[index - 1],
-        actor = actors[index];
-      if (before && actor && before[1].depth > actor[1].depth) return true;
-    }
+    if (due.actors && actorsCross(actors)) return true;
+    if (!due.scenery) return false;
     let comparisons = 0;
     for (const [i, actor] of actors) {
-      const root = actor.root;
       let actorBounds: WorldBounds | undefined;
       // A held key can cross several unrelated planes; check every newly overlapping constraint.
       for (const direction of [-1, 1])
@@ -606,13 +702,12 @@ export const createTravelActors = (
           const otherBounds = sceneryBounds.get(other);
           if (!otherBounds) return true;
           if (!actorBounds) {
-            // Live child bounds include oversized/trimmed LPC frames and fallback replacement.
-            const local = root.getLocalBounds();
+            const local = actorFrame(actor);
             actorBounds = {
-              minX: local.minX + root.x + container.x,
-              maxX: local.maxX + root.x + container.x,
-              minY: local.minY + root.y + container.y,
-              maxY: local.maxY + root.y + container.y,
+              minX: local.minX + container.x,
+              maxX: local.maxX + container.x,
+              minY: local.minY + container.y,
+              maxY: local.maxY + container.y,
             };
           }
           if (boundsOverlap(actorBounds, otherBounds, 1)) return true;
@@ -635,13 +730,12 @@ export const createTravelActors = (
         record.tile = recipe.tile;
       }
       const waypoint = record.path[0] ?? recipe.tile;
-      const dx = -waypoint.center.x - record.x,
-        dy = -waypoint.center.y + standingOffset(waypoint) - record.y;
+      const movement = movements?.get(record.movementKey);
+      // A finished step stands its actor on the step's tile until the next sync catches up.
+      const hold = movement ? undefined : record.hold;
+      const dx = (hold?.x ?? -waypoint.center.x) - record.x,
+        dy = (hold?.y ?? -waypoint.center.y + standingOffset(waypoint)) - record.y;
       const distance = Math.hypot(dx, dy);
-      // Roaming NPC copies share a template userId, so their movement is keyed per actor.
-      const movement = movements?.get(
-        recipe.user?.isNpc ? recipe.key : (recipe.user?.userId ?? ""),
-      );
       const moving = movement ? movement.direction !== null : distance > 0.01;
       const [fromX, fromY] = [record.x, record.y];
       if (movement) {
@@ -656,6 +750,7 @@ export const createTravelActors = (
         record.heading = headingOf(movement.x - record.x, record.heading);
         record.x = movement.x;
         record.y = movement.y;
+        record.hold = movement.to;
       } else if (moving) {
         record.facing = lpcFacing(dx, dy, record.facing);
         record.heading = headingOf(dx, record.heading);
@@ -668,7 +763,7 @@ export const createTravelActors = (
             );
         record.x += (dx / distance) * step;
         record.y += (dy / distance) * step;
-        if (step === distance) {
+        if (step === distance && !hold) {
           record.tile = waypoint;
           record.path.shift();
         }
@@ -679,13 +774,13 @@ export const createTravelActors = (
         (record.x !== fromX || record.y !== fromY || recipe.spread || recipe.quest)
       )
         urgentDepth = true;
-      for (const entry of record.art?.entries ?? [])
-        entry.character?.render(
-          frame,
-          moving && !frame.reducedMotion ? "walk" : "idle",
-          record.facing,
-        );
-      record.art?.animateLoops(frame, { moving, heading: record.heading });
+      record.character?.render(
+        frame,
+        moving && !frame.reducedMotion ? "walk" : "idle",
+        record.facing,
+      );
+      if (record.loops)
+        record.art?.animateLoops(frame, { moving, heading: record.heading });
       if (record.cast) paintCast(record);
       const phi = angle + recipe.orbit;
       root.position.set(
@@ -694,7 +789,16 @@ export const createTravelActors = (
           (recipe.quest ? wobble : 0),
         record.y + (recipe.spread ? recipe.tile.height * 0.1 * Math.cos(phi) : 0),
       );
-      if (recipe.user && !frame.reducedMotion && isOpenWater(groundTile(record))) {
+      if (record.effects) {
+        record.effects.shadows.position.copyFrom(root.position);
+        record.effects.lights.position.copyFrom(root.position);
+      }
+      if (
+        hasOpenWater &&
+        recipe.user &&
+        !frame.reducedMotion &&
+        isOpenWater(groundTile(record))
+      ) {
         record.ripple -= frame.delta;
         if (record.ripple <= 0) {
           record.ripple = moving ? RIPPLE_INTERVAL.moving : RIPPLE_INTERVAL.idle;
@@ -707,24 +811,34 @@ export const createTravelActors = (
     }
     // A sort rebuilds the whole scene's batches, and wildlife in a forest crosses trees all the
     // time; crossings that only roaming wildlife cause wait for the next sort slot.
+    // Crowds pass each other just as often, so actors swapping places wait for their own slot.
     const depthDue =
       urgentDepth || frame.now - lastDepthSortAt >= AMBIENT_DEPTH_SORT_MS;
+    const actorOrderDue = frame.now - lastActorSortAt >= ACTOR_DEPTH_SORT_MS;
     if (
       paintedOriginY !== container.y ||
-      (depthDue &&
+      ((depthDue || actorOrderDue) &&
         (hasDepthCrossing(
           layers?.depth.renderLayerChildren ?? container.children,
           true,
+          {
+            scenery: depthDue,
+            actors: actorOrderDue,
+          },
         ) ||
           (layers?.overlay && hasDepthCrossing(layers.overlay.renderLayerChildren))))
     ) {
       lastDepthSortAt = frame.now;
+      lastActorSortAt = frame.now;
       // Publish moving keys together so actor crossings and new scenery share one coherent order.
       for (const record of records.values()) record.root.zIndex = record.depth;
       layers?.depth.sortRenderLayerChildren();
       layers?.overlay.sortRenderLayerChildren();
     }
     paintedOriginY = container.y;
+    badges.position.copyFrom(container.position);
+    groundEffects.shadows.position.copyFrom(container.position);
+    groundEffects.lights.position.copyFrom(container.position);
     container.sortChildren();
     ripples?.update(frame);
   };
@@ -785,6 +899,10 @@ export const createTravelActors = (
   };
   return {
     container,
+    /** Tile-count badges; add above every layer, after `container`. */
+    badges,
+    /** Actors' ground effects; add after the actor ground layer, shadows before lights. */
+    groundEffects,
     sync,
     setViewport: (bounds: WorldBounds) => {
       const previous = viewport;
@@ -842,10 +960,63 @@ export const createTravelActors = (
     },
     hover: (next: string | null) => {
       if (next !== hovered) {
+        const previous = hovered === null ? undefined : records.get(hovered);
         hovered = next;
-        updateActions();
+        updateActions(previous, next === null ? undefined : records.get(next));
       }
     },
+  };
+};
+
+/**
+ * Whether two actors are painted in the wrong order where their figures overlap. A crowd walks
+ * past each other constantly, and every re-sort rebuilds the whole scene's batches; actors that do
+ * not touch can keep a stale order until they do.
+ */
+const actorsCross = (actors: readonly [number, ActorRecord][]) => {
+  let inverted = false;
+  for (let index = 1; index < actors.length && !inverted; index++)
+    inverted = (actors[index - 1]?.[1].depth ?? 0) > (actors[index]?.[1].depth ?? 0);
+  if (!inverted) return false;
+  // Sweep by left edge so only horizontally overlapping frames are compared.
+  const boxes = actors
+    .map(([order, record]) => ({ order, depth: record.depth, ...actorBody(record) }))
+    .sort((a, b) => a.minX - b.minX);
+  for (let i = 0; i < boxes.length; i++) {
+    const a = boxes[i];
+    if (!a) continue;
+    for (let j = i + 1; j < boxes.length; j++) {
+      const b = boxes[j];
+      if (!b || b.minX > a.maxX) break;
+      if (b.maxY < a.minY || b.minY > a.maxY) continue;
+      if (a.order < b.order !== a.depth <= b.depth && a.depth !== b.depth) return true;
+    }
+  }
+  return false;
+};
+
+/**
+ * Container-local extent an actor paints over scenery: a character's whole sprite frame, which
+ * includes held weapons, or the live bounds of other artwork and the loading fallback.
+ */
+const actorFrame = (record: ActorRecord): WorldBounds => {
+  const body = record.recipe.parts.find((part) => part.character);
+  const { root } = record;
+  if (!body || record.fallback) {
+    const local = root.getLocalBounds();
+    return {
+      minX: local.minX + root.x,
+      maxX: local.maxX + root.x,
+      minY: local.minY + root.y,
+      maxY: local.maxY + root.y,
+    };
+  }
+  const half = body.size / 2;
+  return {
+    minX: root.x + body.x - half,
+    maxX: root.x + body.x + half,
+    minY: root.y + body.y - half,
+    maxY: root.y + body.y + half,
   };
 };
 
@@ -1169,6 +1340,43 @@ export const travelActorKey = (user: SectorUser) =>
   user.isNpc
     ? `npc:${user.npcPlacementId ?? user.userId}:${user.npcCopy ?? 0}:${user.npcMember ?? 0}`
     : `user:${user.userId}`;
+/** Every input userParts reads; walking steps and health updates change none of them. */
+const appearanceInputs = (user: SectorUser) => ({
+  spriteAppearance: user.spriteAppearance,
+  appearanceJson: JSON.stringify(user.spriteAppearance),
+  bodyArt: user.bodyArt,
+  bodyIdle: user.bodyIdle?.id,
+  bodyMove: user.bodyMove?.id,
+  npcIdle: user.npcSheets?.idle?.id,
+  npcMove: user.npcSheets?.move?.id,
+  npcScale: user.npcScale,
+  avatar: user.avatar,
+  avatarLight: user.avatarLight,
+  isNpc: user.isNpc,
+  rank: user.rank,
+  allianceStatus: user.allianceStatus,
+  npcInteractionType: user.npcInteractionType,
+  username: user.username,
+});
+type AppearanceInputs = ReturnType<typeof appearanceInputs>;
+/** Whether a user still draws the artwork recorded in `inputs`. */
+const sameAppearance = (inputs: AppearanceInputs, user: SectorUser) =>
+  inputs.bodyArt === user.bodyArt &&
+  inputs.bodyIdle === user.bodyIdle?.id &&
+  inputs.bodyMove === user.bodyMove?.id &&
+  inputs.npcIdle === user.npcSheets?.idle?.id &&
+  inputs.npcMove === user.npcSheets?.move?.id &&
+  inputs.npcScale === user.npcScale &&
+  inputs.avatar === user.avatar &&
+  inputs.avatarLight === user.avatarLight &&
+  inputs.isNpc === user.isNpc &&
+  inputs.rank === user.rank &&
+  inputs.allianceStatus === user.allianceStatus &&
+  inputs.npcInteractionType === user.npcInteractionType &&
+  inputs.username === user.username &&
+  // Walking steps carry the same recipe object; a rebuilt one is compared by value.
+  (inputs.spriteAppearance === user.spriteAppearance ||
+    inputs.appearanceJson === JSON.stringify(user.spriteAppearance));
 const ambientRank = (user: SectorUser) => Number(user.npcInteractionType === "AMBIENT");
 /** Apply the same visibility policy before body selection and full-roster encounter/count recipes. */
 const canShowUser = (snapshot: TravelActorsSnapshot, user: SectorUser) =>
@@ -1358,8 +1566,13 @@ type ActorRecipe = {
 };
 type CastLight = { x: number; y: number; z: number; day: number };
 /** Matches projected scenery silhouettes, so NPC and tree shadows read as one light. */
+/** Actors load within this many tiles of the view and are kept until this many. */
+const LOAD_TILES = 3;
+const RETAIN_TILES = 6;
 /** Wildlife-only depth crossings re-sort at most this often. */
 const AMBIENT_DEPTH_SORT_MS = 250;
+/** Actors overlapping in the wrong order re-sort at most this often; scenery crossings do not wait. */
+const ACTOR_DEPTH_SORT_MS = 200;
 const CAST_SHADOW_TINT = 0x202932;
 const CAST_SHADOW_ALPHA = 0.22;
 type ActorRecord = {
@@ -1379,6 +1592,8 @@ type ActorRecord = {
   facing: LpcDirection;
   /** Last sideways direction walked; up and down keep it, so looping art never flips. */
   heading?: AvatarFacing;
+  /** Where the last published step ended, until a newer snapshot places the actor. */
+  hold?: { x: number; y: number };
   /** Seconds until the next water ring; zero emits on the first frame over water. */
   ripple: number;
   /** Hex under the actor at its last looked-up position, for water rings. */
@@ -1389,13 +1604,25 @@ type ActorRecord = {
   root: Container;
   art: Awaited<ReturnType<typeof createWorldSprites>> | null;
   fallback: Graphics | null;
-  counterLabel: Text | null;
+  counterLabel: BitmapText | null;
+  /** Key of this actor's published movement. */
+  movementKey: string;
+  /** The loaded layered character, posed every frame. */
+  character: LpcCharacter | undefined;
+  /** Whether the loaded art has idle or walk loops to play. */
+  loops: boolean;
+  /** Ground effects positioned with the actor from their own render groups. */
+  effects: { shadows: Container; lights: Container } | null;
+  /** Player controls currently outside the scene graph. */
+  detached?: Set<Container>;
 };
 
 /** Interpolated sector-local feet use the same path clock as the camera. */
 export type TravelActorMovement = {
   x: number;
   y: number;
+  /** Where a published step ends; the actor stays there once the step expires. */
+  to?: { x: number; y: number };
   direction: WorldMotionDirection | null;
   facing: number;
 };

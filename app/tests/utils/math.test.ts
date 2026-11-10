@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from "bun:test";
-import { secureRandomInt } from "@/utils/math";
+import alea from "alea";
+import { aleaUint32, secureRandomInt } from "@/utils/math";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -38,4 +39,16 @@ test("secure random integers reject invalid bounds", () => {
   for (const bound of [0, -1, 1.5, NaN, Infinity, 0x1_0000_0001]) {
     expect(() => secureRandomInt(bound)).toThrow(RangeError);
   }
+});
+
+test("aleaUint32 matches the first uint32 of an Alea generator for the same seeds", () => {
+  const seeds: (number | string)[][] = [
+    [0],
+    [-3, 7, 724],
+    [12.5, 3, 113],
+    ["a", 4],
+    [4294967295, 1, 79],
+  ];
+  for (let i = 0; i < 2000; i++) seeds.push([i % 97, (i * 31) % 211, 724 + (i % 9)]);
+  for (const args of seeds) expect(aleaUint32(...args)).toBe(alea(...args).uint32());
 });

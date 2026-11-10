@@ -1,4 +1,4 @@
-import { Assets, Rectangle, type Sprite, type Texture } from "pixi.js";
+import { Assets, Rectangle, type Sprite, Texture, type TextureSource } from "pixi.js";
 import { createLeaseCache } from "@/libs/rendering/leaseCache";
 import { worldAssetSource } from "@/libs/rendering/worldAssetSources";
 import { textureImageUrl } from "@/utils/image";
@@ -19,6 +19,46 @@ const textures = createLeaseCache<Texture>({
   bytes: (texture) => texture.source.pixelWidth * texture.source.pixelHeight * 4,
   idleBudget: IDLE_TEXTURE_BUDGET,
 });
+
+const sourceFrames = new WeakMap<TextureSource, Map<string, Texture>>();
+
+/**
+ * One shared view per source rectangle. Every view listens to its source, and removing a
+ * listener is linear in their number, so a sector of sprites each owning a view of one atlas
+ * spent quadratic time being destroyed. Views live as long as their source, which destroys them.
+ */
+export const sharedFrameTexture = (
+  source: TextureSource,
+  frame: { x: number; y: number; width: number; height: number },
+  orig?: { width: number; height: number },
+  trim?: { x: number; y: number },
+) => {
+  let views = sourceFrames.get(source);
+  if (!views) {
+    const owned = new Map<string, Texture>();
+    views = owned;
+    sourceFrames.set(source, owned);
+    source.once("destroy", () => {
+      for (const texture of owned.values()) texture.destroy(false);
+      owned.clear();
+      sourceFrames.delete(source);
+    });
+  }
+  const key = `${frame.x}:${frame.y}:${frame.width}:${frame.height}:${orig?.width ?? ""}:${orig?.height ?? ""}:${trim?.x ?? ""}:${trim?.y ?? ""}`;
+  let texture = views.get(key);
+  if (!texture) {
+    texture = stabilizeNearestTexture(
+      new Texture({
+        source,
+        frame: new Rectangle(frame.x, frame.y, frame.width, frame.height),
+        orig: orig && new Rectangle(0, 0, orig.width, orig.height),
+        trim: trim && new Rectangle(trim.x, trim.y, frame.width, frame.height),
+      }),
+    );
+    views.set(key, texture);
+  }
+  return texture;
+};
 
 /** A sub-texel UV bias resolves Float32 interpolation ties; below 0.016 source pixels at 16K. */
 export const NEAREST_TEXTURE_UV_BIAS = 2 ** -20;

@@ -1,4 +1,3 @@
-import alea from "alea";
 import { type Grid, ring } from "honeycomb-grid";
 import { type AvatarFacing, IMG_SECTOR_USER_MARKER } from "@/drizzle/constants";
 import type { MapAsset, VillageStructure } from "@/drizzle/schema";
@@ -43,6 +42,7 @@ import {
   selectVillageWallTowerVertices,
   type VillageWallPlan,
 } from "@/libs/sector-map/village-walls";
+import { aleaUint32 } from "@/utils/math";
 import type { MapLocation } from "@/validators/mapLocation";
 
 /** Static scenery is described once, independently of its renderer and texture loading. */
@@ -184,7 +184,7 @@ export const sectorSpriteDescriptions = (options: {
           : asset.key.startsWith("tree.green.")
             ? WORLD_UNDERSTORY.ground
             : null;
-      const detailSeed = alea(object.x, object.y, map.sector).uint32();
+      const detailSeed = aleaUint32(object.x, object.y, map.sector);
       if (
         asset !== registered &&
         asset.frame &&
@@ -687,18 +687,18 @@ const groundMarginDescriptions = (
             ? WORLD_UNDERSTORY.ground
             : null;
     if (!palette) continue;
-    const seed = alea(tile.col, tile.row, sector + 37).uint32();
+    const seed = aleaUint32(tile.col, tile.row, sector + 37);
     const neighbors = grid.traverse(ring({ radius: 1, center: tile })).toArray();
     const water = neighbors.find((neighbor) => neighbor.spec?.isWater);
     const wall = neighbors.find((neighbor) =>
       foundations.has(`${neighbor.col},${neighbor.row}`),
     );
     const building = neighbors.find((neighbor) => neighbor.hasStructure);
-    const patch = alea(
+    const patch = aleaUint32(
       Math.floor(tile.col / 4),
       Math.floor(tile.row / 4),
       sector + 79,
-    ).uint32();
+    );
     const contact = water ?? wall ?? building;
     if (seed % 5 === 0 || (!contact && patch % 5 === 0 && seed % 3 !== 0)) continue;
     const groundPalette =
@@ -757,7 +757,7 @@ const groundDetailCluster = (options: {
   const ground = palette.filter((asset) => !foliage.includes(asset));
   const heading = ((seed % 360) * Math.PI) / 180;
   return Array.from({ length: count }, (_, index) => {
-    const value = alea(seed, index, 113).uint32();
+    const value = aleaUint32(seed, index, 113);
     const choices =
       index % 3 < 2
         ? foliage.length

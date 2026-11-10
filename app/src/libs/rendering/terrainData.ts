@@ -415,10 +415,9 @@ const mergeItems = (order: number, entries: [number, TerrainItem][]) => {
     );
     let offset = 0;
     for (const [, entry] of entries) {
-      const source = entry[key];
-      for (let index = 0; index < source.length; index++)
-        values[offset + index] = source[index] ?? 0;
-      offset += source.length;
+      // Streams are built by push, so they hold no holes for a native copy to read as NaN.
+      values.set(entry[key], offset);
+      offset += entry[key].length;
     }
     return values;
   };

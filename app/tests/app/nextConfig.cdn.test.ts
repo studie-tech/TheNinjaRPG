@@ -14,6 +14,7 @@ describe("next.config with a pull zone configured", () => {
     VERCEL_ENV: "production",
   };
   let assetPrefix: string | undefined;
+  let workerAssetPrefix: string | undefined;
   let rules: { source: string; headers: { key: string; value: string }[] }[];
   let redirects: { source: string; destination: string; permanent: boolean }[];
 
@@ -21,10 +22,12 @@ describe("next.config with a pull zone configured", () => {
     Object.assign(process.env, overrides);
     const config = (await import("../../next.config.mjs")).default as {
       assetPrefix?: string;
+      experimental?: { turbopackWorkerAssetPrefix?: string };
       headers: () => Promise<typeof rules>;
       redirects: () => Promise<typeof redirects>;
     };
     assetPrefix = config.assetPrefix;
+    workerAssetPrefix = config.experimental?.turbopackWorkerAssetPrefix;
     rules = await config.headers();
     redirects = await config.redirects();
   });
@@ -38,6 +41,10 @@ describe("next.config with a pull zone configured", () => {
 
   it("prefixes assets with the zone, normalising the trailing slash", () => {
     expect(assetPrefix).toBe("https://tnrprod.b-cdn.net");
+  });
+
+  it("serves Web Workers from the app's own origin, as browsers require", () => {
+    expect(workerAssetPrefix).toBe("");
   });
 
   it("routes legacy registration through the welcome page that captures attribution", () => {

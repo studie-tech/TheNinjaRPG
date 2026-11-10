@@ -15,9 +15,16 @@ const byImage = new Map(
   ),
 );
 
+const resolved = new Map<string, WorldAssetSource | undefined>();
+
 /** Logical scenery keys and persisted atlas URLs resolve to the same published material. */
-export const worldAssetSource = (image: string) =>
-  byImage.get(transformImageUrl(image).split(/[?#]/)[0] ?? image);
+export const worldAssetSource = (image: string) => {
+  // Every sprite of a sector asks; parsing its URL each time showed in sector loads.
+  if (resolved.has(image)) return resolved.get(image);
+  const source = byImage.get(transformImageUrl(image).split(/[?#]/)[0] ?? image);
+  resolved.set(image, source);
+  return source;
+};
 
 /**
  * Each published `surfaces` file split into one immutable file per atlas frame, so scenes

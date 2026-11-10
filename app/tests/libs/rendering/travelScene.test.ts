@@ -3,14 +3,15 @@ import {
   Assets,
   BufferImageSource,
   Container,
-  type Graphics,
   RenderLayer,
+  type Sprite,
   Texture,
 } from "pixi.js";
 import { SECTOR_WALK_STEP_MS } from "@/drizzle/constants";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import * as bakedLighting from "@/libs/rendering/bakedVillageLighting";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
+import { CONTACT_RING } from "@/libs/rendering/primitives/shadow";
 import * as terrain from "@/libs/rendering/primitives/terrain";
 import * as runtime from "@/libs/rendering/runtime";
 import {
@@ -240,6 +241,13 @@ afterEach(() => {
 const standingOffsetFor = (tile: { height: number }, terrace: number) =>
   terrace * terrainElevation.LAND_STEP * tile.height;
 
+/** The drawn ellipse of a contact ring sprite: its rim, without the texture's padding. */
+const ringExtent = (ring: Sprite) => ({
+  width: ring.scale.x * (2 * CONTACT_RING.radiusX + CONTACT_RING.stroke),
+  height: ring.scale.y * (2 * CONTACT_RING.radiusY + CONTACT_RING.stroke),
+  centerY: ring.y,
+});
+
 describe("still travel rendering", () => {
   it("makes terrain ready while a published light-field request is still pending", async () => {
     const original = bakedLighting.createBakedVillageLighting;
@@ -359,7 +367,7 @@ describe("travel scene ground depth", () => {
     const sector = scene.sectors.get(state.sector)!;
     expect(sector.art.entries.length).toBeGreaterThan(0);
     expect(game.setAnimating).toHaveBeenLastCalledWith(false);
-    const actors = world.children.at(-1)!;
+    const actors = world.children.at(-2)!;
     expect(actors.children).toHaveLength(0);
     event("pointerdown", 400, 300);
     event("pointerup", 400, 300);
@@ -423,7 +431,7 @@ describe("travel scene ground depth", () => {
       expect(scene.sectors.get(724)!.art.entries).toHaveLength(0);
       expect(onReady).toHaveBeenCalledTimes(1);
       expect(
-        world.children.at(-1)!.children.some((child) => child.label === "user:self"),
+        world.children.at(-2)!.children.some((child) => child.label === "user:self"),
       ).toBe(true);
       const camera = { x: world.x, y: world.y };
       fixture.event("pointerdown", 400, 300);
@@ -699,7 +707,8 @@ describe("travel scene ground depth", () => {
       };
       state.users = [player({ longitude: 8, latitude: 4 })];
       state.actorRevision++;
-      advance();
+      // Revisions reconcile a few times a second; this frame comes after the previous sync.
+      advance(frame(1200));
       expect(actor.y).toBeCloseTo(-sector.grid.getHex({ col: 8, row: 4 })!.center.y);
       depth.sortRenderLayerChildren();
       expect(depth.renderLayerChildren.indexOf(actor)).toBeGreaterThan(
@@ -867,11 +876,14 @@ describe("travel scene ground depth", () => {
     const building = sector.art.entries.find(
       (entry) => entry.description.id === "building",
     )!;
+    // Revisions reconcile a few times a second, so each walk starts on a later clock.
+    let clock = 1200;
     const walk = (latitude: number) => {
       state.users = [player({ latitude })];
       state.row = latitude;
       state.actorRevision++;
-      for (let tick = 0; tick < 8; tick++) advance(frame(1200 + tick));
+      clock += 200;
+      for (let tick = 0; tick < 8; tick++) advance(frame(clock + tick));
     };
     walk(4);
     expect(tree.sprite.alpha).toBe(1);
@@ -890,8 +902,9 @@ describe("travel scene ground depth", () => {
     state.row = 4;
     state.actorRevision++;
     const alphas: number[] = [];
+    clock += 200;
     for (let tick = 0; tick < 120; tick++) {
-      advance(frame(1300 + tick * 16, false));
+      advance(frame(clock + tick * 16, false));
       alphas.push(tree.sprite.alpha);
     }
     expect(alphas.some((alpha) => alpha > 0.5 && alpha < 0.95)).toBe(true);
@@ -1070,24 +1083,25 @@ describe("travel scene ground depth", () => {
   });
 
   it("keeps compact travel LPC art and shadows at a shared foot contact", async () => {
-    const { scene, depth } = await sceneFixture();
+    const { scene, depth, world } = await sceneFixture();
     const actor = depth.renderLayerChildren.find(
       (child) => child.label === "user:self",
     )!;
     const tile = scene.sectors.get(724)!.grid.getHex({ col: 4, row: 4 })!;
-    const shadow = actor.children[0] as Graphics;
-    const character = actor.children[1]!.children.find(
+    // The ring lies with the actor's other ground effects, positioned at its root.
+    const ground = world.getChildByLabel("user:self:ground", true)!;
+    expect([ground.x, ground.y]).toEqual([actor.x, actor.y]);
+    const shadow = ground.getChildByLabel("contact-ring") as Sprite;
+    const character = actor.children[0]!.children.find(
       (child) => child.label === "avatar",
     )!;
     expect(character.scale.x).toBeCloseTo(tile.height * 1.8 * 0.7);
     expect(character.y - character.scale.x / 2).toBeCloseTo(tile.height * 0.1);
-    const bounds = shadow.getLocalBounds();
+    const bounds = ringExtent(shadow);
     expect(bounds.width).toBeCloseTo(tile.height * (0.35 * 2 * 0.7 + 0.015));
     expect(bounds.height).toBeCloseTo(tile.height * (0.12 * 2 * 0.7 + 0.015));
-    expect(bounds.y + bounds.height / 2).toBeCloseTo(
-      tile.height * (0.1 + (1.8 * 0.7 * 4) / 64),
-    );
-    expect(actor.zIndex).toBeCloseTo(-(actor.y + bounds.y + bounds.height / 2));
+    expect(bounds.centerY).toBeCloseTo(tile.height * (0.1 + (1.8 * 0.7 * 4) / 64));
+    expect(actor.zIndex).toBeCloseTo(-(actor.y + bounds.centerY));
   });
 
   it("picks overlapping NPC controls in overlay paint order while their bodies orbit", async () => {
@@ -1308,10 +1322,14 @@ describe("travel scene ground depth", () => {
     const nearer = actors.container.children.find(
       (child) => child.label === "user:nearer",
     )!;
+    // Hidden controls leave the scene graph; hovering brings the actor's back.
+    expect(
+      other.children.at(-1)!.children.find((child) => child.label === "info"),
+    ).toBeUndefined();
+    actors.hover("user:other");
     const control = other.children
       .at(-1)!
       .children.find((child) => child.label === "info")!;
-    actors.hover("user:other");
     expect(control.visible).toBe(true);
     expect(control.parentRenderLayer).toBe(overlay);
     for (const kind of ["attack", "heal", "info"])
@@ -1363,10 +1381,12 @@ describe("travel scene ground depth", () => {
     actors.sync(snapshot);
     actors.animate(frame());
     await settle();
-    const counter = actors.container.children.find((child) =>
+    const counter = actors.badges.children.find((child) =>
       child.label.startsWith("count:"),
     )!;
-    expect(counter.parentRenderLayer).toBe(overlay);
+    // Counts paint above every layer from their own render group.
+    expect(counter.parentRenderLayer).toBeNull();
+    expect(actors.badges.isRenderGroup).toBe(true);
     const physical = actors.container.children.filter((child) =>
       child.label.startsWith("user:"),
     );

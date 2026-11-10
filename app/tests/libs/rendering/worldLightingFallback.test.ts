@@ -218,8 +218,19 @@ const drawOrder = (stage: Container) => {
 const expectGroundOrder = (stage: Container, sprite: Container) => {
   let owner = sprite.parent;
   while (owner && !owner.getChildByLabel("scenery-shadows")) owner = owner.parent;
-  const contact = owner!.getChildByLabel("scenery-shadows")!.children[0]!;
-  const glow = owner!.getChildByLabel("scenery-lights")!.children[0]!;
+  // Travel actors keep their ground effects in groups of their own, labelled by actor.
+  let actor: Container | null = sprite;
+  while (actor && !actor.label?.startsWith("user:")) actor = actor.parent;
+  const effects = (kind: string) =>
+    owner?.getChildByLabel(`scenery-${kind}`) ??
+    stage
+      .getChildByLabel(
+        `${actor?.label}:${kind === "shadows" ? "ground" : "lights"}`,
+        true,
+      )!
+      .getChildByLabel(`scenery-${kind}`)!;
+  const contact = effects("shadows")!.children[0]!;
+  const glow = effects("lights")!.children[0]!;
   const drawn = drawOrder(stage);
   const lastTerrain = Math.max(
     ...drawn.flatMap((view, index) =>
@@ -505,8 +516,8 @@ describe("world lighting precision fallback", () => {
       "avatar",
       true,
     ) as Sprite;
-    const actorPin = actor.parent!.getChildByLabel("info") as Sprite;
-    const pinTint = actorPin.tint;
+    // The viewer's own controls never show, so they stay out of the scene graph.
+    expect(actor.parent!.getChildByLabel("info")).toBeNull();
     expect(terrainAmbient(sector.terrain.container)).toEqual([1, 1, 1]);
     expect(actor.tint).toBe(0xffffff);
     snapshot.brightness = WORLD_NIGHT_BRIGHTNESS;
@@ -520,15 +531,15 @@ describe("world lighting precision fallback", () => {
     expect(body.tint).toBe(0xffffff);
     expect(actor.tint).toBe(body.tint);
     expect(pin.tint).toBe(0xffcc77);
-    expect(actorPin.tint).toBe(pinTint);
     expectGroundOrder(fixture.game.stage, body as Sprite);
     expectGroundOrder(fixture.game.stage, actor as Sprite);
     snapshot.users.push({ ...snapshot.users[0]!, userId: "arriving", longitude: 2 });
     snapshot.actorRevision++;
-    fixture.tick();
+    // Revisions reconcile a few times a second; this frame comes after the previous sync.
+    fixture.tick({ now: 1000, delta: 0, reducedMotion: true });
     await flushArtwork();
     const characters = fixture.game.stage
-      .getChildrenByLabel(/^user:/, true)
+      .getChildrenByLabel(/^user:[^:]+$/, true)
       .map((root) => root.getChildByLabel("avatar", true)!);
     expect(characters).toHaveLength(2);
     expect(characters.every((character) => character.tint === body.tint)).toBe(true);

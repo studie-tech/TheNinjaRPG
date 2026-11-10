@@ -8,6 +8,7 @@ import {
 import { setGameSceneVisible } from "@/libs/gameSceneVisibility";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { createSceneAssets } from "@/libs/rendering/assets";
+import { createCharacterComposites } from "@/libs/rendering/characterComposites";
 import { premultipliedClearColor } from "@/libs/rendering/color";
 import { createFrameLoop } from "@/libs/rendering/frameLoop";
 import { observeRenderer, type RendererSurface } from "@/libs/rendering/telemetry";
@@ -84,6 +85,7 @@ export const createGameRenderer = async (options: {
   );
   stage.eventMode = "none";
   const assets = createSceneAssets();
+  const characterComposites = createCharacterComposites(renderer);
   const canvas = renderer.canvas as HTMLCanvasElement;
   canvas.style.display = "block";
   canvas.style.width = "100%";
@@ -103,6 +105,8 @@ export const createGameRenderer = async (options: {
   let resize: (width: number, height: number) => void = () => {};
   const listeners = new AbortController();
   const cleanups = new Set<() => void>();
+  /** Work waiting for the next presented frame; it resumes in a task after that frame. */
+  const frameWaiters = new Set<() => void>();
 
   const tick = (now: number) => {
     if (disposed) return;
@@ -120,7 +124,15 @@ export const createGameRenderer = async (options: {
         reducedMotion,
       });
       previousTime = now;
+      characterComposites.flush();
       renderer.render({ container: stage });
+      if (frameWaiters.size) {
+        const waiters = [...frameWaiters];
+        frameWaiters.clear();
+        setTimeout(() => {
+          for (const resume of waiters) resume();
+        }, 0);
+      }
       // On-demand scenes idle between frames, so their intervals are not frame pacing.
       if (continuous && interval > 0) {
         telemetry.frame(interval, performance.now() - startedAt);
@@ -199,6 +211,7 @@ export const createGameRenderer = async (options: {
     "webglcontextrestored",
     () => {
       contextLost = false;
+      characterComposites.reset();
       telemetry.contextRestored();
       invalidate();
     },
@@ -218,7 +231,10 @@ export const createGameRenderer = async (options: {
     stage.destroy({ children: true, texture: false, textureSource: false });
     for (const cleanup of cleanups) cleanup();
     cleanups.clear();
+    for (const resume of frameWaiters) resume();
+    frameWaiters.clear();
     assets.dispose();
+    characterComposites.destroy();
     renderer.destroy({ removeView: true });
   };
   signal.addEventListener("abort", dispose, { once: true });
@@ -231,6 +247,8 @@ export const createGameRenderer = async (options: {
     renderer,
     canvas,
     assets,
+    /** Travel characters share composited frames; the runtime draws new ones before each render. */
+    characterComposites,
     signal,
     listen,
     invalidate,
@@ -255,6 +273,27 @@ export const createGameRenderer = async (options: {
       cleanups.delete(cleanup);
     },
     isDisposed: () => disposed,
+    /**
+     * Resolves in a task after the next frame this scene presents, so long jobs split across
+     * it never run back to back without a frame between them. A scene that is not drawing
+     * resumes after a short timeout instead.
+     */
+    afterFrame: () =>
+      new Promise<void>((resolve) => {
+        if (disposed || !unsubscribe) {
+          setTimeout(resolve, 0);
+          return;
+        }
+        let done = false;
+        const resume = () => {
+          if (done) return;
+          done = true;
+          frameWaiters.delete(resume);
+          resolve();
+        };
+        frameWaiters.add(resume);
+        setTimeout(resume, AFTER_FRAME_TIMEOUT_MS);
+      }),
     /** Links shaders' programs now, so the frame that first draws them does not stall on it. */
     compileShaders: (...shaders: Shader[]) => {
       for (const shader of shaders) renderer.shader.bind(shader, true);
@@ -271,6 +310,9 @@ export const createGameRenderer = async (options: {
 };
 
 export type GameRenderer = Awaited<ReturnType<typeof createGameRenderer>>;
+
+/** Work waiting for a frame resumes anyway after this long, e.g. while frames are slow. */
+const AFTER_FRAME_TIMEOUT_MS = 250;
 /**
  * now is frame-clock milliseconds (RAF live, scene time in captures). Live delta
  * is seconds, capped at 0.1 and reset on resume. reducedMotion reflects the OS
