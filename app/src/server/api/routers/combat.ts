@@ -143,6 +143,7 @@ import {
   getBattleSize,
   getEffectiveMaxPool,
   getHighestGenerals,
+  getItemCombatLevel,
   getPoolKeys,
   inertUserItemColumns,
   mergeExtraState,
@@ -4193,9 +4194,7 @@ export const processUsersForBattle = async (
                   tag: effect,
                   user: user,
                   actionId: ui.itemId,
-                  // AI gear can never earn item XP; keep character-level scaling
-                  // for AI so boss/raid content is not silently nerfed to level 1.
-                  level: user.isAi ? user.level : ui.level,
+                  level: getItemCombatLevel(ui, user),
                   fromType:
                     itemType === "ACCESSORY"
                       ? "accessory"

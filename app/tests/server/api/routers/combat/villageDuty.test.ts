@@ -1,13 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
+import { userItemToAction } from "@/libs/combat/actions";
 import { prepareVillageDutyDefender } from "@/libs/combat/initiation";
+import { getPower } from "@/libs/combat/tags";
+import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
 import { Pusher } from "@/libs/pusher";
 import { initiateBattle } from "@/server/api/routers/combat";
 import type { DrizzleClient } from "@/server/db";
 import {
   fakeInitiationClient,
   makeInitiationUser,
+  preloadBattle,
 } from "../../../../libs/combat/helpers/preload";
+import {
+  makeBattleUserItem,
+  makeCompleteBattle,
+  makeTag,
+  makeWeapon,
+} from "../../../../setup/combat";
 
 const owner = () =>
   makeInitiationUser({
@@ -68,6 +78,86 @@ describe("village duty combat isolation", () => {
         expect.anything(),
       );
       expect(defender).toEqual(before);
+    },
+  );
+  it.each(["VILLAGE_PROTECTOR", "SHRINE_WAR"] as const)(
+    "preserves owned equipment scaling in %s copies and character scaling for authored AI",
+    async (battleType) => {
+      const defender = {
+        ...owner(),
+        joinedVillageAt: new Date("2026-01-01"),
+        items: (
+          [
+            ["WEAPON", "HAND_1", "HAND"],
+            ["ARMOR", "CHEST", "CHEST"],
+            ["ACCESSORY", "WAIST", "WAIST"],
+            ["KEYSTONE", "KEYSTONE", "KEYSTONE"],
+          ] as const
+        ).map(([itemType, equipped, slot], index) => ({
+          ...makeBattleUserItem({
+            id: `owned-${itemType}`,
+            itemId: itemType,
+            equipped,
+            level: 1 + index,
+          }),
+          userId: "owner",
+          imbuements: [],
+          item: makeWeapon({
+            id: itemType,
+            itemType,
+            battleUsageType: "ALL",
+            slot,
+            lpcProfile: "NONE",
+            ...(itemType !== "WEAPON"
+              ? {
+                  effects: [
+                    makeTag("increasemastery", {
+                      masteryTypes: ["Ninjutsu"],
+                      calculation: "static",
+                      power: 22,
+                      powerPerLevel: 1,
+                    }),
+                  ],
+                }
+              : {}),
+          }),
+        })),
+      };
+      const copy = prepareVillageDutyDefender(
+        defender as unknown as Parameters<typeof prepareVillageDutyDefender>[0],
+        "home",
+      )!;
+      const results = await Promise.all(
+        [defender, copy, { ...defender, userId: "authored-ai", isAi: true }].map(
+          (user) =>
+            preloadBattle([structuredClone(user) as unknown as CombatQueryUser], {
+              battleType,
+            }),
+        ),
+      );
+      for (const [index, result] of results.entries()) {
+        const user = result.usersState[0]!;
+        const weapon = user.items.find((item) => item.itemId === "WEAPON")!;
+        const action = userItemToAction(
+          weapon,
+          user,
+          makeCompleteBattle({ extraState: result.extraState }),
+        );
+        for (const item of user.items.filter((item) => item.itemId !== "WEAPON")) {
+          const effect = result.userEffects.find(
+            (effect) => effect.actionId === item.itemId,
+          )!;
+          const level = index === 2 ? user.level : item.level;
+          expect(effect.level).toBe(level);
+          expect(getPower(effect).power).toBe(22 + level);
+        }
+        const level = index === 2 ? user.level : weapon.level;
+        expect(action.level).toBe(level);
+        expect(
+          getPower({ ...action.effects[0], level: action.level } as UserEffect).power,
+        ).toBe(22 + level);
+      }
+      expect(results[1]!.usersState[0]!.isAi).toBe(true);
     },
   );
   it("rejects a cancelled enrollment before battle writes", async () => {

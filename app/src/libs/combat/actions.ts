@@ -66,6 +66,7 @@ import {
   getBarriersBetween,
   getEffectStackKey,
   getItem,
+  getItemCombatLevel,
   getJutsu,
   getJutsuReskin,
   getUserElementalSeal,
@@ -756,9 +757,7 @@ export const userItemToAction = (
 ) => {
   const item = getItem(battle, useritem.itemId);
   if (!item) throw new Error(`Item not found: ${useritem.itemId}`);
-  // AI users can never earn item XP, so their gear keeps character-level scaling.
-  // For players the item's ownership level applies.
-  const level = user.isAi ? (user.level ?? 1) : useritem.level;
+  const level = getItemCombatLevel(useritem, user);
   return {
     id: item.id,
     name: useritem.variantName ?? item.name,
