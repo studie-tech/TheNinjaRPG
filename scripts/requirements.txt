@@ -1,4 +1,4 @@
-Pillow==11.3.0
+Pillow==13.0.0
 boto3==1.43.117
 numpy==2.5.4
 pandas==3.0.6
