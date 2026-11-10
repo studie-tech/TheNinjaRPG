@@ -3,7 +3,7 @@ import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { TriStateToggle } from "@/components/control/Toggle";
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonProps } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MultiSelect } from "@/components/ui/multi-select";
@@ -566,6 +566,7 @@ export const ContentFiltering = <
   state,
   context,
   triggerButtonId = "filter-generic",
+  buttonSize,
   popoverClassName,
   disabled = false,
 }: {
@@ -573,6 +574,7 @@ export const ContentFiltering = <
   state: ContentFilteringState<F, E>;
   context?: unknown;
   triggerButtonId?: string;
+  buttonSize?: ButtonProps["size"];
   popoverClassName?: string;
   disabled?: boolean;
 }) => {
@@ -681,8 +683,10 @@ export const ContentFiltering = <
       <PopoverTrigger asChild>
         <Button
           id={triggerButtonId}
+          size={buttonSize}
           count={totalFilters}
           hoverText="Filter"
+          aria-label="Filter"
           disabled={disabled}
         >
           <Filter className="h-6 w-6 hover:text-orange-500" />

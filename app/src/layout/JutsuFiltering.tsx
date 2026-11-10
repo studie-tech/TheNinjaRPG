@@ -182,6 +182,7 @@ interface JutsuFilteringProps {
   state: JutsuFilteringState;
   fixedBloodline?: string | null;
   disabled?: boolean;
+  compact?: boolean;
 }
 
 export const useFiltering = (defaultRank?: UserRank[]) => {
@@ -207,6 +208,7 @@ const JutsuFiltering: React.FC<JutsuFilteringProps> = (props) => {
       state={props.state.cf}
       context={context}
       disabled={props.disabled}
+      buttonSize={props.compact ? "icon" : undefined}
     />
   );
 };
