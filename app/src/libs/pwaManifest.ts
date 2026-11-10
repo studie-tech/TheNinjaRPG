@@ -1,4 +1,11 @@
 import type { MetadataRoute } from "next";
+import {
+  IMG_FRONTPAGE_SCREENSHOT_COMBAT,
+  IMG_FRONTPAGE_SCREENSHOT_GLOBAL,
+  IMG_FRONTPAGE_SCREENSHOT_JUTSUS,
+  IMG_FRONTPAGE_SCREENSHOT_SECTOR,
+  IMG_FRONTPAGE_SCREENSHOT_VILLAGE,
+} from "@/drizzle/constants";
 
 export const createPwaManifest = (): MetadataRoute.Manifest => ({
   // Relative so it resolves against whichever origin serves the manifest. A
@@ -83,36 +90,36 @@ export const createPwaManifest = (): MetadataRoute.Manifest => ({
   ],
   screenshots: [
     {
-      src: "/screenshots/combat.webp",
-      sizes: "512x351",
+      src: IMG_FRONTPAGE_SCREENSHOT_COMBAT,
+      sizes: "1800x1400",
       type: "image/webp",
       form_factor: "wide",
       label: "Strategic 2d combat system",
     },
     {
-      src: "/screenshots/sector.webp",
-      sizes: "512x366",
+      src: IMG_FRONTPAGE_SCREENSHOT_SECTOR,
+      sizes: "1800x1400",
       type: "image/webp",
       form_factor: "wide",
       label: "Live local sector maps",
     },
     {
-      src: "/screenshots/jutsus.webp",
-      sizes: "512x366",
+      src: IMG_FRONTPAGE_SCREENSHOT_JUTSUS,
+      sizes: "1800x1400",
       type: "image/webp",
       form_factor: "wide",
       label: "500+ jutsus to master",
     },
     {
-      src: "/screenshots/village.webp",
-      sizes: "512x366",
+      src: IMG_FRONTPAGE_SCREENSHOT_VILLAGE,
+      sizes: "1800x1400",
       type: "image/webp",
       form_factor: "wide",
       label: "Multifaceted village with many activities",
     },
     {
-      src: "/screenshots/global.webp",
-      sizes: "512x366",
+      src: IMG_FRONTPAGE_SCREENSHOT_GLOBAL,
+      sizes: "1800x1400",
       type: "image/webp",
       form_factor: "wide",
       label: "Travel to other sectors and visit other villages",

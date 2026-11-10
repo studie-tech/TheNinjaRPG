@@ -1,0 +1,318 @@
+{
+  "groups": {
+    "ios-6.9": [
+      {
+        "file": "01-combat.jpg",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJMlLJpEtsO4cexqW2RDgkE3zZbNXSFGitmnar",
+        "width": 1320,
+        "height": 2868,
+        "type": "image/jpeg",
+        "sha256": "76c160e89decca5b56d44487332376b87a143b3c4a4fa655ff727103ce513088"
+      },
+      {
+        "file": "02-village.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJxEEuIKCWZsq9k0Von5rUfP6OgQ2TyptCKHS4",
+        "width": 1320,
+        "height": 2868,
+        "type": "image/png",
+        "sha256": "1745598f3c08883ac63ae2a8e5d408f547cc152059b26cb420cc732b61b3190c"
+      },
+      {
+        "file": "03-jutsu.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJFW1JuYG2iOewJtjGzvNcmEX3TBnoSfMDZPH4",
+        "width": 1320,
+        "height": 2868,
+        "type": "image/png",
+        "sha256": "1c8a1a2331726d484c6625a460c8f00cb9fcde5cd6f08a5ecbbe5214617f6487"
+      },
+      {
+        "file": "04-world-map.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJPAZuCH4pKeUGyX2kj6u45AOQiSa1zYH0mqZo",
+        "width": 1320,
+        "height": 2868,
+        "type": "image/png",
+        "sha256": "63d6cb691a46e6d06bab5a42f3db1417357b26bbcd821498065fec19b1af1919"
+      },
+      {
+        "file": "05-sector.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJUHPRD7ILCIhwPniJ69VxpvAbTDWkOyGzS8rM",
+        "width": 1320,
+        "height": 2868,
+        "type": "image/png",
+        "sha256": "7e82e22b849c40305ee0897100a725ed9851c9e0615cbd4edd246878515223ee"
+      },
+      {
+        "file": "06-profile.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQrqZRRjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+        "width": 1320,
+        "height": 2868,
+        "type": "image/png",
+        "sha256": "79865147b0d254044fdef902339cda411cd8cf8504ad37517c1007a966001fa1"
+      },
+      {
+        "file": "07-social.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOYU5y3VHevxIThUauQkGJEBY3D2cPqy8f5sp",
+        "width": 1320,
+        "height": 2868,
+        "type": "image/png",
+        "sha256": "5213a69bddbfdefba0d035191aff468beab11901c2327674d35e25a774082e3c"
+      },
+      {
+        "file": "08-village-hyorin.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJeQmTUJyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
+        "width": 1320,
+        "height": 2868,
+        "type": "image/png",
+        "sha256": "824d5e363a9dfdf0617968d7f8b9593879a39a2f420d4336e31e49ef48653ddc"
+      }
+    ],
+    "ipad-13": [
+      {
+        "file": "01-combat.jpg",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrBqoffhuJPmdY8zI2ptZXAoEj1c6BMKvrQOx",
+        "width": 2064,
+        "height": 2752,
+        "type": "image/jpeg",
+        "sha256": "da1a217f1b9190edd79250ef2f3e7ef281fe8c05a54767fa8ecdaaf1d1d8b907"
+      },
+      {
+        "file": "02-village.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJ5qpBPCG797jl4ubX8xrRqTZasyMp2WA5eLGU",
+        "width": 2064,
+        "height": 2752,
+        "type": "image/png",
+        "sha256": "3d9e3ea1168ffe4a227007e39aad9725789732686aea6f925725cc0b6b81e6a8"
+      },
+      {
+        "file": "03-jutsu.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJneMoiXmojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
+        "width": 2064,
+        "height": 2752,
+        "type": "image/png",
+        "sha256": "9d7be427cc621549f7d79cf5ea998eed5a2c0f043eeda72c1e7be904bc71294c"
+      },
+      {
+        "file": "04-world-map.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJb9hI1sAtYUndMi56GkX19q0A4PzyeIloBrEa",
+        "width": 2064,
+        "height": 2752,
+        "type": "image/png",
+        "sha256": "7707276f731023e0639391d120cf971af47916d857dde36babf53ae917ec14bc"
+      },
+      {
+        "file": "05-sector.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJWUa8qqvszvj71yaSYC0MDOmbko5q9JAGuLHf",
+        "width": 2064,
+        "height": 2752,
+        "type": "image/png",
+        "sha256": "61e75a266be1c19cdbe04029ac6a6e305a9dcbe81a04467300ebb12353cfde34"
+      },
+      {
+        "file": "06-profile.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJnQlXoOAmojJ0EqeDCvBrNmZaXVdY97gSpOWi",
+        "width": 2064,
+        "height": 2752,
+        "type": "image/png",
+        "sha256": "a40a52e1ed33d9ac3f77231ef3c58915e534301f5efbbef46ddd446647743aa1"
+      },
+      {
+        "file": "07-social.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJHlvSkoQvYURJhgs76VZtf9wxpMa13Cq0iOnr",
+        "width": 2064,
+        "height": 2752,
+        "type": "image/png",
+        "sha256": "89ec3008de5ab4f00f9af2354caab22a8f67c052c0fe05f7cf7594b74d915b24"
+      },
+      {
+        "file": "08-village-akasumi.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJrttnCC8huJPmdY8zI2ptZXAoEj1c6BMKvrQO",
+        "width": 2064,
+        "height": 2752,
+        "type": "image/png",
+        "sha256": "5fea9ba503ceac877ce867260d83c0534a360f27000b1a10a49e99a3a1a48701"
+      }
+    ],
+    "android-phone": [
+      {
+        "file": "01-combat.jpg",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJAlIBFKoZUC4muiGcQNzjfEndY5y1w20B8hTW",
+        "width": 1080,
+        "height": 2400,
+        "type": "image/jpeg",
+        "sha256": "be7411461f435cbc34f193e5acb448d754e8dcacbbda571080e460f8408ad153"
+      },
+      {
+        "file": "02-village-akikaze.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYEUffrOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d",
+        "width": 1080,
+        "height": 2400,
+        "type": "image/png",
+        "sha256": "a134a49d2f38518f8755cb9c6351aa00ddc5428254cb6bc63f90de6c4a2362ba"
+      },
+      {
+        "file": "03-jutsu.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJE5tIPYLfKL5D7TAFe29bymSaPCIQ846MdzGg",
+        "width": 1080,
+        "height": 2400,
+        "type": "image/png",
+        "sha256": "28538797fc2660eb75c6a446482e74a9f454cc33efbfa44d83e567f80d75639b"
+      },
+      {
+        "file": "04-sector.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJQ7DGUzjhzBPya1rwfCIqOTU0cV5xgsMeo3u2",
+        "width": 1080,
+        "height": 2400,
+        "type": "image/png",
+        "sha256": "25ed449a50cbc006c9961617ae5c0d3a1ac36f86387e07bca6e378d397ecbe27"
+      },
+      {
+        "file": "05-world-map.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJgqlIH9cU9cpECTimBdjaqbNn7vQsxGR1wLk4",
+        "width": 1080,
+        "height": 2400,
+        "type": "image/png",
+        "sha256": "2e9a80469495e0f01d7a69113b3eb581ef0f5e8de28c05b607a557bc543088d2"
+      },
+      {
+        "file": "06-profile.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJF09l8o5G2iOewJtjGzvNcmEX3TBnoSfMDZPH",
+        "width": 1080,
+        "height": 2400,
+        "type": "image/png",
+        "sha256": "3f29202029878e24bb83d88e670454c8a4fe87dfea695ed755af1744b2aa9130"
+      },
+      {
+        "file": "07-social.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJenP2bZyV3OvUJQExAi0bGoIZDF74LqSnHRdp",
+        "width": 1080,
+        "height": 2400,
+        "type": "image/png",
+        "sha256": "75d4d8fb7ebde7e194560d85941f5cf096e801030c8e5ee16e5257f44d17a0e4"
+      },
+      {
+        "file": "08-village-horizon.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJC6NjOo26OYrIJuNP1pvSyz29edFtKbngjRcA",
+        "width": 1080,
+        "height": 2400,
+        "type": "image/png",
+        "sha256": "511da26e6f8f95b847eea085bbe862364e8f9d68ee8f8c8038fd24ae30b8bf88"
+      }
+    ],
+    "android-tablet": [
+      {
+        "file": "01-combat.jpg",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOiNxRhVHevxIThUauQkGJEBY3D2cPqy8f5sp",
+        "width": 1600,
+        "height": 2560,
+        "type": "image/jpeg",
+        "sha256": "462951884de5aaa740e133e516081114b4fc3ad94b3c05d8dd81bf2589a1c0b8"
+      },
+      {
+        "file": "02-village-akikaze.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCkI1FV26OYrIJuNP1pvSyz29edFtKbngjRcA",
+        "width": 1600,
+        "height": 2560,
+        "type": "image/png",
+        "sha256": "fe92eb403dbe1716ae9a66657792203e7942b3491f474065a9560d1c8c615679"
+      },
+      {
+        "file": "03-jutsu.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoC2j1OZ9MPZpHJ7VliuEWDfATdxhv62SXnm4",
+        "width": 1600,
+        "height": 2560,
+        "type": "image/png",
+        "sha256": "1f3f72c2f6b77ad1a054cf9a5fe25646b87a3c2dda8256d11c2adb6e925ddf2f"
+      },
+      {
+        "file": "04-sector.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVX0JqYF2veAXohUuE59nTQHRJIYjtiG18aF4",
+        "width": 1600,
+        "height": 2560,
+        "type": "image/png",
+        "sha256": "bf52e07b58a8834bf66d6e29d9e3defa51c16aec66295f1120c4ee55122d294a"
+      },
+      {
+        "file": "05-world-map.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEJ5lKFjLfKL5D7TAFe29bymSaPCIQ846MdzG",
+        "width": 1600,
+        "height": 2560,
+        "type": "image/png",
+        "sha256": "76954a9c99b02458c7267f654c12ae1168d17c672734789d9f02faa8e458f7fc"
+      },
+      {
+        "file": "06-profile.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYmcNDXOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d",
+        "width": 1600,
+        "height": 2560,
+        "type": "image/png",
+        "sha256": "540cea09ab0e24d485f3288a08320bad284e5bb3295719b490a8ec7a15871aaf"
+      },
+      {
+        "file": "07-social.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJndrnIumojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
+        "width": 1600,
+        "height": 2560,
+        "type": "image/png",
+        "sha256": "a180ac83511cd777ce0a4e0a5784eedf46b84761075265221809c4524e352e63"
+      }
+    ],
+    "android-tablet-7-inch": [
+      {
+        "file": "01-combat.jpg",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJOiNxRhVHevxIThUauQkGJEBY3D2cPqy8f5sp",
+        "width": 1600,
+        "height": 2560,
+        "type": "image/jpeg",
+        "sha256": "462951884de5aaa740e133e516081114b4fc3ad94b3c05d8dd81bf2589a1c0b8"
+      },
+      {
+        "file": "02-village-akikaze.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJCkI1FV26OYrIJuNP1pvSyz29edFtKbngjRcA",
+        "width": 1600,
+        "height": 2560,
+        "type": "image/png",
+        "sha256": "fe92eb403dbe1716ae9a66657792203e7942b3491f474065a9560d1c8c615679"
+      },
+      {
+        "file": "03-jutsu.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJoC2j1OZ9MPZpHJ7VliuEWDfATdxhv62SXnm4",
+        "width": 1600,
+        "height": 2560,
+        "type": "image/png",
+        "sha256": "1f3f72c2f6b77ad1a054cf9a5fe25646b87a3c2dda8256d11c2adb6e925ddf2f"
+      },
+      {
+        "file": "04-sector.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJVX0JqYF2veAXohUuE59nTQHRJIYjtiG18aF4",
+        "width": 1600,
+        "height": 2560,
+        "type": "image/png",
+        "sha256": "bf52e07b58a8834bf66d6e29d9e3defa51c16aec66295f1120c4ee55122d294a"
+      },
+      {
+        "file": "05-world-map.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJEJ5lKFjLfKL5D7TAFe29bymSaPCIQ846MdzG",
+        "width": 1600,
+        "height": 2560,
+        "type": "image/png",
+        "sha256": "76954a9c99b02458c7267f654c12ae1168d17c672734789d9f02faa8e458f7fc"
+      },
+      {
+        "file": "06-profile.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJYmcNDXOMAlNnPZ41ev6fCGcFK3hmjX9I8W7d",
+        "width": 1600,
+        "height": 2560,
+        "type": "image/png",
+        "sha256": "540cea09ab0e24d485f3288a08320bad284e5bb3295719b490a8ec7a15871aaf"
+      },
+      {
+        "file": "07-social.png",
+        "url": "https://uploadthing.b-cdn.net/f/Hzww9EQvYURJndrnIumojJ0EqeDCvBrNmZaXVdY97gSpOWiA",
+        "width": 1600,
+        "height": 2560,
+        "type": "image/png",
+        "sha256": "a180ac83511cd777ce0a4e0a5784eedf46b84761075265221809c4524e352e63"
+      }
+    ]
+  }
+}
