@@ -22,7 +22,8 @@ export const cdnOrigin = (env) => {
  * `crossorigin`, so the directives that name 'self' have to name the zone as well. The
  * zone serves `/_next/static` only. font-src and worker-src also name it so any font or
  * worker emitted under `/_next/static` loads; `public/` and `/sw.js` are served from
- * the origin.
+ * the origin, and so are Web Workers (`turbopackWorkerAssetPrefix` in `next.config.mjs`),
+ * because a worker's script must be same-origin.
  *
  * @param {string | undefined} origin
  * @returns {string}

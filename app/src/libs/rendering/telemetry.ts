@@ -242,7 +242,7 @@ export type RendererSurface =
 
 type RendererFailure = {
   surface: RendererSurface;
-  phase: "init" | "frame" | "context";
+  phase: "init" | "frame" | "context" | "generation";
 };
 
 type GpuIdentity = { gpu: string; gpu_backend: string; software: boolean };

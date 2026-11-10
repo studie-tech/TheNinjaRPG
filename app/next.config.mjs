@@ -32,6 +32,11 @@ const config = {
     // TypeScript 7 ships a native CLI rather than the JavaScript compiler API.
     useTypeScriptCli: true,
     globalNotFound: true,
+    // Browsers refuse cross-origin worker scripts and Turbopack's worker bootstrap loads
+    // same-origin chunks only, so behind the zone workers and their chunks come from the
+    // app's own origin. Without a zone the option is left out: under `next dev` it sends
+    // every page into a hot-reload restart loop.
+    ...(CDN_ORIGIN ? { turbopackWorkerAssetPrefix: "" } : {}),
   },
   turbopack: {
     resolveExtensions: [".tsx", ".ts", ".jsx", ".js"],
