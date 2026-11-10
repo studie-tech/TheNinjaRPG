@@ -191,7 +191,7 @@ describe("travel actor artwork loading", () => {
     },
   );
 
-  it("budgets crowded patrol artwork while retaining the viewer and live players", () => {
+  it("budgets crowded patrol artwork at two frames per second while retaining the viewer and live players", () => {
     WORLD_DETAIL.travelCharacters = bodyBudget;
     const { actors, snapshot } = fixture();
     const patrols = Array.from({ length: 100 }, (_, i) =>
@@ -213,8 +213,8 @@ describe("travel actor artwork loading", () => {
     for (let now = 0; now < 50_000; now += 1000 / 60)
       actors.animate({ now, delta: 1 / 60, reducedMotion: false });
     expect(bodies()).toHaveLength(100);
-    for (let now = 50_000; now < 110_000; now += 1000 / 30)
-      actors.animate({ now, delta: 1 / 30, reducedMotion: false });
+    for (let now = 50_000; now < 110_000; now += 500)
+      actors.animate({ now, delta: 0.1, reducedMotion: false });
     expect(bodies()).toHaveLength(12);
     expect(bodies().map((child) => child.label)).toEqual(
       expect.arrayContaining(["user:viewer", "user:active"]),

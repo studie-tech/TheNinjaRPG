@@ -6,7 +6,8 @@ export const createTravelCharacterBudget = () => {
   let previous: number | undefined;
   let elapsed = 0,
     frames = 0,
-    healthyWindows = 0;
+    healthyWindows = 0,
+    longestGap = 0;
   return {
     get limit() {
       return limit;
@@ -15,16 +16,22 @@ export const createTravelCharacterBudget = () => {
     sample(now: number) {
       const interval = previous === undefined ? 0 : now - previous;
       previous = now;
-      // Tab suspension and isolated long stalls must not influence sustained frame pacing.
-      if (interval <= 0 || interval > 250) {
-        elapsed = frames = healthyWindows = 0;
+      if (interval <= 0) {
+        elapsed = frames = healthyWindows = longestGap = 0;
         return false;
+      }
+      // Exclude one long gap per window: suspension or an isolated stall is not
+      // sustained load, but repeated slow frames must still reduce the body count.
+      if (interval > 250) {
+        if (!longestGap) elapsed = frames = healthyWindows = 0;
+        longestGap = Math.max(longestGap, interval);
       }
       elapsed += interval;
       frames++;
-      if (elapsed < 2000) return false;
-      const average = elapsed / frames;
-      elapsed = frames = 0;
+      const measured = elapsed - longestGap;
+      if (measured < 2000) return false;
+      const average = measured / (frames - Number(longestGap > 0));
+      elapsed = frames = longestGap = 0;
       const before = limit;
       if (average > 25) {
         limit = Math.max(WORLD_DETAIL.travelCharactersMin, limit - 4);
