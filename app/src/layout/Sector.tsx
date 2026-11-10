@@ -275,6 +275,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   const walkAnimatingRef = useRef(false);
   const motionStepsRef = useRef(new Map<string, TravelMotionStep>());
+  /** Latest walk per remote user; a newer move ends the walk it replaces. */
+  const remoteWalksRef = useRef(new Map<string, number>());
   const movePendingRef = useRef(false);
   const mountedRef = useRef(true);
   // Client-authoritative sector id: updated imperatively the moment a
@@ -720,7 +722,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       const idx = usersRef.current.findIndex((u) => u.userId === data.userId);
       if (idx !== -1 && usersRef.current[idx]) {
         if (instantMove) {
-          // User exists - instant movement
+          // User exists - instant movement, which also ends any walk in progress
+          remoteWalksRef.current.delete(data.userId);
           usersRef.current[idx] = {
             ...usersRef.current[idx],
             ...data,
@@ -742,39 +745,41 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             const path = pathFinderRef.current.getShortestPath(currentHex, targetHex);
             if (path) {
               const heading = worldMotionHeading(currentHex, targetHex);
+              const walks = remoteWalksRef.current;
+              const walk = (walks.get(data.userId) ?? 0) + 1;
+              walks.set(data.userId, walk);
               for (const tile of path) {
-                const before = usersRef.current[idx];
-                const motion = before
-                  ? publishMotionStep(
-                      data.userId,
-                      {
-                        sector: data.sector,
-                        x: before.longitude,
-                        y: before.latitude,
-                      },
-                      { sector: data.sector, x: tile.col, y: tile.row },
-                      heading,
-                    )
-                  : null;
-                if (usersRef.current[idx]) {
-                  usersRef.current[idx] = {
-                    ...usersRef.current[idx],
-                    ...data,
-                    avatar: usersRef.current[idx].avatar,
-                    avatarLight: usersRef.current[idx].avatarLight,
-                    username: usersRef.current[idx].username,
-                    experience: data.experience ?? usersRef.current[idx].experience,
-                    rank: data.rank ?? usersRef.current[idx].rank,
-                    allianceStatus,
-                    longitude: tile.col,
-                    latitude: tile.row,
-                  };
-                }
+                // The list changes while a walk sleeps: others leave and arrive, and a newer
+                // move or this user's departure ends the walk.
+                const index = usersRef.current.findIndex(
+                  (u) => u.userId === data.userId,
+                );
+                const before = usersRef.current[index];
+                if (!before || walks.get(data.userId) !== walk) break;
+                const motion = publishMotionStep(
+                  data.userId,
+                  { sector: data.sector, x: before.longitude, y: before.latitude },
+                  { sector: data.sector, x: tile.col, y: tile.row },
+                  heading,
+                );
+                usersRef.current[index] = {
+                  ...before,
+                  ...data,
+                  avatar: before.avatar,
+                  avatarLight: before.avatarLight,
+                  username: before.username,
+                  experience: data.experience ?? before.experience,
+                  rank: data.rank ?? before.rank,
+                  allianceStatus,
+                  longitude: tile.col,
+                  latitude: tile.row,
+                };
                 actorRevisionRef.current++;
                 await sleep(SECTOR_WALK_STEP_MS);
                 if (motion && motionStepsRef.current.get(data.userId) === motion)
                   motionStepsRef.current.delete(data.userId);
               }
+              if (walks.get(data.userId) === walk) walks.delete(data.userId);
             }
           }
         }

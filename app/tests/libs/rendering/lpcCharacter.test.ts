@@ -1,12 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "bun:test";
-import {
-  Assets,
-  BufferImageSource,
-  Container,
-  Graphics,
-  Sprite,
-  Texture,
-} from "pixi.js";
+import { Assets, BufferImageSource, Container, type Sprite, Texture } from "pixi.js";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { getBattleGrid } from "@/libs/combat/util";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
@@ -773,14 +766,17 @@ describe("layered LPC actors", () => {
     // The server recipe takes precedence over a stale cached profile body style.
     expect(create.mock.calls[0]?.[1]).toEqual(appearance);
     expect(renders).toHaveLength(1);
-    expect((root.children[0] as Graphics).context.fillStyle.color).toBe(0x081115);
-    expect((root.children[0] as Graphics).context.strokeStyle.color).toBe(0x3c80bb);
+    // The shared contact ring takes the alliance colour as its tint.
+    const ring = (actor: Container) =>
+      actors.groundEffects.shadows.getChildByLabel(`${actor.label}:ground`)!
+        .children[0] as Sprite;
+    expect(ring(root).label).toBe("contact-ring");
+    expect(ring(root).tint).toBe(0x3c80bb);
     user.allianceStatus = "ENEMY";
     actors.sync(snapshot);
     const hostile = actors.container.children[0]!;
     expect(root.destroyed).toBe(true);
-    expect((hostile.children[0] as Graphics).context.fillStyle.color).toBe(0x081115);
-    expect((hostile.children[0] as Graphics).context.strokeStyle.color).toBe(0xb84040);
+    expect(ring(hostile).tint).toBe(0xb84040);
     actors.setViewport({
       minX: -farTile.center.x,
       maxX: -farTile.center.x,

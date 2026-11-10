@@ -1,4 +1,4 @@
-import { Container, Rectangle, Sprite, Texture, type TextureSource } from "pixi.js";
+import { Container, Rectangle, Sprite, Texture } from "pixi.js";
 import {
   LPC_ATTACK_FRAME_MS,
   LPC_IDLE_FRAME_MS,
@@ -6,13 +6,17 @@ import {
   lpcFrameDuration,
   spriteLayerSheets,
 } from "@/libs/lpc/catalog";
-import { stabilizeNearestTexture } from "@/libs/rendering/assets";
+import { sharedFrameTexture } from "@/libs/rendering/assets";
+import type { CompositeCell } from "@/libs/rendering/characterComposites";
+import { createWindSprite } from "@/libs/rendering/primitives/windSprites";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import type { LpcAnimation, LpcDirection, SpriteAppearance } from "@/validators/lpc";
 
 /**
  * Acquire shared atlas leases and build a unit-square actor with lazily cached frame views.
  * Movement mode omits attack atlases; image sources own shared frame views until eviction.
+ * With the renderer's composites, movement-mode actors draw one composited frame: their layers
+ * stay in an offscreen rig (still posed every frame, so `layers` keep describing the figure).
  */
 export const createLpcCharacter = async (
   game: GameRenderer,
@@ -49,15 +53,42 @@ export const createLpcCharacter = async (
     throw new DOMException("Character cancelled", "AbortError");
   // A unit-square root preserves the existing actor/hit-testing contract.
   const sprite = new Container({ boundsArea: new Rectangle(-0.5, -0.5, 1, 1) });
-  sprite.sortableChildren = true;
+  const composites = mode === "travel" ? game.characterComposites : undefined;
+  const rig = composites ? new Container() : sprite;
+  rig.sortableChildren = true;
+  // A still wind sprite shares the scenery's batches, so actors between trees add no draw calls.
+  const body = composites ? createWindSprite(game.renderer, Texture.EMPTY, 0) : null;
+  if (body) {
+    body.anchor.set(0.5);
+    body.scale.set(1 / 64);
+    body.label = "composite";
+    sprite.addChild(body);
+  }
   const layers = loaded.map((part) => {
     const child = new Sprite(Texture.EMPTY);
     child.anchor.set(0.5);
     child.scale.set((part.layer.mirror ? -1 : 1) / 64, 1 / 64);
     child.zIndex = part.sheet.z;
-    sprite.addChild(child);
+    rig.addChild(child);
     return { ...part, child };
   });
+  /** Painted poses by state, direction and step; a walking cycle repeats the same few. */
+  const paints = new Map<string, { textures: (Texture | null)[]; key: string }>();
+  let shown: CompositeCell | null = null,
+    shownEpoch = -1,
+    poseKey = "";
+  /** Show the composited frame of the rig's current pose, requesting it when new or lost. */
+  const present = () => {
+    if (!composites || !body) return;
+    if (shown?.key === poseKey && shownEpoch === composites.epoch()) return;
+    const next = composites.acquire(poseKey, rig);
+    // A full atlas keeps the previous frame on screen rather than a blank figure.
+    if (!next) return;
+    if (shown) composites.release(shown);
+    shown = next;
+    shownEpoch = composites.epoch();
+    body.texture = next.texture;
+  };
   const durations: Partial<Record<LpcAnimation, number>> = {};
   const poseOwners = new Map<LpcAnimation, (typeof parts)[number]>();
   // Every visible profile must agree on a pose; legacy gear stays attached to the neutral outfit.
@@ -139,8 +170,10 @@ export const createLpcCharacter = async (
       paintedDirection === direction &&
       paintedStep === sampleStep &&
       paintedReducedMotion === frame.reducedMotion
-    )
+    ) {
+      present();
       return;
+    }
     paintedState = sampleState;
     paintedDirection = direction;
     paintedStep = sampleStep;
@@ -150,12 +183,41 @@ export const createLpcCharacter = async (
     const poseOwner = poseOwners.get(sampleState);
     const pose =
       poseOwner && lpcCatalog.layouts[poseOwner.sheet.layout]!.bodyPoses![sampleState]!;
-    const opposite = direction === 1 ? 3 : direction === 3 ? 1 : direction;
-    const poses = pose?.frames[poseOwner?.layer.mirror ? opposite : direction];
     const step = frame.reducedMotion
       ? 0
       : Math.floor(Math.max(0, elapsed) / LPC_ATTACK_FRAME_MS);
+    // Without a body pose every layer samples its own clip at the pose's step.
+    const paintKey = `${sampleState}:${direction}:${sampleStep}:${pose ? step : ""}:${Number(frame.reducedMotion)}`;
+    let painted = paints.get(paintKey);
+    if (!painted) {
+      painted = paint(sampleState, direction, elapsed, step, frame.reducedMotion);
+      paints.set(paintKey, painted);
+    }
+    for (const [index, entry] of layers.entries()) {
+      const texture = painted.textures[index];
+      entry.child.visible = !!texture;
+      if (texture && entry.child.texture !== texture) entry.child.texture = texture;
+    }
+    poseKey = painted.key;
+    present();
+  };
+  /** Layer frames of one sampled pose, and its composite key. */
+  const paint = (
+    sampleState: LpcAnimation,
+    direction: LpcDirection,
+    elapsed: number,
+    step: number,
+    reducedMotion: boolean,
+  ) => {
+    const poseOwner = poseOwners.get(sampleState);
+    const pose =
+      poseOwner && lpcCatalog.layouts[poseOwner.sheet.layout]!.bodyPoses![sampleState]!;
+    const opposite = direction === 1 ? 3 : direction === 3 ? 1 : direction;
+    const poses = pose?.frames[poseOwner?.layer.mirror ? opposite : direction];
     const poseStep = poses?.[Math.min(step, poses.length - 1)];
+    const textures: (Texture | null)[] = [];
+    // Layer textures and mirroring identify a frame; identical outfits share its composite.
+    let key = "";
     for (const entry of layers) {
       const facing = entry.layer.mirror ? opposite : direction;
       const customPose =
@@ -166,7 +228,7 @@ export const createLpcCharacter = async (
         entry.authored.has(animation) &&
         !lpcCatalog.layouts[entry.sheet.layout]?.clips[animation]
       ) {
-        entry.child.visible = false;
+        textures.push(null);
         continue;
       }
       const customFrames = customPose?.frames[facing];
@@ -189,17 +251,28 @@ export const createLpcCharacter = async (
           : usesBodyPose
             ? (poseStep ?? 0) * LPC_ATTACK_FRAME_MS
             : elapsed,
-        usesBodyPose || customPose ? false : frame.reducedMotion,
+        usesBodyPose || customPose ? false : reducedMotion,
       );
-      entry.child.visible = !!sample;
-      if (!sample) continue;
-      const texture = frameTexture(entry.texture.source, sample);
-      if (entry.child.texture !== texture) entry.child.texture = texture;
+      const texture = sample
+        ? sharedFrameTexture(
+            entry.texture.source,
+            sample,
+            { width: sample.size, height: sample.size },
+            sample.trim,
+          )
+        : null;
+      textures.push(texture);
+      if (texture) key += `${texture.uid}${entry.layer.mirror ? "m" : ""},`;
     }
+    return { textures, key };
   };
   render({ now: 0, delta: 0, reducedMotion: true });
   game.own(() => {
     disposed = true;
+    if (shown) composites?.release(shown);
+    shown = null;
+    if (rig !== sprite && !rig.destroyed)
+      rig.destroy({ children: true, texture: false, textureSource: false });
     if (!sprite.destroyed)
       sprite.destroy({ children: true, texture: false, textureSource: false });
   });
@@ -212,42 +285,6 @@ export const createLpcCharacter = async (
     ),
     layers: layers.map(({ child, sheet }) => ({ sprite: child, image: sheet.image })),
   };
-};
-
-const sourceFrames = new WeakMap<TextureSource, Map<string, Texture>>();
-
-/** GPU unload preserves frame views so context restoration can reupload the leased source. */
-const frameTexture = (
-  source: TextureSource,
-  sample: NonNullable<ReturnType<typeof lpcFrame>>,
-) => {
-  let views = sourceFrames.get(source);
-  if (!views) {
-    const owned = new Map<string, Texture>();
-    views = owned;
-    sourceFrames.set(source, owned);
-    source.once("destroy", () => {
-      for (const texture of owned.values()) texture.destroy(false);
-      owned.clear();
-      sourceFrames.delete(source);
-    });
-  }
-  const key = `${sample.x}:${sample.y}:${sample.width}:${sample.height}:${sample.size}:${sample.trim?.x ?? ""}:${sample.trim?.y ?? ""}`;
-  let texture = views.get(key);
-  if (!texture) {
-    texture = stabilizeNearestTexture(
-      new Texture({
-        source,
-        frame: new Rectangle(sample.x, sample.y, sample.width, sample.height),
-        orig: new Rectangle(0, 0, sample.size, sample.size),
-        trim: sample.trim
-          ? new Rectangle(sample.trim.x, sample.trim.y, sample.width, sample.height)
-          : undefined,
-      }),
-    );
-    views.set(key, texture);
-  }
-  return texture;
 };
 
 export type LpcCharacter = Awaited<ReturnType<typeof createLpcCharacter>>;

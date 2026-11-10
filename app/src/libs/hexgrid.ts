@@ -288,6 +288,8 @@ export const getPossibleActionTiles = (
  */
 export class PathCalculator {
   cache: Map<string, TerrainHex[] | undefined>;
+  /** Passable neighbours per tile; like the path cache, valid while tiles stay unchanged. */
+  neighborCache = new Map<TerrainHex, TerrainHex[]>();
   grid: Grid<TerrainHex>;
   /**
    * Lower bound on what a single step can cost, so the heuristic below can be scaled by it and
@@ -335,11 +337,17 @@ export class PathCalculator {
       start: origin,
       goal: target,
       estimate: (tile) => this.minStepCost * this.grid.distance(tile, target),
-      neighbors: (center) =>
-        this.grid
-          .traverse(ring({ radius: 1, center }))
-          .toArray()
-          .filter((tile) => !tile.blocked),
+      neighbors: (center) => {
+        let tiles = this.neighborCache.get(center);
+        if (!tiles) {
+          tiles = this.grid
+            .traverse(ring({ radius: 1, center }))
+            .toArray()
+            .filter((tile) => !tile.blocked);
+          this.neighborCache.set(center, tiles);
+        }
+        return tiles;
+      },
       stepCost: (from, to) => to.cost + from.cost,
     });
     this.cache.set(key, shortestPath);

@@ -58,3 +58,74 @@ const contacts = createLeaseCache<Texture>({
 
 /** Actors and scenery lease one contact mask; the final release destroys its texture and source. */
 export const acquireSoftShadowTexture = () => contacts.acquire("contact");
+
+let lightTexture: Texture | null = null;
+const lights = createLeaseCache<Texture>({
+  load: async () => {
+    lightTexture = createPixelLightTexture();
+    return lightTexture;
+  },
+  unload: async () => {
+    lightTexture?.destroy(true);
+    lightTexture = null;
+  },
+  bytes: (texture) => texture.width * texture.height * 4,
+  idleBudget: 0,
+});
+
+/** Lamps and actors share one light pool texture, so their additive pools batch together. */
+export const acquirePixelLightTexture = () => lights.acquire("light");
+
+/** Ellipse proportions of the ring under a walking character, relative to its width. */
+export const CONTACT_RING = {
+  width: 128,
+  height: 48,
+  radiusX: 60,
+  radiusY: 20.57,
+  stroke: 3.67,
+};
+
+/**
+ * A dark contact ellipse with a white rim; the actor tints it with its alliance colour, which
+ * leaves the near-black fill unchanged.
+ */
+export const createContactRingTexture = () => {
+  const canvas = document.createElement("canvas");
+  canvas.width = CONTACT_RING.width;
+  canvas.height = CONTACT_RING.height;
+  const context = canvas.getContext("2d");
+  if (context) {
+    const { width, height, radiusX, radiusY, stroke } = CONTACT_RING;
+    context.beginPath();
+    context.ellipse(width / 2, height / 2, radiusX, radiusY, 0, 0, Math.PI * 2);
+    context.fillStyle = "rgba(8,17,21,0.4)";
+    context.fill();
+    context.lineWidth = stroke;
+    context.strokeStyle = "rgba(255,255,255,0.45)";
+    context.stroke();
+  }
+  return Texture.from(canvas, true);
+};
+
+let ring: { texture: Texture; users: number } | null = null;
+
+/**
+ * Every character's contact ring is one quad from this shared texture. Actors place their ring
+ * the moment they appear, so the lease is synchronous; the last release destroys it.
+ */
+export const acquireContactRingTexture = () => {
+  ring ??= { texture: createContactRingTexture(), users: 0 };
+  const lease = ring;
+  lease.users++;
+  let released = false;
+  return {
+    texture: lease.texture,
+    release: () => {
+      if (released) return;
+      released = true;
+      if (--lease.users > 0) return;
+      if (ring === lease) ring = null;
+      lease.texture.destroy(true);
+    },
+  };
+};

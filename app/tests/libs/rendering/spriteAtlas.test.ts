@@ -517,7 +517,8 @@ describe("world sprite atlas ownership", () => {
     }
     const view = sprite.texture;
     art.dispose();
-    expect(view.destroyed).toBe(true);
+    // The cutout view belongs to its source, which other art sets may still draw from.
+    expect(view.destroyed).toBe(false);
     expect(texture.destroyed).toBe(false);
     expect(texture.source.destroyed).toBe(false);
   });
@@ -778,7 +779,7 @@ describe("world sprite atlas ownership", () => {
       }
     }
   });
-  it("shares a decoded source while owning independent frame views", async () => {
+  it("shares a decoded source and one frame view per rectangle for the source's lifetime", async () => {
     const source = new BufferImageSource({
       resource: new Uint8Array(32 * 16 * 4),
       width: 32,
@@ -824,13 +825,21 @@ describe("world sprite atlas ownership", () => {
     art.setViewport({ minX: 1000, minY: 1000, maxX: 2000, maxY: 2000 }, 0);
     expect(art.entries[0]?.sprite.renderable).toBe(false);
     expect(shadow?.renderable).toBe(false);
+    // Retiring an art set leaves the shared views to the next one; the source destroys them.
+    const again = await createWorldSprites(game, [
+      { ...base, id: "left-again", frame: { x: 0, y: 0, width: 16, height: 16 } },
+    ]);
+    expect((again.entries[0]!.sprite as Sprite).texture).toBe(left!);
     art.dispose();
-    expect(left?.destroyed).toBe(true);
-    expect(right?.destroyed).toBe(true);
+    again.dispose();
+    expect(left?.destroyed).toBe(false);
+    expect(right?.destroyed).toBe(false);
     expect(source.destroyed).toBe(false);
     for (const cleanup of owned) cleanup();
     expect(source.destroyed).toBe(false);
     original.destroy(true);
+    expect(left?.destroyed).toBe(true);
+    expect(right?.destroyed).toBe(true);
   });
   it("requests physical shadow materials beside their artwork and hands them to registration", async () => {
     const original = new Texture({

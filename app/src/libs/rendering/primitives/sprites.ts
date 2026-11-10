@@ -1,19 +1,12 @@
 import type { Grid } from "honeycomb-grid";
-import {
-  Color,
-  Container,
-  Rectangle,
-  type RenderLayer,
-  Sprite,
-  Texture,
-} from "pixi.js";
+import { Color, Container, type RenderLayer, Sprite, Texture } from "pixi.js";
 import type { AvatarFacing } from "@/drizzle/constants";
 import { type TerrainHex, tileKeysNear } from "@/libs/hexgrid";
 import { sampleAnimationClip } from "@/libs/rendering/animation";
 import {
   createSceneAssets,
   readTexturePixels,
-  stabilizeNearestTexture,
+  sharedFrameTexture,
   textureGroundContact,
   textureOpaqueFrame,
 } from "@/libs/rendering/assets";
@@ -25,8 +18,8 @@ import {
   type LpcCharacter,
 } from "@/libs/rendering/primitives/character";
 import {
+  acquirePixelLightTexture,
   acquireSoftShadowTexture,
-  createPixelLightTexture,
 } from "@/libs/rendering/primitives/shadow";
 import {
   createWindSprite,
@@ -97,7 +90,6 @@ export const createWorldSprites = async (
     );
   const assets = createSceneAssets();
   const masked: ReturnType<typeof acquireMaskedTexture>[] = [];
-  const views: Texture[] = [];
   const materials: ReturnType<WorldShadows["register"]>[] = [];
   // Physical shadow materials and frame topology download beside their artwork;
   // registration reuses these leases.
@@ -118,6 +110,7 @@ export const createWorldSprites = async (
     for (const lease of preparedMaterials.splice(0)) lease.release();
   };
   let lightTexture: Texture | null = null,
+    lightLease: ReturnType<typeof acquirePixelLightTexture> | null = null,
     shadowLease: ReturnType<typeof acquireSoftShadowTexture> | null = null;
   const container = new Container();
   const entries: {
@@ -148,15 +141,13 @@ export const createWorldSprites = async (
     pendingContacts.clear();
     if (!container.destroyed)
       container.destroy({ children: true, texture: false, textureSource: false });
-    for (const view of views) view.destroy(false);
     for (const entry of entries) {
       entry.motion?.dispose();
       entry.loop?.dispose();
       entry.walk?.dispose();
     }
-    lightTexture?.destroy(true);
+    lightLease?.release();
     shadowLease?.release();
-    views.length = 0;
     assets.dispose();
     for (const lease of masked) lease.release();
     masked.length = 0;
@@ -270,6 +261,21 @@ export const createWorldSprites = async (
       throw error;
     }
   }
+  if (
+    !disposed &&
+    !game.signal.aborted &&
+    worldShadows?.kind !== "physical" &&
+    worldShadows?.kind !== "baked" &&
+    descriptions.some((description) => description.light)
+  ) {
+    lightLease = acquirePixelLightTexture();
+    try {
+      lightTexture = await lightLease.resource;
+    } catch (error) {
+      dispose();
+      throw error;
+    }
+  }
   if (disposed || game.signal.aborted) {
     dispose();
     throw new DOMException("Scenery cancelled", "AbortError");
@@ -299,16 +305,8 @@ export const createWorldSprites = async (
       const { description } = result.value;
       const { character } = result.value;
       let { texture } = result.value;
-      if (texture && description.frame) {
-        const { x, y, width, height } = description.frame;
-        texture = stabilizeNearestTexture(
-          new Texture({
-            source: texture.source,
-            frame: new Rectangle(x, y, width, height),
-          }),
-        );
-        views.push(texture);
-      }
+      if (texture && description.frame)
+        texture = sharedFrameTexture(texture.source, description.frame);
       const sprite =
         character?.sprite ??
         (description.mask || description.unlit || description.motion
@@ -366,10 +364,7 @@ export const createWorldSprites = async (
             (frame.y - texture.frame.y)) /
             frame.height,
         );
-        texture = stabilizeNearestTexture(
-          new Texture({ source: texture.source, frame }),
-        );
-        views.push(texture);
+        texture = sharedFrameTexture(texture.source, frame);
         sprite.texture = texture;
         sprite.scale.copyFrom(scale);
       }
@@ -482,8 +477,7 @@ export const createWorldSprites = async (
           lights.alpha = 0;
           container.addChildAt(lights, shadows ? 1 : 0);
         }
-        lightTexture ??= createPixelLightTexture();
-        light = new Sprite(lightTexture);
+        light = new Sprite(lightTexture ?? Texture.EMPTY);
         light.anchor.set(0.5);
         light.position.set(characterFoot?.x ?? description.x, footY);
         light.width =

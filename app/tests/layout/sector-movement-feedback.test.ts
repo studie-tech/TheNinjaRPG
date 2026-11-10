@@ -96,6 +96,7 @@ it("keeps the viewer's own marker when its profile still records the previous se
     },
     sectorRef: { current: 227 },
     actorRevisionRef: { current: 0 },
+    remoteWalksRef: { current: new Map<string, number>() },
     isUserCurrentlyStealthed: () => false,
     mapAttackRelation: () => "NEUTRAL",
     warData: undefined,
@@ -219,3 +220,99 @@ it.each([true, false])(
     expect(test.scope.refreshMovementPosition).toHaveBeenCalledTimes(hasData ? 0 : 1);
   },
 );
+
+/** Remote walks step through a straight path, one tile per (zero-length) walking step. */
+const walkScope = (
+  users: { userId: string; longitude: number; latitude: number }[],
+) => {
+  const scope = {
+    userRef: { current: { userId: "self" } },
+    userData: { userId: "self" },
+    usersRef: { current: users.map((user) => ({ ...user, sector: 1 })) },
+    sectorRef: { current: 1 },
+    actorRevisionRef: { current: 0 },
+    remoteWalksRef: { current: new Map<string, number>() },
+    motionStepsRef: { current: new Map() },
+    gridRef: { current: {} },
+    findHex: (_grid: unknown, { x, y }: { x: number; y: number }) => ({
+      col: x,
+      row: y,
+    }),
+    pathFinderRef: {
+      current: {
+        getShortestPath: (
+          from: { col: number; row: number },
+          to: { col: number; row: number },
+        ) => {
+          const path = [];
+          for (let col = from.col, row = from.row; col !== to.col || row !== to.row; ) {
+            col += Math.sign(to.col - col);
+            row += Math.sign(to.row - row);
+            path.push({ col, row });
+          }
+          return path;
+        },
+      },
+    },
+    worldMotionHeading: () => ({ direction: "horizontal", facing: 1 }),
+    publishMotionStep: () => null,
+    sleep: () => new Promise((resolve) => setTimeout(resolve, 0)),
+    SECTOR_WALK_STEP_MS: 0,
+    isUserCurrentlyStealthed: () => false,
+    mapAttackRelation: () => "NEUTRAL",
+    warData: undefined,
+    publishSurroundings: () => undefined,
+    utils: { travel: { getSectorData: { invalidate: vi.fn(async () => {}) } } },
+  };
+  const updateUsersList = evaluate(
+    `${block("  const updateUsersList = async (", "\n\n  /** Stand the own marker")}\nreturn updateUsersList;`,
+    scope,
+  ) as (data: unknown) => Promise<void>;
+  return { scope, updateUsersList };
+};
+
+it("walks a remote user by identity while others leave the list mid-walk", async () => {
+  const { scope, updateUsersList } = walkScope([
+    { userId: "leaver", longitude: 9, latitude: 9 },
+    { userId: "walker", longitude: 0, latitude: 0 },
+    { userId: "bystander", longitude: 5, latitude: 5 },
+  ]);
+  const walk = updateUsersList({
+    userId: "walker",
+    sector: 1,
+    longitude: 3,
+    latitude: 0,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // A departure shifts every later index while the walk sleeps between steps.
+  scope.usersRef.current.splice(0, 1);
+  await walk;
+  const users = scope.usersRef.current.map((user) => [user.userId, user.longitude]);
+  expect(users).toEqual([
+    ["walker", 3],
+    ["bystander", 5],
+  ]);
+});
+
+it("ends a remote walk when a newer move for the same user arrives", async () => {
+  const { scope, updateUsersList } = walkScope([
+    { userId: "walker", longitude: 0, latitude: 0 },
+  ]);
+  // The first walk is longer, so it would still be stepping after the second one ends.
+  const first = updateUsersList({
+    userId: "walker",
+    sector: 1,
+    longitude: 8,
+    latitude: 0,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const second = updateUsersList({
+    userId: "walker",
+    sector: 1,
+    longitude: 1,
+    latitude: 3,
+  });
+  await Promise.all([first, second]);
+  expect(scope.usersRef.current).toHaveLength(1);
+  expect(scope.usersRef.current[0]).toMatchObject({ longitude: 1, latitude: 3 });
+});

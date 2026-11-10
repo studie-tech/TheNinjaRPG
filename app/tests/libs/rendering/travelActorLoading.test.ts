@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import {
   Assets,
+  BitmapText,
   BufferImageSource,
   Container,
   Graphics,
   RenderLayer,
   Sprite,
-  Text,
   Texture,
 } from "pixi.js";
 import { getBattleGrid } from "@/libs/combat/util";
@@ -16,6 +16,7 @@ import {
 } from "@/libs/lpc/appearance";
 import * as maskedTextures from "@/libs/rendering/maskedTextures";
 import * as characters from "@/libs/rendering/primitives/character";
+import { CONTACT_RING } from "@/libs/rendering/primitives/shadow";
 import type { GameRenderer } from "@/libs/rendering/runtime";
 import {
   createTravelActors,
@@ -25,6 +26,7 @@ import {
 } from "@/libs/rendering/scenes/travelActors";
 import { standingOffset } from "@/libs/rendering/terrainElevation";
 import type { WorldBounds } from "@/libs/rendering/visibility";
+import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/routers/profile";
 import { deferred } from "../../setup/deferred";
@@ -114,7 +116,10 @@ const holdCharacters = () => {
 };
 const bodyPoint = (root: Container, tile: { width: number; height: number }) =>
   root.toGlobal({ x: tile.width / 2, y: tile.height * (0.1 + (1.8 * 0.7) / 2) });
+// Selection tests use a small body budget, so their crowds stay small.
+const bodyBudget = WORLD_DETAIL.travelCharacters;
 beforeEach(() => {
+  WORLD_DETAIL.travelCharacters = 20;
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
   const texture = new Texture({
     source: new BufferImageSource({
@@ -132,9 +137,17 @@ beforeEach(() => {
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 afterEach(async () => {
+  WORLD_DETAIL.travelCharacters = bodyBudget;
   for (const cleanup of cleanups.splice(0)) cleanup();
   await settle();
   vi.restoreAllMocks();
+});
+
+/** The drawn ellipse of a contact ring sprite: its rim, without the texture's padding. */
+const ringExtent = (ring: Sprite) => ({
+  width: ring.scale.x * (2 * CONTACT_RING.radiusX + CONTACT_RING.stroke),
+  height: ring.scale.y * (2 * CONTACT_RING.radiusY + CONTACT_RING.stroke),
+  centerY: ring.y,
 });
 
 describe("travel actor artwork loading", () => {
@@ -316,21 +329,34 @@ describe("travel actor artwork loading", () => {
     const { actors, snapshot, ground } = fixture();
     actors.sync(snapshot([player(0), player(1)]));
     await settle();
-    const effects = ground.renderLayerChildren;
-    expect(effects.map((effect) => effect.label)).toEqual([
-      "scenery-shadows",
-      "scenery-shadows",
-      "scenery-lights",
-      "scenery-lights",
+    // Rings, contact shadows and light pools leave the shared ground layer for two groups
+    // of their own, so upright figures batch with the scenery and re-sorts skip them.
+    expect(ground.renderLayerChildren).toHaveLength(0);
+    const { shadows, lights } = actors.groundEffects;
+    expect(shadows.isRenderGroup && lights.isRenderGroup).toBe(true);
+    expect(
+      shadows.children.map((effects) => effects.children.map((child) => child.label)),
+    ).toEqual([
+      ["contact-ring", "scenery-shadows"],
+      ["contact-ring", "scenery-shadows"],
     ]);
-    const light = effects[2]!;
-    const root = light.parent!.parent!;
+    expect(
+      lights.children.map((effects) => effects.children.map((child) => child.label)),
+    ).toEqual([["scenery-lights"], ["scenery-lights"]]);
+    const root = actors.container.getChildByLabel("user:loading-0")!;
+    const light = lights.getChildByLabel("user:loading-0:lights")!.children[0]!;
+    actors.animate(frame);
     const before = light.toGlobal({ x: 0, y: 0 });
-    root.x += 12;
+    actors.animate(
+      frame,
+      new Map([
+        ["loading-0", { x: root.x + 12, y: root.y, direction: null, facing: 1 }],
+      ]),
+    );
     expect(light.toGlobal({ x: 0, y: 0 }).x - before.x).toBeCloseTo(12);
     actors.sync(snapshot([player(0)]));
-    expect(ground.renderLayerChildren).toHaveLength(2);
-    expect(ground.renderLayerChildren.every((effect) => !effect.destroyed)).toBe(true);
+    expect(shadows.children).toHaveLength(1);
+    expect(lights.children).toHaveLength(1);
   });
   it("resolves visibility once per occupied tile while retaining the entire crowd count", () => {
     holdCharacters();
@@ -351,9 +377,13 @@ describe("travel actor artwork loading", () => {
     expect(
       actors.container.children.filter((root) => root.label.startsWith("user:")),
     ).toHaveLength(20);
-    const badge = actors.container.getChildByLabel("count:4,4")!;
+    const badge = actors.badges.getChildByLabel("count:4,4")!;
     expect(
-      (badge.children[0]!.children.find((child) => child instanceof Text) as Text).text,
+      (
+        badge.children[0]!.children.find(
+          (child) => child instanceof BitmapText,
+        ) as BitmapText
+      ).text,
     ).toBe("264");
   });
 
@@ -364,20 +394,22 @@ describe("travel actor artwork loading", () => {
     actors.sync(snapshot([target, neighbor]));
     await settle();
     const root = actors.container.getChildByLabel("user:loading-0")!;
+    // Hidden controls leave the scene graph until their actor is hovered.
+    expect(root.getChildByLabel("info", true)).toBeNull();
+    actors.hover("user:loading-0");
     const info = root.getChildByLabel("info", true)!,
       heal = root.getChildByLabel("heal", true)!;
-    expect(info.visible).toBe(false);
-    actors.hover("user:loading-0");
-    expect(info.visible).toBe(true);
-    expect(heal.visible).toBe(true);
+    const shown = (control: Container) => control.visible && !!control.parent;
+    expect(shown(info)).toBe(true);
+    expect(shown(heal)).toBe(true);
     actors.sync(snapshot([target, { ...neighbor, longitude: 4 }]));
-    expect(info.visible).toBe(false);
-    expect(heal.visible).toBe(false);
+    expect(shown(info)).toBe(false);
+    expect(shown(heal)).toBe(false);
     actors.sync(snapshot([{ ...target, curHealth: target.maxHealth }, neighbor]));
-    expect(info.visible).toBe(true);
-    expect(heal.visible).toBe(false);
+    expect(shown(info)).toBe(true);
+    expect(shown(heal)).toBe(false);
     actors.hover(null);
-    expect(info.visible).toBe(false);
+    expect(shown(info)).toBe(false);
   });
 
   it("retains a crowd badge and loaded actors when its count changes", async () => {
@@ -387,10 +419,10 @@ describe("travel actor artwork loading", () => {
       player(i, { longitude: 4, latitude: 4 }),
     );
     actors.sync(snapshot(users));
-    const badge = actors.container.getChildByLabel("count:4,4")!;
-    const labels: Text[] = [];
+    const badge = actors.badges.getChildByLabel("count:4,4")!;
+    const labels: BitmapText[] = [];
     const visit = (root: Container) => {
-      if (root instanceof Text) labels.push(root);
+      if (root instanceof BitmapText) labels.push(root);
       for (const child of root.children) visit(child);
     };
     visit(badge);
@@ -400,7 +432,7 @@ describe("travel actor artwork loading", () => {
       root.label?.startsWith("user:"),
     );
     actors.sync(snapshot(users.slice(0, 3)));
-    expect(actors.container.getChildByLabel("count:4,4")).toBe(badge);
+    expect(actors.badges.getChildByLabel("count:4,4")).toBe(badge);
     expect(label.destroyed).toBe(false);
     expect(label.text).toBe("3");
     expect(
@@ -578,9 +610,27 @@ describe("travel actor artwork loading", () => {
       fixed.zIndex = -100;
       stage.addChild(fixed);
       depth.attach(fixed);
+      const tile = grid.getHex({ col: 4, row: 4 })!;
+      // A walking figure spans 24 of its frame's 64 columns and 48 rows above its feet.
+      const figure = (root: Container) => {
+        const size = tile.height * 1.8 * 0.7;
+        const x = root.x + tile.width / 2,
+          y = root.y + tile.height * (0.1 + (1.8 * 0.7) / 2) - (size * 28) / 64;
+        return {
+          minX: x - (size * 12) / 64,
+          maxX: x + (size * 12) / 64,
+          minY: y,
+          maxY: y + (size * 48) / 64,
+        };
+      };
+      const overlap = (a: WorldBounds, b: WorldBounds) =>
+        a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY;
+      let now = frame.now;
       const check = (a: number, b: number) => {
+        // Actors passing each other re-sort in their own slot, a fraction of a second apart.
+        now += 200;
         actors.animate(
-          frame,
+          { ...frame, now },
           new Map(
             users.map((user, index) => [
               user.userId,
@@ -595,10 +645,21 @@ describe("travel actor artwork loading", () => {
         );
         const contact = (root: Container) =>
           root === fixed ? root.zIndex : -(root.y + offset + actors.container.y);
-        for (let i = 1; i < depth.renderLayerChildren.length; i++)
-          expect(contact(depth.renderLayerChildren[i - 1]!)).toBeLessThanOrEqual(
-            contact(depth.renderLayerChildren[i]!),
-          );
+        const order = depth.renderLayerChildren;
+        for (let i = 0; i < order.length; i++)
+          for (let j = i + 1; j < order.length; j++) {
+            const first = order[i]!,
+              second = order[j]!;
+            // Actors whose figures do not touch may keep a stale order until they do.
+            if (
+              spatial &&
+              first !== fixed &&
+              second !== fixed &&
+              !overlap(figure(first), figure(second))
+            )
+              continue;
+            expect(contact(first)).toBeLessThanOrEqual(contact(second));
+          }
       };
       for (let i = 0; i < 100; i++)
         check(-100 + 35 * Math.sin(i * 0.7), -100 + 35 * Math.cos(i * 0.4));
@@ -788,7 +849,7 @@ describe("travel actor artwork loading", () => {
     );
     expect(bodies).toHaveLength(20);
     expect(
-      actors.container.children.filter((root) => root.label.startsWith("count:")),
+      actors.badges.children.filter((root) => root.label.startsWith("count:")),
     ).toHaveLength(0);
     for (const root of bodies) {
       const index = Number(root.label.slice("user:loading-".length));
@@ -852,10 +913,10 @@ describe("travel actor artwork loading", () => {
     expect(bodies().some((root) => root.label === "user:viewer")).toBe(true);
     const totals: string[] = [];
     const visit = (root: Container) => {
-      if (root instanceof Text) totals.push(root.text);
+      if (root instanceof BitmapText) totals.push(root.text);
       for (const child of root.children) visit(child);
     };
-    for (const root of actors.container.children)
+    for (const root of actors.badges.children)
       if (root.label.startsWith("count:")) visit(root);
     expect(totals).toEqual(["30"]);
   });
@@ -990,12 +1051,13 @@ describe("travel actor artwork loading", () => {
     expect(fallback.scale.x).toBeCloseTo(tile.height * 1.8 * 0.7);
     expect(fallback.scale.y).toBeCloseTo(-tile.height * 1.8 * 0.7);
     expect(fallback.y - fallback.scale.x / 2).toBeCloseTo(tile.height * 0.1);
-    const shadow = (root.children[0] as Graphics).getLocalBounds();
+    const shadow = ringExtent(
+      actors.groundEffects.shadows.getChildByLabel(`${root.label}:ground`)!
+        .children[0] as Sprite,
+    );
     expect(shadow.width).toBeCloseTo(tile.height * (0.35 * 2 * 0.7 + 0.015));
     expect(shadow.height).toBeCloseTo(tile.height * (0.12 * 2 * 0.7 + 0.015));
-    expect(shadow.y + shadow.height / 2).toBeCloseTo(
-      tile.height * (0.1 + (1.8 * 0.7 * 4) / 64),
-    );
+    expect(shadow.centerY).toBeCloseTo(tile.height * (0.1 + (1.8 * 0.7 * 4) / 64));
     actors.sync(snapshot([player(0, { longitude: 1 })]));
     actors.animate(frame);
     const expectedBounds = fallback.getBounds();

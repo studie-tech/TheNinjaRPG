@@ -161,6 +161,8 @@ export const createTravelScene = async (options: {
       terrainDrawLayer,
       groundArtLayer,
       actorGroundLayer,
+      actors.groundEffects.shadows,
+      actors.groundEffects.lights,
       route.container,
       depthLayer,
     );
@@ -171,6 +173,7 @@ export const createTravelScene = async (options: {
       weather.container,
       uiLayer,
       actors.container,
+      actors.badges,
     );
     game.stage.addChild(world);
     const sectors = new Map<number, TravelSector>();
@@ -328,6 +331,7 @@ export const createTravelScene = async (options: {
       lastPath: string | null = null,
       hover = "";
     let lastActorSnapshot: TravelSnapshot | null = null;
+    let lastActorSyncAt = Number.NEGATIVE_INFINITY;
     let lastShowAmbient: boolean | undefined;
     const wanderSpotCache = new Map<string, WanderTile[]>();
     /** Each roaming member's current walk in world points; rebuilt only when its cycle moves on. */
@@ -554,6 +558,11 @@ export const createTravelScene = async (options: {
           }
         const field = nav ? createTerrainField(nav.pathFinder.grid, cells) : null;
         shoreline = { key: shorelineKey, nav, cells, field, keys: new Map() };
+        // The window's terrain field is a task of its own; sectors build after it.
+        if (!initial) {
+          await yieldToFrame(game);
+          if (disposed || token !== generation) return;
+        }
       }
       const { nav, cells, field } = shoreline;
       for (const entry of ordered) {
@@ -640,7 +649,7 @@ export const createTravelScene = async (options: {
         // Only the edge changed: rebuild the terrain mesh under the sector's retained scenery.
         if (existing?.artKey === artKey && sectorField) {
           if (!initial) {
-            await yieldToFrame();
+            await yieldToFrame(game);
             if (disposed || token !== generation) return;
           }
           const { roads, wall, seed, descriptions } = existing.terrainInputs;
@@ -699,7 +708,7 @@ export const createTravelScene = async (options: {
         // Each rebuilt sector is its own task, so the map keeps presenting frames while a
         // crossing builds the new edge of the window.
         if (!initial) {
-          await yieldToFrame();
+          await yieldToFrame(game);
           if (disposed || token !== generation) return;
         }
         const scope = createRenderScope(game);
@@ -739,6 +748,14 @@ export const createTravelScene = async (options: {
               mapAssets: snapshot.mapAssets,
               roads,
             });
+            // Scenery and terrain are separate tasks, so a crossing keeps presenting frames.
+            if (!initial) {
+              await yieldToFrame(game);
+              if (disposed || token !== generation) {
+                scope.dispose();
+                return;
+              }
+            }
             // An edge-only rebuild replays the water phases from the generator's state here.
             const seed = prng.exportState();
             data = buildSectorTerrainData(grid, prng, options.lightLayout, {
@@ -927,10 +944,12 @@ export const createTravelScene = async (options: {
             );
         const ax = -a.center.x + from.position.x,
           ay = -a.center.y + standingOffset(a) + from.position.y;
-        const by = -b.center.y + standingOffset(b) + to.position.y;
+        const bx = -b.center.x + to.position.x,
+          by = -b.center.y + standingOffset(b) + to.position.y;
         movements.set(userId, {
-          x: ax + (-b.center.x + to.position.x - ax) * progress - entry.position.x,
+          x: ax + (bx - ax) * progress - entry.position.x,
           y: ay + (by - ay) * progress - entry.position.y,
+          to: { x: bx - entry.position.x, y: by - entry.position.y },
           direction: progress < 1 ? step.direction : null,
           facing: step.facing,
         });
@@ -1047,10 +1066,13 @@ export const createTravelScene = async (options: {
         grid: entry.grid,
         showAmbient: game.visualEffects.wildlife,
       };
+      // Every walking step bumps the revision; positions between syncs come from the
+      // published steps, so a crowd reconciles its actors a few times a second.
       if (
         actorsDirty ||
         !lastActorSnapshot ||
-        snapshot.actorRevision !== lastActorSnapshot.actorRevision ||
+        (snapshot.actorRevision !== lastActorSnapshot.actorRevision &&
+          sourceFrame.now - lastActorSyncAt >= ACTOR_SYNC_MS) ||
         snapshot.sector !== lastActorSnapshot.sector ||
         snapshot.viewer !== lastActorSnapshot.viewer ||
         snapshot.showUsers !== lastActorSnapshot.showUsers ||
@@ -1061,6 +1083,7 @@ export const createTravelScene = async (options: {
         game.visualEffects.wildlife !== lastShowAmbient
       ) {
         actorsDirty = false;
+        lastActorSyncAt = sourceFrame.now;
         lastActorSnapshot = snapshot;
         lastShowAmbient = game.visualEffects.wildlife;
         actors.sync(actorSnapshot);
@@ -1448,11 +1471,15 @@ const terrainResultKey = (
   return { inside, edge };
 };
 
+/** Actor revisions reconcile at most this often; published steps animate positions between. */
+const ACTOR_SYNC_MS = 100;
+
 /** Window update requests arriving within this many milliseconds share one reconciliation. */
 const WINDOW_UPDATE_COALESCE_MS = 50;
 
-/** Hands the main thread back to the browser for at least one task boundary. */
-const yieldToFrame = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+/** Hands the main thread back until the scene has presented a frame, or a task boundary without one. */
+const yieldToFrame = (game?: Pick<GameRenderer, "afterFrame">) =>
+  game?.afterFrame?.() ?? new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 /** Whether the viewer's body and the placed artwork are unchanged since covering scenery was found. */
 const sameCover = (
