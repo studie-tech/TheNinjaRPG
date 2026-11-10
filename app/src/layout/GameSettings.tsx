@@ -42,8 +42,6 @@ export type GameSettingsUser = Pick<
   | "isOutlaw"
   | "bloodlineId"
   | "status"
-  | "preferredGeneral1"
-  | "preferredGeneral2"
 >;
 
 /** The profile page that contains game, profile and account settings. */
@@ -138,11 +136,7 @@ export const useGameSettings = (
     }
     setSfxOn(enabled);
     if (userData && !isLocalPreference) {
-      updatePreferences({
-        preferredGeneral1: userData.preferredGeneral1 ?? null,
-        preferredGeneral2: userData.preferredGeneral2 ?? null,
-        sfxOn: enabled,
-      });
+      updatePreferences({ sfxOn: enabled });
       if (updateUser) {
         void updateUser({ sfxOn: enabled });
       }
@@ -223,11 +217,7 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
     void setAudioEnabled(checked);
     if (isLocalAudioSession()) return;
     if (userData) {
-      updatePreferences({
-        preferredGeneral1: userData.preferredGeneral1 ?? null,
-        preferredGeneral2: userData.preferredGeneral2 ?? null,
-        musicOn: checked,
-      });
+      updatePreferences({ musicOn: checked });
       if (updateUser) {
         await updateUser({ musicOn: checked });
       }
@@ -240,11 +230,7 @@ const GameSettingsContent: React.FC<GameSettingsProps> = ({
     setButtonSfxOn(checked);
     if (setLocalAudioPreference("buttonSfxOn", checked)) return;
     if (userData) {
-      updatePreferences({
-        preferredGeneral1: userData.preferredGeneral1 ?? null,
-        preferredGeneral2: userData.preferredGeneral2 ?? null,
-        buttonSfxOn: checked,
-      });
+      updatePreferences({ buttonSfxOn: checked });
       if (updateUser) {
         void updateUser({ buttonSfxOn: checked });
       }

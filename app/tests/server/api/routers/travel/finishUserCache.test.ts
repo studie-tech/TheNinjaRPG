@@ -144,6 +144,25 @@ describeWithDatabase("confirmed arrival profile updates", () => {
     setSystemTime();
   });
 
+  it("keeps a traveler on the road until the arrival time", async () => {
+    const db = await getTestDatabase();
+    const readRow = () =>
+      db.query.userData.findFirst({ where: eq(userData.userId, userId) });
+    const before = await readRow();
+    const travel = await callerFor(travelRouter, userId);
+    expect(await travel.finishGlobalMove()).toEqual({
+      success: false,
+      message: "You have not arrived yet",
+    });
+    expect(await readRow()).toEqual(before);
+    await db
+      .update(userData)
+      .set({ travelFinishAt: new Date(Date.now() - 1) })
+      .where(eq(userData.userId, userId));
+    expect((await travel.finishGlobalMove()).success).toBe(true);
+    expect((await readRow())?.status).toBe("AWAKE");
+  });
+
   it.each(["ordinary", "NPC", "quest", "NPC and quest"])(
     "reconciles the canonical public sector snapshot after confirmed caller movement with %s scenery",
     async (scenery) => {
@@ -230,7 +249,14 @@ describeWithDatabase("confirmed arrival profile updates", () => {
       }
       expect(
         getSectorUserUpdate(
-          { users: [], village: null, sectorData: null, warData: null },
+          {
+            users: [],
+            village: null,
+            sectorData: null,
+            warData: null,
+            overworldAis: [],
+            questPlacements: [],
+          },
           user ?? undefined,
         ),
       ).toBeUndefined();

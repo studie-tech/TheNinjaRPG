@@ -22,12 +22,14 @@ import { makeCombatQueryUser, preloadBattle } from "./helpers/preload";
  * summon on the round it is summoned.
  */
 
-const ZOO = "iWoiCf6NcredongvK-pJs";
-const KING_SUMMON = "VnLuKCX1hXm1Hqf0k__XB";
-const SHELL = "1Jtd6To2iyRK4ODNlhCHO";
-const SWORD = "1BDtmLoEhwf78FbzAjwFW";
-const TOR_AI = "y07BRyFf73zFzoEJIWwNY";
-const KING_AI = "Bq8WA_8nIM_SYGnOblCDs";
+const ZOO = "jutsu-reptile-zoo";
+const KING_SUMMON = "jutsu-reptile-king-summon";
+const SHELL = "jutsu-shell";
+const SWORD = "jutsu-sword";
+const TOR_AI = "ai-tor-tor";
+const KING_AI = "ai-reptile-king";
+const PLAYER = "player";
+const OPPONENT = "opponent";
 const WIDTH = 12;
 const HEIGHT = 10;
 
@@ -242,16 +244,16 @@ const process = (client: DrizzleClient, users: CombatQueryUser[], left?: string[
  * gear-modifier and skill-lock handling are not replicated.
  */
 const battleAfterLoadoutSwap = async () => {
-  const thabiento = queryUser("user_thab");
-  const luka = queryUser("user_luka");
-  const init = await process(templateClient(), [luka, thabiento], ["user_luka"]);
+  const player = queryUser(PLAYER);
+  const opponent = queryUser(OPPONENT);
+  const init = await process(templateClient(), [opponent, player], [OPPONENT]);
   expect(init.extraState.aiProfiles[torProfile.id]).toBeUndefined();
   const battle = {
     id: "b1",
     battleType: "COMBAT",
     round: 1,
     version: 1,
-    activeUserId: "user_thab",
+    activeUserId: PLAYER,
     createdAt: new Date(0),
     updatedAt: new Date(0),
     roundStartAt: new Date(),
@@ -268,12 +270,10 @@ const battleAfterLoadoutSwap = async () => {
 
   // Loadout swap: reprocess only the swapping player with Reptile Zoo equipped.
   const swapped = await process(templateClient(), [
-    queryUser("user_thab", { jutsus: [userJutsu("user_thab", zoo)] }),
+    queryUser(PLAYER, { jutsus: [userJutsu(PLAYER, zoo)] }),
   ]);
-  const otherUserState = battle.usersState.filter(
-    (u) => u.controllerId !== "user_thab",
-  );
-  const original = battle.usersState.find((u) => u.userId === "user_thab");
+  const otherUserState = battle.usersState.filter((u) => u.controllerId !== PLAYER);
+  const original = battle.usersState.find((u) => u.userId === PLAYER);
   if (swapped.usersState[0] && original) {
     swapped.usersState[0].direction = original.direction;
   }
@@ -310,9 +310,9 @@ describe("summons from a loadout swapped in mid-lobby", () => {
   it("does not duplicate templates the battle already holds on a second swap", async () => {
     const { battle } = await battleAfterLoadoutSwap();
     const again = await process(templateClient(), [
-      queryUser("user_thab", { jutsus: [userJutsu("user_thab", zoo)] }),
+      queryUser(PLAYER, { jutsus: [userJutsu(PLAYER, zoo)] }),
     ]);
-    const others = battle.usersState.filter((u) => u.controllerId !== "user_thab");
+    const others = battle.usersState.filter((u) => u.controllerId !== PLAYER);
     const added = mergeLoadoutParticipants(others, again.usersState);
     expect(added.map((u) => u.userId)).toEqual([again.usersState[0]!.userId]);
   });
@@ -321,10 +321,10 @@ describe("summons from a loadout swapped in mid-lobby", () => {
     const { battle: initial } = await battleAfterLoadoutSwap();
     let battle = initial;
     const grid = new Grid(TerrainHex, rectangle({ width: WIDTH, height: HEIGHT }));
-    place(battle, "user_thab", 6, 5);
-    place(battle, "user_luka", 3, 5);
+    place(battle, PLAYER, 6, 5);
+    place(battle, OPPONENT, 3, 5);
     const cast = (actionId: string, longitude: number, latitude: number) => {
-      const action = availableUserActions(battle, "user_thab", true, true).find(
+      const action = availableUserActions(battle, PLAYER, true, true).find(
         (a) => a.id === actionId,
       );
       if (!action) throw new Error(`missing ${actionId}`);
@@ -332,7 +332,7 @@ describe("summons from a loadout swapped in mid-lobby", () => {
         battle,
         action,
         grid,
-        actorId: "user_thab",
+        actorId: PLAYER,
         longitude,
         latitude,
       }).newBattle;

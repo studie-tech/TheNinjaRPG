@@ -2532,6 +2532,7 @@ describe("multi-room home scene", () => {
       scene.queryByRole("button", { name: /Bed|Armory|Kitchen|Garden|Decorate/ }),
     ).toBeNull();
     expect(props.onSleep).not.toHaveBeenCalled();
+    expect(view.container.textContent).not.toContain("You are awake");
     fireEvent.click(scene.getByRole("button", { name: "Zoom in" }));
     expect(view.getByLabelText("Camera zoom").textContent).toBe("120%");
   });

@@ -447,6 +447,19 @@ describe("routing", () => {
     expect(state.push).not.toHaveBeenCalled();
   });
 
+  it("sends the player back to their tutorial fight a second time", () => {
+    vi.useFakeTimers();
+    const index = TUTORIAL_STEPS.findIndex(
+      (step) => step.onCombatWin && step.page === "/combat",
+    );
+    show(index, { status: "BATTLE", battleId: "fight" }, "/profile");
+    expect(state.replace).toHaveBeenCalledTimes(1);
+    act(() => vi.advanceTimersByTime(1500));
+    expect(state.replace).toHaveBeenCalledTimes(2);
+    expect(state.replace).toHaveBeenLastCalledWith("/combat");
+    expect(state.push).not.toHaveBeenCalled();
+  });
+
   it("leaves an unrelated battle alone on a step outside the fight", () => {
     show(0, { status: "BATTLE", battleId: "fight" }, "/profile");
     expect(state.replace).not.toHaveBeenCalled();

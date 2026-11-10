@@ -34,7 +34,7 @@ import {
   startDeclaredWar,
 } from "@/server/utils/war";
 import { insertClans, insertUsers } from "../../../setup/factories";
-import { beforeTransaction } from "../../../setup/statements";
+import { beforeStatements, beforeTransaction } from "../../../setup/statements";
 import {
   callerFor,
   callerForDatabase,
@@ -211,6 +211,34 @@ describeWithDatabase("faction war declarations", () => {
       .from(userData)
       .where(inArray(userData.userId, [LEADER, TARGET_KAGE]));
     expect(leaders.map((l) => l.unread)).toEqual([1, 1]);
+  });
+
+  it("starts a raid while a war-only setting is out of range", async () => {
+    await seedWorld();
+    const database = await getTestDatabase();
+    await database.insert(gameSetting).values({
+      id: "OBJECTIVE_WAR_noticeHours",
+      name: "OBJECTIVE_WAR_noticeHours",
+      time: new Date(),
+      value: 999,
+    });
+    expect((await declare(LEADER, FACTION)).success).toBe(true);
+    expect(await database.select().from(war)).toMatchObject([{ type: "WAR_RAID" }]);
+  });
+
+  it("still refuses a village declaration while a war setting is out of range", async () => {
+    await seedWorld("VILLAGE");
+    const database = await getTestDatabase();
+    await seedElderVote();
+    await database.insert(gameSetting).values({
+      id: "OBJECTIVE_WAR_noticeHours",
+      name: "OBJECTIVE_WAR_noticeHours",
+      time: new Date(),
+      value: 999,
+    });
+    await expect(declare(LEADER, FACTION)).rejects.toThrow("noticeHours");
+    expect(await database.select().from(war)).toHaveLength(0);
+    expect((await readFaction())?.tokens).toBe(TOKENS);
   });
 
   it("reports success when leader notifications fail after the war commits", async () => {
@@ -419,6 +447,35 @@ describeWithDatabase("faction war declarations", () => {
     });
     expect((await readFaction())?.tokens).toBe(TOKENS - WAR_DECLARATION_COST);
   });
+
+  it("answers the losing one of two simultaneous declarations with a message", async () => {
+    await seedWorld("VILLAGE");
+    const database = await getTestDatabase();
+    await seedElderVote();
+    const declareOn = (client: typeof database) =>
+      callerForDatabase(warRouter, LEADER, client).declareVillageWarOrRaid({
+        userVillageId: FACTION,
+        targetVillageId: TARGET,
+        targetStructureRoute: "/townhall",
+      });
+    // The second request passes every read, then the first commits its vote before the
+    // second inserts its own.
+    let first: Awaited<ReturnType<typeof declareOn>> | undefined;
+    const racing = beforeStatements(database, villageElderVote, [
+      async () => {
+        first = await declareOn(database);
+      },
+    ]);
+    const second = await declareOn(racing);
+    expect(first?.success).toBe(true);
+    expect(second).toMatchObject({
+      success: false,
+      message: "Your village already has a pending war declaration vote",
+    });
+    expect(await database.select().from(villageElderVote)).toHaveLength(1);
+    expect(await database.select().from(notification)).toHaveLength(1);
+  });
+
   it("releases the approved vote back to pending when the war start throws", async () => {
     await seedWorld("VILLAGE");
     const database = await getTestDatabase();

@@ -260,8 +260,6 @@ const GameLayoutController: React.FC<GameLayoutControllerProps> = ({
     sfxOn: user.sfxOn,
     isOutlaw: user.isOutlaw,
     bloodlineId: user.bloodlineId,
-    preferredGeneral1: user.preferredGeneral1,
-    preferredGeneral2: user.preferredGeneral2,
   }));
 
   const signedInIcons = (

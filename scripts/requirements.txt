@@ -1,4 +1,4 @@
-Pillow==13.0.0
+Pillow==11.3.0
 boto3==1.43.117
 numpy==2.5.4
 pandas==3.0.6
@@ -14,3 +14,4 @@ scikit-learn==1.9.1
 joblib==1.6.0
 matplotlib==3.11.2
 requests==2.34.2
+moviepy==2.2.1

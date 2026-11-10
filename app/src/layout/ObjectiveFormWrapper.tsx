@@ -267,7 +267,9 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
         !sectorType ||
         (sectorType === "specific" && !["sectorList"].includes(value)) ||
         (sectorType === "from_list" && !["sector"].includes(value)) ||
-        (["random", "user_village", "current_sector"].includes(sectorType) &&
+        (["random", "user_village", "current_sector", "enemy_village"].includes(
+          sectorType,
+        ) &&
           !["sector", "sectorList"].includes(value))
       );
     })

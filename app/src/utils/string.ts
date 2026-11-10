@@ -1,14 +1,17 @@
+import type { ReactNode } from "react";
+import { createElement, Fragment } from "react";
 import type { BattleUsageType } from "@/drizzle/constants";
 
+/** Swap whole words for components; each swap is keyed by position, so a word may repeat. */
 export const insertComponentsIntoText = (
   text: string,
-  replacements: Record<string, React.ReactNode>,
+  replacements: Record<string, ReactNode>,
 ) => {
   const splitRegex = new RegExp(/(\w*)/g);
   const parts = text.split(splitRegex);
-  return parts.map((part) => {
+  return parts.map((part, index) => {
     if (Object.hasOwn(replacements, part)) {
-      return replacements[part];
+      return createElement(Fragment, { key: index }, replacements[part]);
     }
     return part;
   });

@@ -38,7 +38,7 @@ export const getUnchangedClanUserUpdate = () => ({
 });
 
 /**
- * Debit personal reputation and credit the clan treasury using integer-column rounding.
+ * Debit personal reputation and credit the clan treasury by the whole donated amount.
  * Queued energy work withholds the delta.
  */
 export const getClanDonationUserUpdate = ({
@@ -54,8 +54,7 @@ export const getClanDonationUserUpdate = ({
     ? undefined
     : {
         reputationPoints: -repsCost,
-        // The INT treasury rounds fractional donations; personal reputation is FLOAT.
-        clan: { id: fetchedClanId, repTreasury: Math.round(repsCost) },
+        clan: { id: fetchedClanId, repTreasury: repsCost },
       },
 });
 

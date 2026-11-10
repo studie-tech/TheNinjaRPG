@@ -1,7 +1,11 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import { OPENAI_REVIEW_MODEL, TERR_BOT_ID } from "@/drizzle/constants";
-import { handleEndpointError, lockWithGameTimer } from "@/libs/gamesettings";
+import {
+  handleEndpointError,
+  lockWithMonthlyTimer,
+  runClaimedCron,
+} from "@/libs/gamesettings";
 import { listUserDataForGET, listUserReviewForGET } from "@/queries/reports";
 import { createConvo } from "@/routers/comments";
 import { drizzleDB } from "@/server/db";
@@ -9,28 +13,28 @@ import { authenticateCronRequest } from "@/server/utils/cron";
 
 const TIMER_NAME = "timer-720h";
 
-/** Sends each staff member an AI summary of the reviews they received in the last 30 days. */
+/**
+ * Sends each staff member with written reviews an AI summary of the reviews they received
+ * since the previous monthly run.
+ */
 export async function GET(request: Request) {
   const authError = authenticateCronRequest(request);
   if (authError) return authError;
 
-  // Check timer
-  const frequency = 24 * 30;
-  const response = await lockWithGameTimer(
-    drizzleDB,
-    TIMER_NAME,
-    frequency * 60 * 60 * 1000,
-  );
-  if (response) return response;
+  const timerCheck = await lockWithMonthlyTimer(drizzleDB, TIMER_NAME);
 
-  try {
-    // Get all staff
+  return runClaimedCron(timerCheck, "/api/staffreview", async () => {
     const staff = await listUserDataForGET(drizzleDB);
 
-    // Summarize each staff member's reviews from the timer window (30 days)
-    await Promise.all(
+    // Finish every summary before delivery so model failures can release the month safely.
+    const summaries = await Promise.all(
       staff.map(async (user) => {
-        const results = await listUserReviewForGET(drizzleDB, frequency, user);
+        const results = await listUserReviewForGET(
+          drizzleDB,
+          timerCheck.prevTime,
+          user,
+        );
+        if (!results.length) return;
         const allText = results.map((r) => r.review).join("\n");
 
         // Review
@@ -53,7 +57,14 @@ export async function GET(request: Request) {
         `,
         });
 
-        // Create conversation
+        return { user, text };
+      }),
+    );
+
+    const outcomes = await Promise.allSettled(
+      summaries.map(async (summary) => {
+        if (!summary) return;
+        const { user, text } = summary;
         const now = new Date();
         await createConvo({
           client: drizzleDB,
@@ -61,15 +72,22 @@ export async function GET(request: Request) {
           senderUserId: TERR_BOT_ID,
           receiverUserIds: [user.userId],
           title: `Staff Review: ${now.toLocaleString()}`,
-          content: `Hey ${user.username}, here is a summary of your recent reviews from the last 30 days. This is an auto-generated message, and everything has been written by an AI based on the reviews, in order to keep the original messages annonymized:
+          content: `Hey ${user.username}, here is a summary of your recent reviews from the past month. This is an auto-generated message, and everything has been written by an AI based on the reviews, in order to keep the original messages annonymized:
         <br /><br />${text.replace("```html", "").replace("```", "")}`,
           isStaffAvailable: false,
         });
       }),
     );
 
-    return Response.json(`OK`);
-  } catch (cause) {
-    return handleEndpointError(cause, { endpoint: "/api/staffreview" });
-  }
+    // A rejected conversation write may have partially delivered. Report every failure
+    // without throwing, retaining the month instead of risking duplicate deliveries.
+    const responses = await Promise.all(
+      outcomes
+        .filter((outcome) => outcome.status === "rejected")
+        .map(({ reason }) =>
+          handleEndpointError(reason, { endpoint: "/api/staffreview" }),
+        ),
+    );
+    return responses[0] ?? Response.json(`OK`);
+  });
 }

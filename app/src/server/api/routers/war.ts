@@ -1108,7 +1108,7 @@ export const warRouter = createTRPCRouter({
         existingPending,
         elders,
         attackerStructures,
-        warRules,
+        warRulesRead,
       ] = await Promise.all([
         fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         fetchActiveWars(ctx.drizzle),
@@ -1121,7 +1121,11 @@ export const warRouter = createTRPCRouter({
         findVillageElderVoteForDeclareVillageWarOrRaid2(ctx.drizzle, input),
         listUserDataForDeclareVillageWarOrRaid(ctx.drizzle, input),
         fetchStructures(ctx.drizzle, input.userVillageId),
-        fetchWarRules(ctx.drizzle),
+        // Raids ignore war rules, so a malformed war setting fails only war declarations.
+        fetchWarRules(ctx.drizzle).then(
+          (rules) => ({ rules }),
+          (error: unknown) => ({ error }),
+        ),
       ]);
       // Derived
       const now = new Date();
@@ -1136,7 +1140,9 @@ export const warRouter = createTRPCRouter({
         defenderVillage?.type || "",
       );
       const isRaid = !!attackerVillage && isFactionVillage(attackerVillage);
-      const configuredRules = !isRaid ? warRules : null;
+      if (!isRaid && "error" in warRulesRead) throw warRulesRead.error;
+      const configuredRules =
+        "rules" in warRulesRead && !isRaid ? warRulesRead.rules : null;
       const declarationCost = isRaid
         ? FACTION_RAID_COST
         : configuredRules?.enabled
@@ -1341,15 +1347,23 @@ export const warRouter = createTRPCRouter({
       // index rejects only a same-target duplicate.
       const voteId = nanoid();
       const endsAt = secondsFromNow(ELDER_WAR_VOTE_HOURS * 3600);
-      await insertVillageElderVoteForDeclareVillageWarOrRaid(
-        ctx.drizzle,
-        voteId,
-        { villageId: user.villageId, userId: user.userId },
-        input,
-        warType,
-        structure,
-        endsAt,
-      );
+      try {
+        await insertVillageElderVoteForDeclareVillageWarOrRaid(
+          ctx.drizzle,
+          voteId,
+          { villageId: user.villageId, userId: user.userId },
+          input,
+          warType,
+          structure,
+          endsAt,
+        );
+      } catch (error) {
+        if (isMysqlDuplicateKeyError(error))
+          return errorResponse(
+            "Your village already has a pending war declaration vote",
+          );
+        throw error;
+      }
       const content = `${user.username} has submitted a war declaration against ${defenderVillage.name}. Elders have ${ELDER_WAR_VOTE_HOURS} hours to vote.`;
       const allNotifyIds = [user.userId, ...eligibleElders.map((e) => e.userId)];
       await Promise.all([

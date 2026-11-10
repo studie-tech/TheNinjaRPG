@@ -25,6 +25,8 @@ import {
   ITEM_BROKEN_NOTICE,
   ITEM_DURABILITY_CRITICAL_NOTICE,
   ITEM_DURABILITY_NOTICE,
+  SHRINE_CAPTURED_NOTICE,
+  SHRINE_RECAPTURED_NOTICE,
 } from "@/libs/combat/constants";
 import { settleObjectiveWarCombat } from "@/libs/combat/objectiveWar";
 import { areBattleAllies, hasHumanOpponent } from "@/libs/combat/participants";
@@ -784,7 +786,7 @@ export const updateWars = async (
                 );
                 if (captured) {
                   result.notifications.push(
-                    `${villageName}'s shrine captured! ${villageName} lost ${WAR_SHRINE_CAPTURE_WARHEALTH_DMG} war HP!`,
+                    `${villageName}'s ${SHRINE_CAPTURED_NOTICE} ${villageName} lost ${WAR_SHRINE_CAPTURE_WARHEALTH_DMG} war HP!`,
                   );
                 }
               } else {
@@ -953,7 +955,7 @@ const recoverWarShrine = async (
     await updateWarForRecoverWarShrine2(client, columns, activeWar);
     const villageName = shrineVillageName(w, side);
     notifications.push(
-      `${villageName}'s shrine recaptured! ${villageName} gained ${WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL} war HP!`,
+      `${villageName}'s ${SHRINE_RECAPTURED_NOTICE} ${villageName} gained ${WAR_SHRINE_RECAPTURE_WARHEALTH_HEAL} war HP!`,
     );
   } else {
     // Active shrines and recovery below the threshold still receive HP, without a reward.

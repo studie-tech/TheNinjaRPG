@@ -103,6 +103,9 @@ const WordCloud: React.FC<WordCloudProps> = (props) => {
       }, 100);
       return () => clearTimeout(timer);
     }
+    // Text without countable words leaves an empty canvas.
+    chartInstanceRef.current?.destroy();
+    chartInstanceRef.current = null;
   }, [processedData]);
 
   // Cleanup on unmount

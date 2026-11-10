@@ -43,6 +43,10 @@ export const ITEM_BROKEN_NOTICE = "has broken";
 export const ITEM_DURABILITY_CRITICAL_NOTICE = "durability is critically low";
 export const ITEM_DURABILITY_NOTICE = "durability is now";
 
+/** Phrases in the shrine war notices a battle result carries; the battle screen titles them War Update. */
+export const SHRINE_CAPTURED_NOTICE = "shrine captured!";
+export const SHRINE_RECAPTURED_NOTICE = "shrine recaptured!";
+
 /** Ranked bloodlines boost every damage element, including attacks outside Highest. */
 export const RANKED_BLOODLINE_DAMAGE_TAG = IncreaseDamageGivenTag.parse({
   power: (RANKED_BLOODLINE_EFFECT_MULT - 1) * 100,

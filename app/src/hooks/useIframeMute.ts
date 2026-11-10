@@ -20,8 +20,6 @@ export const useIframeMute = (): UseIframeMuteReturn => {
     prepareUserUpdate,
     updateUser,
   } = useUserDataSelector((user) => ({
-    preferredGeneral1: user.preferredGeneral1,
-    preferredGeneral2: user.preferredGeneral2,
     iframesMuted: "iframesMuted" in user ? user.iframesMuted : undefined,
   }));
   const [isIframesMuted, setIsIframesMuted] = useState<boolean>(false);
@@ -53,11 +51,7 @@ export const useIframeMute = (): UseIframeMuteReturn => {
 
       // Save to database if user is logged in, otherwise localStorage
       if (userData) {
-        updatePreferences({
-          preferredGeneral1: userData.preferredGeneral1 ?? null,
-          preferredGeneral2: userData.preferredGeneral2 ?? null,
-          iframesMuted: muted,
-        });
+        updatePreferences({ iframesMuted: muted });
       } else {
         safeLocalStorageSetItem("iframesMuted", JSON.stringify(muted));
       }
@@ -72,9 +66,8 @@ export const useIframeMute = (): UseIframeMuteReturn => {
 };
 
 /**
- * Get initial mute state from user data or localStorage
- * @param userData
- * @returns boolean
+ * Prefer the signed-in account's mute setting, falling back to a locally saved `true`.
+ * Missing or malformed local values leave iframes unmuted.
  */
 const getInitialIframeMuteState = (
   userData: { iframesMuted?: boolean } | undefined,
@@ -82,9 +75,6 @@ const getInitialIframeMuteState = (
   // Respect explicit user preference when logged in
   if (typeof userData?.iframesMuted === "boolean") return userData.iframesMuted;
 
-  // Fallback to locally saved preference
-  const saved = safeLocalStorageGetItem("iframesMuted");
-  if (saved !== null) return JSON.parse(saved) as boolean;
-
-  return false;
+  // Fallback to locally saved preference; anything but a saved `true` is unmuted
+  return safeLocalStorageGetItem("iframesMuted") === "true";
 };

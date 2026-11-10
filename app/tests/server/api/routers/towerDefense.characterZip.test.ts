@@ -21,28 +21,33 @@ const zipUrl = `${UPLOADTHING_HOST}/f/character.zip`;
 
 const directions = ["n", "ne", "e", "se", "s", "sw", "w", "nw"];
 
+type MetadataFrames = {
+  rotations: Record<string, string>;
+  animations: Record<string, Record<string, string[]>>;
+};
+
 /** A full sprite sheet: the response schema requires every direction. */
-const characterZip = async (frameCount: number) => {
+const characterZip = async (
+  frameCount: number,
+  editFrames: (frames: MetadataFrames) => void = () => {},
+) => {
   const zip = new JSZip();
   const frames = Array.from({ length: frameCount }, (_, i) => `frames/${i}.png`);
   for (const path of frames) zip.file(path, new Uint8Array([1]));
   zip.file("rotation.png", new Uint8Array([1]));
-  zip.file(
-    "metadata.json",
-    JSON.stringify({
-      frames: {
-        rotations: Object.fromEntries(directions.map((dir) => [dir, "rotation.png"])),
-        animations: {
-          walk: Object.fromEntries(
-            directions.map((dir) => [
-              dir,
-              dir === "s" ? frames : ["frames/0.png", "frames/missing.png"],
-            ]),
-          ),
-        },
-      },
-    }),
-  );
+  const metadataFrames: MetadataFrames = {
+    rotations: Object.fromEntries(directions.map((dir) => [dir, "rotation.png"])),
+    animations: {
+      walk: Object.fromEntries(
+        directions.map((dir) => [
+          dir,
+          dir === "s" ? frames : ["frames/0.png", "frames/missing.png"],
+        ]),
+      ),
+    },
+  };
+  editFrames(metadataFrames);
+  zip.file("metadata.json", JSON.stringify({ frames: metadataFrames }));
   return zip.generateAsync({ type: "uint8array" });
 };
 
@@ -127,6 +132,85 @@ describeWithDatabase("processCharacterZip", () => {
       where: eq(towerDefenseCharacter.id, "character"),
     });
     expect(stored?.assetConfig).toEqual(result.assetConfig);
+  });
+
+  it.each([
+    [
+      "an unknown direction",
+      (frames: MetadataFrames) => {
+        frames.rotations.up = "rotation.png";
+      },
+      'Invalid metadata.json rotations: unknown direction "up"',
+    ],
+    [
+      "a direction given twice",
+      (frames: MetadataFrames) => {
+        frames.rotations.north = "rotation.png";
+      },
+      'Invalid metadata.json rotations: direction "north" is listed twice',
+    ],
+    [
+      "an animation without every direction",
+      (frames: MetadataFrames) => {
+        delete frames.animations.walk?.nw;
+      },
+      "Invalid metadata.json animation walk: missing directions north-west",
+    ],
+    [
+      "a rotation image outside the zip",
+      (frames: MetadataFrames) => {
+        frames.rotations.e = "missing.png";
+      },
+      "Rotation image missing.png is not in the zip file",
+    ],
+    [
+      "an existing non-image rotation file",
+      (frames: MetadataFrames) => {
+        frames.rotations.e = "metadata.json";
+      },
+      "Rotation image metadata.json has an unsupported format",
+    ],
+    [
+      "a directory used as a rotation image",
+      (frames: MetadataFrames) => {
+        frames.rotations.e = "frames/";
+      },
+      "Rotation image frames/ is not in the zip file",
+    ],
+  ])("rejects %s before uploading or saving", async (_label, editFrames, message) => {
+    validate();
+    const uploads = stubUploads(async () => []);
+    serveZip(await characterZip(1, editFrames));
+    expect(await process()).toEqual({ success: false, message });
+    expect(uploads).not.toHaveBeenCalled();
+    const stored = await (
+      await getTestDatabase()
+    ).query.towerDefenseCharacter.findFirst({
+      where: eq(towerDefenseCharacter.id, "character"),
+    });
+    expect(stored?.assetConfig).toBeNull();
+  });
+
+  it("saves nothing when a rotation image fails to upload", async () => {
+    validate();
+    stubUploads(async (files) =>
+      files.map((file) =>
+        file.name === "rotation.png"
+          ? { data: null, error: { message: "upload rejected" } }
+          : { data: { ufsUrl: `${UPLOADTHING_HOST}/f/${file.name}`, key: file.name } },
+      ),
+    );
+    serveZip(await characterZip(1));
+    expect(await process()).toEqual({
+      success: false,
+      message: "Failed to upload rotation image rotation.png",
+    });
+    const stored = await (
+      await getTestDatabase()
+    ).query.towerDefenseCharacter.findFirst({
+      where: eq(towerDefenseCharacter.id, "character"),
+    });
+    expect(stored?.assetConfig).toBeNull();
   });
 
   it("reports unexpected failures as a rejected response", async () => {

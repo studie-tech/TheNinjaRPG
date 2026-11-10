@@ -25,7 +25,7 @@ import {
 } from "@/libs/towerDefense/abilities";
 import {
   calculateUpgradeCost,
-  directionToSpriteDirection,
+  toSpriteDirectionRecord,
 } from "@/libs/towerDefense/game";
 import { servedUfsUrl, UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { findUserRoleById } from "@/queries/profile";
@@ -87,11 +87,13 @@ import type {
   CharacterAnimationState,
   SignedEnemyDefinition,
   SignedUpgradeDefinition,
+  SpriteDirection,
 } from "@/validators/towerDefense";
 import {
   characterAssetConfigSchema,
   signedEnemyDefinitionSchema,
   signedUpgradeDefinitionSchema,
+  spriteDirections,
   updateTowerDefenseUpgradeSchema,
 } from "@/validators/towerDefense";
 import { insertTowerDefenseCharacterSchema } from "@/validators/towerDefenseCharacter";
@@ -693,6 +695,32 @@ export const towerDefenseRouter = createTRPCRouter({
           return errorResponse(`Invalid metadata.json: ${parseResult.error.message}`);
         }
         const metadata = parseResult.data;
+        // Validate the complete asset config before anything is uploaded or saved.
+        const rotationPaths = toSpriteDirectionRecord(metadata.frames.rotations ?? {});
+        if ("error" in rotationPaths)
+          return errorResponse(
+            `Invalid metadata.json rotations: ${rotationPaths.error}`,
+          );
+        for (const path of Object.values(rotationPaths.record)) {
+          if (!zip.file(path))
+            return errorResponse(`Rotation image ${path} is not in the zip file`);
+          if (!isSpriteImagePath(path))
+            return errorResponse(`Rotation image ${path} has an unsupported format`);
+        }
+        const animationPaths: {
+          name: string;
+          frames: Record<SpriteDirection, string[]>;
+        }[] = [];
+        for (const [name, directionFrames] of Object.entries(
+          metadata.frames.animations ?? {},
+        )) {
+          const frames = toSpriteDirectionRecord(directionFrames);
+          if ("error" in frames)
+            return errorResponse(
+              `Invalid metadata.json animation ${name}: ${frames.error}`,
+            );
+          animationPaths.push({ name, frames: frames.record });
+        }
 
         const utapi = new UTApi();
         const uploadedUrls: Map<string, string> = new Map();
@@ -702,10 +730,7 @@ export const towerDefenseRouter = createTRPCRouter({
         for (const path of Object.keys(zip.files)) {
           const zipEntry = zip.files[path];
           if (!zipEntry) continue;
-          if (
-            !zipEntry.dir &&
-            (path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".webp"))
-          ) {
+          if (!zipEntry.dir && isSpriteImagePath(path)) {
             const content = await zipEntry.async("uint8array");
             const ext = path.split(".").pop() || "png";
             const mimeType =
@@ -738,56 +763,32 @@ export const towerDefenseRouter = createTRPCRouter({
           }
         }
 
-        // Build rotations mapping
-        const rotations: Record<string, string> = {};
-        if (metadata.frames.rotations) {
-          for (const [direction, path] of Object.entries(metadata.frames.rotations)) {
-            const url = uploadedUrls.get(path);
-            if (url) {
-              // Map short directions to long format
-              rotations[directionToSpriteDirection(direction)] = url;
-            }
-          }
+        // Every rotation must be served; animation frames missing from the zip are dropped.
+        const rotations = {} as Record<SpriteDirection, string>;
+        for (const direction of spriteDirections) {
+          const path = rotationPaths.record[direction];
+          const url = uploadedUrls.get(path);
+          if (!url) return errorResponse(`Failed to upload rotation image ${path}`);
+          rotations[direction] = url;
         }
-
-        // Build animations list (without state assignment - that's done in UI)
-        const availableAnimations: string[] = [];
-        const animations: Array<{
-          name: string;
-          state: CharacterAnimationState;
-          frames: Record<string, string[]>;
-          frameDurationMs: number;
-          loop: boolean;
-        }> = [];
-
-        if (metadata.frames.animations) {
-          for (const [animName, directionFrames] of Object.entries(
-            metadata.frames.animations,
-          )) {
-            availableAnimations.push(animName);
-
-            const framesRecord: Record<string, string[]> = {};
-            for (const [direction, framePaths] of Object.entries(directionFrames)) {
-              framesRecord[directionToSpriteDirection(direction)] = framePaths
+        const availableAnimations = animationPaths.map(({ name }) => name);
+        // Default to idle state - user will configure in UI
+        const animations = animationPaths.map(({ name, frames }) => ({
+          name,
+          state: "idle" as CharacterAnimationState,
+          frames: Object.fromEntries(
+            spriteDirections.map((direction) => [
+              direction,
+              frames[direction]
                 .map((p) => uploadedUrls.get(p))
-                .filter((url): url is string => !!url);
-            }
+                .filter((url): url is string => !!url),
+            ]),
+          ) as Record<SpriteDirection, string[]>,
+          frameDurationMs: 100,
+          loop: true,
+        }));
 
-            // Default to idle state - user will configure in UI
-            animations.push({
-              name: animName,
-              state: "idle",
-              frames: framesRecord,
-              frameDurationMs: 100,
-              loop: true,
-            });
-          }
-        }
-
-        const assetConfig = {
-          rotations,
-          animations,
-        };
+        const assetConfig = { rotations, animations };
 
         // Save to database
         await updateTowerDefenseCharacterAssets(
@@ -860,6 +861,10 @@ export const towerDefenseRouter = createTRPCRouter({
 // ============================================
 // Helper Functions for Session Initiation
 // ============================================
+
+/** Image files a character zip can contribute as sprite frames. */
+const isSpriteImagePath = (path: string) =>
+  path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".webp");
 
 /** Convert upgrade definitions to signed format for SpacetimeDB */
 function toSignedUpgradeDefinitions(

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Quote } from "@/components/ui/quote";
 import { Skeleton } from "@/components/ui/skeleton";
+import { matchesConversationSearch } from "@/deltas/chat";
 import { CONVERSATION_PAUSE_HIDDEN_MINS } from "@/drizzle/constants";
 import { useConversationCacheUpdate } from "@/hooks/useConversationCacheUpdate";
 import { useConversationViewing } from "@/hooks/useConversationViewing";
@@ -411,6 +412,7 @@ export const useConversation = (props: ConversationLogicProps) => {
   /** Prepend a comment another player posted, fetched after its live event. */
   const prependFetchedComment = async (comment: ReturnedComment) => {
     if (!userData || !conversation) return;
+    if (!matchesConversationSearch(searchQuery, comment)) return;
     await utils.comments.getConversationComments.cancel(queryKey);
     updateCachedComments((data, pageIndex) =>
       pageIndex === 0 ? [comment, ...data] : data,
@@ -424,16 +426,6 @@ export const useConversation = (props: ConversationLogicProps) => {
   const insertOptimisticComment = async (newMessage: MutateCommentSchema) => {
     if (!userData || !conversation) return {};
 
-    // During a search, a new message only shows when it matches the search
-    if (
-      searchQuery &&
-      !newMessage.comment.toLowerCase().includes(searchQuery.toLowerCase())
-    ) {
-      return {};
-    }
-
-    // Optimistic update
-    await utils.comments.getConversationComments.cancel(queryKey);
     const cached = utils.comments.getConversationComments.getInfiniteData(queryKey);
     const cachedComments = cached?.pages.flatMap((page) => page.data);
 
@@ -445,6 +437,8 @@ export const useConversation = (props: ConversationLogicProps) => {
         })
         .join("") || "";
 
+    // An AI sender's missing optional fields take defaults, never the poster's values.
+    const author = senderUser ?? userData;
     const optimisticComment = {
       id: nanoid(),
       createdAt: new Date(),
@@ -454,40 +448,30 @@ export const useConversation = (props: ConversationLogicProps) => {
       isPinned: false,
       isReported: false,
       isStaffOnly: false,
-      villageName: senderUser
-        ? (senderUser.village?.name ?? null)
-        : (userData.village?.name ?? null),
-      villageHexColor: senderUser
-        ? (senderUser.village?.hexColor ?? null)
-        : (userData.village?.hexColor ?? null),
-      villageKageId: senderUser
-        ? (senderUser.village?.kageId ?? null)
-        : (userData.village?.kageId ?? null),
-      userId: senderUser ? senderUser.userId : userData.userId,
+      villageName: author.village?.name ?? null,
+      villageHexColor: author.village?.hexColor ?? null,
+      villageKageId: author.village?.kageId ?? null,
+      userId: author.userId,
       authorId: userData.userId,
-      username: senderUser?.username ?? userData.username,
-      avatar: senderUser?.avatar ?? userData.avatar,
-      rank: senderUser?.rank ?? userData.rank,
-      isOutlaw: senderUser?.isOutlaw ?? userData.isOutlaw,
-      level: senderUser?.level ?? userData.level,
-      role: senderUser?.role ?? userData.role,
-      displayTitle: senderUser
-        ? (senderUser.displayTitle ?? "")
-        : (userData.displayTitle ?? ""),
-      federalStatus: senderUser?.federalStatus ?? userData.federalStatus,
-      tavernUsernameColor: senderUser
-        ? (senderUser.tavernUsernameColor ?? "DEFAULT")
-        : userData.tavernUsernameColor,
-      tavernTitleColor: senderUser
-        ? (senderUser.tavernTitleColor ?? "DEFAULT")
-        : userData.tavernTitleColor,
-      nRecruited: senderUser ? (senderUser.nRecruited ?? 0) : userData.nRecruited,
-      tavernMessages: senderUser
-        ? (senderUser.tavernMessages ?? 0)
-        : userData.tavernMessages,
+      username: author.username,
+      avatar: author.avatar ?? null,
+      rank: author.rank,
+      isOutlaw: author.isOutlaw ?? false,
+      level: author.level,
+      role: author.role ?? "USER",
+      displayTitle: author.displayTitle ?? "",
+      federalStatus: author.federalStatus,
+      tavernUsernameColor: author.tavernUsernameColor ?? "DEFAULT",
+      tavernTitleColor: author.tavernTitleColor ?? "DEFAULT",
+      nRecruited: author.nRecruited ?? 0,
+      tavernMessages: author.tavernMessages ?? 0,
     };
+    // During a search, a new message only shows when it matches the search
+    if (!matchesConversationSearch(searchQuery, optimisticComment)) return {};
     if (!cached?.pages[0]?.convo) return {};
 
+    // Optimistic update
+    await utils.comments.getConversationComments.cancel(queryKey);
     updateCachedComments((data, pageIndex) =>
       pageIndex === 0 ? [optimisticComment, ...data] : data,
     );

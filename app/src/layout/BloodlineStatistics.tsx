@@ -48,10 +48,8 @@ export const BloodlineStatistics: React.FC<BloodlineStatisticsProps> = ({
       });
   }, [data]);
 
-  // Calculate total rolls including "none" entries
-  const totalRolls = data
-    ? Object.values(data).reduce((sum, count) => sum + count, 0)
-    : 0;
+  // The total covers the same rolls as the chart's percentages
+  const totalRolls = chartData.reduce((sum, item) => sum + item.count, 0);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

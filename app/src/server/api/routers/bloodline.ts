@@ -9,6 +9,7 @@ import {
 import {
   BLOODLINE_COST,
   BLOODLINE_SWAP_COOLDOWN_HOURS,
+  BLOODLINE_SWAP_FREE,
   COST_SWAP_BLOODLINE,
   LetterRanks,
   REMOVAL_COST,
@@ -115,6 +116,7 @@ import { offsetPage } from "@/server/utils/pagination";
 import { fetchQueuedJutsuIds } from "@/server/utils/userQueue";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
+import { freeAllowanceNote } from "@/utils/paypal";
 import { canChangeContent, canRemoveBloodlineFromPool } from "@/utils/permissions";
 import { getTimeLeftStr, secondsFromDate, secondsPassed } from "@/utils/time";
 import {
@@ -289,6 +291,12 @@ export const bloodlineRouter = createTRPCRouter({
         isFree: isFreeSwap,
         isStaffFree: isStaffFreeSwap,
       } = getBloodlineSwapAllowance(user, monthlySwaps.length);
+      const freeNote = freeAllowanceNote(
+        BLOODLINE_SWAP_FREE,
+        federalStatus,
+        monthlySwaps.length,
+        isStaffFreeSwap,
+      );
 
       if (!isFreeSwap && COST_SWAP_BLOODLINE > user.reputationPoints) {
         return errorResponse("Not enough reputation points");
@@ -335,7 +343,7 @@ export const bloodlineRouter = createTRPCRouter({
       // The live Bloodright refund and hydrated passive sources require profile reconciliation.
       return {
         success: true,
-        message: `Bloodline swapped${isFreeSwap ? (isStaffFreeSwap ? " (Free for staff member)" : ` (Free for ${federalStatus} supporter)`) : ""}`,
+        message: `Bloodline swapped${isFreeSwap ? ` (${freeNote})` : ""}`,
       };
     }),
   // Bloodline reskins (staff-only creation & moderation)

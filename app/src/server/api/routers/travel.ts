@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import type { inferRouterOutputs } from "@trpc/server";
-import { and, eq, gt, isNotNull, lt, sql } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { z } from "zod";
 import * as map from "@/data/hexasphere.json";
@@ -384,7 +384,14 @@ export const travelRouter = createTRPCRouter({
       // Guard: Only awake/travel/queued users can scout
       // QUEUED is included so users in raid queues can still see war/sector data
       if (!["AWAKE", "TRAVEL", "QUEUED"].includes(user.status)) {
-        return { users: [], village: null, sectorData: null, warData: null };
+        return {
+          users: [],
+          village: null,
+          sectorData: null,
+          warData: null,
+          overworldAis: [],
+          questPlacements: [],
+        };
       }
       // Crossings can leave a stale query key. Never return another sector's data.
       const [users, villageData, sectorData, placements] =
@@ -730,6 +737,12 @@ export const travelRouter = createTRPCRouter({
     .mutation(async ({ ctx }) => {
       const loaded = await findUserForGlobalTravelFinish(ctx.drizzle, ctx.userId);
       if (!loaded) return errorResponse("User not found");
+      if (
+        loaded.status === "TRAVEL" &&
+        loaded.travelFinishAt &&
+        loaded.travelFinishAt > new Date()
+      )
+        return errorResponse("You have not arrived yet");
       let user = loaded as NonNullable<UserWithRelations>;
       let canProject = true;
       if (hasEnergyQueue(user)) {
@@ -1277,7 +1290,7 @@ const resolveAdjacentCrossing = (
   return { valid: true, direction };
 };
 
-/** Complete travel and consume its recovery ticks without training queued stats. */
+/** Complete due travel and consume its recovery ticks without training queued stats. */
 const completeGlobalTravel = async (
   client: DrizzleClient,
   user: UserData & { raidBuffs?: TimedBuff[] },
@@ -1296,7 +1309,10 @@ const completeGlobalTravel = async (
       client,
       userId: user.userId,
       updatedAt: user.updatedAt,
-      where: [eq(userData.status, "TRAVEL")],
+      where: [
+        eq(userData.status, "TRAVEL"),
+        or(isNull(userData.travelFinishAt), lte(userData.travelFinishAt, new Date())),
+      ],
       set: {
         status: "AWAKE",
         travelFinishAt: null,

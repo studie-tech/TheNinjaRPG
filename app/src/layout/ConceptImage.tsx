@@ -29,6 +29,7 @@ import {
   IMG_ICON_REDDIT,
   IMG_ICON_TWITTER,
 } from "@/drizzle/constants";
+import { useSingleFlight } from "@/hooks/useSingleFlight";
 import { type ConceptEmotion, ConceptReactions } from "@/layout/ConceptReactions";
 import Confirm from "@/layout/Confirm";
 import Image from "@/layout/Image";
@@ -48,6 +49,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   onDeleted?: (imageId: string) => void;
 }
 
+/** Display one image or video with serialized reactions and deletion; callers key by image ID. */
 const ConceptImage: React.FC<InputProps> = (props) => {
   // Destructure props & state
   const { image, showDetails } = props;
@@ -56,20 +58,18 @@ const ConceptImage: React.FC<InputProps> = (props) => {
   const [copied, setCopied] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const hasInvalidatedRef = useRef(false);
-  const emotionRequestIdRef = useRef(0);
-  const emotionInFlightRef = useRef<{ imageId: string; requestId: number } | null>(
-    null,
-  );
-  const previousImageIdRef = useRef(image?.id);
-  const [pendingEmotion, setPendingEmotion] = useState<{
-    imageId: string;
-    type: ConceptEmotion;
-  } | null>(null);
-  const deleteInFlightRef = useRef<string | null>(null);
-  const currentImageIdRef = useRef(image?.id);
-  currentImageIdRef.current = image?.id;
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
-  const [deletedImageId, setDeletedImageId] = useState<string | null>(null);
+  // Callers key this component by image id, so all per-image state starts fresh.
+  const emotionFlight = useSingleFlight<ConceptEmotion>();
+  const deleteFlight = useSingleFlight();
+  const [isDeleted, setIsDeleted] = useState(false);
+  // Cleared on unmount so a delete finishing after the viewer left does not navigate.
+  const isMountedRef = useRef(false);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // tRPC Utility
   const utils = api.useUtils();
@@ -141,36 +141,16 @@ const ConceptImage: React.FC<InputProps> = (props) => {
     }
   }, [videoStatus, image?.id, utils, finalizeUpload, isFinalizingUpload]);
 
-  // Toggle an emotion on an image. Only one toggle may be in flight per card: the
-  // endpoint returns a success envelope rather than authoritative counters, so the
-  // UI remains response-driven and reconciles both query surfaces after success.
   const emotion = api.conceptart.toggleEmotion.useMutation();
 
-  useEffect(() => {
-    if (previousImageIdRef.current === image?.id) return;
-
-    previousImageIdRef.current = image?.id;
-    currentImageIdRef.current = image?.id;
-    emotionInFlightRef.current = null;
-    deleteInFlightRef.current = null;
-    setPendingEmotion(null);
-    setDeleteTargetId(null);
-    setDeletedImageId(null);
-  }, [image?.id]);
-
+  /**
+   * Serialize reactions against deletion. The endpoint returns no authoritative counters,
+   * so reconcile both query surfaces after success before accepting another reaction.
+   */
   const toggleEmotion = async (type: ConceptEmotion) => {
-    if (
-      !user ||
-      !image ||
-      emotionInFlightRef.current?.imageId === image.id ||
-      deleteInFlightRef.current === image.id
-    )
-      return;
+    if (!user || !image || deleteFlight.current() || !emotionFlight.claim(type)) return;
 
     const imageId = image.id;
-    const requestId = ++emotionRequestIdRef.current;
-    emotionInFlightRef.current = { imageId, requestId };
-    setPendingEmotion({ imageId, type });
 
     try {
       const result = await emotion.mutateAsync({ imageId, type });
@@ -188,24 +168,18 @@ const ConceptImage: React.FC<InputProps> = (props) => {
         message: error instanceof Error ? error.message : "Could not update reaction",
       });
     } finally {
-      const activeRequest = emotionInFlightRef.current;
-      if (activeRequest?.imageId === imageId && activeRequest.requestId === requestId) {
-        emotionInFlightRef.current = null;
-        setPendingEmotion(null);
-      }
+      emotionFlight.release();
     }
   };
 
-  // Delete one exact piece of concept art. The ref is the synchronous guard: the
-  // mutation's pending render cannot happen quickly enough to stop a double click.
   const remove = api.conceptart.delete.useMutation();
 
+  /** Delete this art once, retaining its tombstone and navigating only while mounted. */
   const deleteImage = async (close: () => void) => {
-    if (!image || deleteInFlightRef.current === image.id || isEmotionPending) return;
+    // Same-tick clicks must see the other flight before React renders pending state.
+    if (!image || emotionFlight.current() || !deleteFlight.claim()) return;
 
     const imageId = image.id;
-    deleteInFlightRef.current = imageId;
-    setDeleteTargetId(imageId);
 
     try {
       const result = await remove.mutateAsync({ id: imageId });
@@ -215,10 +189,10 @@ const ConceptImage: React.FC<InputProps> = (props) => {
 
       // Tombstone the exact art before any refresh. This keeps stale/failed query
       // reconciliation from flashing a deleted card back into the gallery.
-      setDeletedImageId(imageId);
+      setIsDeleted(true);
       close();
       props.onDeleted?.(imageId);
-      if (showDetails && currentImageIdRef.current === imageId) {
+      if (showDetails && isMountedRef.current) {
         router.replace("/conceptart");
       }
 
@@ -233,10 +207,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
           error instanceof Error ? error.message : "Could not delete concept art",
       });
     } finally {
-      if (deleteInFlightRef.current === imageId) {
-        deleteInFlightRef.current = null;
-        setDeleteTargetId(null);
-      }
+      deleteFlight.release();
     }
   };
 
@@ -280,10 +251,10 @@ const ConceptImage: React.FC<InputProps> = (props) => {
   const showVideo = isVideo && showDetails && image.video;
 
   // Show image
-  const isEmotionPending = pendingEmotion?.imageId === image.id;
-  const isDeleting = deleteTargetId === image.id;
+  const isEmotionPending = emotionFlight.isPending;
+  const isDeleting = deleteFlight.isPending;
 
-  if (deletedImageId === image.id) {
+  if (isDeleted) {
     return showDetails ? (
       <div className="flex min-h-48 items-center justify-center gap-2 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
@@ -407,7 +378,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
           <ConceptReactions
             image={image}
             userId={user?.userId}
-            pendingEmotion={pendingEmotion?.type}
+            pendingEmotion={emotionFlight.pending}
             disabled={isEmotionPending || isDeleting}
             firstButtonClassName="ml-1"
             buttonClassName="flex cursor-pointer flex-row items-center gap-1 px-1 disabled:cursor-not-allowed disabled:opacity-70"

@@ -107,6 +107,17 @@ describeWithDatabase("clan donations and deposits", () => {
     });
   });
 
+  it("rejects fractional and non-positive reputation donations without moving value", async () => {
+    const before = await balances();
+    const caller = await callerAfter();
+    for (const reputationPoints of [0.5, 0, -1]) {
+      await expect(
+        caller.clanDonate({ clanId: CLAN, reputationPoints }),
+      ).rejects.toThrow();
+    }
+    expect(await balances()).toEqual(before);
+  });
+
   it("moves deposited ryo into the clan bank", async () => {
     const result = await (await callerAfter()).toBank({ clanId: CLAN, amount: 250 });
     expect(result.success).toBe(true);

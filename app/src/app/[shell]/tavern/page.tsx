@@ -56,8 +56,12 @@ export default function Tavern() {
     }
   }, [userData, globalTavernEnabled, activeTab, localTavern]);
 
-  // Derived
-  const conversation = activeTab ?? (canAccessGlobal ? "Global" : localTavern);
+  // Derived: the selector and the conversation share this fallback.
+  const defaultTavern = canAccessGlobal ? "Global" : localTavern;
+  const conversation =
+    !activeTab || (activeTab === "Global" && !canAccessGlobal)
+      ? defaultTavern
+      : activeTab;
   const tavernId = tavernIds?.find((tavern) => tavern.title === conversation)?.id;
   const convoProps = {
     refreshKey: 0,
@@ -77,7 +81,7 @@ export default function Tavern() {
     userData?.role !== "USER" ? (
       <Select onValueChange={(e) => setActiveTab(e)}>
         <SelectTrigger>
-          <SelectValue placeholder={activeTab} />
+          <SelectValue placeholder={conversation} />
         </SelectTrigger>
         <SelectContent>
           {availTaverns?.map((village, i) => (
@@ -90,7 +94,7 @@ export default function Tavern() {
     ) : (
       <NavTabs
         id="tavernSelector"
-        current={activeTab ?? localTavern}
+        current={conversation}
         options={availTaverns}
         setValue={setActiveTab}
       />

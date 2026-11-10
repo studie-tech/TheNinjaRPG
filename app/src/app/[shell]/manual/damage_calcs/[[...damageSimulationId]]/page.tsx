@@ -93,7 +93,6 @@ export default function Simulator(props: {
   const chartRef = useRef<HTMLCanvasElement>(null);
 
   // Page state
-  const [selectedDmg, setSelectedDmg] = useState<number | undefined>(undefined);
   const [showAll, setShowAll] = useState<boolean | undefined>(undefined);
   const [attProgress, setAttProgress] = useState<LoadedProgress | undefined>();
   const [defProgress, setDefProgress] = useState<LoadedProgress | undefined>();
@@ -266,22 +265,18 @@ export default function Simulator(props: {
         myChart.destroy();
       };
     }
-  }, [data]);
+  }, [data, configValues]);
 
   // Handle updating current form values whenever retrieve entry changes
   useEffect(() => {
     if (previous?.state) activateEntry(previous);
   }, [previous]);
 
-  // Handle updating damage whenever form changes
-  useEffect(() => {
-    setSelectedDmg(
-      getDamage(attValues, defValues, actValues, {
-        attacker: attProgress,
-        defender: defProgress,
-      }),
-    );
-  }, [attValues, defValues, actValues, attProgress, defProgress]);
+  // Damage of the current stats, action and formula parameters
+  const selectedDmg = getDamage(attValues, defValues, actValues, {
+    attacker: attProgress,
+    defender: defProgress,
+  });
 
   // Handle simulation
   const onSubmit = attForm.handleSubmit(
@@ -468,15 +463,18 @@ export default function Simulator(props: {
         </div>
         <hr />
         <div className="mx-2 my-2 grid grid-cols-2 items-center">
-          {selectedDmg && (
+          {/* A cleared number field leaves no damage to show until it is filled in again. */}
+          {Number.isFinite(selectedDmg) ? (
             <div>
               <p className="mt-3 text-center font-bold text-2xl">
                 Damage: {selectedDmg}
               </p>
               <p className="mb-3 text-center italic">
-                [{((100 * selectedDmg) / defHp)?.toFixed(1)}% of Defender HP]
+                [{((100 * selectedDmg) / defHp).toFixed(1)}% of Defender HP]
               </p>
             </div>
+          ) : (
+            <div />
           )}
           {!isPending && userData && (
             <Button id="return" onClick={onSubmit}>

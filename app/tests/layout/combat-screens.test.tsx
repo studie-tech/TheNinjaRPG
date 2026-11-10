@@ -688,7 +688,7 @@ describe("combat action notifications", () => {
       "Kunai durability is critically low at 20%! Repair it soon to prevent it from breaking!",
       "Kunai durability is now 40%. Consider repairing it soon!",
       "Hidden Leaf's shrine captured! Hidden Leaf lost 5 war HP!",
-      "The townhall took damage",
+      "Hidden Leaf's shrine recaptured! Hidden Leaf gained 5 war HP!",
       "Return to the Shrine",
       "Delivered Herb for Errand.",
     ];
@@ -712,9 +712,9 @@ describe("combat action notifications", () => {
       { success: false, title: "Item Broken", message: notifications[0] },
       { success: false, title: "Low Durability Warning", message: notifications[1] },
       { success: false, title: "Low Durability Warning", message: notifications[2] },
-      { success: true, title: "Quest Update", message: notifications[3] },
+      { success: true, title: "War Update", message: notifications[3] },
       { success: true, title: "War Update", message: notifications[4] },
-      { success: true, title: "War Update", message: notifications[5] },
+      { success: true, title: "Quest Update", message: notifications[5] },
       { success: true, title: "Quest Update", message: notifications[6] },
     ]);
     expect(state.setBattleState).toHaveBeenLastCalledWith({

@@ -308,7 +308,7 @@ export const clanRouter = createTRPCRouter({
     })
     .input(
       z.object({
-        reputationPoints: z.number().min(0),
+        reputationPoints: z.int().positive(),
         clanId: z.string(),
       }),
     )

@@ -120,6 +120,7 @@ const ICON_BADGES: Partial<
   cleanse: { Icon: Sparkles, background: "bg-yellow-400" },
   move: { Icon: Footprints, background: "bg-cyan-600" },
   replacementTechnique: { Icon: LoaderPinwheel, background: "bg-orange-500" },
+  Highest: { Icon: SquarePlus, background: "bg-stone-500" },
   Taijutsu: { Icon: Grab, background: "bg-green-600" },
   Ninjutsu: { Icon: Zap, background: "bg-amber-500" },
   Genjutsu: { Icon: BrainCog, background: "bg-purple-600" },
@@ -156,14 +157,6 @@ const ElementImage: React.FC<ElementImageProps> = (props) => {
     );
   } else {
     const base = "rounded-full p-1 text-white";
-    if (element === "Highest") {
-      return (
-        <SquarePlus
-          strokeWidth={3}
-          className={cn(base, props.className, "bg-stone-500")}
-        />
-      );
-    }
     if (element === "All") {
       image = (
         <LoaderPinwheel

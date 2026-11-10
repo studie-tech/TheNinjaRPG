@@ -19,6 +19,12 @@ describe("native release configuration", () => {
     expect(packageManifest).toContain('platforms: [.iOS("15.4")]');
   });
 
+  it("warns at Gradle's default log level when google-services.json is missing", () => {
+    const android = readRepoFile("mobile/android/app/build.gradle");
+    expect(android).toContain('logger.warn("google-services.json not found');
+    expect(android).not.toContain('logger.info("google-services.json');
+  });
+
   it("does not back up device credentials", () => {
     const manifest = readRepoFile("mobile/android/app/src/main/AndroidManifest.xml");
     expect(manifest).toContain('android:allowBackup="false"');

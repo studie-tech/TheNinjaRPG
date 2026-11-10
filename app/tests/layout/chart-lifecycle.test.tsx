@@ -31,15 +31,13 @@ beforeEach(() => {
   charts = [];
   attempts = 0;
   failAt = undefined;
-  const chartConstructor = vi
-    .spyOn(chartLibrary, "Chart")
-    .mockImplementation(function () {
-      attempts += 1;
-      if (attempts === failAt) throw new Error("Chart initialization failed");
-      const chart = { destroy: vi.fn() };
-      charts.push(chart);
-      return chart as unknown as Chart;
-    } as never);
+  const chartConstructor = vi.spyOn(chartLibrary, "Chart").mockImplementation((() => {
+    attempts += 1;
+    if (attempts === failAt) throw new Error("Chart initialization failed");
+    const chart = { destroy: vi.fn() };
+    charts.push(chart);
+    return chart as unknown as Chart;
+  }) as never);
   Object.assign(chartConstructor, { defaults: { ...chartDefaults } });
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
     () => ({}) as never,
@@ -136,7 +134,7 @@ describe("statistics popover chart lifetime", () => {
     expect(charts[1]?.destroy).toHaveBeenCalledTimes(1);
   });
 
-  it("charts each rank except H with its own colour and leaves H in the total", async () => {
+  it("charts and totals each rank except H with its own colour", async () => {
     Object.assign(vi.spyOn(client, "api" as never), {
       bloodline: {
         getNaturalRollStatistics: {
@@ -152,7 +150,7 @@ describe("statistics popover chart lifetime", () => {
     await waitFor(() => expect(charts).toHaveLength(1));
     expect(
       view.getByText("Total bloodline rolls:").nextElementSibling?.textContent,
-    ).toBe("200");
+    ).toBe("100");
     const config = (chartLibrary.Chart as unknown as ReturnType<typeof vi.fn>).mock
       .calls[0]?.[1] as {
       data: { labels: string[]; datasets: Record<string, unknown>[] };

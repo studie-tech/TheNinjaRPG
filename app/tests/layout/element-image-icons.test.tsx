@@ -58,7 +58,7 @@ const EXPECTED: Record<string, string> = {
   replacementTechnique:
     "wrapped lucide lucide-loader-pinwheel rounded-full p-1 text-white h-6 w-6 bg-orange-500 stroke=3 label=replacementTechnique",
   Highest:
-    "bare lucide lucide-square-plus lucide-plus-square rounded-full p-1 text-white h-6 w-6 bg-stone-500 stroke=3 label=-",
+    "wrapped lucide lucide-square-plus lucide-plus-square rounded-full p-1 text-white h-6 w-6 bg-stone-500 stroke=3 label=Highest",
   Taijutsu:
     "wrapped lucide lucide-hand-grab lucide-grab rounded-full p-1 text-white h-6 w-6 bg-green-600 stroke=3 label=Taijutsu",
   Ninjutsu:

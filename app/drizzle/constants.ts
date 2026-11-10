@@ -4300,6 +4300,7 @@ export const MIRROR_EXCLUDED_EFFECT_TYPES: ReadonlySet<string> = new Set([
   "cleanseprevent",
   "moveprevent",
   "healprevent",
+  "stun",
   "timecompression",
 ]);
 

@@ -23,3 +23,9 @@ it("shows its label above the page so a scrolling side panel cannot clip it", as
   expect(label.textContent).toBe("Intelligence");
   expect(container.contains(label)).toBe(false);
 });
+
+it("labels the highest-stat badge on hover", async () => {
+  const { container } = render(<ElementImage element="Highest" className="h-6 w-6" />);
+  fireEvent.focus(container.querySelector("[data-state]")!);
+  expect((await screen.findByRole("tooltip")).textContent).toBe("Highest");
+});

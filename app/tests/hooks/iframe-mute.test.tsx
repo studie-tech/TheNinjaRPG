@@ -22,9 +22,11 @@ const response = () => ({
   ...(success ? { userPatch: { iframesMuted: true } } : {}),
 });
 let trpc: ReturnType<typeof testApi.createClient>;
+let requestBodies: unknown[];
 
 beforeEach(() => {
   success = true;
+  requestBodies = [];
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(key, {
     userData: {
@@ -41,8 +43,10 @@ beforeEach(() => {
       httpBatchLink({
         url: "http://localhost/api/trpc",
         transformer: superjson,
-        fetch: async () =>
-          Response.json([{ result: { data: superjson.serialize(response()) } }]),
+        fetch: async (_url, init) => {
+          requestBodies.push(JSON.parse(String(init?.body)));
+          return Response.json([{ result: { data: superjson.serialize(response()) } }]);
+        },
       }),
     ],
   });
@@ -135,6 +139,34 @@ it("falls back to the saved preference, then unmuted, without a profile value", 
   localStorage.removeItem("iframesMuted");
   const unset = renderHook(() => useIframeMute(), { wrapper });
   await waitFor(() => expect(unset.result.current.isIframesMuted).toBe(false));
+});
+
+it("saves only the mute preference, leaving other profile preferences untouched", async () => {
+  client.setQueryData(key, {
+    userData: {
+      userId: "iframe-listener",
+      iframesMuted: false,
+      preferredGeneral1: "Strength",
+      preferredGeneral2: "Speed",
+    } as NonNullable<UserWithRelations>,
+  });
+  const panel = renderHook(() => useIframeMute(), { wrapper });
+  act(() => panel.result.current.setIframesMuted(true));
+
+  await waitFor(() => expect(requestBodies).toHaveLength(1));
+  expect(requestBodies[0]).toEqual({ 0: { json: { iframesMuted: true } } });
+});
+
+it("treats an unreadable saved preference as unmuted", async () => {
+  client.setQueryData(key, { userData: { userId: "iframe-listener" } });
+  localStorage.setItem("iframesMuted", "{not json");
+  try {
+    const panel = renderHook(() => useIframeMute(), { wrapper });
+    await act(async () => {});
+    expect(panel.result.current.isIframesMuted).toBe(false);
+  } finally {
+    localStorage.removeItem("iframesMuted");
+  }
 });
 
 it("prefers the profile value over the saved preference", async () => {

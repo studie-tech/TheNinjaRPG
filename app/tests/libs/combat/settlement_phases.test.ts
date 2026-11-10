@@ -254,18 +254,26 @@ describe("calcBattleResult war damage", () => {
     expect(result.villageWarShrineInfo).toEqual({ war: { attacker: 0, defender: 0 } });
   });
 
-  it("measures the level gap against human opponents only", () => {
+  it("keeps full shrine damage against AI at any level", () => {
     const shrineWar = {
       foe: { isAi: true },
       battle: { battleType: "SHRINE_WAR" },
       extraState: { wars: { war: makeWar({ type: "SECTOR_WAR" }) } },
     };
-    const strong = settle({ ...shrineWar, hero: { level: 11 } });
-    expect(strong.shrineChangeHp).toBe(-1);
-    expect(strong.shrineInfo).toEqual({ 7: -1 });
-    const weak = settle({ ...shrineWar, hero: { level: 10 } });
-    expect(weak.shrineChangeHp).toBe(-WAR_SECTORWAR_AI_SHRINE_REDUCE);
-    expect(weak.shrineInfo).toEqual({ 7: -WAR_SECTORWAR_AI_SHRINE_REDUCE });
+    for (const level of [10, 11, 100]) {
+      const result = settle({ ...shrineWar, hero: { level } });
+      expect(result.shrineChangeHp).toBe(-WAR_SECTORWAR_AI_SHRINE_REDUCE);
+      expect(result.shrineInfo).toEqual({ 7: -WAR_SECTORWAR_AI_SHRINE_REDUCE });
+    }
+    const villageShrine = settle({
+      hero: { level: 100, sector: 2 },
+      foe: { isAi: true },
+      battle: { battleType: "SHRINE_WAR" },
+      extraState: { wars: { war: makeWar() } },
+    });
+    expect(villageShrine.villageWarShrineInfo).toEqual({
+      war: { attacker: 0, defender: -WAR_SECTORWAR_AI_SHRINE_REDUCE },
+    });
   });
 
   it("damages the sector shrine for a losing defender without crediting shrine hp", () => {

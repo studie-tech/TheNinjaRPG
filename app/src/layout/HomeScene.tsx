@@ -1128,13 +1128,15 @@ export const HomeScene = ({
           </div>
         </div>
       )}
-      <p role="status" aria-live="polite" className="sr-only">
-        {isTogglingSleep
-          ? "Changing sleep status…"
-          : isAsleep
-            ? "You are asleep. Resting restores your energy."
-            : "You are awake."}
-      </p>
+      {!isVisiting && (
+        <p role="status" aria-live="polite" className="sr-only">
+          {isTogglingSleep
+            ? "Changing sleep status…"
+            : isAsleep
+              ? "You are asleep. Resting restores your energy."
+              : "You are awake."}
+        </p>
+      )}
       {!isEditing && !isVisiting && (
         <HomeActions
           sleepLabel={sleepLabel}

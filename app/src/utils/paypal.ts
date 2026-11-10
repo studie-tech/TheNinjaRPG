@@ -25,6 +25,21 @@ export const getUserFederalStatus = (
   }
 };
 
+/**
+ * Explain a free monthly reset or swap. Staff take precedence; name the supporter tier
+ * only when its additional allowance applies.
+ */
+export const freeAllowanceNote = (
+  allowance: Record<FederalStatus, number>,
+  federalStatus: FederalStatus,
+  used: number,
+  isStaff: boolean,
+) => {
+  if (isStaff) return "Free for staff member";
+  if (used >= allowance.NONE) return `Free for ${federalStatus} supporter`;
+  return "Free monthly allowance";
+};
+
 /** Jobs that may wait behind the active one in each timed queue. */
 export const getQueueWaitingSlots = (
   user: Pick<UserData, "staffAccount" | "federalStatus">,

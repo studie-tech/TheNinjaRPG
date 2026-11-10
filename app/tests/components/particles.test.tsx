@@ -8,7 +8,8 @@ import { setGameSceneVisible } from "@/libs/gameSceneVisibility";
 const container = {
   animationStatus: true,
   destroyed: false,
-  particles: { count: 200 },
+  actualOptions: { particles: { number: { value: 200 } } },
+  particles: { count: 200, removeQuantity: vi.fn(), push: vi.fn() },
   pause: vi.fn(function pause() {
     container.animationStatus = false;
   }),
@@ -38,9 +39,18 @@ const mountParticles = async () => {
 const nextFrame = () => {
   act(() => frame(performance.now()));
 };
+/** Deliver `seconds` of animation frames spaced `intervalMs` apart. */
+const runFrames = (intervalMs: number, seconds: number) => {
+  const start = performance.now();
+  for (let i = 0; i <= (seconds * 1000) / intervalMs; i++) {
+    act(() => frame(start + i * intervalMs));
+  }
+};
 
 beforeEach(() => {
   container.animationStatus = true;
+  container.particles.removeQuantity.mockClear();
+  container.particles.push.mockClear();
   container.pause.mockClear();
   container.play.mockClear();
   spyOn(mediaQuery, "useMediaQuery").mockImplementation((query) =>
@@ -85,5 +95,19 @@ describe("background particles behind game scenes", () => {
     nextFrame();
     expect(container.pause).toHaveBeenCalledTimes(2);
     expect(container.play).not.toHaveBeenCalled();
+  });
+});
+
+describe("adaptive particle count", () => {
+  it("keeps every particle on a healthy display refreshing just under 60 Hz", async () => {
+    await mountParticles();
+    runFrames(1000 / 59.94, 10);
+    expect(container.particles.removeQuantity).not.toHaveBeenCalled();
+  });
+
+  it("sheds particles when frames run well below the display rate", async () => {
+    await mountParticles();
+    runFrames(25, 3);
+    expect(container.particles.removeQuantity).toHaveBeenCalledWith(25);
   });
 });

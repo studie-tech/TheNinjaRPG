@@ -1,6 +1,6 @@
 import { expect, it } from "bun:test";
 import type { RouterOutputs } from "@/app/_trpc/client";
-import { applyConversationRead } from "@/deltas/chat";
+import { applyConversationRead, matchesConversationSearch } from "@/deltas/chat";
 import { isConversationUnread } from "@/libs/chatPanel";
 
 it("keeps newer activity unread and preserves later confirmed reads and unrelated conversations", () => {
@@ -17,3 +17,36 @@ it("keeps newer activity unread and preserves later confirmed reads and unrelate
   expect(isConversationUnread(latest[0]!)).toBe(false);
   expect(applyConversationRead(latest, "chat", at(2))?.[0]).toBe(latest[0]);
 });
+
+it("matches a live comment by content or author name, ignoring case, like the server search", () => {
+  const comment = { content: "Meet at the <b>Gate</b>", username: "Pathfinder" };
+  expect(matchesConversationSearch("", comment)).toBe(true);
+  expect(matchesConversationSearch("  ", comment)).toBe(true);
+  expect(matchesConversationSearch("gate", comment)).toBe(true);
+  expect(matchesConversationSearch("FINDER", comment)).toBe(true);
+  expect(matchesConversationSearch("ramen", comment)).toBe(false);
+});
+
+it.each(["%", "_", "\\"])(
+  "matches %j literally in content or author names",
+  (symbol) => {
+    expect(
+      matchesConversationSearch(symbol, {
+        content: "Another message",
+        username: "Peer",
+      }),
+    ).toBe(false);
+    expect(
+      matchesConversationSearch(symbol, {
+        content: `Found ${symbol}`,
+        username: "Peer",
+      }),
+    ).toBe(true);
+    expect(
+      matchesConversationSearch(symbol, {
+        content: "Another message",
+        username: `Peer${symbol}`,
+      }),
+    ).toBe(true);
+  },
+);
