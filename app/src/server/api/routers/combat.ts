@@ -3699,6 +3699,8 @@ export const processUsersForBattle = async (
 
   // Loop through users and transform to ProcessingBattleUser
   const usersState: ProcessingBattleUser[] = users.map((inputUser, index) => {
+    const { isVillageDutyCopy, ...participant } = inputUser;
+    const usesPlayerLoadout = !inputUser.isAi || !!isVillageDutyCopy;
     const dependencies = summonDependencies.get(inputUser.userId) ?? new Set<string>();
     const addSummon = (id: string) => {
       allSummons.push(id);
@@ -3708,7 +3710,7 @@ export const processUsersForBattle = async (
     };
     // Build the processing user object with all required fields
     const user: ProcessingBattleUser = {
-      ...inputUser,
+      ...participant,
       // Freeze the choice before bloodline processing and later profile edits, including ranked battles.
       preferredDamageElement: getPreferredDamageElement(inputUser),
       spriteAnimations: inputUser.spriteAnimationBindings
@@ -3900,22 +3902,24 @@ export const processUsersForBattle = async (
     const fitsBattle = (usage: BattleUsageType) => fitsBattleUsage(battleType, usage);
 
     const requirementSkills = user.userSkills;
-    user.activeSkillIds = inputUser.isAi
-      ? undefined
-      : requirementSkills
+    user.activeSkillIds = usesPlayerLoadout
+      ? requirementSkills
           .filter((skill) => skill.activated)
-          .map((skill) => skill.skillId);
+          .map((skill) => skill.skillId)
+      : undefined;
     // Furniture never enters battle, even when old inventory rows still have an
     // equipment slot or drop chance. Filter before mastery and jutsu item gates.
     user.items = user.items.filter(
       (ui) =>
         ui.item.itemType !== "FURNITURE" &&
-        (user.isAi || hasRequiredSkill(ui.item, { userSkills: requirementSkills })),
+        (!usesPlayerLoadout ||
+          hasRequiredSkill(ui.item, { userSkills: requirementSkills })),
     );
 
     // The mastery sources this battle applies; ranked battles skip bloodline and skills
     const wearer = {
       ...user,
+      isAi: !usesPlayerLoadout,
       bloodline: isRankedBattle ? null : user.bloodline,
       userSkills: isRankedBattle ? [] : user.userSkills,
       titles: isRankedBattle ? [] : inputUser.titles,
@@ -4097,7 +4101,11 @@ export const processUsersForBattle = async (
     // Filter and process jutsus - DO NOT apply reskins here, they are applied dynamically
     // in userJutsuToAction to ensure each user sees their own reskin.
     // user.userSkills was cleared for storage above; gates read the captured skills.
-    const gateUser = { ...user, userSkills: requirementSkills };
+    const gateUser = {
+      ...user,
+      isAi: !usesPlayerLoadout,
+      userSkills: requirementSkills,
+    };
     const processedJutsus = user.jutsus.filter((userjutsu) => {
       if (!fitsBattle(userjutsu.jutsu.battleUsageType)) {
         return false;
@@ -4118,6 +4126,13 @@ export const processUsersForBattle = async (
       return true;
     });
     user.jutsus = processedJutsus;
+
+    // Eligibility consumes the owner's quest history; copies cannot carry reward tracking.
+    if (isVillageDutyCopy) {
+      user.userQuests = [];
+      user.completedQuests = [];
+      user.questData = [];
+    }
 
     // Add basic actions to user for tracking cooldowns
     user.basicActions = Object.values(getDefaultBasicActions(user));

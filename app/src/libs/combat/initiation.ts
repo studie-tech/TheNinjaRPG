@@ -7,7 +7,11 @@ import {
   REGEN_SECONDS,
 } from "@/drizzle/constants";
 import type { GameSetting, RankedLoadout, VillageAlliance } from "@/drizzle/schema";
-import type { BattleUserState, GroundEffect } from "@/libs/combat/types";
+import type {
+  BattleUserState,
+  CombatQueryUser,
+  GroundEffect,
+} from "@/libs/combat/types";
 import { inertUserItemColumns } from "@/libs/combat/util";
 import type { CoopEncounter } from "@/libs/coop";
 import {
@@ -441,7 +445,11 @@ export const buildQueuedTrainingLogs = (claimed: QueuedBattleTraining[]) =>
 export const prepareVillageDutyDefender = (
   participant: BattleParticipant,
   villageId: string,
-): (BattleParticipant & Pick<BattleUserState, "spriteAppearance">) | undefined => {
+):
+  | (BattleParticipant &
+      Pick<CombatQueryUser, "isVillageDutyCopy"> &
+      Pick<BattleUserState, "spriteAppearance">)
+  | undefined => {
   if (!isOnVillageDuty(participant, villageId)) return undefined;
   const copy = structuredClone(participant);
   const masked = !!copy.anbuId;
@@ -450,6 +458,7 @@ export const prepareVillageDutyDefender = (
     userId: villageDutyActorId(copy.userId),
     username: masked ? "ANBU Protector" : copy.username,
     isAi: true,
+    isVillageDutyCopy: true,
     status: "AWAKE",
     battleId: null,
     sector: copy.village?.sector ?? copy.sector,
@@ -461,9 +470,6 @@ export const prepareVillageDutyDefender = (
     petTask: null,
     queue: [],
     cookingJobs: [],
-    userQuests: [],
-    completedQuests: [],
-    questData: [],
     bounties: [],
     bountySignups: [],
     raidBuffs: [],

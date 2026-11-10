@@ -142,6 +142,8 @@ export type CombatQueryCompletedQuest = {
  */
 export type CombatQueryUser = UserData &
   ActivityCompletions & {
+    /** Initiation-only provenance: an AI-controlled copy retains its owner's loadout gates. */
+    isVillageDutyCopy?: true;
     attributes?: { attribute: string }[];
     /** Retained when lobby/loadout processing receives an already frozen combatant. */
     spriteAnimations?: CharacterAnimations;

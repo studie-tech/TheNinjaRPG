@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import { userItemToAction } from "@/libs/combat/actions";
+import { type Jutsu, type SkillTree, skillTree } from "@/drizzle/schema";
+import { availableUserActions, userItemToAction } from "@/libs/combat/actions";
 import { prepareVillageDutyDefender } from "@/libs/combat/initiation";
 import { getPower } from "@/libs/combat/tags";
 import type { CombatQueryUser, UserEffect } from "@/libs/combat/types";
@@ -15,9 +16,12 @@ import {
 import {
   makeBattleUserItem,
   makeCompleteBattle,
+  makeJutsu,
   makeTag,
   makeWeapon,
+  tableDefaults,
 } from "../../../../setup/combat";
+import { trackerQuest, trackerUser } from "../../../../setup/quest";
 
 const owner = () =>
   makeInitiationUser({
@@ -158,6 +162,172 @@ describe("village duty combat isolation", () => {
         ).toBe(22 + level);
       }
       expect(results[1]!.usersState[0]!.isAi).toBe(true);
+    },
+  );
+  it.each(["VILLAGE_PROTECTOR", "SHRINE_WAR"] as const)(
+    "keeps player skill eligibility for %s copies after a reset or deactivation",
+    async (battleType) => {
+      const defender = {
+        ...owner(),
+        joinedVillageAt: new Date("2026-01-01"),
+        userSkills: [] as CombatQueryUser["userSkills"],
+        items: [
+          {
+            ...makeBattleUserItem({
+              id: "owned-gear",
+              itemId: "gear",
+              equipped: "HAND_1",
+            }),
+            userId: "owner",
+            imbuements: [],
+            item: makeWeapon({
+              id: "gear",
+              requiredSkillId: "required",
+              battleUsageType: "ALL",
+            }),
+          },
+        ],
+        jutsus: [
+          {
+            id: "owned-jutsu",
+            jutsuId: "gated",
+            equipped: true,
+            level: 1,
+            experience: 0,
+            jutsu: makeJutsu({ id: "gated", requiredSkillId: "required" }),
+          },
+        ],
+      };
+      for (const activated of [undefined, false, true]) {
+        defender.userSkills =
+          activated === undefined
+            ? []
+            : [
+                {
+                  id: "owned-skill",
+                  userId: "owner",
+                  skillId: "required",
+                  activated,
+                  purchasedAt: new Date(),
+                  skill: {
+                    ...tableDefaults(skillTree),
+                    id: "required",
+                    effects: [],
+                  } as unknown as SkillTree,
+                },
+              ];
+        const copy = prepareVillageDutyDefender(
+          defender as unknown as Parameters<typeof prepareVillageDutyDefender>[0],
+          "home",
+        )!;
+        const result = await preloadBattle([copy], { battleType });
+        const user = result.usersState[0]!;
+        const battle = makeCompleteBattle({
+          battleType,
+          usersState: result.usersState,
+          usersEffects: result.userEffects,
+          extraState: result.extraState,
+        });
+        const actions = availableUserActions(battle, user.userId, false).map(
+          (action) => action.id,
+        );
+        expect(user.activeSkillIds).toEqual(activated ? ["required"] : []);
+        expect(user.items.map((item) => item.itemId)).toEqual(
+          activated ? ["gear"] : [],
+        );
+        expect(user.jutsus.map((jutsu) => jutsu.jutsuId)).toEqual(
+          activated ? ["gated"] : [],
+        );
+        expect(actions.includes("gear")).toBe(!!activated);
+        expect(actions.includes("gated")).toBe(!!activated);
+        expect(user.isAi).toBe(true);
+        expect(user).not.toHaveProperty("isVillageDutyCopy");
+      }
+      for (const isSummon of [false, true]) {
+        const result = await preloadBattle(
+          [
+            {
+              ...structuredClone(defender),
+              userId: "duty:authored-ai",
+              userSkills: [],
+              isAi: true,
+            } as unknown as CombatQueryUser,
+          ],
+          { battleType, isSummon },
+        );
+        expect(result.usersState[0]!.activeSkillIds).toBeUndefined();
+        expect(result.usersState[0]!.items.map((item) => item.itemId)).toEqual([
+          "gear",
+        ]);
+        expect(result.usersState[0]!.jutsus.map((jutsu) => jutsu.jutsuId)).toEqual([
+          "gated",
+        ]);
+      }
+    },
+  );
+  it.each(["VILLAGE_PROTECTOR", "SHRINE_WAR"] as const)(
+    "applies every player jutsu gate to %s copies and removes their reward tracking",
+    async (battleType) => {
+      const history = trackerUser(
+        [trackerQuest("owner-quest", [])],
+        [{ id: "owner-quest", goals: [] }],
+      );
+      const requirements: Partial<Jutsu>[] = [
+        {},
+        { requiredSkillId: "missing" },
+        { bloodlineId: "other" },
+        { bloodlineReskinId: "other" },
+        { elementClassification: "Fire" },
+        { requiredNinjutsuMastery: 1_000_000 },
+        { jutsuWeapon: "SWORD" },
+        { requiredBloodlineItemId: "missing" },
+        { requiredLevel: 10_000 },
+        { requiredRank: "ELITE JONIN" },
+        { jutsuRank: "H" },
+        { villageId: "other" },
+      ];
+      const defender = {
+        ...owner(),
+        joinedVillageAt: new Date("2026-01-01"),
+        rank: "CHUNIN",
+        primaryElement: "Water",
+        secondaryElement: "Wind",
+        jutsus: requirements.map((requirement, index) => ({
+          id: `owned-${index}`,
+          jutsuId: `jutsu-${index}`,
+          equipped: true,
+          level: 1,
+          experience: 0,
+          jutsu: makeJutsu({ id: `jutsu-${index}`, ...requirement }),
+        })),
+        userQuests: history.userQuests as NonNullable<CombatQueryUser["userQuests"]>,
+        questData: history.questData,
+        completedQuests: [
+          {
+            id: "owner-receipt",
+            questId: "receipt",
+            completed: 1,
+            previousCompletes: 0,
+            questType: "daily" as const,
+          },
+        ],
+      };
+      const copy = prepareVillageDutyDefender(
+        defender as unknown as Parameters<typeof prepareVillageDutyDefender>[0],
+        "home",
+      )!;
+      expect(copy.completedQuests).toEqual(defender.completedQuests);
+      expect(copy.userQuests.map((entry) => entry.questId)).toEqual(["owner-quest"]);
+      expect(copy.questData).toEqual(defender.questData);
+      const before = structuredClone(defender);
+      const result = await preloadBattle([copy], { battleType });
+      expect(result.usersState[0]!.jutsus.map((jutsu) => jutsu.jutsuId)).toEqual([
+        "jutsu-0",
+      ]);
+      expect(result.extraState.userQuests).toEqual({});
+      expect(result.extraState.completedQuests).toEqual({});
+      expect(result.extraState.questData).toEqual({});
+      expect(defender).toEqual(before);
     },
   );
   it("rejects a cancelled enrollment before battle writes", async () => {
