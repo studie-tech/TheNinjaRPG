@@ -127,14 +127,20 @@ describeWithDatabase("overworld interaction profile updates", () => {
       "setNpcDialog",
       "utils",
       "openRewardChoice",
+      "invalidateInventory",
       `${factory}\nreturn callbacks();`,
     )(
       () => prepareUserUpdate(cache, key),
       updateUser,
       vi.fn(),
       vi.fn(),
-      { travel: { getSectorData: { invalidate: vi.fn() } } },
+      {
+        travel: { getSectorData: { invalidate: vi.fn() } },
+        profile: { getDashboard: { invalidate: vi.fn() } },
+        quests: { getQuestHistory: { invalidate: vi.fn() } },
+      },
       vi.fn(),
+      vi.fn(async () => undefined),
     ) as {
       onMutate: () => number | undefined;
       onSuccess: (
@@ -331,7 +337,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
               })
             )?.memberCount,
           ).toBe(1);
-        await options.onSuccess(result, undefined, revision);
+        await options.onSuccess(result, {}, revision);
         expect(cache.getQueryData<typeof initial>(key)?.userData).toMatchObject({
           anbuId: null,
           anbuSquad: null,
@@ -567,7 +573,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
           userDelta: { dailyOverworldQuestRolls: 1 },
           userExpected: { dailyOverworldQuestRolls: resetDay ? 0 : 1 },
         });
-        await options.onSuccess(result, undefined, revision);
+        await options.onSuccess(result, {}, revision);
         const saved = await db.query.userData.findFirst({
           where: eq(userData.userId, "npc-cache-actor"),
         });
@@ -651,5 +657,64 @@ describeWithDatabase("overworld interaction profile updates", () => {
         where: eq(userData.userId, "npc-cache-actor"),
       }))!.money,
     ).toBe(moneyBefore + 11);
+  });
+
+  it("returns the NPC's next dialog after a branch that continues at the same NPC", async () => {
+    const db = await getTestDatabase();
+    await insertQuests([
+      {
+        id: "cache-dialog-chain",
+        questType: "overworld",
+        hidden: false,
+        maxAttempts: 10,
+        maxCompletes: 10,
+        content: {
+          objectives: [
+            AllObjectives.parse({
+              id: "greet",
+              task: "dialog",
+              overworldPlacementId: "cache-giver",
+              nextObjectiveId: [{ text: "Tell me more", nextObjectiveId: "ask" }],
+            }),
+            AllObjectives.parse({
+              id: "ask",
+              task: "dialog",
+              overworldPlacementId: "cache-giver",
+              description: "Second question",
+              nextObjectiveId: [{ text: "I will help", nextObjectiveId: "train" }],
+            }),
+            AllObjectives.parse({ id: "train", task: "stats_trained", value: 1000 }),
+          ],
+          reward: ObjectiveReward.parse({}),
+          sceneBackground: "",
+          sceneCharacters: [],
+        },
+      },
+    ]);
+    await db.insert(overworldAiPlacementQuest).values({
+      placementId: "cache-giver",
+      questId: "cache-dialog-chain",
+      chance: 100,
+    });
+    const { caller, snapshot } = await prepared();
+    const interact = (dialogContentId?: string) =>
+      caller.interactWithOverworldAi({
+        placementId: "cache-giver",
+        positionVersion: 0,
+        dialogContentId,
+      });
+    expect((await interact()).success).toBe(true);
+    snapshot.user!.activeNpcQuestId = "cache-dialog-chain";
+    expect((await interact()).dialog?.objectiveId).toBe("greet");
+
+    const next = await interact("ask");
+    expect(next).toMatchObject({
+      success: true,
+      dialog: {
+        objectiveId: "ask",
+        description: "Second question",
+        branches: [{ text: "I will help", nextObjectiveId: "train" }],
+      },
+    });
   });
 });

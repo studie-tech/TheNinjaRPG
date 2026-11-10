@@ -351,7 +351,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   } = useRequiredUserDataSelector(selectUserWithoutPosition);
   const userData = profile ? userRef.current : undefined;
   const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(props.sector);
-  const { prepareInventoryUpdate, updateInventory } = useInventoryCacheUpdate();
+  const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
+    useInventoryCacheUpdate();
   const appearanceSignature = useMemo(
     () => JSON.stringify(resolveSpriteAppearance(userData ?? {})),
     [userData],
@@ -1569,18 +1570,39 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     api.overworldAi.interactWithOverworldAi.useMutation({
       /** Applies battle/dialog results and refreshes state after an overworld NPC interaction. */
       onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
+      onSuccess: async (data, variables, revision) => {
         await updateUser(data, { revision });
         showMutationToast(data);
+        // A dialog choice either continues with the NPC's next dialog or ends the conversation.
         if (data.success && data.dialog) {
           setNpcDialog(data.dialog);
-        } else if (!data.success || !data.battleId) {
+        } else if (variables.dialogContentId) {
+          setNpcDialog(null);
+        }
+        if (
+          data.success &&
+          !data.battleId &&
+          (variables.dialogContentId || !data.dialog)
+        ) {
+          // A claimed objective can pay items and profile rewards; refresh their views now
+          // rather than leaving them stale until a page reload.
+          void Promise.allSettled([
+            invalidateInventory(),
+            utils.profile.getDashboard.invalidate(),
+            utils.quests.getQuestHistory.invalidate(),
+          ]);
+        }
+        if (!data.success || (!data.battleId && !data.dialog)) {
           // Placements and public quest locations can change with the interaction.
           await utils.travel.getSectorData.invalidate();
         }
         if (data.rewardChoicePending) {
           void openRewardChoice();
         }
+      },
+      onError: (_error, variables) => {
+        // A failed choice must not leave a dialog whose branch may already be spent.
+        if (variables.dialogContentId) setNpcDialog(null);
       },
     });
 
@@ -2720,18 +2742,22 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
                 className="h-auto w-full justify-start text-left whitespace-normal"
                 onClick={() => {
                   const ctx = pendingNpcInteractRef.current;
-                  if (ctx && !isInteracting) {
-                    interactNpc({
-                      placementId: ctx.placementId,
-                      positionVersion: ctx.positionVersion,
-                      copy: ctx.copy,
-                      dialogContentId: dialogChoiceContentId(
-                        branch.nextObjectiveId,
-                        npcDialog.objectiveId,
-                      ),
-                    });
+                  if (!ctx) {
+                    setNpcDialog(null);
+                    return;
                   }
-                  setNpcDialog(null);
+                  // Keep the dialog open while the choice is sent: the response either carries
+                  // the NPC's next dialog or closes it (see interactNpc onSuccess / onError).
+                  if (isInteracting) return;
+                  interactNpc({
+                    placementId: ctx.placementId,
+                    positionVersion: ctx.positionVersion,
+                    copy: ctx.copy,
+                    dialogContentId: dialogChoiceContentId(
+                      branch.nextObjectiveId,
+                      npcDialog.objectiveId,
+                    ),
+                  });
                 }}
               >
                 {branch.text}

@@ -602,27 +602,13 @@ export const overworldAiRouter = createTRPCRouter({
         // Two-step dialog: the first call returns the available branches; the user
         // picks one and re-submits with dialogContentId to advance + pay.
         if (bound.objective.task === "dialog" && !input.dialogContentId) {
-          const dialogObjective = bound.objective.source;
-          const branches =
-            "nextObjectiveId" in dialogObjective &&
-            Array.isArray(dialogObjective.nextObjectiveId)
-              ? dialogObjective.nextObjectiveId
-              : [];
           return recoverIdleInteraction(ctx.drizzle, readiness, {
             success: true,
             // Empty message suppresses showMutationToast on the client (see item.ts /
             // combat.ts convention); the dialog modal opens off `data.dialog`, not the message.
             message: "",
             userPatch: noUserChange,
-            dialog: {
-              objectiveId: bound.objective.id,
-              // description / sceneBackground / sceneCharacters are baseObjectiveFields,
-              // present on every objective — default safely.
-              description: dialogObjective.description ?? "",
-              sceneBackground: dialogObjective.sceneBackground ?? "",
-              sceneCharacters: dialogObjective.sceneCharacters ?? [],
-              branches,
-            },
+            dialog: toNpcDialog(bound.objective),
           });
         }
 
@@ -699,11 +685,28 @@ export const overworldAiRouter = createTRPCRouter({
 
         const refreshed = getNewTrackers(userForTrackers, [{ task: "any" }]);
         userForTrackers.questData = refreshed.trackers;
+        // When the chosen branch leads to another dialog at this same NPC, hand it back so the
+        // client keeps the dialog open instead of making the player tap the NPC again.
+        const nextBound = claim.rewardChoicePending
+          ? null
+          : findActionableBoundObjective({
+              activeQuests: getBoundObjectiveCandidates(userForTrackers),
+              ownedItemIds,
+              placementId: placement.id,
+            });
+        const nextDialog =
+          nextBound?.objective.task === "dialog" &&
+          (!activeUser.questParty ||
+            activeUser.questParty.questId !== nextBound.questId ||
+            activeUser.questParty.leaderId === ctx.userId)
+            ? toNpcDialog(nextBound.objective)
+            : undefined;
         return actionReadinessResponse(
           {
             success: true,
-            message: messages.join(" ") || "Interaction complete",
+            message: messages.join(" ") || (nextDialog ? "" : "Interaction complete"),
             rewardChoicePending: claim.rewardChoicePending,
+            dialog: nextDialog,
             ...getQuestRewardProjectionUpdate({
               user: userForTrackers,
               requiresProgressionRefresh,
@@ -772,6 +775,30 @@ export const overworldAiRouter = createTRPCRouter({
       });
     }),
 });
+
+/**
+ * Builds the NPC dialog payload (text, scene and branches) for a placement-bound dialog objective.
+ */
+const toNpcDialog = (objective: {
+  id: string;
+  source: ReturnType<
+    typeof getBoundObjectiveCandidates
+  >[number]["objectives"][number]["source"];
+}) => {
+  const source = objective.source;
+  return {
+    objectiveId: objective.id,
+    // description / sceneBackground / sceneCharacters are baseObjectiveFields,
+    // present on every objective — default safely.
+    description: source.description ?? "",
+    sceneBackground: source.sceneBackground ?? "",
+    sceneCharacters: source.sceneCharacters ?? [],
+    branches:
+      "nextObjectiveId" in source && Array.isArray(source.nextObjectiveId)
+        ? source.nextObjectiveId
+        : [],
+  };
+};
 
 /**
  * Spend the actor's daily roll on an NPC's quest pool, granting at most one quest.
