@@ -3508,7 +3508,7 @@ export const initiateBattle = async (
                 type: "battle",
                 battleId,
                 // Match push recipients; initiating fighters stay silent across their tabs.
-                isDefender: !user.isAi && !info.userIds.includes(user.userId),
+                isDefender: !info.userIds.includes(user.userId),
                 ...(user.userId === actionActorId && info.originSocketId
                   ? { originSocketId: info.originSocketId }
                   : {}),
@@ -3516,15 +3516,11 @@ export const initiateBattle = async (
                   ? { userRecovery: superjson.serialize(actionReadiness.userRecovery) }
                   : {}),
               }),
-              ...(!user.isAi
-                ? [
-                    updateUserOnMap(pusher, user.sector, {
-                      ...user,
-                      status: "BATTLE",
-                      battleId,
-                    }),
-                  ]
-                : []),
+              updateUserOnMap(pusher, user.sector, {
+                ...user,
+                status: "BATTLE",
+                battleId,
+              }),
             ]);
           }),
       );
