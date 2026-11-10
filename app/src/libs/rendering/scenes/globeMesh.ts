@@ -437,26 +437,20 @@ void main() {
         mesh.visible = false;
         return;
       }
-      const a = unit(from),
-        b = unit(to);
+      const { start: a, toward, across } = greatCircleBasis(from, to);
       const positions = new Float32Array(segments * STRANDS * 6),
         along = new Float32Array(segments * STRANDS * 2);
-      // Strands sit side by side across the route, so the 1px lines read as one ribbon.
-      const across = unit({
-        x: a.y * b.z - a.z * b.y,
-        y: a.z * b.x - a.x * b.z,
-        z: a.x * b.y - a.y * b.x,
-      });
       const at = (t: number, strand: number) => {
-        const wa = Math.sin((1 - t) * angle) / Math.sin(angle),
-          wb = Math.sin(t * angle) / Math.sin(angle);
+        const wa = Math.cos(t * angle),
+          wb = Math.sin(t * angle);
         const height =
           radius * (1.006 + Math.sin(Math.PI * t) * Math.min(0.12, angle * 0.1));
+        // Strands sit side by side across the route, so the 1px lines read as one ribbon.
         const offset = (strand - (STRANDS - 1) / 2) * radius * 0.0035;
         return [
-          (a.x * wa + b.x * wb) * height + across.x * offset,
-          (a.y * wa + b.y * wb) * height + across.y * offset,
-          (a.z * wa + b.z * wb) * height + across.z * offset,
+          (a.x * wa + toward.x * wb) * height + across.x * offset,
+          (a.y * wa + toward.y * wb) * height + across.y * offset,
+          (a.z * wa + toward.z * wb) * height + across.z * offset,
         ];
       };
       for (let strand = 0; strand < STRANDS; strand++)
@@ -593,6 +587,37 @@ const buildPolarCaps = (map: GlobalMapData, step: number) => {
 const unit = (point: GlobalPoint) => {
   const length = Math.hypot(point.x, point.y, point.z) || 1;
   return { x: point.x / length, y: point.y / length, z: point.z / length };
+};
+
+/**
+ * Orthonormal frame of the great circle from `from` to `to`: the arc point at angle θ is
+ * `start·cos θ + toward·sin θ`, and `across` is its normal. Every sector has an exact
+ * antipode on the symmetric hexasphere, where the plane through both points is undefined;
+ * the arc then bends toward the north pole (or the x axis from a pole).
+ */
+export const greatCircleBasis = (from: GlobalPoint, to: GlobalPoint) => {
+  const start = unit(from);
+  // The part of a direction perpendicular to start, kept once it is long enough to normalise.
+  const perpendicular = (point: GlobalPoint, minimum: number) => {
+    const along = start.x * point.x + start.y * point.y + start.z * point.z;
+    const rest = {
+      x: point.x - start.x * along,
+      y: point.y - start.y * along,
+      z: point.z - start.z * along,
+    };
+    return Math.hypot(rest.x, rest.y, rest.z) > minimum ? unit(rest) : null;
+  };
+  const toward =
+    perpendicular(unit(to), 1e-6) ??
+    perpendicular({ x: 0, y: 1, z: 0 }, 0.1) ??
+    perpendicular({ x: 1, y: 0, z: 0 }, 0.1) ??
+    start;
+  const across = {
+    x: start.y * toward.z - start.z * toward.y,
+    y: start.z * toward.x - start.x * toward.z,
+    z: start.x * toward.y - start.y * toward.x,
+  };
+  return { start, toward, across };
 };
 
 const angleBetween = (a: GlobalPoint, b: GlobalPoint) => {

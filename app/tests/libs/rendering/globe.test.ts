@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import globe from "@/data/hexasphere.json";
 import { globeMarkerAnchor } from "@/libs/rendering/scenes/globeMarkers";
+import { greatCircleBasis } from "@/libs/rendering/scenes/globeMesh";
 import {
   type GlobeCamera,
   globeCameraBasis,
@@ -124,5 +125,41 @@ describe("globe marker anchors", () => {
     expect(rim.point.x / length).toBeCloseTo(radius / camera.distance, 6);
     expect(Math.sign(rim.point.y)).toBe(1);
     expect(Math.sign(rim.point.z)).toBe(1);
+  });
+});
+
+describe("globe route arcs", () => {
+  it("ends every route on its target, including each sector's exact antipode", () => {
+    const unit = (point: { x: number; y: number; z: number }) => {
+      const length = Math.hypot(point.x, point.y, point.z);
+      return { x: point.x / length, y: point.y / length, z: point.z / length };
+    };
+    const centers = map.tiles.map((tile) => unit(tile.c));
+    const dot = (a: (typeof centers)[number], b: (typeof centers)[number]) =>
+      a.x * b.x + a.y * b.y + a.z * b.z;
+    for (const [index, from] of centers.entries()) {
+      const targets = [centers[(index + 1) % centers.length]];
+      let antipode = from;
+      for (const center of centers)
+        if (dot(from, center) < dot(from, antipode)) antipode = center;
+      expect(dot(from, antipode)).toBeLessThan(-0.999999);
+      targets.push(antipode);
+      for (const to of targets) {
+        if (!to) continue;
+        const { start, toward, across } = greatCircleBasis(from, to);
+        const angle = Math.acos(Math.max(-1, Math.min(1, dot(from, to))));
+        for (const axis of [toward, across]) {
+          expect(Math.hypot(axis.x, axis.y, axis.z)).toBeCloseTo(1, 9);
+          expect(dot(start, axis)).toBeCloseTo(0, 9);
+        }
+        expect(dot(toward, across)).toBeCloseTo(0, 9);
+        const end = {
+          x: start.x * Math.cos(angle) + toward.x * Math.sin(angle),
+          y: start.y * Math.cos(angle) + toward.y * Math.sin(angle),
+          z: start.z * Math.cos(angle) + toward.z * Math.sin(angle),
+        };
+        expect(dot(end, to)).toBeCloseTo(1, 6);
+      }
+    }
   });
 });
