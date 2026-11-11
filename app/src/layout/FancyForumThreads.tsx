@@ -46,7 +46,17 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
     lastElement,
   });
 
-  if (!board) return <NotFoundPage />;
+  if (!board)
+    return (
+      <NotFoundPage
+        message="This forum board does not exist. It may have been removed."
+        defaultBackHref="/forum"
+        links={[
+          { href: "/forum", label: "Back to the forum" },
+          { href: "/", label: "Return to the front page" },
+        ]}
+      />
+    );
 
   return (
     <ContentBox
