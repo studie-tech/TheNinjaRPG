@@ -4,6 +4,11 @@ import { FarmInventory } from "@/layout/FarmInventory";
 import { FarmMarket } from "@/layout/FarmMarket";
 import { FarmOverview } from "@/layout/FarmOverview";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
+import {
+  flushRadixFocus,
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../setup/browserGlobals";
 
 vi.mock("@/layout/Image", () => ({
   default: (props: { src: string; alt: string }) => (
@@ -83,8 +88,13 @@ const summary = (patch: Partial<Record<string, number>> = {}) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
 });
-afterEach(cleanup);
+afterEach(async () => {
+  cleanup();
+  await flushRadixFocus();
+  restoreBrowserGlobals();
+});
 
 describe("FarmOverview", () => {
   it("offers only the bulk actions that can run now", () => {
@@ -144,15 +154,11 @@ describe("FarmOverview", () => {
       />,
     );
     expect(view.getByRole("button", { name: "Plant 3 plots" })).toBeTruthy();
-    fireEvent.change(view.getByLabelText("Seed to plant in empty plots"), {
-      target: { value: "seed-2" },
-    });
+    chooseOption(view, "Seed to plant in empty plots", "Onion Seed (1)");
     fireEvent.click(view.getByRole("button", { name: "Plant 1 plot" }));
     expect(handlers.onPlantAll).toHaveBeenCalledWith("seed-2");
     expect(view.getByRole("button", { name: "Fertilize 4 crops" })).toBeTruthy();
-    fireEvent.change(view.getByLabelText("Fertilizer for growing crops"), {
-      target: { value: "fert-small" },
-    });
+    chooseOption(view, "Fertilizer for growing crops", "Ash (1)");
     fireEvent.click(view.getByRole("button", { name: "Fertilize 1 crop" }));
     expect(handlers.onFertilizeAll).toHaveBeenCalledWith("fert-small");
   });
@@ -414,3 +420,9 @@ describe("FarmInventory", () => {
     expect(onOpenUpgrades).toHaveBeenCalledTimes(1);
   });
 });
+
+/** Pick an option from a shared Select by opening it from the keyboard. */
+function chooseOption(view: ReturnType<typeof render>, label: string, option: string) {
+  fireEvent.keyDown(view.getByRole("combobox", { name: label }), { key: "Enter" });
+  fireEvent.keyDown(view.getByRole("option", { name: option }), { key: "Enter" });
+}

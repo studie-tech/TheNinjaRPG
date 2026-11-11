@@ -12,11 +12,18 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import { ForumAttachments } from "@/layout/ForumAttachments";
 import Link from "@/layout/Link";
@@ -406,17 +413,32 @@ export const ForumComposer = ({
             />
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm">
-              Discussion type
-              <select
-                {...form.register("kind")}
-                className="bg-background mt-1 block h-10 w-full rounded-md border px-2"
-                disabled={isBlocked}
-              >
-                <option value="DISCUSSION">Discussion</option>
-                <option value="QUESTION">Question</option>
-              </select>
-            </label>
+            <div className="text-sm">
+              <span id={`${fieldPrefix}-kind`}>Discussion type</span>
+              <Controller
+                control={form.control}
+                name="kind"
+                render={({ field }) => (
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    disabled={isBlocked}
+                  >
+                    <SelectTrigger
+                      aria-labelledby={`${fieldPrefix}-kind`}
+                      className="mt-1 h-10"
+                      onBlur={field.onBlur}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DISCUSSION">Discussion</SelectItem>
+                      <SelectItem value="QUESTION">Question</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
             <label className="text-sm" htmlFor={`${fieldPrefix}-2`}>
               Tags
               <Input
