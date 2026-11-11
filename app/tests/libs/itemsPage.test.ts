@@ -3,6 +3,7 @@ import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import {
   backpackFilterChips,
+  countUnlistedBagStacks,
   dropTargetsFor,
   equipLimitReason,
   filterBackpack,
@@ -10,6 +11,7 @@ import {
   rankSlotCandidates,
   slotName,
   sortBackpack,
+  unlistedBagStacksNote,
 } from "@/libs/itemsPage";
 
 type Fixture = {
@@ -357,5 +359,55 @@ describe("slot rules", () => {
     expect(equipLimitReason(limitTwo[1]!, limitTwo)).toBeNull();
     const loose = limitOne(userItem({ id: "Tanto" }));
     expect(equipLimitReason(loose, [loose])).toBeNull();
+  });
+});
+
+describe("countUnlistedBagStacks", () => {
+  const now = new Date("2026-11-11T12:00:00Z");
+  const later = new Date("2026-11-11T13:00:00Z");
+  const earlier = new Date("2026-11-11T11:00:00Z");
+  const row = (fields: {
+    storedAtHome?: boolean;
+    equipped?: ItemSlot;
+    isInAuction?: boolean;
+    craftingFinishedAt?: Date | null;
+  }) => ({
+    storedAtHome: false,
+    equipped: "NONE" as ItemSlot,
+    isInAuction: false,
+    craftingFinishedAt: null,
+    ...fields,
+  });
+
+  it("counts carried stacks in auction and still crafting", () => {
+    const rows = [
+      row({}),
+      row({ craftingFinishedAt: earlier }),
+      row({ isInAuction: true }),
+      row({ isInAuction: true, craftingFinishedAt: later }),
+      row({ craftingFinishedAt: later }),
+      row({ craftingFinishedAt: later }),
+    ];
+    expect(countUnlistedBagStacks(rows, now)).toEqual({ auction: 2, crafting: 2 });
+  });
+
+  it("skips stacks that use no bag space", () => {
+    const rows = [
+      row({ storedAtHome: true, isInAuction: true }),
+      row({ equipped: "HEAD", craftingFinishedAt: later }),
+    ];
+    expect(countUnlistedBagStacks(rows, now)).toEqual({ auction: 0, crafting: 0 });
+  });
+});
+
+describe("unlistedBagStacksNote", () => {
+  it("names only the kinds present", () => {
+    expect(unlistedBagStacksNote({ auction: 3, crafting: 11 })).toBe(
+      "Also using space: 3 in auction, 11 being crafted.",
+    );
+    expect(unlistedBagStacksNote({ auction: 0, crafting: 1 })).toBe(
+      "Also using space: 1 being crafted.",
+    );
+    expect(unlistedBagStacksNote({ auction: 0, crafting: 0 })).toBeNull();
   });
 });

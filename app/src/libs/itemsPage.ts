@@ -436,3 +436,36 @@ export const homeStorageMoveMessage = (
   const stayed = refused.map(({ name, reason }) => `${name} ${reason}`).join("; ");
   return refused.length > 0 ? `${done} ${refused.length} stayed: ${stayed}.` : done;
 };
+
+/**
+ * Carried stacks that use bag space but are left out of the backpack list: auction
+ * escrow, then unfinished crafts (the same order as getEquipBlockReason).
+ */
+export const countUnlistedBagStacks = (
+  rows: {
+    storedAtHome: boolean;
+    equipped: ItemSlot;
+    isInAuction: boolean;
+    craftingFinishedAt: Date | null;
+  }[],
+  now: Date,
+) => {
+  const counted = rows.filter(countsTowardInventoryStorage);
+  const auction = counted.filter((ui) => ui.isInAuction).length;
+  const crafting = counted.filter(
+    (ui) => !ui.isInAuction && !!ui.craftingFinishedAt && ui.craftingFinishedAt > now,
+  ).length;
+  return { auction, crafting };
+};
+
+/** Says which unlisted stacks still use bag space, or null when every counted stack is listed. */
+export const unlistedBagStacksNote = ({
+  auction,
+  crafting,
+}: ReturnType<typeof countUnlistedBagStacks>) => {
+  const parts = [
+    auction > 0 ? `${auction} in auction` : null,
+    crafting > 0 ? `${crafting} being crafted` : null,
+  ].filter((part) => part !== null);
+  return parts.length > 0 ? `Also using space: ${parts.join(", ")}.` : null;
+};
