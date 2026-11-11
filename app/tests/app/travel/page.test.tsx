@@ -340,10 +340,11 @@ for (const outcome of ["transport error", "success", "rejected"] as const)
     "ASLEEP",
     "HOSPITALIZED",
     "missing snapshot",
+    "pre-travel refresh",
     "missing revision",
     "superseded snapshot",
   ] as const)(
-    `reconciles global journey ${outcome} from %s without a profile read`,
+    `reconciles global journey ${outcome} from %s without leaving successful admission on a stale profile`,
     async (initialStatus) => {
       const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       const key = ["profile", "actor"];
@@ -362,6 +363,7 @@ for (const outcome of ["transport error", "success", "rejected"] as const)
         userData: {
           ...initial.userData,
           status: "TRAVEL" as const,
+          sector: 1539,
           travelFinishAt: new Date(Date.now() + 10000),
           curHealth: 100,
           curChakra: 100,
@@ -458,6 +460,7 @@ for (const outcome of ["transport error", "success", "rejected"] as const)
                 },
             );
           }
+          if (initialStatus === "pre-travel refresh") cache.setQueryData(key, initial);
           preserved = cache.getQueryData(key);
           if (outcome === "transport error") {
             await callbacks.onError(
@@ -481,8 +484,16 @@ for (const outcome of ["transport error", "success", "rejected"] as const)
             );
           }
         });
-        expect(read).not.toHaveBeenCalled();
-        if (initialStatus === "ASLEEP" || initialStatus === "HOSPITALIZED") {
+        const needsReconciliation =
+          outcome === "success" &&
+          initialStatus !== "ASLEEP" &&
+          initialStatus !== "HOSPITALIZED";
+        expect(read).toHaveBeenCalledTimes(needsReconciliation ? 1 : 0);
+        if (
+          needsReconciliation ||
+          initialStatus === "ASLEEP" ||
+          initialStatus === "HOSPITALIZED"
+        ) {
           expect(cache.getQueryData(key)).toMatchObject(
             outcome === "success" ? canonical : initial,
           );

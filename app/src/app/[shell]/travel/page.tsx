@@ -26,6 +26,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -615,15 +616,17 @@ function Travel() {
           // Do not write sector/coords until this payload arrives — they are
           // server-chosen, and an in-flight sector walk must not land on them.
           setTargetPosition(null);
-          setTargetSector(null);
           setShowModal(false);
           setActiveTab(globalLink);
 
-          await updateUser(result.data, {
+          const profileApplied = await updateUser(result.data, {
             revision: previous?.revision,
             refetch: false,
             userRecovery: result.userRecovery,
           });
+          // Admission needs its destination and deadline even when a pre-admission profile read superseded the revision.
+          if (!profileApplied) await updateUser(undefined, { revision: undefined });
+          setTargetSector(null);
           if (globe) {
             const tile = globe.tiles[result.data.sector];
             if (tile) {
@@ -771,14 +774,17 @@ function Travel() {
   // Stable identity for the globe click path: MapComponent is memoized to avoid
   // re-renders during countdown updates, so this callback must not change when
   // sector / isStartingTravel change. The guard is read from a ref instead.
-  const travelGuardRef = useRef({
-    sector: userData?.sector,
-    canTravel: canAttemptAwakeAction(userData) && !isStartingTravel,
+  const travelGuardRef = useRef<{ sector: number | undefined; canTravel: boolean }>({
+    sector: undefined,
+    canTravel: false,
   });
-  travelGuardRef.current = {
-    sector: userData?.sector,
-    canTravel: canAttemptAwakeAction(userData) && !isStartingTravel,
-  };
+  const canStartGlobalTravel = canAttemptAwakeAction(userData) && !isStartingTravel;
+  useLayoutEffect(() => {
+    travelGuardRef.current = {
+      sector: userData?.sector,
+      canTravel: canStartGlobalTravel,
+    };
+  }, [userData?.sector, canStartGlobalTravel]);
 
   const initiateTravelToSector = useCallback((sector: number) => {
     const { sector: current, canTravel } = travelGuardRef.current;
