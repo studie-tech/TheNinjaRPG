@@ -103,6 +103,7 @@ import type {
   SectorPoint,
   SectorUser,
 } from "@/libs/sector-map/world-types";
+import { subscribeSharedChannel } from "@/libs/sharedChannel";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
 import { isTravelKeyBlocked } from "@/libs/travel";
@@ -1701,25 +1702,23 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   // Listen to websocket events for this sector
   useEffect(() => {
     if (pusher) {
-      const channel = pusher.subscribe(props.sector.toString());
-      channel.bind("event", (data: UserData) => {
-        if (data.userId && data.userId !== userRef.current?.userId) {
-          // A broadcast with another sector means the user left this one
-          if (data.sector !== props.sector) {
-            const idx = usersRef.current.findIndex((u) => u.userId === data.userId);
-            if (idx !== -1) {
-              usersRef.current.splice(idx, 1);
-              actorRevisionRef.current++;
-              publishSurroundings();
+      return subscribeSharedChannel(pusher, props.sector.toString(), {
+        event: (data: UserData) => {
+          if (data.userId && data.userId !== userRef.current?.userId) {
+            // A broadcast with another sector means the user left this one
+            if (data.sector !== props.sector) {
+              const idx = usersRef.current.findIndex((u) => u.userId === data.userId);
+              if (idx !== -1) {
+                usersRef.current.splice(idx, 1);
+                actorRevisionRef.current++;
+                publishSurroundings();
+              }
+              return;
             }
-            return;
+            void updateUsersList(data);
           }
-          void updateUsersList(data);
-        }
+        },
       });
-      return () => {
-        pusher.unsubscribe(props.sector.toString());
-      };
     }
   }, [pusher, props.sector]);
 

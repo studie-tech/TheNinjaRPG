@@ -31,6 +31,7 @@ import Loader from "@/layout/Loader";
 import { TeamChatPanel } from "@/layout/TeamChatPanel";
 import { getRewardArray } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
+import { subscribeSharedChannel } from "@/libs/sharedChannel";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { calculatePercent } from "@/utils/math";
 import { secondsFromDate } from "@/utils/time";
@@ -62,6 +63,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
   const {
     data: userData,
     pusher,
+    timeDiff,
     prepareUserUpdate,
     updateUser,
   } = useRequiredUserData();
@@ -78,10 +80,9 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
       enabled: !!userData && viewMode === "history",
     });
 
-  const { data: userQueueData, isFetching: queueFetching } =
-    api.raids.getUserRaidQueue.useQuery(undefined, {
-      enabled: !!userData,
-    });
+  const { data: userQueueData } = api.raids.getUserRaidQueue.useQuery(undefined, {
+    enabled: !!userData,
+  });
 
   const { data: raidDetailsData } = api.raids.getRaidDetails.useQuery(
     { questId: selectedRaidId ?? "" },
@@ -107,18 +108,24 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
     if (error) return util.profile.getUser.invalidate();
   };
   // Mutations
-  const { mutate: joinQueue, isPending: joinPending } =
-    api.raids.joinRaidQueue.useMutation({
-      onSettled: recoverUser,
-      onMutate: prepareUserUpdate,
-      onSuccess: (data, _variables, revision) => {
-        showMutationToast(data);
-        void util.raids.getUserRaidQueue.invalidate();
-        void util.raids.getActiveRaidTeams.invalidate();
-        void util.raids.getRaidDetails.invalidate();
-        void updateUser(data, { revision, delta: data.userDelta });
-      },
-    });
+  const {
+    mutate: joinQueue,
+    isPending: joinPending,
+    variables: joinVariables,
+  } = api.raids.joinRaidQueue.useMutation({
+    onSettled: recoverUser,
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
+      showMutationToast(data);
+      void updateUser(data, { revision, delta: data.userDelta });
+      // Awaited so the join controls stay pending until the new team state arrives
+      await Promise.all([
+        util.raids.getUserRaidQueue.invalidate(),
+        util.raids.getActiveRaidTeams.invalidate(),
+        util.raids.getRaidDetails.invalidate(),
+      ]);
+    },
+  });
 
   const { mutate: leaveQueue, isPending: leavePending } =
     api.raids.leaveRaidQueue.useMutation({
@@ -150,15 +157,16 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
     api.raids.claimDamageReward.useMutation({
       onSettled: recoverUser,
       onMutate: prepareUserUpdate,
-      onSuccess: (data, _variables, revision) => {
+      onSuccess: async (data, _variables, revision) => {
         if (data.success && "rewards" in data && data.rewards) {
           showRewardToast(data.announcements ?? [], data.rewards, data.message);
         } else {
           showMutationToast(data);
         }
-        void util.raids.getRaidDetails.invalidate();
         void updateUser(data, { revision, delta: data.userDelta });
         if (data.success) void util.profile.getDashboard.invalidate();
+        // Awaited so a claimed tier never briefly offers "Claim" again
+        await util.raids.getRaidDetails.invalidate();
       },
     });
 
@@ -241,19 +249,17 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
     const sector = sectorFilter ?? userData?.sector;
     if (!pusher || sector === undefined || sector === null) return;
 
-    const channel = pusher.subscribe(sector.toString());
-    channel.bind("raidTeamUpdate", () => {
-      void util.raids.getActiveRaidTeams.invalidate();
-      void util.raids.getUserRaidQueue.invalidate();
+    // The travel map listens on the same sector channel; only release this listener
+    return subscribeSharedChannel(pusher, sector.toString(), {
+      raidTeamUpdate: () => {
+        void util.raids.getActiveRaidTeams.invalidate();
+        void util.raids.getUserRaidQueue.invalidate();
+      },
+      raidAvailabilityChange: () => {
+        void util.raids.getAvailableRaids.invalidate();
+        void util.raids.getRaidDetails.invalidate();
+      },
     });
-    channel.bind("raidAvailabilityChange", () => {
-      void util.raids.getAvailableRaids.invalidate();
-      void util.raids.getRaidDetails.invalidate();
-    });
-
-    return () => {
-      pusher.unsubscribe(sector.toString());
-    };
   }, [pusher, sectorFilter, userData?.sector, util.raids]);
 
   // Loading state
@@ -403,7 +409,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                             ) : (
                               <Countdown
                                 targetDate={new Date(raid.raidEndsAt)}
-                                timeDiff={0}
+                                timeDiff={timeDiff}
                                 onEndShow="Ended"
                               />
                             )}
@@ -517,7 +523,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                   ) : (
                     <Countdown
                       targetDate={new Date(raidDetails.raidEndsAt)}
-                      timeDiff={0}
+                      timeDiff={timeDiff}
                       onEndShow="Ended"
                     />
                   )}
@@ -577,7 +583,11 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                   onCreateTeam={() => handleJoinQueue()}
                   onLeave={handleLeaveQueue}
                   onStart={handleStartBattle}
-                  isJoining={joinPending || queueFetching}
+                  isJoining={joinPending}
+                  pendingJoinTeamId={
+                    joinPending ? (joinVariables?.teamId ?? NEW_TEAM_KEY) : null
+                  }
+                  timeDiff={timeDiff}
                   isLeaving={leavePending}
                   isStarting={startPending}
                 />
@@ -773,9 +783,13 @@ interface RaidTeamsDisplayProps {
   onCreateTeam: () => void;
   onLeave: () => void;
   onStart: () => void;
+  /** Disables every join control while the player's own join runs. */
   isJoining: boolean;
+  /** Team the pending join targets (NEW_TEAM_KEY when creating), for its pending label. */
+  pendingJoinTeamId: string | null;
   isLeaving: boolean;
   isStarting: boolean;
+  timeDiff: number;
 }
 
 /** Show captured team capacities and let leaders start when full or after the lobby countdown. */
@@ -792,9 +806,12 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
   onLeave,
   onStart,
   isJoining,
+  pendingJoinTeamId,
   isLeaving,
   isStarting,
+  timeDiff,
 }) => {
+  const isCreating = pendingJoinTeamId === NEW_TEAM_KEY;
   // Check if user can create a new team
   const [finishedTimers, setFinishedTimers] = useState<Record<string, boolean>>({});
   const canCreateNewTeam = activeTeams.length < maxTeams && !userInQueue;
@@ -821,7 +838,7 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
             title={banTooltip}
           >
             <Swords className="mr-2 h-4 w-4" />
-            {isJoining ? "Creating..." : "Create Team"}
+            {isCreating ? "Creating..." : "Create Team"}
           </Button>
         )}
       </div>
@@ -839,7 +856,7 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
               title={banTooltip}
             >
               <Swords className="mr-2 h-4 w-4" />
-              {isJoining ? "Creating..." : "Create Team"}
+              {isCreating ? "Creating..." : "Create Team"}
             </Button>
           )}
         </div>
@@ -879,7 +896,7 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                     ) : (
                       <Countdown
                         targetDate={startTime}
-                        timeDiff={0}
+                        timeDiff={timeDiff}
                         onEndShow="Ready!"
                         onFinish={() =>
                           setFinishedTimers((current) => ({
@@ -908,6 +925,7 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                       canJoin={team.canJoin && !userInQueue && !isBanned}
                       onJoin={() => onJoinTeam(team.id)}
                       isJoining={isJoining}
+                      isPending={pendingJoinTeamId === team.id}
                     />
                   ))}
                 </div>
@@ -963,7 +981,7 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                       title={banTooltip}
                     >
                       <Users className="mr-1 h-4 w-4" />
-                      {isJoining ? "Joining..." : "Join Team"}
+                      {pendingJoinTeamId === team.id ? "Joining..." : "Join Team"}
                     </Button>
                   </div>
                 )}
@@ -1027,12 +1045,15 @@ interface RaidEmptySlotProps {
   canJoin?: boolean;
   onJoin?: () => void;
   isJoining?: boolean;
+  /** This slot's team is the target of the player's pending join. */
+  isPending?: boolean;
 }
 
 const RaidEmptySlot: React.FC<RaidEmptySlotProps> = ({
   canJoin = false,
   onJoin,
   isJoining = false,
+  isPending = false,
 }) => {
   return (
     <div className="flex w-16 flex-col items-center gap-1">
@@ -1050,7 +1071,7 @@ const RaidEmptySlot: React.FC<RaidEmptySlotProps> = ({
         title={canJoin ? "Click to join" : undefined}
         aria-label={canJoin ? "Join slot" : "Empty slot"}
       >
-        {isJoining ? <Loader2 className="h-4 w-4 animate-spin" /> : "?"}
+        {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "?"}
       </button>
       <span className="text-muted-foreground text-xs">
         {canJoin ? "Join" : "Empty"}
@@ -1060,6 +1081,9 @@ const RaidEmptySlot: React.FC<RaidEmptySlotProps> = ({
 };
 
 export default RaidBrowser;
+
+/** Pending-join key for creating a new team, which has no team id yet. */
+const NEW_TEAM_KEY = "new-team";
 
 type RaidTeam = RouterOutputs["raids"]["getActiveRaidTeams"]["teams"][number];
 type RaidDetails = RouterOutputs["raids"]["getRaidDetails"];
