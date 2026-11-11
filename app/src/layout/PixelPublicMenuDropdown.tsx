@@ -7,13 +7,23 @@ import {
   MenubarContent,
   MenubarItem,
   MenubarMenu,
+  MenubarSeparator,
   MenubarTrigger,
 } from "@/components/ui/menubar";
 import Link from "@/layout/Link";
 import { BUGS_NAV_LINK, getMainNavbarLinks } from "@/libs/menus";
 import { useUserData } from "@/utils/UserContext";
 
-const PixelPublicMenuDropdown: React.FC = () => {
+interface PixelPublicMenuDropdownProps {
+  /** Landing section links listed above the site pages, for headers that hide them. */
+  sectionLinks?: PixelPublicMenuSectionLink[];
+  align?: "start" | "end";
+}
+
+const PixelPublicMenuDropdown: React.FC<PixelPublicMenuDropdownProps> = ({
+  sectionLinks = [],
+  align = "start",
+}) => {
   const { notifications } = useUserData();
   const menuItems = [...getMainNavbarLinks(notifications), BUGS_NAV_LINK];
 
@@ -23,7 +33,13 @@ const PixelPublicMenuDropdown: React.FC = () => {
         <MenubarTrigger aria-label="Open site menu" className="tnr-ink-menu-trigger">
           <Menu className="h-4 w-4" />
         </MenubarTrigger>
-        <MenubarContent align="start" side="bottom" className="tnr-ink-menu-content">
+        <MenubarContent align={align} side="bottom" className="tnr-ink-menu-content">
+          {sectionLinks.map((link) => (
+            <MenubarItem key={link.href} asChild className="tnr-ink-menu-item">
+              <PixelPublicNavLink href={link.href}>{link.name}</PixelPublicNavLink>
+            </MenubarItem>
+          ))}
+          {sectionLinks.length > 0 && <MenubarSeparator />}
           {menuItems.map((item) => {
             const count = item.notificationCount ?? 0;
             return (
@@ -47,3 +63,17 @@ const PixelPublicMenuDropdown: React.FC = () => {
 };
 
 export default PixelPublicMenuDropdown;
+
+/**
+ * Link to a landing section or page. A bare hash ("#world") scrolls the current page, so
+ * it stays a plain anchor; anything else navigates client-side.
+ */
+export const PixelPublicNavLink: React.FC<
+  React.ComponentProps<"a"> & { href: string }
+> = ({ href, ...props }) =>
+  href.startsWith("#") ? <a href={href} {...props} /> : <Link href={href} {...props} />;
+
+export interface PixelPublicMenuSectionLink {
+  href: string;
+  name: string;
+}

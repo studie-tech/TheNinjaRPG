@@ -14,10 +14,6 @@ import {
   DISCORD_INVITE_URL,
   GITHUB_ISSUES_URL,
   GITHUB_REPO_URL,
-  IMG_ICON_DISCORD,
-  IMG_ICON_FACEBOOK,
-  IMG_ICON_GITHUB,
-  IMG_ICON_GOOGLE,
   IMG_LAYOUT_USERBANNER_MIDDLE,
   IMG_LAYOUT_USERSBANNER_BOTTOM,
   IMG_LAYOUT_USERSBANNER_TOP,
@@ -101,13 +97,6 @@ export type AccountMenuState = "loading" | "create-character" | "error" | null;
 const PARTICIPATE_LINKS = [
   { href: GITHUB_ISSUES_URL, label: "GitHub", Icon: SiGithub },
   { href: DISCORD_INVITE_URL, label: "Discord", Icon: SiDiscord },
-];
-
-const SOCIAL_PROVIDERS = [
-  { src: IMG_ICON_DISCORD, alt: "DiscordProvider" },
-  { src: IMG_ICON_FACEBOOK, alt: "FacebookProvider" },
-  { src: IMG_ICON_GOOGLE, alt: "GoogleProvider" },
-  { src: IMG_ICON_GITHUB, alt: "GithubProvider" },
 ];
 
 const MenuBoxCombat = dynamic(() => import("@/layout/MenuBoxCombat"), {
@@ -259,34 +248,29 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
             </nav>
           ) : (
             <>
-              <p className="hidden px-1 text-orange-100 italic md:block">
-                Socials Login
+              <p className="hidden px-1 text-orange-100 md:block">
+                Free to play in your browser. No download required.
               </p>
-              <p className="block px-1 text-foreground italic md:hidden">
-                Socials Login
+              <p className="block px-1 text-foreground md:hidden">
+                Free to play in your browser. No download required.
               </p>
-              <div className="grid grid-cols-4">
-                {SOCIAL_PROVIDERS.map(({ src, alt }) => (
-                  <Image
-                    key={alt}
-                    className="my-4 w-full grayscale"
-                    src={src}
-                    alt={alt}
-                    width={50}
-                    height={50}
-                  ></Image>
-                ))}
+              <div className="mt-3 flex flex-col gap-2">
+                <Link href="/signup" className="relative">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="w-full"
+                    decoration="gold"
+                  >
+                    Create account
+                  </Button>
+                </Link>
+                <Link href="/login" className="relative">
+                  <Button variant="outline" size="sm" className="w-full">
+                    Sign in
+                  </Button>
+                </Link>
               </div>
-              <Link href="/login" className="relative">
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="w-full"
-                  decoration="gold"
-                >
-                  Sign in
-                </Button>
-              </Link>
             </>
           )}
         </>

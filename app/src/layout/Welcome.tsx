@@ -47,8 +47,8 @@ const Welcome: React.FC = () => {
   const activeLayout = useActiveLayout();
   const isPixelLanding = useIsPixelLanding();
 
-  // Snap container for full-height sections
-  const backgroundClass = "flex snap-start snap-always flex-col justify-center gap-4";
+  // Section wrapper; the page scrolls as one document
+  const backgroundClass = "flex flex-col justify-center gap-4";
 
   // Content wrapper with background styling
   const contentClass =
@@ -78,7 +78,7 @@ const Welcome: React.FC = () => {
 
   // Render
   return (
-    <div className="flex h-screen snap-y snap-mandatory flex-col gap-4 overflow-y-scroll">
+    <div className="flex flex-col gap-4">
       <div className={cn(backgroundClass, "justify-start")}>
         <div className={cn(contentClass, "mb-10")}>
           <Image
@@ -103,8 +103,8 @@ const Welcome: React.FC = () => {
               Challenge other players in tactical combat, right in your browser.
             </p>
             <p>
-              More than <b>{TOTAL_PLAYERS_MILESTONE.toLocaleString("en-US")}</b> have
-              played TheNinja-RPG!
+              More than <b>{TOTAL_PLAYERS_MILESTONE.toLocaleString("en-US")}</b> players
+              have played TheNinja-RPG!
             </p>
             <p>Join the new version and experience our ninja world!</p>
             <Link href="/signup" aria-label="Signup" className="my-3 w-full px-3">
@@ -132,7 +132,7 @@ const Welcome: React.FC = () => {
           </div>
         </div>
       </div>
-      <h2 className={cn(backgroundClass, "pl-3 font-bold text-5xl text-foreground")}>
+      <h2 className="pl-3 font-bold text-2xl text-foreground md:text-3xl">
         Ninja RPG Features
       </h2>
 
@@ -187,11 +187,10 @@ const Welcome: React.FC = () => {
 export default Welcome;
 
 const PixelWelcome: React.FC = () => {
-  const scrollContainerRef = useRef<HTMLElement>(null);
   const heroVideoRef = useRef<HTMLVideoElement>(null);
   const heroLogoRef = useRef<HTMLDivElement>(null);
-  const showHeaderLogo = usePixelHeaderLogoVisibility(heroLogoRef, scrollContainerRef);
-  usePixelHeroVideoPlayback(heroVideoRef, scrollContainerRef);
+  const showHeaderLogo = usePixelHeaderLogoVisibility(heroLogoRef);
+  usePixelHeroVideoPlayback(heroVideoRef);
 
   const pixelClip = "tnr-pixel-clip";
   const panelClass = cn(
@@ -199,8 +198,9 @@ const PixelWelcome: React.FC = () => {
     "border border-sky-200/20 bg-slate-950/72 shadow-2xl shadow-black/30 backdrop-blur-md",
   );
   const eyebrowClass = "font-black text-amber-200 text-xs tracking-[0.2em]";
-  const sectionClass = "bg-[#09111d] py-16 sm:py-20";
-  const alternateSectionClass = "bg-[#0d1a2b] py-16 sm:py-20";
+  // Anchored sections clear the fixed 64px header when reached through a hash link
+  const sectionClass = "scroll-mt-[64px] bg-[#09111d] py-16 sm:py-20";
+  const alternateSectionClass = "scroll-mt-[64px] bg-[#0d1a2b] py-16 sm:py-20";
   const containerClass = "mx-auto w-[min(100%_-_32px,1180px)]";
   const screenshotClass = cn(
     pixelClip,
@@ -214,27 +214,20 @@ const PixelWelcome: React.FC = () => {
   ];
 
   return (
-    <main
-      ref={scrollContainerRef}
-      className="tnr-pixel-scroll-container h-[100svh] overflow-y-auto overflow-x-hidden bg-[#09111d] text-slate-50"
-    >
+    <main className="overflow-x-hidden bg-[#09111d] text-slate-50">
       <PixelPublicHeader showLogo={showHeaderLogo} navLinks={publicNavLinks} />
 
-      <section
-        className="relative grid min-h-[100svh] place-items-center overflow-hidden px-4 pt-28 pb-20"
-        data-pixel-snap="hero"
-      >
+      <section className="relative grid min-h-[100svh] place-items-center overflow-hidden px-4 pt-28 pb-20">
         <HeroPoster />
         <video
           ref={heroVideoRef}
           className="absolute inset-0 h-full w-full object-cover"
           muted
           playsInline
-          autoPlay
           loop
-          preload="metadata"
+          preload="none"
           poster={TRANSPARENT_POSTER}
-          src="/layouts/pixel/tnr-hero.mp4"
+          aria-hidden
         />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,8,14,.68),rgba(8,13,22,.35)_35%,rgba(7,10,18,.9)),radial-gradient(ellipse_at_center,transparent_0_35%,rgba(4,7,13,.72)_85%)]" />
         <div className="relative z-10 flex w-[min(100%,820px)] flex-col items-center text-center">
@@ -276,7 +269,7 @@ const PixelWelcome: React.FC = () => {
         </div>
       </section>
 
-      <section id="world" className={alternateSectionClass} data-pixel-snap="section">
+      <section id="world" className={alternateSectionClass}>
         <div
           className={cn(
             containerClass,
@@ -311,11 +304,7 @@ const PixelWelcome: React.FC = () => {
         </div>
       </section>
 
-      <section
-        id="features"
-        className={alternateSectionClass}
-        data-pixel-snap="section"
-      >
+      <section id="features" className={alternateSectionClass}>
         <div
           className={cn(
             containerClass,
@@ -353,7 +342,7 @@ const PixelWelcome: React.FC = () => {
         </div>
       </section>
 
-      <section className={sectionClass} data-pixel-snap="section">
+      <section className={sectionClass}>
         <div
           className={cn(
             containerClass,
@@ -388,7 +377,7 @@ const PixelWelcome: React.FC = () => {
         </div>
       </section>
 
-      <section className={alternateSectionClass} data-pixel-snap="section">
+      <section className={alternateSectionClass}>
         <div
           className={cn(
             containerClass,
@@ -426,7 +415,7 @@ const PixelWelcome: React.FC = () => {
         </div>
       </section>
 
-      <section id="gameplay" className={sectionClass} data-pixel-snap="section">
+      <section id="gameplay" className={sectionClass}>
         <div
           className={cn(
             containerClass,
@@ -461,7 +450,7 @@ const PixelWelcome: React.FC = () => {
         </div>
       </section>
 
-      <section id="legacy" className={alternateSectionClass} data-pixel-snap="section">
+      <section id="legacy" className={alternateSectionClass}>
         <div className={containerClass}>
           <div className="mb-8 max-w-3xl">
             <p className={eyebrowClass}>Browser RPG Legacy</p>
@@ -503,7 +492,7 @@ const PixelWelcome: React.FC = () => {
         </div>
       </section>
 
-      <section id="community" className={sectionClass} data-pixel-snap="section">
+      <section id="community" className={sectionClass}>
         <div className="mx-auto flex w-[min(100%_-_32px,900px)] flex-col items-center text-center">
           <p className={eyebrowClass}>Begin the Legend</p>
           <h2 className="mt-3 font-black font-serif text-4xl md:text-6xl">
@@ -569,6 +558,12 @@ const PixelWelcome: React.FC = () => {
               <Link href="/login/forgot-password" className="hover:text-amber-300">
                 Recover Account
               </Link>
+              <Link href="/guide" className="hover:text-amber-300">
+                Guide
+              </Link>
+              <Link href="/news" className="hover:text-amber-300">
+                News
+              </Link>
               <Link href="/rules" className="hover:text-amber-300">
                 Rules
               </Link>
@@ -601,12 +596,10 @@ const PixelWelcome: React.FC = () => {
 
 const usePixelHeaderLogoVisibility = (
   heroLogoRef: React.RefObject<HTMLElement | null>,
-  scrollContainerRef: React.RefObject<HTMLElement | null>,
 ) => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const scrollContainer = scrollContainerRef.current;
     const heroLogo = heroLogoRef.current;
     if (!heroLogo) return;
 
@@ -615,7 +608,6 @@ const usePixelHeaderLogoVisibility = (
         setIsVisible(!entry?.isIntersecting);
       },
       {
-        root: scrollContainer,
         rootMargin: "-88px 0px 0px 0px",
         threshold: 0,
       },
@@ -626,23 +618,35 @@ const usePixelHeaderLogoVisibility = (
     return () => {
       observer.disconnect();
     };
-  }, [heroLogoRef, scrollContainerRef]);
+  }, [heroLogoRef]);
 
   return isVisible;
 };
 
+/**
+ * Plays the decorative hero loop while it is on screen. The source is attached only after
+ * the page has loaded, and never on phones, under Save-Data or for visitors who prefer
+ * reduced motion; they keep the HeroPoster still, which stays the LCP element.
+ */
 const usePixelHeroVideoPlayback = (
   videoRef: React.RefObject<HTMLVideoElement | null>,
-  scrollContainerRef: React.RefObject<HTMLElement | null>,
 ) => {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const wideViewport = window.matchMedia(HERO_VIDEO_MIN_VIEWPORT);
+    const connection = (
+      navigator as Navigator & { connection?: { saveData?: boolean } }
+    ).connection;
+    if (reducedMotion.matches || !wideViewport.matches || connection?.saveData) return;
+
     let isInView = true;
+    let isAttached = false;
 
     const syncPlayback = (shouldPlay: boolean) => {
+      if (!isAttached) return;
       if (reducedMotion.matches || !shouldPlay) {
         video.pause();
         return;
@@ -653,30 +657,53 @@ const usePixelHeroVideoPlayback = (
       });
     };
 
+    const attachSource = () => {
+      isAttached = true;
+      video.src = HERO_VIDEO_SRC;
+      syncPlayback(isInView);
+    };
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         isInView = entry?.isIntersecting ?? false;
         syncPlayback(isInView);
       },
-      {
-        root: scrollContainerRef.current,
-        threshold: 0.2,
-      },
+      { threshold: 0.2 },
     );
 
     const handleMotionChange = () => {
       syncPlayback(isInView);
     };
 
+    let idleHandle: number | undefined;
+    const scheduleAttach = () => {
+      idleHandle =
+        typeof window.requestIdleCallback === "function"
+          ? window.requestIdleCallback(attachSource, { timeout: 3000 })
+          : window.setTimeout(attachSource, 1000);
+    };
+
     observer.observe(video);
     reducedMotion.addEventListener("change", handleMotionChange);
-    handleMotionChange();
+    if (document.readyState === "complete") {
+      scheduleAttach();
+    } else {
+      window.addEventListener("load", scheduleAttach, { once: true });
+    }
 
     return () => {
       observer.disconnect();
       reducedMotion.removeEventListener("change", handleMotionChange);
+      window.removeEventListener("load", scheduleAttach);
+      if (idleHandle !== undefined) {
+        if (typeof window.cancelIdleCallback === "function") {
+          window.cancelIdleCallback(idleHandle);
+        } else {
+          window.clearTimeout(idleHandle);
+        }
+      }
     };
-  }, [videoRef, scrollContainerRef]);
+  }, [videoRef]);
 };
 
 // VisitorLog is keyed on a hash of the IP and deduplicated by the server, so the visit is
@@ -821,6 +848,10 @@ const textSEO = (
     </div>
   </div>
 );
+
+/** The hero loop, which only wider screens download. */
+const HERO_VIDEO_SRC = "/layouts/pixel/tnr-hero.mp4";
+const HERO_VIDEO_MIN_VIEWPORT = "(min-width: 768px)";
 
 /**
  * A transparent 1x1 GIF for the hero <video>'s poster. Chrome counts a poster-less

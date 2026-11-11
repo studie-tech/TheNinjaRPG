@@ -29,6 +29,9 @@ const PROVIDERS: {
   { id: "facebook", label: "Facebook", Icon: SiFacebook },
 ];
 
+/** How long the buttons wait for clerk-js before the player is offered a reload. */
+const READY_TIMEOUT_MS = 10_000;
+
 /**
  * Sign-in buttons for the native shell.
  *
@@ -39,9 +42,19 @@ export default function NativeSignIn() {
   const isNativeShell = useNativeShell();
   const { isLoaded, isSignedIn } = useSession();
   const router = useRouter();
-  const { isPending, signInWithApple, signInWithProvider } = useNativeAuth();
+  const { isReady, isPending, signInWithApple, signInWithProvider } = useNativeAuth();
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isReadyOverdue, setIsReadyOverdue] = useState(false);
+  const isDisabled = !isReady || isPending;
+
+  // Clerk normally loads within a second; past the timeout the player is offered a reload
+  // instead of buttons that stay disabled with no explanation.
+  useEffect(() => {
+    if (!isNativeShell || isReady) return;
+    const timer = setTimeout(() => setIsReadyOverdue(true), READY_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [isNativeShell, isReady]);
 
   // Activating an account rebuilds the session boundary and can retire the original
   // sign-in callback. Observe the live session so the replacement login also leaves.
@@ -68,7 +81,7 @@ export default function NativeSignIn() {
       {appleAuth.isSupported() && (
         <Button
           className="h-auto min-h-[48px] w-full bg-black text-[14px] text-white hover:bg-neutral-800"
-          disabled={isPending}
+          disabled={isDisabled}
           onClick={() => void handle("apple", signInWithApple)}
         >
           {activeProvider === "apple" ? (
@@ -85,7 +98,7 @@ export default function NativeSignIn() {
           key={id}
           variant="outline"
           className="h-auto min-h-[48px] w-full text-[14px]"
-          disabled={isPending}
+          disabled={isDisabled}
           onClick={() => void handle(id, () => signInWithProvider(id))}
         >
           {activeProvider === id ? (
@@ -103,9 +116,29 @@ export default function NativeSignIn() {
         </p>
       )}
 
-      <p className="mt-1 text-pretty text-center text-muted-foreground text-xs">
-        Sign in securely, then return to the game.
-      </p>
+      {!isReady && isReadyOverdue ? (
+        <div role="alert" className="flex flex-col items-center gap-2 text-center">
+          <p className="text-[14px] text-destructive">
+            Sign-in is taking longer than usual to load.
+          </p>
+          <Button
+            variant="outline"
+            className="min-h-[48px] text-[14px]"
+            onClick={() => window.location.reload()}
+          >
+            Reload
+          </Button>
+        </div>
+      ) : (
+        <p
+          className="mt-1 text-pretty text-center text-muted-foreground text-xs"
+          aria-live="polite"
+        >
+          {isReady
+            ? "Sign in securely, then return to the game."
+            : "Preparing sign-in…"}
+        </p>
+      )}
     </div>
   );
 }

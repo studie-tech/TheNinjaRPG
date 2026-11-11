@@ -85,4 +85,30 @@ describe("native sign-in feedback", () => {
     await waitFor(() => expect(signIn).toHaveBeenCalledTimes(2));
     expect(view.queryByRole("alert")).toBeNull();
   });
+
+  it("holds the buttons until Clerk is ready and offers a reload if it never loads", () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(auth, "useNativeAuth").mockReturnValue({
+        isReady: false,
+        isPending: false,
+        signInWithApple: signIn,
+        signInWithProvider: signIn,
+      });
+      const view = render(<NativeSignIn />);
+      const google = view.getByRole("button", {
+        name: /Continue with Google$/,
+      }) as HTMLButtonElement;
+      expect(google.disabled).toBe(true);
+      expect(view.getByText("Preparing sign-in…")).toBeTruthy();
+      fireEvent.click(google);
+      expect(signIn).not.toHaveBeenCalled();
+      act(() => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(view.getByRole("button", { name: "Reload" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

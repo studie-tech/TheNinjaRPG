@@ -852,28 +852,9 @@
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
-
-  .tnr-pixel-scroll-container {
-    overscroll-behavior-y: contain;
-    scroll-padding-block: 80px;
-    scroll-snap-type: y mandatory;
-  }
-
-  [data-pixel-snap="hero"] {
-    scroll-snap-align: start;
-    scroll-snap-stop: always;
-  }
-
-  [data-pixel-snap="section"] {
-    scroll-snap-align: center;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tnr-pixel-scroll-container {
-    scroll-snap-type: none;
-  }
-
   .tnr-pixel-parallax {
     transform: none !important;
     will-change: auto;

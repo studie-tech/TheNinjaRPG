@@ -68,4 +68,16 @@ describe("WebGL entry gate", () => {
     expect(screen.getByText("Clerk sign in")).toBeTruthy();
     expect(screen.getByText("WebGL Not Available")).toBeTruthy();
   });
+
+  it("prerenders the page heading with a card placeholder until the shell is known", () => {
+    offerContexts("webgl");
+    vi.spyOn(NativeShell, "useNativeShell").mockReturnValue(undefined);
+    render(<SignupUser />);
+    expect(screen.getByText("Create Account")).toBeTruthy();
+    expect(screen.queryByText("Clerk sign up")).toBeNull();
+    cleanup();
+    render(<LoginUser />);
+    expect(screen.getByText("Login")).toBeTruthy();
+    expect(screen.queryByText("Clerk sign in")).toBeNull();
+  });
 });

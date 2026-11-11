@@ -102,7 +102,11 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
             }
           >
             <Image
-              className="h-auto w-48 max-w-[48vw] sm:w-66 min-[420px]:w-60"
+              className={cn(
+                "h-auto w-48 max-w-[48vw] sm:w-66 min-[420px]:w-60",
+                // Leaves room for the labelled sign-in pill beside it
+                !isSignedInLayout && "max-w-[24vw]",
+              )}
               id="tutorial-logo-mobile"
               src={IMG_LOGO_SHORT}
               width={250}
@@ -188,12 +192,12 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
           loading="lazy"
         />
         <div
-          className="relative top-[70px] h-[15px] w-full shrink-0 bg-fill bg-repeat-x md:hidden"
+          className="mt-[70px] h-[15px] w-full shrink-0 bg-fill bg-repeat-x md:hidden"
           data-compact-hide
           style={{ backgroundImage: `url(${IMG_LAYOUT_MOBILE_TOP})` }}
         ></div>
         <div
-          className="relative top-[70px] z-10 flex h-full flex-row md:top-[-122px]"
+          className="relative z-10 flex h-full flex-row md:top-[-122px]"
           data-compact-content
           data-sidebar-row
         >
@@ -240,8 +244,15 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
               >
                 {/* From md the footer bar below is in flow rather than fixed; one viewport
                     of minimum height keeps it below the fold (see PixelGameLayout.tsx).
-                    Phones also leave room to scroll content clear of an open lesson. */}
-                <div className="p-3 pb-[calc(7rem+env(safe-area-inset-bottom)+var(--activity-dock-space,0px))] md:min-h-svh md:pb-3">
+                    Signed-in phones leave room to scroll content clear of the fixed game
+                    nav and an open lesson; signed-out phones get the footer in flow. */}
+                <div
+                  className={cn(
+                    "p-3 md:min-h-svh md:pb-3",
+                    isSignedInLayout &&
+                      "pb-[calc(7rem+env(safe-area-inset-bottom)+var(--activity-dock-space,0px))]",
+                  )}
+                >
                   {children}
                 </div>
               </div>
@@ -251,7 +262,12 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
               ></div>
             </div>
             <div
-              className="fixed bottom-0 flex h-[calc(5rem+env(safe-area-inset-bottom))] w-full flex-col md:relative md:h-20 md:max-h-28"
+              className={cn(
+                "flex w-full flex-col md:relative md:h-20 md:max-h-28",
+                isSignedInLayout
+                  ? "fixed bottom-0 h-[calc(5rem+env(safe-area-inset-bottom))]"
+                  : "relative",
+              )}
               data-compact-hide
             >
               <div className="absolute top-0 right-0 left-[-20px] -z-30 md:right-[-20px]">
@@ -288,9 +304,13 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                   mobileNavbarButtonClassName={variantClasses.mobileNavbarButton}
                   className="absolute top-0 right-0 left-0 h-20 md:hidden"
                 />
-              ) : (
+              ) : isSignedInLayout ? (
                 <div className="absolute top-4 right-0 left-0 block text-white md:hidden">
                   <Footer />
+                </div>
+              ) : (
+                <div className="bg-rose-950 pt-4 text-white md:hidden">
+                  <Footer layout="list" />
                 </div>
               )}
             </div>
@@ -352,7 +372,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
         </div>
 
         <div
-          className="absolute top-4 right-[max(1rem,env(safe-area-inset-right))] z-50 block grid grid-cols-2 gap-2 md:hidden [&_button]:flex [&_button]:min-h-[48px] [&_button]:min-w-[48px] [&_button]:items-center [&_button]:justify-center"
+          className="absolute top-4 right-[max(1rem,env(safe-area-inset-right))] z-50 flex items-center gap-2 md:hidden [&_button]:flex [&_button]:min-h-[48px] [&_button]:min-w-[48px] [&_button]:items-center [&_button]:justify-center"
           data-compact-hide
         >
           <div className="flex justify-center">
@@ -367,13 +387,19 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
             </LowerRightHelpBtn>
           </div>
           <Sheet open={rightSideBarOpen} onOpenChange={onRightSideBarOpenChange}>
-            <SheetTrigger aria-label="Open game menu" id="tutorial-gameBtn">
-              {isSignedInLayout ? (
+            {isSignedInLayout ? (
+              <SheetTrigger aria-label="Open game menu" id="tutorial-gameBtn">
                 <Earth className={cn(variantClasses.yellowButton)} />
-              ) : (
-                <LogIn className={cn(variantClasses.yellowButton)} />
-              )}
-            </SheetTrigger>
+              </SheetTrigger>
+            ) : (
+              <SheetTrigger
+                id="tutorial-gameBtn"
+                className="gap-1 rounded-full border-2 bg-yellow-500 px-3 font-bold text-base text-orange-950 shadow-black shadow-md transition-colors hover:bg-yellow-300"
+              >
+                <LogIn aria-hidden="true" className="h-4 w-4" />
+                Sign in
+              </SheetTrigger>
+            )}
             <SheetContent onInteractOutside={keepSheetOpenForClerk}>
               <VisuallyHidden.Root>
                 <SheetTitle>Game Menu</SheetTitle>
