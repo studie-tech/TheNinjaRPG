@@ -187,6 +187,7 @@ describeWithDatabase("quest reward inventory reconciliation", () => {
       };
       const leaf = { invalidate: vi.fn(async () => undefined) };
       const bindings = {
+        trackConversion: vi.fn(),
         prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
         prepareQuestRewardUpdate: vi.fn(),
         updateQuestRewards: vi.fn(),
@@ -244,7 +245,7 @@ describeWithDatabase("quest reward inventory reconciliation", () => {
         "utf8",
       );
       const callbacks = source.match(
-        /api\.quests\.checkRewards\.useMutation\((\{[\s\S]*?\n    \})\);/,
+        /api\.quests\.checkRewards\.useMutation\((\{[\s\S]*?\n {4}\})\);/,
       )?.[1];
       if (!callbacks) throw new Error("Quest reward callbacks were not found");
       const options = new Function(...Object.keys(bindings), `return (${callbacks});`)(
