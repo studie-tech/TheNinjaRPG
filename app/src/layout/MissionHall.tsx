@@ -219,14 +219,29 @@ export default function MissionHall({ userData }: MissionHallProps) {
             Missions are special assignments that advance the game&apos;s narrative.
             They can only be started here at the Mission Hall.
           </p>
-          <p className="p-3 text-center font-bold text-md">
-            Errands [{userData.dailyErrands} / {ERRANDS_PER_DAY}] -{" "}
-            {capitalizeFirstLetter(classifier)}s [{userData.dailyMissions} /{" "}
-            {MISSIONS_PER_DAY}] - Medical [{userData.dailyMedicalMissions} /{" "}
-            {MEDICAL_MISSIONS_PER_DAY}] - PvP [{userData.dailyPvpMissions} /{" "}
-            {PVP_MISSIONS_PER_DAY}] - War [{userData.dailyWarMissions ?? 0} /{" "}
-            {WAR_MISSIONS_PER_DAY}]
-          </p>
+          <ul
+            aria-label="Daily limits"
+            className="flex flex-wrap justify-center gap-2 p-3 font-bold text-md"
+          >
+            {[
+              ["Errands", userData.dailyErrands, ERRANDS_PER_DAY],
+              [
+                `${capitalizeFirstLetter(classifier)}s`,
+                userData.dailyMissions,
+                MISSIONS_PER_DAY,
+              ],
+              ["Medical", userData.dailyMedicalMissions, MEDICAL_MISSIONS_PER_DAY],
+              ["PvP", userData.dailyPvpMissions, PVP_MISSIONS_PER_DAY],
+              ["War", userData.dailyWarMissions ?? 0, WAR_MISSIONS_PER_DAY],
+            ].map(([label, done, limit]) => (
+              <li
+                key={label}
+                className="whitespace-nowrap rounded-full border px-2.5 py-0.5"
+              >
+                {label} {done}/{limit}
+              </li>
+            ))}
+          </ul>
           {startBlockedMessage && (
             <p role="status" className="px-3 text-center font-semibold text-orange-500">
               {startBlockedMessage}
@@ -390,7 +405,7 @@ export default function MissionHall({ userData }: MissionHallProps) {
                         />
                         <p className="font-bold">{setting.name}</p>
                         <p className="flex flex-col">
-                          [Random out of {count} available]
+                          {count} available · random
                           {rankInfo && (
                             <span className="text-yellow-500"> {rankInfo}</span>
                           )}

@@ -237,7 +237,7 @@ const PaypalShopContent = ({
             ? "Loading monthly allowance…"
             : allowance.isError
               ? "Monthly allowance unavailable"
-              : `Monthly Reps [${allowance.data} / ${dynamicMonthlyRepCap(userData)}]`
+              : `Monthly reps ${allowance.data}/${dynamicMonthlyRepCap(userData)}`
         }
         topRightContent={
           <>
