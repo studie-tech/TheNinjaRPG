@@ -281,7 +281,7 @@ export default function Shrine() {
                     attack party is formed against this shrine.
                   </div>
                 ) : isProtected ? (
-                  <div className="mb-4 font-semibold text-amber-600 text-sm">
+                  <div className="mb-4 font-semibold text-amber-800 dark:text-amber-300 text-sm">
                     {protectedNotice}
                   </div>
                 ) : canShowMpvpOption ? (
@@ -312,7 +312,9 @@ export default function Shrine() {
                 isProtected={isProtected}
               />
               {isProtected && (
-                <p className="mt-2 font-semibold text-amber-600">{protectedNotice}</p>
+                <p className="mt-2 font-semibold text-amber-800 dark:text-amber-300">
+                  {protectedNotice}
+                </p>
               )}
             </div>
           )}
@@ -374,7 +376,7 @@ export default function Shrine() {
               {userIsAttacker ? (
                 <>
                   {isProtected ? (
-                    <div className="mb-4 font-semibold text-amber-600 text-sm">
+                    <div className="mb-4 font-semibold text-amber-800 dark:text-amber-300 text-sm">
                       {protectedNotice}
                     </div>
                   ) : (

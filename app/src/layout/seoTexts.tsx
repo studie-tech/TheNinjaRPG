@@ -6,11 +6,11 @@ export const publicUserIntro = (username: string) => (
   <p>
     <strong>{username}</strong>&apos;s public profile in TheNinja-RPG: rank, village,
     bloodline, badges and battle record. Want a ninja of your own?{" "}
-    <Link className="font-bold" href="/signup">
+    <Link className="link-inline" href="/signup">
       Create a free account
     </Link>{" "}
     and read the{" "}
-    <Link className="font-bold" href="/guide/getting-started">
+    <Link className="link-inline" href="/guide/getting-started">
       getting-started guide
     </Link>
     .
@@ -32,22 +32,22 @@ export const bloodlineText = (name: string) => {
       support, <b>{name}</b> can amplify your strengths and help you overcome even the
       toughest challenges our world has to offer. <br /> <br /> Ready to dive deeper
       into bloodlines and more? The{" "}
-      <Link className="font-bold" href="/manual">
+      <Link className="link-inline" href="/manual">
         game manual
       </Link>{" "}
       is your go-to source for advanced skill mechanics and mission strategies. You can
       also join our vibrant{" "}
-      <Link className="font-bold" href={DISCORD_INVITE_URL}>
+      <Link className="link-inline" href={DISCORD_INVITE_URL}>
         Discord community
       </Link>{" "}
       to stay informed about the latest updates and discuss optimal builds with ninjas
       from all walks of life. If you have insights or suggestions to share, head over to
       our{" "}
-      <Link className="font-bold" href={GITHUB_ISSUES_URL}>
+      <Link className="link-inline" href={GITHUB_ISSUES_URL}>
         GitHub repository
       </Link>
       , or visit the{" "}
-      <Link className="font-bold" href="/forum">
+      <Link className="link-inline" href="/forum">
         forums
       </Link>{" "}
       for in-depth conversations on bloodline synergy, upcoming features, and more.{" "}
@@ -79,21 +79,21 @@ export const jutsuText = (name: string) => {
       in clan battles or high-stakes PvP encounters. Armed with this knowledge, you can
       make informed decisions when fine-tuning your loadout and overall playstyle.{" "}
       <br /> <br /> Looking to dig deeper into jutsu mechanics and strategy? Our{" "}
-      <Link className="font-bold" href="/manual">
+      <Link className="link-inline" href="/manual">
         game manual
       </Link>{" "}
       covers everything from skill trees to mission tactics, while our lively{" "}
-      <Link className="font-bold" href={DISCORD_INVITE_URL}>
+      <Link className="link-inline" href={DISCORD_INVITE_URL}>
         Discord community
       </Link>{" "}
       brings ninjas from around the globe together to share jutsu insights and stay
       up-to-date on game developments. You can also submit feedback, share innovative
       ideas, or report issues in our{" "}
-      <Link className="font-bold" href={GITHUB_ISSUES_URL}>
+      <Link className="link-inline" href={GITHUB_ISSUES_URL}>
         GitHub repository
       </Link>
       , and discuss advanced jutsu concepts on the{" "}
-      <Link className="font-bold" href="/forum">
+      <Link className="link-inline" href="/forum">
         forums
       </Link>
       , where players collaborate to tackle every challenge the ninja world throws their
@@ -125,22 +125,22 @@ export const itemText = (name: string) => {
       allies. Armed with this knowledge, you can fine-tune your loadout to gain an edge
       where it matters most—on the battlefield. <br /> <br /> Looking to delve even
       deeper into item synergy and advanced tactics? The{" "}
-      <Link className="font-bold" href="/manual">
+      <Link className="link-inline" href="/manual">
         game manual
       </Link>{" "}
       offers a comprehensive overview of equipment mechanics, skill trees, and mission
       strategies. Join our bustling{" "}
-      <Link className="font-bold" href={DISCORD_INVITE_URL}>
+      <Link className="link-inline" href={DISCORD_INVITE_URL}>
         Discord community
       </Link>{" "}
       to stay informed of the latest updates and discuss gear recommendations with
       ninjas from around the globe. You can also contribute your ideas or report any
       issues in our{" "}
-      <Link className="font-bold" href={GITHUB_ISSUES_URL}>
+      <Link className="link-inline" href={GITHUB_ISSUES_URL}>
         GitHub repository
       </Link>
       , or head over to the{" "}
-      <Link className="font-bold" href="/forum">
+      <Link className="link-inline" href="/forum">
         forums
       </Link>{" "}
       for in-depth discussions on item builds, upcoming features, and the evolving
@@ -173,22 +173,22 @@ export const aiText = (name: string) => {
       metagame—making every mission, PvP engagement, and clan confrontation a more
       calculated and rewarding experience. <br /> <br /> Looking to sharpen your edge
       even more? Our{" "}
-      <Link className="font-bold" href="/manual">
+      <Link className="link-inline" href="/manual">
         game manual
       </Link>{" "}
       provides a comprehensive guide to mechanics, skill trees, and mission approaches,
       while our bustling{" "}
-      <Link className="font-bold" href={DISCORD_INVITE_URL}>
+      <Link className="link-inline" href={DISCORD_INVITE_URL}>
         Discord community
       </Link>{" "}
       brings ninjas from around the world together to swap strategies and stay updated
       on the latest AI developments. You can also contribute new ideas or report issues
       at our{" "}
-      <Link className="font-bold" href={GITHUB_ISSUES_URL}>
+      <Link className="link-inline" href={GITHUB_ISSUES_URL}>
         GitHub repository
       </Link>
       , or explore deeper discussions in the{" "}
-      <Link className="font-bold" href="/forum">
+      <Link className="link-inline" href="/forum">
         forums
       </Link>
       , where players collaborate on all aspects of the game. <br /> <br /> Every AI
@@ -218,20 +218,20 @@ export const changelogText = () => {
       our game&apos;s rich history. This transparency ensures you&apos;re always
       informed about how The Ninja RPG evolves and grows. <br /> <br />
       Want to stay even more connected to these developments? Join our active{" "}
-      <Link className="font-bold" href={DISCORD_INVITE_URL}>
+      <Link className="link-inline" href={DISCORD_INVITE_URL}>
         Discord community
       </Link>{" "}
       for real-time discussions about updates and changes. For technical details and
       development insights, check our{" "}
-      <Link className="font-bold" href={GITHUB_ISSUES_URL}>
+      <Link className="link-inline" href={GITHUB_ISSUES_URL}>
         GitHub repository
       </Link>
       , where you can track issues and contribute to future improvements. The{" "}
-      <Link className="font-bold" href="/manual">
+      <Link className="link-inline" href="/manual">
         game manual
       </Link>{" "}
       is regularly updated to reflect these changes, while our{" "}
-      <Link className="font-bold" href="/forum">
+      <Link className="link-inline" href="/forum">
         forums
       </Link>{" "}
       offer in-depth discussions about updates and their impact on gameplay. <br />{" "}
@@ -266,21 +266,21 @@ export const battleCalcText = () => {
       Understanding these mechanics is key to becoming a formidable force in our ninja
       world. <br /> <br />
       Ready to dive deeper into combat mechanics? Our{" "}
-      <Link className="font-bold" href="/manual">
+      <Link className="link-inline" href="/manual">
         game manual
       </Link>{" "}
       provides comprehensive details about combat formulas and strategies. Join our
       thriving{" "}
-      <Link className="font-bold" href={DISCORD_INVITE_URL}>
+      <Link className="link-inline" href={DISCORD_INVITE_URL}>
         Discord community
       </Link>{" "}
       to discuss builds and tactics with fellow ninjas. Found something interesting?
       Share your discoveries on our{" "}
-      <Link className="font-bold" href="/forum">
+      <Link className="link-inline" href="/forum">
         forums
       </Link>
       , or report potential issues through our{" "}
-      <Link className="font-bold" href={GITHUB_ISSUES_URL}>
+      <Link className="link-inline" href={GITHUB_ISSUES_URL}>
         GitHub repository
       </Link>
       . <br /> <br />

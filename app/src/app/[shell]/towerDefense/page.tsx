@@ -178,7 +178,7 @@ const TowerDefensePage: React.FC = () => {
               {/* Existing Session Panel - only for logged in users */}
               {!isGuest && gameState.existingSession && (
                 <div className="space-y-3 rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
-                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                  <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
                     <AlertCircle className="h-4 w-4" />
                     <span className="font-semibold">Active Run Found</span>
                   </div>
@@ -305,7 +305,7 @@ const TowerDefensePage: React.FC = () => {
           <div className="flex items-center gap-3">
             <Trophy className="h-5 w-5 text-amber-500" />
             <div>
-              <p className="font-semibold text-amber-600 dark:text-amber-400">
+              <p className="font-semibold text-amber-800 dark:text-amber-300">
                 Leaderboard resets monthly!
               </p>
               <p className="text-muted-foreground text-sm">

@@ -114,6 +114,23 @@
   }
 }
 
+/* Links inside running prose: coloured and underlined so they read as links, not bold words. */
+@utility link-inline {
+  font-weight: 700;
+  color: var(--color-orange-800);
+  text-decoration-line: underline;
+  text-decoration-color: color-mix(in oklch, currentColor 40%, transparent);
+  text-underline-offset: 2px;
+  &:hover,
+  &:focus-visible {
+    text-decoration-color: currentColor;
+    text-decoration-thickness: 2px;
+  }
+  @variant dark {
+    color: var(--color-orange-300);
+  }
+}
+
 @utility container {
   margin-inline: auto;
   @media (width >= --theme(--breakpoint-sm)) {

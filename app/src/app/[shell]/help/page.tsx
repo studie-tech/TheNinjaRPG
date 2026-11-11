@@ -10,17 +10,17 @@ import Link from "@/layout/Link";
 
 export default function BugReport() {
   const link_t3 = (
-    <Link className="font-bold" href="https://create.t3.gg/">
+    <Link className="link-inline" href="https://create.t3.gg/">
       T3 stack
     </Link>
   );
   const link_github = (
-    <Link className="font-bold" href={GITHUB_REPO_URL}>
+    <Link className="link-inline" href={GITHUB_REPO_URL}>
       GitHub
     </Link>
   );
   const link_issues = (
-    <Link className="font-bold" href={GITHUB_ISSUES_URL}>
+    <Link className="link-inline" href={GITHUB_ISSUES_URL}>
       GitHub Issues
     </Link>
   );
