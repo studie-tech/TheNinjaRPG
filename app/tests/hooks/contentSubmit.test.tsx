@@ -12,11 +12,17 @@ afterEach(() => {
 });
 
 describe("useContentSubmit", () => {
-  it("skips a save that changes nothing", async () => {
+  it("skips a save that changes nothing and says so", async () => {
+    const notify = vi
+      .spyOn(toast, "showMutationToast")
+      .mockImplementation(() => undefined);
     const save = vi.fn(async () => undefined);
     const { result } = renderHook(() => useContentSubmit());
     await result.current({ name: "Same" }, { name: "Same" }, save);
     expect(save).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, message: "No changes to save" }),
+    );
   });
 
   it("admits one save at a time and releases the claim after a rejection", async () => {
