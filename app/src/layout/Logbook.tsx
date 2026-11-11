@@ -26,6 +26,7 @@ import { PendingRewardChoices, useOpenRewardChoice } from "@/layout/RewardChoice
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
+import { trackConversion } from "@/libs/conversionTracking";
 import { getLemuImage, LEMU_EXPERIMENT } from "@/libs/lemuExperiment";
 import {
   dialogChoiceContentId,
@@ -902,6 +903,8 @@ export const useCheckRewards = () => {
         quests: prepareQuestRewardUpdate(),
       }),
       onSuccess: async (data, variables, context) => {
+        if (data.success)
+          trackConversion("tutorial_complete", data.tutorialCompletionId);
         // If a failure, show a toast
         if (!data.success && "message" in data) {
           showMutationToast({ success: data.success, message: data.message });

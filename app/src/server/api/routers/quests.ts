@@ -1449,6 +1449,8 @@ export const questsRouter = createTRPCRouter({
     .input(z.object({ questId: z.string(), nextObjectiveId: z.string().optional() }))
     .output(
       userDeltaResponseSchema.extend({
+        // Only a newly committed Genin graduation carries a conversion receipt.
+        tutorialCompletionId: z.string().optional(),
         // Confirmed counters are optional; absent projections retain the full refetch path.
         questCacheUpdate: z
           .object({
@@ -1626,6 +1628,9 @@ export const questsRouter = createTRPCRouter({
             : null,
           resolved,
           badges: claim.badges,
+          ...(resolved && userQuest?.questId === TUTORIAL_GENIN_EXAM_QUEST_ID
+            ? { tutorialCompletionId: userQuest.id }
+            : {}),
           rewardChoicePending: claim.rewardChoicePending,
           questCacheUpdate: claim.questCacheUpdate,
           ...getQuestRewardProjectionUpdate({
