@@ -12,6 +12,8 @@ export const TravelArrivalStatus = ({
   isBusy,
   isArrivalRejected,
   onArrive,
+  onRetrySync,
+  isSyncing = false,
 }: {
   sector: number;
   destinationName?: string;
@@ -20,6 +22,8 @@ export const TravelArrivalStatus = ({
   isBusy: boolean;
   isArrivalRejected: boolean;
   onArrive: () => void;
+  onRetrySync?: () => void;
+  isSyncing?: boolean;
 }) => (
   <div className="pointer-events-none absolute inset-x-3 top-3 z-20 flex justify-center">
     <div
@@ -57,6 +61,16 @@ export const TravelArrivalStatus = ({
         <p role="alert" className="text-destructive w-full text-xs">
           Could not complete your arrival. Please try again.
         </p>
+      )}
+      {onRetrySync && (
+        <div className="flex w-full flex-wrap items-center gap-2">
+          <p role="alert" className="text-muted-foreground flex-1 text-xs">
+            Your trip has started. Reconnect to confirm your location.
+          </p>
+          <Button size="sm" disabled={isSyncing} onClick={onRetrySync}>
+            {isSyncing ? "Reconnecting…" : "Retry connection"}
+          </Button>
+        </div>
       )}
     </div>
   </div>

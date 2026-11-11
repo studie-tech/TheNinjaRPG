@@ -139,6 +139,9 @@ type StoredSectorEntry =
 /** One sector's dx/dy placement within a specific window */
 type WindowLayoutEntry =
   RouterOutputs["worldMap"]["getSectorWindow"]["windowLayouts"][number]["entries"][number];
+type ConfirmedTravelAdmission = NonNullable<
+  RouterOutputs["travel"]["startGlobalMove"]["data"]
+> & { userId: string };
 
 export default function TravelPage() {
   return (
@@ -217,10 +220,28 @@ function Travel() {
     timeDiff,
     prepareUserUpdate,
     updateUser,
+    refreshUser,
   } = useRequiredUserDataSelector(selectUserWithoutPosition);
   const positionChanged = useRef(() => {});
   const userRef = useUserDataRef(() => positionChanged.current());
   const userData = profile ? userRef.current : undefined;
+  const [unreconciledAdmission, setUnreconciledAdmission] =
+    useState<ConfirmedTravelAdmission | null>(null);
+  const [isRetryingAdmission, setIsRetryingAdmission] = useState(false);
+  const admissionRecovery =
+    unreconciledAdmission?.userId === userData?.userId ? unreconciledAdmission : null;
+  const travelState = admissionRecovery ?? userData;
+  const retryAdmission = async () => {
+    setIsRetryingAdmission(true);
+    try {
+      if (await refreshUser()) {
+        setUnreconciledAdmission(null);
+        setTargetSector(null);
+      }
+    } finally {
+      setIsRetryingAdmission(false);
+    }
+  };
   const loadLpcCatalog = useLpcCatalogLoader({
     revalidateInBackground: true,
     preload: !!userData,
@@ -624,15 +645,15 @@ function Travel() {
             refetch: false,
             userRecovery: result.userRecovery,
           });
-          // Admission needs its destination and deadline even when a pre-admission profile read superseded the revision.
-          if (!profileApplied) await updateUser(undefined, { revision: undefined });
-          setTargetSector(null);
-          if (globe) {
-            const tile = globe.tiles[result.data.sector];
-            if (tile) {
-              setCurrentTile(tile);
-            }
+          // Keep confirmed travel visible when a stale profile rejects its patch and the recovery read cannot complete.
+          if (!profileApplied) {
+            const admissionUserId = previous?.userId ?? userData?.userId;
+            if (admissionUserId)
+              setUnreconciledAdmission({ ...result.data, userId: admissionUserId });
+            if (!(await refreshUser())) return;
           }
+          setUnreconciledAdmission(null);
+          setTargetSector(null);
         } else if (result.userRecovery) {
           setAutoDestination(null);
           await updateUser(result, { revision: previous?.revision, refetch: false });
@@ -745,6 +766,7 @@ function Travel() {
   // Convenience for starting global move
   const handleGlobalMove = useCallback(
     (sector: number) => {
+      if (admissionRecovery) return;
       // Guards against global movement
       if (tutorialFocusSector !== null && sector !== tutorialFocusSector) {
         showMutationToast({
@@ -758,7 +780,7 @@ function Travel() {
       setTargetPosition(null);
       startGlobalMove({ sector });
     },
-    [tutorialFocusSector, startGlobalMove],
+    [admissionRecovery, tutorialFocusSector, startGlobalMove],
   );
 
   // Whether world-travel can be started toward a given sector
@@ -766,9 +788,16 @@ function Travel() {
     (sector: number | undefined) =>
       Number.isFinite(sector) &&
       sector !== userData?.sector &&
+      !admissionRecovery &&
       canAttemptAwakeAction(userData) &&
       !isStartingTravel,
-    [userData?.sector, userData?.status, userData?.autoWakeUp, isStartingTravel],
+    [
+      userData?.sector,
+      userData?.status,
+      userData?.autoWakeUp,
+      isStartingTravel,
+      admissionRecovery,
+    ],
   );
 
   // Stable identity for the globe click path: MapComponent is memoized to avoid
@@ -778,7 +807,8 @@ function Travel() {
     sector: undefined,
     canTravel: false,
   });
-  const canStartGlobalTravel = canAttemptAwakeAction(userData) && !isStartingTravel;
+  const canStartGlobalTravel =
+    !admissionRecovery && canAttemptAwakeAction(userData) && !isStartingTravel;
   useLayoutEffect(() => {
     travelGuardRef.current = {
       sector: userData?.sector,
@@ -801,24 +831,24 @@ function Travel() {
     setShowModal(true);
   }, []);
 
-  const isTraveling = userData?.status === "TRAVEL";
+  const isTraveling = travelState?.status === "TRAVEL";
   const globeJourney = useMemo(
-    () => resolveGlobeJourney(storedJourney, userData),
+    () => resolveGlobeJourney(storedJourney, travelState),
     [
       storedJourney,
-      userData?.userId,
-      userData?.sector,
-      userData?.status,
-      userData?.travelFinishAt,
+      travelState?.userId,
+      travelState?.sector,
+      travelState?.status,
+      travelState?.travelFinishAt,
     ],
   );
   const isGlobal = isTraveling || activeTab === globalLink;
   const showGlobal = villages && globe && isGlobal;
   // Admission supplies the destination coordinates. Prepare its scene during the
   // countdown, after admission settles, and keep that instance for arrival.
-  const isPreparingSector = isTraveling && !isStartingTravel;
+  const isPreparingSector = userData?.status === "TRAVEL" && !isStartingTravel;
   const globeFocusSector = isTraveling
-    ? (targetSector ?? userData?.sector)
+    ? (targetSector ?? travelState?.sector)
     : focusSector;
   const showSector =
     villages &&
@@ -1030,14 +1060,18 @@ function Travel() {
   // Render
   return (
     <>
-      <HuntingArrival blocked={!!locationRequest || searchParams.has("sector")} />
+      <HuntingArrival
+        blocked={!!admissionRecovery || !!locationRequest || searchParams.has("sector")}
+      />
       {locationRequest && (
         <Modal
           title="Auto Travel"
           isOpen={true}
           setIsOpen={() => setLocationRequest(null)}
           proceed_label="Travel"
-          proceedDisabled={!canAttemptAwakeAction(userData) || isStartingTravel}
+          proceedDisabled={
+            !!admissionRecovery || !canAttemptAwakeAction(userData) || isStartingTravel
+          }
           onAccept={() => {
             if (!canAttemptAwakeAction(userData) || isStartingTravel) return;
             setAutoDestination(locationRequest);
@@ -1201,7 +1235,11 @@ function Travel() {
                         size="sm"
                         variant="outline"
                         className="h-auto min-w-0 flex-1 flex-col items-start whitespace-normal text-left"
-                        disabled={isStartingTravel || !canAttemptAwakeAction(userData)}
+                        disabled={
+                          !!admissionRecovery ||
+                          isStartingTravel ||
+                          !canAttemptAwakeAction(userData)
+                        }
                         onClick={() => setLocationRequest(pin)}
                       >
                         <span>{pin.label}</span>
@@ -1394,15 +1432,19 @@ function Travel() {
               )}
             </Modal>
           )}
-          {userData?.travelFinishAt && (
+          {travelState?.travelFinishAt && (
             <TravelArrivalStatus
-              sector={targetSector ?? userData.sector}
-              destinationName={sectorNames.get(targetSector ?? userData.sector)}
-              finishAt={userData.travelFinishAt}
+              sector={targetSector ?? travelState.sector}
+              destinationName={sectorNames.get(targetSector ?? travelState.sector)}
+              finishAt={travelState.travelFinishAt}
               timeDiff={timeDiff}
-              isBusy={isFinishingTravel || isStartingTravel}
+              isBusy={isFinishingTravel || isStartingTravel || !!admissionRecovery}
               isArrivalRejected={isArrivalRejected}
               onArrive={() => finishGlobalMove()}
+              onRetrySync={
+                admissionRecovery && !isStartingTravel ? retryAdmission : undefined
+              }
+              isSyncing={isRetryingAdmission}
             />
           )}
         </div>
