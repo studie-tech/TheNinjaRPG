@@ -267,3 +267,35 @@ it("opens controls above a header near the bottom of the viewport", () => {
   const panel = view.getByRole("region", { name: "Town Hall controls" });
   expect(panel.className).toContain("bottom-full");
 });
+
+it("goes back only to a previous page of the game, otherwise to its parent page", () => {
+  const router = { back: vi.fn(), push: vi.fn() };
+  vi.spyOn(navigation, "useRouter").mockReturnValue(router as never);
+  const setPrevious = (url: string | null) =>
+    Object.defineProperty(window, "navigation", {
+      configurable: true,
+      value: {
+        currentEntry: { index: url ? 1 : 0 },
+        entries: () => (url ? [{ url }, { url: window.location.href }] : []),
+      },
+    });
+  const view = render(
+    <ContentBox title="Bank" defaultBackHref="/village">
+      Body
+    </ContentBox>,
+  );
+  const back = view.getByRole("button", { name: "Bank" });
+  try {
+    setPrevious(null);
+    fireEvent.click(back);
+    setPrevious(`${window.location.origin}/items`);
+    fireEvent.click(back);
+    setPrevious("https://www.google.com/search?q=tnr");
+    fireEvent.click(back);
+  } finally {
+    Reflect.deleteProperty(window, "navigation");
+  }
+  expect(router.back).toHaveBeenCalledTimes(1);
+  expect(router.push).toHaveBeenCalledTimes(2);
+  expect(router.push).toHaveBeenCalledWith("/village");
+});

@@ -29,6 +29,20 @@ export const loginRedirectPath = (path: string) => {
   return `/login?redirect_url=${encodeURIComponent(path)}`;
 };
 
+/**
+ * Whether the previous history entry is a page of this site, so going back stays in the
+ * game. The Navigation API lists only this origin's entries; where it is unavailable the
+ * answer is false and callers navigate to a known page instead.
+ */
+export const hasInAppPreviousEntry = () => {
+  if (typeof window === "undefined") return false;
+  const navigation = window.navigation;
+  const index = navigation?.currentEntry?.index ?? 0;
+  if (!navigation || index < 1) return false;
+  const previous = navigation.entries()[index - 1];
+  return !!previous?.url && new URL(previous.url).origin === window.location.origin;
+};
+
 /** The battle whose start has already sent this tab to /combat. */
 let navigatedBattleId: string | null = null;
 

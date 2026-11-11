@@ -1,5 +1,5 @@
 import type React from "react";
-import { startTransition, useEffect } from "react";
+import { startTransition, useEffect, useOptimistic } from "react";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/libs/shadui";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
@@ -36,6 +36,7 @@ interface NavTabsProps {
 const NavTabs: React.FC<NavTabsProps> = (props) => {
   // Destructure
   const { id, current, options, aliases, setValue, onChange, remember = true } = props;
+  const [shownCurrent, setShownCurrent] = useOptimistic(current);
 
   // If we do not have a current value, get from localStorage or select first one
   useEffect(() => {
@@ -57,6 +58,7 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
     const count = props.counts?.[option] ?? 0;
     const isIconOnly =
       !!props.icons?.[option] && !!props.iconOnlyOptions?.includes(option);
+    const isSelected = option === shownCurrent;
     const button = (
       <button
         type="button"
@@ -66,18 +68,22 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
             ? `${option}${count > 0 ? ` ${count} ${props.countLabel ?? "notifications"}` : ""}`
             : undefined
         }
+        aria-current={!props.accessibleTabs && isSelected ? "true" : undefined}
         className={cn(
-          option === current
-            ? "active inline-block rounded-t-lg border-foreground/50 border-b-2 pt-2 pr-1 pb-2 pl-1 text-foreground/50"
-            : "inline-block rounded-t-lg border-gray-700 border-transparent border-b-2 pt-2 pr-1 pb-2 pl-1 hover:border-gray-300 hover:text-gray-600",
+          "inline-block min-h-11 min-w-11 rounded-t-lg border-b-2 px-2 py-2",
+          isSelected
+            ? "active border-primary font-semibold text-foreground"
+            : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
           props.className,
           count > 0 && "relative",
           count > 0 && !isIconOnly && "pr-7",
         )}
         onClick={() => {
           if (id && remember) safeLocalStorageSetItem(id, option);
-          // A transition lets heavy tab content render after the click is painted.
+          // A transition lets heavy tab content render after the click is painted; the
+          // tapped tab shows as selected straight away.
           startTransition(() => {
+            setShownCurrent(option);
             if (setValue) setValue(option);
             if (onChange) onChange(option);
           });
@@ -121,7 +127,7 @@ const NavTabs: React.FC<NavTabsProps> = (props) => {
             value={props.values?.[option] ?? option}
             asChild
             className={cn(
-              "rounded-b-none data-[state=active]:bg-transparent data-[state=active]:text-foreground/50 data-[state=active]:shadow-none",
+              "rounded-b-none data-[state=active]:bg-transparent data-[state=active]:shadow-none",
               fontSize,
               props.className,
             )}

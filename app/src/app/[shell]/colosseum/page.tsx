@@ -101,6 +101,7 @@ export default function ColosseumPage() {
   return (
     <ContentBox
       title="Colosseum"
+      defaultBackHref="/village"
       subtitle="Live Spectate Ongoing Battles"
       padding={false}
       topRightContent={

@@ -167,7 +167,7 @@ export default function MyItems() {
 
   return (
     <>
-      <ContentBox title="Items" padding={false}>
+      <ContentBox title="Items" defaultBackHref="/profile" padding={false}>
         <ItemsToolbar userData={userData} userItems={userItems} />
         {/* Wait for the updated equipment state before accepting another action. A refresh
             shows as a small overlay so the grid keeps its place. */}

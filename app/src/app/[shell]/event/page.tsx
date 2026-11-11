@@ -320,11 +320,9 @@ const NotificationSystem: React.FC = () => {
           )}
         </ContentBox>
       )}
-      <ContentBox
-        title="Notifications"
-        subtitle="All Previous Notifications"
-        initialBreak={true}
-      >
+      {/* Spaced like a follow-up section but titled as the page's heading. */}
+      <div className="h-4" />
+      <ContentBox title="Notifications" subtitle="All Previous Notifications">
         {isLoadingNotifications && <Loader explanation="Loading notifications" />}
         {!isLoadingNotifications && (
           <div className="grid grid-cols-1">

@@ -109,7 +109,6 @@ export default function OccupationFarming({
         title="Farming"
         subtitle="Grow crops for cooking ingredients"
         defaultBackHref={embedded ? undefined : defaultBackHref}
-        initialBreak={!embedded}
         alreadyHasH1={embedded}
       >
         <div role="alert" className="space-y-2">
@@ -252,7 +251,6 @@ export default function OccupationFarming({
       title="Your Farm"
       subtitle="Grow crops for cooking ingredients"
       defaultBackHref={defaultBackHref}
-      initialBreak
     >
       {farm}
     </ContentBox>

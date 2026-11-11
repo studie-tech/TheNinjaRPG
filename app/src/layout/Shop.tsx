@@ -496,6 +496,25 @@ const Shop: React.FC<ShopProps> = (props) => {
             className="flex gap-0.5 overflow-x-auto overscroll-x-contain rounded-lg bg-muted/90 p-0.5 shadow-inner ring-1 ring-border/50 sm:grid sm:grid-cols-4 sm:gap-1 sm:overflow-visible sm:rounded-xl sm:p-1 lg:grid-cols-8 dark:bg-muted/40"
             role="tablist"
             aria-label="Item category"
+            onKeyDown={(event) => {
+              // Arrow keys, Home and End move between categories like other tab lists.
+              const tabs = Array.from(
+                event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+              );
+              const index = tabs.indexOf(event.target as HTMLButtonElement);
+              if (index < 0) return;
+              const moves: Partial<Record<string, number>> = {
+                ArrowRight: (index + 1) % tabs.length,
+                ArrowLeft: (index - 1 + tabs.length) % tabs.length,
+                Home: 0,
+                End: tabs.length - 1,
+              };
+              const next = moves[event.key];
+              if (next === undefined) return;
+              event.preventDefault();
+              tabs[next]?.focus();
+              tabs[next]?.click();
+            }}
           >
             {itemTypeTabOptions.map((t) => (
               <button
@@ -503,6 +522,7 @@ const Shop: React.FC<ShopProps> = (props) => {
                 type="button"
                 role="tab"
                 aria-selected={selectedItemType === t}
+                tabIndex={selectedItemType === t ? 0 : -1}
                 className={cn(
                   "flex min-w-[4.5rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 font-semibold text-[10px] transition-all sm:min-w-0 sm:flex-row sm:gap-2 sm:rounded-lg sm:px-1 sm:py-3 sm:text-xs",
                   selectedItemType === t

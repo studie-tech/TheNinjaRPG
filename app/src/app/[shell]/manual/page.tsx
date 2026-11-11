@@ -147,7 +147,7 @@ export default function ManualMain() {
 
   return (
     <>
-      <ContentBox title="Player Guide" subtitle="How to play TheNinja-RPG">
+      <ContentBox title="Manual" subtitle="Player guide and game data">
         <p>
           New to Seichi? Start with the official{" "}
           <Link

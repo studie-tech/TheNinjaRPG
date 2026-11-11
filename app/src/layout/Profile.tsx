@@ -201,6 +201,7 @@ export function Profile() {
           />
         </div>
         <TabsContent value="dashboard">
+          <h1 className="sr-only">Dashboard</h1>
           <ContentBox padding={false}>
             <ProfileDashboard settings={dashboardSettings} />
           </ContentBox>

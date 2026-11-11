@@ -3,8 +3,9 @@
 import { ChevronsLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { ContentBoxHeaderActions } from "@/layout/ContentBoxHeaderActions";
+import { hasInAppPreviousEntry } from "@/utils/routing";
 
 export interface ContentBoxProps {
   children: React.ReactNode;
@@ -27,23 +28,17 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
   const headerRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLDivElement>(null);
 
-  // State for browser-based back functionality
   const router = useRouter();
-  const [canGoBack, setCanGoBack] = useState(false);
 
-  // Detect whether browser history has a previous page
-  useEffect(() => {
-    setCanGoBack(history.length > 1);
-  }, []);
-
-  // Handle back navigation
-  const handleBack = useCallback(() => {
-    if (canGoBack) {
+  // Go back only when the previous page is part of the game, which keeps a list's scroll
+  // and filters; a page opened from another site or a fresh tab goes to its parent page.
+  const handleBack = () => {
+    if (hasInAppPreviousEntry()) {
       router.back();
     } else if (props.defaultBackHref) {
       router.push(props.defaultBackHref);
     }
-  }, [canGoBack, router, props]);
+  };
 
   // Title to be shown
   // The 48px touch target is taller than the title line. The negative margin
@@ -100,21 +95,15 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
                   {title}
                 </h1>
               )}
-              {props.subtitle && !props.initialBreak && !props.alreadyHasH1 && (
-                <h2
+              {/* A subtitle describes its title rather than opening a section. */}
+              {props.subtitle && (
+                <div
                   className="truncate text-background-foreground"
+                  data-content-box-subtitle
                   suppressHydrationWarning
                 >
                   {props.subtitle}
-                </h2>
-              )}
-              {props.subtitle && (props.initialBreak || props.alreadyHasH1) && (
-                <h3
-                  className="truncate text-background-foreground"
-                  suppressHydrationWarning
-                >
-                  {props.subtitle}
-                </h3>
+                </div>
               )}
             </div>
           )}

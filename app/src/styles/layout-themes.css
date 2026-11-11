@@ -197,7 +197,7 @@
   max-width: none;
   padding-inline: 0;
 }
-.tnr-theme-game [data-content-box] :where(h1, h2, h3) {
+.tnr-theme-game [data-content-box] :where(h1, h2, h3, [data-content-box-subtitle]) {
   font-family: var(--theme-heading-font);
   letter-spacing: -0.015em;
 }
