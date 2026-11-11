@@ -118,6 +118,7 @@ export default function MyJutsu() {
     moveForward: boolean;
   } | null>(null);
   const loadoutRequestInFlightRef = useRef(false);
+  const buyJutsuSlotInFlightRef = useRef(false);
 
   // Accordion state for jutsu category sections (multiple can be open simultaneously)
   const [openSections, setOpenSections] = useState<Set<string>>(
@@ -342,7 +343,11 @@ export default function MyJutsu() {
         showMutationToast(data);
         if (data.success) {
           await updateUser(undefined, { revision, delta: data.userDelta });
+          setLoadoutConfirmation(null);
         }
+      },
+      onSettled: () => {
+        buyJutsuSlotInFlightRef.current = false;
       },
     });
 
@@ -484,6 +489,10 @@ export default function MyJutsu() {
 
   // Ryo from forgetting
 
+  const hasNoJutsu =
+    !!categorizedJutsus &&
+    Object.values(categorizedJutsus).every((arr) => arr.length === 0);
+
   // Loaders
   if (!userData) return <Loader explanation="Loading userdata" />;
 
@@ -598,17 +607,28 @@ export default function MyJutsu() {
               ? isUnequipping
                 ? undefined
                 : "Unequip all"
-              : canUpgrade
-                ? `Purchase for ${COST_EXTRA_JUTSU_SLOT} reps`
-                : `Need ${COST_EXTRA_JUTSU_SLOT - userData.reputationPoints} more reps`
+              : isUpgrading
+                ? "Purchasing"
+                : canUpgrade
+                  ? `Purchase for ${COST_EXTRA_JUTSU_SLOT} reps`
+                  : `Need ${COST_EXTRA_JUTSU_SLOT - userData.reputationPoints} more reps`
           }
+          keepOpenOnAccept={loadoutConfirmation === "upgrade"}
+          isLoading={loadoutConfirmation === "upgrade" && isUpgrading}
           proceedDisabled={
             isPending || (loadoutConfirmation === "unequip" ? !curEquip : !canUpgrade)
           }
           onAccept={(event) => {
             event.preventDefault();
             if (loadoutConfirmation === "unequip") unequipAll();
-            else if (loadoutConfirmation === "upgrade" && canUpgrade) buyJutsuSlot();
+            else if (
+              loadoutConfirmation === "upgrade" &&
+              canUpgrade &&
+              !buyJutsuSlotInFlightRef.current
+            ) {
+              buyJutsuSlotInFlightRef.current = true;
+              buyJutsuSlot();
+            }
           }}
         >
           {loadoutConfirmation === "unequip" ? (
@@ -627,7 +647,7 @@ export default function MyJutsu() {
         <JutsuStatQuickFilters state={state} />
 
         {/* Equipped Section - Always Visible */}
-        {categorizedJutsus && (
+        {categorizedJutsus && !hasNoJutsu && (
           <div className="mb-4">
             <h3 className="px-3 py-2 font-bold text-lg">
               Equipped Jutsu ({categorizedJutsus.equipped.length}/{maxEquip})
@@ -678,14 +698,12 @@ export default function MyJutsu() {
         )}
 
         {/* Show message when no jutsu */}
-        {!isFetching &&
-          categorizedJutsus &&
-          Object.values(categorizedJutsus).every((arr) => arr.length === 0) && (
-            <p className="py-4 text-center text-muted-foreground">
-              You have not learned any jutsu. Go to the training grounds in your village
-              to learn some.
-            </p>
-          )}
+        {!isFetching && hasNoJutsu && (
+          <p className="py-4 text-center text-muted-foreground">
+            You have not learned any jutsu. Go to the training grounds in your village
+            to learn some.
+          </p>
+        )}
 
         {isOpen && userjutsu && (
           <Modal
@@ -797,8 +815,13 @@ export default function MyJutsu() {
                       <Confirm
                         title="Transfer Level"
                         button={
-                          <Button id="transfer" variant="secondary">
-                            <ArrowRightLeft className="h-6 w-6 sm:mr-2" />
+                          <Button
+                            id="transfer"
+                            variant="secondary"
+                            aria-label="Transfer Level"
+                            hoverText="Transfer Level"
+                          >
+                            <ArrowRightLeft className="h-6 w-6 sm:mr-2" aria-hidden />
                             <p className="hidden sm:block">Transfer Level</p>
                           </Button>
                         }
@@ -934,8 +957,13 @@ export default function MyJutsu() {
                               id={`evolve-${evo.id}`}
                               variant="secondary"
                               disabled={isPending}
+                              aria-label={`Evolve to ${evo.name}`}
+                              hoverText={`Evolve to ${evo.name}`}
                             >
-                              <CircleFadingArrowUp className="h-6 w-6 sm:mr-2" />
+                              <CircleFadingArrowUp
+                                className="h-6 w-6 sm:mr-2"
+                                aria-hidden
+                              />
                               <p className="hidden sm:block">Evolve</p>
                             </Button>
                           }
@@ -996,8 +1024,13 @@ export default function MyJutsu() {
                     <Confirm
                       title="Remove Reskin"
                       button={
-                        <Button id="remove-reskin" variant="destructive">
-                          <Palette className="h-6 w-6 sm:mr-2" />
+                        <Button
+                          id="remove-reskin"
+                          variant="destructive"
+                          aria-label="Remove Reskin"
+                          hoverText="Remove Reskin"
+                        >
+                          <Palette className="h-6 w-6 sm:mr-2" aria-hidden />
                           <p className="hidden sm:block">Remove Reskin</p>
                         </Button>
                       }
@@ -1015,6 +1048,8 @@ export default function MyJutsu() {
                     <Button
                       id="reskin"
                       variant="outline"
+                      aria-label="Reskin"
+                      hoverText="Reskin"
                       onClick={() => {
                         reskinForm.reset({
                           jutsuId: userjutsu.jutsuId,
@@ -1032,15 +1067,20 @@ export default function MyJutsu() {
                         userjutsu.jutsu.jutsuType === "BLOODLINE"
                       }
                     >
-                      <Palette className="h-6 w-6 sm:mr-2" />
+                      <Palette className="h-6 w-6 sm:mr-2" aria-hidden />
                       <p className="hidden sm:block">Reskin</p>
                     </Button>
                   )}
                   <Confirm
                     title="Forget Jutsu"
                     button={
-                      <Button id="return" variant="destructive">
-                        <Trash2 className="h-6 w-6 sm:mr-2" />
+                      <Button
+                        id="return"
+                        variant="destructive"
+                        aria-label="Forget jutsu"
+                        hoverText="Forget jutsu"
+                      >
+                        <Trash2 className="h-6 w-6 sm:mr-2" aria-hidden />
                         <p className="hidden sm:block">Forget</p>
                       </Button>
                     }
