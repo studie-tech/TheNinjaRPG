@@ -45,7 +45,7 @@ const Table = <T, K extends keyof T>(props: TableProps<T, K>) => {
   const avatarWrap = compact ? "w-9" : "w-20";
 
   return (
-    <div className="relative min-w-0 flex-1 overflow-x-scroll">
+    <div className="relative min-w-0 flex-1 overflow-x-auto">
       <table className={cn("w-full text-left", compact ? "text-xs" : "text-sm")}>
         <thead
           className={cn(

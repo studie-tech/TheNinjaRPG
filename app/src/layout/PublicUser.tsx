@@ -1489,7 +1489,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                     Nindo cleared.
                   </p>
                 ) : profile.nindo ? (
-                  <div className="relative overflow-x-scroll">
+                  <div className="relative overflow-x-auto">
                     {parseHtml(profile.nindo.content)}
                   </div>
                 ) : (
