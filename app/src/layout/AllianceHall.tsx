@@ -284,7 +284,7 @@ const AllianceCard: React.FC<{
 
   return (
     <div className="flex flex-col rounded-lg border p-3">
-      <div className="grid grid-cols-[2fr_3fr_3fr] items-center gap-2">
+      <div className="grid grid-cols-[64px_minmax(0,1fr)_48px] items-center gap-2">
         <Image
           src={entity.villageGraphic}
           alt={entity.name}
@@ -293,7 +293,9 @@ const AllianceCard: React.FC<{
           className="aspect-square w-full rounded object-cover"
         />
         <div className="min-w-0">
-          <p className="truncate font-bold text-sm">{entity.name}</p>
+          <p className="truncate font-bold text-sm" title={entity.name}>
+            {entity.name}
+          </p>
           <div className="flex flex-wrap gap-1">
             <span className={`rounded px-1.5 py-0.5 text-xs ${typeColors}`}>
               {typeLabel}
@@ -303,7 +305,10 @@ const AllianceCard: React.FC<{
             </span>
           </div>
           {entity.kage && (
-            <p className="mt-1 truncate text-muted-foreground text-xs">
+            <p
+              className="mt-1 truncate text-muted-foreground text-xs"
+              title={entity.kage.username}
+            >
               {isVillage ? "Kage" : "Leader"}: {entity.kage.username}
             </p>
           )}

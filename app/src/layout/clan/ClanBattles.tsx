@@ -26,6 +26,7 @@ import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { usePendingIds } from "@/hooks/usePendingIds";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import AvatarImage from "@/layout/Avatar";
+import { AvatarNameCell } from "@/layout/AvatarNameCell";
 import ClanSearchSelect from "@/layout/ClanSearchSelect";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
@@ -314,16 +315,12 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     const border = hasWinner ? "grayscale border-2" : "";
     return (
       <div className="flex flex-row">
-        <div className="w-20 text-center">
-          <AvatarImage
-            className={border}
-            href={clan.image}
-            alt={clan.name}
-            size={100}
-            hover_effect={!hasWinner}
-          />
-          {clan.name}
-        </div>
+        <AvatarNameCell
+          avatarClassName={border}
+          avatar={clan.image}
+          name={clan.name}
+          hoverEffect={!hasWinner}
+        />
         <div className="grid grid-cols-3">
           {queue.map((q) => {
             const targetKey = `${battleId}:${q.userId}`;

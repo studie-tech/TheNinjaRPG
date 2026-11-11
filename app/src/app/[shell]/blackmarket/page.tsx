@@ -32,7 +32,7 @@ import {
   repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
-import AvatarImage from "@/layout/Avatar";
+import { AvatarNameCell } from "@/layout/AvatarNameCell";
 import { CurrentBloodline, PurchaseBloodline } from "@/layout/Bloodline";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -371,34 +371,16 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
           </div>
         ),
         creator: (
-          <div className="w-20 text-center">
-            <AvatarImage
-              href={offer.creatorAvatar}
-              alt={offer.creatorUsername}
-              size={100}
-            />
-            <p>{offer.creatorUsername}</p>
-          </div>
+          <AvatarNameCell avatar={offer.creatorAvatar} name={offer.creatorUsername} />
         ),
         buyer: (
-          <div className="w-20 text-center">
-            <AvatarImage
-              href={offer.purchaserAvatar}
-              alt={offer.purchaserUsername || "Unknown"}
-              size={100}
-            />
-            <p>{offer.purchaserUsername}</p>
-          </div>
+          <AvatarNameCell
+            avatar={offer.purchaserAvatar}
+            name={offer.purchaserUsername}
+          />
         ),
         allowed: (
-          <div className="w-20 text-center">
-            <AvatarImage
-              href={offer.allowedAvatar}
-              alt={offer.allowedUsername || "Unknown"}
-              size={100}
-            />
-            <p>{offer.allowedUsername}</p>
-          </div>
+          <AvatarNameCell avatar={offer.allowedAvatar} name={offer.allowedUsername} />
         ),
         actions: (
           <div className="flex flex-row gap-1">
