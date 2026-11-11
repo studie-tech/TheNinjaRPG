@@ -19,7 +19,11 @@ import { useItemEditForm } from "@/hooks/item";
 import { useQuestEditForm } from "@/hooks/quest";
 import * as ContentImageSelector from "@/layout/ContentImageSelector";
 import { EffectFormWrapper } from "@/layout/EditContent";
-import { EffectFieldInputGeneric, MassEffectEditor } from "@/layout/MassEffectEditor";
+import {
+  draftFieldsOutside,
+  EffectFieldInputGeneric,
+  MassEffectEditor,
+} from "@/layout/MassEffectEditor";
 import { ObjectiveFormWrapper } from "@/layout/ObjectiveFormWrapper";
 import { RewardEditor, RewardFormWrapper } from "@/layout/RewardEditor";
 import * as toastHelpers from "@/libs/toast";
@@ -932,6 +936,7 @@ describe("MassEffectEditor numeric drafts", () => {
       expect(invalid.getAttribute("aria-invalid")).toBe("true");
       expect(view.container.firstElementChild?.getAttribute("aria-busy")).toBe("false");
 
+      fireEvent.input(inputs[2]!, { target: { value: "4" } });
       fireEvent.click(
         view.getByRole("button", { name: `Save ${kind} effects for Second` }),
       );
@@ -999,6 +1004,84 @@ describe("MassEffectEditor numeric drafts", () => {
       await waitFor(() => expect(pending).toHaveBeenLastCalledWith(false));
     });
   }
+});
+
+describe("MassEffectEditor drafts overview", () => {
+  const entries = [
+    {
+      id: "first",
+      name: "First",
+      effects: [DamageTag.parse({}), HealTag.parse({})],
+      updatedAt: new Date(),
+    },
+    {
+      id: "second",
+      name: "Second",
+      effects: [DamageTag.parse({})],
+      updatedAt: new Date(),
+    },
+  ];
+
+  it("asks for a field before showing the table", () => {
+    const view = render(
+      <MassEffectEditor kind="jutsu" entries={entries} selectedFields={[]} />,
+    );
+    expect(view.getByText(/Pick one or more effect fields/)).toBeTruthy();
+    expect(view.queryByRole("button", { name: /Save jutsu effects/ })).toBeNull();
+  });
+
+  it("enables saving only for edited entries and saves all of them in order", async () => {
+    const view = render(
+      <MassEffectEditor kind="jutsu" entries={entries} selectedFields={["power"]} />,
+    );
+    const saveFirst = () =>
+      view.getAllByRole("button", {
+        name: "Save jutsu effects for First",
+      })[0] as HTMLButtonElement;
+    const saveAll = () =>
+      view.getByRole("button", { name: "Save all" }) as HTMLButtonElement;
+    expect(saveFirst().disabled).toBe(true);
+    expect(saveAll().disabled).toBe(true);
+    expect(view.getByText("No unsaved changes")).toBeTruthy();
+
+    const inputs = view.getAllByRole("spinbutton");
+    fireEvent.input(inputs[0]!, { target: { value: "5" } });
+    fireEvent.input(inputs[2]!, { target: { value: "6" } });
+    expect(saveFirst().disabled).toBe(false);
+    expect(view.getByText("2 entries with unsaved changes")).toBeTruthy();
+    // First has two effect rows, Second one.
+    expect(view.getAllByText("Unsaved")).toHaveLength(3);
+
+    fireEvent.click(saveAll());
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save.mock.calls.map((call) => call[0].id)).toEqual(["first", "second"]);
+  });
+
+  it("lists drafts in hidden columns next to the entry", () => {
+    const view = render(
+      <MassEffectEditor kind="jutsu" entries={entries} selectedFields={["power"]} />,
+    );
+    fireEvent.input(view.getAllByRole("spinbutton")[0]!, { target: { value: "5" } });
+    view.rerender(
+      <MassEffectEditor kind="jutsu" entries={entries} selectedFields={["rounds"]} />,
+    );
+    expect(view.getAllByText("Unsaved · also saves power").length).toBeGreaterThan(0);
+  });
+});
+
+describe("draftFieldsOutside", () => {
+  it("names changed fields outside the visible columns and effect types", () => {
+    const base = [DamageTag.parse({}), HealTag.parse({})];
+    const draft = [
+      { ...base[0]!, power: 9, rounds: 2 },
+      { ...base[1]!, power: 3 },
+    ] as ZodAllTags[];
+    expect(draftFieldsOutside(base, draft, ["power"])).toEqual(["rounds"]);
+    expect(draftFieldsOutside(base, draft, ["power", "rounds"], ["damage"])).toEqual([
+      "power",
+    ]);
+    expect(draftFieldsOutside(base, base, [])).toEqual([]);
+  });
 });
 
 const CoordinateDraftForm = () => {
@@ -2151,6 +2234,8 @@ describe("MassEffectEditor save failures", () => {
           onPendingChange={pending}
         />,
       );
+      // Failed saves keep the draft, so each retry still has unsaved changes to send.
+      fireEvent.input(view.getByRole("spinbutton"), { target: { value: "4" } });
       for (let attempt = 1; attempt <= 3; attempt++) {
         fireEvent.click(
           view.getByRole("button", { name: `Save ${kind} effects for First` }),

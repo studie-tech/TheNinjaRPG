@@ -2,9 +2,10 @@
 
 import { Loader2 } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MultiSelect, type OptionType } from "@/components/ui/multi-select";
 import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
@@ -101,6 +102,27 @@ export const MassEffectEditor = <
     [assetData],
   );
 
+  // One stable handler for every cell, so a keystroke re-renders only the edited cell.
+  const editField = useCallback(
+    (
+      entryId: string,
+      idx: number,
+      field: string,
+      value: unknown,
+      baseEffects: ZodAllTags[],
+    ) =>
+      setModified((prev) => {
+        const updated = [...(prev[entryId] ?? baseEffects)];
+        const current = updated[idx] ?? baseEffects[idx];
+        if (!current) return prev;
+        updated[idx] = { ...current, [field]: value } as ZodAllTags;
+        return { ...prev, [entryId]: updated };
+      }),
+    [],
+  );
+
+  const baseEffectsOf = (entry: T) => committed[entry.id]?.effects ?? entry.effects;
+
   type Row = {
     id: string;
     name: string;
@@ -108,54 +130,56 @@ export const MassEffectEditor = <
     entryId: string;
     effectIndex: number;
   } & Record<string, React.ReactNode>;
-  const rows: Row[] = useMemo(() => {
-    const out: Row[] = [];
-    (entries || []).forEach((entry) => {
-      entry.effects.forEach((effect, idx) => {
-        // If effect type filter is set, only include matching effect rows
-        if (props.filterEffectTypes && props.filterEffectTypes.length > 0) {
-          if (!props.filterEffectTypes.includes(effect.type)) return;
-        }
-        const row: Row = {
-          id: `${entry.id}:${idx}`,
-          name: entry.name,
-          effectType: effect.type,
-          entryId: entry.id,
-          effectIndex: idx,
-        };
-        selectedFields.forEach((f) => {
-          row[f] = (
-            <div data-effect-entry-id={entry.id}>
-              <EffectFieldInputGeneric
-                effect={
-                  modified[entry.id]?.[idx] ??
-                  committed[entry.id]?.effects[idx] ??
-                  effect
-                }
-                field={f}
-                onChange={(v) =>
-                  setModified((prev) => {
-                    const next: Record<string, ZodAllTags[]> = { ...prev };
-                    const baseEffs =
-                      next[entry.id] ?? committed[entry.id]?.effects ?? entry.effects;
-                    const updated = [...baseEffs];
-                    const current = updated[idx] ?? effect;
-                    updated[idx] = { ...current, [f]: v } as ZodAllTags;
-                    next[entry.id] = updated;
-                    return next;
-                  })
-                }
-                options={options}
-                disabled={editorPending}
-              />
-            </div>
-          );
-        });
-        out.push(row);
-      });
+  const rows: Row[] = [];
+  for (const entry of entries ?? []) {
+    const baseEffects = baseEffectsOf(entry);
+    const draft = modified[entry.id];
+    const hiddenDrafts = draft
+      ? draftFieldsOutside(baseEffects, draft, selectedFields, props.filterEffectTypes)
+      : [];
+    entry.effects.forEach((effect, idx) => {
+      // If effect type filter is set, only include matching effect rows
+      if (props.filterEffectTypes && props.filterEffectTypes.length > 0) {
+        if (!props.filterEffectTypes.includes(effect.type)) return;
+      }
+      const row: Row = {
+        id: `${entry.id}:${idx}`,
+        name: entry.name,
+        nameCell: (
+          <div>
+            <span>{entry.name}</span>
+            {draft && (
+              <p className="font-semibold text-amber-600 text-xs">
+                Unsaved
+                {hiddenDrafts.length > 0 && ` · also saves ${hiddenDrafts.join(", ")}`}
+              </p>
+            )}
+          </div>
+        ),
+        effectType: effect.type,
+        entryId: entry.id,
+        effectIndex: idx,
+      };
+      for (const field of selectedFields) {
+        row[field] = (
+          <EffectFieldCell
+            entryId={entry.id}
+            idx={idx}
+            field={field}
+            effect={draft?.[idx] ?? baseEffects[idx] ?? effect}
+            baseEffects={baseEffects}
+            onEdit={editField}
+            options={options}
+            disabled={editorPending}
+          />
+        );
+      }
+      rows.push(row);
     });
-    return out;
-  }, [entries, selectedFields, modified, committed, options, editorPending]);
+  }
+  const dirtyEntryIds = (entries ?? [])
+    .filter((entry) => modified[entry.id])
+    .map((entry) => entry.id);
 
   // Mutations
   const itemUpdate = api.item.update.useMutation({
@@ -168,20 +192,20 @@ export const MassEffectEditor = <
     meta: { handlesTransportError: true },
   });
 
-  const saveRow = async (row: Row) => {
-    const entry = (entries || []).find((e) => e.id === row.entryId);
-    if (!entry) return;
+  /** Save every effect of one entry; true when the write succeeded. */
+  const saveEntry = async (entryId: string): Promise<boolean> => {
+    const entry = (entries || []).find((e) => e.id === entryId);
+    if (!entry) return false;
     // Saving one row submits every effect for its entry, including sibling rows.
     const fields = editorRef.current?.querySelectorAll<HTMLElement>(
       "[data-effect-entry-id]",
     );
     for (const field of fields ?? []) {
       if (field.dataset.effectEntryId === entry.id && !validateNumberInputs(field)) {
-        return;
+        return false;
       }
     }
-    const effects =
-      modified[row.entryId] ?? committed[row.entryId]?.effects ?? entry.effects;
+    const effects = modified[entryId] ?? committed[entryId]?.effects ?? entry.effects;
     const validator =
       kind === "item"
         ? ItemValidator
@@ -195,9 +219,9 @@ export const MassEffectEditor = <
         success: false,
         message: parsed.error.issues.map((issue) => issue.message).join("; "),
       });
-      return;
+      return false;
     }
-    if (!saveFlight.claim(entry.id)) return;
+    if (!saveFlight.claim(entry.id)) return false;
     props.onPendingChange?.(true);
     try {
       const res =
@@ -222,14 +246,14 @@ export const MassEffectEditor = <
                 } as ZodBloodlineType,
               });
       showMutationToast(res);
-      if (!res.success) return;
+      if (!res.success) return false;
       setCommitted((prev) => ({
         ...prev,
         [entry.id]: { effects, baseUpdatedAt: entry.updatedAt.getTime() },
       }));
       setModified((prev) => {
         const next = { ...prev };
-        delete next[row.entryId];
+        delete next[entryId];
         return next;
       });
       try {
@@ -238,21 +262,30 @@ export const MassEffectEditor = <
         // The committed local snapshot keeps the successful write truthful if
         // the authoritative list cannot be refreshed immediately.
       }
+      return true;
     } catch (error) {
       // The draft is retained for a retry.
       showRetryableErrorToast(
         error,
         `Could not confirm whether the ${kind} effects saved. Refresh before retrying.`,
       );
+      return false;
     } finally {
       saveFlight.release(entry.id);
       props.onPendingChange?.(false);
     }
   };
 
+  /** Save each entry with drafts in list order, one at a time, stopping at a failure. */
+  const saveAll = async () => {
+    for (const entryId of dirtyEntryIds) {
+      if (!(await saveEntry(entryId))) return;
+    }
+  };
+
   const columns: ColumnDefinitionType<Row, keyof Row>[] = useMemo(() => {
     const base: ColumnDefinitionType<Row, keyof Row>[] = [
-      { key: "name", header: "Name", type: "string" },
+      { key: "nameCell", header: "Name", type: "jsx" },
       { key: "effectType", header: "Effect", type: "string" },
     ];
     selectedFields.forEach((f) => {
@@ -261,8 +294,31 @@ export const MassEffectEditor = <
     return base;
   }, [selectedFields]);
 
+  if (selectedFields.length === 0) {
+    return (
+      <p className="p-3 text-muted-foreground">
+        Pick one or more effect fields above to start editing.
+      </p>
+    );
+  }
+
   return (
     <div ref={editorRef} className="flex flex-col gap-2" aria-busy={editorPending}>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 pt-2">
+        <p className="text-muted-foreground text-sm" aria-live="polite">
+          {dirtyEntryIds.length === 0
+            ? "No unsaved changes"
+            : `${dirtyEntryIds.length} ${dirtyEntryIds.length === 1 ? "entry" : "entries"} with unsaved changes`}
+        </p>
+        <Button
+          id="mass-edit-save-all"
+          size="sm"
+          disabled={editorPending || dirtyEntryIds.length === 0}
+          onClick={() => void saveAll()}
+        >
+          Save all
+        </Button>
+      </div>
       <Table<Row, keyof Row>
         data={rows}
         columns={columns}
@@ -281,8 +337,8 @@ export const MassEffectEditor = <
               pendingId === row.entryId
                 ? `Saving ${kind} effects for ${row.name}`
                 : `Save ${kind} effects for ${row.name}`,
-            disabled: () => editorPending,
-            onClick: (r: Row) => void saveRow(r),
+            disabled: (row: Row) => editorPending || !modified[row.entryId],
+            onClick: (r: Row) => void saveEntry(r.entryId),
           },
         ]}
       />
@@ -298,6 +354,39 @@ export const MassEffectEditor = <
     </div>
   );
 };
+
+/** One editable effect field; memoised so editing a cell leaves the other cells alone. */
+const EffectFieldCell = memo(
+  (props: {
+    entryId: string;
+    idx: number;
+    field: string;
+    effect: ZodAllTags;
+    baseEffects: ZodAllTags[];
+    onEdit: (
+      entryId: string,
+      idx: number,
+      field: string,
+      value: unknown,
+      baseEffects: ZodAllTags[],
+    ) => void;
+    options: { animation?: OptionType[]; staticAsset?: OptionType[] };
+    disabled: boolean;
+  }) => {
+    const { entryId, idx, field, baseEffects, onEdit } = props;
+    return (
+      <div data-effect-entry-id={entryId}>
+        <EffectFieldInputGeneric
+          effect={props.effect}
+          field={field}
+          onChange={(value) => onEdit(entryId, idx, field, value, baseEffects)}
+          options={props.options}
+          disabled={props.disabled}
+        />
+      </div>
+    );
+  },
+);
 
 /** Select editable effect columns from the combat damage schema's shared field names. */
 export const EffectFieldSelector: React.FC<{
@@ -472,4 +561,29 @@ export const EffectFieldInputGeneric = <E extends ZodAllTags>(opts: {
       disabled={opts.disabled}
     />
   );
+};
+
+/**
+ * Fields an entry's draft changes that the editor does not show: unselected columns and
+ * effects outside the effect type filter. Saving the entry still writes them.
+ */
+export const draftFieldsOutside = (
+  base: ZodAllTags[],
+  draft: ZodAllTags[],
+  visibleFields: string[],
+  visibleTypes?: string[],
+) => {
+  const hidden = new Set<string>();
+  draft.forEach((effect, idx) => {
+    const before = (base[idx] ?? {}) as Record<string, unknown>;
+    const after = effect as Record<string, unknown>;
+    const isRowVisible =
+      !visibleTypes || visibleTypes.length === 0 || visibleTypes.includes(effect.type);
+    for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+      if (JSON.stringify(before[key]) === JSON.stringify(after[key])) continue;
+      if (isRowVisible && visibleFields.includes(key)) continue;
+      hidden.add(key);
+    }
+  });
+  return [...hidden].sort();
 };
