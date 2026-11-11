@@ -123,7 +123,10 @@ const GlobalMap = dynamic(() => import("@/layout/Map"), {
   ssr: false,
   loading: () => <Loader explanation="Loading world map" />,
 });
-const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
+const Sector = dynamic(() => import("@/layout/Sector"), {
+  ssr: false,
+  loading: () => <SectorLoadingPlaceholder />,
+});
 /** Bootstrap sector windows stay cached this long after travel unmounts. */
 const BOOT_WINDOW_RETENTION_MS = 30 * MINUTE_S * 1000;
 // Start both renderers alongside hydration while the map queries load.
@@ -185,6 +188,10 @@ function Travel() {
   const [cameraFocusRevision, setCameraFocusRevision] = useState(0);
   // A rejected arrival leaves the finished countdown in place with a manual retry.
   const [isArrivalRejected, setIsArrivalRejected] = useState(false);
+  // Once opened, each scene stays mounted (hidden and paused) so switching tabs keeps
+  // the globe's rotation and the sector's loaded terrain.
+  const [hasOpenedGlobal, setHasOpenedGlobal] = useState(false);
+  const [hasOpenedSector, setHasOpenedSector] = useState(false);
 
   const searchParams = useSearchParams();
   const [locationRequest, setLocationRequest] = useState<TravelLocation | null>(null);
@@ -857,6 +864,12 @@ function Travel() {
     currentSectorMap &&
     userData?.status !== "TRAVEL" &&
     !isGlobal;
+  useEffect(() => {
+    if (showGlobal) setHasOpenedGlobal(true);
+  }, [showGlobal]);
+  useEffect(() => {
+    if (showSector) setHasOpenedSector(true);
+  }, [showSector]);
 
   // Attack revealed stealthed player after moving to their position
   useEffect(() => {
@@ -1388,19 +1401,40 @@ function Travel() {
       >
         {/* The countdown needs a viewport even while the destination scene is loading. */}
         <div className={userData.travelFinishAt ? "relative min-h-80" : "relative"}>
-          {showGlobal && MapComponent}
+          {(showGlobal || (hasOpenedGlobal && villages && globe)) && (
+            <div
+              aria-hidden={!showGlobal}
+              inert={!showGlobal}
+              className={!showGlobal ? PAUSED_SCENE_CLASS : undefined}
+            >
+              {MapComponent}
+            </div>
+          )}
           {mapError && <MapError />}
           {/* Prepare the destination offscreen so its scene is ready on arrival. */}
-          {(showSector || isPreparingSector) && (
+          {(showSector ||
+            isPreparingSector ||
+            (hasOpenedSector && SectorComponent)) && (
             <div
               aria-hidden={!showSector}
               inert={!showSector}
-              className={!showSector ? "invisible absolute inset-0" : undefined}
+              className={
+                showSector
+                  ? undefined
+                  : isPreparingSector
+                    ? "invisible absolute inset-0"
+                    : PAUSED_SCENE_CLASS
+              }
             >
               {SectorComponent}
             </div>
           )}
           {!villages && <Loader explanation="Loading data" />}
+          {villages &&
+            !isGlobal &&
+            !mapError &&
+            userData.status !== "TRAVEL" &&
+            (!showSector || !SectorComponent) && <SectorLoadingPlaceholder />}
           {showModal && globe && userData && targetSector !== null && (
             <Modal
               id="tutorial-global-travel"
@@ -1451,8 +1485,8 @@ function Travel() {
       </ContentBox>
       <div className="flex flex-wrap items-start justify-between gap-2 p-1">
         <div className="flex min-w-0 flex-wrap items-start gap-2">
-          {showSector && <JutsuLoadoutSelector size="small" label="Jutsu" />}
-          {showSector && <ItemLoadoutSelector size="small" label="Items" />}
+          {showSector && <JutsuLoadoutSelector size="small" label="Jutsu" compact />}
+          {showSector && <ItemLoadoutSelector size="small" label="Items" compact />}
         </div>
         {showSector && userData?.anbuId && autoAttackMode && (
           <div className="flex items-center font-semibold text-red-500 text-sm">
@@ -1921,6 +1955,26 @@ const RevealedPlayerCard = ({
     </div>
   );
 };
+
+/**
+ * Hides a mounted scene and moves it out of the viewport, so the renderer's intersection
+ * observer suspends its frame loop until the scene's tab is shown again.
+ */
+const PAUSED_SCENE_CLASS =
+  "pointer-events-none invisible absolute inset-0 -translate-x-[200vw] overflow-hidden";
+
+/** Holds the sector scene's space with its loading pill until its data and code arrive. */
+const SectorLoadingPlaceholder = () => (
+  <div className="flex min-h-60 items-center justify-center">
+    <div
+      role="status"
+      className="bg-background/95 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm shadow-md motion-reduce:[&_img]:animate-none"
+    >
+      <Loader noPadding size={20} />
+      <span>Loading world…</span>
+    </div>
+  </div>
+);
 
 // Alias the procedure so its action name is not interpreted as a React hook.
 const activateSensory = api.stealth.useSensory;
