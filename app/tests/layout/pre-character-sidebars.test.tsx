@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import {
   LayoutLeftSidebar,
@@ -100,20 +100,34 @@ describe("sidebars before character creation", () => {
     },
   );
 
-  it.each(variants)("retains account-load feedback and retry in %s", (variant) => {
-    const view = render(
-      <LayoutRightSidebarContent
-        variant={variant}
-        isSignedInLayout
-        accountState="error"
-        systems={[]}
-      />,
-    );
-    expect(view.getByText("We couldn't load your account.")).toBeTruthy();
-    expect(view.queryByRole("navigation", { name: "Explore Seichi" })).toBeNull();
-    fireEvent.click(view.getByRole("button", { name: "Try again" }));
-    expect(invalidate).toHaveBeenCalledTimes(1);
-  });
+  it.each(variants)(
+    "shows account-load feedback once, with a retry that reports progress, in %s",
+    async (variant) => {
+      let finish = () => {};
+      invalidate.mockImplementationOnce(
+        () => new Promise<void>((resolve) => (finish = resolve)),
+      );
+      const view = render(
+        <>
+          <LayoutLeftSidebar variant={variant} isSignedInLayout accountState="error" />
+          <LayoutRightSidebarContent
+            variant={variant}
+            isSignedInLayout
+            accountState="error"
+            systems={[]}
+          />
+        </>,
+      );
+      expect(view.getAllByText("We couldn't load your account.")).toHaveLength(1);
+      expect(view.queryByRole("navigation", { name: "Explore Seichi" })).toBeNull();
+      fireEvent.click(view.getByRole("button", { name: "Try again" }));
+      expect(invalidate).toHaveBeenCalledTimes(1);
+      const pending = view.getByRole("button", { name: "Trying again…" });
+      expect(pending.hasAttribute("disabled")).toBe(true);
+      await act(async () => finish());
+      expect(view.getByRole("button", { name: "Try again" })).toBeTruthy();
+    },
+  );
 
   it("keeps the existing sign-in panel for signed-out Classic visitors", () => {
     const view = render(

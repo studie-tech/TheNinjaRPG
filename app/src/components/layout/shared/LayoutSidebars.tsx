@@ -5,6 +5,7 @@ import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
 import { Bell, Bug, Eclipse, Link2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type React from "react";
+import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,6 +22,7 @@ import {
   IMG_LAYOUT_USERSBANNER_BOTTOM,
   IMG_LAYOUT_USERSBANNER_TOP,
   STRONGEST_USERS_COUNT,
+  type UserStatus,
 } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
 import { GameSettingsPopover, type GameSettingsUser } from "@/layout/GameSettings";
@@ -72,11 +74,23 @@ const RightSidebarLoadingSkeleton: React.FC<{ className?: string }> = ({
 
 const AccountLoadError: React.FC = () => {
   const utils = api.useUtils();
+  const [isRetrying, setIsRetrying] = useState(false);
   return (
     <div className="p-2 text-sm">
       <p>We couldn&apos;t load your account.</p>
-      <Button variant="outline" onClick={() => void utils.profile.getUser.invalidate()}>
-        Try again
+      <Button
+        variant="outline"
+        disabled={isRetrying}
+        onClick={async () => {
+          setIsRetrying(true);
+          try {
+            await utils.profile.getUser.invalidate();
+          } finally {
+            setIsRetrying(false);
+          }
+        }}
+      >
+        {isRetrying ? "Trying again…" : "Try again"}
       </Button>
     </div>
   );
@@ -282,7 +296,8 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
           className={layoutVariantClasses[variant].rightSidebarReservation}
         />
       )}
-      {accountState === "error" && <AccountLoadError />}
+      {/* The error and its retry live in the left column only, which every frame
+          also shows in its player sheet. */}
       <GithubStar />
     </>
   );
@@ -307,7 +322,7 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
   onThemeToggle,
 }) => {
   return (
-    <div className="flex flex-row items-center in-data-stacked-icons:flex-col in-data-stacked-icons:gap-1.5">
+    <div className="flex flex-row items-center gap-1 in-data-stacked-icons:flex-col in-data-stacked-icons:gap-1.5">
       {isSignedIn && (
         <span
           data-sidebar-keep-open="true"
@@ -325,11 +340,21 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
           />
         </span>
       )}
-      <Link href="/event" onClick={onEventClick} aria-label="Event Notifications">
-        <Bell className="mx-1 ml-2 in-data-stacked-icons:ml-1 h-6 w-6 rounded-full bg-blue-100 bg-opacity-80 p-1 text-slate-700 hover:bg-blue-300 hover:text-black xl:h-7 xl:w-7" />
+      <Link
+        href="/event"
+        onClick={onEventClick}
+        aria-label="Event Notifications"
+        className={SIGNED_IN_ICON_TARGET}
+      >
+        <Bell className={SIGNED_IN_ICON} />
       </Link>
-      <Link href="/help" id="tutorial-bugs" aria-label="Bugs">
-        <Bug className="mx-1 h-6 w-6 rounded-full bg-blue-100 bg-opacity-80 p-1 text-slate-700 hover:bg-blue-300 hover:text-black xl:h-7 xl:w-7" />
+      <Link
+        href="/help"
+        id="tutorial-bugs"
+        aria-label="Bugs"
+        className={SIGNED_IN_ICON_TARGET}
+      >
+        <Bug className={SIGNED_IN_ICON} />
       </Link>
       <GameSettingsPopover
         userData={userData}
@@ -338,10 +363,14 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
         section={userData ? "audio" : "all"}
       />
       {getGameLayout(variant).supportsColorMode && (
-        <Eclipse
-          className="mx-1 h-6 min-h-6 w-6 min-w-6 rounded-full bg-blue-100 bg-yellow-100 bg-opacity-80 p-1 text-slate-700 hover:cursor-pointer hover:bg-blue-300 hover:text-black xl:h-7 xl:min-h-7 xl:w-7 xl:min-w-7 dark:bg-blue-100"
+        <button
+          type="button"
+          aria-label="Toggle light and dark theme"
+          className={SIGNED_IN_ICON_TARGET}
           onClick={onThemeToggle}
-        />
+        >
+          <Eclipse className={SIGNED_IN_ICON} />
+        </button>
       )}
     </div>
   );
@@ -413,8 +442,11 @@ const RightSideBar: React.FC<RightSideBarProps> = ({
       <div className="theme-menu-grid mt-1 grid grid-cols-2 gap-3">
         {systems.map((system) => {
           const disabled = system.requireAwake && userData.status !== "AWAKE";
+          const reason = disabled
+            ? UNAVAILABLE_STATUS_LABELS[userData.status]
+            : undefined;
           return (
-            <Link key={system.href} href={system.href} id={system.id}>
+            <Link key={system.href} href={system.href} id={system.id} title={reason}>
               <Button
                 decoration={variantClasses.rightMenuDecoration}
                 className={cn(
@@ -425,7 +457,14 @@ const RightSideBar: React.FC<RightSideBarProps> = ({
                 )}
                 count={system.notificationCount}
               >
-                <div className="grow">{system.name}</div>
+                <div className="grow">
+                  {system.name}
+                  {reason && (
+                    <span className="block font-normal text-[0.75rem] leading-tight">
+                      {reason}
+                    </span>
+                  )}
+                </div>
                 <div>{system.icon}</div>
               </Button>
             </Link>
@@ -502,14 +541,15 @@ export const StrongestUsersBanner: React.FC = () => {
               className="hover:opacity-50"
             >
               <div
-                className={`relative top-2 left-8 grid w-[154px] max-w-[154px] grid-cols-12 items-center justify-center py-1 lg:left-10 lg:w-[200px] lg:max-w-[200px] ${i % 2 === 0 ? "bg-pink-900" : ""} bg-opacity-50 text-xs lg:text-base`}
+                className={`relative top-2 left-8 flex w-[154px] max-w-[154px] items-center gap-1 py-1 lg:left-10 lg:w-[200px] lg:max-w-[200px] ${i % 2 === 0 ? "bg-pink-900" : ""} bg-opacity-50 text-xs lg:text-base`}
               >
-                <p className="pl-2">{i + 1}</p>
-                <div className="col-span-2">
+                {/* A fixed rank cell keeps two-digit ranks clear of the avatar. */}
+                <p className="w-6 shrink-0 text-right tabular-nums">{i + 1}</p>
+                <div className="w-[26px] shrink-0 lg:w-[33px]">
                   <AvatarImage href={user.avatarLight} alt={user.username} size={100} />
                 </div>
-                <p className="col-span-5">{user.username}</p>
-                <p className="col-span-4">{user.rankedLp}</p>
+                <p className="min-w-0 flex-1 truncate">{user.username}</p>
+                <p className="shrink-0 pr-1 tabular-nums">{user.rankedLp}</p>
               </div>
             </Link>
           ))}
@@ -553,3 +593,20 @@ const shouldShowPublicContent = ({
   !userData &&
   (accountState === "create-character" ||
     (getGameLayout(variant).publicFrame === "game" && !isSignedInLayout));
+
+/** Why an awake-only menu entry is unavailable, shown on the entry itself. */
+const UNAVAILABLE_STATUS_LABELS: Partial<Record<UserStatus, string>> = {
+  HOSPITALIZED: "In hospital",
+  BATTLE: "In battle",
+  ASLEEP: "Asleep",
+  TRAVEL: "Travelling",
+  QUEUED: "Queued",
+};
+
+/** Phone-sized hit area around each header icon; the frames' desktop bars keep it compact. */
+const SIGNED_IN_ICON_TARGET =
+  "group/icon inline-flex items-center justify-center max-md:min-h-[44px] max-md:min-w-[44px]";
+
+/** The visible circle, in the dark chrome of the frames' other header controls. */
+const SIGNED_IN_ICON =
+  "h-6 w-6 rounded-full bg-slate-700/80 p-1 text-orange-50 group-hover/icon:bg-slate-600 group-hover/icon:text-white xl:h-7 xl:w-7";

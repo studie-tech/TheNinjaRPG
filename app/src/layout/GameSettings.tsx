@@ -538,14 +538,14 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
           aria-label={isSettingsTrigger ? "Game settings" : "Audio settings"}
           className={
             triggerClassName ??
-            "group/audio mx-1 inline-flex items-center justify-center rounded-full text-slate-700"
+            "group/audio inline-flex items-center justify-center rounded-full text-orange-50 max-md:min-h-[44px] max-md:min-w-[44px]"
           }
         >
           <span
             className={
               triggerClassName
                 ? undefined
-                : "relative inline-flex rounded-full bg-blue-100 bg-opacity-80 group-hover/audio:bg-blue-300 group-hover/audio:text-black"
+                : "relative inline-flex rounded-full bg-slate-700/80 group-hover/audio:bg-slate-600 group-hover/audio:text-white"
             }
           >
             {isSettingsTrigger ? (
