@@ -35,6 +35,7 @@ import {
   MIN_PARTY_PLAYERS,
   RetryQuestDelays,
 } from "@/drizzle/constants";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import ContentBox from "@/layout/ContentBox";
 import { DungeonCatalogue } from "@/layout/DungeonCatalogue";
 import { LabeledField } from "@/layout/LabeledField";
@@ -95,6 +96,10 @@ function DungeonEditor() {
   const allowed = !!user && canChangeContent(user.role);
   const [id, setId] = useState<string>();
   const [content, setContent] = useState<DungeonContent>(newDungeon());
+  // The draft as last loaded or saved; any difference is unsaved work worth guarding.
+  const [savedContent, setSavedContent] = useState(() => JSON.stringify(content));
+  const submittedContent = useRef<string | null>(null);
+  const unsavedGuard = useUnsavedChangesGuard(JSON.stringify(content) !== savedContent);
   const [tier, setTier] = useState(0);
   const [floor, setFloor] = useState(0);
   const [message, setMessage] = useState("");
@@ -118,6 +123,7 @@ function DungeonEditor() {
       showMutationToast(result);
       if (result.success && "id" in result) {
         setId(result.id);
+        if (submittedContent.current) setSavedContent(submittedContent.current);
         await Promise.all([
           definitions.refetch(),
           utils.coop.dungeon.getAvailable.invalidate(),
@@ -178,6 +184,7 @@ function DungeonEditor() {
       } else setMessage(issue.message);
       return;
     }
+    submittedContent.current = JSON.stringify(content);
     save.mutate({ id, content: parsed.data });
   };
   if (!user) return <Loader explanation="Loading content permissions" />;
@@ -191,21 +198,26 @@ function DungeonEditor() {
       subtitle="Player parties and solo companion squads"
       defaultBackHref="/manual"
     >
+      {unsavedGuard.dialog}
       {/* Keep the submitted draft selected until its save result supplies or confirms the ID. */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Button
           variant="secondary"
           disabled={save.isPending}
-          onClick={() => {
-            setId(undefined);
-            setContent(newDungeon());
-            // Reset local input drafts even when their default quantity is unchanged.
-            setDraftVersion((version) => version + 1);
-            setTier(0);
-            setFloor(0);
-            setMessage("");
-            setPanel("details");
-          }}
+          onClick={() =>
+            unsavedGuard.confirmDiscard(() => {
+              const fresh = newDungeon();
+              setId(undefined);
+              setContent(fresh);
+              setSavedContent(JSON.stringify(fresh));
+              // Reset local input drafts even when their default quantity is unchanged.
+              setDraftVersion((version) => version + 1);
+              setTier(0);
+              setFloor(0);
+              setMessage("");
+              setPanel("details");
+            })
+          }
         >
           New dungeon
         </Button>
@@ -215,12 +227,16 @@ function DungeonEditor() {
           onValueChange={(value) => {
             const row = definitions.data?.find((d) => d.id === value);
             if (!row) return;
-            setId(row.id);
-            setContent(dungeonContentSchema.parse(row.content));
-            setTier(0);
-            setFloor(0);
-            setMessage("");
-            setPanel("details");
+            unsavedGuard.confirmDiscard(() => {
+              const loaded = dungeonContentSchema.parse(row.content);
+              setId(row.id);
+              setContent(loaded);
+              setSavedContent(JSON.stringify(loaded));
+              setTier(0);
+              setFloor(0);
+              setMessage("");
+              setPanel("details");
+            });
           }}
         >
           <SelectTrigger aria-label="Edit existing dungeon" className="min-w-0 flex-1">

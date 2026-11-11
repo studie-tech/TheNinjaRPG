@@ -127,6 +127,7 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
           <>
             <PoolStatusBars pools={processedUser} status={processedUser.status} />
             <EditContent
+              guardUnsavedChanges
               schema={insertAiSchema}
               form={form as unknown as UseFormReturn<InsertAiSchema, any>}
               formData={formData}

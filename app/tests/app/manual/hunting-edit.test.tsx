@@ -6,6 +6,7 @@ import {
   useMutation,
 } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import type { ReactNode } from "react";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
@@ -82,9 +83,11 @@ it("uses server-assigned contract IDs when saving the habitat draft again", asyn
     defaultOptions: { mutations: { retry: false } },
   });
   const view = render(
-    <QueryClientProvider client={queryClient}>
-      <HuntingEditor />
-    </QueryClientProvider>,
+    <AppRouterContext.Provider value={{ push: vi.fn() } as never}>
+      <QueryClientProvider client={queryClient}>
+        <HuntingEditor />
+      </QueryClientProvider>
+    </AppRouterContext.Provider>,
   );
   const habitatPicker = view.getByRole("combobox", { name: "Edit existing habitat" });
   fireEvent.keyDown(habitatPicker, { key: "Enter" });

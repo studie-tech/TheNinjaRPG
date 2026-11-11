@@ -6,7 +6,7 @@ import { nanoid } from "nanoid";
 import type React from "react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { FieldValues, Path, PathValue, UseFormReturn } from "react-hook-form";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ import {
   type IMG_ORIENTATION,
   STARTER_VILLAGES,
 } from "@/drizzle/constants";
+import { UnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentAudioSelector from "@/layout/ContentAudioSelector";
 import ContentImage from "@/layout/ContentImage";
@@ -98,6 +99,7 @@ export const EditContent = <
   } = props;
   const [uploadingFields, setUploadingFields] = useState<string[]>([]);
   const isImageUploading = uploadingFields.length > 0;
+  const { isDirty } = useFormState({ control: form.control });
   const currentValues = form.getValues();
   const [targetingMethod, targetingRange] = useWatch({
     control: form.control,
@@ -282,6 +284,7 @@ export const EditContent = <
         }}
         className="grid grid-cols-1 items-start gap-1 md:grid-cols-2"
       >
+        {props.guardUnsavedChanges && <UnsavedChangesGuard isDirty={isDirty} />}
         {/* Asset Picker Dialog */}
         {assetPickerOpen && !submitLoading && (
           <Modal
@@ -2353,6 +2356,8 @@ interface EditContentProps<T, K, S extends FieldValues> {
   submitDisabled?: boolean;
   submitLoading?: boolean;
   submitLoadingText?: string;
+  /** Ask before links or the back button discard unsaved edits to this form. */
+  guardUnsavedChanges?: boolean;
 }
 
 interface EffectFormWrapperProps {

@@ -11,6 +11,7 @@ import { MultiSelect, type OptionType } from "@/components/ui/multi-select";
 import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { unwrapFieldSchema } from "@/layout/EditContent";
 import { SearchSelect } from "@/layout/SearchSelect";
 import type { ColumnDefinitionType } from "@/layout/Table";
@@ -180,6 +181,7 @@ export const MassEffectEditor = <
   const dirtyEntryIds = (entries ?? [])
     .filter((entry) => modified[entry.id])
     .map((entry) => entry.id);
+  const unsavedGuard = useUnsavedChangesGuard(dirtyEntryIds.length > 0);
 
   // Mutations
   const itemUpdate = api.item.update.useMutation({
@@ -296,14 +298,18 @@ export const MassEffectEditor = <
 
   if (selectedFields.length === 0) {
     return (
-      <p className="p-3 text-muted-foreground">
-        Pick one or more effect fields above to start editing.
-      </p>
+      <>
+        {unsavedGuard.dialog}
+        <p className="p-3 text-muted-foreground">
+          Pick one or more effect fields above to start editing.
+        </p>
+      </>
     );
   }
 
   return (
     <div ref={editorRef} className="flex flex-col gap-2" aria-busy={editorPending}>
+      {unsavedGuard.dialog}
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 pt-2">
         <p className="text-muted-foreground text-sm" aria-live="polite">
           {dirtyEntryIds.length === 0

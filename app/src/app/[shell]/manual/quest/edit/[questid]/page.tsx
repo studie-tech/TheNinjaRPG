@@ -275,6 +275,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
           </p>
         )}
         <EditContent
+          guardUnsavedChanges
           schema={QuestFormRawSchema}
           form={form as UseFormReturn<ZodQuestFormType>}
           formData={formData.filter((entry) => !String(entry.id).startsWith("reward_"))}

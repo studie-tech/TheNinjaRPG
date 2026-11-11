@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { MAP_SECTOR_ID_MAX } from "@/drizzle/constants";
 import { useDelayState } from "@/hooks/useDelayState";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -214,6 +215,11 @@ function SectorMapEditorContent() {
   useEffect(() => {
     if (!canEdit || !maps) return;
     if (autoLoadedSectorRef.current === sector) return;
+    // Unsaved JSON (an upload or edits) stays put while the sector number is corrected.
+    if (baseline && jsonText !== baseline.json) {
+      autoLoadedSectorRef.current = sector;
+      return;
+    }
     const published = maps.find((map) => map.status === "PUBLISHED");
     const latest = published ?? [...maps].sort((a, b) => b.version - a.version)[0];
     if (latest) {
@@ -233,7 +239,7 @@ function SectorMapEditorContent() {
       setPreview(null);
       setParseError("");
     }
-  }, [maps, sector, canEdit]);
+  }, [maps, sector, canEdit, baseline, jsonText]);
 
   const { mutate: previewMap, isPending: isPreviewing } =
     api.worldMap.previewTiledSectorMap.useMutation({
@@ -400,6 +406,12 @@ function SectorMapEditorContent() {
     }
   };
 
+  // Unsaved changes: the editor differs from what it was seeded with. Drives
+  // the status line, which action buttons are shown and the leave confirmation.
+  const isDirty =
+    baseline !== null && (jsonText !== baseline.json || name !== baseline.name);
+  const unsavedGuard = useUnsavedChangesGuard(isDirty);
+
   if (!userData) return <Loader explanation="Loading userdata" />;
 
   if (!canEdit) {
@@ -420,10 +432,6 @@ function SectorMapEditorContent() {
   const replacesLiveMap = publishedMap
     ? `, replacing the live v${publishedMap.version}`
     : ", replacing its current live map";
-  // Unsaved changes: the editor differs from what it was seeded with. Drives
-  // the status line and which action buttons are relevant to show at all.
-  const isDirty =
-    baseline !== null && (jsonText !== baseline.json || name !== baseline.name);
   const statusText = (() => {
     if (!sourceLabel) return "";
     if (sourceLabel.kind === "upload") {
@@ -443,6 +451,7 @@ function SectorMapEditorContent() {
 
   return (
     <>
+      {unsavedGuard.dialog}
       <ContentBox
         title="Sector Maps"
         subtitle="Tiled imports"
@@ -730,7 +739,9 @@ function SectorMapEditorContent() {
                   type="button"
                   size="sm"
                   variant="secondary"
-                  onClick={() => void handleLoadMap(map.id)}
+                  onClick={() =>
+                    unsavedGuard.confirmDiscard(() => void handleLoadMap(map.id))
+                  }
                   disabled={busy}
                 >
                   <FileJson className="mr-1 h-4 w-4" />

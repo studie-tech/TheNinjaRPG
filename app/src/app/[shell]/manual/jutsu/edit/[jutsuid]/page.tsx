@@ -112,6 +112,7 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
               rank to H. Future parent edits update all linked reskins automatically.
             </p>
             <EditContent
+              guardUnsavedChanges
               schema={JutsuValidatorRawSchema}
               form={form as unknown as UseFormReturn<ZodJutsuType, any>}
               formData={formData}

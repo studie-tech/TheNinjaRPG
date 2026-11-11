@@ -17,6 +17,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { HUNTING_CONTRACT_DEFAULTS, HUNTING_RANKS } from "@/drizzle/constants";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { Confirm } from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { LabeledField } from "@/layout/LabeledField";
@@ -37,6 +38,9 @@ export default function HuntingEditor() {
   const utils = api.useUtils();
   const [id, setId] = useState<string>();
   const [content, setContent] = useState<HuntingHabitatContent>(newHabitat);
+  // The habitat as last loaded or saved; any difference is unsaved work worth guarding.
+  const [savedContent, setSavedContent] = useState(() => JSON.stringify(content));
+  const unsavedGuard = useUnsavedChangesGuard(JSON.stringify(content) !== savedContent);
   const [message, setMessage] = useState("");
   const form = useRef<HTMLDivElement>(null);
   const definitions = api.hunting.getAll.useQuery(undefined, { enabled: allowed });
@@ -48,6 +52,7 @@ export default function HuntingEditor() {
       if (r.success && "id" in r) {
         setId(r.id);
         setContent(r.content);
+        setSavedContent(JSON.stringify(r.content));
         await Promise.all([
           definitions.refetch(),
           utils.hunting.getBoard.invalidate(),
@@ -61,8 +66,10 @@ export default function HuntingEditor() {
     onSuccess: async (r) => {
       setMessage(r.message);
       if (r.success) {
+        const fresh = newHabitat();
         setId(undefined);
-        setContent(newHabitat());
+        setContent(fresh);
+        setSavedContent(JSON.stringify(fresh));
         await Promise.all([
           definitions.refetch(),
           utils.hunting.getBoard.invalidate(),
@@ -107,16 +114,21 @@ export default function HuntingEditor() {
       subtitle="Habitats, creatures, contracts and materials"
       defaultBackHref="/manual"
     >
+      {unsavedGuard.dialog}
       <div className="space-y-4" ref={form}>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="secondary"
             disabled={pending}
-            onClick={() => {
-              setId(undefined);
-              setContent(newHabitat());
-              setMessage("");
-            }}
+            onClick={() =>
+              unsavedGuard.confirmDiscard(() => {
+                const fresh = newHabitat();
+                setId(undefined);
+                setContent(fresh);
+                setSavedContent(JSON.stringify(fresh));
+                setMessage("");
+              })
+            }
           >
             New habitat
           </Button>
@@ -126,9 +138,12 @@ export default function HuntingEditor() {
             onValueChange={(value) => {
               const h = definitions.data?.find((h) => h.id === value);
               if (h) {
-                setId(h.id);
-                setContent(h.content);
-                setMessage("");
+                unsavedGuard.confirmDiscard(() => {
+                  setId(h.id);
+                  setContent(h.content);
+                  setSavedContent(JSON.stringify(h.content));
+                  setMessage("");
+                });
               }
             }}
           >

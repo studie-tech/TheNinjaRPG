@@ -98,6 +98,7 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
         {!loading && (
           <>
             <EditContent
+              guardUnsavedChanges
               schema={BloodlineValidator}
               form={form as unknown as UseFormReturn<ZodBloodlineType, any>}
               formData={formData}

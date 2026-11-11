@@ -130,6 +130,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
         }
       >
         <EditContent
+          guardUnsavedChanges
           schema={ItemValidatorRawSchema}
           form={form as unknown as UseFormReturn<ZodItemType, any>}
           formData={formData}

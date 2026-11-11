@@ -6,6 +6,7 @@ import {
   useMutation,
 } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import type { ReactNode } from "react";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
@@ -156,6 +157,9 @@ it.each(["", "11", "1.5"])(
     fireEvent.change(view.getByLabelText("Name"), { target: { value: "Discard me" } });
     fireEvent.input(view.getByLabelText("Tokens"), { target: { value: "" } });
     fireEvent.click(view.getByRole("button", { name: "New dungeon" }));
+    // The renamed draft is unsaved, so starting over asks first.
+    expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("Discard me");
+    fireEvent.click(await view.findByRole("button", { name: "Discard changes" }));
     expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("");
     expect((view.getByLabelText("Tokens") as HTMLInputElement).value).toBe("0");
     expect(
@@ -453,9 +457,11 @@ function mountEditor({
     defaultOptions: { mutations: { retry: false } },
   });
   const view = render(
-    <QueryClientProvider client={queryClient}>
-      <DungeonEditor />
-    </QueryClientProvider>,
+    <AppRouterContext.Provider value={{ push: vi.fn() } as never}>
+      <QueryClientProvider client={queryClient}>
+        <DungeonEditor />
+      </QueryClientProvider>
+    </AppRouterContext.Provider>,
   );
   return { view, queryClient };
 }
