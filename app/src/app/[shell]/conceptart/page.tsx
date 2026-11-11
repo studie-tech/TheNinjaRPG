@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   BellOff,
   ImageIcon,
+  ImageOff,
   ImagePlus,
   Loader2,
   Sparkles,
@@ -55,9 +56,12 @@ import { COST_CONCEPT_IMAGE, COST_CONCEPT_VIDEO } from "@/drizzle/constants";
 import ConceptImage from "@/layout/ConceptImage";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
+import { EmptyState } from "@/layout/EmptyState";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
+import Loader from "@/layout/Loader";
 import { useInfinitePagination } from "@/libs/pagination";
+import { cn } from "@/libs/shadui";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { getBanOrSilenceRestriction } from "@/utils/permissions";
 import { useUserData } from "@/utils/UserContext";
@@ -183,7 +187,12 @@ export default function ConceptArt() {
   });
 
   // Fetch data
-  const { data, fetchNextPage, hasNextPage } = api.conceptart.getAll.useInfiniteQuery(
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isPending: isListPending,
+  } = api.conceptart.getAll.useInfiniteQuery(
     { only_own, sort, time_frame, limit: 50 },
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -236,12 +245,20 @@ export default function ConceptArt() {
       subtitle="Create AI art"
       topRightContent={
         <div className="flex flex-row items-center gap-1">
-          <div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-pressed={only_own}
+            aria-label="Show only my art"
+            hoverText="Show only my art"
+            onClick={() => filterForm.setValue("only_own", !only_own)}
+          >
             <User
-              className={`h-6 w-6 hover:cursor-pointer ${only_own ? "text-orange-500" : ""}`}
-              onClick={() => filterForm.setValue("only_own", !only_own)}
+              aria-hidden
+              className={cn("h-6 w-6", only_own && "text-orange-500")}
             />
-          </div>
+          </Button>
           <Select
             onValueChange={(e) => filterForm.setValue("sort", e as SortOption)}
             defaultValue={sort}
@@ -352,6 +369,45 @@ export default function ConceptArt() {
         </div>
       }
     >
+      {isListPending && <Loader explanation="Loading concept art" />}
+      {visibleImages?.length === 0 && (
+        <EmptyState
+          icon={ImageOff}
+          title={only_own ? "You have not created any art here yet" : "No art here yet"}
+          description={[
+            time_frame === "All Time"
+              ? "Nothing has been posted yet."
+              : "Nothing was posted in the selected period.",
+            userData && !conceptArtCreateRestriction
+              ? "Press New to create your own."
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          action={
+            <>
+              {time_frame !== "All Time" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => filterForm.setValue("time_frame", "All Time")}
+                >
+                  Show all time
+                </Button>
+              )}
+              {only_own && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => filterForm.setValue("only_own", false)}
+                >
+                  Show everyone&apos;s art
+                </Button>
+              )}
+            </>
+          }
+        />
+      )}
       <div className="relative grid w-full grow grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
         {visibleImages?.map((image, i) => {
           return (

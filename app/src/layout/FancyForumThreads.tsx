@@ -7,6 +7,7 @@ import NotFoundPage from "@/components/layout/NotFoundPage";
 import { Button } from "@/components/ui/button";
 import { FANCY_FORUM_THREADS_PER_PAGE } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
+import { EmptyState } from "@/layout/EmptyState";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import type { InfiniteThreads } from "@/libs/forum";
@@ -66,12 +67,12 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
       padding={false}
       topRightContent={
         props.canPost && (
-          <Link href={`/forum/${board.id}`}>
-            <Button id="conversation">
+          <Button asChild id="conversation">
+            <Link href={`/forum/${board.id}`}>
               <SquarePen className="mr-2 h-5 w-5" />
               New
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         )
       }
     >
@@ -87,9 +88,15 @@ export const FancyForumThreads: React.FC<FancyForumThreadsProps> = (props) => {
       )}
       <div className="grid grid-cols-1">
         {allThreads.length === 0 ? (
-          <div className="m-2 p-6 text-center text-muted-foreground">
-            <p>No threads yet. Be the first to start a conversation!</p>
-          </div>
+          <EmptyState
+            className="m-2"
+            title="No threads yet"
+            description={
+              props.canPost
+                ? "Be the first to start a conversation!"
+                : "New posts from staff will appear here."
+            }
+          />
         ) : (
           allThreads.map((thread, i) => {
             const post = thread.posts[0];

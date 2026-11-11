@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing, SquarePen, Trash2, Users } from "lucide-react";
+import { BellRing, MessagesSquare, SquarePen, Trash2, Users } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, startTransition, useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -9,6 +9,7 @@ import { useInboxConversations } from "@/hooks/useConversationCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import Conversation from "@/layout/Conversation";
+import { EmptyState } from "@/layout/EmptyState";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { NewConversationPrompt } from "@/layout/NewConversationPrompt";
@@ -146,6 +147,26 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
             </li>
 
             <hr />
+            {filteredConversations?.length === 0 && (
+              <li className="p-3">
+                <EmptyState
+                  icon={MessagesSquare}
+                  title="No conversations yet"
+                  description="Private conversations with other players appear here."
+                  action={
+                    <NewConversationPrompt
+                      setSelectedConvo={setSelectedConvo}
+                      newButton={
+                        <span className={buttonVariants()}>
+                          <SquarePen className="mr-2 h-5 w-5" />
+                          Start a conversation
+                        </span>
+                      }
+                    />
+                  }
+                />
+              </li>
+            )}
             {filteredConversations?.map((convo) => {
               const isExiting = isExitingConversation && exitingConvoId === convo.id;
               // Raid chat membership follows the raid queue, so the server always
