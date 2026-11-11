@@ -27,7 +27,7 @@ import { getPreventTypeName, getStatTypeLabels } from "@/libs/combat/util";
 import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
 import { getFarmPlantExperience } from "@/libs/farming";
 import { masteryRewardLabels } from "@/libs/masteryRewards";
-import { getRewardArray } from "@/libs/objectives";
+import { getQuestRewardSummary } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
 import { parseHtml } from "@/utils/parse";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
@@ -387,7 +387,8 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   const imageExtra = props.imageExtra;
 
   // Define rewards from quests if they are there
-  const rewards = "content" in item ? getRewardArray(item.content.reward) : [];
+  const rewardSummary =
+    "content" in item && item.content ? getQuestRewardSummary(item.content) : undefined;
   return (
     <div className="mb-3 flex flex-row items-center rounded-lg border bg-popover p-2 align-middle shadow-sm">
       {!hideImage && <div className="mx-3 hidden basis-1/3 md:block">{image}</div>}
@@ -746,9 +747,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               {"inArena" in item &&
                 "isSummon" in item &&
                 "isEvent" in item &&
-                "inShrines" in item && (
+                "inShrines" in item &&
+                Boolean(
+                  item.inArena || item.isSummon || item.isEvent || item.inShrines,
+                ) && (
                   <p>
-                    <b>Classification:</b>
+                    <b>Classification</b>:{" "}
                     {[
                       item.inArena && "Arena",
                       item.isSummon && "Summon",
@@ -936,9 +940,9 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     <b>Tier Level</b>: {item.tierLevel}
                   </p>
                 )}
-              {"content" in item && item.content && (
+              {rewardSummary && (
                 <div className="col-span-2">
-                  <b>Reward:</b> {rewards.join(", ")}
+                  <b>{rewardSummary.label}</b>: {rewardSummary.rewards.join(", ")}
                 </div>
               )}
               {"cost" in item && item.cost > 0 && (
@@ -1316,15 +1320,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                             </p>
                           )}
                         {"reward_money" in parsedEffect &&
-                          parsedEffect.reward_money &&
-                          parsedEffect.reward_money > 0 && (
+                          (parsedEffect.reward_money ?? 0) > 0 && (
                             <p>
                               <b>Reward Money</b>: {parsedEffect.reward_money}
                             </p>
                           )}
                         {"reward_reputation" in parsedEffect &&
-                          parsedEffect.reward_reputation &&
-                          parsedEffect.reward_reputation > 0 && (
+                          (parsedEffect.reward_reputation ?? 0) > 0 && (
                             <p>
                               <b>Reward Reputation</b>: {parsedEffect.reward_reputation}
                             </p>
@@ -1351,29 +1353,25 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                             </p>
                           )}
                         {"reward_tokens" in parsedEffect &&
-                          parsedEffect.reward_tokens &&
-                          parsedEffect.reward_tokens > 0 && (
+                          (parsedEffect.reward_tokens ?? 0) > 0 && (
                             <p>
                               <b>Reward Tokens</b>: {parsedEffect.reward_tokens}
                             </p>
                           )}
                         {"reward_prestige" in parsedEffect &&
-                          parsedEffect.reward_prestige &&
-                          parsedEffect.reward_prestige > 0 && (
+                          (parsedEffect.reward_prestige ?? 0) > 0 && (
                             <p>
                               <b>Reward Prestige</b>: {parsedEffect.reward_prestige}
                             </p>
                           )}
                         {"reward_clanpoints" in parsedEffect &&
-                          parsedEffect.reward_clanpoints &&
-                          parsedEffect.reward_clanpoints > 0 && (
+                          (parsedEffect.reward_clanpoints ?? 0) > 0 && (
                             <p>
                               <b>Reward Clanpoints</b>: {parsedEffect.reward_clanpoints}
                             </p>
                           )}
                         {"reward_anbupoints" in parsedEffect &&
-                          parsedEffect.reward_anbupoints &&
-                          parsedEffect.reward_anbupoints > 0 && (
+                          (parsedEffect.reward_anbupoints ?? 0) > 0 && (
                             <p>
                               <b>Reward Anbu Points</b>:{" "}
                               {parsedEffect.reward_anbupoints}
@@ -1387,26 +1385,30 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                             </p>
                           )}
                         {"reward_exp" in parsedEffect &&
-                          parsedEffect.reward_exp &&
-                          parsedEffect.reward_exp > 0 && (
+                          (parsedEffect.reward_exp ?? 0) > 0 && (
                             <p>
                               <b>Reward Exp</b>: {parsedEffect.reward_exp}
                             </p>
                           )}
                         {"reward_sage_mastery_experience" in parsedEffect &&
-                          parsedEffect.reward_sage_mastery_experience &&
-                          parsedEffect.reward_sage_mastery_experience > 0 && (
+                          (parsedEffect.reward_sage_mastery_experience ?? 0) > 0 && (
                             <p>
                               <b>Reward Sage Mode Exp</b>:{" "}
                               {parsedEffect.reward_sage_mastery_experience.toLocaleString()}
                             </p>
                           )}
                         {"reward_seichi_silver" in parsedEffect &&
-                          parsedEffect.reward_seichi_silver &&
-                          parsedEffect.reward_seichi_silver > 0 && (
+                          (parsedEffect.reward_seichi_silver ?? 0) > 0 && (
                             <p>
                               <b>Reward Seichi Silver</b>:{" "}
                               {parsedEffect.reward_seichi_silver}
+                            </p>
+                          )}
+                        {"reward_skillpoints" in parsedEffect &&
+                          (parsedEffect.reward_skillpoints ?? 0) > 0 && (
+                            <p>
+                              <b>Reward Skill Points</b>:{" "}
+                              {parsedEffect.reward_skillpoints}
                             </p>
                           )}
                         {"reward_hunter_items" in parsedEffect &&

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { getRewardArray } from "@/libs/objectives";
+import { getQuestRewardSummary, getRewardArray } from "@/libs/objectives";
 import { hasReward, ObjectiveReward } from "@/validators/rewards";
 
 describe("getRewardArray sage mastery experience", () => {
@@ -17,5 +17,36 @@ describe("hasReward reward_sage_modes", () => {
       true,
     );
     expect(hasReward(ObjectiveReward.parse({ reward_sage_modes: [] }))).toBe(false);
+  });
+});
+
+describe("getQuestRewardSummary", () => {
+  type Content = Parameters<typeof getQuestRewardSummary>[0];
+
+  it("shows the completion reward when it grants anything", () => {
+    const content = {
+      reward: { reward_money: 100 },
+      objectives: [{ reward_exp: 5 }],
+    } as unknown as Content;
+    expect(getQuestRewardSummary(content)).toEqual({
+      label: "Reward",
+      rewards: ["100 ryo"],
+    });
+  });
+
+  it("summarises objective rewards when the completion reward is empty", () => {
+    const content = {
+      reward: {},
+      objectives: [{ reward_money: 50 }, { reward_exp: 5 }],
+    } as unknown as Content;
+    expect(getQuestRewardSummary(content)).toEqual({
+      label: "Objective rewards",
+      rewards: ["50 ryo", "5 exp"],
+    });
+  });
+
+  it("returns undefined when nothing is granted", () => {
+    const content = { reward: {}, objectives: [{}] } as unknown as Content;
+    expect(getQuestRewardSummary(content)).toBeUndefined();
   });
 });

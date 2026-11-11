@@ -379,6 +379,25 @@ export const getRewardArray = (reward?: QuestRewardType) => {
 };
 
 /**
+ * The reward row shown on a quest card: the completion reward when it grants anything,
+ * otherwise the rewards earned along its objectives, or undefined when neither grants any.
+ */
+export const getQuestRewardSummary = (content: {
+  reward?: QuestRewardType;
+  objectives?: AllObjectivesType[];
+}): { label: string; rewards: string[] } | undefined => {
+  const rewards = getRewardArray(content.reward);
+  if (rewards.length > 0) return { label: "Reward", rewards };
+  const objectiveRewards = (content.objectives ?? []).flatMap((objective) =>
+    getRewardArray(objective),
+  );
+  if (objectiveRewards.length > 0) {
+    return { label: "Objective rewards", rewards: objectiveRewards };
+  }
+  return undefined;
+};
+
+/**
  * Preview direct and packaged rewards while keeping invalid editor drafts recoverable.
  * @returns A comma-separated summary, an invalid-draft message, or null for empty rewards.
  */
