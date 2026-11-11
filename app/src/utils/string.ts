@@ -48,19 +48,30 @@ export const formatPercent = (value: number | null) =>
   value == null ? "—" : `${value.toFixed(1)}%`;
 
 /**
- * Plain preview of stored rich text: tags become spaces, common entities are decoded in one
- * pass and whitespace collapses. A light client stand-in for `htmlToPlainText`, which pulls
+ * Plain preview of stored rich text: block boundaries become sentence breaks (". " unless the
+ * block already ends in punctuation), other tags become spaces, common entities are decoded in
+ * one pass and whitespace collapses. A light client stand-in for `htmlToPlainText`, which pulls
  * sanitize-html into the bundle. Decoded text can contain `<`: render it as text, never as HTML.
  */
 export const stripHtmlPreview = (html: string | null) =>
   (html ?? "")
+    .replace(PREVIEW_BLOCK_BOUNDARY, "\u0000")
     .replace(/<[^>]*>/g, " ")
     .replace(
       /&(?:nbsp|amp|lt|gt|quot|#39);/g,
       (entity) => PREVIEW_ENTITIES[entity] ?? entity,
     )
-    .replace(/\s+/g, " ")
-    .trim();
+    .split("\u0000")
+    .map((block) => block.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .reduce(
+      (text, block) =>
+        text ? `${text}${/[.!?:;…]["')\]]?$/.test(text) ? " " : ". "}${block}` : block,
+      "",
+    );
+
+/** Closing block tags, which separate sentences in a preview. */
+const PREVIEW_BLOCK_BOUNDARY = /<\/(?:p|div|h[1-6]|li|blockquote|pre|tr|ul|ol)\s*>/gi;
 
 const PREVIEW_ENTITIES: Record<string, string> = {
   "&nbsp;": " ",

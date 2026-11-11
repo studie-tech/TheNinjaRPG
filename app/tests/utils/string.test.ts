@@ -4,8 +4,22 @@ import { stripHtmlPreview } from "@/utils/string";
 describe("stripHtmlPreview", () => {
   it("separates block text and collapses whitespace", () => {
     expect(stripHtmlPreview("<p>Line one</p>\n<p>Line  two</p>")).toBe(
-      "Line one Line two",
+      "Line one. Line two",
     );
+  });
+
+  it("turns a heading into its own sentence", () => {
+    expect(
+      stripHtmlPreview("<h2>The Hunt</h2><p>Track the beast.</p><p>Return!</p>"),
+    ).toBe("The Hunt. Track the beast. Return!");
+  });
+
+  it("keeps existing punctuation and inline tags inside a sentence", () => {
+    expect(
+      stripHtmlPreview(
+        "<p>Ready?</p><p>Go <b>now</b><br>quickly</p><ul><li>a</li></ul>",
+      ),
+    ).toBe("Ready? Go now quickly. a");
   });
 
   it("decodes the entities sanitized content carries", () => {

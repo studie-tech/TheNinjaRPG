@@ -5,6 +5,7 @@ import {
   ArrowDown,
   ArrowRight,
   ArrowUp,
+  ArrowUpDown,
   BookOpen,
   Briefcase,
   ChevronDown,
@@ -28,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -59,7 +61,7 @@ import {
   buildDashboardCatalogue,
   type DashboardCatalogueEntry,
   dashboardContentActionLabel,
-  dashboardContentGroupLabels,
+  dashboardContentBadgeLabel,
   dashboardContentHref,
   dashboardLevelPercent,
   dashboardLevelProgress,
@@ -88,6 +90,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
   const utils = api.useUtils();
   const { sectorVillage, isLoading: isLoadingSector } = useSectorVillage(userData);
   const [showAllContent, setShowAllContent] = useState(false);
+  const [isEditingLayout, setIsEditingLayout] = useState(false);
   const [sectionOrder, setSectionOrder] = useState<DashboardSectionId[]>([
     ...dashboardSections,
   ]);
@@ -308,11 +311,6 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
       content: (
         <>
           <div className="rounded-md border bg-card px-4">
-            {claimsLoading && (
-              <p className="border-t py-3 text-muted-foreground text-sm first:border-t-0">
-                Checking the streak, the bank, and raids...
-              </p>
-            )}
             {streaks.isError && (
               <div className="border-t py-3 first:border-t-0">
                 <QueryError
@@ -711,10 +709,18 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
                 </Link>
               )}
             </div>
-            {!claimsLoading && !claimsFailed && !hasCollectible && (
+            {/* Loading and the empty result share one slot so the rows above stay put. */}
+            {claimsLoading ? (
               <p className="border-t py-3 text-muted-foreground text-sm">
-                Nothing to collect from the streak, the bank, or raids.
+                Checking the streak, the bank, and raids...
               </p>
+            ) : (
+              !claimsFailed &&
+              !hasCollectible && (
+                <p className="border-t py-3 text-muted-foreground text-sm">
+                  Nothing to collect from the streak, the bank, or raids.
+                </p>
+              )
             )}
           </div>
         </>
@@ -752,7 +758,15 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
       content: (
         <>
           {dashboard.isLoading && catalogue.length === 0 ? (
-            <Loader explanation="Loading available content..." />
+            <div
+              className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+              role="status"
+              aria-label="Loading available content"
+            >
+              {[0, 1, 2, 3].map((index) => (
+                <ContentCardSkeleton key={index} />
+              ))}
+            </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {previewContent.map((entry) => (
@@ -786,7 +800,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
       heading: (
         <SectionHeader
           eyebrow="Your logbook"
-          title="In progress"
+          title="Active quests"
           id="progress-heading"
         />
       ),
@@ -862,13 +876,30 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
   };
   return (
     <div className="space-y-8 p-3 sm:p-4">
+      <h1 className="sr-only">Dashboard</h1>
       {sectionOrder.map((id, index) => (
         <DashboardSection
           key={id}
           id={id}
           heading={sections[id].heading}
           action={sections[id].action}
-          settings={index === 0 ? settings : null}
+          settings={
+            index === 0 ? (
+              <>
+                <Button
+                  variant={isEditingLayout ? "default" : "ghost"}
+                  size={isEditingLayout ? "sm" : "icon"}
+                  aria-pressed={isEditingLayout}
+                  aria-label={isEditingLayout ? undefined : "Reorder sections"}
+                  onClick={() => setIsEditingLayout(!isEditingLayout)}
+                >
+                  {isEditingLayout ? "Done" : <ArrowUpDown className="h-4 w-4" />}
+                </Button>
+                {settings}
+              </>
+            ) : null
+          }
+          isEditingLayout={isEditingLayout}
           onMove={(direction) => moveSection(id, direction)}
           canMoveUp={index > 0}
           canMoveDown={index < sectionOrder.length - 1}
@@ -886,6 +917,7 @@ function DashboardSection({
   heading,
   action,
   settings,
+  isEditingLayout,
   onMove,
   canMoveUp,
   canMoveDown,
@@ -895,6 +927,8 @@ function DashboardSection({
   heading: React.ReactNode;
   action: React.ReactNode;
   settings?: React.ReactNode;
+  /** Reorder arrows show only while the player is rearranging the layout. */
+  isEditingLayout: boolean;
   onMove: (direction: -1 | 1) => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
@@ -911,24 +945,28 @@ function DashboardSection({
         <div className="min-w-0">{heading}</div>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {action}
-          <Button
-            variant="ghost"
-            size="icon"
-            disabled={!canMoveUp}
-            onClick={() => onMove(-1)}
-            aria-label={`Move ${labels[id]} up`}
-          >
-            <ArrowUp className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            disabled={!canMoveDown}
-            onClick={() => onMove(1)}
-            aria-label={`Move ${labels[id]} down`}
-          >
-            <ArrowDown className="h-4 w-4" />
-          </Button>
+          {isEditingLayout && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={!canMoveUp}
+                onClick={() => onMove(-1)}
+                aria-label={`Move ${labels[id]} up`}
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={!canMoveDown}
+                onClick={() => onMove(1)}
+                aria-label={`Move ${labels[id]} down`}
+              >
+                <ArrowDown className="h-4 w-4" />
+              </Button>
+            </>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -1151,7 +1189,10 @@ function ElapsedMeter({
   return <Progress value={progress} className="mt-1.5 h-1.5" />;
 }
 
-/** Present board or travel actions with ban precedence in the restriction label. */
+/**
+ * Present board or travel actions with ban precedence in the restriction label. Phones get a
+ * compact row (thumbnail, title, action) so the catalogue does not push the logbook far down.
+ */
 function ContentCard({
   entry,
   isBanned,
@@ -1161,64 +1202,94 @@ function ContentCard({
 }) {
   const destination = dashboardContentHref(entry);
   const actionLabel = dashboardContentActionLabel(entry);
+  const badgeLabel = dashboardContentBadgeLabel(entry);
   return (
-    <Card className="group overflow-hidden">
-      <div className="relative aspect-[16/7] overflow-hidden bg-muted">
+    <Card className="group flex flex-row overflow-hidden sm:flex-col">
+      <div className="relative w-20 shrink-0 overflow-hidden bg-muted sm:aspect-[16/7] sm:w-full">
         {entry.image ? (
           <Image
             src={entry.image}
             alt=""
             width={640}
             height={280}
-            className="h-full w-full object-cover object-center"
+            className="absolute inset-0 h-full w-full object-cover object-center"
           />
         ) : (
           <div className="flex h-full items-center justify-center">
-            <BookOpen className="h-10 w-10 text-muted-foreground" />
+            <BookOpen className="h-6 w-6 text-muted-foreground sm:h-10 sm:w-10" />
           </div>
         )}
       </div>
-      <CardHeader className="pb-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{dashboardContentGroupLabels[entry.category]}</Badge>
-          {entry.availability !== "travel" && (
-            <Badge
-              variant="outline"
-              className={cn(
-                entry.availability === "available" && "border-green-500 text-green-500",
-              )}
-            >
-              {entry.availability === "available" ? "Available here" : "View only"}
-            </Badge>
-          )}
-        </div>
-        <CardTitle className="text-base">{entry.name}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2 text-sm">
-        <p className="line-clamp-3 text-muted-foreground">
-          {stripHtmlPreview(entry.description) || "No description has been published."}
-        </p>
-        <p className="flex items-center gap-1 text-xs">
-          <MapPin className="h-3.5 w-3.5" /> {entry.location}
-        </p>
-        {entry.endsAt && (
-          <p className="text-muted-foreground text-xs">
-            Available until {new Date(entry.endsAt).toLocaleString()}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <CardHeader className="p-3 pb-1 sm:p-6 sm:pb-2">
+          <div className="flex h-6 items-center gap-2 overflow-hidden">
+            {badgeLabel && (
+              <Badge variant="outline" className="shrink-0">
+                {badgeLabel}
+              </Badge>
+            )}
+            {entry.availability !== "travel" && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "shrink-0",
+                  entry.availability === "available" &&
+                    "border-green-700 text-green-700 dark:border-green-400 dark:text-green-400",
+                )}
+              >
+                {entry.availability === "available" ? "Available here" : "View only"}
+              </Badge>
+            )}
+          </div>
+          <CardTitle className="text-base">{entry.name}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2 p-3 pt-0 text-sm sm:p-6 sm:pt-0">
+          <p className="hidden text-muted-foreground sm:line-clamp-3">
+            {stripHtmlPreview(entry.description) ||
+              "No description has been published."}
           </p>
-        )}
-        <RowAction
-          href={destination}
-          icon={entry.availability === "travel" ? MapPin : ArrowRight}
-          restriction={entry.availabilityReason}
-          restrictionLabel={
-            entry.availability === "travel" && !isBanned
-              ? "Must be awake"
-              : "Cannot start quests"
-          }
-        >
-          {actionLabel}
-        </RowAction>
-      </CardContent>
+          <p className="flex items-center gap-1 text-xs">
+            <MapPin className="h-3.5 w-3.5" /> {entry.location}
+          </p>
+          {entry.endsAt && (
+            <p className="text-muted-foreground text-xs">
+              Available until {new Date(entry.endsAt).toLocaleString()}
+            </p>
+          )}
+          <RowAction
+            href={destination}
+            icon={entry.availability === "travel" ? MapPin : ArrowRight}
+            restriction={entry.availabilityReason}
+            restrictionLabel={
+              entry.availability === "travel" && !isBanned
+                ? "Must be awake"
+                : "Cannot start quests"
+            }
+          >
+            {actionLabel}
+          </RowAction>
+        </CardContent>
+      </div>
+    </Card>
+  );
+}
+
+/** Placeholder with the card's layout at each breakpoint, so loading does not shift the page. */
+function ContentCardSkeleton() {
+  return (
+    <Card className="flex flex-row overflow-hidden sm:flex-col" aria-hidden="true">
+      <Skeleton className="w-20 shrink-0 rounded-none sm:aspect-[16/7] sm:w-full" />
+      <div className="flex min-w-0 flex-1 flex-col gap-2 p-3 sm:p-6">
+        <Skeleton className="h-6 w-24" />
+        <Skeleton className="h-5 w-3/4" />
+        <div className="hidden space-y-1.5 sm:block">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
+        <Skeleton className="h-4 w-28" />
+        <Skeleton className="h-8 w-full" />
+      </div>
     </Card>
   );
 }
