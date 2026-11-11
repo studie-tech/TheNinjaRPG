@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Plus, Tag, Users } from "lucide-react";
+import { AlertCircle, Loader2, Plus, Tag, Users } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import SupportTicketFiltering, {
   useFiltering as useSupportTicketFiltering,
 } from "@/layout/SupportTicketFiltering";
 import { useInfinitePagination } from "@/libs/pagination";
+import { cn } from "@/libs/shadui";
 import { getCategoryColor, getPriorityColor, getStatusColor } from "@/libs/support";
 import { getStatusIcon } from "@/libs/supportIcons";
 import { parseHtml } from "@/utils/parse";
@@ -34,7 +35,7 @@ export default function SupportPage() {
   const isStaff = isStaffRole(userData?.role);
 
   // Query for tickets
-  const { data, isFetching, fetchNextPage, hasNextPage } =
+  const { data, isPlaceholderData, isFetchingNextPage, fetchNextPage, hasNextPage } =
     api.support.getTickets.useInfiniteQuery(
       {
         ...getSupportTicketFilter(filterState),
@@ -135,13 +136,19 @@ export default function SupportPage() {
         )}
 
         {/* Tickets List */}
-        <div className="space-y-4">
-          {isFetching ? (
+        <div
+          aria-busy={isPlaceholderData}
+          className={cn(
+            "space-y-4 transition-opacity",
+            isPlaceholderData && "opacity-60",
+          )}
+        >
+          {!data ? (
             <Loader explanation="Loading tickets..." />
           ) : (
             <>
               {allTickets.length === 0 && (
-                <div className="py-8 text-center text-gray-500">
+                <div className="py-8 text-center text-muted-foreground">
                   <AlertCircle className="mx-auto mb-4 h-12 w-12" />
                   <p>No tickets found</p>
                 </div>
@@ -219,6 +226,15 @@ export default function SupportPage() {
                   </div>
                 </div>
               ))}
+              {isFetchingNextPage && (
+                <div
+                  role="status"
+                  className="flex items-center justify-center gap-2 py-2"
+                >
+                  <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+                  Loading more tickets
+                </div>
+              )}
             </>
           )}
         </div>

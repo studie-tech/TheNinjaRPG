@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleFadingArrowUp } from "lucide-react";
+import { CircleFadingArrowUp, Loader2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -169,9 +169,18 @@ export default function MyItems() {
     <>
       <ContentBox title="Items" padding={false}>
         <ItemsToolbar userData={userData} userItems={userItems} />
-        {isFetching && <Loader explanation="Refreshing items" />}
-        {/* Wait for the updated equipment state before accepting another action. */}
-        <div inert={isFetching}>
+        {/* Wait for the updated equipment state before accepting another action. A refresh
+            shows as a small overlay so the grid keeps its place. */}
+        <div inert={isFetching} aria-busy={isFetching} className="relative">
+          {isFetching && (
+            <div
+              role="status"
+              className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md border bg-card/90 px-2 py-1 text-xs shadow-sm"
+            >
+              <Loader2 aria-hidden className="h-3 w-3 animate-spin" />
+              Refreshing items
+            </div>
+          )}
           <ItemsWorkspace
             userData={userData}
             userItems={availableItems ?? []}

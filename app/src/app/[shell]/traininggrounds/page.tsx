@@ -1158,7 +1158,8 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Jutsus
   const {
     data: jutsus,
-    isFetching,
+    isPlaceholderData: isFilteringJutsus,
+    isFetchingNextPage,
     fetchNextPage,
     hasNextPage,
   } = api.jutsu.getAll.useInfiniteQuery(
@@ -1656,8 +1657,18 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
             </Modal>
           )}
         </div>
-        {/* The list can be taller than the screen, so the loader sticks in view */}
-        {(isFetching || listPriorities === null) && (
+        {isFetchingNextPage && (
+          <div
+            role="status"
+            className="flex items-center justify-center gap-2 py-3 text-sm"
+          >
+            <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+            Loading more jutsu
+          </div>
+        )}
+        {/* The list can be taller than the screen, so the loader sticks in view. Only a
+            first load or a filter change covers it; later pages load below the list. */}
+        {(listPriorities === null || !jutsus || isFilteringJutsus) && (
           <div className="absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-sm">
             <div className="sticky top-24 flex justify-center py-16">
               <Loader explanation="Loading jutsu" />
