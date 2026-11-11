@@ -269,6 +269,8 @@ export const EditContent = <
   // Count how many columns have been used
   let columnCount = 0;
   let lastCategory = "default";
+  // Sectioned forms keep their own order and show each section's heading.
+  const isSectioned = formData.some((formEntry) => formEntry.section);
 
   return (
     <Form {...form}>
@@ -419,9 +421,13 @@ export const EditContent = <
             ),
           )
           .map((formEntry) => {
-            return { ...formEntry, category: getCategory(formEntry.id) };
+            return {
+              ...formEntry,
+              category: formEntry.section ?? getCategory(formEntry.id),
+            };
           })
           .sort((a, b) => {
+            if (isSectioned) return 0;
             // Default category first, then alphabetical by category
             if (a.category === "default" && b.category !== "default") return -1;
             if (a.category !== "default" && b.category === "default") return 1;
@@ -451,8 +457,10 @@ export const EditContent = <
 
             // Figure out if we need to add a spacer
             let includeSpacer = false;
+            let startsSection = false;
             if (formEntry.category !== lastCategory) {
-              includeSpacer = columnCount % 2 !== 0;
+              startsSection = isSectioned;
+              includeSpacer = !isSectioned && columnCount % 2 !== 0;
               columnCount = 0;
               lastCategory = formEntry.category;
             }
@@ -462,6 +470,11 @@ export const EditContent = <
             return (
               <Fragment key={`formEntry-${id}`}>
                 {includeSpacer && <div key={`spacer-${id}`} />}
+                {startsSection && (
+                  <h3 className="col-span-full mt-3 border-b px-2 pb-1 font-semibold text-lg">
+                    {formEntry.category}
+                  </h3>
+                )}
                 <div
                   className={cn(
                     "p-2",
@@ -2287,6 +2300,8 @@ export type FormEntry<K> = {
   resetButton?: boolean;
   searchable?: boolean;
   readonly?: boolean;
+  /** Heading of the form section; sectioned forms keep their entries' order. */
+  section?: string;
 } & (
   | { type: "coordinate_targeting" }
   | { type: "method_size" }

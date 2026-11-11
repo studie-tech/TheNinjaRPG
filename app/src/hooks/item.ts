@@ -10,6 +10,7 @@ import {
   ItemPurchaseLimitPeriods,
   ItemRarities,
   ItemSlotTypes,
+  type ItemType,
   ItemTypes,
   WeaponTypes,
 } from "@/drizzle/constants";
@@ -188,8 +189,18 @@ export const useItemEditForm = (
 
   const { data: requiredSkills } = api.skillTree.getAllNames.useQuery();
 
-  // Object for form values
-  const formData: FormEntry<Path<ZodItemType>>[] = [
+  // Farming details apply to seeds, fertilizers and crops; other items keep stored values hidden.
+  const hasFarmDetails =
+    isFarmSeed ||
+    isFarmFertilizer ||
+    FARM_CROP_ITEM_TYPES.has(itemType) ||
+    !!data.farmYieldItemId ||
+    !!data.farmExtractSeedItemId ||
+    data.farmSellValue > 0 ||
+    data.farmHarvestExperience > 0;
+
+  // Object for form values, grouped into headed sections in display order
+  const basics: FormEntry<Path<ZodItemType>>[] = [
     { id: "name", label: "Item Name", type: "text" },
     { id: "image", type: "avatar", href: imageUrl },
     { id: "itemType", type: "str_array", values: ItemTypes },
@@ -198,15 +209,24 @@ export const useItemEditForm = (
     { id: "weaponType", type: "str_array", values: WeaponTypes },
     { id: "description", type: "text", doubleWidth: true },
     { id: "battleDescription", type: "text", doubleWidth: true },
+    { id: "hidden", type: "boolean" },
+    { id: "isEventItem", type: "boolean" },
+  ];
+  // Add crystal target types field only for CRYSTAL items
+  if (itemType === "CRYSTAL") {
+    basics.push({
+      id: "crystalTargetTypes",
+      type: "str_array",
+      values: ItemTypes,
+      label: "Crystal Target Type",
+    });
+  }
+  const combat: FormEntry<Path<ZodItemType>>[] = [
     { id: "target", type: "str_array", values: AttackTargets },
     { id: "method", type: "str_array", values: AttackMethods },
     ...targetingFields,
     { id: "battleUsageType", type: "str_array", values: BattleUsageTypes },
-    { id: "cost", type: "number" },
-    { id: "repsCost", type: "number" },
-    { id: "seichiSilverCost", type: "number" },
     { id: "cooldown", type: "number" },
-    { id: "stackSize", type: "number" },
     { id: "range", type: "number" },
     { id: "chakraCost", type: "number" },
     { id: "staminaCost", type: "number" },
@@ -216,6 +236,12 @@ export const useItemEditForm = (
     { id: "actionCostPerc", type: "number" },
     { id: "healthCost", type: "number" },
     { id: "maxEquips", type: "number" },
+    { id: "destroyOnUse", type: "boolean" },
+    { id: "preventBattleUsage", type: "boolean" },
+    { id: "maxImbueNumber", type: "number" },
+    { id: "canBeImbued", type: "boolean" },
+  ];
+  const requirements: FormEntry<Path<ZodItemType>>[] = [
     { id: "requiredLevel", type: "number", label: "Required Level" },
     {
       id: "requiredSkillId",
@@ -225,7 +251,6 @@ export const useItemEditForm = (
       searchable: true,
       resetButton: true,
     },
-    { id: "xpToLevel", type: "number", label: "XP Per Level" },
     {
       id: "bloodlineId",
       type: "db_values",
@@ -233,6 +258,7 @@ export const useItemEditForm = (
       label: "Required Bloodline",
       resetButton: true,
     },
+    { id: "xpToLevel", type: "number", label: "XP Per Level" },
     {
       id: "parentItemId",
       label: "Parent Item (Evolution)",
@@ -248,11 +274,13 @@ export const useItemEditForm = (
           type: "number",
         }) as FormEntry<Path<ZodItemType>>,
     ),
-    { id: "destroyOnUse", type: "boolean" },
+  ];
+  const shop: FormEntry<Path<ZodItemType>>[] = [
+    { id: "cost", type: "number" },
+    { id: "repsCost", type: "number" },
+    { id: "seichiSilverCost", type: "number" },
+    { id: "stackSize", type: "number" },
     { id: "canStack", type: "boolean" },
-    { id: "maxImbueNumber", type: "number" },
-    { id: "hidden", type: "boolean" },
-    { id: "isEventItem", type: "boolean" },
     { id: "inShop", type: "boolean" },
     { id: "purchaseLimitPeriod", type: "str_array", values: ItemPurchaseLimitPeriods },
     {
@@ -260,14 +288,7 @@ export const useItemEditForm = (
       type: "number",
       label: "Purchase limit (units per period; NONE is unlimited)",
     },
-    { id: "preventBattleUsage", type: "boolean" },
-    { id: "canBeHunted", type: "boolean" },
-    { id: "canBeGathered", type: "boolean" },
-    {
-      id: "canBeCrafted",
-      type: "boolean",
-      label: isMeal ? "Can be cooked in the kitchen" : "Can Be Crafted",
-    },
+    { id: "expireFromStoreAt", type: "date", label: "Remove from store at" },
     { id: "canBeTraded", type: "boolean" },
     {
       id: "auctionMinPrice",
@@ -279,7 +300,15 @@ export const useItemEditForm = (
       type: "number",
       label: "Auction maximum ryo per unit (blank for none)",
     },
-    { id: "canBeImbued", type: "boolean" },
+  ];
+  const crafting: FormEntry<Path<ZodItemType>>[] = [
+    { id: "canBeHunted", type: "boolean" },
+    { id: "canBeGathered", type: "boolean" },
+    {
+      id: "canBeCrafted",
+      type: "boolean",
+      label: isMeal ? "Can be cooked in the kitchen" : "Can Be Crafted",
+    },
     ...(isMeal
       ? [
           {
@@ -315,58 +344,9 @@ export const useItemEditForm = (
             label: "Crafting Experience",
           },
         ]),
-    { id: "isFarmSeed", type: "boolean", label: "Farm Seed" },
-    { id: "farmGrowTimeSeconds", type: "number", label: "Grow Time (seconds)" },
-    {
-      id: "farmYieldItemId",
-      type: "db_values",
-      values: allItemNames?.filter((i) => i.id !== item.id) ?? [],
-      label: "Crop Item (yield)",
-      resetButton: true,
-    },
-    { id: "farmMinLevel", type: "number", label: "Min Grow Level (to plant)" },
-    ...(isFarmSeed
-      ? [
-          {
-            id: "farmPlantExperience" as const,
-            type: "number" as const,
-            label: "Plant XP",
-          },
-        ]
-      : !isFarmFertilizer
-        ? [
-            {
-              id: "farmHarvestExperience" as const,
-              type: "number" as const,
-              label: "Harvest XP",
-            },
-          ]
-        : []),
-    {
-      id: "farmSellValue",
-      type: "number",
-      label: isFarmSeed ? "Farm Shop Price (coins)" : "Farm Crop Sell Value (coins)",
-    },
-    {
-      id: "farmExtractSeedItemId",
-      type: "db_values",
-      values: allItemNames?.filter((i) => i.id !== item.id) ?? [],
-      label: "Extract → Seed Item",
-      resetButton: true,
-    },
-    { id: "farmExtractSeedCount", type: "number", label: "Seeds Per Extraction" },
-    { id: "isFarmFertilizer", type: "boolean", label: "Farm Fertilizer" },
-    {
-      id: "farmTimeReductionSeconds",
-      type: "number",
-      label: "Grow Time Reduction (seconds)",
-    },
-    { id: "farmFertilizerExperience", type: "number", label: "Apply XP" },
-    { id: "expireFromStoreAt", type: "date", label: "Remove from store at" },
   ];
-
   if (canBeCrafted || isMeal) {
-    formData.push({
+    crafting.push({
       id: "craftingRequirements",
       doubleWidth: true,
       label: isMeal
@@ -376,16 +356,69 @@ export const useItemEditForm = (
       values: allItemNames?.filter((i) => i.id !== item.id) || [],
     });
   }
-
-  // Add crystal target types field only for CRYSTAL items
-  if (itemType === "CRYSTAL") {
-    formData.push({
-      id: "crystalTargetTypes",
-      type: "str_array",
-      values: ItemTypes,
-      label: "Crystal Target Type",
-    });
-  }
+  const farming: FormEntry<Path<ZodItemType>>[] = [
+    { id: "isFarmSeed", type: "boolean", label: "Farm Seed" },
+    { id: "isFarmFertilizer", type: "boolean", label: "Farm Fertilizer" },
+    ...(hasFarmDetails
+      ? ([
+          { id: "farmGrowTimeSeconds", type: "number", label: "Grow Time (seconds)" },
+          {
+            id: "farmYieldItemId",
+            type: "db_values",
+            values: allItemNames?.filter((i) => i.id !== item.id) ?? [],
+            label: "Crop Item (yield)",
+            resetButton: true,
+          },
+          { id: "farmMinLevel", type: "number", label: "Min Grow Level (to plant)" },
+          ...(isFarmSeed
+            ? [
+                {
+                  id: "farmPlantExperience" as const,
+                  type: "number" as const,
+                  label: "Plant XP",
+                },
+              ]
+            : !isFarmFertilizer
+              ? [
+                  {
+                    id: "farmHarvestExperience" as const,
+                    type: "number" as const,
+                    label: "Harvest XP",
+                  },
+                ]
+              : []),
+          {
+            id: "farmSellValue",
+            type: "number",
+            label: isFarmSeed
+              ? "Farm Shop Price (coins)"
+              : "Farm Crop Sell Value (coins)",
+          },
+          {
+            id: "farmExtractSeedItemId",
+            type: "db_values",
+            values: allItemNames?.filter((i) => i.id !== item.id) ?? [],
+            label: "Extract → Seed Item",
+            resetButton: true,
+          },
+          { id: "farmExtractSeedCount", type: "number", label: "Seeds Per Extraction" },
+          {
+            id: "farmTimeReductionSeconds",
+            type: "number",
+            label: "Grow Time Reduction (seconds)",
+          },
+          { id: "farmFertilizerExperience", type: "number", label: "Apply XP" },
+        ] satisfies FormEntry<Path<ZodItemType>>[])
+      : []),
+  ];
+  const formData = withSections([
+    ["Basics", basics],
+    ["Combat", combat],
+    ["Requirements & evolution", requirements],
+    ["Shop & trade", shop],
+    ["Crafting & cooking", crafting],
+    ["Farming", farming],
+  ]);
 
   const visibleFormData = isMeal
     ? formData.filter((field) => MEAL_FORM_FIELDS.has(field.id))
@@ -402,11 +435,13 @@ export const useItemEditForm = (
         type: "str_array",
         values: HomeFurnitureActions,
         resetButton: true,
+        section: "Basics",
       },
       {
         id: "furnitureData.isFloor",
         label: "Floor decoration",
         type: "boolean",
+        section: "Basics",
       },
     );
   }
@@ -421,6 +456,17 @@ export const useItemEditForm = (
     isUpdating,
   };
 };
+
+/** Item types harvested from farm plots, which show crop yield and seed extraction. */
+const FARM_CROP_ITEM_TYPES = new Set<ItemType>(["MATERIAL", "COOKING"]);
+
+/** Tag each entry with its section heading, keeping the sections' order. */
+const withSections = (
+  sections: [string, FormEntry<Path<ZodItemType>>[]][],
+): FormEntry<Path<ZodItemType>>[] =>
+  sections.flatMap(([section, entries]) =>
+    entries.map((entry) => ({ ...entry, section })),
+  );
 
 const MEAL_FORM_FIELDS = new Set<Path<ZodItemType>>([
   "name",

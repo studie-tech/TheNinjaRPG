@@ -90,18 +90,18 @@ const MEAL_FIELD_IDS = [
   "itemType",
   "rarity",
   "description",
+  "hidden",
+  "isEventItem",
   "cost",
   "repsCost",
   "seichiSilverCost",
   "stackSize",
   "canStack",
-  "hidden",
-  "isEventItem",
   "inShop",
-  "canBeCrafted",
   "canBeTraded",
   "auctionMinPrice",
   "auctionMaxPrice",
+  "canBeCrafted",
   "cookingMinLevel",
   "cookingTimeSeconds",
   "cookingOutputQuantity",
@@ -500,6 +500,31 @@ describe("staff item economy editor", () => {
     expect(
       ids.slice(ids.indexOf("canBeTraded"), ids.indexOf("canBeTraded") + 3),
     ).toEqual(["canBeTraded", "auctionMinPrice", "auctionMaxPrice"]);
+  });
+  it("groups fields into sections and shows farm details only for farm items", async () => {
+    const weapon = { ...data, itemType: "WEAPON" as const };
+    const { result } = renderHook(() => useItemEditForm(weapon, async () => undefined));
+    const sections = [
+      ...new Set(result.current.formData.map((field) => field.section)),
+    ];
+    expect(sections).toEqual([
+      "Basics",
+      "Combat",
+      "Requirements & evolution",
+      "Shop & trade",
+      "Crafting & cooking",
+      "Farming",
+    ]);
+    const farmIds = () =>
+      result.current.formData
+        .filter((field) => field.section === "Farming")
+        .map((field) => field.id);
+    expect(farmIds()).toEqual(["isFarmSeed", "isFarmFertilizer"]);
+    await act(async () => {
+      result.current.form.setValue("isFarmSeed", true);
+    });
+    expect(farmIds()).toContain("farmGrowTimeSeconds");
+    expect(farmIds()).toContain("farmPlantExperience");
   });
   it("limits meals to their listing, crafting and cooking fields", async () => {
     const { result } = renderHook(() => useItemEditForm(data, async () => undefined));

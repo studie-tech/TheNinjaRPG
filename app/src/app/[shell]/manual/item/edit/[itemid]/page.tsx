@@ -114,6 +114,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
   const itemDescription = useWatch({ control: form.control, name: "description" });
   const itemSlot = useWatch({ control: form.control, name: "slot" });
   const itemWeaponType = useWatch({ control: form.control, name: "weaponType" });
+  const itemLpcProfile = useWatch({ control: form.control, name: "lpcProfile" });
 
   // Show panel controls
   return (
@@ -126,19 +127,6 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
           <ItemHelper item={form.getValues() as unknown as ZodItemType} />
         }
       >
-        <fieldset disabled={isUpdating || isFurnitureMeasuring}>
-          <LpcEquipmentFields
-            control={form.control}
-            className="grid-cols-1 gap-1 md:grid-cols-2 [&>div]:p-2"
-            item={{
-              ...item,
-              name: itemName,
-              itemType,
-              slot: itemSlot,
-              weaponType: itemWeaponType,
-            }}
-          />
-        </fieldset>
         <EditContent
           schema={ItemValidatorRawSchema}
           form={form as unknown as UseFormReturn<ZodItemType, any>}
@@ -153,7 +141,26 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
           }}
           submitLoading={isUpdating || isFurnitureMeasuring}
           submitLoadingText={isFurnitureMeasuring ? "Measuring furniture" : "Saving"}
-        />
+        >
+          {(isWornItem(itemType, itemSlot) || !!itemLpcProfile) && (
+            <details className="col-span-full mt-3 rounded-md border p-2">
+              <summary className="cursor-pointer font-semibold text-lg">
+                Character appearance
+              </summary>
+              <LpcEquipmentFields
+                control={form.control}
+                className="mt-2 grid-cols-1 gap-1 md:grid-cols-2 [&>div]:p-2"
+                item={{
+                  ...item,
+                  name: itemName,
+                  itemType,
+                  slot: itemSlot,
+                  weaponType: itemWeaponType,
+                }}
+              />
+            </details>
+          )}
+        </EditContent>
         {isFurniture && (
           <Controller
             control={form.control}
@@ -773,3 +780,8 @@ const ItemVariantsEditor: React.FC<ItemVariantsEditorProps> = ({
     </div>
   );
 };
+
+/** Equipment shown on the character sprite: weapons, armour, accessories and worn slots. */
+const isWornItem = (itemType: string, slot: string) =>
+  ["WEAPON", "ARMOR", "ACCESSORY"].includes(itemType) ||
+  ["HEAD", "CHEST", "LEGS", "FEET", "HAND", "WAIST", "THROWN"].includes(slot);
