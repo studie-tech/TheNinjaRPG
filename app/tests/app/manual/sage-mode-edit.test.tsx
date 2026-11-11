@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { act, cleanup, render } from "@testing-library/react";
 import { Suspense } from "react";
+import { useForm } from "react-hook-form";
 import * as client from "@/app/_trpc/client";
 import SageModeEdit from "@/app/[shell]/manual/sageMode/edit/[sagemodeid]/page";
 import type { SageMode } from "@/drizzle/schema";
@@ -32,7 +33,9 @@ beforeEach(() => {
   } as never);
   vi.spyOn(sageModeHooks, "useSageModeEditForm").mockImplementation((data) => {
     forms.push(data);
-    return { loading: true, sageMode: data } as never;
+    // The page titles itself from the form's watched name.
+    const form = useForm({ values: data });
+    return { loading: true, sageMode: data, form } as never;
   });
   Object.assign(vi.spyOn(client, "api" as never), {
     sageMode: {
