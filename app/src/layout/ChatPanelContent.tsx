@@ -673,7 +673,7 @@ function ConversationMenu({ convo, meId }: { convo: InboxConversation; meId: str
               <MenuButton
                 destructive
                 disabled={isBlocking}
-                onClick={() => toggleBlock({ userId: partner.userId })}
+                onClick={() => toggleBlock({ userId: partner.userId, active: true })}
               >
                 <Ban /> Block {partner.userData.username}
               </MenuButton>

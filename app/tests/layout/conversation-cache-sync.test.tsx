@@ -167,7 +167,7 @@ const blacklistPanel = (success: boolean) => {
       });
     }
     if (path === "profile.toggleBlacklistEntry") {
-      expect(input).toEqual({ userId: "friend" });
+      expect(input).toEqual({ userId: "friend", active: true });
       return outcome;
     }
     throw new Error(`Unexpected request: ${path}`);

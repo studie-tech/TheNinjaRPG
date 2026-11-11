@@ -353,7 +353,7 @@ function UserMenu({
             <MenuItem
               destructive
               disabled={isPending}
-              onSelect={() => toggleBlock({ userId: user.userId })}
+              onSelect={() => toggleBlock({ userId: user.userId, active: true })}
             >
               <Ban /> Block user
             </MenuItem>
