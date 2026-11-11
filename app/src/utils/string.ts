@@ -22,6 +22,15 @@ export const capitalizeFirstLetter = (string: string) => {
 };
 
 /**
+ * Readable words for a constant such as "CONTENT-ADMIN" or "ACTIVITY_STREAK_RECURRING".
+ * Text that is not an upper-case constant, e.g. a staff-written reason, is returned as is.
+ */
+export const humanizeConstant = (value: string) =>
+  /^[A-Z0-9]+(?:[_-][A-Z0-9]+)*$/.test(value)
+    ? value.split(/[_-]/).map(capitalizeFirstLetter).join(" ")
+    : value;
+
+/**
  * Also removes thousands and replace with k, m, b, t, etc.
  * @param number
  * @returns

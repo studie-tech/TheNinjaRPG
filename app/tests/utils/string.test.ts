@@ -4,6 +4,7 @@ import {
   formatAttackMethod,
   formatAttackTarget,
   formatEnumLabel,
+  humanizeConstant,
   stripHtmlPreview,
 } from "@/utils/string";
 
@@ -60,5 +61,22 @@ describe("encyclopedia enum labels", () => {
   it("turns other enum values into sentence case", () => {
     expect(formatEnumLabel("FIST_WEAPON")).toBe("Fist weapon");
     expect(formatEnumLabel("HAND_1")).toBe("Hand 1");
+  });
+});
+
+describe("humanizeConstant", () => {
+  it("turns roles and reason constants into readable words", () => {
+    expect(humanizeConstant("CONTENT-ADMIN")).toBe("Content Admin");
+    expect(humanizeConstant("HEAD_BALANCE")).toBe("Head Balance");
+    expect(humanizeConstant("ACTIVITY_STREAK_RECURRING")).toBe(
+      "Activity Streak Recurring",
+    );
+  });
+
+  it("leaves written text unchanged", () => {
+    expect(humanizeConstant("Helped new players in chat")).toBe(
+      "Helped new players in chat",
+    );
+    expect(humanizeConstant("PvP event winner")).toBe("PvP event winner");
   });
 });

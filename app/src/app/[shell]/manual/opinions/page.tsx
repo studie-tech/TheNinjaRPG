@@ -13,7 +13,7 @@ import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { capitalizeFirstLetter } from "@/utils/string";
+import { humanizeConstant } from "@/utils/string";
 import { useUserData } from "@/utils/UserContext";
 import { type UserReviewSchema, userReviewSchema } from "@/validators/reports";
 
@@ -152,7 +152,7 @@ const ReportImage: React.FC<ReportimageProps> = (props) => {
       <div>
         <div className="font-bold">{user.username}</div>
         <div>
-          Lvl. {user.level} {capitalizeFirstLetter(user.role)}
+          Lvl. {user.level} {humanizeConstant(user.role)}
         </div>
       </div>
       {props.positive === true && (

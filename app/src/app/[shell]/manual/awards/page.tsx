@@ -8,6 +8,7 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { useInfinitePagination } from "@/libs/pagination";
+import { humanizeConstant } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 
 export default function AwardsManual() {
@@ -40,6 +41,7 @@ export default function AwardsManual() {
     .filter((award) => award.receiver && award.awardedBy)
     .map((award) => ({
       ...award,
+      reason: humanizeConstant(award.reason),
       awardedBy: (
         <AvatarNameCell
           href={`/username/${award.awardedBy.username}`}
@@ -56,8 +58,10 @@ export default function AwardsManual() {
       ),
       rewards: (
         <div>
-          {award.reputationAmount > 0 && <p>Reputation: {award.reputationAmount}</p>}
-          {award.moneyAmount > 0 && <p>Money: {award.moneyAmount}</p>}
+          {award.reputationAmount > 0 && (
+            <p>Reputation: {award.reputationAmount.toLocaleString()}</p>
+          )}
+          {award.moneyAmount > 0 && <p>Money: {award.moneyAmount.toLocaleString()}</p>}
         </div>
       ),
     }));
@@ -69,7 +73,12 @@ export default function AwardsManual() {
     { key: "awardedBy", header: "Awarded By", type: "jsx" },
     { key: "rewards", header: "Rewards", type: "jsx" },
     { key: "reason", header: "Reason", type: "string" },
-    { key: "createdAt", header: "Date", type: "date" },
+    {
+      key: "createdAt",
+      header: "Date",
+      type: "date",
+      className: "whitespace-nowrap",
+    },
   ];
 
   if (!data) return <Loader explanation="Loading awards data..." />;

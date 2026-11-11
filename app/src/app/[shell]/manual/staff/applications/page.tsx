@@ -31,6 +31,7 @@ type ApplicationRow = {
 export default function ApplicationsPage() {
   const { data: me } = useUserData();
   const isStaff = me?.role ? isStaffRole(me.role) : false;
+  const canDelete = !!me && canDeleteStaffApplication(me.role);
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const filterState = useApplicationsFiltering();
   const {
@@ -104,7 +105,7 @@ export default function ApplicationsPage() {
     // Actions: delete button for the owner
     actions: (
       <div>
-        {me && canDeleteStaffApplication(me.role) && (
+        {canDelete && (
           <Confirm
             title="Confirm delete"
             button={
@@ -158,7 +159,9 @@ export default function ApplicationsPage() {
               type: "string",
               tooltip: (row) => row.motivation || "",
             },
-            { key: "actions", header: "Actions", type: "jsx" },
+            ...(canDelete
+              ? [{ key: "actions" as const, header: "Actions", type: "jsx" as const }]
+              : []),
           ]}
           setLastElement={setLastElement}
         />
