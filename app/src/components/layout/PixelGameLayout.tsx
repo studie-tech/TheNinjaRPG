@@ -1,7 +1,7 @@
 "use client";
 
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import { Earth, House, MessageCircle } from "lucide-react";
+import { Earth, Menu, MessageCircle } from "lucide-react";
 import type React from "react";
 import PixelPublicHeader from "@/components/layout/PixelPublicHeader";
 import {
@@ -140,7 +140,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
             </div>
           )}
           {isSignedInLayout && (
-            <div className="fixed inset-x-0 top-0 z-50 border-sky-200/15 border-b bg-black/55 shadow-2xl shadow-black/35 backdrop-blur-md md:hidden">
+            <div className="fixed inset-x-0 top-0 z-50 border-sky-200/15 border-b bg-black/55 pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] shadow-2xl shadow-black/35 backdrop-blur-md md:hidden">
               <div className="relative mx-auto flex min-h-[72px] w-[calc(100%-24px)] items-center justify-between gap-3">
                 <div className="z-10 flex shrink-0 justify-start gap-2">
                   <Sheet open={leftSideBarOpen} onOpenChange={onLeftSideBarOpenChange}>
@@ -148,7 +148,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                       className={PIXEL_MOBILE_HEADER_BUTTON_STYLE}
                       aria-label="Open player menu"
                     >
-                      <House className={PIXEL_MOBILE_HEADER_ICON_STYLE} />
+                      <Menu className={PIXEL_MOBILE_HEADER_ICON_STYLE} />
                     </SheetTrigger>
                     <SheetContent
                       data-reading-surface

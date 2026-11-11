@@ -1,16 +1,7 @@
 "use client";
 
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import {
-  Earth,
-  Eye,
-  EyeOff,
-  House,
-  LogIn,
-  Menu,
-  MessageCircle,
-  Music,
-} from "lucide-react";
+import { Earth, Eye, EyeOff, LogIn, Menu, MessageCircle, Music } from "lucide-react";
 import type React from "react";
 import {
   Sheet,
@@ -237,19 +228,20 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
             <StrongestUsersBanner />
           </div>
           <div className="flex w-full min-w-0 flex-1 flex-col">
-            <div className="flex min-h-screen w-full flex-row md:min-h-0">
+            {/* From md the row grows to the tallest sidebar, so the footer always ends the frame. */}
+            <div className="flex min-h-screen w-full flex-row md:min-h-0 md:flex-1">
               <div
                 className="hidden w-12 shrink-0 bg-fill bg-repeat-y lg:block"
                 style={{ backgroundImage: `url(${IMG_LAYOUT_SIDESCROLL})` }}
               ></div>
               <div
                 data-reading-surface
-                className="flex min-h-[200px] w-full grow flex-col overflow-x-scroll bg-background"
+                className="flex min-h-[200px] w-full grow flex-col overflow-x-auto bg-background"
               >
                 {/* From md the footer bar below is in flow rather than fixed; one viewport
                     of minimum height keeps it below the fold (see PixelGameLayout.tsx).
                     Phones also leave room to scroll content clear of an open lesson. */}
-                <div className="p-3 pb-[calc(7rem+var(--activity-dock-space,0px))] md:min-h-svh md:pb-3">
+                <div className="p-3 pb-[calc(7rem+env(safe-area-inset-bottom)+var(--activity-dock-space,0px))] md:min-h-svh md:pb-3">
                   {children}
                 </div>
               </div>
@@ -259,13 +251,15 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
               ></div>
             </div>
             <div
-              className="fixed bottom-0 flex h-20 max-h-28 w-full flex-col md:relative"
+              className="fixed bottom-0 flex h-[calc(5rem+env(safe-area-inset-bottom))] w-full flex-col md:relative md:h-20 md:max-h-28"
               data-compact-hide
             >
               <div className="absolute top-0 right-0 left-[-20px] -z-30 md:right-[-20px]">
                 <div className="h-5 bg-linear-to-b from-rose-950 to-rose-800"></div>
                 <div className="h-8 bg-rose-800"></div>
                 <div className="h-7 bg-linear-to-b from-rose-800 to-rose-950"></div>
+                {/* Below the bar, the home-indicator zone keeps the bar's colour. */}
+                <div className="h-[env(safe-area-inset-bottom)] bg-rose-950 md:hidden"></div>
               </div>
               <Image
                 className="absolute top-[-195px] left-[-120px] -z-20 hidden select-none md:block"
@@ -292,7 +286,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                   location={location}
                   yellowButtonClassName={variantClasses.yellowButton}
                   mobileNavbarButtonClassName={variantClasses.mobileNavbarButton}
-                  className="absolute top-0 right-0 bottom-0 left-0 md:hidden"
+                  className="absolute top-0 right-0 left-0 h-20 md:hidden"
                 />
               ) : (
                 <div className="absolute top-4 right-0 left-0 block text-white md:hidden">
@@ -329,16 +323,12 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
           </div>
         </div>
         <div
-          className="absolute top-4 left-4 z-50 flex items-center gap-2 md:hidden [&_button]:flex [&_button]:min-h-[48px] [&_button]:min-w-[48px] [&_button]:items-center [&_button]:justify-center"
+          className="absolute top-4 left-[max(1rem,env(safe-area-inset-left))] z-50 flex items-center gap-2 md:hidden [&_button]:flex [&_button]:min-h-[48px] [&_button]:min-w-[48px] [&_button]:items-center [&_button]:justify-center"
           data-compact-hide
         >
           <Sheet open={leftSideBarOpen} onOpenChange={onLeftSideBarOpenChange}>
             <SheetTrigger className="block" aria-label="Open main menu">
-              {userData ? (
-                <House className={cn(variantClasses.yellowButton)} />
-              ) : (
-                <Menu className={cn(variantClasses.yellowButton)} />
-              )}
+              <Menu className={cn(variantClasses.yellowButton)} />
             </SheetTrigger>
             <SheetContent side="left" onInteractOutside={keepSheetOpenForClerk}>
               <SheetHeader className="text-left">
@@ -362,12 +352,14 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
         </div>
 
         <div
-          className="absolute top-4 right-4 z-50 block grid grid-cols-2 gap-2 md:hidden [&_button]:flex [&_button]:min-h-[48px] [&_button]:min-w-[48px] [&_button]:items-center [&_button]:justify-center"
+          className="absolute top-4 right-[max(1rem,env(safe-area-inset-right))] z-50 block grid grid-cols-2 gap-2 md:hidden [&_button]:flex [&_button]:min-h-[48px] [&_button]:min-w-[48px] [&_button]:items-center [&_button]:justify-center"
           data-compact-hide
         >
           <div className="flex justify-center">
             <LowerRightHelpBtn className="block md:hidden">
-              {userData ? (
+              {/* Keyed on the server-known session so a signed-in hard load never
+                  flashes the signed-out icons while the character loads. */}
+              {isSignedInLayout ? (
                 <MessageCircle className={cn(variantClasses.yellowButton)} />
               ) : (
                 <Music className={cn(variantClasses.yellowButton)} />
@@ -376,7 +368,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
           </div>
           <Sheet open={rightSideBarOpen} onOpenChange={onRightSideBarOpenChange}>
             <SheetTrigger aria-label="Open game menu" id="tutorial-gameBtn">
-              {userData ? (
+              {isSignedInLayout ? (
                 <Earth className={cn(variantClasses.yellowButton)} />
               ) : (
                 <LogIn className={cn(variantClasses.yellowButton)} />

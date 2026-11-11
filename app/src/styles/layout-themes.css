@@ -51,6 +51,8 @@
   width: min(100% - 3rem, var(--theme-main-width));
   margin-inline: auto;
   padding-block: 1rem 2rem;
+  /* A landscape notch can be wider than the outer margin. */
+  padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
 }
 .theme-brand {
   grid-area: brand;
@@ -295,7 +297,13 @@ html[data-game-frame="panel"] img:is([alt="signup-decor-left"], [alt="signup-dec
   outline-offset: 3px;
 }
 
+.theme-focus-chat {
+  display: none;
+}
 @media (width >= 1100px) {
+  body:has([data-battle-focus-dialog]) .theme-focus-chat {
+    display: block;
+  }
   .theme-frame {
     width: fit-content;
     max-width: calc(100% - 3rem);

@@ -51,9 +51,13 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
   return (
     <div
       ref={navRef}
-      className={cn("grid grid-cols-7 items-center justify-center", className)}
+      className={cn(
+        // Two left shortcuts share the width of the three on the right, keeping the raised
+        // centre button in the middle without an empty slot. The insets clear a landscape notch.
+        "grid grid-cols-[1.5fr_1.5fr_1fr_1fr_1fr_1fr] items-center justify-center pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]",
+        className,
+      )}
     >
-      <div></div>
       {mobileNavConfig.left.map((optionId) => (
         <div key={optionId}>
           <MobileGameNavButton
