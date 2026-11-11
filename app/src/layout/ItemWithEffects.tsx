@@ -93,6 +93,8 @@ export interface ItemWithEffectsProps {
   hideDetails?: boolean;
   showEvolutions?: boolean;
   imageExtra?: React.ReactNode;
+  /** Status message shown inside the card, under the entry's title. */
+  notice?: React.ReactNode;
   /** Actions shown after the entry's description, requirements and effects. */
   footer?: React.ReactNode;
   showEdit?:
@@ -494,6 +496,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   )}
               </div>
             </div>
+            {props.notice && <div className="my-1">{props.notice}</div>}
             {!hideDetails && !hideDates && !playerView && (
               <div className="flex flex-row flex-wrap gap-2">
                 {item.createdAt && (

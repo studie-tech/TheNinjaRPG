@@ -101,6 +101,8 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
       : undefined,
   });
 
+  const reason = useWatch({ control: form.control, name: "reason" }) ?? "";
+
   // Mutation for updating reskin
   const { mutate: updateReskin, isPending: isUpdating } =
     api.bloodline.updateReskin.useMutation({
@@ -133,13 +135,15 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
   const formData: FormEntry<keyof BloodlineReskinUpdateSchema>[] = [
     {
       id: "image",
+      section: "Reskin",
       type: "avatar",
       label: "Image",
       href: reskinData.image || undefined,
     },
-    { id: "name", type: "text", label: "Reskin Name" },
+    { id: "name", type: "text", label: "Reskin Name", section: "Reskin" },
     {
       id: "description",
+      section: "Reskin",
       type: "richinput",
       label: "Custom Description",
     },
@@ -148,6 +152,7 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
       type: "textarea",
       label: "Reason for update",
       doubleWidth: true,
+      section: "Audit",
     },
   ];
 
@@ -185,7 +190,13 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
             type="bloodline_reskin"
             onAccept={onAccept}
             submitDisabled={!form.formState.isValid || isUpdating}
-          />
+          >
+            {reason.length < REASON_MIN_LENGTH && (
+              <p className="col-span-full px-2 text-muted-foreground text-sm">
+                Add a reason (at least {REASON_MIN_LENGTH} characters) to save.
+              </p>
+            )}
+          </EditContent>
         </div>
       </ContentBox>
       <ContentBox
@@ -269,3 +280,6 @@ function SingleEditBloodlineReskin({ reskinId }: { reskinId: string }) {
     </>
   );
 }
+
+/** Shortest reason the update schema accepts, shown while Save is disabled. */
+const REASON_MIN_LENGTH = bloodlineReskinUpdateSchema.shape.reason.minLength ?? 0;

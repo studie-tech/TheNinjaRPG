@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { use, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
@@ -65,6 +65,8 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
         : undefined,
   });
 
+  const reason = useWatch({ control: form.control, name: "reason" }) ?? "";
+
   // Mutation for updating reskin
   const { mutate: updateReskin, isPending: isUpdating } =
     api.jutsu.updateReskin.useMutation({
@@ -97,14 +99,16 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
   const formData: FormEntry<keyof JutsuReskinUpdateSchema>[] = [
     {
       id: "image",
+      section: "Reskin",
       type: "avatar",
       label: "Image",
       href: reskin.image || undefined,
     },
-    { id: "name", type: "text", label: "Reskin Name" },
-    { id: "username", type: "text", label: "Owner (username)" },
+    { id: "name", type: "text", label: "Reskin Name", section: "Reskin" },
+    { id: "username", type: "text", label: "Owner (username)", section: "Reskin" },
     {
       id: "jutsuId",
+      section: "Reskin",
       type: "db_values",
       label: "Base Jutsu",
       values: jutsuNames,
@@ -112,17 +116,20 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
     },
     {
       id: "attached",
+      section: "Reskin",
       type: "boolean",
       label: "Active on the owner's jutsu",
     },
     {
       id: "description",
+      section: "Reskin",
       type: "richinput",
       label: "Custom Description",
       doubleWidth: true,
     },
     {
       id: "battleDescription",
+      section: "Reskin",
       type: "richinput",
       label: "Custom Battle Text",
     },
@@ -131,6 +138,7 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
       type: "textarea",
       label: "Reason for update",
       doubleWidth: true,
+      section: "Audit",
     },
   ];
 
@@ -163,8 +171,17 @@ export default function ReskinEdit(props: { params: Promise<{ reskinId: string }
           type="jutsu_reskin"
           onAccept={onAccept}
           submitDisabled={!form.formState.isValid || isUpdating}
-        />
+        >
+          {reason.length < REASON_MIN_LENGTH && (
+            <p className="col-span-full px-2 text-muted-foreground text-sm">
+              Add a reason (at least {REASON_MIN_LENGTH} characters) to save.
+            </p>
+          )}
+        </EditContent>
       </div>
     </ContentBox>
   );
 }
+
+/** Shortest reason the update schema accepts, shown while Save is disabled. */
+const REASON_MIN_LENGTH = jutsuReskinUpdateSchema.shape.reason.minLength ?? 0;
