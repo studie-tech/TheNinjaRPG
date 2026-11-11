@@ -46,17 +46,17 @@ export const EventTournaments = ({
   tournamentId?: string;
   staff?: boolean;
 }) => {
-  const { data: user, status: userStatus } = useUserData();
+  const { data: user, status: userStatus, isSignedIn } = useUserData();
   const reconcile = useEventActionCache();
   const [editing, setEditing] = useState(false);
   const canManage = canManageTournaments(user?.role ?? "USER");
   const list = api.tournament.listEvents.useQuery(undefined, {
-    enabled: !tournamentId,
+    enabled: !tournamentId && isSignedIn,
     refetchInterval: 15000,
   });
   const details = api.tournament.getEvent.useQuery(
     { tournamentId: tournamentId ?? "" },
-    { enabled: !!tournamentId, refetchInterval: 5000 },
+    { enabled: !!tournamentId && isSignedIn, refetchInterval: 5000 },
   );
   const utils = api.useUtils();
   const refresh = async () => {
@@ -110,6 +110,23 @@ export const EventTournaments = ({
         originSocketId: reconcile.originSocketId(),
       });
   };
+  // Signed-out visitors have no account to load, so they get a way in instead of a spinner.
+  if (!isSignedIn)
+    return (
+      <ContentBox title="Tournaments" subtitle="Compete for rewards">
+        <p className="mb-3">
+          Sign in to see upcoming tournaments and register your ninja.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild>
+            <Link href="/login">Sign in</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/signup">Create an account</Link>
+          </Button>
+        </div>
+      </ContentBox>
+    );
   if (userStatus === "pending") return <Loader explanation="Loading your account" />;
   if (staff && !canManage)
     return (

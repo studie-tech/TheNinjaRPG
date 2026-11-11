@@ -94,6 +94,7 @@ const LiveTab = ({ actor }: { actor: boolean }) => {
     <UserContext.Provider
       value={{
         ...defaults,
+        isSignedIn: true,
         pusher,
         data: profile.data?.userData,
         status: "success",
@@ -117,7 +118,7 @@ const setup = (
   } = {},
 ) => {
   const connections: Connection[] = [];
-  vi.spyOn(Pusher, "default").mockImplementation(function () {
+  vi.spyOn(Pusher, "default").mockImplementation((() => {
     const connection: Connection = {
       socket_id: `${connections.length + 1}.1`,
       receive: async () => undefined,
@@ -133,7 +134,7 @@ const setup = (
       unsubscribe: vi.fn(),
       disconnect: vi.fn(),
     };
-  } as never);
+  }) as never);
   const event = createEventState(
     eventTournamentConfigSchema.parse({
       name: "Cache Cup",

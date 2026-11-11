@@ -56,7 +56,9 @@ import BanInfo from "@/layout/BanInfo";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { GroupOrders } from "@/layout/GroupOrders";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { QueryError } from "@/layout/QueryError";
 import QuestPicker from "@/layout/QuestPicker";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserRequestSystem from "@/layout/UserRequestSystem";
@@ -82,10 +84,12 @@ export default function ANBUDetails(props: { params: Promise<{ anbuid: string }>
   const { userData, access } = useRequireInVillage("/anbu");
 
   // Queries
-  const { data: squad } = api.anbu.get.useQuery(
-    { id: squadId },
-    { enabled: !!squadId },
-  );
+  const {
+    data: squad,
+    error: squadError,
+    isFetching: isFetchingSquad,
+    refetch: refetchSquad,
+  } = api.anbu.get.useQuery({ id: squadId }, { enabled: !!squadId });
 
   // Loading states
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -94,6 +98,29 @@ export default function ANBUDetails(props: { params: Promise<{ anbuid: string }>
     return (
       <ContentBox title="ANBU" defaultBackHref="/village">
         Unlikely to find outlaw ANBU.
+      </ContentBox>
+    );
+  if (squad === null)
+    return (
+      <ContentBox title="ANBU" subtitle="Squad not found" defaultBackHref="/anbu">
+        <p className="mb-3">
+          This ANBU squad has been disbanded or does not belong to your village.
+        </p>
+        <Link href="/anbu" className="link-inline">
+          Back to the ANBU headquarters
+        </Link>
+      </ContentBox>
+    );
+  if (!squad && squadError)
+    return (
+      <ContentBox title="ANBU" defaultBackHref="/anbu">
+        <QueryError
+          layout="stacked"
+          message="Could not load this ANBU squad."
+          messageClassName="mb-3"
+          onRetry={() => void refetchSquad()}
+          isRetrying={isFetchingSquad}
+        />
       </ContentBox>
     );
   if (!squad) return <Loader explanation="Loading ANBU squad" />;
