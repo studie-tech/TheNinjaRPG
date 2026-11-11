@@ -51,7 +51,7 @@ import { insertDefaultAiProfile, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { sectorMap } from "../../../setup/sectorMap";
 import { resetServerModuleStubs } from "../../../setup/serverModules";
-import { beforeStatements } from "../../../setup/statements";
+import { beforeStatements, holdReads } from "../../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -511,6 +511,155 @@ describeWithDatabase("village duty hourly patrol", () => {
     const after = await invader.patrol({ sector: 123 });
     expect(after.battleId).toBeUndefined();
   });
+
+  it.each([
+    ["VILLAGE_PROTECTOR", false, false, 0],
+    ["SHRINE_WAR", false, false, 2],
+    ["VILLAGE_PROTECTOR", true, false, 0],
+    ["SHRINE_WAR", true, false, 2],
+    ["VILLAGE_PROTECTOR", true, true, 2],
+    ["SHRINE_WAR", true, true, 0],
+  ] as const)(
+    "%s awards PvP points once: copy wins=%s, rotated=%s, repeats=%s",
+    async (battleType, copyWins, rotated, repeats) => {
+      const db = await getTestDatabase();
+      vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+      await insertDefaultAiProfile();
+      await db
+        .insert(village)
+        .values({ id: "invaders", name: "Invaders", sector: 456, kageId: "invader" });
+      await db.insert(villageAlliance).values({
+        id: "hostile",
+        villageIdA: "home",
+        villageIdB: "invaders",
+        status: "ENEMY",
+      });
+      await insertUsers([
+        {
+          userId: "invader",
+          username: "Invader",
+          villageId: "invaders",
+          sector: 123,
+          longitude: 19,
+          latitude: 19,
+          location: "Village",
+          status: "AWAKE",
+          rank: "JONIN",
+          level: 50,
+          experience: 3339000,
+          curHealth: 1000,
+          maxHealth: 1000,
+          curChakra: 1000,
+          maxChakra: 1000,
+          curStamina: 1000,
+          maxStamina: 1000,
+        },
+      ]);
+      await enrollCurrent();
+      const active = await shift();
+      if (repeats)
+        await db.insert(battleHistory).values(
+          Array.from({ length: repeats }, (_, index) => ({
+            battleId: `prior-${index}`,
+            battleType,
+            attackedId: "invader",
+            defenderId: "duty:protector",
+          })),
+        );
+      const admission = await initiateVillageDutyBattle(
+        {
+          client: db,
+          userIds: ["invader"],
+          sector: 123,
+          longitude: 19,
+          latitude: 19,
+          forceDefenderVillageId: "home",
+          shift: active,
+          slot: 0,
+        },
+        battleType,
+      );
+      expect(admission.success, admission.message).toBe(true);
+      if (!("battleId" in admission) || !admission.battleId)
+        throw new Error(admission.message);
+      const fight = (await db.query.battle.findFirst({
+        where: eq(battle.id, admission.battleId!),
+      }))!;
+      expect(fight.extraState.pvpExperienceScaling).toBe(1 / (repeats + 1));
+      for (const user of fight.usersState)
+        user.curHealth = !!user.isVillageDutyCopy === copyWins ? 1000 : 0;
+      await db
+        .update(battle)
+        .set({ usersState: fight.usersState, extraState: fight.extraState })
+        .where(eq(battle.id, fight.id));
+      // Concurrent real-account progress and activity must survive an offline copy's payout.
+      await db
+        .update(userData)
+        .set({
+          pvpWins: 7,
+          pvpLosses: 4,
+          pvpExperience: 12.5,
+          weeklyPvpKills: 9,
+          weeklyPvpKillsAt: new Date("2025-01-01"),
+          pvpStreak: 3,
+          status: "ASLEEP",
+          battleId: "separate-owner-battle",
+          curHealth: 23,
+          money: 451,
+        })
+        .where(eq(userData.userId, "protector"));
+      const ownerBefore = (await load())!;
+      if (rotated)
+        await ensureVillageDutyShift(
+          db,
+          (await fetchVillageDutyHome(db, "home"))!,
+          secondsFromDate(3600, active.startedAt),
+        );
+      const competing = holdReads(db, "battle", 2);
+      const getBattle = () =>
+        callerForDatabase(combatRouter, "invader", competing).getBattle({
+          battleId: fight.id,
+        });
+      await Promise.all([getBattle(), getBattle()]);
+      const ownerAfter = (await load())!;
+      const xp = repeats ? 83.33 : 250;
+      if (copyWins) {
+        // Long-tenured owners retain the normal five-percent PvP loyalty bonus.
+        const ownerXp = repeats ? 87.5 : 262.5;
+        expect(ownerAfter).toMatchObject({
+          pvpWins: 8,
+          pvpLosses: 4,
+          pvpExperience: 12.5 + ownerXp,
+          weeklyPvpKills: 1,
+          pvpStreak: 3,
+        });
+        expect(ownerAfter).toEqual({
+          ...ownerBefore,
+          pvpWins: 8,
+          pvpExperience: 12.5 + ownerXp,
+          weeklyPvpKills: 1,
+          weeklyPvpKillsAt: ownerAfter.weeklyPvpKillsAt,
+        });
+      } else expect(ownerAfter).toEqual(ownerBefore);
+      const invader = (await db.query.userData.findFirst({
+        where: eq(userData.userId, "invader"),
+      }))!;
+      expect(invader).toMatchObject({
+        pvpWins: copyWins ? 0 : 1,
+        pvpLosses: copyWins ? 1 : 0,
+        pvpExperience: copyWins ? (repeats ? 33.33 : 100) : xp,
+        weeklyPvpKills: copyWins ? 0 : 1,
+      });
+      expect(
+        await db.query.battle.findFirst({ where: eq(battle.id, fight.id) }),
+      ).toBeUndefined();
+      const finalShift = (await findVillageDutyShift(db, "home"))!;
+      expect(finalShift.startedAt).toEqual(
+        rotated ? secondsFromDate(3600, active.startedAt) : active.startedAt,
+      );
+      expect(finalShift.patrols[0]?.defeated).toBe(!copyWins);
+    },
+  );
 
   it.each([
     ["AWAKE", false],

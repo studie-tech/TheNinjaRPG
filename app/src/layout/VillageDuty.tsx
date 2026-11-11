@@ -107,8 +107,8 @@ export const VillageDuty = ({
           <p className="text-muted-foreground text-sm">
             Active stealth avoids roaming patrols; attacking players or shrines still
             confronts them. Each enemy fights one copy at a time; defeated copies stay
-            down village-wide until rotation. Your health, items and battle record stay
-            untouched, and your copy earns no rewards.
+            down village-wide until rotation. Defeating a protector or an invader with
+            your copy earns PvP wins and points. Your health and items stay untouched.
             <span className="mt-1 block">
               Next rotation:{" "}
               <Countdown

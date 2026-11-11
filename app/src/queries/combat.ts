@@ -2558,7 +2558,7 @@ export const updateUserDataForUpdateUser2 = (
   userId: string,
   result: CombatResult,
   settledAt: Date,
-  hasHumanOpponent: false | true,
+  hasPvpRewardOpponent: boolean,
   user: {
     sageModeUsedThisBattle?: undefined | false | true;
     allyVillage: false | true;
@@ -2593,7 +2593,8 @@ export const updateUserDataForUpdateUser2 = (
           }
         : {}),
       pvpStreak: result.pvpStreak,
-      ...(curBattle.battleType === "COMBAT" && hasHumanOpponent
+      ...((curBattle.battleType === "COMBAT" || curBattle.extraState.villageDuty) &&
+      hasPvpRewardOpponent
         ? {
             pvpWins: sql`${userData.pvpWins} + ${result.outcome === "Won" ? 1 : 0}`,
             pvpLosses: sql`${userData.pvpLosses} + ${result.outcome === "Lost" || result.outcome === "Fled" ? 1 : 0}`,

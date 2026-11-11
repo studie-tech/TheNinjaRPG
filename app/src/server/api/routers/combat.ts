@@ -2136,7 +2136,9 @@ export const initiateBattle = async (
     fetchAchievementCatalogue(client),
     // Fetch user data
     queryBattleUsers(),
-    PvpBattleTypes.includes(battleType) || battleType === "SHRINE_WAR"
+    PvpBattleTypes.includes(battleType) ||
+    battleType === "SHRINE_WAR" ||
+    info.villageDuty
       ? selectBattleHistoryForInitiateBattle(client, userIds, targetIds)
       : null,
     jutsusIds.length > 0 ? listJutsuByIds(client, jutsusIds) : [],
@@ -2978,11 +2980,12 @@ export const initiateBattle = async (
   if (PvpBattleTypes.includes(battleType)) {
     rewardScaling = repeatOpponentScaling;
   }
-  // Human shrine XP has diminishing returns without reducing strategic shrine rewards.
+  // Human shrine fights and duty copies share repeat-opponent PvP XP scaling without reducing shrine rewards.
   const pvpExperienceScaling =
-    battleType === "SHRINE_WAR" &&
-    users.some((user) => !user.isAi && userIds.includes(user.userId)) &&
-    users.some((user) => !user.isAi && targetIds.includes(user.userId))
+    info.villageDuty ||
+    (battleType === "SHRINE_WAR" &&
+      users.some((user) => !user.isAi && userIds.includes(user.userId)) &&
+      users.some((user) => !user.isAi && targetIds.includes(user.userId)))
       ? repeatOpponentScaling
       : undefined;
 

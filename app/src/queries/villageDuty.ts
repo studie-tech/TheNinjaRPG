@@ -21,7 +21,7 @@ import {
 import type { VillageDutyPatrol } from "@/libs/villageDuty";
 import { spriteUserRelations } from "@/queries/lpc";
 import type { DrizzleClient } from "@/server/db";
-import { getUtcHourStart } from "@/utils/time";
+import { getUtcHourStart, periodStart } from "@/utils/time";
 
 /** Duty belongs to the membership tenure that enrolled, regardless of online presence. */
 export const activeVillageDutyWhere = () =>
@@ -378,3 +378,19 @@ export const deleteExpiredVillageDutyPresence = (client: DrizzleClient) =>
     )
     .orderBy(villageDutyPresence.expiresAt)
     .limit(10000);
+
+/** Credit a copy's winning owner only after the caller claims the terminal battle version; preserve their live character. */
+export const creditVillageDutyVictory = (
+  client: DrizzleClient,
+  reward: { userId: string; pvpExperience: number; weeklyPvpKills: number },
+  settledAt = new Date(),
+) =>
+  client
+    .update(userData)
+    .set({
+      pvpWins: sql`${userData.pvpWins} + 1`,
+      pvpExperience: sql`${userData.pvpExperience} + ${reward.pvpExperience}`,
+      weeklyPvpKills: sql`CASE WHEN ${userData.weeklyPvpKillsAt} >= ${periodStart("weekly", settledAt)} THEN ${userData.weeklyPvpKills} ELSE 0 END + ${reward.weeklyPvpKills}`,
+      weeklyPvpKillsAt: settledAt,
+    })
+    .where(and(eq(userData.userId, reward.userId), eq(userData.isAi, false)));

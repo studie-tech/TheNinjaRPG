@@ -9,6 +9,7 @@ import {
   COMBAT_BORDER_RIGHT,
   COMBAT_BORDER_TOP,
 } from "@/libs/combat/constants";
+import { villageDutyActorId } from "@/libs/villageDuty";
 
 /**
  * Whether quest content may add NPC templates to the initiating player's team.
@@ -65,6 +66,24 @@ export const hasHumanOpponent = (
   usersState: HumanOpponentCandidate[],
   user: { direction: "left" | "right" },
 ): boolean => usersState.some((candidate) => isHumanOpponent(user, candidate));
+
+/** PvP points include the reserved original duty copy, without treating other AI or summons as players. */
+export const isPvpRewardOpponent = (
+  user: { direction: "left" | "right"; villageId: string | null },
+  candidate: HumanOpponentCandidate & {
+    controllerId: string;
+    villageId: string | null;
+    isVillageDutyCopy?: true;
+  },
+  dutyOwnerId?: string,
+) =>
+  isHumanOpponent(user, candidate) ||
+  (!!dutyOwnerId &&
+    candidate.controllerId === villageDutyActorId(dutyOwnerId) &&
+    candidate.isVillageDutyCopy === true &&
+    !candidate.isSummon &&
+    !areBattleAllies(user, candidate) &&
+    candidate.villageId !== user.villageId);
 
 /**
  * Enumerate distinct spawn cells within one team's combat borders.
