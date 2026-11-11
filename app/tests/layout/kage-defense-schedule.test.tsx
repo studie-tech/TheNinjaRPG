@@ -1,9 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+  vi,
+} from "bun:test";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import {
   KAGE_CHALLENGER_DAILY_LIMIT,
+  KAGE_DEFENSE_CHECK_IN_MINUTES,
   KAGE_DEFENSE_GRACE_MINUTES,
   KAGE_DEFENSE_INSTANT_REQUEST_MINUTES,
   KAGE_PRESTIGE_COST,
@@ -116,4 +125,41 @@ describe("kage defense schedule editor", () => {
       );
     },
   );
+});
+
+describe("kage defense check-in window", () => {
+  it("opens check-in when its boundary passes without a per-second clock", () => {
+    const start = Date.UTC(2031, 2, 20, 12);
+    vi.useFakeTimers();
+    setSystemTime(start);
+    try {
+      const at = new Date(start + (KAGE_DEFENSE_CHECK_IN_MINUTES + 1) * 60_000);
+      hall.queue = [
+        {
+          id: "match",
+          challengerId: "challenger",
+          username: "Challenger",
+          scheduledAt: at,
+          status: "SCHEDULED",
+          checkedInAt: null,
+          aiRequested: false,
+          aiAccepted: false,
+          hospitalDeferred: false,
+          rescheduled: false,
+        },
+      ];
+      const view = render(
+        <KageDefense user={{ userId: "challenger", villageId: "village" } as never} />,
+      );
+      const checkIn = () => view.getByRole("button", { name: "Check in" });
+      expect(checkIn().hasAttribute("disabled")).toBe(true);
+      act(() => vi.advanceTimersByTime(30_000));
+      expect(checkIn().hasAttribute("disabled")).toBe(true);
+      act(() => vi.advanceTimersByTime(31_000));
+      expect(checkIn().hasAttribute("disabled")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+      setSystemTime();
+    }
+  });
 });

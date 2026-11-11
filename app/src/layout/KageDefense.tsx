@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -27,7 +27,7 @@ import {
   KAGE_PRESTIGE_COST,
 } from "@/drizzle/constants";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
-import { useNow } from "@/hooks/useNow";
+import { useRefreshAt } from "@/hooks/useRefreshAt";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Link from "@/layout/Link";
@@ -53,7 +53,9 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
   const [message, setMessage] = useState<{ success: boolean; message: string } | null>(
     null,
   );
-  const now = useNow(1000) - timeDiff;
+  // Server time, re-read only when a check-in, start or invitation boundary passes.
+  const [clientNow, setClientNow] = useState(() => Date.now());
+  const now = clientNow - timeDiff;
   const { data, isPending, error, refetch } = api.kage.getDefenses.useQuery(
     { villageId: user.villageId ?? "" },
     { enabled: !!user.villageId, refetchInterval: 15_000 },
@@ -140,6 +142,27 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
     invitation && new Date(invitation.expiresAt).getTime() > now
       ? invitation
       : undefined;
+  useRefreshAt(
+    [
+      invitation?.expiresAt,
+      ...(hall?.queue ?? []).flatMap((m) => {
+        const at = m.scheduledAt?.getTime();
+        return at === undefined
+          ? []
+          : [
+              at - KAGE_DEFENSE_CHECK_IN_MINUTES * 60_000,
+              at,
+              at + KAGE_DEFENSE_GRACE_MINUTES * 60_000,
+            ];
+      }),
+    ],
+    () => setClientNow(Date.now()),
+    timeDiff,
+  );
+  // New schedule data can already be inside a window that began after the last read.
+  useEffect(() => {
+    if (data) setClientNow(Date.now());
+  }, [data]);
   /** Validate with the server's schema so publication failures preserve an editable draft. */
   const publishSchedule = () => {
     const parsed = kageScheduleSchema.safeParse({

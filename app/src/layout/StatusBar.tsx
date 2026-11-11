@@ -93,8 +93,8 @@ const StatusBar: React.FC<StatusBarProps> = (props) => {
     };
     // Call immediately to avoid visual lag when dependencies change
     updateState();
-    // Then update at regular intervals
-    const interval = setInterval(updateState, 250);
+    // Regeneration and the next-tick countdown change at most once a second.
+    const interval = setInterval(updateState, 1000);
     return () => {
       clearInterval(interval);
     };

@@ -40,6 +40,20 @@ describe("useNow", () => {
     expect(result.current).toBe(START + 5000);
   });
 
+  it("shares one boundary-aligned ticker between consumers", () => {
+    const first = renderHook(() => useNow(1000));
+    act(() => vi.advanceTimersByTime(400));
+    const second = renderHook(() => useNow(1000));
+    expect(vi.getTimerCount()).toBe(1);
+    act(() => vi.advanceTimersByTime(600));
+    expect(first.result.current).toBe(START + 1000);
+    expect(second.result.current).toBe(START + 1000);
+    first.unmount();
+    expect(vi.getTimerCount()).toBe(1);
+    second.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("clears its interval on unmount", () => {
     const { unmount } = renderHook(() => useNow(1000));
     unmount();
