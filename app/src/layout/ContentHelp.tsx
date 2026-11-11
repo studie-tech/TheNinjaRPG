@@ -2,7 +2,7 @@
 
 import { ExternalLink, HelpCircle, Info } from "lucide-react";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,6 @@ import {
   MIN_CONTENT_DESCRIPTION_LENGTH,
   type QuestType,
 } from "@/drizzle/constants";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { hasEffectGraphics, isNonBattleItem } from "@/libs/contentCompleteness";
 import { findPredecessor } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
@@ -73,8 +72,8 @@ export const QuestHelper: React.FC<QuestHelperProps> = (props) => {
       summary={<SummaryField label="Type" value={quest.questType} />}
     >
       {(quest.questType && QUEST_TIPS[quest.questType]?.(quest)) ?? (
-        <div className="rounded-lg border bg-gray-50 p-3 text-center">
-          <p className="text-gray-600 text-sm">
+        <div className="rounded-lg border bg-muted p-3 text-center">
+          <p className="text-muted-foreground text-sm">
             No specific tips available for this quest type yet.
           </p>
         </div>
@@ -202,13 +201,13 @@ export const AiHelper: React.FC<AiHelperProps> = ({ ai }) => {
   );
 };
 
-/** Non-modal help sheet that stays open on desktop and starts closed on mobile. */
+/**
+ * Non-modal help sheet opened from its ? button. It starts closed so it never covers the
+ * sidebar uninvited, and Esc or a click outside it closes it again.
+ */
 const HelperSheet: React.FC<HelperSheetProps> = (props) => {
   const { title, heading, summary, isBlock, children } = props;
-  const isDesktop = useMediaQuery("(min-width: 768px)");
   const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => setIsOpen(isDesktop), [isDesktop]);
 
   return (
     <div className={isBlock ? undefined : "inline-block"}>
@@ -222,12 +221,7 @@ const HelperSheet: React.FC<HelperSheetProps> = (props) => {
           </Button>
         </SheetTrigger>
 
-        <SheetContent
-          side="right"
-          className="w-80 sm:w-96"
-          onInteractOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-        >
+        <SheetContent side="right" className="w-80 sm:w-96">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <HelpCircle className="h-5 w-5" />
@@ -236,8 +230,8 @@ const HelperSheet: React.FC<HelperSheetProps> = (props) => {
           </SheetHeader>
 
           <div className="mt-6 space-y-4">
-            <div className="rounded-lg border bg-gray-50 p-3">
-              <h3 className="mb-2 font-medium text-gray-900">{heading}</h3>
+            <div className="rounded-lg border bg-muted p-3">
+              <h3 className="mb-2 font-medium text-foreground">{heading}</h3>
               {summary}
             </div>
             {children}
@@ -250,7 +244,7 @@ const HelperSheet: React.FC<HelperSheetProps> = (props) => {
 
 /** Present one labeled value in a content helper's compact summary. */
 const SummaryField: React.FC<{ label: string; value: React.ReactNode }> = (props) => (
-  <p className="text-gray-600 text-sm capitalize">
+  <p className="text-muted-foreground text-sm capitalize">
     {props.label}: <span className="font-medium">{props.value}</span>
   </p>
 );
@@ -277,7 +271,7 @@ const RelationSection: React.FC<RelationSectionProps> = (props) => {
   const { name, data, route, rowClassName } = props;
   return (
     <div>
-      <h5 className="mb-1 font-medium text-gray-700 text-sm">
+      <h5 className="mb-1 font-medium text-muted-foreground text-sm">
         {name} ({data.length})
       </h5>
       <div className="space-y-1">
@@ -331,7 +325,7 @@ const renderEffectsTips = (effects: ZodAllTags[]) => {
 
   return (
     <div className="space-y-3">
-      <h4 className="font-medium text-gray-900">Effects Tips</h4>
+      <h4 className="font-medium text-foreground">Effects Tips</h4>
       {tips}
     </div>
   );
@@ -432,7 +426,7 @@ const renderSkillTreeWarnings = (skillTree: DeepPartial<ZodSkillTreeType>) => {
 
   return (
     <div className="space-y-3">
-      <h4 className="font-medium text-gray-900">Skill Tree Warnings</h4>
+      <h4 className="font-medium text-foreground">Skill Tree Warnings</h4>
       {warnings}
     </div>
   );
@@ -979,9 +973,9 @@ const renderRaidTips = (quest: DeepPartial<ZodQuestFormType>) => {
           </p>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-          <h4 className="mb-2 font-medium text-gray-900">Damage Thresholds</h4>
-          <p className="text-gray-800">
+        <div className="rounded-lg border border-border bg-muted p-3">
+          <h4 className="mb-2 font-medium text-foreground">Damage Thresholds</h4>
+          <p className="text-foreground">
             After creating the raid quest, you can configure damage threshold rewards
             through the database. Players who deal enough cumulative damage across
             battles can claim these rewards.
@@ -1037,8 +1031,8 @@ const renderItemTips = (item: DeepPartial<ZodItemType>) => {
 
   if (warnings.length === 0) {
     return (
-      <div className="rounded-lg border bg-gray-50 p-3 text-center">
-        <p className="text-gray-600 text-sm">
+      <div className="rounded-lg border bg-muted p-3 text-center">
+        <p className="text-muted-foreground text-sm">
           No configuration warnings detected. Item settings look good!
         </p>
       </div>
@@ -1167,7 +1161,7 @@ const renderJutsuRelations = (relations?: JutsuRelations) => {
 
   return (
     <div className="space-y-4">
-      <h4 className="font-medium text-gray-900">Jutsu Relations</h4>
+      <h4 className="font-medium text-foreground">Jutsu Relations</h4>
 
       <div className="space-y-3 text-sm">
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
@@ -1199,7 +1193,7 @@ const renderJutsuRelations = (relations?: JutsuRelations) => {
               </PopoverContent>
             </Popover>
           </div>
-          <div className="mt-1 space-y-0.5 text-gray-700 text-xs">
+          <div className="mt-1 space-y-0.5 text-muted-foreground text-xs">
             {relationConfigs.map((config) =>
               config.data.length > 0 ? (
                 <p key={config.name}>
@@ -1227,7 +1221,7 @@ const renderBossFightStatus = (aiId: string, boss?: AiBossFight) => {
   ]);
   return (
     <div className="space-y-2">
-      <h4 className="font-medium text-gray-900">This boss</h4>
+      <h4 className="font-medium text-foreground">This boss</h4>
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm">
         <p>
           Form {position} of {boss.forms.length}.
@@ -1254,12 +1248,12 @@ const renderBossFightStatus = (aiId: string, boss?: AiBossFight) => {
 /** How to build a multi-form boss, from the AI page's own controls. */
 const renderBossFightGuide = () => (
   <div className="space-y-2">
-    <h4 className="font-medium text-gray-900">Creating a boss fight</h4>
-    <p className="text-gray-700 text-sm">
+    <h4 className="font-medium text-foreground">Creating a boss fight</h4>
+    <p className="text-muted-foreground text-sm">
       A boss is a chain of AIs. When one falls, the next rises on the same tile with a
       cinematic, in the same battle.
     </p>
-    <ol className="list-decimal space-y-1 pl-5 text-gray-700 text-sm">
+    <ol className="list-decimal space-y-1 pl-5 text-muted-foreground text-sm">
       <li>Create one AI per form, weakest first, with stats, jutsu and AI rules.</li>
       <li>
         On every form except the last, open Boss transformation and choose the Next
@@ -1275,7 +1269,7 @@ const renderBossFightGuide = () => (
       </li>
       <li>Play it from start to finish before release.</li>
     </ol>
-    <ul className="list-disc space-y-1 pl-5 text-gray-600 text-xs">
+    <ul className="list-disc space-y-1 pl-5 text-muted-foreground text-xs">
       <li>
         Up to {BOSS_FIGHT_MAX_FORMS} forms. Raids, wars, events and fights with allies
         or several enemies ignore transformations.
@@ -1300,7 +1294,7 @@ const renderAiRelations = (relations?: AiRelations) => {
 
   return (
     <div className="space-y-4">
-      <h4 className="font-medium text-gray-900">AI Relations</h4>
+      <h4 className="font-medium text-foreground">AI Relations</h4>
       <div className="space-y-3 text-sm">
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
           <div className="flex items-center gap-2">
@@ -1309,7 +1303,7 @@ const renderAiRelations = (relations?: AiRelations) => {
               <span className="font-medium">{questsUsingAi.length}</span>
             </span>
           </div>
-          <div className="mt-1 space-y-0.5 text-gray-700 text-xs">
+          <div className="mt-1 space-y-0.5 text-muted-foreground text-xs">
             {questsUsingAi.map((q) => (
               <RelationRow
                 key={q.id}
@@ -1337,10 +1331,10 @@ const renderItemRelations = (relations?: ItemRelations) => {
 
   return (
     <div className="space-y-4">
-      <h4 className="font-medium text-gray-900">Item Relations</h4>
+      <h4 className="font-medium text-foreground">Item Relations</h4>
       <div className="space-y-3 text-sm">
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-          <div className="mt-1 space-y-1 text-gray-700 text-xs">
+          <div className="mt-1 space-y-1 text-muted-foreground text-xs">
             {sections.map(
               (section) =>
                 section.data &&
