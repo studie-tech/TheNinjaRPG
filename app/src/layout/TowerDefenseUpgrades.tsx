@@ -59,10 +59,11 @@ const TowerDefenseUpgrades: React.FC<TowerDefenseUpgradesProps> = ({
   const utils = api.useUtils();
 
   const purchaseMutation = api.towerDefense.purchasePermanentUpgrade.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        void utils.towerDefense.getUserUpgrades.invalidate();
+        // Awaited so the card stays pending until its new level and cost arrive
+        await utils.towerDefense.getUserUpgrades.invalidate();
       }
     },
   });
@@ -137,11 +138,13 @@ const TowerDefenseUpgrades: React.FC<TowerDefenseUpgradesProps> = ({
               className={`flex w-full items-center gap-2 rounded-lg border-2 p-2.5 transition-all ${
                 isMaxLevel
                   ? "border-yellow-500/50 bg-yellow-500/10"
-                  : canPurchase
-                    ? "cursor-pointer border-primary/50 bg-primary/5 hover:border-primary hover:bg-primary/15"
-                    : "cursor-not-allowed border-border bg-muted/30 opacity-60"
-              }
-              `}
+                  : canPurchase && isLoading
+                    ? "cursor-wait border-primary/50 bg-primary/5 opacity-60"
+                    : canPurchase
+                      ? "cursor-pointer border-primary/50 bg-primary/5 hover:border-primary hover:bg-primary/15"
+                      : "cursor-not-allowed border-border bg-muted/30 opacity-60"
+              }`}
+              aria-busy={isLoading}
             >
               {/* Icon */}
               <div

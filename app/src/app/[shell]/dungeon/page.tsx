@@ -153,6 +153,16 @@ export default function DungeonPage() {
     memberCount <= capacity &&
     current.state.memberIds.every((id) => current.state.readyIds.includes(id));
   const endingRun = runs.find((run) => run.id === abandonId);
+  const squadPets =
+    collection.data?.pets.filter(
+      (pet) =>
+        pet.generationStatus === "READY" &&
+        pet.species &&
+        canUsePet(pet, user) &&
+        user.petTask?.petId !== pet.id,
+    ) ?? [];
+  // Shown while entrances load so the picker does not jump in once they arrive
+  const hasEntrances = available.data?.length !== 0;
   return (
     <ContentBox
       title="Dungeon Pyramids"
@@ -487,38 +497,39 @@ export default function DungeonPage() {
         {/* Entrance lookups must not block party controls or completion claims. */}
         {!current && (
           <div className="space-y-3">
-            <fieldset className="min-w-0 space-y-2 rounded-lg border p-3">
-              <legend className="px-1 text-sm font-medium">
-                Solo squad companions ({selectedPets.length}/{DUNGEON_SOLO_PETS})
-              </legend>
-              {collection.error ? (
-                <p role="alert">
-                  {collection.error.message}{" "}
-                  <Button onClick={() => void collection.refetch()}>
-                    Retry companions
-                  </Button>
-                </p>
-              ) : collection.isPending ? (
-                <Loader explanation="Loading companions" />
-              ) : (
-                <>
-                  <p className="text-xs text-muted-foreground">
-                    Choose {DUNGEON_SOLO_PETS} fully generated, battle-ready companions
-                    who are not on a task.{" "}
+            {hasEntrances && (
+              <fieldset className="min-w-0 space-y-2 rounded-lg border p-3">
+                <legend className="px-1 text-sm font-medium">
+                  Solo squad companions ({selectedPets.length}/{DUNGEON_SOLO_PETS})
+                </legend>
+                {collection.error ? (
+                  <p role="alert">
+                    {collection.error.message}{" "}
+                    <Button onClick={() => void collection.refetch()}>
+                      Retry companions
+                    </Button>
+                  </p>
+                ) : collection.isPending ? (
+                  <Loader explanation="Loading companions" />
+                ) : squadPets.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No battle-ready companions. A squad companion must be fully
+                    generated, battle-enabled, allowed for your rank and not on a task.{" "}
                     <Link href="/pets" className="text-primary underline">
                       Manage companions
                     </Link>
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    {collection.data?.pets
-                      .filter(
-                        (pet) =>
-                          pet.generationStatus === "READY" &&
-                          pet.species &&
-                          canUsePet(pet, user) &&
-                          user.petTask?.petId !== pet.id,
-                      )
-                      .map((pet) => (
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      Choose {DUNGEON_SOLO_PETS} fully generated, battle-ready
+                      companions who are not on a task.{" "}
+                      <Link href="/pets" className="text-primary underline">
+                        Manage companions
+                      </Link>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {squadPets.map((pet) => (
                         <label
                           key={pet.id}
                           className="flex min-w-0 max-w-full items-center gap-2 rounded border px-3 py-2 text-sm"
@@ -545,10 +556,11 @@ export default function DungeonPage() {
                           </span>
                         </label>
                       ))}
-                  </div>
-                </>
-              )}
-            </fieldset>
+                    </div>
+                  </>
+                )}
+              </fieldset>
+            )}
             <h2 className="font-semibold">Dungeons in your sector</h2>
             {available.error ? (
               <p role="alert">
