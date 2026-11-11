@@ -553,7 +553,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
           {!hideData && isFurniture && (
             <FurnitureDetails
               item={item as Item}
-              showHidden={!!userData && canChangeContent(userData.role)}
+              showHidden={!!role && canChangeContent(role)}
             />
           )}
           {!hideData && !isFurniture && (
@@ -791,14 +791,11 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   <b>Item type</b>: {formatEnumLabel(item.itemType)}
                 </p>
               )}
-              {"hidden" in item &&
-                !playerView &&
-                userData &&
-                canChangeContent(userData.role) && (
-                  <p>
-                    <b>Hidden</b>: {item.hidden ? "yes" : "no"}
-                  </p>
-                )}
+              {"hidden" in item && !playerView && role && canChangeContent(role) && (
+                <p>
+                  <b>Hidden</b>: {item.hidden ? "yes" : "no"}
+                </p>
+              )}
               {folderName && (
                 <p>
                   <b>Folder</b>: {folderName}
