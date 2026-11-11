@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { sendGTMEvent } from "@next/third-parties/google";
 import AutoHeight from "embla-carousel-auto-height";
 import { ArrowRight, MonitorPlay } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -49,6 +48,7 @@ import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import { trackConversion } from "@/libs/conversionTracking";
 import { cn } from "@/libs/shadui";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { getRandomElement, shuffle } from "@/utils/array";
@@ -160,9 +160,10 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
     api.register.createCharacter.useMutation({
       onSuccess: async (data) => {
         if (data.success) {
+          // Publish the confirmed receipt before cache reconciliation can fail.
+          trackConversion("register", data.registrationId ?? userId ?? undefined);
           await utils.profile.getUser.invalidate();
           createAvatar.mutate();
-          sendGTMEvent({ event: "register", userId: userId ?? "" });
         } else {
           showMutationToast(data);
         }
