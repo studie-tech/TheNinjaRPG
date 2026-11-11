@@ -100,7 +100,6 @@ export const KageHall: React.FC<{
   // Checks
   if (!user.villageId) return <Loader explanation="Join a village first" />;
   if (isPending || !village) return <Loader explanation="Loading village" />;
-  if (isSendingPrestige) return <Loader explanation="Sending prestige" />;
 
   // Render
   return (
@@ -151,7 +150,11 @@ export const KageHall: React.FC<{
 
         {isElder && (
           <Form {...prestigeForm}>
-            <form onSubmit={onSendPrestige} className="relative my-2">
+            <form
+              onSubmit={onSendPrestige}
+              className="relative my-2"
+              aria-busy={isSendingPrestige}
+            >
               <FormField
                 control={prestigeForm.control}
                 name="amount"
@@ -160,6 +163,7 @@ export const KageHall: React.FC<{
                     <FormControl>
                       <Input
                         id="amount"
+                        disabled={isSendingPrestige}
                         placeholder={`Send prestige (max ${user.villagePrestige})`}
                         {...field}
                         value={field.value as number | undefined}
@@ -169,7 +173,12 @@ export const KageHall: React.FC<{
                   </FormItem>
                 )}
               />
-              <Button className="absolute top-0 right-0" type="submit">
+              <Button
+                className="absolute top-0 right-0"
+                type="submit"
+                aria-label="Send prestige"
+                loading={isSendingPrestige}
+              >
                 <CircleArrowUp className="h-5 w-5" />
               </Button>
             </form>

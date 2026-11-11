@@ -1042,8 +1042,6 @@ function Travel() {
   }, [autoDestination, userData, currentSectorMap, isStartingTravel, sectorLink]);
 
   if (!userData) return <Loader explanation="Loading userdata" />;
-  if (isJoining) return <Loader explanation="Joining" />;
-  if (isCreatingHideout) return <Loader explanation="Purchasing" />;
 
   // Derived
   const loadedVillages = villages && villages.length > 0;
@@ -1356,7 +1354,13 @@ function Travel() {
                 title={`Join Village [${sectorVillage.name}]`}
                 proceed_label="Submit"
                 button={<GitMerge className={`mx-1 h-7 w-7 hover:text-orange-500`} />}
-                onAccept={() => joinVillage({ villageId: sectorVillage.id })}
+                triggerLabel={`Join ${sectorVillage.name}`}
+                disabled={isJoining}
+                isLoading={isJoining}
+                keepOpenOnAccept
+                onAccept={(_, { close }) =>
+                  joinVillage({ villageId: sectorVillage.id }, { onSettled: close })
+                }
               >
                 Do you confirm that you wish to join {sectorVillage.name}? Please be
                 aware that if you join this village your training benefits & regen will
@@ -1369,13 +1373,16 @@ function Travel() {
                 title="Purchase Hideout"
                 proceed_label={canAffordHideout ? "Submit" : "Not enough ryo"}
                 button={<HousePlus className={`mx-1 h-7 w-7 hover:text-orange-500`} />}
-                onAccept={() => {
-                  if (canAffordHideout) {
-                    purchaseHideout({
-                      clanId: userData.clanId || "",
-                      sector: currentSector ?? 0,
-                    });
-                  }
+                triggerLabel="Purchase hideout"
+                disabled={isCreatingHideout}
+                isLoading={isCreatingHideout}
+                keepOpenOnAccept
+                onAccept={(_, { close }) => {
+                  if (!canAffordHideout) return close();
+                  purchaseHideout(
+                    { clanId: userData.clanId || "", sector: currentSector ?? 0 },
+                    { onSettled: close },
+                  );
                 }}
               >
                 As a leader of a faction, you have the option of founding a hideout for

@@ -434,7 +434,6 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
 
   // Loader
   if (!userData) return <Loader explanation="Loading user data" />;
-  if (isDepositing) return <Loader explanation="Depositing money" />;
 
   // Derived
   const village = clanData.village;
@@ -782,6 +781,9 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                   button={
                     <PiggyBank className="ml-2 h-6 w-6 hover:cursor-pointer hover:text-orange-500" />
                   }
+                  triggerLabel={`Donate to ${groupLabel.toLowerCase()} bank`}
+                  disabled={isDepositing}
+                  isLoading={isDepositing}
                   onAccept={onDeposit}
                 >
                   <p>

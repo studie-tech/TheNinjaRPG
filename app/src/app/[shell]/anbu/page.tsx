@@ -102,7 +102,6 @@ export default function ANBU() {
         Can not find the ANBU structure in this village.
       </ContentBox>
     );
-  if (isCreating) return <Loader explanation="Creating squad" />;
   if (userData.isBanned) return <BanInfo />;
 
   // Form handlers
@@ -143,11 +142,16 @@ export default function ANBU() {
                 title="Create a new squad"
                 proceed_label="Submit"
                 button={
-                  <Button id="create-anbu-squad" className="w-full">
+                  <Button
+                    id="create-anbu-squad"
+                    className="w-full"
+                    loading={isCreating}
+                  >
                     <UsersRound className="mr-2 h-5 w-5" />
                     New Squad
                   </Button>
                 }
+                disabled={isCreating}
                 isValid={createForm.formState.isValid}
                 onAccept={onSubmit}
               >

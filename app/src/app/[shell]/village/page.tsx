@@ -98,7 +98,6 @@ export default function VillageOverview() {
   // Loading states
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!villageData) return <Loader explanation="Loading village" />;
-  if (isLeaving) return <Loader explanation="Leaving village" />;
 
   const canLeave = hasRequiredRank(userData.rank, VILLAGE_LEAVE_REQUIRED_RANK);
 
@@ -172,11 +171,20 @@ export default function VillageOverview() {
                 title="Leave Village"
                 proceed_label="Submit"
                 button={
-                  <Button className="ml-2">
+                  <Button
+                    className="ml-2"
+                    aria-label="Leave village"
+                    loading={isLeaving}
+                  >
                     <DoorOpen className="h-6 w-6" />
                   </Button>
                 }
-                onAccept={() => leaveVillage()}
+                disabled={isLeaving}
+                isLoading={isLeaving}
+                keepOpenOnAccept
+                onAccept={(_, { close }) =>
+                  leaveVillage(undefined, { onSettled: close })
+                }
               >
                 Do you confirm that you wish to leave your village? Your prestige will
                 be reset to 0. Please be aware that if you join another village your

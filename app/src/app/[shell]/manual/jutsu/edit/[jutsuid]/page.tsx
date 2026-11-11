@@ -80,6 +80,7 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
   // Form handling
   const {
     loading,
+    isSaving,
     jutsu,
     effects,
     form,
@@ -119,6 +120,7 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
               type="jutsu"
               relationId={jutsu.id}
               allowImageUpload={props.canSave}
+              submitLoading={isSaving}
               onAccept={handleJutsuSubmit}
             />
             {updateError && (

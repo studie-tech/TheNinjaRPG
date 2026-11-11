@@ -92,22 +92,25 @@ const Tournament: React.FC<TournamentProps> = (props) => {
       },
     });
 
-  const { mutate: joinMatch, isPending: isJoiningMatch } =
-    api.tournament.joinMatch.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userRecovery)
-          await updateUser(data, { revision, refetch: false });
-        showMutationToast(data);
-        await utils.tournament.getTournament.invalidate();
-        // A match can be joined without a battle starting — the opponent no-showed and this
-        // player took the round — so there is nothing to go to combat for
-        if (data.success && data.battleId) pushToCombat(router, data.battleId);
-      },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
-    });
+  const {
+    mutate: joinMatch,
+    isPending: isJoiningMatch,
+    variables: joiningMatch,
+  } = api.tournament.joinMatch.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
+      if (data.success || data.userRecovery)
+        await updateUser(data, { revision, refetch: false });
+      showMutationToast(data);
+      await utils.tournament.getTournament.invalidate();
+      // A match can be joined without a battle starting — the opponent no-showed and this
+      // player took the round — so there is nothing to go to combat for
+      if (data.success && data.battleId) pushToCombat(router, data.battleId);
+    },
+    onError: (error) => {
+      showMutationToast({ success: false, message: error.message });
+    },
+  });
 
   // Form
   const createForm = useForm<
@@ -137,10 +140,6 @@ const Tournament: React.FC<TournamentProps> = (props) => {
   const rounds = [...matches.keys()];
   const initialSeeds = matches.get(1)?.length ?? 0;
 
-  if (isCreating) return <Loader explanation="Creating tournament" />;
-  if (isJoiningTournament) return <Loader explanation="Joining tournament" />;
-  if (isJoiningMatch) return <Loader explanation="Joining match" />;
-
   return (
     <ContentBox
       title={props.title}
@@ -153,10 +152,16 @@ const Tournament: React.FC<TournamentProps> = (props) => {
               title="Join tournament"
               proceed_label="Join"
               button={
-                <Button id="create-tournament" className="w-full">
+                <Button
+                  id="join-tournament"
+                  className="w-full"
+                  aria-label="Join tournament"
+                  loading={isJoiningTournament}
+                >
                   <UserRoundPlus className="h-5 w-5" />
                 </Button>
               }
+              disabled={isJoiningTournament}
               onAccept={(e) => {
                 e.preventDefault();
                 joinTournament({ tournamentId });
@@ -170,10 +175,16 @@ const Tournament: React.FC<TournamentProps> = (props) => {
               title="Create new tournament"
               proceed_label="Create"
               button={
-                <Button id="create-tournament" className="w-full">
+                <Button
+                  id="create-tournament"
+                  className="w-full"
+                  aria-label="Create tournament"
+                  loading={isCreating}
+                >
                   <Trophy className="h-5 w-5" />
                 </Button>
               }
+              disabled={isCreating}
               isValid={createForm.formState.isValid}
               onAccept={onSubmit}
             >
@@ -343,7 +354,13 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                                   userData.userId,
                                 ) && (
                                   <Button
+                                    type="button"
                                     className="ml-2 shrink-0"
+                                    disabled={isJoiningMatch}
+                                    loading={
+                                      isJoiningMatch &&
+                                      joiningMatch?.matchId === seed.id
+                                    }
                                     onClick={() =>
                                       joinMatch({
                                         matchId: seed.id,

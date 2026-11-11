@@ -222,7 +222,8 @@ export default function Bank() {
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!access) return <Loader explanation="Accessing Bank" />;
   if (userData.isBanned) return <BanInfo />;
-  if (l1 || l2 || l4) return <Loader explanation="Processing bank transaction" />;
+  // One transaction at a time: every bank control waits while any of them is pending.
+  const isTransacting = l1 || l2 || l3 || l4;
 
   return (
     <>
@@ -249,6 +250,8 @@ export default function Bank() {
               <AmountForm
                 form={toBankForm}
                 onSubmit={onDeposit}
+                disabled={isTransacting}
+                pending={l1}
                 id="amount-to-bank"
                 placeholder="Transfer to bank"
                 max={money}
@@ -265,6 +268,8 @@ export default function Bank() {
               <AmountForm
                 form={toPocketForm}
                 onSubmit={onWithdraw}
+                disabled={isTransacting}
+                pending={l2}
                 id="amount-to-pocket"
                 placeholder="Transfer to pocket"
                 max={bank}
@@ -292,6 +297,8 @@ export default function Bank() {
             </p>
             <Button
               onClick={() => claimInterest()}
+              disabled={isTransacting}
+              loading={l4}
               className="w-full"
               animation="pulse"
             >
@@ -319,6 +326,8 @@ export default function Bank() {
           <AmountForm
             form={toUserForm}
             onSubmit={onTransfer}
+            disabled={isTransacting}
+            pending={l3}
             id="amount-to-user"
             placeholder="Amount to transfer"
             max={bank}
@@ -416,9 +425,15 @@ const AmountForm = ({
   label,
   icon,
   className,
+  disabled,
+  pending,
 }: {
   form: UseFormReturn<MoneyTransferSchemaInput, unknown, MoneyTransferSchema>;
   onSubmit: React.FormEventHandler<HTMLFormElement>;
+  /** Blocks input while any bank transaction is pending. */
+  disabled: boolean;
+  /** Spins this form's button while its own transaction is pending. */
+  pending: boolean;
   id: string;
   placeholder: string;
   max: number;
@@ -430,34 +445,37 @@ const AmountForm = ({
     <form
       onSubmit={onSubmit}
       className={cn("flex flex-row flex-wrap items-start gap-1", className)}
+      aria-busy={pending}
     >
-      <FormField
-        control={form.control}
-        name="amount"
-        render={({ field }) => (
-          <FormItem className="flex min-w-0 flex-1 basis-32 flex-col">
-            <FormControl>
-              <NumberInput
-                id={id}
-                aria-label={placeholder}
-                placeholder={placeholder}
-                min={1}
-                max={max}
-                name={field.name}
-                ref={field.ref}
-                onBlur={field.onBlur}
-                value={field.value as number | undefined}
-                onOptionalValueChange={field.onChange}
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <Button type="submit" className="shrink-0">
-        {icon}
-        <span className="ml-1">{label}</span>
-      </Button>
+      <fieldset disabled={disabled} className="contents">
+        <FormField
+          control={form.control}
+          name="amount"
+          render={({ field }) => (
+            <FormItem className="flex min-w-0 flex-1 basis-32 flex-col">
+              <FormControl>
+                <NumberInput
+                  id={id}
+                  aria-label={placeholder}
+                  placeholder={placeholder}
+                  min={1}
+                  max={max}
+                  name={field.name}
+                  ref={field.ref}
+                  onBlur={field.onBlur}
+                  value={field.value as number | undefined}
+                  onOptionalValueChange={field.onChange}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button type="submit" className="shrink-0" loading={pending}>
+          {icon}
+          <span className="ml-1">{label}</span>
+        </Button>
+      </fieldset>
     </form>
   </Form>
 );
