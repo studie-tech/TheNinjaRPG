@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { IMG_AVATAR_DEFAULT, TOURNAMENT_ROUND_SECONDS } from "@/drizzle/constants";
 import type { TournamentMatch } from "@/drizzle/schema";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
+import { useNow } from "@/hooks/useNow";
 import AvatarImage from "@/layout/Avatar";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -53,15 +54,26 @@ const Tournament: React.FC<TournamentProps> = (props) => {
   const { userData, tournamentId, rewards } = props;
 
   const { timeDiff, pusher, prepareUserUpdate, updateUser } = useUserData();
-  const syncedTime = Date.now() - timeDiff;
 
   const utils = api.useUtils();
 
   // Get router
   const router = useRouter();
 
-  // Queries
-  const { data } = api.tournament.getTournament.useQuery({ tournamentId });
+  // Queries. Each read advances the bracket server-side, so poll only while rounds run.
+  const { data } = api.tournament.getTournament.useQuery(
+    { tournamentId },
+    {
+      refetchInterval: (query) =>
+        query.state.data?.status === "IN_PROGRESS"
+          ? TOURNAMENT_POLL_INTERVAL_MS
+          : false,
+    },
+  );
+  const isInProgress = data?.status === "IN_PROGRESS";
+  // Ticking clock so the fight control appears when a match opens without a reload
+  const syncedTime =
+    useNow(TOURNAMENT_CLOCK_TICK_MS, { enabled: isInProgress }) - timeDiff;
 
   // Mutations
   const { mutate: createTournament, isPending: isCreating } =
@@ -271,6 +283,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                   )}
                   timeDiff={timeDiff}
                   onEndShow="Now"
+                  onFinish={() => void utils.tournament.getTournament.invalidate()}
                 />
               </div>
             )}
@@ -329,8 +342,8 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                                 [seed.userId2, seed.userId1].includes(
                                   userData.userId,
                                 ) && (
-                                  <Swords
-                                    className="h-8 w-8 grow text-slate-300 hover:cursor-pointer hover:text-orange-200"
+                                  <Button
+                                    className="ml-2 shrink-0"
                                     onClick={() =>
                                       joinMatch({
                                         matchId: seed.id,
@@ -338,7 +351,10 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                                         originSocketId: pusher?.connection.socket_id,
                                       })
                                     }
-                                  />
+                                  >
+                                    <Swords className="mr-1 h-4 w-4" />
+                                    Fight
+                                  </Button>
                                 )}
                               {seed.battleId && (
                                 <Link
@@ -388,6 +404,9 @@ const Tournament: React.FC<TournamentProps> = (props) => {
 };
 
 export default Tournament;
+
+const TOURNAMENT_POLL_INTERVAL_MS = 10_000;
+const TOURNAMENT_CLOCK_TICK_MS = 1_000;
 
 interface UserMatchProps {
   seed: TournamentMatch;

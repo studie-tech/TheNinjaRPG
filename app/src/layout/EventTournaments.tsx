@@ -23,7 +23,7 @@ import { showMutationToast } from "@/libs/toast";
 import { currentEventRound } from "@/libs/tournament/events";
 import { canManageTournaments } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
-import { useUserData } from "@/utils/UserContext";
+import { useUserData, useUserInfo } from "@/utils/UserContext";
 import type { EventGame, EventTournamentState } from "@/validators/tournament";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
@@ -568,13 +568,16 @@ const ReadyCheck = ({
   pending: boolean;
   onAccept: () => void;
 }) => {
-  const seconds = useLiveCountdown((game.deadline - Date.now()) / 1000);
+  const { timeDiff } = useUserInfo();
+  const seconds = useLiveCountdown((game.deadline - (Date.now() - timeDiff)) / 1000);
+  // Re-read each render; the live countdown ticks every second while the window is open
+  const isOpen = Date.now() - timeDiff >= game.opensAt;
   const accepted = game.accepted.includes(userId);
   return (
     <div className="space-y-2">
       <p className="text-sm">
         Game {gameNumber}:{" "}
-        {Date.now() < game.opensAt
+        {!isOpen
           ? `Opens ${date(game.opensAt)}`
           : `Accept by ${date(game.deadline)} (${Math.ceil(seconds)}s)`}
       </p>
@@ -583,7 +586,7 @@ const ReadyCheck = ({
       </p>
       {inSeries && (
         <Button
-          disabled={pending || Date.now() < game.opensAt || seconds <= 0 || accepted}
+          disabled={pending || !isOpen || seconds <= 0 || accepted}
           onClick={onAccept}
         >
           Accept match

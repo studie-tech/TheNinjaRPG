@@ -3,8 +3,15 @@
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   KAGE_CHALLENGER_DAILY_LIMIT,
   KAGE_CHALLENGER_WEEKLY_LIMIT,
@@ -269,12 +276,11 @@ export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) 
                 {data?.eligibility ?? "You meet the requirements to join the queue."}
               </p>
               <div className="flex items-center gap-2">
-                <Input
+                <Checkbox
                   id="request-defense-ai"
-                  className="size-4"
-                  type="checkbox"
                   checked={aiRequested}
-                  onChange={(e) => setAiRequested(e.target.checked)}
+                  disabled={pending}
+                  onCheckedChange={(value) => setAiRequested(value === true)}
                 />
                 <Label htmlFor="request-defense-ai">
                   Request AI vs AI (requires Kage agreement)
@@ -516,38 +522,52 @@ const KageScheduleEditor = ({
       </p>
       {windows.map((w, i) => (
         <div key={i} className="flex flex-wrap items-end gap-2">
-          <label className="flex min-w-36 flex-1 flex-col gap-1 text-sm">
-            Day {i + 1}
-            <select
-              aria-label={`Defense day ${i + 1}`}
-              className="h-10 rounded border bg-background px-2"
-              value={w.day}
+          <div className="flex min-w-36 flex-1 flex-col gap-1 text-sm">
+            <Label htmlFor={`kage-defense-day-${i}`}>Day {i + 1}</Label>
+            <Select
+              value={String(w.day)}
               disabled={pending}
-              onChange={(e) => setWindow(i, "day", Number(e.target.value))}
+              onValueChange={(value) => setWindow(i, "day", Number(value))}
             >
-              {days.map((day, index) => (
-                <option key={day} value={index}>
-                  {day}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex min-w-36 flex-1 flex-col gap-1 text-sm">
-            Start time (UTC)
-            <select
-              aria-label={`Defense start time ${i + 1}`}
-              className="h-10 rounded border bg-background px-2"
-              value={w.hour}
+              <SelectTrigger
+                id={`kage-defense-day-${i}`}
+                aria-label={`Defense day ${i + 1}`}
+                className="h-10 w-full"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {days.map((day, index) => (
+                  <SelectItem key={day} value={String(index)}>
+                    {day}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex min-w-36 flex-1 flex-col gap-1 text-sm">
+            <Label htmlFor={`kage-defense-hour-${i}`}>Start time (UTC)</Label>
+            <Select
+              value={String(w.hour)}
               disabled={pending}
-              onChange={(e) => setWindow(i, "hour", Number(e.target.value))}
+              onValueChange={(value) => setWindow(i, "hour", Number(value))}
             >
-              {Array.from({ length: 25 - KAGE_DEFENSE_WINDOW_HOURS }, (_, h) => (
-                <option key={h} value={h}>
-                  {hour(h)}
-                </option>
-              ))}
-            </select>
-          </label>
+              <SelectTrigger
+                id={`kage-defense-hour-${i}`}
+                aria-label={`Defense start time ${i + 1}`}
+                className="h-10 w-full"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 25 - KAGE_DEFENSE_WINDOW_HOURS }, (_, h) => (
+                  <SelectItem key={h} value={String(h)}>
+                    {hour(h)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {windows.length > KAGE_DEFENSE_MIN_DAYS && (
             <Button
               variant="outline"
