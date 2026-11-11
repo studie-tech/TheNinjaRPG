@@ -89,7 +89,6 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
         title={heading}
         subtitle="Bloodline Management"
         defaultBackHref="/manual/bloodline"
-        noRightAlign={true}
         topRightContent={
           <BloodlineHelper
             bloodline={form.getValues() as unknown as ZodBloodlineType}

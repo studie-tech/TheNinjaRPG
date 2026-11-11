@@ -84,7 +84,6 @@ const SingleEditSageMode: React.FC<SingleEditSageModeProps> = (props) => {
         title={heading}
         subtitle="Sage Mode Management"
         defaultBackHref="/manual/sageMode"
-        noRightAlign={true}
       >
         {!loading && (
           <EditContent

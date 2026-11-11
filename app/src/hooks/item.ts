@@ -233,7 +233,7 @@ export const useItemEditForm = (
     { id: "chakraCostReducePerLvl", type: "number" },
     { id: "staminaCostReducePerLvl", type: "number" },
     { id: "healthCostReducePerLvl", type: "number" },
-    { id: "actionCostPerc", type: "number" },
+    { id: "actionCostPerc", type: "number", label: "Action cost (%)" },
     { id: "healthCost", type: "number" },
     { id: "maxEquips", type: "number" },
     { id: "destroyOnUse", type: "boolean" },

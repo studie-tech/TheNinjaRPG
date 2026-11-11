@@ -262,7 +262,6 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
             disable tasks.
           </p>
         )}
-
         <EditContent
           schema={QuestFormRawSchema}
           form={form as UseFormReturn<ZodQuestFormType>}

@@ -62,6 +62,7 @@ import { cn } from "@/libs/shadui";
 import { defaultWeightedCache, getWeightedCacheIssues } from "@/libs/weightedCache";
 import { calculateContentDiff } from "@/utils/diff";
 import { canAwardReputation } from "@/utils/permissions";
+import { humanizeIdentifier } from "@/utils/string";
 import { objectKeys } from "@/utils/typeutils";
 import { useUserData } from "@/utils/UserContext";
 import { showUploadError, UploadButton } from "@/utils/uploadthing";
@@ -279,7 +280,7 @@ export const EditContent = <
           }
           void props.onAccept?.(event);
         }}
-        className="grid grid-cols-1 items-center gap-1 md:grid-cols-2"
+        className="grid grid-cols-1 items-start gap-1 md:grid-cols-2"
       >
         {/* Asset Picker Dialog */}
         {assetPickerOpen && !submitLoading && (
@@ -493,7 +494,7 @@ export const EditContent = <
                         return (
                           <FormItem>
                             <FormLabel htmlFor={id}>
-                              {formEntry.label ? formEntry.label : id}
+                              {fieldLabel(formEntry, id)}
                             </FormLabel>
                             <FormControl>
                               {type === "number" ? (
@@ -568,7 +569,7 @@ export const EditContent = <
                         return (
                           <FormItem>
                             <FormLabel htmlFor={id}>
-                              {formEntry.label ? formEntry.label : id}
+                              {fieldLabel(formEntry, id)}
                             </FormLabel>
                             <FormControl>
                               <Textarea
@@ -598,7 +599,7 @@ export const EditContent = <
                         return (
                           <FormItem>
                             <FormLabel>
-                              {formEntry.label ? formEntry.label : id}
+                              {fieldLabel(formEntry, id)}
                             </FormLabel>
                             <FormControl>
                               <Switch
@@ -630,7 +631,7 @@ export const EditContent = <
                                     : "60"
                                 }
                                 placeholder={currentValues[id] as string}
-                                label={formEntry.label ? formEntry.label : id}
+                                label={fieldLabel(formEntry, id)}
                                 control={form.control}
                                 isDirty={fieldState.isDirty}
                                 error={form.formState.errors[id]?.message as string}
@@ -718,7 +719,7 @@ export const EditContent = <
                             return (
                               <FormItem className="flex flex-col">
                                 <FormLabel>
-                                  {formEntry.label ? formEntry.label : id}
+                                  {fieldLabel(formEntry, id)}
                                 </FormLabel>
 
                                 {"multiple" in formEntry && formEntry.multiple ? (
@@ -835,7 +836,7 @@ export const EditContent = <
                       </div>
                       {formEntry.resetButton && (
                         <Button
-                          aria-label={`Clear ${formEntry.label ?? id}`}
+                          aria-label={`Clear ${fieldLabel(formEntry, id)}`}
                           className="ml-1 w-8 shrink-0 p-0"
                           type="button"
                           variant="ghost"
@@ -860,7 +861,7 @@ export const EditContent = <
                           control={form.control}
                           name={id}
                           render={({ field }) => {
-                            const label = formEntry.label ? formEntry.label : id;
+                            const label = fieldLabel(formEntry, id);
                             const handleOpen = () => {
                               const t =
                                 id === "staticAssetPath"
@@ -906,7 +907,8 @@ export const EditContent = <
                                   </div>
                                   <FormMessage />
                                 </FormItem>
-                                {/* Preview to the right */}
+                                {/* Preview to the right, only once an asset is picked */}
+                                {field.value ? (
                                 <div
                                   className={cn(
                                     "h-24",
@@ -968,6 +970,7 @@ export const EditContent = <
                                     })()
                                   )}
                                 </div>
+                                ) : null}
                               </div>
                             );
                           }}
@@ -984,7 +987,7 @@ export const EditContent = <
                             <FormItem>
                               <FormControl>
                                 <ContentImageSelector
-                                  label={formEntry.label ? formEntry.label : id}
+                                  label={fieldLabel(formEntry, id)}
                                   imageUrl={(field.value as string) ?? formEntry.href}
                                   id={props.relationId ?? nanoid()}
                                   allowImageUpload={props.allowImageUpload}
@@ -1015,7 +1018,7 @@ export const EditContent = <
                         return (
                           <FormItem>
                             <FormLabel>
-                              {formEntry.label ? formEntry.label : id}
+                              {fieldLabel(formEntry, id)}
                             </FormLabel>
                             <div className="items-left flex w-full flex-col gap-2">
                               {audioUrl ? (
@@ -1100,7 +1103,7 @@ export const EditContent = <
                           : [];
                         return (
                           <FormItem className="flex flex-col gap-2">
-                            <FormLabel>{formEntry.label ?? id}</FormLabel>
+                            <FormLabel>{fieldLabel(formEntry, id)}</FormLabel>
                             <div className="flex flex-col gap-2">
                               {dialogOptions.map((opt, optionIdx) => {
                                 const option: {
@@ -1238,7 +1241,7 @@ export const EditContent = <
                         const isRewardItems = id === "reward_items";
                         return (
                           <FormItem className="flex flex-col py-4">
-                            <FormLabel>{formEntry.label ?? id}</FormLabel>
+                            <FormLabel>{fieldLabel(formEntry, id)}</FormLabel>
                             <div className="flex flex-col gap-2">
                               {valueArr.map((entry, entryIdx) => (
                                 <div
@@ -2278,6 +2281,10 @@ const OUT_OF_BATTLE_HIDDEN_FIELDS = new Map<string, readonly string[]>([
  */
 const hasComboboxValue = (value: unknown) =>
   value !== undefined && value !== null && value !== "";
+
+/** A form entry's label, or its field id written out as words when it has none. */
+const fieldLabel = (entry: { label?: string }, id: string | number | symbol) =>
+  entry.label || humanizeIdentifier(String(id));
 
 export type FormDbValue = { id: string; name: string };
 

@@ -95,7 +95,6 @@ const SingleEditSkillTree: React.FC<SingleEditSkillTreeProps> = (props) => {
             ? "/manual/bloodright"
             : "/manual/skillTree"
         }
-        noRightAlign={true}
         topRightContent={
           <div className="flex justify-end">
             <SkillTreeHelper
