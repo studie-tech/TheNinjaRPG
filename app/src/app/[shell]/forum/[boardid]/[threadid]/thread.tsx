@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { applyForumReaction, type ForumReactionChange } from "@/deltas/forum";
 import {
   FORUM_MIN_LEVEL,
   FORUM_THREAD_POSTS_PER_PAGE,
@@ -215,6 +216,15 @@ export default function Thread({
       utils.forum.getAll.invalidate(),
     ]);
   };
+  // A confirmed reaction changes only that post, so patch it in place instead of
+  // refetching the thread and the board lists.
+  const applyReaction = async (change: ForumReactionChange) => {
+    const filter = { thread_id: threadId, limit: FORUM_THREAD_POSTS_PER_PAGE };
+    await utils.comments.getForumComments.cancel(filter);
+    utils.comments.getForumComments.setQueriesData(filter, {}, (current) =>
+      current ? applyForumReaction(current, change) : current,
+    );
+  };
   return (
     <ContentBox
       title={thread?.title ?? "Forum discussion"}
@@ -351,6 +361,7 @@ export default function Thread({
                 )
               }
               onChange={refresh}
+              onReact={applyReaction}
               onQuote={() => {
                 setQuote(
                   `<blockquote><p>${post.user?.username ?? "Player"} wrote:</p>${post.content}</blockquote><p><br></p><p><br></p><!--${Date.now()}-->`,
@@ -437,6 +448,7 @@ function ForumPost({
   number,
   onQuote,
   onChange,
+  onReact,
   selected,
   onSelect,
 }: {
@@ -446,6 +458,7 @@ function ForumPost({
   number: number;
   onQuote: () => void;
   onChange: (removedPostId?: string) => Promise<void>;
+  onReact: (change: ForumReactionChange) => Promise<void>;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -487,6 +500,21 @@ function ForumPost({
       await onChange(removesPost ? post.id : undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : "The action could not be completed.");
+    }
+  };
+  /** Reactions update the post in place without a toast; rejections show beside it. */
+  const reactTo = async (reaction: ForumReaction, active: boolean) => {
+    if (!user) return;
+    setError("");
+    try {
+      const result = await react.mutateAsync({ postId: post.id, reaction, active });
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+      await onReact({ postId: post.id, userId: user.userId, reaction, active });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The reaction could not be saved.");
     }
   };
   return (
@@ -644,7 +672,7 @@ function ForumPost({
         </div>
         {user && board.permissions.vote && (
           <div className="mt-2 flex flex-wrap gap-2">
-            {(["helpful", "❤️", "😂", "👏"] as const).map((reaction) => {
+            {FORUM_REACTIONS.map((reaction) => {
               const entries = post.reactions.filter((r) => r.reaction === reaction);
               const active = entries.some((r) => r.userId === user.userId);
               return (
@@ -654,11 +682,7 @@ function ForumPost({
                   size="sm"
                   aria-pressed={active}
                   disabled={react.isPending}
-                  onClick={() =>
-                    void run(() =>
-                      react.mutateAsync({ postId: post.id, reaction, active: !active }),
-                    )
-                  }
+                  onClick={() => void reactTo(reaction, !active)}
                 >
                   {reaction === "helpful" ? (
                     <>
@@ -765,4 +789,8 @@ function ForumPost({
   );
 }
 
+/** Reactions offered under each post, in display order. */
+const FORUM_REACTIONS = ["helpful", "❤️", "😂", "👏"] as const;
+
 type ThreadData = RouterOutputs["comments"]["getForumComments"];
+type ForumReaction = (typeof FORUM_REACTIONS)[number];

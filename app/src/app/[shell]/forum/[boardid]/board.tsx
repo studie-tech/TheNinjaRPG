@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import type { RouterOutputs } from "@/app/_trpc/client";
@@ -14,6 +14,7 @@ import {
 import ContentBox from "@/layout/ContentBox";
 import {
   ForumComposer,
+  ForumEmptyState,
   ForumNavigation,
   ForumSearch,
   ForumTopicList,
@@ -51,6 +52,8 @@ export default function Board({
   );
   const board = threads.data?.pages[0]?.board;
   const create = api.forum.createThread.useMutation();
+  const canCreate =
+    !!board?.permissions.create && !!user && user.level >= FORUM_MIN_LEVEL;
   return (
     <ContentBox
       title={board?.name ?? "Forum board"}
@@ -72,9 +75,13 @@ export default function Board({
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <ForumWatchButton scope="BOARD" scopeId={board.id} />
-            {board.permissions.create && user && user.level >= FORUM_MIN_LEVEL && (
+            {canCreate && (
               <Button onClick={() => setCompose((v) => !v)}>
-                <Plus className="mr-2 h-4 w-4" />
+                {compose ? (
+                  <X className="mr-2 h-4 w-4" />
+                ) : (
+                  <Plus className="mr-2 h-4 w-4" />
+                )}
                 {compose ? "Close composer" : "New topic"}
               </Button>
             )}
@@ -151,6 +158,31 @@ export default function Board({
           <ForumTopicList
             threads={threads.data?.pages.flatMap((p) => p.threads) ?? []}
             selectable={board.permissions.moderate}
+            empty={
+              query ? (
+                <ForumEmptyState
+                  title="No topics match your search"
+                  detail="Try other words, or clear the search to see every topic."
+                />
+              ) : (
+                <ForumEmptyState
+                  title="No topics yet"
+                  detail={
+                    canCreate
+                      ? "Start the first discussion on this board."
+                      : "Nobody has started a discussion on this board yet."
+                  }
+                  action={
+                    canCreate && !compose ? (
+                      <Button onClick={() => setCompose(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Start the first topic
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              )
+            }
             selected={selected}
             onSelect={(id) =>
               setSelected((s) =>

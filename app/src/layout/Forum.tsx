@@ -11,7 +11,7 @@ import {
   Search,
   ShieldCheck,
 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
@@ -64,34 +64,41 @@ export const ForumNavigation = ({
     </nav>
   );
 };
-/** Render server-authorized topics with unread/resume links and optional staff selection. */
+/**
+ * Render server-authorized topics with unread/resume links and optional staff selection.
+ * The whole row opens the topic; inner links and the selection box stay separate targets.
+ */
 export const ForumTopicList = ({
   threads,
   selectable,
   selected,
   onSelect,
+  empty,
 }: {
   threads: RouterOutputs["forum"]["getThreads"]["threads"];
   selectable?: boolean;
   selected?: string[];
   onSelect?: (id: string) => void;
+  /** Replaces the generic empty state, e.g. to invite the first topic on a board. */
+  empty?: ReactNode;
 }) => (
   <div className="bg-popover divide-y rounded-lg border">
-    {threads.length === 0 && (
-      <div className="p-8 text-center">
-        <MessageSquare className="text-muted-foreground mx-auto mb-3 h-8 w-8" />
-        <p className="font-semibold">No discussions found</p>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Try another search or start a topic in a board.
-        </p>
-      </div>
-    )}
+    {threads.length === 0 &&
+      (empty ?? (
+        <ForumEmptyState
+          title="No discussions found"
+          detail="Try another search or start a topic in a board."
+        />
+      ))}
     {threads.map((t) => (
-      <div key={t.id} className="flex min-w-0 items-start gap-3 p-4 sm:items-center">
+      <div
+        key={t.id}
+        className="hover:bg-muted/40 relative flex min-w-0 items-start gap-3 p-4 sm:items-center"
+      >
         {selectable && (
           <input
             type="checkbox"
-            className="mt-1 h-5 w-5 shrink-0"
+            className="relative z-10 mt-1 h-5 w-5 shrink-0"
             aria-label={`Select ${t.title}`}
             checked={selected?.includes(t.id) ?? false}
             onChange={() => onSelect?.(t.id)}
@@ -135,20 +142,23 @@ export const ForumTopicList = ({
           </div>
           <Link
             href={`/forum/${t.boardId}/${t.id}`}
-            className="block text-base leading-snug font-semibold break-words hover:underline"
+            className="block text-base leading-snug font-semibold break-words after:absolute after:inset-0 hover:underline"
           >
             {t.title}
           </Link>
           <div className="text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
             <span>{t.user?.username ?? "Deleted player"}</span>
-            <Link href={`/forum/${t.boardId}`} className="hover:underline">
+            <Link
+              href={`/forum/${t.boardId}`}
+              className="relative z-10 hover:underline"
+            >
               {t.boardName}
             </Link>
             {t.tags?.map((tag) => (
               <Link
                 href={`/forum?view=latest&tag=${encodeURIComponent(tag)}`}
                 key={tag}
-                className="bg-muted rounded px-1.5"
+                className="bg-muted relative z-10 rounded px-1.5"
               >
                 {tag}
               </Link>
@@ -157,7 +167,7 @@ export const ForumTopicList = ({
           {t.resumePostId && (
             <Link
               href={`/forum/${t.boardId}/${t.id}?post=${t.resumePostId}`}
-              className="mt-2 inline-block text-xs font-medium text-orange-700 hover:underline"
+              className="relative z-10 mt-2 inline-block text-xs font-medium text-orange-700 hover:underline"
             >
               Resume reading
             </Link>
@@ -165,7 +175,7 @@ export const ForumTopicList = ({
         </div>
         <div className="text-muted-foreground shrink-0 text-right text-xs">
           <span className="text-foreground block font-semibold">
-            {Math.max(0, t.nPosts - 1)} replies
+            {replyCount(t.nPosts)} {replyCount(t.nPosts) === 1 ? "reply" : "replies"}
           </span>
           <time suppressHydrationWarning dateTime={t.updatedAt.toISOString()}>
             {t.updatedAt.toLocaleDateString()}
@@ -522,6 +532,27 @@ export const ForumSearch = ({
 };
 
 /** Stored per account and composer scope; recovery is explicit and successful submission clears it. */
+/** Centered empty-list message, with an optional action such as starting a topic. */
+export const ForumEmptyState = ({
+  title,
+  detail,
+  action,
+}: {
+  title: string;
+  detail: string;
+  action?: ReactNode;
+}) => (
+  <div className="p-8 text-center">
+    <MessageSquare className="text-muted-foreground mx-auto mb-3 h-8 w-8" />
+    <p className="font-semibold">{title}</p>
+    <p className="text-muted-foreground mt-1 text-sm">{detail}</p>
+    {action && <div className="mt-4 flex justify-center">{action}</div>}
+  </div>
+);
+
+/** Replies to a topic: every post after its opening post. */
+const replyCount = (nPosts: number) => Math.max(0, nPosts - 1);
+
 type Draft = {
   content: string;
   title: string;

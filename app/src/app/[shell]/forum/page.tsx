@@ -225,7 +225,11 @@ function ForumBrowse({
                 </div>
                 <div className="bg-popover divide-y rounded-lg border">
                   {group.map((board) => (
-                    <div key={board.id} className="flex min-w-0 items-center gap-3 p-4">
+                    // The whole row opens a readable board.
+                    <div
+                      key={board.id}
+                      className={`relative flex min-w-0 items-center gap-3 p-4 ${board.permissions.read ? "hover:bg-muted/40" : ""}`}
+                    >
                       <MessageSquare
                         aria-hidden
                         className="hidden h-6 w-6 shrink-0 text-orange-600 sm:block"
@@ -234,7 +238,7 @@ function ForumBrowse({
                         {board.permissions.read ? (
                           <Link
                             href={`/forum/${board.id}`}
-                            className="font-semibold hover:underline"
+                            className="font-semibold after:absolute after:inset-0 hover:underline"
                           >
                             {board.name}
                           </Link>
@@ -264,7 +268,7 @@ function ForumBrowse({
                         <Link
                           href={`/forum/${board.id}`}
                           aria-label={`Open ${board.name}`}
-                          className="hover:bg-accent rounded-md p-2"
+                          className="hover:bg-accent relative z-10 rounded-md p-2"
                         >
                           <ChevronRight className="h-5 w-5" />
                         </Link>
