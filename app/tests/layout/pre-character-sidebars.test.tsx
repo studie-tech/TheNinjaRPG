@@ -129,7 +129,7 @@ describe("sidebars before character creation", () => {
     },
   );
 
-  it("keeps the existing sign-in panel for signed-out Classic visitors", () => {
+  it("offers signed-out Classic visitors account creation beside sign-in", () => {
     const view = render(
       <LayoutRightSidebarContent
         variant="default"
@@ -141,7 +141,10 @@ describe("sidebars before character creation", () => {
     expect(view.getByRole("link", { name: /^Sign in/ }).getAttribute("href")).toBe(
       "/login",
     );
-    expect(view.getByAltText("DiscordProvider")).toBeTruthy();
+    expect(
+      view.getByRole("link", { name: /^Create account/ }).getAttribute("href"),
+    ).toBe("/signup");
+    expect(view.queryByAltText("DiscordProvider")).toBeNull();
     expect(view.queryByRole("navigation", { name: "Explore Seichi" })).toBeNull();
   });
 });

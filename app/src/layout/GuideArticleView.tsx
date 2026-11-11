@@ -157,7 +157,7 @@ export const GuideArticleView: React.FC<GuideArticleViewProps> = ({
   );
 };
 
-const GuideToc: React.FC<{
+export const GuideToc: React.FC<{
   headings: { id: string; text: string; level: 2 | 3 }[];
 }> = ({ headings }) => (
   <ol className="mt-2 space-y-0.5 border-l pl-3 text-sm">

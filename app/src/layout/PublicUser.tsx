@@ -154,6 +154,8 @@ export interface PublicUserSeed {
 interface PublicUserComponentProps {
   userId: string;
   title: string;
+  /** Replaces the default "Profile: <name>" subtitle, e.g. when the title is the name. */
+  subtitle?: string;
   initialProfile?: PublicUserSeed;
   defaultBackHref?: string;
   initialBreak?: boolean;
@@ -195,6 +197,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const {
     userId,
     title,
+    subtitle,
     initialProfile,
     defaultBackHref,
     initialBreak,
@@ -721,6 +724,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     return (
       <PublicUserSkeleton
         title={title}
+        subtitle={subtitle}
         defaultBackHref={defaultBackHref}
         initialBreak={initialBreak}
         isGuest={isGuest}
@@ -749,22 +753,12 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   // Render
   return (
     <>
-      {isGuest && (
-        <ContentBox
-          title="Public Profile"
-          subtitle={`Profile: ${profileName}`}
-          defaultBackHref={defaultBackHref}
-          initialBreak={initialBreak}
-        >
-          {publicUserIntro(profile.username)}
-        </ContentBox>
-      )}
       {/* USER STATISTICS */}
       <ContentBox
         title={title}
-        defaultBackHref={isGuest ? undefined : defaultBackHref}
-        subtitle={`Profile: ${profileName}`}
-        initialBreak={isGuest ? true : initialBreak}
+        defaultBackHref={defaultBackHref}
+        subtitle={subtitle ?? `Profile: ${profileName}`}
+        initialBreak={initialBreak}
         topRightContent={
           <div className="flex flex-row items-center gap-1 [&_svg]:block">
             {userData && canCloneUser(userData.role) && (
@@ -1204,6 +1198,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
           </div>
         }
       >
+        {isGuest && <div className="mb-4">{publicUserIntro(profile.username)}</div>}
         <div className="grid grid-cols-2">
           <div>
             <b>General</b>

@@ -1,4 +1,6 @@
+import type React from "react";
 import ContentBox from "@/layout/ContentBox";
+import { GuideToc } from "@/layout/GuideArticleView";
 
 export default function GameRules() {
   return (
@@ -16,15 +18,19 @@ export default function GameRules() {
           generally follows PEGI-12 guidelines for game content, however user content is
           unrated.
         </p>
+        <nav aria-label="On this page" className="my-3 rounded-lg border p-3">
+          <p className="font-bold">On this page</p>
+          <GuideToc headings={RULE_TOC} />
+        </nav>
         <hr className="my-2" />
 
-        <h2 className="font-bold text-lg">1. Code of Conduct</h2>
-        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;1.1 Respect and Decorum</h3>
-        <p className="my-2">
-          &nbsp;&nbsp;To maintain a welcoming environment, all users are required to
-          treat others with respect and dignity. When encountering negative behavior
-          users are strongly encouraged to use the blacklist feature in addition to
-          reporting an offense. The following behaviors are strictly prohibited:
+        <RuleHeading number="1" />
+        <RuleHeading number="1.1" />
+        <p className="my-2 pl-3">
+          To maintain a welcoming environment, all users are required to treat others
+          with respect and dignity. When encountering negative behavior users are
+          strongly encouraged to use the blacklist feature in addition to reporting an
+          offense. The following behaviors are strictly prohibited:
         </p>
         <ul className="list-disc pl-5">
           <li>
@@ -55,9 +61,7 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="font-bold text-lg">
-          2. Avatar, Account Name, and Title Guidelines
-        </h2>
+        <RuleHeading number="2" />
         <ul className="list-disc pl-5">
           <li>
             <b>Prohibited Content:</b> Avatars, account names, and titles depicting
@@ -88,7 +92,7 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="font-bold text-lg">3. External Links</h2>
+        <RuleHeading number="3" />
         <ul className="list-disc pl-5">
           <li>
             <b>Prohibited Platforms:</b> Links to sites associated with drugs,
@@ -101,18 +105,17 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="font-bold text-lg">4. Punishment System</h2>
-        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;4.1 Overview</h3>
-        <p className="my-2">
-          &nbsp;&nbsp;Strikes do not reset and remain permanently attached to a user’s
-          record. Moderators typically issue one official warning before applying a
-          strike, unless the violation is severe. A moderator may issue an unofficial
-          warning or rule reminder before issuing a strike or official warning. However,
-          it is considered a courtesy and is not required before official action is
-          taken.
+        <RuleHeading number="4" />
+        <RuleHeading number="4.1" />
+        <p className="my-2 pl-3">
+          Strikes do not reset and remain permanently attached to a user’s record.
+          Moderators typically issue one official warning before applying a strike,
+          unless the violation is severe. A moderator may issue an unofficial warning or
+          rule reminder before issuing a strike or official warning. However, it is
+          considered a courtesy and is not required before official action is taken.
         </p>
 
-        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;4.2 Strike Levels</h3>
+        <RuleHeading number="4.2" />
         <ul className="list-disc pl-5">
           <li>
             <b>Strike 1:</b> 24-hour Silence.
@@ -133,9 +136,7 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="pt-3 font-bold text-md">
-          &nbsp;&nbsp;4.3 Special Punishment Rules
-        </h3>
+        <RuleHeading number="4.3" />
         <ul className="list-disc pl-5">
           <li>
             <b>Minimum Duration:</b> Silences under 24 hours are not considered strikes.
@@ -161,8 +162,8 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="font-bold text-lg">5. Reporting and Appeals</h2>
-        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;5.1 Reporting Violations</h3>
+        <RuleHeading number="5" />
+        <RuleHeading number="5.1" />
         <ul className="list-disc pl-5">
           <li>Users should report rule violations via the in-game reporting system.</li>
           <li>
@@ -178,7 +179,7 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;5.2 Appeals Process</h3>
+        <RuleHeading number="5.2" />
         <ul className="list-disc pl-5">
           <li>
             Users may appeal disciplinary actions by contacting the issuing Moderator or
@@ -195,8 +196,8 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="font-bold text-lg">6. Staff Roles and Responsibilities</h2>
-        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;6.1 Roles</h3>
+        <RuleHeading number="6" />
+        <RuleHeading number="6.1" />
         <ul className="list-disc pl-5">
           <li>
             <b>Jr. Moderators:</b> Moderators in training. May issue warnings and
@@ -234,7 +235,7 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;6.2 Responsibilities</h3>
+        <RuleHeading number="6.2" />
         <ul className="list-disc pl-5">
           <li>
             <b>Transparency:</b> All disciplinary actions must be logged and justified.
@@ -245,14 +246,12 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="pt-3 font-bold text-md">
-          &nbsp;&nbsp;6.3 Recusal and Conflicts of Interest
-        </h3>
-        <p className="my-2">
-          &nbsp;&nbsp;Staff may not use staff powers, tools, or influence (including
-          moderation actions, content and balance changes, reward or item grants, and
-          access to private information) in any matter where they have a conflict of
-          interest. A conflict of interest exists whenever the matter involves:
+        <RuleHeading number="6.3" />
+        <p className="my-2 pl-3">
+          Staff may not use staff powers, tools, or influence (including moderation
+          actions, content and balance changes, reward or item grants, and access to
+          private information) in any matter where they have a conflict of interest. A
+          conflict of interest exists whenever the matter involves:
         </p>
         <ul className="list-disc pl-5">
           <li>
@@ -276,9 +275,7 @@ export default function GameRules() {
             who has reported them or whom they have reported.
           </li>
         </ul>
-        <p className="my-2">
-          &nbsp;&nbsp;When a conflict of interest exists, staff must:
-        </p>
+        <p className="my-2 pl-3">When a conflict of interest exists, staff must:</p>
         <ul className="list-disc pl-5">
           <li>
             Not act on the matter themselves, and hand it to an unconflicted staff
@@ -296,19 +293,17 @@ export default function GameRules() {
             Moderator Admin, or Content Admin.
           </li>
         </ul>
-        <p className="my-2">
-          &nbsp;&nbsp;These rules are applied by their intent, not only their wording.
-          Actions that benefit a staff member&apos;s own accounts or groups indirectly
-          (for example, a balance change made to favor their own build, or asking
-          another staff member to act on their behalf) are treated as violations.
+        <p className="my-2 pl-3">
+          These rules are applied by their intent, not only their wording. Actions that
+          benefit a staff member&apos;s own accounts or groups indirectly (for example,
+          a balance change made to favor their own build, or asking another staff member
+          to act on their behalf) are treated as violations.
         </p>
 
-        <h3 className="pt-3 font-bold text-md">
-          &nbsp;&nbsp;6.4 Staff Harassment Protocol
-        </h3>
-        <p className="my-2">
-          &nbsp;&nbsp;When a staff member is the target of harassment, baiting, or
-          hostility, they must:
+        <RuleHeading number="6.4" />
+        <p className="my-2 pl-3">
+          When a staff member is the target of harassment, baiting, or hostility, they
+          must:
         </p>
         <ul className="list-disc pl-5">
           <li>
@@ -324,14 +319,12 @@ export default function GameRules() {
             recorded.
           </li>
         </ul>
-        <p className="my-2">
-          &nbsp;&nbsp;Staff may never punish, silence, ban, or otherwise act against a
-          player who is harassing or arguing with them personally.
+        <p className="my-2 pl-3">
+          Staff may never punish, silence, ban, or otherwise act against a player who is
+          harassing or arguing with them personally.
         </p>
 
-        <h3 className="pt-3 font-bold text-md">
-          &nbsp;&nbsp;6.5 Staff Probation and Removal
-        </h3>
+        <RuleHeading number="6.5" />
         <ul className="list-disc pl-5">
           <li>
             Staff may be placed on probation when joining or changing role, or after a
@@ -350,10 +343,8 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="font-bold text-lg">7. Fair Play Guidelines</h2>
-        <h3 className="pt-3 font-bold text-md">
-          &nbsp;&nbsp;7.1 Cheating and Exploits
-        </h3>
+        <RuleHeading number="7" />
+        <RuleHeading number="7.1" />
         <ul className="list-disc pl-5">
           <li>
             Exploiting mechanics or using unauthorized third-party tools is prohibited.
@@ -367,9 +358,7 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="pt-3 font-bold text-md">
-          &nbsp;&nbsp;7.2 Account Sharing and Multiple Accounts
-        </h3>
+        <RuleHeading number="7.2" />
         <ul className="list-disc pl-5">
           <li>
             Each individual may own up to two accounts in total, including accounts
@@ -401,14 +390,12 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="pt-3 font-bold text-md">
-          &nbsp;&nbsp;7.3 Selling or Transferring Accounts
-        </h3>
+        <RuleHeading number="7.3" />
         <ul className="list-disc pl-5">
           <li>Strictly prohibited and may result in permanent bans.</li>
         </ul>
 
-        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;7.4 AI Players</h3>
+        <RuleHeading number="7.4" />
         <ul className="list-disc pl-5">
           <li>
             <b>Same Rules:</b> AI players and players using AI assistance must follow
@@ -462,7 +449,7 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="font-bold text-lg">8. General Community Standards</h2>
+        <RuleHeading number="8" />
         <ul className="list-disc pl-5">
           <li>
             <b>Respect for Staff:</b> Harassment of staff is treated the same as
@@ -476,7 +463,7 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="font-bold text-lg">9. Official Events</h2>
+        <RuleHeading number="9" />
         <ul className="list-disc pl-5">
           <li>
             Official events and media are announced in-game and on official channels.
@@ -489,8 +476,8 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="font-bold text-lg">10. Additional Guidelines</h2>
-        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;10.1 Impersonation</h3>
+        <RuleHeading number="10" />
+        <RuleHeading number="10.1" />
         <ul className="list-disc pl-5">
           <li>
             Impersonating accounts, staff, or players (including past users) is
@@ -498,7 +485,7 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;10.2 Language Policy</h3>
+        <RuleHeading number="10.2" />
         <ul className="list-disc pl-5">
           <li>
             TNR is an English-only game. Short phrases in other languages are allowed,
@@ -506,9 +493,7 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="pt-3 font-bold text-md">
-          &nbsp;&nbsp;10.3 Criticism of Moderator Decisions
-        </h3>
+        <RuleHeading number="10.3" />
         <ul className="list-disc pl-5">
           <li>
             Publicly criticizing moderation decisions or making unfounded assumptions
@@ -517,9 +502,7 @@ export default function GameRules() {
           </li>
         </ul>
 
-        <h3 className="pt-3 font-bold text-md">
-          &nbsp;&nbsp;10.4 Selling Reputation Points
-        </h3>
+        <RuleHeading number="10.4" />
         <ul className="list-disc pl-5">
           <li>
             Players may buy reputation points through the official store or trade with
@@ -530,21 +513,21 @@ export default function GameRules() {
         </ul>
         <hr className="my-2" />
 
-        <h2 className="font-bold text-lg">11. Disclaimer of Warranties</h2>
+        <RuleHeading number="11" />
         <p className="my-2">
           TNR is provided on an &quot;as-is&quot; basis. Players use the platform at
           their own risk
         </p>
         <hr className="my-2" />
 
-        <h2 className="font-bold text-lg">12. Modification of Terms</h2>
+        <RuleHeading number="12" />
         <p className="my-2">
           TNR reserves the right to modify these rules at any time. Announcements will
           be made in-game and on official platforms.
         </p>
         <hr className="my-2" />
 
-        <h2 className="font-bold text-lg">13. Discord</h2>
+        <RuleHeading number="13" />
         <p className="my-2">
           Discord is used as an official means of communication for TNR and the TNR
           community. Bug and moderation tickets can be submitted there as an official
@@ -554,41 +537,110 @@ export default function GameRules() {
           in addition to in-game.
         </p>
 
-        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;13.1 Rules</h3>
-        <p className="my-2">
-          &nbsp;&nbsp;The TNR discord generally follows rules of the TNR website, but
-          may have additional rules in place in a separate rule channel. It also follows
-          the official Discord ToS. It is important to familiarize yourself with both
-          sets of the rules. Strikes on discord are considered separate from strikes
-          in-game, except for rare or extreme circumstances. Therefore a person may be
-          banned or removed from the discord but be allowed to remain in-game.
-          Individuals considered exceptionally disruptive to the TNR discord community
-          may be removed, as discord is considered non essential for gameplay.
+        <RuleHeading number="13.1" />
+        <p className="my-2 pl-3">
+          The TNR discord generally follows rules of the TNR website, but may have
+          additional rules in place in a separate rule channel. It also follows the
+          official Discord ToS. It is important to familiarize yourself with both sets
+          of the rules. Strikes on discord are considered separate from strikes in-game,
+          except for rare or extreme circumstances. Therefore a person may be banned or
+          removed from the discord but be allowed to remain in-game. Individuals
+          considered exceptionally disruptive to the TNR discord community may be
+          removed, as discord is considered non essential for gameplay.
         </p>
 
-        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;13.2 External Discords</h3>
-        <p className="my-2">
-          &nbsp;&nbsp;Any discord besides the main TNR server is considered unofficial,
-          regardless of whether it is run by a staff member or player, and is not
-          required to follow the official TNR rules. These servers are joined at the
-          risk of the player and are not the responsibility of TNR. Except when evidence
-          of in-game infractions (such as prohibited automation under section 7.4,
-          account sharing, exploitation etc.) or extreme, potentially criminal,
-          circumstances (stalking, doxxing etc.) official action will not be taken
-          against a player for behaviour within those servers. If users are experiencing
-          negativity, harassment or disruptions within these servers, they are
-          encouraged to leave them.
+        <RuleHeading number="13.2" />
+        <p className="my-2 pl-3">
+          Any discord besides the main TNR server is considered unofficial, regardless
+          of whether it is run by a staff member or player, and is not required to
+          follow the official TNR rules. These servers are joined at the risk of the
+          player and are not the responsibility of TNR. Except when evidence of in-game
+          infractions (such as prohibited automation under section 7.4, account sharing,
+          exploitation etc.) or extreme, potentially criminal, circumstances (stalking,
+          doxxing etc.) official action will not be taken against a player for behaviour
+          within those servers. If users are experiencing negativity, harassment or
+          disruptions within these servers, they are encouraged to leave them.
         </p>
 
-        <h3 className="pt-3 font-bold text-md">&nbsp;&nbsp;13.2.1 Staff</h3>
-        <p className="my-2">
-          &nbsp;&nbsp;Staff may create, moderate, or participate in external discords.
-          While action in these discords are not considered official staff actions,
-          staff are still expected to remain reasonably professional as a reflection of
-          the community they work for.
+        <RuleHeading number="13.2.1" />
+        <p className="my-2 pl-3">
+          Staff may create, moderate, or participate in external discords. While action
+          in these discords are not considered official staff actions, staff are still
+          expected to remain reasonably professional as a reflection of the community
+          they work for.
         </p>
         <hr className="my-2" />
       </div>
     </ContentBox>
   );
 }
+
+/**
+ * Rule section headings. Each id derives from the rule number alone (rule-4-3), so links
+ * shared by moderators keep working when a title is reworded; renumbering a rule changes
+ * its link.
+ */
+const RuleHeading: React.FC<{ number: string }> = ({ number }) => {
+  const heading = RULE_HEADINGS.find((entry) => entry.number === number);
+  if (!heading) return null;
+  const id = ruleAnchorId(number);
+  return heading.level === 2 ? (
+    <h2 id={id} className="scroll-mt-[80px] pt-2 font-bold text-xl">
+      {number}. {heading.title}
+    </h2>
+  ) : (
+    <h3 id={id} className="scroll-mt-[80px] pt-3 pl-3 font-bold text-lg">
+      {number} {heading.title}
+    </h3>
+  );
+};
+
+/** Stable anchor id of a rule, e.g. "4.3" becomes "rule-4-3". */
+const ruleAnchorId = (number: string) => `rule-${number.replaceAll(".", "-")}`;
+
+const RULE_HEADINGS: { number: string; title: string; level: 2 | 3 }[] = [
+  { number: "1", title: "Code of Conduct", level: 2 },
+  { number: "1.1", title: "Respect and Decorum", level: 3 },
+  { number: "2", title: "Avatar, Account Name, and Title Guidelines", level: 2 },
+  { number: "3", title: "External Links", level: 2 },
+  { number: "4", title: "Punishment System", level: 2 },
+  { number: "4.1", title: "Overview", level: 3 },
+  { number: "4.2", title: "Strike Levels", level: 3 },
+  { number: "4.3", title: "Special Punishment Rules", level: 3 },
+  { number: "5", title: "Reporting and Appeals", level: 2 },
+  { number: "5.1", title: "Reporting Violations", level: 3 },
+  { number: "5.2", title: "Appeals Process", level: 3 },
+  { number: "6", title: "Staff Roles and Responsibilities", level: 2 },
+  { number: "6.1", title: "Roles", level: 3 },
+  { number: "6.2", title: "Responsibilities", level: 3 },
+  { number: "6.3", title: "Recusal and Conflicts of Interest", level: 3 },
+  { number: "6.4", title: "Staff Harassment Protocol", level: 3 },
+  { number: "6.5", title: "Staff Probation and Removal", level: 3 },
+  { number: "7", title: "Fair Play Guidelines", level: 2 },
+  { number: "7.1", title: "Cheating and Exploits", level: 3 },
+  { number: "7.2", title: "Account Sharing and Multiple Accounts", level: 3 },
+  { number: "7.3", title: "Selling or Transferring Accounts", level: 3 },
+  { number: "7.4", title: "AI Players", level: 3 },
+  { number: "8", title: "General Community Standards", level: 2 },
+  { number: "9", title: "Official Events", level: 2 },
+  { number: "10", title: "Additional Guidelines", level: 2 },
+  { number: "10.1", title: "Impersonation", level: 3 },
+  { number: "10.2", title: "Language Policy", level: 3 },
+  { number: "10.3", title: "Criticism of Moderator Decisions", level: 3 },
+  { number: "10.4", title: "Selling Reputation Points", level: 3 },
+  { number: "11", title: "Disclaimer of Warranties", level: 2 },
+  { number: "12", title: "Modification of Terms", level: 2 },
+  { number: "13", title: "Discord", level: 2 },
+  { number: "13.1", title: "Rules", level: 3 },
+  { number: "13.2", title: "External Discords", level: 3 },
+  { number: "13.2.1", title: "Staff", level: 3 },
+];
+
+/** The "On this page" list links the top-level sections. */
+const RULE_TOC = RULE_HEADINGS.filter((heading) => heading.level === 2).map(
+  (heading) => ({
+    id: ruleAnchorId(heading.number),
+    text: `${heading.number}. ${heading.title}`,
+    level: 2 as const,
+  }),
+);
