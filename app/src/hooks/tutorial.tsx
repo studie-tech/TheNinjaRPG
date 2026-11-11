@@ -1,6 +1,6 @@
 "use client";
 
-import { useAtomValue } from "jotai";
+import { atom, useAtomValue } from "jotai";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -10,6 +10,7 @@ import {
   availableUserActions,
   calcActiveUser,
 } from "@/libs/combat/actions";
+import type { ReturnedBattle } from "@/libs/combat/types";
 import { getDistanceToClosestEnemy } from "@/libs/combat/util";
 import {
   getTutorialCombatGuidance,
@@ -27,6 +28,8 @@ import {
 
 /** Steps the hands-on combat lesson replaces with live guidance once the fight is on. */
 const GUIDED_COMBAT_STEP_IDS = ["combat-fight", "mission-find-pup"];
+const noBattleAtom = atom<ReturnedBattle | undefined>(undefined);
+const noSelectedActionAtom = atom<string | undefined>(undefined);
 
 /**
  * Hook to get the current tutorial step
@@ -48,10 +51,6 @@ export const useTutorialStep = () => {
   const router = useRouter();
   const [isAssistantVisible, setIsAssistantVisible] = useState<boolean>(false);
 
-  // Jotai atoms for combat state
-  const battle = useAtomValue(userBattleAtom);
-  const selectedActionId = useAtomValue(combatActionIdAtom);
-
   // Derived
   const stepNumber = userData?.tutorialStep || 0;
   // A switched-off tutorial has no current step. Callers use `currentStep` to
@@ -62,17 +61,21 @@ export const useTutorialStep = () => {
     : undefined;
   const userId = userData?.userId;
   const inBattle = userData?.status === "BATTLE";
+  const isGuidedCombat =
+    pathname === "/combat" &&
+    !!staticStep &&
+    GUIDED_COMBAT_STEP_IDS.includes(staticStep.id);
+
+  // Only a guided combat lesson follows the battle; every other caller reads constant
+  // atoms, so battle updates and action selection do not re-render it.
+  const battle = useAtomValue(isGuidedCombat ? userBattleAtom : noBattleAtom);
+  const selectedActionId = useAtomValue(
+    isGuidedCombat ? combatActionIdAtom : noSelectedActionAtom,
+  );
 
   // Live guidance for the hands-on combat lesson
   const combatGuidance = (() => {
-    if (
-      !battle ||
-      !userId ||
-      pathname !== "/combat" ||
-      !staticStep ||
-      !GUIDED_COMBAT_STEP_IDS.includes(staticStep.id)
-    )
-      return undefined;
+    if (!battle || !userId || !isGuidedCombat) return undefined;
     const self = battle.usersState.find((u) => u.userId === userId);
     if (!self) return undefined;
     if (self.isAutoCombat) return { kind: "auto" } as const;
