@@ -394,15 +394,10 @@ export default function MissionHall({ userData }: MissionHallProps) {
                           "disabled:cursor-not-allowed disabled:opacity-60",
                           grayScale || isSpecificStartBlocked
                             ? "grayscale filter"
-                            : "hover:cursor-pointer hover:opacity-30",
+                            : "rounded-lg transition-transform hover:scale-[1.03] hover:cursor-pointer hover:ring-2 hover:ring-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:hover:scale-100",
                         )}
                       >
-                        <Image
-                          alt="small"
-                          src={setting.image}
-                          width={256}
-                          height={256}
-                        />
+                        <Image alt="" src={setting.image} width={256} height={256} />
                         <p className="font-bold">{setting.name}</p>
                         <p className="flex flex-col">
                           {count} available · random

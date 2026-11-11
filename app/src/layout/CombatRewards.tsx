@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { CombatResult } from "@/libs/combat/types";
 import { getHuntingRank } from "@/libs/hunting";
-import { capitalizeFirstLetter } from "@/utils/string";
+import { capitalizeFirstLetter, formatAmount } from "@/utils/string";
 import type { HuntingReceipt } from "@/validators/hunting";
 
 /** Present settled combat rewards without fetching or granting anything on render. */
@@ -123,7 +123,7 @@ export function CombatRewards({
       )}
       {result.bountiesClaimed.map((bounty) => (
         <p key={bounty.bountyId}>
-          Bounty claimed: <strong>{bounty.amountRyo.toFixed(2)} Ryo</strong>
+          Bounty claimed: <strong>{formatAmount(bounty.amountRyo)} Ryo</strong>
         </p>
       ))}
       {droppedItems.map((drop) => (

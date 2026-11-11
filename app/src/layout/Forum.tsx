@@ -113,7 +113,7 @@ export const ForumTopicList = ({
         )}
         <MessageSquare
           aria-hidden
-          className={`mt-1 hidden h-5 w-5 shrink-0 sm:block ${t.unread ? "text-orange-600" : "text-muted-foreground"}`}
+          className={`mt-1 hidden h-5 w-5 shrink-0 sm:block ${t.unread ? "text-warning" : "text-muted-foreground"}`}
         />
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2 text-xs">
@@ -136,15 +136,13 @@ export const ForumTopicList = ({
             )}
             {t.kind === "QUESTION" && (
               <span
-                className={
-                  t.acceptedPostId ? "text-green-700" : "text-muted-foreground"
-                }
+                className={t.acceptedPostId ? "text-success" : "text-muted-foreground"}
               >
                 {t.acceptedPostId ? "Answered" : "Question"}
               </span>
             )}
             {t.kind === "ANNOUNCEMENT" && (
-              <span className="font-semibold text-orange-700">Announcement</span>
+              <span className="font-semibold text-warning">Announcement</span>
             )}
           </div>
           <Link
@@ -174,7 +172,7 @@ export const ForumTopicList = ({
           {t.resumePostId && (
             <Link
               href={`/forum/${t.boardId}/${t.id}?post=${t.resumePostId}`}
-              className="relative z-10 mt-2 inline-block text-xs font-medium text-orange-700 hover:underline"
+              className="relative z-10 mt-2 inline-block text-xs font-medium text-link hover:underline"
             >
               Resume reading
             </Link>

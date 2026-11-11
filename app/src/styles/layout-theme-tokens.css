@@ -28,6 +28,9 @@ html[data-game-layout="3-sakura-courtyard"]:not([data-reading-palette]) {
   --border: 264 21.1% 86.1%;
   --input: 264 21.1% 86.1%;
   --ring: 326.4 23.6% 41.6%;
+  --success: 142 64% 26%;
+  --warning: 24 85% 34%;
+  --link: 224 64% 42%;
   color-scheme: light;
 }
 html[data-game-layout="3-sakura-courtyard"]
@@ -64,6 +67,9 @@ html[data-game-layout="17-obsidian-council"]:not([data-reading-palette]) {
   --border: 216.4 15.7% 34.9%;
   --input: 216.4 15.7% 34.9%;
   --ring: 40.8 50.6% 69.8%;
+  --success: 142 60% 66%;
+  --warning: 38 90% 66%;
+  --link: 213 90% 76%;
   color-scheme: dark;
 }
 html[data-game-layout="17-obsidian-council"]
@@ -100,6 +106,9 @@ html[data-game-layout="20-eclipse-observatory"]:not([data-reading-palette]) {
   --border: 243.2 20.9% 34.7%;
   --input: 243.2 20.9% 34.7%;
   --ring: 264.9 62.4% 83.3%;
+  --success: 142 60% 66%;
+  --warning: 38 90% 68%;
+  --link: 213 90% 78%;
   color-scheme: dark;
 }
 html[data-game-layout="20-eclipse-observatory"]

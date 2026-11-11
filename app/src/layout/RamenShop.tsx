@@ -18,6 +18,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import type { RamenOption } from "@/utils/ramen";
 import { calcRamenPrice, getRamenHealPercentage } from "@/utils/ramen";
 import { useAwake } from "@/utils/routing";
+import { formatAmount } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 interface RamenShopProps {
@@ -197,8 +198,8 @@ const MenuEntry: React.FC<MenuEntryProps> = (props) => {
         className={isUnavailable ? "opacity-50 grayscale" : "hover:opacity-30"}
       />
       <p>{title}</p>
-      <p className="text-green-700">+{healPerc.toFixed()}% SP/CP</p>
-      <p className="text-red-700">-{cost.toLocaleString()} ryo</p>
+      <p className="text-success">+{healPerc.toFixed()}% SP/CP</p>
+      <p className="text-destructive">-{formatAmount(cost)} ryo</p>
       {!canAfford && (
         <p className="font-normal text-destructive text-sm">Not enough ryo</p>
       )}

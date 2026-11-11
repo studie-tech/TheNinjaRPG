@@ -53,6 +53,10 @@
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
 
+  --color-success: hsl(var(--success));
+  --color-warning: hsl(var(--warning));
+  --color-link: hsl(var(--link));
+
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
 
@@ -161,32 +165,38 @@
     --foreground: 15 75% 28%;
 
     --card: 48 100% 96%; /* amber-50 */
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 20 45% 9%;
 
     --popover: 33 100% 93%; /* orange-100 */
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 20 45% 9%;
 
     --poppopover: 32 98% 83%; /* orange-200 */
-    --poppopover-foreground: 222.2 84% 4.9%;
+    --poppopover-foreground: 20 45% 9%;
 
     --primary: 22 78% 26%;
-    --primary-foreground: 210 40% 98%;
+    --primary-foreground: 40 100% 97%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Warm neutrals that sit on the cream and brown palette. */
+    --secondary: 36 52% 88%;
+    --secondary-foreground: 22 60% 16%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 38 48% 90%;
+    --muted-foreground: 25 28% 34%;
 
     --accent: 48 100% 96%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent-foreground: 22 60% 16%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 210 40% 98%;
 
+    /* Status text and links, readable on cards in every layout. */
+    --success: 142 72% 24%;
+    --warning: 24 90% 32%;
+    --link: 217 80% 38%;
+
     --border: 22 78% 26%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --input: 30 35% 70%;
+    --ring: 22 78% 26%;
 
     --radius: 0.5rem;
   }
@@ -207,8 +217,8 @@
     --primary: 22 78% 26%;
     --primary-foreground: 34 100% 92%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 215 25% 27%;
+    --secondary-foreground: 210 40% 98%;
 
     --muted: 220 15% 25%;
     --muted-foreground: 215 20.2% 65.1%;
@@ -219,8 +229,12 @@
     --destructive: 0 72% 51%;
     --destructive-foreground: 210 40% 98%;
 
+    --success: 142 69% 58%;
+    --warning: 38 92% 60%;
+    --link: 213 94% 74%;
+
     --border: 215 16% 47%;
-    --input: 214.3 31.8% 91.4%;
+    --input: 215 16% 40%;
     --ring: 0 0% 100%;
   }
   .dark body {
@@ -726,7 +740,8 @@
 
   html:not([data-reading-palette]) .tnr-pixel-game [data-content-box] h1,
   html:not([data-reading-palette]) .tnr-pixel-game [data-content-box] h2,
-  html:not([data-reading-palette]) .tnr-pixel-game [data-content-box] h3 {
+  html:not([data-reading-palette]) .tnr-pixel-game [data-content-box] h3,
+  html:not([data-reading-palette]) .tnr-pixel-game [data-content-box-subtitle] {
     color: rgb(248 250 252) !important;
   }
 
@@ -999,6 +1014,15 @@ html[data-reading-palette] {
   --border: 220 12% 45%;
   --input: 220 12% 45%;
   --ring: 220 15% 20%;
+  --success: 142 72% 24%;
+  --warning: 24 90% 32%;
+  --link: 217 80% 38%;
+}
+/* The Pixel shell draws its content boxes dark. */
+html:not([data-reading-palette]) .tnr-pixel-game {
+  --success: 142 69% 58%;
+  --warning: 38 92% 60%;
+  --link: 213 94% 74%;
 }
 html[data-reading-palette] [data-reading-surface] {
   background: hsl(var(--background)) !important;
@@ -1013,7 +1037,7 @@ html[data-reading-palette] .tnr-pixel-game [data-content-box-inner] {
   border-color: hsl(var(--border)) !important;
   box-shadow: none !important;
 }
-html[data-reading-palette] .tnr-pixel-game [data-content-box] :where(h1, h2, h3) {
+html[data-reading-palette] .tnr-pixel-game [data-content-box] :where(h1, h2, h3, [data-content-box-subtitle]) {
   color: hsl(var(--foreground)) !important;
 }
 @keyframes navigation-progress {

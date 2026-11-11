@@ -70,10 +70,10 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
             "disabled:cursor-not-allowed disabled:opacity-60",
             disabled || interactionDisabled
               ? "grayscale filter"
-              : "hover:cursor-pointer hover:opacity-30",
+              : "rounded-lg transition-transform hover:scale-[1.03] hover:cursor-pointer hover:ring-2 hover:ring-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:hover:scale-100",
           )}
         >
-          <Image alt="small" src={setting.image} width={256} height={256} />
+          <Image alt="" src={setting.image} width={256} height={256} />
           <p className="font-bold">{setting.name}</p>
           <p>[Select out of {missions.length} available]</p>
         </button>
@@ -98,11 +98,11 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
                   <button
                     type="button"
                     disabled={isMissionDisabled}
-                    className="hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-lg transition-transform hover:scale-[1.03] hover:ring-2 hover:ring-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:ring-0 motion-reduce:hover:scale-100"
                   >
                     <div className="flex flex-col items-center justify-center">
                       <Image
-                        alt="small"
+                        alt=""
                         className="rounded-lg"
                         src={mission.image || setting.image}
                         width={128}
