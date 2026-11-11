@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, Skull, Trash2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -470,52 +470,21 @@ function DungeonEditor() {
                     />
                   </LabeledField>
                   {(["maxAttempts", "maxCompletes"] as const).map((field) => (
-                    <LabeledField
+                    <DungeonLimitField
                       key={field}
                       label={
                         field === "maxAttempts"
                           ? "Maximum lifetime attempts"
                           : "Maximum completions per reset period"
                       }
-                    >
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          aria-label={`Limit ${field === "maxAttempts" ? "attempts" : "completions"}`}
-                          checked={content.requirements[field] !== null}
-                          onCheckedChange={(limited) =>
-                            patch({
-                              requirements: {
-                                ...content.requirements,
-                                [field]: limited ? 1 : null,
-                              },
-                            })
-                          }
-                        />
-                        {content.requirements[field] !== null ? (
-                          <NumberInput
-                            aria-label={
-                              field === "maxAttempts"
-                                ? "Maximum lifetime attempts"
-                                : "Maximum completions per reset period"
-                            }
-                            min={1}
-                            value={content.requirements[field]!}
-                            onValueChange={(value) =>
-                              patch({
-                                requirements: {
-                                  ...content.requirements,
-                                  [field]: value,
-                                },
-                              })
-                            }
-                          />
-                        ) : (
-                          <span className="text-sm text-muted-foreground">
-                            Unlimited
-                          </span>
-                        )}
-                      </div>
-                    </LabeledField>
+                      switchLabel={`Limit ${field === "maxAttempts" ? "attempts" : "completions"}`}
+                      limit={content.requirements[field]}
+                      onChange={(value) =>
+                        patch({
+                          requirements: { ...content.requirements, [field]: value },
+                        })
+                      }
+                    />
                   ))}
                   {(["attemptDelay", "retryDelay"] as const).map((field) => (
                     <LabeledField
@@ -546,10 +515,19 @@ function DungeonEditor() {
                       >
                         {RetryQuestDelays.map((delay) => (
                           <option key={delay} value={delay}>
-                            {delay === "none" ? "None (lifetime)" : delay}
+                            {delay === "none"
+                              ? field === "attemptDelay"
+                                ? "No cooldown"
+                                : "Never resets (lifetime)"
+                              : delay}
                           </option>
                         ))}
                       </select>
+                      {field === "attemptDelay" && (
+                        <span className="block font-normal text-muted-foreground text-sm">
+                          Use Maximum lifetime attempts to cap attempts.
+                        </span>
+                      )}
                     </LabeledField>
                   ))}
                 </div>
@@ -1000,6 +978,53 @@ const EnemyQuantity = ({
         if (Number.isInteger(value) && value >= 1 && value <= max) onChange(value);
       }}
     />
+  );
+};
+
+/**
+ * Optional numeric limit where null means unlimited. The caption targets the number
+ * input rather than the switch, and switching the limit back on restores the last value.
+ */
+const DungeonLimitField = ({
+  label,
+  switchLabel,
+  limit,
+  onChange,
+}: {
+  label: string;
+  switchLabel: string;
+  limit: number | null;
+  onChange: (value: number | null) => void;
+}) => {
+  const inputId = useId();
+  const [lastLimit, setLastLimit] = useState(limit ?? 1);
+  if (limit !== null && Number.isInteger(limit) && limit >= 1 && limit !== lastLimit) {
+    setLastLimit(limit);
+  }
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={inputId} className="block">
+        {label}
+      </Label>
+      <div className="flex items-center gap-2">
+        <Switch
+          aria-label={switchLabel}
+          checked={limit !== null}
+          onCheckedChange={(limited) => onChange(limited ? lastLimit : null)}
+        />
+        {limit !== null ? (
+          <NumberInput
+            id={inputId}
+            aria-label={label}
+            min={1}
+            value={limit}
+            onValueChange={onChange}
+          />
+        ) : (
+          <span className="text-muted-foreground text-sm">Unlimited</span>
+        )}
+      </div>
+    </div>
   );
 };
 
