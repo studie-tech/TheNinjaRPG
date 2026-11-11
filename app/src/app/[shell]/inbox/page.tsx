@@ -153,7 +153,7 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
               const canExit = !isRaidChatConversationId(convo.id);
               return (
                 <li
-                  className={`relative mx-3 my-3 flex h-12 flex-row items-center rounded-lg hover:bg-popover`}
+                  className="relative mx-3 my-3 flex min-h-12 flex-row items-center gap-2 rounded-lg py-1 hover:bg-popover"
                   key={convo.id}
                 >
                   <button
@@ -162,34 +162,33 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
                     onClick={() => setSelectedConvo(convo.id)}
                     aria-label={`Select conversation with ${convo.users.map((u) => u.userData.username).join(", ")}`}
                   />
-                  {convo.users.length > 0 &&
-                    convo.users.map((relation, i) => {
-                      const user = relation.userData;
-                      return (
-                        <div
-                          key={user.userId}
-                          className={`absolute w-14`}
-                          style={{ left: `${i * 2}rem` }}
-                        >
-                          <AvatarImage
-                            href={user.avatar}
-                            alt={user.username}
-                            size={50}
-                          />
-                        </div>
-                      );
-                    })}
-                  <span
-                    className="grow truncate text-sm"
-                    style={{
-                      marginLeft: `${(convo.users.length * 2 + 1.5).toString()}rem`,
-                    }}
-                  >
-                    {convo.title}
-                    <br />
-                    {convo.createdAt.toDateString()}
+                  {convo.users.length > 0 && (
+                    <div className="flex shrink-0 items-center -space-x-4">
+                      {convo.users.slice(0, INBOX_AVATARS_SHOWN).map((relation) => {
+                        const user = relation.userData;
+                        return (
+                          <div key={user.userId} className="w-12">
+                            <AvatarImage
+                              href={user.avatar}
+                              alt={user.username}
+                              size={50}
+                            />
+                          </div>
+                        );
+                      })}
+                      {convo.users.length > INBOX_AVATARS_SHOWN && (
+                        <span className="rounded-full bg-popover px-1.5 py-0.5 text-xs font-semibold">
+                          +{convo.users.length - INBOX_AVATARS_SHOWN}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <span className="min-w-0 flex-1 text-sm">
+                    <span className="block truncate">{convo.title}</span>
+                    <span className="block truncate text-muted-foreground">
+                      {convo.createdAt.toDateString()}
+                    </span>
                   </span>
-                  <div className="grow"></div>
                   {convo.hasNewMessages && (
                     <BellRing className="h-6 w-6 animate-[wiggle_1s_ease-in-out_infinite] text-red-500 hover:cursor-pointer hover:text-orange-500" />
                   )}
@@ -258,3 +257,6 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
     </div>
   );
 };
+
+/** Overlapping avatars shown per conversation before the rest collapse into "+N". */
+const INBOX_AVATARS_SHOWN = 3;

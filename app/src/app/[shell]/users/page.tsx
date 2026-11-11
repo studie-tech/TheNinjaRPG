@@ -183,16 +183,16 @@ export default function Users() {
     >
       <div className="grid grid-cols-3 p-2 text-center">
         <p>
-          <b>Online last 30min</b>
+          <b>Online now (30 min)</b>
           <br /> {userCountNow} users
         </p>
         <p>
-          <b>Max Online Ever</b>
+          <b>Record online at once</b>
           <br />
           {maxOnline} users
         </p>
         <p>
-          <b>Online today</b>
+          <b>Active in last 24h</b>
           <br /> {userCountDay} users
         </p>
       </div>
