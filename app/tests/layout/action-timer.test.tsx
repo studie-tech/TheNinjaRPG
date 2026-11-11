@@ -56,6 +56,7 @@ const renderTimer = (battle: ReturnType<typeof makeCompleteBattle>) => {
   return {
     commits: () => commits,
     getByText: view.getByText,
+    getAllByText: view.getAllByText,
     queryByText: view.queryByText,
   };
 };
@@ -142,5 +143,33 @@ describe("ActionTimer interval commits", () => {
 
     expect(commits()).toBeGreaterThan(afterMount);
     expect(getByText(`You: ${(COMBAT_SECONDS - 1.1).toFixed(1)}s`)).toBeTruthy();
+  });
+});
+
+describe("ActionTimer turn label", () => {
+  const teamBattle = (activeUserId: string) =>
+    makeCompleteBattle({
+      usersState: [
+        makeBattleUser("p1", { curHealth: 100, direction: "left" }),
+        makeBattleUser("ally", { curHealth: 100, direction: "left" }),
+        makeBattleUser("enemy", { curHealth: 100, direction: "right" }),
+      ],
+      activeUserId,
+      roundStartAt: new Date(FROZEN_NOW - 1000),
+      version: 1,
+    });
+  const label = `${(COMBAT_SECONDS - 1.1).toFixed(1)}s`;
+
+  it("names a teammate's turn as the ally's", () => {
+    const { getByText, queryByText } = renderTimer(teamBattle("ally"));
+    act(() => vi.advanceTimersByTime(100));
+    expect(getByText(`Ally: ${label}`)).toBeTruthy();
+    expect(queryByText(`Opponent: ${label}`)).toBeNull();
+  });
+
+  it("names the other team's turn as the opponent's", () => {
+    const { getAllByText } = renderTimer(teamBattle("enemy"));
+    act(() => vi.advanceTimersByTime(100));
+    expect(getAllByText(`Opponent: ${label}`).length).toBeGreaterThan(0);
   });
 });
