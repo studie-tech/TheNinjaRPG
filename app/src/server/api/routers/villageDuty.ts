@@ -185,7 +185,7 @@ export const villageDutyRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       if (!input.enabled) {
         await cancelVillageDuty(ctx.drizzle, ctx.userId);
-        return { success: true, message: "You have stood down from village duty." };
+        return { success: true, message: "You have stood down from patrol duty." };
       }
       const result = await enrollVillageDuty(
         ctx.drizzle,

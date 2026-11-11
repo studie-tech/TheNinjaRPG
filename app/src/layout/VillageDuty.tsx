@@ -38,7 +38,7 @@ export const VillageDuty = ({
   return (
     <ContentBox
       title="Town Hall"
-      subtitle="Village Duty"
+      subtitle="Patrol Duty"
       defaultBackHref="/village"
       topRightContent={navTabs}
     >
@@ -51,11 +51,11 @@ export const VillageDuty = ({
         <Loader explanation="Loading village protectors" />
       ) : isError ? (
         <div className="space-y-2">
-          <p>Could not load village duty.</p>
+          <p>Could not load patrol duty.</p>
           <Button onClick={() => void refetch()}>Try again</Button>
         </div>
       ) : !data ? (
-        <p>Village duty is available to members of a village.</p>
+        <p>Patrol duty is available to members of a village.</p>
       ) : (
         <div className="space-y-5">
           <div className="bg-muted/30 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">

@@ -16,7 +16,7 @@ import BanInfo from "@/layout/BanInfo";
 import { ElderHall } from "@/layout/ElderHall";
 import { KageHall } from "@/layout/KageHall";
 import Loader from "@/layout/Loader";
-import NavTabs from "@/layout/NavTabs";
+import NavTabs, { resolveRememberedTab } from "@/layout/NavTabs";
 import { ShrineHall } from "@/layout/ShrineHall";
 import { VillageDuty } from "@/layout/VillageDuty";
 import { VillageMission } from "@/layout/VillageMission";
@@ -36,13 +36,16 @@ export default function TownHall() {
         "Wars",
         "Shrines",
         "Village Mission",
-        "Village Duty",
+        "Patrol Duty",
       ];
-  const [tab, setTab] = useLocalStorage<(typeof availableTabs)[number] | null>(
+  const [storedTab, setTab] = useLocalStorage<(typeof availableTabs)[number] | null>(
     "townhallTab",
     null,
     true,
   );
+  const tab = storedTab
+    ? (resolveRememberedTab(storedTab, availableTabs, townhallTabAliases) ?? null)
+    : null;
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (userData.isBanned) return <BanInfo />;
@@ -52,6 +55,7 @@ export default function TownHall() {
       id={`townhallSelection-${userData.villageId}`}
       current={tab}
       options={availableTabs}
+      aliases={townhallTabAliases}
       setValue={setTab}
       icons={{
         Alliance: (
@@ -84,7 +88,7 @@ export default function TownHall() {
             aria-hidden="true"
           />
         ),
-        "Village Duty": (
+        "Patrol Duty": (
           <Shield
             className="size-4 shrink-0 @min-[640px]/townhall:hidden"
             aria-hidden="true"
@@ -121,7 +125,7 @@ export default function TownHall() {
     content = <WarRoom user={userData} navTabs={NavBarBlock} />;
   } else if (tab === "Shrines") {
     content = <ShrineHall user={userData} navTabs={NavBarBlock} />;
-  } else if (tab === "Village Duty") {
+  } else if (tab === "Patrol Duty") {
     content = (
       <VillageDuty
         villageId={userData.villageId ?? ""}
@@ -141,3 +145,6 @@ export default function TownHall() {
   }
   return <div className="@container/townhall min-w-0">{content}</div>;
 }
+
+/** Keep existing town hall selections usable when a tab's displayed name changes. */
+const townhallTabAliases = { "Village Duty": "Patrol Duty" };
