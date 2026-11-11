@@ -66,11 +66,13 @@ export default function Academy() {
       <QuestPicker
         questType="starter"
         title={activeElement === "" ? (isElite ? "Milestones" : "Lessons") : "Academy"}
-        subtitle={subtitle}
+        subtitle={activeElement === "" ? undefined : subtitle}
         unavailableText={
           hasCompletedMilestones
             ? "All Elite Jonin milestones are complete. No lessons available."
-            : undefined
+            : isElite
+              ? "No milestones available right now."
+              : "No lessons available right now."
         }
         initialBreak={activeElement === ""}
         activeQuestId={activeElement}

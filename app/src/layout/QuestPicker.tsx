@@ -27,7 +27,7 @@ import { useRequiredUserData } from "@/utils/UserContext";
 interface QuestPickerProps {
   questType: QuestType;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   defaultBackHref?: string;
   introduction?: string;
   unavailableText?: string;
@@ -215,9 +215,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
         <div className="bg-popover">
           {availableQuests.length === 0 && (
             <p className="p-3 font-bold">
-              {props.unavailableText
-                ? props.unavailableText
-                : `No current ${props.questType} quests available`}
+              {props.unavailableText ?? "No quests available right now."}
             </p>
           )}
           {availableQuests.map((quest) => {
