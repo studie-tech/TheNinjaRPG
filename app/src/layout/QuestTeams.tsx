@@ -472,9 +472,20 @@ export const QuestTeams = ({
             </div>
           ))}
       {!questId && !current && data?.teams.length === 0 && (
-        <p className="text-sm">
-          No public teams or invitations. Form a team from a team-enabled quest.
-        </p>
+        <div className="space-y-2 text-sm">
+          <p>
+            No public teams or invitations. Form a team from a team-enabled quest:
+            event, story and ANBU quests, or a Battle Pyramid tower.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/adminbuilding">Administration Building</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/battlearena#Battle%20Pyramid">Battle Pyramid</Link>
+            </Button>
+          </div>
+        </div>
       )}
     </section>
   );

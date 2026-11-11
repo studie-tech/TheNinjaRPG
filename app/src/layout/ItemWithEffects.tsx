@@ -110,6 +110,8 @@ export interface ItemWithEffectsProps {
   hideImage?: boolean;
   hideEffects?: boolean;
   hideDates?: boolean;
+  /** Player-facing listing: skips editor metadata such as dates, author and visibility. */
+  playerView?: boolean;
   hideData?: boolean;
   onDelete?: (id: string) => void;
   folderName?: string;
@@ -265,6 +267,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
     hideImage,
     hideEffects,
     hideDates,
+    playerView,
     hideData,
     onDelete,
     folderName,
@@ -485,7 +488,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   )}
               </div>
             </div>
-            {!hideDetails && !hideDates && (
+            {!hideDetails && !hideDates && !playerView && (
               <div className="flex flex-row flex-wrap gap-2">
                 {item.createdAt && (
                   <div>
@@ -773,7 +776,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   <b>Item type</b>: {item.itemType.toLowerCase()}
                 </p>
               )}
-              {"hidden" in item && (
+              {"hidden" in item && !playerView && (
                 <p>
                   <b>Hidden</b>: {item.hidden ? "yes" : "no"}
                 </p>

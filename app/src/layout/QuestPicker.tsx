@@ -166,9 +166,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
       defaultBackHref={props.defaultBackHref}
     >
       {props.introduction && (
-        <p className="mb-4 px-3 pt-3 text-center font-bold text-xl">
-          {props.introduction}
-        </p>
+        <p className="mb-4 px-3 pt-3 text-muted-foreground">{props.introduction}</p>
       )}
       {startError && (
         <div className="p-3">
@@ -270,6 +268,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
                     <ItemWithEffects
                       item={quest}
                       showEdit="quest"
+                      playerView
                       footer={
                         <div className="space-y-2">
                           <QuestEntryStock stock={entryStock} />
