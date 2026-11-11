@@ -8,6 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { COMBAT_BIOMES } from "@/drizzle/constants";
 import type { MapTerrain } from "@/drizzle/schema";
@@ -196,17 +203,24 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
           </div>
           <div className="space-y-1">
             <Label htmlFor="terrain-biome">Combat arena (battle background)</Label>
-            <select
-              id="terrain-biome"
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
-              {...form.register("battleBiome")}
-            >
-              {COMBAT_BIOMES.map((biome) => (
-                <option key={biome} value={biome}>
-                  {biome}
-                </option>
-              ))}
-            </select>
+            <Controller
+              control={form.control}
+              name="battleBiome"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger id="terrain-biome" onBlur={field.onBlur}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMBAT_BIOMES.map((biome) => (
+                      <SelectItem key={biome} value={biome}>
+                        {biome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
         </div>
         <div className="space-y-3">

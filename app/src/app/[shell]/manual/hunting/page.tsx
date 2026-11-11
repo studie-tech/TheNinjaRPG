@@ -5,7 +5,16 @@ import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { HUNTING_CONTRACT_DEFAULTS, HUNTING_RANKS } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
@@ -110,13 +119,11 @@ export default function HuntingEditor() {
           >
             New habitat
           </Button>
-          <select
-            aria-label="Edit existing habitat"
-            className="min-w-0 flex-1 rounded border bg-background p-2"
+          <Select
             value={id ?? ""}
             disabled={pending}
-            onChange={(e) => {
-              const h = definitions.data?.find((h) => h.id === e.target.value);
+            onValueChange={(value) => {
+              const h = definitions.data?.find((h) => h.id === value);
               if (h) {
                 setId(h.id);
                 setContent(h.content);
@@ -124,13 +131,20 @@ export default function HuntingEditor() {
               }
             }}
           >
-            <option value="">Select habitat</option>
-            {definitions.data?.map((h) => (
-              <option key={h.id} value={h.id}>
-                {h.content.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              aria-label="Edit existing habitat"
+              className="min-w-0 flex-1"
+            >
+              <SelectValue placeholder="Select habitat" />
+            </SelectTrigger>
+            <SelectContent>
+              {definitions.data?.map((h) => (
+                <SelectItem key={h.id} value={h.id}>
+                  {h.content.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button loading={save.isPending} disabled={pending} onClick={submit}>
             Save habitat
           </Button>
@@ -174,14 +188,14 @@ export default function HuntingEditor() {
               onChange={(e) => patch({ description: e.target.value })}
             />
           </LabeledField>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+          <div className="flex items-center gap-2">
+            <Switch
+              id="habitat-enabled"
               checked={content.enabled}
-              onChange={(e) => patch({ enabled: e.target.checked })}
+              onCheckedChange={(enabled) => patch({ enabled })}
             />
-            Habitat enabled
-          </label>
+            <Label htmlFor="habitat-enabled">Habitat enabled</Label>
+          </div>
           <p className="text-muted-foreground text-sm">
             Use published, reachable sectors. Each contract assigns one personal sector.
             Changes apply to newly accepted contracts. Active hunters keep their
@@ -223,17 +237,23 @@ export default function HuntingEditor() {
                   />
                 </LabeledField>
                 <LabeledField label="Required hunting rank">
-                  <select
-                    className="w-full rounded border bg-background p-2"
+                  <Select
                     value={c.rank}
-                    onChange={(e) =>
-                      edit(ci, { rank: e.target.value as HuntingContract["rank"] })
+                    onValueChange={(value) =>
+                      edit(ci, { rank: value as HuntingContract["rank"] })
                     }
                   >
-                    {HUNTING_RANKS.map((r) => (
-                      <option key={r}>{r}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Required hunting rank">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {HUNTING_RANKS.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {r}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </LabeledField>
                 <LabeledField label="Combat difficulty">
                   <Input
@@ -284,14 +304,14 @@ export default function HuntingEditor() {
                     onValueChange={(v) => edit(ci, { experience: v })}
                   />
                 </LabeledField>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id={`contract-enabled-${c.id}`}
                     checked={c.enabled}
-                    onChange={(e) => edit(ci, { enabled: e.target.checked })}
+                    onCheckedChange={(enabled) => edit(ci, { enabled })}
                   />
-                  Contract enabled
-                </label>
+                  <Label htmlFor={`contract-enabled-${c.id}`}>Contract enabled</Label>
+                </div>
               </div>
               <h4 className="font-semibold">Materials</h4>
               <p className="text-sm">

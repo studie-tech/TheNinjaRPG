@@ -16,6 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { MAP_SECTOR_ID_MAX } from "@/drizzle/constants";
 import { useDelayState } from "@/hooks/useDelayState";
 import Confirm from "@/layout/Confirm";
@@ -681,18 +688,20 @@ function SectorMapEditorContent() {
         title="History"
         subtitle={`Sector ${sector}`}
         topRightContent={
-          <select
-            className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
+          <Select
             value={statusFilter}
-            onChange={(event) =>
-              setStatusFilter(event.target.value as typeof statusFilter)
-            }
+            onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}
           >
-            <option value="ALL">All</option>
-            <option value="DRAFT">Draft</option>
-            <option value="PUBLISHED">Published</option>
-            <option value="ARCHIVED">Archived</option>
-          </select>
+            <SelectTrigger aria-label="Map status" className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All</SelectItem>
+              <SelectItem value="DRAFT">Draft</SelectItem>
+              <SelectItem value="PUBLISHED">Published</SelectItem>
+              <SelectItem value="ARCHIVED">Archived</SelectItem>
+            </SelectContent>
+          </Select>
         }
       >
         {isFetching && <Loader explanation="Loading maps" />}

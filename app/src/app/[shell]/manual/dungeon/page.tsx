@@ -8,6 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -202,13 +209,11 @@ function DungeonEditor() {
         >
           New dungeon
         </Button>
-        <select
-          aria-label="Edit existing dungeon"
-          className="min-w-0 flex-1 rounded border bg-background p-2"
+        <Select
           disabled={save.isPending}
           value={id ?? ""}
-          onChange={(e) => {
-            const row = definitions.data?.find((d) => d.id === e.target.value);
+          onValueChange={(value) => {
+            const row = definitions.data?.find((d) => d.id === value);
             if (!row) return;
             setId(row.id);
             setContent(dungeonContentSchema.parse(row.content));
@@ -218,13 +223,17 @@ function DungeonEditor() {
             setPanel("details");
           }}
         >
-          <option value="">Select dungeon</option>
-          {definitions.data?.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.content.name}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger aria-label="Edit existing dungeon" className="min-w-0 flex-1">
+            <SelectValue placeholder="Select dungeon" />
+          </SelectTrigger>
+          <SelectContent>
+            {definitions.data?.map((d) => (
+              <SelectItem key={d.id} value={d.id}>
+                {d.content.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button disabled={save.isPending} loading={save.isPending} onClick={submit}>
           Save dungeon
         </Button>
@@ -298,19 +307,28 @@ function DungeonEditor() {
                   />
                 </LabeledField>
                 <LabeledField label="Entrance artwork">
-                  <select
-                    aria-label="Entrance artwork"
-                    className="w-full rounded border bg-background p-2"
-                    value={content.structureAssetId}
-                    onChange={(e) => patch({ structureAssetId: e.target.value })}
+                  <Select
+                    value={content.structureAssetId || DEFAULT_ENTRANCE}
+                    onValueChange={(value) =>
+                      patch({
+                        structureAssetId: value === DEFAULT_ENTRANCE ? "" : value,
+                      })
+                    }
                   >
-                    <option value="">Default biome entrance</option>
-                    {assets.data?.map((asset) => (
-                      <option key={asset.id} value={asset.id}>
-                        {asset.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Entrance artwork">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={DEFAULT_ENTRANCE}>
+                        Default biome entrance
+                      </SelectItem>
+                      {assets.data?.map((asset) => (
+                        <SelectItem key={asset.id} value={asset.id}>
+                          {asset.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </LabeledField>
                 <LabeledField label="Entrance size multiplier">
                   <NumberInput
@@ -322,19 +340,23 @@ function DungeonEditor() {
                   />
                 </LabeledField>
                 <LabeledField label="Battle background">
-                  <select
-                    className="w-full rounded border bg-background p-2"
+                  <Select
                     value={content.background}
-                    onChange={(e) =>
-                      patch({
-                        background: e.target.value as DungeonContent["background"],
-                      })
+                    onValueChange={(value) =>
+                      patch({ background: value as DungeonContent["background"] })
                     }
                   >
-                    {COMBAT_BIOMES.map((b) => (
-                      <option key={b}>{b}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Battle background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COMBAT_BIOMES.map((b) => (
+                        <SelectItem key={b} value={b}>
+                          {b}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </LabeledField>
                 <div className="sm:col-span-2">
                   <LabeledField label="Description">
@@ -495,34 +517,39 @@ function DungeonEditor() {
                           : "Completion reset period"
                       }
                     >
-                      <select
-                        aria-label={
-                          field === "attemptDelay"
-                            ? "Attempt cooldown"
-                            : "Completion reset period"
-                        }
-                        className="w-full rounded border bg-background p-2"
+                      <Select
                         value={content.requirements[field]}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           patch({
                             requirements: {
                               ...content.requirements,
-                              [field]: e.target
-                                .value as DungeonContent["requirements"][typeof field],
+                              [field]:
+                                value as DungeonContent["requirements"][typeof field],
                             },
                           })
                         }
                       >
-                        {RetryQuestDelays.map((delay) => (
-                          <option key={delay} value={delay}>
-                            {delay === "none"
-                              ? field === "attemptDelay"
-                                ? "No cooldown"
-                                : "Never resets (lifetime)"
-                              : delay}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger
+                          aria-label={
+                            field === "attemptDelay"
+                              ? "Attempt cooldown"
+                              : "Completion reset period"
+                          }
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RetryQuestDelays.map((delay) => (
+                            <SelectItem key={delay} value={delay}>
+                              {delay === "none"
+                                ? field === "attemptDelay"
+                                  ? "No cooldown"
+                                  : "Never resets (lifetime)"
+                                : delay}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       {field === "attemptDelay" && (
                         <span className="block font-normal text-muted-foreground text-sm">
                           Use Maximum lifetime attempts to cap attempts.
@@ -542,22 +569,25 @@ function DungeonEditor() {
             >
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    aria-label="Tier"
-                    className="min-w-0 flex-1 rounded border bg-background p-2"
-                    value={tier}
-                    onChange={(e) => {
+                  <Select
+                    value={String(tier)}
+                    onValueChange={(value) => {
                       if (!validateNumberInputs(roomsRef.current)) return;
-                      setTier(Number(e.target.value));
+                      setTier(Number(value));
                       setFloor(0);
                     }}
                   >
-                    {content.tiers.map((_, i) => (
-                      <option key={i} value={i}>
-                        Tier {i + 1} of {content.tiers.length}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Tier" className="min-w-0 flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {content.tiers.map((_, i) => (
+                        <SelectItem key={i} value={String(i)}>
+                          Tier {i + 1} of {content.tiers.length}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button
                     variant="secondary"
                     disabled={content.tiers.length >= DUNGEON_MAX_TIERS}
@@ -800,28 +830,30 @@ function DungeonEditor() {
                     className="grid grid-cols-[7rem_minmax(0,1fr)_auto] items-end gap-2 rounded-lg border bg-popover p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto]"
                     key={i}
                   >
-                    <select
-                      aria-label={`Drop ${i + 1} type`}
-                      className="rounded border bg-background p-2"
+                    <Select
                       value={drop.type}
-                      onChange={(e) => {
+                      onValueChange={(value) => {
                         const drops = [...content.rewards.drops];
                         drops[i] = {
                           ...drop,
-                          type: e.target
-                            .value as DungeonContent["rewards"]["drops"][number]["type"],
+                          type: value as DungeonContent["rewards"]["drops"][number]["type"],
                           id: "",
                           package: undefined,
-                          quantity: e.target.value === "jutsu" ? 1 : drop.quantity,
+                          quantity: value === "jutsu" ? 1 : drop.quantity,
                         };
                         patch({ rewards: { ...content.rewards, drops } });
                       }}
                     >
-                      <option value="item">Item</option>
-                      <option value="jutsu">Jutsu</option>
-                      <option value="package">Reward package</option>
-                      <option value="cache">Cache</option>
-                    </select>
+                      <SelectTrigger aria-label={`Drop ${i + 1} type`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="item">Item</SelectItem>
+                        <SelectItem value="jutsu">Jutsu</SelectItem>
+                        <SelectItem value="package">Reward package</SelectItem>
+                        <SelectItem value="cache">Cache</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <div className="col-span-2 min-w-0 sm:col-span-1">
                       <SearchSelect
                         label={`Drop ${i + 1} reward`}
@@ -1027,6 +1059,9 @@ const DungeonLimitField = ({
     </div>
   );
 };
+
+/** Select value standing for no entrance asset, which Radix Select cannot hold as "". */
+const DEFAULT_ENTRANCE = "default";
 
 /** Create the required five room slots; normalizeRooms assigns their boss roles. */
 const newTier = (): DungeonContent["tiers"][number] =>
