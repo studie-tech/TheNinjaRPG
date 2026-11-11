@@ -79,6 +79,7 @@ import type { Jutsu } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useJutsuTrainingCacheUpdate } from "@/hooks/useJutsuTrainingCacheUpdate";
 import { useMasteryTrainingQueue } from "@/hooks/useMasteryTrainingQueue";
+import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -1079,12 +1080,12 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Successive levels of the selected jutsu to buy in one go
   const [levelCount, setLevelCount] = useState<number>(1);
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
-  // Re-renders the box when the countdown ends: the refetch it triggers returns the
-  // same rows, which alone would leave the finished training's overlay on screen.
-  const [, setTrainingFinishedAt] = useState<number>();
   // finishTraining is a server timestamp; compare it on the server clock, the same one
-  // the countdown and the server's training guards use.
-  const serverNow = Date.now() - timeDiff;
+  // the countdown and the server's training guards use. The clock is state so typing in
+  // the confirm dialog reuses the sorted list; it moves when a training ends or the rows
+  // change, since the refetch after a finished countdown can return the same rows.
+  const [clientNow, setClientNow] = useState(() => Date.now());
+  const serverNow = clientNow - timeDiff;
 
   // tRPC useUtils
   const utils = api.useUtils();
@@ -1110,6 +1111,17 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     isPending: isRefetchingUserJutsu,
     isError: isOwnershipUnavailable,
   } = api.jutsu.getUserJutsus.useQuery({});
+  useEffect(() => {
+    if (userJutsus) setClientNow(Date.now());
+  }, [userJutsus]);
+  useRefreshAt(
+    (userJutsus ?? []).map((owned) => owned.finishTraining),
+    () => setClientNow(Date.now()),
+    timeDiff,
+  );
+  const userJutsuById = new Map(
+    (userJutsus ?? []).map((owned) => [owned.jutsuId, owned]),
+  );
   const { data: trainingQueue, isError: isQueueUnavailable } =
     api.jutsu.getTrainingQueue.useQuery(undefined);
   // Keep priorities fixed across offset pages; later favorite/training changes re-sort
@@ -1307,18 +1319,16 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         if (j.parentJutsuId)
           return (
             // Training/leveling is item-free, so ignore the bloodline item requirement here
-            canUseJutsu(j, userData, true, masteries, true) &&
-            (userJutsus?.some((uj) => uj.jutsuId === j.id) ?? false)
+            canUseJutsu(j, userData, true, masteries, true) && userJutsuById.has(j.id)
           );
         return canTrainJutsu(j, userData, masteries);
       })
       .filter((j) => !evolvedAncestorIds.has(j.id))
-      .filter((j) => {
-        const userJutsu = userJutsus?.find((uj) => uj.jutsuId === j.id);
-        return userJutsu || !isJutsuTrainToLearnRestricted(j.jutsuType);
-      })
+      .filter(
+        (j) => userJutsuById.has(j.id) || !isJutsuTrainToLearnRestricted(j.jutsuType),
+      )
       .map((j) => {
-        const uj = userJutsus?.find((uj) => uj.jutsuId === j.id);
+        const uj = userJutsuById.get(j.id);
         return {
           ...j,
           level: uj?.level || 0,
@@ -1502,7 +1512,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           timeDiff={timeDiff}
           emptyText="Nothing in training. Select a jutsu below to start."
           onActiveFinish={async () => {
-            setTrainingFinishedAt(Date.now());
+            setClientNow(Date.now());
             await refreshTraining();
           }}
         />

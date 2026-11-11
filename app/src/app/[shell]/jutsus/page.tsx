@@ -15,7 +15,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ import {
 import type { UserItemWithItem, UserJutsuWithRelations } from "@/drizzle/schema";
 import { useJutsuCacheUpdate } from "@/hooks/useJutsuCacheUpdate";
 import { useJutsuLoadoutCacheUpdate } from "@/hooks/useJutsuLoadoutCacheUpdate";
+import { useRefreshAt } from "@/hooks/useRefreshAt";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -93,8 +94,11 @@ export default function MyJutsu() {
     timeDiff,
     prepareUserUpdate,
   } = useRequiredUserData();
-  // finishTraining is a server timestamp, so compare it on the server clock
-  const serverNow = Date.now() - timeDiff;
+  // finishTraining is a server timestamp, so compare it on the server clock. The clock
+  // is state so typing in a dialog reuses the jutsu counts; it moves when a training
+  // ends or the rows change.
+  const [clientNow, setClientNow] = useState(() => Date.now());
+  const serverNow = clientNow - timeDiff;
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [sharingMode, setSharingMode] = useState<"export" | "import" | null>(null);
@@ -172,6 +176,14 @@ export default function MyJutsu() {
   const { data: userJutsus, isFetching: l1 } = api.jutsu.getUserJutsus.useQuery(
     jutsuInput,
     { enabled: !!userData, placeholderData: (previousData) => previousData },
+  );
+  useEffect(() => {
+    if (userJutsus) setClientNow(Date.now());
+  }, [userJutsus]);
+  useRefreshAt(
+    (userJutsus ?? []).map((owned) => owned.finishTraining),
+    () => setClientNow(Date.now()),
+    timeDiff,
   );
   // Open the details modal of one owned jutsu
   const openJutsu = (id: string) => {
@@ -685,10 +697,11 @@ export default function MyJutsu() {
             {JUTSU_SECTIONS.map(([key, title]) => (
               <JutsuCategorySection
                 key={key}
+                section={key}
                 title={title}
                 jutsus={categorizedJutsus[key]}
                 isOpen={openSections.has(key)}
-                onToggle={() => toggleSection(key)}
+                onToggle={toggleSection}
                 onClick={openJutsu}
                 counts={userJutsuCounts}
                 transformToActionItems={transformToActionItems}
@@ -1362,10 +1375,11 @@ export default function MyJutsu() {
 
 // Sub-component for rendering accordion-style jutsu category sections
 interface JutsuCategorySectionProps {
+  section: string;
   title: string;
   jutsus: UserJutsuWithRelations[];
   isOpen: boolean;
-  onToggle: () => void;
+  onToggle: (section: string) => void;
   onClick: (id: string) => void;
   counts: { id: string; quantity: number }[] | undefined;
   transformToActionItems: (jutsus: UserJutsuWithRelations[]) => {
@@ -1380,8 +1394,16 @@ interface JutsuCategorySectionProps {
 }
 
 const JutsuCategorySection = memo((props: JutsuCategorySectionProps) => {
-  const { title, jutsus, isOpen, onToggle, onClick, counts, transformToActionItems } =
-    props;
+  const {
+    section,
+    title,
+    jutsus,
+    isOpen,
+    onToggle,
+    onClick,
+    counts,
+    transformToActionItems,
+  } = props;
   if (jutsus.length === 0) return null;
 
   return (
@@ -1389,7 +1411,7 @@ const JutsuCategorySection = memo((props: JutsuCategorySectionProps) => {
       <button
         type="button"
         className="flex w-full cursor-pointer flex-row items-center hover:bg-popover"
-        onClick={onToggle}
+        onClick={() => onToggle(section)}
       >
         <h2 className="mt-2 font-bold">
           {title} ({jutsus.length})
