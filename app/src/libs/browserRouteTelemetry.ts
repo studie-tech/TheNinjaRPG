@@ -54,6 +54,7 @@ export const PUBLIC_PAGE_ROUTES = [
   "/manual/ai",
   "/manual/ai/[aiid]/placements",
   "/manual/ai/balance",
+  "/manual/ai/completeness",
   "/manual/ai/edit/[aiid]",
   "/manual/ai/statistics/[aiid]",
   "/manual/asset",

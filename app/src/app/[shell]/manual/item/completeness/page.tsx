@@ -91,7 +91,7 @@ export default function ManualItemCompleteness() {
     { key: "effects", header: "Effects", type: "jsx" },
     { key: "missingGraphic", header: "Graphics", type: "jsx" },
     { key: "missingSfx", header: "SFX", type: "jsx" },
-    { key: "assetsExist", header: "Asset Missing", type: "jsx" },
+    { key: "assetsExist", header: "Assets Exist", type: "jsx" },
     { key: "description", header: "Description", type: "jsx" },
     { key: "total", header: "Total", type: "jsx" },
   ];

@@ -102,7 +102,7 @@ const BloodlineEffectsBalance: React.FC<BloodlineEffectsBalanceProps> = (props) 
     BloodlineBalanceRow,
     keyof BloodlineBalanceRow
   >[] = [
-    { key: "name", header: "Bloodline", type: "string" },
+    { key: "name", header: "Name", type: "string" },
     { key: "links", header: "Links", type: "jsx" },
     {
       key: "statClassification",
@@ -113,7 +113,7 @@ const BloodlineEffectsBalance: React.FC<BloodlineEffectsBalanceProps> = (props) 
     { key: "rank", header: "Rank", type: "capitalized" },
     { key: "power", header: "Power", type: "number" },
     { key: "rounds", header: "Rounds", type: "number" },
-    { key: "powerPerLevel", header: "PowerPerLvl", type: "number" },
+    { key: "powerPerLevel", header: "Power/Level", type: "number" },
   ];
 
   return (
@@ -197,16 +197,16 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
     BloodlineBalanceRow,
     keyof BloodlineBalanceRow
   >[] = [
-    { key: "name", header: "Bloodline", type: "string" },
+    { key: "name", header: "Name", type: "string" },
     { key: "links", header: "Links", type: "jsx" },
-    { key: "userCount", header: "#users", type: "number" },
-    { key: "totalUsage", header: "#uses", type: "number" },
+    { key: "userCount", header: "Users", type: "number" },
+    { key: "totalUsage", header: "Uses", type: "number" },
     { key: "wins", header: "Wins", type: "number" },
     { key: "flees", header: "Flees", type: "number" },
     { key: "losses", header: "Losses", type: "number" },
     {
       key: "winRate",
-      header: "WinRate",
+      header: "Win rate",
       type: "string",
     },
   ];

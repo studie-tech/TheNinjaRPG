@@ -101,14 +101,14 @@ const JutsuEffectsBalance: React.FC<JutsuEffectsBalanceProps> = (props) => {
   // Table columns
   type JutsuBalanceRow = ArrayElement<typeof tableData>;
   const columns: ColumnDefinitionType<JutsuBalanceRow, keyof JutsuBalanceRow>[] = [
-    { key: "name", header: "Jutsu", type: "string" },
+    { key: "name", header: "Name", type: "string" },
     { key: "links", header: "Links", type: "jsx" },
     { key: "jutsuType", header: "Type", type: "capitalized" },
     { key: "effect", header: "Effect", type: "string" },
     { key: "rank", header: "Rank", type: "capitalized" },
     { key: "power", header: "Power", type: "number" },
     { key: "rounds", header: "Rounds", type: "number" },
-    { key: "powerPerLevel", header: "PowerPerLvl", type: "number" },
+    { key: "powerPerLevel", header: "Power/Level", type: "number" },
   ];
 
   return (
@@ -200,16 +200,16 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
   // Table columns
   type JutsuBalanceRow = ArrayElement<typeof tableData>;
   const columns: ColumnDefinitionType<JutsuBalanceRow, keyof JutsuBalanceRow>[] = [
-    { key: "name", header: "Jutsu", type: "string" },
+    { key: "name", header: "Name", type: "string" },
     { key: "links", header: "Links", type: "jsx" },
-    { key: "totalUsage", header: "#uses", type: "number" },
-    { key: "equippedCount", header: "#equipped", type: "number" },
+    { key: "totalUsage", header: "Uses", type: "number" },
+    { key: "equippedCount", header: "Equipped", type: "number" },
     { key: "wins", header: "Wins", type: "number" },
     { key: "flees", header: "Flees", type: "number" },
     { key: "losses", header: "Losses", type: "number" },
     {
       key: "winRate",
-      header: "WinRate",
+      header: "Win rate",
       type: "string",
     },
   ];

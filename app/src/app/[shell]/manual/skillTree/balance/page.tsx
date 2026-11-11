@@ -93,8 +93,8 @@ const SkillTreeEffectsBalance: React.FC<SkillTreeEffectsBalanceProps> = (props) 
     SkillTreeBalanceRow,
     keyof SkillTreeBalanceRow
   >[] = [
-    { key: "name", header: "Skill Name", type: "string" },
-    { key: "links", header: "Actions", type: "jsx" },
+    { key: "name", header: "Name", type: "string" },
+    { key: "links", header: "Links", type: "jsx" },
     { key: "tier", header: "Tier", type: "string" },
     { key: "costSkillPoints", header: "Cost", type: "string" },
     { key: "effect", header: "Effect", type: "string" },
@@ -175,12 +175,12 @@ const SkillTreeUsageBalance: React.FC<SkillTreeUsageBalanceProps> = (props) => {
     SkillTreeBalanceRow,
     keyof SkillTreeBalanceRow
   >[] = [
-    { key: "name", header: "Skill Name", type: "string" },
+    { key: "name", header: "Name", type: "string" },
     { key: "links", header: "Links", type: "jsx" },
-    { key: "userCount", header: "#Users", type: "string" },
+    { key: "userCount", header: "Users", type: "string" },
     { key: "tier", header: "Tier", type: "string" },
     { key: "costSkillPoints", header: "Cost", type: "string" },
-    { key: "effects", header: "#Effects", type: "string" },
+    { key: "effects", header: "Effects", type: "string" },
   ];
 
   return (

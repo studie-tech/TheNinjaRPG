@@ -179,7 +179,7 @@ export const kde = (
 
 /**
  * Totals of battle outcome rows, where `battleWon` is 0 for a loss, 1 for a win and 2
- * for a flee.
+ * for a flee. Content without usage gets a dash instead of a misleading 0% win rate.
  */
 export const summarizeBattleOutcomes = (
   rows: readonly { battleWon: number; count: number | null }[],
@@ -192,8 +192,8 @@ export const summarizeBattleOutcomes = (
   const flees = sumOutcome(2);
   const losses = sumOutcome(0);
   const totalUsage = wins + flees + losses;
-  const winRate = totalUsage > 0 ? (wins / totalUsage) * 100 : 0;
-  return { wins, flees, losses, totalUsage, winRate: `${winRate.toFixed(1)}%` };
+  const winRate = totalUsage > 0 ? `${((wins / totalUsage) * 100).toFixed(1)}%` : "—";
+  return { wins, flees, losses, totalUsage, winRate };
 };
 
 /** Beta density sampled over [0,1], clamped off the endpoints where it can diverge. */

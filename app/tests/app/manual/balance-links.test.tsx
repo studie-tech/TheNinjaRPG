@@ -63,7 +63,14 @@ it("links each balance data source from its content row and column", () => {
       "/manual/item/completeness#Diversity",
       "",
     ],
-    ["AI", "/manual/ai/balance#Usage", "/manual/ai/balance#Power", "", "", ""],
+    [
+      "AI",
+      "/manual/ai/balance#Usage",
+      "/manual/ai/balance#Power",
+      "/manual/ai/completeness",
+      "",
+      "",
+    ],
     [
       "Skill Trees",
       "/manual/skillTree/balance#Usage",

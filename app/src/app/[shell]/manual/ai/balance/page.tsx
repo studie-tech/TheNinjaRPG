@@ -81,15 +81,15 @@ const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => 
   // Table columns
   type AiBalanceRow = ArrayElement<typeof tableData>;
   const columns: ColumnDefinitionType<AiBalanceRow, keyof AiBalanceRow>[] = [
-    { key: "name", header: "AI", type: "string" },
-    { key: "links", header: "Link", type: "jsx" },
-    { key: "totalUsage", header: "Usage#", type: "number" },
+    { key: "name", header: "Name", type: "string" },
+    { key: "links", header: "Links", type: "jsx" },
+    { key: "totalUsage", header: "Uses", type: "number" },
     { key: "wins", header: "Wins", type: "number" },
     { key: "flees", header: "Flees", type: "number" },
     { key: "losses", header: "Losses", type: "number" },
     {
       key: "winRate",
-      header: "WinRate",
+      header: "Win rate",
       type: "string",
     },
   ];
@@ -170,10 +170,10 @@ const AiEffectsBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) =
   const columns: ColumnDefinitionType<AiEffectsRow, keyof AiEffectsRow>[] = [
     {
       key: "name",
-      header: "AI",
+      header: "Name",
       type: "jsx",
     },
-    { key: "links", header: "Link", type: "jsx" },
+    { key: "links", header: "Links", type: "jsx" },
     { key: "level", header: "Level", type: "number" },
     { key: "origin", header: "Origin", type: "string" },
     { key: "effect", header: "Effect", type: "string" },

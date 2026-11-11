@@ -1,6 +1,6 @@
 "use client";
 
-import { ChartCandlestick, FilePlus } from "lucide-react";
+import { ChartCandlestick, FilePlus, ListChecks } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -84,6 +84,13 @@ export default function ManualAI() {
                 <ChartCandlestick className="h-6 w-6" />
               </Button>
             </Link>
+            {userData && canChangeContent(userData.role) && (
+              <Link href="/manual/ai/completeness">
+                <Button id="ai-completeness" hoverText="Animation Completeness">
+                  <ListChecks className="h-6 w-6" />
+                </Button>
+              </Link>
+            )}
           </div>
         }
       >

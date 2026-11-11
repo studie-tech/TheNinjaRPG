@@ -98,14 +98,14 @@ const ItemEffectsBalance: React.FC<ItemEffectsBalanceProps> = (props) => {
   // Table columns
   type ItemBalanceRow = ArrayElement<typeof tableData>;
   const columns: ColumnDefinitionType<ItemBalanceRow, keyof ItemBalanceRow>[] = [
-    { key: "name", header: "Item", type: "string" },
+    { key: "name", header: "Name", type: "string" },
     { key: "links", header: "Links", type: "jsx" },
     { key: "itemType", header: "Type", type: "capitalized" },
     { key: "effect", header: "Effect", type: "string" },
     { key: "rarity", header: "Rarity", type: "capitalized" },
     { key: "power", header: "Power", type: "number" },
     { key: "rounds", header: "Rounds", type: "number" },
-    { key: "powerPerLevel", header: "PowerPerLvl", type: "number" },
+    { key: "powerPerLevel", header: "Power/Level", type: "number" },
   ];
 
   // Set the default filters
@@ -198,17 +198,17 @@ const ItemUsageBalance: React.FC<ItemUsageBalanceProps> = (props) => {
   const columns: ColumnDefinitionType<ItemBalanceRow, keyof ItemBalanceRow>[] = [
     {
       key: "name",
-      header: "Item",
+      header: "Name",
       type: "jsx",
     },
-    { key: "totalUsage", header: "Total Usage", type: "number" },
+    { key: "totalUsage", header: "Uses", type: "number" },
     { key: "equippedCount", header: "Equipped", type: "number" },
     { key: "wins", header: "Wins", type: "number" },
     { key: "flees", header: "Flees", type: "number" },
     { key: "losses", header: "Losses", type: "number" },
     {
       key: "winRate",
-      header: "Win Rate",
+      header: "Win rate",
       type: "string",
     },
   ];
