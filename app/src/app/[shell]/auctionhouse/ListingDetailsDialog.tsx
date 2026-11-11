@@ -34,6 +34,7 @@ import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
+import { QueryError } from "@/layout/QueryError";
 import Table from "@/layout/Table";
 import { finishedImbuementItems } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
@@ -72,7 +73,13 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   const utils = api.useUtils();
 
   // Query single auction listing
-  const { data: listing, isLoading } = api.auction.getAuctionListing.useQuery(
+  const {
+    data: listing,
+    isLoading,
+    isError: isListingError,
+    isFetching: isFetchingListing,
+    refetch: refetchListing,
+  } = api.auction.getAuctionListing.useQuery(
     { auctionId },
     { enabled: isOpen && !!auctionId },
   );
@@ -130,6 +137,19 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
     });
 
   // Guards
+  if (isListingError && !listing) {
+    return (
+      <Modal title="Auction Details" isOpen={isOpen} setIsOpen={setIsOpen}>
+        <QueryError
+          layout="stacked"
+          className="space-y-3 p-4 text-center"
+          message="Could not load this auction."
+          onRetry={() => void refetchListing()}
+          isRetrying={isFetchingListing}
+        />
+      </Modal>
+    );
+  }
   if (isLoading || !listing) {
     return (
       <Modal title="Auction Details" isOpen={isOpen} setIsOpen={setIsOpen}>

@@ -17,6 +17,10 @@ import * as Link from "@/layout/Link";
 import * as Post from "@/layout/Post";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 import { TrpcTestProviders, testApi } from "../../setup/trpc";
 
 type ThreadData = RouterOutputs["comments"]["getForumComments"];
@@ -31,6 +35,7 @@ let requestedPages: number[];
 let savedObserver: PropertyDescriptor | undefined;
 
 beforeEach(() => {
+  installBrowserGlobals({ events: [], scrollIntoView: true });
   failReads = false;
   rejectRemoval = false;
   moderator = false;
@@ -48,9 +53,7 @@ beforeEach(() => {
   savedObserver = Object.getOwnPropertyDescriptor(globalThis, "IntersectionObserver");
   Object.defineProperty(globalThis, "IntersectionObserver", {
     configurable: true,
-    value: function () {
-      return { observe() {}, unobserve() {}, disconnect() {} };
-    },
+    value: () => ({ observe() {}, unobserve() {}, disconnect() {} }),
   });
   vi.spyOn(navigation, "useSearchParams").mockReturnValue(
     new URLSearchParams() as never,
@@ -103,6 +106,7 @@ afterEach(() => {
   if (savedObserver)
     Object.defineProperty(globalThis, "IntersectionObserver", savedObserver);
   else Reflect.deleteProperty(globalThis, "IntersectionObserver");
+  restoreBrowserGlobals();
 });
 
 /** Build the server page from mutable fixture posts so later reads can represent removal or restoration. */
@@ -273,7 +277,7 @@ it("returns from an emptied final page to the reconciled cached previous page wh
   ];
   const view = renderThread();
   await waitFor(() => expect(requestedPages.length).toBe(1));
-  fireEvent.click(view.getAllByRole("button", { name: "2" })[0]!);
+  fireEvent.click(view.getAllByRole("button", { name: "Page 2" })[0]!);
   const replyText = await view.findByText("reply content");
   fireEvent.click(
     within(replyText.closest("article")!).getByRole("button", { name: "Remove post" }),
@@ -284,5 +288,5 @@ it("returns from an emptied final page to the reconciled cached previous page wh
     FORUM_THREAD_POSTS_PER_PAGE,
   );
   await waitFor(() => expect(requestedPages.at(-1)).toBe(0));
-  expect(view.queryByRole("button", { name: "2" })).toBeNull();
+  expect(view.queryByRole("button", { name: "Page 2" })).toBeNull();
 });

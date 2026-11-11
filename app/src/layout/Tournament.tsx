@@ -24,6 +24,7 @@ import Countdown from "@/layout/Countdown";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { Reward } from "@/layout/Objective";
+import { QueryError } from "@/layout/QueryError";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { groupBy } from "@/utils/grouping";
@@ -61,7 +62,13 @@ const Tournament: React.FC<TournamentProps> = (props) => {
   const router = useRouter();
 
   // Queries. Each read advances the bracket server-side, so poll only while rounds run.
-  const { data } = api.tournament.getTournament.useQuery(
+  const {
+    data,
+    isPending: isLoadingTournament,
+    isError: isTournamentError,
+    isFetching: isFetchingTournament,
+    refetch: refetchTournament,
+  } = api.tournament.getTournament.useQuery(
     { tournamentId },
     {
       refetchInterval: (query) =>
@@ -70,6 +77,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
           : false,
     },
   );
+  const hasNoTournament = !isLoadingTournament && !isTournamentError && !data;
   const isInProgress = data?.status === "IN_PROGRESS";
   // Ticking clock so the fight control appears when a match opens without a reload
   const syncedTime =
@@ -170,7 +178,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
               Do you wish to join this tournament?
             </Confirm>
           )}
-          {!data && props.canCreate && (
+          {hasNoTournament && props.canCreate && (
             <Confirm
               title="Create new tournament"
               proceed_label="Create"
@@ -256,7 +264,15 @@ const Tournament: React.FC<TournamentProps> = (props) => {
         </>
       }
     >
-      {!data && <div>There are no current tournaments</div>}
+      {isLoadingTournament && <Loader explanation="Loading tournament" />}
+      {isTournamentError && !data && (
+        <QueryError
+          message="Could not load the tournament."
+          onRetry={() => void refetchTournament()}
+          isRetrying={isFetchingTournament}
+        />
+      )}
+      {hasNoTournament && <div>There are no current tournaments</div>}
       {data && (
         <div className="grid grid-cols-8">
           <div className="col-span-2">

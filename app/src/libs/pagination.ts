@@ -67,3 +67,25 @@ export const useInfinitePagination = ({
     if (hasNextPage) void fetchData();
   }, [fetchNextPage, hasNextPage, page]);
 };
+
+/**
+ * Zero-based page numbers to show for `current` of `total` pages: the first and last pages
+ * and one page either side of the current one, with `null` marking each skipped run. A
+ * single skipped page is shown instead of a gap.
+ */
+export const getPageWindow = (current: number, total: number): (number | null)[] => {
+  const shown = new Set(
+    [0, total - 1, current - 1, current, current + 1].filter(
+      (page) => page >= 0 && page < total,
+    ),
+  );
+  const sorted = [...shown].sort((a, b) => a - b);
+  const pages: (number | null)[] = [];
+  for (const page of sorted) {
+    const previous = pages[pages.length - 1];
+    if (typeof previous === "number" && page - previous === 2) pages.push(page - 1);
+    else if (typeof previous === "number" && page - previous > 2) pages.push(null);
+    pages.push(page);
+  }
+  return pages;
+};

@@ -64,6 +64,8 @@ interface ActionSelectorSettingsProps {
   labelSingles?: boolean;
   onClick: (id: string) => void;
   emptyText?: string;
+  /** Hides `emptyText` while the items are still loading. */
+  isLoading?: boolean;
   setLastElement?: (el: HTMLDivElement | null) => void;
   showInfoIcon?: boolean;
   /**
@@ -244,7 +246,8 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
         // Doubles as the pagination sentinel: a batch that was filtered down to nothing
         // can still have more batches behind it.
         <div ref={props.setLastElement} className="flex flex-row text-base">
-          {props.emptyText ? props.emptyText : "Nothing Available"}
+          {!props.isLoading &&
+            (props.emptyText ? props.emptyText : "Nothing Available")}
         </div>
       )}
     </>

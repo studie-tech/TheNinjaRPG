@@ -39,6 +39,7 @@ import ContentBox from "@/layout/ContentBox";
 import GraphBlackmarketLedger from "@/layout/GraphBlackmarketLedger";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
+import { QueryError } from "@/layout/QueryError";
 import Shop from "@/layout/Shop";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
@@ -340,20 +341,27 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   const { methods: allowedSearchMethods, user: allowedUser } = useUserPicker(maxUsers);
 
   // Query
-  const { data, fetchNextPage, hasNextPage } =
-    api.blackmarket.getRyoOffers.useInfiniteQuery(
-      {
-        activeToggle: tab === "Active",
-        creator: creatorUser?.username,
-        buyer: buyerUser?.username,
-        limit: 30,
-      },
-      {
-        getNextPageParam: (lastPage) => lastPage.nextCursor,
-        placeholderData: (previousData) => previousData,
-        staleTime: 1000 * 60 * 30, // every 30min
-      },
-    );
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isPending: isLoadingOffers,
+    isError: isOffersError,
+    isFetching: isFetchingOffers,
+    refetch: refetchOffers,
+  } = api.blackmarket.getRyoOffers.useInfiniteQuery(
+    {
+      activeToggle: tab === "Active",
+      creator: creatorUser?.username,
+      buyer: buyerUser?.username,
+      limit: 30,
+    },
+    {
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      placeholderData: (previousData) => previousData,
+      staleTime: 1000 * 60 * 30, // every 30min
+    },
+  );
   const allOffers = data?.pages
     .flatMap((page) => page.data)
     .map((offer) => {
@@ -667,7 +675,16 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
           <Table data={allOffers} columns={columns} setLastElement={setLastElement} />
         </div>
       )}
-      {!allOffers?.length && (
+      {isLoadingOffers && <Loader explanation="Loading offers" />}
+      {isOffersError && !allOffers && (
+        <QueryError
+          className="mt-3 border-t-2 border-dashed bg-popover p-3"
+          message="Could not load the offers."
+          onRetry={() => void refetchOffers()}
+          isRetrying={isFetchingOffers}
+        />
+      )}
+      {allOffers?.length === 0 && (
         <p className="mt-3 border-t-2 border-dashed bg-popover p-3">
           No offers currently listed.
         </p>

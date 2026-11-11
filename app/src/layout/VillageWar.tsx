@@ -43,8 +43,10 @@ import Building from "@/layout/Building";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
+import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { ObjectiveWarPanel } from "@/layout/ObjectiveWarPanel";
+import { QueryError } from "@/layout/QueryError";
 import StatusBar from "@/layout/StatusBar";
 import type { ColumnDefinitionType } from "@/layout/Table";
 import Table from "@/layout/Table";
@@ -101,7 +103,12 @@ export const VillageWar: React.FC<{
     defenderVillage: initialWar.defenderVillage,
     warAllies: initialWar.warAllies,
   };
-  const { data: warKills } = api.war.getWarKills.useQuery(
+  const {
+    data: warKills,
+    isError: isWarKillsError,
+    isFetching: isFetchingWarKills,
+    refetch: refetchWarKills,
+  } = api.war.getWarKills.useQuery(
     { warId: war.id },
     { enabled: showKills && !war.rules },
   );
@@ -508,8 +515,17 @@ export const VillageWar: React.FC<{
                 linkDisabled={(row) => !row.killerId}
               />
             </div>
-          ) : (
+          ) : warKills ? (
             <p className="text-center text-muted-foreground">No kills recorded yet</p>
+          ) : isWarKillsError ? (
+            <QueryError
+              className="text-center"
+              message="Could not load the war kills."
+              onRetry={() => void refetchWarKills()}
+              isRetrying={isFetchingWarKills}
+            />
+          ) : (
+            <Loader explanation="Loading war kills" />
           )}
         </div>
       </Modal>

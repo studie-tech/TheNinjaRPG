@@ -692,13 +692,12 @@ describe("objective war townhall health", () => {
       expect(rows).toHaveLength(3);
       expect(rows[0]!.textContent).toContain("Mercenary");
       expect(rows[0]!.classList.contains("cursor-pointer")).toBe(false);
-      fireEvent.click(rows[0]!);
-      expect(push).not.toHaveBeenCalled();
+      expect(within(rows[0]!).queryByRole("link")).toBeNull();
       for (const index of [1, 2]) {
-        fireEvent.click(rows[index]!);
-        expect(push).toHaveBeenLastCalledWith(`/userid/${identities[index]!.userId}`);
+        expect(within(rows[index]!).getByRole("link").getAttribute("href")).toBe(
+          `/userid/${identities[index]!.userId}`,
+        );
       }
-      push.mockClear();
       fireEvent.click(
         within(view.getByRole("dialog")).getAllByRole("button", { name: "Close" })[0]!,
       );

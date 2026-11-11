@@ -348,11 +348,10 @@ describe("war field objectives", () => {
       const [masked, own] = within(table).getAllByRole("row").slice(1);
       expect(masked!.textContent).toContain("Mercenary");
       expect(masked!.classList.contains("cursor-pointer")).toBe(false);
-      fireEvent.click(masked!);
-      expect(router.push).not.toHaveBeenCalled();
-      fireEvent.click(own!);
-      expect(router.push).toHaveBeenCalledWith(`/userid/${user.userId}`);
-      router.push.mockClear();
+      expect(within(masked!).queryByRole("link")).toBeNull();
+      expect(within(own!).getByRole("link").getAttribute("href")).toBe(
+        `/userid/${user.userId}`,
+      );
     }
   });
 
