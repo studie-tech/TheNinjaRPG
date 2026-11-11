@@ -113,19 +113,14 @@ describe("statistics popover chart lifetime", () => {
       <BloodlineStatistics trigger={<button type="button">Roll Statistics</button>} />,
     );
 
-  it("draws only while open, survives debug toggles, and redraws after reopening", async () => {
+  it("draws only while open, offers no debug controls, and redraws after reopening", async () => {
     const view = mount();
     expect(charts).toHaveLength(0);
     const trigger = view.getByRole("button", { name: "Roll Statistics" });
     fireEvent.click(trigger);
     await waitFor(() => expect(charts).toHaveLength(1));
-    const debug = view.getByRole("dialog").querySelector("button");
-    expect(debug).not.toBeNull();
-    fireEvent.click(debug!);
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(charts).toHaveLength(1);
+    expect(view.getByRole("dialog").querySelector("button")).toBeNull();
+    expect(view.getByRole("dialog").querySelector("pre")).toBeNull();
     fireEvent.click(trigger);
     await waitFor(() => expect(charts[0]?.destroy).toHaveBeenCalledTimes(1));
     fireEvent.click(trigger);
