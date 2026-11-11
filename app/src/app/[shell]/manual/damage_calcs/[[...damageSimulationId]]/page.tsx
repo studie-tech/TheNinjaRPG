@@ -23,6 +23,7 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { NumberInput } from "@/components/ui/number-input";
 import { GeneralTypes, StatTypes } from "@/drizzle/constants";
 import type { DamageSimulation } from "@/drizzle/schema";
+import { Confirm } from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import {
   DmgConfigDialog,
@@ -543,10 +544,19 @@ export default function Simulator(props: {
                     </button>
 
                     <div className="grow" />
-                    <Trash2
-                      className="mr-1 h-5 w-5 hover:cursor-pointer hover:text-orange-500"
-                      onClick={() => deleteEntry({ id: entry.id })}
-                    />
+                    <Confirm
+                      title="Delete saved simulation?"
+                      triggerLabel="Delete saved simulation"
+                      proceed_label="Delete"
+                      confirmClassName="bg-red-600 text-white hover:bg-red-700"
+                      button={
+                        <Trash2 className="mr-1 h-5 w-5 hover:cursor-pointer hover:text-orange-500" />
+                      }
+                      onAccept={() => deleteEntry({ id: entry.id })}
+                    >
+                      Delete the simulation saved {entry.createdAt.toLocaleString()}?
+                      This cannot be undone.
+                    </Confirm>
                     <ClipboardCopy
                       className="ml-1 h-5 w-5 hover:cursor-pointer hover:text-orange-900"
                       onClick={() => {

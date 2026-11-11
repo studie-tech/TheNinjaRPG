@@ -32,6 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PollOptionType } from "@/drizzle/constants";
 import Accordion from "@/layout/Accordion";
 import AvatarImage from "@/layout/Avatar";
+import { Confirm } from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
@@ -419,15 +420,56 @@ function PollContent({
   };
 
   // The voting view only shows for active polls, so both views share the results styling
-  const statusButton = userCanClosePolls && (
-    <Button
-      variant={poll.isActive ? "destructive" : "default"}
-      size="sm"
-      onClick={handleTogglePollStatus}
-      disabled={isClosingPoll}
+  const statusButton =
+    userCanClosePolls &&
+    (poll.isActive ? (
+      <Confirm
+        title="Close this poll?"
+        disabled={isClosingPoll}
+        isLoading={isClosingPoll}
+        proceed_label="Close Poll"
+        button={
+          <Button variant="destructive" size="sm" disabled={isClosingPoll}>
+            Close Poll
+          </Button>
+        }
+        onAccept={handleTogglePollStatus}
+      >
+        Close &quot;{poll.title}&quot;? Players can no longer vote until it is reopened.
+      </Confirm>
+    ) : (
+      <Button size="sm" onClick={handleTogglePollStatus} disabled={isClosingPoll}>
+        Reopen Poll
+      </Button>
+    ));
+
+  /** Trash button that deletes an option and its votes after a confirmation naming both. */
+  const deleteOptionButton = (
+    option: PollWithRelations["options"][0] & { voteCount: number },
+    className: string,
+  ) => (
+    <Confirm
+      title="Delete poll option?"
+      disabled={isDeletingOption}
+      isLoading={isDeletingOption}
+      proceed_label="Delete"
+      confirmClassName="bg-red-600 text-white hover:bg-red-700"
+      triggerLabel={`Delete option ${option.targetUser?.username ?? option.text}`}
+      button={
+        <Button
+          variant="ghost"
+          size="icon"
+          className={className}
+          disabled={isDeletingOption}
+        >
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
+      }
+      onAccept={() => handleDeleteOption(option.id)}
     >
-      {poll.isActive ? "Close Poll" : "Reopen Poll"}
-    </Button>
+      Delete option &quot;{option.targetUser?.username ?? option.text}&quot; and its{" "}
+      {option.voteCount} vote{option.voteCount !== 1 && "s"}? This cannot be undone.
+    </Confirm>
   );
 
   // Render option content based on option type
@@ -495,17 +537,7 @@ function PollContent({
                       {option.voteCount} vote{option.voteCount !== 1 && "s"} (
                       {option.percentage}%)
                     </span>
-                    {canDeleteOption(option) && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => handleDeleteOption(option.id)}
-                        disabled={isDeletingOption}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    )}
+                    {canDeleteOption(option) && deleteOptionButton(option, "h-6 w-6")}
                   </div>
                 </div>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
@@ -547,17 +579,7 @@ function PollContent({
                   <Vote className="mr-2 h-4 w-4" />
                   {renderOptionContent(option)}
                 </Button>
-                {canDeleteOption(option) && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="flex-shrink-0"
-                    onClick={() => handleDeleteOption(option.id)}
-                    disabled={isDeletingOption}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                )}
+                {canDeleteOption(option) && deleteOptionButton(option, "flex-shrink-0")}
               </div>
             ))}
 

@@ -30,6 +30,7 @@ import { buildObjectiveEdges, getObjectiveImage } from "@/libs/objectives";
 import { PET_TASK_MIN_RANK_NAME } from "@/libs/pets/tasks";
 import { verifyQuestObjectiveFlow } from "@/libs/quest/validation";
 import { getQuestFlowPositions, restoreQuestFlowPositions } from "@/libs/questFlow";
+import { showUndoToast } from "@/libs/toast";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import type {
   AllObjectivesType,
@@ -106,6 +107,10 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
   const heading = useEditorTitle("quest", entryName);
 
   const [selectedObjectiveId, setSelectedObjectiveId] = useState<string | null>(null);
+  const latestObjectives = useRef(objectives);
+  useEffect(() => {
+    latestObjectives.current = objectives;
+  });
 
   // Handlers for adding/removing objectives
   const addObjective = () => {
@@ -124,9 +129,16 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
   const removeObjective = (idx: number) => {
     if (isUpdating) return;
     const newObjectives = [...objectives];
-    newObjectives.splice(idx, 1);
+    const [removed] = newObjectives.splice(idx, 1);
     setObjectives(newObjectives);
     setSelectedObjectiveId(null);
+    if (!removed) return;
+    showUndoToast(`Objective ${idx + 1} removed.`, () => {
+      // Re-insert into the objectives as they are then, keeping later edits.
+      const current = [...latestObjectives.current];
+      current.splice(Math.min(idx, current.length), 0, removed);
+      setObjectives(current);
+    });
   };
 
   /** Duplicate an objective with fresh attachment ids while retaining each package's source. */

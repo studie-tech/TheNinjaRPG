@@ -112,7 +112,7 @@ it("creates a backup of the content type named on each button", () => {
       <ManualBackupPage />
     </AppRouterContext.Provider>,
   );
-  const labels = ["Bloodlines", "Jutsu", "Items", "AI"];
+  const labels = ["Back up bloodlines", "Back up jutsu", "Back up items", "Back up AI"];
   expect(
     view
       .getAllByRole("button")

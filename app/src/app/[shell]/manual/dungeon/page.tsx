@@ -42,7 +42,7 @@ import Loader from "@/layout/Loader";
 import { MapLocationPreview } from "@/layout/MapLocationPreview";
 import { SearchSelect } from "@/layout/SearchSelect";
 import { getRewardPreview } from "@/libs/objectives";
-import { showMutationToast } from "@/libs/toast";
+import { showMutationToast, showUndoToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { formatLocalDateTimeInput } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
@@ -606,9 +606,18 @@ function DungeonEditor() {
                     disabled={content.tiers.length <= 1}
                     onClick={() => {
                       if (!validateNumberInputs(roomsRef.current)) return;
+                      const removed = content.tiers.at(-1);
+                      const removedNumber = content.tiers.length;
                       patch({ tiers: normalizeRooms(content.tiers.slice(0, -1)) });
                       setTier(0);
                       setFloor(0);
+                      if (!removed) return;
+                      showUndoToast(`Tier ${removedNumber} removed.`, () =>
+                        setContent((current) => ({
+                          ...current,
+                          tiers: normalizeRooms([...current.tiers, removed]),
+                        })),
+                      );
                     }}
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />

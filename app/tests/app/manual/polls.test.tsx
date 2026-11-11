@@ -375,14 +375,22 @@ describe("poll list", () => {
         <PollsPage />
       </QueryClientProvider>,
     );
-    const results = view.getByRole("button", { name: "Close Poll" });
+    // The trigger's wrapper also carries the button role; the styled control is the <button>.
+    const closeButtons = () =>
+      view
+        .getAllByRole("button", { name: "Close Poll" })
+        .filter((button) => button.tagName === "BUTTON");
+    const results = closeButtons()[0]!;
     expect(results.className).toContain("bg-destructive");
     fireEvent.click(results);
+    expect(closePoll).not.toHaveBeenCalled();
+    fireEvent.click(closeButtons().at(-1)!);
     fireEvent.click(view.getByRole("button", { name: "Vote Now" }));
-    const voting = view.getByRole("button", { name: "Close Poll" });
+    const voting = closeButtons()[0]!;
     expect(voting).not.toBe(results);
     expect(voting.className).toBe(results.className);
     fireEvent.click(voting);
+    fireEvent.click(closeButtons().at(-1)!);
     expect(closePoll.mock.calls).toEqual([
       [{ id: "poll-1", isActive: false }],
       [{ id: "poll-1", isActive: false }],

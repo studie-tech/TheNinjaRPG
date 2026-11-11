@@ -31,6 +31,7 @@ import {
   ContentProposalRejectReasons,
 } from "@/drizzle/constants";
 import { BattlefieldPreview } from "@/layout/BattlefieldPreview";
+import { Confirm } from "@/layout/Confirm";
 import ContentImage from "@/layout/ContentImage";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Link from "@/layout/Link";
@@ -372,13 +373,22 @@ const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }
 
       {proposal.status === "APPLIED" && proposal.canReview && (
         <footer className="flex justify-end border-t pt-2">
-          <Button
-            variant="outline"
-            onClick={() => revert.mutate({ id: proposal.id })}
-            loading={revert.isPending}
+          <Confirm
+            title="Revert this suggestion?"
+            disabled={revert.isPending}
+            isLoading={revert.isPending}
+            proceed_label="Revert"
+            proceed_loading_label="Reverting"
+            button={
+              <Button variant="outline" loading={revert.isPending}>
+                <Undo2 className="mr-1 h-4 w-4" /> Revert
+              </Button>
+            }
+            onAccept={() => revert.mutate({ id: proposal.id })}
           >
-            <Undo2 className="mr-1 h-4 w-4" /> Revert
-          </Button>
+            Revert &quot;{proposal.title}&quot;? The live content returns to the values
+            it had before this suggestion was applied.
+          </Confirm>
         </footer>
       )}
     </div>

@@ -17,6 +17,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { HUNTING_CONTRACT_DEFAULTS, HUNTING_RANKS } from "@/drizzle/constants";
+import { Confirm } from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { LabeledField } from "@/layout/LabeledField";
 import Loader from "@/layout/Loader";
@@ -149,13 +150,23 @@ export default function HuntingEditor() {
             Save habitat
           </Button>
           {id && (
-            <Button
-              variant="destructive"
+            <Confirm
+              title="Delete habitat?"
               disabled={pending}
-              onClick={() => remove.mutate({ id })}
+              isLoading={remove.isPending}
+              proceed_label="Delete"
+              confirmClassName="bg-red-600 text-white hover:bg-red-700"
+              button={
+                <Button variant="destructive" disabled={pending}>
+                  Delete habitat
+                </Button>
+              }
+              onAccept={() => remove.mutate({ id })}
             >
-              Delete habitat
-            </Button>
+              Delete &quot;{content.name}&quot; and its {content.contracts.length}{" "}
+              {content.contracts.length === 1 ? "contract" : "contracts"}? Hunters who
+              already accepted a contract keep their terms.
+            </Confirm>
           )}
         </div>
         {(message || definitions.error || ais.error || items.error) && (
