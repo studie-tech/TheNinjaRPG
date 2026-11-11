@@ -15,7 +15,6 @@ import {
   Sparkles,
   Sword,
   Tag,
-  Ticket,
 } from "lucide-react";
 import {
   type Dispatch,
@@ -462,7 +461,8 @@ const Shop: React.FC<ShopProps> = (props) => {
         />
       )}
 
-      <div className="relative overflow-hidden border-b bg-linear-to-br from-amber-950/25 via-card to-card px-3 py-4 md:px-6 md:py-8">
+      {/* Phones go straight to the categories and items */}
+      <div className="relative hidden overflow-hidden border-b bg-linear-to-br from-amber-950/25 via-card to-card px-3 py-4 sm:block md:px-6 md:py-8">
         <div className="pointer-events-none absolute -top-24 right-0 h-48 w-48 rounded-full bg-amber-500/10 blur-3xl" />
         <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-start gap-3">
@@ -484,13 +484,6 @@ const Shop: React.FC<ShopProps> = (props) => {
                   <Tag className="h-3 w-3" />
                   {catalogHeroBadge}
                 </Badge>
-                <Badge
-                  variant="secondary"
-                  className="gap-1 border-amber-500/25 bg-background/60 font-normal"
-                >
-                  <Ticket className="h-3 w-3" />
-                  Tap a card to buy
-                </Badge>
               </div>
             </div>
           </div>
@@ -500,7 +493,7 @@ const Shop: React.FC<ShopProps> = (props) => {
       <div className="border-b bg-linear-to-b from-amber-950/10 to-muted/30 px-2 py-3 md:px-6 md:py-4">
         <div className="mx-auto flex max-w-5xl flex-col gap-1.5 sm:gap-2">
           <div
-            className="grid grid-cols-4 gap-0.5 rounded-lg bg-muted/90 p-0.5 shadow-inner ring-1 ring-border/50 sm:grid-cols-4 sm:gap-1 sm:rounded-xl sm:p-1 lg:grid-cols-8 dark:bg-muted/40"
+            className="flex gap-0.5 overflow-x-auto overscroll-x-contain rounded-lg bg-muted/90 p-0.5 shadow-inner ring-1 ring-border/50 sm:grid sm:grid-cols-4 sm:gap-1 sm:overflow-visible sm:rounded-xl sm:p-1 lg:grid-cols-8 dark:bg-muted/40"
             role="tablist"
             aria-label="Item category"
           >
@@ -511,7 +504,7 @@ const Shop: React.FC<ShopProps> = (props) => {
                 role="tab"
                 aria-selected={selectedItemType === t}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 rounded-md px-0.5 py-1.5 font-semibold text-[10px] transition-all sm:flex-row sm:gap-2 sm:rounded-lg sm:px-1 sm:py-3 sm:text-xs",
+                  "flex min-w-[4.5rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 font-semibold text-[10px] transition-all sm:min-w-0 sm:flex-row sm:gap-2 sm:rounded-lg sm:px-1 sm:py-3 sm:text-xs",
                   selectedItemType === t
                     ? "bg-background text-foreground shadow-sm ring-1 ring-border/60"
                     : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
@@ -529,7 +522,7 @@ const Shop: React.FC<ShopProps> = (props) => {
               </button>
             ))}
           </div>
-          <p className="text-balance text-center text-[11px] text-muted-foreground leading-relaxed sm:text-xs">
+          <p className="hidden text-balance text-center text-muted-foreground text-xs leading-relaxed sm:block">
             {tabHint}
           </p>
         </div>
@@ -555,7 +548,7 @@ const Shop: React.FC<ShopProps> = (props) => {
               />
             </div>
           </div>
-          <p className="text-muted-foreground text-xs lg:max-w-xs lg:text-right">
+          <p className="hidden text-muted-foreground text-xs sm:block lg:max-w-xs lg:text-right">
             More filters (rarity, slot, effects, …) stay in the filter button above.
           </p>
         </div>

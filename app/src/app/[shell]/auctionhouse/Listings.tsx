@@ -139,6 +139,21 @@ export const AuctionListing: React.FC<AuctionListingProps> = ({
       .flatMap((page) => page.data)
       .filter((listing) => listing.userItem?.item) ?? [];
 
+  // Only blame the filters for an empty result when one is actually set
+  const hasFilters = Boolean(
+    debouncedSearchTerm.trim() ||
+      debouncedSellerSearchTerm.trim() ||
+      debouncedMinPrice ||
+      debouncedMaxPrice,
+  );
+  const emptyHeadline = hasFilters
+    ? "No lots match your filters"
+    : browseTab === "MINE"
+      ? "You have no listings"
+      : browseTab === "MY_BIDS"
+        ? "You have no bids"
+        : "No lots yet";
+
   return (
     <div>
       <div className="border-b py-3">
@@ -217,7 +232,7 @@ export const AuctionListing: React.FC<AuctionListingProps> = ({
         ) : allListings.length === 0 && !isError ? (
           <div className="flex min-h-[36vh] flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 px-6 py-16 text-center">
             <Landmark className="mb-3 h-12 w-12 text-muted-foreground opacity-60" />
-            <p className="font-medium text-lg">No lots match your filters</p>
+            <p className="font-medium text-lg">{emptyHeadline}</p>
             <p className="mt-1 max-w-sm text-muted-foreground text-sm">
               {browseTab === "MINE"
                 ? debouncedSellerSearchTerm.trim()
@@ -229,7 +244,9 @@ export const AuctionListing: React.FC<AuctionListingProps> = ({
                     : "You have no bids in this status. Open Auctions and place a bid to see it here."
                   : debouncedSearchTerm.trim() || debouncedSellerSearchTerm.trim()
                     ? "Try clearing the item or seller search, widening the price range, or switch to another tab."
-                    : "Try widening the price range, or switch to another tab."}
+                    : hasFilters
+                      ? "Try widening the price range, or switch to another tab."
+                      : "Nothing is listed here in this status yet. Check another tab or come back later."}
             </p>
           </div>
         ) : allListings.length > 0 ? (
