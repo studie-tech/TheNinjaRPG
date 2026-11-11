@@ -52,11 +52,11 @@ const Accordion: React.FC<AccordionProps> = (props) => {
             </div>
           )}
           <div>
-            <span className="block font-bold">
+            <h2 className="font-bold">
               {titlePrefix}
               {title}
               {titlePostfix}
-            </span>
+            </h2>
             <div className="italic">
               {active && selectedSubtitle}
               {!active && unselectedSubtitle}
