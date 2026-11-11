@@ -47,7 +47,7 @@ const ActionLogs: React.FC<ActionLogsProps> = (props) => {
           <div className="w-20">
             <AvatarImage
               href={entry.relatedImage}
-              alt={entry.relatedMsg}
+              alt={entry.relatedMsg ?? undefined}
               size={100}
               hover_effect={true}
             />
