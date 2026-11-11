@@ -33,7 +33,7 @@ export default function BugReport() {
         in fine-tuning the gameplay, improving the overall user experience, and ensuring
         a seamless adventure for everyone. Together, let&lsquo;s forge a stronger
         connection and make this game the best it can be. Join our Discord today and let
-        your voice be heard! Alternatively, report bugs directly on Github and help us
+        your voice be heard! Alternatively, report bugs directly on GitHub and help us
         improve the game.
         <div className="flex flex-row justify-center space-x-5 p-5">
           <Link
@@ -70,7 +70,7 @@ export default function BugReport() {
             been extremely beneficial both personally and in my professional life. With
             this latest version of TNR, I hope that by enabling others to contribute to
             the codebase, we can inspire more people, young and old, to learn to code,
-            while also creating an inclusive, supportive and awesome developmer
+            while also creating an inclusive, supportive and awesome developer
             community&quot;. ~Terr
           </i>
         </p>

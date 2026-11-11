@@ -38,6 +38,8 @@ export default function Hospital() {
   const { userData, access, timeDiff, prepareUserUpdate, updateUser } =
     useRequireInVillage("/hospital");
   const isHospitalized = userData?.status === "HOSPITALIZED";
+  // Deadline whose countdown has run out, so the buttons flip without waiting for another render
+  const [finishedWaitAt, setFinishedWaitAt] = useState<number | null>(null);
 
   // Mutations
   const { mutate: heal, isPending } = api.hospital.npcHeal.useMutation({
@@ -67,6 +69,11 @@ export default function Hospital() {
   const canHealOthers = hasRequiredRank(userData?.rank, MEDNIN_MIN_RANK);
   // If user is fully healed, allow immediate checkout
   const isFullyHealed = userData && userData.curHealth >= userData.maxHealth;
+  // The server decides whether checkout is free; this only mirrors it for the buttons
+  const isWaitOver =
+    !!healFinishAt &&
+    (finishedWaitAt === healFinishAt.getTime() || healFinishAt <= new Date());
+  const canCheckOut = isFullyHealed || isWaitOver;
 
   // Heal finish time
   if (!userData) return <Loader explanation="Loading userdata" />;
@@ -100,23 +107,30 @@ export default function Hospital() {
       {!isPending && isHospitalized && userData && healFinishAt && (
         <div className="p-3">
           <p>
-            {isFullyHealed
-              ? "You are fully healed. You can check out now."
+            {canCheckOut
+              ? "Your treatment is complete. You can check out now."
               : "You are hospitalized, either wait or pay to expedite treatment."}
           </p>
           <div className="grid grid-cols-2 gap-2 py-3" id="tutorial-hospital-buttons">
             <Button
               id="hospital-check-out"
               className="w-full"
-              disabled={!isFullyHealed && healFinishAt && healFinishAt > new Date()}
+              disabled={!canCheckOut}
               onClick={() => heal({ villageId: userData.villageId })}
             >
               <Clock className="mr-2 h-6 w-6" />
               <div>
-                {isFullyHealed ? (
+                {canCheckOut ? (
                   "Check Out"
                 ) : (
-                  <>Wait ({<Countdown targetDate={healFinishAt} />})</>
+                  <>
+                    Wait (
+                    <Countdown
+                      targetDate={healFinishAt}
+                      onFinish={() => setFinishedWaitAt(healFinishAt.getTime())}
+                    />
+                    )
+                  </>
                 )}
               </div>
             </Button>
@@ -124,7 +138,7 @@ export default function Hospital() {
               id="hospital-pay"
               className="w-full"
               color={canAfford ? "default" : "red"}
-              disabled={isFullyHealed || (healFinishAt && healFinishAt <= new Date())}
+              disabled={canCheckOut}
               onClick={() => heal({ villageId: userData.villageId })}
             >
               {canAfford ? (
@@ -132,7 +146,7 @@ export default function Hospital() {
               ) : (
                 <Hand className="mr-3 h-6 w-6" />
               )}
-              <div>Pay {healCost && <span>({healCost} ryo)</span>}</div>
+              <div>Pay {!canCheckOut && healCost && <span>({healCost} ryo)</span>}</div>
             </Button>
           </div>
         </div>
@@ -254,11 +268,10 @@ export const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) =
       btns: (
         <HealPercentageButtons
           className="gap-1"
-          buttonProps={{ role: "combobox" }}
           maxHealth={user.maxHealth}
           missingHealth={missingHealth}
           maxHeal={maxHeal}
-          disabled={missingHealth <= 0}
+          disabled={isPending || missingHealth <= 0}
           onHeal={(healPercentage) => userHeal({ userId: user.userId, healPercentage })}
         />
       ),
@@ -281,7 +294,7 @@ export const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) =
           <ScanHeart className="h-6 w-6" />
           <AlertTitle>Healing Capacity</AlertTitle>
           <AlertDescription>
-            Your current medicial rank is {capitalizeFirstLetter(medninRank)}. You can
+            Your current medical rank is {capitalizeFirstLetter(medninRank)}. You can
             heal up to <HealCapacity userData={userData} timeDiff={timeDiff} />{" "}
             {pools.join(", ")} at a time.
           </AlertDescription>
@@ -290,7 +303,7 @@ export const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) =
       {allHospitalized && allHospitalized.length > 0 ? (
         <Table data={allHospitalized} columns={columns} />
       ) : (
-        <p className="p-3">There are nobody injured for you to heal</p>
+        <p className="p-3">There is nobody injured for you to heal</p>
       )}
       {isPending && <Loader explanation="Healing User" />}
     </div>
@@ -326,5 +339,5 @@ const HealCapacity: React.FC<{
     }, 1000);
     return () => clearInterval(interval);
   }, [userData, timeDiff]);
-  return <>{capacity.toFixed(2)}</>;
+  return <>{Math.floor(capacity)}</>;
 };
