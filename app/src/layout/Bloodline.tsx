@@ -84,6 +84,7 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
             current={state.rank}
             options={["D", "C", "B", "A"]}
             setValue={state.setRank}
+            className="min-w-[32px] text-center"
           />
           <BloodFiltering state={state} limitRanks={["D", "C", "B", "A"]} />
         </div>
@@ -114,6 +115,7 @@ export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
           selectedId={bloodline?.id}
           showBgColor={false}
           showLabels={true}
+          gridClassNameOverwrite="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7"
           onClick={(id) => {
             // Restyles every tile and mounts the modal; kept off the tap's next paint.
             startTransition(() => {

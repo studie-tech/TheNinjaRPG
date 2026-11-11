@@ -265,9 +265,11 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
   // Derived values
   const remainingCooldown = getRemainingCooldown(item, settings.currentRound);
   const cooldownPerc = cooldown ? (100 * remainingCooldown) / cooldown : 0;
-  const elements = item.effects
-    ? item.effects.flatMap((e) => ("elements" in e && e.elements ? e.elements : []))
-    : [];
+  const elements = [
+    ...new Set(
+      item.effects?.flatMap((e) => ("elements" in e && e.elements ? e.elements : [])),
+    ),
+  ];
   const effectiveActionCost = getEffectiveActionCost(item, settings);
   const insufficientAP = lacksActionPoints(effectiveActionCost, settings);
 
@@ -438,16 +440,14 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
             </PopoverContent>
           </Popover>
         )}
-        {/* Elements overlay - top left */}
-        {elements.map((element, i) => (
-          <div
-            key={`${element}-${i}`}
-            className={`absolute top-[-5px]`}
-            style={{ left: `${i * 10}px` }}
-          >
-            <ElementImage element={element} className="w-6" />
+        {/* Elements overlay - a row inset from the top left corner */}
+        {elements.length > 0 && (
+          <div className="pointer-events-none absolute top-0.5 left-0.5 flex max-w-[calc(100%-0.25rem)] flex-row flex-wrap gap-px">
+            {elements.map((element) => (
+              <ElementImage key={element} element={element} className="w-5" />
+            ))}
           </div>
-        ))}
+        )}
         {/* Durability bar */}
         {item.durability !== undefined && item.maxDurability !== undefined && (
           <DurabilityBar
