@@ -659,6 +659,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
 
   // Derived
   const canChange = userData && canClearUserNindo(userData);
+  const isOwnProfile = !!userData && !!profile && userData.userId === profile.userId;
+  const nindo = profile?.nindo;
 
   const suppressStaleClearedNindo = Boolean(
     committedNindoClear &&
@@ -805,21 +807,24 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 </Tooltip>
               </TooltipProvider>
             )}
-            {userData && !userData.isBanned && !userData.isSilenced && (
-              <NewConversationPrompt
-                newButton={
-                  <TooltipProvider delayDuration={50}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <MessageCircle className="h-6 w-6 cursor-pointer hover:text-orange-500" />
-                      </TooltipTrigger>
-                      <TooltipContent>Message User</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                }
-                preSelectedUser={toSearchUser(profile)}
-              />
-            )}
+            {userData &&
+              !isOwnProfile &&
+              !userData.isBanned &&
+              !userData.isSilenced && (
+                <NewConversationPrompt
+                  newButton={
+                    <TooltipProvider delayDuration={50}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <MessageCircle className="h-6 w-6 cursor-pointer hover:text-orange-500" />
+                        </TooltipTrigger>
+                        <TooltipContent>Message User</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  }
+                  preSelectedUser={toSearchUser(profile)}
+                />
+              )}
             {userData && userData.role !== "USER" && (
               <>
                 <TooltipProvider delayDuration={50}>
@@ -1132,7 +1137,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 }
               />
             )}
-            {userData && (
+            {userData && !isOwnProfile && (
               <ReportUser
                 user={profile}
                 content={{
@@ -1447,7 +1452,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
           )}
 
           {/* USER NINDO */}
-          {showNindo && profile.nindo && (
+          {/* The default tab always renders, with an empty state when there is no nindo. */}
+          {showNindo && (
             <TabsContent value="nindo">
               <ContentBox
                 title="Nindo"
@@ -1455,7 +1461,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 initialBreak={true}
                 topRightContent={
                   <div className="flex flex-row gap-1">
-                    {canChange && !suppressStaleClearedNindo && (
+                    {canChange && nindo && !suppressStaleClearedNindo && (
                       <TooltipProvider delayDuration={50}>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -1468,8 +1474,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                                 setClearNindoTarget({
                                   userId: profile.userId,
                                   username: profile.username,
-                                  nindoId: profile.nindo.id,
-                                  expectedContent: profile.nindo.content,
+                                  nindoId: nindo.id,
+                                  expectedContent: nindo.content,
                                 })
                               }
                             >
@@ -1487,10 +1493,14 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                   <p role="status" aria-live="polite" className="text-center italic">
                     Nindo cleared.
                   </p>
-                ) : (
+                ) : profile.nindo ? (
                   <div className="relative overflow-x-scroll">
                     {parseHtml(profile.nindo.content)}
                   </div>
+                ) : (
+                  <p className="text-center text-muted-foreground">
+                    {profile.username} hasn&apos;t written a Ninja Way yet.
+                  </p>
                 )}
               </ContentBox>
             </TabsContent>
