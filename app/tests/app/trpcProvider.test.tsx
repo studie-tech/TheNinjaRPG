@@ -312,15 +312,24 @@ it.each([BOTID_BLOCKED_MESSAGE, BOTID_RELOAD_REQUIRED_MESSAGE])(
   },
 );
 
-it("preserves profile sharing for imperative reads without changing other query defaults", async () => {
+it("shares equal Dates across every query, including imperative reads", async () => {
   mountProvider(session("a"));
   const key = getQueryKey(testApi.profile.getUser, undefined, "query");
-  expect(queryClient.getQueryDefaults(key).structuralSharing).toBe(shareUserCache);
+  expect(queryClient.defaultQueryOptions({ queryKey: key }).structuralSharing).toBe(
+    shareUserCache,
+  );
+  const dashboardKey = getQueryKey(testApi.profile.getDashboard, undefined, "query");
   expect(
-    queryClient.getQueryDefaults(
-      getQueryKey(testApi.profile.getDashboard, undefined, "query"),
-    ).structuralSharing,
-  ).toBeUndefined();
+    queryClient.defaultQueryOptions({ queryKey: dashboardKey }).structuralSharing,
+  ).toBe(shareUserCache);
+  const dashboard = { rows: [{ createdAt: new Date(2000) }] };
+  queryClient.setQueryData(dashboardKey, dashboard);
+  await queryClient.fetchQuery({
+    queryKey: dashboardKey,
+    staleTime: 0,
+    queryFn: async () => structuredClone(dashboard),
+  });
+  expect(queryClient.getQueryData(dashboardKey)).toBe(dashboard);
   const initial = {
     userData: { updatedAt: new Date(1000) },
     achievementProgress: [{ startedAt: new Date(1000) }],

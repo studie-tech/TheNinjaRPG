@@ -117,7 +117,6 @@ import {
   useRequiredUserDataSelector,
   useUserDataRef,
 } from "@/utils/UserContext";
-import { shareUserCache } from "@/utils/userCacheSharing";
 import type { MapLocation } from "@/validators/mapLocation";
 
 /**
@@ -379,8 +378,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     { sector: sector },
     {
       placeholderData: (previous) => previous,
-      // Equal server Dates do not change the visible presence or village snapshot.
-      structuralSharing: shareUserCache,
       notifyOnChangeProps: ["data"],
       // Keep own vitals/appearance and all other presence reactive; own coordinates come from the scene.
       select: (data) => {

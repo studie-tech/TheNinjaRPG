@@ -17,7 +17,6 @@ import {
   TRPCClientError,
   type TRPCLink,
 } from "@trpc/client";
-import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import { useEffect, useState } from "react";
 import superjson from "superjson";
@@ -102,6 +101,9 @@ const TrpcClientProvider = (props: {
       defaultOptions: {
         queries: {
           staleTime: Infinity,
+          // SuperJSON decodes fresh Date objects on every fetch; reuse equal ones so an
+          // unchanged poll keeps its data identity and does not re-render observers.
+          structuralSharing: shareUserCache,
           // React Query's default (3 retries within ~7s) would resend a rate-limited
           // read straight back into the same limiter window.
           retry: (failureCount, error) =>
@@ -127,10 +129,6 @@ const TrpcClientProvider = (props: {
           onMutateCheck(trpcPathFromKey(mutation.options.mutationKey));
         },
       }),
-    });
-    // Imperative profile reads must retain sharing when they replace observer options.
-    queryClient.setQueryDefaults(getQueryKey(api.profile.getUser, undefined, "query"), {
-      structuralSharing: shareUserCache,
     });
     // fetchQuery skips retries only while no retry default exists; keep that for
     // imperative reads (fetch, prefetch, ensureData) now that observers have one.
