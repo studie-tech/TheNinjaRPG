@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import ConceptBox_ConceptImage from "@/app/[shell]/conceptart/[imageid]/conceptimage";
 import * as ContentBox from "@/layout/ContentBox";
+import * as Report from "@/layout/Report";
+import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 
 const finalize = vi.fn();
@@ -18,9 +20,24 @@ const processingVideo = (id: string) => ({
   image: null,
   user: { username: "artist", avatar: null },
 });
-const images: Record<string, ReturnType<typeof processingVideo>> = {
+const toggleEmotion = vi.fn();
+const images: Record<string, Record<string, unknown>> = {
   first: processingVideo("first"),
   second: processingVideo("second"),
+  done: {
+    id: "done",
+    userId: "artist",
+    mediaType: "image",
+    done: true,
+    status: "succeeded",
+    image: "https://utfs.io/f/done.png",
+    prompt: "A ninja",
+    n_likes: 2,
+    n_loves: 0,
+    n_laugh: 0,
+    likes: [],
+    user: { username: "artist", avatar: null },
+  },
 };
 const statuses: Record<string, unknown> = {
   first: { readyToFinalize: true, progress: 40 },
@@ -51,7 +68,7 @@ beforeEach(() => {
       finalizeVideoUpload: {
         useMutation: () => ({ mutate: finalize, isPending: false }),
       },
-      toggleEmotion: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+      toggleEmotion: { useMutation: () => ({ mutateAsync: toggleEmotion }) },
       delete: { useMutation: () => ({ mutateAsync: vi.fn() }) },
     },
   });
@@ -70,4 +87,17 @@ it("starts each image's video tracking fresh when the detail page moves to anoth
   view.rerender(<ConceptBox_ConceptImage imageid="second" />);
   expect(statusQueries.at(-1)).toEqual({ id: "second", enabled: true });
   expect(screen.queryByText("40%")).toBeNull();
+});
+
+it("asks a signed-out visitor to sign in instead of silently ignoring a reaction", () => {
+  const shown = vi
+    .spyOn(toast, "showMutationToast")
+    .mockImplementation(() => undefined);
+  vi.spyOn(Report, "default").mockImplementation(() => null);
+  render(<ConceptBox_ConceptImage imageid="done" />);
+  fireEvent.click(screen.getByRole("button", { name: "Add heart reaction" }));
+  expect(toggleEmotion).not.toHaveBeenCalled();
+  expect(shown).toHaveBeenCalledWith(
+    expect.objectContaining({ success: false, title: "Sign in to react" }),
+  );
 });
