@@ -19,13 +19,19 @@ export function CombatInspectionPicker({
       Inspect character
       <select
         aria-label="Inspect character"
-        className="bg-background mt-1 w-full rounded-md border p-2"
+        className="bg-background text-foreground border-input mt-1 w-full rounded-md border p-2"
         value={selectedId ?? ""}
         onChange={(event) => selectUser(event.target.value || undefined)}
       >
-        <option value="">Automatic</option>
+        <option value="" className="bg-background text-foreground">
+          Automatic
+        </option>
         {[true, false].map((allied) => (
-          <optgroup key={String(allied)} label={allied ? "Allies" : "Enemies"}>
+          <optgroup
+            key={String(allied)}
+            label={allied ? "Allies" : "Enemies"}
+            className="bg-background text-foreground"
+          >
             {battle.usersState
               .filter(
                 (user) =>
@@ -34,7 +40,11 @@ export function CombatInspectionPicker({
                   (user.direction === viewer?.direction) === allied,
               )
               .map((user, index) => (
-                <option key={user.userId} value={user.userId}>
+                <option
+                  key={user.userId}
+                  value={user.userId}
+                  className="bg-background text-foreground"
+                >
                   {user.username} ({index + 1}){user.isSummon ? " · Summon" : ""}
                   {user.curHealth <= 0 ? " · Defeated" : ""}
                 </option>
