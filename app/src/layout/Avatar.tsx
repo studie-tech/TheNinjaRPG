@@ -1,6 +1,8 @@
 "use client";
 
 import type React from "react";
+import { useState } from "react";
+import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
 import { useLightLayout } from "@/hooks/light-layout";
 import Image from "@/layout/Image";
 import { cn } from "@/libs/shadui";
@@ -32,6 +34,7 @@ export const useAvatarRenditionWidth = (size: number) => {
 };
 
 interface AvatarImageProps {
+  /** `undefined` while the owner is still loading; `null` or empty when there is no avatar. */
   href?: string | null;
   alt?: string;
   size: number;
@@ -46,12 +49,12 @@ interface AvatarImageProps {
  * and the image's arrival causes no layout shift.
  */
 const AVATAR_BOX =
-  "relative max-w-80 m-auto w-5/6 aspect-square rounded-2xl border-2 border-black";
+  "relative max-w-80 m-auto w-5/6 aspect-square overflow-hidden rounded-2xl border-2 border-black";
 
 const AvatarImage: React.FC<AvatarImageProps> = (props) => {
   const renditionWidth = useAvatarRenditionWidth(props.size);
-  // If no href, show loader, otherwise show avatar
-  if (!props.href) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (props.href === undefined) {
     return (
       <div
         className={cn(
@@ -64,11 +67,17 @@ const AvatarImage: React.FC<AvatarImageProps> = (props) => {
     );
   } else {
     const hover = props.hover_effect ? "hover:border-amber-500 hover:opacity-80" : "";
+    const href = props.href;
+    // Players without an avatar, or whose image no longer loads, get the default portrait.
+    const src = !href || failedSrc === href ? IMG_AVATAR_DEFAULT : href;
     return (
       <Image
         className={cn(AVATAR_BOX, hover, props.className)}
-        src={props.href}
-        alt={`${props.alt || "unknown"} AvatarImage`}
+        src={src}
+        alt={props.alt ?? "Avatar"}
+        onError={() => {
+          if (href && src === href) setFailedSrc(href);
+        }}
         width={renditionWidth}
         height={renditionWidth}
         priority={props.priority}

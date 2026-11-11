@@ -530,7 +530,11 @@ export const StrongestUsersBanner: React.FC = () => {
                 {/* A fixed rank cell keeps two-digit ranks clear of the avatar. */}
                 <p className="w-6 shrink-0 text-right tabular-nums">{i + 1}</p>
                 <div className="w-[26px] shrink-0 lg:w-[33px]">
-                  <AvatarImage href={user.avatarLight} alt={user.username} size={100} />
+                  <AvatarImage
+                    href={user.avatarLight || user.avatar}
+                    alt={user.username}
+                    size={100}
+                  />
                 </div>
                 <p className="min-w-0 flex-1 truncate">{user.username}</p>
                 <p className="shrink-0 pr-1 tabular-nums">{user.rankedLp}</p>

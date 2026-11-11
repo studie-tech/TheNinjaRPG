@@ -33,9 +33,9 @@ const GlowingBorder: React.FC<GlowingBorderProps> = ({
   }
 
   return (
-    <div className={cn("relative m-4 w-fit bg-red-500", className)}>
+    <div className={cn("relative m-4 w-full max-w-80", className)}>
       <div
-        className={cn("absolute rounded-2xl", borderClass)}
+        className={cn("absolute rounded-2xl motion-reduce:animate-none!", borderClass)}
         style={{
           animation: `glowingBorder ${animationDuration}s linear infinite`,
           top: "0px",

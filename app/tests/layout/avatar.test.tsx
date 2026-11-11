@@ -1,7 +1,9 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import type React from "react";
 import { renderToString } from "react-dom/server";
-import {
+import { IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import AvatarImage, {
   AVATAR_FULL_WIDTH,
   avatarRenditionWidth,
   useAvatarRenditionWidth,
@@ -29,5 +31,35 @@ describe("useAvatarRenditionWidth", () => {
     const markup = renderToString(<Probe size={100} />);
     expect(markup).toContain(String(AVATAR_FULL_WIDTH));
     expect(markup).not.toContain(">100<");
+  });
+});
+
+describe("AvatarImage", () => {
+  afterEach(cleanup);
+  const defaultFile = IMG_AVATAR_DEFAULT.split("/").at(-1) ?? "";
+
+  it("keeps the loading placeholder while the owner is unknown", () => {
+    const view = render(<AvatarImage href={undefined} alt="Kakashi" size={100} />);
+    expect(view.queryByRole("img")).toBeNull();
+  });
+
+  it("shows the default portrait for a player without an avatar", () => {
+    const view = render(<AvatarImage href={null} alt="Kakashi" size={100} />);
+    const image = view.getByRole("img", { name: "Kakashi" });
+    expect(decodeURIComponent(image.getAttribute("src") ?? "")).toContain(defaultFile);
+  });
+
+  it("falls back to the default portrait when the image fails to load", () => {
+    const view = render(
+      <AvatarImage href="https://example.com/missing.webp" alt="Kakashi" size={100} />,
+    );
+    const image = view.getByRole("img", { name: "Kakashi" });
+    expect(image.getAttribute("src")).toContain("missing.webp");
+    fireEvent.error(image);
+    expect(
+      decodeURIComponent(
+        view.getByRole("img", { name: "Kakashi" }).getAttribute("src") ?? "",
+      ),
+    ).toContain(defaultFile);
   });
 });

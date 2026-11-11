@@ -70,9 +70,7 @@ it.each([
         <MenuBoxCombat />
       </Provider>,
     );
-    expect(view.getAllByRole("img", { name: /AvatarImage$/ }).length).toBeGreaterThan(
-      0,
-    );
+    expect(view.getAllByRole("img").length).toBeGreaterThan(0);
     const avatarLink = view
       .queryAllByRole("link")
       .find((link) => link.querySelector("img"));

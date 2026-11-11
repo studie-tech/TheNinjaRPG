@@ -1456,7 +1456,13 @@ export const listUserDataForGetStrongestUsers = (
     extras: (table) => ({
       displayTitle: displayTitleSql(table).as("displayTitle"),
     }),
-    columns: { userId: true, username: true, avatarLight: true, rankedLp: true },
+    columns: {
+      userId: true,
+      username: true,
+      avatar: true,
+      avatarLight: true,
+      rankedLp: true,
+    },
     where: eq(userData.isAi, false),
     orderBy: [desc(userData.rankedLp), desc(userData.experience)],
     limit: STRONGEST_USERS_COUNT,
