@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ChevronsDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type React from "react";
 import { useId } from "react";
 import { cn } from "@/libs/shadui";
@@ -37,7 +37,7 @@ const Accordion: React.FC<AccordionProps> = (props) => {
         <button
           type="button"
           className={cn(
-            "flex w-full flex-row items-center text-left",
+            "flex min-h-11 w-full flex-row items-center py-2 text-left",
             active ? "" : "hover:cursor-pointer hover:bg-popover",
           )}
           aria-expanded={active}
@@ -52,11 +52,11 @@ const Accordion: React.FC<AccordionProps> = (props) => {
             </div>
           )}
           <div>
-            <h2 className="mt-2 font-bold">
+            <span className="block font-bold">
               {titlePrefix}
               {title}
               {titlePostfix}
-            </h2>
+            </span>
             <div className="italic">
               {active && selectedSubtitle}
               {!active && unselectedSubtitle}
@@ -64,8 +64,12 @@ const Accordion: React.FC<AccordionProps> = (props) => {
           </div>
           <div className="grow"></div>
           <div className="flex flex-row items-center">
-            <ChevronsDown
-              className={`h-6 w-6 hover:cursor-pointer hover:text-orange-500 ${active ? "rotate-90 transform" : ""}`}
+            <ChevronDown
+              aria-hidden
+              className={cn(
+                "h-6 w-6 transition-transform hover:text-orange-500",
+                active && "rotate-180",
+              )}
             />
           </div>
         </button>
