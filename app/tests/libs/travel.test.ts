@@ -6,6 +6,7 @@ import {
   getBiomeAtSectorAnchor,
   isTravelKeyBlocked,
   optimisticGlobalTravelStart,
+  resolveGlobeJourney,
   SECTOR_BATTLE_STALE_SECONDS,
 } from "@/libs/travel";
 import { sectorTile as makeTile, sectorMap } from "../setup/sectorMap";
@@ -14,6 +15,53 @@ const makeMap = (width: number, height: number, blocked: Set<string> = new Set()
   sectorMap(width, height, (x, y) =>
     blocked.has(`${x},${y}`) ? { walkCost: 0, blocked: true } : {},
   );
+
+describe("confirmed globe journey", () => {
+  const stored = {
+    userId: "hero",
+    fromSector: 724,
+    toSector: 177,
+    finishAt: 20_000,
+    durationMs: 10_000,
+  };
+  const user = {
+    userId: "hero",
+    sector: 177,
+    status: "TRAVEL" as const,
+    travelFinishAt: new Date(20_000),
+  };
+
+  it("restores the server-confirmed journey after serialization, including instant travel", () => {
+    expect(resolveGlobeJourney(JSON.parse(JSON.stringify(stored)), user)).toEqual(
+      stored,
+    );
+    expect(
+      resolveGlobeJourney(
+        { ...stored, toSector: 222, durationMs: 0 },
+        { ...user, sector: 222 },
+      )?.durationMs,
+    ).toBe(0);
+  });
+
+  it("ignores malformed, stale and other-account routes without changing travel state", () => {
+    for (const entry of [
+      null,
+      {},
+      "route",
+      { ...stored, fromSector: -1 },
+      { ...stored, durationMs: -1 },
+      { ...stored, durationMs: Infinity },
+      { ...stored, fromSector: 177 },
+      { ...stored, userId: "another-user" },
+      { ...stored, toSector: 178 },
+      { ...stored, finishAt: 19_000 },
+    ])
+      expect(resolveGlobeJourney(entry, user)).toBeNull();
+    expect(resolveGlobeJourney(stored, { ...user, status: "AWAKE" })).toBeNull();
+    expect(resolveGlobeJourney(stored, { ...user, travelFinishAt: null })).toBeNull();
+    expect(resolveGlobeJourney(stored, undefined)).toBeNull();
+  });
+});
 
 describe("findGlobalTravelDestination", () => {
   it("lands in the center of a standard sector", () => {

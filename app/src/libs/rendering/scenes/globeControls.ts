@@ -31,6 +31,7 @@ export const createGlobeControls = (
   >();
   let pointer: { x: number; y: number } | null = null;
   let multiTouch = false;
+  let rotationRevision = 0;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   const save = () =>
     safeLocalStorageSetItem(
@@ -89,6 +90,7 @@ export const createGlobeControls = (
       const after = separation();
       if (before > 1 && after > 1) zoom(before / after);
     } else {
+      if (dx !== 0 || dy !== 0) rotationRevision++;
       camera.longitude += dx * 0.005;
       camera.latitude = Math.max(
         -limits.latitude,
@@ -129,5 +131,10 @@ export const createGlobeControls = (
     if (saveTimer !== null) clearTimeout(saveTimer);
     save();
   });
-  return { zoom, isInteracting: () => pointers.size > 0, pointer: () => pointer };
+  return {
+    zoom,
+    isInteracting: () => pointers.size > 0,
+    pointer: () => pointer,
+    rotationRevision: () => rotationRevision,
+  };
 };

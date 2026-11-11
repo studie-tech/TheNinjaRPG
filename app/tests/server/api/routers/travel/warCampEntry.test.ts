@@ -176,20 +176,32 @@ afterEach(() => {
 describe("travel camp admission scheduling", () => {
   it("starts global-travel admission reads while the user read is still pending", async () => {
     const test = fixture();
-    const pending = test.api.startGlobalMove({ sector: neighbors.east });
+    const before = Date.now();
+    const pending = test.api.startGlobalMove({
+      sector: neighbors.east,
+      curSector: 177,
+    });
     await test.userStarted;
     expect(test.reads).toContain("camp wars");
     expect(test.reads).toContain("mercenary");
     expect(test.getWrites()).toBe(0);
     test.releaseUser();
-    expect(await pending).toMatchObject({
+    const admitted = await pending;
+    expect(admitted).toMatchObject({
       success: true,
+      fromSector: SECTOR,
       data: {
         sector: neighbors.east,
         longitude: SECTOR_WIDTH / 2,
         latitude: SECTOR_HEIGHT / 2,
       },
     });
+    if (!admitted.data || admitted.durationMs === undefined)
+      throw new Error("Missing route admission metadata");
+    expect(admitted.durationMs).toBeGreaterThan(0);
+    const startedAt = admitted.data.travelFinishAt.getTime() - admitted.durationMs;
+    expect(startedAt).toBeGreaterThanOrEqual(before);
+    expect(startedAt).toBeLessThanOrEqual(Date.now());
     expect(test.campSectors).toEqual([neighbors.east]);
     expect(test.getWrites()).toBe(1);
   });

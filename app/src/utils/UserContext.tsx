@@ -111,6 +111,8 @@ type UserContextValue = {
     patch: UserUpdate | undefined,
     mutation?: UserUpdateOptions,
   ) => Promise<boolean>;
+  /** Request a fresh profile after confirmed server work; false keeps feature recovery available. */
+  refreshUser: () => Promise<boolean>;
   updateNotifications: (
     notifications: NavBarDropdownLink[] | undefined,
   ) => Promise<void>;
@@ -140,6 +142,7 @@ const defaultUserContext: UserContextValue = {
     dispose: () => {},
   },
   updateUser: async () => false,
+  refreshUser: async () => false,
   updateNotifications: async () => {
     // do nothing
   },
@@ -258,6 +261,15 @@ export function UserContextProvider(props: {
       updateUserCache(queryClient, userQueryKey, patch, mutation),
     [queryClient, userQueryKey],
   );
+  const refreshUser = useCallback(async () => {
+    try {
+      await queryClient.cancelQueries({ queryKey: userQueryKey, exact: true });
+      const result = await refetch({ throwOnError: true });
+      return result.isSuccess && result.data?.userData?.userId === userId;
+    } catch {
+      return false;
+    }
+  }, [queryClient, userQueryKey, refetch, userId]);
 
   // Optimistic notification update function
   const updateNotifications = useCallback(
@@ -333,6 +345,7 @@ export function UserContextProvider(props: {
       prepareUserUpdate,
       actionPreferences,
       updateUser,
+      refreshUser,
       updateNotifications: updateNotifications,
     }),
     [
@@ -349,6 +362,7 @@ export function UserContextProvider(props: {
       prepareUserUpdate,
       actionPreferences,
       updateUser,
+      refreshUser,
       updateNotifications,
     ],
   );

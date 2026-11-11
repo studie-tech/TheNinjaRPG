@@ -19,6 +19,7 @@ import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { calcGlobalTravelTime } from "@/libs/travel";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { useUserData } from "@/utils/UserContext";
+import type { GlobeJourney } from "@/validators/travel";
 
 interface MapProps {
   highlights?: Village[];
@@ -38,6 +39,8 @@ interface MapProps {
   focusSector?: number | null;
   /** Sector of a trip awaiting confirmation; the route arc keeps pointing at it. */
   routeTarget?: number | null;
+  /** Confirmed journey whose marker follows the same deadline as the countdown. */
+  journey?: GlobeJourney | null;
   /** Receive the picked world sector ID for travel, editing or war selection. */
   onTileClick?: (sector: number) => void;
 }
@@ -108,6 +111,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       questSectors,
       timeDiff,
       routeTarget: props.routeTarget,
+      journey: props.journey,
       layers,
     }),
     [
@@ -124,6 +128,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       questSectors,
       timeDiff,
       props.routeTarget,
+      props.journey,
       layers,
     ],
   );
@@ -172,10 +177,15 @@ const GlobalMap: React.FC<MapProps> = (props) => {
           hover={hover}
           map={hexasphere}
           villages={props.highlights}
-          fromSector={props.userLocation ? userData?.sector : undefined}
+          fromSector={
+            props.userLocation && userData?.status !== "TRAVEL"
+              ? userData?.sector
+              : undefined
+          }
           quests={hasQuestMarkers ? questGoals : NO_GOALS}
           targets={props.usersHighlighted}
           focusSector={props.focusSector}
+          focusLabel={userData?.status === "TRAVEL" ? "Destination" : "Search target"}
           explanation={actionExplanation}
         />
       )}
@@ -237,6 +247,7 @@ const SectorCard: React.FC<{
   quests: QuestGoal[];
   targets?: { sector: number; username?: string }[];
   focusSector?: number | null;
+  focusLabel: string;
   explanation: string;
 }> = ({
   hover,
@@ -246,6 +257,7 @@ const SectorCard: React.FC<{
   quests,
   targets,
   focusSector,
+  focusLabel,
   explanation,
 }) => {
   const hovered = useSyncExternalStore(hover.subscribe, hover.get, hover.get);
@@ -310,7 +322,7 @@ const SectorCard: React.FC<{
       )}
       {focusSector === sector && (
         <span className="border-l-2 border-purple-400 pl-2 text-sm text-purple-200">
-          Search target
+          {focusLabel}
         </span>
       )}
       {sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR && (

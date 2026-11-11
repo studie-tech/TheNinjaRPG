@@ -105,6 +105,7 @@ beforeEach(() => {
         timeDiff: 0,
         prepareUserUpdate: () => 1,
         updateUser: async () => {},
+        refreshUser: async () => true,
       }) as never,
   );
   vi.spyOn(UserContext, "useUserDataSelector").mockImplementation(
@@ -340,10 +341,12 @@ for (const outcome of ["transport error", "success", "rejected"] as const)
     "ASLEEP",
     "HOSPITALIZED",
     "missing snapshot",
+    "pre-travel refresh",
+    "failed recovery read",
     "missing revision",
     "superseded snapshot",
   ] as const)(
-    `reconciles global journey ${outcome} from %s without a profile read`,
+    `reconciles global journey ${outcome} from %s without leaving successful admission on a stale profile`,
     async (initialStatus) => {
       const cache = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       const key = ["profile", "actor"];
@@ -362,6 +365,7 @@ for (const outcome of ["transport error", "success", "rejected"] as const)
         userData: {
           ...initial.userData,
           status: "TRAVEL" as const,
+          sector: 1539,
           travelFinishAt: new Date(Date.now() + 10000),
           curHealth: 100,
           curChakra: 100,
@@ -369,7 +373,11 @@ for (const outcome of ["transport error", "success", "rejected"] as const)
         },
       };
       cache.setQueryData(key, initial);
-      const read = vi.fn(async () => canonical);
+      let failRead = initialStatus === "failed recovery read";
+      const read = vi.fn(async () => {
+        if (failRead) throw new Error("Profile unavailable");
+        return canonical;
+      });
       const observer = new QueryObserver(cache, {
         queryKey: key,
         staleTime: Infinity,
@@ -383,6 +391,11 @@ for (const outcome of ["transport error", "success", "rejected"] as const)
         timeDiff: 0,
         prepareUserUpdate: () => prepareUserUpdate(cache, key),
         updateUser,
+        refreshUser: async () => {
+          await cache.cancelQueries({ queryKey: key, exact: true });
+          const refreshed = await observer.refetch();
+          return refreshed.isSuccess;
+        },
       } as never);
       type Previous =
         | {
@@ -438,7 +451,7 @@ for (const outcome of ["transport error", "success", "rejected"] as const)
         ),
       });
       try {
-        render(<TravelPage />);
+        const view = render(<TravelPage />);
         let preserved: unknown;
         await act(async () => {
           const previous = await callbacks.onMutate({ sector: 1539 });
@@ -458,6 +471,11 @@ for (const outcome of ["transport error", "success", "rejected"] as const)
                 },
             );
           }
+          if (
+            initialStatus === "pre-travel refresh" ||
+            initialStatus === "failed recovery read"
+          )
+            cache.setQueryData(key, initial);
           preserved = cache.getQueryData(key);
           if (outcome === "transport error") {
             await callbacks.onError(
@@ -481,8 +499,35 @@ for (const outcome of ["transport error", "success", "rejected"] as const)
             );
           }
         });
-        expect(read).not.toHaveBeenCalled();
-        if (initialStatus === "ASLEEP" || initialStatus === "HOSPITALIZED") {
+        const failedRecovery =
+          outcome === "success" && initialStatus === "failed recovery read";
+        if (failedRecovery) {
+          expect(cache.getQueryState(key)?.status).toBe("error");
+          expect(view.getByText("Home village")).toBeTruthy();
+          expect(view.getByText(/s remaining/)).toBeTruthy();
+          expect(
+            view.getByText(
+              "Your trip has started. Reconnect to confirm your location.",
+            ),
+          ).toBeTruthy();
+          failRead = false;
+          await act(async () =>
+            fireEvent.click(view.getByRole("button", { name: "Retry connection" })),
+          );
+          expect(view.queryByRole("button", { name: "Retry connection" })).toBeNull();
+        }
+        const needsReconciliation =
+          outcome === "success" &&
+          initialStatus !== "ASLEEP" &&
+          initialStatus !== "HOSPITALIZED";
+        expect(read).toHaveBeenCalledTimes(
+          failedRecovery ? 2 : needsReconciliation ? 1 : 0,
+        );
+        if (
+          needsReconciliation ||
+          initialStatus === "ASLEEP" ||
+          initialStatus === "HOSPITALIZED"
+        ) {
           expect(cache.getQueryData(key)).toMatchObject(
             outcome === "success" ? canonical : initial,
           );

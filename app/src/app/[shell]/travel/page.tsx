@@ -26,6 +26,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -67,7 +68,6 @@ import AutoAttackModal from "@/layout/AutoAttackModal";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
-import Countdown from "@/layout/Countdown";
 import { FindSectorPopover, SectorIdField } from "@/layout/FindSectorPopover";
 import { HuntingArrival } from "@/layout/HuntingArrival";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
@@ -77,6 +77,7 @@ import Loader from "@/layout/Loader";
 import MapError from "@/layout/MapError";
 import Modal from "@/layout/Modal";
 import NavTabs from "@/layout/NavTabs";
+import { TravelArrivalStatus } from "@/layout/TravelArrivalStatus";
 import { TravelPositionLabel } from "@/layout/TravelPositionLabel";
 import { WarFieldActions } from "@/layout/WarFieldActions";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
@@ -96,6 +97,7 @@ import {
   calcGlobalTravelTime,
   globalTravelFinishPatch,
   optimisticGlobalTravelStart,
+  resolveGlobeJourney,
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
 import { getReadableVillageHexColor } from "@/utils/color";
@@ -117,7 +119,10 @@ import {
   travelLocationSchema,
 } from "@/validators/travel";
 
-const GlobalMap = dynamic(() => import("@/layout/Map"), { ssr: false });
+const GlobalMap = dynamic(() => import("@/layout/Map"), {
+  ssr: false,
+  loading: () => <Loader explanation="Loading world map" />,
+});
 const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
 /** Bootstrap sector windows stay cached this long after travel unmounts. */
 const BOOT_WINDOW_RETENTION_MS = 30 * MINUTE_S * 1000;
@@ -134,6 +139,9 @@ type StoredSectorEntry =
 /** One sector's dx/dy placement within a specific window */
 type WindowLayoutEntry =
   RouterOutputs["worldMap"]["getSectorWindow"]["windowLayouts"][number]["entries"][number];
+type ConfirmedTravelAdmission = NonNullable<
+  RouterOutputs["travel"]["startGlobalMove"]["data"]
+> & { userId: string };
 
 export default function TravelPage() {
   return (
@@ -200,6 +208,10 @@ function Travel() {
   const [currentPosition, setCurrentPosition] = useState<SectorPoint | null>(null);
   const [targetPosition, setTargetPosition] = useState<SectorPoint | null>(null);
   const [targetSector, setTargetSector] = useState<number | null>(null);
+  const [storedJourney, setStoredJourney] = useLocalStorage<unknown>(
+    "worldTravelJourney",
+    null,
+  );
 
   // Data from database
   const {
@@ -208,10 +220,28 @@ function Travel() {
     timeDiff,
     prepareUserUpdate,
     updateUser,
+    refreshUser,
   } = useRequiredUserDataSelector(selectUserWithoutPosition);
   const positionChanged = useRef(() => {});
   const userRef = useUserDataRef(() => positionChanged.current());
   const userData = profile ? userRef.current : undefined;
+  const [unreconciledAdmission, setUnreconciledAdmission] =
+    useState<ConfirmedTravelAdmission | null>(null);
+  const [isRetryingAdmission, setIsRetryingAdmission] = useState(false);
+  const admissionRecovery =
+    unreconciledAdmission?.userId === userData?.userId ? unreconciledAdmission : null;
+  const travelState = admissionRecovery ?? userData;
+  const retryAdmission = async () => {
+    setIsRetryingAdmission(true);
+    try {
+      if (await refreshUser()) {
+        setUnreconciledAdmission(null);
+        setTargetSector(null);
+      }
+    } finally {
+      setIsRetryingAdmission(false);
+    }
+  };
   const loadLpcCatalog = useLpcCatalogLoader({
     revalidateInBackground: true,
     preload: !!userData,
@@ -558,16 +588,21 @@ function Travel() {
         setWorldExpanded(false);
         if (!userData) return;
         const previous = {
+          userId: userData.userId,
           status: userData.status,
           travelFinishAt: userData.travelFinishAt ?? null,
         };
         // startGlobalMoveSchema coerces the sector, so the mutate input type is unknown.
         const destinationSector = Number(variables.sector);
+        setTargetSector(destinationSector);
         const travelTime = globe
           ? calcGlobalTravelTime(userData.sector, destinationSector, globe)
           : 0;
         await updateUser(optimisticGlobalTravelStart(travelTime));
-        return { ...previous, revision: prepareUserUpdate() };
+        return {
+          ...previous,
+          revision: prepareUserUpdate(),
+        };
       },
       onError: async (_error, _variables, previous) => {
         setAutoDestination(null);
@@ -584,25 +619,41 @@ function Travel() {
       onSuccess: async (result, _variables, previous) => {
         showMutationToast(result);
         if (result.success && result.data) {
+          if (
+            previous &&
+            result.fromSector !== undefined &&
+            result.durationMs !== undefined
+          ) {
+            setStoredJourney({
+              userId: previous.userId,
+              fromSector: result.fromSector,
+              toSector: result.data.sector,
+              finishAt: result.data.travelFinishAt.getTime(),
+              durationMs: result.durationMs,
+            });
+          }
           // Clear any local-sector movement target before the destination
           // coordinates enter UserContext so it cannot overwrite the arrival.
           // Do not write sector/coords until this payload arrives — they are
           // server-chosen, and an in-flight sector walk must not land on them.
           setTargetPosition(null);
-          setTargetSector(null);
           setShowModal(false);
+          setActiveTab(globalLink);
 
-          await updateUser(result.data, {
+          const profileApplied = await updateUser(result.data, {
             revision: previous?.revision,
             refetch: false,
             userRecovery: result.userRecovery,
           });
-          if (globe) {
-            const tile = globe.tiles[result.data.sector];
-            if (tile) {
-              setCurrentTile(tile);
-            }
+          // Keep confirmed travel visible when a stale profile rejects its patch and the recovery read cannot complete.
+          if (!profileApplied) {
+            const admissionUserId = previous?.userId ?? userData?.userId;
+            if (admissionUserId)
+              setUnreconciledAdmission({ ...result.data, userId: admissionUserId });
+            if (!(await refreshUser())) return;
           }
+          setUnreconciledAdmission(null);
+          setTargetSector(null);
         } else if (result.userRecovery) {
           setAutoDestination(null);
           await updateUser(result, { revision: previous?.revision, refetch: false });
@@ -715,6 +766,7 @@ function Travel() {
   // Convenience for starting global move
   const handleGlobalMove = useCallback(
     (sector: number) => {
+      if (admissionRecovery) return;
       // Guards against global movement
       if (tutorialFocusSector !== null && sector !== tutorialFocusSector) {
         showMutationToast({
@@ -728,7 +780,7 @@ function Travel() {
       setTargetPosition(null);
       startGlobalMove({ sector });
     },
-    [tutorialFocusSector, startGlobalMove],
+    [admissionRecovery, tutorialFocusSector, startGlobalMove],
   );
 
   // Whether world-travel can be started toward a given sector
@@ -736,26 +788,37 @@ function Travel() {
     (sector: number | undefined) =>
       Number.isFinite(sector) &&
       sector !== userData?.sector &&
+      !admissionRecovery &&
       canAttemptAwakeAction(userData) &&
       !isStartingTravel,
-    [userData?.sector, userData?.status, userData?.autoWakeUp, isStartingTravel],
+    [
+      userData?.sector,
+      userData?.status,
+      userData?.autoWakeUp,
+      isStartingTravel,
+      admissionRecovery,
+    ],
   );
 
   // Stable identity for the globe click path: MapComponent is memoized to avoid
   // re-renders during countdown updates, so this callback must not change when
   // sector / isStartingTravel change. The guard is read from a ref instead.
-  const travelGuardRef = useRef({
-    sector: userData?.sector,
-    isStartingTravel,
+  const travelGuardRef = useRef<{ sector: number | undefined; canTravel: boolean }>({
+    sector: undefined,
+    canTravel: false,
   });
-  travelGuardRef.current = {
-    sector: userData?.sector,
-    isStartingTravel,
-  };
+  const canStartGlobalTravel =
+    !admissionRecovery && canAttemptAwakeAction(userData) && !isStartingTravel;
+  useLayoutEffect(() => {
+    travelGuardRef.current = {
+      sector: userData?.sector,
+      canTravel: canStartGlobalTravel,
+    };
+  }, [userData?.sector, canStartGlobalTravel]);
 
   const initiateTravelToSector = useCallback((sector: number) => {
-    const { sector: current, isStartingTravel: busy } = travelGuardRef.current;
-    if (busy) return;
+    const { sector: current, canTravel } = travelGuardRef.current;
+    if (!canTravel) return;
     if (sector === current) {
       showMutationToast({
         success: false,
@@ -768,11 +831,25 @@ function Travel() {
     setShowModal(true);
   }, []);
 
-  const isGlobal = activeTab === globalLink;
+  const isTraveling = travelState?.status === "TRAVEL";
+  const globeJourney = useMemo(
+    () => resolveGlobeJourney(storedJourney, travelState),
+    [
+      storedJourney,
+      travelState?.userId,
+      travelState?.sector,
+      travelState?.status,
+      travelState?.travelFinishAt,
+    ],
+  );
+  const isGlobal = isTraveling || activeTab === globalLink;
   const showGlobal = villages && globe && isGlobal;
   // Admission supplies the destination coordinates. Prepare its scene during the
   // countdown, after admission settles, and keep that instance for arrival.
   const isPreparingSector = userData?.status === "TRAVEL" && !isStartingTravel;
+  const globeFocusSector = isTraveling
+    ? (targetSector ?? travelState?.sector)
+    : focusSector;
   const showSector =
     villages &&
     hasCurrentSector &&
@@ -819,8 +896,12 @@ function Travel() {
           userLocation={true}
           showOwnership={showOwnership && !userData?.tutorialOn}
           autoRotate={false}
-          focusSector={focusSector}
+          focusSector={globeFocusSector}
+          actionExplanation={
+            isTraveling ? "You are traveling to your destination" : undefined
+          }
           routeTarget={showModal ? targetSector : null}
+          journey={globeJourney}
           onTileClick={(sector) => initiateTravelToSector(sector)}
           hexasphere={globe}
         />
@@ -831,7 +912,9 @@ function Travel() {
     globe,
     trackedBounties,
     showOwnership,
-    focusSector,
+    globeFocusSector,
+    isTraveling,
+    globeJourney,
     showModal,
     targetSector,
     userData?.tutorialOn,
@@ -977,14 +1060,18 @@ function Travel() {
   // Render
   return (
     <>
-      <HuntingArrival blocked={!!locationRequest || searchParams.has("sector")} />
+      <HuntingArrival
+        blocked={!!admissionRecovery || !!locationRequest || searchParams.has("sector")}
+      />
       {locationRequest && (
         <Modal
           title="Auto Travel"
           isOpen={true}
           setIsOpen={() => setLocationRequest(null)}
           proceed_label="Travel"
-          proceedDisabled={!canAttemptAwakeAction(userData) || isStartingTravel}
+          proceedDisabled={
+            !!admissionRecovery || !canAttemptAwakeAction(userData) || isStartingTravel
+          }
           onAccept={() => {
             if (!canAttemptAwakeAction(userData) || isStartingTravel) return;
             setAutoDestination(locationRequest);
@@ -1067,9 +1154,9 @@ function Travel() {
                 )}
               </>
             )}
-            {activeTab === globalLink && (
+            {isGlobal && !isTraveling && (
               <FindSectorPopover
-                focusSector={focusSector}
+                focusSector={globeFocusSector}
                 onFocusSector={setFocusSector}
                 trigger={
                   <Locate
@@ -1148,7 +1235,11 @@ function Travel() {
                         size="sm"
                         variant="outline"
                         className="h-auto min-w-0 flex-1 flex-col items-start whitespace-normal text-left"
-                        disabled={isStartingTravel || !canAttemptAwakeAction(userData)}
+                        disabled={
+                          !!admissionRecovery ||
+                          isStartingTravel ||
+                          !canAttemptAwakeAction(userData)
+                        }
                         onClick={() => setLocationRequest(pin)}
                       >
                         <span>{pin.label}</span>
@@ -1235,7 +1326,7 @@ function Travel() {
                 <Maximize2 className="h-7 w-7" />
               </button>
             )}
-            {activeTab === globalLink && (
+            {isGlobal && (
               <TooltipProvider delayDuration={50}>
                 <Tooltip>
                   <TooltipTrigger onClick={() => setShowOwnership(!showOwnership)}>
@@ -1283,8 +1374,8 @@ function Travel() {
             )}
 
             <NavTabs
-              current={activeTab}
-              options={[sectorLink, globalLink]}
+              current={isGlobal ? globalLink : activeTab}
+              options={isTraveling ? [globalLink] : [sectorLink, globalLink]}
               labels={{ [sectorLink]: <TravelPositionLabel /> }}
               setValue={setActiveTab}
               onChange={(value) => {
@@ -1299,7 +1390,7 @@ function Travel() {
         <div className={userData.travelFinishAt ? "relative min-h-80" : "relative"}>
           {showGlobal && MapComponent}
           {mapError && <MapError />}
-          {/* Invisible preparation preserves viewport measurements and the arrival canvas. */}
+          {/* Prepare the destination offscreen so its scene is ready on arrival. */}
           {(showSector || isPreparingSector) && (
             <div
               aria-hidden={!showSector}
@@ -1341,35 +1432,20 @@ function Travel() {
               )}
             </Modal>
           )}
-          {userData?.travelFinishAt && (
-            <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto flex flex-col justify-center bg-black opacity-90">
-              <div className="m-auto text-center text-white">
-                <p className="p-5 text-3xl">
-                  Traveling to Sector {targetSector ?? userData?.sector}
-                </p>
-                <p className="text-5xl">
-                  Time Left:{" "}
-                  <Countdown
-                    targetDate={userData?.travelFinishAt}
-                    timeDiff={timeDiff}
-                    onFinish={() => {
-                      if (!isFinishingTravel && !isStartingTravel) finishGlobalMove();
-                    }}
-                    onEndShow={
-                      isArrivalRejected ? (
-                        <Button
-                          className="text-xl"
-                          disabled={isFinishingTravel || isStartingTravel}
-                          onClick={() => finishGlobalMove()}
-                        >
-                          Arrive
-                        </Button>
-                      ) : undefined
-                    }
-                  />
-                </p>
-              </div>
-            </div>
+          {travelState?.travelFinishAt && (
+            <TravelArrivalStatus
+              sector={targetSector ?? travelState.sector}
+              destinationName={sectorNames.get(targetSector ?? travelState.sector)}
+              finishAt={travelState.travelFinishAt}
+              timeDiff={timeDiff}
+              isBusy={isFinishingTravel || isStartingTravel || !!admissionRecovery}
+              isArrivalRejected={isArrivalRejected}
+              onArrive={() => finishGlobalMove()}
+              onRetrySync={
+                admissionRecovery && !isStartingTravel ? retryAdmission : undefined
+              }
+              isSyncing={isRetryingAdmission}
+            />
           )}
         </div>
       </ContentBox>

@@ -14,7 +14,30 @@ import {
 import type { GlobalMapData, SectorPoint } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { secondsFromNow } from "@/utils/time";
+import { type GlobeJourney, globeJourneySchema } from "@/validators/travel";
 import type { UserCachePatch } from "@/validators/userCache";
+
+/** Restore only the presentation metadata belonging to this account's confirmed trip. */
+export const resolveGlobeJourney = (
+  stored: unknown,
+  user:
+    | Pick<
+        NonNullable<UserWithRelations>,
+        "userId" | "sector" | "status" | "travelFinishAt"
+      >
+    | undefined,
+): GlobeJourney | null => {
+  if (user?.status !== "TRAVEL" || !user.travelFinishAt) return null;
+  const parsed = globeJourneySchema.safeParse(stored);
+  if (!parsed.success) return null;
+  const journey = parsed.data;
+  return journey.userId === user.userId &&
+    journey.toSector === user.sector &&
+    journey.fromSector !== journey.toSector &&
+    journey.finishAt === user.travelFinishAt.getTime()
+    ? journey
+    : null;
+};
 
 /**
  * Gets the biome for a globe tile terrain type (0=ocean, 1=land, 2=desert, 3=ice)

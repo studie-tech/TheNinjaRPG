@@ -596,6 +596,9 @@ export const travelRouter = createTRPCRouter({
     .input(startGlobalMoveSchema)
     .output(
       baseServerResponse.extend({
+        // Route presentation uses the same departure and duration as admission.
+        fromSector: z.number().optional(),
+        durationMs: z.number().nonnegative().optional(),
         data: z
           .object({
             sector: z.number(),
@@ -704,6 +707,8 @@ export const travelRouter = createTRPCRouter({
           {
             success: true,
             message: "OK",
+            fromSector: departureSector,
+            durationMs: travelTime * 1000,
             data: {
               sector: input.sector,
               longitude: destination.x,

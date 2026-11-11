@@ -307,7 +307,7 @@ describe("getTutorialPortraitSide", () => {
 });
 
 describe("TUTORIAL_STEPS", () => {
-  it("highlights the world-travel confirm button before the globe and the Global tab", () => {
+  it("highlights travel confirmation and arrival before the globe and the Global tab", () => {
     // Travel steps share one element list defined above the step array.
     const source = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), "../../src/libs/tutorialSteps.tsx"),
@@ -319,6 +319,9 @@ describe("TUTORIAL_STEPS", () => {
     // Once the travel modal opens its proceed button must win the highlight;
     // the always-mounted globe would otherwise keep it for the whole step.
     expect(block.indexOf("tutorial-global-travel-proceed")).toBeLessThan(
+      block.indexOf("tutorial-travel-arrival"),
+    );
+    expect(block.indexOf("tutorial-travel-arrival")).toBeLessThan(
       block.indexOf("tutorial-global-map"),
     );
     expect(block.indexOf("tutorial-global-map")).toBeLessThan(
