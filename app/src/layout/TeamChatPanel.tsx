@@ -1,6 +1,7 @@
 "use client";
 import { Loader2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
+import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -85,17 +86,7 @@ export const TeamChatPanel: React.FC<TeamChatPanelProps> = ({
     util.comments.getConversationComments,
   ]);
 
-  const comments = useMemo(() => {
-    if (!commentsData?.pages) return [];
-    const seen = new Set<string>();
-    return commentsData.pages
-      .flatMap((page) => page.data)
-      .filter((comment) => {
-        if (seen.has(comment.id)) return false;
-        seen.add(comment.id);
-        return true;
-      });
-  }, [commentsData?.pages]);
+  const comments = uniqueComments(commentsData?.pages);
   const restrictionMessage =
     commentsData?.pages[0]?.restrictionMessage ??
     commentsData?.pages[0]?.convo?.sendRestriction ??
@@ -143,23 +134,11 @@ export const TeamChatPanel: React.FC<TeamChatPanelProps> = ({
             .slice()
             .reverse()
             .map((comment) => (
-              <div
+              <TeamChatMessage
                 key={comment.id}
-                className={cn(
-                  "rounded-lg bg-background px-3 py-2 text-sm",
-                  comment.userId === userData?.userId && "bg-primary/5",
-                )}
-              >
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="font-medium">{comment.username}</span>
-                  <span className="text-muted-foreground text-xs">
-                    {new Date(comment.createdAt).toLocaleTimeString()}
-                  </span>
-                </div>
-                <div className="break-words text-foreground">
-                  {parseHtml(comment.content)}
-                </div>
-              </div>
+                comment={comment}
+                isOwn={comment.userId === userData?.userId}
+              />
             ))
         ) : (
           <p className="text-muted-foreground text-sm">
@@ -205,6 +184,50 @@ export const TeamChatPanel: React.FC<TeamChatPanelProps> = ({
     </div>
   );
 };
+
+// Cache updates preserve unchanged comment objects, so a new message renders and
+// parses only its own row.
+const TeamChatMessage = memo(function TeamChatMessage({
+  comment,
+  isOwn,
+}: {
+  comment: TeamChatComment;
+  isOwn: boolean;
+}) {
+  const content = useMemo(() => parseHtml(comment.content), [comment.content]);
+  return (
+    <div
+      className={cn(
+        "rounded-lg bg-background px-3 py-2 text-sm",
+        isOwn && "bg-primary/5",
+      )}
+    >
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="font-medium">{comment.username}</span>
+        <span className="text-muted-foreground text-xs">
+          {new Date(comment.createdAt).toLocaleTimeString()}
+        </span>
+      </div>
+      <div className="break-words text-foreground">{content}</div>
+    </div>
+  );
+});
+
+/** Loaded pages can overlap after a refetch; keep the first copy of each comment. */
+const uniqueComments = (pages: TeamChatPage[] | undefined) => {
+  if (!pages) return [];
+  const seen = new Set<string>();
+  return pages
+    .flatMap((page) => page.data)
+    .filter((comment) => {
+      if (seen.has(comment.id)) return false;
+      seen.add(comment.id);
+      return true;
+    });
+};
+
+type TeamChatPage = RouterOutputs["comments"]["getConversationComments"];
+type TeamChatComment = TeamChatPage["data"][number];
 
 /** Existing activity conversation; its router owns membership and sending permissions. */
 interface TeamChatPanelProps {
