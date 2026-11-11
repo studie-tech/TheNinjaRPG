@@ -123,7 +123,7 @@ it("renders rounds newest first, with placeholders, separators and highlighted s
   );
   expect(effects.map((node) => node.className)).toEqual([
     "text-blue-500",
-    "text-black",
+    "text-foreground",
     "text-green-500",
     "text-red-500",
   ]);

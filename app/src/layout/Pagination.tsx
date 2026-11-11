@@ -14,7 +14,7 @@ const Pagination: React.FC<PaginationProps> = (props) => {
           <li>
             <button
               type="button"
-              className="ml-0 rounded-l-lg border border-gray-300 bg-white px-3 py-2 text-gray-500 leading-tight hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ml-0 rounded-l-lg border border-border bg-background px-3 py-2 text-muted-foreground leading-tight hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               disabled={props.current <= 0}
               onClick={() => props.setPage(props.current - 1)}
             >
@@ -28,8 +28,8 @@ const Pagination: React.FC<PaginationProps> = (props) => {
                   type="button"
                   className={
                     pageNum === props.current
-                      ? "border border-gray-300 bg-blue-50 px-3 py-2 text-blue-600 hover:bg-blue-100 hover:text-blue-700"
-                      : "border border-gray-300 bg-white px-3 py-2 text-gray-500 leading-tight hover:bg-gray-100 hover:text-gray-700"
+                      ? "border border-border bg-primary px-3 py-2 text-primary-foreground hover:bg-primary/80"
+                      : "border border-border bg-background px-3 py-2 text-muted-foreground leading-tight hover:bg-accent hover:text-foreground"
                   }
                   onClick={() => {
                     props.setPage(pageNum);
@@ -43,7 +43,7 @@ const Pagination: React.FC<PaginationProps> = (props) => {
           <li>
             <button
               type="button"
-              className="rounded-r-lg border border-gray-300 bg-white px-3 py-2 text-gray-500 leading-tight hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-r-lg border border-border bg-background px-3 py-2 text-muted-foreground leading-tight hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               disabled={props.current >= props.total - 1}
               onClick={() => props.setPage(props.current + 1)}
             >

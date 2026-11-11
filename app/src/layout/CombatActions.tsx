@@ -112,7 +112,9 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
   );
   const base = "gap-1 text-xs";
   const grid = props.gridClassNameOverwrite || "grid grid-cols-6 md:grid-cols-7";
-  const bgColor = props.showBgColor ? "rounded-lg border bg-slate-50 text-black" : "";
+  const bgColor = props.showBgColor
+    ? "rounded-lg border bg-card text-card-foreground"
+    : "";
 
   // Track previous round to detect round changes
   const prevRoundRef = useRef<number | undefined>(currentRound);
@@ -225,7 +227,7 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
                       isHighlight
                         ? "rounded-xl border-4 border-amber-500 bg-amber-300 text-black"
                         : "",
-                      bgColor ? `${bgColor} text-black` : "",
+                      bgColor,
                       isGreyed ? "opacity-20" : "",
                     )}
                     isGreyed={isGreyed}
@@ -309,7 +311,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
           // biome-ignore lint/a11y/useKeyWithClickEvents: Container click is supplementary - audio controls are the primary interaction
           // biome-ignore lint/a11y/noStaticElementInteractions: Click handler supplements audio controls
           <div className={cn(settings.aspectRatioClass)} onClick={handleClick}>
-            <div className="relative flex aspect-square w-full items-center justify-center rounded-xl border-2 bg-slate-100">
+            <div className="relative flex aspect-square w-full items-center justify-center rounded-xl border-2 bg-muted">
               {/* biome-ignore lint/a11y/useMediaCaption: Audio assets are sound effects without caption content */}
               <audio
                 src={item.url}

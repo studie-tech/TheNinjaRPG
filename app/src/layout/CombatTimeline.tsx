@@ -232,7 +232,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
   }, [slotCount, limit]);
 
   return (
-    <div className="relative space-y-3 rounded-lg border bg-slate-100 p-3">
+    <div className="relative space-y-3 rounded-lg border bg-card text-card-foreground p-3">
       {/* Each action refreshes the log in place; only an explicit page load covers it. */}
       {isFetching && (!entries || limit > TIMELINE_PAGE_SIZE) && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-slate-950/10 backdrop-blur-sm">
@@ -242,14 +242,14 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
 
       <div className="flex items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full bg-gray-700" />
-          <Clock className="h-4 w-4 text-gray-700" />
-          <span className="font-semibold text-gray-800 text-sm">Action Timeline</span>
+          <div className="h-2 w-2 rounded-full bg-muted-foreground" />
+          <Clock className="h-4 w-4 text-muted-foreground" />
+          <span className="font-semibold text-foreground text-sm">Action Timeline</span>
         </div>
         {/* biome-ignore lint/a11y/noStaticElementInteractions: Mouse enter/leave for tooltip expansion is supplementary to button click */}
         <div
           ref={filterRef}
-          className="relative flex rounded-md border bg-slate-200 p-0.5"
+          className="relative flex rounded-md border bg-muted p-0.5"
           onMouseEnter={() => setFilterExpanded(true)}
           onMouseLeave={() => setFilterExpanded(false)}
         >
@@ -274,8 +274,8 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
                     ? "max-w-24 px-2 py-1 opacity-100"
                     : "max-w-0 px-0 py-1 opacity-0",
                   isActive
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900",
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
                 title={label}
               >
@@ -294,16 +294,16 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
           <Button
             size="icon"
             variant="ghost"
-            className="shrink-0 rounded-full border bg-slate-200 shadow-sm hover:bg-slate-300"
+            className="shrink-0 rounded-full border bg-muted shadow-sm hover:bg-accent"
             onClick={() => setLimit((l) => l + TIMELINE_PAGE_SIZE)}
             disabled={!hasMoreOlder || isFetching}
             aria-label="Load older actions"
           >
-            <ChevronLeft className="h-4 w-4 text-gray-700" />
+            <ChevronLeft className="h-4 w-4 text-muted-foreground" />
           </Button>
 
           {slotCount === 0 && (
-            <p className="relative z-10 mt-6 flex-1 text-center text-gray-600 text-xs">
+            <p className="relative z-10 mt-6 flex-1 text-center text-muted-foreground text-xs">
               No actions recorded yet.
             </p>
           )}
@@ -329,14 +329,14 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
                         type="button"
                         className={cn(
                           "group relative flex w-20 flex-none flex-col items-center rounded-lg px-1 py-1 text-xs transition",
-                          "hover:bg-slate-200",
+                          "hover:bg-accent",
                         )}
                         onClick={() => setSelected({ entry, actionItem })}
                         aria-label="View action details"
                       >
                         <div className="flex flex-col items-center">
                           <div className="relative">
-                            <div className="rounded-full border bg-slate-50 shadow-sm group-hover:border-gray-400">
+                            <div className="rounded-full border bg-background shadow-sm group-hover:border-gray-400">
                               {actionImage ? (
                                 <ContentImage
                                   image={actionImage}
@@ -372,7 +372,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
                               </TooltipProvider>
                             )}
                             {/* User avatar - bottom right */}
-                            <div className="absolute -right-1 -bottom-1 rounded-full bg-slate-50 shadow-sm group-hover:border-gray-400">
+                            <div className="absolute -right-1 -bottom-1 rounded-full bg-background shadow-sm group-hover:border-gray-400">
                               {user?.avatar ? (
                                 <ContentImage
                                   image={user.avatar}
@@ -384,7 +384,7 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
                               )}
                             </div>
                           </div>
-                          <div className="mt-4 font-medium text-[10px] text-gray-600">
+                          <div className="mt-4 font-medium text-[10px] text-muted-foreground">
                             <span className="inline-flex items-center gap-1 whitespace-nowrap">
                               <Clock className="h-3 w-3" />
                               <span>Round {entry.battleRound}</span>
@@ -484,7 +484,7 @@ const PendingTimelineSlot: React.FC<{
       className="relative flex w-20 flex-none flex-col items-center rounded-lg px-1 py-1 text-xs"
     >
       <div className="relative">
-        <div className="rounded-full border bg-slate-50 opacity-70 shadow-sm">
+        <div className="rounded-full border bg-background opacity-70 shadow-sm">
           <ContentImage
             image={action.image}
             alt={action.name}
@@ -495,12 +495,12 @@ const PendingTimelineSlot: React.FC<{
           <Loader2 className="h-8 w-8 animate-spin text-white" aria-hidden />
         </div>
         {avatar && (
-          <div className="absolute -right-1 -bottom-1 rounded-full bg-slate-50 shadow-sm">
+          <div className="absolute -right-1 -bottom-1 rounded-full bg-background shadow-sm">
             <ContentImage image={avatar} alt="" className="h-8 w-8 rounded-full" />
           </div>
         )}
       </div>
-      <div className="mt-4 font-medium text-[10px] text-gray-600">
+      <div className="mt-4 font-medium text-[10px] text-muted-foreground">
         <span className="inline-flex items-center gap-1 whitespace-nowrap">
           <Clock className="h-3 w-3" />
           <span>{round === undefined ? "Now" : `Round ${round}`}</span>
