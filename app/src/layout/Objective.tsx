@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, CircleHelp, Gift, Loader2, RotateCcw, X } from "lucide-react";
+import { Check, Circle, CircleHelp, Gift, Loader2, RotateCcw } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -129,7 +129,10 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
         </>
       ) : (
         <>
-          <X className="h-10 w-10 stroke-red-500" />
+          <Circle
+            className="h-10 w-10 stroke-muted-foreground"
+            aria-label="Not done yet"
+          />
           {isTimeEventCountdown && <Loader2 className="h-10 w-10 animate-spin" />}
         </>
       )}

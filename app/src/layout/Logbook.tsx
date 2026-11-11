@@ -722,7 +722,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
               <EventTimer quest={quest} />
             </div>
             {!["tier", "daily"].includes(quest.questType) && quest.description && (
-              <div data-reading-text>{parseHtml(quest.description)}</div>
+              <QuestBriefing key={quest.id} description={quest.description} />
             )}
           </>
         )}
@@ -831,6 +831,25 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
 };
 
 /** A quest's objective cards, hiding those not yet relevant. Callers own the grid around them. */
+/** Quest story text, collapsed so the objectives stay near the quest name */
+const QuestBriefing: React.FC<{ description: string }> = ({ description }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div>
+      <Button
+        type="button"
+        variant="link"
+        className="h-auto p-0"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        {isOpen ? "Hide briefing" : "Read briefing"}
+      </Button>
+      {isOpen && <div data-reading-text>{parseHtml(description)}</div>}
+    </div>
+  );
+};
+
 export const QuestObjectives: React.FC<{
   quest: UserQuest["quest"];
   tracker: QuestTrackerType;
