@@ -31,6 +31,20 @@ export const humanizeConstant = (value: string) =>
     : value;
 
 /**
+ * Readable label for a code identifier: camelCase, snake_case and kebab-case words become
+ * one sentence-case phrase, e.g. "chakraCostReducePerLvl" reads "Chakra cost reduce per lvl".
+ */
+export const humanizeIdentifier = (identifier: string) =>
+  capitalizeFirstLetter(
+    identifier
+      .replace(/([a-z\d])([A-Z])/g, "$1 $2")
+      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+
+/**
  * Also removes thousands and replace with k, m, b, t, etc.
  * @param number
  * @returns

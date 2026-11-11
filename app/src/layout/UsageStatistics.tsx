@@ -654,7 +654,7 @@ const getUsageChart = (
       scales: {
         x: {
           stacked: true,
-          title: { display: true, text: "Change of Outcome [%]" },
+          title: { display: true, text: "Chance of Outcome [%]" },
         },
         y: {
           stacked: true,

@@ -6,6 +6,7 @@ import {
   formatAttackTarget,
   formatEnumLabel,
   humanizeConstant,
+  humanizeIdentifier,
   stripHtmlPreview,
 } from "@/utils/string";
 
@@ -87,5 +88,20 @@ describe("formatAmount", () => {
     expect(formatAmount(1.3)).toBe("1");
     expect(formatAmount(1234567.5)).toBe("1,234,568");
     expect(formatAmount(0)).toBe("0");
+  });
+});
+
+describe("humanizeIdentifier", () => {
+  it("splits camelCase into a sentence-case phrase", () => {
+    expect(humanizeIdentifier("chakraCostReducePerLvl")).toBe(
+      "Chakra cost reduce per lvl",
+    );
+    expect(humanizeIdentifier("destroyOnUse")).toBe("Destroy on use");
+  });
+
+  it("splits snake, kebab and acronym runs", () => {
+    expect(humanizeIdentifier("landing_v2")).toBe("Landing v2");
+    expect(humanizeIdentifier("hero-art")).toBe("Hero art");
+    expect(humanizeIdentifier("HTMLContent")).toBe("Html content");
   });
 });

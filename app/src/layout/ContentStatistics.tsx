@@ -58,7 +58,13 @@ export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
   ) : (
     filtering
   );
-  const usage = filteredUsage && <UsageStats usage={filteredUsage} />;
+  const usage =
+    total > 0 ? (
+      filteredUsage && <UsageStats usage={filteredUsage} />
+    ) : (
+      <NoStatistics text="No battles recorded for this filter." />
+    );
+  const hasLevelData = levelDistribution?.some((entry) => entry.count > 0) ?? false;
 
   return (
     <>
@@ -75,13 +81,16 @@ export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
         topRightContent={levelStats ? undefined : filters}
       >
         {levelStats
-          ? levelDistribution && (
+          ? levelDistribution &&
+            (hasLevelData ? (
               <LevelStats
                 levelDistribution={levelDistribution}
                 title={levelStats.title}
                 xaxis={levelStats.xaxis}
               />
-            )
+            ) : (
+              <NoStatistics text={`No players have this ${label.toLowerCase()} yet.`} />
+            ))
           : usage}
       </ContentBox>
       {levelStats && (
@@ -97,6 +106,11 @@ export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
     </>
   );
 };
+
+/** Empty state in place of a chart that would otherwise draw an empty grid. */
+const NoStatistics: React.FC<{ text: string }> = ({ text }) => (
+  <p className="py-8 text-center text-muted-foreground">{text}</p>
+);
 
 interface ContentStatisticsProps {
   type: "jutsu" | "item" | "bloodline" | "ai";

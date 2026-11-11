@@ -1079,6 +1079,29 @@ export const BattleTypes = [
 ] as const;
 export type BattleType = (typeof BattleTypes)[number];
 
+/** Player-facing name of each battle type. */
+export const BattleTypeLabels: Record<BattleType, string> = {
+  ARENA: "Arena",
+  HUNTING: "Hunting",
+  COMBAT: "Open World PvP",
+  SPARRING: "Sparring",
+  KAGE_AI: "Kage AI",
+  KAGE_PVP: "Kage PvP",
+  CLAN_CHALLENGE: "Clan Challenge",
+  CLAN_BATTLE: "Clan Battle",
+  TERRITORY_WAR: "Territory War",
+  SHRINE_WAR: "Shrine War",
+  TOURNAMENT: "Tournament",
+  QUEST: "Quest",
+  VILLAGE_PROTECTOR: "Village Protector",
+  TRAINING: "Training",
+  RANKED_PVP: "Ranked PvP",
+  RANKED_SPARRING: "Ranked Sparring",
+  RANDOM_ENCOUNTER: "Random Encounter",
+  RAID: "Raid",
+  OVERWORLD: "Overworld",
+};
+
 export const PvpBattleTypes: BattleType[] = [
   "COMBAT",
   "SPARRING",
