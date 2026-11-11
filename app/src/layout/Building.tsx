@@ -3,6 +3,7 @@
 import { CircleArrowUp, Info, LockKeyhole, RefreshCw } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Tooltip,
   TooltipContent,
@@ -58,21 +59,23 @@ const Building: React.FC<BuildingProps> = (props) => {
           {delta > 0 && <span className="text-green-500"> (+{delta})</span>}
           {delta < 0 && <span className="text-red-500"> (−{Math.abs(delta)})</span>}
         </p>{" "}
-        <TooltipProvider delayDuration={50}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 shrink-0"
-                aria-label={`${structure.name} bonuses`}
-              >
-                <Info className="size-4" aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{structureRewardEntries(structure)}</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        {/* A popover opens on tap as well as click; this is the only place the bonuses show. */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 shrink-0"
+              aria-label={`${structure.name} bonuses`}
+            >
+              <Info className="size-4" aria-hidden="true" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto max-w-72 p-3 text-left text-sm">
+            <p className="mb-1 font-semibold">{structure.name}</p>
+            {structureRewardEntries(structure)}
+          </PopoverContent>
+        </Popover>
         {userData && userData?.village?.kageId === userData?.userId && showUpgrade && (
           <UpgradeButton
             structure={structure}
@@ -92,13 +95,14 @@ const Building: React.FC<BuildingProps> = (props) => {
   // Render
   return (
     <div className="relative flex min-w-0 flex-col items-center justify-center text-center">
-      {showBar && (
+      {/* Only damaged structures show their health, in a softer colour than danger red. */}
+      {showBar && structure.curSp < structure.maxSp && (
         <div className="w-2/3">
           <StatusBar
             key={structure.curSp}
             title=""
             tooltip="Health"
-            color="bg-red-500"
+            color="bg-yellow-500"
             current={structure.curSp}
             total={structure.maxSp}
           />

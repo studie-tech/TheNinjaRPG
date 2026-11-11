@@ -1,5 +1,6 @@
 "use client";
 
+import type { LucideIcon } from "lucide-react";
 import {
   Bot,
   BrickWall,
@@ -10,15 +11,11 @@ import {
   ReceiptJapaneseYen,
   Users,
 } from "lucide-react";
+import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   VILLAGE_LEAVE_REQUIRED_RANK,
   VILLAGE_REDUCED_GAINS_DAYS,
@@ -125,71 +122,49 @@ export default function VillageOverview() {
         topRightContent={
           <div className="flex flex-row items-center">
             <div className="grid grid-cols-3 gap-1">
-              <TooltipProvider delayDuration={50}>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <div className="flex flex-row">
-                      <MapPinHouse className="mr-2 h-6 w-6" />
-                      {data?.sectorCount ?? "?"} / {maxSectors}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Number of sectors owned (max {maxSectors})
-                  </TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger>
-                    <div className="flex flex-row">
-                      <BrickWall className="mr-2 h-6 w-6" /> lvl. {walls?.level}
-                    </div>
-                  </TooltipTrigger>
-                  {walls && (
-                    <TooltipContent>{structureRewardEntries(walls)}</TooltipContent>
-                  )}
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger>
-                    <div className="flex flex-row">
-                      <Bot className="mr-2 h-6 w-6" /> lvl. {protectors?.level}
-                    </div>
-                  </TooltipTrigger>
-                  {protectors && (
-                    <TooltipContent>
-                      {structureRewardEntries(protectors)}
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger>
-                    <Link href={href}>
-                      <div className="flex flex-row hover:cursor-pointer hover:text-orange-500">
-                        <Users className="mr-2 h-6 w-6" />
-                        {prettyNumber(villageData?.populationCount ?? 0)}
-                      </div>
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Total {userData?.isOutlaw ? "faction" : "village"} population
-                  </TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger>
-                    <div className="flex flex-row">
-                      <ReceiptJapaneseYen className="mr-2 h-6 w-6" />
-                      {prettyNumber(villageData?.tokens ?? 0)}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Tokens earned through PvP and quests can be used to improve{" "}
-                    {userData?.isOutlaw ? "faction" : "village"}. Current tokens:{" "}
-                    {villageData?.tokens.toLocaleString()}.
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <VillageStat
+                icon={MapPinHouse}
+                label="Sectors"
+                value={`${data?.sectorCount ?? "?"} / ${maxSectors}`}
+              >
+                Number of sectors owned (max {maxSectors})
+              </VillageStat>
+              <VillageStat
+                icon={BrickWall}
+                label="Walls"
+                value={`lvl. ${walls?.level ?? "?"}`}
+              >
+                {walls ? structureRewardEntries(walls) : "No walls built"}
+              </VillageStat>
+              <VillageStat
+                icon={Bot}
+                label="Protectors"
+                value={`lvl. ${protectors?.level ?? "?"}`}
+              >
+                {protectors
+                  ? structureRewardEntries(protectors)
+                  : "No protectors built"}
+              </VillageStat>
+              <Link
+                href={href}
+                aria-label={`${prettyNumber(villageData?.populationCount ?? 0)} ${userData?.isOutlaw ? "faction" : "village"} population`}
+                className="flex flex-col items-start rounded-md px-1 hover:text-orange-500"
+              >
+                <span className="flex flex-row">
+                  <Users aria-hidden className="mr-2 h-6 w-6" />
+                  {prettyNumber(villageData?.populationCount ?? 0)}
+                </span>
+                <span className="text-xs">Population</span>
+              </Link>
+              <VillageStat
+                icon={ReceiptJapaneseYen}
+                label="Tokens"
+                value={String(prettyNumber(villageData?.tokens ?? 0))}
+              >
+                Tokens earned through PvP and quests can be used to improve{" "}
+                {userData?.isOutlaw ? "faction" : "village"}. Current tokens:{" "}
+                {villageData?.tokens.toLocaleString()}.
+              </VillageStat>
             </div>
 
             {!userData.isOutlaw && canLeave && ownSector && (
@@ -270,4 +245,39 @@ export default function VillageOverview() {
       )}
     </>
   );
+}
+
+/** A labelled header figure whose explanation opens on tap as well as click. */
+const VillageStat: React.FC<VillageStatProps> = ({
+  icon: Icon,
+  label,
+  value,
+  children,
+}) => (
+  <Popover>
+    <PopoverTrigger asChild>
+      <button
+        type="button"
+        aria-label={`${label}: ${value}`}
+        className="flex flex-col items-start rounded-md px-1 text-left hover:text-orange-500 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <span className="flex flex-row">
+          <Icon aria-hidden className="mr-2 h-6 w-6" />
+          {value}
+        </span>
+        <span className="text-xs">{label}</span>
+      </button>
+    </PopoverTrigger>
+    <PopoverContent className="w-auto max-w-72 p-3 text-sm">
+      <p className="mb-1 font-semibold">{label}</p>
+      {children}
+    </PopoverContent>
+  </Popover>
+);
+
+interface VillageStatProps {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  children: React.ReactNode;
 }
