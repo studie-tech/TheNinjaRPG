@@ -232,6 +232,10 @@ export default function Training() {
                     : 0),
               }}
               countLabel="in queue"
+              iconOnlyOptions={trainingSections.options}
+              labelClassName={(option) =>
+                option === activeSection ? "not-sr-only" : "sm:not-sr-only"
+              }
               icons={{
                 Stats: <Swords aria-hidden="true" className="h-4 w-4" />,
                 Masteries: <Medal aria-hidden="true" className="h-4 w-4" />,
@@ -1439,8 +1443,40 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         title: finishTrainingAt.jutsu?.name ?? "Jutsu",
         detail: `level ${finishTrainingAt.level}`,
         finishesAt: finishTrainingAt.finishTraining,
-        stopLabel: "Stop training (no refund)",
-        onStop: isRefetchingUserJutsu ? undefined : () => cancel(),
+        stopControl: isRefetchingUserJutsu ? undefined : (
+          <Confirm
+            title="Stop jutsu training"
+            disabled={isPending}
+            triggerLabel="Stop training (no refund)"
+            button={
+              <span className="flex h-9 w-9 items-center justify-center">
+                <XCircle className="h-4 w-4 text-red-600" aria-hidden />
+              </span>
+            }
+            proceed_label="Stop training"
+            proceed_loading_label="Stopping"
+            confirmClassName="bg-red-600 text-white hover:bg-red-700"
+            isLoading={isStoppingTrain}
+            keepOpenOnAccept
+            onAccept={(_e, { close }) =>
+              cancel(undefined, {
+                onSuccess: (data) => {
+                  if (data.success) close();
+                },
+              })
+            }
+          >
+            <p>
+              Stop training {finishTrainingAt.jutsu?.name ?? "this jutsu"} to level{" "}
+              {finishTrainingAt.level}? It has{" "}
+              <Countdown
+                targetDate={finishTrainingAt.finishTraining}
+                timeDiff={timeDiff}
+              />{" "}
+              left. The level is not gained, and the ryo paid for it is not refunded.
+            </p>
+          </Confirm>
+        ),
       }
     : null;
 
