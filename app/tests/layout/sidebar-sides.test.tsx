@@ -52,9 +52,35 @@ afterAll(() => {
   stylesheet?.remove();
 });
 
+const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
+
+/** Answer width media queries as a viewport of `width` CSS pixels would. */
+const setViewportWidth = (width: number) => {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: (media: string) => {
+      const min = /min-width:\s*([\d.]+)px/.exec(media)?.[1];
+      const max = /max-width:\s*([\d.]+)px/.exec(media)?.[1];
+      return {
+        media,
+        matches:
+          (min === undefined || width >= Number(min)) &&
+          (max === undefined || width <= Number(max)),
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      };
+    },
+  });
+};
+
+beforeEach(() => setViewportWidth(1440));
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  if (originalMatchMedia)
+    Object.defineProperty(window, "matchMedia", originalMatchMedia);
+  else Reflect.deleteProperty(window, "matchMedia");
   document.documentElement.removeAttribute(SWAP_SIDEBARS_ATTRIBUTE);
   localStorage.removeItem(SWAP_SIDEBARS_STORAGE_KEY);
   localStorage.removeItem("gameSettingsTab");
@@ -178,6 +204,22 @@ describe("sidebar sides in flex layouts", () => {
     expect(getComputedStyle(start).paddingRight).toBe("80px");
     expect(getComputedStyle(end).paddingLeft).toBe("80px");
   });
+
+  it.each([
+    ["Classic", ClassicGameLayout, "default"],
+    ["Pixel", PixelGameLayout, "pixel"],
+  ] as const)(
+    "leaves the hidden %s columns empty on phones",
+    (_name, Layout, variant) => {
+      mockFrameChrome();
+      setViewportWidth(390);
+      const view = render(<Layout {...renderProps(variant)} />);
+      expect(view.queryByText("Player sidebar")).toBeNull();
+      expect(view.queryByText("World sidebar")).toBeNull();
+      expect(view.queryByText("Strongest users")).toBeNull();
+      expect(view.getByText("Page content")).toBeTruthy();
+    },
+  );
 
   it("reverses the Pixel column row only when swapped", () => {
     mockFrameChrome();

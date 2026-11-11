@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import { IMG_LOGO_SHORT } from "@/drizzle/constants";
 import { useActivityDock } from "@/hooks/useActivityDock";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import Footer from "@/layout/Footer";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -27,7 +28,10 @@ import {
 } from "./shared/LayoutChrome";
 import { MobileNotificationsPopover } from "./shared/LayoutNotifications";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
-import { keepSheetOpenForClerk } from "./shared/layoutUtils";
+import {
+  keepSheetOpenForClerk,
+  SIDEBAR_COLUMNS_HIDDEN_QUERY,
+} from "./shared/layoutUtils";
 import {
   ANONYMOUS_PIXEL_NAV_LINKS,
   PIXEL_MOBILE_HEADER_BUTTON_STYLE,
@@ -59,6 +63,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
   showMobileNotifications,
 }) => {
   const { swapSides } = useActivityDock();
+  const areSidebarColumnsHidden = useMediaQuery(SIDEBAR_COLUMNS_HIDDEN_QUERY);
   const isAnonymousLayout = !isSignedInLayout;
   return (
     <div
@@ -249,7 +254,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                     PIXEL_SIGNED_IN_SHELL_SURFACE,
                   )}
                 >
-                  {leftSideBar}
+                  {!areSidebarColumnsHidden && leftSideBar}
                 </div>
               </div>
             </div>
@@ -326,7 +331,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                     PIXEL_SIGNED_IN_SHELL_SURFACE,
                   )}
                 >
-                  {rightSideBar}
+                  {!areSidebarColumnsHidden && rightSideBar}
                 </div>
               </div>
             </div>

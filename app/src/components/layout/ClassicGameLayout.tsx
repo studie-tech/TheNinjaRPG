@@ -20,6 +20,7 @@ import {
   IMG_LOGO_SHORT,
 } from "@/drizzle/constants";
 import { useActivityDock } from "@/hooks/useActivityDock";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import Footer from "@/layout/Footer";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -34,7 +35,11 @@ import {
 import { MobileNotificationsPopover } from "./shared/LayoutNotifications";
 import { StrongestUsersBanner } from "./shared/LayoutSidebars";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
-import { keepSheetOpenForClerk } from "./shared/layoutUtils";
+import {
+  keepSheetOpenForClerk,
+  SIDEBAR_COLUMNS_HIDDEN_QUERY,
+  SIDEBAR_COLUMNS_SHOWN_QUERY,
+} from "./shared/layoutUtils";
 import { MobileGameNav } from "./shared/MobileGameNav";
 
 /** Renders the Classic frame with account and settings controls available when its banner is hidden. */
@@ -64,6 +69,8 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
   showMobileNotifications,
 }) => {
   const { swapSides } = useActivityDock();
+  const areSidebarColumnsHidden = useMediaQuery(SIDEBAR_COLUMNS_HIDDEN_QUERY);
+  const areSidebarColumnsShown = useMediaQuery(SIDEBAR_COLUMNS_SHOWN_QUERY);
   const navbarMenuItemsLeft = navbarMenuItems.slice(0, 3);
   const navbarMenuItemsRight = navbarMenuItems.slice(3);
   // Signed-in players go straight to their profile; "/" would only forward them there.
@@ -217,7 +224,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                 className="z-10 pt-4 pr-4 pl-20 text-white"
                 data-sidebar-content="start"
               >
-                {leftSideBar}
+                {!areSidebarColumnsHidden && leftSideBar}
               </div>
             </div>
             <Image
@@ -229,7 +236,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
               alt="leftbanner"
               loading="lazy"
             ></Image>
-            <StrongestUsersBanner />
+            {areSidebarColumnsShown && <StrongestUsersBanner />}
           </div>
           <div className="flex w-full min-w-0 flex-1 flex-col">
             {/* From md the row grows to the tallest sidebar, so the footer always ends the frame. */}
@@ -328,7 +335,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                 loading="lazy"
               ></Image>
               <div className="p-2 pr-20 pl-4 text-white" data-sidebar-content="end">
-                {rightSideBar}
+                {!areSidebarColumnsHidden && rightSideBar}
               </div>
             </div>
             <Image
