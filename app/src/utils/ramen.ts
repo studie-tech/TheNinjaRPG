@@ -30,8 +30,9 @@ export const calcRamenCost = (option: RamenOption, user: UserData) => {
 };
 
 /**
- * Ryo price of a ramen option after the ramen-shop discount of the sector's village
- * structures; a sector without a village gives no discount.
+ * Whole-ryo price of a ramen option after the ramen-shop discount of the sector's
+ * village structures; a sector without a village gives no discount. Ryo balances are
+ * whole numbers, so the menu shows and the shop charges this rounded amount.
  */
 export const calcRamenPrice = (
   option: RamenOption,
@@ -39,5 +40,5 @@ export const calcRamenPrice = (
   structures?: BoostStructure[],
 ) => {
   const discount = getStrucBoost("ramenDiscountPerLvl", structures);
-  return (calcRamenCost(option, user) * (100 - discount)) / 100;
+  return Math.round((calcRamenCost(option, user) * (100 - discount)) / 100);
 };
