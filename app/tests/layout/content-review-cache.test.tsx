@@ -96,7 +96,7 @@ beforeEach(() => {
       getCounts: { useQuery: () => ({ data: counts }) },
       getQueue: {
         useInfiniteQuery: () => ({
-          data: { pages: [{ items: [] }] },
+          data: { pages: [{ items: [], outdatedCount: 0 }] },
           isPending: false,
         }),
       },

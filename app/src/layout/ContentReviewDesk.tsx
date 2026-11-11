@@ -69,6 +69,18 @@ export const ContentReviewDesk: React.FC = () => {
   });
 
   const items = queue.data?.pages.flatMap((page) => page.items) ?? [];
+  const outdatedOnLoad =
+    queue.data?.pages.reduce((sum, page) => sum + page.outdatedCount, 0) ?? 0;
+
+  // A queue read that outdates suggestions leaves the tab counts and the sidebar badge
+  // stale; refetching the queue returns 0 for them, so this settles after one round.
+  useEffect(() => {
+    if (outdatedOnLoad === 0) return;
+    void Promise.all([
+      utils.contentReview.getCounts.invalidate(),
+      utils.profile.getUser.invalidate(),
+    ]);
+  }, [outdatedOnLoad, utils]);
   const canReview = counts?.canReview ?? false;
   const selectedIndex = items.findIndex((item) => item.id === selectedId);
 
@@ -192,9 +204,11 @@ export const ContentReviewDesk: React.FC = () => {
             <Loader explanation="Loading suggestions" />
           ) : items.length === 0 ? (
             <p className="rounded-lg border border-dashed p-6 text-center">
-              {status === "PENDING"
-                ? "The queue is clear. New suggestions from the content audit show up here."
-                : "Nothing here."}
+              {status !== "PENDING"
+                ? "Nothing here."
+                : outdatedOnLoad > 0
+                  ? `The queue is clear: ${outdatedOnLoad} ${outdatedOnLoad === 1 ? "suggestion" : "suggestions"} became outdated while loading and moved to the Outdated tab.`
+                  : "The queue is clear. New suggestions from the content audit show up here."}
             </p>
           ) : (
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)]">

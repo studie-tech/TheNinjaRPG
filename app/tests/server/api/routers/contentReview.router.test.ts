@@ -1393,6 +1393,10 @@ describeWithDatabase("content review", () => {
     const editor = await callerFor(contentReviewRouter, EDITOR);
     const queue = await editor.getQueue({ status: "PENDING", limit: 25 });
     expect(queue.items).toHaveLength(0);
+    expect(queue.outdatedCount).toBe(1);
+    expect(
+      (await editor.getQueue({ status: "PENDING", limit: 25 })).outdatedCount,
+    ).toBe(0);
     const [row] = await proposalRows();
     expect(row?.status).toBe("OUTDATED");
     expect(row?.outdatedReason).toContain("changed since the suggestion was made");
