@@ -485,6 +485,8 @@ describe("quest structure drafts", () => {
 });
 
 describe("reward node editing", () => {
+  withRadixBrowserGlobals();
+
   it.each(["button", "selector"])(
     "validates drafts before copying a reward group via the %s",
     async (control) => {
@@ -496,19 +498,17 @@ describe("reward node editing", () => {
       const initialOrder = [...view.container.querySelectorAll("summary")].map(
         (node) => node.textContent,
       );
-      const copy = () =>
+      const copy = async () =>
         control === "button"
           ? fireEvent.click(
               within(currency).getByRole("button", { name: "Add Another Node" }),
             )
-          : fireEvent.change(view.getByRole("combobox", { name: "Add reward node" }), {
-              target: { value: "currency" },
-            });
+          : await pickRewardNode(view, /^Currency/);
       await act(async () => {
         ryo.focus();
         fireEvent.input(ryo, { target: { value: "" } });
       });
-      copy();
+      await copy();
       await waitFor(() =>
         expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledTimes(1),
       );
@@ -527,7 +527,7 @@ describe("reward node editing", () => {
       await act(async () => {
         fireEvent.input(ryo, { target: { value: "350" } });
       });
-      copy();
+      await copy();
       await waitFor(() =>
         expect(view.getAllByRole("button", { name: "Remove Node" })).toHaveLength(1),
       );
@@ -869,9 +869,7 @@ describe("reward node editing", () => {
     const initialOrder = [...view.container.querySelectorAll("summary")].map(
       (node) => node.textContent,
     );
-    fireEvent.change(view.getByRole("combobox", { name: "Add reward node" }), {
-      target: { value: "progression" },
-    });
+    await pickRewardNode(view, /^Progression/);
     expect(
       [...view.container.querySelectorAll("summary")].map((node) => node.textContent),
     ).toEqual([...initialOrder, "Progression"]);
@@ -883,9 +881,7 @@ describe("reward node editing", () => {
     await waitFor(() =>
       expect(view.container.querySelector('input[name="reward_money"]')).toBeNull(),
     );
-    fireEvent.change(view.getByRole("combobox", { name: "Add reward node" }), {
-      target: { value: "currency" },
-    });
+    await pickRewardNode(view, /^Currency/);
     expect(
       view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!
         .value,
@@ -1046,7 +1042,7 @@ const CoordinateDraftForm = () => {
 };
 
 /** Radix selects and popovers need these browser APIs; installs them around each test of a describe. */
-const withRadixBrowserGlobals = () => {
+function withRadixBrowserGlobals() {
   beforeEach(() => {
     installBrowserGlobals({
       resizeObserver: true,
@@ -1058,7 +1054,15 @@ const withRadixBrowserGlobals = () => {
     cleanup();
     restoreBrowserGlobals();
   });
-};
+}
+
+/** Open the reward editor's "Add reward node" select and choose the node named `name`. */
+async function pickRewardNode(view: ReturnType<typeof render>, name: RegExp) {
+  fireEvent.keyDown(view.getByRole("combobox", { name: "Add reward node" }), {
+    key: "Enter",
+  });
+  fireEvent.click(await view.findByRole("option", { name }));
+}
 
 describe("effect drafts", () => {
   withRadixBrowserGlobals();
@@ -1208,7 +1212,7 @@ describe("effect drafts", () => {
       );
       fireEvent.click(view.getByRole("button", { name: "Save coordinate effects" }));
       expect(save).not.toHaveBeenCalled();
-      fireEvent.click(view.getByRole("combobox", { name: "target" }));
+      fireEvent.click(view.getByRole("combobox", { name: "Target" }));
       fireEvent.click(await view.findByRole("option", { name: target }));
       await waitFor(() =>
         expect(
@@ -1609,7 +1613,7 @@ describe("Special quest item drafts", () => {
     async (_name, initial) => {
       const view = render(<ItemQuestDraftForm initial={initial} />);
       if (initial.type === "heal") {
-        fireEvent.click(view.getByRole("combobox", { name: "type" }));
+        fireEvent.click(view.getByRole("combobox", { name: "Type" }));
         fireEvent.click(await view.findByRole("option", { name: "noncombatquest" }));
       }
       const field = view
@@ -1900,105 +1904,126 @@ describe("schema-derived field visibility", () => {
       "damage",
       "jutsu",
       [
-        "type",
-        "staticAssetPath",
-        "staticAnimation",
-        "appearAnimation",
-        "disappearAnimation",
+        "Type",
+        "Static asset path",
+        "Static animation",
+        "Appear animation",
+        "Disappear animation",
         "Animation scale (1–3×)",
-        "appearSfx",
-        "disappearSfx",
-        "rounds",
-        "power",
-        "powerPerLevel",
-        "target",
-        "friendlyFire",
-        "calculation",
-        "statTypes",
-        "generalTypes",
-        "elements",
-        "residualModifier",
-        "dmgModifier",
-        "allowBloodlineDamageIncrease",
-        "allowBloodlineDamageDecrease",
-        "description",
+        "Appear sfx",
+        "Disappear sfx",
+        "Rounds",
+        "Power",
+        "Power per level",
+        "Target",
+        "Friendly fire",
+        "Calculation",
+        "Stat types",
+        "General types",
+        "Elements",
+        "Residual modifier",
+        "Dmg modifier",
+        "Allow bloodline damage increase",
+        "Allow bloodline damage decrease",
+        "Description",
       ],
     ],
     [
       "heal",
       "bloodline",
       [
-        "type",
-        "staticAssetPath",
-        "staticAnimation",
-        "appearAnimation",
-        "disappearAnimation",
+        "Type",
+        "Static asset path",
+        "Static animation",
+        "Appear animation",
+        "Disappear animation",
         "Animation scale (1–3×)",
-        "appearSfx",
-        "disappearSfx",
-        "power",
-        "powerPerLevel",
-        "target",
-        "calculation",
-        "poolsAffected",
-        "description",
+        "Appear sfx",
+        "Disappear sfx",
+        "Power",
+        "Power per level",
+        "Target",
+        "Calculation",
+        "Pools affected",
+        "Description",
       ],
     ],
     [
       "noncombatgainskill",
       "item",
       [
-        "type",
-        "appearSfx",
-        "disappearSfx",
+        "Type",
+        "Appear sfx",
+        "Disappear sfx",
         "Skill Unlocked by Consumption",
-        "description",
+        "Description",
       ],
     ],
     [
       "noncombatquest",
       "item",
-      ["type", "appearSfx", "disappearSfx", "Special quest", "description"],
+      ["Type", "Appear sfx", "Disappear sfx", "Special quest", "Description"],
     ],
     [
       "repair",
       "item",
-      ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"],
+      [
+        "Type",
+        "Appear sfx",
+        "Disappear sfx",
+        "Power",
+        "Power per level",
+        "Description",
+      ],
     ],
     [
       "rollbloodline",
       "item",
       [
-        "type",
-        "appearSfx",
-        "disappearSfx",
-        "power",
-        "powerPerLevel",
-        "rank",
-        "description",
+        "Type",
+        "Appear sfx",
+        "Disappear sfx",
+        "Power",
+        "Power per level",
+        "Rank",
+        "Description",
       ],
     ],
     [
       "rollsagemode",
       "item",
-      ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"],
+      [
+        "Type",
+        "Appear sfx",
+        "Disappear sfx",
+        "Power",
+        "Power per level",
+        "Description",
+      ],
     ],
     [
       "removebloodline",
       "item",
-      ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"],
+      [
+        "Type",
+        "Appear sfx",
+        "Disappear sfx",
+        "Power",
+        "Power per level",
+        "Description",
+      ],
     ],
     [
       "marriageslotincrease",
       "item",
       [
-        "type",
-        "appearSfx",
-        "disappearSfx",
-        "power",
-        "powerPerLevel",
-        "rank",
-        "description",
+        "Type",
+        "Appear sfx",
+        "Disappear sfx",
+        "Power",
+        "Power per level",
+        "Rank",
+        "Description",
       ],
     ],
   ] as const)("shows the %s tag fields for a %s", (type, wrapper, expected) => {

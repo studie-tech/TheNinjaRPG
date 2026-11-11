@@ -1699,7 +1699,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
       } else if ((value as string) === "aiId" && aiData) {
         return {
           id: value,
-          label: FORM_LABEL_MAP[value] ?? value,
+          label: FORM_LABEL_MAP[value],
           values: aiData
             .filter((ai) => ai.isSummon)
             .sort((a, b) => a.level - b.level)
@@ -1714,7 +1714,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           id: value,
           values: itemData,
           multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
+          label: FORM_LABEL_MAP[value],
           type: "db_values",
         };
       } else if ((value as string) === "jutsus" && jutsuData) {
@@ -1722,7 +1722,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           id: value,
           values: jutsuData,
           multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
+          label: FORM_LABEL_MAP[value],
           type: "db_values",
         };
       } else if ((value as string) === "jutsuIds" && jutsuData) {
@@ -1730,7 +1730,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           id: value,
           values: jutsuData.filter((j) => j.injectableInBattle),
           multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
+          label: FORM_LABEL_MAP[value],
           type: "db_values",
         };
       } else if ((value as string) === "variantId") {
@@ -1757,7 +1757,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
             .filter((s) => s.skillType === "SPECIAL")
             .map((i) => ({ id: i.id, name: i.name })),
           multiple: false,
-          label: FORM_LABEL_MAP[value] ?? value,
+          label: FORM_LABEL_MAP[value],
           type: "db_values",
         };
       } else if ((value as string) === "reward_pets") {
@@ -1777,7 +1777,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           fullWidth: true,
         };
       } else if ((value as string) === "description") {
-        return { id: value, label: value, type: "richinput", doubleWidth: true };
+        return { id: value, type: "richinput", doubleWidth: true };
       } else if (innerType instanceof z.ZodString && value === "appearAnimation") {
         return {
           id: value,
@@ -1814,7 +1814,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           multiple: false,
           type: "db_values",
           searchable: true,
-          label: "appearSfx",
         };
       } else if (innerType instanceof z.ZodString && value === "disappearSfx") {
         return {
@@ -1823,13 +1822,12 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           multiple: false,
           type: "db_values",
           searchable: true,
-          label: "disappearSfx",
         };
       } else if (
         innerType instanceof z.ZodLiteral ||
         innerType instanceof z.ZodString
       ) {
-        return { id: value, label: value, type: "text" };
+        return { id: value, type: "text" };
       } else if (innerType instanceof z.ZodNumber) {
         // Only noncombatconsumereward tag allows reward_reputation field
         const isReputationField =
@@ -1844,7 +1842,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
                 ? "Additional jutsu slots"
                 : props.type === "sageMode" && String(value) === "rounds"
                   ? "Instant (0) or mode duration"
-                  : (FORM_LABEL_MAP[value] ?? value),
+                  : FORM_LABEL_MAP[value],
           type: "number",
           readonly: isReputationField && !hasReputationPermission,
         };
@@ -1876,9 +1874,9 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         }
         return { id: value, type: "str_array", values: enumValues, multiple: true };
       } else if (innerType instanceof z.ZodBoolean) {
-        return { id: value, label: value, type: "boolean" };
+        return { id: value, type: "boolean" };
       } else {
-        return { id: value, label: value, type: "text" };
+        return { id: value, type: "text" };
       }
     });
 
