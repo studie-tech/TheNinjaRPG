@@ -39,7 +39,7 @@ import {
   formatEnumLabel,
 } from "@/utils/string";
 import { formatHoursMinutes } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   activityBonusPowerLabel,
   getTagSchema,
@@ -280,7 +280,8 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
     onDelete,
     folderName,
   } = props;
-  const { data: userData } = useUserData();
+  // Only the role decides staff links, so other profile changes do not re-render each card.
+  const { data: role } = useUserDataSelector((user) => user.role);
   const isFurniture = "itemType" in item && item.itemType === "FURNITURE";
 
   // Get bloodline / sage-mode names for requirement labels
@@ -435,7 +436,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     <BarChartBig className="h-6 w-6 hover:text-popover-foreground/50" />
                   </Link>
                 )}
-                {showEdit && userData && canChangeContent(userData.role) && (
+                {showEdit && role && canChangeContent(role) && (
                   <>
                     {showCopy === "quest" && (
                       <QuestCloneControl
@@ -483,9 +484,9 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                 )}
                 {showEdit &&
                   SUGGESTABLE_CONTENT.includes(showEdit) &&
-                  userData &&
-                  isStaffRole(userData.role) &&
-                  !canChangeContent(userData.role) && (
+                  role &&
+                  isStaffRole(role) &&
+                  !canChangeContent(role) && (
                     <Link
                       href={`/manual/${showEdit}/edit/${item.id}`}
                       aria-label="Suggest a change"
@@ -636,7 +637,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   {item.farmSellValue > 0
                     ? ` · farm shop ${item.farmSellValue} coins`
                     : ""}
-                  {item.inShop && userData && canChangeContent(userData.role)
+                  {item.inShop && role && canChangeContent(role)
                     ? " · ⚠ also in item shop (should be off)"
                     : ""}
                 </p>

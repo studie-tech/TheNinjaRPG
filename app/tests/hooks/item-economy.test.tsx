@@ -568,9 +568,9 @@ describe("staff item selector refreshes", () => {
     vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
       data: { role: "CONTENT-ADMIN" },
     } as never);
-    vi.spyOn(UserContext, "useUserData").mockReturnValue({
-      data: { role: "CONTENT-ADMIN" },
-    } as never);
+    vi.spyOn(UserContext, "useUserDataSelector").mockImplementation(
+      (select) => ({ data: select({ role: "CONTENT-ADMIN" } as never) }) as never,
+    );
     vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
       <section>{children}</section>
     ));
