@@ -135,10 +135,10 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
         </p>
       )}
       {pageAvatars && (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(5rem,1fr))] gap-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] gap-3">
           {pageAvatars.map((avatar, i) => (
-            <div key={avatar.id} className="relative">
-              {/* Selection and deletion must remain separate interactive targets. */}
+            <div key={avatar.id} className="flex flex-col items-center gap-1">
+              {/* Selection and deletion stay separate targets: delete sits below the image. */}
               <button
                 type="button"
                 aria-label={`Use saved avatar ${i + 1}`}
@@ -169,7 +169,7 @@ export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => 
                     size="icon"
                     aria-label={`Delete saved avatar ${i + 1}`}
                     disabled={props.disabled}
-                    className="border-border/20 absolute top-1 right-1 h-8 w-8 rounded-full border"
+                    className="border-border/20 h-8 w-8 rounded-full border"
                   >
                     <Trash2 aria-hidden="true" className="h-4 w-4" />
                   </Button>
