@@ -375,8 +375,8 @@ const PlayerTutorialAssistant: React.FC<
     }
 
     return trackLayout(() => {
-      const rect =
-        getUsableHighlightElement("tutorial-gameBtn")?.getBoundingClientRect();
+      const element = getUsableHighlightElement("tutorial-gameBtn");
+      const rect = element?.getBoundingClientRect();
       if (rect) {
         const next = {
           top: rect.top,
@@ -388,6 +388,7 @@ const PlayerTutorialAssistant: React.FC<
       } else {
         setGameMenuHighlight(null);
       }
+      return element;
     });
   }, [
     showGameMenuTutorial,
@@ -1747,10 +1748,11 @@ const useHighlightPlacement = ({
           ? prev
           : next,
       );
-    } else {
-      setHighlight(null);
-      setPanelDodgesHighlight(false);
+      return highlightInfo.element;
     }
+    setHighlight(null);
+    setPanelDodgesHighlight(false);
+    return null;
   };
 
   // Update highlight position based on current step and element
@@ -1928,29 +1930,66 @@ const highlightHoleStyle = (box: {
 });
 
 /**
- * Run `update` now and whenever layout may have moved, returning the cleanup. The poll covers
- * content that shifts without a DOM mutation, such as images and canvases.
+ * Run `update` now and whenever layout may have moved, returning the cleanup. `update`
+ * returns the element it measured. Changes to the DOM tree, scrolling, resizing and the
+ * element's own size schedule one measurement per frame. A 250 ms poll covers content
+ * that shifts without any of these, such as images and canvases above the target; it
+ * stops once the element has held still for a second and restarts on the next change.
+ * A missing element keeps the poll running so a late-mounting target is still found.
  */
-const trackLayout = (update: () => void) => {
-  update();
-  const intervalId = setInterval(update, 250);
-  const updateNextFrame = () => requestAnimationFrame(update);
-  window.addEventListener("scroll", updateNextFrame, { passive: true });
-  window.addEventListener("resize", updateNextFrame, { passive: true });
-  const observer = new MutationObserver(updateNextFrame);
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    characterData: false,
-  });
+export const trackLayout = (update: () => Element | null) => {
+  let frame: number | null = null;
+  let poll: ReturnType<typeof setInterval> | null = null;
+  let observed: Element | null = null;
+  let lastBox = "";
+  let stableRuns = 0;
+  const resizeObserver =
+    typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => schedule());
+  const run = () => {
+    const element = update();
+    if (element !== observed) {
+      if (observed) resizeObserver?.unobserve(observed);
+      if (element) resizeObserver?.observe(element);
+      observed = element;
+    }
+    const rect = element?.getBoundingClientRect();
+    const box = rect ? `${rect.top},${rect.left},${rect.width},${rect.height}` : "";
+    stableRuns = box && box === lastBox ? stableRuns + 1 : 0;
+    lastBox = box;
+    if (stableRuns >= TRACK_LAYOUT_SETTLED_RUNS && poll !== null) {
+      clearInterval(poll);
+      poll = null;
+    }
+  };
+  const startPoll = () => {
+    stableRuns = 0;
+    poll ??= setInterval(run, 250);
+  };
+  function schedule() {
+    startPoll();
+    frame ??= requestAnimationFrame(() => {
+      frame = null;
+      run();
+    });
+  }
+  run();
+  startPoll();
+  window.addEventListener("scroll", schedule, { passive: true });
+  window.addEventListener("resize", schedule, { passive: true });
+  const observer = new MutationObserver(schedule);
+  observer.observe(document.body, { childList: true, subtree: true });
   return () => {
-    clearInterval(intervalId);
-    window.removeEventListener("scroll", updateNextFrame);
-    window.removeEventListener("resize", updateNextFrame);
+    if (poll !== null) clearInterval(poll);
+    if (frame !== null) cancelAnimationFrame(frame);
+    window.removeEventListener("scroll", schedule);
+    window.removeEventListener("resize", schedule);
     observer.disconnect();
+    resizeObserver?.disconnect();
   };
 };
+
+/** Polls (250 ms each) a measured element must hold still before the poll stops. */
+const TRACK_LAYOUT_SETTLED_RUNS = 4;
 
 // Helper function to find element to highlight based on current tutorial step
 const getUsableHighlightElement = (id: string | undefined) => {
