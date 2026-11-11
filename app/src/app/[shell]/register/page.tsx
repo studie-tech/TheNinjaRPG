@@ -49,8 +49,12 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { trackConversion } from "@/libs/conversionTracking";
+import {
+  firstInvalidRegistrationStep,
+  registrationStepReadiness,
+} from "@/libs/registration";
 import { cn } from "@/libs/shadui";
-import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
+import { showMutationToast } from "@/libs/toast";
 import { getRandomElement, shuffle } from "@/utils/array";
 import { isRetryableTrpcError } from "@/utils/error";
 import { secureRandomInt } from "@/utils/math";
@@ -215,10 +219,24 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
     }
   }, [form]);
 
-  // Handle form submission
+  // Carousel holding the current step, owned here so an invalid submit can return to it
+  const [cApi, setCApi] = useState<CarouselApi>();
+
+  // Handle form submission. An invalid submit returns to the first step with an error,
+  // where each field shows its message inline.
   const handleCreateCharacter = form.handleSubmit(
     (data) => createCharacter(data),
-    (errors) => showFormErrorsToast(errors),
+    (errors) => {
+      const invalid = firstInvalidRegistrationStep(Object.keys(errors));
+      if (!invalid) return;
+      cApi?.scrollTo(invalid.step);
+      showMutationToast({
+        success: false,
+        title: `Step ${invalid.step + 1} needs attention`,
+        message: `Please check: ${invalid.labels.join(", ")}`,
+        id: "register-invalid",
+      });
+    },
   );
 
   // The steps stay mounted while creating, only hidden, because the carousel holds the
@@ -232,6 +250,8 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
             className={cn("relative", isPending && "invisible")}
           >
             <RegisterSteps
+              cApi={cApi}
+              setCApi={setCApi}
               form={form}
               isLoading={isLoading}
               failureMessage={failureMessage}
@@ -250,12 +270,13 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
 
 /** Carousel of registration steps; while loading, the first step's banner and a loader */
 const RegisterSteps: React.FC<{
+  cApi: CarouselApi | undefined;
+  setCApi: (api: CarouselApi) => void;
   form: RegisterFormApi;
   isLoading: boolean;
   failureMessage: string | undefined;
-}> = ({ form, isLoading, failureMessage }) => {
+}> = ({ cApi, setCApi, form, isLoading, failureMessage }) => {
   // Carousel state
-  const [cApi, setCApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
   const [count, setCount] = useState(0);
   // Size each step to its content instead of reserving space for the tallest step.
@@ -310,7 +331,7 @@ const RegisterSteps: React.FC<{
           )}
         </CarouselContent>
         <CarouselPrevious className="animate-[wiggle_1s_ease-in-out_infinite]" />
-        <CarouselNext className="animate-[wiggle_1s_ease-in-out_infinite]" />
+        <StepGatedCarouselNext form={form} current={current} />
       </Carousel>
       {!isLoading && (
         <>
@@ -456,9 +477,9 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
   );
 
   return (
-    <div className="grid grid-cols-[min(7rem,35%)_minmax(0,1fr)] items-start gap-3 px-3 sm:grid-cols-[min(9rem,30%)_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 items-start gap-3 px-3 sm:grid-cols-[min(9rem,30%)_minmax(0,1fr)]">
       <CharacterPreview
-        className="w-full sm:row-span-2"
+        className="w-40 sm:row-span-2 sm:w-full"
         user={{
           gender,
           spriteBodyStyle: body,
@@ -496,7 +517,7 @@ const AppearanceStep: React.FC<{ form: RegisterFormApi }> = ({ form }) => {
           </FormItem>
         )}
       />
-      <div className="col-span-2 grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 sm:col-span-1 sm:grid-cols-3">
+      <div className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3">
         {(
           [
             ["hair_color", "Hair color", option_colors],
@@ -655,6 +676,7 @@ const AgreementStep: React.FC<{
                   I have read & agree to the Terms of Service
                 </Link>
               </FormLabel>
+              <FormMessage />
             </div>
           </FormItem>
         )}
@@ -678,6 +700,7 @@ const AgreementStep: React.FC<{
                   I have read & agree to the Privacy Policy
                 </Link>
               </FormLabel>
+              <FormMessage />
             </div>
           </FormItem>
         )}
@@ -698,6 +721,7 @@ const AgreementStep: React.FC<{
                 Things (even if purchased with real money) may radically change over
                 time
               </FormDescription>
+              <FormMessage />
             </div>
           </FormItem>
         )}
@@ -727,6 +751,20 @@ const AgreementStep: React.FC<{
   </>
 );
 
+/** Carousel arrow to the next step, enabled once the current step's fields are valid */
+const StepGatedCarouselNext: React.FC<{ form: RegisterFormApi; current: number }> = ({
+  form,
+  current,
+}) => {
+  const isReady = useIsStepReady(form, current);
+  return (
+    <CarouselNext
+      disabled={!isReady}
+      className={cn(isReady && "animate-[wiggle_1s_ease-in-out_infinite]")}
+    />
+  );
+};
+
 /** Button to the next step, shown once the current step's fields are valid */
 const NextStepButton: React.FC<{
   form: RegisterFormApi;
@@ -734,6 +772,24 @@ const NextStepButton: React.FC<{
   count: number;
   onNext: () => void;
 }> = ({ form, current, count, onNext }) => {
+  const isReady = useIsStepReady(form, current);
+  if (!isReady || current >= count) return null;
+  return (
+    <div className="flex justify-end p-3 sm:p-4">
+      <Button
+        type="button"
+        onClick={onNext}
+        className="bg-green-700 shadow-md hover:bg-green-800"
+      >
+        Next
+        <ArrowRight className="ml-2 h-5 w-5" />
+      </Button>
+    </div>
+  );
+};
+
+/** Whether the one-based current step's fields are filled and valid */
+const useIsStepReady = (form: RegisterFormApi, current: number) => {
   const [
     watchUsername,
     watchGender,
@@ -759,48 +815,21 @@ const NextStepButton: React.FC<{
     ],
   });
   const { errors } = useFormState({ control: form.control });
-
-  const isStep1Ready =
-    (watchUsername ?? "").trim().length >= 2 &&
-    Boolean(watchGender) &&
-    !errors.username &&
-    !errors.gender;
-  const isStep2Ready =
-    Boolean(watchHairColor) &&
-    Boolean(watchEyeColor) &&
-    Boolean(watchSkinColor) &&
-    Boolean(watchAttr1) &&
-    Boolean(watchAttr2) &&
-    Boolean(watchAttr3) &&
-    !errors.hair_color &&
-    !errors.eye_color &&
-    !errors.skin_color &&
-    !errors.attribute_1 &&
-    !errors.attribute_2 &&
-    !errors.attribute_3;
-  const isStep3Ready = Boolean(watchBloodlineId) && !errors.bloodlineId;
-  const canShowNextSmall =
-    current === 1
-      ? isStep1Ready
-      : current === 2
-        ? isStep2Ready
-        : current === 3
-          ? isStep3Ready
-          : false;
-
-  if (!canShowNextSmall || current >= count) return null;
-  return (
-    <div className="flex justify-end p-3 sm:p-4">
-      <Button
-        type="button"
-        onClick={onNext}
-        className="bg-green-700 shadow-md hover:bg-green-800"
-      >
-        Next
-        <ArrowRight className="ml-2 h-5 w-5" />
-      </Button>
-    </div>
+  const readiness = registrationStepReadiness(
+    {
+      username: watchUsername,
+      gender: watchGender,
+      hair_color: watchHairColor,
+      eye_color: watchEyeColor,
+      skin_color: watchSkinColor,
+      attribute_1: watchAttr1,
+      attribute_2: watchAttr2,
+      attribute_3: watchAttr3,
+      bloodlineId: watchBloodlineId,
+    },
+    Object.keys(errors),
   );
+  return readiness[current - 1] ?? false;
 };
 
 /** The reason a settled submission failed, in words the player can act on */
