@@ -35,7 +35,7 @@ type PurchaseOptions = {
 let purchaseOptions: PurchaseOptions;
 let purchaseResult: FoodResult;
 let isPending = false;
-const push = vi.fn();
+const replace = vi.fn();
 const prepareUserUpdate = vi.fn(() => 17);
 const completeTutorialAction = vi.fn(async () => {});
 const updateUser = vi.fn(async (_patch: unknown, _options: unknown) => undefined);
@@ -85,7 +85,7 @@ beforeEach(() => {
     prepareUserUpdate,
     updateUser,
   } as never);
-  vi.spyOn(navigation, "useNavigationRouter").mockReturnValue({ push } as never);
+  vi.spyOn(navigation, "useNavigationRouter").mockReturnValue({ replace } as never);
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/ramenshop");
   vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
     completeTutorialAction,
@@ -119,7 +119,7 @@ describe("ramen menu", () => {
       user.status = status;
       user.autoWakeUp = autoWakeUp;
       const view = render(<RamenShop.RamenMenu />);
-      expect(push.mock.calls).toEqual(destination ? [[destination]] : []);
+      expect(replace.mock.calls).toEqual(destination ? [[destination]] : []);
       expect(view.getByRole("button", { name: /Small Bowl/ })).toBeTruthy();
       expect(view.container.querySelector("#tutorial-ramen-menu")).toBeTruthy();
       expect(purchase).not.toHaveBeenCalled();
