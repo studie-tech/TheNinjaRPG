@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { stripHtmlPreview } from "@/utils/string";
+import { AttackMethods, AttackTargets } from "@/drizzle/constants";
+import {
+  formatAttackMethod,
+  formatAttackTarget,
+  formatEnumLabel,
+  stripHtmlPreview,
+} from "@/utils/string";
 
 describe("stripHtmlPreview", () => {
   it("separates block text and collapses whitespace", () => {
@@ -38,5 +44,21 @@ describe("stripHtmlPreview", () => {
 
   it("treats a missing value as empty", () => {
     expect(stripHtmlPreview(null)).toBe("");
+  });
+});
+
+describe("encyclopedia enum labels", () => {
+  it("names every attack target and method in plain words", () => {
+    expect(formatAttackTarget("OTHER_USER")).toBe("Other player");
+    expect(formatAttackMethod("SINGLE")).toBe("Single target");
+    for (const target of AttackTargets)
+      expect(formatAttackTarget(target)).not.toContain("_");
+    for (const method of AttackMethods)
+      expect(formatAttackMethod(method)).not.toContain("_");
+  });
+
+  it("turns other enum values into sentence case", () => {
+    expect(formatEnumLabel("FIST_WEAPON")).toBe("Fist weapon");
+    expect(formatEnumLabel("HAND_1")).toBe("Hand 1");
   });
 });

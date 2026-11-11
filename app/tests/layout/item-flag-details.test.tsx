@@ -92,3 +92,17 @@ it("highlights each required rank except NONE", () => {
   );
   expect(rowText(sage, "Sage Rank Requirement")).toBe("Sage Rank Requirement: S");
 });
+
+it("shows the hidden flag to content staff only and names targets in plain words", () => {
+  const item = content({ hidden: false, target: "OTHER_USER", method: "SINGLE" });
+  const player = render(<ItemWithEffects item={item} hideImage />);
+  expect(player.queryByText("Hidden")).toBeNull();
+  expect(rowText(player, "Target")).toBe("Target: Other player");
+  expect(rowText(player, "Method")).toBe("Method: Single target");
+  cleanup();
+  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    data: { role: "CONTENT-ADMIN" },
+  } as never);
+  const staff = render(<ItemWithEffects item={item} hideImage />);
+  expect(rowText(staff, "Hidden")).toBe("Hidden: no");
+});

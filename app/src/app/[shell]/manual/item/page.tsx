@@ -23,7 +23,7 @@ export default function ManualItems() {
   const utils = api.useUtils();
 
   //Two-Way Filtering
-  const state = useFiltering();
+  const state = useFiltering({ allShopStatus: true });
 
   // Data
   const {

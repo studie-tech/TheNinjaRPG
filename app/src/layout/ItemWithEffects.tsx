@@ -31,7 +31,13 @@ import { getQuestRewardSummary } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
 import { parseHtml } from "@/utils/parse";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
-import { capitalizeFirstLetter, formatBattleUsageType } from "@/utils/string";
+import {
+  capitalizeFirstLetter,
+  formatAttackMethod,
+  formatAttackTarget,
+  formatBattleUsageType,
+  formatEnumLabel,
+} from "@/utils/string";
 import { formatHoursMinutes } from "@/utils/time";
 import { useUserData } from "@/utils/UserContext";
 import {
@@ -540,7 +546,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
           </div>
         </div>
         <div>
-          {!hideData && isFurniture && <FurnitureDetails item={item as Item} />}
+          {!hideData && isFurniture && (
+            <FurnitureDetails
+              item={item as Item}
+              showHidden={!!userData && canChangeContent(userData.role)}
+            />
+          )}
           {!hideData && !isFurniture && (
             <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-xs md:text-base">
               {"bloodline" in item && item.bloodline !== null && (
@@ -726,7 +737,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               )}
               {"type" in item && item.type && (
                 <p>
-                  <b>Type</b>: {item.type.toLowerCase()}
+                  <b>Type</b>: {formatEnumLabel(item.type)}
                 </p>
               )}
               {"onInitialBattleField" in item && item.onInitialBattleField && (
@@ -773,14 +784,17 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               )}
               {"itemType" in item && (
                 <p>
-                  <b>Item type</b>: {item.itemType.toLowerCase()}
+                  <b>Item type</b>: {formatEnumLabel(item.itemType)}
                 </p>
               )}
-              {"hidden" in item && !playerView && (
-                <p>
-                  <b>Hidden</b>: {item.hidden ? "yes" : "no"}
-                </p>
-              )}
+              {"hidden" in item &&
+                !playerView &&
+                userData &&
+                canChangeContent(userData.role) && (
+                  <p>
+                    <b>Hidden</b>: {item.hidden ? "yes" : "no"}
+                  </p>
+                )}
               {folderName && (
                 <p>
                   <b>Folder</b>: {folderName}
@@ -828,17 +842,17 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               )}
               {"target" in item && (
                 <p>
-                  <b>Target</b>: {item.target.toLowerCase()}
+                  <b>Target</b>: {formatAttackTarget(item.target)}
                 </p>
               )}
               {"method" in item && (
                 <p>
-                  <b>Method</b>: {item.method.toLowerCase()}
+                  <b>Method</b>: {formatAttackMethod(item.method)}
                 </p>
               )}
               {"weaponType" in item && item.weaponType && (
                 <p>
-                  <b>Weapon</b>: {item.weaponType.toLowerCase()}
+                  <b>Weapon</b>: {formatEnumLabel(item.weaponType)}
                 </p>
               )}
               {"maxDurability" in item && item.maxDurability !== undefined && (
@@ -852,7 +866,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               )}
               {"slot" in item && item.slot && (
                 <p>
-                  <b>Equip</b>: {item.slot.toLowerCase()}
+                  <b>Equip</b>: {formatEnumLabel(item.slot)}
                 </p>
               )}
               {"requiredRank" in item && item.requiredRank && (
@@ -1473,7 +1487,13 @@ const RankRequirement = ({ label, rank }: { label: string; rank: string | null }
     </div>
   ) : null;
 
-const FurnitureDetails = ({ item }: { item: Item }) => (
+const FurnitureDetails = ({
+  item,
+  showHidden,
+}: {
+  item: Item;
+  showHidden: boolean;
+}) => (
   <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-xs md:text-base">
     <p>
       <b>Item type</b>: furniture
@@ -1499,9 +1519,11 @@ const FurnitureDetails = ({ item }: { item: Item }) => (
     <p>
       <b>Can be Traded</b>: {item.canBeTraded ? "yes" : "no"}
     </p>
-    <p>
-      <b>Hidden</b>: {item.hidden ? "yes" : "no"}
-    </p>
+    {showHidden && (
+      <p>
+        <b>Hidden</b>: {item.hidden ? "yes" : "no"}
+      </p>
+    )}
     {item.cost > 0 && (
       <p className="col-span-2">
         <b>Shop Price:</b> {item.cost.toLocaleString()} ryo
