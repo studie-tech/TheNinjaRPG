@@ -876,9 +876,10 @@ export const HomeScene = ({
         <fieldset
           aria-label="Property navigation"
           data-home-controls
-          // Keep navigation opposite the selected piece's screen-space action row.
+          // Bottom-left stays clear of the starter fixtures (the garden that opens the farm sits
+          // bottom-right); flip to the top when a selected piece's action row needs the bottom.
           className={cn(
-            "absolute right-2 z-[10000] flex items-center gap-1 rounded-md bg-slate-950/85 p-1 shadow-md",
+            "absolute left-2 z-[10000] flex items-center gap-1 rounded-md bg-slate-950/85 p-1 shadow-md",
             selectedScreenBounds && selectedScreenBounds.top > 50
               ? "top-2"
               : "bottom-2",

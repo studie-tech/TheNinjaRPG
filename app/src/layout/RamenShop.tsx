@@ -23,6 +23,8 @@ import { useRequiredUserData } from "@/utils/UserContext";
 interface RamenShopProps {
   initialBreak?: boolean;
   defaultBackHref?: string;
+  /** Replaces the default subtitle where the shop sits inside another feature. */
+  subtitle?: string;
   showImage?: boolean;
 }
 
@@ -30,7 +32,7 @@ const RamenShop: React.FC<RamenShopProps> = (props) => {
   return (
     <ContentBox
       title="Ramen Shop"
-      subtitle="Healthy food to regain chakra & stamina"
+      subtitle={props.subtitle ?? "Healthy food to regain chakra & stamina"}
       defaultBackHref={props.defaultBackHref}
       padding={false}
       initialBreak={props.initialBreak}

@@ -44,7 +44,8 @@ export default function VillageOverview() {
   const { currentStep } = useTutorialStep();
 
   // Queries
-  const { data, isFetching: isFetchingVillage } = api.village.get.useQuery(
+  // Background refetches keep showing the loaded village; only the first load shows a loader.
+  const { data } = api.village.get.useQuery(
     { id: sectorVillage?.id ?? "" },
     { enabled: !!sectorVillage },
   );
@@ -245,7 +246,6 @@ export default function VillageOverview() {
             </div>
           ))}
         </div>
-        {isFetchingVillage && <Loader explanation="Loading Village Information" />}
       </ContentBox>
 
       {["OUTLAW", "VILLAGE"].includes(sectorVillage?.type || "unknown") && (
@@ -265,9 +265,7 @@ export default function VillageOverview() {
             </Button>
           )}
         >
-          {(isFetchingVillage || isUpdating) && (
-            <Loader explanation="Loading Village Information" />
-          )}
+          {isUpdating && <Loader explanation="Updating notice" />}
         </GroupOrders>
       )}
     </>

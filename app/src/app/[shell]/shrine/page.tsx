@@ -31,6 +31,9 @@ import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { useRequiredUserData } from "@/utils/UserContext";
 
+/** Explains why a ramen menu follows the shrine on a war page. */
+const SHRINE_RAMEN_SUBTITLE = "Eat to recover chakra & stamina before the next assault";
+
 export default function Shrine() {
   // Data from database
   const {
@@ -226,7 +229,7 @@ export default function Shrine() {
             </div>
           </ContentBox>
         )}
-        <RamenShop initialBreak={true} />
+        <RamenShop initialBreak={true} subtitle={SHRINE_RAMEN_SUBTITLE} />
       </div>
     );
   }
@@ -418,7 +421,7 @@ export default function Shrine() {
         </ContentBox>
       )}
 
-      <RamenShop initialBreak={hasNoActiveWars} />
+      <RamenShop subtitle={SHRINE_RAMEN_SUBTITLE} />
     </div>
   );
 }

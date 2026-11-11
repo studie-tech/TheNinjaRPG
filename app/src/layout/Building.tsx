@@ -46,9 +46,6 @@ const Building: React.FC<BuildingProps> = (props) => {
   // Blocks
   const TextBlock = (
     <div className="min-w-0 space-y-1 text-xs">
-      <p className="flex min-h-8 items-center justify-center font-bold leading-tight">
-        {structure.name}
-      </p>
       {getRaidStructureMultiplier(structure) > 1 && (
         <p className="text-green-500">
           Raid bonus: +{FACTION_RAID_BOOST_PERCENT}% benefits until{" "}
@@ -108,7 +105,7 @@ const Building: React.FC<BuildingProps> = (props) => {
         </div>
       )}
       <div className="grid min-w-0 items-center">
-        <Link href={structure.route}>
+        <Link href={structure.route} className="group block">
           <Image
             className={cn(
               "aspect-square w-full object-contain object-bottom",
@@ -121,6 +118,9 @@ const Building: React.FC<BuildingProps> = (props) => {
             loading={props.eager ? "eager" : "lazy"}
             id={`tutorial${structure.route.replace("/", "-")}`}
           />
+          <p className="flex min-h-8 items-center justify-center font-bold text-xs leading-tight group-hover:underline">
+            {structure.name}
+          </p>
         </Link>
         {TextBlock}
       </div>
