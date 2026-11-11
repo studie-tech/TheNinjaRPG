@@ -210,7 +210,7 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
           </div>
         </div>
         <div className="space-y-3">
-          <div className="flex items-center justify-between rounded-md border p-3">
+          <div className="flex items-center justify-between gap-4 rounded-md border p-3">
             <div>
               <Label htmlFor="terrain-water">Water</Label>
               <p className="text-muted-foreground text-xs">
@@ -224,6 +224,7 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
               render={({ field }) => (
                 <Switch
                   id="terrain-water"
+                  className="shrink-0"
                   checked={field.value}
                   onCheckedChange={field.onChange}
                 />
@@ -252,9 +253,9 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
             />
           </div>
           <div className="space-y-1">
-            <Label>Texture overlay (optional, blended over the shades)</Label>
             <ContentImageSelector
-              label="Texture"
+              label="Texture overlay (optional, blended over the shades)"
+              emptyImageLabel="No texture"
               imageUrl={textureUrl}
               id={terrain.id}
               prompt={`seamless ${terrain.name} texture tile`}

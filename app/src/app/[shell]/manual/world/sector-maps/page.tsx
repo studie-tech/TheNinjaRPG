@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { MAP_SECTOR_ID_MAX } from "@/drizzle/constants";
 import { useDelayState } from "@/hooks/useDelayState";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
@@ -407,6 +408,11 @@ function SectorMapEditorContent() {
   }
 
   const busy = isPreviewing || isSaving || isPublishing || isArchiving;
+  // The live map, when the History filter includes it, named in publish confirmations.
+  const publishedMap = maps?.find((map) => map.status === "PUBLISHED");
+  const replacesLiveMap = publishedMap
+    ? `, replacing the live v${publishedMap.version}`
+    : ", replacing its current live map";
   // Unsaved changes: the editor differs from what it was seeded with. Drives
   // the status line and which action buttons are relevant to show at all.
   const isDirty =
@@ -591,19 +597,31 @@ function SectorMapEditorContent() {
                     <Save className="mr-2 h-4 w-4" />
                     Save Draft
                   </Button>
-                  <Button
-                    type="button"
-                    onClick={() => handleSave(true)}
+                  <Confirm
+                    title="Publish sector map"
                     disabled={busy || !isValidSectorId(sector) || !normalized.map}
-                    title={
-                      normalized.map
-                        ? undefined
-                        : "Fix the validation errors shown above first"
+                    isLoading={isSaving}
+                    proceed_label="Publish"
+                    proceed_loading_label="Publishing"
+                    onAccept={() => handleSave(true)}
+                    button={
+                      <Button
+                        type="button"
+                        disabled={busy || !isValidSectorId(sector) || !normalized.map}
+                        title={
+                          normalized.map
+                            ? undefined
+                            : "Fix the validation errors shown above first"
+                        }
+                      >
+                        <Rocket className="mr-2 h-4 w-4" />
+                        Publish
+                      </Button>
                     }
                   >
-                    <Rocket className="mr-2 h-4 w-4" />
-                    Publish
-                  </Button>
+                    Publish these changes to Sector {sector}? Players see the map
+                    immediately{replacesLiveMap}.
+                  </Confirm>
                 </>
               )}
             </div>
@@ -615,6 +633,13 @@ function SectorMapEditorContent() {
               Validation
             </div>
             {busy && <Loader explanation="Processing map" />}
+            {!busy && !parseError && !preview && (
+              <p className="text-muted-foreground text-sm">
+                {sourceLabel?.kind === "version" && !isDirty
+                  ? "This saved version passed validation when it was stored. Edit the JSON and press Validate to check changes."
+                  : "Upload or edit Tiled JSON, then press Validate to check it."}
+              </p>
+            )}
             {parseError && <p className="text-red-500 text-sm">{parseError}</p>}
             {preview?.map && (
               <div className="space-y-1 text-sm">
@@ -703,27 +728,44 @@ function SectorMapEditorContent() {
                   Load JSON
                 </Button>
                 {map.status !== "PUBLISHED" && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => publishMap({ id: map.id })}
+                  <Confirm
+                    title="Publish sector map"
                     disabled={busy}
+                    isLoading={isPublishing}
+                    proceed_label="Publish"
+                    proceed_loading_label="Publishing"
+                    onAccept={() => publishMap({ id: map.id })}
+                    button={
+                      <Button type="button" size="sm" disabled={busy}>
+                        <Rocket className="mr-1 h-4 w-4" />
+                        Publish
+                      </Button>
+                    }
                   >
-                    <Rocket className="mr-1 h-4 w-4" />
-                    Publish
-                  </Button>
+                    Publish v{map.version} of Sector {map.sector}? Players see it
+                    immediately{replacesLiveMap}.
+                  </Confirm>
                 )}
                 {map.status !== "ARCHIVED" && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => archiveMap({ id: map.id })}
+                  <Confirm
+                    title="Archive sector map"
                     disabled={busy}
+                    isLoading={isArchiving}
+                    proceed_label="Archive"
+                    proceed_loading_label="Archiving"
+                    onAccept={() => archiveMap({ id: map.id })}
+                    button={
+                      <Button type="button" size="sm" variant="outline" disabled={busy}>
+                        <Archive className="mr-1 h-4 w-4" />
+                        Archive
+                      </Button>
+                    }
                   >
-                    <Archive className="mr-1 h-4 w-4" />
-                    Archive
-                  </Button>
+                    Archive v{map.version} of Sector {map.sector}?
+                    {map.status === "PUBLISHED"
+                      ? " This is the live map: players lose it immediately."
+                      : " The draft stays in the History under Archived."}
+                  </Confirm>
                 )}
               </div>
             </div>

@@ -328,7 +328,7 @@ const LibraryCard: React.FC<LibraryCardProps> = (props) => {
               title={deleteTitle}
               button={
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   size="sm"
                   disabled={isDeleting}
                   loading={isDeleting}
