@@ -75,6 +75,12 @@ const Button = ({
   // A loading button stays inert so the pending request cannot be submitted twice.
   const isDisabled = asChild ? disabled : disabled || loading;
   const isPulse = animation === "pulse" && !isDisabled;
+  const badge =
+    count !== undefined && count > 0 ? (
+      <div className="absolute top-0 right-[-3] z-50 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-orange-100 text-xs">
+        {count}
+      </div>
+    ) : null;
   const isGlow = animation === "glow";
   const widthClassesFromUser = React.useMemo(() => {
     if (typeof className !== "string") return undefined;
@@ -126,11 +132,7 @@ const Button = ({
           ) : (
             children
           )}
-          {count !== undefined && count > 0 && (
-            <div className="absolute top-0 right-[-3] z-50 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-orange-100 text-xs">
-              {count}
-            </div>
-          )}
+          {badge}
         </>
       )}
     </Comp>
@@ -145,8 +147,10 @@ const Button = ({
       </TooltipProvider>
     );
   }
-  // If neither glow nor decoration is requested, return the element directly
-  if (!isGlow && decoration === "none") return element;
+  // A slotted child cannot take extra children, so its badge sits in the wrapper instead.
+  const wrappedBadge = asChild ? badge : null;
+  // Without glow, decoration or a slotted badge, return the element directly
+  if (!isGlow && decoration === "none" && !wrappedBadge) return element;
 
   // Wrap to support glow and/or decoration layers
   return (
@@ -167,6 +171,7 @@ const Button = ({
         </div>
       )}
       {element}
+      {wrappedBadge}
       {isGlow && (
         <div
           aria-hidden

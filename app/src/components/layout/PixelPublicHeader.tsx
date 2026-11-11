@@ -62,25 +62,23 @@ const PixelPublicHeader: React.FC<PixelPublicHeaderProps> = ({
           ))}
         </nav>
         <div className="col-start-2 flex items-center gap-[8px] justify-self-end md:col-start-3 md:gap-3">
-          <Link href="/login">
-            <Button
-              variant="outline"
-              size="sm"
-              className="tnr-ink-btn tnr-ink-btn-secondary min-h-[48px]"
-              style={{ minWidth: 64 }}
-            >
-              Log In
-            </Button>
-          </Link>
-          <Link href="/signup">
-            <Button
-              size="sm"
-              className="tnr-ink-btn tnr-ink-btn-primary tnr-ink-register min-h-[48px]"
-              style={{ minWidth: 64 }}
-            >
-              Register
-            </Button>
-          </Link>
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="tnr-ink-btn tnr-ink-btn-secondary min-h-[48px]"
+            style={{ minWidth: 64 }}
+          >
+            <Link href="/login">Log In</Link>
+          </Button>
+          <Button
+            asChild
+            size="sm"
+            className="tnr-ink-btn tnr-ink-btn-primary tnr-ink-register min-h-[48px]"
+            style={{ minWidth: 64 }}
+          >
+            <Link href="/signup">Register</Link>
+          </Button>
           <GameSettingsPopover
             trigger="settings"
             triggerClassName="tnr-ink-settings-btn min-h-[48px] min-w-[48px]"

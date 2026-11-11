@@ -218,16 +218,18 @@ export function HuntingBoard({
                 new contract.
               </p>
             )}
-            <div className="grid grid-cols-2 gap-2 [&_button]:h-full [&_button]:min-h-9 [&_button]:w-full [&_button]:whitespace-normal">
+            <div className="grid grid-cols-2 gap-2 [&_:is(a,button)]:h-full [&_:is(a,button)]:min-h-9 [&_:is(a,button)]:w-full [&_:is(a,button)]:whitespace-normal">
               {user?.sector !== session.sector && (
-                <Link href={`/travel?sector=${session.sector}`}>
-                  <Button variant="secondary">Travel to sector {session.sector}</Button>
-                </Link>
+                <Button asChild variant="secondary">
+                  <Link href={`/travel?sector=${session.sector}`}>
+                    Travel to sector {session.sector}
+                  </Link>
+                </Button>
               )}
               {session.battleId ? (
-                <Link href="/combat">
-                  <Button>Return to fight</Button>
-                </Link>
+                <Button asChild>
+                  <Link href="/combat">Return to fight</Link>
+                </Button>
               ) : (
                 <>
                   {!session.readyAt && active && (

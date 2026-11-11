@@ -107,17 +107,19 @@ const Welcome: React.FC = () => {
               have played TheNinja-RPG!
             </p>
             <p>Join the new version and experience our ninja world!</p>
-            <Link href="/signup" aria-label="Signup" className="my-3 w-full px-3">
+            <div className="my-3 w-full px-3">
               <Button
-                id="signup_btn"
+                asChild
                 className="w-full font-bold text-xl"
                 size="xl2"
                 animation="glow"
               >
-                <UserPlus className="mr-2 h-6 w-6" />
-                Create an Account
+                <Link href="/signup" id="signup_btn">
+                  <UserPlus className="mr-2 h-6 w-6" />
+                  Create an Account
+                </Link>
               </Button>
-            </Link>
+            </div>
           </div>
           <Link href="/guide/getting-started" className="mb-4 font-bold underline">
             Learn how to play
@@ -918,21 +920,20 @@ const HeroPoster: React.FC = () => {
 /** Register and log in calls to action of the landing sections. */
 const AuthCtaButtons: React.FC = () => (
   <div className="mt-8 flex flex-wrap justify-center gap-3">
-    <Link href="/signup">
-      <Button size="lg" className={cn(inkPrimaryButton, "tnr-ink-cta")}>
+    <Button asChild size="lg" className={cn(inkPrimaryButton, "tnr-ink-cta")}>
+      <Link href="/signup">
         <UserPlus className="mr-2 h-5 w-5" />
         Register
-      </Button>
-    </Link>
-    <Link href="/login">
-      <Button
-        variant="outline"
-        size="lg"
-        className={cn(inkSecondaryButton, "tnr-ink-cta")}
-      >
-        Log In
-      </Button>
-    </Link>
+      </Link>
+    </Button>
+    <Button
+      asChild
+      variant="outline"
+      size="lg"
+      className={cn(inkSecondaryButton, "tnr-ink-cta")}
+    >
+      <Link href="/login">Log In</Link>
+    </Button>
   </div>
 );
 

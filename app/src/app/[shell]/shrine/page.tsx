@@ -223,9 +223,9 @@ export default function Shrine() {
                 The shrine has been defeated! Return to your village&apos;s Town Hall to
                 finalize the war and claim the sector.
               </p>
-              <Link href="/travel">
-                <Button size="lg">Travel to Village</Button>
-              </Link>
+              <Button asChild size="lg">
+                <Link href="/travel">Travel to Village</Link>
+              </Button>
             </div>
           </ContentBox>
         )}
@@ -731,9 +731,9 @@ const WarCard = ({
                   The shrine has been defeated. Quickly return to your village&apos;s
                   Town Hall to finalize the war and claim the sector!
                 </p>
-                <Link href="/travel">
-                  <Button>Travel to Village</Button>
-                </Link>
+                <Button asChild>
+                  <Link href="/travel">Travel to Village</Link>
+                </Button>
               </>
             )}
           </div>

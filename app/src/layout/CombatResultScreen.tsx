@@ -10,6 +10,7 @@ import Link from "@/layout/Link";
 import { isPvpEnergyRewardBattle, sendsToHospital } from "@/libs/combat/settlement";
 import type { BattleState, CombatResult, ReturnedBattle } from "@/libs/combat/types";
 import { getIsolatedPyramid } from "@/libs/questRun";
+import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { getTutorialBattleReturnPage } from "@/libs/tutorial";
 import { TUTORIAL_STEPS, type TutorialStepConfig } from "@/libs/tutorialSteps";
@@ -96,29 +97,27 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
           />
         </div>
         <div className="grid gap-2 pt-3 sm:grid-cols-2 [&>:only-child]:sm:col-span-2">
-          <Link
-            href={
-              getIsolatedPyramid(userData)
-                ? "/combat"
-                : toHospital
-                  ? "/hospital"
-                  : "/profile"
-            }
-            className="w-full"
-            onClick={(event) => {
-              void handleTutorialBattleReturn(
-                event,
-                toHospital ? "/hospital" : "/profile",
-              );
-            }}
+          <Button
+            asChild
+            id="return"
+            className={cn("w-full", isReturningFromTutorial && returningClassName)}
           >
-            <Button
-              id="return"
-              className="w-full"
-              disabled={isReturningFromTutorial}
-              aria-busy={isReturningFromTutorial}
-              onClick={() => {
+            <Link
+              href={
+                getIsolatedPyramid(userData)
+                  ? "/combat"
+                  : toHospital
+                    ? "/hospital"
+                    : "/profile"
+              }
+              aria-disabled={isReturningFromTutorial || undefined}
+              aria-busy={isReturningFromTutorial || undefined}
+              onClick={(event) => {
                 if (getIsolatedPyramid(userData)) setBattleState(undefined);
+                void handleTutorialBattleReturn(
+                  event,
+                  toHospital ? "/hospital" : "/profile",
+                );
               }}
             >
               {isReturningFromTutorial
@@ -128,48 +127,47 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
                   : currentStep && userData?.tutorialOn
                     ? "Continue tutorial"
                     : `Return to ${toHospital ? "Hospital" : "Profile"}`}
-            </Button>
-          </Link>
-          {showShrineAgain && (
-            <Link href="/shrine" className="w-full">
-              <Button id="return" className="w-full">
-                Back to Shrine
-              </Button>
             </Link>
+          </Button>
+          {showShrineAgain && (
+            <Button asChild id="toShrine" className="w-full">
+              <Link href="/shrine">Back to Shrine</Link>
+            </Button>
           )}
           {props.arenaActions}
           {battleType === "RANKED_PVP" && (
-            <Link href="/battlearena#PVP%20Rank" className="w-full">
-              <Button id="toPvpRank" className="w-full">
-                Back to PvP Queue
-              </Button>
-            </Link>
+            <Button asChild id="toPvpRank" className="w-full">
+              <Link href="/battlearena#PVP%20Rank">Back to PvP Queue</Link>
+            </Button>
           )}
           {battleRef.current?.extraState.dungeon && (
-            <Link href="/dungeon" className="w-full">
-              <Button className="w-full">Return to party</Button>
-            </Link>
+            <Button asChild className="w-full">
+              <Link href="/dungeon">Return to party</Link>
+            </Button>
           )}
           {showTravelBtn && (
-            <Link
-              href="/travel"
-              className="w-full"
-              onClick={(event) => {
-                void handleTutorialBattleReturn(event, "/travel");
-              }}
+            <Button
+              asChild
+              id="toTravel"
+              className={cn("w-full", isReturningFromTutorial && returningClassName)}
             >
-              <Button
-                id="toTravel"
-                className="w-full"
-                disabled={isReturningFromTutorial}
-                aria-busy={isReturningFromTutorial}
+              <Link
+                href="/travel"
+                aria-disabled={isReturningFromTutorial || undefined}
+                aria-busy={isReturningFromTutorial || undefined}
+                onClick={(event) => {
+                  void handleTutorialBattleReturn(event, "/travel");
+                }}
               >
                 {isReturningFromTutorial ? "Returning..." : "To Map"}
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           )}
         </div>
       </div>
     </div>
   );
 };
+
+/** A return link stays inert while the tutorial confirms the profile it navigates with. */
+const returningClassName = "pointer-events-none opacity-50";

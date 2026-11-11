@@ -235,15 +235,17 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
               className="theme-menu-grid mt-2 grid grid-cols-2 gap-3"
             >
               {getMainNavbarLinks().map((link) => (
-                <Link key={link.href} href={link.href}>
-                  <Button
-                    decoration={variantClasses.rightMenuDecoration}
-                    className={variantClasses.rightMenuButton}
-                  >
+                <Button
+                  key={link.href}
+                  asChild
+                  decoration={variantClasses.rightMenuDecoration}
+                  className={variantClasses.rightMenuButton}
+                >
+                  <Link href={link.href}>
                     <span className="grow">{link.name}</span>
                     {link.icon}
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               ))}
             </nav>
           ) : (
@@ -255,21 +257,18 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
                 Free to play in your browser. No download required.
               </p>
               <div className="mt-3 flex flex-col gap-2">
-                <Link href="/signup" className="relative">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="w-full"
-                    decoration="gold"
-                  >
-                    Create account
-                  </Button>
-                </Link>
-                <Link href="/login" className="relative">
-                  <Button variant="outline" size="sm" className="w-full">
-                    Sign in
-                  </Button>
-                </Link>
+                <Button
+                  asChild
+                  variant="default"
+                  size="sm"
+                  className="w-full"
+                  decoration="gold"
+                >
+                  <Link href="/signup">Create account</Link>
+                </Button>
+                <Button asChild variant="outline" size="sm" className="w-full">
+                  <Link href="/login">Sign in</Link>
+                </Button>
               </div>
             </>
           )}
@@ -350,10 +349,11 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
         <button
           type="button"
           aria-label="Toggle light and dark theme"
+          title="Toggle light and dark theme"
           className={SIGNED_IN_ICON_TARGET}
           onClick={onThemeToggle}
         >
-          <Eclipse className={SIGNED_IN_ICON} />
+          <Eclipse aria-hidden className={SIGNED_IN_ICON} />
         </button>
       )}
     </div>
@@ -381,15 +381,17 @@ export const LayoutMainMenu: React.FC<LayoutMainMenuProps> = ({
       <div className="theme-menu-grid mt-1 grid grid-cols-2 gap-3">
         {navbarMenuItems.map((system) => {
           return (
-            <Link key={system.href} href={system.href} onClick={onNavigate}>
-              <Button
-                decoration={variantClasses.mainMenuDecoration}
-                className={variantClasses.mainMenuButton}
-              >
-                <div className="grow">{system.name}</div>
-                <div>{system.icon}</div>
-              </Button>
-            </Link>
+            <Button
+              key={system.href}
+              asChild
+              decoration={variantClasses.mainMenuDecoration}
+              className={variantClasses.mainMenuButton}
+            >
+              <Link href={system.href} onClick={onNavigate}>
+                <span className="grow">{system.name}</span>
+                <span>{system.icon}</span>
+              </Link>
+            </Button>
           );
         })}
         <div className="flex flex-row items-center justify-center">{signedInIcons}</div>
@@ -430,28 +432,30 @@ const RightSideBar: React.FC<RightSideBarProps> = ({
             ? UNAVAILABLE_STATUS_LABELS[userData.status]
             : undefined;
           return (
-            <Link key={system.href} href={system.href} id={system.id} title={reason}>
-              <Button
-                decoration={variantClasses.rightMenuDecoration}
-                className={cn(
-                  variantClasses.rightMenuButton,
-                  disabled
-                    ? variantClasses.rightMenuDisabled
-                    : variantClasses.rightMenuEnabled,
-                )}
-                count={system.notificationCount}
-              >
-                <div className="grow">
+            <Button
+              key={system.href}
+              asChild
+              decoration={variantClasses.rightMenuDecoration}
+              className={cn(
+                variantClasses.rightMenuButton,
+                disabled
+                  ? variantClasses.rightMenuDisabled
+                  : variantClasses.rightMenuEnabled,
+              )}
+              count={system.notificationCount}
+            >
+              <Link href={system.href} id={system.id} title={reason}>
+                <span className="grow">
                   {system.name}
                   {reason && (
                     <span className="block font-normal text-[0.75rem] leading-tight">
                       {reason}
                     </span>
                   )}
-                </div>
-                <div>{system.icon}</div>
-              </Button>
-            </Link>
+                </span>
+                <span>{system.icon}</span>
+              </Link>
+            </Button>
           );
         })}
       </div>
@@ -512,11 +516,11 @@ export const StrongestUsersBanner: React.FC = () => {
       >
         <div className="relative top-[-40px]">
           <div className="relative left-10 w-[140px] max-w-[140px] lg:left-14 lg:w-[178px] lg:max-w-[178px]">
-            <Link href={userData ? "/battlearena#PVP%20Rank" : "/login"}>
-              <Button decoration="gold" className="w-full" animation="pulse">
+            <Button asChild decoration="gold" className="w-full" animation="pulse">
+              <Link href={userData ? "/battlearena#PVP%20Rank" : "/login"}>
                 Join Ranked PvP
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
           {users?.map((user, i) => (
             <Link

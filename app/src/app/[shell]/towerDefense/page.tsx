@@ -154,12 +154,12 @@ const TowerDefensePage: React.FC = () => {
                   to earn or save permanent upgrade points. Log in to save your progress
                   and purchase permanent upgrades!
                 </p>
-                <Link href="/login">
-                  <Button variant="outline" size="sm" className="mt-1">
+                <Button asChild variant="outline" size="sm" className="mt-1">
+                  <Link href="/login">
                     <LogIn className="mr-2 h-4 w-4" />
                     Log In
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </div>
             </div>
           </div>
@@ -579,12 +579,12 @@ const AbandonRunConfirm = ({
 
 /** Reuse the leaderboard navigation control across tower-defense screen states. */
 const LeaderboardLink = () => (
-  <Link href="/manual/towerDefense/leaderboard">
-    <Button size="sm">
+  <Button asChild size="sm">
+    <Link href="/manual/towerDefense/leaderboard">
       <Trophy className="mr-2 h-4 w-4" />
       Leaderboard
-    </Button>
-  </Link>
+    </Link>
+  </Button>
 );
 
 /** Keep a recoverable tower-defense error visible until the player dismisses it. */

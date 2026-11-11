@@ -76,12 +76,12 @@ const ErrorBoundary: React.FC<ErrorBoundaryProps> = ({ error, reset }) => {
             <RefreshCw className={cn("h-4 w-4", isRetrying && "animate-spin")} />
             Try Again
           </Button>
-          <Link href={isSignedIn ? "/profile" : "/"}>
-            <Button variant="outline" size="lg" className="gap-2">
+          <Button asChild variant="outline" size="lg" className="gap-2">
+            <Link href={isSignedIn ? "/profile" : "/"}>
               <Home className="h-4 w-4" />
               Go Home
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
 
         <details className="mt-4 w-full">

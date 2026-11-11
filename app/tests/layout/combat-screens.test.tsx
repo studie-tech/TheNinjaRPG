@@ -480,7 +480,7 @@ describe("combat result screen", () => {
     );
     expect(view.getByText("You Won")).toBeTruthy();
     expect(document.getElementById("tutorial-combat-field")?.hidden).toBe(true);
-    const back = view.getByRole("button", { name: "Return to Profile" });
+    const back = view.getByRole("link", { name: "Return to Profile" });
     expect(back.id).toBe("return");
     expect(back.closest("a")?.getAttribute("href")).toBe("/profile");
     expect(buttonTexts(view)).toEqual(["Return to Profile", "Arena again"]);
@@ -503,7 +503,7 @@ describe("combat result screen", () => {
     expect(view.getByText("You Lost")).toBeTruthy();
     expect(
       view
-        .getByRole("button", { name: "Return to Hospital" })
+        .getByRole("link", { name: "Return to Hospital" })
         .closest("a")
         ?.getAttribute("href"),
     ).toBe("/hospital");
@@ -542,7 +542,7 @@ describe("combat result screen", () => {
     });
     expect(
       view
-        .getByRole("button", { name: "Return to party" })
+        .getByRole("link", { name: "Return to party" })
         .closest("a")
         ?.getAttribute("href"),
     ).toBe("/dungeon");
@@ -558,9 +558,9 @@ describe("combat result screen", () => {
       result: result(),
       isPending: false,
     });
-    const next = view.getByRole("button", { name: "Continue Pyramid" });
+    const next = view.getByRole("link", { name: "Continue Pyramid" });
     expect(next.closest("a")?.getAttribute("href")).toBe("/combat");
-    expect(view.queryByRole("button", { name: "To Map" })).toBeNull();
+    expect(view.queryByRole("link", { name: "To Map" })).toBeNull();
     fireEvent.click(next);
     expect(state.setBattleState).toHaveBeenCalledWith(undefined);
   });
@@ -605,7 +605,7 @@ describe("combat result screen", () => {
         result: result({ outcome, curHealth } as never),
         isPending: false,
       });
-      const button = view.getByRole("button", { name });
+      const button = view.getByRole("link", { name });
       const link = button.closest("a")!;
       expect(link.getAttribute("href")).toBe(
         destination === "/travel" ? "/travel" : destination,
@@ -616,7 +616,7 @@ describe("combat result screen", () => {
       });
       expect(click.defaultPrevented).toBe(true);
       await waitFor(() =>
-        expect(view.getAllByRole("button", { name: "Returning..." }).length).toBe(2),
+        expect(view.getAllByRole("link", { name: "Returning..." }).length).toBe(2),
       );
       expect(state.fetchProfile).toHaveBeenCalledWith(undefined, { staleTime: 0 });
       // A second press while the profile loads does not fetch again.
@@ -637,7 +637,7 @@ describe("combat result screen", () => {
         destination,
       );
       expect(state.push).toHaveBeenCalledWith("/next-lesson");
-      await waitFor(() => expect(view.getByRole("button", { name })).toBeTruthy());
+      await waitFor(() => expect(view.getByRole("link", { name })).toBeTruthy());
     },
   );
 
@@ -656,7 +656,7 @@ describe("combat result screen", () => {
       result: result(),
       isPending: false,
     });
-    fireEvent.click(view.getByRole("button", { name: "Continue tutorial" }));
+    fireEvent.click(view.getByRole("link", { name: "Continue tutorial" }));
     await waitFor(() =>
       expect(toasts).toHaveBeenCalledWith({
         success: false,
@@ -665,7 +665,9 @@ describe("combat result screen", () => {
     );
     expect(state.push).not.toHaveBeenCalled();
     expect(
-      view.getByRole("button", { name: "Continue tutorial" }).hasAttribute("disabled"),
+      view
+        .getByRole("link", { name: "Continue tutorial" })
+        .hasAttribute("aria-disabled"),
     ).toBe(false);
   });
 });
