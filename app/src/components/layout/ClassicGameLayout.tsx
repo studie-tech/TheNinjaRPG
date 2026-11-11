@@ -283,7 +283,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                 alt="rightbottomdecor"
                 loading="lazy"
               ></Image>
-              <div className="absolute top-2 right-0 left-0 hidden md:block">
+              <div className="absolute top-2 right-0 left-0 hidden text-white md:block">
                 <Footer />
               </div>
               {userData ? (
@@ -295,7 +295,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                   className="absolute top-0 right-0 bottom-0 left-0 md:hidden"
                 />
               ) : (
-                <div className="absolute top-4 right-0 left-0 block md:hidden">
+                <div className="absolute top-4 right-0 left-0 block text-white md:hidden">
                   <Footer />
                 </div>
               )}

@@ -119,6 +119,9 @@
   color: var(--theme-muted);
   font-size: 0.85rem;
 }
+.theme-public-footer [data-footer-link] {
+  color: var(--theme-text);
+}
 .theme-public-page :where(a, button, input, select, [tabindex]):focus-visible {
   outline: 3px solid var(--theme-accent);
   outline-offset: 4px;
