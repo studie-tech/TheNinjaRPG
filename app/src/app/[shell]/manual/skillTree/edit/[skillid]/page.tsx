@@ -1,10 +1,11 @@
 "use client";
 
 import { use } from "react";
-import type { UseFormReturn } from "react-hook-form";
+import { type UseFormReturn, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { SkillTree } from "@/drizzle/schema";
 import { useSkillTreeEditForm } from "@/hooks/skillTree";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { SkillTreeHelper } from "@/layout/ContentHelp";
@@ -42,7 +43,7 @@ export default function SkillTreeEdit(props: { params: Promise<{ skillid: string
   if (!data) {
     return (
       <ContentBox
-        title="Content Panel"
+        title="Edit skill"
         subtitle="Skill Tree Management"
         defaultBackHref="/manual/skillTree"
       >
@@ -76,12 +77,14 @@ const SingleEditSkillTree: React.FC<SingleEditSkillTreeProps> = (props) => {
     setEffects,
     handleSkillTreeSubmit,
   } = useSkillTreeEditForm(props.skillTree, props.refetch);
+  const entryName = useWatch({ control: form.control, name: "name" });
+  const heading = useEditorTitle("skill", entryName);
 
   // Show panel controls
   return (
     <>
       <ContentBox
-        title="Content Panel"
+        title={heading}
         subtitle={
           skillTree.pathType === "BLOODRIGHT"
             ? "Bloodright Management"

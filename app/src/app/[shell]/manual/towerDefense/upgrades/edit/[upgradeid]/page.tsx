@@ -1,10 +1,11 @@
 "use client";
 
 import { use } from "react";
-import type { UseFormReturn } from "react-hook-form";
+import { type UseFormReturn, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { TowerDefenseUpgrade } from "@/drizzle/schema";
 import { useTowerDefenseUpgradeEditForm } from "@/hooks/towerDefenseUpgrade";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
@@ -62,10 +63,12 @@ interface SingleEditUpgradeProps {
 const SingleEditUpgrade: React.FC<SingleEditUpgradeProps> = ({ upgrade }) => {
   const { form, formData, isUpdating, handleUpgradeSubmit } =
     useTowerDefenseUpgradeEditForm(upgrade);
+  const entryName = useWatch({ control: form.control, name: "name" });
+  const heading = useEditorTitle("upgrade", entryName);
 
   return (
     <ContentBox
-      title="Content Panel"
+      title={heading}
       subtitle="Upgrade Configuration"
       defaultBackHref="/manual/towerDefense/upgrades"
     >

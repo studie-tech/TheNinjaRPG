@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
 import { MasteryTypes, TITLE_MAX_EFFECTS } from "@/drizzle/constants";
 import type { Title } from "@/drizzle/schema";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
 import Loader from "@/layout/Loader";
@@ -51,6 +52,8 @@ const SingleTitleEdit = ({ title }: { title: Title }) => {
     resetOptions: { keepDirtyValues: true },
   });
   const effects = useWatch({ control: form.control, name: "effects" });
+  const entryName = useWatch({ control: form.control, name: "name" });
+  const heading = useEditorTitle("title", entryName);
   const utils = api.useUtils();
   const save = api.title.update.useMutation({
     onSuccess: async (result) => {
@@ -63,7 +66,7 @@ const SingleTitleEdit = ({ title }: { title: Title }) => {
     form.setValue("effects", next, { shouldDirty: true, shouldValidate: true });
   return (
     <ContentBox
-      title="Content Panel"
+      title={heading}
       subtitle="Title Management"
       defaultBackHref="/manual/title"
     >

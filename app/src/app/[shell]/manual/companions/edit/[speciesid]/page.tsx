@@ -3,6 +3,7 @@
 import { use } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { canChangeContent } from "@/utils/permissions";
@@ -22,9 +23,10 @@ export default function PetSpeciesEdit(props: {
     error,
     refetch,
   } = api.petSpecies.get.useQuery({ id: speciesid }, { enabled: canEdit });
+  const heading = useEditorTitle("companion species", species?.name);
   return (
     <ContentBox
-      title="Content Panel"
+      title={heading}
       subtitle="Companion Species Management"
       defaultBackHref="/manual/companions"
       noRightAlign

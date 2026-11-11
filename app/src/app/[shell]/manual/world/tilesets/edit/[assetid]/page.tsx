@@ -5,6 +5,7 @@ import { use, useRef } from "react";
 import { type UseFormReturn, useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { MapAsset } from "@/drizzle/schema";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent, type FormEntry } from "@/layout/EditContent";
@@ -103,6 +104,8 @@ const SingleEditMapAsset: React.FC<SingleEditMapAssetProps> = (props) => {
 
   const category = useWatch({ control: form.control, name: "category" });
   const imageUrl = useWatch({ control: form.control, name: "imageUrl" });
+  const entryName = useWatch({ control: form.control, name: "name" });
+  const heading = useEditorTitle("map asset", entryName);
 
   const formData: FormEntry<keyof ZodMapAssetType>[] = [
     { id: "name", label: "Display Name", type: "text" },
@@ -125,7 +128,7 @@ const SingleEditMapAsset: React.FC<SingleEditMapAssetProps> = (props) => {
 
   return (
     <ContentBox
-      title="Content Panel"
+      title={heading}
       subtitle="Map Asset Management"
       defaultBackHref="/manual/world/tilesets"
       noRightAlign={true}

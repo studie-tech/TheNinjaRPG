@@ -5,7 +5,7 @@ import { Copy, FileMinus, FilePlus } from "lucide-react";
 import { nanoid } from "nanoid";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import CytoscapeComponent from "react-cytoscapejs";
-import type { UseFormReturn } from "react-hook-form";
+import { type UseFormReturn, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -16,6 +16,7 @@ import {
 } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import { useQuestEditForm } from "@/hooks/quest";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { QuestHelper } from "@/layout/ContentHelp";
@@ -101,6 +102,8 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
     getSuggestionData,
     isUpdating,
   } = useQuestEditForm(props.quest, props.refetch);
+  const entryName = useWatch({ control: form.control, name: "name" });
+  const heading = useEditorTitle("quest", entryName);
 
   const [selectedObjectiveId, setSelectedObjectiveId] = useState<string | null>(null);
 
@@ -233,7 +236,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
         </span>
       )}
       <ContentBox
-        title="Content Panel"
+        title={heading}
         subtitle="Quest Management"
         defaultBackHref="/manual/quest"
         topRightContent={<QuestHelper quest={currentValues} />}
@@ -259,9 +262,6 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
             disable tasks.
           </p>
         )}
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="font-bold text-2xl">Edit Quest</h1>
-        </div>
 
         <EditContent
           schema={QuestFormRawSchema}

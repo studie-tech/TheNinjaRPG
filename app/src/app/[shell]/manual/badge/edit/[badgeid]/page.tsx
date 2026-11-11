@@ -1,9 +1,11 @@
 "use client";
 
 import { use } from "react";
+import { useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { Badge } from "@/drizzle/schema";
 import { useBadgeEditForm } from "@/hooks/badge";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
@@ -63,11 +65,13 @@ const SingleEditBadge: React.FC<SingleEditBadgeProps> = (props) => {
     props.badge,
     props.refetch,
   );
+  const entryName = useWatch({ control: form.control, name: "name" });
+  const heading = useEditorTitle("badge", entryName);
 
   // Show panel controls
   return (
     <ContentBox
-      title="Content Panel"
+      title={heading}
       subtitle="Badge Management"
       defaultBackHref="/manual/badge"
       backDisabled={isUpdating}

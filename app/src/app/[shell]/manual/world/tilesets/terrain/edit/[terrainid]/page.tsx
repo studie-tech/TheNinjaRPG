@@ -11,6 +11,7 @@ import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import { COMBAT_BIOMES } from "@/drizzle/constants";
 import type { MapTerrain } from "@/drizzle/schema";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import ContentImageSelector from "@/layout/ContentImageSelector";
@@ -108,12 +109,14 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
 
   const colors = useWatch({ control: form.control, name: "colors" });
   const textureUrl = useWatch({ control: form.control, name: "textureUrl" });
+  const entryName = useWatch({ control: form.control, name: "name" });
+  const heading = useEditorTitle("terrain", entryName);
 
   const colorLabels = ["Light shade", "Mid shade", "Dark shade (blocked)"] as const;
 
   return (
     <ContentBox
-      title="Content Panel"
+      title={heading}
       subtitle="Map Terrain Management"
       defaultBackHref="/manual/world/tilesets"
       noRightAlign={true}

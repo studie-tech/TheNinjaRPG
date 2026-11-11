@@ -2,10 +2,11 @@
 
 import { MapPin } from "lucide-react";
 import { use } from "react";
-import type { UseFormReturn } from "react-hook-form";
+import { type UseFormReturn, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { useAiEditForm } from "@/hooks/ai";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import AiProfileEdit from "@/layout/AiProfileEdit";
 import { AiSpriteAnimations } from "@/layout/AiSpriteAnimations";
@@ -85,6 +86,8 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
     setEffects,
     handleUserSubmit,
   } = useAiEditForm(props.user);
+  const entryName = useWatch({ control: form.control, name: "username" });
+  const heading = useEditorTitle("AI", entryName);
 
   // Mutations
   const { mutate: updateNindo, isPending: isUpdating } =
@@ -101,7 +104,7 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
   return (
     <>
       <ContentBox
-        title="Content Panel"
+        title={heading}
         subtitle="Stats scale by level; editing a stat reweights the level budget"
         defaultBackHref="/manual/ai"
         topRightContent={
@@ -122,9 +125,6 @@ const SingleEditUser: React.FC<SingleEditUserProps> = (props) => {
       >
         {!loading && (
           <>
-            <div className="mb-4 flex items-center justify-between">
-              <h1 className="font-bold text-2xl">Edit AI</h1>
-            </div>
             <PoolStatusBars pools={processedUser} status={processedUser.status} />
             <EditContent
               schema={insertAiSchema}

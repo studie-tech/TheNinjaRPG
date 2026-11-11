@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { GuideArticle } from "@/drizzle/schema";
 import { useGuideEditForm } from "@/hooks/guide";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -62,6 +63,7 @@ const SingleEditGuide: React.FC<{
   const content = useWatch({ control: form.control, name: "content" }) ?? "";
   const faq = useWatch({ control: form.control, name: "faq" }) ?? [];
   const title = useWatch({ control: form.control, name: "title" }) ?? article.title;
+  const heading = useEditorTitle("guide", title);
 
   const { mutate: remove, isPending } = api.guide.delete.useMutation({
     onSuccess: (data) => {
@@ -74,8 +76,8 @@ const SingleEditGuide: React.FC<{
 
   return (
     <ContentBox
-      title="Content Panel"
-      subtitle={`Guide: ${title}`}
+      title={heading}
+      subtitle="Guide Management"
       defaultBackHref="/guide"
       topRightContent={
         <Confirm

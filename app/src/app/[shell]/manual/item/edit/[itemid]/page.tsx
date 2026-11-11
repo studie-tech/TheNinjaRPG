@@ -23,6 +23,7 @@ import {
 } from "@/drizzle/constants";
 import type { CraftingRequirement, Item } from "@/drizzle/schema";
 import { useItemEditForm } from "@/hooks/item";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -111,6 +112,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
   const furnitureData = useWatch({ control: form.control, name: "furnitureData" });
   const [isFurnitureMeasuring, setIsFurnitureMeasuring] = React.useState(false);
   const itemName = useWatch({ control: form.control, name: "name" });
+  const heading = useEditorTitle("item", itemName);
   const itemDescription = useWatch({ control: form.control, name: "description" });
   const itemSlot = useWatch({ control: form.control, name: "slot" });
   const itemWeaponType = useWatch({ control: form.control, name: "weaponType" });
@@ -120,7 +122,7 @@ const SingleEditItem: React.FC<SingleEditItemProps> = (props) => {
   return (
     <>
       <ContentBox
-        title="Content Panel"
+        title={heading}
         subtitle="Item Management"
         defaultBackHref="/manual/item"
         topRightContent={

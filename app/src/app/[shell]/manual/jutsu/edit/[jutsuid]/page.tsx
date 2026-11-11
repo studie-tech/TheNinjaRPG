@@ -1,10 +1,11 @@
 "use client";
 
 import { use } from "react";
-import type { UseFormReturn } from "react-hook-form";
+import { type UseFormReturn, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { Jutsu } from "@/drizzle/schema";
 import { useJutsuEditForm } from "@/hooks/jutsu";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { JutsuHelper } from "@/layout/ContentHelp";
@@ -88,12 +89,14 @@ const SingleEditJutsu: React.FC<SingleEditJutsuProps> = (props) => {
     reskinParentId,
     updateError,
   } = useJutsuEditForm(props.jutsu, props.refetch);
+  const entryName = useWatch({ control: form.control, name: "name" });
+  const heading = useEditorTitle("jutsu", entryName);
 
   // Show panel controls
   return (
     <>
       <ContentBox
-        title="Content Panel"
+        title={heading}
         subtitle="Jutsu Management"
         defaultBackHref="/manual/jutsu"
         topRightContent={
