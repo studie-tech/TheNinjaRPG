@@ -7,7 +7,7 @@ import {
   setSystemTime,
   vi,
 } from "bun:test";
-import { act, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { useNow } from "@/hooks/useNow";
 
 const START = Date.UTC(2026, 0, 1);
@@ -17,6 +17,8 @@ beforeEach(() => {
   setSystemTime(START);
 });
 afterEach(() => {
+  // Unmounting ends each consumer's subscription to the shared clock.
+  cleanup();
   vi.useRealTimers();
   setSystemTime();
 });
