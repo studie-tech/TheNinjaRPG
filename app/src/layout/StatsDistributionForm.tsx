@@ -39,7 +39,7 @@ import ContentBox from "@/layout/ContentBox";
 import { getElementImg } from "@/layout/ElementImage";
 import Image from "@/layout/Image";
 import NavTabs from "@/layout/NavTabs";
-import SliderField from "@/layout/SliderField";
+import SliderField, { formatSliderNumber } from "@/layout/SliderField";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { providedElements } from "@/libs/elementalMastery";
 import { withCappedStats } from "@/libs/profile";
@@ -627,7 +627,9 @@ const AdvancedDistribution: React.FC<AdvancedDistributionProps> = (props) => {
                         max={Math.max(dynamicMax, currentValue)}
                         step={step}
                         watchedValue={currentValue}
-                        watchedTotal={availableStats}
+                        formatWatchedValue={(value) =>
+                          `Selected: ${formatSliderNumber(value)} of ${formatSliderNumber(Math.max(dynamicMax, value, 0))} possible`
+                        }
                         setValue={form.setValue}
                         register={form.register}
                         error={fieldState.error?.message}

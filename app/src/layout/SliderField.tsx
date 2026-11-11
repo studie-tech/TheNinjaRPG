@@ -38,11 +38,18 @@ const SliderField: React.FC<SliderFieldProps> = (props) => {
     }
   };
 
+  // The selection is always shown, including zero, without forced decimals.
   const selectedLabel = props.formatWatchedValue
     ? props.formatWatchedValue(props.watchedValue)
-    : props.watchedValue
-      ? `Selected: ${props.watchedValue.toFixed(2)} ${props.watchedTotal ? `/ ${props.watchedTotal.toFixed(2)}` : ""} ${props.unit ?? ""}`
-      : "";
+    : [
+        `Selected: ${formatSliderNumber(props.watchedValue)}`,
+        props.watchedTotal !== undefined
+          ? `/ ${formatSliderNumber(props.watchedTotal)}`
+          : "",
+        props.unit ?? "",
+      ]
+        .filter(Boolean)
+        .join(" ");
 
   return (
     <div className="m-1">
@@ -147,3 +154,7 @@ const SliderStepper: React.FC<{
     </div>
   );
 };
+
+/** Thousands separators and at most two decimals, so whole values print as "500". */
+export const formatSliderNumber = (value: number) =>
+  value.toLocaleString(undefined, { maximumFractionDigits: 2 });
