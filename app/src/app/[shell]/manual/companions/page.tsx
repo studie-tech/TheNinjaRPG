@@ -53,7 +53,11 @@ export default function ManualCompanions() {
       </>
     ),
     status: (
-      <Badge variant={entry.isActive ? "default" : "outline"}>
+      <Badge variant="outline" className="gap-1.5 whitespace-nowrap font-normal">
+        <span
+          aria-hidden
+          className={`h-2 w-2 shrink-0 rounded-full ${entry.isActive ? "bg-green-500" : "bg-muted-foreground"}`}
+        />
         {entry.isActive ? "Available" : "Retired"}
       </Badge>
     ),
@@ -128,7 +132,6 @@ export default function ManualCompanions() {
         <p>No companion species match your filters.</p>
       ) : (
         <Table
-          compact
           data={rows}
           columns={[
             { key: "species", header: "Species", type: "jsx" },
