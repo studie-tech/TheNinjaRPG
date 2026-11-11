@@ -150,8 +150,7 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
         const tagSchema = getObjectiveSchema(watchTask);
         const parsedTag = tagSchema.safeParse({ id: objective.id, task: watchTask });
         const shownTag = parsedTag.success ? parsedTag.data : objective;
-        shownTag.task = watchTask;
-        newObjectives[idx] = shownTag;
+        newObjectives[idx] = { ...shownTag, task: watchTask };
       }
       setObjectives(newObjectives);
     }

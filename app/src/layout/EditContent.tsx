@@ -266,9 +266,6 @@ export const EditContent = <
   }
 
   const FormTag = props.fieldsOnly ? "div" : "form";
-  // Count how many columns have been used
-  let columnCount = 0;
-  let lastCategory = "default";
   // Sectioned forms keep their own order and show each section's heading.
   const isSectioned = formData.some((formEntry) => formEntry.section);
 
@@ -436,6 +433,7 @@ export const EditContent = <
             }
             return 0;
           })
+          .map(withCategorySpacer)
           .map((formEntry) => {
             // Derived
             const id = formEntry.id;
@@ -455,16 +453,8 @@ export const EditContent = <
               value: o.value !== "" ? o.value : "None",
             }));
 
-            // Figure out if we need to add a spacer
-            let includeSpacer = false;
-            let startsSection = false;
-            if (formEntry.category !== lastCategory) {
-              startsSection = isSectioned;
-              includeSpacer = !isSectioned && columnCount % 2 !== 0;
-              columnCount = 0;
-              lastCategory = formEntry.category;
-            }
-            columnCount += formEntry.doubleWidth ? 2 : 1;
+            const includeSpacer = !isSectioned && formEntry.includeSpacer;
+            const startsSection = isSectioned && formEntry.startsCategory;
 
             // Render
             return (
@@ -2385,3 +2375,24 @@ interface RewardCatalogs {
   titles: FormDbValue[] | undefined;
   badges: FormDbValue[] | undefined;
 }
+
+/**
+ * Mark the first entry of each category, and whether it follows an odd number of columns
+ * so a spacer starts the category on a new row of the two-column grid.
+ */
+const withCategorySpacer = <T extends { category: string; doubleWidth?: boolean }>(
+  entry: T,
+  index: number,
+  entries: T[],
+): T & { includeSpacer: boolean; startsCategory: boolean } => {
+  if (entry.category === (entries[index - 1]?.category ?? "default"))
+    return { ...entry, includeSpacer: false, startsCategory: false };
+  let columns = 0;
+  for (
+    let i = index - 1;
+    i >= 0 && entries[i]?.category === entries[index - 1]?.category;
+    i--
+  )
+    columns += entries[i]?.doubleWidth ? 2 : 1;
+  return { ...entry, includeSpacer: columns % 2 !== 0, startsCategory: true };
+};
