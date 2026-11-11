@@ -32,7 +32,12 @@ import {
   getInventoryBucketCapacity,
   isEquippableUserItem,
 } from "@/libs/item";
-import { homeStorageBlockReason, homeStorageMoveBlockReason } from "@/libs/itemsPage";
+import {
+  countUnlistedBagStacks,
+  homeStorageBlockReason,
+  homeStorageMoveBlockReason,
+  unlistedBagStacksNote,
+} from "@/libs/itemsPage";
 import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 
@@ -115,6 +120,15 @@ export default function MyItems() {
     return { value, count, max, over: count > max };
   });
   const selectedBag = bags.find((bag) => bag.value === activeTab);
+  // Name the counted stacks the list leaves out, so the count matches what players see.
+  const unlistedNote = unlistedBagStacksNote(
+    countUnlistedBagStacks(
+      carriedItems?.filter(
+        (ui) => activeTab === "all" || getInventoryBucket(ui.item) === activeTab,
+      ) ?? [],
+      inventoryTime,
+    ),
+  );
 
   // Home storage sits beside the backpack while the player can reach it. Furniture stays
   // with the home's decorating.
@@ -217,11 +231,16 @@ export default function MyItems() {
               </div>
             }
             bagTabs={
-              <BagTabs
-                bags={[{ value: "all", count: carriedItems?.length ?? 0 }, ...bags]}
-                active={activeTab}
-                onChange={setActiveTab}
-              />
+              <>
+                <BagTabs
+                  bags={[{ value: "all", count: carriedItems?.length ?? 0 }, ...bags]}
+                  active={activeTab}
+                  onChange={setActiveTab}
+                />
+                {unlistedNote && (
+                  <p className="text-muted-foreground mt-1 text-xs">{unlistedNote}</p>
+                )}
+              </>
             }
             bagItems={
               availableItems?.filter(
