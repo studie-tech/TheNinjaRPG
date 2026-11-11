@@ -329,7 +329,7 @@ export function BattleFocusView({
         data-battle-focus-dialog
         showCloseButton={false}
         aria-describedby={undefined}
-        className="flex h-[99%] min-w-[99%] flex-col gap-0 overflow-hidden rounded-lg p-0"
+        className="flex h-[99%] max-h-none min-w-[99%] flex-col gap-0 overflow-hidden rounded-lg p-0"
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
         onInteractOutside={(event) => {

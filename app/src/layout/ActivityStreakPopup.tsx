@@ -22,7 +22,6 @@ import {
   shouldFetchActivityStreaksForPopup,
 } from "@/libs/activityStreak";
 import { isBrowserAuthPath } from "@/libs/native/deepLink";
-import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
 import { usePublicPathname } from "@/utils/routing";
 import { getDateKey } from "@/utils/time";
@@ -156,7 +155,7 @@ const ActivityStreakPopup: React.FC = () => {
 
   return (
     <Dialog open={isModalOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className={cn("max-w-2xl", "max-h-[90vh] overflow-y-auto")}>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Gift className="h-5 w-5 text-primary" />

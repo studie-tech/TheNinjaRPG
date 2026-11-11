@@ -47,7 +47,7 @@ export const RewardDialog: React.FC<RewardDialogProps> = (props) => {
       }}
     >
       <DialogContent
-        className="max-h-screen max-w-3xl overflow-y-auto"
+        className="max-w-3xl"
         closeDisabled={disabled}
         onEscapeKeyDown={(event) => {
           if (disabled) event.preventDefault();

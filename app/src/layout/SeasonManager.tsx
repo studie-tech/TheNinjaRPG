@@ -179,7 +179,7 @@ export function SeasonManager() {
                 </Button>
               </DialogTrigger>
               <DialogContent
-                className="max-h-[85vh] max-w-3xl overflow-y-auto"
+                className="max-w-3xl"
                 closeDisabled={isCreatePending}
                 onEscapeKeyDown={(event) => {
                   if (isCreatePending) event.preventDefault();
@@ -213,7 +213,7 @@ export function SeasonManager() {
                     </Button>
                   </DialogTrigger>
                   <DialogContent
-                    className="max-h-[85vh] max-w-3xl overflow-y-auto"
+                    className="max-w-3xl"
                     closeDisabled={isEditPending}
                     onEscapeKeyDown={(event) => {
                       if (isEditPending) event.preventDefault();

@@ -236,7 +236,7 @@ export function NewOfferDialog({
           <Plus aria-hidden="true" className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>
             {offerType === "REQUEST" ? "Request materials" : "Offer an item trade"}
@@ -548,7 +548,7 @@ function OfferCard({
                     : "Review & accept"}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-h-[85vh] overflow-y-auto">
+              <DialogContent>
                 <DialogHeader>
                   <DialogTitle>
                     {offer.offerType === "REQUEST" ? "Fulfil request" : "Accept trade"}
