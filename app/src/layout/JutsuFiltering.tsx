@@ -12,6 +12,7 @@ import {
 import {
   buildFilter,
   ContentFiltering,
+  type ContentFilteringOptions,
   defineFilteringSchema,
   hiddenVisibilityField,
   useContentEditContext,
@@ -185,9 +186,12 @@ interface JutsuFilteringProps {
   compact?: boolean;
 }
 
-export const useFiltering = (defaultRank?: UserRank[]) => {
+export const useFiltering = (
+  defaultRank?: UserRank[],
+  options?: ContentFilteringOptions,
+) => {
   const schema = useMemo(() => makeJutsuFilteringSchema(defaultRank), [defaultRank]);
-  const cf = useContentFiltering(schema);
+  const cf = useContentFiltering(schema, options);
   return {
     ...cf.values,
     cf,

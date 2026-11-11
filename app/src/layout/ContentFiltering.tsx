@@ -18,7 +18,9 @@ import {
 } from "@/components/ui/select";
 import type { BattleType } from "@/drizzle/constants";
 import { BattleTypes } from "@/drizzle/constants";
+import { cn } from "@/libs/shadui";
 import { canChangeContent } from "@/utils/permissions";
+import { safeSessionStorageGetItem, safeSessionStorageSetItem } from "@/utils/storage";
 import { useUserData } from "@/utils/UserContext";
 
 /**
@@ -263,6 +265,17 @@ export interface ContentFilteringState<
   excluded: ExcludedFromSchema<E>;
   debouncedExcluded: ExcludedFromSchema<E>;
   setExcluded: ExcludedSettersFromSchema<E>;
+  /** Restore every field's default and clear all exclusions. */
+  reset: () => void;
+}
+
+/** Options of `useContentFiltering`. */
+export interface ContentFilteringOptions {
+  /**
+   * Keep the filter for the rest of the browser session under this key, so a list opened
+   * again (e.g. with Back from an entry) shows the filter it was left with.
+   */
+  persistKey?: string;
 }
 
 /** Debounce delay for free-typing filter changes */
@@ -270,6 +283,44 @@ const DEBOUNCE_MS = 500;
 
 const isTypingField = (field: AnyFieldConfig) =>
   field.type === "text" || field.type === "number" || field.type === "date";
+
+/** Session-storage key prefix of persisted filters. */
+const FILTER_STORAGE_PREFIX = "contentFilter:";
+
+type StoredFilter = {
+  defaultsKey: string;
+  values: Record<string, unknown>;
+  excluded: Record<string, string[]>;
+};
+
+/** Save a filter; cleared fields are kept as null because JSON drops undefined. */
+const writeStoredFilter = (key: string, filter: StoredFilter) => {
+  safeSessionStorageSetItem(
+    `${key}:${filter.defaultsKey}`,
+    JSON.stringify(filter, (_, value) => (value === undefined ? null : value)),
+  );
+};
+
+/** The filter saved under `key` for these defaults, with null fields read back as cleared. */
+const readStoredFilter = (key: string, defaultsKey: string): StoredFilter | null => {
+  const raw = safeSessionStorageGetItem(`${key}:${defaultsKey}`);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as StoredFilter;
+    if (parsed?.defaultsKey !== defaultsKey || typeof parsed.values !== "object") {
+      return null;
+    }
+    const values = Object.fromEntries(
+      Object.entries(parsed.values ?? {}).map(([id, value]) => [
+        id,
+        value === null ? undefined : value,
+      ]),
+    );
+    return { defaultsKey, values, excluded: parsed.excluded ?? {} };
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Hook: derives typed state maps (values, debounced, setters, exclusions) from a schema.
@@ -284,7 +335,11 @@ export const useContentFiltering = <
     | undefined,
 >(
   schema: FilteringSchema<F, E>,
+  options: ContentFilteringOptions = {},
 ): ContentFilteringState<F, E> => {
+  const storageKey = options.persistKey
+    ? `${FILTER_STORAGE_PREFIX}${options.persistKey}`
+    : undefined;
   // Build initial maps from schema defaults
   const initialValues = useMemo(() => {
     const obj = {} as ValuesFromSchema<F>;
@@ -385,6 +440,36 @@ export const useContentFiltering = <
     if (appliedDefaultsKey !== defaultsKey) setExcludedState(initialExcluded);
   }, [appliedDefaultsKey, defaultsKey, initialExcluded]);
 
+  // A stored filter applies after mount, so prerendered markup matches the first render.
+  // Its defaults key must match: a filter saved under other defaults or fields is dropped.
+  const [restoredKey, setRestoredKey] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!storageKey || restoredKey === defaultsKey) return;
+    const stored = readStoredFilter(storageKey, defaultsKey);
+    if (stored) {
+      const restoredValues = {
+        ...initialValues,
+        ...stored.values,
+      } as ValuesFromSchema<F>;
+      setFieldState({
+        values: restoredValues,
+        debounced: restoredValues,
+        appliedDefaultsKey: defaultsKey,
+      });
+      setExcludedState({
+        ...initialExcluded,
+        ...stored.excluded,
+      } as ExcludedFromSchema<E>);
+    }
+    setRestoredKey(defaultsKey);
+  }, [storageKey, restoredKey, defaultsKey, initialValues, initialExcluded]);
+
+  useEffect(() => {
+    if (!storageKey || restoredKey !== defaultsKey) return;
+    if (appliedDefaultsKey !== defaultsKey) return;
+    writeStoredFilter(storageKey, { defaultsKey, values, excluded });
+  }, [storageKey, restoredKey, defaultsKey, appliedDefaultsKey, values, excluded]);
+
   const setExcluded = useMemo(() => {
     const out = {} as ExcludedSettersFromSchema<E>;
     if (schema.exclusions) {
@@ -409,6 +494,15 @@ export const useContentFiltering = <
     return out;
   }, [schema.exclusions]);
 
+  const reset = () => {
+    setFieldState({
+      values: initialValues,
+      debounced: initialValues,
+      appliedDefaultsKey: defaultsKey,
+    });
+    setExcludedState(initialExcluded);
+  };
+
   return {
     values,
     debounced,
@@ -416,6 +510,7 @@ export const useContentFiltering = <
     excluded,
     debouncedExcluded: excluded,
     setExcluded,
+    reset,
   };
 };
 
@@ -668,6 +763,9 @@ export const ContentFiltering = <
   };
 
   const totalFilters = computeCount();
+  const totalExclusions = Object.values(
+    state.excluded as Record<string, string[]>,
+  ).reduce((sum, items) => sum + items.length, 0);
 
   const getExclusionCategory = (key: string | undefined) =>
     schema.exclusions?.find((e) => e.key === key);
@@ -693,8 +791,13 @@ export const ContentFiltering = <
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent className={popoverClassName ?? "min-w-96"}>
-        <div className="grid grid-cols-2 gap-1 gap-x-3">
+      <PopoverContent
+        className={cn(
+          popoverClassName ?? "min-w-96",
+          "max-h-[var(--radix-popover-content-available-height)] overflow-y-auto",
+        )}
+      >
+        <div className="grid grid-cols-1 gap-1 gap-x-3 sm:grid-cols-2">
           {fieldsToRender.map((field) => {
             const id = field.id as keyof ContentFilteringState<F, E>["values"] & string;
             const value = state.values[id];
@@ -704,7 +807,10 @@ export const ContentFiltering = <
             switch (field.type) {
               case "text":
                 return (
-                  <div key={field.id} className={field.doubleWidth ? "col-span-2" : ""}>
+                  <div
+                    key={field.id}
+                    className={field.doubleWidth ? "sm:col-span-2" : ""}
+                  >
                     <Label>{field.label}</Label>
                     <Input
                       value={(value as string) ?? ""}
@@ -716,7 +822,10 @@ export const ContentFiltering = <
                 );
               case "date":
                 return (
-                  <div key={field.id} className={field.doubleWidth ? "col-span-2" : ""}>
+                  <div
+                    key={field.id}
+                    className={field.doubleWidth ? "sm:col-span-2" : ""}
+                  >
                     <Label>{field.label}</Label>
                     <Input
                       type="date"
@@ -728,7 +837,10 @@ export const ContentFiltering = <
                 );
               case "number":
                 return (
-                  <div key={field.id} className={field.doubleWidth ? "col-span-2" : ""}>
+                  <div
+                    key={field.id}
+                    className={field.doubleWidth ? "sm:col-span-2" : ""}
+                  >
                     <Label>{field.label}</Label>
                     <NumberInput
                       disabled={disabled}
@@ -744,7 +856,10 @@ export const ContentFiltering = <
                 );
               case "single-select":
                 return (
-                  <div key={field.id} className={field.doubleWidth ? "col-span-2" : ""}>
+                  <div
+                    key={field.id}
+                    className={field.doubleWidth ? "sm:col-span-2" : ""}
+                  >
                     <FilterSelect
                       key={field.id}
                       label={field.label}
@@ -759,7 +874,10 @@ export const ContentFiltering = <
                 );
               case "multi-select":
                 return (
-                  <div key={field.id} className={field.doubleWidth ? "col-span-2" : ""}>
+                  <div
+                    key={field.id}
+                    className={field.doubleWidth ? "sm:col-span-2" : ""}
+                  >
                     <Label>{field.label}</Label>
                     <MultiSelect
                       selected={(value as string[]) ?? []}
@@ -775,7 +893,7 @@ export const ContentFiltering = <
                 return (
                   <div
                     key={field.id}
-                    className={field.doubleWidth ? "col-span-2 mt-1" : "mt-1"}
+                    className={field.doubleWidth ? "mt-1 sm:col-span-2" : "mt-1"}
                   >
                     <Label>{field.label}</Label>
                     <TriStateToggle
@@ -806,6 +924,18 @@ export const ContentFiltering = <
                 return null;
             }
           })}
+        </div>
+
+        <div className="mt-2 flex justify-end">
+          <Button
+            id={`${triggerButtonId}-reset`}
+            variant="outline"
+            size="sm"
+            onClick={state.reset}
+            disabled={disabled || (totalFilters === 0 && totalExclusions === 0)}
+          >
+            Reset filters
+          </Button>
         </div>
 
         {schema.exclusions && schema.exclusions.length > 0 && (

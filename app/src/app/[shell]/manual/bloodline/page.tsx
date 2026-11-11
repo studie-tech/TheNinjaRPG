@@ -26,7 +26,7 @@ export default function ManualBloodlines() {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // Two-level filtering
-  const state = useFiltering();
+  const state = useFiltering(undefined, { persistKey: "manual-bloodline" });
 
   // Data
   const {

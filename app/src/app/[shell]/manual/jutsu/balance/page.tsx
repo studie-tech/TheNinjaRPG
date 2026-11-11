@@ -147,7 +147,7 @@ interface JutsuUsageBalanceProps {
 
 const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
   // State
-  const filterState = useFiltering();
+  const filterState = useFiltering({ persistKey: "manual-jutsu-balance" });
   const { data: userData } = useUserData();
 
   const details = useContentDetails();

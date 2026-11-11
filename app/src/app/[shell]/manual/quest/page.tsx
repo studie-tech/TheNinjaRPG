@@ -20,7 +20,7 @@ export default function ManualQuests() {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // Filtering
-  const state = useFiltering();
+  const state = useFiltering({ persistKey: "manual-quest" });
 
   // Query data
   const {

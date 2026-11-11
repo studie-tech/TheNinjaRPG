@@ -199,6 +199,78 @@ describe("shared filter fields", () => {
   });
 });
 
+describe("persisted and reset filters", () => {
+  beforeEach(() => window.sessionStorage.clear());
+
+  it("restores a persisted filter when the list mounts again", () => {
+    const schema = makeSchema();
+    const first = renderHook(() =>
+      useContentFiltering(schema, { persistKey: "test-list" }),
+    );
+    act(() => {
+      first.result.current.setters.category("ARMOR");
+      first.result.current.setters.level(5);
+      first.result.current.setters.hidden(false);
+      first.result.current.setExcluded.excludedStats(["Ninjutsu"]);
+    });
+    first.unmount();
+
+    const second = renderHook(() =>
+      useContentFiltering(schema, { persistKey: "test-list" }),
+    );
+    expect(buildFilter(second.result.current, schema)).toEqual({
+      category: "ARMOR",
+      level: 5,
+      hidden: false,
+      excludedStats: ["Ninjutsu"],
+    });
+    expect(second.result.current.debounced).toEqual(second.result.current.values);
+  });
+
+  it("keeps a cleared field cleared instead of restoring its default", () => {
+    const schema = makeSchema();
+    const first = renderHook(() =>
+      useContentFiltering(schema, { persistKey: "test-list" }),
+    );
+    act(() => first.result.current.setters.category(""));
+    first.unmount();
+
+    const second = renderHook(() =>
+      useContentFiltering(schema, { persistKey: "test-list" }),
+    );
+    expect(second.result.current.values.category).toBe("");
+  });
+
+  it("ignores a filter saved under other defaults and lists without a key", () => {
+    const first = renderHook(() =>
+      useContentFiltering(makeSchema(), { persistKey: "test-list" }),
+    );
+    act(() => first.result.current.setters.stats(["Ninjutsu"]));
+    first.unmount();
+
+    const otherDefaults = makeSchema("ARMOR");
+    const second = renderHook(() =>
+      useContentFiltering(otherDefaults, { persistKey: "test-list" }),
+    );
+    expect(second.result.current.values.stats).toEqual([]);
+    const unkeyed = renderHook(() => useContentFiltering(makeSchema()));
+    expect(unkeyed.result.current.values.stats).toEqual([]);
+  });
+
+  it("resets every field and exclusion to the schema defaults", () => {
+    const schema = makeSchema();
+    const { result } = renderHook(() => useContentFiltering(schema));
+    act(() => {
+      result.current.setters.name("fire");
+      result.current.setters.category("ARMOR");
+      result.current.setExcluded.excludedStats(["Ninjutsu"]);
+    });
+    act(() => result.current.reset());
+    expect(buildFilter(result.current, schema)).toEqual({ category: "WEAPON" });
+    expect(result.current.excluded).toEqual({ excludedStats: [] });
+  });
+});
+
 const stableBattleSchema = defineFilteringSchema({
   fields: [battleTypesField(["COMBAT"])] as const,
 });

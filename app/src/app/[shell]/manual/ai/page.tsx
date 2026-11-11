@@ -21,7 +21,7 @@ export default function ManualAI() {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // Two-level filtering
-  const state = useFiltering();
+  const state = useFiltering({ persistKey: "manual-ai" });
 
   // Data
   const {

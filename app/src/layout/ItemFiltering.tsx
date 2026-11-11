@@ -9,6 +9,7 @@ import {
 import {
   buildFilter,
   ContentFiltering,
+  type ContentFilteringOptions,
   defineFilteringSchema,
   hiddenVisibilityField,
   toOptions,
@@ -215,11 +216,12 @@ export const getFilter = (state: ItemFilteringState) =>
  * Item filter state. Shop tools open on items sold in shops; `allShopStatus` opens on
  * every item instead, for the encyclopedia.
  */
-export const useFiltering = (options?: { allShopStatus?: boolean }) => {
-  const schema = options?.allShopStatus
-    ? allShopStatusItemFilteringSchema
-    : itemFilteringSchema;
-  const cf = useContentFiltering(schema);
+export const useFiltering = (
+  options?: ContentFilteringOptions & { allShopStatus?: boolean },
+) => {
+  const { allShopStatus, ...filteringOptions } = options ?? {};
+  const schema = allShopStatus ? allShopStatusItemFilteringSchema : itemFilteringSchema;
+  const cf = useContentFiltering(schema, filteringOptions);
   return {
     ...cf.values,
     cf,

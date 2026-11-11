@@ -3,6 +3,7 @@ import {
   buildFilter,
   type ContentEditContext,
   ContentFiltering,
+  type ContentFilteringOptions,
   defineFilteringSchema,
   hiddenVisibilityField,
   toOptions,
@@ -102,8 +103,8 @@ export default QuestFiltering;
 export const getFilter = (state: QuestFilteringState) =>
   buildFilter(state.cf, QUEST_FILTERING_SCHEMA);
 
-export const useFiltering = () => {
-  const cf = useContentFiltering(QUEST_FILTERING_SCHEMA);
+export const useFiltering = (options?: ContentFilteringOptions) => {
+  const cf = useContentFiltering(QUEST_FILTERING_SCHEMA, options);
   return {
     ...cf.values,
     cf,

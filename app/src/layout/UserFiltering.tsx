@@ -1,6 +1,7 @@
 import {
   buildFilter,
   ContentFiltering,
+  type ContentFilteringOptions,
   defineFilteringSchema,
   useContentFiltering,
 } from "@/layout/ContentFiltering";
@@ -152,8 +153,8 @@ export const getFilter = (state: UserFilteringState) =>
   buildFilter(state.cf, USER_FILTERING_SCHEMA);
 
 /** State for the User Filtering component */
-export const useFiltering = () => {
-  const cf = useContentFiltering(USER_FILTERING_SCHEMA);
+export const useFiltering = (options?: ContentFilteringOptions) => {
+  const cf = useContentFiltering(USER_FILTERING_SCHEMA, options);
   return {
     ...cf.values,
     cf,
