@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { MAX_BLOODRIGHT_TIERS } from "@/drizzle/constants";
 import { useSkillTreeCatalogInvalidation } from "@/hooks/skillTree";
 import ContentBox from "@/layout/ContentBox";
@@ -89,6 +96,7 @@ export default function ManualSkillTree({
   // Derived calculations
   const totalLoading = isFetching || load1 || load2;
   const canEdit = !!userData && canChangeContent(userData.role);
+  const canSeeHidden = !!userData && canAccessHiddenSkillTree(userData.role);
 
   return (
     <>
@@ -145,8 +153,13 @@ export default function ManualSkillTree({
             </p>
           </>
         )}
-        <Link href={isBloodright ? "/manual/skillTree" : "/manual/bloodright"}>
-          {isBloodright ? "Skill Tree" : "Bloodright"}
+        <Link
+          href={isBloodright ? "/manual/skillTree" : "/manual/bloodright"}
+          className="mt-4 inline-block"
+        >
+          <Button id="switch-skill-path" variant="outline">
+            {isBloodright ? "Switch to Skill Tree" : "Switch to Bloodright"}
+          </Button>
         </Link>
       </ContentBox>
 
@@ -159,19 +172,18 @@ export default function ManualSkillTree({
             {canEdit && userData && canAccessHiddenSkillTree(userData.role) && (
               <div className="flex flex-wrap gap-2">
                 {isBloodright && (
-                  <select
-                    aria-label="Bloodline for new tier"
-                    value={bloodlineId}
-                    onChange={(event) => setBloodlineId(event.target.value)}
-                    className="rounded border bg-background p-2"
-                  >
-                    <option value="">Choose a bloodline</option>
-                    {bloodlines?.map((line) => (
-                      <option key={line.id} value={line.id}>
-                        {line.name}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={bloodlineId} onValueChange={setBloodlineId}>
+                    <SelectTrigger aria-label="Bloodline for new tier" className="w-48">
+                      <SelectValue placeholder="Choose a bloodline" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {bloodlines?.map((line) => (
+                        <SelectItem key={line.id} value={line.id}>
+                          {line.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
                 <Button
                   id="create-skill"
@@ -204,7 +216,13 @@ export default function ManualSkillTree({
           </div>
         ))}
         {!totalLoading && allSkills.length === 0 && (
-          <div>No skills found given the search criteria.</div>
+          <div>
+            {!isBloodright
+              ? "No skills found given the search criteria."
+              : canSeeHidden
+                ? "No bloodright tiers match this filter. Choose a bloodline above to create its first tier."
+                : "No bloodright tiers are published for this filter yet. Check back once they are released."}
+          </div>
         )}
         <ListLoader
           initialLoading={isPending}
