@@ -251,7 +251,9 @@ it("offers recovery for invalid content and confirms returning without rewards",
     name: "Return your companion without rewards?",
   });
   expect(dialog.textContent).toContain("Entry items already consumed");
-  fireEvent.click(within(dialog).getByRole("button", { name: "Proceed" }));
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Return without rewards" }),
+  );
   await waitFor(() => expect(cancel).toHaveBeenCalledWith(receipt));
 });
 
@@ -312,7 +314,9 @@ it("merges a cancelled receipt without deleting a restarted cached attempt", asy
       .find((button) => button.tagName === "BUTTON")!,
   );
   const dialog = await view.findByRole("dialog");
-  fireEvent.click(within(dialog).getByRole("button", { name: "Proceed" }));
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Return without rewards" }),
+  );
   await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
   expect(
     queryClient.getQueryData<{ userData: { petTask: unknown; userQuests: unknown[] } }>(

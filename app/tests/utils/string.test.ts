@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { AttackMethods, AttackTargets } from "@/drizzle/constants";
 import {
+  formatAmount,
   formatAttackMethod,
   formatAttackTarget,
   formatEnumLabel,
@@ -78,5 +79,13 @@ describe("humanizeConstant", () => {
       "Helped new players in chat",
     );
     expect(humanizeConstant("PvP event winner")).toBe("PvP event winner");
+  });
+});
+
+describe("formatAmount", () => {
+  it("rounds to whole units with thousand separators", () => {
+    expect(formatAmount(1.3)).toBe("1");
+    expect(formatAmount(1234567.5)).toBe("1,234,568");
+    expect(formatAmount(0)).toBe("0");
   });
 });

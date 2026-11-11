@@ -111,6 +111,10 @@ const NewAiAvatar: React.FC = () => {
               </p>
               <Confirm
                 title="Confirm Avatar Change"
+                proceed_label="Create avatar"
+                proceed_loading_label="Creating"
+                isLoading={createAvatar.isPending}
+                disabled={createAvatar.isPending}
                 button={
                   <Button id="create" className="min-h-11 w-full">
                     <SwitchCamera className="mr-2 h-5 w-5" />

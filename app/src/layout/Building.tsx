@@ -157,6 +157,9 @@ const RestoreStructureButton = ({
     <Confirm
       title="Restore Structure Points"
       proceed_label="Restore"
+      proceed_loading_label="Restoring"
+      isLoading={isPending}
+      disabled={isPending}
       onAccept={() => restorePoints({ structureId })}
       button={
         <Button

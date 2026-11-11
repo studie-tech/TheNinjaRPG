@@ -86,6 +86,10 @@ const ATTACK_METHOD_LABELS: Record<AttackMethod, string> = {
 export const formatAttackMethod = (method: AttackMethod): string =>
   ATTACK_METHOD_LABELS[method];
 
+/** A currency amount as stored: rounded to a whole number, with thousand separators. */
+export const formatAmount = (value: number) =>
+  Math.round(value).toLocaleString("en-US");
+
 /** One-decimal percentage, or a dash when there is no value. */
 export const formatPercent = (value: number | null) =>
   value == null ? "—" : `${value.toFixed(1)}%`;

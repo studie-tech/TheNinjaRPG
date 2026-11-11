@@ -63,7 +63,7 @@ const AlertDialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      "flex flex-row flex-wrap gap-2 sm:flex-nowrap sm:justify-end [&>*]:min-h-12 [&>*]:flex-1 [&>*]:basis-28 sm:[&>*]:min-h-9 sm:[&>*]:flex-none sm:[&>*]:basis-auto",
       className,
     )}
     {...props}
@@ -117,7 +117,7 @@ const AlertDialogCancel = ({
 }: React.ComponentPropsWithRef<typeof AlertDialogPrimitive.Cancel>) => (
   <AlertDialogPrimitive.Cancel
     ref={ref}
-    className={cn(buttonVariants({ variant: "outline" }), "mt-2 sm:mt-0", className)}
+    className={cn(buttonVariants({ variant: "outline" }), className)}
     {...props}
   />
 );

@@ -518,6 +518,7 @@ export default function MyJutsu() {
     <>
       <ContentBox
         title="My Jutsu"
+        defaultBackHref="/profile"
         subtitle={subtitle}
         noRightAlign
         topRightContent={
@@ -1086,6 +1087,7 @@ export default function MyJutsu() {
                   )}
                   <Confirm
                     title="Forget Jutsu"
+                    triggerLabel={`Forget ${userjutsu.jutsu.name}`}
                     button={
                       <Button
                         id="return"
@@ -1097,12 +1099,20 @@ export default function MyJutsu() {
                         <p className="hidden sm:block">Forget</p>
                       </Button>
                     }
+                    tone="destructive"
+                    proceed_label="Forget jutsu"
+                    proceed_loading_label="Forgetting"
+                    isLoading={isForgetting}
                     onAccept={(e) => {
                       e.preventDefault();
                       forget({ id: userjutsu.id });
                     }}
                   >
-                    <p>Confirm to forget this jutsu.</p>
+                    <p>
+                      Forget {userjutsu.jutsu.name} and lose its {userjutsu.level}{" "}
+                      {userjutsu.level === 1 ? "level" : "levels"} of training? This
+                      cannot be undone.
+                    </p>
                   </Confirm>
                 </div>
               </>

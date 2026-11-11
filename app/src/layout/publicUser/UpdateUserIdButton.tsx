@@ -95,6 +95,7 @@ export const UpdateUserIdButton: React.FC<UpdateUserIdButtonProps> = ({
     <Confirm
       id="update-user-id"
       title="Update User ID"
+      triggerLabel="Update user ID"
       proceed_label="Update user ID"
       proceed_loading_label="Updating"
       button={<IdCard className="h-6 w-6 cursor-pointer hover:text-orange-500" />}

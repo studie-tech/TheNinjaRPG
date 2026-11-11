@@ -777,7 +777,7 @@ export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
                 <p>Bank: {clanData.bank}</p>{" "}
                 <Confirm
                   title={`Donate to ${groupLabel.toLowerCase()}`}
-                  proceed_label="Submit"
+                  proceed_label="Donate"
                   button={
                     <PiggyBank className="ml-2 h-6 w-6 hover:cursor-pointer hover:text-orange-500" />
                   }

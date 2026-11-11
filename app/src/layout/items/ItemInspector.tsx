@@ -121,6 +121,11 @@ export function ItemInspector({
 
   // Derived
   const structures = userData?.village?.structures;
+  const isDropOnly = useritem.item.isEventItem || !useritem.item.inShop;
+  const stackLabel =
+    useritem.quantity > 1
+      ? `${useritem.quantity}x ${useritem.item.name}`
+      : useritem.item.name;
   const isMeal = useritem.item.itemType === "MEAL";
   const canEatMeal =
     !isLoading && canAttemptAwakeAction(userData) && !userData.battleId;
@@ -564,10 +569,17 @@ export function ItemInspector({
             Asks for a security confirmation
           </span>
           <Confirm
-            title="Security Confirmation"
-            proceed_label="Submit"
+            title={isDropOnly ? "Drop item?" : "Sell item?"}
+            tone="destructive"
+            proceed_label={
+              isDropOnly
+                ? "Drop item"
+                : `Sell for ${Math.floor(sellPrice).toLocaleString()} ryo`
+            }
+            proceed_loading_label={isDropOnly ? "Dropping" : "Selling"}
+            isLoading={isSelling}
             button={
-              useritem.item.isEventItem || !useritem.item.inShop ? (
+              isDropOnly ? (
                 <Button id="sell" variant="destructive">
                   <ArrowDownToLine className="mr-2 h-5 w-5" />
                   Drop Item
@@ -581,7 +593,9 @@ export function ItemInspector({
             }
             onAccept={() => sell({ userItemId: useritem.id })}
           >
-            Are you absolutely sure you wish to remove this item from your inventory?
+            {isDropOnly
+              ? `Drop ${stackLabel}? It is removed from your inventory and cannot be recovered.`
+              : `Sell ${stackLabel} for ${Math.floor(sellPrice).toLocaleString()} ryo? This cannot be undone.`}
           </Confirm>
         </div>
       )}

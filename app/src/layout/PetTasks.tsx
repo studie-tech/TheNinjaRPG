@@ -104,6 +104,10 @@ export const PetTasks = ({ petId }: { petId: string }) => {
             <Confirm
               title="Return your companion without rewards?"
               disabled={pending}
+              tone="destructive"
+              proceed_label="Return without rewards"
+              proceed_loading_label="Returning"
+              isLoading={cancel.isPending}
               button={
                 <Button variant="outline" disabled={pending}>
                   Return without rewards

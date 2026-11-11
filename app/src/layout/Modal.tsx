@@ -1,7 +1,7 @@
 "use client";
 import { Loader2 } from "lucide-react";
 import type React from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,6 +13,9 @@ import {
 import { validateNumberInputs } from "@/components/ui/number-input";
 import { useHeaderActionsFocus } from "@/hooks/useHeaderActionsFocus";
 import { cn } from "@/libs/shadui";
+
+/** How long an accepted action may take to report loading before the dialog closes. */
+const ACCEPT_START_GRACE_MS = 150;
 
 export const modalViewportClassName =
   "max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden";
@@ -42,10 +45,17 @@ interface ModalProps {
   proceed_label?: string | null;
   proceed_loading_label?: string | null;
   confirmClassName?: string;
+  /** `destructive` styles Proceed as an irreversible action. */
+  tone?: "destructive";
   isValid?: boolean;
   isLoading?: boolean;
   /** Keep the dialog open after Proceed so the caller can close it on success. */
   keepOpenOnAccept?: boolean;
+  /**
+   * After Proceed, stay open while `isLoading` is true and close once it clears, so the
+   * dialog shows the action's progress. An accept that never starts loading closes at once.
+   */
+  closeWhenSettled?: boolean;
   proceedDisabled?: boolean;
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -83,6 +93,34 @@ export const Modal: React.FC<ModalProps> = (props) => {
   const returnFocusRef = props.returnFocusRef ?? headerFocusRef;
 
   const isProceedDisabled = props.isLoading || props.proceedDisabled;
+  const [awaitingSettle, setAwaitingSettle] = useState<"accepted" | "loading" | null>(
+    null,
+  );
+  const { isLoading, isOpen, setIsOpen } = props;
+
+  // Follow the accepted action: close once it has loaded and settled, or straight away
+  // when the accept did not start loading.
+  useEffect(() => {
+    if (!awaitingSettle) return;
+    if (!isOpen) {
+      setAwaitingSettle(null);
+      return;
+    }
+    if (isLoading) {
+      if (awaitingSettle === "accepted") setAwaitingSettle("loading");
+      return;
+    }
+    if (awaitingSettle === "loading") {
+      setAwaitingSettle(null);
+      setIsOpen(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setAwaitingSettle(null);
+      setIsOpen(false);
+    }, ACCEPT_START_GRACE_MS);
+    return () => clearTimeout(timer);
+  }, [awaitingSettle, isLoading, isOpen, setIsOpen]);
 
   const handleAccept = (
     e:
@@ -99,7 +137,8 @@ export const Modal: React.FC<ModalProps> = (props) => {
     // Proceed button without an accept handler still use it to dismiss.
     props.onAccept?.(e);
     if (!props.keepOpenOnAccept && (props.isValid === undefined || props.isValid)) {
-      props.setIsOpen(false);
+      if (props.closeWhenSettled) setAwaitingSettle("accepted");
+      else props.setIsOpen(false);
     }
   };
 
@@ -108,9 +147,9 @@ export const Modal: React.FC<ModalProps> = (props) => {
     if (!props.isOpen) return;
 
     const onDocumentKeyDown = (event: KeyboardEvent) => {
-      // Don't trigger if the active element is a button (it will handle Enter itself)
-      const activeElement = document.activeElement;
-      const isButton = activeElement?.tagName === "BUTTON";
+      // Buttons and links handle Enter themselves, multi-line and rich text fields use
+      // it for a new line, and a handler that already consumed it wins.
+      if (event.defaultPrevented || isEnterOwnedBy(document.activeElement)) return;
 
       // Enter only mirrors a Proceed button that is visible, enabled, and backed
       // by an accept handler, so it never dismisses a plain info/edit dialog.
@@ -119,7 +158,6 @@ export const Modal: React.FC<ModalProps> = (props) => {
         !event.isComposing &&
         props.proceed_label &&
         props.onAccept &&
-        !isButton &&
         !isProceedDisabled
       ) {
         handleAccept(event as unknown as React.KeyboardEvent<KeyboardEvent>);
@@ -218,6 +256,7 @@ export const Modal: React.FC<ModalProps> = (props) => {
                 // Callers colour their action (red for destructive, amber, ...); the
                 // theme's primary button is the default. First in the DOM so the dialog
                 // focuses it on open and Enter confirms; `order` places it last.
+                variant={props.tone === "destructive" ? "destructive" : undefined}
                 className={cn("z-30 order-2", props.confirmClassName)}
               >
                 {props.isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -251,6 +290,16 @@ export const Modal: React.FC<ModalProps> = (props) => {
         )}
       </DialogContent>
     </Dialog>
+  );
+};
+
+/** Whether a focused element uses Enter itself, so the dialog must not accept on it. */
+const isEnterOwnedBy = (element: Element | null) => {
+  if (!(element instanceof HTMLElement)) return false;
+  return (
+    ["BUTTON", "TEXTAREA", "SELECT", "A"].includes(element.tagName) ||
+    element.isContentEditable ||
+    element.closest("[data-enter-ignore]") !== null
   );
 };
 

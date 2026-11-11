@@ -154,7 +154,7 @@ import { isInArray } from "@/utils/array";
 import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 import { useUserPicker } from "@/utils/search";
 import { safeLocalStorageSetItem } from "@/utils/storage";
-import { capitalizeFirstLetter } from "@/utils/string";
+import { capitalizeFirstLetter, formatAmount } from "@/utils/string";
 import { getTimeLeftStr } from "@/utils/time";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 import type { BaseServerResponse } from "@/validators/base";
@@ -392,22 +392,28 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
               {students.map((user) => (
                 <div className="relative" key={user.userId}>
-                  <UserAvatarTile user={user} className="text-center">
-                    {user.rank === "GENIN" && (
-                      <Confirm
-                        title="Remove Student"
-                        button={
-                          <XCircle className="absolute top-[3%] right-[13%] h-9 w-9 cursor-pointer rounded-full bg-slate-300 p-1 hover:text-orange-500" />
-                        }
-                        onAccept={(e) => {
-                          e.preventDefault();
-                          remove({ studentId: user.userId });
-                        }}
-                      >
-                        You are about to remove this user as your student. Confirm?
-                      </Confirm>
-                    )}
-                  </UserAvatarTile>
+                  <UserAvatarTile user={user} className="text-center" />
+                  {user.rank === "GENIN" && (
+                    <Confirm
+                      title="Remove Student"
+                      triggerLabel={`Remove ${user.username} as your student`}
+                      triggerClassName="absolute top-[3%] right-[13%] rounded-full"
+                      button={
+                        <XCircle className="h-9 w-9 rounded-full bg-slate-300 p-1 text-slate-900 hover:text-orange-500" />
+                      }
+                      tone="destructive"
+                      proceed_label="Remove student"
+                      proceed_loading_label="Removing"
+                      isLoading={isRemoving}
+                      onAccept={(e) => {
+                        e.preventDefault();
+                        remove({ studentId: user.userId });
+                      }}
+                    >
+                      Remove {user.username} as your student? This ends your sensei
+                      relationship with them.
+                    </Confirm>
+                  )}
                 </div>
               ))}
             </div>
@@ -1433,7 +1439,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     if (!Number.isFinite(levelCount)) {
       proceed_label = "Enter a number of levels";
     } else if (!canAfford) {
-      proceed_label = `Need ${cost - userData.money} more ryo`;
+      proceed_label = `Need ${formatAmount(cost - userData.money)} more ryo`;
     } else if (isCapped) {
       proceed_label = `Level capped`;
     } else if (!okRank) {

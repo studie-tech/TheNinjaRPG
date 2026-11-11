@@ -406,12 +406,15 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
       {!hideImage && <div className="mx-3 hidden basis-1/3 md:block">{image}</div>}
 
       <div className={cn("basis-full text-sm", hideImage || "md:basis-2/3")}>
-        <div className="flex flex-row">
+        {/* Phones stack the image above the text so the text keeps the card's width. */}
+        <div className="flex flex-col sm:flex-row">
           {!hideImage && (
-            <div className="relative block md:hidden md:basis-1/3">{image}</div>
+            <div className="relative mx-auto mb-2 block w-28 shrink-0 sm:mx-0 sm:mb-0 sm:w-auto md:hidden md:basis-1/3">
+              {image}
+            </div>
           )}
 
-          <div className="relative flex min-w-0 basis-full flex-col pl-5 md:pl-0">
+          <div className="relative flex min-w-0 basis-full flex-col sm:pl-5 md:pl-0">
             {imageExtra && <div className="flex flex-row">{imageExtra}</div>}
             <div className="flex items-start justify-between gap-2">
               {!hideTitle ? (
@@ -462,22 +465,28 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                         source={{ id: item.id, name: item.name }}
                       />
                     )}
-                    <Link href={`/manual/${showEdit}/edit/${item.id}`}>
+                    <Link
+                      href={`/manual/${showEdit}/edit/${item.id}`}
+                      aria-label={`Edit ${item.name}`}
+                    >
                       <SquarePen className="h-6 w-6 hover:text-popover-foreground/50" />
                     </Link>
                     {onDelete && (
                       <Confirm
-                        title="Confirm Deletion"
+                        title={`Delete ${item.name}?`}
+                        triggerLabel={`Delete ${item.name}`}
                         button={
                           <Trash2 className="h-6 w-6 hover:cursor-pointer hover:text-popover-foreground/50" />
                         }
+                        tone="destructive"
+                        proceed_label="Delete for all players"
                         onAccept={(e) => {
                           e.preventDefault();
                           onDelete(item.id);
                         }}
                       >
-                        You are about to delete this. Are you sure? This will affect ALL
-                        USERS WHO HAS THE CONTENT IN QUESTION.
+                        Delete {item.name} from the game? Every player who has it loses
+                        it. This cannot be undone.
                       </Confirm>
                     )}
                   </>
@@ -557,7 +566,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
             />
           )}
           {!hideData && !isFurniture && (
-            <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-xs md:text-base">
+            <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-sm md:text-base">
               {"bloodline" in item && item.bloodline !== null && (
                 <p className="col-span-2">
                   <b>Bloodline</b>: {(item?.bloodline as Bloodline)?.name}
@@ -1495,7 +1504,7 @@ const FurnitureDetails = ({
   item: Item;
   showHidden: boolean;
 }) => (
-  <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-xs md:text-base">
+  <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-sm md:text-base">
     <p>
       <b>Item type</b>: furniture
     </p>
