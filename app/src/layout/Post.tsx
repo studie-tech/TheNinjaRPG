@@ -30,6 +30,8 @@ export interface PostProps {
   hover_effect?: boolean;
   href?: string;
   tavernStyling?: boolean;
+  /** Narrow avatar column and tighter spacing for conversation and list rows. */
+  dense?: boolean;
 }
 
 const Post: React.FC<PostProps> = (props) => {
@@ -66,9 +68,9 @@ const Post: React.FC<PostProps> = (props) => {
 
   // Blocks
   const UsernameBlock = props.user && (
-    <div className="basis-1/4">
+    <div>
       <div className={`${userColor} font-bold`}>{props.user.username}</div>
-      <div className="pt-1 pb-4 text-xs">
+      <div className={cn("pt-1 text-xs", props.dense ? "pb-2" : "pb-4")}>
         <span className="m-1 rounded-md bg-slate-300 p-1 text-black">
           Lvl. {props.user.level}
         </span>
@@ -105,27 +107,43 @@ const Post: React.FC<PostProps> = (props) => {
     </div>
   );
 
+  const titleBlock = props.title && (
+    <h3 className="font-bold text-lg tracking-tight sm:text-2xl">{props.title}</h3>
+  );
+  // Options sit in flow beside the title and username so they never cover them.
+  // Without a header they keep the corner, where cards such as quests expect them.
+  const hasHeader = !!(titleBlock || UsernameBlock);
   const content = (
     <>
-      <div className="grow basis-1/2">
+      <div className="wrap-break-word min-w-0 grow basis-1/2">
         <div className="flex h-full flex-col justify-center">
-          {props.title && (
-            <h3 className="basis-1/5 font-bold text-2xl tracking-tight">
-              {props.title}
-            </h3>
+          {hasHeader && (
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                {titleBlock}
+                {UsernameBlock}
+              </div>
+              {props.options && (
+                <div className="mr-1 flex max-w-[60%] shrink-0 flex-wrap items-center justify-end gap-1">
+                  {props.options}
+                </div>
+              )}
+            </div>
           )}
-          {UsernameBlock}
           <div className="relative basis-3/4 font-normal">{props.children}</div>
         </div>
       </div>
-      {props.options && <div className="absolute top-3 right-3">{props.options}</div>}
+      {props.options && !hasHeader && (
+        <div className="absolute top-3 right-3">{props.options}</div>
+      )}
     </>
   );
 
   return (
     <div
       className={cn(
-        `relative mb-3 flex flex-row rounded-lg border ${color} px-1 py-3 shadow`,
+        `relative mb-3 flex flex-row rounded-lg border ${color} px-1 shadow`,
+        props.dense ? "py-2" : "py-3",
         props.align_middle ? "items-center" : "",
         props.hover_effect ? hover : "",
         props.className,
@@ -133,7 +151,14 @@ const Post: React.FC<PostProps> = (props) => {
     >
       {props.image}
       {props.user && (
-        <div className="mr-3 basis-2/12 truncate text-center sm:basis-3/12 sm:text-base">
+        <div
+          className={cn(
+            "truncate text-center sm:text-base",
+            props.dense
+              ? "mr-2 w-14 shrink-0 sm:w-24"
+              : "mr-3 basis-2/12 sm:basis-3/12",
+          )}
+        >
           <Link href={`/username/${props.user.username}`}>
             <AvatarImage
               href={props.user.avatar}

@@ -151,6 +151,7 @@ export default function SupportPage() {
                 <div key={ticket.id}>
                   <div ref={i === allTickets.length - 1 ? setLastElement : null}>
                     <Post
+                      dense
                       title={ticket.title}
                       hover_effect={true}
                       color={
@@ -163,8 +164,6 @@ export default function SupportPage() {
                     >
                       <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2 text-foreground-muted text-sm">
-                          <span>by {ticket.createdBy.username}</span>
-                          <Separator orientation="vertical" className="h-4" />
                           <span>{formatTimeAgo(ticket.createdAt)}</span>
                           {ticket.assignedTo && (
                             <>
@@ -195,8 +194,10 @@ export default function SupportPage() {
                           )}
                         </div>
 
-                        <div className="line-clamp-3 rounded-md border p-2 text-foreground text-sm">
-                          {parseHtml(ticket.description)}
+                        <div className="rounded-md border p-2 text-foreground text-sm">
+                          <div className="line-clamp-3">
+                            {parseHtml(ticket.description)}
+                          </div>
                         </div>
 
                         {ticket.tags && ticket.tags.length > 0 && (
