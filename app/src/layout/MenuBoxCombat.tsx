@@ -1,14 +1,15 @@
 import { useAtomValue } from "jotai";
 import { Link2 } from "lucide-react";
 import type React from "react";
+import { useCombatInspection } from "@/hooks/useCombatInspection";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
 import AvatarImage from "@/layout/Avatar";
 import { BattleUserTraits } from "@/layout/BattleUserTraits";
+import { CombatInspectionPicker } from "@/layout/CombatInspectionPicker";
 import Link from "@/layout/Link";
 import { PoolStatusBars } from "@/layout/PoolStatusBars";
 import { SideBannerTitle } from "@/layout/SideBannerTitle";
 import { VisualizeEffects } from "@/layout/VisualizeEffects";
-import { findSidebarOpponent } from "@/libs/combat/actions";
 import {
   combatPresentedBattleAtom,
   userBattleAtom,
@@ -21,10 +22,13 @@ const MenuBoxCombat: React.FC = () => {
   const liveBattle = useAtomValue(userBattleAtom);
   const presentedBattle = useAtomValue(combatPresentedBattleAtom);
   // Follows the field, so a form never appears here before it has risen.
-  const battle = presentedBattle ?? liveBattle;
+  const battle =
+    presentedBattle?.id === liveBattle?.id
+      ? (presentedBattle ?? liveBattle)
+      : liveBattle;
 
-  // Battle user state (enemy)
-  const battleUser = battle && findSidebarOpponent(battle.usersState, userData?.userId);
+  // Character inspection follows the visible snapshot.
+  const { selectedUser: battleUser } = useCombatInspection(battle, userData?.userId);
 
   // Calculate effective pool values with fallbacks
   const pools = useEffectivePools({
@@ -33,10 +37,14 @@ const MenuBoxCombat: React.FC = () => {
   });
 
   // Guard
-  if (!battleUser) return null;
+  if (!battleUser)
+    return battle ? (
+      <CombatInspectionPicker battle={battle} viewerId={userData?.userId} />
+    ) : null;
 
   return (
     <>
+      {battle && <CombatInspectionPicker battle={battle} viewerId={userData?.userId} />}
       <SideBannerTitle>
         {/* AI combatants get a synthetic id when the battle starts and masked users
             hide theirs, so neither has a profile to link to. */}
@@ -89,7 +97,7 @@ const MenuBoxCombat: React.FC = () => {
           className="contents"
         />
       )}
-      {/* Active Effects on opponent */}
+      {/* Active effects on the inspected character */}
       {battle?.usersEffects && (
         <div className="mt-2">
           <VisualizeEffects

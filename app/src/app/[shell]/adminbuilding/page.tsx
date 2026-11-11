@@ -150,6 +150,7 @@ export default function AdministrationBuilding() {
                             <QuestTeams
                               questId={quest.id}
                               teamEnabled={quest.teamEnabled}
+                              maxPlayers={quest.teamMaxPlayers}
                               asAction
                             />
                           </div>

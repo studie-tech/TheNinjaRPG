@@ -14,6 +14,7 @@ import {
 import { useGameScene } from "@/hooks/game-scene";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
+import { useCombatInspection } from "@/hooks/useCombatInspection";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { usePageActive } from "@/hooks/usePageActive";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
@@ -166,6 +167,12 @@ const Combat: React.FC<CombatProps> = (props) => {
   const setPresentedLogVersion = useSetAtom(combatPresentedLogVersionAtom);
   // Fighter meters follow the field while it replays actions the server already resolved.
   const [presentedBattle, setPresentedBattle] = useAtom(combatPresentedBattleAtom);
+  const { selectUser: inspectUser } = useCombatInspection(
+    presentedBattle?.id === battleState.battle?.id
+      ? presentedBattle
+      : battleState.battle,
+    props.userId,
+  );
   // A replay ends with its scene; a new one reports nothing until the battle changes.
   useEffect(
     () => () => {
@@ -821,6 +828,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       resultRef.current
     )
       return;
+    if (character?.userId) inspectUser(character.userId);
     setAggroTarget(
       config.showAggro && character?.userId && aggro.has(character.userId)
         ? character

@@ -85,7 +85,9 @@ describe("raid join cache reconciliation", () => {
             },
           }),
         },
-        mpvpBattleQueue: { findFirst: async () => ({ id: "cache-team", queue: [] }) },
+        mpvpBattleQueue: {
+          findFirst: async () => ({ id: "cache-team", raidMaxPlayers: 3, queue: [] }),
+        },
       },
       select: () => ({
         from: () => ({ innerJoin: () => ({ where: async () => [] }) }),
@@ -94,6 +96,7 @@ describe("raid join cache reconciliation", () => {
         set: () => ({ where: async () => ({ rowsAffected: canClaim ? 1 : 0 }) }),
       })),
       insert,
+      execute: vi.fn(async () => ({ rowsAffected: 1 })),
     };
   };
   for (const pendingQueue of [false, true]) {
@@ -109,7 +112,8 @@ describe("raid join cache reconciliation", () => {
       expect(result.userDelta).toEqual({});
       expect(result.userPatch).toMatchObject({ status: "QUEUED" });
       expect(db.query.userData.findFirst).toHaveBeenCalledTimes(1);
-      expect(db.insert).toHaveBeenCalledTimes(3);
+      expect(db.insert).toHaveBeenCalledTimes(2);
+      expect(db.execute).toHaveBeenCalledTimes(1);
     });
   }
   it("does not return a queue patch or insert membership after the status claim fails", async () => {
@@ -132,6 +136,7 @@ describe("raid join cache reconciliation", () => {
       if (reason === "full team")
         vi.spyOn(db.query.mpvpBattleQueue, "findFirst").mockResolvedValue({
           id: "cache-team",
+          raidMaxPlayers: 3,
           queue: [{}, {}, {}],
         } as never);
       if (reason === "wrong sector") db.actor.sector = 8;
@@ -233,32 +238,30 @@ describeWithDatabase("raid join committed queue", () => {
             },
           ]);
         } else {
-          const readTeam = db.query.mpvpBattleQueue.findFirst.bind(
-            db.query.mpvpBattleQueue,
+          client = beforeStatements(
+            db,
+            mpvpBattleUser,
+            [
+              async () => {
+                await enterBattle();
+                if (failure === "missing team")
+                  await db
+                    .delete(mpvpBattleQueue)
+                    .where(eq(mpvpBattleQueue.id, "cache-team"));
+                else
+                  await db.insert(mpvpBattleUser).values(
+                    [0, 1, 2].map((slot) => ({
+                      id: `full-${slot}`,
+                      userId: `other-${slot}`,
+                      clanBattleId: "cache-team",
+                      side: "ATTACKER" as const,
+                      slot,
+                    })),
+                  );
+              },
+            ],
+            { operations: ["execute"] },
           );
-          let reads = 0;
-          vi.spyOn(db.query.mpvpBattleQueue, "findFirst").mockImplementation((async (
-            ...args: Parameters<typeof readTeam>
-          ) => {
-            if (++reads === 2) {
-              await enterBattle();
-              if (failure === "missing team")
-                await db
-                  .delete(mpvpBattleQueue)
-                  .where(eq(mpvpBattleQueue.id, "cache-team"));
-              else
-                await db.insert(mpvpBattleUser).values(
-                  [0, 1, 2].map((slot) => ({
-                    id: `full-${slot}`,
-                    userId: `other-${slot}`,
-                    clanBattleId: "cache-team",
-                    side: "ATTACKER" as const,
-                    slot,
-                  })),
-                );
-            }
-            return readTeam(...args);
-          }) as unknown as typeof readTeam);
         }
         const counted = countUserReads(client);
         const result = await callerForDatabase(
@@ -787,7 +790,7 @@ describeWithDatabase("raid join committed queue", () => {
       );
       const callbacks = source
         .slice(source.indexOf("api.raids.readyToQueue.useMutation("))
-        .match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+        .match(/useMutation\((\{[\s\S]*?\n {4}\})\);/)?.[1];
       if (!callbacks) throw new Error("Ready-up callbacks not found");
       const options = new Function(
         "recoverUser",

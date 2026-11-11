@@ -93,6 +93,7 @@ import {
 } from "@/validators/combat";
 import { mapLocationFields, supportsMapStructure } from "@/validators/mapLocation";
 import { masteryRequirementFields } from "@/validators/mastery";
+import { partyCapacitySchema } from "@/validators/partyCapacity";
 import { petTaskMinutesSchema } from "@/validators/petTasks";
 import {
   QuestReward,
@@ -960,6 +961,8 @@ export const QuestValidatorRawSchema = z.object({
   }),
   hidden: z.coerce.boolean(),
   teamEnabled: z.boolean().prefault(false),
+  teamMaxPlayers: partyCapacitySchema,
+  raidMaxPlayers: partyCapacitySchema,
   publicLocations: z.boolean().prefault(false),
   retryDelay: z.enum(RetryQuestDelays).optional(),
   attemptDelay: z.enum(RetryQuestDelays).optional(),

@@ -101,6 +101,7 @@ const mount = (
     useUtils: () => ({
       profile: { getUser: { invalidate: vi.fn(async () => undefined) } },
     }),
+    profile: { searchUsers: { useQuery: () => ({ data: [] }) } },
     pets: {
       getCollection: { useQuery: () => ({ data: { pets: [] }, isPending: false }) },
     },
@@ -180,6 +181,25 @@ const scenarios = [
   { status: "BETWEEN", label: "Enter next floor", command: "start" },
   { status: "PAUSED", label: "Resume and ready up", command: "resume" },
 ] as const;
+
+it("lets a ready solo player enter a dungeon with an eight-player limit", async () => {
+  const data = partyState("LOBBY");
+  const run = data.runs[0]!;
+  run.content.maxPlayers = 8;
+  run.state.memberIds = ["a"];
+  run.state.readyIds = ["a"];
+  const { view, actCall } = mount(
+    "LOBBY",
+    async () => [],
+    async () => data,
+  );
+
+  await waitFor(() => expect(view.getByText("1/8 players · 1/1 ready")).toBeDefined());
+  fireEvent.click(view.getByRole("button", { name: "Enter next floor" }));
+  await waitFor(() =>
+    expect(actCall).toHaveBeenCalledWith({ id: "run", action: "start" }),
+  );
+});
 
 it("forwards confirmed achievement progress with the claim's captured profile revision", async () => {
   const { view, updateUser, respondToClaim } = mount("COMPLETED", async () => []);

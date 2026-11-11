@@ -4,7 +4,6 @@ import {
   ID_SFX_TRANSFORMATION_BURST,
   ID_SFX_TRANSFORMATION_SURGE,
 } from "@/drizzle/constants";
-import { findSidebarOpponent } from "@/libs/combat/actions";
 import {
   bossChainIssue,
   bossFormsFrom,
@@ -12,6 +11,7 @@ import {
   withBossForms,
 } from "@/libs/combat/bossFight";
 import { advanceEncounterWave, prepareEncounterWaves } from "@/libs/combat/encounters";
+import { resolveCombatInspection } from "@/libs/combat/inspection";
 import { maskBattle } from "@/libs/combat/masking";
 import { calcBattleResult } from "@/libs/combat/settlement";
 import { makeCompleteBattle, makeUser } from "../../setup/combat";
@@ -268,7 +268,7 @@ describe("boss fight", () => {
     advanceEncounterWave(battle);
 
     expect(battle.usersState[0]?.userId).toBe("student");
-    expect(findSidebarOpponent(battle.usersState, "hero")?.userId).toBe("genin");
+    expect(resolveCombatInspection(battle, "hero", null)?.userId).toBe("genin");
   });
 
   it("stays on the form that just fell, not an earlier one, until the next rises", () => {
@@ -280,7 +280,7 @@ describe("boss fight", () => {
     fallen.curHealth = 0;
     battle.usersState.push(fallen);
 
-    expect(findSidebarOpponent(battle.usersState, "hero")?.userId).toBe("genin");
+    expect(resolveCombatInspection(battle, "hero", null)?.userId).toBe("genin");
   });
 
   it("keeps the last opponent beside the field once everyone has left", () => {
@@ -288,6 +288,6 @@ describe("boss fight", () => {
     battle.usersState[1]!.curHealth = 0;
     battle.usersState[1]!.leftBattle = true;
 
-    expect(findSidebarOpponent(battle.usersState, "hero")?.userId).toBe("student");
+    expect(resolveCombatInspection(battle, "hero", null)?.userId).toBe("student");
   });
 });

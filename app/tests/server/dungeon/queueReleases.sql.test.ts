@@ -686,7 +686,13 @@ describeWithDatabase("activity releases preserve dungeon reservations", () => {
     });
     expect(owner?.status).toBe("QUEUED");
   });
-  it("preserves a new dungeon when a leaving raider makes the old launcher roll back", async () => {
+  it.each([
+    [
+      "preserves a new dungeon when a leaving raider makes the old launcher roll back",
+      true,
+    ],
+    ["does not admit a raider who leaves during setup and remains awake", false],
+  ])("%s", async (_label, entersDungeon) => {
     const db = await getTestDatabase();
     await insertUsers([
       {
@@ -750,13 +756,15 @@ describeWithDatabase("activity releases preserve dungeon reservations", () => {
           expect(
             (await (await callerFor(raidsRouter, "member")).leaveRaidQueue()).success,
           ).toBe(true);
-          expect(
-            (
-              await (
-                await callerFor(dungeonRouter, "member")
-              ).create({ id: "definition", petIds: ["one", "two"] })
-            ).success,
-          ).toBe(true);
+          if (entersDungeon) {
+            expect(
+              (
+                await (
+                  await callerFor(dungeonRouter, "member")
+                ).create({ id: "definition", petIds: ["one", "two"] })
+              ).success,
+            ).toBe(true);
+          }
         }
         return await read(...args);
       },
@@ -766,12 +774,20 @@ describeWithDatabase("activity releases preserve dungeon reservations", () => {
       "member",
       delayed,
     ).startRaidBattle({ teamId: "raid-team" });
+    expect(interposed).toBe(true);
     expect(result.success).toBe(false);
     expect(await db.query.mpvpBattleQueue.findFirst()).toBeUndefined();
     expect(await db.query.mpvpBattleUser.findFirst()).toBeUndefined();
     const owner = await db.query.userData.findFirst({
       where: eq(userData.userId, "member"),
     });
-    expect(owner?.status).toBe("QUEUED");
+    expect(owner).toMatchObject({
+      status: entersDungeon ? "QUEUED" : "AWAKE",
+      battleId: null,
+    });
+    const reservation = await db.query.dungeonMember.findFirst({
+      where: eq(dungeonMember.activeUserId, "member"),
+    });
+    expect(!!reservation).toBe(entersDungeon);
   });
 });

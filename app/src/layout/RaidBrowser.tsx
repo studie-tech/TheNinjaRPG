@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
   RAID_BATTLE_LOBBY_SECONDS,
-  RAID_BATTLE_MAX_USERS_PER_TEAM,
   RAID_MAX_CONCURRENT_TEAMS,
 } from "@/drizzle/constants";
 import { ActiveTimedBuffs } from "@/layout/ActiveTimedBuffs";
@@ -568,6 +567,7 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
                 <RaidTeamsDisplay
                   activeTeams={activeTeams}
                   maxTeams={maxTeams}
+                  maxPlayers={raidDetails.maxPlayers}
                   userId={userData.userId}
                   userInQueue={userInSelectedRaidQueue}
                   userTeamIsClaiming={userQueueIsClaiming}
@@ -763,6 +763,7 @@ const RaidLeaderboard: React.FC<RaidLeaderboardProps> = ({ leaderboard }) => {
 interface RaidTeamsDisplayProps {
   activeTeams: RaidTeam[];
   maxTeams: number;
+  maxPlayers: number;
   userId: string;
   userInQueue: boolean;
   userTeamIsClaiming: boolean;
@@ -779,6 +780,7 @@ interface RaidTeamsDisplayProps {
 const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
   activeTeams,
   maxTeams,
+  maxPlayers,
   userId,
   userInQueue,
   userTeamIsClaiming,
@@ -792,6 +794,7 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
   isStarting,
 }) => {
   // Check if user can create a new team
+  const [finishedTimers, setFinishedTimers] = useState<Record<string, boolean>>({});
   const canCreateNewTeam = activeTeams.length < maxTeams && !userInQueue;
   const banTooltip = isBanned
     ? "You are banned and cannot participate in raids"
@@ -804,7 +807,8 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
         <div className="flex items-center gap-2 font-semibold text-sm">
           <Users className="h-4 w-4 text-orange-500" />
           <span>
-            Active Teams ({activeTeams.length}/{maxTeams})
+            Active Teams ({activeTeams.length}/{maxTeams}) · Up to {maxPlayers} players
+            per new team
           </span>
         </div>
         {canCreateNewTeam && (
@@ -847,7 +851,8 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
               RAID_BATTLE_LOBBY_SECONDS,
               team.createdAt,
             );
-            const emptySlots = RAID_BATTLE_MAX_USERS_PER_TEAM - team.members.length;
+            const emptySlots = Math.max(0, team.maxPlayers - team.members.length);
+            const canStart = emptySlots === 0 || finishedTimers[team.id];
 
             return (
               <div
@@ -863,11 +868,25 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                   <div className="flex items-center gap-2 font-semibold text-sm">
                     <span>
                       {isUserTeam ? "Your Team" : "Team"} ({team.members.length}/
-                      {RAID_BATTLE_MAX_USERS_PER_TEAM})
+                      {team.maxPlayers})
                     </span>
                   </div>
                   <div className="text-muted-foreground text-sm">
-                    <Countdown targetDate={startTime} timeDiff={0} onEndShow="Ready!" />
+                    {emptySlots === 0 ? (
+                      "Ready!"
+                    ) : (
+                      <Countdown
+                        targetDate={startTime}
+                        timeDiff={0}
+                        onEndShow="Ready!"
+                        onFinish={() =>
+                          setFinishedTimers((current) => ({
+                            ...current,
+                            [team.id]: true,
+                          }))
+                        }
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -916,7 +935,7 @@ const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
                         <Button
                           size="sm"
                           onClick={onStart}
-                          disabled={isStarting || isBanned}
+                          disabled={!canStart || isStarting || isBanned}
                           title={banTooltip}
                         >
                           {isStarting ? (

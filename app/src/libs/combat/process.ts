@@ -768,6 +768,8 @@ const applyGroundEffects = ({
         if (!user && e.type === "damage") {
           const barrier = findBarrier(groundEffects, e.longitude, e.latitude);
           if (barrier) {
+            // Temporary barrier copies share the ground effect's per-round history.
+            e.timeTracker ??= {};
             usersEffects.push({
               ...e,
               targetType: "barrier",
@@ -1412,13 +1414,12 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
     effect.targetType === "barrier" &&
     curUser
   ) {
-    // For barrier damage, only apply if target is the actor (not if effect is new)
-    // This prevents residual damage from applying to barriers on every action
-    const isTarget = effect.targetId === actorId;
-    const ratio = calcApplyRatio(effect, battle, effect.targetId, isTarget);
-    if (ratio > 0) {
+    // Barriers have no actor turn; each effect can damage each barrier once per round.
+    if (effect.timeTracker?.[effect.targetId] !== round) {
       const result = damageBarrier(newGroundEffects, curUser, effect, config);
       if (result) {
+        effect.timeTracker ??= {};
+        effect.timeTracker[effect.targetId] = round;
         longitude = result.barrier.longitude;
         latitude = result.barrier.latitude;
         actionEffects.push(result.info);

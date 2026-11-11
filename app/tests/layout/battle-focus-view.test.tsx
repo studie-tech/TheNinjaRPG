@@ -7,7 +7,8 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { useState } from "react";
+import { createStore, Provider } from "jotai";
+import { type ReactNode, useState } from "react";
 import * as pools from "@/hooks/useEffectivePools";
 import * as mediaQuery from "@/hooks/useMediaQuery";
 import * as avatar from "@/layout/Avatar";
@@ -66,6 +67,7 @@ const fighter = (userId: string, direction: "left" | "right", extra = {}) => ({
 });
 
 const battle = {
+  id: "inspection-test",
   usersState: [
     fighter("me", "left"),
     fighter("ally", "left"),
@@ -79,6 +81,7 @@ const battle = {
 const renderView = (
   onShowLayout = vi.fn(),
   overrides: Partial<Parameters<typeof BattleFocusView>[0]> = {},
+  store = createStore(),
 ) =>
   render(
     <BattleFocusView
@@ -99,9 +102,45 @@ const renderView = (
       onShowLayout={onShowLayout}
       {...overrides}
     />,
+    {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <Provider store={store}>{children}</Provider>
+      ),
+    },
   );
 
 describe("BattleFocusView", () => {
+  it("offers only characters in the presented snapshot during playback", () => {
+    isDesktop = true;
+    const store = createStore();
+    store.set(userContext.combatPresentedBattleAtom, battle ?? null);
+    const future = {
+      ...battle!,
+      usersState: [...battle!.usersState, fighter("future-form", "right")],
+    } as NonNullable<BattleState["battle"]>;
+    renderView(undefined, { battle: future }, store);
+    expect(screen.queryByRole("option", { name: /future-form/ })).toBeNull();
+    expect(screen.queryByRole("region", { name: "future-form" })).toBeNull();
+    expect(screen.getByRole("region", { name: "foe" })).toBeTruthy();
+  });
+  it.each([true, false])(
+    "inspects allies and summons and restores automatic selection on desktop=%s",
+    (desktop) => {
+      isDesktop = desktop;
+      renderView();
+      const picker = screen.getByRole("combobox", { name: "Inspect character" });
+      fireEvent.change(picker, { target: { value: "ally" } });
+      const right = desktop
+        ? screen.getByRole("complementary", { name: "Characters and battle log" })
+        : screen.getByRole("dialog");
+      expect(within(right).getByRole("region", { name: "ally" })).toBeTruthy();
+      fireEvent.change(picker, { target: { value: "summon" } });
+      expect(within(right).getByRole("region", { name: "summon" })).toBeTruthy();
+      fireEvent.change(picker, { target: { value: "" } });
+      expect(within(right).queryByRole("region", { name: "summon" })).toBeNull();
+      expect(within(right).getByRole("region", { name: "foe" })).toBeTruthy();
+    },
+  );
   it("names the battle dialog and dismisses it with Escape", () => {
     const onShowLayout = vi.fn();
     renderView(onShowLayout);
@@ -132,7 +171,7 @@ describe("BattleFocusView", () => {
     renderView();
     const own = screen.getByRole("complementary", { name: "Your side" });
     const theirs = screen.getByRole("complementary", {
-      name: "Opponents and battle log",
+      name: "Characters and battle log",
     });
     expect(within(own).getByRole("region", { name: "me" })).toBeTruthy();
     expect(within(own).getByRole("region", { name: "ally" })).toBeTruthy();
@@ -225,7 +264,7 @@ describe("BattleFocusView", () => {
     const view = renderView(undefined, props);
     const main = screen.getByRole("main", { name: "Battle" });
     const side = screen.getByRole("complementary", {
-      name: "Opponents and battle log",
+      name: "Characters and battle log",
     });
     expect(within(main).getByText("Dock")).toBeTruthy();
     expect(within(side).getByText("Log body")).toBeTruthy();
@@ -249,7 +288,7 @@ describe("BattleFocusView", () => {
       />,
     );
     const swappedSide = screen.getByRole("complementary", {
-      name: "Opponents and actions",
+      name: "Characters and actions",
     });
     expect(within(main).getByRole("region", { name: "Battle history" })).toBeTruthy();
     expect(within(main).getByText("Log body")).toBeTruthy();
@@ -266,7 +305,7 @@ describe("BattleFocusView", () => {
     renderView();
     expect(screen.getByRole("region", { name: "me" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "foe" })).toBeTruthy();
-    expect(screen.getByText("+1 more")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Inspect character" })).toBeTruthy();
     expect(screen.getByText("Actions")).toBeTruthy();
   });
 

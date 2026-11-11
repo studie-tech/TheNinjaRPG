@@ -37,6 +37,7 @@ const fixture = (task = "stats_trained", value = 10) => {
     createdAt: new Date(),
     id: "party",
     questId: "quest",
+    maxPlayers: 3,
     leaderId: "one",
     memberIds: ["one", "two"],
     invitedUserIds: [],

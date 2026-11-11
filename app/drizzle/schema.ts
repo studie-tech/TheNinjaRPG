@@ -1233,6 +1233,10 @@ export const mpvpBattleQueue = mysqlTable(
     attackerEntityId: varchar("attackerEntityId", { length: 191 }).notNull(),
     defenderEntityId: varchar("defenderEntityId", { length: 191 }).notNull(),
     sector: smallint("sector"),
+    raidMaxPlayers: tinyint("raidMaxPlayers")
+      .default(consts.DEFAULT_PARTY_PLAYERS)
+      .notNull(),
+    raidClaimedAt: datetime("raidClaimedAt", { mode: "date", fsp: 3 }),
   },
   (table) => {
     return {
@@ -4812,6 +4816,9 @@ export const quest = mysqlTable(
     hidden: boolean("hidden").default(false).notNull(),
     consecutiveObjectives: boolean("consecutiveObjectives").default(true).notNull(),
     teamEnabled: boolean("teamEnabled").default(false).notNull(),
+    teamMaxPlayers: tinyint("teamMaxPlayers")
+      .default(consts.DEFAULT_PARTY_PLAYERS)
+      .notNull(),
     publicLocations: boolean("publicLocations").default(false).notNull(),
     requiredVillage: varchar("requiredVillage", { length: 191 }),
     requiredBloodlineId: varchar("requiredBloodlineId", { length: 191 }),
@@ -4842,6 +4849,9 @@ export const quest = mysqlTable(
     endsAt: date("endsAt", { mode: "string" }),
     startsAt: date("startsAt", { mode: "string" }),
     // Raid-specific fields (AI and sector are stored in the objective, not here)
+    raidMaxPlayers: tinyint("raidMaxPlayers")
+      .default(consts.DEFAULT_PARTY_PLAYERS)
+      .notNull(),
     raidBossMaxHealth: bigint("raidBossMaxHealth", { mode: "number" }),
     raidBossCurrentHealth: bigint("raidBossCurrentHealth", { mode: "number" }),
     /** Open raid runs advance only when a defeated boss is restored. */
@@ -4913,6 +4923,7 @@ export const questParty = mysqlTable(
     id: varchar("id", { length: 191 }).primaryKey().notNull(),
     questId: varchar("questId", { length: 191 }).notNull(),
     leaderId: varchar("leaderId", { length: 191 }).notNull(),
+    maxPlayers: tinyint("maxPlayers").default(consts.DEFAULT_PARTY_PLAYERS).notNull(),
     isPublic: boolean("isPublic").default(false).notNull(),
     memberIds: json("memberIds").$type<string[]>().notNull(),
     invitedUserIds: json("invitedUserIds").$type<string[]>().notNull(),

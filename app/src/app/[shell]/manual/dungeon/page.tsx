@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   COMBAT_BIOMES,
+  DEFAULT_PARTY_PLAYERS,
   DUNGEON_FLOORS_PER_TIER,
   DUNGEON_LOBBY_SECONDS,
   DUNGEON_MAX_DROPS,
@@ -22,7 +23,9 @@ import {
   DUNGEON_MAX_WAVES,
   ENCOUNTER_MAX_WAVE_DELAY_ROUNDS,
   MAX_ITEM_STACK_SIZE,
+  MAX_PARTY_PLAYERS,
   MAX_PLAYER_LEVEL,
+  MIN_PARTY_PLAYERS,
   RetryQuestDelays,
 } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
@@ -283,6 +286,15 @@ function DungeonEditor() {
                   <Input
                     value={content.name}
                     onChange={(e) => patch({ name: e.target.value })}
+                  />
+                </LabeledField>
+                <LabeledField label="Maximum players">
+                  <NumberInput
+                    aria-label="Maximum players"
+                    min={MIN_PARTY_PLAYERS}
+                    max={MAX_PARTY_PLAYERS}
+                    value={content.maxPlayers}
+                    onValueChange={(maxPlayers) => patch({ maxPlayers })}
                   />
                 </LabeledField>
                 <LabeledField label="Entrance artwork">
@@ -1012,6 +1024,7 @@ const normalizeRooms = (tiers: DungeonContent["tiers"]): DungeonContent["tiers"]
   );
 /** Start with an unpublished definition so incomplete drafts never expose travel entrances. */
 const newDungeon = (): DungeonContent => ({
+  maxPlayers: DEFAULT_PARTY_PLAYERS,
   requirements: dungeonRequirementsSchema.parse({}),
   name: "",
   description: "",

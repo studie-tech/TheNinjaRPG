@@ -1,7 +1,6 @@
 import {
-  DUNGEON_PARTY_SIZE,
+  DEFAULT_PARTY_PLAYERS,
   QUEST_PARTY_MAX_INVITATIONS,
-  QUEST_PARTY_MAX_MEMBERS,
 } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import type { DungeonBattleState } from "@/libs/dungeon";
@@ -12,7 +11,7 @@ import type { QuestTrackerType } from "@/validators/objectives";
 export const coopPolicies = {
   quest: {
     minMembers: 1,
-    maxMembers: QUEST_PARTY_MAX_MEMBERS,
+    maxMembers: DEFAULT_PARTY_PLAYERS,
     invitationLimit: QUEST_PARTY_MAX_INVITATIONS,
     reserveInvitations: false,
     readyCheck: false,
@@ -27,9 +26,9 @@ export const coopPolicies = {
     mutableRoster: false,
   },
   dungeon: {
-    minMembers: DUNGEON_PARTY_SIZE,
-    maxMembers: DUNGEON_PARTY_SIZE,
-    invitationLimit: DUNGEON_PARTY_SIZE,
+    minMembers: 1,
+    maxMembers: DEFAULT_PARTY_PLAYERS,
+    invitationLimit: DEFAULT_PARTY_PLAYERS,
     reserveInvitations: true,
     readyCheck: true,
     mutableRoster: false,
@@ -43,8 +42,10 @@ export const questCoopParty = (party: {
   invitedUserIds: string[];
   isPublic: boolean;
   battleId: string | null;
+  maxPlayers?: number;
 }): CoopParty => ({
   leaderId: party.leaderId,
+  maxPlayers: party.maxPlayers,
   memberIds: party.memberIds,
   invitedIds: party.invitedUserIds,
   readyIds: [],
@@ -64,7 +65,14 @@ export const transitionCoopParty = (
   action: CoopAction,
   targetId?: string,
 ): CoopTransition => {
-  const policy = coopPolicies[kind];
+  const basePolicy = coopPolicies[kind];
+  const maxMembers =
+    kind === "dungeonSolo" ? 1 : (current.maxPlayers ?? basePolicy.maxMembers);
+  const policy = {
+    ...basePolicy,
+    maxMembers,
+    invitationLimit: kind === "dungeon" ? maxMembers : basePolicy.invitationLimit,
+  };
   const party = structuredClone(current);
   const member = party.memberIds.includes(actorId);
   const invited = party.invitedIds.includes(actorId);
@@ -163,8 +171,9 @@ export const transitionCoopParty = (
       (!["LOBBY", "BETWEEN"].includes(party.phase) ||
         party.memberIds.some((id) => !party.readyIds.includes(id)))
     )
-      return reject(`All ${policy.maxMembers} players must be ready.`);
+      return reject("All current party members must be ready.");
     party.phase = "STARTING";
+    if (!policy.mutableRoster) party.invitedIds = [];
     party.readyIds = [];
   }
   return {
@@ -190,6 +199,7 @@ export type CoopPhase =
   | "ENDED";
 /** Normalized command input supplied by a quest or dungeon persistence adapter. */
 export type CoopParty = CoopRoster & {
+  maxPlayers?: number;
   leaderId: string;
   isPublic: boolean;
   phase: CoopPhase;

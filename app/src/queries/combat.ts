@@ -1076,6 +1076,7 @@ export const updateUserDataForCreateBattle = (
         };
     territoryWar?: undefined | import("@/drizzle/schema").TerritoryWar;
     clanBattle?: undefined | { queueId: string; battleId: string };
+    raidQueueClaim?: { teamId: string; claimId: string };
     questBattleSource?: { questId: undefined | string } | undefined;
   },
   battleType: BattleType,
@@ -1399,6 +1400,26 @@ export const updateUserDataForCreateBattle = (
                 ),
             ]
           : []),
+        info.raidQueueClaim &&
+          and(
+            eq(userData.status, "QUEUED"),
+            exists(
+              client
+                .select({ one: sql`1` })
+                .from(mpvpBattleUser)
+                .innerJoin(
+                  mpvpBattleQueue,
+                  eq(mpvpBattleQueue.id, mpvpBattleUser.clanBattleId),
+                )
+                .where(
+                  and(
+                    eq(mpvpBattleUser.userId, userData.userId),
+                    eq(mpvpBattleQueue.id, info.raidQueueClaim.teamId),
+                    eq(mpvpBattleQueue.battleId, info.raidQueueClaim.claimId),
+                  ),
+                ),
+            ),
+          ),
         ["CLAN_BATTLE", "TERRITORY_WAR"].includes(battleType) && info.clanBattle
           ? and(
               eq(userData.status, "QUEUED"),
