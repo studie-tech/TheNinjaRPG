@@ -95,21 +95,8 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
     ...dashboardSections,
   ]);
   useEffect(() => {
-    try {
-      const stored = JSON.parse(
-        safeLocalStorageGetItem("profileDashboardOrder") ?? "null",
-      );
-      if (
-        Array.isArray(stored) &&
-        stored.length === dashboardSections.length &&
-        new Set(stored).size === dashboardSections.length &&
-        stored.every((id) => dashboardSections.includes(id))
-      ) {
-        setSectionOrder(stored);
-      }
-    } catch {
-      // A malformed saved preference falls back to the published layout.
-    }
+    const stored = readStoredSectionOrder();
+    if (stored) setSectionOrder(stored);
   }, []);
   const moveSection = (id: DashboardSectionId, direction: -1 | 1) => {
     const next = moveItem(sectionOrder, sectionOrder.indexOf(id), direction);
@@ -1166,7 +1153,9 @@ function ElapsedMeter({
   const [now, setNow] = useState(() => Date.now());
   const hasFinishedRef = useRef(false);
   const onFinishRef = useRef(onFinish);
-  onFinishRef.current = onFinish;
+  useEffect(() => {
+    onFinishRef.current = onFinish;
+  });
 
   const adjustedStart = startedAt.getTime() + timeDiff;
   const adjustedEnd = endsAt.getTime() + timeDiff;
@@ -1292,4 +1281,21 @@ function ContentCardSkeleton() {
       </div>
     </Card>
   );
+}
+
+/** A saved order applies only when it is a permutation of the published sections. */
+function readStoredSectionOrder(): DashboardSectionId[] | null {
+  let stored: unknown;
+  try {
+    stored = JSON.parse(safeLocalStorageGetItem("profileDashboardOrder") ?? "null");
+  } catch {
+    // A malformed saved preference falls back to the published layout.
+    return null;
+  }
+  return Array.isArray(stored) &&
+    stored.length === dashboardSections.length &&
+    new Set(stored).size === dashboardSections.length &&
+    stored.every((id) => dashboardSections.includes(id))
+    ? (stored as DashboardSectionId[])
+    : null;
 }

@@ -1,5 +1,12 @@
 import { Cloud, Flag, ScrollText, ZoomIn, ZoomOut } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { MAP_WAR_TORN_BATTLEGROUND_SECTOR } from "@/drizzle/constants";
@@ -133,7 +140,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     ],
   );
   const current = useRef({ state, props });
-  current.current = { state, props };
+  // Layout effects run before the scene's factory effect, so it reads this render's values.
+  useLayoutEffect(() => {
+    current.current = { state, props };
+  });
   const { scene, error } = useGameScene(
     "globe",
     mountRef,

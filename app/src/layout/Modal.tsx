@@ -1,7 +1,7 @@
 "use client";
 import { Loader2 } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -84,34 +84,24 @@ export const Modal: React.FC<ModalProps> = (props) => {
 
   const isProceedDisabled = props.isLoading || props.proceedDisabled;
 
-  const handleAccept = useCallback(
-    (
-      e:
-        | React.MouseEvent<HTMLButtonElement, MouseEvent>
-        | React.KeyboardEvent<KeyboardEvent>,
-    ) => {
-      if (
-        props.isLoading ||
-        props.proceedDisabled ||
-        !validateNumberInputs(bodyRef.current)
-      )
-        return;
-      // The close side-effect is independent of onAccept: dialogs that render a
-      // Proceed button without an accept handler still use it to dismiss.
-      props.onAccept?.(e);
-      if (!props.keepOpenOnAccept && (props.isValid === undefined || props.isValid)) {
-        props.setIsOpen(false);
-      }
-    },
-    [
-      props.isLoading,
-      props.proceedDisabled,
-      props.keepOpenOnAccept,
-      props.onAccept,
-      props.isValid,
-      props.setIsOpen,
-    ],
-  );
+  const handleAccept = (
+    e:
+      | React.MouseEvent<HTMLButtonElement, MouseEvent>
+      | React.KeyboardEvent<KeyboardEvent>,
+  ) => {
+    if (
+      props.isLoading ||
+      props.proceedDisabled ||
+      !validateNumberInputs(bodyRef.current)
+    )
+      return;
+    // The close side-effect is independent of onAccept: dialogs that render a
+    // Proceed button without an accept handler still use it to dismiss.
+    props.onAccept?.(e);
+    if (!props.keepOpenOnAccept && (props.isValid === undefined || props.isValid)) {
+      props.setIsOpen(false);
+    }
+  };
 
   // Handle key-presses for Enter key only when this modal is open
   useEffect(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFarmController } from "@/hooks/farm-controller";
@@ -88,21 +88,15 @@ export default function OccupationFarming({
     revealElement("farm-panel", "nearest");
   }, [selectedSlotIndex, isWide, isDocked]);
 
-  const selectTab = useCallback(
-    (next: FarmTab) => {
-      controller.setSelectedSlotIndex(null);
-      setTab(next);
-    },
-    [controller.setSelectedSlotIndex],
-  );
+  const selectTab = (next: FarmTab) => {
+    controller.setSelectedSlotIndex(null);
+    setTab(next);
+  };
   // Shortcuts elsewhere on the farm jump to the storehouse; its own tab bar is already in view.
-  const openTab = useCallback(
-    (next: FarmTab) => {
-      selectTab(next);
-      revealElement("farm-storehouse", "start");
-    },
-    [selectTab],
-  );
+  const openTab = (next: FarmTab) => {
+    selectTab(next);
+    revealElement("farm-storehouse", "start");
+  };
 
   if (controller.query.isLoading) {
     return <Loader explanation="Loading farm..." />;

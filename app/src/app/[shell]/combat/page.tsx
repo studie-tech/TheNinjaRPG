@@ -307,11 +307,15 @@ export default function CombatPage() {
   // Reconcile from the server without clearing held results or a newer battle.
   useEffect(() => {
     if (userId && !results && (!requestedBattleId || isBattleMissing)) {
-      setBattleAtom((current) => (current?.id === battle?.id ? undefined : current));
+      const heldBattleId = battle?.id;
+      setBattleAtom((current) =>
+        current && current.id === heldBattleId ? undefined : current,
+      );
     }
     if (isBattleMissing && !results) {
       if (userData?.battleId) void utils.profile.getUser.invalidate();
-      if (battle?.id === userData?.battleId && battle?.extraState.dungeon && !results) {
+      const ownBattleId = userData?.battleId;
+      if (battle && battle.id === ownBattleId && battle.extraState.dungeon) {
         router.push("/dungeon");
       }
     }
@@ -479,37 +483,19 @@ export default function CombatPage() {
 
   // Battle scene. Pass the CONTROLLED actor (self, or the piloted summon on its
   // turn) so Combat does not have to re-derive it from the same battle object.
-  // Depend on battleState so isPending / result reach Combat; do not depend on
-  // the whole config object — Combat reads grid, aggro and resource visibility.
   // The WebGL scene stays mounted while newly revealed action assets load.
-  const combat = useMemo(() => {
-    return (
-      battleState &&
-      controlledActorId && (
-        <Combat
-          battleState={battleState}
-          action={actions.find((a) => a.id === actionId)}
-          userId={controlledActorId}
-          setBattleState={setBattleState}
-          config={config}
-          endTurnKey={hotkeys.byAction.wait}
-          arenaActions={arenaActions}
-          loadLpcCatalog={loadLpcCatalog}
-        />
-      )
-    );
-  }, [
-    battleState,
-    actionId,
-    controlledActorId,
-    config.showGridNumbers,
-    config.showAggro,
-    config.resourceBarsVisibility,
-    actions,
-    hotkeys.byAction.wait,
-    arenaActions,
-    loadLpcCatalog,
-  ]);
+  const combat = battleState && controlledActorId && (
+    <Combat
+      battleState={battleState}
+      action={actions.find((a) => a.id === actionId)}
+      userId={controlledActorId}
+      setBattleState={setBattleState}
+      config={config}
+      endTurnKey={hotkeys.byAction.wait}
+      arenaActions={arenaActions}
+      loadLpcCatalog={loadLpcCatalog}
+    />
+  );
 
   // Battle hotkeys select actions by id. A bound action that is unavailable
   // right now (stealth, disarm, cooldown, too little AP) ignores its key rather

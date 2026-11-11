@@ -15,6 +15,9 @@ import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData, userBattleAtom } from "@/utils/UserContext";
 
 interface CombatLobbyProps {
+  /** The rendered battle snapshot. */
+  battle: ReturnedBattle | null | undefined;
+  /** The latest battle for handlers, ahead of the next render after a response. */
   battleRef: React.RefObject<ReturnedBattle | null | undefined>;
   isInLobby: boolean;
   setBattleState: React.Dispatch<React.SetStateAction<BattleState | undefined>>;
@@ -25,6 +28,7 @@ interface CombatLobbyProps {
  * Rendered with the battle so its requests outlive the countdown.
  */
 export const CombatLobby: React.FC<CombatLobbyProps> = ({
+  battle,
   battleRef,
   isInLobby,
   setBattleState,
@@ -44,14 +48,14 @@ export const CombatLobby: React.FC<CombatLobbyProps> = ({
     kind: "item" | "jutsu";
     loadoutId: string;
   } | null>(null);
-  const battleId = battleRef.current?.id;
+  const battleId = battle?.id;
   const setBattleAtom = useSetAtom(userBattleAtom);
   const { data: userData, timeDiff } = useRequiredUserData();
   const suid = userData?.userId;
 
   // Session battle user state (the human's own account — used for lobby/ready
   // UI and loadout selection, NOT the actor it pilots).
-  const battleSessionUser = battleRef.current?.usersState.find(
+  const battleSessionUser = battle?.usersState.find(
     (u) => u.userId === userData?.userId,
   );
   // Once this participant's readiness has been proven by the mutation response,
@@ -212,130 +216,122 @@ export const CombatLobby: React.FC<CombatLobbyProps> = ({
     });
   };
 
-  const initiveWinner = battleRef.current?.usersState.find(
-    (u) => u.userId === battleRef.current?.activeUserId,
+  const initiveWinner = battle?.usersState.find(
+    (u) => u.userId === battle.activeUserId,
   );
 
   return (
     <>
-      {isInLobby &&
-        battleRef.current &&
-        PvpBattleTypes.includes(battleRef.current.battleType) && (
-          <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto overflow-y-auto bg-black/90">
-            {/* min-h-full lets a tall stack grow downward into the scroll area */}
-            <div className="flex min-h-full flex-col items-center justify-center px-4 py-4 text-center text-white">
-              <p className="text-xl sm:text-3xl">Waiting for opponent</p>
-              <p className="text-base sm:text-xl">
-                Time Left:{" "}
-                <Countdown
-                  targetDate={battleRef.current.createdAt}
-                  timeDiff={timeDiff}
-                />
-              </p>
-              <p className="mb-2 flex flex-row text-base sm:text-lg">
-                Initiative Winner: {initiveWinner?.username}{" "}
-                <Link href="/manual/combat">
-                  <HelpCircle className="h6 ml-2 w-6 hover:text-orange-500" />
-                </Link>
-              </p>
-              <div className="flex flex-row flex-wrap justify-center gap-4">
-                {battleRef.current.usersState
-                  .filter((u) => u.isOriginal && !u.isAi)
-                  .map((u) => {
-                    return (
-                      <div
-                        key={`${u.userId}-initiative-${u.initiative}`}
-                        className="relative flex flex-col items-center font-bold"
-                      >
-                        <Image
-                          alt={`roll-${u.userId}`}
-                          src={IMG_INITIATIVE_D20}
-                          height={60}
-                          width={60}
-                        ></Image>
-                        <p className="absolute top-7 text-md">
-                          {Math.floor(u.initiative)}
-                        </p>
-                        <p>
-                          {u.username}{" "}
-                          {u.iAmHere ||
-                          (u.userId === suid && readySettledBattleId === battleId)
-                            ? "(✓)"
-                            : ""}
-                        </p>
-                      </div>
-                    );
-                  })}
-              </div>
-              {battleSessionUser && (
-                <fieldset
-                  className="mt-3 flex w-full max-w-xs flex-col items-stretch gap-3 sm:w-auto sm:max-w-none sm:flex-row sm:items-end"
+      {isInLobby && battle && PvpBattleTypes.includes(battle.battleType) && (
+        <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto overflow-y-auto bg-black/90">
+          {/* min-h-full lets a tall stack grow downward into the scroll area */}
+          <div className="flex min-h-full flex-col items-center justify-center px-4 py-4 text-center text-white">
+            <p className="text-xl sm:text-3xl">Waiting for opponent</p>
+            <p className="text-base sm:text-xl">
+              Time Left: <Countdown targetDate={battle.createdAt} timeDiff={timeDiff} />
+            </p>
+            <p className="mb-2 flex flex-row text-base sm:text-lg">
+              Initiative Winner: {initiveWinner?.username}{" "}
+              <Link href="/manual/combat">
+                <HelpCircle className="h6 ml-2 w-6 hover:text-orange-500" />
+              </Link>
+            </p>
+            <div className="flex flex-row flex-wrap justify-center gap-4">
+              {battle.usersState
+                .filter((u) => u.isOriginal && !u.isAi)
+                .map((u) => {
+                  return (
+                    <div
+                      key={`${u.userId}-initiative-${u.initiative}`}
+                      className="relative flex flex-col items-center font-bold"
+                    >
+                      <Image
+                        alt={`roll-${u.userId}`}
+                        src={IMG_INITIATIVE_D20}
+                        height={60}
+                        width={60}
+                      ></Image>
+                      <p className="absolute top-7 text-md">
+                        {Math.floor(u.initiative)}
+                      </p>
+                      <p>
+                        {u.username}{" "}
+                        {u.iAmHere ||
+                        (u.userId === suid && readySettledBattleId === battleId)
+                          ? "(✓)"
+                          : ""}
+                      </p>
+                    </div>
+                  );
+                })}
+            </div>
+            {battleSessionUser && (
+              <fieldset
+                className="mt-3 flex w-full max-w-xs flex-col items-stretch gap-3 sm:w-auto sm:max-w-none sm:flex-row sm:items-end"
+                disabled={isMarkingReady || hasSettledReady || !!activePendingLoadout}
+                aria-busy={isMarkingReady || !!activePendingLoadout}
+              >
+                {(battle.battleType === "COMBAT" ||
+                  battle.battleType === "SPARRING") && (
+                  <>
+                    <div className="text-left sm:w-44">
+                      <ItemLoadoutSelector
+                        variant="dropdown"
+                        label="Item Loadout"
+                        onSelectOverride={(loadoutId, displayName) =>
+                          handleSelectLoadout("item", loadoutId, displayName)
+                        }
+                        selectedOverrideId={battleSessionUser.itemLoadout}
+                      />
+                    </div>
+                    <div className="text-left sm:w-44">
+                      <JutsuLoadoutSelector
+                        variant="dropdown"
+                        label="Jutsu Loadout"
+                        onSelectOverride={(loadoutId, displayName) =>
+                          handleSelectLoadout("jutsu", loadoutId, displayName)
+                        }
+                        selectedOverrideId={battleSessionUser.jutsuLoadout}
+                      />
+                    </div>
+                  </>
+                )}
+                <Button
+                  variant="secondary"
+                  className="shrink-0"
                   disabled={isMarkingReady || hasSettledReady || !!activePendingLoadout}
                   aria-busy={isMarkingReady || !!activePendingLoadout}
+                  onClick={handleMarkReady}
                 >
-                  {(battleRef.current.battleType === "COMBAT" ||
-                    battleRef.current.battleType === "SPARRING") && (
+                  {isMarkingReady ? (
                     <>
-                      <div className="text-left sm:w-44">
-                        <ItemLoadoutSelector
-                          variant="dropdown"
-                          label="Item Loadout"
-                          onSelectOverride={(loadoutId, displayName) =>
-                            handleSelectLoadout("item", loadoutId, displayName)
-                          }
-                          selectedOverrideId={battleSessionUser.itemLoadout}
-                        />
-                      </div>
-                      <div className="text-left sm:w-44">
-                        <JutsuLoadoutSelector
-                          variant="dropdown"
-                          label="Jutsu Loadout"
-                          onSelectOverride={(loadoutId, displayName) =>
-                            handleSelectLoadout("jutsu", loadoutId, displayName)
-                          }
-                          selectedOverrideId={battleSessionUser.jutsuLoadout}
-                        />
-                      </div>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                      Confirming
                     </>
+                  ) : hasSettledReady ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4" aria-hidden />
+                      Ready
+                    </>
+                  ) : (
+                    "I'm Ready"
                   )}
-                  <Button
-                    variant="secondary"
-                    className="shrink-0"
-                    disabled={
-                      isMarkingReady || hasSettledReady || !!activePendingLoadout
-                    }
-                    aria-busy={isMarkingReady || !!activePendingLoadout}
-                    onClick={handleMarkReady}
-                  >
-                    {isMarkingReady ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                        Confirming
-                      </>
-                    ) : hasSettledReady ? (
-                      <>
-                        <Check className="mr-2 h-4 w-4" aria-hidden />
-                        Ready
-                      </>
-                    ) : (
-                      "I'm Ready"
-                    )}
-                  </Button>
-                </fieldset>
-              )}
-              {battleSessionUser && activePendingLoadout && (
-                <p
-                  className="mt-2 flex items-center text-sm text-white/80"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                  Saving
-                </p>
-              )}
-            </div>
+                </Button>
+              </fieldset>
+            )}
+            {battleSessionUser && activePendingLoadout && (
+              <p
+                className="mt-2 flex items-center text-sm text-white/80"
+                role="status"
+                aria-live="polite"
+              >
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                Saving
+              </p>
+            )}
           </div>
-        )}
+        </div>
+      )}
     </>
   );
 };

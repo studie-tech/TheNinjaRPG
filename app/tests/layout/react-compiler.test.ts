@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "bun:test";
-import { readFileSync } from "node:fs";
+import { globSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import reactCompiler, { type LoggerEvent } from "babel-plugin-react-compiler";
 import * as React from "react";
@@ -56,6 +57,106 @@ const targets = [
   ["layout/battlearena/PyramidMode.tsx", ["PyramidMode", "TowerHeading"]],
 ] as const;
 
+// Functions the compiler still skips, as "path#function". Fix one and remove it here.
+const compilerExceptions = [
+  "app/[shell]/battlelog/[battleid]/page.tsx#BattleLog",
+  "app/[shell]/dungeon/page.tsx#DungeonPage",
+  "app/[shell]/error.tsx#ErrorBoundary",
+  "app/[shell]/forum/[boardid]/[threadid]/thread.tsx#ForumPost",
+  "app/[shell]/forum/[boardid]/[threadid]/thread.tsx#Thread",
+  "app/[shell]/forum/manage/page.tsx#ForumRestrictions",
+  "app/[shell]/forum/manage/page.tsx#ForumStaff",
+  "app/[shell]/forum/manage/page.tsx#RemoveStructure",
+  "app/[shell]/manual/damage_calcs/[[...damageSimulationId]]/page.tsx#Simulator",
+  "app/[shell]/manual/item/edit/[itemid]/page.tsx#ItemVariantsEditor",
+  "app/[shell]/manual/staff/page.tsx#Staff",
+  "app/[shell]/manual/world/sector-maps/page.tsx#SectorMapEditorContent",
+  "app/[shell]/manual/world/tilesets/edit/[assetid]/page.tsx#SingleEditMapAsset",
+  "app/[shell]/manual/world/tilesets/terrain/edit/[terrainid]/page.tsx#SingleEditMapTerrain",
+  "app/[shell]/support/page.tsx#SupportPage",
+  "app/[shell]/travel/page.tsx#Travel",
+  "components/merch/MerchProvider.tsx#MerchProvider",
+  "components/native/DeviceSettings.tsx#DeviceSettings",
+  "components/native/NativeAccountDeletion.tsx#NativeAccountDeletion",
+  "components/native/NativeBridge.tsx#NativeBridge",
+  "components/native/NativeStore.tsx#NativeStore",
+  "components/pwa/PWAManager.tsx#PWAManager",
+  "components/ui/number-input.tsx#NumberInput",
+  "hooks/combat.ts#useBattleMaps",
+  "hooks/combat.ts#useCombatUpdates",
+  "hooks/combatTabs.ts#useCombatTabs",
+  "hooks/contentSubmit.ts#useContentSubmit",
+  "hooks/farm-controller.ts#useFarmController",
+  "hooks/game-scene.ts#useGameScene",
+  "hooks/useActionPreferenceCacheUpdate.ts#useActionPreferenceCacheUpdate",
+  "hooks/useBattleCacheUpdate.ts#useBattleCacheUpdate",
+  "hooks/useDungeonAvailability.ts#useDungeonAvailability",
+  "hooks/useLazyChart.ts#useLazyChart",
+  "hooks/useLiveActivity.ts#useLiveActivity",
+  "hooks/useNativeAuth.ts#useNativeAuth",
+  "hooks/useNativePush.ts#useNativePush",
+  "hooks/usePendingIds.ts#usePendingIds",
+  "hooks/usePublicQuestLocations.ts#usePublicQuestLocations",
+  "hooks/useSceneMutation.ts#useSceneMutation",
+  "hooks/useSingleFlight.ts#useSingleFlight",
+  "hooks/useTowerDefense.ts#useTowerDefense",
+  "layout/BloodlineStatistics.tsx#BloodlineRollChart",
+  "layout/CharacterPreview.tsx#CharacterPreview",
+  "layout/ChatConversation.tsx#ChatConversation",
+  "layout/Combat.tsx#Combat",
+  "layout/CombatActions.tsx#ActionSelector",
+  "layout/CombatResultScreen.tsx#CombatResultScreen",
+  "layout/CombatTargetPreview.tsx#TargetingBattlefield",
+  "layout/ConceptImage.tsx#ConceptImage",
+  "layout/ContentImageSelector.tsx#ContentImageSelector",
+  "layout/CoordinateTargetingEditor.tsx#CoordinateTargetingEditor",
+  "layout/EditContent.tsx#EditContent",
+  "layout/EmbeddedConceptArt.tsx#EmbeddedConceptArt",
+  "layout/FarmCanvas.tsx#FarmCanvasInner",
+  "layout/Forum.tsx#ForumComposer",
+  "layout/ForumModeration.tsx#ForumRestructureTools",
+  "layout/ForumModeration.tsx#ForumTopicTools",
+  "layout/ForumPoll.tsx#ForumTopicExtras",
+  "layout/GraphUsersGeneric.tsx#GraphUsersGeneric",
+  "layout/HistoricalAiAvatar.tsx#HistoricalAiAvatar",
+  "layout/HomeLanding.tsx#HomeLanding",
+  "layout/HomeSharing.tsx#HomeSharing",
+  "layout/JutsuLoadoutSharing.tsx#JutsuLoadoutSharingDialog",
+  "layout/LpcAssetEditor.tsx#LpcAssetEditor",
+  "layout/MassEffectEditor.tsx#MassEffectEditor",
+  "layout/MissionHall.tsx#MissionHall",
+  "layout/ModerationSummary.tsx#ModerationSummary",
+  "layout/NewConversationPrompt.tsx#NewConversationPrompt",
+  "layout/ObjectiveFormWrapper.tsx#ObjectiveFormWrapper",
+  "layout/OccupationCrafting.tsx#OccupationCrafting",
+  "layout/PetAcquisition.tsx#PetAcquisition",
+  "layout/PetProfile.tsx#PetProfile",
+  "layout/ProfileSharing.tsx#ReviewPromotionAction",
+  "layout/PublicUser.tsx#PublicUserComponent",
+  "layout/PublicUserEdit.tsx#DeleteUserQuestControl",
+  "layout/PublicUserEdit.tsx#EditUserComponent",
+  "layout/PvpRank.tsx#RankedLoadoutSelector",
+  "layout/Report.tsx#ReportUser",
+  "layout/RichInput.tsx#RichInput",
+  "layout/SearchSelect.tsx#SearchSelect",
+  "layout/SeasonForm.tsx#SeasonForm",
+  "layout/SeasonManager.tsx#SeasonManager",
+  "layout/Sector.tsx#SectorScene",
+  "layout/SectorPreview.tsx#SectorPreview",
+  "layout/ShrineBattleLobby.tsx#ShrineBattleLobby",
+  "layout/ShrineHall.tsx#BoostTemplateGrid",
+  "layout/StrengthWeaknesses.tsx#GraphsTab",
+  "layout/TowerDefense.tsx#TowerDefenseInner",
+  "layout/UsageStatistics.tsx#QuestFunnelBar",
+  "layout/clan/ClanBattles.tsx#ClanBattles",
+  "layout/clan/ClanMembers.tsx#ClanMembers",
+  "layout/profileEdit/AttributeChange.tsx#AttributeChange",
+  "layout/profileEdit/Marriage.tsx#Marriage",
+  "layout/publicUser/BadgesTab.tsx#BadgesTab",
+  "utils/UserContext.tsx#UserContextProvider",
+  "utils/UserContext.tsx#useUserDataRef",
+];
+
 describe("React Compiler coverage", () => {
   for (const [path, names] of targets) {
     it(`memoizes ${names.join(", ")}`, () => {
@@ -67,6 +168,28 @@ describe("React Compiler coverage", () => {
       for (const name of names) expect(compiled).toContain(name);
     });
   }
+});
+
+describe("React Compiler repository gate", () => {
+  it(
+    "compiles every client component and hook outside the known exceptions",
+    () => {
+      const failures = new Set<string>();
+      for (const path of clientModules()) {
+        const source = readFileSync(
+          new URL(`../../src/${path}`, import.meta.url),
+          "utf8",
+        );
+        for (const name of compile(source, path).failed)
+          failures.add(`${path}#${name}`);
+      }
+      const allowed = new Set<string>(compilerExceptions);
+      expect([...failures].filter((entry) => !allowed.has(entry)).sort()).toEqual([]);
+      // A fixed function must leave the list so it cannot silently regress.
+      expect([...allowed].filter((entry) => !failures.has(entry)).sort()).toEqual([]);
+    },
+    { timeout: 180_000 },
+  );
 });
 
 describe("React Compiler runtime", () => {
@@ -219,22 +342,39 @@ function compile(source: string, path: string) {
         ],
       ],
     });
+    const nameOf = (event: LoggerEvent) => {
+      const loc = "fnLoc" in event ? event.fnLoc : undefined;
+      return (
+        ("fnName" in event ? event.fnName : undefined) ??
+        functionNames.get(`${loc?.start.line}:${loc?.start.column}`) ??
+        "<anonymous>"
+      );
+    };
     const compiled = events.flatMap((event) =>
-      event.kind === "CompileSuccess"
-        ? [
-            event.fnName ??
-              functionNames.get(
-                `${event.fnLoc?.start.line}:${event.fnLoc?.start.column}`,
-              ),
-          ]
-        : [],
+      event.kind === "CompileSuccess" ? [nameOf(event)] : [],
     );
-    return { code, compiled };
+    const failed = [
+      ...new Set(
+        events.flatMap((event) =>
+          event.kind === "CompileError" ? [nameOf(event)] : [],
+        ),
+      ),
+    ];
+    return { code, compiled, failed };
   } finally {
     // Assignment preserves Bun's native plain-object capture; redefining descriptors does not.
     Error.prepareStackTrace = prepareStackTrace;
     Error.stackTraceLimit = stackTraceLimit;
   }
+}
+
+/** Source modules that can hold components or hooks; server code never renders. */
+function clientModules() {
+  const root = fileURLToPath(new URL("../../src/", import.meta.url));
+  return globSync("**/*.{ts,tsx}", { cwd: root })
+    .filter((path) => !path.startsWith("server/") && !path.includes("/api/"))
+    .filter((path) => /\buse[A-Z]\w*\(|<[A-Z]/.test(readFileSync(root + path, "utf8")))
+    .sort();
 }
 
 /** Compiler events omit the binding name for arrow functions. Match their original AST locations. */
@@ -245,10 +385,19 @@ function collectFunctionNames(ast: unknown) {
     const node = value as {
       type?: string;
       id?: { name?: string };
+      loc?: { start: { line: number; column: number } };
       init?: { loc?: { start: { line: number; column: number } } };
     };
     if (node.type === "VariableDeclarator" && node.id?.name && node.init?.loc) {
       const { line, column } = node.init.loc.start;
+      names.set(`${line}:${column}`, node.id.name);
+    }
+    if (
+      (node.type === "FunctionDeclaration" || node.type === "FunctionExpression") &&
+      node.id?.name &&
+      node.loc
+    ) {
+      const { line, column } = node.loc.start;
       names.set(`${line}:${column}`, node.id.name);
     }
     for (const child of Object.values(value)) {

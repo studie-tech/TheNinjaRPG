@@ -9,7 +9,7 @@ import {
 } from "bun:test";
 import { act, cleanup, render } from "@testing-library/react";
 import { Profiler, type ProfilerOnRenderCallback } from "react";
-import ActionTimer from "@/layout/ActionTimer";
+import ActionTimer, { formatSecondsLeft } from "@/layout/ActionTimer";
 import { COMBAT_SECONDS } from "@/libs/combat/constants";
 import * as userContext from "@/utils/UserContext";
 import { makeBattleUser, makeCompleteBattle } from "../setup/combat";
@@ -28,14 +28,14 @@ const lobbyBattle = () =>
     version: 1,
   });
 
-const countdownBattle = () =>
+const countdownBattle = (elapsedMs = 1000) =>
   makeCompleteBattle({
     usersState: [
       makeBattleUser("p1", { curHealth: 100 }),
       makeBattleUser("p2", { curHealth: 100 }),
     ],
     activeUserId: "p1",
-    roundStartAt: new Date(FROZEN_NOW - 1000),
+    roundStartAt: new Date(FROZEN_NOW - elapsedMs),
     version: 1,
   });
 
@@ -112,7 +112,7 @@ describe("ActionTimer interval commits", () => {
     const { getByText, queryByText } = renderTimer(countdownBattle());
     expect(queryByText("Not in Focus")).toBeNull();
     act(() => vi.advanceTimersByTime(100));
-    expect(getByText(`You: ${(COMBAT_SECONDS - 1.1).toFixed(1)}s`)).toBeTruthy();
+    expect(getByText(`You: ${formatSecondsLeft(COMBAT_SECONDS - 1.1)}s`)).toBeTruthy();
   });
 
   it("pauses hidden timers and catches up when visible again", () => {
@@ -128,21 +128,43 @@ describe("ActionTimer interval commits", () => {
       isHidden = false;
       document.dispatchEvent(new window.Event("visibilitychange"));
     });
-    expect(getByText(`You: ${(COMBAT_SECONDS - 3).toFixed(1)}s`)).toBeTruthy();
+    expect(getByText(`You: ${formatSecondsLeft(COMBAT_SECONDS - 3)}s`)).toBeTruthy();
   });
 
-  it("re-commits when the displayed tenth-second label changes", () => {
+  it("shows whole seconds and re-commits only when the second changes", () => {
     const { commits, getByText } = renderTimer(countdownBattle());
     flushMount();
-    expect(getByText(`You: ${(COMBAT_SECONDS - 1).toFixed(1)}s`)).toBeTruthy();
+    expect(getByText(`You: ${COMBAT_SECONDS - 1}s`)).toBeTruthy();
     const afterMount = commits();
 
-    act(() => {
-      vi.advanceTimersByTime(100);
-    });
+    act(() => vi.advanceTimersByTime(900));
+    expect(commits()).toBe(afterMount);
 
+    act(() => vi.advanceTimersByTime(100));
     expect(commits()).toBeGreaterThan(afterMount);
-    expect(getByText(`You: ${(COMBAT_SECONDS - 1.1).toFixed(1)}s`)).toBeTruthy();
+    expect(getByText(`You: ${COMBAT_SECONDS - 2}s`)).toBeTruthy();
+  });
+
+  it("shows tenths of a second near the end of the turn", () => {
+    const { commits, getByText } = renderTimer(
+      countdownBattle((COMBAT_SECONDS - 5) * 1000),
+    );
+    flushMount();
+    expect(getByText("You: 5.0s")).toBeTruthy();
+    const afterMount = commits();
+
+    act(() => vi.advanceTimersByTime(100));
+    expect(commits()).toBeGreaterThan(afterMount);
+    expect(getByText("You: 4.9s")).toBeTruthy();
+  });
+});
+
+describe("formatSecondsLeft", () => {
+  it("rounds up to whole seconds above the precise window", () => {
+    expect(formatSecondsLeft(58.1)).toBe("59");
+    expect(formatSecondsLeft(10.01)).toBe("11");
+    expect(formatSecondsLeft(10)).toBe("10.0");
+    expect(formatSecondsLeft(0.25)).toBe("0.3");
   });
 });
 
