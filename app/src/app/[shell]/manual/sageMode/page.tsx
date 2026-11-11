@@ -35,7 +35,7 @@ export default function ManualSageModes() {
   const allSageModes = sageModes?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
-  const { onCreated, onDeleted } = useContentListActions(
+  const { onCreated, onDeleted, isOpeningCreated } = useContentListActions(
     refetch,
     "/manual/sageMode/edit",
   );
@@ -78,7 +78,12 @@ export default function ManualSageModes() {
         topRightContent={
           <div className="flex flex-row gap-1 items-center">
             {userData && canChangeContent(userData.role) && (
-              <Button id="create-sagemode" onClick={() => create()}>
+              <Button
+                id="create-sagemode"
+                onClick={() => create()}
+                disabled={load1 || isOpeningCreated}
+                loading={load1 || isOpeningCreated}
+              >
                 <FilePlus className="h-5 w-5" />
               </Button>
             )}

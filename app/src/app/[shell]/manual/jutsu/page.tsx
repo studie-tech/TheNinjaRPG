@@ -46,7 +46,10 @@ export default function ManualJutsus() {
   const alljutsus = jutsus?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
-  const { onCreated, onDeleted } = useContentListActions(refetch, "/manual/jutsu/edit");
+  const { onCreated, onDeleted, isOpeningCreated } = useContentListActions(
+    refetch,
+    "/manual/jutsu/edit",
+  );
 
   // Mutations
   const { mutate: create, isPending: load1 } = api.jutsu.create.useMutation({
@@ -104,7 +107,13 @@ export default function ManualJutsus() {
           <div className="flex flex-row items-center gap-1">
             {userData && canChangeContent(userData.role) && (
               <>
-                <Button id="create-jutsu" onClick={() => create()} hoverText="New">
+                <Button
+                  id="create-jutsu"
+                  onClick={() => create()}
+                  hoverText="New"
+                  disabled={load1 || isOpeningCreated}
+                  loading={load1 || isOpeningCreated}
+                >
                   <FilePlus className="h-6 w-6" />
                 </Button>
                 <Link href="/manual/jutsu/mass_edit">

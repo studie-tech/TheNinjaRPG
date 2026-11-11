@@ -46,7 +46,7 @@ export default function ManualBloodlines() {
   const allBloodlines = bloodlines?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
-  const { onCreated, onDeleted } = useContentListActions(
+  const { onCreated, onDeleted, isOpeningCreated } = useContentListActions(
     refetch,
     "/manual/bloodline/edit",
   );
@@ -109,7 +109,12 @@ export default function ManualBloodlines() {
           <div className="flex flex-row items-center gap-1">
             {userData && canChangeContent(userData.role) && (
               <>
-                <Button id="create-bloodline" onClick={() => create()}>
+                <Button
+                  id="create-bloodline"
+                  onClick={() => create()}
+                  disabled={load1 || isOpeningCreated}
+                  loading={load1 || isOpeningCreated}
+                >
                   <FilePlus className="h-5 w-5" />
                 </Button>
                 <Link href="/manual/bloodline/mass_edit">

@@ -57,7 +57,10 @@ export default function ManualAI() {
 
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
-  const { onCreated, onDeleted } = useContentListActions(refetch, "/manual/ai/edit");
+  const { onCreated, onDeleted, isOpeningCreated } = useContentListActions(
+    refetch,
+    "/manual/ai/edit",
+  );
 
   // Mutations
   const { mutate: create, isPending: load1 } = api.profile.create.useMutation({
@@ -109,7 +112,12 @@ export default function ManualAI() {
         topRightContent={
           <div className="flex flex-row items-center gap-2">
             {userData && canChangeContent(userData.role) && (
-              <Button id="create-ai" onClick={() => create()}>
+              <Button
+                id="create-ai"
+                onClick={() => create()}
+                disabled={load1 || isOpeningCreated}
+                loading={load1 || isOpeningCreated}
+              >
                 <FilePlus className="mr-2 h-5 w-5" /> New AI
               </Button>
             )}

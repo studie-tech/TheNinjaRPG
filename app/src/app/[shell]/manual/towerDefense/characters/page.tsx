@@ -94,6 +94,8 @@ export default function ManualTowerDefenseCharacters() {
               <Button
                 id="create-character"
                 onClick={() => create({ isPlayer: activeTab === "players" })}
+                disabled={isCreating}
+                loading={isCreating}
               >
                 <FilePlus className="mr-2 h-5 w-5" />
                 New {activeTab === "players" ? "Player" : "Enemy"}

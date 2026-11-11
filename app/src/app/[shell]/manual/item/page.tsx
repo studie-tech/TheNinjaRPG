@@ -45,7 +45,10 @@ export default function ManualItems() {
   const allItems = items?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
-  const { onCreated } = useContentListActions(refetch, "/manual/item/edit");
+  const { onCreated, isOpeningCreated } = useContentListActions(
+    refetch,
+    "/manual/item/edit",
+  );
 
   // Mutations
   const { mutate: create, isPending: load1 } = api.item.create.useMutation({
@@ -109,6 +112,8 @@ export default function ManualItems() {
                 <Button
                   id={`create-${state.itemType}`}
                   className="w-full"
+                  disabled={load1 || isOpeningCreated}
+                  loading={load1 || isOpeningCreated}
                   onClick={() =>
                     create({
                       type: state.itemType !== "ANY" ? state.itemType : "WEAPON",

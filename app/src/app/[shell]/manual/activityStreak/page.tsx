@@ -42,7 +42,10 @@ export default function ActivityStreakListPage() {
       ? allConfigs
       : allConfigs?.filter((c) => c.streakType === typeFilter);
 
-  const { onCreated } = useContentListActions(refetch, "/manual/activityStreak/edit");
+  const { onCreated, isOpeningCreated } = useContentListActions(
+    refetch,
+    "/manual/activityStreak/edit",
+  );
 
   const { mutate: create, isPending: createPending } =
     api.activityStreak.createConfig.useMutation({
@@ -88,7 +91,12 @@ export default function ActivityStreakListPage() {
       defaultBackHref="/manual"
       topRightContent={
         userData && canChangeContent(userData.role) ? (
-          <Button id="create-config" onClick={handleCreate} disabled={isPending}>
+          <Button
+            id="create-config"
+            onClick={handleCreate}
+            disabled={isPending || isOpeningCreated}
+            loading={createPending || isOpeningCreated}
+          >
             <FilePlus className="mr-2 h-6 w-6" />
             New
           </Button>
