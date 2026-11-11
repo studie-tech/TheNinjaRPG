@@ -211,7 +211,11 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
                     </span>
                   </span>
                   {convo.hasNewMessages && (
-                    <BellRing className="h-6 w-6 animate-[wiggle_1s_ease-in-out_infinite] text-red-500 hover:cursor-pointer hover:text-orange-500" />
+                    <BellRing
+                      role="img"
+                      aria-label="New messages"
+                      className="h-6 w-6 animate-[wiggle_1s_ease-in-out_infinite] text-red-500 motion-reduce:animate-none"
+                    />
                   )}
                   {canExit && (
                     <Button

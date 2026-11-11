@@ -372,8 +372,8 @@ export default function Bank() {
         topRightContent={
           <Dialog>
             <DialogTrigger asChild>
-              <Button type="submit">
-                <Waypoints className="h-5 w-5" />
+              <Button type="button" aria-label="Open transfer graph">
+                <Waypoints className="h-5 w-5" aria-hidden="true" />
               </Button>
             </DialogTrigger>
             <DialogContent className="min-h-[99%] min-w-[99%]">

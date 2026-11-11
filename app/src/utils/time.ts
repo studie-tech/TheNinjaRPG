@@ -127,17 +127,20 @@ export const getDaysHoursMinutesSeconds = (countDown: number) => {
 /** Return a string of how much time is left of a duration in milliseconds */
 export const getTimeLeftStr = (ms: number) => {
   const [days, hours, minutes, seconds] = getDaysHoursMinutesSeconds(ms);
-  if (days > 0) {
-    return `${days} days, ${hours} hours`;
-  } else if (hours > 0) {
-    return `${hours} hours, ${minutes} mins`;
-  } else if (minutes > 0) {
-    return `${minutes} mins, ${seconds} secs`;
-  } else if (seconds > 0) {
-    return `${seconds} secs`;
-  }
+  const d = countUnit(days, "day", "days");
+  const h = countUnit(hours, "hour", "hours");
+  const m = countUnit(minutes, "min", "mins");
+  const s = countUnit(seconds, "sec", "secs");
+  if (days > 0) return `${d}, ${h}`;
+  if (hours > 0) return `${h}, ${m}`;
+  if (minutes > 0) return `${m}, ${s}`;
+  if (seconds > 0) return s;
   return "0 seconds";
 };
+
+/** A count with its unit, singular only for exactly one. */
+const countUnit = (count: number, singular: string, plural: string) =>
+  `${count} ${count === 1 ? singular : plural}`;
 
 /**
  * Sleep for x number of milliseconds
@@ -229,6 +232,9 @@ export const isDifferentDay = (date1: Date, date2: Date): boolean =>
 export const formatDateTimeShort = (date: Date): string => {
   return date.toISOString().replace("T", " ").slice(0, 16);
 };
+
+/** Browser-local date and time to the minute for display, e.g. "Nov 11, 2026, 3:04 PM". */
+export const formatDateTime = (date: Date) => format(date, "PP, p");
 
 /** Format browser-local calendar time for a datetime-local input, without converting it to UTC. */
 export const formatLocalDateTimeInput = (date: Date) =>

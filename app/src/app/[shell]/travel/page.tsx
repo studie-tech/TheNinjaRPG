@@ -1119,15 +1119,25 @@ function Travel() {
               <>
                 {userData?.anbuId &&
                   (autoAttackMode ? (
-                    <Zap
-                      className={`mr-2 h-7 w-7 text-red-500`}
+                    <button
+                      type="button"
+                      aria-label="Stop auto-attack"
+                      aria-pressed={true}
+                      className={mapToolClassName}
                       onClick={() => setAutoAttackMode(false)}
-                    />
+                    >
+                      <Zap className="h-7 w-7 text-red-500" />
+                    </button>
                   ) : (
-                    <ZapOff
-                      className={`mr-2 h-7 w-7 hover:text-red-500`}
+                    <button
+                      type="button"
+                      aria-label="Start auto-attack"
+                      aria-pressed={false}
+                      className={mapToolClassName}
                       onClick={() => setShowAutoAttackModal(true)}
-                    />
+                    >
+                      <ZapOff className="h-7 w-7 hover:text-red-500" />
+                    </button>
                   ))}
                 <StealthControls
                   onRevealed={(players) => {
@@ -1138,6 +1148,9 @@ function Travel() {
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
                     <TooltipTrigger
+                      aria-label="Show other players on the map"
+                      aria-pressed={showOtherUsers}
+                      className={mapToolClassName}
                       onClick={() =>
                         tutorialRunning
                           ? setRevealOthersInTutorial((prev) => !prev)
@@ -1145,9 +1158,9 @@ function Travel() {
                       }
                     >
                       {showOtherUsers ? (
-                        <Eye className={`mr-2 h-7 w-7 text-orange-500`} />
+                        <Eye className="h-7 w-7 text-orange-500" />
                       ) : (
-                        <EyeOff className={`mr-2 h-7 w-7`} />
+                        <EyeOff className="h-7 w-7" />
                       )}
                     </TooltipTrigger>
                     <TooltipContent>
@@ -1158,10 +1171,17 @@ function Travel() {
                   </Tooltip>
                 </TooltipProvider>
                 {userData.status === "AWAKE" && (
-                  <UserRoundSearch
-                    className={`mr-2 h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
+                  <button
+                    type="button"
+                    aria-label="Scout surrounding sectors"
+                    aria-pressed={showSorrounding}
+                    className={mapToolClassName}
                     onClick={() => setShowSorrounding((prev) => !prev)}
-                  />
+                  >
+                    <UserRoundSearch
+                      className={`h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
+                    />
+                  </button>
                 )}
               </>
             )}
@@ -1352,7 +1372,7 @@ function Travel() {
             {joinVillageBtn && (
               <Confirm
                 title={`Join Village [${sectorVillage.name}]`}
-                proceed_label="Submit"
+                proceed_label="Join village"
                 button={<GitMerge className={`mx-1 h-7 w-7 hover:text-orange-500`} />}
                 triggerLabel={`Join ${sectorVillage.name}`}
                 disabled={isJoining}
@@ -1371,7 +1391,7 @@ function Travel() {
             {canCreateHideout && (
               <Confirm
                 title="Purchase Hideout"
-                proceed_label={canAffordHideout ? "Submit" : "Not enough ryo"}
+                proceed_label={canAffordHideout ? "Purchase hideout" : "Not enough ryo"}
                 button={<HousePlus className={`mx-1 h-7 w-7 hover:text-orange-500`} />}
                 triggerLabel="Purchase hideout"
                 disabled={isCreatingHideout}
@@ -1985,6 +2005,10 @@ const SectorLoadingPlaceholder = () => (
 
 // Alias the procedure so its action name is not interpreted as a React hook.
 const activateSensory = api.stealth.useSensory;
+
+/** A 40px icon toggle in the map's title bar. */
+const mapToolClassName =
+  "mr-1 inline-flex size-[40px] shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 
 /** Public player fields shown by sensory reveals and their map markers. */
 type RevealedPlayer = NonNullable<

@@ -175,20 +175,38 @@ const ReportImage: React.FC<ReportimageProps> = (props) => {
       <PopoverContent>
         <div className="relative max-w-[320px]">
           <div className="flex flex-row gap-2">
-            <ThumbsDown
-              className={cn(
-                "h-6 w-6",
-                watchedPositive === false ? "fill-orange-500" : "",
-              )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-[40px]"
+              aria-label="Negative rating"
+              aria-pressed={watchedPositive === false}
               onClick={() => createForm.setValue("positive", false)}
-            />{" "}
-            <ThumbsUp
-              className={cn(
-                "h-6 w-6",
-                watchedPositive === true ? "fill-orange-500" : "",
-              )}
+            >
+              <ThumbsDown
+                className={cn(
+                  "h-6 w-6",
+                  watchedPositive === false ? "fill-orange-500" : "",
+                )}
+              />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-[40px]"
+              aria-label="Positive rating"
+              aria-pressed={watchedPositive === true}
               onClick={() => createForm.setValue("positive", true)}
-            />{" "}
+            >
+              <ThumbsUp
+                className={cn(
+                  "h-6 w-6",
+                  watchedPositive === true ? "fill-orange-500" : "",
+                )}
+              />
+            </Button>
           </div>
           <Form {...createForm}>
             <form className="space-y-2" onSubmit={onSubmit}>
