@@ -86,12 +86,12 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
   // Create the history
   const history: React.ReactNode[] = [];
 
-  // Ensure the latest round is opened by default or whenever a new round appears
+  // Open the latest rounds by default and whenever a new round appears, keeping any
+  // earlier round the player opened
   useEffect(() => {
     if (maxRound) {
-      const latest = maxRound;
-      const secondLatest = maxRound - 1;
-      setOpenRounds([latest, secondLatest].filter((r) => r > 0));
+      const latest = [maxRound, maxRound - 1].filter((r) => r > 0);
+      setOpenRounds((rounds) => [...new Set([...rounds, ...latest])]);
     }
   }, [maxRound]);
 

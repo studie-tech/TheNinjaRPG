@@ -106,9 +106,11 @@ export const CombatLobby: React.FC<CombatLobbyProps> = ({
     const sessionUser = battleRef.current?.usersState.find(
       (user) => user.userId === suid,
     );
+    // Spectators watching the lobby have no readiness to confirm
     if (
       !currentBattleId ||
       !suid ||
+      !sessionUser ||
       isMarkingReady ||
       loadoutInFlightRef.current?.battleId === currentBattleId ||
       readyInFlightBattleIdRef.current === currentBattleId ||
@@ -220,22 +222,23 @@ export const CombatLobby: React.FC<CombatLobbyProps> = ({
         battleRef.current &&
         PvpBattleTypes.includes(battleRef.current.battleType) && (
           <div className="absolute top-0 right-0 bottom-0 left-0 z-20 m-auto overflow-y-auto bg-black/90">
-            <div className="flex h-full flex-col items-center justify-center text-white">
-              <p className="text-3xl">Waiting for opponent</p>
-              <p className="text-xl">
+            {/* min-h-full lets a tall stack grow downward into the scroll area */}
+            <div className="flex min-h-full flex-col items-center justify-center px-4 py-4 text-center text-white">
+              <p className="text-xl sm:text-3xl">Waiting for opponent</p>
+              <p className="text-base sm:text-xl">
                 Time Left:{" "}
                 <Countdown
                   targetDate={battleRef.current.createdAt}
                   timeDiff={timeDiff}
                 />
               </p>
-              <p className="mb-2 flex flex-row text-lg">
+              <p className="mb-2 flex flex-row text-base sm:text-lg">
                 Initiative Winner: {initiveWinner?.username}{" "}
                 <Link href="/manual/combat">
                   <HelpCircle className="h6 ml-2 w-6 hover:text-orange-500" />
                 </Link>
               </p>
-              <div className="flex flex-row gap-4">
+              <div className="flex flex-row flex-wrap justify-center gap-4">
                 {battleRef.current.usersState
                   .filter((u) => u.isOriginal && !u.isAi)
                   .map((u) => {
@@ -264,55 +267,63 @@ export const CombatLobby: React.FC<CombatLobbyProps> = ({
                     );
                   })}
               </div>
-              <fieldset
-                className="mt-3 flex flex-row items-end gap-3"
-                disabled={isMarkingReady || hasSettledReady || !!activePendingLoadout}
-                aria-busy={isMarkingReady || !!activePendingLoadout}
-              >
-                {(battleRef.current.battleType === "COMBAT" ||
-                  battleRef.current.battleType === "SPARRING") && (
-                  <>
-                    <ItemLoadoutSelector
-                      variant="dropdown"
-                      label="Item Loadout"
-                      onSelectOverride={(loadoutId, displayName) =>
-                        handleSelectLoadout("item", loadoutId, displayName)
-                      }
-                      selectedOverrideId={battleSessionUser?.itemLoadout}
-                    />
-                    <JutsuLoadoutSelector
-                      variant="dropdown"
-                      label="Jutsu Loadout"
-                      onSelectOverride={(loadoutId, displayName) =>
-                        handleSelectLoadout("jutsu", loadoutId, displayName)
-                      }
-                      selectedOverrideId={battleSessionUser?.jutsuLoadout}
-                    />
-                  </>
-                )}
-                <Button
-                  variant="secondary"
-                  className="shrink-0"
+              {battleSessionUser && (
+                <fieldset
+                  className="mt-3 flex w-full max-w-xs flex-col items-stretch gap-3 sm:w-auto sm:max-w-none sm:flex-row sm:items-end"
                   disabled={isMarkingReady || hasSettledReady || !!activePendingLoadout}
                   aria-busy={isMarkingReady || !!activePendingLoadout}
-                  onClick={handleMarkReady}
                 >
-                  {isMarkingReady ? (
+                  {(battleRef.current.battleType === "COMBAT" ||
+                    battleRef.current.battleType === "SPARRING") && (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                      Confirming
+                      <div className="text-left sm:w-44">
+                        <ItemLoadoutSelector
+                          variant="dropdown"
+                          label="Item Loadout"
+                          onSelectOverride={(loadoutId, displayName) =>
+                            handleSelectLoadout("item", loadoutId, displayName)
+                          }
+                          selectedOverrideId={battleSessionUser.itemLoadout}
+                        />
+                      </div>
+                      <div className="text-left sm:w-44">
+                        <JutsuLoadoutSelector
+                          variant="dropdown"
+                          label="Jutsu Loadout"
+                          onSelectOverride={(loadoutId, displayName) =>
+                            handleSelectLoadout("jutsu", loadoutId, displayName)
+                          }
+                          selectedOverrideId={battleSessionUser.jutsuLoadout}
+                        />
+                      </div>
                     </>
-                  ) : hasSettledReady ? (
-                    <>
-                      <Check className="mr-2 h-4 w-4" aria-hidden />
-                      Ready
-                    </>
-                  ) : (
-                    "I'm Ready"
                   )}
-                </Button>
-              </fieldset>
-              {activePendingLoadout && (
+                  <Button
+                    variant="secondary"
+                    className="shrink-0"
+                    disabled={
+                      isMarkingReady || hasSettledReady || !!activePendingLoadout
+                    }
+                    aria-busy={isMarkingReady || !!activePendingLoadout}
+                    onClick={handleMarkReady}
+                  >
+                    {isMarkingReady ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                        Confirming
+                      </>
+                    ) : hasSettledReady ? (
+                      <>
+                        <Check className="mr-2 h-4 w-4" aria-hidden />
+                        Ready
+                      </>
+                    ) : (
+                      "I'm Ready"
+                    )}
+                  </Button>
+                </fieldset>
+              )}
+              {battleSessionUser && activePendingLoadout && (
                 <p
                   className="mt-2 flex items-center text-sm text-white/80"
                   role="status"

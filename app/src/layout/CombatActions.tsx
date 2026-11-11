@@ -464,7 +464,13 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
           </div>
         )}
       </div>
-      {settings.showLabels && <span className="w-full break-words">{name}</span>}
+      {settings.showLabels && (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: pointer shortcut for the action control above, which handles keyboard selection
+        // biome-ignore lint/a11y/noStaticElementInteractions: a span avoids nesting buttons in catalogs that wrap the tile
+        <span className="w-full break-words" onClick={handleClick}>
+          {name}
+        </span>
+      )}
     </div>
   );
 };

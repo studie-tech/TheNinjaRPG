@@ -110,10 +110,10 @@ const CombatTimeline: React.FC<CombatTimelineProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Reset limit when battle version or filter changes
+  // Reset the page size for a new battle or filter; live updates keep loaded older actions
   useEffect(
     () => setLimit(TIMELINE_PAGE_SIZE),
-    [battleVersion, userFilter, showBasicActions],
+    [battleId, userFilter, showBasicActions],
   );
 
   const { data: entries, isFetching } = api.combat.getBattleEntries.useQuery(
