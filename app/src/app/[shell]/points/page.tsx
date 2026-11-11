@@ -64,6 +64,7 @@ import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
+import Modal from "@/layout/Modal";
 import SliderField from "@/layout/SliderField";
 import {
   StripeCheckoutButton,
@@ -796,11 +797,13 @@ const SubscriptionsOverview = () => {
     };
   });
   type Subscription = ArrayElement<typeof allSubscriptions>;
+  const [pendingCancel, setPendingCancel] = useState<Subscription | null>(null);
 
   const { mutate: cancelSubscription, isPending } =
     api.paypal.cancelPaypalSubscription.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
+        if (data.success) setPendingCancel(null);
         await refetch();
       },
     });
@@ -819,24 +822,42 @@ const SubscriptionsOverview = () => {
       padding={false}
       initialBreak={true}
     >
-      {isPending ? (
-        <Loader />
-      ) : (
-        <Table
-          data={allSubscriptions}
-          columns={columns}
-          buttons={[
-            {
-              label: "Cancel",
-              onClick: (subscription: Subscription) => {
-                cancelSubscription({
-                  subscriptionId: subscription.subscriptionId,
-                });
-              },
-            },
-          ]}
-        />
-      )}
+      <Table
+        data={allSubscriptions}
+        columns={columns}
+        buttons={[
+          {
+            label: "Cancel",
+            onClick: (subscription: Subscription) => setPendingCancel(subscription),
+          },
+        ]}
+      />
+      <Modal
+        id="paypal-subscription-cancel"
+        title="Cancel subscription"
+        isOpen={!!pendingCancel}
+        setIsOpen={(open) => {
+          if (!open) setPendingCancel(null);
+        }}
+        proceed_label="Cancel subscription"
+        proceed_loading_label="Cancelling..."
+        confirmClassName="bg-red-600 text-white hover:bg-red-700"
+        isLoading={isPending}
+        keepOpenOnAccept={true}
+        onAccept={() => {
+          if (pendingCancel) {
+            cancelSubscription({ subscriptionId: pendingCancel.subscriptionId });
+          }
+        }}
+      >
+        {pendingCancel && (
+          <p>
+            Cancel the <b>{pendingCancel.federalStatus}</b> subscription for{" "}
+            {pendingCancel.affectedUser?.username ?? "this character"}? It stops at
+            PayPal immediately and will not renew.
+          </p>
+        )}
+      </Modal>
     </ContentBox>
   ) : null;
 };
@@ -880,13 +901,13 @@ const LookupTransaction = () => {
       {isPending && <Loader explanation="Searching..." />}
       {!isPending && (
         <Form {...searchForm}>
-          <form onSubmit={handleSubmitRequest} className="relative">
-            <div className="relative flex flex-row gap-2">
+          <form onSubmit={handleSubmitRequest}>
+            <div className="flex flex-row items-start gap-2">
               <FormField
                 control={searchForm.control}
                 name="transactionDate"
                 render={({ field }) => (
-                  <FormItem className="flex basis-1/2 flex-col">
+                  <FormItem className="flex min-w-0 flex-1 flex-col">
                     <FormControl>
                       <Input
                         id="purchase-date"
@@ -911,7 +932,7 @@ const LookupTransaction = () => {
                 control={searchForm.control}
                 name="transactionId"
                 render={({ field }) => (
-                  <FormItem className="basis-1/2">
+                  <FormItem className="min-w-0 flex-1">
                     <FormControl>
                       <Input {...field} placeholder="Transaction ID" />
                     </FormControl>
@@ -920,8 +941,9 @@ const LookupTransaction = () => {
                   </FormItem>
                 )}
               />
-              <Button className="absolute top-0 right-0" type="submit">
+              <Button className="shrink-0" type="submit">
                 <Search className="mr-1 h-5 w-5" />
+                Look up
               </Button>
             </div>
           </form>
