@@ -183,6 +183,17 @@ describe("getUserFactionNotifications", () => {
     ]);
   });
 
+  it("marks raids as informational opportunities rather than critical threats", () => {
+    expect(
+      notify({
+        activeRaids: [
+          { raidType: "open", sector: 1 },
+          { raidType: "exclusive", sector: 6 },
+        ],
+      }).map((entry) => entry.color),
+    ).toEqual(["blue", "blue"]);
+  });
+
   it("orders shrine, war, village war and raid notices", () => {
     expect(
       names({

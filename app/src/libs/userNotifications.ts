@@ -148,7 +148,8 @@ export const getUserFactionNotifications = (
     });
   }
 
-  // Raid notifications
+  // Raid notifications. Raids are opportunities to join, not threats, so they use the
+  // informational colour and leave red (and the red badge) to attacks and blocking states.
   const openRaids = user?.activeRaids?.filter((r) => r.raidType === "open") ?? [];
   const exclusiveRaids =
     user?.activeRaids?.filter((r) => r.raidType === "exclusive") ?? [];
@@ -161,7 +162,7 @@ export const getUserFactionNotifications = (
     notifications.push({
       href: "/travel",
       name: `Open ${pluralize("Raid", openRaidSectors)} available (${sectorList(openRaidSectors)})`,
-      color: "red",
+      color: "blue",
       alwaysShow: true,
     });
   }
@@ -170,7 +171,7 @@ export const getUserFactionNotifications = (
     notifications.push({
       href: "/travel",
       name: `Village ${pluralize("Raid", exclusiveRaidSectors)} active (${sectorList(exclusiveRaidSectors)})`,
-      color: "red",
+      color: "blue",
       alwaysShow: true,
     });
   }
