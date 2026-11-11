@@ -125,7 +125,7 @@ export function CompactComment(props: CompactCommentProps) {
         ) : (
           <div
             data-reading-text
-            className="[&_blockquote]:text-muted-foreground text-[13px] break-words [&_blockquote]:my-[4px] [&_blockquote]:border-l-2 [&_blockquote]:pl-[8px] [&_blockquote]:text-[12px] [&_img]:max-h-[160px] [&_img]:rounded-md"
+            className="[&_blockquote]:text-muted-foreground text-[13px] break-words [&_blockquote]:my-[4px] [&_blockquote]:border-l-2 [&_blockquote]:pl-[8px] [&_blockquote]:text-[12px] [&_img]:max-h-[160px] [&_img]:max-w-full [&_img]:rounded-md"
           >
             {props.children}
           </div>
@@ -483,6 +483,7 @@ function CompactEditor({
         control={control}
         disabled={isPending}
         onSubmit={submit}
+        submitOnEnter="never"
         error={errors.comment?.message}
       />
     </form>

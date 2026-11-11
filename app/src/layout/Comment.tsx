@@ -196,6 +196,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
 
   return (
     <Post
+      dense
       options={
         props.user && (
           <div className="flex flex-row gap-1">
@@ -271,12 +272,13 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
             control={control}
             disabled={props.isEditPending}
             onSubmit={onSubmit}
+            submitOnEnter="never"
             error={errors.comment?.message}
           />
         </form>
       ) : (
         <>
-          <div data-reading-text className="mb-6">
+          <div data-reading-text className="mb-6 [&_img]:h-auto [&_img]:max-w-full">
             {props.children}
           </div>
           <div className="absolute right-2 bottom-0 flex flex-row items-end gap-1">

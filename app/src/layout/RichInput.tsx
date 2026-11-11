@@ -35,7 +35,13 @@ import UserSearchSelect from "@/layout/UserSearchSelect";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { getImageDimensions } from "@/utils/image";
-import { needsHtmlSource, richTextInput } from "@/utils/richText";
+import {
+  enterSubmits,
+  needsHtmlSource,
+  richTextInput,
+  type SubmitOnEnter,
+  stripPastedChatHtml,
+} from "@/utils/richText";
 import { useUserPicker } from "@/utils/search";
 import { useUploadThing } from "@/utils/uploadthing";
 import "quill/dist/quill.core.css";
@@ -73,6 +79,10 @@ export const RichInput = (props: RichInputProps) => {
   const blocked = !!props.disabled || uploading;
   const allowImages = props.allowImages !== false;
   const isSource = props.plainText || sourceMode;
+  const submitMode = props.submitOnEnter ?? "desktop";
+  // Soft keyboards label their Return key from this; "desktop" sends only with a
+  // physical keyboard, so touch keyboards keep a newline key.
+  const enterKeyHint = props.onSubmit && submitMode === "always" ? "send" : "enter";
   const { methods: mentionForm, users: selectedUsers } = useUserPicker();
   const { startUpload } = useUploadThing("tavernUploader", {
     onUploadError: (error) => {
@@ -122,6 +132,7 @@ export const RichInput = (props: RichInputProps) => {
     disabled: blocked,
     autoFocus: props.autoFocus ?? true,
     focusEndOnExternalChange: props.focusEndOnExternalChange,
+    enterKeyHint,
   }));
 
   useEffect(() => {
@@ -177,6 +188,7 @@ export const RichInput = (props: RichInputProps) => {
         editor.root.id = props.id;
         editor.root.setAttribute("role", "textbox");
         editor.root.setAttribute("aria-multiline", "true");
+        editor.root.setAttribute("enterkeyhint", options.enterKeyHint);
         editor.root.setAttribute(
           "aria-label",
           props.label || props.placeholder || "Message",
@@ -238,6 +250,10 @@ export const RichInput = (props: RichInputProps) => {
     if (props.focusEndOnExternalChange && !blocked)
       editor.setSelection(editor.getLength() - 1, 0, "silent");
   }, [value, props.focusEndOnExternalChange, blocked]);
+
+  useEffect(() => {
+    quillRef.current?.root.setAttribute("enterkeyhint", enterKeyHint);
+  }, [enterKeyHint, ready]);
 
   useEffect(() => {
     quillRef.current?.enable(!blocked);
@@ -410,6 +426,7 @@ export const RichInput = (props: RichInputProps) => {
     if (
       event.key === "Enter" &&
       props.onSubmit &&
+      enterSubmits(submitMode, isCoarsePointer()) &&
       !event.shiftKey &&
       !event.ctrlKey &&
       !event.altKey &&
@@ -453,7 +470,8 @@ export const RichInput = (props: RichInputProps) => {
     setUrlEntry(null);
   };
 
-  // Keep common actions visible while formatting controls scroll within narrow fields.
+  // Keep common actions visible while formatting controls wrap on phones and scroll
+  // within narrow fields on wider screens.
   const editorActions = (
     <>
       {uploading && (
@@ -562,6 +580,7 @@ export const RichInput = (props: RichInputProps) => {
       autoFocus={props.autoFocus ?? true}
       placeholder={props.placeholder}
       rows={props.rows}
+      enterKeyHint={enterKeyHint}
       isDirty={props.isDirty}
       // The compact row draws the frame; the field itself stays borderless.
       className={
@@ -631,10 +650,29 @@ export const RichInput = (props: RichInputProps) => {
           editor.setSelection(range.index + content.length(), 0, "silent");
           return;
         }
-        if (!props.allowClipboardPaste || !quillRef.current) return;
         const file = Array.from(event.clipboardData.files).find((item) =>
           item.type.startsWith("image/"),
         );
+        const chatHtml =
+          props.chatPaste && editor && !file
+            ? event.clipboardData.getData("text/html")
+            : "";
+        // Filter the pasted HTML only: loading an existing draft keeps its images.
+        if (editor && /<(?:img|hr)\b/i.test(chatHtml)) {
+          event.preventDefault();
+          event.stopPropagation();
+          const range = editor.getSelection(true);
+          const content = editor.clipboard.convert({
+            html: stripPastedChatHtml(chatHtml),
+          });
+          editor.updateContents(
+            [{ retain: range.index }, { delete: range.length }, ...content.ops],
+            "user",
+          );
+          editor.setSelection(range.index + content.length(), 0, "silent");
+          return;
+        }
+        if (!props.allowClipboardPaste || !quillRef.current) return;
         if (file) {
           event.preventDefault();
           event.stopPropagation();
@@ -668,7 +706,7 @@ export const RichInput = (props: RichInputProps) => {
               <div
                 key={`${props.id}:${props.refreshKey}`}
                 ref={toolbarRef}
-                className="rich-input-toolbar flex min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto p-1 [&>*]:shrink-0"
+                className="rich-input-toolbar flex min-w-0 flex-1 flex-wrap items-center gap-1 p-1 sm:flex-nowrap sm:overflow-x-auto [&>*]:shrink-0"
                 role="toolbar"
                 aria-label="Text formatting"
               >
@@ -882,6 +920,9 @@ export const RichInput = (props: RichInputProps) => {
   );
 };
 
+/** Touch screens without a precise pointer use soft keyboards. */
+const isCoarsePointer = () => window.matchMedia?.("(pointer: coarse)").matches ?? false;
+
 /** Older WebKit can clear isComposing before the IME-confirming Enter. */
 const isComposingKey = (event: KeyboardEvent) =>
   event.isComposing || event.keyCode === 229;
@@ -923,6 +964,10 @@ interface RichInputProps {
   enableMentions?: boolean;
   /** Opt into moderated image paste, drop and file uploads. */
   allowClipboardPaste?: boolean;
+  /** Chat composers drop images and rules from pasted HTML; uploads still work. */
+  chatPaste?: boolean;
+  /** When a plain Enter sends via `onSubmit`; defaults to "desktop". */
+  submitOnEnter?: SubmitOnEnter;
   /** Default true; false blocks new image embeds while preserving existing content for recovery. */
   allowImages?: boolean;
   autoFocus?: boolean;

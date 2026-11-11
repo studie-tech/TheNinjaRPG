@@ -2,7 +2,13 @@ import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { processMentions } from "@/utils/chat";
 import { parseHtml } from "@/utils/parse";
-import { needsHtmlSource, richTextInput, splitQuotedReply } from "@/utils/richText";
+import {
+  enterSubmits,
+  needsHtmlSource,
+  richTextInput,
+  splitQuotedReply,
+  stripPastedChatHtml,
+} from "@/utils/richText";
 import sanitize, { buildQuoteBlock } from "@/utils/sanitize";
 
 const render = (html: string) => renderToStaticMarkup(parseHtml(sanitize(html)));
@@ -155,5 +161,22 @@ describe("buildQuoteBlock", () => {
     expect(quote?.getAttribute("author")).toBe(username);
     expect(quote?.getAttribute("data-comment-id")).toBe("comment-1");
     expect(splitQuotedReply(`${html}<p>reply</p>`).authors).toEqual([username]);
+  });
+});
+
+describe("chat composer input policy", () => {
+  it("sends on Enter only where the policy and the keyboard allow it", () => {
+    expect(enterSubmits("desktop", false)).toBe(true);
+    expect(enterSubmits("desktop", true)).toBe(false);
+    expect(enterSubmits("always", true)).toBe(true);
+    expect(enterSubmits("never", false)).toBe(false);
+  });
+
+  it("strips copied avatars, badges and rules and the blocks they leave empty", () => {
+    expect(
+      stripPastedChatHtml(
+        '<div><a href="/username/a"><img src="/avatar.png"></a></div><span><img src="/badge.png"></span><hr><p>Kept <strong>text</strong></p><p><br></p>',
+      ),
+    ).toBe("<p>Kept <strong>text</strong></p>");
   });
 });

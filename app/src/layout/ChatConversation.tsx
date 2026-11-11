@@ -303,6 +303,7 @@ export function ChatConversation({
               onSubmit={handleSubmitComment}
               enableMentions
               allowClipboardPaste
+              chatPaste
               focusEndOnExternalChange={shouldFocusOnChange}
               autoFocus={false}
             />
