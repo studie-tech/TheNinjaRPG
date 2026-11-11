@@ -128,6 +128,47 @@ export const zoomHomeCameraTo = (
     homeType,
   );
 
+/** The CSS transform that places the property under a camera. */
+export const homeCameraTransform = (camera: HomeCamera) =>
+  `translate(${camera.x}%, ${camera.y}%) scale(${camera.scale})`;
+
+/**
+ * Follow one pointer of a camera gesture: a lone pointer pans, and a second pointer
+ * pinches around the midpoint of both. Coordinates are client pixels inside `rect`.
+ */
+export const moveHomeCamera = (
+  camera: HomeCamera,
+  homeType: HomeType,
+  rect: { left: number; top: number; width: number; height: number },
+  previous: { x: number; y: number },
+  next: { x: number; y: number },
+  other?: { x: number; y: number },
+) => {
+  const before = other ? Math.hypot(previous.x - other.x, previous.y - other.y) : 0;
+  if (other && before > 0) {
+    const after = Math.hypot(next.x - other.x, next.y - other.y);
+    const toView = (point: { x: number; y: number }) => ({
+      x: (((point.x + other.x) / 2 - rect.left) / rect.width) * 100,
+      y: (((point.y + other.y) / 2 - rect.top) / rect.height) * 100,
+    });
+    return zoomHomeCameraTo(
+      camera,
+      (camera.scale * after) / before,
+      homeType,
+      toView(previous),
+      toView(next),
+    );
+  }
+  return boundHomeCamera(
+    {
+      ...camera,
+      x: camera.x + ((next.x - previous.x) / rect.width) * 100,
+      y: camera.y + ((next.y - previous.y) / rect.height) * 100,
+    },
+    homeType,
+  );
+};
+
 /** One room of a home, or undefined when the home lacks it. */
 export const getHomeRoom = (homeType: HomeType, id: HomeRoomId) =>
   getHomeRooms(homeType).find((room) => room.id === id);

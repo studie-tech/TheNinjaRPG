@@ -2237,9 +2237,6 @@ describe("multi-room home scene", () => {
 
       scene.getBoundingClientRect = () => new DOMRect(0, 0, 800, 600);
       firePointerEvent(scene, "pointermove", 2, 500, 240);
-      expect(view.getByLabelText("Camera zoom").textContent).toBe(
-        cameraZoom("TOWN_HOUSE", Math.min(1.8, initial.scale * 1.5)),
-      );
       const expected = boundHomeCamera(
         zoomHomeCamera(
           initial,
@@ -2253,6 +2250,16 @@ describe("multi-room home scene", () => {
       expect(resumed.scale).toBeCloseTo(expected.scale, 10);
       expect(resumed.x).toBeCloseTo(expected.x, 10);
       expect(resumed.y).toBeCloseTo(expected.y, 10);
+      // The gesture moves the camera layer and commits the camera when it ends.
+      expect(view.getByLabelText("Camera zoom").textContent).toBe(
+        cameraZoom("TOWN_HOUSE", initial.scale),
+      );
+      firePointerEvent(scene, "pointerup", 2, 500, 240);
+      firePointerEvent(scene, "pointerup", 1, 200, 240);
+      expect(view.getByLabelText("Camera zoom").textContent).toBe(
+        cameraZoom("TOWN_HOUSE", Math.min(1.8, initial.scale * 1.5)),
+      );
+      expect(sceneCamera(scene)).toEqual(resumed);
     },
   );
 
@@ -2455,19 +2462,18 @@ describe("multi-room home scene", () => {
       const firstY = start === "editing furniture" ? 205 : 200;
       firePointerEvent(scene, "pointerdown", 2, 400, 200);
       firePointerEvent(scene, "pointermove", 2, 600, 200);
-      expect(view.getByLabelText("Camera zoom").textContent).toBe(
-        cameraZoom(
-          "TOWN_HOUSE",
-          Math.min(
-            1.8,
-            (initialScale * Math.hypot(600 - firstX, 200 - firstY)) /
-              Math.hypot(400 - firstX, 200 - firstY),
-          ),
-        ),
+      const pinchedScale = Math.min(
+        1.8,
+        (initialScale * Math.hypot(600 - firstX, 200 - firstY)) /
+          Math.hypot(400 - firstX, 200 - firstY),
       );
+      expect(sceneCamera(scene).scale).toBeCloseTo(pinchedScale, 10);
       firePointerEvent(scene, "pointerup", 2, 600, 200);
       firePointerEvent(bed, "pointermove", 1, 220, 200);
       firePointerEvent(first, "pointerup", 1, 220, 200);
+      expect(view.getByLabelText("Camera zoom").textContent).toBe(
+        cameraZoom("TOWN_HOUSE", pinchedScale),
+      );
       fireEvent.click(bed, { detail: 1 });
       expect(props.onSleep).not.toHaveBeenCalled();
       expect(furniturePosition(bed)).toEqual(before);
