@@ -3,11 +3,18 @@ import {
   EMPTY_PLOT,
   type FarmPlotWithSeed,
   getFarmingLevel,
+  getFarmNotifications,
   mapPlotToState,
   patchFarmPlot,
+  summarizeFarmPlots,
 } from "@/libs/farming";
+import type { NavBarDropdownLink } from "@/libs/menus";
 import { getPublicQuestUser } from "@/libs/quest/projection";
-import type { FarmMutationResponse, FarmStateResponse } from "@/validators/farming";
+import type {
+  FarmMutationResponse,
+  FarmPlotState,
+  FarmStateResponse,
+} from "@/validators/farming";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
 /** Project confirmed farm counters and the public tracker snapshot saved by its successful claim. */
@@ -297,4 +304,29 @@ export const getFarmMutationUpdate = (
       return;
   }
   return applyFarmMutationPatch(state, result);
+};
+
+/**
+ * Replace the farm notices with counts from confirmed plots, keeping their place in the list,
+ * so a harvest or watering clears its notice before the next profile refresh.
+ */
+export const syncFarmNotifications = (
+  notifications: NavBarDropdownLink[] | undefined,
+  plots: FarmPlotState[],
+  now: Date,
+) => {
+  if (!notifications) return notifications;
+  const { ready, waterable } = summarizeFarmPlots(plots, now);
+  const farm = getFarmNotifications(ready, waterable);
+  const current = notifications.filter((entry) => entry.href === "/farm");
+  const isUnchanged =
+    current.length === farm.length &&
+    current.every(
+      (entry, i) => entry.name === farm[i]?.name && entry.color === farm[i]?.color,
+    );
+  if (isUnchanged) return notifications;
+  const index = notifications.findIndex((entry) => entry.href === "/farm");
+  const others = notifications.filter((entry) => entry.href !== "/farm");
+  const at = index < 0 ? others.length : index;
+  return [...others.slice(0, at), ...farm, ...others.slice(at)];
 };

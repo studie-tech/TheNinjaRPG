@@ -19,6 +19,7 @@ import {
 } from "@/drizzle/constants";
 import type { FarmPlot, Item, UserData } from "@/drizzle/schema";
 import { getWorldDayCycleIndex } from "@/libs/dayNight";
+import type { NavBarDropdownLink } from "@/libs/menus";
 import { calcLevelRequirements } from "@/libs/profile";
 import { calculatePercent } from "@/utils/math";
 import { getUserFederalStatus } from "@/utils/paypal";
@@ -217,6 +218,37 @@ export const summarizeFarmPlots = (plots: FarmPlotState[], now = new Date()) => 
   }
   return summary;
 };
+
+/** Navigation notices for crops ready to harvest and plants waiting for water. */
+export const getFarmNotifications = (
+  ready: number,
+  waterable: number,
+): NavBarDropdownLink[] => [
+  ...(ready > 0
+    ? [
+        {
+          href: "/farm",
+          name:
+            ready === 1
+              ? "1 farm crop is ready to harvest"
+              : `${ready} farm crops are ready to harvest`,
+          color: "green" as const,
+        },
+      ]
+    : []),
+  ...(waterable > 0
+    ? [
+        {
+          href: "/farm",
+          name:
+            waterable === 1
+              ? "1 farm plant is ready to water"
+              : `${waterable} farm plants are ready to water`,
+          color: "blue" as const,
+        },
+      ]
+    : []),
+];
 
 /** Earliest harvest and pre-harvest watering times across growing plots; null when none. */
 export const getNextFarmEvents = (plots: FarmPlotState[], now = new Date()) => {

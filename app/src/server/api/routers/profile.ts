@@ -75,6 +75,7 @@ import { getWorldCyclePosition } from "@/libs/dayNight";
 import { activeDungeonNotification } from "@/libs/dungeon";
 import { elementalGainRoom } from "@/libs/elementalMastery";
 import { getExperimentAssignments } from "@/libs/experimentAnalytics";
+import { getFarmNotifications } from "@/libs/farming";
 import {
   getGameSettingBoost,
   getGlobalGameSettingNotifications,
@@ -930,27 +931,7 @@ export const profileRouter = createTRPCRouter({
         notifications.push({ name: msg, color: "toast", href: "/profile" });
       });
 
-      if (readyFarmPlots > 0) {
-        notifications.push({
-          href: "/farm",
-          name:
-            readyFarmPlots === 1
-              ? "1 farm crop is ready to harvest"
-              : `${readyFarmPlots} farm crops are ready to harvest`,
-          color: "green",
-        });
-      }
-
-      if (waterableFarmPlots > 0) {
-        notifications.push({
-          href: "/farm",
-          name:
-            waterableFarmPlots === 1
-              ? "1 farm plant is ready to water"
-              : `${waterableFarmPlots} farm plants are ready to water`,
-          color: "blue",
-        });
-      }
+      notifications.push(...getFarmNotifications(readyFarmPlots, waterableFarmPlots));
 
       notifications.push(...getUserFactionNotifications(user, now));
       notifications.push(...getNoJutsuEquippedNotifications(user));

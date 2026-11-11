@@ -4,6 +4,7 @@ import {
   getFarmBulkMutationUpdate,
   getFarmMutationUpdate,
   getFarmProfileUpdate,
+  syncFarmNotifications,
 } from "@/deltas/farming";
 import { getFarmingLevel } from "@/libs/farming";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
@@ -455,4 +456,59 @@ it("masks hidden quest targets without mutating the committed farming trackers",
   expect(patch.userPatch.questData?.[0]?.goals[0]?.sector).toBeUndefined();
   expect(patch.userPatch.questData?.[0]?.goals[0]?.longitude).toBeUndefined();
   expect(source).toEqual(before);
+});
+
+describe("syncFarmNotifications", () => {
+  const now = new Date("2030-01-01T12:00:00Z");
+  const growing: FarmPlotState = {
+    ...emptyPlot,
+    seedItemId: "seed-1",
+    plantedAt: new Date("2030-01-01T10:00:00Z"),
+    finishAt: new Date("2030-01-02T00:00:00Z"),
+  };
+  const ready: FarmPlotState = {
+    ...growing,
+    finishAt: new Date("2030-01-01T11:00:00Z"),
+  };
+  const poll = { href: "/manual/polls", name: "Unvoted Polls", color: "blue" } as const;
+  const harvestNotice = {
+    href: "/farm",
+    name: "5 farm crops are ready to harvest",
+    color: "green",
+  } as const;
+  const waterNotice = {
+    href: "/farm",
+    name: "1 farm plant is ready to water",
+    color: "blue",
+  } as const;
+
+  it("drops the farm notices once nothing is ready or waits for water", () => {
+    const watered = { ...growing, lastWateredAt: now };
+    expect(
+      syncFarmNotifications([harvestNotice, poll, waterNotice], [watered], now),
+    ).toEqual([poll]);
+  });
+
+  it("counts the plots still ready or waiting for water", () => {
+    expect(
+      syncFarmNotifications(
+        [harvestNotice, waterNotice, poll],
+        [ready, growing, emptyPlot],
+        now,
+      ),
+    ).toEqual([
+      { href: "/farm", name: "1 farm crop is ready to harvest", color: "green" },
+      waterNotice,
+      poll,
+    ]);
+  });
+
+  it("returns the same list when the farm notices already match", () => {
+    const current = [poll, waterNotice];
+    expect(syncFarmNotifications(current, [growing], now)).toBe(current);
+  });
+
+  it("leaves a profile without notifications untouched", () => {
+    expect(syncFarmNotifications(undefined, [ready], now)).toBeUndefined();
+  });
 });

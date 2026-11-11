@@ -4,7 +4,11 @@ import { getQueryKey } from "@trpc/react-query";
 import type { RefObject } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
-import { getFarmBulkMutationUpdate, getFarmMutationUpdate } from "@/deltas/farming";
+import {
+  getFarmBulkMutationUpdate,
+  getFarmMutationUpdate,
+  syncFarmNotifications,
+} from "@/deltas/farming";
 import { FARM_MAX_CROP_SELL_QUANTITY } from "@/drizzle/constants";
 import { useNow } from "@/hooks/useNow";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
@@ -24,7 +28,8 @@ export function useFarmController() {
   const farmCache = useQueryCacheUpdate<RouterOutputs["farming"]["getFarmState"]>(
     getQueryKey(api.farming.getFarmState, undefined, "query"),
   );
-  const { timeDiff, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { timeDiff, prepareUserUpdate, updateUser, updateNotifications } =
+    useRequiredUserData();
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [pendingPlotSlots, setPendingPlotSlots] = useState<Set<number>>(new Set());
   const pendingPlotSlotsRef = useRef<Set<number>>(new Set());
@@ -107,6 +112,15 @@ export function useFarmController() {
     [utils],
   );
 
+  /** Clear farm notices the confirmed plots no longer warrant, from the latest profile list. */
+  const syncNotifications = useCallback(async () => {
+    const plots = utils.farming.getFarmState.getData()?.plots;
+    const current = utils.profile.getUser.getData()?.notifications;
+    if (!plots) return;
+    const next = syncFarmNotifications(current, plots, new Date(Date.now() - timeDiff));
+    if (next !== current) await updateNotifications(next);
+  }, [utils, timeDiff, updateNotifications]);
+
   /** Prevent overlapping plot actions and reconcile the revision captured before each write. */
   const runPlotAction = useCallback(
     async (
@@ -134,6 +148,7 @@ export function useFarmController() {
               : undefined,
           snapshot,
         );
+        await syncNotifications();
         setEffectEvent({ id: Date.now(), slotIndex: plot.slotIndex, effect });
       } catch (error) {
         showFailure(error, "Farm action failed");
@@ -141,7 +156,7 @@ export function useFarmController() {
         setPendingPlot(plot.slotIndex, false);
       }
     },
-    [setPendingPlot, farmCache, showFailure, showResult],
+    [setPendingPlot, farmCache, showFailure, showResult, syncNotifications],
   );
 
   const plant = useCallback(
@@ -195,6 +210,7 @@ export function useFarmController() {
             current ? getFarmBulkMutationUpdate(current, result, key) : undefined,
           snapshot,
         );
+        await syncNotifications();
         return result.success;
       } catch (error) {
         showFailure(error, "Bulk farm action failed");
@@ -204,7 +220,7 @@ export function useFarmController() {
         setPendingBulkAction(null);
       }
     },
-    [farmCache, showFailure, showResult],
+    [farmCache, showFailure, showResult, syncNotifications],
   );
 
   const plantAll = useCallback(

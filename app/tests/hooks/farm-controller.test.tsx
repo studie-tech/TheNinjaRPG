@@ -119,12 +119,22 @@ const harness = (response: FarmMutationResponse, deferred = false) => {
     },
   });
   cleanups.push(observer.subscribe(() => {}));
-  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
-    timeDiff: 0,
-    prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
-    updateUser: (result, options) =>
-      updateUserCache(client, profileKey, result, options),
-  } as ReturnType<typeof userContext.useRequiredUserData>);
+  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
+    () =>
+      ({
+        timeDiff: 0,
+        notifications: notifications(),
+        updateNotifications: async (next) => {
+          client.setQueryData<UserCache>(profileKey, (old) =>
+            old ? { ...old, notifications: next } : old,
+          );
+        },
+        prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
+        updateUser: (result, options) =>
+          updateUserCache(client, profileKey, result, options),
+      }) as ReturnType<typeof userContext.useRequiredUserData>,
+  );
+  const notifications = () => client.getQueryData<UserCache>(profileKey)?.notifications;
   let requested = false;
   const { promise: waiting, resolve: release } = createDeferred<void>();
   const requests: string[] = [];
@@ -161,6 +171,7 @@ const harness = (response: FarmMutationResponse, deferred = false) => {
     requested: () => requested,
     profileReads: () => profileReads,
     profile: () => client.getQueryData<UserCache>(profileKey)?.userData,
+    notifications,
     profileKey,
   };
 };
@@ -326,4 +337,33 @@ it("keeps confirmed recovery after a partial bulk failure with withheld profile 
     farmCurrency: 100,
   });
   expect(test.view.result.current.pendingBulkAction).toBeNull();
+});
+
+it("clears the watering notice once the last thirsty plant is watered", async () => {
+  const test = harness({
+    success: true,
+    message: "Watered",
+    userPatch: {},
+    userDelta: { farmingExperience: 1 },
+    farmingExperienceDelta: 1,
+    updatedPlot: { ...plot, canWater: false, lastWateredAt: new Date() },
+  });
+  const poll = { href: "/manual/polls", name: "Unvoted Polls", color: "blue" } as const;
+  test.client.setQueryData<UserCache>(test.profileKey, (old) =>
+    old
+      ? {
+          ...old,
+          notifications: [
+            { href: "/farm", name: "1 farm plant is ready to water", color: "blue" },
+            poll,
+          ],
+        }
+      : old,
+  );
+  await act(async () => {
+    test.view.result.current.water(plot);
+  });
+  await waitFor(() => expect(test.view.result.current.pendingPlotSlots.size).toBe(0));
+  expect(test.notifications()).toEqual([poll]);
+  expect(test.profileReads()).toBe(0);
 });
