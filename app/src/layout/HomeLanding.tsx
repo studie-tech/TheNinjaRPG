@@ -38,7 +38,15 @@ export const HomeLanding: React.FC = () => {
   const store = useStore();
   const nativeRedirect = useAtomValue(nativeHomeRedirectAtom);
 
-  // Redirect based on user status
+  // Warm both destinations while the character loads, so the hop is immediate.
+  useEffect(() => {
+    if (!isSignedIn) return;
+    router.prefetch("/profile");
+    router.prefetch("/register");
+  }, [isSignedIn, router]);
+
+  // Redirect based on user status. Replace, not push: "/" must not stay in history, or
+  // Back would land here and forward the player again.
   useEffect(() => {
     // Character data may outlive the session for a render during sign-out.
     if (!isClerkLoaded || !isSignedIn || !userId) return;
@@ -46,15 +54,15 @@ export const HomeLanding: React.FC = () => {
     if (userStatus === "success" && !userData) {
       storeLandingAttribution(new URLSearchParams(window.location.search));
       setReferral.mutate({ utmSource: readCampaignSource() });
-      void router.push("/register");
+      void router.replace("/register");
     }
     if (userData) {
       // Read at navigation time: a native callback can arrive after this render but
       // before its effect, and its destination must win over the default Profile.
-      // NativeBridge already issued this destination. Even one duplicate push can
+      // NativeBridge already issued this destination. Even one duplicate navigation can
       // restart a slow route; character refreshes must leave it alone entirely.
       if (store.get(nativeHomeRedirectAtom)) return;
-      void router.push("/profile");
+      void router.replace("/profile");
     }
   }, [isClerkLoaded, isSignedIn, userData, userId, userStatus, store, nativeRedirect]);
 
@@ -97,7 +105,7 @@ export const HomeLanding: React.FC = () => {
     );
   }
 
-  return isSignedIn ? <Loader explanation="Forwarding to profile" /> : <Welcome />;
+  return isSignedIn ? <Loader explanation="Loading your ninja…" /> : <Welcome />;
 };
 
 export default HomeLanding;

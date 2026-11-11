@@ -46,6 +46,8 @@ beforeEach(() => {
   vi.spyOn(routing, "usePublicPathname").mockImplementation(() => pathname);
   vi.spyOn(navigation, "useRouter").mockReturnValue({
     push: navigate,
+    replace: navigate,
+    prefetch: vi.fn(),
     back: vi.fn(),
   } as never);
   Object.assign(vi.spyOn(client, "api" as never), {

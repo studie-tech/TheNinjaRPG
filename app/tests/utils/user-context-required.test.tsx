@@ -24,13 +24,14 @@ const key: ReturnType<typeof trpc.getQueryKey> = [
   { type: "query" },
 ];
 const clients: QueryClient[] = [];
-const push = vi.fn();
+const replace = vi.fn();
 
 beforeEach(() => {
-  push.mockClear();
+  replace.mockClear();
+  window.history.replaceState(null, "", "/travel?sector=4");
   vi.spyOn(trpc, "getQueryKey").mockReturnValue(key);
   vi.spyOn(pusher, "usePusherHandler").mockReturnValue(undefined);
-  vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
+  vi.spyOn(navigation, "useRouter").mockReturnValue({ replace } as never);
 });
 
 afterEach(() => {
@@ -84,22 +85,24 @@ const mount = async (
 describe("useRequiredUserDataSelector", () => {
   it("waits for Clerk before judging the session", async () => {
     await mount({ isLoaded: false });
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it("waits for Clerk on a hard load that starts signed out", async () => {
     await mount({ isLoaded: false }, undefined, undefined, false);
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
   });
 
-  it("sends signed-out visitors home", async () => {
+  it("sends signed-out visitors to sign in and back to the page they opened", async () => {
     await mount({ isLoaded: true, isSignedIn: false });
-    expect(push).toHaveBeenCalledWith("/");
+    expect(replace).toHaveBeenCalledWith(
+      `/login?redirect_url=${encodeURIComponent("/travel?sector=4")}`,
+    );
   });
 
   it("waits while the signed-in profile is loading", async () => {
     await mount({ isLoaded: true, isSignedIn: true });
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it("sends signed-in users without a character home", async () => {
@@ -108,7 +111,7 @@ describe("useRequiredUserDataSelector", () => {
       undefined,
       Promise.resolve({ serverTime: 0, notifications: [], userData: null }),
     );
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
   });
 
   it("keeps users with a character on the page", async () => {
@@ -116,6 +119,6 @@ describe("useRequiredUserDataSelector", () => {
       { isLoaded: true, isSignedIn: true },
       { serverTime: 0, notifications: [], userData: { userId: "required-test" } },
     );
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
   });
 });

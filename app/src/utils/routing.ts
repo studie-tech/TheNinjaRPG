@@ -16,6 +16,19 @@ export const usePublicPathname = () => {
   return publicPathForShellPath(pathname) ?? pathname;
 };
 
+/**
+ * The sign-in page, returning to `path` afterwards when it is a same-site game path.
+ * Entry pages and anything that is not a plain absolute path sign in without a return.
+ */
+export const loginRedirectPath = (path: string) => {
+  const isSameSite =
+    path.startsWith("/") && !path.startsWith("//") && !path.includes("\\");
+  const pagePath = path.split(/[?#]/)[0];
+  if (!isSameSite || ["/", "/login", "/signup"].includes(pagePath ?? ""))
+    return "/login";
+  return `/login?redirect_url=${encodeURIComponent(path)}`;
+};
+
 /** The battle whose start has already sent this tab to /combat. */
 let navigatedBattleId: string | null = null;
 
@@ -50,13 +63,13 @@ export const useAwake = (
   useEffect(() => {
     if (canRecover) return;
     if (userStatus === "HOSPITALIZED") {
-      void router.push("/hospital");
+      void router.replace("/hospital");
     } else if (userStatus === "BATTLE") {
-      void router.push("/combat");
+      void router.replace("/combat");
     } else if (userStatus === "TRAVEL" && pathname !== "/travel") {
-      void router.push("/travel");
+      void router.replace("/travel");
     } else if (userStatus === "ASLEEP") {
-      void router.push("/home");
+      void router.replace("/home");
     }
   }, [pathname, userStatus, router, canRecover]);
   return userStatus === "AWAKE";

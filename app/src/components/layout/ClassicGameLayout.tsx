@@ -75,6 +75,8 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
   const { swapSides } = useActivityDock();
   const navbarMenuItemsLeft = navbarMenuItems.slice(0, 3);
   const navbarMenuItemsRight = navbarMenuItems.slice(3);
+  // Signed-in players go straight to their profile; "/" would only forward them there.
+  const logoHref = isSignedInLayout ? "/profile" : "/";
   return (
     <div data-world-page className="absolute top-0 bottom-0 w-full md:relative">
       <FloatingHelpButton
@@ -89,7 +91,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
           data-compact-hide
         >
           {!lightLayout && (
-            <Link href="/" data-light-layout-hide>
+            <Link href={logoHref} data-light-layout-hide>
               <Image
                 className="hidden md:block"
                 id="tutorial-logo"
@@ -102,9 +104,11 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
             </Link>
           )}
           <Link
-            href="/"
+            href={logoHref}
             className="absolute top-0 left-1/2 block min-w-0 -translate-x-1/2 md:hidden"
-            aria-label="The Ninja RPG home"
+            aria-label={
+              isSignedInLayout ? "The Ninja RPG profile" : "The Ninja RPG home"
+            }
           >
             <Image
               className="h-auto w-48 max-w-[48vw] sm:w-66 min-[420px]:w-60"

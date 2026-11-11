@@ -96,7 +96,11 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                 PIXEL_SIGNED_IN_SHELL_SURFACE,
               )}
             >
-              <Link href="/" className="flex items-center">
+              <Link
+                href="/profile"
+                className="flex items-center"
+                aria-label="The Ninja RPG profile"
+              >
                 <Image
                   className="h-auto w-[180px]"
                   id="tutorial-logo"
@@ -172,9 +176,9 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                   )}
                 </div>
                 <Link
-                  href="/"
+                  href="/profile"
                   className="absolute left-1/2 min-w-0 -translate-x-1/2"
-                  aria-label="The Ninja RPG home"
+                  aria-label="The Ninja RPG profile"
                 >
                   <Image
                     className="h-auto w-48 max-w-[48vw] sm:w-66 min-[420px]:w-60"

@@ -37,8 +37,8 @@ it.each([
 ] as const)(
   "preserves activity routing for %s (auto-wake %s, recovery %s)",
   (status, autoWakeUp, allowActionRecovery, destination) => {
-    const push = vi.fn();
-    vi.spyOn(router, "useNavigationRouter").mockReturnValue({ push } as never);
+    const replace = vi.fn();
+    vi.spyOn(router, "useNavigationRouter").mockReturnValue({ replace } as never);
     vi.spyOn(routing, "usePublicPathname").mockReturnValue("/travel");
     const view = render(
       <ActivityGuard
@@ -47,7 +47,7 @@ it.each([
         allowActionRecovery={allowActionRecovery}
       />,
     );
-    expect(push.mock.calls).toEqual(destination ? [[destination]] : []);
+    expect(replace.mock.calls).toEqual(destination ? [[destination]] : []);
     expect(view.getByText("Unavailable")).toBeTruthy();
   },
 );
