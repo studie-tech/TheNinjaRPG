@@ -112,17 +112,15 @@ const PusherListener = () => {
 
 it("refreshes a mounted home invitation list before showing its incoming invitation toast", async () => {
   let receiveEvent!: (data: UserEvent) => Promise<void>;
-  vi.spyOn(Pusher, "default").mockImplementation(function () {
-    return {
-      subscribe: () => ({
-        bind: (_event: string, handler: typeof receiveEvent) => {
-          receiveEvent = handler;
-        },
-      }),
-      unsubscribe: vi.fn(),
-      disconnect: vi.fn(),
-    };
-  } as never);
+  vi.spyOn(Pusher, "default").mockImplementation((() => ({
+    subscribe: () => ({
+      bind: (_event: string, handler: typeof receiveEvent) => {
+        receiveEvent = handler;
+      },
+    }),
+    unsubscribe: vi.fn(),
+    disconnect: vi.fn(),
+  })) as never);
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/home");
   const showToast = vi
     .spyOn(toast, "showMutationToast")
@@ -187,7 +185,9 @@ it("sends invitations through the request system and retains rejected input for 
   }) as HTMLInputElement;
   fireEvent.change(username, { target: { value: " Visitor " } });
   fireEvent.click(view.getByRole("button", { name: "Invite" }));
-  expect((await view.findByRole("status")).textContent).toBe("Player not found");
+  expect((await view.findByText("Player not found")).getAttribute("role")).toBe(
+    "status",
+  );
   await waitFor(() =>
     expect(
       (view.getByRole("button", { name: "Invite" }) as HTMLButtonElement).disabled,
