@@ -1,4 +1,5 @@
 import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
+import { Button } from "@/components/ui/button";
 import {
   DISCORD_INVITE_URL,
   GITHUB_ISSUES_URL,
@@ -25,7 +26,7 @@ export default function BugReport() {
   );
   return (
     <>
-      <ContentBox title="Report Bugs" subtitle="Found a bug? Let us know!">
+      <ContentBox title="Help & Feedback" subtitle="Found a bug? Let us know!">
         We need your help in making our gaming experience even better. Join our vibrant
         Discord community and become an integral part of our bug-reporting team. By
         sharing your valuable insights, you&lsquo;ll contribute to identifying and
@@ -35,20 +36,18 @@ export default function BugReport() {
         connection and make this game the best it can be. Join our Discord today and let
         your voice be heard! Alternatively, report bugs directly on GitHub and help us
         improve the game.
-        <div className="flex flex-row justify-center space-x-5 p-5">
-          <Link
-            href={DISCORD_INVITE_URL}
-            className="flex flex-col items-center font-bold hover:opacity-50"
-          >
-            <SiDiscord className="text-black dark:text-white" size={100} />
-            <p>Go to Discord</p>
+        <div className="flex flex-wrap justify-center gap-3 p-5">
+          <Link href={DISCORD_INVITE_URL}>
+            <Button>
+              <SiDiscord aria-hidden="true" className="mr-2 h-4 w-4" />
+              Join Discord
+            </Button>
           </Link>
-          <Link
-            href={GITHUB_ISSUES_URL}
-            className="flex flex-col items-center font-bold hover:opacity-50"
-          >
-            <SiGithub className="text-black dark:text-white" size={100} />
-            <p>Go to GitHub</p>
+          <Link href={GITHUB_ISSUES_URL}>
+            <Button variant="outline">
+              <SiGithub aria-hidden="true" className="mr-2 h-4 w-4" />
+              Open GitHub issues
+            </Button>
           </Link>
         </div>
       </ContentBox>
@@ -74,7 +73,7 @@ export default function BugReport() {
             community&quot;. ~Terr
           </i>
         </p>
-        <h2 className="mt-3 text-2xl">How to Contribute?</h2>
+        <h2 className="mt-3 font-bold text-lg">How to Contribute?</h2>
         <p>
           The latest version of TNR is based on the {link_t3} and the source code is
           made available on {link_github}. You&rsquo;re highly encouraged to check out
@@ -85,27 +84,20 @@ export default function BugReport() {
           technologies it&rsquo;s composed of yourself, and from there open a pull
           request on GitHub.
         </p>
-        <h2 className="mt-3 text-2xl">Feature Requests</h2>
+        <h2 className="mt-3 font-bold text-lg">Feature Requests</h2>
         <p>
-          Even if you have not coding skills or desire to learn, {link_issues} is where
+          Even if you have no coding skills or desire to learn, {link_issues} is where
           you can request new game features, or help giving feedback during development
           of new features.
         </p>
-        <div className="flex flex-row justify-center p-5">
-          <Link
-            href={GITHUB_REPO_URL}
-            className="flex flex-col items-center font-bold hover:opacity-50"
-          >
-            <SiGithub className="text-black dark:text-white" size={100} />
-            <p>Go to GitHub</p>
+        <div className="flex justify-center p-5">
+          <Link href={GITHUB_REPO_URL}>
+            <Button variant="outline">
+              <SiGithub aria-hidden="true" className="mr-2 h-4 w-4" />
+              View the source on GitHub
+            </Button>
           </Link>
         </div>
-        <Link
-          href="https://github.com/MathiasGruber/TNR-Core3"
-          className="font-bold text-xs italic"
-        >
-          - Link to old Core3 Code
-        </Link>
       </ContentBox>
     </>
   );

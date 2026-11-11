@@ -1,3 +1,5 @@
+import type { NavBarDropdownLink } from "@/libs/menus";
+
 /** One player's confirmed reaction state on a forum post. */
 export interface ForumReactionChange {
   postId: string;
@@ -37,3 +39,8 @@ export const applyForumReaction = <
     }),
   };
 };
+
+/** Clear the unread-news counter acknowledged by marking the news board read. */
+export const clearNewsNotifications = (
+  notifications: NavBarDropdownLink[] | undefined,
+) => notifications?.filter((entry) => entry.href !== "/news");
