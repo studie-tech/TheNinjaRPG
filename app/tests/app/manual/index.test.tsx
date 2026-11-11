@@ -5,15 +5,16 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as ImageLinkGrid from "@/layout/ImageLinkGrid";
 import * as UserContext from "@/utils/UserContext";
 
-let hrefs: string[];
+type Tile = { href: string; label?: string };
+let grids: Tile[][];
 
 beforeEach(() => {
-  hrefs = [];
+  grids = [];
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
     <div>{children}</div>
   ));
   vi.spyOn(ImageLinkGrid, "ImageLinkGrid").mockImplementation(({ entries }) => {
-    hrefs = entries.map((entry) => entry.href);
+    grids.push(entries);
     return null;
   });
 });
@@ -23,10 +24,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const manualCards = (role: string) => {
+/** Player tiles and staff tiles rendered for the role, in display order. */
+const manualGrids = (role: string) => {
+  grids = [];
   vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role } } as never);
   render(<ManualMain />);
-  return hrefs;
+  const [player = [], staff = []] = grids;
+  return { player, staff };
+};
+const manualCards = (role: string) => {
+  const { player, staff } = manualGrids(role);
+  return [...player, ...staff].map((tile) => tile.href);
 };
 
 it("lists the dungeon and hunting editors only for content staff", () => {
@@ -91,12 +99,25 @@ const roleCards: Record<string, string[]> = {
   CODER: contentCards,
 };
 
-it("lists every card permitted to each role in alphabetical order", () => {
+it("lists player pages, then the staff tools permitted to each role, by caption", () => {
+  const byHref = (names: string[]) => names.map((name) => `/manual/${name}`).sort();
   for (const [role, extra] of Object.entries(roleCards)) {
-    const expected = [...playerCards, ...extra]
-      .sort((a, b) => a.localeCompare(b))
-      .map((name) => `/manual/${name}`);
-    expect(manualCards(role)).toEqual(expected);
+    const { player, staff } = manualGrids(role);
+    expect(player.map((tile) => tile.href).sort()).toEqual(byHref(playerCards));
+    expect(staff.map((tile) => tile.href).sort()).toEqual(byHref(extra));
+    for (const tiles of [player, staff]) {
+      const labels = tiles.map((tile) => tile.label ?? "");
+      expect(labels.every(Boolean)).toBe(true);
+      expect(labels).toEqual([...labels].sort((a, b) => a.localeCompare(b)));
+    }
     cleanup();
   }
+});
+
+it("captions tiles with readable names instead of route slugs", () => {
+  const { player } = manualGrids("USER");
+  const label = (href: string) => player.find((tile) => tile.href === href)?.label;
+  expect(label("/manual/damage_calcs")).toBe("Damage Calculator");
+  expect(label("/manual/pvp_rank")).toBe("Ranked PvP");
+  expect(label("/manual/crafting_recipes")).toBe("Crafting Recipes");
 });

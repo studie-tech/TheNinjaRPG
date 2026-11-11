@@ -16,9 +16,24 @@ export default function TowerDefenseManual() {
   const canEditContent = canChangeContent(role);
 
   const entries = [
-    { name: "leaderboard", img: IMG_MANUAL_TOWER_LEADERBOARD, public: true },
-    { name: "characters", img: IMG_MANUAL_TOWER_ENEMIES, public: false },
-    { name: "upgrades", img: IMG_MANUAL_TOWER_UPGRADES, public: false },
+    {
+      name: "leaderboard",
+      label: "Leaderboard",
+      img: IMG_MANUAL_TOWER_LEADERBOARD,
+      public: true,
+    },
+    {
+      name: "characters",
+      label: "Characters",
+      img: IMG_MANUAL_TOWER_ENEMIES,
+      public: false,
+    },
+    {
+      name: "upgrades",
+      label: "Upgrades",
+      img: IMG_MANUAL_TOWER_UPGRADES,
+      public: false,
+    },
   ];
 
   const visibleEntries = entries.filter((e) => e.public || canEditContent);
@@ -34,7 +49,7 @@ export default function TowerDefenseManual() {
       <ImageLinkGrid
         priority
         entries={visibleEntries
-          .sort((a, b) => a.name.localeCompare(b.name))
+          .sort((a, b) => a.label.localeCompare(b.label))
           .map((page) => ({ ...page, href: `/manual/towerDefense/${page.name}` }))}
       />
     </ContentBox>
