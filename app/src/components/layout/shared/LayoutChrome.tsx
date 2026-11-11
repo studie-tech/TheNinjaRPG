@@ -8,6 +8,9 @@ import Loader from "@/layout/Loader";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
 import { cn } from "@/libs/shadui";
 
+/** The signed-in chat button sits above the tutorial spotlight, but beneath any open dialog or sheet. */
+export const CHAT_BUTTON_LAYER = "z-[65] in-[body[data-scroll-locked]]:z-40";
+
 /** Desktop help button of the Classic and Pixel frames; signed-in players follow the dock side. */
 export const FloatingHelpButton: React.FC<{
   hasCharacter: boolean;
@@ -20,7 +23,8 @@ export const FloatingHelpButton: React.FC<{
       "fixed bottom-1 rounded-full bg-slate-500",
       hasCharacter
         ? cn(
-            "z-[65] md:bottom-5",
+            CHAT_BUTTON_LAYER,
+            "md:bottom-5",
             swapSides ? "left-1 md:left-5" : "right-1 md:right-5",
           )
         : "right-1 z-50 md:right-5 md:bottom-5",

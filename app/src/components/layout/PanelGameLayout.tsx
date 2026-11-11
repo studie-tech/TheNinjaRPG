@@ -18,6 +18,7 @@ import Loader from "@/layout/Loader";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
 import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
+import { CHAT_BUTTON_LAYER } from "./shared/LayoutChrome";
 import { MobileNotificationsPopover } from "./shared/LayoutNotifications";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
 import { isClerkElement, keepSheetOpenForClerk } from "./shared/layoutUtils";
@@ -54,7 +55,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
         className={cn(
           "fixed hidden min-[1100px]:block",
           userData
-            ? cn("bottom-5 z-[65]", swapSides ? "left-5" : "right-5")
+            ? cn("bottom-5", CHAT_BUTTON_LAYER, swapSides ? "left-5" : "right-5")
             : "right-5 bottom-5 z-50",
         )}
       >
