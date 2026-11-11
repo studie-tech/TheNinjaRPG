@@ -86,10 +86,6 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await Promise.all([
-          utils.auction.getAuctionListings.invalidate(),
-          utils.auction.getAuctionListing.invalidate(),
-        ]);
         if ("amountToDeduct" in data && data.amountToDeduct && userData && listing) {
           const delta = data.amountToDeduct;
           if (listing.currencyType === "MONEY") {
@@ -105,6 +101,11 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
         setPendingBidAmount(null);
         setShowBidConfirmation(false);
         setShowBuyoutConfirmation(false);
+        // Listings refetch in the background; the dialog is released once the bid lands.
+        void Promise.all([
+          utils.auction.getAuctionListings.invalidate(),
+          utils.auction.getAuctionListing.invalidate(),
+        ]);
       }
     },
     onSettled: () => {
@@ -117,13 +118,13 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([
+          setShowCancelConfirmation(false);
+          setIsOpen(false);
+          void Promise.all([
             utils.auction.getAuctionListings.invalidate(),
             utils.auction.getAuctionListing.invalidate(),
             utils.item.getUserItems.invalidate(),
           ]);
-          setShowCancelConfirmation(false);
-          setIsOpen(false);
         }
       },
     });

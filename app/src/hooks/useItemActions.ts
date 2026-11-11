@@ -21,6 +21,8 @@ import { useRequiredUserData, useUserDataSelector } from "@/utils/UserContext";
  * Binds per-item tRPC mutations to the shared inventory and profile cache controllers.
  * Each action owns when onDone dismisses its initiating view; repairs dismiss only after
  * confirmed success, while actions with settlement handlers also dismiss after rejection.
+ * Inventory refetches after confirmed writes run in the background, so the pressed
+ * control is released as soon as the server answers.
  */
 export const useItemActions = ({
   useritem,
@@ -121,9 +123,7 @@ export const useItemActions = ({
     api.item.splitStack.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        if (data.success) {
-          await utils.item.getUserItemsWithVariants.invalidate();
-        }
+        if (data.success) void utils.item.getUserItemsWithVariants.invalidate();
       },
       onSettled,
     });
@@ -136,10 +136,8 @@ export const useItemActions = ({
         if (data.userRecovery && !data.success) void updateUser(data, { revision });
         if (data.success) {
           onDone();
-          await Promise.all([
-            utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser(data, { revision }),
-          ]);
+          await updateUser(data, { revision });
+          void utils.item.getUserItemsWithVariants.invalidate();
         }
       },
     });
@@ -152,10 +150,8 @@ export const useItemActions = ({
         if (data.userRecovery && !data.success) void updateUser(data, { revision });
         if (data.success) {
           onSettled();
-          await Promise.all([
-            utils.item.getUserItemsWithVariants.invalidate(),
-            updateUser(data, { revision }),
-          ]);
+          await updateUser(data, { revision });
+          void utils.item.getUserItemsWithVariants.invalidate();
         }
       },
     });
@@ -167,7 +163,7 @@ export const useItemActions = ({
       if (data.success || data.userRecovery)
         await updateUser(data, { revision, refetch: false });
       if (data.success) {
-        await Promise.all([
+        void Promise.all([
           utils.item.getUserItemsWithVariants.invalidate(),
           utils.item.getEvolutions.invalidate(),
           utils.item.getItemLoadouts.invalidate(),
@@ -181,9 +177,7 @@ export const useItemActions = ({
     api.occupation.removeImbuement.useMutation({
       onSuccess: async (data) => {
         showMutationToast(data);
-        if (data.success) {
-          await utils.item.getUserItemsWithVariants.invalidate();
-        }
+        if (data.success) void utils.item.getUserItemsWithVariants.invalidate();
       },
       onSettled,
     });
