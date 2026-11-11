@@ -21,6 +21,7 @@ import * as StatusBar from "@/layout/StatusBar";
 import * as SuggestChange from "@/layout/SuggestChange";
 import * as toast from "@/libs/toast";
 import type { AiWithRelations } from "@/routers/profile";
+import { humanizeIdentifier } from "@/utils/string";
 import * as UserContext from "@/utils/UserContext";
 
 const save = vi.fn();
@@ -187,10 +188,12 @@ describe("manual AI editing", () => {
     ));
     const view = await mount();
     for (const field of ["preferredGeneral1", "preferredGeneral2", "primaryElement"]) {
-      fireEvent.click(view.getByRole("button", { name: `Clear ${field}` }));
-      expect(view.getByRole("combobox", { name: field }).textContent).toContain(
-        "Select option",
+      fireEvent.click(
+        view.getByRole("button", { name: `Clear ${humanizeIdentifier(field)}` }),
       );
+      expect(
+        view.getByRole("combobox", { name: humanizeIdentifier(field) }).textContent,
+      ).toContain("Select option");
     }
     fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));

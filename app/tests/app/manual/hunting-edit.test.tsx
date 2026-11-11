@@ -86,9 +86,12 @@ it("uses server-assigned contract IDs when saving the habitat draft again", asyn
       <HuntingEditor />
     </QueryClientProvider>,
   );
-  fireEvent.change(view.getByRole("combobox", { name: "Edit existing habitat" }), {
-    target: { value: "forest" },
-  });
+  const habitatPicker = view.getByRole("combobox", { name: "Edit existing habitat" });
+  fireEvent.keyDown(habitatPicker, { key: "Enter" });
+  await act(async () =>
+    fireEvent.click(await view.findByRole("option", { name: content.name })),
+  );
+  await waitFor(() => expect(document.activeElement).toBe(habitatPicker));
   fireEvent.click(view.getByRole("button", { name: "Add creature contract" }));
   for (const [label, value] of [
     ["Contract name", "Boar"],

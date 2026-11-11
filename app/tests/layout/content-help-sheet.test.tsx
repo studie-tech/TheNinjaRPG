@@ -1,16 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import * as sheet from "@/components/ui/sheet";
-import * as mediaQuery from "@/hooks/useMediaQuery";
 import { BloodlineHelper } from "@/layout/ContentHelp";
 import * as UserContext from "@/utils/UserContext";
 
-let isDesktop: boolean;
-
 beforeEach(() => {
-  isDesktop = true;
-  vi.spyOn(mediaQuery, "useMediaQuery").mockImplementation(() => isDesktop);
   vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
     data: { role: "CONTENT-ADMIN" },
   } as never);
@@ -24,6 +19,9 @@ beforeEach(() => {
     children: ReactNode;
   }) => (
     <div data-testid="sheet" data-open={open}>
+      <button type="button" onClick={() => onOpenChange(true)}>
+        open
+      </button>
       <button type="button" onClick={() => onOpenChange(false)}>
         close
       </button>
@@ -33,9 +31,21 @@ beforeEach(() => {
   vi.spyOn(sheet, "SheetTrigger").mockImplementation((() => null) as never);
   vi.spyOn(sheet, "SheetContent").mockImplementation((({
     children,
+    onEscapeKeyDown,
+    onInteractOutside,
   }: {
     children: ReactNode;
-  }) => <div>{children}</div>) as never);
+    onEscapeKeyDown?: unknown;
+    onInteractOutside?: unknown;
+  }) => (
+    <div
+      data-testid="content"
+      data-blocks-escape={onEscapeKeyDown !== undefined}
+      data-blocks-outside={onInteractOutside !== undefined}
+    >
+      {children}
+    </div>
+  )) as never);
   vi.spyOn(sheet, "SheetHeader").mockImplementation((() => null) as never);
 });
 
@@ -47,30 +57,19 @@ afterEach(() => {
 describe("content helper sheet", () => {
   const helper = <BloodlineHelper bloodline={{ name: "Sharingan", rank: "A" }} />;
 
-  it("starts open on desktop and closed on mobile", () => {
-    const desktop = render(helper);
-    expect(desktop.getByTestId("sheet").dataset.open).toBe("true");
-    expect(desktop.getByText("Bloodline: Sharingan")).toBeTruthy();
-    cleanup();
-    isDesktop = false;
-    const mobile = render(helper);
-    expect(mobile.getByTestId("sheet").dataset.open).toBe("false");
-  });
-
-  it("stays closed across a resize that does not cross the breakpoint", () => {
+  it("starts closed and opens on request", () => {
     const view = render(helper);
+    expect(view.getByTestId("sheet").dataset.open).toBe("false");
+    fireEvent.click(view.getByText("open"));
+    expect(view.getByTestId("sheet").dataset.open).toBe("true");
+    expect(view.getByText("Bloodline: Sharingan")).toBeTruthy();
     fireEvent.click(view.getByText("close"));
-    act(() => {
-      window.dispatchEvent(new window.Event("resize"));
-    });
     expect(view.getByTestId("sheet").dataset.open).toBe("false");
   });
 
-  it("follows the breakpoint", () => {
-    isDesktop = false;
-    const view = render(helper);
-    isDesktop = true;
-    view.rerender(<BloodlineHelper bloodline={{ name: "Sharingan", rank: "A" }} />);
-    expect(view.getByTestId("sheet").dataset.open).toBe("true");
+  it("leaves Esc and outside clicks to dismiss the sheet", () => {
+    const content = render(helper).getByTestId("content");
+    expect(content.dataset.blocksEscape).toBe("false");
+    expect(content.dataset.blocksOutside).toBe("false");
   });
 });
