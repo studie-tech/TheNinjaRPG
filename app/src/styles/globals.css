@@ -73,6 +73,8 @@
   --radius-sm: calc(var(--radius) - 4px);
 
   --animate-home-sleep: home-sleep 3s ease-in-out infinite;
+  /* Calls to action pulse a ring around the button and keep full opacity, unlike disabled ones. */
+  --animate-cta-pulse: cta-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   /* Loading placeholders pulse below their resting 20% opacity, on the compositor. */
   --animate-placeholder-pulse: placeholder-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 
@@ -83,6 +85,16 @@
     }
     50% {
       opacity: 0.1;
+    }
+  }
+
+  @keyframes cta-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgb(249 115 22 / 0.65);
+    }
+    50% {
+      box-shadow: 0 0 0 5px rgb(249 115 22 / 0);
     }
   }
 

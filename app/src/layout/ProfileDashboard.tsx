@@ -349,7 +349,7 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
                           size="sm"
                           variant="outline"
                           disabled={claimStreak.isPending}
-                          className="w-full gap-1.5 hover:text-black"
+                          className="w-full gap-1.5"
                         >
                           <RotateCcw className="h-4 w-4" />
                           Reset
@@ -1028,7 +1028,7 @@ function RowAction({
 }) {
   if (restriction)
     return <RestrictionBadge message={restriction} label={restrictionLabel} />;
-  const className = cn("w-full gap-1.5", variant === "outline" && "hover:text-black");
+  const className = "w-full gap-1.5";
   const content = (
     <>
       <Icon className="h-4 w-4 shrink-0" />

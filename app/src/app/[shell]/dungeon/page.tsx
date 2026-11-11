@@ -123,6 +123,16 @@ export default function DungeonPage() {
     command: Parameters<typeof act.mutate>[0]["action"],
     userId?: string,
   ) => act.mutate({ id, action: command, userId });
+  /** Whether the pending party command is this one, so only the pressed button spins. */
+  const isSending = (
+    id: string,
+    command: Parameters<typeof act.mutate>[0]["action"],
+    userId?: string,
+  ) =>
+    act.isPending &&
+    act.variables?.id === id &&
+    act.variables.action === command &&
+    (userId === undefined || act.variables.userId === userId);
   const usernameOf = (userId: string) =>
     state.data?.users.find((u) => u.userId === userId)?.username;
   if (state.error)
@@ -233,6 +243,7 @@ export default function DungeonPage() {
               </div>
               <Button
                 disabled={pending}
+                loading={isSending(run.id, "accept")}
                 onClick={() => sendPartyAction(run.id, "accept")}
               >
                 Accept invitation
@@ -240,6 +251,7 @@ export default function DungeonPage() {
               <Button
                 variant="ghost"
                 disabled={pending}
+                loading={isSending(run.id, "decline")}
                 onClick={() => sendPartyAction(run.id, "decline")}
               >
                 Decline
@@ -261,7 +273,11 @@ export default function DungeonPage() {
                     All {run.state.clearedFloors.length} floors cleared
                   </p>
                 </div>
-                <Button disabled={pending} onClick={() => claim.mutate({ id: run.id })}>
+                <Button
+                  disabled={pending}
+                  loading={claim.isPending && claim.variables?.id === run.id}
+                  onClick={() => claim.mutate({ id: run.id })}
+                >
                   Claim completion rewards
                 </Button>
               </div>
@@ -407,6 +423,7 @@ export default function DungeonPage() {
                         size="sm"
                         variant="ghost"
                         disabled={pending}
+                        loading={isSending(current.id, "remove", id)}
                         onClick={() => sendPartyAction(current.id, "remove", id)}
                       >
                         Cancel invitation
@@ -431,6 +448,7 @@ export default function DungeonPage() {
                   <Button
                     variant="secondary"
                     disabled={pending || !selected[0]}
+                    loading={isSending(current.id, "invite")}
                     onClick={() => {
                       const target = selected[0];
                       if (target) sendPartyAction(current.id, "invite", target.userId);
@@ -452,6 +470,7 @@ export default function DungeonPage() {
                   <Button
                     variant={isReady ? "secondary" : "default"}
                     disabled={pending}
+                    loading={isSending(current.id, isReady ? "unready" : "ready")}
                     onClick={() =>
                       sendPartyAction(current.id, isReady ? "unready" : "ready")
                     }
@@ -463,6 +482,7 @@ export default function DungeonPage() {
                   <Button
                     variant={allReady ? "default" : "secondary"}
                     disabled={pending || !allReady}
+                    loading={isSending(current.id, "start")}
                     onClick={() => sendPartyAction(current.id, "start")}
                   >
                     <Swords className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -472,6 +492,7 @@ export default function DungeonPage() {
                 {current.leaderId === user.userId && current.status === "PAUSED" && (
                   <Button
                     disabled={pending}
+                    loading={isSending(current.id, "resume")}
                     onClick={() => sendPartyAction(current.id, "resume")}
                   >
                     Resume and ready up
@@ -593,6 +614,11 @@ export default function DungeonPage() {
                     </div>
                     <Button
                       disabled={pending || !!dungeon.admission.error}
+                      loading={
+                        create.isPending &&
+                        create.variables?.id === dungeon.id &&
+                        !create.variables.petIds
+                      }
                       onClick={() => create.mutate({ id: dungeon.id })}
                     >
                       Create lobby
@@ -603,6 +629,11 @@ export default function DungeonPage() {
                         pending ||
                         !!dungeon.admission.error ||
                         selectedPets.length !== DUNGEON_SOLO_PETS
+                      }
+                      loading={
+                        create.isPending &&
+                        create.variables?.id === dungeon.id &&
+                        !!create.variables.petIds
                       }
                       onClick={() =>
                         create.mutate({ id: dungeon.id, petIds: selectedPets })

@@ -896,7 +896,7 @@ export const HomeScene = ({
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8 hover:text-black"
+            className="h-8 w-8"
             aria-label="Zoom out"
             onClick={() =>
               setCamera((current) =>
@@ -918,7 +918,7 @@ export const HomeScene = ({
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8 hover:text-black"
+            className="h-8 w-8"
             aria-label="Zoom in"
             onClick={() =>
               setCamera((current) =>
@@ -934,7 +934,7 @@ export const HomeScene = ({
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8 hover:text-black"
+            className="h-8 w-8"
             aria-label="Reset view"
             hoverText="Reset view"
             onClick={() => setCamera(getHomeOverviewCamera(homeType))}

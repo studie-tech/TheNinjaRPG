@@ -171,6 +171,7 @@ export default function TerritoryWarPage() {
             {!ownTeam && (
               <Button
                 disabled={pending || !inSector || !canAttemptAwakeAction(user)}
+                loading={create.isPending}
                 onClick={() => create.mutate({ eventId: event.id })}
               >
                 Create guardian team
@@ -205,6 +206,7 @@ export default function TerritoryWarPage() {
                           <>
                             <Button
                               disabled={pending || !inSector}
+                              loading={start.isPending}
                               onClick={() => start.mutate({ teamId: team.id })}
                             >
                               Attack guardian
@@ -212,6 +214,7 @@ export default function TerritoryWarPage() {
                             <Button
                               variant="outline"
                               disabled={pending}
+                              loading={leave.isPending}
                               onClick={() => leave.mutate({ teamId: team.id })}
                             >
                               Leave
@@ -226,6 +229,9 @@ export default function TerritoryWarPage() {
                               !inSector ||
                               !canAttemptAwakeAction(user) ||
                               team.queue.length >= TERRITORY_WAR_TEAM_SIZE
+                            }
+                            loading={
+                              join.isPending && join.variables?.teamId === team.id
                             }
                             onClick={() => join.mutate({ teamId: team.id })}
                           >
