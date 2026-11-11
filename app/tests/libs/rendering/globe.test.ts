@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import globe from "@/data/hexasphere.json";
 import { globeMarkerAnchor } from "@/libs/rendering/scenes/globeMarkers";
-import { greatCircleBasis } from "@/libs/rendering/scenes/globeMesh";
 import {
   type GlobeCamera,
   globeCameraBasis,
@@ -11,6 +10,11 @@ import {
   globeRayHit,
   globeSectorAt,
 } from "@/libs/rendering/scenes/globeProjection";
+import {
+  createGlobeArc,
+  globeJourneyProgress,
+  greatCircleBasis,
+} from "@/libs/rendering/scenes/globeRoute";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 
 const map = globe as unknown as GlobalMapData;
@@ -129,6 +133,49 @@ describe("globe marker anchors", () => {
 });
 
 describe("globe route arcs", () => {
+  it("places a traveler on the ribbon from departure through its midpoint to arrival", () => {
+    const arc = createGlobeArc({ x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, 10);
+    expect(arc.at(0)).toEqual({ x: 10.06, y: 0, z: 0 });
+    expect(arc.at(1).x).toBeCloseTo(0);
+    expect(arc.at(1).z).toBeCloseTo(10.06);
+    const midway = arc.at(0.5);
+    expect(midway.x).toBeCloseTo(midway.z);
+    expect(Math.hypot(midway.x, midway.y, midway.z)).toBeGreaterThan(10.06);
+    expect(arc.at(-1)).toEqual(arc.at(0));
+    expect(arc.at(2)).toEqual(arc.at(1));
+    for (const to of [
+      { x: -1, y: 0, z: 0 },
+      { x: 1, y: 0, z: 0 },
+    ]) {
+      const edge = createGlobeArc({ x: 1, y: 0, z: 0 }, to, 10);
+      for (const t of [0, 0.25, 0.5, 0.75, 1])
+        expect(Object.values(edge.at(t)).every(Number.isFinite)).toBe(true);
+      expect(edge.at(1).x).toBeCloseTo(to.x * 10.06);
+    }
+  });
+
+  it("synchronizes progress to the server deadline across reloads, clock offsets and instant trips", () => {
+    const journey = {
+      userId: "hero",
+      fromSector: 724,
+      toSector: 177,
+      finishAt: 20_000,
+      durationMs: 10_000,
+    };
+    expect(globeJourneyProgress(journey, 9_000)).toBe(0);
+    expect(globeJourneyProgress(journey, 10_000)).toBe(0);
+    expect(globeJourneyProgress(journey, 15_000)).toBe(0.5);
+    const clientNow = 18_000,
+      timeDiff = 3_000;
+    expect(globeJourneyProgress(journey, clientNow - timeDiff)).toBe(0.5);
+    expect(
+      globeJourneyProgress(JSON.parse(JSON.stringify(journey)), 18_000),
+    ).toBeCloseTo(0.8);
+    expect(globeJourneyProgress(journey, 20_000)).toBe(1);
+    expect(globeJourneyProgress(journey, 25_000)).toBe(1);
+    expect(globeJourneyProgress({ ...journey, durationMs: 0 }, 10_000)).toBe(1);
+  });
+
   it("ends every route on its target, including each sector's exact antipode", () => {
     const unit = (point: { x: number; y: number; z: number }) => {
       const length = Math.hypot(point.x, point.y, point.z);

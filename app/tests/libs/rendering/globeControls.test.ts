@@ -50,6 +50,22 @@ const setup = () => {
 };
 
 describe("globe gesture ownership", () => {
+  it("lets journey follow distinguish manual orbiting from taps and zoom", () => {
+    const scene = setup();
+    try {
+      expect(scene.controls.rotationRevision()).toBe(0);
+      scene.controls.zoom(1.1);
+      scene.event("pointerdown", 1, 100, 100);
+      scene.event("pointerup", 1, 100, 100);
+      expect(scene.controls.rotationRevision()).toBe(0);
+      scene.event("pointerdown", 2, 100, 100);
+      scene.event("pointermove", 2, 140, 120);
+      scene.event("pointerup", 2, 140, 120);
+      expect(scene.controls.rotationRevision()).toBeGreaterThan(0);
+    } finally {
+      scene.dispose();
+    }
+  });
   it.each([-100, 100])("owns wheel zoom for delta %s", (deltaY) => {
     const scene = setup();
     try {

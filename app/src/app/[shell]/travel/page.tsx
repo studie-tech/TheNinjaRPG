@@ -96,6 +96,7 @@ import {
   calcGlobalTravelTime,
   globalTravelFinishPatch,
   optimisticGlobalTravelStart,
+  resolveGlobeJourney,
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
 import { getReadableVillageHexColor } from "@/utils/color";
@@ -203,6 +204,10 @@ function Travel() {
   const [currentPosition, setCurrentPosition] = useState<SectorPoint | null>(null);
   const [targetPosition, setTargetPosition] = useState<SectorPoint | null>(null);
   const [targetSector, setTargetSector] = useState<number | null>(null);
+  const [storedJourney, setStoredJourney] = useLocalStorage<unknown>(
+    "worldTravelJourney",
+    null,
+  );
 
   // Data from database
   const {
@@ -561,6 +566,7 @@ function Travel() {
         setWorldExpanded(false);
         if (!userData) return;
         const previous = {
+          userId: userData.userId,
           status: userData.status,
           travelFinishAt: userData.travelFinishAt ?? null,
         };
@@ -571,7 +577,10 @@ function Travel() {
           ? calcGlobalTravelTime(userData.sector, destinationSector, globe)
           : 0;
         await updateUser(optimisticGlobalTravelStart(travelTime));
-        return { ...previous, revision: prepareUserUpdate() };
+        return {
+          ...previous,
+          revision: prepareUserUpdate(),
+        };
       },
       onError: async (_error, _variables, previous) => {
         setAutoDestination(null);
@@ -588,6 +597,19 @@ function Travel() {
       onSuccess: async (result, _variables, previous) => {
         showMutationToast(result);
         if (result.success && result.data) {
+          if (
+            previous &&
+            result.fromSector !== undefined &&
+            result.durationMs !== undefined
+          ) {
+            setStoredJourney({
+              userId: previous.userId,
+              fromSector: result.fromSector,
+              toSector: result.data.sector,
+              finishAt: result.data.travelFinishAt.getTime(),
+              durationMs: result.durationMs,
+            });
+          }
           // Clear any local-sector movement target before the destination
           // coordinates enter UserContext so it cannot overwrite the arrival.
           // Do not write sector/coords until this payload arrives — they are
@@ -774,6 +796,16 @@ function Travel() {
   }, []);
 
   const isTraveling = userData?.status === "TRAVEL";
+  const globeJourney = useMemo(
+    () => resolveGlobeJourney(storedJourney, userData),
+    [
+      storedJourney,
+      userData?.userId,
+      userData?.sector,
+      userData?.status,
+      userData?.travelFinishAt,
+    ],
+  );
   const isGlobal = isTraveling || activeTab === globalLink;
   const showGlobal = villages && globe && isGlobal;
   // Admission supplies the destination coordinates. Prepare its scene during the
@@ -833,6 +865,7 @@ function Travel() {
             isTraveling ? "You are traveling to your destination" : undefined
           }
           routeTarget={showModal ? targetSector : null}
+          journey={globeJourney}
           onTileClick={(sector) => initiateTravelToSector(sector)}
           hexasphere={globe}
         />
@@ -845,6 +878,7 @@ function Travel() {
     showOwnership,
     globeFocusSector,
     isTraveling,
+    globeJourney,
     showModal,
     targetSector,
     userData?.tutorialOn,

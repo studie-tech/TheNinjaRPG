@@ -417,7 +417,7 @@ export const TUTORIAL_STEPS: TutorialStepConfig[] = [
     chapter: "mission",
     title: "The world map",
     description:
-      "This globe is the world of Seichi, and the orange \u2757 badge marks your objective. Journeys between sectors take a little time. The globe stays visible with an arrival timer during your trip. Don't worry, I'm coming with you.",
+      "This globe is the world of Seichi, and the orange \u2757 badge marks your objective. Journeys between sectors take a little time. Follow your character along the route as the arrival timer counts down. Don't worry, I'm coming with you.",
     action: "Open Global, tap the orange \u2757 badge, then confirm the trip.",
     elementIds: globalTravelElements,
     page: "/travel",

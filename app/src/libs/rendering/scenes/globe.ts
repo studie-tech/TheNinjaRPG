@@ -35,11 +35,16 @@ import {
   globeDistanceLimits,
   globeSectorAt,
 } from "@/libs/rendering/scenes/globeProjection";
+import {
+  createGlobeArc,
+  globeJourneyProgress,
+} from "@/libs/rendering/scenes/globeRoute";
 import { createSectorGenerator } from "@/libs/rendering/sectorGenerationClient";
 import { worldSunlight } from "@/libs/rendering/worldSunlight";
 import { getWorldWeather, type WorldWeather } from "@/libs/rendering/worldWeather";
 import type { GlobalMapData, GlobalPoint } from "@/libs/sector-map/world-types";
 import { getReadableVillageHexColor } from "@/utils/color";
+import type { GlobeJourney } from "@/validators/travel";
 
 /**
  * Owns the projected globe; the surface is ready on return while marker images
@@ -215,9 +220,14 @@ export const createGlobeScene = async (options: {
       );
     };
     let routeKey = "";
+    let journeyKey = "";
+    let journeyRotationRevision = 0;
+    let journeyArc: ReturnType<typeof createGlobeArc> | null = null;
     const updateRoute = () => {
-      const target = hovered ?? state.routeTarget ?? null;
-      const from = state.userLocation && state.user ? state.user.sector : null;
+      const target = state.journey?.toSector ?? hovered ?? state.routeTarget ?? null;
+      const from =
+        state.journey?.fromSector ??
+        (state.userLocation && state.user ? state.user.sector : null);
       if (routeKey === `${from}:${target}`) return;
       routeKey = `${from}:${target}`;
       route.set(
@@ -250,8 +260,19 @@ export const createGlobeScene = async (options: {
       },
     );
     const updateState = (next: GlobeSceneState) => {
-      if (next.focusSector !== state.focusSector) aimAt(next.focusSector);
+      if (!next.journey && next.focusSector !== state.focusSector)
+        aimAt(next.focusSector);
       state = next;
+      const key = state.journey
+        ? `${state.journey.userId}:${state.journey.finishAt}`
+        : "";
+      if (key !== journeyKey) {
+        journeyKey = key;
+        journeyRotationRevision = controls.rotationRevision();
+        const from = state.journey ? surfacePoint(map, state.journey.fromSector) : null;
+        const to = state.journey ? surfacePoint(map, state.journey.toSector) : null;
+        journeyArc = from && to ? createGlobeArc(from, to, radius) : null;
+      }
       ownerBySector = new Map(
         state.ownership?.sectors.map((entry) => [entry.sector, entry.villageId]),
       );
@@ -346,29 +367,38 @@ export const createGlobeScene = async (options: {
             clickable: true,
           });
         }
-      const avatar = (user: GlobeUser, border: string, clickable: boolean) => {
+      const avatar = (
+        user: GlobeUser,
+        border: string,
+        clickable: boolean,
+        id?: string,
+      ) => {
         const point = surfacePoint(map, user.sector);
         if (!point) return;
         avatars.push({
+          id,
           kind: "avatar",
           sector: user.sector,
           point,
           image: user.avatarLight || user.avatar || IMG_AVATAR_DEFAULT,
           border,
           clickable,
+          edge: id === "traveler" && !!state.journey,
         });
       };
       for (const user of state.usersHighlighted ?? []) avatar(user, "#dc2626", true);
       const own = state.user ? surfacePoint(map, state.user.sector) : null;
       if (state.user && own) {
         ground.push({
+          id: "traveler",
           kind: "ring",
           sector: state.user.sector,
           point: own,
           border: "#ffffff",
           pulse: true,
+          edge: !!state.journey,
         });
-        avatar(state.user, "white", false);
+        avatar(state.user, "white", false, "traveler");
       }
       // A quest or target in a village's sector is pinned onto that village's banner,
       // so every marker stays on its own sector instead of standing beside the pole.
@@ -460,6 +490,27 @@ export const createGlobeScene = async (options: {
     };
     game.setUpdate((frame) => {
       elapsed += frame.delta;
+      if (state.journey && journeyArc) {
+        const progress = globeJourneyProgress(
+          state.journey,
+          Date.now() - state.timeDiff,
+        );
+        // Reduced motion advances in one-second steps instead of continuously rotating the globe.
+        const seconds = state.journey.durationMs / 1000;
+        const visualProgress =
+          frame.reducedMotion && progress < 1 && seconds > 0
+            ? Math.floor(progress * seconds) / seconds
+            : progress;
+        const point = journeyArc.at(visualProgress);
+        markers.move("traveler", point);
+        if (
+          !controls.isInteracting() &&
+          controls.rotationRevision() === journeyRotationRevision
+        ) {
+          camera.longitude = Math.atan2(point.z, point.x);
+          camera.latitude = Math.asin(point.y / Math.hypot(point.x, point.y, point.z));
+        }
+      }
       if (elapsed - skyCheckedAt > 5 || lastClouds !== state.layers.clouds) {
         skyCheckedAt = elapsed;
         lastClouds = state.layers.clouds;
@@ -471,6 +522,7 @@ export const createGlobeScene = async (options: {
       }
       if (
         state.autoRotate &&
+        !state.journey &&
         !state.isTravelStep &&
         !frame.reducedMotion &&
         !controls.isInteracting()
@@ -646,6 +698,7 @@ export type GlobeSceneState = {
   timeDiff: number;
   /** Destination the route arc keeps pointing at when nothing is hovered (a pending trip). */
   routeTarget?: number | null;
+  journey?: GlobeJourney | null;
   layers: GlobeLayers;
   ownership?: {
     sectors: { sector: number; villageId: string }[];

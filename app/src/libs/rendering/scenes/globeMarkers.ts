@@ -226,6 +226,31 @@ void main() {
   return {
     container,
     set,
+    /** Move existing billboards without redrawing their atlas or reloading artwork. */
+    move: (id: string, point: GlobalPoint) => {
+      const dirty = new Set<Geometry>();
+      markers.forEach((marker, index) => {
+        if (marker.id !== id) return;
+        if (
+          marker.point.x === point.x &&
+          marker.point.y === point.y &&
+          marker.point.z === point.z
+        )
+          return;
+        marker.point = point;
+        const geometry = pages[Math.floor(index / 64)]?.geometry;
+        if (!geometry) return;
+        const positions = geometry.getBuffer("aPosition").data as Float32Array;
+        const offset = (index % 64) * 12;
+        for (let vertex = 0; vertex < 4; vertex++) {
+          positions[offset + vertex * 3] = point.x;
+          positions[offset + vertex * 3 + 1] = point.y;
+          positions[offset + vertex * 3 + 2] = point.z;
+        }
+        dirty.add(geometry);
+      });
+      for (const geometry of dirty) geometry.getBuffer("aPosition").update();
+    },
     emphasizeOwner: (owner: string | null) => {
       if (owner === hoveredOwner) return;
       hoveredOwner = owner;
@@ -242,7 +267,7 @@ void main() {
         })
         .filter(({ anchor }) => anchor.isVisible)
         .sort((a, b) => a.projected.depth - b.projected.depth);
-      for (const { marker, anchor, projected } of candidates) {
+      for (const { marker, projected } of candidates) {
         const layout = MARKER_LAYOUT[marker.kind];
         const [bottom, top] = layout.hit ?? [layout.lift, layout.lift + layout.height];
         const dx = (x - projected.x) / projected.scale - (layout.shift ?? 0),
@@ -504,6 +529,8 @@ const drawAvatar = (
  * marker visible on the rim in its direction.
  */
 export type GlobeMarker = {
+  /** Shared by billboards that move together, such as the viewer's avatar and ring. */
+  id?: string;
   kind:
     | "label"
     | "avatar"

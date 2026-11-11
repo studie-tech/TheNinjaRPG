@@ -57,6 +57,16 @@ export const travelPinSchema = travelLocationSchema.extend({
 });
 export type TravelPin = z.infer<typeof travelPinSchema>;
 
+/** Browser presentation metadata; the matching profile deadline remains authoritative. */
+export const globeJourneySchema = z.object({
+  userId: z.string().min(1),
+  fromSector: sectorIdSchema,
+  toSector: sectorIdSchema,
+  finishAt: z.number().int().positive(),
+  durationMs: z.number().int().nonnegative(),
+});
+export type GlobeJourney = z.infer<typeof globeJourneySchema>;
+
 /** Reads stored pins one by one, so a single stale or invalid pin does not drop the rest. */
 export const parseTravelPins = (stored: unknown): TravelPin[] =>
   (Array.isArray(stored) ? stored : [])

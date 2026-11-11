@@ -19,6 +19,7 @@ import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { calcGlobalTravelTime } from "@/libs/travel";
 import { getReadableVillageHexColor } from "@/utils/color";
 import { useUserData } from "@/utils/UserContext";
+import type { GlobeJourney } from "@/validators/travel";
 
 interface MapProps {
   highlights?: Village[];
@@ -38,6 +39,8 @@ interface MapProps {
   focusSector?: number | null;
   /** Sector of a trip awaiting confirmation; the route arc keeps pointing at it. */
   routeTarget?: number | null;
+  /** Confirmed journey whose marker follows the same deadline as the countdown. */
+  journey?: GlobeJourney | null;
   /** Receive the picked world sector ID for travel, editing or war selection. */
   onTileClick?: (sector: number) => void;
 }
@@ -108,6 +111,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       questSectors,
       timeDiff,
       routeTarget: props.routeTarget,
+      journey: props.journey,
       layers,
     }),
     [
@@ -124,6 +128,7 @@ const GlobalMap: React.FC<MapProps> = (props) => {
       questSectors,
       timeDiff,
       props.routeTarget,
+      props.journey,
       layers,
     ],
   );
