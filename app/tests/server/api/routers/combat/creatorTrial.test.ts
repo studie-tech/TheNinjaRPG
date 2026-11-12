@@ -16,17 +16,19 @@ import { Pusher } from "@/libs/pusher";
 import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { questsRouter } from "@/server/api/routers/quests";
 import { insertDefaultAiProfile, insertUsers } from "../../../../setup/factories";
+import { readMigration } from "../../../../setup/migrations";
 import {
   callerFor,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
+  runRawSql,
 } from "../../../../setup/testDatabase";
 
 const HERO = "trial-hero";
 const CREATOR = "trial-creator";
 const SPOT = { sector: 12, longitude: 5, latitude: 6 };
-const IDS = [CREATOR_TRIAL_FIRST_FORM, "trial-form-b", "trial-form-c"];
+const IDS = [CREATOR_TRIAL_FIRST_FORM, "trial-form-b", "creator-trial-elite"];
 const ARRIVAL = { log: "It rises", tier: 1, color: 1, glow: 2 };
 
 const attack = async (position = SPOT) =>
@@ -250,6 +252,159 @@ describeWithDatabase("creator trial admission", () => {
       expect(
         await client.query.userBadge.findFirst({ where: eq(userBadge.userId, HERO) }),
       ).toMatchObject({ badgeId: "creator-badge" });
+    },
+  );
+
+  it.each([true, false])(
+    "awards God-mode independently when the original achievement is completed: %s",
+    async (hasOriginal) => {
+      const client = await getTestDatabase();
+      const originalQuestId = "g2ilVOzFys21wkEHwfTeE";
+      await client.insert(badge).values({
+        id: "original-badge",
+        name: "Killed the Creator",
+        image: "image",
+        description: "",
+      });
+      await client.insert(quest).values({
+        id: originalQuestId,
+        name: "Kill the Creator",
+        questType: "achievement",
+        content: {
+          reward: {},
+          objectives: [
+            {
+              id: "original-objective",
+              task: "defeat_opponents",
+              opponentAIs: [{ ids: [CREATOR], number: 1 }],
+              completionOutcome: "Win",
+              reward_rank: "NONE",
+              reward_village_membership: "NONE",
+              reward_badges: ["original-badge", "creator-trial-badge"],
+            },
+          ],
+          sceneBackground: "",
+          sceneCharacters: [],
+        },
+      } as never);
+      if (hasOriginal) {
+        await client.insert(questHistory).values({
+          id: "original-history",
+          userId: HERO,
+          questId: originalQuestId,
+          questType: "achievement",
+          completed: 1,
+          previousCompletes: 1,
+          endAt: new Date(),
+        });
+        await client
+          .insert(userBadge)
+          .values({ userId: HERO, badgeId: "original-badge" });
+      }
+      await runRawSql(await readMigration("0152_creator_trial_achievement.sql"));
+      await attack();
+      const created = (await client.query.battle.findFirst())!;
+      // Set up the final round with both earlier forms defeated and the last form on the field.
+      const pending = created.extraState.encounter!.pendingWaves;
+      const usersState = [
+        ...created.usersState,
+        ...pending.flatMap((wave) => wave.users),
+      ].map((user) => (user.isAi ? { ...user, curHealth: 0 } : user));
+      await client
+        .update(battle)
+        .set({
+          usersState,
+          extraState: {
+            ...created.extraState,
+            encounter: { ...created.extraState.encounter!, pendingWaves: [] },
+          },
+        })
+        .where(eq(battle.id, created.id));
+      const caller = await callerFor(combatRouter, HERO);
+      expect((await caller.getBattle({ battleId: created.id })).result?.outcome).toBe(
+        "Won",
+      );
+      const quests = await callerFor(questsRouter, HERO);
+      expect(
+        await quests.checkRewards({ questId: "creator-trial-achievement" }),
+      ).toMatchObject({ success: true });
+      if (!hasOriginal)
+        expect(await quests.checkRewards({ questId: originalQuestId })).toMatchObject({
+          success: true,
+        });
+      await quests.checkRewards({ questId: "creator-trial-achievement" });
+      expect(
+        await client.query.userData.findFirst({ where: eq(userData.userId, HERO) }),
+      ).toMatchObject({ rank: "STUDENT", villageId: "village" });
+      expect(
+        (await client.query.userBadge.findMany({ where: eq(userBadge.userId, HERO) }))
+          .map((row) => row.badgeId)
+          .sort(),
+      ).toEqual(["creator-trial-badge", "original-badge"]);
+      expect(
+        await client.query.questHistory.findFirst({
+          where: eq(questHistory.questId, originalQuestId),
+        }),
+      ).toMatchObject({ completed: 1, previousCompletes: 1 });
+    },
+  );
+
+  it.each(["Lost", "Fled", "opening-only", "pending"] as const)(
+    "withholds the God-mode badge for %s",
+    async (outcome) => {
+      const client = await getTestDatabase();
+      await runRawSql(await readMigration("0152_creator_trial_achievement.sql"));
+      await attack();
+      const created = (await client.query.battle.findFirst())!;
+      const encounter = created.extraState.encounter!;
+      const usersState =
+        outcome === "Lost" || outcome === "Fled"
+          ? [
+              ...created.usersState.map((user) =>
+                user.isAi
+                  ? { ...user, curHealth: 0 }
+                  : {
+                      ...user,
+                      curHealth: outcome === "Lost" ? 0 : user.curHealth,
+                      fledBattle: outcome === "Fled",
+                    },
+              ),
+              ...encounter.pendingWaves.flatMap((wave) => wave.users),
+            ]
+          : created.usersState.map((user) =>
+              user.isAi ? { ...user, curHealth: 0 } : user,
+            );
+      await client
+        .update(battle)
+        .set({
+          usersState,
+          extraState: {
+            ...created.extraState,
+            encounter: {
+              ...encounter,
+              pendingWaves: outcome === "pending" ? encounter.pendingWaves : [],
+            },
+          },
+        })
+        .where(eq(battle.id, created.id));
+      const caller = await callerFor(combatRouter, HERO);
+      const result = (await caller.getBattle({ battleId: created.id })).result;
+      if (outcome === "pending") expect(result).toBeNull();
+      else expect(result?.outcome).toBe(outcome === "opening-only" ? "Won" : outcome);
+      await (await callerFor(questsRouter, HERO)).checkRewards({
+        questId: "creator-trial-achievement",
+      });
+      expect(
+        await client.query.userBadge.findMany({ where: eq(userBadge.userId, HERO) }),
+      ).toEqual([]);
+      const hero = await client.query.userData.findFirst({
+        where: eq(userData.userId, HERO),
+      });
+      expect(
+        hero?.questData
+          ?.find((tracker) => tracker.id === "creator-trial-achievement")
+          ?.goals.some((goal) => goal.done),
+      ).not.toBe(true);
     },
   );
 });
