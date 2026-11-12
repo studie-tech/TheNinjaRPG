@@ -463,6 +463,8 @@ export type PreBattleGearModifiers = {
  * Static data is stored once at battle initiation and looked up by ID.
  */
 export type ExtraState = {
+  /** UTC silo window captured at admission; settlement performs no eligibility fetch. */
+  resourceSiloWindowId?: string;
   hunting?: HuntingBattleState;
   /** Durable scheduled defense and tenure; settlement never needs another fetch. */
   kageMatch?: {

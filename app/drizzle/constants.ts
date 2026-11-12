@@ -184,6 +184,12 @@ export const MAP_WAKE_ISLAND_SECTOR = 222;
 // Robbery, farming and crafting restrictions on Wake Island are independent of this.
 export const WAKE_ISLAND_PVP_PROTECTION = false;
 export const MAP_WAR_TORN_BATTLEGROUND_SECTOR = 335;
+export const RESOURCE_SILO_POINTS_REQUIRED = 60;
+export const RESOURCE_SILO_WIN_POINTS = 10;
+export const RESOURCE_SILO_LOSS_POINTS = 5;
+export const RESOURCE_SILO_RESPAWN_COST = 40000;
+export const RESOURCE_SILO_INTERVAL_HOURS = 3;
+export const RESOURCE_SILO_DURATION_HOURS = 1;
 export const MAP_WAR_TORN_BATTLEGROUND_COLOR = "#dc2626";
 export const MAP_GLOBAL_TRAVEL_TIME_CAP_SECS = 10;
 export const SECTOR_MAP_MAX_DIMENSION = 64;

@@ -6,6 +6,7 @@ import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { IMG_BUILDING_HOSPITAL, MEDNIN_MIN_RANK } from "@/drizzle/constants";
+import { useWarTornRevival } from "@/hooks/useResourceSilos";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import {
@@ -18,6 +19,7 @@ import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import StatusBar from "@/layout/StatusBar";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { WarTornRevival } from "@/layout/WarTornRevival";
 import {
   calcHealCost,
   calcMedninHealablePool,
@@ -33,10 +35,19 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
 
+/** Keep hospital treatment available while resolving the optional War-Torn revival choice. */
 export default function Hospital() {
   // Settings
+  const revival = useWarTornRevival();
+  // A confirmed shrine revival must finish profile reconciliation before hospital access redirects.
   const { userData, access, timeDiff, prepareUserUpdate, updateUser } =
-    useRequireInVillage("/hospital");
+    useRequireInVillage("/hospital", {
+      enabled: !revival.isPending,
+      redirectTo:
+        revival.data?.success && revival.variables?.destination === "shrine"
+          ? "/shrine"
+          : undefined,
+    });
   const isHospitalized = userData?.status === "HOSPITALIZED";
 
   // Mutations
@@ -97,6 +108,7 @@ export default function Hospital() {
         className="w-full"
         priority={true}
       />
+      <WarTornRevival revival={revival} />
       {!isPending && isHospitalized && userData && healFinishAt && (
         <div className="p-3">
           <p>

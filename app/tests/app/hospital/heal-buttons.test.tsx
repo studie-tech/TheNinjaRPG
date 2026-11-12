@@ -83,10 +83,20 @@ it("gives the hospitalized player's wait and pay buttons distinct ids", () => {
     prepareUserUpdate: vi.fn(),
     updateUser: vi.fn(),
   } as never);
+  // The War-Torn revival panel reads the profile and stays hidden for ordinary patients.
+  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+    data: { ...patient(40), warTornRespawn: false },
+    prepareUserUpdate: vi.fn(),
+    updateUser: vi.fn(),
+  } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     hospital: {
       npcHeal: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    resourceSilos: {
+      respawn: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    useUtils: () => ({}),
   });
   const view = render(
     <AppRouterContext.Provider value={{} as never}>

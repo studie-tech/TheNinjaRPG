@@ -53,12 +53,18 @@ export const createGenericStructure = (info: {
   };
 };
 
+/** The shrine's authored map position, with the shared unanchored-map fallback. */
+export const getSectorShrinePosition = (map: Pick<NormalizedSectorMap, "anchors">) => {
+  const anchor = resolveSectorAnchor(map, "shrine.default");
+  return { x: anchor?.x ?? 10, y: anchor?.y ?? 5 };
+};
+
 /** Authored anchors and a shared identity keep sector state, rendered picking and shrine actions aligned. */
 export const createShrineStructure = (
   map: NormalizedSectorMap,
   globalTileType: number,
 ) => {
-  const anchor = resolveSectorAnchor(map, "shrine.default");
+  const anchor = getSectorShrinePosition(map);
   const art = Object.values(WORLD_STRUCTURE_ART).find(
     (art) => art.route === "/shrine" && art.sector === map.sector,
   );
@@ -71,8 +77,8 @@ export const createShrineStructure = (
         WAR_SHRINE_IMAGE_BY_BIOME[
           getBiomeAtSectorAnchor(map, "shrine.default", globalTileType)
         ],
-      longitude: anchor?.x ?? 10,
-      latitude: anchor?.y ?? 5,
+      longitude: anchor.x,
+      latitude: anchor.y,
     }),
     id: "sector-shrine",
   };

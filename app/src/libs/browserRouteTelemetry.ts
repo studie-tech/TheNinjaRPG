@@ -108,6 +108,7 @@ export const PUBLIC_PAGE_ROUTES = [
   "/manual/review",
   "/manual/review/battlefield",
   "/manual/rewards",
+  "/manual/resource_silos",
   "/manual/sageMode",
   "/manual/sageMode/edit/[sagemodeid]",
   "/manual/sprite_studio",

@@ -60,6 +60,10 @@ import type {
   RankedSeasonDivisionReward,
 } from "@/validators/pvpRank";
 import type { AdditionalContext } from "@/validators/reports";
+import type {
+  ResourceSiloEntryType,
+  ResourceSiloProgress,
+} from "@/validators/resourceSilos";
 import type { ObjectiveRewardType, PendingRewardChoice } from "@/validators/rewards";
 import type { TitleEffect } from "@/validators/title";
 import type { EventTournamentState } from "@/validators/tournament";
@@ -3036,6 +3040,9 @@ export const userData = mysqlTable(
     regeneration: tinyint("regeneration").default(60).notNull(),
     money: bigint("money", { mode: "number" }).default(1000).notNull(),
     bank: bigint("bank", { mode: "number" }).default(1000).notNull(),
+    resourceSiloProgress: json("resourceSiloProgress").$type<ResourceSiloProgress>(),
+    /** An unconsumed choice from a death in the War-Torn Sector. */
+    warTornRespawn: boolean("warTornRespawn").default(false).notNull(),
     experience: int("experience").default(0).notNull(),
     earnedExperience: int("earnedExperience").default(2000).notNull(),
     // The active companion's unused XP is parked on its pet row when another becomes active.
@@ -4782,6 +4789,13 @@ export const rewardPackage = mysqlTable("RewardPackage", {
     .default(sql`(CURRENT_TIMESTAMP(3))`)
     .notNull(),
 });
+/** Singleton reward pool for the War-Torn shrine's weekend resource silo. */
+export const resourceSilo = mysqlTable("ResourceSilo", {
+  id: varchar("id", { length: 191 }).primaryKey().notNull(),
+  entries: json("entries").$type<ResourceSiloEntryType[]>().notNull(),
+  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 }).notNull(),
+});
+
 /** Named editor grouping of existing reward fields, with no independent payout behavior. */
 export const rewardNode = mysqlTable("RewardNode", {
   id: varchar("id", { length: 191 }).primaryKey().notNull(),
