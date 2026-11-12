@@ -22,6 +22,7 @@ import {
   getBattleGrid,
   resolveDamageCreditUser,
 } from "@/libs/combat/util";
+import { calcHP } from "@/libs/profile";
 import type { DrizzleClient } from "@/server/db";
 import { AiRule } from "@/validators/ai";
 import {
@@ -62,6 +63,9 @@ const petFixture = (patch: Partial<BattlePet> = {}): BattlePet => ({
   rank: 1,
   experience: 1000,
   storedExperience: 0,
+  potentialValue: 1,
+  potentialRevealed: true,
+  potentialChances: [],
   lastFedAt: null,
   species: petSpeciesFixture(),
   jutsuIds: [],
@@ -201,6 +205,64 @@ describe("owned pets in combat", () => {
   });
   afterEach(() => {
     PET_BATTLE_CONFIG.enabled = previousBattleEnabled;
+  });
+
+  it("freezes rank-based caps at initiation and keeps HP independent of hidden potential", () => {
+    const battle = scenario();
+    add(battle, [
+      petFixture({
+        rank: 10,
+        artRank: 10,
+        experience: 2_000_000,
+        potentialValue: 1,
+        potentialRevealed: false,
+        offence: 800_000,
+        strength: 800_000,
+      }),
+    ]);
+    // The actual character rank, rather than normalized battle rank, enables rank ten.
+    const actor = battle.usersState.find((entry) => entry.petId);
+    expect(actor).toBeUndefined();
+    addPetsToBattle({
+      ...battle,
+      pets: [
+        petFixture({
+          rank: 10,
+          artRank: 10,
+          experience: 2_000_000,
+          potentialValue: 1,
+          potentialRevealed: false,
+          offence: 800_000,
+          strength: 800_000,
+        }),
+      ],
+      ownerRanks: { owner: "ELITE JONIN" },
+    });
+    const spawned = battle.usersState.find((entry) => entry.petId);
+    expect(spawned?.maxHealth).toBe(calcHP(spawned!.level));
+    expect(spawned?.curHealth).toBe(spawned?.maxHealth);
+    expect(spawned?.offence).toBe(800_000);
+    expect(spawned?.strength).toBe(600_000);
+  });
+
+  it("gives revealed Perfect pets only fifty percent cap headroom without changing level-derived HP", () => {
+    const battle = scenario();
+    const pet = petFixture({
+      rank: 10,
+      artRank: 10,
+      experience: 3_000_000,
+      potentialValue: 5,
+      potentialRevealed: true,
+      offence: 9_000_000,
+      strength: 9_000_000,
+    });
+    addPetsToBattle({ ...battle, pets: [pet], ownerRanks: { owner: "ELITE JONIN" } });
+    const actor = battle.usersState.find((entry) => entry.petId)!;
+    expect(actor.offence).toBe(2_250_000);
+    expect(actor.strength).toBe(900_000);
+    expect(actor.maxHealth).toBe(calcHP(actor.level));
+    pet.potentialValue = 1;
+    expect(actor.offence).toBe(2_250_000);
   });
 
   it("spawns both selected solo dungeon pets with independent actors and distinct cells", () => {

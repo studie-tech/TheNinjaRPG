@@ -30,6 +30,11 @@ setDefaultTimeout(20_000);
 
 const usePetSpeciesEditForm = petSpecies.usePetSpeciesEditForm;
 const defaults = {
+  potentialMode: "FIXED" as const,
+  potentialValue: 1,
+  potentialMin: 1,
+  potentialMax: 5,
+  potentialWeights: [70, 50, 20, 10, 2],
   artDirection: null,
   rankConcepts: [],
   preferredDamageElement: null,
@@ -492,4 +497,110 @@ it("offers a working retry when the catalogue cannot load", async () => {
   fireEvent.click(view.getByRole("button", { name: "Try again" }));
   await view.findByText("Fox");
   expect(view.queryByRole("alert")).toBeNull();
+});
+
+it("shows only the selected potential settings and retains drafts across mode switches", async () => {
+  const view = await mount(true);
+  const fixed = await view.findByRole("spinbutton", { name: "Fixed potential (1–5)" });
+  expect(view.queryByRole("spinbutton", { name: "Random minimum (1–5)" })).toBeNull();
+  fireEvent.input(fixed, { target: { value: "4" } });
+  act(() =>
+    editor.form.setValue("potentialMode", "RANDOM", {
+      shouldDirty: true,
+      shouldValidate: true,
+    }),
+  );
+  expect(view.queryByRole("spinbutton", { name: "Fixed potential (1–5)" })).toBeNull();
+  fireEvent.input(view.getByRole("spinbutton", { name: "Random minimum (1–5)" }), {
+    target: { value: "2" },
+  });
+  fireEvent.input(
+    view.getByRole("spinbutton", {
+      name: "Gifted roll weight (normalized within range)",
+    }),
+    { target: { value: "35" } },
+  );
+  act(() =>
+    editor.form.setValue("potentialMode", "FIXED", {
+      shouldDirty: true,
+      shouldValidate: true,
+    }),
+  );
+  expect(
+    view.getByRole("spinbutton", { name: "Fixed potential (1–5)" }),
+  ).toHaveProperty("value", "4");
+  act(() =>
+    editor.form.setValue("potentialMode", "RANDOM", {
+      shouldDirty: true,
+      shouldValidate: true,
+    }),
+  );
+  expect(view.getByRole("spinbutton", { name: "Random minimum (1–5)" })).toHaveProperty(
+    "value",
+    "2",
+  );
+  expect(
+    view.getByRole("spinbutton", {
+      name: "Gifted roll weight (normalized within range)",
+    }),
+  ).toHaveProperty("value", "35");
+  fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
+  await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+  expect(update.mock.calls[0]?.[0].data).toMatchObject({
+    potentialMode: "RANDOM",
+    potentialValue: 4,
+    potentialMin: 2,
+    potentialWeights: [70, 50, 35, 10, 2],
+  });
+});
+
+it("exposes invalid inactive potential drafts so staff can correct them and save", async () => {
+  const view = await mount(true);
+  const fixed = await view.findByRole("spinbutton", { name: "Fixed potential (1–5)" });
+  fireEvent.input(fixed, { target: { value: "9" } });
+  act(() =>
+    editor.form.setValue("potentialMode", "RANDOM", {
+      shouldDirty: true,
+      shouldValidate: true,
+    }),
+  );
+  await waitFor(() => expect(editor.form.formState.errors.potentialValue).toBeTruthy());
+  expect(
+    view.getByRole("spinbutton", { name: "Fixed potential (1–5)" }),
+  ).toHaveProperty("value", "9");
+  fireEvent.input(view.getByRole("spinbutton", { name: "Fixed potential (1–5)" }), {
+    target: { value: "3" },
+  });
+  await waitFor(() =>
+    expect(
+      view.queryByRole("spinbutton", { name: "Fixed potential (1–5)" }),
+    ).toBeNull(),
+  );
+  fireEvent.input(view.getByRole("spinbutton", { name: "Random minimum (1–5)" }), {
+    target: { value: "8" },
+  });
+  act(() =>
+    editor.form.setValue("potentialMode", "FIXED", {
+      shouldDirty: true,
+      shouldValidate: true,
+    }),
+  );
+  await waitFor(() => expect(editor.form.formState.errors.potentialMin).toBeTruthy());
+  expect(view.getByRole("spinbutton", { name: "Random minimum (1–5)" })).toHaveProperty(
+    "value",
+    "8",
+  );
+  fireEvent.input(view.getByRole("spinbutton", { name: "Random minimum (1–5)" }), {
+    target: { value: "2" },
+  });
+  await waitFor(() =>
+    expect(view.queryByRole("spinbutton", { name: "Random minimum (1–5)" })).toBeNull(),
+  );
+  fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
+  await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+  expect(update.mock.calls[0]?.[0].data).toMatchObject({
+    potentialMode: "FIXED",
+    potentialValue: 3,
+    potentialMin: 2,
+  });
 });

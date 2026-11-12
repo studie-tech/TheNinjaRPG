@@ -3,7 +3,12 @@ import { z } from "zod";
 import {
   AI_PROFILE_MAX_RULES,
   AvatarFacings,
+  type CombatStatName,
+  CombatStatNames,
+  getCombatStatCap,
+  getUserCaps,
   PET_NAME_MAX_LENGTH,
+  PET_POTENTIAL_TIERS,
   PetGenders,
   PetPaymentCurrencies,
   PetSpawnPositions,
@@ -66,10 +71,19 @@ export const updatePetSchema = z
   })
   .refine((input) => Object.keys(input).length > 1, "Choose a setting to update.");
 
-/** Reuse the player form's six combat stats; the router checks the pet's live caps and XP bank. */
-export const assignPetExperienceSchema = createStatSchema(0, 0).schema.extend(
-  petSelectionSchema.shape,
-);
+/** Reuse stat validation with the largest potential-adjusted caps; the router checks the live pet. */
+export const assignPetExperienceSchema = createStatSchema(
+  0,
+  0,
+  undefined,
+  Object.fromEntries(
+    CombatStatNames.map((stat) => [
+      stat,
+      getCombatStatCap(getUserCaps(), stat) *
+        Math.max(...PET_POTENTIAL_TIERS.map((tier) => tier.capMultiplier)),
+    ]),
+  ) as Record<CombatStatName, number>,
+).schema.extend(petSelectionSchema.shape);
 
 /** Visual quality is separate from content safety; domain acceptance requires every check to pass. */
 export const petAppearanceQualitySchema = z.object({

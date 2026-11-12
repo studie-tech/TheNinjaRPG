@@ -8,16 +8,19 @@ import {
   getAssignExperienceUserUpdate,
   getFeedPetUserUpdate,
   getReleasePetUserUpdate,
+  getRevealedPetPotentialUserUpdate,
   getSavedPetSettingsUpdate,
+  getTransferPetExperienceUpdate,
   getUnchangedPetUserUpdate,
   getUnlockSlotUserUpdate,
 } from "@/deltas/pets";
 import {
   CombatStatNames,
-  getCombatStatCap,
   MAP_WAKE_ISLAND_SECTOR,
   PET_BATTLE_CONFIG,
   PET_COLLECTION_SLOT_COST,
+  PET_EXPERIENCE_TRANSFER_COST,
+  PET_EXPERIENCE_TRANSFER_MAX_PERCENT,
   PET_FEED_COOLDOWN_HOURS,
   PET_FEED_EXPERIENCE_BY_RARITY,
   PET_GENERATION_LEASE_MS,
@@ -58,7 +61,6 @@ import {
   isPetAppearanceReady,
   petRankUpBlockMessage,
 } from "@/libs/pets/progression";
-import { getAssignedCombatStatTotal } from "@/libs/profile";
 import { updateUserForActionReadiness } from "@/queries/actionReadiness";
 import { deleteEmptyUserItem } from "@/queries/item";
 import {
@@ -74,16 +76,21 @@ import {
   insertUserPet,
   insertUserUploadForGenerateAppearance,
   listPetSpeciesForGetPet,
+  listStaffPetPotentials,
   listUserItemForGetPet,
   listVisiblePetJutsu,
+  logPetPotentialOverride,
   selectPetSpeciesForWhere,
   selectUserDataForActivatePet,
   selectUserPetForWhere,
+  transferPetExperience,
   updateUserPetForGenerateAppearance,
   updateUserPetForGenerateAppearance2,
   updateUserPetForGenerateAppearance3,
 } from "@/queries/pets";
+import { fetchUser, findOwnedUserPet } from "@/queries/profile";
 import {
+  baseServerResponse,
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
@@ -99,6 +106,7 @@ import { claimUserSnapshot } from "@/server/utils/concurrency";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { logError } from "@/server/utils/sentry";
 import { getUserFederalStatus } from "@/utils/paypal";
+import { canEditPetPotential } from "@/utils/permissions";
 import {
   getNextUserSnapshotAt,
   getPetFeedAvailableAt,
@@ -161,6 +169,183 @@ const petSettingsResponseSchema = userDeltaResponseSchema.extend({
 
 /** Own, configure and progress companions through guarded account and pet snapshots. */
 export const petsRouter = createTRPCRouter({
+  /** Restrict individual companion values to authorized content and coding leadership. */
+  getPotentialsForStaff: protectedProcedure
+    .input(z.object({ userId: z.string().min(1).max(191) }))
+    .query(async ({ ctx, input }) => {
+      const [actor, pets] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        listStaffPetPotentials(ctx.drizzle, input.userId),
+      ]);
+      return !actor.isBanned && canEditPetPotential(actor.role) ? pets : [];
+    }),
+
+  /** Save and audit an explicit support override within the bounded potential tiers. */
+  setPotentialForStaff: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string().min(1).max(191),
+        petId: z.string().min(1).max(191),
+        value: z.number().int().min(1).max(5),
+        reason: z.string().trim().min(10).max(500),
+      }),
+    )
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      const [actor, target, pet] = await Promise.all([
+        fetchUser(ctx.drizzle, ctx.userId),
+        fetchUser(ctx.drizzle, input.userId),
+        findOwnedUserPet(ctx.drizzle, input.petId, input.userId),
+      ]);
+      if (actor.isBanned || !canEditPetPotential(actor.role))
+        return errorResponse("You do not have permission to edit companion potential.");
+      if (!pet) return errorResponse("Companion not found");
+      if (target.isBanned) return errorResponse("This character is banned.");
+      if (target.petTask?.petId === pet.id)
+        return errorResponse(
+          "Collect or cancel this companion's profession job first.",
+        );
+      // A support edit cannot recover or otherwise change the target's activity.
+      if (target.status !== "AWAKE" || target.battleId)
+        return errorResponse("The character must be awake and out of combat.");
+      // A MySQL multi-table UPDATE cannot insert the new ActionLog row, and an
+      // INSERT cannot update the existing pet. This staff-only transaction keeps
+      // audit failures from committing an unaudited override; player writes use CAS.
+      const changed = await retryOnDeadlock(() =>
+        ctx.drizzle.transaction(async (tx) => {
+          const updated = await updateOwnedPetOnce(tx, target, pet, {
+            potentialValue: input.value,
+            potentialRevealed: true,
+          });
+          if (!updated) return false;
+          await logPetPotentialOverride(tx, ctx.userId, pet, input.value, input.reason);
+          return true;
+        }),
+      );
+      if (!changed) return changedResponse();
+      return {
+        success: true,
+        message: "Companion potential updated.",
+      };
+    }),
+
+  /** Reveal the saved adoption roll; retries cannot produce a different potential. */
+  revealPotential: protectedProcedure
+    .input(petSelectionSchema)
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const {
+        user: initialUser,
+        pet,
+        settings,
+      } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId, true);
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
+      const restriction = petMutationBlockMessage(user, pet);
+      if (restriction || !user || !pet)
+        return errorResponse(restriction ?? "Pet not found");
+      if (pet.potentialRevealed)
+        return errorResponse("This companion's potential is already revealed.");
+      const changed = await updateOwnedPet(
+        ctx.drizzle,
+        user,
+        pet,
+        {
+          potentialRevealed: true,
+        },
+        readiness,
+      );
+      return changed
+        ? actionReadinessResponse(
+            {
+              success: true,
+              message: "Companion potential revealed.",
+              ...getRevealedPetPotentialUserUpdate(user, changed),
+            },
+            readiness,
+            ctx.drizzle,
+          )
+        : changedResponse();
+    }),
+
+  /** Move assigned XP between owned companions of the exact same species. */
+  transferExperience: protectedProcedure
+    .input(
+      petSelectionSchema.extend({
+        destinationPetId: z.string().min(1).max(191),
+        amount: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+      }),
+    )
+    .output(userDeltaResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      const {
+        user: initialUser,
+        pet,
+        pets,
+        settings,
+      } = await fetchPetOwner(ctx.drizzle, ctx.userId, input.petId, true);
+      if (!initialUser) return errorResponse("User not found");
+      const readiness = prepareActionReadiness(initialUser, settings);
+      if (readiness.error) return errorResponse(readiness.error);
+      const user = readiness.user;
+      const destination = pets.find((entry) => entry.id === input.destinationPetId);
+      const restriction =
+        petMutationBlockMessage(user, pet) ??
+        petMutationBlockMessage(user, destination);
+      if (restriction || !user || !pet || !destination)
+        return errorResponse(restriction ?? "Pet not found");
+      if (pet.id === destination.id || pet.speciesId !== destination.speciesId)
+        return errorResponse("Choose another companion of the same species.");
+      if (hasActiveGeneration(pet) || hasActiveGeneration(destination))
+        return errorResponse("Wait for companion artwork to finish generating.");
+      if (
+        input.amount >
+        Math.floor((pet.experience * PET_EXPERIENCE_TRANSFER_MAX_PERCENT) / 100)
+      )
+        return errorResponse(
+          `Transfer at most ${PET_EXPERIENCE_TRANSFER_MAX_PERCENT}% of the source's assigned experience.`,
+        );
+      if (user.money < PET_EXPERIENCE_TRANSFER_COST)
+        return errorResponse("Not enough ryo for this transfer.");
+      const now = new Date();
+      const update = getTransferPetExperienceUpdate(
+        pet,
+        input.amount,
+        user,
+        destination.id,
+        now,
+      );
+      const result = await retryOnDeadlock(() =>
+        transferPetExperience(
+          ctx.drizzle,
+          user,
+          pet,
+          destination,
+          update.source,
+          input.amount,
+          PET_EXPERIENCE_TRANSFER_COST,
+          (snapshot) => ownerSnapshotWhere(snapshot, readiness),
+          now,
+          readiness,
+        ),
+      );
+      return result.rowsAffected > 0
+        ? actionReadinessResponse(
+            {
+              success: true,
+              message:
+                "Experience transferred to the destination's unused experience. Source stats were reduced proportionally.",
+              userDelta: update.userDelta,
+              userPatch: update.userPatch,
+            },
+            readiness,
+            ctx.drizzle,
+          )
+        : changedResponse();
+    }),
+
   /** Buy collection capacity and debit its price in one account update. */
   unlockSlot: protectedProcedure
     .input(petPaymentSchema)
@@ -884,12 +1069,14 @@ export const petsRouter = createTRPCRouter({
         willpower: pet.willpower,
       };
       for (const stat of CombatStatNames) {
-        const cap = getCombatStatCap(caps, stat);
-        if (stats[stat] + gains[stat] > cap)
-          return errorResponse("One or more companion stats exceed this rank's cap.");
+        const cap = caps[stat];
+        if (gains[stat] > 0 && stats[stat] + gains[stat] > cap)
+          return errorResponse("One or more companion stats exceed its potential cap.");
         stats[stat] += gains[stat];
       }
-      const spent = getAssignedCombatStatTotal(stats) - getAssignedCombatStatTotal(pet);
+      // Charge integer gains directly: subtracting fractional stat snapshots can
+      // introduce floating-point error after proportional XP transfers.
+      const spent = CombatStatNames.reduce((sum, stat) => sum + gains[stat], 0);
       const isActive = user.activePetId === pet.id;
       const availableExperience = isActive ? user.petExperience : pet.storedExperience;
       if (spent > availableExperience)
@@ -1174,11 +1361,15 @@ const getPetPayment = (
   };
 };
 
-/** Generation tokens are server-only lease credentials. */
+/** Hide server-only generation leases and unrevealed potential from owner-facing responses. */
 const omitGenerationToken = <T extends UserPet>({
   generationToken: _generationToken,
+  potentialValue,
   ...pet
-}: T) => pet;
+}: T) => ({
+  ...pet,
+  potentialValue: pet.potentialRevealed ? potentialValue : null,
+});
 
 /** Sanctuary adoption requires an eligible, awake player at its current location. */
 const acquisitionBlockMessage = (user: UserData) => {
@@ -1259,9 +1450,13 @@ const petMutationConflict = () =>
 const isPetMutationConflict = (error: unknown) =>
   error instanceof Error && error.name === "PetMutationConflict";
 
-/** Publish a pet patch guarded by the owner and pet snapshots. */
-const updateOwnedPet = async (
-  client: DrizzleClient,
+/** Retry a standalone guarded pet patch without introducing a transaction. */
+const updateOwnedPet = (...args: Parameters<typeof updateOwnedPetOnce>) =>
+  retryOnDeadlock(() => updateOwnedPetOnce(...args));
+
+/** Apply one guarded patch; transactional callers retry their whole transaction. */
+const updateOwnedPetOnce = async (
+  client: Pick<DrizzleClient, "execute" | "select">,
   user: UserData,
   pet: UserPet,
   patch: Partial<UserPet>,
@@ -1278,17 +1473,14 @@ const updateOwnedPet = async (
     });
   // Drizzle cannot build a multi-table UPDATE. Both snapshot guards gate the
   // patch and the account claim together.
-  const result = await retryOnDeadlock(() =>
-    executeResultForUpdateOwnedPet(
-      client,
-      user,
-      now,
-      assignments,
-      (snapshot) => ownerSnapshotWhere(snapshot, readiness),
-
-      pet,
-      readiness,
-    ),
+  const result = await executeResultForUpdateOwnedPet(
+    client,
+    user,
+    now,
+    assignments,
+    (snapshot) => ownerSnapshotWhere(snapshot, readiness),
+    pet,
+    readiness,
   );
   return result.rowsAffected > 0 ? now : undefined;
 };

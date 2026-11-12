@@ -9,7 +9,7 @@ import {
 } from "bun:test";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
-import { ELEMENTAL_MASTERY_CAP } from "@/drizzle/constants";
+import { ELEMENTAL_MASTERY_CAP, getUserCaps, MAX_MASTERY_CAP } from "@/drizzle/constants";
 import * as tutorial from "@/hooks/tutorial";
 import DistributeStatsForm from "@/layout/StatsDistributionForm";
 import type { UserWithRelations } from "@/routers/profile";
@@ -75,6 +75,37 @@ const form = (onAccept: Accept, userData = trainee) => (
 );
 
 describe("advanced experience assignment drafts", () => {
+  it.each([undefined, { offence: 0 }])("labels only explicitly overridden caps without attributing them to rank (%j)", (statCaps) => {
+    const view = render(
+      <DistributeStatsForm
+        includeMasteries
+        showWrapper={false}
+        userData={{
+          ...trainee,
+          defence: getUserCaps(trainee.rank).stats_cap,
+          ninjutsuMastery: MAX_MASTERY_CAP,
+          elementalMastery: { Lightning: ELEMENTAL_MASTERY_CAP },
+        }}
+        statCaps={statCaps}
+        availableStats={100}
+        onAccept={vi.fn()}
+        isPending={false}
+      />,
+    );
+    const cappedMessage = (label: string) => view.getByText(label, { exact: true }).parentElement?.textContent;
+    if (statCaps) {
+      expect(cappedMessage("Offence")).toContain("- Max reached");
+      expect(view.queryByRole("spinbutton", { name: /^Offence/ })).toBeNull();
+    } else {
+      expect(view.getByRole("spinbutton", { name: /^Offence/ })).toBeTruthy();
+      expect(view.queryByText("- Max reached")).toBeNull();
+    }
+    expect(cappedMessage("Defence")).toContain("- Max for Jonin");
+    expect(cappedMessage("Ninjutsumastery")).toContain("- Max for Jonin");
+    expect(cappedMessage("Fire")).toContain("Provided by innate elements or bloodline");
+    expect(cappedMessage("Lightning")).toContain("Fully mastered");
+  });
+
   it("waits for an accepted allocation before advancing the tutorial", async () => {
     const { promise: assignment, resolve: resolveAssignment } = deferred<boolean>();
     const accept = vi.fn(() => assignment);

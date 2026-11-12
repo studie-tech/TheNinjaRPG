@@ -1,6 +1,8 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
 import type { CombatStatName } from "@/drizzle/constants";
+import { PET_EXPERIENCE_TRANSFER_COST } from "@/drizzle/constants";
 import type { UserData, UserPet } from "@/drizzle/schema";
+import { getPetTransferStats } from "@/libs/pets/potential";
 import { petRankUpBlockMessage } from "@/libs/pets/progression";
 import { getNextUserSnapshotAt } from "@/utils/time";
 
@@ -206,6 +208,25 @@ export const getAssignedPetCollection = (
   };
 };
 
+/** Retain source stat proportions and credit transferred assigned XP to the destination's unused bank. */
+export const getTransferPetExperienceUpdate = (
+  source: UserPet,
+  amount: number,
+  user: Pick<UserData, "updatedAt" | "activePetId">,
+  destinationId: string,
+  now: Date,
+) => ({
+  source: {
+    ...getPetTransferStats(source, amount),
+    experience: source.experience - amount,
+  },
+  userPatch: { updatedAt: getNextUserSnapshotAt(user.updatedAt, now) },
+  userDelta: {
+    money: -PET_EXPERIENCE_TRANSFER_COST,
+    ...(user.activePetId === destinationId ? { petExperience: amount } : {}),
+  },
+});
+
 /** Public settings fields that cannot expose artwork generation leases or owner secrets. */
 type PetSettings = Pick<
   UserPet,
@@ -310,3 +331,11 @@ export const getSavedPetSettingsCollection = (
     pets: current.pets.map((pet) => (pet.id === id ? { ...pet, ...patch } : pet)),
   };
 };
+
+/** Advance the owner cache to the timestamp claimed when revealing a companion's saved potential. */
+export const getRevealedPetPotentialUserUpdate = (
+  user: Pick<UserData, "updatedAt">,
+  now: Date,
+) => ({
+  userPatch: { updatedAt: getNextUserSnapshotAt(user.updatedAt, now) },
+});

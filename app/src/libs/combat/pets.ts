@@ -1,12 +1,7 @@
 /** Materialize owned companions as self-contained AI actors during battle initiation. */
 import { nanoid } from "nanoid";
 import type { BattleType, PetSpawnPosition, UserRank } from "@/drizzle/constants";
-import {
-  CombatStatNames,
-  getCombatStatCap,
-  PET_BASE_STAT,
-  PET_BATTLE_CONFIG,
-} from "@/drizzle/constants";
+import { CombatStatNames, PET_BASE_STAT, PET_BATTLE_CONFIG } from "@/drizzle/constants";
 import type { Jutsu, PetSpecies, UserPet } from "@/drizzle/schema";
 import { getDefaultBasicActions, stillInBattle } from "@/libs/combat/actions";
 import { GROUND_EFFECT_TAG_TYPES } from "@/libs/combat/constants";
@@ -339,8 +334,7 @@ const createPetBattleUser = (
     taijutsuMastery: PET_BASE_STAT,
     bukijutsuMastery: PET_BASE_STAT,
   };
-  for (const stat of CombatStatNames)
-    actor[stat] = Math.min(pet[stat], getCombatStatCap(caps, stat));
+  for (const stat of CombatStatNames) actor[stat] = Math.min(pet[stat], caps[stat]);
   actor.highestGenerals = getHighestGenerals(actor);
   actor.basicActions = Object.values(getDefaultBasicActions(actor)).map((action) => ({
     id: action.id,

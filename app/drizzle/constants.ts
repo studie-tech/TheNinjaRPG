@@ -685,6 +685,23 @@ export const PET_BATTLE_CONFIG = {
   battleTypes: ["QUEST"] as readonly BattleType[],
 };
 export const PET_BASE_STAT = 10;
+/** Ryo charged once per successful same-species assigned-XP transfer. */
+export const PET_EXPERIENCE_TRANSFER_COST = 1_000_000;
+/** Maximum percentage of a source companion's assigned XP movable per transfer. */
+export const PET_EXPERIENCE_TRANSFER_MAX_PERCENT = 70;
+/** Species choose a fixed acquisition value or a weighted acquisition roll. */
+export const PetPotentialModes = ["FIXED", "RANDOM"] as const;
+/**
+ * Potential raises rank-based training ceilings by at most fifty percent.
+ * Species weights are relative and normalized within their enabled range.
+ */
+export const PET_POTENTIAL_TIERS = [
+  { value: 1, title: "Modest", capMultiplier: 1, weight: 70 },
+  { value: 2, title: "Promising", capMultiplier: 1.125, weight: 50 },
+  { value: 3, title: "Gifted", capMultiplier: 1.25, weight: 20 },
+  { value: 4, title: "Exceptional", capMultiplier: 1.375, weight: 10 },
+  { value: 5, title: "Perfect", capMultiplier: 1.5, weight: 2 },
+] as const;
 export const PET_REPLACEMENT_COST = 30;
 export const PET_MAX_COLLECTION_SLOTS = 6;
 export const PET_COLLECTION_SLOT_COST = 20;
