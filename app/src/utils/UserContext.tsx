@@ -18,7 +18,7 @@ import {
   useState,
 } from "react";
 import { api } from "@/app/_trpc/client";
-import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
+import type { UserCache, UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import type { StructureRoute } from "@/drizzle/constants";
 import { useActionPreferenceCacheUpdate } from "@/hooks/useActionPreferenceCacheUpdate";
 import { useMasteryQueueRefresh } from "@/hooks/useMasteryQueueRefresh";
@@ -31,6 +31,7 @@ import { getTerritoryWarBoostUntil } from "@/libs/territoryWar";
 import { showMutationToast } from "@/libs/toast";
 import type { AchievementProgress, UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
+import { updateQueryCache } from "@/utils/queryCache";
 import {
   prepareUserUpdate as captureUserUpdate,
   updateUserCache,
@@ -113,8 +114,11 @@ type UserContextValue = {
   ) => Promise<boolean>;
   /** Request a fresh profile after confirmed server work; false keeps feature recovery available. */
   refreshUser: () => Promise<boolean>;
+  /** Derive notification changes from the latest cache value, preserving profile reconciliation. */
   updateNotifications: (
-    notifications: NavBarDropdownLink[] | undefined,
+    update: (
+      current: NavBarDropdownLink[] | undefined,
+    ) => NavBarDropdownLink[] | undefined,
   ) => Promise<void>;
 };
 
@@ -173,9 +177,6 @@ export function UserContextProvider(props: {
   // Preserve the server-known state through hydration. Using `!!data` as an auth signal
   // makes signed-in pages briefly render their anonymous tree while getUser is pending.
   const effectiveIsSignedIn = isLoaded ? !!isSignedIn : props.initialIsSignedIn;
-
-  // tRPC utility
-  const utils = api.useUtils();
 
   // Get user data
   const {
@@ -271,15 +272,15 @@ export function UserContextProvider(props: {
     }
   }, [queryClient, userQueryKey, refetch, userId]);
 
-  // Optimistic notification update function
+  /** Apply notification changes together with other writers, preserving unrelated profile reconciliation. */
   const updateNotifications = useCallback(
-    async (notifications: NavBarDropdownLink[] | undefined) => {
-      await utils.profile.getUser.cancel();
-      utils.profile.getUser.setData(undefined, (old) => {
-        return { ...old, notifications } as typeof old;
+    async (update: Parameters<UserContextValue["updateNotifications"]>[0]) => {
+      await updateQueryCache<UserCache>(queryClient, userQueryKey, (old) => {
+        const notifications = update(old.notifications) ?? old.notifications;
+        return notifications === old.notifications ? old : { ...old, notifications };
       });
     },
-    [utils],
+    [queryClient, userQueryKey],
   );
 
   // Time diff setting

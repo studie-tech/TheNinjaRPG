@@ -75,7 +75,7 @@ export function useInboxConversations(
   });
   useEffect(() => {
     if (result.data && getInboxNews(notifications) > 0) {
-      void updateNotifications(clearInboxNotifications(notifications));
+      void updateNotifications(clearInboxNotifications);
     }
   }, [result.data, notifications, updateNotifications]);
   return result;

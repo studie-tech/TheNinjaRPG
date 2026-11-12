@@ -88,13 +88,20 @@ export default function OccupationFarming({
     revealElement("farm-panel", "nearest");
   }, [selectedSlotIndex, isWide, isDocked]);
 
-  const openTab = useCallback(
+  const selectTab = useCallback(
     (next: FarmTab) => {
       controller.setSelectedSlotIndex(null);
       setTab(next);
-      revealElement("farm-storehouse", "start");
     },
     [controller.setSelectedSlotIndex],
+  );
+  // Shortcuts elsewhere on the farm jump to the storehouse; its own tab bar is already in view.
+  const openTab = useCallback(
+    (next: FarmTab) => {
+      selectTab(next);
+      revealElement("farm-storehouse", "start");
+    },
+    [selectTab],
   );
 
   if (controller.query.isLoading) {
@@ -193,7 +200,7 @@ export default function OccupationFarming({
         aria-label="Market and storage"
         className="rounded-lg border bg-card p-3"
       >
-        <Tabs value={tab} onValueChange={(value) => openTab(value as FarmTab)}>
+        <Tabs value={tab} onValueChange={(value) => selectTab(value as FarmTab)}>
           <TabsList className="mb-3 grid w-full grid-cols-4">
             <TabsTrigger value="market">Market</TabsTrigger>
             <TabsTrigger value="crops">

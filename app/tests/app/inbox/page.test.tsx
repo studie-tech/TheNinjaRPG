@@ -3,6 +3,7 @@ import { cleanup, render, waitFor } from "@testing-library/react";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import Inbox from "@/app/[shell]/inbox/page";
+import { clearInboxNotifications } from "@/deltas/chat";
 import * as newConversation from "@/layout/NewConversationPrompt";
 import * as blacklist from "@/layout/UserBlacklistControl";
 import * as userContext from "@/utils/UserContext";
@@ -52,5 +53,7 @@ afterEach(() => {
 
 it("clears the inbox notification once the conversation list loads", async () => {
   render(<Inbox />);
-  await waitFor(() => expect(updateNotifications).toHaveBeenCalledWith([otherNews]));
+  await waitFor(() =>
+    expect(updateNotifications).toHaveBeenCalledWith(clearInboxNotifications),
+  );
 });

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, render } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
 import * as client from "@/app/_trpc/client";
+import { clearInboxNotifications } from "@/deltas/chat";
 import * as mutes from "@/hooks/useChatMutes";
 import * as tavernActivity from "@/hooks/useTavernActivity";
 import * as taverns from "@/hooks/useTaverns";
@@ -66,7 +67,7 @@ it("reconciles cleared inbox news when the phone chat list loads", () => {
     <ChatPanelBody isPhone isWide={false} onToggleWide={() => {}} onClose={() => {}} />,
   );
   expect(view.getByText("No private messages yet.")).toBeTruthy();
-  expect(updateNotifications).toHaveBeenCalledWith([{ href: "/news", name: "News" }]);
+  expect(updateNotifications).toHaveBeenCalledWith(clearInboxNotifications);
 });
 
 it("shows new tavern messages per tavern on the phone chat list", () => {

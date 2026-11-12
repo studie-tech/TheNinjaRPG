@@ -163,6 +163,8 @@ describe("OccupationFarming layout", () => {
       view.getByRole("tab", { name: "Upgrades" }).getAttribute("aria-selected"),
     ).toBe("true");
     expect(setSelectedSlotIndex).toHaveBeenCalledWith(null);
+    // The tab bar is already in view where it was pressed, so switching tabs keeps the page still.
+    expect(window.scrollBy).not.toHaveBeenCalled();
     setSelectedSlotIndex.mockClear();
     fireEvent.click(view.getByRole("button", { name: "Buy seeds" }));
     expect(

@@ -19,6 +19,7 @@ import {
 } from "@/drizzle/constants";
 import type { FarmPlot, Item, UserData } from "@/drizzle/schema";
 import { getWorldDayCycleIndex } from "@/libs/dayNight";
+import type { NavBarDropdownLink } from "@/libs/menus";
 import { calcLevelRequirements } from "@/libs/profile";
 import { calculatePercent } from "@/utils/math";
 import { getUserFederalStatus } from "@/utils/paypal";
@@ -205,10 +206,13 @@ export const getFarmPlotStatus = (
   return isPlotReady(plot.finishAt, now) ? "ready" : "growing";
 };
 
+/** Count confirmed and elapsed plot states for farm controls and navigation notices. */
 export const summarizeFarmPlots = (plots: FarmPlotState[], now = new Date()) => {
   const summary = { ready: 0, growing: 0, empty: 0, waterable: 0, fertilizable: 0 };
   for (const plot of plots) {
-    const status = getFarmPlotStatus(plot, now);
+    // A confirmed crop stays ready when client clock calibration lags its completion.
+    const status =
+      plot.seedItemId && plot.isReady ? "ready" : getFarmPlotStatus(plot, now);
     summary[status] += 1;
     if (status === "growing") {
       if (canWaterPlot(plot.lastWateredAt, now)) summary.waterable += 1;
@@ -217,6 +221,37 @@ export const summarizeFarmPlots = (plots: FarmPlotState[], now = new Date()) => 
   }
   return summary;
 };
+
+/** Navigation notices for crops ready to harvest and plants waiting for water. */
+export const getFarmNotifications = (
+  ready: number,
+  waterable: number,
+): NavBarDropdownLink[] => [
+  ...(ready > 0
+    ? [
+        {
+          href: "/farm",
+          name:
+            ready === 1
+              ? "1 farm crop is ready to harvest"
+              : `${ready} farm crops are ready to harvest`,
+          color: "green" as const,
+        },
+      ]
+    : []),
+  ...(waterable > 0
+    ? [
+        {
+          href: "/farm",
+          name:
+            waterable === 1
+              ? "1 farm plant is ready to water"
+              : `${waterable} farm plants are ready to water`,
+          color: "blue" as const,
+        },
+      ]
+    : []),
+];
 
 /** Earliest harvest and pre-harvest watering times across growing plots; null when none. */
 export const getNextFarmEvents = (plots: FarmPlotState[], now = new Date()) => {

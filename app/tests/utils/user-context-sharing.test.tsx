@@ -11,6 +11,8 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import * as trpc from "@trpc/react-query";
 import { type ContextType, Profiler, type ReactNode, useContext } from "react";
 import * as client from "@/app/_trpc/client";
+import { clearInboxNotifications } from "@/deltas/chat";
+import { syncFarmNotifications } from "@/deltas/farming";
 import { ActivityStreakPanel } from "@/layout/ActivityStreakPanel";
 import Countdown from "@/layout/Countdown";
 import * as pusher from "@/layout/PusherHandler";
@@ -18,7 +20,7 @@ import * as mutationToast from "@/libs/toast";
 import {
   selectUserWithoutPosition,
   UserContextProvider,
-  useUserData,
+  type useUserData,
   useUserDataRef,
   useUserDataSelector,
   useUserInfo,
@@ -77,16 +79,15 @@ const mount = (
   extraApi: Record<string, unknown> = {},
 ) => {
   let providerRenders = 0;
-  let response = initial;
+  let response: Snapshot | Promise<Snapshot> = initial;
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   queryClient.setQueryDefaults(key, { structuralSharing: shareUserCache });
   clients.push(queryClient);
   queryClient.setQueryData(key, initial);
-  const utils = {};
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => utils,
+    useUtils: () => ({}),
     profile: {
       getUser: {
         // Exercise the provider's query options with a real TanStack cache and observer.
@@ -126,6 +127,9 @@ const mount = (
     seen,
     current: () => seen.at(-1)!,
     read: () => queryClient.getQueryData<Snapshot>(key)!,
+    setResponse: (next: Snapshot | Promise<Snapshot>) => {
+      response = next;
+    },
     refresh: async (next: Snapshot) => {
       response = next;
       await settle(() => queryClient.refetchQueries({ queryKey: key }));
@@ -135,6 +139,59 @@ const mount = (
 };
 
 describe("profile context structural sharing", () => {
+  it.each([false, true])(
+    "preserves pending profile reconciliation while syncing farm notices (has notice=%p)",
+    async (hasNotice) => {
+      const initial = snapshot();
+      initial.notifications = hasNotice
+        ? [{ href: "/farm", name: "1 farm crop is ready to harvest", color: "green" }]
+        : [];
+      const test = mount(initial);
+      const pending = deferred<Snapshot>();
+      test.setResponse(pending.promise);
+      const latest = {
+        ...initial,
+        userData: { ...initial.userData, money: 300 },
+        notifications: [],
+      };
+      await test.settle(async () => {
+        const refresh = test.queryClient.refetchQueries({ queryKey: key });
+        expect(test.queryClient.getQueryState(key)?.fetchStatus).toBe("fetching");
+        const update = test
+          .current()
+          .updateNotifications((current) =>
+            syncFarmNotifications(current, [], new Date(BASE)),
+          );
+        pending.resolve(latest);
+        await Promise.all([refresh, update]);
+      });
+      expect(test.read().userData.money).toBe(300);
+      expect(test.read().notifications).toEqual([]);
+    },
+  );
+  it.each([false, true])(
+    "preserves overlapping farm and inbox notification removals (inbox first=%p)",
+    async (inboxFirst) => {
+      const initial = snapshot();
+      const other = initial.notifications[0]!;
+      initial.notifications = [
+        { href: "/farm", name: "1 farm crop is ready to harvest", color: "green" },
+        { href: "/inbox", name: "1 message", color: "blue" },
+        other,
+      ];
+      const test = mount(initial);
+      const update = test.current().updateNotifications;
+      const changes = [
+        (current: Parameters<typeof clearInboxNotifications>[0]) =>
+          syncFarmNotifications(current, [], new Date(BASE)),
+        clearInboxNotifications,
+      ];
+      if (inboxFirst) changes.reverse();
+      await test.settle(() => Promise.all(changes.map(update)));
+      expect(test.read().notifications).toEqual([other]);
+      expect(test.read().userData).toBe(initial.userData);
+    },
+  );
   it("keeps imperative profile readers idle during observer bookkeeping while publishing updates and removal", async () => {
     let latest: ReturnType<typeof useUserDataRef> | undefined;
     const changed = vi.fn();

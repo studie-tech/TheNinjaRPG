@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import * as appClient from "@/app/_trpc/client";
 import type { UserCache } from "@/deltas/profile";
 import { useFarmController } from "@/hooks/farm-controller";
+import { updateQueryCache } from "@/utils/queryCache";
 import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type {
@@ -87,7 +88,7 @@ afterEach(() => {
 });
 
 /** Run the real controller/cache pipeline; only server transport and the profile context binding are supplied. */
-const harness = (response: FarmMutationResponse, deferred = false) => {
+const harness = (response: FarmMutationResponse, deferred = false, timeDiff = 0) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -119,12 +120,23 @@ const harness = (response: FarmMutationResponse, deferred = false) => {
     },
   });
   cleanups.push(observer.subscribe(() => {}));
-  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
-    timeDiff: 0,
-    prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
-    updateUser: (result, options) =>
-      updateUserCache(client, profileKey, result, options),
-  } as ReturnType<typeof userContext.useRequiredUserData>);
+  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
+    () =>
+      ({
+        timeDiff,
+        notifications: notifications(),
+        updateNotifications: async (update) => {
+          await updateQueryCache<UserCache>(client, profileKey, (old) => ({
+            ...old,
+            notifications: update(old.notifications) ?? old.notifications,
+          }));
+        },
+        prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
+        updateUser: (result, options) =>
+          updateUserCache(client, profileKey, result, options),
+      }) as ReturnType<typeof userContext.useRequiredUserData>,
+  );
+  const notifications = () => client.getQueryData<UserCache>(profileKey)?.notifications;
   let requested = false;
   const { promise: waiting, resolve: release } = createDeferred<void>();
   const requests: string[] = [];
@@ -161,6 +173,7 @@ const harness = (response: FarmMutationResponse, deferred = false) => {
     requested: () => requested,
     profileReads: () => profileReads,
     profile: () => client.getQueryData<UserCache>(profileKey)?.userData,
+    notifications,
     profileKey,
   };
 };
@@ -327,3 +340,80 @@ it("keeps confirmed recovery after a partial bulk failure with withheld profile 
   });
   expect(test.view.result.current.pendingBulkAction).toBeNull();
 });
+
+it("clears the watering notice once the last thirsty plant is watered", async () => {
+  const test = harness({
+    success: true,
+    message: "Watered",
+    userPatch: {},
+    userDelta: { farmingExperience: 1 },
+    farmingExperienceDelta: 1,
+    updatedPlot: { ...plot, canWater: false, lastWateredAt: new Date() },
+  });
+  const poll = { href: "/manual/polls", name: "Unvoted Polls", color: "blue" } as const;
+  test.client.setQueryData<UserCache>(test.profileKey, (old) =>
+    old
+      ? {
+          ...old,
+          notifications: [
+            { href: "/farm", name: "1 farm plant is ready to water", color: "blue" },
+            poll,
+          ],
+        }
+      : old,
+  );
+  await act(async () => {
+    test.view.result.current.water(plot);
+  });
+  await waitFor(() => expect(test.view.result.current.pendingPlotSlots.size).toBe(0));
+  expect(test.notifications()).toEqual([poll]);
+  expect(test.profileReads()).toBe(0);
+});
+
+it.each([false, true])(
+  "counts crops confirmed ready despite clock calibration lag (bulk=%p)",
+  async (bulk) => {
+    const serverNow = new Date();
+    vi.spyOn(Date, "now").mockReturnValue(serverNow.getTime());
+    const watered = {
+      ...plot,
+      finishAt: serverNow,
+      lastWateredAt: serverNow,
+      isReady: true,
+      canWater: false,
+    };
+    const test = harness(
+      {
+        success: true,
+        message: "Watered",
+        userPatch: {},
+        userDelta: { farmingExperience: 1 },
+        farmingExperienceDelta: 1,
+        updatedPlot: watered,
+        updatedPlots: [{ before: plot, after: watered }],
+      },
+      false,
+      1000,
+    );
+    test.client.setQueryData<UserCache>(test.profileKey, (old) =>
+      old
+        ? {
+            ...old,
+            notifications: [
+              { href: "/farm", name: "1 farm plant is ready to water", color: "blue" },
+            ],
+          }
+        : old,
+    );
+    await act(async () => {
+      if (bulk) await test.view.result.current.waterAll();
+      else test.view.result.current.water(plot);
+    });
+    await waitFor(() => expect(test.view.result.current.pendingPlotSlots.size).toBe(0));
+    expect(test.notifications()).toEqual([
+      { href: "/farm", name: "1 farm crop is ready to harvest", color: "green" },
+    ]);
+    expect(test.view.result.current.summary.ready).toBe(1);
+    expect(test.profileReads()).toBe(0);
+  },
+);
