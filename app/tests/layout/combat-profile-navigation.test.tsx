@@ -107,15 +107,16 @@ it.each([true, false])(
         <MenuBoxCombat />
       </Provider>,
     );
-    expect(view.getAllByRole("link", { name: "Opponent" })).toHaveLength(2);
+    // Both name links and the avatar open the profile.
+    expect(view.getAllByRole("link", { name: "Opponent" })).toHaveLength(3);
     fireEvent.change(view.getByRole("combobox", { name: "Inspect character" }), {
       target: { value: "ally" },
     });
     expect(view.queryAllByRole("link", { name: "Opponent" })).toHaveLength(0);
     const profiles = view.queryAllByRole("link", { name: "Teammate" });
-    expect(profiles).toHaveLength(isMasked ? 0 : 2);
+    expect(profiles).toHaveLength(isMasked ? 0 : 3);
     for (const profile of profiles)
       expect(profile.getAttribute("href")).toBe("/userid/ally");
-    expect(view.getByRole("img", { name: "Teammate AvatarImage" })).toBeTruthy();
+    expect(view.getByRole("img", { name: "Teammate" })).toBeTruthy();
   },
 );
