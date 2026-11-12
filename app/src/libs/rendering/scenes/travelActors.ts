@@ -7,7 +7,6 @@ import {
   Rectangle,
   type RenderLayer,
   Sprite,
-  Text,
 } from "pixi.js";
 import {
   type AvatarFacing,
@@ -455,20 +454,16 @@ export const createTravelActors = (
         record.fallback = fallback;
       }
       if (recipe.user?.isVillageDuty) {
-        const label = new Text({
-          text: "Protector",
-          style: {
-            fontFamily: "sans-serif",
-            fontSize: 24,
-            fill: "#deedc2",
-            stroke: { color: "#17261b", width: 3 },
-          },
-        });
-        label.anchor.set(0.5, 0);
-        label.position.set(recipe.tile.width * 0.5, recipe.tile.height * 1.5);
-        label.scale.set(recipe.tile.height / 80, -recipe.tile.height / 80);
-        root.addChild(label);
-        layers?.overlay.attach(label);
+        // A small insignia identifies patrols without filling a crowded village with labels.
+        const shield = new Graphics()
+          .poly([-12, 0, 12, 0, 11, 15, 0, 26, -11, 15])
+          .fill(0xdeedc2)
+          .stroke({ color: 0x17261b, width: 2 });
+        shield.label = "village-protector";
+        shield.position.set(recipe.tile.width * 0.5, recipe.tile.height * 1.5);
+        shield.scale.set(recipe.tile.height / 80, -recipe.tile.height / 80);
+        root.addChild(shield);
+        layers?.overlay.attach(shield);
       }
       records.set(recipe.key, record);
       byRoot.set(root, record);
