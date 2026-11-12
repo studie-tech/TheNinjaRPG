@@ -155,7 +155,7 @@ describe("post username and role styling", () => {
       } else {
         const style = roleStyles[role];
         expect(badge?.className).toBe(
-          `${style.badge} m-1 rounded-md p-1 ${style.darkText ? "text-black" : ""}`,
+          `${style.badge} rounded-md p-1 ${style.darkText ? "text-black" : ""}`,
         );
         expect(view.getByText("Poster").className).toBe(`${style.name} font-bold`);
       }
@@ -168,13 +168,13 @@ describe("post username and role styling", () => {
     const leader = { ...poster("USER"), villageKageId: "poster" };
     const kage = render(<Post user={leader}>Body</Post>);
     expect(kage.getByText("Kage").className).toBe(
-      "m-1 rounded-md bg-slate-300 p-1 text-black",
+      "rounded-md bg-slate-300 p-1 text-black",
     );
     expect(kage.queryByText("Daimyo")).toBeNull();
     cleanup();
     const daimyo = render(<Post user={{ ...leader, isOutlaw: true }}>Body</Post>);
     expect(daimyo.getByText("Daimyo").className).toBe(
-      "m-1 rounded-md bg-slate-300 p-1 text-black",
+      "rounded-md bg-slate-300 p-1 text-black",
     );
     expect(daimyo.queryByText("Kage")).toBeNull();
   });

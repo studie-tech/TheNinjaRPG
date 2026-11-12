@@ -70,31 +70,36 @@ const Post: React.FC<PostProps> = (props) => {
   const UsernameBlock = props.user && (
     <div>
       <div className={`${userColor} font-bold`}>{props.user.username}</div>
-      <div className={cn("pt-1 text-xs", props.dense ? "pb-2" : "pb-4")}>
-        <span className="m-1 rounded-md bg-slate-300 p-1 text-black">
+      <div
+        className={cn(
+          "flex flex-wrap gap-1 pt-1 text-xs [&>span]:whitespace-nowrap",
+          props.dense ? "pb-2" : "pb-4",
+        )}
+      >
+        <span className="rounded-md bg-slate-300 p-1 text-black">
           Lvl. {props.user.level}
         </span>
-        <span className="m-1 rounded-md bg-slate-300 p-1 text-black">
+        <span className="rounded-md bg-slate-300 p-1 text-black">
           {showUserRank(props.user)}
         </span>
         {props.user.displayTitle && (
-          <span className={`${titleColor} m-1 rounded-md p-1`}>
+          <span className={`${titleColor} rounded-md p-1`}>
             {props.user.displayTitle}
           </span>
         )}
         {props.user.villageKageId && props.user.villageKageId === props.user.userId && (
-          <span className="m-1 rounded-md bg-slate-300 p-1 text-black">
+          <span className="rounded-md bg-slate-300 p-1 text-black">
             {props.user?.isOutlaw ? "Daimyo" : "Kage"}
           </span>
         )}
         {props.user?.role !== "USER" && (
-          <span className={`${userRole} m-1 rounded-md p-1 ${roleTextColor}`}>
+          <span className={`${userRole} rounded-md p-1 ${roleTextColor}`}>
             {capitalizeFirstLetter(props.user?.role)}
           </span>
         )}
         {props.user.villageName && props.user.villageHexColor && (
           <span
-            className="m-1 rounded-md p-1"
+            className="rounded-md p-1"
             style={{
               backgroundColor: props.user.villageHexColor,
               color: contrastingTextColor(props.user.villageHexColor),

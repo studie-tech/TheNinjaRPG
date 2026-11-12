@@ -53,7 +53,11 @@ beforeEach(() => {
   savedObserver = Object.getOwnPropertyDescriptor(globalThis, "IntersectionObserver");
   Object.defineProperty(globalThis, "IntersectionObserver", {
     configurable: true,
-    value: () => ({ observe() {}, unobserve() {}, disconnect() {} }),
+    value: class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
   });
   vi.spyOn(navigation, "useSearchParams").mockReturnValue(
     new URLSearchParams() as never,

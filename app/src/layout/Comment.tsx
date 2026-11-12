@@ -308,10 +308,11 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
         </form>
       ) : (
         <>
-          <div data-reading-text className="mb-6 [&_img]:h-auto [&_img]:max-w-full">
+          <div data-reading-text className="[&_img]:h-auto [&_img]:max-w-full">
             {props.children}
           </div>
-          <div className="absolute right-2 bottom-0 flex flex-row items-center">
+          {/* In flow below the message, so a long message or wrapped actions never overlap it. */}
+          <div className="mt-1 flex flex-row flex-wrap items-center justify-end">
             {/* Server and browser locale or timezone settings can format this date
                 differently during hydration. */}
             <p className="pr-2 text-gray-600 text-xs italic" suppressHydrationWarning>
