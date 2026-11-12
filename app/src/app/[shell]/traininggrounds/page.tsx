@@ -25,9 +25,11 @@ import {
   type SetStateAction,
   startTransition,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
+import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1125,9 +1127,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     () => setClientNow(Date.now()),
     timeDiff,
   );
-  const userJutsuById = new Map(
-    (userJutsus ?? []).map((owned) => [owned.jutsuId, owned]),
-  );
   const { data: trainingQueue, isError: isQueueUnavailable } =
     api.jutsu.getTrainingQueue.useQuery(undefined);
   // Keep priorities fixed across offset pages; later favorite/training changes re-sort
@@ -1193,20 +1192,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
 
   // Worn gear and activated skills raise masteries, as the server's training gate counts
   const { data: userItems } = api.item.getUserItems.useQuery(undefined);
-  const masteries = effectiveMasteries({
-    ...userData,
-    items: userItems ?? [],
-  });
-
-  const userJutsuCounts = userJutsus?.map((userJutsu) => {
-    return {
-      id: userJutsu.jutsuId,
-      quantity: isJutsuInTraining(userJutsu, serverNow)
-        ? userJutsu.level - 1
-        : userJutsu.level,
-    };
-  });
-
   // Tutorial management hook
   const { currentStep, completeTutorialAction } = useTutorialStep();
   const isJutsuPickStep = isTutorialJutsuPickStep(currentStep);
@@ -1293,14 +1278,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     });
   };
 
-  // Jutsu in active training or waiting in the queue, shown right after favorites
-  const trainingJutsuIds = new Set([
-    ...(userJutsus ?? [])
-      .filter((uj) => isJutsuInTraining(uj, serverNow))
-      .map((uj) => uj.jutsuId),
-    ...(trainingQueue?.waiting ?? []).map((job) => job.jutsuId),
-  ]);
-
   // Selecting a jutsu restyles every tile of the grid and mounts or unmounts the confirm
   // modal; as a transition, that render does not block the tap's next paint.
   const setJutsuConfirmOpen: Dispatch<SetStateAction<boolean>> = (open) => {
@@ -1312,72 +1289,34 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     });
   };
 
-  // Collect all ancestor jutsu IDs that the user has evolved past
-  const evolvedAncestorIds = new Set<string>();
-  for (const uj of userJutsus ?? []) {
-    for (const id of uj.ancestorIds) evolvedAncestorIds.add(id);
-  }
-
-  // Filtering jutsus
-  const alljutsus =
-    jutsus?.pages
-      .flatMap((page) => page.data)
-      .filter((j) => {
-        if (j.parentJutsuId)
-          return (
-            // Training/leveling is item-free, so ignore the bloodline item requirement here
-            canUseJutsu(j, userData, true, masteries, true) && userJutsuById.has(j.id)
-          );
-        return canTrainJutsu(j, userData, masteries);
-      })
-      .filter((j) => !evolvedAncestorIds.has(j.id))
-      .filter(
-        (j) => userJutsuById.has(j.id) || !isJutsuTrainToLearnRestricted(j.jutsuType),
-      )
-      .map((j) => {
-        const uj = userJutsuById.get(j.id);
-        return {
-          ...j,
-          level: uj?.level || 0,
-          highlight: isJutsuPickStep && j.id === TUTORIAL_JUTSU_ID,
-          isFavorite: favoriteJutsuIds.includes(j.id),
-        };
-      })
-      .filter((j) => j.level < JUTSU_LEVEL_CAP)
-      // Favorites first, then jutsu in training/queued, then highest level
-      .sort(
-        (a, b) =>
-          Number(b.isFavorite) - Number(a.isFavorite) ||
-          Number(trainingJutsuIds.has(b.id)) - Number(trainingJutsuIds.has(a.id)) ||
-          b.level - a.level,
-      ) ?? [];
-
-  const tutorialJutsuLevel =
-    userJutsus?.find((uj) => uj.jutsuId === TUTORIAL_JUTSU_ID)?.level || 0;
-  if (
-    isJutsuPickStep &&
-    tutorialJutsu &&
-    canTrainJutsu(tutorialJutsu, userData, masteries) &&
-    // The list drops capped jutsu; pinning one back would show a tile whose
-    // confirm modal can only say "Level capped".
-    tutorialJutsuLevel < JUTSU_LEVEL_CAP &&
-    !alljutsus.some((j) => j.id === tutorialJutsu.id)
-  ) {
-    alljutsus.unshift({
-      // jutsu.get carries no relations, unlike the paginated jutsu.getAll rows
-      bloodline: null,
-      ...tutorialJutsu,
-      level: tutorialJutsuLevel,
-      highlight: true,
-      isFavorite: favoriteJutsuIds.includes(tutorialJutsu.id),
-    });
-  } else if (isJutsuPickStep) {
-    const pinnedIdx = alljutsus.findIndex((j) => j.id === TUTORIAL_JUTSU_ID);
-    if (pinnedIdx > 0) {
-      const [pinned] = alljutsus.splice(pinnedIdx, 1);
-      if (pinned) alljutsus.unshift(pinned);
-    }
-  }
+  // Memoized so the tiles keep their identity while the confirm dialog's level count changes
+  const storedFavoriteIds = rankedLoadout?.loadout.favoriteJutsuIds;
+  const jutsuPages = jutsus?.pages;
+  const { alljutsus, userJutsuCounts } = useMemo(
+    () =>
+      buildTrainableJutsuTiles({
+        pages: jutsuPages,
+        userJutsus,
+        trainingQueue,
+        userData,
+        userItems,
+        favoriteJutsuIds: storedFavoriteIds,
+        tutorialJutsu,
+        isJutsuPickStep,
+        serverNow,
+      }),
+    [
+      jutsuPages,
+      userJutsus,
+      trainingQueue,
+      userData,
+      userItems,
+      storedFavoriteIds,
+      tutorialJutsu,
+      isJutsuPickStep,
+      serverNow,
+    ],
+  );
 
   // Training time
   const finishTrainingAt = findJutsuInTraining(userJutsus, serverNow);
@@ -2013,4 +1952,119 @@ const getTrainingLabel = (stat: CombatStatName | TimedMasteryName) => {
     default:
       return stat.charAt(0).toUpperCase() + stat.slice(1);
   }
+};
+
+/**
+ * Training-grid tiles and the trained level of every owned jutsu. One call over the query
+ * data, so the compiler reuses both while the confirm dialog's level count changes.
+ */
+const buildTrainableJutsuTiles = (input: {
+  pages: RouterOutputs["jutsu"]["getAll"][] | undefined;
+  userJutsus: RouterOutputs["jutsu"]["getUserJutsus"] | undefined;
+  trainingQueue: RouterOutputs["jutsu"]["getTrainingQueue"] | undefined;
+  userData: NonNullable<UserWithRelations>;
+  userItems: RouterOutputs["item"]["getUserItems"] | undefined;
+  favoriteJutsuIds: string[] | undefined;
+  tutorialJutsu: RouterOutputs["jutsu"]["get"] | undefined;
+  isJutsuPickStep: boolean;
+  serverNow: number;
+}) => {
+  const { pages, userJutsus, trainingQueue, userData, userItems, tutorialJutsu } =
+    input;
+  const { isJutsuPickStep, serverNow } = input;
+  const favoriteJutsuIds = input.favoriteJutsuIds ?? [];
+  const userJutsuById = new Map(
+    (userJutsus ?? []).map((owned) => [owned.jutsuId, owned]),
+  );
+
+  const masteries = effectiveMasteries({
+    ...userData,
+    items: userItems ?? [],
+  });
+
+  const userJutsuCounts = userJutsus?.map((userJutsu) => {
+    return {
+      id: userJutsu.jutsuId,
+      quantity: isJutsuInTraining(userJutsu, serverNow)
+        ? userJutsu.level - 1
+        : userJutsu.level,
+    };
+  });
+
+  // Jutsu in active training or waiting in the queue, shown right after favorites
+  const trainingJutsuIds = new Set([
+    ...(userJutsus ?? [])
+      .filter((uj) => isJutsuInTraining(uj, serverNow))
+      .map((uj) => uj.jutsuId),
+    ...(trainingQueue?.waiting ?? []).map((job) => job.jutsuId),
+  ]);
+
+  // Collect all ancestor jutsu IDs that the user has evolved past
+  const evolvedAncestorIds = new Set<string>();
+  for (const uj of userJutsus ?? []) {
+    for (const id of uj.ancestorIds) evolvedAncestorIds.add(id);
+  }
+
+  // Filtering jutsus
+  const alljutsus =
+    pages
+      ?.flatMap((page) => page.data)
+      .filter((j) => {
+        if (j.parentJutsuId)
+          return (
+            // Training/leveling is item-free, so ignore the bloodline item requirement here
+            canUseJutsu(j, userData, true, masteries, true) && userJutsuById.has(j.id)
+          );
+        return canTrainJutsu(j, userData, masteries);
+      })
+      .filter((j) => !evolvedAncestorIds.has(j.id))
+      .filter(
+        (j) => userJutsuById.has(j.id) || !isJutsuTrainToLearnRestricted(j.jutsuType),
+      )
+      .map((j) => {
+        const uj = userJutsuById.get(j.id);
+        return {
+          ...j,
+          level: uj?.level || 0,
+          highlight: isJutsuPickStep && j.id === TUTORIAL_JUTSU_ID,
+          isFavorite: favoriteJutsuIds.includes(j.id),
+        };
+      })
+      .filter((j) => j.level < JUTSU_LEVEL_CAP)
+      // Favorites first, then jutsu in training/queued, then highest level
+      .sort(
+        (a, b) =>
+          Number(b.isFavorite) - Number(a.isFavorite) ||
+          Number(trainingJutsuIds.has(b.id)) - Number(trainingJutsuIds.has(a.id)) ||
+          b.level - a.level,
+      ) ?? [];
+
+  const tutorialJutsuLevel =
+    userJutsus?.find((uj) => uj.jutsuId === TUTORIAL_JUTSU_ID)?.level || 0;
+  if (
+    isJutsuPickStep &&
+    tutorialJutsu &&
+    canTrainJutsu(tutorialJutsu, userData, masteries) &&
+    // The list drops capped jutsu; pinning one back would show a tile whose
+    // confirm modal can only say "Level capped".
+    tutorialJutsuLevel < JUTSU_LEVEL_CAP &&
+    !alljutsus.some((j) => j.id === tutorialJutsu.id)
+  ) {
+    alljutsus.unshift({
+      // jutsu.get carries no relations, unlike the paginated jutsu.getAll rows
+      bloodline: null,
+      ...tutorialJutsu,
+      level: tutorialJutsuLevel,
+      highlight: true,
+      isFavorite: favoriteJutsuIds.includes(tutorialJutsu.id),
+    });
+  } else if (isJutsuPickStep) {
+    const pinnedIdx = alljutsus.findIndex((j) => j.id === TUTORIAL_JUTSU_ID);
+    if (pinnedIdx > 0) {
+      const [pinned] = alljutsus.splice(pinnedIdx, 1);
+      if (pinned) alljutsus.unshift(pinned);
+    }
+  }
+
+  return { alljutsus, userJutsuCounts };
 };
