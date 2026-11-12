@@ -14,9 +14,14 @@ import {
   userData,
   village,
   villageAlliance,
+  villageDutyPresence,
+  villageDutyShift,
+  villageStructure,
+  war,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { shrineRouter } from "@/server/api/routers/shrine";
+import { villageDutyActorId } from "@/server/utils/villageDuty";
 import { insertDefaultAiProfile, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { beforeStatements } from "../../../setup/statements";
@@ -52,11 +57,15 @@ describeWithDatabase("shrine AI defenders", () => {
       aiProfile,
       battle,
       battleHistory,
+      villageDutyShift,
+      villageDutyPresence,
+      villageStructure,
       mpvpBattleUser,
       mpvpBattleQueue,
       sector,
       userData,
       villageAlliance,
+      war,
       village,
     );
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
@@ -146,6 +155,70 @@ describeWithDatabase("shrine AI defenders", () => {
     });
     expect(human).toMatchObject({ status: "AWAKE", battleId: null });
   });
+
+  it.each(["OUTLAW", "HIDEOUT", "STRONGHOLD"] as const)(
+    "uses stored shrine defenders for a %s faction",
+    async (type) => {
+      const db = await getTestDatabase();
+      await db.update(village).set({ type }).where(eq(village.id, "b"));
+      expect(await startLobby(["shrine-a"])).toEqual(["shrine-a"]);
+    },
+  );
+
+  it.each([
+    [true, "VILLAGE"],
+    [false, "VILLAGE"],
+    [true, "OUTLAW"],
+  ] as const)(
+    "uses a duty copy only for a village home shrine (home=%s, type=%s)",
+    async (home, type) => {
+      const db = await getTestDatabase();
+      await db
+        .update(userData)
+        .set({
+          villageDutyVillageId: "b",
+          joinedVillageAt: new Date("2025-01-01"),
+          villageDutyStartedAt: new Date("2026-01-01"),
+          status: "ASLEEP",
+        })
+        .where(eq(userData.userId, "human"));
+      if (home) {
+        await db.update(village).set({ sector: 101, type }).where(eq(village.id, "b"));
+        await db.insert(war).values({
+          id: "home-war",
+          attackerVillageId: "a",
+          defenderVillageId: "b",
+          type: "VILLAGE_WAR",
+          status: "ACTIVE",
+        });
+      }
+      await db.insert(villageStructure).values({
+        id: "duty-guards",
+        name: "Village Protectors",
+        image: "guards",
+        villageId: "b",
+        level: 1,
+        patrolSlotsPerLvl: 2,
+      });
+      const defenders = await startLobby(["shrine-a"]);
+      expect(defenders).toEqual(
+        home && type === "VILLAGE" ? [villageDutyActorId("human")] : ["shrine-a"],
+      );
+      expect(
+        (await db.query.villageDutyShift.findFirst({
+          where: eq(villageDutyShift.villageId, "b"),
+        })) !== undefined,
+      ).toBe(home && type === "VILLAGE");
+      expect(
+        await db.query.userData.findFirst({ where: eq(userData.userId, "human") }),
+      ).toMatchObject({
+        status: "ASLEEP",
+        battleId: null,
+        curHealth: 100,
+        pveFights: 0,
+      });
+    },
+  );
 
   it("falls back to the global shrine AIs when no stored defender qualifies", async () => {
     const defenders = await startLobby(["human", "plain-ai"]);

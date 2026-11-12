@@ -33,7 +33,7 @@ const settlementFunctions = new Set([
   "server/utils/kage.ts#syncLockedKageDefense",
 ]);
 
-// Queue launchers validate participants, not the requesting user's availability.
+// Queue launchers validate participants; travel heartbeats observe already-awake intruders.
 // Exempt only these helper guards: adding an actor guard to a launcher still fails.
 const participantLaunchers = [
   "territoryWar.startBattle",
@@ -42,9 +42,11 @@ const participantLaunchers = [
   "shrine.initiateShrineBattle",
   "pvpRank.checkRankedPvpMatches",
   "raids.startRaidBattle",
+  "villageDuty.patrol",
 ];
 const participantGuards = new Set([
   "server/api/routers/combat.ts#initiateBattle",
+  "server/utils/villageDuty.ts#isVillageDutyIntruder",
   "libs/train.ts#trainingStartBlockMessage",
   "server/api/routers/tournamentEvents.ts#launchEventGame",
 ]);

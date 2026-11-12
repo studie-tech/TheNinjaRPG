@@ -29,7 +29,12 @@ import {
   SHRINE_RECAPTURED_NOTICE,
 } from "@/libs/combat/constants";
 import { settleObjectiveWarCombat } from "@/libs/combat/objectiveWar";
-import { areBattleAllies, hasHumanOpponent } from "@/libs/combat/participants";
+import {
+  areBattleAllies,
+  hasHumanOpponent,
+  isPvpRewardOpponent,
+  villageDutyBattleActorId,
+} from "@/libs/combat/participants";
 import type { CombatQuestTrackerTask } from "@/libs/combat/quests";
 import {
   buildCombatTrackerTasks,
@@ -41,6 +46,7 @@ import {
   getOpposingBattleWars,
   hydrateUserForQuests,
   isPvpEnergyRewardBattle,
+  villageDutyVictory,
 } from "@/libs/combat/settlement";
 import type {
   ActionEffect,
@@ -116,6 +122,10 @@ import { reduceActiveFarmPlotTimers } from "@/queries/farming";
 import { deleteUserItemsWithPositiveQuantity } from "@/queries/item";
 import { incrementNotificationCounters } from "@/queries/misc";
 import { incrementVillageTokens } from "@/queries/village";
+import {
+  creditVillageDutyVictory,
+  releaseVillageDutyPatrol,
+} from "@/queries/villageDuty";
 import { warRaidCombatGuard } from "@/queries/war";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
@@ -299,7 +309,10 @@ export const updateBattle = async (
 
   const finishBattle = async () => {
     if (battleOver) {
+      // Only the terminal version claimant pays the copy's owner, even after an hourly roster rotation.
+      const dutyReward = villageDutyVictory(newBattle);
       await Promise.all([
+        ...(dutyReward ? [creditVillageDutyVictory(client, dutyReward)] : []),
         ...(user && other
           ? [insertLogBattleLengthsForFinishBattle(client, newBattle, user, other)]
           : []),
@@ -1169,6 +1182,21 @@ export const settlementWrites = (
   battleOver: boolean,
 ): [ReturnType<typeof updateUser>, ...Promise<unknown>[]] => [
   updateUser(client, pusher, battle, result, userId),
+  ...(battleOver && battle.extraState.villageDuty
+    ? [
+        releaseVillageDutyPatrol(
+          client,
+          { ...battle.extraState.villageDuty, battleId: battle.id },
+          !battle.usersState.some(
+            (user) =>
+              user.isVillageDutyCopy &&
+              !user.isSummon &&
+              user.curHealth > 0 &&
+              !user.fledBattle,
+          ),
+        ),
+      ]
+    : []),
   ...(!battle.extraState.dungeon && !battle.extraState.hunting
     ? [
         saveUsage(client, battle, result, userId),
@@ -1223,6 +1251,13 @@ export const updateUser = async (
   if (result && user) {
     const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
     const facedHuman = hasHumanOpponent(curBattle.usersState, user);
+    const facedPvpRewardOpponent = curBattle.usersState.some((target) =>
+      isPvpRewardOpponent(
+        user,
+        target,
+        villageDutyBattleActorId(curBattle.extraState.villageDuty),
+      ),
+    );
     result.energyReward =
       isPvpEnergyRewardBattle(curBattle, userId) &&
       curBattle.extraState.energyRewardEligible === true &&
@@ -1541,7 +1576,7 @@ export const updateUser = async (
             userId,
             result,
             settledAt,
-            facedHuman,
+            facedPvpRewardOpponent,
             user,
             updatedQuestData,
             tookKageSeat,

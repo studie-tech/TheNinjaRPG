@@ -664,8 +664,10 @@ const villageRelations = {
   kage: { columns: { username: true, userId: true, avatar: true } },
 } as const;
 
-/** A genin loses their sensei and an elder loses their seat when changing village. */
+/** Changing membership ends duty, removes a genin's sensei and returns elders to jonin. */
 const villageChangeFields = (user: { rank: UserRank }) => ({
+  villageDutyVillageId: null,
+  villageDutyStartedAt: null,
   ...(user.rank === "GENIN" && { senseiId: null }),
   ...(user.rank === "ELDER" && { rank: "JONIN" as const }),
 });

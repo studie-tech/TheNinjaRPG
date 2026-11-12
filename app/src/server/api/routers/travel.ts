@@ -17,10 +17,8 @@ import {
   TUTORIAL_GENIN_EXAM_QUEST_ID,
   TUTORIAL_STARTER_QUEST_ID,
   UserStatuses,
-  VILLAGE_PROTECTOR_AI_ID,
 } from "@/drizzle/constants";
 import { type UserData, userData } from "@/drizzle/schema";
-import { anbuStealthChance } from "@/libs/anbu";
 import { isCreator } from "@/libs/combat/creatorTrial";
 import {
   anonymousSpriteAppearance,
@@ -55,7 +53,6 @@ import {
   type SectorMapEdge,
 } from "@/libs/sector-map/crossing";
 import {
-  chebyshevDistance,
   findNearestWalkableCoordinate,
   isReachableCoordinate,
   isWalkableCoordinate,
@@ -73,6 +70,7 @@ import {
   findLandingNear,
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
+import { villageDutyPatrols } from "@/libs/villageDuty";
 import { getMapDisguise } from "@/libs/war";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import {
@@ -103,9 +101,15 @@ import {
   updateUserDataForStartGlobalMove,
 } from "@/queries/travel";
 import { fetchSectorVillage, findVillageBySector } from "@/queries/village";
-import { initiateBattle } from "@/routers/combat";
+import {
+  listVillageDutyPatrols,
+  listVillageDutyRoster,
+  listVillageDutyVisitors,
+} from "@/queries/villageDuty";
+import { initiateBattle, initiateVillageDutyBattle } from "@/routers/combat";
 import { fetchUpdatedUser, type UserWithRelations } from "@/routers/profile";
 import { breakStealth } from "@/routers/stealth";
+import { fetchActiveWars } from "@/routers/war";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -132,11 +136,15 @@ import {
   resolveSectorCrossing,
 } from "@/server/utils/sectorMap";
 import { missingUserMessage } from "@/server/utils/sentry";
+import {
+  ensureVillageDutyShift,
+  isVillageDutyIntruder,
+  prepareVillageDutyEncounter,
+  villageDutyActorId,
+} from "@/server/utils/villageDuty";
 import { canEnterWarCamp, fetchWarCampEntry } from "@/server/utils/warMercenary";
-import { findRelationship } from "@/utils/alliance";
 import { groupBy } from "@/utils/grouping";
 import { regenTicksSince, secondsFromNow } from "@/utils/time";
-import { getStrucBoost } from "@/utils/village";
 import type { QuestTrackerType } from "@/validators/objectives";
 import {
   sectorIdSchema,
@@ -394,11 +402,21 @@ export const travelRouter = createTRPCRouter({
         };
       }
       // Crossings can leave a stale query key. Never return another sector's data.
-      const [users, villageData, sectorData, placements] =
+      const [users, villageData, sectorData, placements, loadedDutyUsers] =
         user.sector === input.sector
           ? sectorWindowData
           : await fetchSectorWindowData(ctx.drizzle, ctx.userId, user.sector);
 
+      const dutyShift =
+        villageData?.type === "VILLAGE"
+          ? await ensureVillageDutyShift(ctx.drizzle, villageData)
+          : null;
+      const dutyUsers =
+        dutyShift?.startedAt.getTime() === villageData?.dutyShift?.startedAt.getTime()
+          ? loadedDutyUsers
+          : villageData?.type === "VILLAGE"
+            ? await listVillageDutyPatrols(ctx.drizzle, user.sector)
+            : [];
       // Keep the caller's ban/activity exceptions outside the indexed sector range query.
       // Project only the public sector fields from the already-loaded caller snapshot.
       if (user.status === "AWAKE" && !user.isAi) {
@@ -485,6 +503,19 @@ export const travelRouter = createTRPCRouter({
         user.sector === input.sector
           ? requestedMap
           : await fetchPublishedSectorMap(ctx.drizzle, user.sector).catch(() => null);
+      const dutyPatrols = sectorMap
+        ? villageDutyPatrols(
+            dutyUsers.map((owner) => ({
+              ...owner,
+              actorId: villageDutyActorId(owner.userId),
+            })),
+            sectorMap,
+            user.sector,
+            user.villageId,
+            dutyShift?.patrols,
+            villageData?.structures,
+          )
+        : [];
       const overworldAis = placements.flatMap((p) => {
         if (!p.aiTemplate?.isAi) return [];
         const template = {
@@ -563,7 +594,17 @@ export const travelRouter = createTRPCRouter({
                 : u,
             )
           : processedUsers,
-        village: villageData,
+        protectors: dutyPatrols,
+        patrolShiftAt: dutyShift?.startedAt ?? null,
+        patrolRevision: dutyShift?.revision ?? 0,
+        patrolThreat:
+          !!villageData &&
+          isVillageDutyIntruder(villageData, user, warData) &&
+          !isUserCurrentlyStealthed(user) &&
+          dutyUsers.length > 0,
+        village: villageData
+          ? (({ dutyShift: _shift, ...publicVillage }) => publicVillage)(villageData)
+          : null,
         sectorData,
         warData: warData.map((w) =>
           maskWarObjectives(
@@ -1083,10 +1124,6 @@ export const travelRouter = createTRPCRouter({
       }
       const isVillage = calcIsInVillage(destination, targetMap);
       const location = isVillage ? "Village" : "";
-      const travelLength =
-        crossing && entryTile
-          ? 1 + chebyshevDistance(entryTile, destination)
-          : chebyshevDistance({ x: curLongitude, y: curLatitude }, destination);
       // Optimistic update & query simultaneously
       const moveOutcome = await Promise.all([
         updateUserDataForMoveInSector(
@@ -1103,6 +1140,21 @@ export const travelRouter = createTRPCRouter({
           readiness,
         ),
         isVillage ? findVillageForMoveInSector(ctx.drizzle, targetSector) : undefined,
+        isVillage &&
+        targetSector !== moveUser.village?.sector &&
+        !isUserCurrentlyStealthed(moveUser)
+          ? listVillageDutyRoster(ctx.drizzle, targetSector)
+          : [],
+        isVillage &&
+        targetSector !== moveUser.village?.sector &&
+        !isUserCurrentlyStealthed(moveUser)
+          ? listVillageDutyVisitors(ctx.drizzle, targetSector, new Date())
+          : [],
+        isVillage &&
+        targetSector !== moveUser.village?.sector &&
+        !isUserCurrentlyStealthed(moveUser)
+          ? fetchActiveWars(ctx.drizzle)
+          : [],
       ]).catch((error: unknown) => {
         // The CAS guard makes a blind retry unsafe: a re-issue after the first
         // attempt already applied would match zero rows. Degrade to an ordinary
@@ -1113,63 +1165,59 @@ export const travelRouter = createTRPCRouter({
       if (!moveOutcome) {
         return errorResponse("Connection hiccup, please try moving again");
       }
-      const [result, sectorVillage] = moveOutcome;
+      const [result, sectorVillage, dutyRoster, dutyPresence, dutyWars] = moveOutcome;
       const user = moveUser;
       // Check if move was successful
       if (result.rowsAffected === 1) {
-        // Check for encounters / village defence
-        if (isVillage && sectorVillage && sectorVillage.id !== villageId) {
-          const relations = [
-            ...sectorVillage.relationshipA,
-            ...sectorVillage.relationshipB,
-          ];
-          const relation = findRelationship(relations, villageId, sectorVillage.id);
-          if (relation?.status === "ENEMY") {
-            // Chance of getting attacked by village protector
-            const chance = getStrucBoost("patrolsPerLvl", sectorVillage.structures);
-            if (Math.random() < (travelLength * chance) / 100) {
-              // Chance of ANBU squad avoiding attack
-              const anbuChance = user.anbuId
-                ? anbuStealthChance(user.anbuSquad?.stealthLevel ?? 0)
-                : 0;
-              if (Math.random() < anbuChance / 100) {
-                return actionReadinessResponse(
-                  {
-                    success: true,
-                    message: "ANBU stealth prevented guard attack",
-                  },
-                  readiness,
-                  ctx.drizzle,
-                );
-              }
-              // Attack village protector
-              const battle = await initiateBattle(
-                {
-                  longitude: destination.x,
-                  latitude: destination.y,
-                  sector: targetSector,
-                  userIds: [ctx.userId],
-                  targetIds: [VILLAGE_PROTECTOR_AI_ID],
-                  client: ctx.drizzle,
-                  scaleTarget: true,
-                  biome: "default",
-                  autoCombatUserIds: user.defaultAutoCombat ? [ctx.userId] : undefined,
-                },
-                "VILLAGE_PROTECTOR",
+        // A committed village move advances the same finite patrol used by idle travel checks.
+        if (
+          isVillage &&
+          sectorVillage &&
+          user.villageId !== sectorVillage.id &&
+          !isUserCurrentlyStealthed(user)
+        ) {
+          const encounter = await prepareVillageDutyEncounter({
+            client: ctx.drizzle,
+            userId: ctx.userId,
+            sector: targetSector,
+            preload: {
+              user: {
+                ...user,
+                longitude: destination.x,
+                latitude: destination.y,
+                sector: targetSector,
+                location: "Village",
+              },
+              home: sectorVillage,
+              map: targetMap,
+              roster: dutyRoster,
+              presence: dutyPresence,
+              wars: dutyWars,
+            },
+          });
+          if (encounter && !encounter.blocked && encounter.slot >= 0) {
+            const battle = await initiateVillageDutyBattle(
+              {
+                client: ctx.drizzle,
+                userIds: [ctx.userId],
+                actionUserId: ctx.userId,
+                sector: targetSector,
+                longitude: destination.x,
+                latitude: destination.y,
+                forceDefenderVillageId: encounter.home.id,
+                shift: encounter.shift,
+                slot: encounter.slot,
+                autoCombatUserIds: user.defaultAutoCombat ? [ctx.userId] : undefined,
+              },
+              "VILLAGE_PROTECTOR",
+            );
+            if (battle.success)
+              return actionReadinessResponse(
+                { ...battle, message: "A village protector intercepted you." },
+                readiness,
+                ctx.drizzle,
+                { status: "BATTLE", battleId: battle.battleId },
               );
-              if (battle.success) {
-                return actionReadinessResponse(
-                  {
-                    ...battle,
-                    success: true,
-                    message: "Attacked by village protector",
-                  },
-                  readiness,
-                  ctx.drizzle,
-                  { status: "BATTLE", battleId: battle.battleId },
-                );
-              }
-            }
           }
         }
         // Final output

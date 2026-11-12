@@ -1943,6 +1943,20 @@ export const VILLAGE_REDUCED_GAINS_FACTOR = 0.5;
 // Highest level a Horizon user can reach before joining one of the main villages.
 export const HORIZON_MAX_LEVEL = 10;
 export const VILLAGE_SYNDICATE_ID = "ryBk0qD4EgvPPyav2K4OC";
+/** Ranks eligible to enroll and provide a village duty defender. */
+export const VILLAGE_DUTY_RANKS = ["CHUNIN", "JONIN", "ELITE JONIN", "ELDER"] as const;
+/** Minimum rank used by the enrollment UI and in-memory eligibility checks. */
+export const VILLAGE_DUTY_MIN_RANK = VILLAGE_DUTY_RANKS[0];
+/** Patrol capacity contributed by each Village Protectors level. */
+export const VILLAGE_DUTY_SLOTS_PER_LEVEL = 2;
+/** Shared cap for active patrol selection, appearance payloads and the town hall roster. */
+export const VILLAGE_DUTY_MAX_PATROLS = 20;
+/** Travel-only presence expires promptly when a visitor leaves or backgrounds the map. */
+export const VILLAGE_DUTY_PRESENCE_SECONDS = 25;
+/** All clients select the same roster for each UTC game hour. */
+export const VILLAGE_DUTY_ROTATION_SECONDS = 3600;
+/** Patrol wander radius in tiles; movement also stays within the village zone. */
+export const VILLAGE_DUTY_WANDER_RADIUS = 5;
 /** Guardian AI behind village protector encounters and the last-resort shrine defence. */
 export const VILLAGE_PROTECTOR_AI_ID = "MJMzOE67Cx2YP3NX8SAbh";
 /** Ascending, incremental milestones; repeated categories add percentage points. */

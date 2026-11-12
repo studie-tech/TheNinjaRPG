@@ -5,6 +5,7 @@ import { dmgConfig } from "@/libs/combat/constants";
 import { refreshMasteries } from "@/libs/combat/mastery";
 import { applyEffects } from "@/libs/combat/process";
 import {
+  clone,
   damageCalc,
   decreaseMastery,
   increaseMastery,
@@ -379,10 +380,52 @@ describe("availableUserActions mastery gating", () => {
     expect(canUse(battle, "actor", GATED_JUTSU)).toBe(true);
   });
 
-  it("exempts AI from mastery gates", () => {
-    const battle = makeBattle([makeActor({ ninjutsuMastery: 100, isAi: true })]);
+  it.each([
+    ["legacy player", {}, false],
+    ["authored AI", { isAi: true }, true],
+    ["summon", { isAi: true, isSummon: true }, true],
+    [
+      "companion",
+      { isAi: true, isSummon: true, petId: "pet", activeSkillIds: [] as string[] },
+      true,
+    ],
+    ["village duty copy", { isAi: true, isVillageDutyCopy: true }, false],
+  ] as const)("preserves mastery requirements for %s", (_kind, fields, allowed) => {
+    const battle = makeBattle([makeActor({ ninjutsuMastery: 100, ...fields })]);
+    if ("petId" in fields) {
+      battle.extraState.jutsus[GATED_JUTSU]!.jutsuType = "PETS";
+      battle.battleType = "QUEST";
+    }
+    expect(canUse(battle, "actor", GATED_JUTSU)).toBe(allowed);
+    expect(canUse(battle, "actor", GATED_BLADE)).toBe(allowed);
+    if ("petId" in fields) return;
+    battle.battleType = "RANKED_PVP";
     expect(canUse(battle, "actor", GATED_JUTSU)).toBe(true);
     expect(canUse(battle, "actor", GATED_BLADE)).toBe(true);
+  });
+
+  it("keeps duty-copy clones on the summon mastery exemption", () => {
+    const battle = makeBattle([
+      makeActor({ ninjutsuMastery: 100, isAi: true, isVillageDutyCopy: true }),
+    ]);
+    clone(
+      battle.usersState,
+      {
+        ...makeEffect(
+          "clone",
+          { power: 100, rounds: 5 },
+          { creatorId: "actor", isNew: true },
+        ),
+        longitude: 1,
+        latitude: 1,
+      } as GroundEffect,
+      battle.extraState,
+    );
+    const summoned = battle.usersState[1]!;
+    expect(summoned.isSummon).toBe(true);
+    expect(summoned.isVillageDutyCopy).toBeUndefined();
+    expect(canUse(battle, summoned.userId, GATED_JUTSU)).toBe(true);
+    expect(canUse(battle, summoned.userId, GATED_BLADE)).toBe(true);
   });
 
   describe.each(["RANKED_PVP", "RANKED_SPARRING"] as const)("%s", (battleType) => {

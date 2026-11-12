@@ -43,6 +43,16 @@ import {
   upsertActiveBoostsExpression,
 } from "@/server/utils/shrine";
 
+/** Load authored shrine defenders for any faction, with duty state for eligible village homes. */
+export const findVillageForInitiateShrineBattle = (
+  client: Pick<DrizzleClient, "query">,
+  villageId: string,
+) =>
+  client.query.village.findFirst({
+    where: eq(village.id, villageId),
+    with: { structures: true, dutyShift: true },
+  });
+
 /** Build the `sector` listing for `runShrineMaintenance`, using predicates on `nextMaintainanceDueDate`. */
 export const listSectorForRunShrineMaintenance = (
   client: Pick<DrizzleClient, "query">,

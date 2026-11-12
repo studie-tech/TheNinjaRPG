@@ -15,6 +15,8 @@ import { getSectorTile } from "@/libs/sector-map/validation";
 export const WANDER_STEP_MS = 650;
 /** Fixed rest each cycle; the walk and a random pause fill the rest of it. */
 const WANDER_REST_MS = 6000;
+/** Village protectors pause briefly at each destination before continuing their circuit. */
+const PATROL_REST_MS = 800;
 /** Members of a group set off up to this long after their leader. */
 const WANDER_FOLLOW_MS = 900;
 /** Members keep within this many hexes of their leader's spot. */
@@ -48,9 +50,9 @@ export const isWanderTile = (
   (!wildOnly || tile.zone === "wilderness");
 
 const structureTileCache = new WeakMap<WanderMap, Set<number>>();
+const patrolSpotCache = new WeakMap<WanderMap, Map<string, WanderTile[]>>();
 /**
- * Tiles around the map's buildings: the sector shrine and authored structures, located by the
- * map alone so the server and every client derive the same wander spots.
+ * Tiles around authored buildings and any rendered structures supplied by the navigation view.
  */
 const structureTiles = (map: WanderMap) => {
   let tiles = structureTileCache.get(map);
@@ -76,7 +78,12 @@ const structureTiles = (map: WanderMap) => {
 };
 
 /** An open tile on this map that is clear of its buildings. */
-const isOpenWanderTile = (map: WanderMap, x: number, y: number, wildOnly: boolean) =>
+export const isOpenWanderTile = (
+  map: WanderMap,
+  x: number,
+  y: number,
+  wildOnly: boolean,
+) =>
   isWanderTile(getSectorTile(map, { x, y }), wildOnly) &&
   !structureTiles(map).has(y * map.width + x);
 
@@ -89,12 +96,18 @@ export const wanderSpots = (
   anchor: WanderTile,
   radius: number,
   wildOnly: boolean,
+  villageOnly = false,
 ): WanderTile[] => {
+  const key = `${anchor.x}:${anchor.y}:${radius}:${wildOnly}`;
+  let cached = villageOnly ? patrolSpotCache.get(map) : undefined;
+  const found = cached?.get(key);
+  if (found) return found;
   const open = (x: number, y: number) =>
-    isOpenWanderTile(map, x, y, wildOnly) || (x === anchor.x && y === anchor.y);
+    (isOpenWanderTile(map, x, y, wildOnly) &&
+      (!villageOnly || getSectorTile(map, { x, y })?.zone === "village")) ||
+    (x === anchor.x && y === anchor.y);
   const spots: WanderTile[] = [{ x: anchor.x, y: anchor.y }];
-  if (radius < 1) return spots;
-  for (let x = anchor.x - radius; x <= anchor.x + radius; x++)
+  for (let x = anchor.x - radius; radius >= 1 && x <= anchor.x + radius; x++)
     for (let y = anchor.y - radius; y <= anchor.y + radius; y++) {
       if (x === anchor.x && y === anchor.y) continue;
       const distance = oddQHexDistance(anchor.x, anchor.y, x, y);
@@ -110,6 +123,13 @@ export const wanderSpots = (
       }
       if (clear) spots.push({ x, y });
     }
+  if (villageOnly) {
+    if (!cached) {
+      cached = new Map();
+      patrolSpotCache.set(map, cached);
+    }
+    cached.set(key, spots);
+  }
   return spots;
 };
 
@@ -139,14 +159,30 @@ export type WanderConfig = {
   radius: number;
   /** From {@link wanderSpots}; computed once per anchor. */
   spots: readonly WanderTile[];
+  /** Village-only protectors follow a continuous circuit with brief destination pauses. */
+  villageOnly?: boolean;
 };
 
 /** Which wander cycle the clock is in, and how far into it. Cheap enough for every frame. */
-export const wanderClock = (
-  config: Pick<WanderConfig, "seed" | "radius">,
-  timeMs: number,
-) => {
+export const wanderClock = (config: WanderConfig, timeMs: number) => {
   const base = seedHash(config.seed);
+  if (config.villageOnly) {
+    const route = patrolCircuit(config);
+    const shifted = timeMs + (base % route.duration);
+    const repeat = Math.floor(shifted / route.duration);
+    const within = shifted - repeat * route.duration;
+    let low = 0,
+      high = route.ends.length - 1;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (within < (route.ends[middle] as number)) high = middle;
+      else low = middle + 1;
+    }
+    return {
+      cycle: repeat * route.legs.length + low,
+      into: within - (low ? (route.ends[low - 1] as number) : 0),
+    };
+  }
   const cycleMs = WANDER_REST_MS + 2 * Math.max(1, config.radius) * WANDER_STEP_MS * 2;
   const shifted = timeMs + (base % cycleMs);
   const cycle = Math.floor(shifted / cycleMs);
@@ -159,7 +195,15 @@ export const wanderClock = (
  * around the leader's spot, so a herd never stacks on one tile. It only changes with the cycle,
  * so renderers keep it until {@link wanderClock} moves on.
  */
-export const wanderLeg = (config: WanderConfig, member: number, cycle: number) => {
+export const wanderLeg = (
+  config: WanderConfig,
+  member: number,
+  cycle: number,
+): WanderLeg => {
+  if (config.villageOnly) {
+    const { legs } = patrolCircuit(config);
+    return legs[((cycle % legs.length) + legs.length) % legs.length] as WanderLeg;
+  }
   const { anchor, radius, spots } = config;
   const base = seedHash(config.seed);
   const cycleMs = WANDER_REST_MS + 2 * Math.max(1, radius) * WANDER_STEP_MS * 2;
@@ -187,7 +231,67 @@ export const wanderLeg = (config: WanderConfig, member: number, cycle: number) =
   };
 };
 
-export type WanderLeg = ReturnType<typeof wanderLeg>;
+export type WanderLeg = {
+  from: WanderTile;
+  to: WanderTile;
+  via: WanderTile | null;
+  departAt: number;
+  walkMs: number;
+  fromOffset: WanderTile;
+  toOffset: WanderTile;
+};
+
+const patrolCircuits = new WeakMap<
+  readonly WanderTile[],
+  Map<string, { legs: WanderLeg[]; ends: number[]; duration: number }>
+>();
+
+/** Cache a seeded, closed circuit so random-access clocks need no route construction per frame. */
+const patrolCircuit = (config: WanderConfig) => {
+  const key = `${config.seed}:${config.anchor.x}:${config.anchor.y}`;
+  let cached = patrolCircuits.get(config.spots);
+  const found = cached?.get(key);
+  if (found) return found;
+  const base = seedHash(config.seed);
+  const spots = [...config.spots];
+  for (let index = spots.length - 1; index > 0; index--) {
+    const other = mix(base, index, 97) % (index + 1);
+    [spots[index], spots[other]] = [
+      spots[other] as WanderTile,
+      spots[index] as WanderTile,
+    ];
+  }
+  const legs = spots.map((from, index): WanderLeg => {
+    const to = spots[(index + 1) % spots.length] as WanderTile;
+    const via = clearLine(config.spots, from, to) ? null : config.anchor;
+    const steps = via
+      ? oddQHexDistance(from.x, from.y, via.x, via.y) +
+        oddQHexDistance(via.x, via.y, to.x, to.y)
+      : oddQHexDistance(from.x, from.y, to.x, to.y);
+    return {
+      from,
+      to,
+      via,
+      departAt: PATROL_REST_MS,
+      walkMs: steps * WANDER_STEP_MS,
+      fromOffset: { x: 0, y: 0 },
+      toOffset: { x: 0, y: 0 },
+    };
+  });
+  let duration = 0;
+  const ends = legs.map((leg) => {
+    duration += leg.departAt + leg.walkMs;
+    return duration;
+  });
+  const route = { legs, ends, duration };
+  if (!cached) {
+    cached = new Map();
+    patrolCircuits.set(config.spots, cached);
+  }
+  if (cached.size > 4096) cached.clear();
+  cached.set(key, route);
+  return route;
+};
 
 /** Share of a leg walked `into` its cycle. */
 export const wanderProgress = (leg: WanderLeg, into: number) =>

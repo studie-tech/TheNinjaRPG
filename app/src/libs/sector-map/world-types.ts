@@ -5,6 +5,7 @@ import type {
   UserStatus,
 } from "@/drizzle/constants";
 import type { CharacterAnimation } from "@/libs/spriteAnimations";
+import type { VillageDutyPatrol } from "@/libs/villageDuty";
 
 type NonEmptyArray<T> = T[] & { 0: T };
 
@@ -65,6 +66,10 @@ export interface SectorUser {
   bodyIdle?: CharacterAnimation;
   /** Walking sheet played in place of `bodyIdle` while the user moves. */
   bodyMove?: CharacterAnimation;
+  /** A village-duty copy has its own map identity and cannot be attacked or healed as a player. */
+  isVillageDuty?: boolean;
+  /** Owner ID for profile links, present only when the protector is unmasked. */
+  villageDutyUserId?: string;
   userId: string;
   username: string;
   /** Viewer-specific anonymity from the authenticated sector snapshot. */
@@ -109,6 +114,10 @@ export interface SectorUser {
     anchor: { x: number; y: number };
     radius: number;
     wildOnly: boolean;
+    /** Village protectors stay on village tiles and roam a circuit with brief destination pauses. */
+    villageOnly?: boolean;
+    /** Shared server pursuit; scenes interpolate it without per-frame requests. */
+    pursuit?: NonNullable<VillageDutyPatrol["pursuit"]>;
   };
   /** Drawn height relative to the default NPC height. */
   npcScale?: number;

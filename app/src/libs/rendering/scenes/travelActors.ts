@@ -51,12 +51,12 @@ import type {
   WorldSpriteDescription,
 } from "@/libs/rendering/sectorSprites";
 import { standingOffset } from "@/libs/rendering/terrainElevation";
+import { createTravelCharacterBudget } from "@/libs/rendering/travelCharacterBudget";
 import {
   boundsOverlap,
   isObjectChainVisible,
   type WorldBounds,
 } from "@/libs/rendering/visibility";
-import { WORLD_DETAIL } from "@/libs/rendering/worldDetail";
 import type { WorldShadows } from "@/libs/rendering/worldShadows";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { CharacterAnimation } from "@/libs/spriteAnimations";
@@ -92,6 +92,8 @@ export const createTravelActors = (
     layers?.ground?.attach(ripples.container);
     return ripples;
   };
+  const characterBudget = createTravelCharacterBudget();
+  let characterDemand = 0;
   const records = new Map<string, ActorRecord>();
   const byRoot = new Map<Container, ActorRecord>();
   const appearanceParts = new Map<
@@ -128,6 +130,9 @@ export const createTravelActors = (
   let viewport: WorldBounds | null = null;
   let stableViewport: Record<keyof WorldBounds, [number, number]> | null = null;
   let visibleKey = "";
+  let actorMovements: ReadonlyMap<string, TravelActorMovement> | undefined;
+  let pursuingUsers: SectorUser[] = [];
+  let pursuitVisibilityKey = "";
   const movementOrder = new Map<
     string,
     {
@@ -144,6 +149,41 @@ export const createTravelActors = (
   let paintedOriginY = container.y;
   let lastDepthSortAt = Number.NEGATIVE_INFINITY;
   let lastActorSortAt = Number.NEGATIVE_INFINITY;
+  const membership = (x: number, y: number, width: number, height: number) => {
+    const bounds = viewport;
+    const within = (reach: number) =>
+      !bounds ||
+      (x >= bounds.minX - width * reach &&
+        x <= bounds.maxX + width * reach &&
+        y >= bounds.minY - height * reach &&
+        y <= bounds.maxY + height * reach);
+    return {
+      visible: within(LOAD_TILES),
+      retained: within(RETAIN_TILES),
+      onScreen:
+        !bounds ||
+        boundsOverlap(bounds, {
+          minX: x - width,
+          maxX: x + width * 2,
+          minY: y - height,
+          maxY: y + height * 2.4,
+        }),
+    };
+  };
+  /** Moving pursuits cross visibility boundaries independently of the static camera cache. */
+  const movingVisibilityKey = () =>
+    pursuingUsers
+      .map((user) => {
+        const movement = actorMovements?.get(travelActorKey(user));
+        const tile = sourceSnapshot?.grid.getHex({
+          col: user.longitude,
+          row: user.latitude,
+        });
+        if (!movement || !tile) return "";
+        const state = membership(movement.x, movement.y, tile.width, tile.height);
+        return `${Number(state.visible)}${Number(state.retained)}${Number(state.onScreen)}`;
+      })
+      .join("|");
   /** Cull before acquiring artwork; padding preloads nearby actors and the viewer stays present. */
   const visibleSnapshot = (snapshot: TravelActorsSnapshot) => {
     const bounds = viewport;
@@ -169,46 +209,36 @@ export const createTravelActors = (
     >();
     const tileFor = (user: SectorUser) => {
       // A roaming NPC can be anywhere within its radius of the anchor tile it reports.
-      const reach = user.npcWander?.radius ?? 0;
-      const key = `${user.longitude},${user.latitude},${reach}`;
+      const movement = user.npcWander?.pursuit
+        ? actorMovements?.get(travelActorKey(user))
+        : undefined;
+      const reach = movement ? 0 : (user.npcWander?.radius ?? 0);
+      const key = movement
+        ? `pursuit:${movement.x},${movement.y}`
+        : `${user.longitude},${user.latitude},${reach}`;
       if (tiles.has(key)) return tiles.get(key);
       const tile = snapshot.grid.getHex({ col: user.longitude, row: user.latitude });
       if (!tile) {
         tiles.set(key, undefined);
         return undefined;
       }
-      const x = -tile.center.x,
-        y = -tile.center.y,
+      const x = movement?.x ?? -tile.center.x,
+        y = movement?.y ?? -tile.center.y,
         width = tile.width * (1 + reach),
         height = tile.height * (1 + reach);
+      // Dynamic boundaries are checked separately so they cannot stale the camera's stable domain.
+      const fixedBoundary = movement ? () => {} : boundary;
       for (const reachTiles of [LOAD_TILES, RETAIN_TILES]) {
-        boundary("minX", x + width * reachTiles);
-        boundary("maxX", x - width * reachTiles);
-        boundary("minY", y + height * reachTiles);
-        boundary("maxY", y - height * reachTiles);
+        fixedBoundary("minX", x + width * reachTiles);
+        fixedBoundary("maxX", x - width * reachTiles);
+        fixedBoundary("minY", y + height * reachTiles);
+        fixedBoundary("maxY", y - height * reachTiles);
       }
-      boundary("minX", x + width * 2);
-      boundary("maxX", x - width);
-      boundary("minY", y + height * 2.4);
-      boundary("maxY", y - height);
-      const within = (reachTiles: number) =>
-        !bounds ||
-        (x >= bounds.minX - width * reachTiles &&
-          x <= bounds.maxX + width * reachTiles &&
-          y >= bounds.minY - height * reachTiles &&
-          y <= bounds.maxY + height * reachTiles);
-      const entry = {
-        visible: within(LOAD_TILES),
-        retained: within(RETAIN_TILES),
-        onScreen:
-          !bounds ||
-          boundsOverlap(bounds, {
-            minX: x - width,
-            maxX: x + width * 2,
-            minY: y - height,
-            maxY: y + height * 2.4,
-          }),
-      };
+      fixedBoundary("minX", x + width * 2);
+      fixedBoundary("maxX", x - width);
+      fixedBoundary("minY", y + height * 2.4);
+      fixedBoundary("maxY", y - height);
+      const entry = membership(x, y, width, height);
       tiles.set(key, entry);
       return entry;
     };
@@ -227,9 +257,10 @@ export const createTravelActors = (
       const tile = tileFor(user);
       return tile ? [{ user, key: travelActorKey(user), onScreen: tile.onScreen }] : [];
     });
+    characterDemand = candidates.length;
     stableViewport = domain;
     // Every awake candidate gets a body while the crowd fits the budget.
-    if (candidates.length <= WORLD_DETAIL.travelCharacters) {
+    if (candidates.length <= characterBudget.limit) {
       selectionKey = null;
       characterKeys = null;
       return { ...snapshot, users: visibleUsers, characterKeys: undefined };
@@ -239,7 +270,7 @@ export const createTravelActors = (
       .join("|");
     if (key !== selectionKey || !characterKeys) {
       selectionKey = key;
-      if (candidates.length > WORLD_DETAIL.travelCharacters)
+      if (candidates.length > characterBudget.limit)
         candidates.sort((a, b) => {
           const ownA = a.user.userId === snapshot.viewer?.userId;
           const ownB = b.user.userId === snapshot.viewer?.userId;
@@ -253,6 +284,7 @@ export const createTravelActors = (
             // Visible quest/hostile NPCs retain their controls within the same body budget;
             // ambient wildlife yields to every player.
             ambientRank(a.user) - ambientRank(b.user) ||
+            Number(!!a.user.isVillageDuty) - Number(!!b.user.isVillageDuty) ||
             Number(Boolean(b.user.isNpc)) - Number(Boolean(a.user.isNpc)) ||
             (orderB?.order ?? 0) - (orderA?.order ?? 0) ||
             (orderB?.initialTime ?? 0) - (orderA?.initialTime ?? 0) ||
@@ -260,7 +292,7 @@ export const createTravelActors = (
           );
         });
       characterKeys = new Set(
-        candidates.slice(0, WORLD_DETAIL.travelCharacters).map((entry) => entry.key),
+        candidates.slice(0, characterBudget.limit).map((entry) => entry.key),
       );
     }
     return { ...snapshot, users: visibleUsers, characterKeys };
@@ -384,7 +416,10 @@ export const createTravelActors = (
         counterLabel: null,
         effects,
         // Roaming NPC copies share a template userId, so their movement is keyed per actor.
-        movementKey: recipe.user?.isNpc ? recipe.key : (recipe.user?.userId ?? ""),
+        movementKey:
+          recipe.user?.npcWander || recipe.user?.isNpc
+            ? recipe.key
+            : (recipe.user?.userId ?? ""),
         character: undefined,
         loops: false,
         tile: previous?.tile ?? recipe.tile,
@@ -419,6 +454,18 @@ export const createTravelActors = (
         fallback.scale.set(body.size, -body.size);
         root.addChild(fallback);
         record.fallback = fallback;
+      }
+      if (recipe.user?.isVillageDuty) {
+        // A small insignia identifies patrols without filling a crowded village with labels.
+        const shield = new Graphics()
+          .poly([-12, 0, 12, 0, 11, 15, 0, 26, -11, 15])
+          .fill(0xdeedc2)
+          .stroke({ color: 0x17261b, width: 2 });
+        shield.label = "village-protector";
+        shield.position.set(recipe.tile.width * 0.5, recipe.tile.height * 1.5);
+        shield.scale.set(recipe.tile.height / 80, -recipe.tile.height / 80);
+        root.addChild(shield);
+        layers?.overlay.attach(shield);
       }
       records.set(recipe.key, record);
       byRoot.set(root, record);
@@ -532,7 +579,9 @@ export const createTravelActors = (
               isHovered &&
               (alone || target.username === CREATOR_USERNAME) &&
               actions.attack
-            : isHovered && alone && actions[kind];
+            : isHovered &&
+              (alone || (kind === "info" && target.isVillageDuty)) &&
+              actions[kind];
         showControl(record, entry.sprite, !!shown);
       }
     }
@@ -718,7 +767,21 @@ export const createTravelActors = (
   const animate = (
     frame: GameFrame,
     movements?: ReadonlyMap<string, TravelActorMovement>,
+    continuous = true,
   ) => {
+    actorMovements = movements;
+    const movingKey = movingVisibilityKey();
+    if (movingKey !== pursuitVisibilityKey) {
+      pursuitVisibilityKey = movingKey;
+      refreshVisibility();
+    }
+    if (
+      characterBudget.sample(frame.now, continuous, characterDemand) &&
+      sourceSnapshot
+    ) {
+      selectionKey = null;
+      sync(sourceSnapshot);
+    }
     const angle = frame.reducedMotion ? 0 : (frame.now * Math.PI) / 5000;
     const cycle = frame.reducedMotion ? 0 : (frame.now / 1000) % 2;
     const wobble = cycle < 1 ? Math.sin(cycle * Math.PI * 4) * (1 - cycle) * 2 : 0;
@@ -863,6 +926,7 @@ export const createTravelActors = (
     if (sourceSnapshot?.sector !== snapshot.sector) {
       movementOrder.clear();
       selectionKey = null;
+      actorMovements = undefined;
     }
     if (sourceSnapshot?.viewer?.userId !== snapshot.viewer?.userId) selectionKey = null;
     const present = new Set<string>();
@@ -893,8 +957,19 @@ export const createTravelActors = (
     for (const key of movementOrder.keys())
       if (!present.has(key)) movementOrder.delete(key);
     sourceSnapshot = snapshot;
+    pursuingUsers = snapshot.users.filter((user) => user.npcWander?.pursuit);
+    pursuitVisibilityKey = movingVisibilityKey();
     const visible = visibleSnapshot(snapshot);
     visibleKey = userKey(visible);
+    reconcile(visible);
+  };
+  /** Reconcile only membership or body-priority changes; stable artwork stays owned by its actor. */
+  const refreshVisibility = () => {
+    if (!sourceSnapshot) return;
+    const visible = visibleSnapshot(sourceSnapshot);
+    const key = userKey(visible);
+    if (key === visibleKey) return;
+    visibleKey = key;
     reconcile(visible);
   };
   return {
@@ -909,23 +984,23 @@ export const createTravelActors = (
       const domain = stableViewport;
       viewport = { ...bounds };
       if (!sourceSnapshot) return;
+      const movingKey = movingVisibilityKey();
       if (
-        (previous &&
+        movingKey === pursuitVisibilityKey &&
+        ((previous &&
           bounds.minX === previous.minX &&
           bounds.maxX === previous.maxX &&
           bounds.minY === previous.minY &&
           bounds.maxY === previous.maxY) ||
-        (domain &&
-          (Object.keys(domain) as (keyof WorldBounds)[]).every(
-            (axis) => bounds[axis] > domain[axis][0] && bounds[axis] < domain[axis][1],
-          ))
+          (domain &&
+            (Object.keys(domain) as (keyof WorldBounds)[]).every(
+              (axis) =>
+                bounds[axis] > domain[axis][0] && bounds[axis] < domain[axis][1],
+            )))
       )
         return;
-      const visible = visibleSnapshot(sourceSnapshot);
-      const key = userKey(visible);
-      if (key === visibleKey) return;
-      visibleKey = key;
-      reconcile(visible);
+      pursuitVisibilityKey = movingKey;
+      refreshVisibility();
     },
     hit,
     animate,
@@ -1151,7 +1226,7 @@ export const travelActorRecipes = (
         tile,
         parts: partsFor(appearanceUser, tile),
         orbit: (index / shown.length) * Math.PI * 2,
-        spread: shown.length > 1,
+        spread: !user.npcWander && shown.length > 1,
       });
     });
     // Fights on the creator's tile are trials: a pin there would cover their attack control,
@@ -1242,6 +1317,7 @@ export const isAloneOnTile = (
   users.filter(
     (candidate) =>
       !candidate.isNpc &&
+      !candidate.isVillageDuty &&
       candidate.status === "AWAKE" &&
       candidate.userId !== viewerId &&
       candidate.longitude === target.longitude &&
@@ -1254,14 +1330,15 @@ export const travelActionAvailability = (
   friendlyAttack: boolean,
   wars: TravelActorsSnapshot["wars"],
 ) => {
-  const other = target.userId !== viewer.userId && !target.isNpc;
+  const other =
+    target.userId !== viewer.userId && !target.isNpc && !target.isVillageDuty;
   return {
     attack: !!other && canShowMapAttack(viewer, target, friendlyAttack, wars),
     heal:
       !!other &&
       target.curHealth < target.maxHealth &&
       hasRequiredRank(viewer.rank, MEDNIN_MIN_RANK),
-    info: !!other && !target.isMasked,
+    info: (!!other || !!target.isVillageDuty) && !target.isMasked,
   };
 };
 
@@ -1384,6 +1461,7 @@ const canShowUser = (snapshot: TravelActorsSnapshot, user: SectorUser) =>
   (snapshot.showAmbient !== false || user.npcInteractionType !== "AMBIENT") &&
   (user.isNpc ||
     user.userId === snapshot.viewer?.userId ||
+    user.isVillageDuty ||
     passesBracketFilter(user, snapshot.minBracket));
 
 const part = (
@@ -1494,14 +1572,17 @@ const userParts = (user: SectorUser, tile: TerrainHex) => {
     // Character sprites are narrower than portraits, so their controls tuck in around the body.
     const at = user.spriteAppearance ? SPRITE_CONTROLS : PORTRAIT_CONTROLS;
     if (
-      user.username === CREATOR_USERNAME ||
-      !RANKS_RESTRICTED_FROM_PVP.includes(user.rank)
+      !user.isVillageDuty &&
+      (user.username === CREATOR_USERNAME ||
+        !RANKS_RESTRICTED_FROM_PVP.includes(user.rank))
     )
       parts.push(
         part(tile, "attack", IMG_SECTOR_ATTACK, 0.8, at.attack[0], at.attack[1]),
       );
     parts.push(
-      part(tile, "heal", IMG_ICON_HEAL, 0.7, at.heal[0], at.heal[1]),
+      ...(!user.isVillageDuty
+        ? [part(tile, "heal", IMG_ICON_HEAL, 0.7, at.heal[0], at.heal[1])]
+        : []),
       part(tile, "info", IMG_SECTOR_INFO, 0.7, at.info[0], at.info[1]),
     );
   }

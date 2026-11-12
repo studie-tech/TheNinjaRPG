@@ -90,6 +90,7 @@ import {
   userPet,
   village,
   villageAlliance,
+  villageDutyShift,
   war,
   warKill,
 } from "@/drizzle/schema";
@@ -1059,6 +1060,13 @@ export const updateUserDataForCreateBattle = (
   queueUpdate: Record<string, SQL<unknown>>,
   battleId: string,
   info: {
+    villageDuty?: {
+      startedAt: string;
+      slot: number;
+      villageId: string;
+      battleId: string;
+      passive?: boolean;
+    };
     actionReadiness?: ActionReadiness;
     tournamentGame?: undefined | { id: string; battleId: string; aiOnly: false | true };
     hunting?: undefined | import("@/validators/hunting").HuntingBattleState;
@@ -1085,7 +1093,15 @@ export const updateUserDataForCreateBattle = (
   warAggressorIds: string[],
   bracketImmunityAggressorIds: string[],
   allParticipantIds: string[],
-  fetchedUsers: Pick<UserData, "userId" | "activePetId" | "petTask">[],
+  fetchedUsers: Pick<
+    UserData,
+    | "userId"
+    | "activePetId"
+    | "petTask"
+    | "stealthActive"
+    | "stealthActivatedAt"
+    | "stealth"
+  >[],
   sector: undefined | number,
   huntingEquipment: Pick<
     import("@/drizzle/schema").UserItem,
@@ -1172,12 +1188,33 @@ export const updateUserDataForCreateBattle = (
     })
     .where(
       and(
+        // A rotated or released patrol lease must not admit a stale encounter.
+        info.villageDuty
+          ? sql`EXISTS (SELECT 1 FROM ${villageDutyShift} WHERE ${villageDutyShift.villageId} = ${info.villageDuty.villageId} AND ${villageDutyShift.startedAt} = ${new Date(info.villageDuty.startedAt)} AND JSON_UNQUOTE(JSON_EXTRACT(${villageDutyShift.patrols}, ${`$[${info.villageDuty.slot}].battleId`})) = ${info.villageDuty.battleId})`
+          : undefined,
         // Exactly the rows the CAS guard counts (expectedRows), so the
         // predicate and the expected count derive from one source and cannot
         // drift apart. The list already excludes AI rows, so the shared AI
         // row is never even examined (or locked) by this update. Drizzle
         // compiles an empty list to FALSE, matching expectedRows === 0.
         inArray(userData.userId, allParticipantIds),
+        // Stealth activation during preload must win over a passive patrol's stale visibility snapshot.
+        ...(info.villageDuty?.passive
+          ? fetchedUsers
+              .filter((user) => allParticipantIds.includes(user.userId))
+              .map((user) =>
+                or(
+                  ne(userData.userId, user.userId),
+                  and(
+                    eq(userData.stealthActive, user.stealthActive),
+                    user.stealthActivatedAt
+                      ? eq(userData.stealthActivatedAt, user.stealthActivatedAt)
+                      : isNull(userData.stealthActivatedAt),
+                    eq(userData.stealth, user.stealth),
+                  ),
+                ),
+              )
+          : []),
         info.actionReadiness?.notice
           ? or(
               ne(userData.userId, info.actionReadiness.initial.userId),
@@ -1490,7 +1527,9 @@ export const updateUserDataForCreateBattle = (
           : []),
         ...(!dungeonEncounter ? [withoutDungeonReservation()] : []),
         // Team members must still occupy the original launch tile after combat preload.
-        ...(battleType === "COMBAT" || questEncounter
+        ...(battleType === "COMBAT" ||
+        battleType === "VILLAGE_PROTECTOR" ||
+        questEncounter
           ? [
               and(
                 ...(sector !== undefined ? [eq(userData.sector, sector)] : []),
@@ -2521,7 +2560,7 @@ export const updateUserDataForUpdateUser2 = (
   userId: string,
   result: CombatResult,
   settledAt: Date,
-  hasHumanOpponent: false | true,
+  hasPvpRewardOpponent: boolean,
   user: {
     sageModeUsedThisBattle?: undefined | false | true;
     allyVillage: false | true;
@@ -2556,7 +2595,8 @@ export const updateUserDataForUpdateUser2 = (
           }
         : {}),
       pvpStreak: result.pvpStreak,
-      ...(curBattle.battleType === "COMBAT" && hasHumanOpponent
+      ...((curBattle.battleType === "COMBAT" || curBattle.extraState.villageDuty) &&
+      hasPvpRewardOpponent
         ? {
             pvpWins: sql`${userData.pvpWins} + ${result.outcome === "Won" ? 1 : 0}`,
             pvpLosses: sql`${userData.pvpLosses} + ${result.outcome === "Lost" || result.outcome === "Fled" ? 1 : 0}`,

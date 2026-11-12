@@ -5,6 +5,7 @@ import {
   PET_SANCTUARY_LATITUDE,
   PET_SANCTUARY_LONGITUDE,
   PET_SANCTUARY_NAME,
+  VILLAGE_DUTY_SLOTS_PER_LEVEL,
 } from "@/drizzle/constants";
 import {
   bloodline,
@@ -197,6 +198,15 @@ describeWithDatabase("content seeds", () => {
     await seedVillages(database);
 
     const villages = await database.select().from(village);
+    const protectors = await database.query.villageStructure.findMany({
+      where: eq(villageStructure.name, "Protectors"),
+    });
+    expect(protectors.length).toBeGreaterThan(0);
+    expect(
+      protectors.every(
+        (structure) => structure.patrolSlotsPerLvl === VILLAGE_DUTY_SLOTS_PER_LEVEL,
+      ),
+    ).toBe(true);
     for (const landmark of WORLD_LANDMARKS) {
       const rows = villages.filter((row) => row.name === landmark.name);
       for (const row of rows) expect(row.sector).toBe(landmark.sector);

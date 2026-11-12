@@ -5,6 +5,7 @@ import {
   Handshake,
   Landmark,
   ScrollText,
+  Shield,
   Swords,
   UsersRound,
 } from "lucide-react";
@@ -15,8 +16,9 @@ import BanInfo from "@/layout/BanInfo";
 import { ElderHall } from "@/layout/ElderHall";
 import { KageHall } from "@/layout/KageHall";
 import Loader from "@/layout/Loader";
-import NavTabs from "@/layout/NavTabs";
+import NavTabs, { resolveRememberedTab } from "@/layout/NavTabs";
 import { ShrineHall } from "@/layout/ShrineHall";
+import { VillageDuty } from "@/layout/VillageDuty";
 import { VillageMission } from "@/layout/VillageMission";
 import { VillageStructureMaintenance } from "@/layout/VillageStructureMaintenance";
 import { WarRoom } from "@/layout/WarSystem";
@@ -27,12 +29,23 @@ export default function TownHall() {
   const { data: userData } = useRequiredUserData();
   const availableTabs = userData?.isOutlaw
     ? ["Alliance", "Wars", "Shrines"]
-    : ["Alliance", "Kage", "Elders", "Wars", "Shrines", "Village Mission"];
-  const [tab, setTab] = useLocalStorage<(typeof availableTabs)[number] | null>(
+    : [
+        "Alliance",
+        "Kage",
+        "Elders",
+        "Wars",
+        "Shrines",
+        "Village Mission",
+        "Patrol Duty",
+      ];
+  const [storedTab, setTab] = useLocalStorage<(typeof availableTabs)[number] | null>(
     "townhallTab",
     null,
     true,
   );
+  const tab = storedTab
+    ? (resolveRememberedTab(storedTab, availableTabs, townhallTabAliases) ?? null)
+    : null;
 
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (userData.isBanned) return <BanInfo />;
@@ -42,41 +55,48 @@ export default function TownHall() {
       id={`townhallSelection-${userData.villageId}`}
       current={tab}
       options={availableTabs}
+      aliases={townhallTabAliases}
       setValue={setTab}
       icons={{
         Alliance: (
           <Handshake
-            className="@min-[640px]/townhall:hidden size-4 shrink-0"
+            className="size-4 shrink-0 @min-[640px]/townhall:hidden"
             aria-hidden="true"
           />
         ),
         Kage: (
           <Crown
-            className="@min-[640px]/townhall:hidden size-4 shrink-0"
+            className="size-4 shrink-0 @min-[640px]/townhall:hidden"
             aria-hidden="true"
           />
         ),
         Elders: (
           <UsersRound
-            className="@min-[640px]/townhall:hidden size-4 shrink-0"
+            className="size-4 shrink-0 @min-[640px]/townhall:hidden"
             aria-hidden="true"
           />
         ),
         Wars: (
           <Swords
-            className="@min-[640px]/townhall:hidden size-4 shrink-0"
+            className="size-4 shrink-0 @min-[640px]/townhall:hidden"
             aria-hidden="true"
           />
         ),
         Shrines: (
           <Landmark
-            className="@min-[640px]/townhall:hidden size-4 shrink-0"
+            className="size-4 shrink-0 @min-[640px]/townhall:hidden"
+            aria-hidden="true"
+          />
+        ),
+        "Patrol Duty": (
+          <Shield
+            className="size-4 shrink-0 @min-[640px]/townhall:hidden"
             aria-hidden="true"
           />
         ),
         "Village Mission": (
           <ScrollText
-            className="@min-[640px]/townhall:hidden size-4 shrink-0"
+            className="size-4 shrink-0 @min-[640px]/townhall:hidden"
             aria-hidden="true"
           />
         ),
@@ -90,7 +110,7 @@ export default function TownHall() {
       fontSize="text-xs"
       listClassName="flex-nowrap gap-0.5"
       itemClassName={() => "mr-0 shrink-0"}
-      className="min-h-11 min-w-8 @min-[640px]/townhall:px-2 px-1.5"
+      className="min-h-11 min-w-8 px-1.5 @min-[640px]/townhall:px-2"
     />
   );
 
@@ -105,6 +125,14 @@ export default function TownHall() {
     content = <WarRoom user={userData} navTabs={NavBarBlock} />;
   } else if (tab === "Shrines") {
     content = <ShrineHall user={userData} navTabs={NavBarBlock} />;
+  } else if (tab === "Patrol Duty") {
+    content = (
+      <VillageDuty
+        villageId={userData.villageId ?? ""}
+        sector={userData.village?.sector}
+        navTabs={NavBarBlock}
+      />
+    );
   } else if (tab === "Village Mission") {
     content = (
       <>
@@ -117,3 +145,6 @@ export default function TownHall() {
   }
   return <div className="@container/townhall min-w-0">{content}</div>;
 }
+
+/** Keep existing town hall selections usable when a tab's displayed name changes. */
+const townhallTabAliases = { "Village Duty": "Patrol Duty" };

@@ -12,6 +12,7 @@ import {
 import {
   CLANS_PER_STRUCTURE_LEVEL,
   FACTION_RAID_BOOST_PERCENT,
+  VILLAGE_DUTY_MAX_PATROLS,
 } from "@/drizzle/constants";
 import type { Village, VillageStructure } from "@/drizzle/schema";
 import Confirm from "@/layout/Confirm";
@@ -315,9 +316,13 @@ export const structureRewardEntries = (structure: VillageStructure) => {
       const perLvl = (structure[bonus.key] as number) ?? 0;
       if (perLvl <= 0) continue;
       const baseValue = computeBonusValue(bonus, perLvl, baseLevel);
-      const effectiveValue =
+      const boostedValue =
         computeBonusValue(bonus, perLvl, effectiveLevel) *
         getRaidStructureMultiplier(structure);
+      const effectiveValue =
+        bonus.key === "patrolSlotsPerLvl"
+          ? Math.min(VILLAGE_DUTY_MAX_PATROLS, Math.floor(boostedValue))
+          : boostedValue;
       const bonusValue = effectiveValue - baseValue;
       const suffix = bonus.unit;
       let valueText = `${formatNumber(bonus, baseValue)}${suffix}`;
@@ -353,7 +358,12 @@ const STRUCTURE_BONUSES: StructureBonus[] = [
   { key: "hospitalSpeedupPerLvl", label: "Hospital Speed", unit: "%" },
   { key: "itemDiscountPerLvl", label: "Item Discount", unit: "%" },
   { key: "missionRewardPerLvl", label: "Mission/Errand Rewards", unit: "%" },
-  { key: "patrolsPerLvl", label: "Patrol Attacking Enemies", unit: "%" },
+  {
+    key: "patrolSlotsPerLvl",
+    label: "Patrol Slots",
+    unit: "",
+    valueAt: (perLvl, level) => Math.min(VILLAGE_DUTY_MAX_PATROLS, perLvl * level),
+  },
   { key: "ramenDiscountPerLvl", label: "Ramen Discount", unit: "%" },
   { key: "regenIncreasePerLvl", label: "Regen In Village", unit: "%" },
   { key: "sleepRegenPerLvl", label: "Sleep Regen", unit: "%" },

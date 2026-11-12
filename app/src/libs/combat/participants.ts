@@ -66,6 +66,30 @@ export const hasHumanOpponent = (
   user: { direction: "left" | "right" },
 ): boolean => usersState.some((candidate) => isHumanOpponent(user, candidate));
 
+/** Frozen copy identity also lets already-active battles settle their legacy controller IDs. */
+export const villageDutyBattleActorId = (duty?: {
+  userId: string;
+  actorId?: string;
+}) => (duty ? (duty.actorId ?? `duty:${duty.userId}`) : undefined);
+
+/** PvP points include the reserved original duty copy, without treating other AI or summons as players. */
+export const isPvpRewardOpponent = (
+  user: { direction: "left" | "right"; villageId: string | null },
+  candidate: HumanOpponentCandidate & {
+    controllerId: string;
+    villageId: string | null;
+    isVillageDutyCopy?: true;
+  },
+  dutyActorId?: string,
+) =>
+  isHumanOpponent(user, candidate) ||
+  (!!dutyActorId &&
+    candidate.controllerId === dutyActorId &&
+    candidate.isVillageDutyCopy === true &&
+    !candidate.isSummon &&
+    !areBattleAllies(user, candidate) &&
+    candidate.villageId !== user.villageId);
+
 /**
  * Enumerate distinct spawn cells within one team's combat borders.
  * Capacity validation and placement share this finite list so an overcrowded

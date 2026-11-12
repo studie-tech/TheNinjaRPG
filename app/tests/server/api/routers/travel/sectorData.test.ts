@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "bun:test";
-import type { SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
-import type { UserData } from "@/drizzle/schema";
+import { type UserData, village as villageTable } from "@/drizzle/schema";
 import { travelRouter } from "@/server/api/routers/travel";
 import { buildSectorWindowLayout } from "@/server/utils/sectorMap";
 import {
@@ -68,7 +68,7 @@ const makeCaller = (
   let readCount = 0;
   const read = <T>(result: (options: { where: SQL }) => T) =>
     vi.fn((query: { where: SQL }) => {
-      if (++readCount === 6) allSectorReadsStarted.resolve();
+      if (++readCount === 7) allSectorReadsStarted.resolve();
       return Promise.resolve(result(query));
     });
   const users = read((query) => [
@@ -80,6 +80,7 @@ const makeCaller = (
       anbuSquad: null,
     },
   ]);
+  const patrols = read(() => []);
   const village = read((query) => ({
     id: `village-${queryParams(query)[0]}`,
     sector: queryParams(query)[0],
@@ -98,28 +99,38 @@ const makeCaller = (
     userId: user.userId,
     drizzle: {
       query: {
-        userData: { findFirst: findUser, findMany: users },
+        userData: {
+          findFirst: findUser,
+          findMany: (query: {
+            where: SQL;
+            columns?: { villageDutyStartedAt?: boolean };
+          }) => (query.columns?.villageDutyStartedAt ? patrols(query) : users(query)),
+        },
         village: { findFirst: village },
         sector: { findFirst: sector },
         war: { findMany: wars },
         overworldAiPlacement: { findMany: placements },
         questHistory: { findMany: history },
       },
-      select: () => ({ from: () => ({ where: battles }) }),
+      select: () => ({
+        from: (table: unknown) => ({
+          where: table === villageTable ? () => sql`(select 'home')` : battles,
+        }),
+      }),
     },
   } as never);
   return {
     caller,
     history,
     findUser,
-    reads: { users, village, sector, placements, wars, battles },
+    reads: { users, patrols, village, sector, placements, wars, battles },
     allSectorReadsStarted: allSectorReadsStarted.promise,
     releaseUser: () => userGate.resolve(user),
   };
 };
 
 describe("travel.getSectorData query scheduling", () => {
-  it("starts all six sector/global reads before the authoritative user lookup finishes", async () => {
+  it("starts all sector/global reads before the authoritative user lookup finishes", async () => {
     const test = makeCaller({ waitForUser: true });
     const pending = test.caller.getSectorData({ sector: SECTOR });
     try {
@@ -245,6 +256,7 @@ describe("travel.getSectorData query scheduling", () => {
     expect(test.history).not.toHaveBeenCalled();
     for (const read of [
       test.reads.users,
+      test.reads.patrols,
       test.reads.village,
       test.reads.sector,
       test.reads.placements,

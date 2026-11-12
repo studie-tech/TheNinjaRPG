@@ -49,6 +49,7 @@ import {
   VILLAGE_SYNDICATE_ID,
   WAKE_ISLAND_PVP_PROTECTION,
 } from "@/drizzle/constants";
+import type { VillageDutyShift } from "@/drizzle/schema";
 import {
   type AiProfile,
   type AiTransformation,
@@ -95,6 +96,7 @@ import {
   applyForcedLoadouts,
   buildQueuedTrainingLogs,
   getAttackRestriction,
+  prepareVillageDutyDefender,
   projectQuestParty,
   rollStartingGroundEffects,
   settleQueuedBattleTraining,
@@ -142,6 +144,7 @@ import {
   getBattleSize,
   getEffectiveMaxPool,
   getHighestGenerals,
+  getItemCombatLevel,
   getPoolKeys,
   inertUserItemColumns,
   mergeExtraState,
@@ -198,7 +201,7 @@ import { hasTrainingInProgress } from "@/libs/queue";
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import { snapshotSpriteAnimations } from "@/libs/spriteAnimations";
-import { rollStealthKeep } from "@/libs/stealth";
+import { isUserCurrentlyStealthed, rollStealthKeep } from "@/libs/stealth";
 import { getTerritoryCompetitor } from "@/libs/territoryWar";
 import {
   getTimedRegenerationGain,
@@ -264,7 +267,14 @@ import { fetchQuestEntryInventory, listVisibleRaidQuests } from "@/queries/quest
 import { findSectorWithVillage } from "@/queries/shrine";
 import { fetchUserSkills } from "@/queries/skillTree";
 import { fetchActiveTerritoryWar } from "@/queries/territoryWar";
-import { fetchSectorVillage, findVillageBySector } from "@/queries/village";
+import { fetchSectorVillage } from "@/queries/village";
+import {
+  claimVillageDutyPatrol,
+  fetchVillageDutyHome,
+  listVillageDutyRoster,
+  listVillageDutyVisitors,
+  releaseVillageDutyPatrol,
+} from "@/queries/villageDuty";
 import { fetchActiveWars } from "@/routers/war";
 import {
   fetchUserItemsWithVariants,
@@ -299,7 +309,14 @@ import {
   getQuestEntryCharges,
 } from "@/server/utils/questEntry";
 import { fetchSanninRankedPlayers } from "@/server/utils/ranked";
+import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
 import { hasDueTimedJob, settleDueTimedQueues } from "@/server/utils/userQueue";
+import {
+  ensureVillageDutyShift,
+  isVillageDutyIntruder,
+  prepareVillageDutyEncounter,
+  villageDutyActorId,
+} from "@/server/utils/villageDuty";
 import { findRelationship } from "@/utils/alliance";
 import { getKageEligibility } from "@/utils/kage";
 import { fedItemLoadouts, fedJutsuLoadouts } from "@/utils/paypal";
@@ -1660,7 +1677,7 @@ export const combatRouter = createTRPCRouter({
         fetchActiveWars(ctx.drizzle),
         findSectorWithVillage(ctx.drizzle, input.sector),
         listUserDataForStartShrineBattle(ctx.drizzle),
-        findVillageBySector(ctx.drizzle, input.sector),
+        fetchVillageDutyHome(ctx.drizzle, input.sector),
       ]);
 
       // Check that user was found
@@ -1709,12 +1726,42 @@ export const combatRouter = createTRPCRouter({
           ? validAis.map((ai) => ai.userId)
           : [VILLAGE_PROTECTOR_AI_ID];
 
+      if (
+        isHome &&
+        isHome.id === shrineOwnerVillageId &&
+        isHome.id !== user.villageId
+      ) {
+        const shift = await ensureVillageDutyShift(ctx.drizzle, isHome);
+        const eligible = await listVillageDutyRoster(ctx.drizzle, isHome.id);
+        const slot =
+          shift?.patrols.findIndex(
+            (patrol) =>
+              !patrol.defeated &&
+              !patrol.battleId &&
+              eligible.some((entry) => entry.userId === patrol.userId),
+          ) ?? -1;
+        if (shift && slot >= 0)
+          return await initiateVillageDutyBattle(
+            {
+              client: ctx.drizzle,
+              userIds: [user.userId],
+              actionUserId: ctx.userId,
+              requiresUserRefresh: requiresProgressionRefresh,
+              originSocketId: input.originSocketId,
+              sector: input.sector,
+              forceDefenderVillageId: shrineOwnerVillageId,
+              shift,
+              slot,
+            },
+            "SHRINE_WAR",
+          );
+      }
       // Return battle
       return await initiateBattle(
         {
           sector: input.sector,
           userIds: [user.userId],
-          targetIds: targetIds,
+          targetIds,
           forceDefenderVillageId: shrineOwnerVillageId,
           client: ctx.drizzle,
           actionUserId: ctx.userId,
@@ -1915,6 +1962,17 @@ export const initiateBattle = async (
     /** Shared rules snapshot used for ranked loadout cleanup and battle admission. */
     jutsuEquipLimits?: JutsuEquipLimit[];
     forceDefenderVillageId?: string;
+    /** Enrolled owner loaded with the participants and converted to an isolated AI copy. */
+    villageDuty?: {
+      userId: string;
+      actorId: string;
+      villageId: string;
+      startedAt: string;
+      slot: number;
+      battleId: string;
+      /** Only passive travel interception yields to stealth at admission and atomic claim. */
+      passive?: boolean;
+    };
     biome?: CombatBiome;
     forceKeepPools?: boolean;
     /** Replace the initiating players' HP/CP/SP with this percentage of effective maxima. */
@@ -2013,8 +2071,28 @@ export const initiateBattle = async (
     ]),
   ];
 
-  const queryBattleUsers = () =>
-    listUserDataForQueryBattleUsers(client, userIds, allyAiIds, targetIds);
+  /** Rebuild eligible duty copies from owner loadouts on every participant read, including settlement reloads. */
+  const queryBattleUsers = async () => {
+    const duty = info.villageDuty;
+    const participants = await listUserDataForQueryBattleUsers(
+      client,
+      userIds,
+      allyAiIds,
+      duty
+        ? targetIds.map((id) => (id === duty.actorId ? duty.userId : id))
+        : targetIds,
+    );
+    if (!duty) return participants;
+    return participants.flatMap((participant) => {
+      if (participant.userId !== duty.userId) return [participant];
+      const copy = prepareVillageDutyDefender(
+        participant,
+        duty.villageId,
+        duty.actorId,
+      );
+      return copy ? [copy] : [];
+    });
+  };
 
   // Use Promise.all to fetch all independent data in parallel
   const [
@@ -2047,6 +2125,7 @@ export const initiateBattle = async (
     petJutsus,
     dungeonEntryData,
     aiTransformations,
+    patrolHome,
   ] = await Promise.all([
     info.territoryWar ??
       (battleType === "COMBAT" && sector !== undefined
@@ -2060,7 +2139,9 @@ export const initiateBattle = async (
     fetchAchievementCatalogue(client),
     // Fetch user data
     queryBattleUsers(),
-    PvpBattleTypes.includes(battleType) || battleType === "SHRINE_WAR"
+    PvpBattleTypes.includes(battleType) ||
+    battleType === "SHRINE_WAR" ||
+    info.villageDuty
       ? selectBattleHistoryForInitiateBattle(client, userIds, targetIds)
       : null,
     jutsusIds.length > 0 ? listJutsuByIds(client, jutsusIds) : [],
@@ -2113,7 +2194,94 @@ export const initiateBattle = async (
       (battleType === "COMBAT" && targetIds.length === 1))
       ? listAiTransformations(client)
       : null,
+    battleType === "COMBAT" && sector !== undefined
+      ? fetchVillageDutyHome(client, sector)
+      : undefined,
   ]);
+
+  // All map PvP paths share this barrier, including failed robbery battles and scripted callers.
+  const rawIntruder = preloadedUsers.find(
+    (user) => user.userId === userIds[0] && !user.isAi,
+  );
+  const intruderReadiness =
+    battleType === "COMBAT" &&
+    patrolHome &&
+    rawIntruder &&
+    rawIntruder.villageId !== patrolHome.id &&
+    info.actionUserId === rawIntruder.userId
+      ? prepareActionReadiness(rawIntruder, settings)
+      : undefined;
+  // Automatic waking must not let an invader bypass the same patrol an awake visitor faces.
+  const intruder =
+    intruderReadiness && !intruderReadiness.error
+      ? intruderReadiness.user
+      : rawIntruder;
+  if (
+    battleType === "COMBAT" &&
+    userIds.length === 1 &&
+    patrolHome &&
+    intruder &&
+    isVillageDutyIntruder(patrolHome, intruder, activeWars)
+  ) {
+    const [roster, presence, map] = await Promise.all([
+      listVillageDutyRoster(client, patrolHome.id),
+      listVillageDutyVisitors(client, patrolHome.sector, new Date()),
+      fetchPublishedSectorMap(client, patrolHome.sector).catch(() => null),
+    ]);
+    const interception = await prepareVillageDutyEncounter({
+      client,
+      userId: intruder.userId,
+      sector: patrolHome.sector,
+      force: true,
+      preload: {
+        user: intruder,
+        home: patrolHome,
+        map,
+        roster,
+        presence,
+        wars: activeWars,
+      },
+    });
+    if (interception?.blocked)
+      return errorResponse("The village patrol is updating. Please try again.");
+    if (interception?.remaining) {
+      if (interception.slot < 0)
+        return errorResponse(
+          "Village protectors are defending. Defeat the remaining patrol before attacking players here.",
+        );
+      return await initiateVillageDutyBattle(
+        {
+          client,
+          userIds: [intruder.userId],
+          actionUserId: info.actionUserId,
+          actionReadiness: intruderReadiness,
+          originSocketId: info.originSocketId,
+          sector: intruder.sector,
+          longitude: intruder.longitude,
+          latitude: intruder.latitude,
+          forceDefenderVillageId: patrolHome.id,
+          shift: interception.shift,
+          slot: interception.slot,
+          force: true,
+          autoCombatFromDefaults: true,
+        },
+        "VILLAGE_PROTECTOR",
+      );
+    }
+  }
+
+  const dutyEnrollment = info.villageDuty;
+  if (
+    dutyEnrollment &&
+    (!["SHRINE_WAR", "VILLAGE_PROTECTOR"].includes(battleType) ||
+      userIds.includes(dutyEnrollment.userId) ||
+      !preloadedUsers.some(
+        (user) => user.userId === dutyEnrollment.actorId && user.isAi,
+      ))
+  )
+    return errorResponse(
+      "This protector has stood down or changed villages. Try again.",
+    );
 
   // A fight with the creator never reaches their account: an open-world attack, or quest
   // content naming them, opens the trial against their stand-in forms. An attack stays bound
@@ -2209,6 +2377,24 @@ export const initiateBattle = async (
       });
     }
   }
+
+  // Check the final participant snapshot so settlement reloads cannot admit a hidden visitor.
+  if (
+    dutyEnrollment?.passive &&
+    fetchedUsers.some(
+      (user) => userIds.includes(user.userId) && isUserCurrentlyStealthed(user),
+    )
+  )
+    return errorResponse("Stealth keeps you hidden from this patrol.");
+
+  // Settlement reloads can observe a cancelled enrollment. Reject before writing battle rows or claims.
+  if (
+    dutyEnrollment &&
+    !fetchedUsers.some((user) => user.userId === dutyEnrollment.actorId && user.isAi)
+  )
+    return errorResponse(
+      "This protector has stood down or changed villages. Try again.",
+    );
 
   // Arena selection overlaps readiness, so recheck its rules on the fresh combat
   // participants. Shared AI templates are excluded from the final player claim.
@@ -2794,11 +2980,12 @@ export const initiateBattle = async (
   if (PvpBattleTypes.includes(battleType)) {
     rewardScaling = repeatOpponentScaling;
   }
-  // Human shrine XP has diminishing returns without reducing strategic shrine rewards.
+  // Human shrine fights and duty copies share repeat-opponent PvP XP scaling without reducing shrine rewards.
   const pvpExperienceScaling =
-    battleType === "SHRINE_WAR" &&
-    users.some((user) => !user.isAi && userIds.includes(user.userId)) &&
-    users.some((user) => !user.isAi && targetIds.includes(user.userId))
+    info.villageDuty ||
+    (battleType === "SHRINE_WAR" &&
+      users.some((user) => !user.isAi && userIds.includes(user.userId)) &&
+      users.some((user) => !user.isAi && targetIds.includes(user.userId)))
       ? repeatOpponentScaling
       : undefined;
 
@@ -2909,6 +3096,10 @@ export const initiateBattle = async (
   }
 
   if (info.kageMatch) extraState.kageMatch = info.kageMatch;
+  if (info.villageDuty) {
+    const { villageId, userId, actorId, startedAt, slot } = info.villageDuty;
+    extraState.villageDuty = { villageId, userId, actorId, startedAt, slot };
+  }
 
   if (info.tournamentGame) {
     extraState.tournamentGameId = info.tournamentGame.id;
@@ -3030,6 +3221,7 @@ export const initiateBattle = async (
     info.clanBattle?.battleId ??
     info.tournamentGame?.battleId ??
     info.kageMatch?.battleId ??
+    info.villageDuty?.battleId ??
     nanoid();
 
   // Rows the status update below is expected to claim, used as the CAS guard
@@ -3136,7 +3328,7 @@ export const initiateBattle = async (
     RankedBattleTypes.includes(battleType) ? "ranked" : "unranked",
   );
   for (const participant of usersState) {
-    if (participant.isAi) continue;
+    if (participant.isAi && !participant.isVillageDutyCopy) continue;
     const selected = participant.jutsus.filter((entry) => entry.equipped);
     const accepted = computeJutsuLoadoutCapAssignments({
       caps: equipCaps,
@@ -3452,31 +3644,29 @@ export const initiateBattle = async (
     // not be broadcast. Auto-battles stay off this broadcast.
     if (!AutoBattleTypes.includes(battleType)) {
       await Promise.all(
-        users.map(async (user) => {
-          await Promise.all([
-            pusher.trigger(user.userId, "event", {
-              type: "battle",
-              battleId,
-              // Match push recipients; initiating fighters stay silent across their tabs.
-              isDefender: !user.isAi && !info.userIds.includes(user.userId),
-              ...(user.userId === actionActorId && info.originSocketId
-                ? { originSocketId: info.originSocketId }
-                : {}),
-              ...(user.userId === actionActorId && actionReadiness?.userRecovery
-                ? { userRecovery: superjson.serialize(actionReadiness.userRecovery) }
-                : {}),
-            }),
-            ...(!user.isAi
-              ? [
-                  updateUserOnMap(pusher, user.sector, {
-                    ...user,
-                    status: "BATTLE",
-                    battleId,
-                  }),
-                ]
-              : []),
-          ]);
-        }),
+        users
+          .filter((user) => !user.isAi)
+          .map(async (user) => {
+            await Promise.all([
+              pusher.trigger(user.userId, "event", {
+                type: "battle",
+                battleId,
+                // Match push recipients; initiating fighters stay silent across their tabs.
+                isDefender: !info.userIds.includes(user.userId),
+                ...(user.userId === actionActorId && info.originSocketId
+                  ? { originSocketId: info.originSocketId }
+                  : {}),
+                ...(user.userId === actionActorId && actionReadiness?.userRecovery
+                  ? { userRecovery: superjson.serialize(actionReadiness.userRecovery) }
+                  : {}),
+              }),
+              updateUserOnMap(pusher, user.sector, {
+                ...user,
+                status: "BATTLE",
+                battleId,
+              }),
+            ]);
+          }),
       );
     }
   } catch (error) {
@@ -3649,6 +3839,8 @@ export const processUsersForBattle = async (
 
   // Loop through users and transform to ProcessingBattleUser
   const usersState: ProcessingBattleUser[] = users.map((inputUser, index) => {
+    const { isVillageDutyCopy } = inputUser;
+    const usesPlayerLoadout = !inputUser.isAi || !!isVillageDutyCopy;
     const dependencies = summonDependencies.get(inputUser.userId) ?? new Set<string>();
     const addSummon = (id: string) => {
       allSummons.push(id);
@@ -3850,22 +4042,24 @@ export const processUsersForBattle = async (
     const fitsBattle = (usage: BattleUsageType) => fitsBattleUsage(battleType, usage);
 
     const requirementSkills = user.userSkills;
-    user.activeSkillIds = inputUser.isAi
-      ? undefined
-      : requirementSkills
+    user.activeSkillIds = usesPlayerLoadout
+      ? requirementSkills
           .filter((skill) => skill.activated)
-          .map((skill) => skill.skillId);
+          .map((skill) => skill.skillId)
+      : undefined;
     // Furniture never enters battle, even when old inventory rows still have an
     // equipment slot or drop chance. Filter before mastery and jutsu item gates.
     user.items = user.items.filter(
       (ui) =>
         ui.item.itemType !== "FURNITURE" &&
-        (user.isAi || hasRequiredSkill(ui.item, { userSkills: requirementSkills })),
+        (!usesPlayerLoadout ||
+          hasRequiredSkill(ui.item, { userSkills: requirementSkills })),
     );
 
     // The mastery sources this battle applies; ranked battles skip bloodline and skills
     const wearer = {
       ...user,
+      isAi: !usesPlayerLoadout,
       bloodline: isRankedBattle ? null : user.bloodline,
       userSkills: isRankedBattle ? [] : user.userSkills,
       titles: isRankedBattle ? [] : inputUser.titles,
@@ -4047,7 +4241,11 @@ export const processUsersForBattle = async (
     // Filter and process jutsus - DO NOT apply reskins here, they are applied dynamically
     // in userJutsuToAction to ensure each user sees their own reskin.
     // user.userSkills was cleared for storage above; gates read the captured skills.
-    const gateUser = { ...user, userSkills: requirementSkills };
+    const gateUser = {
+      ...user,
+      isAi: !usesPlayerLoadout,
+      userSkills: requirementSkills,
+    };
     const processedJutsus = user.jutsus.filter((userjutsu) => {
       if (!fitsBattle(userjutsu.jutsu.battleUsageType)) {
         return false;
@@ -4068,6 +4266,13 @@ export const processUsersForBattle = async (
       return true;
     });
     user.jutsus = processedJutsus;
+
+    // Eligibility consumes the owner's quest history; copies cannot carry reward tracking.
+    if (isVillageDutyCopy) {
+      user.userQuests = [];
+      user.completedQuests = [];
+      user.questData = [];
+    }
 
     // Add basic actions to user for tracking cooldowns
     user.basicActions = Object.values(getDefaultBasicActions(user));
@@ -4144,9 +4349,7 @@ export const processUsersForBattle = async (
                   tag: effect,
                   user: user,
                   actionId: ui.itemId,
-                  // AI gear can never earn item XP; keep character-level scaling
-                  // for AI so boss/raid content is not silently nerfed to level 1.
-                  level: user.isAi ? user.level : ui.level,
+                  level: getItemCombatLevel(ui, user),
                   fromType:
                     itemType === "ACCESSORY"
                       ? "accessory"
@@ -4571,4 +4774,53 @@ export const processUsersForBattle = async (
  */
 const announceLobbyChange = (userBattle: { id: string; version: number }) => {
   void pusher.trigger(userBattle.id, "event", { version: userBattle.version + 1 });
+};
+
+/** Reserve one shared copy and compensate rejected admission without claiming its owner or using a transaction. */
+export const initiateVillageDutyBattle = async (
+  info: Omit<Parameters<typeof initiateBattle>[0], "targetIds" | "villageDuty"> & {
+    shift: VillageDutyShift;
+    slot: number;
+    force?: boolean;
+  },
+  battleType: "VILLAGE_PROTECTOR" | "SHRINE_WAR",
+) => {
+  const { shift, slot, force = false, ...battleInfo } = info;
+  const patrol = shift.patrols[slot];
+  if (!patrol || patrol.defeated || patrol.battleId)
+    return errorResponse("This protector is no longer available.");
+  const battleId = nanoid();
+  const actorId = villageDutyActorId(patrol.userId);
+  const reference = {
+    villageId: shift.villageId,
+    startedAt: shift.startedAt.toISOString(),
+    slot,
+    battleId,
+  };
+  const claim = await claimVillageDutyPatrol(info.client, shift, slot, battleId);
+  if (claim.rowsAffected !== 1)
+    return errorResponse("The patrol changed. Please try again.");
+  // A process interrupted before compensation quarantines this reversible slot until rotation;
+  // keeping the reservation prevents two enemies from fighting the same copy.
+  try {
+    const result = await initiateBattle(
+      {
+        ...battleInfo,
+        targetIds: [actorId],
+        villageDuty: {
+          ...reference,
+          userId: patrol.userId,
+          actorId,
+          passive: battleType === "VILLAGE_PROTECTOR" && !force,
+        },
+      },
+      battleType,
+    );
+    if (!result.success)
+      await releaseVillageDutyPatrol(info.client, reference, false, true);
+    return result;
+  } catch (error) {
+    await releaseVillageDutyPatrol(info.client, reference, false, true);
+    throw error;
+  }
 };

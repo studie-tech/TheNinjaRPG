@@ -32,6 +32,7 @@ import {
   VILLAGE_SYNDICATE_ID,
   WAR_SHRINE_MAINTENANCE_DAYS,
 } from "@/drizzle/constants";
+import type { VillageDutyShift } from "@/drizzle/schema";
 import {
   areWarObjectivesRevealed,
   findObjectiveWarForSector,
@@ -68,6 +69,7 @@ import {
   findSectorWithVillage,
   findUserDataForJoinShrineBattle,
   findVillageForGetBoostTemplate,
+  findVillageForInitiateShrineBattle,
   insertMpvpBattleQueueForChallengeShrine,
   insertMpvpBattleUserForJoinShrineBattle,
   listMpvpBattleQueueForGetShrineBattles,
@@ -89,12 +91,9 @@ import {
   updateVillageForUpgradeShrine2,
 } from "@/queries/shrine";
 import { findVillageBoostUserCache } from "@/queries/socialUserCache";
-import {
-  fetchAlliances,
-  findVillageById,
-  findVillageBySector,
-} from "@/queries/village";
-import { initiateBattle } from "@/routers/combat";
+import { fetchAlliances, findVillageBySector } from "@/queries/village";
+import { listVillageDutyRoster } from "@/queries/villageDuty";
+import { initiateBattle, initiateVillageDutyBattle } from "@/routers/combat";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { fetchActiveWars } from "@/routers/war";
 import {
@@ -111,6 +110,7 @@ import {
 } from "@/server/utils/actionReadiness";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import { shrineLobbyFreshAfter } from "@/server/utils/shrine";
+import { ensureVillageDutyShift } from "@/server/utils/villageDuty";
 // Pusher instance
 import { findRelationship } from "@/utils/alliance";
 import { isKage } from "@/utils/kage";
@@ -1158,13 +1158,20 @@ export const shrineRouter = createTRPCRouter({
       // Prepare attacker and defender IDs
       const attackerIds = attackers.map((a) => a.userId);
       let defenderIds: string[] = defenders.map((d) => d.userId);
+      let duty: { shift: VillageDutyShift; slot: number } | undefined;
 
       // If no player defenders, use AI defenders from the defender village
       if (defenderIds.length === 0) {
         // Use defenderEntityId directly - it's the village ID for shrine battles
-        const [defenderVillage, shrineAis] = await Promise.all([
-          findVillageById(ctx.drizzle, shrineBattle.defenderEntityId),
+        const [defenderVillage, shrineAis, eligible] = await Promise.all([
+          findVillageForInitiateShrineBattle(
+            ctx.drizzle,
+            shrineBattle.defenderEntityId,
+          ),
           listUserDataForStartShrineBattle(ctx.drizzle),
+          shrineBattle.sector != null
+            ? listVillageDutyRoster(ctx.drizzle, shrineBattle.defenderEntityId)
+            : [],
         ]);
         const shrineAiIds = shrineAis.map((ai) => ai.userId);
         // Only shrine AIs defend, whatever the village has stored.
@@ -1176,6 +1183,25 @@ export const shrineRouter = createTRPCRouter({
           0,
           SHRINE_BATTLE_MAX_USERS_PER_SIDE,
         );
+        const shift =
+          defenderVillage?.type === "VILLAGE" &&
+          defenderVillage.sector === shrineBattle.sector
+            ? await ensureVillageDutyShift(ctx.drizzle, defenderVillage)
+            : null;
+        const roster =
+          !shift ||
+          shift.startedAt.getTime() === defenderVillage?.dutyShift?.startedAt.getTime()
+            ? eligible
+            : await listVillageDutyRoster(ctx.drizzle, shrineBattle.defenderEntityId);
+        const slot =
+          shift?.patrols.findIndex(
+            (patrol) =>
+              !patrol.defeated &&
+              !patrol.battleId &&
+              !attackerIds.includes(patrol.userId) &&
+              roster.some((entry) => entry.userId === patrol.userId),
+          ) ?? -1;
+        if (shift && slot >= 0) duty = { shift, slot };
         // Final fallback: use the same hardcoded AI as solo shrine battles
         if (defenderIds.length === 0) {
           defenderIds = [VILLAGE_PROTECTOR_AI_ID];
@@ -1199,17 +1225,28 @@ export const shrineRouter = createTRPCRouter({
       // Now we have exclusive ownership - start the battle
       let result: Awaited<ReturnType<typeof initiateBattle>>;
       try {
-        result = await initiateBattle(
-          {
-            userIds: attackerIds,
-            targetIds: defenderIds,
-            client: ctx.drizzle,
-            biome: "default",
-            forceDefenderVillageId: shrineBattle.defenderEntityId,
-            sector: shrineBattle.sector ?? undefined,
-          },
-          "SHRINE_WAR",
-        );
+        result = duty
+          ? await initiateVillageDutyBattle(
+              {
+                userIds: attackerIds,
+                client: ctx.drizzle,
+                forceDefenderVillageId: shrineBattle.defenderEntityId,
+                sector: shrineBattle.sector ?? undefined,
+                ...duty,
+              },
+              "SHRINE_WAR",
+            )
+          : await initiateBattle(
+              {
+                userIds: attackerIds,
+                targetIds: defenderIds,
+                client: ctx.drizzle,
+                biome: "default",
+                forceDefenderVillageId: shrineBattle.defenderEntityId,
+                sector: shrineBattle.sector ?? undefined,
+              },
+              "SHRINE_WAR",
+            );
       } catch (error) {
         await releaseBattleQueueClaim(ctx.drizzle, input.shrineBattleId, claimId);
         throw error;

@@ -62,6 +62,11 @@ const placement = (patch: Record<string, unknown> = {}) => ({
 });
 
 describe("wander spots", () => {
+  it("keeps village patrol routes inside the village", () => {
+    const spots = wanderSpots(map(), { x: 1, y: 7 }, 5, false, true);
+    expect(spots.length).toBeGreaterThan(1);
+    expect(spots.every((spot) => spot.x < 3)).toBe(true);
+  });
   it("keeps to open tiles within the radius that the anchor can walk to in a straight line", () => {
     const anchor = { x: 6, y: 7 };
     const spots = wanderSpots(map(), anchor, 5, true);

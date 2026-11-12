@@ -1174,12 +1174,11 @@ export const cleanse = (
 };
 
 /**
- * AI rows and their summons carry AI-scale stats; players, auto-battle players and
- * clones (isOriginal false) carry player-scale ones. A clone of an AI caster is the one
- * misread, which only affects its damage to barriers.
+ * AI rows and their summons carry AI-scale stats; players, village duty copies,
+ * auto-battle players and clones (isOriginal false) carry player-scale ones.
  */
 const statScaleOf = (user: BattleUserState): StatScale =>
-  user.isAi && user.isOriginal ? "ai" : "player";
+  user.isAi && user.isOriginal && !user.isVillageDutyCopy ? "ai" : "player";
 
 /**
  * An AI-driven copy of `template` standing on the effect's tile, on the caster's side
@@ -1199,6 +1198,8 @@ const spawnStandIn = (
   standIn.userId = nanoid();
   standIn.isSummon = true;
   standIn.isAi = true;
+  // Summons and clones use authored AI action requirements, independent of their template.
+  delete standIn.isVillageDutyCopy;
   standIn.controllerId = caster.userId;
   standIn.isSummonTemplate = false; // an active entity, not a template
   standIn.hidden = undefined;

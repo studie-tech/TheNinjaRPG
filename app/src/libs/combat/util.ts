@@ -41,6 +41,7 @@ import {
 } from "./constants";
 import type {
   BattleRoundContext,
+  BattleUserItem,
   BattleUserState,
   CombatAction,
   CompleteBattle,
@@ -225,6 +226,12 @@ export const getQuestDataFromBattle = (
 ) => {
   return battle.extraState.questData?.[controllerId] ?? [];
 };
+
+/** Duty copies retain owned item levels; authored AI and clone gear scales with its character. */
+export const getItemCombatLevel = (
+  item: Pick<BattleUserItem, "level">,
+  user: Pick<ReturnedUserState, "isAi" | "isVillageDutyCopy" | "level">,
+) => (user.isAi && !user.isVillageDutyCopy ? (user.level ?? 1) : item.level);
 
 /** Row columns of a UserItem that only matter outside battle, for rows rebuilt in memory. */
 export const inertUserItemColumns = (userId: string, at: Date) => ({

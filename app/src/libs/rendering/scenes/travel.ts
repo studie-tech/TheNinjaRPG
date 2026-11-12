@@ -63,6 +63,10 @@ import type { TerrainSpec } from "@/libs/sector-map/terrains";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
 import { planVillageWallWindow } from "@/libs/sector-map/village-walls";
 import { getBiomeFromTileType } from "@/libs/travel";
+import {
+  villageDutyNavigationMap,
+  villageDutyPursuitPosition,
+} from "@/libs/villageDuty";
 import { clamp } from "@/utils/math";
 import type { MapLocation } from "@/validators/mapLocation";
 
@@ -324,7 +328,7 @@ export const createTravelScene = async (options: {
     const wanderSpotCache = new Map<string, WanderTile[]>();
     /** Each roaming member's current walk in world points; rebuilt only when its cycle moves on. */
     const wanderWalks = new Map<string, WanderWalk>();
-    let wanderSpotsSector: number | null = null;
+    let wanderSpotsMap: NormalizedSectorMap | undefined;
     let isStill = false;
     let lastFrameInputs: ReturnType<typeof travelFrameInputs> | null = null;
     let zoomTimer: ReturnType<typeof setTimeout> | null = null;
@@ -850,9 +854,13 @@ export const createTravelScene = async (options: {
         });
       }
       // Roaming NPCs follow the shared wander timeline on the server-corrected clock.
-      const wanderMap = snapshot.window.find((w) => w.sector === snapshot.sector)?.map;
-      if (wanderMap && wanderSpotsSector !== snapshot.sector) {
-        wanderSpotsSector = snapshot.sector;
+      const wanderEntry = snapshot.window.find((w) => w.sector === snapshot.sector);
+      const wanderMap = wanderEntry?.map;
+      const dutyMap =
+        wanderEntry &&
+        villageDutyNavigationMap(wanderEntry.map, wanderEntry.structures);
+      if (dutyMap !== wanderSpotsMap) {
+        wanderSpotsMap = dutyMap;
         wanderSpotCache.clear();
         wanderWalks.clear();
       }
@@ -861,21 +869,59 @@ export const createTravelScene = async (options: {
         const wander = user.npcWander;
         if (!wander || !wanderMap) continue;
         const actorKey = travelActorKey(user);
-        const { cycle, into } = wanderClock(wander, clock);
-        let walk = wanderWalks.get(actorKey);
-        if (walk?.seed !== wander.seed || walk.cycle !== cycle) {
-          const key = `${wander.seed}:${wander.radius}:${wander.wildOnly}`;
-          let spots = wanderSpotCache.get(key);
-          if (!spots) {
-            spots = wanderSpots(
-              wanderMap,
-              wander.anchor,
-              wander.radius,
-              wander.wildOnly,
-            );
-            wanderSpotCache.set(key, spots);
+        if (wander.pursuit) {
+          const pose = villageDutyPursuitPosition(wander.pursuit, clock);
+          const from =
+            pose && entry.grid.getHex({ col: pose.from.x, row: pose.from.y });
+          const to = pose && entry.grid.getHex({ col: pose.to.x, row: pose.to.y });
+          if (pose && from && to) {
+            const progress = frame.reducedMotion
+              ? Math.round(pose.progress)
+              : pose.progress;
+            movements.set(actorKey, {
+              x: -from.center.x + (-to.center.x + from.center.x) * progress,
+              y:
+                -from.center.y +
+                standingOffset(from) +
+                (-to.center.y +
+                  standingOffset(to) +
+                  from.center.y -
+                  standingOffset(from)) *
+                  progress,
+              direction:
+                pose.progress > 0 && pose.progress < 1 && !frame.reducedMotion
+                  ? "horizontal"
+                  : null,
+              facing: to.center.x > from.center.x ? 1 : -1,
+            });
+            continue;
           }
-          const leg = wanderLeg({ ...wander, spots }, user.npcMember ?? 0, cycle);
+        }
+        const key = `${wander.seed}:${wander.anchor.x}:${wander.anchor.y}:${wander.radius}:${wander.wildOnly}:${wander.villageOnly ?? false}`;
+        let spots = wanderSpotCache.get(key);
+        if (!spots) {
+          spots = wanderSpots(
+            user.isVillageDuty ? (dutyMap ?? wanderMap) : wanderMap,
+            wander.anchor,
+            wander.radius,
+            wander.wildOnly,
+            wander.villageOnly,
+          );
+          wanderSpotCache.set(key, spots);
+        }
+        const config = { ...wander, spots };
+        const { cycle, into } = wanderClock(config, clock);
+        let walk = wanderWalks.get(actorKey);
+        if (
+          walk?.wander.seed !== wander.seed ||
+          walk.wander.anchor.x !== wander.anchor.x ||
+          walk.wander.anchor.y !== wander.anchor.y ||
+          walk.wander.radius !== wander.radius ||
+          walk.wander.wildOnly !== wander.wildOnly ||
+          walk.wander.villageOnly !== wander.villageOnly ||
+          walk.cycle !== cycle
+        ) {
+          const leg = wanderLeg(config, user.npcMember ?? 0, cycle);
           const point = (tile: WanderTile, offset: WanderTile) => {
             const hex = entry.grid.getHex({ col: tile.x, row: tile.y });
             if (!hex) return null;
@@ -902,7 +948,7 @@ export const createTravelScene = async (options: {
             };
           };
           walk = {
-            seed: wander.seed,
+            wander,
             cycle,
             leg,
             from: point(leg.from, leg.fromOffset),
@@ -1019,7 +1065,7 @@ export const createTravelScene = async (options: {
           rendered.art.animate(frame, scale(), null, breeze);
       }
       // Zoom can reclassify foreground scenery before actor contact order is resolved.
-      actors.animate(frame, movements);
+      actors.animate(frame, movements, !isStill);
       revealViewer(frame, snapshot.viewer?.userId);
       sceneryScale = scale();
       const pointer = controls.pointer();
@@ -1247,7 +1293,7 @@ type TravelSector = {
 
 type WanderPoint = { x: number; y: number };
 type WanderWalk = {
-  seed: string;
+  wander: NonNullable<TravelSnapshot["users"][number]["npcWander"]>;
   cycle: number;
   leg: WanderLeg;
   from: WanderPoint | null;

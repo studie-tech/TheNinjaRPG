@@ -248,7 +248,14 @@ export const getKnownEffectiveLevel = (user: {
 export const getScoutingUsers = <
   T extends Pick<
     SectorUser,
-    "userId" | "username" | "level" | "experience" | "rank" | "status" | "isNpc"
+    | "userId"
+    | "username"
+    | "level"
+    | "experience"
+    | "rank"
+    | "status"
+    | "isNpc"
+    | "isVillageDuty"
   >,
 >(
   users: readonly T[],
@@ -259,6 +266,7 @@ export const getScoutingUsers = <
     .filter(
       (user) =>
         !user.isNpc &&
+        !user.isVillageDuty &&
         user.userId !== currentUserId &&
         user.status === "AWAKE" &&
         passesBracketFilter(user, filterBracket),

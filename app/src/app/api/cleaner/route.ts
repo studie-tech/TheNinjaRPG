@@ -41,6 +41,7 @@ import {
   updateUserDataForGET2,
   updateUserDataForGET3,
 } from "@/queries/cleaner";
+import { deleteExpiredVillageDutyPresence } from "@/queries/villageDuty";
 import { cleanupExpiredExclusiveRaids } from "@/routers/raids";
 import { completeExpiredGlobalTravel } from "@/routers/travel";
 import { drizzleDB } from "@/server/db";
@@ -71,7 +72,10 @@ export async function GET(request: Request) {
     const rangeCleanupBatchSize = 10_000;
 
     // Delete from battle table where updatedAt is older than 1 day
-    await deleteBattleForGET(drizzleDB, rangeCleanupBatchSize);
+    await Promise.all([
+      deleteBattleForGET(drizzleDB, rangeCleanupBatchSize),
+      retryOnDeadlock(() => deleteExpiredVillageDutyPresence(drizzleDB)),
+    ]);
 
     // Release hunting reservations whose battle is gone. Settlement clears the
     // reservation with the battle, but an abandoned hunt only expires through the battle cleanup above;

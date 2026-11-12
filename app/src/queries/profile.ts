@@ -1017,7 +1017,13 @@ export const updateUserDataForUpdateUser = (
             bloodlineId: input.data.bloodlineId,
           }
         : {}),
-      ...(villageChanged ? { villageId: input.data.villageId } : {}),
+      ...(villageChanged
+        ? {
+            villageId: input.data.villageId,
+            villageDutyVillageId: null,
+            villageDutyStartedAt: null,
+          }
+        : {}),
       ...(rankChanged ? { rank: input.data.rank } : {}),
       ...(bloodlineReskinChanged
         ? { bloodlineReskinId: input.data.bloodlineReskinId ?? null }

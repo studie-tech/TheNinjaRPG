@@ -32,6 +32,7 @@ import type {
   UserEffect,
 } from "@/libs/combat/types";
 import type { NormalizedSectorMap } from "@/libs/sector-map/types";
+import type { VillageDutyPatrol } from "@/libs/villageDuty";
 import type { AiRuleType } from "@/validators/ai";
 import type { ZodAllTags } from "@/validators/combat";
 import type { CoordinateTargeting } from "@/validators/coordinateTargeting";
@@ -3127,6 +3128,8 @@ export const userData = mysqlTable(
     longitude: smallint("longitude", { unsigned: true }).default(10).notNull(),
     latitude: smallint("latitude", { unsigned: true }).default(7).notNull(),
     location: varchar("location", { length: 191 }).default(""),
+    villageDutyVillageId: varchar("villageDutyVillageId", { length: 191 }),
+    villageDutyStartedAt: datetime("villageDutyStartedAt", { mode: "date", fsp: 3 }),
     joinedVillageAt: datetime("joinedVillageAt", { mode: "date", fsp: 3 })
       .default(sql`(CURRENT_TIMESTAMP(3) - INTERVAL 7 DAY)`)
       .notNull(),
@@ -3393,6 +3396,9 @@ export const userData = mysqlTable(
       ),
       sageModeIdIdx: index("UserData_sageModeId_idx").on(table.sageModeId),
       villageIdIdx: index("UserData_villageId_idx").on(table.villageId),
+      villageDutyIdx: index("UserData_villageDutyVillageId_idx").on(
+        table.villageDutyVillageId,
+      ),
       battleIdIdx: index("UserData_battleId_idx").on(table.battleId),
       statusIdx: index("UserData_status_idx").on(table.status),
       sectorIdx: index("UserData_sector_idx").on(table.sector),
@@ -4544,6 +4550,10 @@ export const village = mysqlTable(
 export type Village = InferSelectModel<typeof village>;
 
 export const villageRelations = relations(village, ({ many, one }) => ({
+  dutyShift: one(villageDutyShift, {
+    fields: [village.id],
+    references: [villageDutyShift.villageId],
+  }),
   structures: many(villageStructure),
   relationshipA: many(villageAlliance, { relationName: "villageA" }),
   relationshipB: many(villageAlliance, { relationName: "villageB" }),
@@ -4592,7 +4602,7 @@ export const villageStructure = mysqlTable(
     hospitalSpeedupPerLvl: tinyint("hospitalSpeedupPerLvl").default(0).notNull(),
     itemDiscountPerLvl: tinyint("itemDiscountPerLvl").default(0).notNull(),
     missionRewardPerLvl: tinyint("missionRewardPerLvl").default(0).notNull(),
-    patrolsPerLvl: tinyint("patrolsPerLvl").default(0).notNull(),
+    patrolSlotsPerLvl: tinyint("patrolSlotsPerLvl").default(0).notNull(),
     ramenDiscountPerLvl: tinyint("ramenDiscountPerLvl").default(0).notNull(),
     regenIncreasePerLvl: tinyint("regenIncreasePerLvl").default(0).notNull(),
     sleepRegenPerLvl: tinyint("sleepRegenPerLvl").default(0).notNull(),
@@ -4619,6 +4629,51 @@ export const villageStructure = mysqlTable(
 );
 export type VillageStructure = InferSelectModel<typeof villageStructure>;
 export type VillageStructureInsert = InferInsertModel<typeof villageStructure>;
+
+/** One CAS-protected roster per village; defeated copies cannot be replaced within its game hour. */
+export const villageDutyShift = mysqlTable("VillageDutyShift", {
+  capacity: tinyint("capacity", { unsigned: true }).notNull(),
+  villageId: varchar("villageId", { length: 191 }).primaryKey().notNull(),
+  startedAt: datetime("startedAt", { mode: "date", fsp: 3 }).notNull(),
+  revision: int("revision", { unsigned: true }).default(0).notNull(),
+  patrols: json("patrols").$type<VillageDutyPatrol[]>().notNull(),
+});
+
+export type VillageDutyShift = InferSelectModel<typeof villageDutyShift>;
+
+/** Travel-only heartbeats let guards pursue active visitors without attacking offline characters. */
+export const villageDutyPresence = mysqlTable(
+  "VillageDutyPresence",
+  {
+    userId: varchar("userId", { length: 191 }).primaryKey().notNull(),
+    sector: smallint("sector", { unsigned: true }).notNull(),
+    expiresAt: datetime("expiresAt", { mode: "date", fsp: 3 }).notNull(),
+  },
+  (table) => ({
+    sectorExpiryIdx: index("VillageDutyPresence_sector_expiresAt_idx").on(
+      table.sector,
+      table.expiresAt,
+    ),
+    expiryIdx: index("VillageDutyPresence_expiresAt_idx").on(table.expiresAt),
+  }),
+);
+
+export const villageDutyShiftRelations = relations(villageDutyShift, ({ one }) => ({
+  village: one(village, {
+    fields: [villageDutyShift.villageId],
+    references: [village.id],
+  }),
+}));
+
+export const villageDutyPresenceRelations = relations(
+  villageDutyPresence,
+  ({ one }) => ({
+    user: one(userData, {
+      fields: [villageDutyPresence.userId],
+      references: [userData.userId],
+    }),
+  }),
+);
 
 export const villageStructureRelations = relations(villageStructure, ({ one }) => ({
   village: one(village, {

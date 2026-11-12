@@ -142,6 +142,8 @@ export type CombatQueryCompletedQuest = {
  */
 export type CombatQueryUser = UserData &
   ActivityCompletions & {
+    /** An AI-controlled copy retains its owner's loadout gates throughout combat. */
+    isVillageDutyCopy?: true;
     attributes?: { attribute: string }[];
     /** Retained when lobby/loadout processing receives an already frozen combatant. */
     spriteAnimations?: CharacterAnimations;
@@ -198,6 +200,8 @@ export type ProcessedItem = CombatQueryUserItem & {
  * Shared between ProcessingBattleUser and BattleUserState.
  */
 export type CombatUserFields = {
+  /** An AI-controlled village defender uses player loadout and action requirements. */
+  isVillageDutyCopy?: true;
   /** Private creation/clothing snapshot captured at initiation and retained across loadout edits. */
   spriteBaseAppearance?: SpriteAppearance;
   /** Private item-instance lookup permits in-memory recomposition after consumption or breakage. */
@@ -463,6 +467,14 @@ export type PreBattleGearModifiers = {
  * Static data is stored once at battle initiation and looked up by ID.
  */
 export type ExtraState = {
+  /** Hourly patrol reservation frozen at admission; settlement needs no village read. */
+  villageDuty?: {
+    villageId: string;
+    startedAt: string;
+    userId: string;
+    actorId?: string;
+    slot: number;
+  };
   hunting?: HuntingBattleState;
   /** Durable scheduled defense and tenure; settlement never needs another fetch. */
   kageMatch?: {
@@ -572,7 +584,7 @@ export type ReturnedUserState = Pick<BattleUserState, (typeof publicState)[numbe
  */
 export type ReturnedExtraState = Omit<
   ExtraState,
-  "villages" | "clans" | "dungeon" | "encounter" | "creatorTrial"
+  "villages" | "clans" | "dungeon" | "encounter" | "creatorTrial" | "villageDuty"
 > & {
   encounter?: Pick<EncounterWaveState, "wave">;
   /** Public progress only; authored future enemies and their loadouts stay server-side. */

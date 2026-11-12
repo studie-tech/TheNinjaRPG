@@ -66,6 +66,7 @@ import {
   getBarriersBetween,
   getEffectStackKey,
   getItem,
+  getItemCombatLevel,
   getJutsu,
   getJutsuReskin,
   getUserElementalSeal,
@@ -123,9 +124,9 @@ export const availableUserActions = (
   const elementalSeal = getUserElementalSeal(userId, battle?.usersEffects);
   const basicActions = getActiveBasicActions(battle, user);
   const isRankedBattle = !!battle && RankedBattleTypes.includes(battle.battleType);
-  // Ranked and AI loadouts bypass mastery gates even when penalties or
+  // Ranked and authored AI loadouts bypass mastery gates even when penalties or
   // level scaling lower their battle masteries below the requirements.
-  const skipsMasteryGates = user?.isAi || isRankedBattle;
+  const skipsMasteryGates = (user?.isAi && !user.isVillageDutyCopy) || isRankedBattle;
   // A player-piloted summon must not hand its controller a second Clear/Cleanse
   // on an independent cooldown. Gated here so the UI and the server-side action
   // lookup in the combat router both lose it.
@@ -756,9 +757,7 @@ export const userItemToAction = (
 ) => {
   const item = getItem(battle, useritem.itemId);
   if (!item) throw new Error(`Item not found: ${useritem.itemId}`);
-  // AI users can never earn item XP, so their gear keeps character-level scaling.
-  // For players the item's ownership level applies.
-  const level = user.isAi ? (user.level ?? 1) : useritem.level;
+  const level = getItemCombatLevel(useritem, user);
   return {
     id: item.id,
     name: useritem.variantName ?? item.name,

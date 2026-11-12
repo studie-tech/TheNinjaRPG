@@ -151,6 +151,147 @@ const ringExtent = (ring: Sprite) => ({
 });
 
 describe("travel actor artwork loading", () => {
+  it("culls pursuing protectors at their live position and refreshes a stationary viewport as they cross it", () => {
+    holdCharacters();
+    const { actors, snapshot } = fixture();
+    const grid = getBattleGrid(
+      40,
+      { width: 26, height: 12, biome: "ground" } as never,
+      { x: 0, y: 0 },
+    );
+    const target = grid.getHex({ col: 24, row: 5 })!;
+    const origin = grid.getHex({ col: 1, row: 5 })!;
+    const bounds = {
+      minX: -target.center.x,
+      maxX: -target.center.x + 1,
+      minY: -target.center.y,
+      maxY: -target.center.y + 1,
+    };
+    actors.setViewport(bounds);
+    const guard = player(0, {
+      userId: "duty:guard",
+      isVillageDuty: true,
+      longitude: 1,
+      latitude: 5,
+      npcWander: {
+        seed: "duty:guard",
+        anchor: { x: 1, y: 5 },
+        radius: 2,
+        wildOnly: false,
+        villageOnly: true,
+        pursuit: {
+          targetUserId: "viewer",
+          startedAt: 0,
+          path: [
+            { x: 1, y: 5 },
+            { x: 24, y: 5 },
+          ],
+        },
+      },
+    });
+    actors.sync({ ...snapshot([guard]), grid });
+    const roots = () =>
+      actors.container.children.filter((root) => root.label === "user:duty:guard");
+    expect(roots()).toHaveLength(0);
+    const move = (tile: typeof target) =>
+      actors.animate(
+        frame,
+        new Map([
+          [
+            "user:duty:guard",
+            { x: -tile.center.x, y: -tile.center.y, direction: null, facing: 1 },
+          ],
+        ]),
+      );
+    move(target);
+    expect(roots()).toHaveLength(1);
+    expect(roots()[0]!.x).toBe(-target.center.x);
+    expect(roots()[0]!.y).toBe(-target.center.y);
+    const retained = roots()[0];
+    move(target);
+    actors.setViewport({ ...bounds, minX: bounds.minX + 0.00001 });
+    expect(roots()[0]).toBe(retained);
+    move(origin);
+    expect(roots()).toHaveLength(0);
+    move(target);
+    expect(roots()).toHaveLength(1);
+  });
+
+  it("prioritizes a pursuing protector on screen over retained bodies outside the screen", () => {
+    holdCharacters();
+    const { actors, snapshot } = fixture();
+    const grid = getBattleGrid(
+      40,
+      { width: 26, height: 12, biome: "ground" } as never,
+      { x: 0, y: 0 },
+    );
+    const target = grid.getHex({ col: 24, row: 5 })!;
+    actors.setViewport({
+      minX: -target.center.x,
+      maxX: -target.center.x + 1,
+      minY: -target.center.y,
+      maxY: -target.center.y + 1,
+    });
+    const guard = player(99, {
+      userId: "duty:guard",
+      isVillageDuty: true,
+      longitude: 1,
+      latitude: 5,
+      npcWander: {
+        seed: "duty:guard",
+        anchor: { x: 1, y: 5 },
+        radius: 2,
+        wildOnly: false,
+        pursuit: {
+          targetUserId: "viewer",
+          startedAt: 0,
+          path: [
+            { x: 1, y: 5 },
+            { x: 24, y: 5 },
+          ],
+        },
+      },
+    });
+    actors.sync({
+      ...snapshot([
+        ...Array.from({ length: 20 }, (_, i) =>
+          player(i, { longitude: 21, latitude: 5 }),
+        ),
+        guard,
+      ]),
+      grid,
+    });
+    expect(
+      actors.container.children.some((root) => root.label === "user:duty:guard"),
+    ).toBe(false);
+    actors.animate(
+      frame,
+      new Map([
+        [
+          "user:duty:guard",
+          { x: -target.center.x, y: -target.center.y, direction: null, facing: 1 },
+        ],
+      ]),
+    );
+    expect(
+      actors.container.children.filter((root) => root.label.startsWith("user:")),
+    ).toHaveLength(20);
+    expect(
+      actors.container.children.some((root) => root.label === "user:duty:guard"),
+    ).toBe(true);
+  });
+
+  it("keeps the body budget during sparse on-demand frames", () => {
+    holdCharacters();
+    const { actors, snapshot } = fixture();
+    actors.sync(snapshot(Array.from({ length: 20 }, (_, i) => player(i))));
+    for (let now = 0; now <= 440_000; now += 10_000)
+      actors.animate({ ...frame, now }, undefined, false);
+    expect(
+      actors.container.children.filter((root) => root.label.startsWith("user:")),
+    ).toHaveLength(20);
+  });
+
   it.each(["FRIENDLY", "HOSTILE"] as const)(
     "retains visible %s NPC interactions within the twenty-body budget",
     (npcInteractionType) => {
@@ -190,6 +331,60 @@ describe("travel actor artwork loading", () => {
       expect(recipes.find((recipe) => recipe.counter)?.counter).toBe(31);
     },
   );
+
+  it("reduces a small patrol crowd in the first slow window while retaining the viewer and live players", () => {
+    WORLD_DETAIL.travelCharacters = bodyBudget;
+    holdCharacters();
+    const { actors, snapshot } = fixture();
+    actors.sync(
+      snapshot([
+        ...Array.from({ length: 23 }, (_, i) =>
+          player(i, { userId: `duty:${i}`, isVillageDuty: true }),
+        ),
+        player(1, { userId: "active" }),
+        player(2, { userId: "viewer" }),
+      ]),
+    );
+    const bodies = () =>
+      actors.container.children.filter((child) => child.label.startsWith("user:"));
+    expect(bodies()).toHaveLength(25);
+    for (let now = 0; now < 2100; now += 1000 / 30)
+      actors.animate({ now, delta: 1 / 30, reducedMotion: false });
+    expect(bodies()).toHaveLength(21);
+    expect(bodies().map((child) => child.label)).toEqual(
+      expect.arrayContaining(["user:viewer", "user:active"]),
+    );
+  });
+
+  it("budgets crowded patrol artwork at two frames per second while retaining the viewer and live players", () => {
+    WORLD_DETAIL.travelCharacters = bodyBudget;
+    const { actors, snapshot } = fixture();
+    const patrols = Array.from({ length: 100 }, (_, i) =>
+      player(i, { userId: `duty:${i}`, isVillageDuty: true }),
+    );
+    actors.sync(
+      snapshot([
+        ...patrols,
+        player(1, { userId: "active" }),
+        player(2, { userId: "viewer" }),
+      ]),
+    );
+    const bodies = () =>
+      actors.container.children.filter((child) => child.label.startsWith("user:"));
+    expect(bodies()).toHaveLength(100);
+    expect(bodies().map((child) => child.label)).toEqual(
+      expect.arrayContaining(["user:viewer", "user:active"]),
+    );
+    for (let now = 0; now < 50_000; now += 1000 / 60)
+      actors.animate({ now, delta: 1 / 60, reducedMotion: false });
+    expect(bodies()).toHaveLength(100);
+    for (let now = 50_000; now < 110_000; now += 500)
+      actors.animate({ now, delta: 0.1, reducedMotion: false });
+    expect(bodies()).toHaveLength(12);
+    expect(bodies().map((child) => child.label)).toEqual(
+      expect.arrayContaining(["user:viewer", "user:active"]),
+    );
+  });
 
   it("stands characters on raised terraces and walks them up and down the steps", () => {
     const { actors, grid, snapshot } = fixture();

@@ -41,7 +41,12 @@ import {
 } from "@/drizzle/constants";
 import type { GameSetting, Item, UserItem, VillageAlliance } from "@/drizzle/schema";
 import { combatMasteryGains } from "@/libs/combat/mastery";
-import { areBattleAllies, hasHumanOpponent } from "@/libs/combat/participants";
+import {
+  areBattleAllies,
+  hasHumanOpponent,
+  isPvpRewardOpponent,
+  villageDutyBattleActorId,
+} from "@/libs/combat/participants";
 import type { CombatQuestTrackerTask } from "@/libs/combat/quests";
 import { dungeonCombatResult } from "@/libs/dungeon";
 import { applyGameSettingMultiplier } from "@/libs/gameSettingBoost";
@@ -520,18 +525,27 @@ export const calcBattleResult = (
       for (const field of ["money", "villageTokens", "clanPoints"] as const) {
         if (result[field] > 0) result[field] = Math.round(result[field]);
       }
+      // Original duty copies represent players for PvP points, while authored NPCs remain PvE.
+      const pvpTargets = targets.filter((target) =>
+        isPvpRewardOpponent(
+          user,
+          target,
+          villageDutyBattleActorId(battle.extraState.villageDuty),
+        ),
+      );
       const earnsPvpExperience =
         !user.isAi &&
         !user.isSummon &&
         [
           "COMBAT",
+          "VILLAGE_PROTECTOR",
           "RANKED_PVP",
           "CLAN_BATTLE",
           "SHRINE_WAR",
           "KAGE_PVP",
           "TOURNAMENT",
         ].includes(battleType) &&
-        targetUsers.length > 0 &&
+        pvpTargets.length > 0 &&
         !(battleType === "COMBAT" && villageIds.length === 1 && !isInWarTornSector);
       result.pvpExperience = earnsPvpExperience
         ? pvpExperienceReward(
@@ -541,12 +555,15 @@ export const calcBattleResult = (
         : 0;
       if (result.pvpExperience > 0)
         result.pvpExperience = round(
-          result.pvpExperience * percentageMultiplier(pvpRewardBoost),
+          result.pvpExperience *
+            percentageMultiplier(
+              battle.extraState.villageDuty ? loyalty.pvpRewards : pvpRewardBoost,
+            ),
           2,
         );
       result.weeklyPvpKills =
         earnsPvpExperience && outcome === "Won"
-          ? targetUsers.filter((target) => wasDefeated(target)).length
+          ? pvpTargets.filter((target) => wasDefeated(target)).length
           : 0;
 
       // Keep the result summary consistent with exhibition settlement's progression bypass.
@@ -855,6 +872,38 @@ const calcWarDamage = ({
     villageWarShrineDisplay,
     warHealthChange,
     shrineChangeHp,
+  };
+};
+
+/** Derive only the real owner's PvP victory credit from a surviving original copy and defeated invaders. */
+export const villageDutyVictory = (battle: CompleteBattle) => {
+  const duty = battle.extraState.villageDuty;
+  if (!duty) return;
+  const protector = battle.usersState.find(
+    (user) =>
+      user.controllerId === villageDutyBattleActorId(duty) &&
+      user.isVillageDutyCopy &&
+      !user.isSummon,
+  );
+  if (!protector || !stillInBattle(protector)) return;
+  const opponents = battle.usersState.filter(
+    (user) => !user.isSummon && !areBattleAllies(user, protector),
+  );
+  if (opponents.some(stillInBattle)) return;
+  const kills = opponents.filter(
+    (user) => !user.isAi && user.villageId !== protector.villageId && wasDefeated(user),
+  ).length;
+  if (!kills) return;
+  return {
+    userId: duty.userId,
+    pvpExperience: round(
+      pvpExperienceReward(
+        "Won",
+        battle.extraState.pvpExperienceScaling ?? battle.rewardScaling,
+      ) * percentageMultiplier(getVillageLoyaltyBonuses(protector).pvpRewards),
+      2,
+    ),
+    weeklyPvpKills: kills,
   };
 };
 

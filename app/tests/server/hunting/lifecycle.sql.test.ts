@@ -207,10 +207,10 @@ describeWithDatabase("Hunting lifecycle", () => {
           "event",
           expect.objectContaining({ type: "battle", originSocketId: "hunter-tab" }),
         );
-        expect(Pusher.prototype.trigger).toHaveBeenCalledWith(
+        expect(Pusher.prototype.trigger).not.toHaveBeenCalledWith(
           "enemy",
           "event",
-          expect.not.objectContaining({ originSocketId: "hunter-tab" }),
+          expect.objectContaining({ type: "battle" }),
         );
         await updateUserCache(cache, key, response.userPatch, { revision });
         const saved = await db.query.userData.findFirst({

@@ -36,6 +36,7 @@ import {
 import { SECTOR_BATTLE_STALE_SECONDS } from "@/libs/travel";
 import { spriteUserRelations } from "@/queries/lpc";
 import { fetchSector } from "@/queries/village";
+import { listVillageDutyPatrols } from "@/queries/villageDuty";
 import { activeWarAllyWhere, activeWarMercenaryWhere } from "@/queries/war";
 import type { DrizzleClient } from "@/server/db";
 import {
@@ -105,7 +106,12 @@ export const fetchSectorWindowData = (
     }),
     client.query.village.findFirst({
       where: eq(village.sector, sector),
-      with: { structures: true },
+      with: {
+        structures: true,
+        dutyShift: true,
+        relationshipA: true,
+        relationshipB: true,
+      },
     }),
     fetchSector(client, sector),
     client.query.overworldAiPlacement.findMany({
@@ -165,6 +171,7 @@ export const fetchSectorWindowData = (
         },
       },
     }),
+    listVillageDutyPatrols(client, sector),
   ]);
 
 /**
@@ -425,6 +432,7 @@ export const findVillageForMoveInSector = (
   client.query.village.findFirst({
     with: {
       structures: true,
+      dutyShift: true,
       relationshipA: true,
       relationshipB: true,
     },
