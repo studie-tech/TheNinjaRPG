@@ -33,6 +33,7 @@ import {
   areBattleAllies,
   hasHumanOpponent,
   isPvpRewardOpponent,
+  villageDutyBattleActorId,
 } from "@/libs/combat/participants";
 import type { CombatQuestTrackerTask } from "@/libs/combat/quests";
 import {
@@ -1251,7 +1252,11 @@ export const updateUser = async (
     const isInWarTornSector = user.sector === MAP_WAR_TORN_BATTLEGROUND_SECTOR;
     const facedHuman = hasHumanOpponent(curBattle.usersState, user);
     const facedPvpRewardOpponent = curBattle.usersState.some((target) =>
-      isPvpRewardOpponent(user, target, curBattle.extraState.villageDuty?.userId),
+      isPvpRewardOpponent(
+        user,
+        target,
+        villageDutyBattleActorId(curBattle.extraState.villageDuty),
+      ),
     );
     result.energyReward =
       isPvpEnergyRewardBattle(curBattle, userId) &&

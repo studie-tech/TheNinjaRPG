@@ -74,8 +74,9 @@ describe("village duty combat isolation", () => {
         {
           client,
           userIds: ["attacker"],
-          targetIds: ["duty:owner"],
+          targetIds: ["duty:opaque-1234"],
           villageDuty: {
+            actorId: "duty:opaque-1234",
             userId: "owner",
             villageId: "home",
             startedAt: new Date("2026-11-10T10:00:00Z").toISOString(),
@@ -89,7 +90,7 @@ describe("village duty combat isolation", () => {
       expect(result.success).toBe(true);
       const copy = fake
         .saved()
-        ?.usersState.find((u) => u.controllerId === "duty:owner");
+        ?.usersState.find((u) => u.controllerId === "duty:opaque-1234");
       expect(copy?.isAi).toBe(true);
       expect(copy?.userId).not.toBe("owner");
       expect(copy?.curHealth).toBe(copy?.maxHealth);
@@ -151,6 +152,7 @@ describe("village duty combat isolation", () => {
       const copy = prepareVillageDutyDefender(
         defender as unknown as Parameters<typeof prepareVillageDutyDefender>[0],
         "home",
+        "duty:opaque-1234",
       )!;
       const results = await Promise.all(
         [defender, copy, { ...defender, userId: "authored-ai", isAi: true }].map(
@@ -273,6 +275,7 @@ describe("village duty combat isolation", () => {
         const copy = prepareVillageDutyDefender(
           defender as unknown as Parameters<typeof prepareVillageDutyDefender>[0],
           "home",
+          "duty:opaque-1234",
         )!;
         const result = await preloadBattle([copy], { battleType });
         const user = result.usersState[0]!;
@@ -369,6 +372,7 @@ describe("village duty combat isolation", () => {
       const copy = prepareVillageDutyDefender(
         defender as unknown as Parameters<typeof prepareVillageDutyDefender>[0],
         "home",
+        "duty:opaque-1234",
       )!;
       expect(copy.completedQuests).toEqual(defender.completedQuests);
       expect(copy.userQuests.map((entry) => entry.questId)).toEqual(["owner-quest"]);
@@ -393,8 +397,9 @@ describe("village duty combat isolation", () => {
       {
         client: fake.client,
         userIds: ["attacker"],
-        targetIds: ["duty:owner"],
+        targetIds: ["duty:opaque-1234"],
         villageDuty: {
+          actorId: "duty:opaque-1234",
           userId: "owner",
           villageId: "home",
           startedAt: new Date("2026-11-10T10:00:00Z").toISOString(),
@@ -454,8 +459,9 @@ describe("village duty combat isolation", () => {
         {
           client,
           userIds: ["attacker"],
-          targetIds: ["duty:owner"],
+          targetIds: ["duty:opaque-1234"],
           villageDuty: {
+            actorId: "duty:opaque-1234",
             userId: "owner",
             villageId: "home",
             startedAt: new Date("2026-11-10T10:00:00Z").toISOString(),
@@ -497,8 +503,9 @@ describe("village duty combat isolation", () => {
     const copy = prepareVillageDutyDefender(
       defender as unknown as Parameters<typeof prepareVillageDutyDefender>[0],
       "home",
+      "duty:opaque-1234",
     );
-    expect(copy?.userId).toBe("duty:owner");
+    expect(copy?.userId).toBe("duty:opaque-1234");
     expect(copy?.queue).toEqual([]);
     expect(copy?.bounties).toEqual([]);
     expect(copy?.activePetId).toBeNull();
@@ -543,6 +550,7 @@ describe("village duty combat isolation", () => {
         const copy = prepareVillageDutyDefender(
           defender as unknown as Parameters<typeof prepareVillageDutyDefender>[0],
           "home",
+          "duty:opaque-1234",
         )!;
         for (const input of [defender, copy]) {
           const result = await preloadBattle(
@@ -638,10 +646,11 @@ describe("village duty combat isolation", () => {
           {
             client,
             userIds: ["attacker"],
-            targetIds: [kind === "copy" ? "duty:owner" : "owner"],
+            targetIds: [kind === "copy" ? "duty:opaque-1234" : "owner"],
             ...(kind === "copy"
               ? {
                   villageDuty: {
+                    actorId: "duty:opaque-1234",
                     userId: "owner",
                     villageId: "home",
                     startedAt: new Date("2026-11-10T10:00:00Z").toISOString(),
@@ -657,7 +666,8 @@ describe("village duty combat isolation", () => {
         expect(result.success).toBe(true);
         const saved = fake.saved()!;
         const fighter = saved.usersState.find(
-          (user) => user.controllerId === (kind === "copy" ? "duty:owner" : "owner"),
+          (user) =>
+            user.controllerId === (kind === "copy" ? "duty:opaque-1234" : "owner"),
         )!;
         const actions = availableUserActions(saved, fighter.userId, false)
           .filter((action) => action.id.startsWith("capped-"))

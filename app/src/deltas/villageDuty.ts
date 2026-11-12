@@ -1,10 +1,11 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
 import type { VillageDutyShift } from "@/drizzle/schema";
-import { villageDutyActorId } from "@/libs/villageDuty";
 
 /** Publish only copy availability and pursuit changes already known from the guarded patrol mutation. */
 export const buildVillageDutyPatrolUpdate = (
-  shift: VillageDutyShift,
+  shift: Omit<VillageDutyShift, "patrols"> & {
+    patrols: (VillageDutyShift["patrols"][number] & { actorId: string })[];
+  },
   sector: number,
   eligibleUserIds: ReadonlySet<string>,
   claimedSlot?: number,
@@ -13,7 +14,7 @@ export const buildVillageDutyPatrolUpdate = (
   startedAt: shift.startedAt,
   revision: shift.revision + Number(claimedSlot !== undefined),
   patrols: shift.patrols.map((patrol, index) => ({
-    userId: villageDutyActorId(patrol.userId),
+    userId: patrol.actorId,
     available:
       eligibleUserIds.has(patrol.userId) &&
       !patrol.defeated &&

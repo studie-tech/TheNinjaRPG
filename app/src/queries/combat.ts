@@ -1527,7 +1527,9 @@ export const updateUserDataForCreateBattle = (
           : []),
         ...(!dungeonEncounter ? [withoutDungeonReservation()] : []),
         // Team members must still occupy the original launch tile after combat preload.
-        ...(battleType === "COMBAT" || questEncounter
+        ...(battleType === "COMBAT" ||
+        battleType === "VILLAGE_PROTECTOR" ||
+        questEncounter
           ? [
               and(
                 ...(sector !== undefined ? [eq(userData.sector, sector)] : []),

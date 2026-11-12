@@ -36,9 +36,6 @@ export const villageDutyCapacity = (structures?: BoostStructure[]) =>
     Math.max(0, Math.floor(getStrucBoost("patrolSlotsPerLvl", structures))),
   );
 
-/** Give patrols and combat copies an identity that cannot claim their owner's account row. */
-export const villageDutyActorId = (userId: string) => `duty:${userId}`;
-
 /** Enrollment belongs to one membership tenure and never makes a banned or outlaw account a defender. */
 export const isOnVillageDuty = (
   user: Pick<
@@ -125,7 +122,9 @@ export const villageDutyNavigationMap = (
 
 /** Publish copies on walkable village tiles without revealing their owners' current positions or activities. */
 export const villageDutyPatrols = (
-  users: Awaited<ReturnType<typeof listVillageDutyPatrols>>,
+  users: (Awaited<ReturnType<typeof listVillageDutyPatrols>>[number] & {
+    actorId: string;
+  })[],
   map: NormalizedSectorMap,
   sector: number,
   viewerVillageId: string | null,
@@ -145,7 +144,7 @@ export const villageDutyPatrols = (
     const pursuit = patrols?.find((entry) => entry.userId === user.userId)?.pursuit;
     return [
       {
-        userId: villageDutyActorId(user.userId),
+        userId: user.actorId,
         villageDutyUserId: masked ? undefined : user.userId,
         isVillageDuty: true,
         username: masked ? "ANBU Protector" : user.username,
@@ -174,7 +173,7 @@ export const villageDutyPatrols = (
         status: "AWAKE",
         battleId: null,
         npcWander: {
-          seed: villageDutyActorId(user.userId),
+          seed: user.actorId,
           anchor: { x: tile.x, y: tile.y },
           radius: VILLAGE_DUTY_WANDER_RADIUS,
           wildOnly: false,
@@ -305,7 +304,7 @@ const villageDutyAnchors = (
 /** Plan shared pursuit paths using existing hex routing; no database, timers or owner mutations occur here. */
 export const planVillageDutyPursuits = (
   patrols: readonly VillageDutyPatrol[],
-  owners: readonly { userId: string }[],
+  owners: readonly { userId: string; actorId: string }[],
   map: NormalizedSectorMap,
   intruders: readonly {
     userId: string;
@@ -330,7 +329,7 @@ export const planVillageDutyPursuits = (
             longitude: anchor.x,
             latitude: anchor.y,
             npcWander: {
-              seed: villageDutyActorId(owner.userId),
+              seed: owner.actorId,
               anchor,
               radius: VILLAGE_DUTY_WANDER_RADIUS,
               wildOnly: false,
@@ -393,7 +392,9 @@ export const planVillageDutyPursuits = (
           : best,
       undefined,
     );
-    goals.push(...(nearestOpen ? [nearestOpen] : []), from);
+    goals.push(...(nearestOpen ? [nearestOpen] : []));
+    if (oddQHexDistance(from.x, from.y, target.longitude, target.latitude) <= 1)
+      goals.push(from);
     for (const goal of goals) {
       const destination = grid.getHex({ col: goal.x, row: goal.y });
       if (!destination || destination.blocked) continue;
@@ -409,6 +410,6 @@ export const planVillageDutyPursuits = (
           },
         };
     }
-    return patrol;
+    return patrol.pursuit ? { ...patrol, pursuit: null } : patrol;
   });
 };

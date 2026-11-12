@@ -4,9 +4,8 @@ import {
   buildVillageDutyPatrolUpdate,
   getVillageDutySectorUpdate,
 } from "@/deltas/villageDuty";
-import type { VillageDutyShift } from "@/drizzle/schema";
 
-const shift: VillageDutyShift = {
+const shift: Parameters<typeof buildVillageDutyPatrolUpdate>[0] = {
   villageId: "home",
   startedAt: new Date("2026-11-10T10:00:00Z"),
   capacity: 2,
@@ -14,6 +13,7 @@ const shift: VillageDutyShift = {
   patrols: [
     {
       userId: "guard",
+      actorId: "duty:opaque",
       defeated: false,
       battleId: null,
       pursuit: { targetUserId: "enemy", startedAt: 1000, path: [{ x: 1, y: 2 }] },
@@ -27,7 +27,11 @@ const sector = () =>
     patrolRevision: 3,
     patrolThreat: true,
     protectors: [
-      { userId: "duty:guard", avatar: "loaded-art", npcWander: { seed: "duty:guard" } },
+      {
+        userId: "duty:opaque",
+        avatar: "loaded-art",
+        npcWander: { seed: "duty:opaque" },
+      },
     ],
   }) as Extract<
     RouterOutputs["travel"]["getSectorData"],

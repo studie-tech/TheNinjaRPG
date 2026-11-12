@@ -1,4 +1,5 @@
 import { expect, it } from "bun:test";
+import { buildVillageDutyPatrolUpdate } from "@/deltas/villageDuty";
 import { VILLAGE_DUTY_PRESENCE_SECONDS } from "@/drizzle/constants";
 import { type VillageStructure, villageStructure } from "@/drizzle/schema";
 import { oddQHexDistance } from "@/libs/hexgrid";
@@ -56,7 +57,10 @@ it("pursues the closest enemy and keeps deterministic ties without changing owne
   const before = structuredClone(source);
   const result = planVillageDutyPursuits(
     source,
-    [{ userId: "guard" }, { userId: "reserve" }],
+    [
+      { userId: "guard", actorId: "duty:opaque-guard" },
+      { userId: "reserve", actorId: "duty:opaque-reserve" },
+    ],
     map,
     [
       { userId: "far", longitude: 8, latitude: 8 },
@@ -82,7 +86,7 @@ it("routes pursuing copies around blocked ground using reachable village tiles",
   );
   const result = planVillageDutyPursuits(
     [patrol()],
-    [{ userId: "guard" }],
+    [{ userId: "guard", actorId: "duty:opaque-guard" }],
     map,
     [{ userId: "enemy", longitude: 8, latitude: 1 }],
     1000,
@@ -104,7 +108,11 @@ it("does not replace defeated, engaged or withdrawn copies and returns to roamin
   ];
   const result = planVillageDutyPursuits(
     source,
-    [{ userId: "guard" }, { userId: "busy" }, { userId: "free" }],
+    [
+      { userId: "guard", actorId: "duty:opaque-guard" },
+      { userId: "busy", actorId: "duty:opaque-busy" },
+      { userId: "free", actorId: "duty:opaque-free" },
+    ],
     map,
     [],
     1000,
@@ -129,7 +137,7 @@ it("retains an unchanged pursuit and shares bounded interpolation with the rende
   });
   const result = planVillageDutyPursuits(
     [source],
-    [{ userId: "guard" }],
+    [{ userId: "guard", actorId: "duty:opaque-guard" }],
     map,
     [{ userId: "enemy", longitude: 3, latitude: 1, expiresAt: 100_001 }],
     1100,
@@ -163,7 +171,7 @@ it("expires abandoned pursuits on the same clock used for rendering and retarget
   expect(villageDutyPosition(source, actor, map, now)).toEqual({ x: 4, y: 4 });
   const fresh = planVillageDutyPursuits(
     [source],
-    [{ userId: "guard" }],
+    [{ userId: "guard", actorId: "duty:opaque-guard" }],
     map,
     [{ userId: "old", longitude: 2, latitude: 1 }],
     now,
@@ -172,7 +180,7 @@ it("expires abandoned pursuits on the same clock used for rendering and retarget
   expect(fresh.pursuit?.expiresAt).toBe(now + VILLAGE_DUTY_PRESENCE_SECONDS * 1000);
   const renewed = planVillageDutyPursuits(
     [fresh],
-    [{ userId: "guard" }],
+    [{ userId: "guard", actorId: "duty:opaque-guard" }],
     map,
     [{ userId: "old", longitude: 2, latitude: 1 }],
     now + 1000,
@@ -214,8 +222,9 @@ it("keeps patrol anchors, roaming and pursuit paths clear of actual Horizon buil
   const owners: Parameters<typeof villageDutyPatrols>[0] = [
     "user_3EOz9fh8bSO50ubD7HEH7FEhieN",
     "user_3FWtvZC9iNKwSFPCtVL6z5DeZK1",
-  ].map((userId) => ({
+  ].map((userId, index) => ({
     userId,
+    actorId: `duty:opaque-${index}`,
     username: userId,
     avatar: null,
     avatarLight: null,
@@ -341,4 +350,71 @@ it("retains navigation views until the map or actual structure layout changes", 
   const editedNavigation = villageDutyNavigationMap(edited, structures);
   expect(editedNavigation).not.toBe(navigation);
   expect(isOpenWanderTile(editedNavigation, 12, 12, false)).toBe(false);
+});
+
+it.each(["old", "enemy"])(
+  "clears an unreachable distant %s pursuit instead of completing at its origin",
+  (previousTarget) => {
+    const map = sectorMap(10, 10, (x) => ({ zone: "village", blocked: x === 4 }), {
+      anchors: [],
+    });
+    const source = patrol({
+      pursuit: { targetUserId: previousTarget, startedAt: 0, path: [{ x: 1, y: 1 }] },
+    });
+    const result = planVillageDutyPursuits(
+      [source],
+      [{ userId: "guard", actorId: "duty:opaque" }],
+      map,
+      [{ userId: "enemy", longitude: 8, latitude: 1 }],
+      1000,
+    )[0]!;
+    expect(result.pursuit).toBeNull();
+  },
+);
+
+it("masks ANBU owner IDs consistently in snapshots, seeds and deltas", () => {
+  const map = sectorMap(10, 10, () => ({ zone: "village" }), { anchors: [] });
+  const owner = {
+    userId: "private-owner",
+    actorId: "duty:opaque",
+    username: "Secret",
+    anbuId: "squad",
+    anbuSquad: { image: "mask" },
+    villageId: "home",
+    avatar: "portrait",
+    avatarLight: null,
+    gender: "male",
+    spriteBodyStyle: null,
+    maxHealth: 100,
+    level: 10,
+    experience: 0,
+    rank: "CHUNIN",
+    villageDutyStartedAt: new Date(0),
+    attributes: [],
+    items: [],
+  } as Parameters<typeof villageDutyPatrols>[0][number];
+  const foreign = villageDutyPatrols([owner], map, 1, "foreign")[0]!;
+  const ally = villageDutyPatrols([owner], map, 1, "home")[0]!;
+  expect(foreign.userId).toBe(owner.actorId);
+  expect(foreign.npcWander?.seed).toBe(owner.actorId);
+  expect(foreign.villageDutyUserId).toBeUndefined();
+  expect(JSON.stringify(foreign)).not.toContain(owner.userId);
+  expect(ally.userId).toBe(foreign.userId);
+  expect(ally.npcWander?.seed).toBe(foreign.npcWander?.seed);
+  expect(ally.villageDutyUserId).toBe(owner.userId);
+  const update = buildVillageDutyPatrolUpdate(
+    {
+      villageId: "home",
+      startedAt: new Date(0),
+      revision: 0,
+      capacity: 1,
+      patrols: [
+        { ...patrol({ userId: owner.userId, pursuit: null }), actorId: owner.actorId },
+      ],
+    },
+    1,
+    new Set([owner.userId]),
+  );
+  expect(update.patrols[0]?.userId).toBe(foreign.userId);
+  expect(JSON.stringify(update)).not.toContain(owner.userId);
 });

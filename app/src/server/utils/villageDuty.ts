@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { VILLAGE_DUTY_PRESENCE_SECONDS } from "@/drizzle/constants";
 import { oddQHexDistance } from "@/libs/hexgrid";
 import { getWarRelationship } from "@/libs/objectiveWar";
@@ -22,8 +23,15 @@ import {
 } from "@/queries/villageDuty";
 import { fetchActiveWars } from "@/routers/war";
 import type { DrizzleClient } from "@/server/db";
+import { getIpHashSecret } from "@/server/utils/ipHash";
 import { fetchPublishedSectorMap } from "@/server/utils/sectorMap";
 import { getUtcHourStart, secondsFromDate } from "@/utils/time";
+
+/** Stable public copy identities hide their owners even when ANBU appearance is masked. */
+export const villageDutyActorId = (userId: string) =>
+  `duty:${createHmac("sha256", getIpHashSecret())
+    .update(`village-duty-actor:v1:${userId}`)
+    .digest("hex")}`;
 
 /** Lazily publish a fixed hourly roster; only initialization losers reconcile another writer's result. */
 export const ensureVillageDutyShift = async (
@@ -81,20 +89,25 @@ export const isVillageDutyIntruder = (
     isBanned: boolean;
   },
   wars: Parameters<typeof getWarRelationship>[0] = [],
-) =>
-  !user.isAi &&
-  !user.isBanned &&
-  user.status === "AWAKE" &&
-  user.location === "Village" &&
-  user.sector === home.sector &&
-  user.villageId !== home.id &&
-  (getWarRelationship(wars, { userId: "", villageId: home.id }, user) === "ENEMY" ||
-    [...home.relationshipA, ...home.relationshipB].some(
-      (relation) =>
-        relation.status === "ENEMY" &&
-        (relation.villageIdA === user.villageId ||
-          relation.villageIdB === user.villageId),
-    ));
+) => {
+  if (
+    user.isAi ||
+    user.isBanned ||
+    user.status !== "AWAKE" ||
+    user.location !== "Village" ||
+    user.sector !== home.sector ||
+    user.villageId === home.id
+  )
+    return false;
+  const war = getWarRelationship(wars, { userId: "", villageId: home.id }, user);
+  if (war !== undefined) return war === "ENEMY";
+  return [...home.relationshipA, ...home.relationshipB].some(
+    (relation) =>
+      relation.status === "ENEMY" &&
+      (relation.villageIdA === user.villageId ||
+        relation.villageIdB === user.villageId),
+  );
+};
 
 /** Pursue visible visitors with one guarded write; stealth leaves only an expiring last-known trail. */
 export const advanceVillageDutyPursuits = async (
@@ -134,7 +147,7 @@ export const advanceVillageDutyPursuits = async (
   ];
   const patrols = planVillageDutyPursuits(
     shift.patrols,
-    owners,
+    owners.map((owner) => ({ ...owner, actorId: villageDutyActorId(owner.userId) })),
     map,
     intruders,
     now.getTime(),
@@ -183,10 +196,7 @@ export const prepareVillageDutyEncounter = async ({
         preload.map,
         preload.roster,
         preload.presence,
-        preload.wars ??
-          (preload.home && isVillageDutyIntruder(preload.home, preload.user)
-            ? []
-            : await fetchActiveWars(client)),
+        preload.wars ?? (await fetchActiveWars(client)),
       ] as const)
     : await Promise.all([
         fetchVillageDutyUser(client, userId),

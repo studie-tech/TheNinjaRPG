@@ -45,6 +45,7 @@ import {
   areBattleAllies,
   hasHumanOpponent,
   isPvpRewardOpponent,
+  villageDutyBattleActorId,
 } from "@/libs/combat/participants";
 import type { CombatQuestTrackerTask } from "@/libs/combat/quests";
 import { dungeonCombatResult } from "@/libs/dungeon";
@@ -52,7 +53,6 @@ import { applyGameSettingMultiplier } from "@/libs/gameSettingBoost";
 import { getWarSide } from "@/libs/objectiveWar";
 import { boostPvpGain, pvpExperienceReward } from "@/libs/pvpExperience";
 import { calculateLpEloChange } from "@/libs/ranked_pvp";
-import { villageDutyActorId } from "@/libs/villageDuty";
 import { getVillageLoyaltyBonuses, percentageMultiplier } from "@/libs/villageLoyalty";
 import { findRelationship } from "@/utils/alliance";
 import { randomInt, round } from "@/utils/math";
@@ -527,7 +527,11 @@ export const calcBattleResult = (
       }
       // Original duty copies represent players for PvP points, while authored NPCs remain PvE.
       const pvpTargets = targets.filter((target) =>
-        isPvpRewardOpponent(user, target, battle.extraState.villageDuty?.userId),
+        isPvpRewardOpponent(
+          user,
+          target,
+          villageDutyBattleActorId(battle.extraState.villageDuty),
+        ),
       );
       const earnsPvpExperience =
         !user.isAi &&
@@ -877,7 +881,7 @@ export const villageDutyVictory = (battle: CompleteBattle) => {
   if (!duty) return;
   const protector = battle.usersState.find(
     (user) =>
-      user.controllerId === villageDutyActorId(duty.userId) &&
+      user.controllerId === villageDutyBattleActorId(duty) &&
       user.isVillageDutyCopy &&
       !user.isSummon,
   );

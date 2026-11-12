@@ -25,6 +25,7 @@ import {
 import {
   ensureVillageDutyShift,
   prepareVillageDutyEncounter,
+  villageDutyActorId,
 } from "@/server/utils/villageDuty";
 import { getUtcHourStart, secondsFromDate } from "@/utils/time";
 import { userDeltaResponseSchema } from "@/validators/userCache";
@@ -135,6 +136,13 @@ export const villageDutyRouter = createTRPCRouter({
       });
       if (!encounter || encounter.blocked) return { success: true, message: "" };
       const { shift, slot, user } = encounter;
+      const patrolShift = {
+        ...shift,
+        patrols: shift.patrols.map((patrol) => ({
+          ...patrol,
+          actorId: villageDutyActorId(patrol.userId),
+        })),
+      };
       if (slot < 0)
         return {
           success: true,
@@ -143,7 +151,7 @@ export const villageDutyRouter = createTRPCRouter({
             shift.revision !== input.revision ||
             shift.startedAt.getTime() !== input.startedAt?.getTime()
               ? buildVillageDutyPatrolUpdate(
-                  shift,
+                  patrolShift,
                   input.sector,
                   encounter.eligibleUserIds,
                 )
@@ -169,7 +177,7 @@ export const villageDutyRouter = createTRPCRouter({
         ...result,
         patrolUpdate: result.success
           ? buildVillageDutyPatrolUpdate(
-              shift,
+              patrolShift,
               input.sector,
               encounter.eligibleUserIds,
               result.success && result.battleId ? slot : undefined,

@@ -102,16 +102,18 @@ export const useVillageDutyPursuit = ({
     startedAt,
     revision,
   });
-  latest.current = {
-    enabled,
-    protectors,
-    mutation,
-    userId,
-    timeDiff,
-    pusher,
-    startedAt,
-    revision,
-  };
+  useEffect(() => {
+    latest.current = {
+      enabled,
+      protectors,
+      mutation,
+      userId,
+      timeDiff,
+      pusher,
+      startedAt,
+      revision,
+    };
+  }, [enabled, protectors, mutation, userId, timeDiff, pusher, startedAt, revision]);
   useEffect(() => {
     const check = () => {
       const state = latest.current;

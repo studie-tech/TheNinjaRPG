@@ -468,7 +468,13 @@ export type PreBattleGearModifiers = {
  */
 export type ExtraState = {
   /** Hourly patrol reservation frozen at admission; settlement needs no village read. */
-  villageDuty?: { villageId: string; startedAt: string; userId: string; slot: number };
+  villageDuty?: {
+    villageId: string;
+    startedAt: string;
+    userId: string;
+    actorId?: string;
+    slot: number;
+  };
   hunting?: HuntingBattleState;
   /** Durable scheduled defense and tenure; settlement never needs another fetch. */
   kageMatch?: {

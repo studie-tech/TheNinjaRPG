@@ -109,6 +109,7 @@ import {
 import { initiateBattle, initiateVillageDutyBattle } from "@/routers/combat";
 import { fetchUpdatedUser, type UserWithRelations } from "@/routers/profile";
 import { breakStealth } from "@/routers/stealth";
+import { fetchActiveWars } from "@/routers/war";
 import {
   baseServerResponse,
   createTRPCRouter,
@@ -139,6 +140,7 @@ import {
   ensureVillageDutyShift,
   isVillageDutyIntruder,
   prepareVillageDutyEncounter,
+  villageDutyActorId,
 } from "@/server/utils/villageDuty";
 import { canEnterWarCamp, fetchWarCampEntry } from "@/server/utils/warMercenary";
 import { groupBy } from "@/utils/grouping";
@@ -503,7 +505,10 @@ export const travelRouter = createTRPCRouter({
           : await fetchPublishedSectorMap(ctx.drizzle, user.sector).catch(() => null);
       const dutyPatrols = sectorMap
         ? villageDutyPatrols(
-            dutyUsers,
+            dutyUsers.map((owner) => ({
+              ...owner,
+              actorId: villageDutyActorId(owner.userId),
+            })),
             sectorMap,
             user.sector,
             user.villageId,
@@ -1145,6 +1150,11 @@ export const travelRouter = createTRPCRouter({
         !isUserCurrentlyStealthed(moveUser)
           ? listVillageDutyVisitors(ctx.drizzle, targetSector, new Date())
           : [],
+        isVillage &&
+        targetSector !== moveUser.village?.sector &&
+        !isUserCurrentlyStealthed(moveUser)
+          ? fetchActiveWars(ctx.drizzle)
+          : [],
       ]).catch((error: unknown) => {
         // The CAS guard makes a blind retry unsafe: a re-issue after the first
         // attempt already applied would match zero rows. Degrade to an ordinary
@@ -1155,7 +1165,7 @@ export const travelRouter = createTRPCRouter({
       if (!moveOutcome) {
         return errorResponse("Connection hiccup, please try moving again");
       }
-      const [result, sectorVillage, dutyRoster, dutyPresence] = moveOutcome;
+      const [result, sectorVillage, dutyRoster, dutyPresence, dutyWars] = moveOutcome;
       const user = moveUser;
       // Check if move was successful
       if (result.rowsAffected === 1) {
@@ -1182,6 +1192,7 @@ export const travelRouter = createTRPCRouter({
               map: targetMap,
               roster: dutyRoster,
               presence: dutyPresence,
+              wars: dutyWars,
             },
           });
           if (encounter && !encounter.blocked && encounter.slot >= 0) {

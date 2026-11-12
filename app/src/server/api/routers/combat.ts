@@ -211,7 +211,6 @@ import { regenerationBuffs, titleCombatTag } from "@/libs/titles";
 import { isActiveEventEntrant } from "@/libs/tournament/events";
 import { getBiomeFromTileType } from "@/libs/travel";
 import { isTutorialGuidedBattle } from "@/libs/tutorial";
-import { villageDutyActorId } from "@/libs/villageDuty";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import { listAiTransformations } from "@/queries/ai";
 import {
@@ -316,6 +315,7 @@ import {
   ensureVillageDutyShift,
   isVillageDutyIntruder,
   prepareVillageDutyEncounter,
+  villageDutyActorId,
 } from "@/server/utils/villageDuty";
 import { findRelationship } from "@/utils/alliance";
 import { getKageEligibility } from "@/utils/kage";
@@ -1965,6 +1965,7 @@ export const initiateBattle = async (
     /** Enrolled owner loaded with the participants and converted to an isolated AI copy. */
     villageDuty?: {
       userId: string;
+      actorId: string;
       villageId: string;
       startedAt: string;
       slot: number;
@@ -2078,15 +2079,17 @@ export const initiateBattle = async (
       userIds,
       allyAiIds,
       duty
-        ? targetIds.map((id) =>
-            id === villageDutyActorId(duty.userId) ? duty.userId : id,
-          )
+        ? targetIds.map((id) => (id === duty.actorId ? duty.userId : id))
         : targetIds,
     );
     if (!duty) return participants;
     return participants.flatMap((participant) => {
       if (participant.userId !== duty.userId) return [participant];
-      const copy = prepareVillageDutyDefender(participant, duty.villageId);
+      const copy = prepareVillageDutyDefender(
+        participant,
+        duty.villageId,
+        duty.actorId,
+      );
       return copy ? [copy] : [];
     });
   };
@@ -2273,8 +2276,7 @@ export const initiateBattle = async (
     (!["SHRINE_WAR", "VILLAGE_PROTECTOR"].includes(battleType) ||
       userIds.includes(dutyEnrollment.userId) ||
       !preloadedUsers.some(
-        (user) =>
-          user.userId === villageDutyActorId(dutyEnrollment.userId) && user.isAi,
+        (user) => user.userId === dutyEnrollment.actorId && user.isAi,
       ))
   )
     return errorResponse(
@@ -2388,9 +2390,7 @@ export const initiateBattle = async (
   // Settlement reloads can observe a cancelled enrollment. Reject before writing battle rows or claims.
   if (
     dutyEnrollment &&
-    !fetchedUsers.some(
-      (user) => user.userId === villageDutyActorId(dutyEnrollment.userId) && user.isAi,
-    )
+    !fetchedUsers.some((user) => user.userId === dutyEnrollment.actorId && user.isAi)
   )
     return errorResponse(
       "This protector has stood down or changed villages. Try again.",
@@ -3097,8 +3097,8 @@ export const initiateBattle = async (
 
   if (info.kageMatch) extraState.kageMatch = info.kageMatch;
   if (info.villageDuty) {
-    const { villageId, userId, startedAt, slot } = info.villageDuty;
-    extraState.villageDuty = { villageId, userId, startedAt, slot };
+    const { villageId, userId, actorId, startedAt, slot } = info.villageDuty;
+    extraState.villageDuty = { villageId, userId, actorId, startedAt, slot };
   }
 
   if (info.tournamentGame) {
@@ -4790,6 +4790,7 @@ export const initiateVillageDutyBattle = async (
   if (!patrol || patrol.defeated || patrol.battleId)
     return errorResponse("This protector is no longer available.");
   const battleId = nanoid();
+  const actorId = villageDutyActorId(patrol.userId);
   const reference = {
     villageId: shift.villageId,
     startedAt: shift.startedAt.toISOString(),
@@ -4805,19 +4806,21 @@ export const initiateVillageDutyBattle = async (
     const result = await initiateBattle(
       {
         ...battleInfo,
-        targetIds: [villageDutyActorId(patrol.userId)],
+        targetIds: [actorId],
         villageDuty: {
           ...reference,
           userId: patrol.userId,
+          actorId,
           passive: battleType === "VILLAGE_PROTECTOR" && !force,
         },
       },
       battleType,
     );
-    if (!result.success) await releaseVillageDutyPatrol(info.client, reference, false);
+    if (!result.success)
+      await releaseVillageDutyPatrol(info.client, reference, false, true);
     return result;
   } catch (error) {
-    await releaseVillageDutyPatrol(info.client, reference, false);
+    await releaseVillageDutyPatrol(info.client, reference, false, true);
     throw error;
   }
 };

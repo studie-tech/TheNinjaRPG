@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm";
 import { VILLAGE_DUTY_MAX_PATROLS, VILLAGE_DUTY_RANKS } from "@/drizzle/constants";
 import {
+  battle,
   userData,
   village,
   villageDutyPresence,
@@ -269,6 +270,7 @@ export const releaseVillageDutyPatrol = (
   client: DrizzleClient,
   reference: { villageId: string; startedAt: string; slot: number; battleId: string },
   defeated: boolean,
+  admissionFailure = false,
 ) =>
   client
     .update(villageDutyShift)
@@ -278,6 +280,10 @@ export const releaseVillageDutyPatrol = (
     })
     .where(
       and(
+        // Publication may fail after battle creation; keep committed battles reserved.
+        admissionFailure
+          ? sql`NOT EXISTS (SELECT 1 FROM ${battle} WHERE ${battle.id} = ${reference.battleId})`
+          : undefined,
         eq(villageDutyShift.villageId, reference.villageId),
         eq(villageDutyShift.startedAt, new Date(reference.startedAt)),
         sql`JSON_UNQUOTE(JSON_EXTRACT(${villageDutyShift.patrols}, ${`$[${reference.slot}].battleId`})) = ${reference.battleId}`,
@@ -334,33 +340,36 @@ export const enrollVillageDuty = (
   villageId: string,
   now: Date,
 ) =>
-  client
-    .update(userData)
-    .set({ villageDutyVillageId: villageId, villageDutyStartedAt: now })
-    .where(
-      and(
-        eq(userData.userId, userId),
-        eq(userData.villageId, villageId),
-        eq(userData.status, "AWAKE"),
-        eq(userData.location, "Village"),
-        eq(userData.isBanned, false),
-        eq(userData.isAi, false),
-        eq(userData.isOutlaw, false),
-        inArray(userData.rank, VILLAGE_DUTY_RANKS),
-        exists(
-          client
-            .select({ one: sql`1` })
-            .from(village)
-            .where(
-              and(
-                eq(village.id, villageId),
-                eq(village.type, "VILLAGE"),
-                eq(village.sector, userData.sector),
-              ),
+  // MySQL evaluates SET left to right; Drizzle emits schema order, which would replace
+  // the village before checking the previous enrollment's membership tenure.
+  client.execute(sql`UPDATE ${userData} SET
+    ${sql.identifier(userData.villageDutyStartedAt.name)} = CASE
+      WHEN ${userData.villageDutyVillageId} = ${villageId}
+        AND ${userData.villageDutyStartedAt} >= ${userData.joinedVillageAt}
+      THEN ${userData.villageDutyStartedAt} ELSE ${now} END,
+    ${sql.identifier(userData.villageDutyVillageId.name)} = ${villageId}
+    WHERE ${and(
+      eq(userData.userId, userId),
+      eq(userData.villageId, villageId),
+      eq(userData.status, "AWAKE"),
+      eq(userData.location, "Village"),
+      eq(userData.isBanned, false),
+      eq(userData.isAi, false),
+      eq(userData.isOutlaw, false),
+      inArray(userData.rank, VILLAGE_DUTY_RANKS),
+      exists(
+        client
+          .select({ one: sql`1` })
+          .from(village)
+          .where(
+            and(
+              eq(village.id, villageId),
+              eq(village.type, "VILLAGE"),
+              eq(village.sector, userData.sector),
             ),
-        ),
+          ),
       ),
-    );
+    )}`);
 
 /** Cancellation is available during any activity and clears only the account's duty enrollment. */
 export const cancelVillageDuty = (client: DrizzleClient, userId: string) =>

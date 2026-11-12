@@ -37,6 +37,7 @@ describe("village duty barrier damage", () => {
         const copy = prepareVillageDutyDefender(
           human as unknown as Parameters<typeof prepareVillageDutyDefender>[0],
           "home",
+          "duty:opaque-1234",
         )!;
         expect(copy).toBeDefined();
         const results = [];

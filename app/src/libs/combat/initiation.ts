@@ -30,7 +30,7 @@ import { projectPartyTracker, questPartyHelperAttemptId } from "@/libs/questPart
 import { getTimedRegenerationGain } from "@/libs/timedBuffs";
 import { regenerationBuffs } from "@/libs/titles";
 import { applyMasteryTrainingGains, settleQueuedTraining } from "@/libs/train";
-import { isOnVillageDuty, villageDutyActorId } from "@/libs/villageDuty";
+import { isOnVillageDuty } from "@/libs/villageDuty";
 import type {
   fetchBattleEssentials,
   listUserDataForQueryBattleUsers,
@@ -445,6 +445,7 @@ export const buildQueuedTrainingLogs = (claimed: QueuedBattleTraining[]) =>
 export const prepareVillageDutyDefender = (
   participant: BattleParticipant,
   villageId: string,
+  actorId: string,
 ):
   | (BattleParticipant &
       Pick<CombatQueryUser, "isVillageDutyCopy"> &
@@ -455,7 +456,7 @@ export const prepareVillageDutyDefender = (
   const masked = !!copy.anbuId;
   return {
     ...copy,
-    userId: villageDutyActorId(copy.userId),
+    userId: actorId,
     username: masked ? "ANBU Protector" : copy.username,
     isAi: true,
     isVillageDutyCopy: true,
@@ -476,7 +477,7 @@ export const prepareVillageDutyDefender = (
     items: copy.items.map((item) => ({
       ...item,
       id: `duty:${item.id}`,
-      userId: villageDutyActorId(copy.userId),
+      userId: actorId,
       dropChancePerc: 0,
     })),
     ...(masked

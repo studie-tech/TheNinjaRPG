@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
+import { maskBattle } from "@/libs/combat/masking";
 import { isPvpRewardOpponent } from "@/libs/combat/participants";
 import { calcBattleResult, villageDutyVictory } from "@/libs/combat/settlement";
 import { Pusher } from "@/libs/pusher";
@@ -23,7 +24,7 @@ const duel = (battleType: "VILLAGE_PROTECTOR" | "SHRINE_WAR", copyWins = false) 
       }),
       makeUser({
         userId: "copy-instance",
-        controllerId: "duty:owner",
+        controllerId: "duty:opaque-1234",
         direction: "right",
         villageId: "home",
         isAi: true,
@@ -33,6 +34,7 @@ const duel = (battleType: "VILLAGE_PROTECTOR" | "SHRINE_WAR", copyWins = false) 
     ],
     extraState: {
       villageDuty: {
+        actorId: "duty:opaque-1234",
         userId: "owner",
         villageId: "home",
         startedAt: new Date().toISOString(),
@@ -47,6 +49,23 @@ const duel = (battleType: "VILLAGE_PROTECTOR" | "SHRINE_WAR", copyWins = false) 
 afterEach(() => vi.restoreAllMocks());
 
 describe("village duty PvP points", () => {
+  it("publishes only the opaque controller identity and freezes settlement across shifts", () => {
+    const battle = duel("VILLAGE_PROTECTOR", true);
+    battle.extraState.villageDuty!.startedAt = "2026-01-01T10:00:00Z";
+    const visible = maskBattle(battle, "invader");
+    expect(visible.usersState[1]?.controllerId).toBe("duty:opaque-1234");
+    expect(visible.extraState).not.toHaveProperty("villageDuty");
+    expect(villageDutyVictory(battle)?.userId).toBe("owner");
+  });
+  it("settles already-active legacy copies using their frozen private owner reference", () => {
+    const battle = duel("VILLAGE_PROTECTOR", true);
+    delete battle.extraState.villageDuty!.actorId;
+    battle.usersState[1]!.controllerId = "duty:owner";
+    expect(villageDutyVictory(battle)?.userId).toBe("owner");
+    battle.usersState[0]!.curHealth = 100;
+    battle.usersState[1]!.curHealth = 0;
+    expect(calcBattleResult(battle, "invader")?.weeklyPvpKills).toBe(1);
+  });
   it.each(["VILLAGE_PROTECTOR", "SHRINE_WAR"] as const)(
     "awards repeat-scaled points and weekly credit for beating a copy in %s",
     (type) => {
@@ -101,7 +120,7 @@ describe("village duty PvP points", () => {
     const battle = duel("VILLAGE_PROTECTOR");
     const [invader, copy] = battle.usersState;
     if (!copy || !invader) throw new Error("Missing duel participants");
-    expect(isPvpRewardOpponent(invader, copy, "owner")).toBe(true);
+    expect(isPvpRewardOpponent(invader, copy, "duty:opaque-1234")).toBe(true);
     for (const change of [
       { isVillageDutyCopy: undefined },
       { isSummon: true },
@@ -109,7 +128,9 @@ describe("village duty PvP points", () => {
       { controllerId: "duty:someone-else" },
       { villageId: "enemy" },
     ])
-      expect(isPvpRewardOpponent(invader, { ...copy, ...change }, "owner")).toBe(false);
+      expect(
+        isPvpRewardOpponent(invader, { ...copy, ...change }, "duty:opaque-1234"),
+      ).toBe(false);
     delete copy.isVillageDutyCopy;
     expect(calcBattleResult(battle, "invader")).toMatchObject({
       pvpExperience: 0,
@@ -151,8 +172,9 @@ describe("village duty PvP points", () => {
         {
           client,
           userIds: ["invader"],
-          targetIds: ["duty:owner"],
+          targetIds: ["duty:opaque-1234"],
           villageDuty: {
+            actorId: "duty:opaque-1234",
             userId: "owner",
             villageId: "home",
             startedAt,
@@ -164,7 +186,9 @@ describe("village duty PvP points", () => {
         battleType,
       );
       expect(result.success, result.message).toBe(true);
-      expect(history).toEqual([["invader", "duty:owner", "duty:owner", "invader"]]);
+      expect(history).toEqual([
+        ["invader", "duty:opaque-1234", "duty:opaque-1234", "invader"],
+      ]);
       expect(fake.saved()?.extraState.pvpExperienceScaling).toBe(1 / 3);
       expect(fake.saved()?.rewardScaling).toBe(1);
     },

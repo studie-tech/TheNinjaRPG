@@ -30,6 +30,7 @@ import {
 import {
   claimVillageDutyPatrol,
   countVillageDuty,
+  enrollVillageDuty,
   fetchVillageDutyHome,
   findVillageDutyShift,
   listVillageDutyCandidates,
@@ -46,8 +47,10 @@ import * as sectorMaps from "@/server/utils/sectorMap";
 import {
   advanceVillageDutyPursuits,
   ensureVillageDutyShift,
+  villageDutyActorId,
 } from "@/server/utils/villageDuty";
 import { getUtcHourStart, secondsFromDate } from "@/utils/time";
+import { makeCompleteBattle } from "../../../setup/combat";
 import { insertDefaultAiProfile, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { sectorMap } from "../../../setup/sectorMap";
@@ -194,6 +197,39 @@ describeWithDatabase("village duty hourly patrol", () => {
     expect((await shift()).patrols).toEqual(active.patrols);
   });
 
+  it("preserves an enrolled shift slot on repeated signup and refreshes stale membership enrollment", async () => {
+    const db = await getTestDatabase();
+    await enrollCurrent();
+    const active = await shift();
+    const before = (await load())!;
+    expect((await duty(true)).success).toBe(true);
+    expect((await duty(true)).success).toBe(true);
+    expect((await load())?.villageDutyStartedAt).toEqual(before.villageDutyStartedAt);
+    expect((await listVillageDutyPatrols(db, 123)).map((p) => p.userId)).toEqual([
+      "protector",
+    ]);
+    expect((await shift()).patrols).toEqual(active.patrols);
+    expect((await load())?.updatedAt).toEqual(before.updatedAt);
+    for (const patch of [
+      { villageDutyVillageId: "foreign" },
+      {
+        villageDutyVillageId: "home",
+        joinedVillageAt: new Date("2026-06-01"),
+        villageDutyStartedAt: new Date("2026-01-01"),
+      },
+    ]) {
+      await db.update(userData).set(patch).where(eq(userData.userId, "protector"));
+      const now = new Date();
+      const trace = await recordQueries(() =>
+        enrollVillageDuty(db, "protector", "home", now),
+      );
+      expect(trace.result.rowsAffected).toBe(1);
+      expect(trace.statements).toHaveLength(1);
+      expect((await load())?.villageDutyStartedAt).toEqual(now);
+      expect((await load())?.villageDutyVillageId).toBe("home");
+    }
+  });
+
   it.each([
     { rank: "GENIN" as const },
     { isBanned: true },
@@ -307,6 +343,89 @@ describeWithDatabase("village duty hourly patrol", () => {
     expect(next.patrols[0]?.defeated).toBe(false);
     expect((await releaseVillageDutyPatrol(db, reference, true)).rowsAffected).toBe(0);
     expect((await findVillageDutyShift(db, "home"))?.patrols[0]?.defeated).toBe(false);
+  });
+
+  it("keeps a committed battle reserved when admission cleanup runs and still releases at settlement", async () => {
+    const db = await getTestDatabase();
+    await enrollCurrent();
+    const active = await shift();
+    await claimVillageDutyPatrol(db, active, 0, "committed");
+    await db.insert(battle).values(makeCompleteBattle({ id: "committed" }));
+    const reference = {
+      villageId: "home",
+      startedAt: active.startedAt.toISOString(),
+      slot: 0,
+      battleId: "committed",
+    };
+    expect(
+      (await releaseVillageDutyPatrol(db, reference, false, true)).rowsAffected,
+    ).toBe(0);
+    expect((await findVillageDutyShift(db, "home"))?.patrols[0]?.battleId).toBe(
+      "committed",
+    );
+    expect((await releaseVillageDutyPatrol(db, reference, false)).rowsAffected).toBe(1);
+    const next = (await findVillageDutyShift(db, "home"))!;
+    await claimVillageDutyPatrol(db, next, 0, "rejected");
+    expect(
+      (
+        await releaseVillageDutyPatrol(
+          db,
+          { ...reference, battleId: "rejected" },
+          false,
+          true,
+        )
+      ).rowsAffected,
+    ).toBe(1);
+  });
+
+  it("keeps a committed copy reserved when publication throws after admission", async () => {
+    const db = await getTestDatabase();
+    vi.spyOn(Pusher.prototype, "trigger").mockRejectedValue(
+      new Error("Publication failed"),
+    );
+    await insertDefaultAiProfile();
+    await insertUsers([
+      {
+        userId: "invader",
+        username: "Invader",
+        sector: 123,
+        longitude: 5,
+        latitude: 5,
+        location: "Village",
+        status: "AWAKE",
+        rank: "JONIN",
+        level: 50,
+        experience: 3339000,
+      },
+    ]);
+    await enrollCurrent();
+    const active = await shift();
+    await expect(
+      initiateVillageDutyBattle(
+        {
+          client: db,
+          userIds: ["invader"],
+          sector: 123,
+          longitude: 5,
+          latitude: 5,
+          shift: active,
+          slot: 0,
+        },
+        "VILLAGE_PROTECTOR",
+      ),
+    ).rejects.toThrow("Publication failed");
+    const committed = (await db.query.battle.findMany())[0]!;
+    const reserved = (await findVillageDutyShift(db, "home"))!;
+    expect(committed).toBeDefined();
+    expect(reserved.patrols[0]?.battleId).toBe(committed.id);
+    expect(
+      (await claimVillageDutyPatrol(db, reserved, 0, "second-battle")).rowsAffected,
+    ).toBe(0);
+    expect(
+      (await db.query.userData.findFirst({ where: eq(userData.userId, "invader") }))
+        ?.battleId,
+    ).toBe(committed.id);
+    expect((await load())?.battleId).toBeNull();
   });
 
   it("returns a surviving copy after a failed admission or an enemy defeat without changing its owner", async () => {
@@ -433,7 +552,10 @@ describeWithDatabase("village duty hourly patrol", () => {
     expect(trace.statements).toHaveLength(0);
     const stored = (await findVillageDutyShift(db, "home"))!;
     const actor = villageDutyPatrols(
-      await listVillageDutyPatrols(db, 123, now),
+      (await listVillageDutyPatrols(db, 123, now)).map((owner) => ({
+        ...owner,
+        actorId: villageDutyActorId(owner.userId),
+      })),
       map,
       123,
       "home",
@@ -592,7 +714,7 @@ describeWithDatabase("village duty hourly patrol", () => {
             battleId: `prior-${index}`,
             battleType,
             attackedId: "invader",
-            defenderId: "duty:protector",
+            defenderId: villageDutyActorId("protector"),
           })),
         );
       const admission = await initiateVillageDutyBattle(
@@ -759,7 +881,9 @@ describeWithDatabase("village duty hourly patrol", () => {
       }))!;
       expect(fight.battleType).toBe("VILLAGE_PROTECTOR");
       expect(
-        fight.usersState.some((user) => user.controllerId === "duty:protector"),
+        fight.usersState.some(
+          (user) => user.controllerId === villageDutyActorId("protector"),
+        ),
       ).toBe(true);
       expect((await load())?.status).toBe("AWAKE");
       expect((await load())?.battleId).toBeNull();
@@ -884,6 +1008,64 @@ describeWithDatabase("village duty hourly patrol", () => {
     );
     expect(advanced?.patrols[0]?.pursuit?.targetUserId).toBe("visible");
   });
+
+  it.each(["sector", "longitude", "latitude"] as const)(
+    "rejects a passive encounter when the visitor's %s changes before admission",
+    async (coordinate) => {
+      const db = await getTestDatabase();
+      vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
+      await insertDefaultAiProfile();
+      await insertUsers([
+        {
+          userId: "invader",
+          username: "Invader",
+          sector: 123,
+          longitude: 5,
+          latitude: 5,
+          location: "Village",
+          status: "AWAKE",
+          rank: "JONIN",
+          level: 50,
+          experience: 3339000,
+        },
+      ]);
+      await enrollCurrent();
+      const active = await shift();
+      const guarded = beforeStatements(
+        db,
+        userData,
+        [
+          () =>
+            db
+              .update(userData)
+              .set({ [coordinate]: 456 })
+              .where(eq(userData.userId, "invader")),
+        ],
+        { when: (values) => values.status === "BATTLE" },
+      );
+      const result = await initiateVillageDutyBattle(
+        {
+          client: guarded,
+          userIds: ["invader"],
+          sector: 123,
+          longitude: 5,
+          latitude: 5,
+          shift: active,
+          slot: 0,
+        },
+        "VILLAGE_PROTECTOR",
+      );
+      expect(result.success).toBe(false);
+      expect(await db.query.battle.findMany()).toEqual([]);
+      expect((await findVillageDutyShift(db, "home"))?.patrols[0]?.battleId).toBeNull();
+      expect((await load())?.battleId).toBeNull();
+      const invader = await db.query.userData.findFirst({
+        where: eq(userData.userId, "invader"),
+      });
+      expect(invader?.status).toBe("AWAKE");
+      expect(invader?.[coordinate]).toBe(456);
+    },
+  );
 
   it.each(["before preload", "during cooking settlement", "before claim"])(
     "honors stealth activated %s and releases the reserved copy",

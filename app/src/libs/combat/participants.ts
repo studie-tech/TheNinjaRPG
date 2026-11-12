@@ -9,7 +9,6 @@ import {
   COMBAT_BORDER_RIGHT,
   COMBAT_BORDER_TOP,
 } from "@/libs/combat/constants";
-import { villageDutyActorId } from "@/libs/villageDuty";
 
 /**
  * Whether quest content may add NPC templates to the initiating player's team.
@@ -67,6 +66,12 @@ export const hasHumanOpponent = (
   user: { direction: "left" | "right" },
 ): boolean => usersState.some((candidate) => isHumanOpponent(user, candidate));
 
+/** Frozen copy identity also lets already-active battles settle their legacy controller IDs. */
+export const villageDutyBattleActorId = (duty?: {
+  userId: string;
+  actorId?: string;
+}) => (duty ? (duty.actorId ?? `duty:${duty.userId}`) : undefined);
+
 /** PvP points include the reserved original duty copy, without treating other AI or summons as players. */
 export const isPvpRewardOpponent = (
   user: { direction: "left" | "right"; villageId: string | null },
@@ -75,11 +80,11 @@ export const isPvpRewardOpponent = (
     villageId: string | null;
     isVillageDutyCopy?: true;
   },
-  dutyOwnerId?: string,
+  dutyActorId?: string,
 ) =>
   isHumanOpponent(user, candidate) ||
-  (!!dutyOwnerId &&
-    candidate.controllerId === villageDutyActorId(dutyOwnerId) &&
+  (!!dutyActorId &&
+    candidate.controllerId === dutyActorId &&
     candidate.isVillageDutyCopy === true &&
     !candidate.isSummon &&
     !areBattleAllies(user, candidate) &&
