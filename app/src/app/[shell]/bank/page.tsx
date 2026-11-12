@@ -52,6 +52,7 @@ import {
   type MoneyTransferSchemaInput,
 } from "@/validators/bank";
 
+/** Render bank balances, money transfers and claimable interest. */
 export default function Bank() {
   // State
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
