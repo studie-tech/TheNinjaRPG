@@ -26,6 +26,7 @@ const state = (count: number) => ({
     canEnroll: true,
   },
   isPending: false,
+  isLoading: false,
   isError: false,
   isChanging: false,
   feedback: null as { success: boolean; message: string } | null,
@@ -50,6 +51,36 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 const panel = () => <VillageDuty villageId="home" navTabs={null} />;
+
+it("explains unavailable duty when the village query is disabled without data", () => {
+  vi.spyOn(duty, "useVillageDuty").mockReturnValue({
+    ...current,
+    data: undefined,
+    isPending: true,
+    isLoading: false,
+  } as never);
+  const view = render(<VillageDuty villageId="" navTabs={null} />);
+  expect(
+    view.getByText("Patrol duty is available to members of a village."),
+  ).toBeDefined();
+  expect(view.queryByText("Loading village protectors")).toBeNull();
+  expect(view.queryByRole("button", { name: "Sign up for duty" })).toBeNull();
+});
+
+it("shows the loader while the initial village roster is fetching", () => {
+  vi.spyOn(duty, "useVillageDuty").mockReturnValue({
+    ...current,
+    data: undefined,
+    isPending: true,
+    isLoading: true,
+  } as never);
+  const view = render(panel());
+  expect(view.getByText("Loading village protectors")).toBeDefined();
+  expect(
+    view.queryByText("Patrol duty is available to members of a village."),
+  ).toBeNull();
+  expect(view.queryByRole("button", { name: "Sign up for duty" })).toBeNull();
+});
 
 it.each([0, 1, 4, 20, 101])(
   "bounds a roster of %i without losing its count or profile links",

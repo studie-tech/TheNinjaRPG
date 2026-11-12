@@ -29,7 +29,7 @@ export const VillageDuty = ({
   navTabs: ReactNode;
 }) => {
   const [page, setPage] = useState(0);
-  const { data, isPending, isError, refetch, setDuty, isChanging, feedback, timeDiff } =
+  const { data, isLoading, isError, refetch, setDuty, isChanging, feedback, timeDiff } =
     useVillageDuty(villageId, sector);
   const protectors = data?.protectors ?? [];
   const pageCount = Math.ceil(protectors.length / 4);
@@ -47,7 +47,7 @@ export const VillageDuty = ({
         Protectors provides {VILLAGE_DUTY_SLOTS_PER_LEVEL} slots per level, up to{" "}
         {VILLAGE_DUTY_MAX_PATROLS}. You can keep playing normally while enrolled.
       </p>
-      {isPending ? (
+      {isLoading ? (
         <Loader explanation="Loading village protectors" />
       ) : isError ? (
         <div className="space-y-2">
