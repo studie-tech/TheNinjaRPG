@@ -41,7 +41,12 @@ export const createTravelCharacterBudget = () => {
       elapsed = frames = longestGap = 0;
       const before = limit;
       if (average > 25) {
-        limit = Math.max(WORLD_DETAIL.travelCharactersMin, Math.min(limit, demand) - 4);
+        // At or below the floor, lowering capacity cannot remove any actual bodies.
+        if (demand > WORLD_DETAIL.travelCharactersMin)
+          limit = Math.max(
+            WORLD_DETAIL.travelCharactersMin,
+            Math.min(limit, demand) - 4,
+          );
         healthyWindows = 0;
       } else if (average < 18.5) {
         if (++healthyWindows >= 4) {

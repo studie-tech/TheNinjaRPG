@@ -25,6 +25,46 @@ describe("travel character budget", () => {
     for (let now = 0; now < 2100; now += 1000 / 30) budget.sample(now, true, 25);
     expect(budget.limit).toBe(21);
   });
+  it.each([0, 1, 12])(
+    "preserves capacity after slow demand %i before a healthy crowd arrives",
+    (demand) => {
+      const budget = createTravelCharacterBudget();
+      let now = 0,
+        changes = 0;
+      for (; now < 2100; now += 1000 / 30)
+        changes += Number(budget.sample(now, true, demand));
+      expect(budget.limit).toBe(100);
+      expect(changes).toBe(0);
+      for (; now < 4200; now += 1000 / 60) budget.sample(now, true, 100);
+      expect(budget.limit).toBe(100);
+    },
+  );
+  it("reduces thirteen candidates to the minimum in the first slow window", () => {
+    const budget = createTravelCharacterBudget();
+    for (let now = 0; now < 2100; now += 1000 / 30) budget.sample(now, true, 13);
+    expect(budget.limit).toBe(12);
+  });
+  it("resets healthy recovery progress when a sparse slow window cannot reduce bodies", () => {
+    const budget = createTravelCharacterBudget();
+    let now = 0;
+    const sampleFrames = (count: number, interval: number, demand: number) => {
+      for (let i = 0; i < count; i++) {
+        now += interval;
+        budget.sample(now, true, demand);
+      }
+    };
+    budget.sample(now, true, 25);
+    sampleFrames(50, 40, 25);
+    expect(budget.limit).toBe(21);
+    sampleFrames(375, 16, 25);
+    expect(budget.limit).toBe(21);
+    sampleFrames(50, 40, 1);
+    expect(budget.limit).toBe(21);
+    sampleFrames(125, 16, 25);
+    expect(budget.limit).toBe(21);
+    sampleFrames(375, 16, 25);
+    expect(budget.limit).toBe(25);
+  });
   it("does not increase a degraded limit when candidate demand grows", () => {
     const budget = createTravelCharacterBudget();
     let now = 0;
