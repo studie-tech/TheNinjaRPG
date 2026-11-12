@@ -70,3 +70,66 @@ it("clears selection when the displayed roster removes a character and when a ne
   view.rerender(<Layout shown={battle("next")} />);
   expect(screen.getByTestId("inspected").textContent).toBe("enemy:90");
 });
+
+function TappingLayout({ shown }: { shown: ReturnedBattle }) {
+  const { inspectTapped } = useCombatInspection(shown, "me");
+  return (
+    <>
+      <Layout shown={shown} />
+      <button type="button" onClick={() => inspectTapped("ally")}>
+        Tap ally
+      </button>
+    </>
+  );
+}
+
+it("keeps a fighter pinned in the picker when the battlefield is tapped", () => {
+  render(<TappingLayout shown={battle()} />, { wrapper: Provider });
+  const picker = screen.getByRole("combobox", { name: "Inspect character" });
+  fireEvent.change(picker, { target: { value: "enemy" } });
+  fireEvent.click(screen.getByRole("button", { name: "Tap ally" }));
+  expect(screen.getByTestId("inspected").textContent).toBe("enemy:90");
+  fireEvent.change(picker, { target: { value: "" } });
+  fireEvent.click(screen.getByRole("button", { name: "Tap ally" }));
+  expect(screen.getByTestId("inspected").textContent).toBe("ally:70");
+  // A tap follows the fighter without pinning them.
+  expect((picker as HTMLSelectElement).value).not.toBe("ally");
+  expect(screen.getByRole("option", { name: "Following: Twin (2)" })).toBeTruthy();
+});
+
+it("returns to automatic inspection after following a tap", () => {
+  render(<TappingLayout shown={battle()} />, { wrapper: Provider });
+  const picker = screen.getByRole("combobox", { name: "Inspect character" });
+  fireEvent.click(screen.getByRole("button", { name: "Tap ally" }));
+  expect(screen.getByRole("option", { name: "Following: Twin (2)" })).toBeTruthy();
+  fireEvent.change(picker, { target: { value: "" } });
+  expect(screen.getByTestId("inspected").textContent).toBe("enemy:90");
+});
+
+it("pins the followed fighter and marks the pin", () => {
+  render(<TappingLayout shown={battle()} />, { wrapper: Provider });
+  const picker = screen.getByRole("combobox", { name: "Inspect character" });
+  fireEvent.click(screen.getByRole("button", { name: "Tap ally" }));
+  fireEvent.change(picker, { target: { value: "ally" } });
+  expect((picker as HTMLSelectElement).value).toBe("ally");
+  expect(screen.getByText("Ally · Pinned")).toBeTruthy();
+});
+
+it("lets taps move on from a pinned fighter once defeated", () => {
+  const view = render(<TappingLayout shown={battle()} />, { wrapper: Provider });
+  fireEvent.change(screen.getByRole("combobox"), { target: { value: "ally" } });
+  view.rerender(<TappingLayout shown={battle("battle", 0)} />);
+  fireEvent.click(screen.getByRole("button", { name: "Tap ally" }));
+  expect((screen.getByRole("combobox") as HTMLSelectElement).value).not.toBe("ally");
+  expect(
+    screen.getByRole("option", { name: "Following: Twin (2) · Defeated" }),
+  ).toBeTruthy();
+});
+
+it("stops marking a pin once the pinned fighter is defeated", () => {
+  const view = render(<TappingLayout shown={battle()} />, { wrapper: Provider });
+  fireEvent.change(screen.getByRole("combobox"), { target: { value: "ally" } });
+  expect(screen.getByText("Ally · Pinned")).toBeTruthy();
+  view.rerender(<TappingLayout shown={battle("battle", 0)} />);
+  expect(screen.queryByText("Ally · Pinned")).toBeNull();
+});

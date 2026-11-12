@@ -44,6 +44,7 @@ import {
   SHRINE_RECAPTURED_NOTICE,
 } from "@/libs/combat/constants";
 import { isBattleHotkeyBlocked } from "@/libs/combat/hotkeys";
+import { inspectsBattlefieldTap } from "@/libs/combat/inspection";
 import { validateActionTarget } from "@/libs/combat/targetValidation";
 import { getTurnControl, resolveControlledActorId } from "@/libs/combat/turn";
 import type { BattleState, CombatAction, ReturnedBattle } from "@/libs/combat/types";
@@ -162,7 +163,7 @@ const Combat: React.FC<CombatProps> = (props) => {
   const setPresentedLogVersion = useSetAtom(combatPresentedLogVersionAtom);
   // Fighter meters follow the field while it replays actions the server already resolved.
   const [presentedBattle, setPresentedBattle] = useAtom(combatPresentedBattleAtom);
-  const { selectUser: inspectUser } = useCombatInspection(
+  const { inspectTapped } = useCombatInspection(
     presentedBattle?.id === battleState.battle?.id
       ? presentedBattle
       : battleState.battle,
@@ -823,7 +824,6 @@ const Combat: React.FC<CombatProps> = (props) => {
       resultRef.current
     )
       return;
-    if (character?.userId) inspectUser(character.userId);
     setAggroTarget(
       config.showAggro && character?.userId && aggro.has(character.userId)
         ? character
@@ -832,20 +832,28 @@ const Combat: React.FC<CombatProps> = (props) => {
     const battle = battleRef.current,
       action = actionRef.current,
       grid = gridRef.current;
-    if (!battle || !action || !grid) return;
-    const user = battle.usersState.find((user) => user.userId === userIdRef.current);
-    if (!user) return;
-    const { isValid } = validateActionTarget({
-      user,
-      battle,
-      action,
-      grid,
-      target,
-      timeDiff,
-      precomputedUserId: userIdRef.current,
-      precomputedActions: precomputedActionsRef.current,
-    });
-    if (!isValid || !canPerformAction()) return;
+    const user = battle?.usersState.find((user) => user.userId === userIdRef.current);
+    const isValid =
+      !!battle &&
+      !!action &&
+      !!grid &&
+      !!user &&
+      validateActionTarget({
+        user,
+        battle,
+        action,
+        grid,
+        target,
+        timeDiff,
+        precomputedUserId: userIdRef.current,
+        precomputedActions: precomputedActionsRef.current,
+      }).isValid;
+    if (
+      character?.userId &&
+      inspectsBattlefieldTap(battle, userIdRef.current, character.userId, isValid)
+    )
+      inspectTapped(character.userId);
+    if (!battle || !action || !isValid || !canPerformAction()) return;
     document.body.style.cursor = "wait";
     performAction({
       battleId: battle.id,

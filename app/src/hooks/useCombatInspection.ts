@@ -2,6 +2,7 @@ import { atom, useAtom } from "jotai";
 import { useEffect } from "react";
 import {
   type CombatInspection,
+  holdsPin,
   resolveCombatInspection,
 } from "@/libs/combat/inspection";
 import type { ReturnedBattle } from "@/libs/combat/types";
@@ -28,12 +29,28 @@ export function useCombatInspection(
       setSelection((current) => (current === selection ? null : current));
     }
   }, [battle, selection, setSelection]);
-  const selectedId =
+  const shownId =
     selection && selection.battleId === battle?.id ? selection.userId : undefined;
+  const isShown = shownId !== undefined && selectedUser?.userId === shownId;
   return {
     selectedUser,
-    selectedId: selectedUser?.userId === selectedId ? selectedId : undefined,
+    /** The fighter pinned in the picker. */
+    pinnedId: isShown && selection?.pinned ? shownId : undefined,
+    /** Whether the pin still keeps battlefield taps from changing the panel. */
+    isPinHeld: holdsPin(battle, selection),
+    /** The fighter last tapped on the battlefield while nothing is pinned. */
+    followedId: isShown && !selection?.pinned ? shownId : undefined,
+    /** Pin a fighter from the picker, or return to automatic inspection. */
     selectUser: (userId?: string) =>
-      setSelection(battle && userId ? { battleId: battle.id, userId } : null),
+      setSelection(
+        battle && userId ? { battleId: battle.id, userId, pinned: true } : null,
+      ),
+    /** Inspect a fighter tapped on the battlefield unless a pin holds. */
+    inspectTapped: (userId: string) =>
+      setSelection((current) =>
+        !battle || holdsPin(battle, current)
+          ? current
+          : { battleId: battle.id, userId },
+      ),
   };
 }

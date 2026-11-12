@@ -1,6 +1,11 @@
 import type { ReturnedBattle } from "@/libs/combat/types";
 
-export type CombatInspection = { battleId: string; userId: string } | null;
+/** A chosen fighter; `pinned` marks a choice from the picker, which battlefield taps keep. */
+export type CombatInspection = {
+  battleId: string;
+  userId: string;
+  pinned?: boolean;
+} | null;
 
 /** Resolve inspection only from the snapshot currently visible on the battlefield. */
 export function resolveCombatInspection(
@@ -26,4 +31,39 @@ export function resolveCombatInspection(
   );
   const remaining = enemies.filter((user) => !user.leftBattle && !user.fledBattle);
   return remaining.find((user) => user.curHealth > 0) ?? remaining[0] ?? enemies[0];
+}
+
+/**
+ * Whether tapping a fighter on the battlefield inspects them. A tap that casts an action on
+ * the viewer's own side, such as a buff on themselves or an ally, keeps the panel where it is.
+ */
+export function inspectsBattlefieldTap(
+  battle: ReturnedBattle | null | undefined,
+  viewerId: string | undefined,
+  tappedUserId: string,
+  casts: boolean,
+) {
+  if (!casts) return true;
+  const users = battle?.usersState ?? [];
+  const viewer = users.find((user) => user.userId === viewerId);
+  const tapped = users.find((user) => user.userId === tappedUserId);
+  return !viewer || !tapped || tapped.direction !== viewer.direction;
+}
+
+/** Whether a picker pin still holds: a fighter of the shown battle who is still standing. */
+export function holdsPin(
+  battle: ReturnedBattle | null | undefined,
+  selection: CombatInspection,
+) {
+  return (
+    !!selection?.pinned &&
+    selection.battleId === battle?.id &&
+    !!battle?.usersState.some(
+      (user) =>
+        user.userId === selection.userId &&
+        user.curHealth > 0 &&
+        !user.leftBattle &&
+        !user.fledBattle,
+    )
+  );
 }
