@@ -12,8 +12,8 @@ export const createTravelCharacterBudget = () => {
     get limit() {
       return limit;
     },
-    /** Sample monotonic frame time in milliseconds; return whether the scene needs a new limit. */
-    sample(now: number, continuous = true) {
+    /** Sample monotonic frame time; available candidate demand bounds slow-window backoff. */
+    sample(now: number, continuous = true, demand = limit) {
       // Intentional on-demand intervals measure invalidation cadence, not rendering capacity.
       if (!continuous) {
         previous = undefined;
@@ -41,7 +41,7 @@ export const createTravelCharacterBudget = () => {
       elapsed = frames = longestGap = 0;
       const before = limit;
       if (average > 25) {
-        limit = Math.max(WORLD_DETAIL.travelCharactersMin, limit - 4);
+        limit = Math.max(WORLD_DETAIL.travelCharactersMin, Math.min(limit, demand) - 4);
         healthyWindows = 0;
       } else if (average < 18.5) {
         if (++healthyWindows >= 4) {

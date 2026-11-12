@@ -332,6 +332,30 @@ describe("travel actor artwork loading", () => {
     },
   );
 
+  it("reduces a small patrol crowd in the first slow window while retaining the viewer and live players", () => {
+    WORLD_DETAIL.travelCharacters = bodyBudget;
+    holdCharacters();
+    const { actors, snapshot } = fixture();
+    actors.sync(
+      snapshot([
+        ...Array.from({ length: 23 }, (_, i) =>
+          player(i, { userId: `duty:${i}`, isVillageDuty: true }),
+        ),
+        player(1, { userId: "active" }),
+        player(2, { userId: "viewer" }),
+      ]),
+    );
+    const bodies = () =>
+      actors.container.children.filter((child) => child.label.startsWith("user:"));
+    expect(bodies()).toHaveLength(25);
+    for (let now = 0; now < 2100; now += 1000 / 30)
+      actors.animate({ now, delta: 1 / 30, reducedMotion: false });
+    expect(bodies()).toHaveLength(21);
+    expect(bodies().map((child) => child.label)).toEqual(
+      expect.arrayContaining(["user:viewer", "user:active"]),
+    );
+  });
+
   it("budgets crowded patrol artwork at two frames per second while retaining the viewer and live players", () => {
     WORLD_DETAIL.travelCharacters = bodyBudget;
     const { actors, snapshot } = fixture();

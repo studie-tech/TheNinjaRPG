@@ -93,6 +93,7 @@ export const createTravelActors = (
     return ripples;
   };
   const characterBudget = createTravelCharacterBudget();
+  let characterDemand = 0;
   const records = new Map<string, ActorRecord>();
   const byRoot = new Map<Container, ActorRecord>();
   const appearanceParts = new Map<
@@ -256,6 +257,7 @@ export const createTravelActors = (
       const tile = tileFor(user);
       return tile ? [{ user, key: travelActorKey(user), onScreen: tile.onScreen }] : [];
     });
+    characterDemand = candidates.length;
     stableViewport = domain;
     // Every awake candidate gets a body while the crowd fits the budget.
     if (candidates.length <= characterBudget.limit) {
@@ -773,7 +775,10 @@ export const createTravelActors = (
       pursuitVisibilityKey = movingKey;
       refreshVisibility();
     }
-    if (characterBudget.sample(frame.now, continuous) && sourceSnapshot) {
+    if (
+      characterBudget.sample(frame.now, continuous, characterDemand) &&
+      sourceSnapshot
+    ) {
       selectionKey = null;
       sync(sourceSnapshot);
     }

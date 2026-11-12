@@ -20,6 +20,19 @@ describe("travel character budget", () => {
     for (let now = 9100; now < 40_000; now += 1000 / 60) budget.sample(now);
     expect(budget.limit).toBe(100);
   });
+  it("reduces a small crowd's body count in the first slow window", () => {
+    const budget = createTravelCharacterBudget();
+    for (let now = 0; now < 2100; now += 1000 / 30) budget.sample(now, true, 25);
+    expect(budget.limit).toBe(21);
+  });
+  it("does not increase a degraded limit when candidate demand grows", () => {
+    const budget = createTravelCharacterBudget();
+    let now = 0;
+    for (; now < 2100; now += 1000 / 30) budget.sample(now, true, 25);
+    expect(budget.limit).toBe(21);
+    for (; now < 4200; now += 1000 / 30) budget.sample(now, true, 100);
+    expect(budget.limit).toBe(17);
+  });
   it("backs off quickly under sustained load and preserves a bounded minimum", () => {
     const budget = createTravelCharacterBudget();
     for (let now = 0; now < 2100; now += 1000 / 30) budget.sample(now);
