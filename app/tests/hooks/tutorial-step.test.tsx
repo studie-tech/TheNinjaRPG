@@ -1,12 +1,21 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, vi } from "bun:test";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
 import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
-import { useTutorialStep } from "@/hooks/tutorial";
-import { TUTORIAL_STEPS } from "@/libs/tutorialSteps";
+import type * as TutorialHooks from "@/hooks/tutorial";
+import type * as TutorialSteps from "@/libs/tutorialSteps";
 import * as routing from "@/utils/routing";
 import * as UserContext from "@/utils/UserContext";
+
+// An assistant suite replaces these modules with one synthetic step, and Bun keeps
+// module mocks across files. Query-suffixed imports load the real definitions again.
+const realStepsPath = "../../src/libs/tutorialSteps.tsx?real";
+const steps = (await import(realStepsPath)) as typeof TutorialSteps;
+mock.module("@/libs/tutorialSteps", () => steps);
+const realTutorialPath = "../../src/hooks/tutorial.tsx?real";
+const { useTutorialStep } = (await import(realTutorialPath)) as typeof TutorialHooks;
+const { TUTORIAL_STEPS } = steps;
 
 const store = getDefaultStore();
 let tutorialStep = 0;
