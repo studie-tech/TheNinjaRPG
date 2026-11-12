@@ -953,6 +953,8 @@ const executeClaimedQuestConsequences = async ({
   if (startedQuestIds.length > 0) await closeQuests;
   // Start the delivery once so the mutation phase and the success check share one execution.
   const itemRemoval = deliverQuestItems(client, user.userId, deliveries);
+  // A battle owns the delivered stacks once it starts, so deliveries finish first.
+  if (opponent && deliveries.length > 0) await itemRemoval;
   await Promise.all([
     startedQuestIds.length === 0 ? closeQuests : undefined,
     ...(startedQuestIds.length > 0
@@ -1133,7 +1135,7 @@ const deliverQuestItems = async (
         id,
         take,
       );
-      if (decremented.rowsAffected !== 1) await removal();
+      if (decremented.rowsAffected !== 1 && take < quantity) await removal();
       return false;
     }),
   );
