@@ -1384,6 +1384,7 @@ const isStaleRaidClaim = (team: {
 
 const raidSeatUnavailable = new Error("Raid seat unavailable");
 
+/** Undo pre-admission status and chat setup, deleting a newly created team only while empty. */
 const rollbackJoinRaidQueue = async ({
   client,
   userId,

@@ -44,6 +44,7 @@ interface RaidBrowserProps {
   sectorFilter?: number;
 }
 
+/** Coordinate raid discovery, participation controls and the selected raid's live team state. */
 const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
   const {
     title = "Raids",
@@ -777,6 +778,7 @@ interface RaidTeamsDisplayProps {
   isStarting: boolean;
 }
 
+/** Show captured team capacities and let leaders start when full or after the lobby countdown. */
 const RaidTeamsDisplay: React.FC<RaidTeamsDisplayProps> = ({
   activeTeams,
   maxTeams,

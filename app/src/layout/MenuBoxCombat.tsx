@@ -16,6 +16,7 @@ import {
   useUserData,
 } from "@/utils/UserContext";
 
+/** Inspect the presented combatant snapshot while preserving masked-player and AI profile restrictions. */
 const MenuBoxCombat: React.FC = () => {
   // State
   const { data: userData, timeDiff } = useUserData();
