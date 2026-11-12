@@ -25,6 +25,7 @@ import {
   compatibleEquipSlots,
   computeAutoEquipAssignments,
   computeLoadoutAssignments,
+  countMergeableStackTypes,
   countsTowardInventoryStorage,
   type EquipConstraintInfo,
   type EquippedAssignment,
@@ -1148,6 +1149,60 @@ describe("getItemStackMergeBucketKey", () => {
         getItemStackMergeBucketKey(item, other),
       );
     }
+  });
+});
+
+describe("countMergeableStackTypes", () => {
+  const now = new Date("2026-11-12T12:00:00Z");
+  const stack = (quantity: number, overrides: Record<string, unknown> = {}) => ({
+    itemId: "kunai",
+    quantity,
+    storedAtHome: false,
+    isInAuction: false,
+    craftingFinishedAt: null,
+    equipped: "NONE" as const,
+    activeVariantId: null,
+    level: 1,
+    imbuements: [],
+    item: { itemType: "CONSUMABLE" as const, stackSize: 10 },
+    ...overrides,
+  });
+
+  it("counts an item type whose carried stacks can be packed tighter", () => {
+    expect(countMergeableStackTypes([stack(4), stack(3)], false, now)).toBe(1);
+    expect(countMergeableStackTypes([stack(7), stack(7)], false, now)).toBe(1);
+  });
+
+  it("skips stacks that are already packed", () => {
+    expect(countMergeableStackTypes([stack(10), stack(5)], false, now)).toBe(0);
+    expect(countMergeableStackTypes([stack(4)], false, now)).toBe(0);
+  });
+
+  it("counts each item type once", () => {
+    const shuriken = { itemId: "shuriken" };
+    const rows = [stack(1), stack(1), stack(1), stack(1, shuriken), stack(1, shuriken)];
+    expect(countMergeableStackTypes(rows, false, now)).toBe(2);
+  });
+
+  it("leaves out rows the merge does not touch", () => {
+    for (const other of [
+      { storedAtHome: true },
+      { isInAuction: true },
+      { imbuements: [{}] },
+      { craftingFinishedAt: new Date("2026-11-12T13:00:00Z") },
+      { equipped: "HAND_1" as const },
+      { item: { itemType: "CONSUMABLE" as const, stackSize: 1 } },
+    ]) {
+      expect(countMergeableStackTypes([stack(1), stack(1, other)], false, now)).toBe(0);
+    }
+  });
+
+  it("checks home storage on its own", () => {
+    const home = { storedAtHome: true };
+    expect(countMergeableStackTypes([stack(1, home), stack(1, home)], true, now)).toBe(
+      1,
+    );
+    expect(countMergeableStackTypes([stack(1), stack(1)], true, now)).toBe(0);
   });
 });
 

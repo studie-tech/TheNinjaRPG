@@ -13,6 +13,8 @@ import { useRequiredUserData } from "@/utils/UserContext";
 interface MergeAllStacksButtonProps {
   storedAtHome: boolean;
   compact?: boolean;
+  /** Item types the merge would change, shown on the label when known. */
+  count?: number;
   onMerged?: () => void;
 }
 
@@ -20,6 +22,7 @@ interface MergeAllStacksButtonProps {
 export const MergeAllStacksButton: React.FC<MergeAllStacksButtonProps> = ({
   storedAtHome,
   compact = false,
+  count,
   onMerged,
 }) => {
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
@@ -74,7 +77,9 @@ export const MergeAllStacksButton: React.FC<MergeAllStacksButtonProps> = ({
         >
           <Merge className="h-4 w-4" />
           <span className={compact ? "hidden sm:inline" : undefined}>
-            {isPending ? "Merging..." : compact ? "Merge" : "Merge stacks"}
+            {isPending
+              ? "Merging..."
+              : `${compact ? "Merge" : "Merge stacks"}${count ? ` (${count})` : ""}`}
           </span>
         </Button>
       }

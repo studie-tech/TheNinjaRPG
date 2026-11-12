@@ -8,6 +8,7 @@ import type { UserItemWithRelations } from "@/drizzle/schema";
 import Confirm from "@/layout/Confirm";
 import ItemLoadoutSelector from "@/layout/ItemLoadoutSelector";
 import { MergeAllStacksButton } from "@/layout/MergeAllStacksButton";
+import { countMergeableStackTypes } from "@/libs/item";
 import { calcRepairAllCost, calculateKitsToUse, getRepairKits } from "@/libs/repair";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
@@ -18,8 +19,9 @@ import { useRequiredUserData } from "@/utils/UserContext";
 /**
  * The item loadout selector and whole-inventory actions: unequip all, merge all stacks,
  * repair all (with kits, or ryo for crafters) and auto equip, each behind its confirmation.
- * Repair all leads while gear is damaged and repairable here, otherwise auto equip; phones
- * show only that action and open the others with ⋯.
+ * Repair all leads while gear is damaged and repairable here, otherwise auto equip. Merge
+ * stacks sits beside it, at every width, while carried stacks can be merged; phones open the
+ * other actions with ⋯.
  */
 export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
   const { prepareUserUpdate, updateUser } = useRequiredUserData();
@@ -109,6 +111,12 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
   const hasLoadouts = fedItemLoadouts(userData) > 1;
   const canRepairAll =
     itemsNeedingRepair.length > 0 && (repairKits.length > 0 || isCrafter);
+  // Carried item types the merge would change; the button hides while stacks are packed.
+  const mergeableStackTypes = countMergeableStackTypes(
+    userItems ?? [],
+    false,
+    new Date(),
+  );
 
   // Distinct keys keep an open confirmation from changing actions after a refresh.
   const autoEquipAction = (
@@ -268,6 +276,9 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
       )}
       <div className="ml-auto flex flex-wrap items-center gap-2">
         {canRepairAll ? repairAllAction : autoEquipAction}
+        {mergeableStackTypes > 0 && (
+          <MergeAllStacksButton storedAtHome={false} count={mergeableStackTypes} />
+        )}
         <Button
           variant="outline"
           size="sm"
@@ -319,7 +330,6 @@ export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
             </p>
           </Confirm>
           {canRepairAll && autoEquipAction}
-          <MergeAllStacksButton storedAtHome={false} />
         </div>
       </div>
     </div>
