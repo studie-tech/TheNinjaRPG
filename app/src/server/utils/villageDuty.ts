@@ -138,6 +138,7 @@ export const advanceVillageDutyPursuits = async (
     map,
     intruders,
     now.getTime(),
+    home.structures,
   );
   const changed = patrols.some((patrol, index) => patrol !== shift.patrols[index]);
   const [saved] = await Promise.all([

@@ -49,8 +49,7 @@ export const isWanderTile = (
 
 const structureTileCache = new WeakMap<WanderMap, Set<number>>();
 /**
- * Tiles around the map's buildings: the sector shrine and authored structures, located by the
- * map alone so the server and every client derive the same wander spots.
+ * Tiles around authored buildings and any rendered structures supplied by the navigation view.
  */
 const structureTiles = (map: WanderMap) => {
   let tiles = structureTileCache.get(map);

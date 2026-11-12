@@ -508,6 +508,7 @@ export const travelRouter = createTRPCRouter({
             user.sector,
             user.villageId,
             dutyShift?.patrols,
+            villageData?.structures,
           )
         : [];
       const overworldAis = placements.flatMap((p) => {

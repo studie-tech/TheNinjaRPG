@@ -2,11 +2,20 @@ import { expect, it } from "bun:test";
 import { VILLAGE_DUTY_PRESENCE_SECONDS } from "@/drizzle/constants";
 import { type VillageStructure, villageStructure } from "@/drizzle/schema";
 import { oddQHexDistance } from "@/libs/hexgrid";
-import { WANDER_STEP_MS } from "@/libs/overworldWander";
+import {
+  isOpenWanderTile,
+  WANDER_STEP_MS,
+  wanderPose,
+  wanderPoseTile,
+  wanderSpots,
+} from "@/libs/overworldWander";
+import { planVillageWalls } from "@/libs/sector-map/village-walls";
 import {
   planVillageDutyPursuits,
   type VillageDutyPatrol,
   villageDutyCapacity,
+  villageDutyNavigationMap,
+  villageDutyPatrols,
   villageDutyPosition,
   villageDutyPursuitPosition,
 } from "@/libs/villageDuty";
@@ -171,4 +180,156 @@ it("expires abandoned pursuits on the same clock used for rendering and retarget
   expect(renewed.pursuit?.path).toBe(fresh.pursuit?.path);
   expect(renewed.pursuit?.startedAt).toBe(now);
   expect(renewed.pursuit?.expiresAt).toBe(fresh.pursuit!.expiresAt! + 1000);
+});
+
+it("keeps patrol anchors, roaming and pursuit paths clear of actual Horizon buildings", () => {
+  const map = sectorMap(25, 25, () => ({ zone: "village" }), {
+    anchors: [
+      { key: "shrine.default", x: 13, y: 5 },
+      { key: "structure.alliancehall", x: 13, y: 7 },
+      { key: "structure.hospital", x: 16, y: 8 },
+    ],
+  });
+  const structures = [
+    { hasPage: 1, longitude: 3, latitude: 9, route: "/townhall" },
+    { hasPage: 1, longitude: 5, latitude: 5, route: "/itemshop" },
+    { hasPage: 1, longitude: 7, latitude: 8, route: "/blackmarket" },
+    { hasPage: 1, longitude: 13, latitude: 8, route: "/hospital" },
+    { hasPage: 0, longitude: 10, latitude: 10, route: "/patrol" },
+  ];
+  const original = structuredClone(map);
+  const clientMap = villageDutyNavigationMap(map, structures);
+  expect(clientMap.tiles).not.toBe(map.tiles);
+  expect(clientMap.anchors.slice(0, map.anchors.length)).toEqual(map.anchors);
+  expect(isOpenWanderTile(map, 3, 9, false)).toBe(true);
+  expect(isOpenWanderTile(clientMap, 3, 9, false)).toBe(false);
+  expect(isOpenWanderTile(clientMap, 13, 10, false)).toBe(false);
+  expect(isOpenWanderTile(clientMap, 0, 0, false)).toBe(false);
+  expect(isOpenWanderTile(clientMap, 10, 10, false)).toBe(true);
+  const wall = planVillageWalls(map, [
+    ...structures,
+    { hasPage: 1, longitude: 13, latitude: 5, route: "/shrine" },
+  ]);
+  const interior = new Set(wall.interior.map((tile) => `${tile.x},${tile.y}`));
+  const owners: Parameters<typeof villageDutyPatrols>[0] = [
+    "user_3EOz9fh8bSO50ubD7HEH7FEhieN",
+    "user_3FWtvZC9iNKwSFPCtVL6z5DeZK1",
+  ].map((userId) => ({
+    userId,
+    username: userId,
+    avatar: null,
+    avatarLight: null,
+    gender: "male",
+    spriteBodyStyle: null,
+    maxHealth: 100,
+    level: 10,
+    experience: 0,
+    rank: "CHUNIN",
+    villageId: "horizon",
+    villageDutyStartedAt: new Date(0),
+    anbuId: null,
+    anbuSquad: null,
+    attributes: [],
+    items: [],
+  }));
+  const actors = villageDutyPatrols(
+    owners,
+    map,
+    map.sector,
+    "horizon",
+    undefined,
+    structures,
+  );
+  expect(actors).toHaveLength(2);
+  expect(actors[0]!.npcWander!.anchor).not.toEqual(actors[1]!.npcWander!.anchor);
+  const roster = owners.map((owner) => patrol({ userId: owner.userId, pursuit: null }));
+  for (const defeated of [false, true]) {
+    const survivor = villageDutyPatrols(
+      owners.slice(1),
+      map,
+      map.sector,
+      "horizon",
+      [{ ...roster[0]!, defeated }, roster[1]!],
+      structures,
+    )[0]!;
+    expect(survivor.npcWander!.anchor).toEqual(actors[1]!.npcWander!.anchor);
+  }
+  const now = 1_794_465_382_401;
+  for (const [index, actor] of actors.entries()) {
+    const source = patrol({ userId: owners[index]!.userId, pursuit: null });
+    const wander = actor.npcWander!;
+    expect(interior.has(`${wander.anchor.x},${wander.anchor.y}`)).toBe(true);
+    const spots = wanderSpots(clientMap, wander.anchor, wander.radius, false, true);
+    expect(spots.length).toBeGreaterThan(1);
+    expect(
+      spots.every((tile) => isOpenWanderTile(clientMap, tile.x, tile.y, false)),
+    ).toBe(true);
+    // A client's interpolated timeline and the server's engagement position share clearance.
+    for (let elapsed = 0; elapsed < 120_000; elapsed += 100) {
+      const at = now + elapsed;
+      const client = wanderPoseTile(wanderPose({ ...wander, spots }, 0, at));
+      expect(villageDutyPosition(source, actor, clientMap, at)).toEqual(client);
+      expect(isOpenWanderTile(clientMap, client.x, client.y, false)).toBe(true);
+      expect(interior.has(`${client.x},${client.y}`)).toBe(true);
+    }
+    const obstructed = {
+      ...source,
+      pursuit: {
+        targetUserId: "visitor",
+        startedAt: now,
+        path: [{ x: 3, y: 9 }],
+      },
+    };
+    expect(
+      villageDutyPatrols(
+        owners,
+        map,
+        map.sector,
+        "horizon",
+        roster.map((entry) => (entry.userId === source.userId ? obstructed : entry)),
+        structures,
+      )[index]!.npcWander!.pursuit,
+    ).toBeUndefined();
+    expect(villageDutyPosition(obstructed, actor, clientMap, now)).toEqual(
+      villageDutyPosition(source, actor, clientMap, now),
+    );
+    const pursuit = planVillageDutyPursuits(
+      roster.map((entry) => (entry.userId === source.userId ? obstructed : entry)),
+      owners,
+      map,
+      [{ userId: "visitor", longitude: 3, latitude: 9 }],
+      now,
+      structures,
+    )[index]!.pursuit!;
+    expect(pursuit.path[0]).toEqual(villageDutyPosition(source, actor, clientMap, now));
+    expect(pursuit.path.length).toBeGreaterThan(1);
+    for (const [step, tile] of pursuit.path.entries()) {
+      expect(isOpenWanderTile(clientMap, tile.x, tile.y, false)).toBe(true);
+      if (step)
+        expect(
+          oddQHexDistance(
+            pursuit.path[step - 1]!.x,
+            pursuit.path[step - 1]!.y,
+            tile.x,
+            tile.y,
+          ),
+        ).toBe(1);
+    }
+  }
+  expect(map).toEqual(original);
+});
+
+it("retains navigation views until the map or actual structure layout changes", () => {
+  const map = sectorMap(25, 25);
+  const structures = [{ hasPage: 1, longitude: 3, latitude: 9, route: "/townhall" }];
+  const navigation = villageDutyNavigationMap(map, structures);
+  expect(villageDutyNavigationMap(map, structures)).toBe(navigation);
+  const moved = [{ ...structures[0]!, longitude: 20 }];
+  const next = villageDutyNavigationMap(map, moved);
+  expect(next).not.toBe(navigation);
+  expect(isOpenWanderTile(next, 20, 9, false)).toBe(false);
+  const edited = { ...map, anchors: [{ key: "structure.shop", x: 12, y: 12 }] };
+  const editedNavigation = villageDutyNavigationMap(edited, structures);
+  expect(editedNavigation).not.toBe(navigation);
+  expect(isOpenWanderTile(editedNavigation, 12, 12, false)).toBe(false);
 });

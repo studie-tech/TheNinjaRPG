@@ -4,7 +4,7 @@ import {
   VILLAGE_DUTY_PRESENCE_SECONDS,
   VILLAGE_DUTY_WANDER_RADIUS,
 } from "@/drizzle/constants";
-import type { UserData } from "@/drizzle/schema";
+import type { UserData, VillageStructure } from "@/drizzle/schema";
 import { createHexGrid, oddQHexDistance, PathCalculator } from "@/libs/hexgrid";
 import {
   anonymousSpriteAppearance,
@@ -19,7 +19,12 @@ import {
 } from "@/libs/overworldWander";
 import { hasRequiredRank } from "@/libs/rank";
 import type { NormalizedSectorMap, SectorCoordinate } from "@/libs/sector-map/types";
-import { getNeighborCoordinates, getSectorTile } from "@/libs/sector-map/validation";
+import {
+  getNeighborCoordinates,
+  getSectorTile,
+  resolveSectorAnchor,
+} from "@/libs/sector-map/validation";
+import { planVillageWalls } from "@/libs/sector-map/village-walls";
 import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { listVillageDutyPatrols } from "@/queries/villageDuty";
 import { type BoostStructure, getStrucBoost } from "@/utils/village";
@@ -59,6 +64,65 @@ export const isOnVillageDuty = (
   !user.isOutlaw &&
   hasRequiredRank(user.rank, VILLAGE_DUTY_MIN_RANK);
 
+type VillageDutyStructure = Pick<
+  VillageStructure,
+  "hasPage" | "longitude" | "latitude" | "route"
+>;
+
+const navigationMaps = new WeakMap<
+  NormalizedSectorMap,
+  WeakMap<readonly VillageDutyStructure[], NormalizedSectorMap>
+>();
+
+/** Keep patrols inside the rendered walls and clear of buildings without editing published maps. */
+export const villageDutyNavigationMap = (
+  map: NormalizedSectorMap,
+  structures?: readonly VillageDutyStructure[],
+): NormalizedSectorMap => {
+  if (!structures?.length) return map;
+  let layouts = navigationMaps.get(map);
+  const cached = layouts?.get(structures);
+  if (cached) return cached;
+  const shrine = resolveSectorAnchor(map, "shrine.default");
+  const buildings = structures.some((structure) => structure.route === "/shrine")
+    ? structures
+    : [
+        ...structures,
+        {
+          hasPage: 1,
+          route: "/shrine",
+          longitude: shrine?.x ?? 10,
+          latitude: shrine?.y ?? 5,
+        },
+      ];
+  const anchors = buildings.flatMap((structure, index) =>
+    structure.hasPage
+      ? [
+          {
+            key: `structure.patrol.${index}`,
+            x: structure.longitude,
+            y: structure.latitude,
+          },
+        ]
+      : [],
+  );
+  const wall = planVillageWalls(map, [...buildings]);
+  const interior = new Set(wall.interior.map((tile) => tile.y * map.width + tile.x));
+  const navigation = {
+    ...map,
+    anchors: [...map.anchors, ...anchors],
+    tiles: map.tiles.map((tile) =>
+      interior.has(tile.y * map.width + tile.x) ? tile : { ...tile, blocked: true },
+    ),
+  };
+  if (!layouts) {
+    layouts = new WeakMap();
+    navigationMaps.set(map, layouts);
+  }
+  layouts.set(structures, navigation);
+  return navigation;
+};
+
 /** Publish copies on walkable village tiles without revealing their owners' current positions or activities. */
 export const villageDutyPatrols = (
   users: Awaited<ReturnType<typeof listVillageDutyPatrols>>,
@@ -66,15 +130,19 @@ export const villageDutyPatrols = (
   sector: number,
   viewerVillageId: string | null,
   patrols?: VillageDutyPatrol[],
+  structures?: readonly VillageDutyStructure[],
 ): SectorUser[] => {
+  map = villageDutyNavigationMap(map, structures);
   const tiles = map.tiles.filter(
     (tile) => tile.zone === "village" && isOpenWanderTile(map, tile.x, tile.y, false),
   );
   if (!tiles.length) return [];
+  const anchors = villageDutyAnchors(patrols ?? users, tiles);
   return users.flatMap((user) => {
-    const tile = villageDutyAnchor(user.userId, tiles);
+    const tile = anchors.get(user.userId);
     if (!tile) return [];
     const masked = !!user.anbuId && user.villageId !== viewerVillageId;
+    const pursuit = patrols?.find((entry) => entry.userId === user.userId)?.pursuit;
     return [
       {
         userId: villageDutyActorId(user.userId),
@@ -112,8 +180,7 @@ export const villageDutyPatrols = (
           wildOnly: false,
           villageOnly: true,
           pursuit:
-            patrols?.find((entry) => entry.userId === user.userId)?.pursuit ??
-            undefined,
+            pursuit && isVillageDutyPursuitClear(pursuit, map) ? pursuit : undefined,
         },
       } satisfies SectorUser,
     ];
@@ -132,6 +199,17 @@ export type VillageDutyPatrol = {
     path: SectorCoordinate[];
   } | null;
 };
+
+/** Persisted paths must still fit the current building layout before server or client replay. */
+const isVillageDutyPursuitClear = (
+  pursuit: NonNullable<VillageDutyPatrol["pursuit"]>,
+  map: NormalizedSectorMap,
+) =>
+  pursuit.path.every(
+    (tile) =>
+      isOpenWanderTile(map, tile.x, tile.y, false) &&
+      getSectorTile(map, tile)?.zone === "village",
+  );
 
 /** A pursuit advances at the NPC pace until its travel presence expires, then resumes shared roaming. */
 export const villageDutyPursuitPosition = (
@@ -157,7 +235,7 @@ export const villageDutyPosition = (
   map: NormalizedSectorMap,
   now: number,
 ) => {
-  if (patrol.pursuit) {
+  if (patrol.pursuit && isVillageDutyPursuitClear(patrol.pursuit, map)) {
     const pose = villageDutyPursuitPosition(patrol.pursuit, now);
     if (pose) return pose.progress < 0.5 ? pose.from : pose.to;
   }
@@ -200,6 +278,30 @@ export const villageDutyAnchor = (
   return tiles[hash % tiles.length];
 };
 
+/** Reserve distinct anchors from the full shift so defeated or withdrawn copies cannot move survivors. */
+const villageDutyAnchors = (
+  roster: readonly { userId: string }[],
+  tiles: readonly SectorCoordinate[],
+) => {
+  const anchors = new Map<string, SectorCoordinate>();
+  const occupied = new Set<number>();
+  for (const { userId } of [...roster].sort((a, b) =>
+    a.userId.localeCompare(b.userId),
+  )) {
+    const preferred = villageDutyAnchor(userId, tiles);
+    if (!preferred) continue;
+    let index = tiles.indexOf(preferred);
+    for (let attempt = 0; attempt < tiles.length && occupied.has(index); attempt++)
+      index = (index + 1) % tiles.length;
+    const tile = tiles[index];
+    if (tile) {
+      anchors.set(userId, tile);
+      occupied.add(index);
+    }
+  }
+  return anchors;
+};
+
 /** Plan shared pursuit paths using existing hex routing; no database, timers or owner mutations occur here. */
 export const planVillageDutyPursuits = (
   patrols: readonly VillageDutyPatrol[],
@@ -212,12 +314,15 @@ export const planVillageDutyPursuits = (
     expiresAt?: number;
   }[],
   now: number,
+  structures?: readonly VillageDutyStructure[],
 ): VillageDutyPatrol[] => {
+  map = villageDutyNavigationMap(map, structures);
   const tiles = map.tiles.filter(
     (tile) => tile.zone === "village" && isOpenWanderTile(map, tile.x, tile.y, false),
   );
+  const anchors = villageDutyAnchors(patrols, tiles);
   const actors = owners.flatMap((owner) => {
-    const anchor = villageDutyAnchor(owner.userId, tiles);
+    const anchor = anchors.get(owner.userId);
     return anchor
       ? [
           {
@@ -247,6 +352,7 @@ export const planVillageDutyPursuits = (
     const last = patrol.pursuit?.path.at(-1);
     if (
       patrol.pursuit?.targetUserId === target.userId &&
+      isVillageDutyPursuitClear(patrol.pursuit, map) &&
       villageDutyPursuitPosition(patrol.pursuit, now) &&
       last &&
       oddQHexDistance(last.x, last.y, target.longitude, target.latitude) <= 1
