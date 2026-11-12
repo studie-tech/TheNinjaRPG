@@ -13,28 +13,28 @@ import type { PetTask } from "@/validators/petTasks";
 import { hasPromotionRank, MASTERY_EXPERIENCE_FIELDS } from "@/validators/rewards";
 import type { UserCachePatch, UserDelta } from "@/validators/userCache";
 
-/** Project only confirmed whole-stack quest deliveries; grants, nested starts and combat need recovery. */
+/** Project only confirmed quest deliveries; grants, nested starts and combat need recovery. */
 export const getQuestConsequenceInventoryUpdate = (
   owned: Pick<UserItem, "id" | "itemId" | "quantity">[],
-  removedIds: string[],
+  deliveries: { id: string; take: number }[],
   consequences: QuestConsequence[],
   removed: boolean,
 ) => {
+  const quantities = deliveries.map(({ id, take }) => ({
+    id,
+    quantity: (owned.find((row) => row.id === id)?.quantity ?? 0) - take,
+  }));
   if (
     !removed ||
-    removedIds.some(
-      (id) =>
-        !owned.some(
-          (row) => row.id === id && Number.isInteger(row.quantity) && row.quantity > 0,
-        ),
+    quantities.some(
+      ({ id, quantity }) =>
+        !owned.some((row) => row.id === id && Number.isInteger(row.quantity)) ||
+        quantity < 0,
     ) ||
     consequences.some((entry) => !["remove_item", "update_user"].includes(entry.type))
   )
     return;
-  return getInventoryQuantityChanges(
-    owned,
-    removedIds.map((id) => ({ id, quantity: 0 })),
-  );
+  return getInventoryQuantityChanges(owned, quantities);
 };
 
 /** Project a quest start only after pending announcements were claimed for delivery by this response. */

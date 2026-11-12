@@ -810,6 +810,9 @@ describeWithDatabase("confirmed quest cache responses", () => {
         from: (table: Parameters<typeof selection.from>[0]) => {
           const query = selection.from(table);
           return {
+            // Granted reward items read their backpack stacks without pausing.
+            leftJoin: (...join: Parameters<typeof query.leftJoin>) =>
+              query.leftJoin(...join),
             where: async (condition: Parameters<typeof query.where>[0]) => {
               const index = selections++;
               entered[index]!.resolve();

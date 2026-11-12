@@ -28,7 +28,6 @@ import {
   insertRecruitmentRewardsForUpdateRewards,
   insertSageModeRollsForUpdateRewards,
   insertUserBadgeForUpdateRewards,
-  insertUserItemForUpdateRewards,
   insertUserJutsuForUpdateRewards,
   insertUserRewardsForUpdateRewards,
   selectBadgeForUpdateRewards,
@@ -51,6 +50,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import { fetchActiveWars } from "@/routers/war";
 import type { DrizzleClient } from "@/server/db";
 import { runRewardTasks } from "@/server/utils/concurrency";
+import { grantUserItems } from "@/server/utils/itemGrants";
 import {
   masteryGainUpdates,
   masteryRankUpdate,
@@ -368,7 +368,11 @@ export const updateRewards = async (info: {
         : undefined,
     () =>
       itemsToInsert.length > 0 &&
-      insertUserItemForUpdateRewards(client, itemsToInsert, user),
+      grantUserItems(
+        client,
+        user.userId,
+        itemsToInsert.map(({ id, quantity }) => ({ itemId: id, quantity })),
+      ),
     () => badges.length > 0 && insertUserBadgeForUpdateRewards(client, badges, user),
     () =>
       grantTitles(

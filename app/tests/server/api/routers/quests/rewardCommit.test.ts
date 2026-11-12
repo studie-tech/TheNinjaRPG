@@ -190,6 +190,8 @@ const makeGatheringClient = () => {
       where: vi
         .fn()
         .mockResolvedValue([{ id: "herb-1", name: "Herb", rarity: "COMMON" }]),
+      // The player carries no stack the gathered herbs could join.
+      leftJoin: vi.fn(() => ({ where: vi.fn().mockResolvedValue([]) })),
     })),
   }));
   const insert = vi.fn(() => ({
@@ -559,7 +561,7 @@ describe("quest reward commit", () => {
     const { user, missionHistory } = makeUser();
     const hydratedUser = {
       ...user,
-      items: [{ id: "user-item-1", itemId: "item-1" }],
+      items: [{ id: "user-item-1", itemId: "item-1", quantity: 1 }],
     };
     const { client, sets, deleteFrom, deleteWhere } = makeClient([
       { rowsAffected: 1 },

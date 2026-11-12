@@ -61,7 +61,7 @@ describeWithDatabase("location quest inventory recovery", () => {
     invalidatePublishedMapCache();
   });
 
-  it("projects a confirmed whole-stack delivery against the canonical inventory", async () => {
+  it("projects a confirmed delivery against the canonical inventory", async () => {
     const db = await getTestDatabase();
     const user = (await db.query.userData.findFirst({
       where: eq(userData.userId, userId),
@@ -97,7 +97,7 @@ describeWithDatabase("location quest inventory recovery", () => {
     expect(result.success).toBe(true);
     expect(result.itemsChanged).toBe(true);
     expect(result.inventoryChanges).toEqual([
-      { id: "delivery-stack", itemId: "merge-herb", beforeQuantity: 3, quantity: 0 },
+      { id: "delivery-stack", itemId: "merge-herb", beforeQuantity: 3, quantity: 2 },
     ]);
     expect(getInventoryQuantities(before, result.inventoryChanges)).toEqual(
       await items.getUserItems(),

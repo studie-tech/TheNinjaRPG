@@ -1463,7 +1463,7 @@ const getPendingQuestItemEffects = (
       }
     } else if (objective.task === "deliver_item") {
       const removed: string[] = [];
-      // The consequence handler retires one owned row per distinct item ID.
+      // The consequence handler takes one unit per distinct item ID.
       for (const itemId of new Set(objective.deliverItemIds)) {
         const collectionId = collectionsByItem.get(itemId)?.shift();
         const items = collectionId ? outstanding.get(collectionId) : undefined;
