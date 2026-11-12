@@ -66,12 +66,12 @@ export default function CookieConsent() {
           </AlertDescription>
         </Alert>
       )}
-      {/* Cookiebot owns the declaration markup. Its tables keep cookie names whole and
-          break only identifiers too long for a phone's column. */}
+      {/* Cookiebot owns the declaration markup. Cookie names stay whole on one line and
+          a table wider than a phone scrolls sideways instead of splitting them. */}
       <div
         id="cookie-consent-mount"
         className={cn(
-          "[&_td]:break-normal! [&_td]:[overflow-wrap:anywhere]! [&_th]:break-normal! [&_th]:[overflow-wrap:anywhere]!",
+          "[&_table]:block! [&_table]:max-w-full [&_table]:overflow-x-auto [&_td]:break-normal! [&_td]:[overflow-wrap:normal]! [&_th]:break-normal! [&_th]:[overflow-wrap:normal]! [&_td:first-child]:whitespace-nowrap",
           status === "ready"
             ? "transition-opacity duration-200"
             : status === "error"
