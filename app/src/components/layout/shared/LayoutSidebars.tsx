@@ -394,7 +394,10 @@ export const LayoutMainMenu: React.FC<LayoutMainMenuProps> = ({
             </Button>
           );
         })}
-        <div className="flex flex-row items-center justify-center">{signedInIcons}</div>
+        {/* A full row: the phone-sized icon targets do not fit beside a menu button. */}
+        <div className="col-span-2 flex flex-row flex-wrap items-center justify-center">
+          {signedInIcons}
+        </div>
       </div>
     </>
   );
