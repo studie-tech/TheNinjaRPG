@@ -4,6 +4,7 @@ import { Progress } from "@/components/ui/progress";
 import { usePageActive } from "@/hooks/usePageActive";
 import Loader from "@/layout/Loader";
 import { availableUserActions, calcActiveUser } from "@/libs/combat/actions";
+import { areBattleAllies } from "@/libs/combat/participants";
 import { calcApReduction } from "@/libs/combat/turn";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { clamp } from "@/utils/math";
@@ -73,7 +74,12 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
       const canAct = actor.userId === user.userId;
       const waiting = user.userId !== actor.userId;
       if (mseconds >= 0) {
-        const inform = !waiting ? "You" : "Opponent";
+        const self = battle.usersState.find((u) => u.userId === user.userId);
+        const inform = !waiting
+          ? "You"
+          : self && areBattleAllies(actor, self)
+            ? "Ally"
+            : "Opponent";
         const info = left > 0 ? `${inform}: ${left.toFixed(1)}s` : "Finished!";
         return { label: info, canAct, waiting };
       }
