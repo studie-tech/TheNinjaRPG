@@ -26,10 +26,12 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { nanoid } from "nanoid";
 import type { z } from "zod";
 import {
   DEFAULT_ITEM_DESCRIPTION,
+  DURABILITY_MAX_DEFAULT,
   IMG_AVATAR_DEFAULT,
   type VariantCostType,
   type VariantCurrencyField,
@@ -2237,6 +2239,89 @@ export const listUserItemForExecuteMergeStacksForItem = (
     ),
     with: { imbuements: true },
   });
+
+/** Stack size of a row's item, as `getEffectiveStackSize` reads it, in SQL. */
+const effectiveStackSizeSql = (itemId: SQL | AnyMySqlColumn) =>
+  sql`(SELECT CASE WHEN ${item.canStack} THEN GREATEST(${item.stackSize}, 1) ELSE 1 END FROM ${item} WHERE ${item.id} = ${itemId})`;
+
+/** Battle settlement writes absolute quantities for its items, so their stacks wait for it. */
+export const hasNoBattleWhere = (userId: string) =>
+  sql`NOT EXISTS (SELECT 1 FROM ${userData} WHERE ${userData.userId} = ${userId} AND ${userData.battleId} IS NOT NULL)`;
+
+/**
+ * Backpack stacks a fresh row of the same item may join: the carried, unequipped, non-auction
+ * stacks the Merge button would combine with it (no variant, no imbuement, not mid-craft,
+ * level 1 unless consumable; see `getItemStackMergeBucketKey`), still at full durability.
+ * Positive quantities skip rows claimed or emptied by a running merge. Nothing joins while
+ * the owner is in a battle, whose settlement writes battle quantities back to its rows.
+ */
+const grantableUserItemWhere = (userId: string, now: Date) =>
+  and(
+    eq(userItem.userId, userId),
+    eq(userItem.storedAtHome, false),
+    eq(userItem.equipped, "NONE"),
+    eq(userItem.isInAuction, false),
+    isNull(userItem.activeVariantId),
+    gt(userItem.quantity, 0),
+    eq(userItem.durability, DURABILITY_MAX_DEFAULT),
+    or(isNull(userItem.craftingFinishedAt), lte(userItem.craftingFinishedAt, now)),
+    or(
+      eq(userItem.level, 1),
+      sql`EXISTS (SELECT 1 FROM ${item} WHERE ${item.id} = ${userItem.itemId} AND ${item.itemType} = ${"CONSUMABLE"})`,
+    ),
+    sql`NOT EXISTS (SELECT 1 FROM ${userItemImbuement} WHERE ${userItemImbuement.userItemId} = ${userItem.id})`,
+    hasNoBattleWhere(userId),
+  );
+
+/**
+ * Build the listing of each granted item's stack settings with the backpack stacks it may
+ * join; an item without such a stack is listed once with a null stack.
+ */
+export const listItemForGrantUserItems = (
+  client: Pick<DrizzleClient, "select">,
+  userId: string,
+  itemIds: string[],
+  now: Date,
+) =>
+  client
+    .select({
+      itemId: item.id,
+      canStack: item.canStack,
+      stackSize: item.stackSize,
+      stackId: userItem.id,
+      quantity: userItem.quantity,
+    })
+    .from(item)
+    .leftJoin(
+      userItem,
+      and(eq(userItem.itemId, item.id), grantableUserItemWhere(userId, now)),
+    )
+    .where(inArray(item.id, itemIds));
+
+/**
+ * Build the top-up adding granted items to one listed stack. The stack is re-checked against
+ * the listing rules and its item's stack size, so a stack that changed meanwhile is left alone.
+ */
+export const updateUserItemForGrantUserItems = (
+  client: Pick<DrizzleClient, "update">,
+  userId: string,
+  stackId: string,
+  quantity: number,
+  now: Date,
+) =>
+  client
+    .update(userItem)
+    .set({
+      quantity: sql`${userItem.quantity} + ${quantity}`,
+      updatedAt: nextSnapshotSql(userItem.updatedAt),
+    })
+    .where(
+      and(
+        eq(userItem.id, stackId),
+        grantableUserItemWhere(userId, now),
+        sql`${userItem.quantity} + ${quantity} <= ${effectiveStackSizeSql(userItem.itemId)}`,
+      ),
+    );
 
 /** Build insertion of caller-prepared inventory rows. */
 export const insertUserItems = (
