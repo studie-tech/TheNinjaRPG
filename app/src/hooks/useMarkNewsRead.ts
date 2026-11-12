@@ -19,9 +19,8 @@ export const useMarkNewsRead = () => {
     hasRequested.current = true;
     readNews(undefined, {
       onSuccess: (result) => {
-        if (result.success)
-          void updateNotifications(clearNewsNotifications(notifications));
+        if (result.success) void updateNotifications(clearNewsNotifications);
       },
     });
-  }, [userData, unreadNews, notifications, readNews, updateNotifications]);
+  }, [userData, unreadNews, readNews, updateNotifications]);
 };

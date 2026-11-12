@@ -18,7 +18,7 @@ const inbox: NavBarDropdownLink = {
 };
 
 const setup = (notifications: NavBarDropdownLink[]) => {
-  const updateNotifications = vi.fn(async () => undefined);
+  const updateNotifications = vi.fn(async (_update: unknown) => undefined);
   const mutate = vi.fn(
     (
       _input: undefined,
@@ -46,7 +46,10 @@ it("marks unread news read once and drops only the News badge", () => {
   const view = renderHook(() => useMarkNewsRead());
   view.rerender();
   expect(mutate).toHaveBeenCalledTimes(1);
-  expect(updateNotifications).toHaveBeenCalledWith([inbox]);
+  const update = updateNotifications.mock.calls[0]?.[0] as (
+    current: (typeof news)[],
+  ) => (typeof news)[];
+  expect(update([news, inbox])).toEqual([inbox]);
 });
 
 it("sends nothing when there is no unread news", () => {
