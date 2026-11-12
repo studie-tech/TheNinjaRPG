@@ -6,7 +6,7 @@ import {
   ChevronsDown,
   CircleFadingArrowUp,
   Download,
-  Ellipsis,
+  List,
   ListX,
   Loader2,
   Palette,
@@ -501,7 +501,7 @@ export default function MyJutsu() {
         noRightAlign
         topRightContent={
           !isOpen && (
-            <div className="my-2 ml-3 flex min-w-0 items-center gap-1 [&_button]:min-h-[44px] [&_button]:min-w-[44px]">
+            <div className="my-2 ml-3 flex min-w-0 items-center gap-1">
               <div className="min-w-0 flex-1">
                 <JutsuLoadoutSelector compact />
               </div>
@@ -514,14 +514,14 @@ export default function MyJutsu() {
                     aria-label="Jutsu options"
                     hoverText="Jutsu options"
                   >
-                    <Ellipsis className="h-6 w-6" aria-hidden />
+                    <List className="h-5 w-5" aria-hidden />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent
                   aria-label="Jutsu options"
                   align="end"
                   collisionPadding={8}
-                  className="w-64 space-y-1 p-2 [&_button]:min-h-[44px]"
+                  className="w-64 space-y-1 p-2"
                   onCloseAutoFocus={(event) => {
                     // A selected action transfers focus to its dialog.
                     if (sharingMode || loadoutConfirmation) event.preventDefault();
