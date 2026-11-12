@@ -22,6 +22,7 @@ interface AccordionProps {
   onClick: React.Dispatch<React.SetStateAction<string>>;
 }
 
+/** Shows a selectable panel with optional collapse and preserved child state. */
 const Accordion: React.FC<AccordionProps> = (props) => {
   const { title, titlePrefix, titlePostfix } = props;
   const { unselectedSubtitle, selectedSubtitle, children, onClick } = props;

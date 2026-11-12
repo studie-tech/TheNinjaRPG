@@ -58,6 +58,7 @@ const OCCUPATION_DATA = [
   },
 ];
 
+/** Shows occupation selection, job-change availability and the active job's tools. */
 export default function Occupations() {
   // Utils
 
@@ -135,6 +136,7 @@ export default function Occupations() {
       </Dialog>
     ) : null;
 
+  /** Keeps job details and change controls together with crafting's bulk repair action. */
   const renderHeader = (repairAllAction?: React.ReactNode) => (
     <ContentBox
       title="Occupation"
