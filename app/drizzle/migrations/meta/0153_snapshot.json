@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "41373552-b25c-4f05-ba3f-b52cee3d2d40",
-  "prevId": "7154e933-0c01-444a-a69c-291d259e8e0d",
+  "id": "10da2c29-d8fc-4cd9-9963-e88e320a35e8",
+  "prevId": "0bf06c08-5156-44ab-b69c-69e98b3c681d",
   "tables": {
     "AbEvent": {
       "name": "AbEvent",

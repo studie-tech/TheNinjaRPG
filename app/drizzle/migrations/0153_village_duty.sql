@@ -15,7 +15,10 @@ CREATE TABLE `VillageDutyShift` (
 );
 
 ALTER TABLE `VillageStructure` RENAME COLUMN `patrolsPerLvl` TO `patrolSlotsPerLvl`;
+ALTER TABLE `UserData` ADD `villageDutyVillageId` varchar(191);
+ALTER TABLE `UserData` ADD `villageDutyStartedAt` datetime(3);
 CREATE INDEX `VillageDutyPresence_sector_expiresAt_idx` ON `VillageDutyPresence` (`sector`,`expiresAt`);
 CREATE INDEX `VillageDutyPresence_expiresAt_idx` ON `VillageDutyPresence` (`expiresAt`);
+CREATE INDEX `UserData_villageDutyVillageId_idx` ON `UserData` (`villageDutyVillageId`);
 
 UPDATE `VillageStructure` SET `patrolSlotsPerLvl` = 2 WHERE `patrolSlotsPerLvl` > 0;

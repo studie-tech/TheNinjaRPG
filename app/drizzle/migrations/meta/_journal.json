@@ -1069,8 +1069,8 @@
     {
       "idx": 153,
       "version": "5",
-      "when": 1794469257450,
-      "tag": "0153_village_duty_rotation",
+      "when": 1794477607919,
+      "tag": "0153_village_duty",
       "breakpoints": false
     }
   ]
