@@ -24,7 +24,13 @@ beforeEach(() => {
     comments: {
       // The listing resets the server's inbox counter whenever it loads.
       getUserConversations: {
-        useQuery: () => ({ data: [], refetch: vi.fn(), isPending: false }),
+        useQuery: () => ({
+          data: [],
+          refetch: vi.fn(),
+          isPending: false,
+          // Read after the inbox news arrived, so the server counter is already reset.
+          dataUpdatedAt: Number.MAX_SAFE_INTEGER,
+        }),
       },
       exitConversation: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },

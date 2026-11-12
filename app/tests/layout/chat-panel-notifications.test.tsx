@@ -60,7 +60,14 @@ it("reconciles cleared inbox news when the phone chat list loads", () => {
   vi.spyOn(prompt, "NewConversationPrompt").mockReturnValue(<></>);
   Object.assign(vi.spyOn(client, "api" as never), {
     comments: {
-      getUserConversations: { useQuery: () => ({ data: [], isPending: false }) },
+      getUserConversations: {
+        // A list the server read after the inbox news arrived, resetting its counter.
+        useQuery: () => ({
+          data: [],
+          isPending: false,
+          dataUpdatedAt: Number.MAX_SAFE_INTEGER,
+        }),
+      },
     },
   });
   const view = render(
