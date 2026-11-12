@@ -60,7 +60,6 @@ const targets = [
 // Functions the compiler still skips, as "path#function". Fix one and remove it here.
 const compilerExceptions = [
   "app/[shell]/battlelog/[battleid]/page.tsx#BattleLog",
-  "app/[shell]/dungeon/page.tsx#DungeonPage",
   "app/[shell]/error.tsx#ErrorBoundary",
   "app/[shell]/forum/[boardid]/[threadid]/thread.tsx#ForumPost",
   "app/[shell]/forum/[boardid]/[threadid]/thread.tsx#Thread",

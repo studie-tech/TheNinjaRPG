@@ -20,11 +20,13 @@ import {
 import * as ContentBox from "@/layout/ContentBox";
 import { KageDefense } from "@/layout/KageDefense";
 import * as UserContext from "@/utils/UserContext";
+import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 
 const publish = vi.fn();
 let hall: Record<string, unknown>;
 
 beforeEach(() => {
+  installBrowserGlobals({ resizeObserver: true, scrollIntoView: true });
   publish.mockClear();
   hall = {
     kageId: "kage",
@@ -46,11 +48,13 @@ beforeEach(() => {
     <div>{children}</div>
   ));
   const mutation = { useMutation: () => ({ mutate: vi.fn(), isPending: false }) };
+  // React Query keeps the result stable between renders; so does this stub.
+  const defenses = { isPending: false, data: { hall } };
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({ kage: { getDefenses: {} }, village: { get: {} } }),
     kage: new Proxy(
       {
-        getDefenses: { useQuery: () => ({ isPending: false, data: { hall } }) },
+        getDefenses: { useQuery: () => defenses },
         publishSchedule: { useMutation: () => ({ mutate: publish, isPending: false }) },
       },
       { get: (target, key) => (key in target ? target[key as never] : mutation) },
@@ -66,24 +70,34 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  restoreBrowserGlobals();
   vi.restoreAllMocks();
 });
 
 const kage = { userId: "kage", villageId: "village", rank: "JONIN" } as never;
 const select = (view: ReturnType<typeof render>, label: string) =>
-  view.getByRole("combobox", { name: label }) as HTMLSelectElement;
+  view.getByRole("combobox", { name: label });
+const chooseOption = async (
+  view: ReturnType<typeof render>,
+  label: string,
+  option: string,
+) => {
+  fireEvent.keyDown(select(view, label), { key: "Enter" });
+  const choice = await view.findByRole("option", { name: option });
+  await act(async () => fireEvent.click(choice));
+};
 
 describe("kage defense schedule editor", () => {
-  it("starts from two default windows and publishes the edited schedule", () => {
+  it("starts from two default windows and publishes the edited schedule", async () => {
     const view = render(<KageDefense user={kage} />);
-    expect(select(view, "Defense day 1").value).toBe("1");
-    expect(select(view, "Defense start time 1").value).toBe("12");
-    expect(select(view, "Defense day 2").value).toBe("4");
+    expect(select(view, "Defense day 1").textContent).toBe("Monday");
+    expect(select(view, "Defense start time 1").textContent).toBe("12:00");
+    expect(select(view, "Defense day 2").textContent).toBe("Thursday");
     expect(view.queryByRole("button", { name: "Remove day 1" })).toBeNull();
-    fireEvent.change(select(view, "Defense day 1"), { target: { value: "2" } });
-    fireEvent.change(select(view, "Defense start time 2"), { target: { value: "8" } });
+    await chooseOption(view, "Defense day 1", "Tuesday");
+    await chooseOption(view, "Defense start time 2", "08:00");
     fireEvent.click(view.getByRole("button", { name: "Add day" }));
-    expect(select(view, "Defense day 3").value).toBe("0");
+    expect(select(view, "Defense day 3").textContent).toBe("Sunday");
     fireEvent.click(view.getByRole("button", { name: "Remove day 1" }));
     fireEvent.click(view.getByRole("button", { name: "Publish schedule" }));
     expect(publish).toHaveBeenCalledWith({
