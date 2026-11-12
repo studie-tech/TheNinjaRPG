@@ -92,6 +92,51 @@ const moreActions = () => {
   return within(group!);
 };
 
+const kunai = (id: string, quantity: number) =>
+  ({
+    id,
+    itemId: "kunai",
+    quantity,
+    durability: 100,
+    level: 1,
+    equipped: "NONE",
+    activeVariantId: null,
+    craftingFinishedAt: null,
+    storedAtHome: false,
+    isInAuction: false,
+    imbuements: [],
+    item: {
+      id: "kunai",
+      name: "Kunai",
+      itemType: "CONSUMABLE",
+      stackSize: 10,
+      maxDurability: 100,
+      cost: 100,
+      effects: [],
+    },
+  }) as unknown as UserItemWithRelations;
+
+it("keeps merge stacks in view while carried stacks can merge", () => {
+  render(
+    <ItemsToolbar
+      userData={player("NONE")}
+      userItems={[sword(100), kunai("kunai-1", 3), kunai("kunai-2", 4)]}
+    />,
+  );
+  expect(buttons(screen, "Merge stacks")).toHaveLength(1);
+  expect(buttons(moreActions(), "Merge stacks")).toHaveLength(0);
+});
+
+it("hides merge stacks while every stack is packed", () => {
+  render(
+    <ItemsToolbar
+      userData={player("NONE")}
+      userItems={[sword(100), kunai("kunai-1", 10), kunai("kunai-2", 4)]}
+    />,
+  );
+  expect(buttons(screen, "Merge stacks")).toHaveLength(0);
+});
+
 it("keeps auto equip in view while nothing needs repair", () => {
   render(<ItemsToolbar userData={player("CRAFTING")} userItems={[sword(100)]} />);
   expect(buttons(moreActions(), /Auto equip/)).toHaveLength(0);

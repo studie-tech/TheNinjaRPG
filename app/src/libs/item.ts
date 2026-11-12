@@ -849,6 +849,67 @@ export const getItemStackMergeBucketKey = (
   `${row.storedAtHome ? "home" : "carry"}:${row.equipped}:${row.activeVariantId ?? "none"}:${item.itemType === "CONSUMABLE" ? "consumable" : row.level}`;
 
 /**
+ * Item types that `mergeAllStacks` would consolidate in carried inventory or home storage:
+ * the same rows and buckets it merges, where the stacks are not already packed full.
+ */
+export const countMergeableStackTypes = (
+  rows: readonly (Pick<
+    UserItemWithRelations,
+    | "itemId"
+    | "quantity"
+    | "storedAtHome"
+    | "isInAuction"
+    | "craftingFinishedAt"
+    | "equipped"
+    | "activeVariantId"
+    | "level"
+  > & {
+    item?: Pick<Item, "itemType" | "stackSize"> | null;
+    imbuements: readonly unknown[];
+  })[],
+  storedAtHome: boolean,
+  now: Date,
+) => {
+  const buckets = new Map<
+    string,
+    { itemId: string; stackSize: number; rows: number[] }
+  >();
+  for (const row of rows) {
+    const { item } = row;
+    if (
+      !item ||
+      !(item.stackSize > 1) ||
+      row.quantity <= 0 ||
+      row.storedAtHome !== storedAtHome ||
+      row.isInAuction ||
+      row.imbuements.length > 0 ||
+      (row.craftingFinishedAt && row.craftingFinishedAt >= now)
+    ) {
+      continue;
+    }
+    const key = `${row.itemId}:${getItemStackMergeBucketKey(item, row)}`;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.rows.push(row.quantity);
+    else
+      buckets.set(key, {
+        itemId: row.itemId,
+        stackSize: item.stackSize,
+        rows: [row.quantity],
+      });
+  }
+  const mergeable = new Set<string>();
+  for (const { itemId, stackSize, rows: quantities } of buckets.values()) {
+    const total = quantities.reduce((sum, quantity) => sum + quantity, 0);
+    const packed = splitIntoStacks(total, stackSize);
+    const sorted = [...quantities].sort((a, b) => b - a);
+    if (sorted.length !== packed.length || sorted.some((q, i) => q !== packed[i])) {
+      mergeable.add(itemId);
+    }
+  }
+  return mergeable.size;
+};
+
+/**
  * ActionSelector badge lists for user items: amber stack quantity (bottom-right)
  * for every stack, red ownership level (bottom-left) for leveling gear.
  */
