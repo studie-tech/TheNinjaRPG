@@ -4,6 +4,7 @@ import {
   isPetTaskAttempt,
   isPetTaskContract,
   petTaskDispatchBlockMessage,
+  petTaskRequirementsText,
 } from "@/libs/pets/tasks";
 import { getNewTrackers, getUserQuests } from "@/libs/quest";
 import { getReward } from "@/libs/quest/rewards";
@@ -54,11 +55,11 @@ describe("companion profession task contracts", () => {
 
   it("requires ready Hunter rank supported by the owner and one task per account", () => {
     expect(petTaskDispatchBlockMessage(owner, pet)).toBeNull();
-    expect(petTaskDispatchBlockMessage(owner, { ...pet, rank: 4 })).toContain(
-      "Hunter rank",
+    expect(petTaskDispatchBlockMessage(owner, { ...pet, rank: 4 })).toBe(
+      "This companion is rank 4; tasks need companion rank 5 (Hunter) or higher.",
     );
-    expect(petTaskDispatchBlockMessage({ ...owner, rank: "GENIN" }, pet)).toContain(
-      "Your rank",
+    expect(petTaskDispatchBlockMessage({ ...owner, rank: "GENIN" }, pet)).toBe(
+      "This companion is rank 5; your shinobi rank supports up to rank 3.",
     );
     expect(petTaskDispatchBlockMessage(owner, { ...pet, artRank: 4 })).toContain(
       "appearance",
@@ -72,6 +73,16 @@ describe("companion profession task contracts", () => {
     expect(
       petTaskDispatchBlockMessage({ ...owner, battleId: "battle" }, pet),
     ).toContain("out of combat");
+  });
+
+  it("summarizes requirements with the companion rank range the owner's rank allows", () => {
+    expect(petTaskRequirementsText("CHUNIN")).toBe(
+      "Requirements: Hunter or Gatherer job, awake and out of combat, companion rank 5, appearance ready.",
+    );
+    expect(petTaskRequirementsText("JONIN")).toContain("companion rank 5-7");
+    expect(petTaskRequirementsText("GENIN")).toContain(
+      "companion rank 5+ (needs a higher shinobi rank)",
+    );
   });
 
   it("distinguishes restarted attempts even when their history row is reused", () => {
