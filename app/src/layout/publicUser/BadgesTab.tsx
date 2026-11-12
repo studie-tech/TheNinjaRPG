@@ -375,15 +375,15 @@ export const BadgesTab: React.FC<BadgesTabProps> = ({
                   )}
                 </div>
               )}
-              <div className="text-center">
-                <Image
-                  src={displayedBadge.image}
-                  alt={displayedBadge.name}
-                  width={128}
-                  height={128}
-                  className="mx-auto h-auto w-full max-w-32"
-                />
-                <div className="font-bold wrap-anywhere">{displayedBadge.name}</div>
+              <Image
+                src={displayedBadge.image}
+                alt={displayedBadge.name}
+                width={128}
+                height={128}
+                className="mx-auto h-auto w-full max-w-32"
+              />
+              <div className="col-span-full text-center font-bold wrap-anywhere">
+                {displayedBadge.name}
               </div>
             </div>
           ))}
