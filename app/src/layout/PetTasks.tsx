@@ -139,8 +139,8 @@ export const PetTasks = ({ petId }: { petId: string }) => {
             />
           ) : !selected ? (
             <p className="text-sm">
-              This companion is ready, but no {professionLabel} contracts are enabled
-              for companions yet.
+              This companion is ready, but no {professionLabel} contracts for companions
+              are available to you right now.
             </p>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
