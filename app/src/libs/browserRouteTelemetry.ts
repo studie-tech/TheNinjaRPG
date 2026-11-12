@@ -137,6 +137,7 @@ export const PUBLIC_PAGE_ROUTES = [
   "/merch/[handle]",
   "/merch/cart",
   "/minigames",
+  "/minigames/shinobi-struggle",
   "/missionhall",
   "/native-sign-in",
   "/news",

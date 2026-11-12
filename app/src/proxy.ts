@@ -130,6 +130,7 @@ export const config = {
     "/api/trpc/((?!cdn/).*)",
     "/api/chat/:path*",
     "/api/discord/:path*",
+    "/api/minigames/blockstruggle/:path*",
     "/api/uploadthing(.*)",
     "/api/content-review/sfx-preview",
     // The MCP OAuth discovery documents; isUnshelledPath passes them through untouched.

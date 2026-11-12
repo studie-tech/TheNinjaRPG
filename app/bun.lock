@@ -7,6 +7,7 @@
       "dependencies": {
         "@ai-sdk/openai": "^4.0.99",
         "@ai-sdk/react": "^4.0.152",
+        "@blockstruggle/game-ui": "file:./vendor/blockstruggle/blockstruggle-game-ui-0.1.17.tgz",
         "@clerk/backend": "^3.26.1",
         "@clerk/mcp-tools": "^0.6.0",
         "@clerk/nextjs": "^7.9.19",
@@ -45,6 +46,7 @@
         "@uploadthing/react": "^7.3.3",
         "@upstash/ratelimit": "^2.2.0",
         "@upstash/redis": "^1.39.0",
+        "@vercel/oidc": "3.2.0",
         "@vercel/speed-insights": "^2.0.0",
         "ai": "^7.0.148",
         "alea": "1.0.1",
@@ -61,6 +63,7 @@
         "deep-object-diff": "^1.1.9",
         "drizzle-orm": "0.45.4",
         "drizzle-zod": "^0.8.3",
+        "effect": "3.22.2",
         "embla-carousel-auto-height": "8.6.0",
         "embla-carousel-react": "^8.6.0",
         "entities": "8.1.0",
@@ -141,6 +144,7 @@
     "@types/react-cytoscapejs": {
       "cytoscape": "^3.34.4",
     },
+    "effect": "3.22.2",
   },
   "packages": {
     "@ai-sdk/gateway": ["@ai-sdk/gateway@4.0.121", "", { "dependencies": { "@ai-sdk/provider": "4.0.31", "@ai-sdk/provider-utils": "5.0.65", "@vercel/oidc": "3.2.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-cPNXvQ4B5OkmVAm98Dxe1fHdMthyqqqAG0HJx3D92NUa9FpcvkNxdAqiuZdeAhNAodFb9lBrslzzzEwxuVS53A=="],
@@ -194,6 +198,8 @@
     "@biomejs/cli-win32-arm64": ["@biomejs/cli-win32-arm64@2.6.2", "", { "os": "win32", "cpu": "arm64" }, "sha512-/PEOo6evlgrQOfKhMNtC/4Gk8ai3hySXXEtjUzCqZe/4iAbMdqelpp7qvZEDyLxlZS+BjOMQFpq2gXI/BPaAqw=="],
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.6.2", "", { "os": "win32", "cpu": "x64" }, "sha512-FVlWD+mDDz8nN5LWKRWUhhb7wKIK0VE3oXQvQBX7Fwwj00CvqMVhMyiz1iz8O5aZGmnkhFlKSwJPrUvMh5prQw=="],
+
+    "@blockstruggle/game-ui": ["@blockstruggle/game-ui@./vendor/blockstruggle/blockstruggle-game-ui-0.1.17.tgz", { "peerDependencies": { "react": "^19.0.0", "react-dom": "^19.0.0" } }, "sha512-GdkvKM89MO+48bY/qjnpQU/Wfud/Mj3/8dslOkEZkrlnYmNjBqyfcknBxj8ipExjXxYcTzgfn3v12kuI7HnmwA=="],
 
     "@bramus/specificity": ["@bramus/specificity@2.4.3", "", { "dependencies": { "css-tree": "^3.2.1" }, "bin": { "specificity": "bin/cli.js" } }, "sha512-0GEz8qJWokkUVYQYRukmkSHIFNoBH8QTreeHrAFbvz1XFYc3Y+puhMs8PQ5x8GNugiC2l5jvDBXKLbBIByeSBw=="],
 
@@ -1031,7 +1037,7 @@
 
     "ee-first": ["ee-first@1.1.1", "", {}, "sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow=="],
 
-    "effect": ["effect@3.17.7", "", { "dependencies": { "@standard-schema/spec": "^1.0.0", "fast-check": "^3.23.1" } }, "sha512-dpt0ONUn3zzAuul6k4nC/coTTw27AL5nhkORXgTi6NfMPzqWYa1M05oKmOMTxpVSTKepqXVcW9vIwkuaaqx9zA=="],
+    "effect": ["effect@3.22.2", "", { "dependencies": { "@standard-schema/spec": "^1.0.0", "fast-check": "^3.23.1" } }, "sha512-fm1CQXCs7GTMwpadZxwU5rnAb2bN6mbQpknq/pXBGCzSKkosNYb9k0wsoL0TfB10rSa5xOEZJjo77u/KLXSANg=="],
 
     "embla-carousel": ["embla-carousel@8.6.0", "", {}, "sha512-SjWyZBHJPbqxHOzckOfo8lHisEaJWmwd23XppYFYVh10bU66/Pn5tkVkbkCMZVdbUE5eTCI2nD8OyIP4Z+uwkA=="],
 
