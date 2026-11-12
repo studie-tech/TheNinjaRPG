@@ -114,7 +114,7 @@ export interface SectorUser {
     anchor: { x: number; y: number };
     radius: number;
     wildOnly: boolean;
-    /** Restrict generated patrol destinations to village-zoned tiles. */
+    /** Village protectors stay on village tiles and roam a circuit with brief destination pauses. */
     villageOnly?: boolean;
     /** Shared server pursuit; scenes interpolate it without per-frame requests. */
     pursuit?: NonNullable<VillageDutyPatrol["pursuit"]>;

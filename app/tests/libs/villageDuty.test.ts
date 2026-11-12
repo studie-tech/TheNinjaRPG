@@ -265,13 +265,22 @@ it("keeps patrol anchors, roaming and pursuit paths clear of actual Horizon buil
       spots.every((tile) => isOpenWanderTile(clientMap, tile.x, tile.y, false)),
     ).toBe(true);
     // A client's interpolated timeline and the server's engagement position share clearance.
+    let moving = 0;
+    let idleMs = 0;
+    let longestIdleMs = 0;
     for (let elapsed = 0; elapsed < 120_000; elapsed += 100) {
       const at = now + elapsed;
-      const client = wanderPoseTile(wanderPose({ ...wander, spots }, 0, at));
+      const pose = wanderPose({ ...wander, spots }, 0, at);
+      moving += Number(pose.moving);
+      idleMs = pose.moving ? 0 : idleMs + 100;
+      longestIdleMs = Math.max(longestIdleMs, idleMs);
+      const client = wanderPoseTile(pose);
       expect(villageDutyPosition(source, actor, clientMap, at)).toEqual(client);
       expect(isOpenWanderTile(clientMap, client.x, client.y, false)).toBe(true);
       expect(interior.has(`${client.x},${client.y}`)).toBe(true);
     }
+    expect(moving / 1200).toBeGreaterThan(0.5);
+    expect(longestIdleMs).toBeLessThanOrEqual(1000);
     const obstructed = {
       ...source,
       pursuit: {

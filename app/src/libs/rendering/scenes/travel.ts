@@ -897,7 +897,20 @@ export const createTravelScene = async (options: {
             continue;
           }
         }
-        const { cycle, into } = wanderClock(wander, clock);
+        const key = `${wander.seed}:${wander.anchor.x}:${wander.anchor.y}:${wander.radius}:${wander.wildOnly}:${wander.villageOnly ?? false}`;
+        let spots = wanderSpotCache.get(key);
+        if (!spots) {
+          spots = wanderSpots(
+            user.isVillageDuty ? (dutyMap ?? wanderMap) : wanderMap,
+            wander.anchor,
+            wander.radius,
+            wander.wildOnly,
+            wander.villageOnly,
+          );
+          wanderSpotCache.set(key, spots);
+        }
+        const config = { ...wander, spots };
+        const { cycle, into } = wanderClock(config, clock);
         let walk = wanderWalks.get(actorKey);
         if (
           walk?.wander.seed !== wander.seed ||
@@ -908,19 +921,7 @@ export const createTravelScene = async (options: {
           walk.wander.villageOnly !== wander.villageOnly ||
           walk.cycle !== cycle
         ) {
-          const key = `${wander.seed}:${wander.anchor.x}:${wander.anchor.y}:${wander.radius}:${wander.wildOnly}:${wander.villageOnly ?? false}`;
-          let spots = wanderSpotCache.get(key);
-          if (!spots) {
-            spots = wanderSpots(
-              user.isVillageDuty ? (dutyMap ?? wanderMap) : wanderMap,
-              wander.anchor,
-              wander.radius,
-              wander.wildOnly,
-              wander.villageOnly,
-            );
-            wanderSpotCache.set(key, spots);
-          }
-          const leg = wanderLeg({ ...wander, spots }, user.npcMember ?? 0, cycle);
+          const leg = wanderLeg(config, user.npcMember ?? 0, cycle);
           const point = (tile: WanderTile, offset: WanderTile) => {
             const hex = entry.grid.getHex({ col: tile.x, row: tile.y });
             if (!hex) return null;
