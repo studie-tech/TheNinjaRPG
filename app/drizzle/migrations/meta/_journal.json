@@ -1058,6 +1058,13 @@
       "when": 1794359850153,
       "tag": "0151_coop_party_capacity",
       "breakpoints": false
+    },
+    {
+      "idx": 152,
+      "version": "5",
+      "when": 1794475441729,
+      "tag": "0152_creator_trial_achievement",
+      "breakpoints": false
     }
   ]
 }
