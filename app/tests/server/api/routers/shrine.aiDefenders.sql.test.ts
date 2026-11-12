@@ -21,6 +21,7 @@ import {
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
 import { shrineRouter } from "@/server/api/routers/shrine";
+import { villageDutyActorId } from "@/server/utils/villageDuty";
 import { insertDefaultAiProfile, insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
 import { beforeStatements } from "../../../setup/statements";
@@ -201,7 +202,7 @@ describeWithDatabase("shrine AI defenders", () => {
       });
       const defenders = await startLobby(["shrine-a"]);
       expect(defenders).toEqual(
-        home && type === "VILLAGE" ? ["duty:human"] : ["shrine-a"],
+        home && type === "VILLAGE" ? [villageDutyActorId("human")] : ["shrine-a"],
       );
       expect(
         (await db.query.villageDutyShift.findFirst({
