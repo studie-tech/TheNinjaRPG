@@ -79,26 +79,15 @@ const mount = (
   extraApi: Record<string, unknown> = {},
 ) => {
   let providerRenders = 0;
-  let response = initial;
+  let response: Snapshot | Promise<Snapshot> = initial;
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   queryClient.setQueryDefaults(key, { structuralSharing: shareUserCache });
   clients.push(queryClient);
   queryClient.setQueryData(key, initial);
-  const utils = {
-    profile: {
-      getUser: {
-        cancel: () => queryClient.cancelQueries({ queryKey: key, exact: true }),
-        setData: (
-          _input: undefined,
-          update: (current: Snapshot | undefined) => Snapshot | undefined,
-        ) => queryClient.setQueryData<Snapshot>(key, update),
-      },
-    },
-  };
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => utils,
+    useUtils: () => ({}),
     profile: {
       getUser: {
         // Exercise the provider's query options with a real TanStack cache and observer.
@@ -138,6 +127,9 @@ const mount = (
     seen,
     current: () => seen.at(-1)!,
     read: () => queryClient.getQueryData<Snapshot>(key)!,
+    setResponse: (next: Snapshot | Promise<Snapshot>) => {
+      response = next;
+    },
     refresh: async (next: Snapshot) => {
       response = next;
       await settle(() => queryClient.refetchQueries({ queryKey: key }));
@@ -148,7 +140,37 @@ const mount = (
 
 describe("profile context structural sharing", () => {
   it.each([false, true])(
-    "preserves overlapping farm and inbox notification removals across cancellation (inbox first=%p)",
+    "preserves pending profile reconciliation while syncing farm notices (has notice=%p)",
+    async (hasNotice) => {
+      const initial = snapshot();
+      initial.notifications = hasNotice
+        ? [{ href: "/farm", name: "1 farm crop is ready to harvest", color: "green" }]
+        : [];
+      const test = mount(initial);
+      const pending = deferred<Snapshot>();
+      test.setResponse(pending.promise);
+      const latest = {
+        ...initial,
+        userData: { ...initial.userData, money: 300 },
+        notifications: [],
+      };
+      await test.settle(async () => {
+        const refresh = test.queryClient.refetchQueries({ queryKey: key });
+        expect(test.queryClient.getQueryState(key)?.fetchStatus).toBe("fetching");
+        const update = test
+          .current()
+          .updateNotifications((current) =>
+            syncFarmNotifications(current, [], new Date(BASE)),
+          );
+        pending.resolve(latest);
+        await Promise.all([refresh, update]);
+      });
+      expect(test.read().userData.money).toBe(300);
+      expect(test.read().notifications).toEqual([]);
+    },
+  );
+  it.each([false, true])(
+    "preserves overlapping farm and inbox notification removals (inbox first=%p)",
     async (inboxFirst) => {
       const initial = snapshot();
       const other = initial.notifications[0]!;

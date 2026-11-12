@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import * as appClient from "@/app/_trpc/client";
 import type { UserCache } from "@/deltas/profile";
 import { useFarmController } from "@/hooks/farm-controller";
+import { updateQueryCache } from "@/utils/queryCache";
 import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type {
@@ -125,10 +126,10 @@ const harness = (response: FarmMutationResponse, deferred = false) => {
         timeDiff: 0,
         notifications: notifications(),
         updateNotifications: async (update) => {
-          await client.cancelQueries({ queryKey: profileKey, exact: true });
-          client.setQueryData<UserCache>(profileKey, (old) =>
-            old ? { ...old, notifications: update(old.notifications) } : old,
-          );
+          await updateQueryCache<UserCache>(client, profileKey, (old) => ({
+            ...old,
+            notifications: update(old.notifications) ?? old.notifications,
+          }));
         },
         prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
         updateUser: (result, options) =>
