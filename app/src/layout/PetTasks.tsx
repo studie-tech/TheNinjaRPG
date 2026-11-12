@@ -20,8 +20,8 @@ import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import {
   isPetTaskContract,
   PET_TASK_IN_PROGRESS_MESSAGE,
-  PET_TASK_MIN_RANK_NAME,
   petTaskDispatchBlockMessage,
+  petTaskRequirementsText,
 } from "@/libs/pets/tasks";
 import { formatQuestEntryCost } from "@/libs/questRun";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
@@ -53,6 +53,7 @@ export const PetTasks = ({ petId }: { petId: string }) => {
   const available = contracts.data?.filter(isPetTaskContract) ?? [];
   const selected = available.find((entry) => entry.id === questId) ?? available[0];
   const current = task.data?.task;
+  const professionLabel = occupation === "GATHERING" ? "gathering" : "hunting";
 
   if (!user || task.isPending) return <Loader explanation="Loading companion task" />;
   if (task.error)
@@ -118,12 +119,15 @@ export const PetTasks = ({ petId }: { petId: string }) => {
       ) : (
         <>
           <p className="text-muted-foreground text-sm">
-            Send one {PET_TASK_MIN_RANK_NAME}-rank companion on an enabled profession
-            contract. The final quest reward and usual profession drops are paid on
-            return; objectives and intermediate rewards are not simulated.
+            Send one companion on an enabled profession contract. The final quest reward
+            and usual profession drops are paid on return; objectives and intermediate
+            rewards are not simulated.
+          </p>
+          <p className="text-muted-foreground text-sm">
+            {petTaskRequirementsText(user.rank)}
           </p>
           {task.data?.dispatchBlockMessage ? (
-            <p className="text-sm">{task.data.dispatchBlockMessage}</p>
+            <p className="text-sm font-medium">{task.data.dispatchBlockMessage}</p>
           ) : contracts.isPending ? (
             <Loader explanation="Loading profession contracts" />
           ) : contracts.error ? (
@@ -135,8 +139,8 @@ export const PetTasks = ({ petId }: { petId: string }) => {
             />
           ) : !selected ? (
             <p className="text-sm">
-              Content has not enabled any available companion contracts for your
-              profession.
+              This companion is ready, but no {professionLabel} contracts for companions
+              are available to you right now.
             </p>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
@@ -207,6 +211,12 @@ export const PetTaskDispatch = ({
     eligible.find((pet) => pet.id === petId) ??
     eligible.find((pet) => pet.id === user?.activePetId) ??
     eligible[0];
+  const pets = collection.data?.pets ?? [];
+  const shownPet = pets.find((pet) => pet.id === user?.activePetId) ?? pets[0];
+  const blockReason =
+    user && shownPet
+      ? petTaskDispatchBlockMessage(actionPrerequisiteUser(user), shownPet)
+      : null;
 
   if (!user) return null;
   if (user.petTask)
@@ -233,8 +243,9 @@ export const PetTaskDispatch = ({
         />
       ) : !selected ? (
         <p className="text-muted-foreground text-sm">
-          A ready {PET_TASK_MIN_RANK_NAME}-rank companion can complete this contract for
-          you.
+          {shownPet && blockReason
+            ? `${shownPet.name}: ${blockReason}`
+            : petTaskRequirementsText(user.rank)}
         </p>
       ) : (
         <div className="flex flex-wrap items-center gap-2">

@@ -4,6 +4,7 @@ import {
   PET_TASK_MAX_MINUTES,
   PET_TASK_MIN_RANK,
   type PET_TASK_QUEST_TYPES,
+  type UserRank,
 } from "@/drizzle/constants";
 import type { Quest, UserData, UserPet } from "@/drizzle/schema";
 import {
@@ -15,6 +16,18 @@ import type { PetTask } from "@/validators/petTasks";
 
 /** Name of the lowest companion rank that can take profession contracts. */
 export const PET_TASK_MIN_RANK_NAME = getPetRank(PET_TASK_MIN_RANK).name;
+
+/** One-line summary of every dispatch requirement, with the companion rank range the owner's rank allows. */
+export const petTaskRequirementsText = (ownerRank: UserRank) => {
+  const max = getMaxPetRank(ownerRank);
+  const range =
+    max > PET_TASK_MIN_RANK
+      ? `companion rank ${PET_TASK_MIN_RANK}-${max}`
+      : max === PET_TASK_MIN_RANK
+        ? `companion rank ${PET_TASK_MIN_RANK}`
+        : `companion rank ${PET_TASK_MIN_RANK}+ (needs a higher shinobi rank)`;
+  return `Requirements: Hunter or Gatherer job, awake and out of combat, ${range}, appearance ready.`;
+};
 
 /** Why a dispatched companion cannot return yet; the task panel shows its countdown instead. */
 export const PET_TASK_IN_PROGRESS_MESSAGE =
@@ -65,9 +78,9 @@ export const petTaskDispatchBlockMessage = (
     return "Become a Hunter or Gatherer to send companions on profession tasks.";
   if (!pet) return "Choose an owned companion.";
   if (pet.rank < PET_TASK_MIN_RANK)
-    return `Companion tasks require ${PET_TASK_MIN_RANK_NAME} rank or higher.`;
+    return `This companion is rank ${pet.rank}; tasks need companion rank ${PET_TASK_MIN_RANK} (${PET_TASK_MIN_RANK_NAME}) or higher.`;
   if (pet.rank > getMaxPetRank(user.rank))
-    return "Your rank does not support this companion rank.";
+    return `This companion is rank ${pet.rank}; your shinobi rank supports up to rank ${getMaxPetRank(user.rank)}.`;
   if (!isPetAppearanceReady(pet))
     return "Finish your companion's appearance before sending it on a task.";
   return null;
