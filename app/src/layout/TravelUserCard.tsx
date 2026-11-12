@@ -56,7 +56,7 @@ export const TravelUserCard: React.FC<{
             href={travelAvatar(user)}
             alt={user.username}
             size={100}
-            className="m-0 w-20 shrink-0"
+            className="m-0 size-20 shrink-0"
           />
           <div className="min-w-0 flex-1">
             <p className="truncate text-base font-bold" title={user.username}>
@@ -80,7 +80,7 @@ export const TravelUserCard: React.FC<{
                 {relation.label}
               </Badge>
               {user.isVillageDuty && (
-                <Badge variant="secondary">Village protector · AI patrol</Badge>
+                <Badge variant="secondary">Village Protector</Badge>
               )}
               {user.status !== "AWAKE" && (
                 <Badge variant="secondary">{user.status.toLowerCase()}</Badge>
