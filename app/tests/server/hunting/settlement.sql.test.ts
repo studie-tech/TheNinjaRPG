@@ -453,6 +453,75 @@ describeWithDatabase("Atomic hunting settlement", () => {
     );
     expect(await db.query.userItem.findMany()).toHaveLength(inventory.length);
   });
+  it.each([
+    [
+      "joins the carried stack read at start",
+      true,
+      [
+        ["hide-in-battle", 4],
+        ["hide-stack", 7],
+      ],
+    ],
+    [
+      "opens a stack when the battle predates stack reads",
+      false,
+      [
+        ["hide-in-battle", 4],
+        ["hide-stack", 4],
+        ["new", 3],
+      ],
+    ],
+  ] as const)("hunted materials %s", async (_, preloaded, expected) => {
+    const { db, current, result, version } = await setup();
+    await db
+      .update(item)
+      .set({ canStack: true, stackSize: 10 })
+      .where(eq(item.id, "hide"));
+    await insertUserItems([
+      { id: "hide-stack", itemId: "hide", userId: "hunter", quantity: 4 },
+      {
+        id: "hide-in-battle",
+        itemId: "hide",
+        userId: "hunter",
+        quantity: 6,
+        equipped: "ITEM_1",
+      },
+    ]);
+    // The battle used two of its equipped hides.
+    current.usersState[0]!.items = [
+      makeBattleUserItem({
+        id: "hide-in-battle",
+        itemId: "hide",
+        quantity: 4,
+        equipped: "ITEM_1",
+      }),
+    ];
+    const meta = current.extraState.hunting;
+    if (!meta) throw Error("Missing hunting state");
+    meta.contract.rewards = [{ itemId: "hide", quantity: 3, chance: 100 }];
+    meta.materialStacks = { hide: 10 };
+    meta.huntingBonusQuantity = 0;
+    if (preloaded)
+      meta.grantStacks = [
+        {
+          itemId: "hide",
+          canStack: true,
+          stackSize: 10,
+          stackId: "hide-stack",
+          quantity: 4,
+        },
+      ];
+    await settleHuntingBattle(db, current, result, version, settlePlayer);
+    const inventory = await db.query.userItem.findMany();
+    expect(
+      inventory
+        .map((row) => [
+          ["hide-in-battle", "hide-stack"].includes(row.id) ? row.id : "new",
+          row.quantity,
+        ])
+        .sort(([a], [b]) => String(a).localeCompare(String(b))),
+    ).toEqual(expected.map((row) => [...row]));
+  });
   it("uses fresh quest state and results when a settlement transaction deadlocks", async () => {
     const { db, current, result, version } = await setup();
     current.extraState.hunting!.huntingBonusQuantity = 2;

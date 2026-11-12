@@ -33,6 +33,7 @@ import {
   updateHuntingProgressForSave,
   updateHuntingSessionForSessionAction,
 } from "@/queries/hunting";
+import { listItemForGrantUserItems } from "@/queries/item";
 import {
   fetchAllGameSettings,
   findUserById,
@@ -505,9 +506,16 @@ export const huntingRouter = createTRPCRouter({
         return errorResponse("Finish preparing before starting combat.");
       if (!progress || allowance.cooling || allowance.remaining < 1)
         return errorResponse("This contract is on cooldown.");
-      const reachableSectors = getReachableHuntingSectors(
-        await listPublishedHuntingMaps(ctx.drizzle, [session.sector]),
-      );
+      const [maps, grantStacks] = await Promise.all([
+        listPublishedHuntingMaps(ctx.drizzle, [session.sector]),
+        listItemForGrantUserItems(
+          ctx.drizzle,
+          ctx.userId,
+          contract.rewards.map((reward) => reward.itemId),
+          new Date(),
+        ),
+      ]);
+      const reachableSectors = getReachableHuntingSectors(maps);
       if (
         !contract.sectors.includes(session.sector) ||
         !reachableSectors.has(session.sector)
@@ -543,6 +551,7 @@ export const huntingRouter = createTRPCRouter({
             materialStacks: Object.fromEntries(
               materials.map((m) => [m.id, getEffectiveStackSize(m)]),
             ),
+            grantStacks,
           },
         },
         "HUNTING",

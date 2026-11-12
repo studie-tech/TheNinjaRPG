@@ -90,4 +90,15 @@ export type HuntingBattleState = {
   huntingExperience: number;
   materialNames: Record<string, string>;
   materialStacks: Record<string, number>;
+  /**
+   * Backpack stacks that hunted materials may join, read at start because settlement cannot
+   * fetch. Without it the materials open new stacks.
+   */
+  grantStacks?: {
+    itemId: string;
+    canStack: boolean;
+    stackSize: number;
+    stackId: string | null;
+    quantity: number | null;
+  }[];
 };

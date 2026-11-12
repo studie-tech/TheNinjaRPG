@@ -23,11 +23,10 @@ import {
   item,
   sectorMap,
   userData,
-  userItem,
 } from "@/drizzle/schema";
 import { nextSnapshotSql } from "@/queries/concurrency";
 import type { DrizzleClient } from "@/server/db";
-import type { HuntingHabitatContent, HuntingReceipt } from "@/validators/hunting";
+import type { HuntingHabitatContent } from "@/validators/hunting";
 
 /** Build the `huntingSession` selection for `getSession`, using predicates on `userId`. */
 export const selectHuntingSessionForGetSession = (
@@ -445,33 +444,6 @@ export const updateHuntingProgressForSettleHuntingBattle = (
         eq(huntingProgress.version, meta.progressVersion),
       ),
     );
-
-/** Build the `userItem` insert for `settleHuntingBattle`. */
-export const insertUserItemForSettleHuntingBattle = (
-  client: Pick<DrizzleClient, "insert">,
-  receipt: {
-    materials: HuntingReceipt["materials"];
-  },
-  meta: { materialStacks: Record<string, number>; userId: string },
-) =>
-  client.insert(userItem).values(
-    receipt.materials.flatMap((m) =>
-      Array.from(
-        {
-          length: Math.ceil(m.quantity / (meta.materialStacks[m.itemId] ?? 1)),
-        },
-        (_, index) => ({
-          id: nanoid(),
-          userId: meta.userId,
-          itemId: m.itemId,
-          quantity: Math.min(
-            meta.materialStacks[m.itemId] ?? 1,
-            m.quantity - index * (meta.materialStacks[m.itemId] ?? 1),
-          ),
-        }),
-      ),
-    ),
-  );
 
 /** Build the `huntingReceipt` insert for `settleHuntingBattle`. */
 export const insertHuntingReceiptForSettleHuntingBattle = (
