@@ -11,13 +11,15 @@ import {
   AutoBattleTypes,
   BATTLE_TAG_STACKING,
   CombatStatTypes,
+  DEFAULT_PARTY_PLAYERS,
   DURABILITY_USABILITY_THR,
   isPreBattleGearFromType,
+  MAX_PARTY_PLAYERS,
   NO_DURABILITY_LOSS_COMBATS,
   PoolTypes,
   PRE_BATTLE_SOURCE_TYPES,
 } from "@/drizzle/constants";
-import { areBattleAllies } from "@/libs/combat/participants";
+import { areBattleAllies, getBattleSpawnLocations } from "@/libs/combat/participants";
 import { getEffectPower } from "@/libs/combat/power";
 import { getTargetTiles } from "@/libs/combat/targeting";
 import type { BattleEffect, GroundEffect, UserEffect } from "@/libs/combat/types";
@@ -517,6 +519,30 @@ export const getDefaultBattleSizes = (battleType: BattleType, userLevel: number)
     if (userLevel < 40) return { width: 11, height: 10 };
   }
   return { width: 12, height: 10 };
+};
+
+/** Keep the standard grid when it fits. Co-op encounters can use the largest
+ * standard grid and extra rows to fit additional players beside authored allies. */
+export const getBattleSize = (
+  battleType: BattleType,
+  userLevel: number,
+  leftCount: number,
+  rightCount: number,
+  canExpand: boolean,
+) => {
+  const fits = ({ width, height }: { width: number; height: number }) =>
+    leftCount <= getBattleSpawnLocations(width, height, "left").length &&
+    rightCount <= getBattleSpawnLocations(width, height, "right").length;
+  const standard = getDefaultBattleSizes(battleType, userLevel);
+  if (fits(standard)) return standard;
+  if (!canExpand) return undefined;
+
+  const largest = getDefaultBattleSizes(battleType, Number.MAX_SAFE_INTEGER);
+  const extraRows = MAX_PARTY_PLAYERS - DEFAULT_PARTY_PLAYERS;
+  for (let height = largest.height; height <= largest.height + extraRows; height++) {
+    const candidate = { width: largest.width, height };
+    if (fits(candidate)) return candidate;
+  }
 };
 
 const LEVEL_SCALED_BATTLES: BattleType[] = [

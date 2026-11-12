@@ -205,6 +205,7 @@ export const questPartyRouter = createTRPCRouter({
         ? {
             id: user.questParty.id,
             version: user.questParty.version,
+            maxPlayers: user.questParty.maxPlayers,
             questId: user.questParty.questId,
             name: user.questParty.quest.name,
             leaderId: user.questParty.leaderId,
@@ -250,6 +251,7 @@ export const questPartyRouter = createTRPCRouter({
         .map((party) => ({
           id: party.id,
           questId: party.questId,
+          maxPlayers: party.maxPlayers,
           name: party.quest.name,
           isPublic: party.isPublic,
           leaderId: party.leaderId,

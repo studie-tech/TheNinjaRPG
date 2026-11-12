@@ -492,7 +492,9 @@ export const StructureRoutes = [
 export type StructureRoute = (typeof StructureRoutes)[number];
 
 /** Shared dungeon limits for content validation, party commands, combat and player-facing rules. */
-export const DUNGEON_PARTY_SIZE = 3;
+export const MIN_PARTY_PLAYERS = 1;
+export const MAX_PARTY_PLAYERS = 8;
+export const DEFAULT_PARTY_PLAYERS = 3;
 /** Bound the attack-protected wait for an unstarted dungeon squad. */
 export const DUNGEON_LOBBY_SECONDS = 15 * 60;
 /** Owned companions occupy the other combat slots in a solo dungeon squad. */
@@ -1209,7 +1211,6 @@ export type QuestRewardMode = (typeof QUEST_REWARD_MODES)[number];
 /** Upper bound for how many rewards a "choose" quest lets the player pick. */
 export const QUEST_REWARD_PICK_MAX = 5;
 
-export const QUEST_PARTY_MAX_MEMBERS = 3;
 export const QUEST_PARTY_MAX_INVITATIONS = 30;
 export const QUEST_PARTY_TYPES = ["story", "event", "anbu"] as const;
 
@@ -2681,7 +2682,6 @@ export const SHRINE_BATTLE_LOBBY_SECONDS = 60;
 export const SHRINE_BATTLE_STALE_LOBBY_SECONDS = 300; // 5 min grace past lobby window
 
 // Raid Battle Config
-export const RAID_BATTLE_MAX_USERS_PER_TEAM = 3;
 export const RAID_MAX_CONCURRENT_TEAMS = 5;
 export const RAID_BATTLE_LOBBY_SECONDS = 60;
 /** Exclusive raid windows begin when a sector shrine falls. */

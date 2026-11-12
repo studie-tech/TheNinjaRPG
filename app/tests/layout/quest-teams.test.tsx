@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import * as client from "@/app/_trpc/client";
 import type { UserStatus } from "@/drizzle/constants";
 import { QuestTeams } from "@/layout/QuestTeams";
+import * as TeamChatPanel from "@/layout/TeamChatPanel";
 import { AUTO_WAKE_MESSAGE, actionStatusMessage } from "@/libs/actionReadiness";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
@@ -55,6 +56,7 @@ const encounterTeam = () => ({
   questId: "quest",
   name: "Team",
   leaderId: "ninja",
+  maxPlayers: 3,
   members: [
     {
       userId: "ninja",
@@ -100,6 +102,7 @@ beforeEach(() => {
     updateUser,
   } as never);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+  vi.spyOn(TeamChatPanel, "TeamChatPanel").mockImplementation(() => null);
   const inactive = { useMutation: () => ({ isPending: false }) };
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({
@@ -120,6 +123,7 @@ beforeEach(() => {
                   id: "team",
                   questId: "quest",
                   name: "Team",
+                  maxPlayers: 3,
                   members: [],
                   invited: false,
                 },
@@ -143,6 +147,47 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   globalThis.CustomEvent = previousCustomEvent;
+});
+
+for (const questId of [undefined, "quest"]) {
+  it(`explains the active team's captured capacity ${questId ? "within its quest" : "on the team page"}`, async () => {
+    current = { ...encounterTeam(), maxPlayers: 8 };
+    const view = render(<QuestTeams questId={questId} maxPlayers={4} />);
+    expect(view.getByText("2/8 members · Public team")).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(view.getByRole("button", { name: "How quest teams work" }));
+    });
+    expect(
+      view.getByText(
+        "Up to 8 players share every objective, even when joining mid-quest.",
+      ),
+    ).toBeTruthy();
+  });
+}
+
+it("explains a specific quest's configured capacity before forming a team", async () => {
+  const view = render(<QuestTeams questId="quest" maxPlayers={6} />);
+  expect(view.getByText("Share quest progress with up to 6 players.")).toBeTruthy();
+  await act(async () => {
+    fireEvent.click(view.getByRole("button", { name: "How quest teams work" }));
+  });
+  expect(
+    view.getByText(
+      "Up to 6 players share every objective, even when joining mid-quest.",
+    ),
+  ).toBeTruthy();
+});
+
+it("keeps general team discovery guidance independent of quest capacity", async () => {
+  const view = render(<QuestTeams />);
+  expect(view.getByText("Find a team to share quest progress.")).toBeTruthy();
+  await act(async () => {
+    fireEvent.click(view.getByRole("button", { name: "How quest teams work" }));
+  });
+  expect(
+    view.getByText("Teammates share every objective, even when joining mid-quest."),
+  ).toBeTruthy();
+  expect(view.queryByText(/Up to 3 players/)).toBeNull();
 });
 
 for (const status of ["ASLEEP", "HOSPITALIZED"] as const) {

@@ -11,6 +11,7 @@ import {
   applyPoolAdjustmentsToBase,
   calcPoolCost,
   collapseConsequences,
+  getBattleSize,
   getDefaultBattleSizes,
   rollInitiative,
 } from "@/libs/combat/util";
@@ -245,6 +246,14 @@ describe("calcPoolCost", () => {
   });
 });
 
+describe("co-op battlefield capacity", () => {
+  it("expands for the starting roster and preserves the level-sized map for a small party", () => {
+    expect(getBattleSize("QUEST", 10, 2, 1, true)).toEqual({ width: 9, height: 8 });
+    expect(getBattleSize("QUEST", 10, 8, 10, true)).toEqual({ width: 12, height: 10 });
+    expect(getBattleSize("QUEST", 10, 19, 1, true)).toEqual({ width: 12, height: 13 });
+    expect(getBattleSize("QUEST", 10, 8, 1, false)).toBeUndefined();
+  });
+});
 describe("getDefaultBattleSizes", () => {
   const scaled = ["HUNTING", "RANDOM_ENCOUNTER", "ARENA", "TRAINING", "QUEST"];
 

@@ -1689,27 +1689,6 @@ export const stillInBattle = (
 ) => user.curHealth > 0 && !user.fledBattle;
 
 /**
- * The opponent shown beside the field. Encounters keep defeated enemies in the list, so
- * prefer one still fighting, then the one that has just fallen and not yet been replaced.
- */
-export const findSidebarOpponent = <
-  T extends Pick<
-    ReturnedUserState,
-    "userId" | "isSummon" | "curHealth" | "fledBattle" | "leftBattle"
-  >,
->(
-  usersState: T[],
-  userId?: string | null,
-) => {
-  const others = usersState.filter((u) => u.userId !== userId && !u.isSummon);
-  return (
-    others.find((u) => stillInBattle(u) && !u.leftBattle) ??
-    others.find((u) => !u.leftBattle) ??
-    others[0]
-  );
-};
-
-/**
  * Calculate (based on current time), which user is currently the one to perform a move
  */
 export const calcActiveUser = (

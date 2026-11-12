@@ -1,5 +1,6 @@
 "use client";
 
+import { useAtomValue } from "jotai";
 import { Minimize2, Swords } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -10,15 +11,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCombatInspection } from "@/hooks/useCombatInspection";
 import { useEffectivePools } from "@/hooks/useEffectivePools";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import AvatarImage from "@/layout/Avatar";
 import { BattleUserTraits } from "@/layout/BattleUserTraits";
+import { CombatInspectionPicker } from "@/layout/CombatInspectionPicker";
 import StatusBar from "@/layout/StatusBar";
 import { VisualizeEffects } from "@/layout/VisualizeEffects";
 import type { BattleState, ReturnedUserState } from "@/libs/combat/types";
 import { cn } from "@/libs/shadui";
-import { useUserData } from "@/utils/UserContext";
+import { combatPresentedBattleAtom, useUserData } from "@/utils/UserContext";
 
 /**
  * Inset battle dialog with fighters, actions and history above the game layout.
@@ -28,7 +31,7 @@ import { useUserData } from "@/utils/UserContext";
  * Raised layout siblings opt into keyboard access with data-battle-focus-layer.
  */
 export function BattleFocusView({
-  battle,
+  battle: liveBattle,
   controlledActorId,
   swapFocusPanels = false,
   renderTimer,
@@ -40,6 +43,12 @@ export function BattleFocusView({
   timeline,
   onShowLayout,
 }: BattleFocusViewProps) {
+  const presentedBattle = useAtomValue(combatPresentedBattleAtom);
+  const battle =
+    presentedBattle?.id === liveBattle?.id
+      ? (presentedBattle ?? liveBattle)
+      : liveBattle;
+  const { selectedUser } = useCombatInspection(battle, controlledActorId);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const [viewElement, setViewElement] = useState<HTMLDivElement | null>(null);
   const exitButtonRef = useRef<HTMLButtonElement>(null);
@@ -212,19 +221,27 @@ export function BattleFocusView({
       </main>
       <aside
         aria-label={
-          swapFocusPanels ? "Opponents and actions" : "Opponents and battle log"
+          swapFocusPanels ? "Characters and actions" : "Characters and battle log"
         }
         className="flex min-h-0 flex-col gap-[8px]"
       >
         <div className="flex max-h-[55%] shrink-0 flex-col gap-[8px] overflow-y-auto overscroll-contain">
-          {enemies.map((user, index) => (
-            <FighterCard
-              key={user.userId}
-              battle={battle}
-              user={user}
-              isPrimary={index === 0}
-            />
-          ))}
+          {battle && (
+            <CombatInspectionPicker battle={battle} viewerId={controlledActorId} />
+          )}
+          {selectedUser && (
+            <FighterCard battle={battle} user={selectedUser} isPrimary />
+          )}
+          {enemies
+            .filter((user) => user.userId !== selectedUser?.userId)
+            .map((user) => (
+              <FighterCard
+                key={user.userId}
+                battle={battle}
+                user={user}
+                isPrimary={false}
+              />
+            ))}
         </div>
         <section
           aria-label={swapFocusPanels ? "Battle actions" : "Battle history"}
@@ -237,16 +254,12 @@ export function BattleFocusView({
   ) : (
     <div className="flex h-full flex-col gap-[6px] overflow-y-auto overscroll-contain p-[6px]">
       <div className="shrink-0">{renderTimer(exitButton)}</div>
+      {battle && (
+        <CombatInspectionPicker battle={battle} viewerId={controlledActorId} />
+      )}
       <div className="grid shrink-0 grid-cols-2 gap-[6px]">
         {me && <FighterCard battle={battle} user={me} compact />}
-        {enemies[0] && (
-          <FighterCard
-            battle={battle}
-            user={enemies[0]}
-            compact
-            extra={enemies.length > 1 ? enemies.length - 1 : 0}
-          />
-        )}
+        {selectedUser && <FighterCard battle={battle} user={selectedUser} isPrimary />}
       </div>
       {/* Limit the field's height without distorting its grid on short screens. */}
       <div className="shrink-0">
@@ -444,7 +457,7 @@ function FighterCard({
             />
           ))}
       </div>
-      {isPrimary && !compact && battle?.usersEffects && (
+      {isPrimary && battle?.usersEffects && (
         <div className="mt-[6px] text-[12px]">
           <VisualizeEffects
             effects={battle.usersEffects}

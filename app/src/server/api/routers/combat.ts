@@ -31,7 +31,7 @@ import {
   COMBAT_BIOMES,
   type CombatBiome,
   CREATOR_TRIAL_FIRST_FORM,
-  DUNGEON_PARTY_SIZE,
+  DEFAULT_PARTY_PLAYERS,
   DUNGEON_SOLO_PETS,
   ELEMENTAL_MASTERY_BOOST,
   IMG_AVATAR_DEFAULT,
@@ -139,7 +139,7 @@ import {
   createEmptyExtraState,
   getBattleClaimIds,
   getBattleGrid,
-  getDefaultBattleSizes,
+  getBattleSize,
   getEffectiveMaxPool,
   getHighestGenerals,
   getPoolKeys,
@@ -1934,6 +1934,8 @@ export const initiateBattle = async (
     /** Guardian lobby's event; preload political identities and guard its live window at admission. */
     territoryWar?: TerritoryWar;
     raidQuestId?: string;
+    /** Live raid roster reservation checked when combat claims the participants. */
+    raidQueueClaim?: { teamId: string; claimId: string };
     topPlayersLP?: number[];
     /** Reserved lobby/combat IDs used to reject participants after lobby deletion. */
     clanBattle?: { queueId: string; battleId: string };
@@ -1981,11 +1983,20 @@ export const initiateBattle = async (
       ? withBossForms(authoredFight, info.aiTransformations)
       : authoredFight;
   const { targetIds, waves: encounterWaves } = bossFight;
-  if (
-    dungeonEncounter &&
-    userIds.length !== (dungeonEncounter.runState.pets ? 1 : DUNGEON_PARTY_SIZE)
-  )
-    return errorResponse(`A dungeon requires ${DUNGEON_PARTY_SIZE} players`);
+  if (dungeonEncounter) {
+    const { content, runState } = dungeonEncounter;
+    const capacity = runState.pets ? 1 : (content.maxPlayers ?? DEFAULT_PARTY_PLAYERS);
+    const roster = new Set(userIds);
+    if (
+      roster.size !== userIds.length ||
+      roster.size < 1 ||
+      roster.size > capacity ||
+      roster.size !== runState.memberIds.length ||
+      runState.memberIds.some((id) => !roster.has(id))
+    ) {
+      return errorResponse("The dungeon roster changed or exceeds the player limit.");
+    }
+  }
 
   if (allyAiIds.length > 0 && !supportsNpcAllies(battleType)) {
     return errorResponse("NPC allies are only supported in quest battles");
@@ -2621,28 +2632,17 @@ export const initiateBattle = async (
   }
 
   // Calculate battle width and height
-  const gridSize = getDefaultBattleSizes(battleType, users[0]?.level ?? 0);
-
-  {
-    const leftCapacity = getBattleSpawnLocations(
-      gridSize.width,
-      gridSize.height,
-      "left",
-    ).length;
-    const rightCapacity = getBattleSpawnLocations(
-      gridSize.width,
-      gridSize.height,
-      "right",
-    ).length;
-    if (
-      leftSideUserCount > leftCapacity ||
-      (encounterWaves
-        ? Math.max(...encounterWaves.map((w) => w.aiIds.length))
-        : users.length - leftSideUserCount) > rightCapacity
-    ) {
-      return errorResponse("Too many NPCs for this battlefield");
-    }
-  }
+  const rightSideUserCount = encounterWaves
+    ? Math.max(...encounterWaves.map((wave) => wave.aiIds.length))
+    : users.length - leftSideUserCount;
+  const gridSize = getBattleSize(
+    battleType,
+    users[0]?.level ?? 0,
+    leftSideUserCount,
+    rightSideUserCount,
+    !!info.coop || !!info.raidQuestId,
+  );
+  if (!gridSize) return errorResponse("Too many NPCs for this battlefield");
 
   // Team bracket eligibility uses the initiating player; village and activity guards still apply to every member.
   const now = new Date();

@@ -17,10 +17,10 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import {
+  DEFAULT_PARTY_PLAYERS,
   DUNGEON_FLOORS_PER_TIER,
   DUNGEON_INACTIVE_ROUNDS,
   DUNGEON_LOBBY_SECONDS,
-  DUNGEON_PARTY_SIZE,
   DUNGEON_RUN_SECONDS,
   DUNGEON_SOLO_PETS,
 } from "@/drizzle/constants";
@@ -143,9 +143,14 @@ export default function DungeonPage() {
   const readyCount = current?.state.readyIds.length ?? 0;
   const isReady = current?.state.readyIds.includes(user.userId) ?? false;
   const canReady = !!current && ["LOBBY", "BETWEEN"].includes(current.status);
+  const capacity = current?.state.pets
+    ? 1
+    : (current?.content.maxPlayers ?? DEFAULT_PARTY_PLAYERS);
+  const memberCount = current?.state.memberIds.length ?? 0;
   const allReady =
-    current?.state.memberIds.length ===
-      (current?.state.pets ? 1 : DUNGEON_PARTY_SIZE) &&
+    current &&
+    memberCount > 0 &&
+    memberCount <= capacity &&
     current.state.memberIds.every((id) => current.state.readyIds.includes(id));
   const endingRun = runs.find((run) => run.id === abandonId);
   return (
@@ -157,7 +162,7 @@ export default function DungeonPage() {
       <div className="mb-4 flex items-center gap-3 text-muted-foreground text-sm">
         <span className="flex items-center gap-1.5">
           <Users className="h-4 w-4" aria-hidden="true" />
-          {DUNGEON_PARTY_SIZE} players or solo with {DUNGEON_SOLO_PETS} pets
+          Solo or with a party
         </span>
         <span className="flex items-center gap-1.5">
           <Clock3 className="h-4 w-4" aria-hidden="true" />
@@ -178,8 +183,8 @@ export default function DungeonPage() {
           <PopoverContent align="end" className="space-y-2 text-sm">
             <p className="font-semibold">Dungeon rules</p>
             <p>
-              Enter with {DUNGEON_PARTY_SIZE} ready players or solo with{" "}
-              {DUNGEON_SOLO_PETS} battle-ready pets. Lobbies expire after{" "}
+              Enter when every party member is ready, or bring {DUNGEON_SOLO_PETS}{" "}
+              battle-ready pets as a solo squad. Lobbies expire after{" "}
               {DUNGEON_LOBBY_SECONDS / 60} minutes. The {DUNGEON_RUN_SECONDS / 60}
               -minute timer starts on the first floor and keeps running while paused.
             </p>
@@ -341,7 +346,7 @@ export default function DungeonPage() {
               />
             </div>
             <PartyRoster
-              capacity={current.state.pets ? 1 : DUNGEON_PARTY_SIZE}
+              capacity={current.status === "LOBBY" ? capacity : memberCount}
               members={current.state.memberIds.map((id) => ({
                 userId: id,
                 username: usernameOf(id) ?? id,
@@ -405,7 +410,7 @@ export default function DungeonPage() {
               !current.state.pets &&
               current.leaderId === user.userId &&
               current.state.memberIds.length + current.state.invitedIds.length <
-                DUNGEON_PARTY_SIZE && (
+                capacity && (
                 <div className="flex items-end gap-2">
                   <UserSearchSelect
                     useFormMethods={form}
@@ -430,7 +435,7 @@ export default function DungeonPage() {
               <span className="text-muted-foreground text-xs">
                 {current.status === "PAUSED"
                   ? "The timer continues while paused."
-                  : `${readyCount}/${current.state.pets ? 1 : DUNGEON_PARTY_SIZE} ready`}
+                  : `${memberCount}/${capacity} players · ${readyCount}/${memberCount} ready`}
               </span>
               <div className="flex gap-2">
                 {canReady && (
@@ -571,6 +576,7 @@ export default function DungeonPage() {
                       <p className="mt-1 text-muted-foreground text-xs">
                         {dungeon.content.tiers.length} tiers ·{" "}
                         {dungeon.content.tiers.length * DUNGEON_FLOORS_PER_TIER} floors
+                        · Up to {dungeon.content.maxPlayers} players
                       </p>
                     </div>
                     <Button

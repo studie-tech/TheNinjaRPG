@@ -12,7 +12,6 @@ import {
 } from "@/deltas/raids";
 import {
   RAID_BATTLE_LOBBY_SECONDS,
-  RAID_BATTLE_MAX_USERS_PER_TEAM,
   RAID_CLAIMING_TIMEOUT_MS,
   RAID_MAX_CONCURRENT_TEAMS,
 } from "@/drizzle/constants";
@@ -47,21 +46,18 @@ import { deleteRankedQueueForUser } from "@/queries/pvprank";
 import { fetchQuest } from "@/queries/quests";
 import {
   claimBattleQueue,
-  clearQueueBattleId,
   deleteEmptyQueueById,
+  deleteLeavingRaidQueueMember,
   deleteMpvpBattleQueueForCheckAndCleanupExpiredRaid,
   deleteMpvpBattleQueueForReadyToQueue,
   deleteMpvpBattleQueueForRollbackStartRaidBattle,
   deleteMpvpBattleUserForCheckAndCleanupExpiredRaid,
   deleteMpvpBattleUserForReadyToQueue,
-  deleteMpvpBattleUserForRollbackJoinRaidQueue,
   deleteRaidDamageThresholdForDeleteDamageThreshold,
-  deleteUnclaimedBattleQueue,
   executeInsertResultForJoinRaidQueue,
   fetchRaidJoinUser,
   fetchRaidListUser,
   findMpvpBattleQueueForJoinRaidQueue,
-  findMpvpBattleQueueForJoinRaidQueue2,
   findMpvpBattleQueueForStartRaidBattle,
   findMpvpBattleUserForGetUserRaidQueue,
   findMpvpBattleUserForLeaveRaidQueue,
@@ -117,6 +113,7 @@ import {
   actionReadinessResponse,
   prepareActionReadiness,
 } from "@/server/utils/actionReadiness";
+import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { raidBattleStarted } from "@/server/utils/push/messages";
 import { updateRewards } from "@/server/utils/questRewards";
@@ -529,22 +526,25 @@ export const raidsRouter = createTRPCRouter({
 
       // Derived
       return {
-        teams: teams.map((team) => {
-          const isClaiming = isBattleClaimId(team.battleId);
-          return {
-            id: team.id,
-            createdAt: team.createdAt,
-            isClaiming,
-            members: team.queue.map((m) => ({
-              slot: m.slot,
-              visibleId: m.userId,
-              username: m.user.username,
-              avatar: m.user.avatar,
-            })),
-            // Don't allow joining teams that are in claiming state
-            canJoin: !isClaiming && team.queue.length < RAID_BATTLE_MAX_USERS_PER_TEAM,
-          };
-        }),
+        teams: teams
+          .filter((team) => team.queue.length > 0)
+          .map((team) => {
+            const isClaiming = isBattleClaimId(team.battleId);
+            return {
+              id: team.id,
+              createdAt: team.createdAt,
+              isClaiming,
+              maxPlayers: team.raidMaxPlayers,
+              members: team.queue.map((m) => ({
+                slot: m.slot,
+                visibleId: m.userId,
+                username: m.user.username,
+                avatar: m.user.avatar,
+              })),
+              // Don't allow joining teams that are in claiming state
+              canJoin: !isClaiming && team.queue.length < team.raidMaxPlayers,
+            };
+          }),
         maxTeams: RAID_MAX_CONCURRENT_TEAMS,
       };
     }),
@@ -593,6 +593,14 @@ export const raidsRouter = createTRPCRouter({
         return reject(
           "You are in another battle queue. Please leave it before readying for a raid.",
         );
+      }
+      const raidQueue = queueEntry?.clanBattle;
+      if (
+        raidQueue?.battleType === "RAID_BATTLE" &&
+        raidQueue.battleId &&
+        !isStaleRaidClaim(raidQueue)
+      ) {
+        return reject("Your raid battle is starting or already in progress.");
       }
       const userId = user.userId;
       // CAS: only transition from the status we read to avoid racing concurrent requests.
@@ -799,7 +807,7 @@ export const raidsRouter = createTRPCRouter({
         if (!teamData) {
           return reject("Team not found or battle already started");
         }
-        if (teamData.queue.length >= RAID_BATTLE_MAX_USERS_PER_TEAM) {
+        if (teamData.queue.length >= teamData.raidMaxPlayers) {
           return reject("Team is full");
         }
       } else {
@@ -811,6 +819,7 @@ export const raidsRouter = createTRPCRouter({
           teamId,
           input,
           raidData,
+          raid.raidMaxPlayers,
         );
 
         // Guard - check if insert succeeded
@@ -828,70 +837,35 @@ export const raidsRouter = createTRPCRouter({
       if (statusResult.rowsAffected === 0) {
         // Rollback - clean up newly created team if status update fails
         if (createdNewTeam) {
-          await deleteUnclaimedBattleQueue(ctx.drizzle, teamId);
+          await deleteEmptyQueueById(ctx.drizzle, teamId);
         }
         return errorResponse("Failed to update status - you may already be in a queue");
       }
 
-      // Derived - find available slot
-      let availableSlot: number | undefined;
-
-      if (createdNewTeam) {
-        // For new teams, we know slot 0 is available (we just created it)
-        availableSlot = 0;
-      } else {
-        // For existing teams, re-fetch to get fresh state (handle race conditions)
-        const freshTeam = await findMpvpBattleQueueForJoinRaidQueue2(
-          ctx.drizzle,
-          teamId,
+      try {
+        // Prepare chat before publishing the seat so a failed chat setup cannot roll
+        // back a participant after the starting roster has been claimed.
+        await ensureRaidChatConversation(ctx.drizzle, raid, ctx.userId);
+        const inserted = await retryOnDeadlock(() =>
+          insertMpvpBattleUserForJoinRaidQueue(ctx.drizzle, teamId, ctx),
         );
-
-        // Guard - team still exists
-        if (!freshTeam) {
-          const wake = await wakeQueuedUser(ctx.drizzle, ctx.userId);
-          return actionReadinessResponse(
-            errorResponse("Team is no longer available"),
-            readiness,
-            ctx.drizzle,
-            wake.rowsAffected > 0 ? { status: "AWAKE" } : null,
-          );
-        }
-
-        const usedSlots = freshTeam.queue.map((u) => u.slot);
-        availableSlot = [0, 1, 2].find((s) => !usedSlots.includes(s));
-
-        // Guard - slot available
-        if (availableSlot === undefined) {
-          const wake = await wakeQueuedUser(ctx.drizzle, ctx.userId);
-          return actionReadinessResponse(
-            errorResponse("Team is full"),
-            readiness,
-            ctx.drizzle,
-            wake.rowsAffected > 0 ? { status: "AWAKE" } : null,
-          );
-        }
-      }
-
-      // Mutation - insert user into queue and ensure chat conversation in parallel.
-      // ensureRaidChatConversation targets different tables (conversation,
-      // user2conversation) and has no data dependency on the mpvpBattleUser
-      // insert, so we run them concurrently to avoid a sequential round-trip.
-      const [userInsertResult, chatResult] = await Promise.allSettled([
-        insertMpvpBattleUserForJoinRaidQueue(ctx.drizzle, teamId, ctx, availableSlot),
-        ensureRaidChatConversation(ctx.drizzle, raid, ctx.userId),
-      ]);
-
-      if (userInsertResult.status === "rejected" || chatResult.status === "rejected") {
+        if (!inserted.rowsAffected) throw raidSeatUnavailable;
+      } catch (error) {
         const wake = await rollbackJoinRaidQueue({
           client: ctx.drizzle,
           userId: ctx.userId,
           teamId,
           raidQuestId: input.questId,
           deleteTeam: createdNewTeam,
-          deleteUserRow: userInsertResult.status === "fulfilled",
         });
+        const unavailable =
+          error === raidSeatUnavailable || isMysqlDuplicateKeyError(error);
         return actionReadinessResponse(
-          errorResponse("Failed to join raid - please try again"),
+          errorResponse(
+            unavailable
+              ? "The team is full or has already started."
+              : "Failed to join raid - please try again",
+          ),
           readiness,
           ctx.drizzle,
           wake.rowsAffected > 0 ? { status: "AWAKE" } : null,
@@ -957,27 +931,25 @@ export const raidsRouter = createTRPCRouter({
       if (queueEntry.clanBattle.battleType !== "RAID_BATTLE") {
         return reject("You are not in a raid queue");
       }
-      // Allow leaving if not in a real battle (claiming state is allowed)
-      const isClaimingState = isBattleClaimId(queueEntry.clanBattle.battleId);
-      if (queueEntry.clanBattle.battleId !== null && !isClaimingState) {
-        return reject("Battle has already started");
-      }
+      if (
+        queueEntry.clanBattle.battleId &&
+        !isBattleClaimId(queueEntry.clanBattle.battleId)
+      )
+        return reject("Your raid battle has already started.");
+      const removed = await retryOnDeadlock(() =>
+        deleteLeavingRaidQueueMember(ctx.drizzle, queueEntry.id),
+      );
+      if (removed.rowsAffected !== 1)
+        return reject("Your raid team changed. Refresh and try again.");
 
       // Store sector before operations for Pusher notification
       const teamSector = queueEntry.clanBattle.sector;
       const raidQuestId = queueEntry.clanBattle.attackerEntityId;
       const raidChatConversationId = getRaidChatConversationId(raidQuestId);
 
-      // Mutation - delete queue entry, update user status, drop chat
-      // membership, and cleanup claiming ID in parallel.
-      const [, wake] = await Promise.all([
-        deleteBattleQueueMemberById(ctx.drizzle, queueEntry.id),
+      const [wake] = await Promise.all([
         wakeQueuedUser(ctx.drizzle, ctx.userId),
         purgeRaidChatMembership(ctx.drizzle, raidChatConversationId, ctx.userId),
-        // Clean up claiming ID if present
-        isClaimingState
-          ? clearQueueBattleId(ctx.drizzle, queueEntry.clanBattleId)
-          : Promise.resolve(),
       ]);
 
       // Mutation - clean up the team if it is now empty
@@ -1025,11 +997,7 @@ export const raidsRouter = createTRPCRouter({
 
       // Check battleId state - handle stale claiming states or already started battles
       if (team.battleId !== null) {
-        const isStaleClaimingState =
-          isBattleClaimId(team.battleId) &&
-          team.createdAt.getTime() < Date.now() - RAID_CLAIMING_TIMEOUT_MS;
-
-        if (isStaleClaimingState) {
+        if (isStaleRaidClaim(team)) {
           // Reset the stale claiming state
           await updateMpvpBattleQueueForStartRaidBattle(ctx.drizzle, input);
           // Notify other users that the team is available again
@@ -1053,7 +1021,7 @@ export const raidsRouter = createTRPCRouter({
       const LOBBY_BUFFER_MS = 2000;
       if (
         Date.now() < lobbyTimeElapsed.getTime() - LOBBY_BUFFER_MS &&
-        team.queue.length < RAID_BATTLE_MAX_USERS_PER_TEAM
+        team.queue.length < team.raidMaxPlayers
       ) {
         return reject("Please wait for the lobby timer or full team");
       }
@@ -1081,7 +1049,12 @@ export const raidsRouter = createTRPCRouter({
 
       // Mutation - claim the battle atomically
       const claimId = createBattleClaimId(nanoid());
-      const claimResult = await claimBattleQueue(ctx.drizzle, claimId, input.teamId);
+      const claimResult = await claimBattleQueue(
+        ctx.drizzle,
+        claimId,
+        input.teamId,
+        new Date(),
+      );
 
       if (claimResult.rowsAffected === 0) {
         return reject("Battle was already started by another player");
@@ -1091,9 +1064,22 @@ export const raidsRouter = createTRPCRouter({
       const currentQueueMembers = await listQueueMembers(ctx.drizzle, input.teamId);
 
       // Guard - members validation after claim
-      if (currentQueueMembers.length === 0) {
-        await clearQueueBattleId(ctx.drizzle, input.teamId);
-        return reject("No team members available to start battle");
+      if (
+        currentQueueMembers.length === 0 ||
+        currentQueueMembers.length > team.raidMaxPlayers ||
+        currentQueueMembers.some(
+          (member) => member.slot < 0 || member.slot >= team.raidMaxPlayers,
+        )
+      ) {
+        await releaseBattleQueueClaim(ctx.drizzle, input.teamId, claimId);
+        return reject("The team roster changed. Refresh and try again.");
+      }
+      if (
+        Date.now() < lobbyTimeElapsed.getTime() - LOBBY_BUFFER_MS &&
+        currentQueueMembers.length < team.raidMaxPlayers
+      ) {
+        await releaseBattleQueueClaim(ctx.drizzle, input.teamId, claimId);
+        return reject("Please wait for the lobby timer or full team");
       }
 
       const isStillMember = currentQueueMembers.some((m) => m.userId === ctx.userId);
@@ -1114,6 +1100,7 @@ export const raidsRouter = createTRPCRouter({
             client: ctx.drizzle,
             targetIds: [raidData.firstAiId],
             raidQuestId: raid.id,
+            raidQueueClaim: { teamId: input.teamId, claimId },
             autoCombatFromDefaults: true,
             givePools: raidData.objective.givePools,
             startingEffects: [
@@ -1385,29 +1372,35 @@ export const checkAndCleanupExpiredRaid = async (
   }
 };
 
+/** Measure launch expiry from the reservation. Older claims used the lobby creation time. */
+const isStaleRaidClaim = (team: {
+  battleId: string | null;
+  raidClaimedAt: Date | null;
+  createdAt: Date;
+}) =>
+  isBattleClaimId(team.battleId) &&
+  (team.raidClaimedAt ?? team.createdAt).getTime() <
+    Date.now() - RAID_CLAIMING_TIMEOUT_MS;
+
+const raidSeatUnavailable = new Error("Raid seat unavailable");
+
+/** Undo pre-admission status and chat setup, deleting a newly created team only while empty. */
 const rollbackJoinRaidQueue = async ({
   client,
   userId,
   teamId,
   raidQuestId,
   deleteTeam,
-  deleteUserRow,
 }: {
   client: DrizzleClient;
   userId: string;
   teamId: string;
   raidQuestId: string;
   deleteTeam: boolean;
-  deleteUserRow: boolean;
 }) => {
-  // Delete our user row, drop chat membership, and reset status first, so the
-  // team-empty check below sees the row we may have inserted as already gone.
   const raidChatConversationId = getRaidChatConversationId(raidQuestId);
   const [wake] = await Promise.all([
     wakeQueuedUser(client, userId),
-    ...(deleteUserRow
-      ? [deleteMpvpBattleUserForRollbackJoinRaidQueue(client, userId, teamId)]
-      : []),
     purgeRaidChatMembership(client, raidChatConversationId, userId),
   ]);
   // A concurrent joiner may have inserted into mpvpBattleUser before this rollback
@@ -1489,6 +1482,7 @@ const toRaidSummary = (
     | "name"
     | "description"
     | "image"
+    | "raidMaxPlayers"
     | "raidBossMaxHealth"
     | "raidBossCurrentHealth"
     | "raidEndsAt"
@@ -1500,6 +1494,7 @@ const toRaidSummary = (
   description: raid.description,
   image: raid.image,
   raidType: raidData?.raidType ?? null,
+  maxPlayers: raid.raidMaxPlayers,
   raidBossMaxHealth: raid.raidBossMaxHealth,
   raidBossCurrentHealth: raid.raidBossCurrentHealth,
   raidEndsAt: raid.raidEndsAt,

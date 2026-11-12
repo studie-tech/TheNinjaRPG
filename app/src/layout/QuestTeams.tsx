@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
-import { QUEST_PARTY_MAX_MEMBERS } from "@/drizzle/constants";
+import { DEFAULT_PARTY_PLAYERS } from "@/drizzle/constants";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
@@ -28,11 +28,13 @@ import type { UserDeltaResponse } from "@/validators/userCache";
 export const QuestTeams = ({
   questId,
   teamEnabled = true,
+  maxPlayers = DEFAULT_PARTY_PLAYERS,
   compact = false,
   asAction = false,
 }: {
   questId?: string;
   teamEnabled?: boolean;
+  maxPlayers?: number;
   compact?: boolean;
   /** Keep optional team setup behind an action in available quest cards. */
   asAction?: boolean;
@@ -115,6 +117,7 @@ export const QuestTeams = ({
   if (!teamEnabled) return null;
   if (!user) return <Loader explanation="Loading quest teams..." />;
   const current = data?.current;
+  const capacity = current?.maxPlayers ?? (questId ? maxPlayers : undefined);
   // Compact summaries link to the full team controls and chat.
   if (compact)
     return current || data?.teams.length || error ? (
@@ -125,7 +128,7 @@ export const QuestTeams = ({
           <Badge variant="outline">
             {current.completed
               ? "Completed"
-              : `${current.members.length}/${QUEST_PARTY_MAX_MEMBERS}`}
+              : `${current.members.length}/${current.maxPlayers}`}
           </Badge>
         )}
         {error && <span role="alert">{error.message}</span>}
@@ -171,8 +174,10 @@ export const QuestTeams = ({
           </h3>
           <p className="mt-1 text-sm">
             {current
-              ? `${current.members.length}/${QUEST_PARTY_MAX_MEMBERS} members · ${current.isPublic ? "Public" : "Private"} team`
-              : `Share quest progress with up to ${QUEST_PARTY_MAX_MEMBERS} players.`}
+              ? `${current.members.length}/${current.maxPlayers} members · ${current.isPublic ? "Public" : "Private"} team`
+              : capacity
+                ? `Share quest progress with up to ${capacity} players.`
+                : "Find a team to share quest progress."}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -185,8 +190,8 @@ export const QuestTeams = ({
             <PopoverContent align="end" className="space-y-2 text-sm">
               <p className="font-semibold">Quest teams</p>
               <p>
-                Up to {QUEST_PARTY_MAX_MEMBERS} players share every objective, even when
-                joining mid-quest.
+                {capacity ? `Up to ${capacity} players` : "Teammates"} share every
+                objective, even when joining mid-quest.
               </p>
               <p>
                 Each eligible player claims the full reward. Previously completed
@@ -288,7 +293,7 @@ export const QuestTeams = ({
             }))}
             leaderId={current.leaderId}
             viewerId={user.userId}
-            capacity={QUEST_PARTY_MAX_MEMBERS}
+            capacity={current.maxPlayers}
             disabled={busy || !!current.battleId}
             onRemove={(userId) => {
               setRemoveUserId(userId);
@@ -368,7 +373,7 @@ export const QuestTeams = ({
           {current.leaderId === user.userId &&
             !current.completed &&
             !current.failed &&
-            current.members.length < QUEST_PARTY_MAX_MEMBERS &&
+            current.members.length < current.maxPlayers &&
             !current.battleId && (
               <form
                 className="flex gap-2"
@@ -453,14 +458,12 @@ export const QuestTeams = ({
               {team.invited && <Badge variant="outline">Invited</Badge>}
               <span className="flex items-center gap-1 text-muted-foreground text-xs">
                 <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                {team.members.length}/{QUEST_PARTY_MAX_MEMBERS}
+                {team.members.length}/{team.maxPlayers}
               </span>
               <Button
                 size="sm"
                 disabled={
-                  busy ||
-                  !!team.battleId ||
-                  team.members.length >= QUEST_PARTY_MAX_MEMBERS
+                  busy || !!team.battleId || team.members.length >= team.maxPlayers
                 }
                 onClick={() => join.mutate({ partyId: team.id })}
               >

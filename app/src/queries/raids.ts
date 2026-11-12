@@ -18,6 +18,7 @@ import {
 } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
+  MAX_PARTY_PLAYERS,
   RAID_CLAIMING_TIMEOUT_MS,
   RAID_MAX_CONCURRENT_TEAMS,
 } from "@/drizzle/constants";
@@ -55,7 +56,10 @@ const battleOpenOrClaimed = or(
 const staleBattleClaim = () =>
   and(
     like(mpvpBattleQueue.battleId, BATTLE_CLAIM_LIKE_PATTERN),
-    lt(mpvpBattleQueue.createdAt, new Date(Date.now() - RAID_CLAIMING_TIMEOUT_MS)),
+    lt(
+      sql`COALESCE(${mpvpBattleQueue.raidClaimedAt}, ${mpvpBattleQueue.createdAt})`,
+      new Date(Date.now() - RAID_CLAIMING_TIMEOUT_MS),
+    ),
   );
 
 /** Build the `quest` listing for `getCompletedRaids`, including predicates on `questType`, `hidden`, `raidEndsAt`. */
@@ -352,7 +356,14 @@ export const findMpvpBattleUserForReadyToQueue = (
     where: eq(mpvpBattleUser.userId, ctx.userId),
     with: {
       clanBattle: {
-        columns: { sector: true, battleType: true, attackerEntityId: true },
+        columns: {
+          sector: true,
+          battleType: true,
+          attackerEntityId: true,
+          battleId: true,
+          raidClaimedAt: true,
+          createdAt: true,
+        },
       },
     },
   });
@@ -474,7 +485,7 @@ export const updateMpvpBattleQueueForReadyToQueue = (
 ) =>
   client
     .update(mpvpBattleQueue)
-    .set({ battleId: null })
+    .set({ battleId: null, raidClaimedAt: null })
     .where(
       and(
         eq(mpvpBattleQueue.id, queueEntry.clanBattleId),
@@ -544,10 +555,11 @@ export const executeInsertResultForJoinRaidQueue = (
   teamId: string,
   input: { questId: string },
   raidData: { sector: number },
+  maxPlayers: number,
 ) =>
   client.execute(sql`
-          INSERT INTO ${mpvpBattleQueue} (id, battleType, attackerEntityId, defenderEntityId, sector)
-          SELECT ${teamId}, 'RAID_BATTLE', ${input.questId}, 'RAID_AI', ${raidData.sector ?? null}
+          INSERT INTO ${mpvpBattleQueue} (id, battleType, attackerEntityId, defenderEntityId, sector, raidMaxPlayers)
+          SELECT ${teamId}, 'RAID_BATTLE', ${input.questId}, 'RAID_AI', ${raidData.sector ?? null}, ${maxPlayers}
           FROM (SELECT 1) AS dummy
           WHERE (
             SELECT COUNT(*)
@@ -567,30 +579,47 @@ export const deleteUnclaimedBattleQueue = (
     .delete(mpvpBattleQueue)
     .where(and(eq(mpvpBattleQueue.id, teamId), isNull(mpvpBattleQueue.battleId)));
 
-/** Build the `mpvpBattleQueue` lookup for `joinRaidQueue`, using predicates on `id`. */
-export const findMpvpBattleQueueForJoinRaidQueue2 = (
-  client: Pick<DrizzleClient, "query">,
-  teamId: string,
-) =>
-  client.query.mpvpBattleQueue.findFirst({
-    where: eq(mpvpBattleQueue.id, teamId),
-    with: { queue: true },
-  });
-
-/** Build the `mpvpBattleUser` insert for `joinRaidQueue`. */
+/** Admit into an open raid queue, locking its existing row against the battle claim. */
 export const insertMpvpBattleUserForJoinRaidQueue = (
-  client: Pick<DrizzleClient, "insert">,
+  client: Pick<DrizzleClient, "execute">,
   teamId: string,
   ctx: { userId: string },
-  availableSlot: number,
+) => {
+  const slots = sql.join(
+    Array.from({ length: MAX_PARTY_PLAYERS }, (_, slot) => sql`SELECT ${slot} AS slot`),
+    sql` UNION ALL `,
+  );
+  return client.execute(sql`
+    INSERT INTO ${mpvpBattleUser} (id, clanBattleId, userId, side, slot)
+    SELECT ${nanoid()}, q.id, ${ctx.userId}, 'ATTACKER', slots.slot
+    FROM ${mpvpBattleQueue} q
+    CROSS JOIN (${slots}) slots
+    WHERE q.id = ${teamId} AND q.battleType = 'RAID_BATTLE' AND q.battleId IS NULL
+      AND slots.slot < q.raidMaxPlayers
+      AND NOT EXISTS (
+        SELECT 1 FROM ${mpvpBattleUser} m
+        WHERE m.clanBattleId = q.id AND m.side = 'ATTACKER' AND m.slot = slots.slot
+      )
+    ORDER BY slots.slot LIMIT 1
+    FOR UPDATE
+  `);
+};
+
+/** Let a member leave during setup until their character has been admitted to combat. */
+export const deleteLeavingRaidQueueMember = (
+  client: Pick<DrizzleClient, "execute">,
+  memberId: string,
 ) =>
-  client.insert(mpvpBattleUser).values({
-    id: nanoid(),
-    clanBattleId: teamId,
-    userId: ctx.userId,
-    side: "ATTACKER",
-    slot: availableSlot,
-  });
+  client.execute(sql`
+    DELETE m FROM ${mpvpBattleUser} m
+    INNER JOIN ${mpvpBattleQueue} q ON q.id = m.clanBattleId
+    INNER JOIN ${userData} u ON u.userId = m.userId
+    WHERE m.id = ${memberId} AND q.battleType = 'RAID_BATTLE'
+      AND (q.battleId IS NULL OR (
+        q.battleId LIKE ${BATTLE_CLAIM_LIKE_PATTERN}
+        AND u.status = 'QUEUED' AND u.battleId IS NULL
+      ))
+  `);
 
 /** Build the `mpvpBattleUser` lookup for `leaveRaidQueue`, using predicates on `userId`. */
 export const findMpvpBattleUserForLeaveRaidQueue = (
@@ -674,7 +703,7 @@ export const updateMpvpBattleQueueForStartRaidBattle = (
 ) =>
   client
     .update(mpvpBattleQueue)
-    .set({ battleId: null })
+    .set({ battleId: null, raidClaimedAt: null })
     .where(and(eq(mpvpBattleQueue.id, input.teamId), staleBattleClaim()));
 
 /** Build a battle queue claim guarded by it having no existing battle ID. */
@@ -682,10 +711,11 @@ export const claimBattleQueue = (
   client: Pick<DrizzleClient, "update">,
   battleId: string,
   teamId: string,
+  raidClaimedAt?: Date,
 ) =>
   client
     .update(mpvpBattleQueue)
-    .set({ battleId: battleId })
+    .set({ battleId, raidClaimedAt })
     .where(and(eq(mpvpBattleQueue.id, teamId), isNull(mpvpBattleQueue.battleId)));
 
 /** Build a battle queue claim release guarded by the expected claim ID. */
@@ -856,18 +886,6 @@ export const updateUserDataForCheckAndCleanupExpiredRaid = (
         inArray(userData.userId, userIds),
         withoutDungeonReservation(),
       ),
-    );
-
-/** Build the `mpvpBattleUser` deletion for `rollbackJoinRaidQueue`, using predicates on `userId` and `clanBattleId`. */
-export const deleteMpvpBattleUserForRollbackJoinRaidQueue = (
-  client: Pick<DrizzleClient, "delete">,
-  userId: string,
-  teamId: string,
-) =>
-  client
-    .delete(mpvpBattleUser)
-    .where(
-      and(eq(mpvpBattleUser.userId, userId), eq(mpvpBattleUser.clanBattleId, teamId)),
     );
 
 /** Build the `mpvpBattleQueue` deletion for `rollbackStartRaidBattle`, using predicates on `id` and `battleId`. */

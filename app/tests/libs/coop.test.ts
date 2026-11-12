@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { type CoopParty, transitionCoopParty } from "@/libs/coop";
+import { partyCapacitySchema } from "@/validators/partyCapacity";
 
 const party = (overrides: Partial<CoopParty> = {}): CoopParty => ({
   leaderId: "a",
@@ -12,6 +13,12 @@ const party = (overrides: Partial<CoopParty> = {}): CoopParty => ({
 });
 
 describe("co-op party policies", () => {
+  it("defaults missing staff settings to three and rejects invalid limits", () => {
+    expect(partyCapacitySchema.parse(undefined)).toBe(3);
+    for (const capacity of [0, 1.5, 9, null]) {
+      expect(partyCapacitySchema.safeParse(capacity).success).toBe(false);
+    }
+  });
   it("allows public quest replacements, but keeps started dungeon rosters fixed", () => {
     expect(
       transitionCoopParty(
@@ -38,6 +45,30 @@ describe("co-op party policies", () => {
     );
     expect(transitionCoopParty("quest", full, "d", "join").success).toBe(false);
   });
+  it.each(["quest", "dungeon"] as const)(
+    "enforces the configured maximum for %s",
+    (kind) => {
+      for (let maxPlayers = 1; maxPlayers <= 8; maxPlayers++) {
+        const roster = party({
+          maxPlayers,
+          memberIds: [
+            "a",
+            ...Array.from({ length: maxPlayers - 1 }, (_, i) => "member-" + i),
+          ],
+          invitedIds: ["b"],
+        });
+        expect(transitionCoopParty(kind, roster, "b", "join")).toMatchObject({
+          success: false,
+        });
+        if (maxPlayers > 1) {
+          roster.memberIds.pop();
+          expect(transitionCoopParty(kind, roster, "b", "join")).toMatchObject({
+            success: true,
+          });
+        }
+      }
+    },
+  );
   it("requires invitations for private parties and prevents duplicate membership", () => {
     expect(transitionCoopParty("quest", party(), "b", "join").success).toBe(false);
     expect(
@@ -66,12 +97,25 @@ describe("co-op party policies", () => {
       transitionCoopParty("dungeon", { ...roster, phase: "BETWEEN" }, "b", "leave"),
     ).toMatchObject({ success: true, ended: true });
   });
-  it("starts a solo quest, but requires three ready dungeon members and resets readiness on resume", () => {
+  it("starts a ready dungeon below capacity, clears invitations, and resets readiness on resume", () => {
     expect(
       transitionCoopParty("quest", party({ phase: "ACTIVE" }), "a", "start").success,
     ).toBe(true);
     expect(
-      transitionCoopParty("dungeon", party({ readyIds: ["a"] }), "a", "start").success,
+      transitionCoopParty(
+        "dungeon",
+        party({ maxPlayers: 8, readyIds: ["a"], invitedIds: ["b"] }),
+        "a",
+        "start",
+      ),
+    ).toMatchObject({ success: true, party: { memberIds: ["a"], invitedIds: [] } });
+    expect(
+      transitionCoopParty(
+        "dungeon",
+        party({ maxPlayers: 8, memberIds: ["a", "b"], readyIds: ["a", "c"] }),
+        "a",
+        "start",
+      ).success,
     ).toBe(false);
     const ready = party({ memberIds: ["a", "b", "c"], readyIds: ["a", "b", "c"] });
     expect(transitionCoopParty("dungeon", ready, "a", "start")).toMatchObject({

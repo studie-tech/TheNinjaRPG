@@ -299,6 +299,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
                             <QuestTeams
                               questId={quest.id}
                               teamEnabled={quest.teamEnabled}
+                              maxPlayers={quest.teamMaxPlayers}
                               asAction
                             />
                           </div>

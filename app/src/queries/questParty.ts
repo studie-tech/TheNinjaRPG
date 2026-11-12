@@ -3,7 +3,6 @@
  */
 
 import { and, desc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
-import { QUEST_PARTY_MAX_MEMBERS } from "@/drizzle/constants";
 import {
   overworldAiPlacement,
   questHistory,
@@ -146,7 +145,7 @@ export const findOverworldAiPlacementForOverview = (
 export const insertQuestPartyForCreate = (
   client: Pick<DrizzleClient, "insert">,
   partyId: string,
-  definition: { id: string },
+  definition: { id: string; teamMaxPlayers: number },
   ctx: { userId: string },
   input: { isPublic: false | true },
   tracker: Omit<QuestTrackerType, "party"> & { party: undefined },
@@ -154,6 +153,7 @@ export const insertQuestPartyForCreate = (
   client.insert(questParty).values({
     id: partyId,
     questId: definition.id,
+    maxPlayers: definition.teamMaxPlayers,
     leaderId: ctx.userId,
     isPublic: input.isPublic,
     memberIds: [ctx.userId],
@@ -188,7 +188,7 @@ export const updateQuestPartyForJoin = (
         eq(questParty.id, party.id),
         eq(questParty.version, party.version),
         isNull(questParty.battleId),
-        sql`JSON_LENGTH(${questParty.memberIds}) < ${QUEST_PARTY_MAX_MEMBERS}`,
+        sql`JSON_LENGTH(${questParty.memberIds}) < ${questParty.maxPlayers}`,
       ),
     );
 

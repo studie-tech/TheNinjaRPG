@@ -9,6 +9,7 @@ import {
   getUnchangedDungeonUserUpdate,
 } from "@/deltas/dungeon";
 import {
+  DEFAULT_PARTY_PLAYERS,
   DUNGEON_RUN_SECONDS,
   DUNGEON_SOLO_PETS,
   MAP_SECTOR_ID_MAX,
@@ -208,6 +209,7 @@ export const dungeonRouter = createTRPCRouter({
       .map(({ id, content }) => ({
         id,
         name: content.name,
+        maxPlayers: content.maxPlayers ?? DEFAULT_PARTY_PLAYERS,
         description: content.description,
         sector: content.sector,
         longitude: content.longitude,
@@ -257,7 +259,11 @@ export const dungeonRouter = createTRPCRouter({
         )
         .map((d) => ({
           ...d,
-          content: { ...d.content, requirements: dungeonRequirements(d.content) },
+          content: {
+            ...d.content,
+            maxPlayers: d.content.maxPlayers ?? DEFAULT_PARTY_PLAYERS,
+            requirements: dungeonRequirements(d.content),
+          },
           admission: dungeonAdmission(admissionData, user, d.id, d.content),
         }));
     }),
@@ -614,6 +620,7 @@ export const dungeonRouter = createTRPCRouter({
         run.state.pets ? "dungeonSolo" : "dungeon",
         {
           ...run.state,
+          maxPlayers: run.content.maxPlayers,
           leaderId: run.leaderId,
           isPublic: false,
           phase: run.status,

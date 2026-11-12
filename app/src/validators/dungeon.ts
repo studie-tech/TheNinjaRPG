@@ -16,6 +16,7 @@ import {
 } from "@/drizzle/constants";
 import { type CoopRoster, encounterWaveSchema } from "@/validators/coop";
 import { mapLocationFields } from "@/validators/mapLocation";
+import { partyCapacitySchema } from "@/validators/partyCapacity";
 import { RewardPackageValidator } from "@/validators/rewardPackages";
 import type { PostProcessedRewards } from "@/validators/rewards";
 import { sectorLatitudeSchema, sectorLongitudeSchema } from "@/validators/travel";
@@ -66,6 +67,7 @@ export const dungeonFloorSchema = z.object({
 export const dungeonContentSchema = z
   .object({
     requirements: dungeonRequirementsSchema.prefault({}),
+    maxPlayers: partyCapacitySchema,
     name: z.string().trim().min(1, "Enter a dungeon name.").max(100),
     description: z.string().max(2000).prefault(""),
     // Empty artwork retains the biome entrance; encounter portraits remain independent.

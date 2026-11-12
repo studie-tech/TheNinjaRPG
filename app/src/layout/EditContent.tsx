@@ -219,7 +219,8 @@ export const EditContent = <
     if (id.includes("opponent") || ["scaleGains", "keepOriginalPools"].includes(id))
       return "opponent";
     if (id.includes("attackers")) return "attackers";
-    if (["raidBossMaxHealth", "raidBossCurrentHealth"].includes(id)) return "raid";
+    if (["raidMaxPlayers", "raidBossMaxHealth", "raidBossCurrentHealth"].includes(id))
+      return "raid";
     if (
       [
         "sector",

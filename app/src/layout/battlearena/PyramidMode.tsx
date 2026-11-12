@@ -260,7 +260,11 @@ export function PyramidMode() {
                           abandon.
                         </p>
                       )}
-                      <QuestTeams questId={tower.id} teamEnabled={tower.teamEnabled} />
+                      <QuestTeams
+                        questId={tower.id}
+                        teamEnabled={tower.teamEnabled}
+                        maxPlayers={tower.teamMaxPlayers}
+                      />
                     </>
                   )}
                   {rewards.length > 0 ? (

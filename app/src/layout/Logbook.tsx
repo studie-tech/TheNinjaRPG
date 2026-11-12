@@ -692,7 +692,11 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
           </p>
         )}
         {quest.teamEnabled && (
-          <QuestTeams questId={quest.id} teamEnabled={quest.teamEnabled} />
+          <QuestTeams
+            questId={quest.id}
+            teamEnabled={quest.teamEnabled}
+            maxPlayers={quest.teamMaxPlayers}
+          />
         )}
         {!hideTitle && (
           <div className={cn(showScene ? "px-3 pt-3" : "")}>

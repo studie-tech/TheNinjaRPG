@@ -63,6 +63,9 @@ it.each(["success", "error"])(
       name: "New dungeon",
     }) as HTMLButtonElement;
     fireEvent.change(select, { target: { value: "A" } });
+    const capacity = view.getByLabelText("Maximum players") as HTMLInputElement;
+    expect(capacity.value).toBe("3");
+    fireEvent.input(capacity, { target: { value: "8" } });
     // A numeric draft on a hidden tab must be revealed and corrected before saving.
     const tokens = view.getByLabelText("Tokens") as HTMLInputElement;
     fireEvent.input(tokens, { target: { value: "" } });
@@ -88,7 +91,7 @@ it.each(["success", "error"])(
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0]?.[0]).toMatchObject({
       id: "A",
-      content: { name: "Dungeon A" },
+      content: { name: "Dungeon A", maxPlayers: 8 },
     });
     expect(select.disabled).toBe(true);
     expect(newButton.disabled).toBe(true);

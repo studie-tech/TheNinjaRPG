@@ -159,6 +159,7 @@ export const DungeonCatalogue = () => {
             <p className="whitespace-pre-wrap break-words">{selected.description}</p>
           )}
           <p>Minimum level: {selected.requiredLevel}</p>
+          <p>Maximum players: {selected.maxPlayers}</p>
           <p>
             Expiration:{" "}
             {selected.expiresAt

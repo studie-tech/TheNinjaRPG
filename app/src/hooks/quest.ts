@@ -236,6 +236,8 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
     name: "rewardMode",
   });
 
+  const teamEnabled = useWatch({ control: form.control, name: "teamEnabled" });
+
   // Object for form values
   const formData: FormEntry<keyof ZodQuestFormType>[] = [
     { id: "name", label: "Title", type: "text" },
@@ -251,6 +253,15 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
       type: "boolean",
       label: "Allow quest teams",
     },
+    ...(teamEnabled
+      ? [
+          {
+            id: "teamMaxPlayers",
+            type: "number",
+            label: "Maximum quest party members",
+          } as const,
+        ]
+      : []),
     { id: "questType", type: "str_array", values: QuestTypes },
     { id: "questRank", type: "str_array", values: LetterRanks },
     { id: "medicalRank", type: "str_array", values: MEDNIN_RANKS },
@@ -380,6 +391,11 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
 
   // For raids, add raid-specific fields (AI and sector are in the objective)
   if (questType === "raid") {
+    formData.push({
+      id: "raidMaxPlayers",
+      type: "number",
+      label: "Maximum players per raid team",
+    });
     formData.push({
       id: "raidBossMaxHealth",
       type: "number",
