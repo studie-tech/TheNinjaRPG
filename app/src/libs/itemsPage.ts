@@ -315,16 +315,16 @@ export const bulkSellMessage = (
   ].join(" ");
 };
 
-/**
- * Why the player cannot reach their home storage, or null when they can: awake or asleep
- * in their own village, as for furnishing the home.
- */
 /** Statuses that may use home storage; sleeping at home is allowed. */
 export const HOME_STORAGE_STATUSES = [
   "AWAKE",
   "ASLEEP",
 ] as const satisfies UserStatus[];
 
+/**
+ * Why the player cannot reach their home storage, or null when they can: awake or asleep
+ * in their own village, as for furnishing the home.
+ */
 export const homeStorageBlockReason = (user: {
   sector: number;
   status: UserStatus;
