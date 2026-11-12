@@ -22,6 +22,7 @@ import { Pusher } from "@/libs/pusher";
 import { calcStealthDuration } from "@/libs/stealth";
 import {
   isOnVillageDuty,
+  villageDutyNavigationMap,
   villageDutyPatrols,
   villageDutyPosition,
   villageDutyPursuitPosition,
@@ -61,6 +62,13 @@ import {
   resolverOf,
 } from "../../../setup/testDatabase";
 
+/** Rendered buildings and the shrine leave open patrol space inside the village walls. */
+const villageMap = () =>
+  sectorMap(20, 20, () => ({ zone: "village" }), {
+    sector: 123,
+    anchors: [{ key: "shrine.default", x: 10, y: 5 }],
+  });
+
 describeWithDatabase("village duty hourly patrol", () => {
   beforeEach(async () => {
     resetServerModuleStubs();
@@ -86,14 +94,36 @@ describeWithDatabase("village duty hourly patrol", () => {
       type: "VILLAGE",
       kageId: "leader",
     });
-    await db.insert(villageStructure).values({
-      id: "guards",
-      name: "Village Protectors",
-      image: "guards",
-      villageId: "home",
-      level: 1,
-      patrolSlotsPerLvl: VILLAGE_DUTY_SLOTS_PER_LEVEL,
-    });
+    await db.insert(villageStructure).values([
+      {
+        id: "guards",
+        name: "Village Protectors",
+        image: "guards",
+        villageId: "home",
+        level: 1,
+        patrolSlotsPerLvl: VILLAGE_DUTY_SLOTS_PER_LEVEL,
+      },
+      {
+        id: "townhall",
+        name: "Town Hall",
+        image: "townhall",
+        villageId: "home",
+        route: "/townhall",
+        hasPage: 1,
+        longitude: 3,
+        latitude: 9,
+      },
+      {
+        id: "hospital",
+        name: "Hospital",
+        image: "hospital",
+        villageId: "home",
+        route: "/hospital",
+        hasPage: 1,
+        longitude: 16,
+        latitude: 12,
+      },
+    ]);
     await insertUsers([
       {
         userId: "protector",
@@ -360,7 +390,8 @@ describeWithDatabase("village duty hourly patrol", () => {
     ]);
     const home = (await fetchVillageDutyHome(db, "home"))!;
     const owners = await listVillageDutyRoster(db, "home", now);
-    const map = sectorMap(10, 10, () => ({ zone: "village" }), { anchors: [] });
+    const map = villageMap();
+    const navigation = villageDutyNavigationMap(map, home.structures);
     const visitor = {
       userId: "enemy",
       villageId: "foreign",
@@ -407,27 +438,25 @@ describeWithDatabase("village duty hourly patrol", () => {
       123,
       "home",
       stored.patrols,
+      home.structures,
     )[0]!;
     expect(
       villageDutyPursuitPosition(actor.npcWander!.pursuit!, expired.getTime()),
     ).toBeNull();
     expect(
-      villageDutyPosition(stored.patrols[0]!, actor, map, expired.getTime()),
+      villageDutyPosition(stored.patrols[0]!, actor, navigation, expired.getTime()),
     ).toEqual(
       villageDutyPosition(
         { ...stored.patrols[0]!, pursuit: null },
         actor,
-        map,
+        navigation,
         expired.getTime(),
       ),
     );
   });
   it("pursues an active enemy without a roll and globally spends the copy after combat", async () => {
     const db = await getTestDatabase();
-    const map = sectorMap(20, 20, () => ({ zone: "village" }), {
-      sector: 123,
-      anchors: [],
-    });
+    const map = villageMap();
     vi.spyOn(sectorMaps, "fetchPublishedSectorMap").mockResolvedValue(map);
     vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
     await insertDefaultAiProfile();
@@ -670,9 +699,7 @@ describeWithDatabase("village duty hourly patrol", () => {
     "intercepts direct PvP from %s (stealth=%s) before an invader can bypass live village protectors",
     async (status, stealthActive) => {
       const db = await getTestDatabase();
-      vi.spyOn(sectorMaps, "fetchPublishedSectorMap").mockResolvedValue(
-        sectorMap(20, 20, () => ({ zone: "village" }), { sector: 123, anchors: [] }),
-      );
+      vi.spyOn(sectorMaps, "fetchPublishedSectorMap").mockResolvedValue(villageMap());
       vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
       await insertDefaultAiProfile();
       await db
@@ -743,9 +770,7 @@ describeWithDatabase("village duty hourly patrol", () => {
     "respects %s stealth in travel snapshots and passive patrol admission",
     async (state) => {
       const db = await getTestDatabase();
-      vi.spyOn(sectorMaps, "fetchPublishedSectorMap").mockResolvedValue(
-        sectorMap(20, 20, () => ({ zone: "village" }), { sector: 123, anchors: [] }),
-      );
+      vi.spyOn(sectorMaps, "fetchPublishedSectorMap").mockResolvedValue(villageMap());
       vi.spyOn(Pusher.prototype, "trigger").mockResolvedValue(undefined);
       await insertDefaultAiProfile();
       await db
@@ -854,7 +879,7 @@ describeWithDatabase("village duty hourly patrol", () => {
       home!,
       owners,
       presence,
-      sectorMap(20, 20, () => ({ zone: "village" }), { anchors: [] }),
+      villageMap(),
       visitor!,
     );
     expect(advanced?.patrols[0]?.pursuit?.targetUserId).toBe("visible");
