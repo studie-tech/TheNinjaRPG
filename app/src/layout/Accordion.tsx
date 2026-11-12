@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import { ChevronsDown } from "lucide-react";
 import type React from "react";
+import { useId } from "react";
 import { cn } from "@/libs/shadui";
 
 interface AccordionProps {
@@ -9,6 +10,8 @@ interface AccordionProps {
   selectedTitle: string;
   selectionKey?: string;
   collapsible?: boolean;
+  /** Preserve drafts and timers when the panel is closed. */
+  keepMounted?: boolean;
   titlePrefix?: string;
   titlePostfix?: string;
   unselectedSubtitle?: string | React.ReactNode;
@@ -19,10 +22,12 @@ interface AccordionProps {
   onClick: React.Dispatch<React.SetStateAction<string>>;
 }
 
+/** Shows a selectable panel with optional collapse and preserved child state. */
 const Accordion: React.FC<AccordionProps> = (props) => {
   const { title, titlePrefix, titlePostfix } = props;
   const { unselectedSubtitle, selectedSubtitle, children, onClick } = props;
   const Icon = props.icon;
+  const panelId = useId();
 
   const selectionKey = props.selectionKey ?? title;
   const active = selectionKey === props.selectedTitle;
@@ -36,6 +41,7 @@ const Accordion: React.FC<AccordionProps> = (props) => {
             active ? "" : "hover:cursor-pointer hover:bg-popover",
           )}
           aria-expanded={active}
+          aria-controls={active || props.keepMounted ? panelId : undefined}
           onClick={() =>
             (!active || props.collapsible) && onClick(active ? "" : selectionKey)
           }
@@ -67,7 +73,11 @@ const Accordion: React.FC<AccordionProps> = (props) => {
           <div className="flex shrink-0 items-center">{props.options}</div>
         )}
       </div>
-      {active && children}
+      {(active || props.keepMounted) && (
+        <div id={panelId} hidden={!active}>
+          {children}
+        </div>
+      )}
     </div>
   );
 };

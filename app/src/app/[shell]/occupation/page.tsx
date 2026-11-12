@@ -58,6 +58,7 @@ const OCCUPATION_DATA = [
   },
 ];
 
+/** Shows occupation selection, job-change availability and the active job's tools. */
 export default function Occupations() {
   // Utils
 
@@ -111,7 +112,7 @@ export default function Occupations() {
     getOccupationChangeDaysRemaining(userData.occupationSignupAt) === 0 ||
     canChangeContent(userData.role);
 
-  const topRightContent =
+  const changeJobAction =
     userData.occupation && canChange ? (
       <Dialog open={changeDialogOpen} onOpenChange={setChangeDialogOpen}>
         <DialogTrigger asChild>
@@ -135,57 +136,74 @@ export default function Occupations() {
       </Dialog>
     ) : null;
 
-  return (
-    <>
-      <ContentBox
-        title="Occupation"
-        subtitle="Work for your village"
-        defaultBackHref="/profile"
-        topRightContent={topRightContent}
-      >
-        {userData.occupation ? (
-          <div>
-            {occupationInfo && (
-              <div className="flex flex-col gap-0.5 sm:gap-1">
-                <p className="mt-0.5 text-muted-foreground text-sm leading-relaxed sm:text-base">
-                  {occupationInfo.description}
-                </p>
+  /** Keeps job details and change controls together with crafting's bulk repair action. */
+  const renderHeader = (repairAllAction?: React.ReactNode) => (
+    <ContentBox
+      title="Occupation"
+      subtitle="Work for your village"
+      defaultBackHref="/profile"
+      topRightContent={
+        (repairAllAction || changeJobAction) && (
+          <div className="flex items-center gap-2">
+            {repairAllAction}
+            {changeJobAction}
+          </div>
+        )
+      }
+    >
+      {userData.occupation ? (
+        <div>
+          {occupationInfo && (
+            <div className="flex flex-col gap-0.5 sm:gap-1">
+              <p className="mt-0.5 text-muted-foreground text-sm leading-relaxed sm:text-base">
+                {occupationInfo.description}
+              </p>
+            </div>
+          )}
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+            {userData.occupationSignupAt && (
+              <div className="flex items-center gap-1.5 text-muted-foreground text-xs sm:text-sm">
+                <span className="font-medium">Started:</span>
+                <span className="font-mono">
+                  {userData.occupationSignupAt.toLocaleDateString()}
+                </span>
               </div>
             )}
-            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-              {userData.occupationSignupAt && (
-                <div className="flex items-center gap-1.5 text-muted-foreground text-xs sm:text-sm">
-                  <span className="font-medium">Started:</span>
-                  <span className="font-mono">
-                    {userData.occupationSignupAt.toLocaleDateString()}
+            {!canChange && (
+              <div className="flex items-center gap-1.5 font-medium text-orange-600 text-xs sm:text-sm">
+                <span>You can change occupations in</span>
+                {userData.occupationSignupAt && (
+                  <span className="rounded bg-popover px-2 py-0.5 font-mono">
+                    <Countdown
+                      targetDate={getOccupationChangeAvailableAt(
+                        userData.occupationSignupAt,
+                      )}
+                    />
                   </span>
-                </div>
-              )}
-              {!canChange && (
-                <div className="flex items-center gap-1.5 font-medium text-orange-600 text-xs sm:text-sm">
-                  <span>You can change occupations in</span>
-                  {userData.occupationSignupAt && (
-                    <span className="rounded bg-popover px-2 py-0.5 font-mono">
-                      <Countdown
-                        targetDate={getOccupationChangeAvailableAt(
-                          userData.occupationSignupAt,
-                        )}
-                      />
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
-        ) : (
-          <OccupationSelector
-            selectedOccupation={selectedOccupation}
-            onOccupationSelect={handleOccupationSelect}
-            isPending={isPending}
-          />
-        )}
-      </ContentBox>
-      {renderOccupationComponent(userData)}
+        </div>
+      ) : (
+        <OccupationSelector
+          selectedOccupation={selectedOccupation}
+          onOccupationSelect={handleOccupationSelect}
+          isPending={isPending}
+        />
+      )}
+    </ContentBox>
+  );
+
+  if (userData.occupation === "CRAFTING") {
+    return <OccupationCrafting renderHeader={renderHeader} />;
+  }
+
+  return (
+    <>
+      {renderHeader()}
+      {userData.occupation === "GATHERING" && <OccupationGathering />}
+      {userData.occupation === "HUNTER" && <OccupationHunter />}
     </>
   );
 }
@@ -278,23 +296,4 @@ const OccupationSelector: React.FC<OccupationSelectorProps> = ({
       </div>
     </div>
   );
-};
-
-/**
- * Render the occupation component
- * @returns The occupation component
- */
-const renderOccupationComponent = (userData: { occupation: OccupationType | null }) => {
-  if (!userData.occupation) return null;
-
-  switch (userData.occupation) {
-    case "GATHERING":
-      return <OccupationGathering />;
-    case "HUNTER":
-      return <OccupationHunter />;
-    case "CRAFTING":
-      return <OccupationCrafting />;
-    default:
-      return null;
-  }
 };

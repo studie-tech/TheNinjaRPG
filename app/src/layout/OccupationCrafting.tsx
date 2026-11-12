@@ -1,11 +1,18 @@
 "use client";
 
 import { BookOpen, Gem, Hammer, Info, Star, Wrench, Zap } from "lucide-react";
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
   CRAFTING_MAX_IMBUED_ITEMS,
@@ -15,6 +22,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
+import Accordion from "@/layout/Accordion";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -45,15 +53,25 @@ import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 /** Manages recipes, the crafting queue, item imbuements and repairs. */
-export default function OccupationCrafting() {
+export default function OccupationCrafting({
+  renderHeader,
+}: {
+  renderHeader: (repairAllAction: ReactNode) => ReactNode;
+}) {
   // Utils
   const utils = api.useUtils();
 
   // State
   const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const [openCatalog, setOpenCatalog] = useState("Catalog / Queue");
+  const [openImbue, setOpenImbue] = useState("Imbue");
+  const [openRepair, setOpenRepair] = useState("Repair Items");
 
   // API calls
-  const { data: userItems } = api.item.getUserItems.useQuery();
+  const { data: userItems, isError: hasInventoryError } =
+    api.item.getUserItems.useQuery(undefined, {
+      enabled: userData?.occupation === "CRAFTING",
+    });
   const { data: craftableItems } = api.occupation.getCraftableItems.useQuery();
   const { data: craftingQueue } = api.occupation.getCraftingQueue.useQuery();
   const { mutate: cancelQueuedCraft, isPending: isCancellingQueuedCraft } =
@@ -107,7 +125,7 @@ export default function OccupationCrafting() {
     meta: { handlesTransportError: true },
   });
 
-  const repairItemMutation = api.item.repair.useMutation({
+  const repairItem = api.item.repair.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
@@ -120,8 +138,7 @@ export default function OccupationCrafting() {
       }
     },
   });
-
-  const repairAllMutation = api.item.repairAll.useMutation({
+  const repairAll = api.item.repairAll.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (data, _variables, revision) => {
       showMutationToast(data);
@@ -357,9 +374,63 @@ export default function OccupationCrafting() {
   };
 
   const rankProgress = getCraftingRankProgress(userData?.craftingExperience || 0);
+  const currentCraft = craftingStatus?.isCurrentlyCrafting
+    ? craftingStatus.currentCraftingItem?.name
+    : undefined;
+  const queuedCount = craftingQueue?.waiting.length ?? 0;
+  const craftSummary = [
+    currentCraft && `Crafting ${currentCraft}`,
+    queuedCount > 0 && `${queuedCount} queued`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const imbueTarget = committedImbue?.targetName ?? activeImbuingItem?.item.name;
+  const imbueSummary = imbueTarget ? `Imbuing ${imbueTarget}` : undefined;
 
-  return (
-    <ContentBox title="Crafting" subtitle="Craft items and equipment" initialBreak>
+  const { itemsNeedingRepair, totalCost } = calcRepairAllCost(userItems);
+  const count = itemsNeedingRepair.length;
+  const itemLabel = `${count} item${count === 1 ? "" : "s"}`;
+  const canAffordRepair = userData.money >= totalCost;
+  const isRepairPending = repairItem.isPending || repairAll.isPending;
+  const isRepairAllDisabled = !count || !canAffordRepair || isRepairPending;
+  const repairStatus = !userItems
+    ? hasInventoryError
+      ? "Inventory unavailable"
+      : "Loading inventory"
+    : !count
+      ? "No items need repair"
+      : undefined;
+  const unavailableReason =
+    repairStatus ??
+    (!canAffordRepair
+      ? `You need ${totalCost.toLocaleString()} ryo to repair all items`
+      : undefined);
+  const repairAllAction = (
+    <Confirm
+      title="Repair All Items"
+      proceed_label="Repair All"
+      disabled={isRepairAllDisabled}
+      confirmDisabled={isRepairAllDisabled}
+      button={
+        <Button asChild variant="secondary" className="gap-2">
+          <span title={unavailableReason}>
+            <Wrench className="h-4 w-4" aria-hidden="true" />
+            {repairAll.isPending ? "Repairing…" : "Repair All"}
+          </span>
+        </Button>
+      }
+      onAccept={() => {
+        if (!isRepairAllDisabled) repairAll.mutate();
+      }}
+    >
+      <p>
+        Repair all {itemLabel} for <strong>{totalCost.toLocaleString()} ryo</strong>?
+      </p>
+    </Confirm>
+  );
+
+  const craftingPanel = (
+    <ContentBox title="Crafting" initialBreak>
       <div className="space-y-6">
         {/* Crafting Status */}
         <Card>
@@ -385,584 +456,575 @@ export default function OccupationCrafting() {
           </CardContent>
         </Card>
 
-        {/* Crafting Catalog */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
-              Crafting Catalog
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-4 text-muted-foreground text-sm">
-              Browse all craftable recipes by category. Select a category to view
-              available items.
-            </p>
-            <CraftingCatalog
-              craftableItems={craftableItems}
-              userItems={userItems}
-              userData={userData}
-              isBusy={
-                !!craftingStatus?.isCurrentlyCrafting || !!craftingQueue?.waiting.length
-              }
-              isQueueFull={
-                (!!craftingStatus?.isCurrentlyCrafting ||
-                  !!craftingQueue?.waiting.length) &&
-                (craftingStatus?.isCurrentlyCrafting ? 1 : 0) +
-                  (craftingQueue?.waiting.length ?? 0) >=
-                  (craftingQueue?.capacity ?? 1)
-              }
-            />
-          </CardContent>
-        </Card>
-
-        <TimedQueue
-          title="Crafting queue"
-          subtitle="Crafts that start when the current one is ready"
-          initialBreak={false}
-          capacity={craftingQueue?.capacity ?? 1}
-          help="Choose a recipe while crafting to queue it. Its materials are set aside when queued and returned if you cancel before it starts. Crafting experience and quest progress are granted when a queued craft starts, also while you are offline. Waiting times are base durations; Territory War bonuses active when a job starts can shorten them."
-          waitingDurationLabel="base time"
-          active={
-            craftingStatus?.isCurrentlyCrafting &&
-            craftingStatus.craftingFinishedAt &&
-            craftingStatus.currentCraftingItem
-              ? {
-                  title: craftingStatus.currentCraftingItem.name,
-                  finishesAt: new Date(craftingStatus.craftingFinishedAt),
-                }
-              : null
-          }
-          waiting={(craftingQueue?.waiting ?? []).map((job) => ({
-            id: job.id,
-            title: `${job.quantity}x ${job.name}`,
-            detail: job.materials.map((m) => `${m.quantity} ${m.name}`).join(", "),
-            startsAt: job.startsAt,
-            finishesAt: job.finishesAt,
-          }))}
-          cancelLabel="Cancel and return materials"
-          onCancel={(queueId) => cancelQueuedCraft({ queueId })}
-          isPending={isCancellingQueuedCraft}
-          emptyText="Nothing crafting. Pick a recipe from the catalog to start."
-          onActiveFinish={() => {
-            // Reading the queue starts the next craft, so the inventory is read after it.
-            void utils.occupation.getCraftingQueue
-              .invalidate()
-              .then(() => utils.item.getUserItems.invalidate());
-          }}
-        />
-
-        {/* Current Crafting */}
-        {craftingStatus?.isCurrentlyCrafting && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Hammer className="h-5 w-5" />
-                Currently Crafting
-                {craftingStatus.craftingFinishedAt && (
-                  <span className="font-normal text-muted-foreground text-sm">
-                    (
-                    <Countdown
-                      targetDate={craftingStatus.craftingFinishedAt}
-                      onEndShow="Ready!"
-                      onFinish={() => {
-                        void utils.item.getUserItems.invalidate();
-                      }}
-                    />
-                    )
-                  </span>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col gap-4">
-                {craftingStatus.currentCraftingItem && (
-                  <ItemWithEffects item={craftingStatus.currentCraftingItem} />
-                )}
-                {craftingStatus.craftingFinishedAt &&
-                  new Date(craftingStatus.craftingFinishedAt) <= new Date() && (
-                    <div className="font-medium text-green-600 text-sm">Finished!</div>
-                  )}
-                {currentCraftingUserItemId &&
-                  canChangeContent(userData?.role || "USER") && (
-                    <Button
-                      onClick={() =>
-                        finishCraftingImmediatelyMutation.mutate({
-                          userItemId: currentCraftingUserItemId,
-                        })
-                      }
-                      disabled={finishCraftingImmediatelyMutation.isPending}
-                      loading={finishCraftingImmediatelyMutation.isPending}
-                      variant="outline"
-                      size="sm"
-                      className="w-fit"
-                    >
-                      <Zap className="mr-2 h-4 w-4" />
-                      Instant Finish (Staff)
-                    </Button>
-                  )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Current Imbuing */}
-        {activeImbuement && activeImbuingItem && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Gem className="h-5 w-5" />
-                Currently Imbuing
-                {activeImbuement?.craftingFinishedAt && (
-                  <span className="font-normal text-muted-foreground text-sm">
-                    (
-                    <Countdown
-                      targetDate={new Date(activeImbuement.craftingFinishedAt)}
-                      onEndShow="Ready!"
-                      onFinish={() => {
-                        void utils.item.getUserItems.invalidate();
-                      }}
-                    />
-                    )
-                  </span>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col gap-4">
-                <p className="text-muted-foreground text-sm">
-                  You can imbue one item at a time. Imbueable Items comes back when this
-                  one finishes.
-                </p>
-                <ItemWithEffects
-                  item={{
-                    ...activeImbuingItem.item,
-                    imbuements: activeImbuingItem.imbuements.map((i) => i.item),
-                  }}
-                  key={activeImbuingItem.id}
-                />
-                {canChangeContent(userData?.role || "USER") && activeImbuement && (
-                  <Button
-                    onClick={() =>
-                      finishImbuingImmediatelyMutation.mutate({
-                        userItemImbuementId: activeImbuement.id,
-                      })
-                    }
-                    disabled={finishImbuingImmediatelyMutation.isPending}
-                    loading={finishImbuingImmediatelyMutation.isPending}
-                    variant="outline"
-                    size="sm"
-                    className="w-fit"
-                  >
-                    <Zap className="mr-2 h-4 w-4" />
-                    Instant Finish (Staff)
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Imbue New Item */}
-        {!activeImbuingItem && !activeImbuement && !committedImbue && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Gem className="h-5 w-5" />
-                Imbueable Items
-                <Badge variant="outline" className="ml-auto">
-                  {capitalizeFirstLetter(userCraftingRank)} rank: up to{" "}
-                  {maxCrystalsPerItem} per item
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {imbueBlockedMessage ? (
-                  <>
-                    <p
-                      className="text-muted-foreground text-sm"
-                      data-testid="imbue-blocked-message"
-                    >
-                      {imbueBlockedMessage}
-                    </p>
-                    {maxCrystalsPerItem > 0 && rankCapNotes}
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <h4 className="mb-2 font-medium">Select Item to Imbue</h4>
-                      <ActionSelector
-                        items={openImbueOptions.map(
-                          ({ userItem, currentCrystals, effectiveMaxImbuements }) => ({
-                            id: userItem.id,
-                            name: `${userItem.item?.name || "Unknown"} (${currentCrystals}/${effectiveMaxImbuements} crystals)`,
-                            image: userItem.item?.image || "",
-                            rarity: userItem.item?.rarity || "COMMON",
-                            type: "item" as const,
-                            effects: userItem.item?.effects || [],
-                            hidden: false,
-                          }),
-                        )}
-                        selectedId={selectedImbuableItem?.id}
-                        showBgColor={false}
-                        showLabels={true}
-                        onClick={(id) => {
-                          const item = imbuableItems.find((item) => item.id === id);
-                          setSelectedImbuableItem(
-                            item === selectedImbuableItem ? undefined : item,
-                          );
-                          setSelectedCrystalUserItem(undefined);
-                        }}
-                      />
-                      {rankCapNotes}
-                    </div>
-
-                    {selectedImbuableItem && (
-                      <div>
-                        <h4 className="mb-2 font-medium">Select Crystal</h4>
-                        <p className="mb-2 text-muted-foreground text-sm">
-                          Only crystals compatible with{" "}
-                          <strong>{selectedImbuableItem.item?.itemType}</strong> items
-                          are shown. PvE-only crystals require a PvE-only item.
-                        </p>
-                        <ActionSelector
-                          items={crystals
-                            .filter((userItem) => {
-                              const crystal = userItem.item;
-                              if (!crystal) return false;
-                              if (
-                                crystal.battleUsageType === "PVE" &&
-                                selectedImbuableItem.item?.battleUsageType !== "PVE"
-                              ) {
-                                return false;
-                              }
-
-                              const alreadyOnItem =
-                                selectedImbuableItem.imbuements?.some(
-                                  (imb) => imb.imbuementItemId === crystal.id,
-                                );
-                              if (alreadyOnItem) return false;
-
-                              // If crystal has no target types specified, it can be used on any item
-                              if (!crystal.crystalTargetTypes) {
-                                return true;
-                              }
-
-                              // Check if the target item type matches the crystal's allowed type
-                              return (
-                                crystal.crystalTargetTypes ===
-                                selectedImbuableItem.item?.itemType
-                              );
-                            })
-                            .map((userItem) => ({
-                              id: userItem.id,
-                              name: userItem.item?.name || "Unknown",
-                              image: userItem.item?.image || "",
-                              rarity: userItem.item?.rarity || "COMMON",
-                              type: "item" as const,
-                              effects: userItem.item?.effects || [],
-                              hidden: false,
-                            }))}
-                          selectedId={selectedCrystalUserItem?.id}
-                          showBgColor={false}
-                          showLabels={true}
-                          onClick={(id) => {
-                            const crystal = crystals.find((item) => item.id === id);
-                            setSelectedCrystalUserItem(
-                              crystal === selectedCrystalUserItem ? undefined : crystal,
-                            );
-                            if (crystal && crystal !== selectedCrystalUserItem) {
-                              setIsImbueModalOpen(true);
-                            }
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    {isImbueModalOpen &&
-                      selectedImbuableItem &&
-                      selectedCrystalUserItem && (
-                        <Modal
-                          title="Imbue Item"
-                          proceed_label="Imbue Item"
-                          proceed_loading_label="Imbuing"
-                          isOpen={isImbueModalOpen}
-                          setIsOpen={setIsImbueModalOpen}
-                          isLoading={imbueFlight.isPending}
-                          keepOpenOnAccept
-                          proceedDisabled={committedImbue !== null}
-                          onAccept={() => void handleImbueItem()}
-                          confirmClassName="bg-purple-600 text-white hover:bg-purple-700"
-                        >
-                          <div className="space-y-4">
-                            <div>
-                              <h4 className="mb-2 font-semibold text-sm">
-                                Target Item
-                              </h4>
-                              {selectedImbuableItem.item && (
-                                <ItemWithEffects
-                                  item={{
-                                    ...selectedImbuableItem.item,
-                                    imbuements: shownImbuements(
-                                      selectedImbuableItem,
-                                    ).map((i) => i.item),
-                                  }}
-                                />
-                              )}
-                            </div>
-                            <div>
-                              <h4 className="mb-2 font-semibold text-sm">Crystal</h4>
-                              {selectedCrystalUserItem.item && (
-                                <ItemWithEffects item={selectedCrystalUserItem.item} />
-                              )}
-                            </div>
-                            <div className="rounded-lg bg-slate-100 p-3 dark:bg-slate-800">
-                              <p className="text-muted-foreground text-sm">
-                                This will permanently imbue your{" "}
-                                {selectedImbuableItem.item?.name} with the effects of{" "}
-                                {selectedCrystalUserItem.item?.name}. The crystal will
-                                be consumed in the process.
-                              </p>
-                            </div>
-                          </div>
-                        </Modal>
-                      )}
-                  </>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {committedImbue && (
-          <Card aria-busy="true">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Gem className="h-5 w-5" />
-                Imbuement Started
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p
-                role="status"
-                aria-live="polite"
-                className="text-muted-foreground text-sm"
-              >
-                {committedImbue.targetName} is being imbued with{" "}
-                {committedImbue.crystalName}. Updating your inventory…
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Manage Existing Imbuements */}
-        {(() => {
-          const itemsWithImbuements = (userItems || []).filter(
-            (userItem) => shownImbuements(userItem).length > 0,
-          );
-
-          return itemsWithImbuements.length > 0 ? (
+        <Accordion
+          title="Catalog / Queue"
+          icon={BookOpen}
+          selectedTitle={openCatalog}
+          unselectedSubtitle={craftSummary}
+          onClick={setOpenCatalog}
+          collapsible
+          keepMounted
+        >
+          <div className="space-y-4 py-3">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Star className="h-5 w-5" />
-                  Manage Existing Imbuements
-                  <Badge variant="outline" className="ml-auto">
-                    {itemsWithImbuements.length} item
-                    {itemsWithImbuements.length !== 1 ? "s" : ""}
-                  </Badge>
+                  <BookOpen className="h-5 w-5" />
+                  Crafting Catalog
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {itemsWithImbuements.map((userItem) => (
-                    <div key={userItem.id} className="rounded-lg border p-4">
-                      <div className="mb-3 flex items-center gap-3">
-                        <ContentImage
-                          image={userItem.item?.image || ""}
-                          alt={userItem.item?.name || "Unknown"}
-                          className="h-12 w-12"
-                        />
-                        <div>
-                          <h4 className="font-semibold">{userItem.item?.name}</h4>
-                          {(() => {
-                            const done = shownImbuements(userItem).length;
-                            return (
-                              <p className="text-muted-foreground text-sm">
-                                {done} imbuement{done !== 1 ? "s" : ""}
-                              </p>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                      <ItemWithEffects
-                        item={{
-                          ...userItem.item,
-                          imbuements: shownImbuements(userItem).map((i) => i.item),
-                        }}
-                      />
-                      {/* Imbuements with remove buttons */}
-                      {userItem.imbuements.length > 0 && (
-                        <div className="mt-3 rounded-lg bg-purple-100 p-3">
-                          <h4 className="mb-2 font-semibold text-purple-800">
-                            Imbuements
-                          </h4>
-                          <div className="space-y-2">
-                            {shownImbuements(userItem).map((imbuement) => (
-                              <div
-                                key={imbuement.id}
-                                className="flex items-center justify-between rounded bg-white p-2"
-                              >
-                                <div className="flex items-center space-x-2">
-                                  <ContentImage
-                                    image={imbuement.item.image}
-                                    alt={imbuement.item.name}
-                                    className="h-8 w-8"
-                                  />
-                                  <span className="font-medium">
-                                    {imbuement.item.name}
-                                  </span>
-                                </div>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  disabled={
-                                    pendingRemoveImbuement?.userItemImbuementId ===
-                                    imbuement.id
-                                  }
-                                  onClick={() => {
-                                    setRemoveImbuementTarget({
-                                      userItemId: userItem.id,
-                                      userItemImbuementId: imbuement.id,
-                                      targetName: userItem.item?.name || "item",
-                                      crystalName: imbuement.item.name,
-                                      returnsCrystal: !userItem.item?.canBeImbued,
-                                    });
-                                  }}
-                                >
-                                  Remove
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                <p className="mb-4 text-muted-foreground text-sm">
+                  Browse all craftable recipes by category. Select a category to view
+                  available items.
+                </p>
+                <CraftingCatalog
+                  craftableItems={craftableItems}
+                  userItems={userItems}
+                  userData={userData}
+                  isBusy={
+                    !!craftingStatus?.isCurrentlyCrafting ||
+                    !!craftingQueue?.waiting.length
+                  }
+                  isQueueFull={
+                    (!!craftingStatus?.isCurrentlyCrafting ||
+                      !!craftingQueue?.waiting.length) &&
+                    (craftingStatus?.isCurrentlyCrafting ? 1 : 0) +
+                      (craftingQueue?.waiting.length ?? 0) >=
+                      (craftingQueue?.capacity ?? 1)
+                  }
+                />
               </CardContent>
             </Card>
-          ) : null;
-        })()}
 
-        <Modal
-          id="remove-imbuement-confirmation"
-          title="Remove Imbuement"
-          isOpen={removeImbuementTarget !== null}
-          setIsOpen={(open) => {
-            if (!open && !pendingRemoveImbuement) {
-              setRemoveImbuementTarget(null);
-            }
-          }}
-          proceed_label="Remove"
-          proceed_loading_label="Removing"
-          confirmClassName="bg-red-600 text-white hover:bg-red-700"
-          isLoading={removeImbuementFlight.isPending}
-          keepOpenOnAccept
-          onAccept={() => void handleRemoveImbuement()}
+            <TimedQueue
+              title="Crafting queue"
+              subtitle="Crafts that start when the current one is ready"
+              initialBreak={false}
+              capacity={craftingQueue?.capacity ?? 1}
+              help="Choose a recipe while crafting to queue it. Its materials are set aside when queued and returned if you cancel before it starts. Crafting experience and quest progress are granted when a queued craft starts, also while you are offline. Waiting times are base durations; Territory War bonuses active when a job starts can shorten them."
+              waitingDurationLabel="base time"
+              active={
+                craftingStatus?.isCurrentlyCrafting &&
+                craftingStatus.craftingFinishedAt &&
+                craftingStatus.currentCraftingItem
+                  ? {
+                      title: craftingStatus.currentCraftingItem.name,
+                      finishesAt: new Date(craftingStatus.craftingFinishedAt),
+                    }
+                  : null
+              }
+              waiting={(craftingQueue?.waiting ?? []).map((job) => ({
+                id: job.id,
+                title: `${job.quantity}x ${job.name}`,
+                detail: job.materials.map((m) => `${m.quantity} ${m.name}`).join(", "),
+                startsAt: job.startsAt,
+                finishesAt: job.finishesAt,
+              }))}
+              cancelLabel="Cancel and return materials"
+              onCancel={(queueId) => cancelQueuedCraft({ queueId })}
+              isPending={isCancellingQueuedCraft}
+              emptyText="Nothing crafting. Pick a recipe from the catalog to start."
+              onActiveFinish={() => {
+                // Reading the queue starts the next craft, so the inventory is read after it.
+                void utils.occupation.getCraftingQueue
+                  .invalidate()
+                  .then(() => utils.item.getUserItems.invalidate());
+              }}
+            />
+
+            {/* Current Crafting */}
+            {craftingStatus?.isCurrentlyCrafting && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Hammer className="h-5 w-5" />
+                    Currently Crafting
+                    {craftingStatus.craftingFinishedAt && (
+                      <span className="font-normal text-muted-foreground text-sm">
+                        (
+                        <Countdown
+                          targetDate={craftingStatus.craftingFinishedAt}
+                          onEndShow="Ready!"
+                          onFinish={() => {
+                            void utils.item.getUserItems.invalidate();
+                          }}
+                        />
+                        )
+                      </span>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col gap-4">
+                    {craftingStatus.currentCraftingItem && (
+                      <ItemWithEffects item={craftingStatus.currentCraftingItem} />
+                    )}
+                    {craftingStatus.craftingFinishedAt &&
+                      new Date(craftingStatus.craftingFinishedAt) <= new Date() && (
+                        <div className="font-medium text-green-600 text-sm">
+                          Finished!
+                        </div>
+                      )}
+                    {currentCraftingUserItemId &&
+                      canChangeContent(userData?.role || "USER") && (
+                        <Button
+                          onClick={() =>
+                            finishCraftingImmediatelyMutation.mutate({
+                              userItemId: currentCraftingUserItemId,
+                            })
+                          }
+                          disabled={finishCraftingImmediatelyMutation.isPending}
+                          loading={finishCraftingImmediatelyMutation.isPending}
+                          variant="outline"
+                          size="sm"
+                          className="w-fit"
+                        >
+                          <Zap className="mr-2 h-4 w-4" />
+                          Instant Finish (Staff)
+                        </Button>
+                      )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </Accordion>
+
+        <Accordion
+          title="Imbue"
+          icon={Gem}
+          selectedTitle={openImbue}
+          unselectedSubtitle={imbueSummary}
+          onClick={setOpenImbue}
+          collapsible
+          keepMounted
         >
-          {removeImbuementTarget && (
-            <div className="space-y-3">
-              <p>
-                Remove the <strong>{removeImbuementTarget.crystalName}</strong>{" "}
-                imbuement from <strong>{removeImbuementTarget.targetName}</strong>?
-              </p>
-              {removeImbuementTarget.returnsCrystal ? (
-                <p className="text-muted-foreground text-sm">
-                  Imbuing is disabled on this item, so the crystal will be returned to
-                  your inventory.
-                </p>
-              ) : (
-                <p className="font-medium text-red-700 text-sm">
-                  This cannot be undone. The crystal will be destroyed and will not be
-                  returned to your inventory.
-                </p>
-              )}
-              {pendingRemoveImbuement && (
-                <p role="status" aria-live="polite" className="text-sm">
-                  Removing
-                </p>
-              )}
-            </div>
-          )}
-        </Modal>
+          <div className="space-y-4 py-3">
+            {/* Current Imbuing */}
+            {activeImbuement && activeImbuingItem && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Gem className="h-5 w-5" />
+                    Currently Imbuing
+                    {activeImbuement?.craftingFinishedAt && (
+                      <span className="font-normal text-muted-foreground text-sm">
+                        (
+                        <Countdown
+                          targetDate={new Date(activeImbuement.craftingFinishedAt)}
+                          onEndShow="Ready!"
+                          onFinish={() => {
+                            void utils.item.getUserItems.invalidate();
+                          }}
+                        />
+                        )
+                      </span>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col gap-4">
+                    <p className="text-muted-foreground text-sm">
+                      You can imbue one item at a time. Imbueable Items comes back when
+                      this one finishes.
+                    </p>
+                    <ItemWithEffects
+                      item={{
+                        ...activeImbuingItem.item,
+                        imbuements: activeImbuingItem.imbuements.map((i) => i.item),
+                      }}
+                      key={activeImbuingItem.id}
+                    />
+                    {canChangeContent(userData?.role || "USER") && activeImbuement && (
+                      <Button
+                        onClick={() =>
+                          finishImbuingImmediatelyMutation.mutate({
+                            userItemImbuementId: activeImbuement.id,
+                          })
+                        }
+                        disabled={finishImbuingImmediatelyMutation.isPending}
+                        loading={finishImbuingImmediatelyMutation.isPending}
+                        variant="outline"
+                        size="sm"
+                        className="w-fit"
+                      >
+                        <Zap className="mr-2 h-4 w-4" />
+                        Instant Finish (Staff)
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-        {/* Repair Items */}
-        {(() => {
-          const { itemsNeedingRepair, totalCost: totalRepairCost } =
-            calcRepairAllCost(userItems);
+            {/* Imbue New Item */}
+            {!activeImbuingItem && !activeImbuement && !committedImbue && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Gem className="h-5 w-5" />
+                    Imbueable Items
+                    <Badge variant="outline" className="ml-auto">
+                      {capitalizeFirstLetter(userCraftingRank)} rank: up to{" "}
+                      {maxCrystalsPerItem} per item
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {imbueBlockedMessage ? (
+                      <>
+                        <p
+                          className="text-muted-foreground text-sm"
+                          data-testid="imbue-blocked-message"
+                        >
+                          {imbueBlockedMessage}
+                        </p>
+                        {maxCrystalsPerItem > 0 && rankCapNotes}
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <h4 className="mb-2 font-medium">Select Item to Imbue</h4>
+                          <ActionSelector
+                            items={openImbueOptions.map(
+                              ({
+                                userItem,
+                                currentCrystals,
+                                effectiveMaxImbuements,
+                              }) => ({
+                                id: userItem.id,
+                                name: `${userItem.item?.name || "Unknown"} (${currentCrystals}/${effectiveMaxImbuements} crystals)`,
+                                image: userItem.item?.image || "",
+                                rarity: userItem.item?.rarity || "COMMON",
+                                type: "item" as const,
+                                effects: userItem.item?.effects || [],
+                                hidden: false,
+                              }),
+                            )}
+                            selectedId={selectedImbuableItem?.id}
+                            showBgColor={false}
+                            showLabels={true}
+                            onClick={(id) => {
+                              const item = imbuableItems.find((item) => item.id === id);
+                              setSelectedImbuableItem(
+                                item === selectedImbuableItem ? undefined : item,
+                              );
+                              setSelectedCrystalUserItem(undefined);
+                            }}
+                          />
+                          {rankCapNotes}
+                        </div>
 
-          return itemsNeedingRepair.length > 0 ? (
-            <Card>
+                        {selectedImbuableItem && (
+                          <div>
+                            <h4 className="mb-2 font-medium">Select Crystal</h4>
+                            <p className="mb-2 text-muted-foreground text-sm">
+                              Only crystals compatible with{" "}
+                              <strong>{selectedImbuableItem.item?.itemType}</strong>{" "}
+                              items are shown. PvE-only crystals require a PvE-only
+                              item.
+                            </p>
+                            <ActionSelector
+                              items={crystals
+                                .filter((userItem) => {
+                                  const crystal = userItem.item;
+                                  if (!crystal) return false;
+                                  if (
+                                    crystal.battleUsageType === "PVE" &&
+                                    selectedImbuableItem.item?.battleUsageType !== "PVE"
+                                  ) {
+                                    return false;
+                                  }
+
+                                  const alreadyOnItem =
+                                    selectedImbuableItem.imbuements?.some(
+                                      (imb) => imb.imbuementItemId === crystal.id,
+                                    );
+                                  if (alreadyOnItem) return false;
+
+                                  // If crystal has no target types specified, it can be used on any item
+                                  if (!crystal.crystalTargetTypes) {
+                                    return true;
+                                  }
+
+                                  // Check if the target item type matches the crystal's allowed type
+                                  return (
+                                    crystal.crystalTargetTypes ===
+                                    selectedImbuableItem.item?.itemType
+                                  );
+                                })
+                                .map((userItem) => ({
+                                  id: userItem.id,
+                                  name: userItem.item?.name || "Unknown",
+                                  image: userItem.item?.image || "",
+                                  rarity: userItem.item?.rarity || "COMMON",
+                                  type: "item" as const,
+                                  effects: userItem.item?.effects || [],
+                                  hidden: false,
+                                }))}
+                              selectedId={selectedCrystalUserItem?.id}
+                              showBgColor={false}
+                              showLabels={true}
+                              onClick={(id) => {
+                                const crystal = crystals.find((item) => item.id === id);
+                                setSelectedCrystalUserItem(
+                                  crystal === selectedCrystalUserItem
+                                    ? undefined
+                                    : crystal,
+                                );
+                                if (crystal && crystal !== selectedCrystalUserItem) {
+                                  setIsImbueModalOpen(true);
+                                }
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        {isImbueModalOpen &&
+                          selectedImbuableItem &&
+                          selectedCrystalUserItem && (
+                            <Modal
+                              title="Imbue Item"
+                              proceed_label="Imbue Item"
+                              proceed_loading_label="Imbuing"
+                              isOpen={isImbueModalOpen}
+                              setIsOpen={setIsImbueModalOpen}
+                              isLoading={imbueFlight.isPending}
+                              keepOpenOnAccept
+                              proceedDisabled={committedImbue !== null}
+                              onAccept={() => void handleImbueItem()}
+                              confirmClassName="bg-purple-600 text-white hover:bg-purple-700"
+                            >
+                              <div className="space-y-4">
+                                <div>
+                                  <h4 className="mb-2 font-semibold text-sm">
+                                    Target Item
+                                  </h4>
+                                  {selectedImbuableItem.item && (
+                                    <ItemWithEffects
+                                      item={{
+                                        ...selectedImbuableItem.item,
+                                        imbuements: shownImbuements(
+                                          selectedImbuableItem,
+                                        ).map((i) => i.item),
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                                <div>
+                                  <h4 className="mb-2 font-semibold text-sm">
+                                    Crystal
+                                  </h4>
+                                  {selectedCrystalUserItem.item && (
+                                    <ItemWithEffects
+                                      item={selectedCrystalUserItem.item}
+                                    />
+                                  )}
+                                </div>
+                                <div className="rounded-lg bg-slate-100 p-3 dark:bg-slate-800">
+                                  <p className="text-muted-foreground text-sm">
+                                    This will permanently imbue your{" "}
+                                    {selectedImbuableItem.item?.name} with the effects
+                                    of {selectedCrystalUserItem.item?.name}. The crystal
+                                    will be consumed in the process.
+                                  </p>
+                                </div>
+                              </div>
+                            </Modal>
+                          )}
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {committedImbue && (
+              <Card aria-busy="true">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Gem className="h-5 w-5" />
+                    Imbuement Started
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className="text-muted-foreground text-sm"
+                  >
+                    {committedImbue.targetName} is being imbued with{" "}
+                    {committedImbue.crystalName}. Updating your inventory…
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Manage Existing Imbuements */}
+            {(() => {
+              const itemsWithImbuements = (userItems || []).filter(
+                (userItem) => shownImbuements(userItem).length > 0,
+              );
+
+              return itemsWithImbuements.length > 0 ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Star className="h-5 w-5" />
+                      Manage Existing Imbuements
+                      <Badge variant="outline" className="ml-auto">
+                        {itemsWithImbuements.length} item
+                        {itemsWithImbuements.length !== 1 ? "s" : ""}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {itemsWithImbuements.map((userItem) => (
+                        <div key={userItem.id} className="rounded-lg border p-4">
+                          <div className="mb-3 flex items-center gap-3">
+                            <ContentImage
+                              image={userItem.item?.image || ""}
+                              alt={userItem.item?.name || "Unknown"}
+                              className="h-12 w-12"
+                            />
+                            <div>
+                              <h4 className="font-semibold">{userItem.item?.name}</h4>
+                              {(() => {
+                                const done = shownImbuements(userItem).length;
+                                return (
+                                  <p className="text-muted-foreground text-sm">
+                                    {done} imbuement{done !== 1 ? "s" : ""}
+                                  </p>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                          <ItemWithEffects
+                            item={{
+                              ...userItem.item,
+                              imbuements: shownImbuements(userItem).map((i) => i.item),
+                            }}
+                          />
+                          {/* Imbuements with remove buttons */}
+                          {userItem.imbuements.length > 0 && (
+                            <div className="mt-3 rounded-lg bg-purple-100 p-3">
+                              <h4 className="mb-2 font-semibold text-purple-800">
+                                Imbuements
+                              </h4>
+                              <div className="space-y-2">
+                                {shownImbuements(userItem).map((imbuement) => (
+                                  <div
+                                    key={imbuement.id}
+                                    className="flex items-center justify-between rounded bg-white p-2"
+                                  >
+                                    <div className="flex items-center space-x-2">
+                                      <ContentImage
+                                        image={imbuement.item.image}
+                                        alt={imbuement.item.name}
+                                        className="h-8 w-8"
+                                      />
+                                      <span className="font-medium">
+                                        {imbuement.item.name}
+                                      </span>
+                                    </div>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      disabled={
+                                        pendingRemoveImbuement?.userItemImbuementId ===
+                                        imbuement.id
+                                      }
+                                      onClick={() => {
+                                        setRemoveImbuementTarget({
+                                          userItemId: userItem.id,
+                                          userItemImbuementId: imbuement.id,
+                                          targetName: userItem.item?.name || "item",
+                                          crystalName: imbuement.item.name,
+                                          returnsCrystal: !userItem.item?.canBeImbued,
+                                        });
+                                      }}
+                                    >
+                                      Remove
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : null;
+            })()}
+
+            <Modal
+              id="remove-imbuement-confirmation"
+              title="Remove Imbuement"
+              isOpen={removeImbuementTarget !== null}
+              setIsOpen={(open) => {
+                if (!open && !pendingRemoveImbuement) {
+                  setRemoveImbuementTarget(null);
+                }
+              }}
+              proceed_label="Remove"
+              proceed_loading_label="Removing"
+              confirmClassName="bg-red-600 text-white hover:bg-red-700"
+              isLoading={removeImbuementFlight.isPending}
+              keepOpenOnAccept
+              onAccept={() => void handleRemoveImbuement()}
+            >
+              {removeImbuementTarget && (
+                <div className="space-y-3">
+                  <p>
+                    Remove the <strong>{removeImbuementTarget.crystalName}</strong>{" "}
+                    imbuement from <strong>{removeImbuementTarget.targetName}</strong>?
+                  </p>
+                  {removeImbuementTarget.returnsCrystal ? (
+                    <p className="text-muted-foreground text-sm">
+                      Imbuing is disabled on this item, so the crystal will be returned
+                      to your inventory.
+                    </p>
+                  ) : (
+                    <p className="font-medium text-red-700 text-sm">
+                      This cannot be undone. The crystal will be destroyed and will not
+                      be returned to your inventory.
+                    </p>
+                  )}
+                  {pendingRemoveImbuement && (
+                    <p role="status" aria-live="polite" className="text-sm">
+                      Removing
+                    </p>
+                  )}
+                </div>
+              )}
+            </Modal>
+          </div>
+        </Accordion>
+
+        <Accordion
+          title="Repair Items"
+          icon={Wrench}
+          selectedTitle={openRepair}
+          unselectedSubtitle={repairStatus ?? `Items needing repair: ${count}`}
+          onClick={setOpenRepair}
+          collapsible
+        >
+          {count > 0 ? (
+            <Card className="my-3">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Wrench className="h-5 w-5" />
-                  Repair Items
-                  <Badge variant="outline" className="ml-auto">
-                    {itemsNeedingRepair.length} item
-                    {itemsNeedingRepair.length !== 1 ? "s" : ""}
-                  </Badge>
-                </CardTitle>
+                <CardDescription>
+                  Total repair cost: {totalCost.toLocaleString()} ryo.
+                  {!canAffordRepair &&
+                    ` You have ${userData.money.toLocaleString()} ryo.`}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {/* Repair All Button */}
-                  {(() => {
-                    const canAfford = (userData?.money || 0) >= totalRepairCost;
-                    return (
-                      <div className="mb-4 flex items-center justify-between rounded-lg border bg-muted/50 p-4">
-                        <div>
-                          <p className="font-semibold">Repair All Items</p>
-                          <p className="text-muted-foreground text-sm">
-                            Total cost:{" "}
-                            <span
-                              className={canAfford ? "text-green-600" : "text-red-600"}
-                            >
-                              {totalRepairCost.toLocaleString()} ryo
-                            </span>
-                            {!canAfford && (
-                              <span className="ml-2">
-                                (You have {(userData?.money ?? 0).toLocaleString()} ryo)
-                              </span>
-                            )}
-                          </p>
-                        </div>
-                        <Confirm
-                          title="Repair All Items"
-                          proceed_label="Repair All"
-                          button={
-                            <Button
-                              variant="default"
-                              disabled={repairAllMutation.isPending || !canAfford}
-                              loading={repairAllMutation.isPending}
-                            >
-                              <Wrench className="mr-2 h-4 w-4" />
-                              Repair All
-                            </Button>
-                          }
-                          onAccept={() => repairAllMutation.mutate()}
-                        >
-                          <p>
-                            Are you sure you want to repair all{" "}
-                            {itemsNeedingRepair.length} item
-                            {itemsNeedingRepair.length !== 1 ? "s" : ""} for{" "}
-                            <strong>{totalRepairCost.toLocaleString()} ryo</strong>?
-                          </p>
-                        </Confirm>
-                      </div>
-                    );
-                  })()}
                   {itemsNeedingRepair.map((userItem) => {
                     const repairCost = calcItemRepairCost(userItem);
                     const durabilityPercent = Math.round(
@@ -1001,10 +1063,10 @@ export default function OccupationCrafting() {
                           <Button
                             variant="info"
                             onClick={() =>
-                              repairItemMutation.mutate({ userItemId: userItem.id })
+                              repairItem.mutate({ userItemId: userItem.id })
                             }
-                            disabled={repairItemMutation.isPending}
-                            loading={repairItemMutation.isPending}
+                            disabled={isRepairPending}
+                            loading={repairItem.isPending}
                           >
                             <Wrench className="mr-2 h-4 w-4" />
                             Repair
@@ -1016,12 +1078,21 @@ export default function OccupationCrafting() {
                 </div>
               </CardContent>
             </Card>
-          ) : null;
-        })()}
+          ) : (
+            <p className="text-muted-foreground py-3 text-sm">{repairStatus}</p>
+          )}
+        </Accordion>
 
         <CraftingInfoCard />
       </div>
     </ContentBox>
+  );
+
+  return (
+    <>
+      {renderHeader(repairAllAction)}
+      {craftingPanel}
+    </>
   );
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Ellipsis } from "lucide-react";
+import { List } from "lucide-react";
 import type { ReactNode, RefObject } from "react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -169,7 +169,7 @@ export function ContentBoxHeaderActions({
       <Button
         ref={triggerRef}
         size="icon"
-        className={cn("h-[44px] w-[44px]", !isOverflowing && "hidden")}
+        className={cn(!isOverflowing && "hidden")}
         hidden={!isOverflowing}
         aria-hidden={!isOverflowing || undefined}
         aria-label={`${label} controls`}
@@ -177,7 +177,7 @@ export function ContentBoxHeaderActions({
         aria-expanded={isOverflowing && isOpen}
         onClick={() => setIsOpen((open) => !open)}
       >
-        <Ellipsis className="h-6 w-6" aria-hidden />
+        <List className="h-5 w-5" aria-hidden />
       </Button>
       <section
         id={panelId}

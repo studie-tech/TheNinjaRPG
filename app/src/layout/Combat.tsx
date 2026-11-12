@@ -22,7 +22,6 @@ import { CombatAggro } from "@/layout/CombatAggro";
 import { CombatLobby } from "@/layout/CombatLobby";
 import { CombatResourceBars } from "@/layout/CombatResourceBars";
 import { CombatResultScreen } from "@/layout/CombatResultScreen";
-import { DayNightIndicator } from "@/layout/DayNightIndicator";
 import Loader from "@/layout/Loader";
 import { QuestUpdateModal } from "@/layout/Logbook";
 import { VisualizeEffects, VisualizeGroundEffects } from "@/layout/VisualizeEffects";
@@ -60,11 +59,9 @@ import {
   type CombatSceneSnapshot,
   createCombatScene,
 } from "@/libs/rendering/scenes/combat";
-import type { WorldWeather } from "@/libs/rendering/worldWeather";
 import { showMutationToast } from "@/libs/toast";
 import { isTutorialActive } from "@/libs/tutorial";
 import { playPreloadedAudio, preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
-import { isStaffRole } from "@/utils/permissions";
 import { secondsFromNow } from "@/utils/time";
 import {
   combatActionIdAtom,
@@ -119,8 +116,6 @@ const Combat: React.FC<CombatProps> = (props) => {
 
   // Light layout preference state
   const [lightLayout] = useLocalStorage<boolean>(LIGHT_LAYOUT_STORAGE_KEY, false);
-  const [lightingPreviewDate, setLightingPreviewDate] = useState<Date | null>(null);
-  const [weatherPreview, setWeatherPreview] = useState<WorldWeather | null>(null);
   const [storedZoom, setStoredZoom] = useLocalStorage<number>("combatZoom", 1.5);
 
   // References which shouldn't update
@@ -871,9 +866,6 @@ const Combat: React.FC<CombatProps> = (props) => {
         aggro: config.showAggro ? aggro : undefined,
         timeDiff,
         cycleEnabled: true,
-        // Staff previews affect only rendering; turn deadlines use the server clock.
-        lightDate: isStaffRole(userData?.role) ? lightingPreviewDate : null,
-        weather: isStaffRole(userData?.role) ? weatherPreview : null,
         assets: gameAssetsRef.current.assets,
         requestedIds: gameAssetsRef.current.requestedIds,
         active: isPageActive && !result,
@@ -955,8 +947,6 @@ const Combat: React.FC<CombatProps> = (props) => {
     isPageActive,
     config,
     combat.isReady,
-    lightingPreviewDate,
-    weatherPreview,
   ]);
   useEffect(() => {
     lastHoverKeyRef.current = null;
@@ -983,17 +973,6 @@ const Combat: React.FC<CombatProps> = (props) => {
   return (
     <>
       <div id="tutorial-combat-field" ref={mountRef} hidden={!!result}></div>
-
-      {!result && !isInLobby && !webglError && combat.isReady && battleState.battle && (
-        <div className="absolute top-2 right-2 z-10">
-          <DayNightIndicator
-            previewDate={lightingPreviewDate}
-            onPreviewDateChange={setLightingPreviewDate}
-            previewWeather={weatherPreview}
-            onPreviewWeatherChange={setWeatherPreview}
-          />
-        </div>
-      )}
 
       {!result &&
         (!hasGameAssets || !combat.isReady) &&

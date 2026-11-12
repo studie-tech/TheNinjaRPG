@@ -99,6 +99,24 @@ afterEach(() => {
 const mount = () =>
   render(<BadgesTab userId="target" username="Target" currentBadges={currentBadges} />);
 
+it.each([
+  { role: "USER", canViewStatistics: false },
+  { role: "guest", canViewStatistics: false },
+  { role: "OWNER", canViewStatistics: true },
+])(
+  "shows badge statistics according to the viewer's role ($role)",
+  ({ role, canViewStatistics }) => {
+    vi.spyOn(UserContext, "useUserData").mockReturnValue({
+      data: role === "guest" ? undefined : { role },
+    } as never);
+    const view = mount();
+    expect(view.getByAltText("Old Badge")).toBeTruthy();
+    expect(
+      !!view.queryByRole("button", { name: "View statistics for Old Badge" }),
+    ).toBe(canViewStatistics);
+  },
+);
+
 it("opens and dismisses the badge assignment confirmation", async () => {
   const view = mount();
   expect(view.queryByRole("dialog")).toBeNull();

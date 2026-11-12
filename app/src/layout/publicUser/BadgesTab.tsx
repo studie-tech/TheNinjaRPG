@@ -330,55 +330,67 @@ export const BadgesTab: React.FC<BadgesTabProps> = ({
         }
       >
         {displayedBadges.length === 0 && <p>No badges found</p>}
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-5">
           {displayedBadges.map(({ badge: displayedBadge, userBadge }) => (
-            <div key={displayedBadge.id} className="relative text-center">
+            <div
+              key={displayedBadge.id}
+              className={
+                canModify
+                  ? "grid grid-cols-[auto_minmax(0,1fr)] items-start gap-1.5"
+                  : undefined
+              }
+            >
+              {canModify && (
+                <div className="flex flex-col gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`View statistics for ${displayedBadge.name}`}
+                    title="Badge statistics"
+                    className="rounded-full border-2 border-black bg-amber-100 p-0 text-slate-700 hover:bg-amber-200 hover:text-orange-700"
+                    onClick={(event) => {
+                      statisticsTrigger.current = event.currentTarget;
+                      setStatisticsBadge(displayedBadge);
+                    }}
+                  >
+                    <BarChart2 aria-hidden="true" className="h-5 w-5" />
+                  </Button>
+                  {userBadge && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Remove ${displayedBadge.name} from ${username}`}
+                      disabled={
+                        removalPending &&
+                        removal?.assignmentKey ===
+                          badgeAssignmentKey(userBadge.badgeId, userBadge.createdAt)
+                      }
+                      className="rounded-full border-2 border-black bg-amber-100 p-0 hover:bg-amber-100"
+                      onClick={() => openBadgeRemoval(userBadge)}
+                    >
+                      <Trash2 className="h-7 w-7 fill-slate-500 p-1 hover:fill-orange-500" />
+                    </Button>
+                  )}
+                </div>
+              )}
               <Image
                 src={displayedBadge.image}
                 alt={displayedBadge.name}
                 width={128}
                 height={128}
+                className="mx-auto h-auto w-full max-w-32"
               />
-              <div>
-                <div className="font-bold">{displayedBadge.name}</div>
+              <div className="col-span-full text-center font-bold wrap-anywhere">
+                {displayedBadge.name}
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={`View statistics for ${displayedBadge.name}`}
-                title="Badge statistics"
-                className="absolute top-0 left-[8%] h-9 w-9 rounded-full border-2 border-black bg-amber-100 p-0 text-slate-700 hover:bg-amber-200 hover:text-orange-700"
-                onClick={(event) => {
-                  statisticsTrigger.current = event.currentTarget;
-                  setStatisticsBadge(displayedBadge);
-                }}
-              >
-                <BarChart2 aria-hidden="true" className="h-5 w-5" />
-              </Button>
-              {canModify && userBadge && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Remove ${displayedBadge.name} from ${username}`}
-                  disabled={
-                    removalPending &&
-                    removal?.assignmentKey ===
-                      badgeAssignmentKey(userBadge.badgeId, userBadge.createdAt)
-                  }
-                  className="absolute top-0 right-[8%] h-9 w-9 rounded-full border-2 border-black bg-amber-100 p-0 hover:bg-amber-100"
-                  onClick={() => openBadgeRemoval(userBadge)}
-                >
-                  <Trash2 className="h-7 w-7 fill-slate-500 p-1 hover:fill-orange-500" />
-                </Button>
-              )}
             </div>
           ))}
         </div>
       </ContentBox>
 
-      {statisticsBadge && (
+      {canModify && statisticsBadge && (
         <BadgeStatisticsModal
           key={statisticsBadge.id}
           badge={statisticsBadge}
