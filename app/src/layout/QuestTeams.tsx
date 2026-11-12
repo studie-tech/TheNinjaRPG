@@ -117,6 +117,7 @@ export const QuestTeams = ({
   if (!teamEnabled) return null;
   if (!user) return <Loader explanation="Loading quest teams..." />;
   const current = data?.current;
+  const capacity = current?.maxPlayers ?? (questId ? maxPlayers : undefined);
   // Compact summaries link to the full team controls and chat.
   if (compact)
     return current || data?.teams.length || error ? (
@@ -174,7 +175,9 @@ export const QuestTeams = ({
           <p className="mt-1 text-sm">
             {current
               ? `${current.members.length}/${current.maxPlayers} members · ${current.isPublic ? "Public" : "Private"} team`
-              : `Share quest progress with up to ${maxPlayers} players.`}
+              : capacity
+                ? `Share quest progress with up to ${capacity} players.`
+                : "Find a team to share quest progress."}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -187,8 +190,8 @@ export const QuestTeams = ({
             <PopoverContent align="end" className="space-y-2 text-sm">
               <p className="font-semibold">Quest teams</p>
               <p>
-                Up to {maxPlayers} players share every objective, even when joining
-                mid-quest.
+                {capacity ? `Up to ${capacity} players` : "Teammates"} share every
+                objective, even when joining mid-quest.
               </p>
               <p>
                 Each eligible player claims the full reward. Previously completed
