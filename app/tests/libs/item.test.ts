@@ -1168,6 +1168,19 @@ describe("countMergeableStackTypes", () => {
     ...overrides,
   });
 
+  it.each([[[25]], [[25, 3]]])(
+    "skips stacks %p holding more than their rows can at the stack size",
+    (quantities) => {
+      expect(
+        countMergeableStackTypes(
+          quantities.map((quantity) => stack(quantity)),
+          false,
+          now,
+        ),
+      ).toBe(0);
+    },
+  );
+
   it("counts an item type whose carried stacks can be packed tighter", () => {
     expect(countMergeableStackTypes([stack(4), stack(3)], false, now)).toBe(1);
     expect(countMergeableStackTypes([stack(7), stack(7)], false, now)).toBe(1);

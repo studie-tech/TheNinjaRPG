@@ -4398,6 +4398,11 @@ async function executeMergeStacksForItemBucket(
   const numFullStacks = Math.floor(totalQuantity / stackSize);
   const remainder = totalQuantity % stackSize;
   const targetStacks = numFullStacks + (remainder > 0 ? 1 : 0);
+  // Publishing only rewrites existing rows, so stacks holding more than they could at the
+  // stack size (after the item's stack size was lowered) stay as they are.
+  if (targetStacks > bucketItems.length) {
+    return { success: true, didMerge: false, message: "", inventoryChanges: [] };
+  }
 
   // Keep the strongest ownership progression when consolidating consumables. Gear
   // buckets already share a level, so their deterministic ID ordering stays intact.

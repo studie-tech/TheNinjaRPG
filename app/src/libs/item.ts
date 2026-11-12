@@ -902,6 +902,8 @@ export const countMergeableStackTypes = (
     const total = quantities.reduce((sum, quantity) => sum + quantity, 0);
     const packed = splitIntoStacks(total, stackSize);
     const sorted = [...quantities].sort((a, b) => b - a);
+    // A merge cannot open rows, so a bucket needing more than it has stays as it is.
+    if (packed.length > sorted.length) continue;
     if (sorted.length !== packed.length || sorted.some((q, i) => q !== packed[i])) {
       mergeable.add(itemId);
     }
