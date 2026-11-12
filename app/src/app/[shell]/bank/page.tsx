@@ -52,6 +52,7 @@ import {
   type MoneyTransferSchemaInput,
 } from "@/validators/bank";
 
+/** Render bank balances, money transfers and claimable interest. */
 export default function Bank() {
   // State
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
@@ -75,15 +76,15 @@ export default function Bank() {
 
   // Forms
   const toBankForm = useForm<MoneyTransferSchemaInput, unknown, MoneyTransferSchema>({
-    defaultValues: { amount: 0 },
+    defaultValues: { amount: "" },
     resolver: zodResolver(fromPocketSchema),
   });
   const toPocketForm = useForm<MoneyTransferSchemaInput, unknown, MoneyTransferSchema>({
-    defaultValues: { amount: 0 },
+    defaultValues: { amount: "" },
     resolver: zodResolver(fromBankSchema),
   });
   const toUserForm = useForm<MoneyTransferSchemaInput, unknown, MoneyTransferSchema>({
-    defaultValues: { amount: 0 },
+    defaultValues: { amount: "" },
     resolver: zodResolver(fromBankSchema),
   });
 

@@ -91,6 +91,19 @@ afterEach(() => {
 });
 
 describe("bank transfers", () => {
+  it("starts every amount empty so its placeholder shows", () => {
+    renderPage(<Bank />);
+    for (const placeholder of [
+      "Transfer to bank",
+      "Transfer to pocket",
+      "Amount to transfer",
+    ]) {
+      expect((screen.getByPlaceholderText(placeholder) as HTMLInputElement).value).toBe(
+        "",
+      );
+    }
+  });
+
   it("applies the returned balances and clears only the form that moved money", async () => {
     renderPage(<Bank />);
     const toBank = screen.getByPlaceholderText("Transfer to bank") as HTMLInputElement;
@@ -116,7 +129,7 @@ describe("bank transfers", () => {
         3,
       ),
     );
-    expect([toBank.value, toPocket.value, toUser.value]).toEqual(["0", "25", "25"]);
+    expect([toBank.value, toPocket.value, toUser.value]).toEqual(["", "25", "25"]);
     typeAll();
     await act(() =>
       captured.toPocket!.onSuccess(
@@ -125,7 +138,7 @@ describe("bank transfers", () => {
         6,
       ),
     );
-    expect([toBank.value, toPocket.value, toUser.value]).toEqual(["25", "0", "25"]);
+    expect([toBank.value, toPocket.value, toUser.value]).toEqual(["25", "", "25"]);
     typeAll();
     await act(() =>
       captured.transfer!.onSuccess(
@@ -134,7 +147,7 @@ describe("bank transfers", () => {
         9,
       ),
     );
-    expect([toBank.value, toPocket.value, toUser.value]).toEqual(["25", "25", "0"]);
+    expect([toBank.value, toPocket.value, toUser.value]).toEqual(["25", "25", ""]);
     expect(updateUser.mock.calls).toEqual([
       [{ bank: 1, money: 2 }, { revision: 3 }],
       [{ bank: 4, money: 5 }, { revision: 6 }],
