@@ -180,7 +180,7 @@ describe("ActionTimer turn label", () => {
       roundStartAt: new Date(FROZEN_NOW - 1000),
       version: 1,
     });
-  const label = `${(COMBAT_SECONDS - 1.1).toFixed(1)}s`;
+  const label = `${formatSecondsLeft(COMBAT_SECONDS - 1.1)}s`;
 
   it("names a teammate's turn as the ally's", () => {
     const { getByText, queryByText } = renderTimer(teamBattle("ally"));

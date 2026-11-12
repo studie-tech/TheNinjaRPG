@@ -23,10 +23,8 @@ const MenuBoxCombat: React.FC = () => {
   const liveBattle = useAtomValue(userBattleAtom);
   const presentedBattle = useAtomValue(combatPresentedBattleAtom);
   // Follows the field, so a form never appears here before it has risen.
-  const battle =
-    presentedBattle?.id === liveBattle?.id
-      ? (presentedBattle ?? liveBattle)
-      : liveBattle;
+  const isPresentingLive = presentedBattle?.id === liveBattle?.id;
+  const battle = isPresentingLive ? (presentedBattle ?? liveBattle) : liveBattle;
 
   // Character inspection follows the visible snapshot.
   const { selectedUser: battleUser } = useCombatInspection(battle, userData?.userId);

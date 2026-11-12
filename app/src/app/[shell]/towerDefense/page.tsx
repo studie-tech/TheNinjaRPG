@@ -563,12 +563,10 @@ const AbandonRunConfirm = ({
       keepOpenOnAccept
       onAccept={async (_e, { close }) => {
         setIsAbandoning(true);
-        try {
-          await onAbandon();
-        } finally {
+        await onAbandon().finally(() => {
           setIsAbandoning(false);
           close();
-        }
+        });
       }}
     >
       This ends the run permanently. Its waves, score and in-run upgrades are lost and

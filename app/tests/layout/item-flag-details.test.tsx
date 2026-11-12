@@ -100,9 +100,9 @@ it("shows the hidden flag to content staff only and names targets in plain words
   expect(rowText(player, "Target")).toBe("Target: Other player");
   expect(rowText(player, "Method")).toBe("Method: Single target");
   cleanup();
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
-    data: { role: "CONTENT-ADMIN" },
-  } as never);
+  vi.spyOn(UserContext, "useUserDataSelector").mockImplementation(
+    (select) => ({ data: select({ role: "CONTENT-ADMIN" } as never) }) as never,
+  );
   const staff = render(<ItemWithEffects item={item} hideImage />);
   expect(rowText(staff, "Hidden")).toBe("Hidden: no");
 });

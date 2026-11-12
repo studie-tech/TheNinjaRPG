@@ -44,10 +44,8 @@ export function BattleFocusView({
   onShowLayout,
 }: BattleFocusViewProps) {
   const presentedBattle = useAtomValue(combatPresentedBattleAtom);
-  const battle =
-    presentedBattle?.id === liveBattle?.id
-      ? (presentedBattle ?? liveBattle)
-      : liveBattle;
+  const isPresentingLive = presentedBattle?.id === liveBattle?.id;
+  const battle = isPresentingLive ? (presentedBattle ?? liveBattle) : liveBattle;
   const { selectedUser } = useCombatInspection(battle, controlledActorId);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const [viewElement, setViewElement] = useState<HTMLDivElement | null>(null);

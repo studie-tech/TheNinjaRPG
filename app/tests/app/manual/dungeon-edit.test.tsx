@@ -112,7 +112,13 @@ it.each(["success", "error"])(
     );
     expect(refetch).toHaveBeenCalledTimes(outcome === "success" ? 1 : 0);
     expect(invalidate).toHaveBeenCalledTimes(outcome === "success" ? 1 : 0);
-    await chooseOption(view, "Edit existing dungeon", "Dungeon B");
+    if (outcome === "success") {
+      await chooseOption(view, "Edit existing dungeon", "Dungeon B");
+    } else {
+      // The failed save left the draft unsaved, so switching dungeons asks first.
+      await chooseOption(view, "Edit existing dungeon", "Dungeon B", false);
+      fireEvent.click(await view.findByRole("button", { name: "Discard changes" }));
+    }
     fireEvent.click(view.getByRole("button", { name: "Save dungeon" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
     expect(save.mock.calls[1]?.[0]).toMatchObject({

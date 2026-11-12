@@ -412,11 +412,9 @@ export default function OccupationCrafting({
       disabled={isRepairAllDisabled}
       confirmDisabled={isRepairAllDisabled}
       button={
-        <Button asChild variant="secondary" className="gap-2">
-          <span title={unavailableReason}>
-            <Wrench className="h-4 w-4" aria-hidden="true" />
-            {repairAll.isPending ? "Repairing…" : "Repair All"}
-          </span>
+        <Button variant="secondary" className="gap-2" title={unavailableReason}>
+          <Wrench className="h-4 w-4" aria-hidden="true" />
+          {repairAll.isPending ? "Repairing…" : "Repair All"}
         </Button>
       }
       onAccept={() => {

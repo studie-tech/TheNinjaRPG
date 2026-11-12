@@ -79,11 +79,7 @@ const AccountLoadError: React.FC = () => {
         disabled={isRetrying}
         onClick={async () => {
           setIsRetrying(true);
-          try {
-            await utils.profile.getUser.invalidate();
-          } finally {
-            setIsRetrying(false);
-          }
+          await utils.profile.getUser.invalidate().finally(() => setIsRetrying(false));
         }}
       >
         {isRetrying ? "Trying again…" : "Try again"}

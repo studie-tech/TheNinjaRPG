@@ -115,7 +115,7 @@ describe("bank transfers", () => {
     ) as HTMLInputElement;
     const typeAll = () => {
       for (const input of [toBank, toPocket, toUser])
-        fireEvent.change(input, { target: { value: "25" } });
+        fireEvent.input(input, { target: { value: "25" } });
     };
     for (const name of ["toBank", "toPocket", "transfer"]) {
       expect(captured[name]?.onMutate).toBe(prepareUserUpdate);

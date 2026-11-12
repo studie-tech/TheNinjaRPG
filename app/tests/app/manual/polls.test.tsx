@@ -369,7 +369,7 @@ describe("poll list", () => {
     expect(header(view, "Second title").getAttribute("aria-expanded")).toBe("true");
   });
 
-  it("offers closing an active poll from the results and the voting view", () => {
+  it("offers closing an active poll from the results and the voting view", async () => {
     const view = render(
       <QueryClientProvider client={queryClient}>
         <PollsPage />
@@ -385,7 +385,8 @@ describe("poll list", () => {
     fireEvent.click(results);
     expect(closePoll).not.toHaveBeenCalled();
     fireEvent.click(closeButtons().at(-1)!);
-    fireEvent.click(view.getByRole("button", { name: "Vote Now" }));
+    // The dialog closes once the accepted action had its chance to start loading.
+    fireEvent.click(await view.findByRole("button", { name: "Vote Now" }));
     const voting = closeButtons()[0]!;
     expect(voting).not.toBe(results);
     expect(voting.className).toBe(results.className);

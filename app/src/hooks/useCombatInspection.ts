@@ -28,12 +28,11 @@ export function useCombatInspection(
       setSelection((current) => (current === selection ? null : current));
     }
   }, [battle, selection, setSelection]);
+  const selectedId =
+    selection && selection.battleId === battle?.id ? selection.userId : undefined;
   return {
     selectedUser,
-    selectedId:
-      selection?.battleId === battle?.id && selectedUser?.userId === selection?.userId
-        ? selection?.userId
-        : undefined,
+    selectedId: selectedUser?.userId === selectedId ? selectedId : undefined,
     selectUser: (userId?: string) =>
       setSelection(battle && userId ? { battleId: battle.id, userId } : null),
   };
