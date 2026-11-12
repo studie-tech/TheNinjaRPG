@@ -863,7 +863,6 @@ export default function ProfileDashboard({ settings }: { settings?: React.ReactN
   };
   return (
     <div className="space-y-8 p-3 sm:p-4">
-      <h1 className="sr-only">Dashboard</h1>
       {sectionOrder.map((id, index) => (
         <DashboardSection
           key={id}
