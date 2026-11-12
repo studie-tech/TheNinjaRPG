@@ -124,9 +124,10 @@ const harness = (response: FarmMutationResponse, deferred = false) => {
       ({
         timeDiff: 0,
         notifications: notifications(),
-        updateNotifications: async (next) => {
+        updateNotifications: async (update) => {
+          await client.cancelQueries({ queryKey: profileKey, exact: true });
           client.setQueryData<UserCache>(profileKey, (old) =>
-            old ? { ...old, notifications: next } : old,
+            old ? { ...old, notifications: update(old.notifications) } : old,
           );
         },
         prepareUserUpdate: () => prepareUserUpdate(client, profileKey),

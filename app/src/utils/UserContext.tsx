@@ -113,8 +113,11 @@ type UserContextValue = {
   ) => Promise<boolean>;
   /** Request a fresh profile after confirmed server work; false keeps feature recovery available. */
   refreshUser: () => Promise<boolean>;
+  /** Derive notification changes from the latest cache value after cancelling reads. */
   updateNotifications: (
-    notifications: NavBarDropdownLink[] | undefined,
+    update: (
+      current: NavBarDropdownLink[] | undefined,
+    ) => NavBarDropdownLink[] | undefined,
   ) => Promise<void>;
 };
 
@@ -271,12 +274,14 @@ export function UserContextProvider(props: {
     }
   }, [queryClient, userQueryKey, refetch, userId]);
 
-  // Optimistic notification update function
+  /** Apply notification changes together with other writers after pending reads stop. */
   const updateNotifications = useCallback(
-    async (notifications: NavBarDropdownLink[] | undefined) => {
+    async (update: Parameters<UserContextValue["updateNotifications"]>[0]) => {
       await utils.profile.getUser.cancel();
       utils.profile.getUser.setData(undefined, (old) => {
-        return { ...old, notifications } as typeof old;
+        if (!old) return old;
+        const notifications = update(old.notifications) ?? old.notifications;
+        return notifications === old.notifications ? old : { ...old, notifications };
       });
     },
     [utils],

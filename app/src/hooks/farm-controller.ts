@@ -114,11 +114,12 @@ export function useFarmController() {
 
   /** Clear farm notices the confirmed plots no longer warrant, from the latest profile list. */
   const syncNotifications = useCallback(async () => {
-    const plots = utils.farming.getFarmState.getData()?.plots;
-    const current = utils.profile.getUser.getData()?.notifications;
-    if (!plots) return;
-    const next = syncFarmNotifications(current, plots, new Date(Date.now() - timeDiff));
-    if (next !== current) await updateNotifications(next);
+    await updateNotifications((current) => {
+      const plots = utils.farming.getFarmState.getData()?.plots;
+      return plots
+        ? syncFarmNotifications(current, plots, new Date(Date.now() - timeDiff))
+        : current;
+    });
   }, [utils, timeDiff, updateNotifications]);
 
   /** Prevent overlapping plot actions and reconcile the revision captured before each write. */

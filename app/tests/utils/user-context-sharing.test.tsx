@@ -11,6 +11,8 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import * as trpc from "@trpc/react-query";
 import { type ContextType, Profiler, type ReactNode, useContext } from "react";
 import * as client from "@/app/_trpc/client";
+import { clearInboxNotifications } from "@/deltas/chat";
+import { syncFarmNotifications } from "@/deltas/farming";
 import { ActivityStreakPanel } from "@/layout/ActivityStreakPanel";
 import Countdown from "@/layout/Countdown";
 import * as pusher from "@/layout/PusherHandler";
@@ -18,7 +20,7 @@ import * as mutationToast from "@/libs/toast";
 import {
   selectUserWithoutPosition,
   UserContextProvider,
-  useUserData,
+  type useUserData,
   useUserDataRef,
   useUserDataSelector,
   useUserInfo,
@@ -84,7 +86,17 @@ const mount = (
   queryClient.setQueryDefaults(key, { structuralSharing: shareUserCache });
   clients.push(queryClient);
   queryClient.setQueryData(key, initial);
-  const utils = {};
+  const utils = {
+    profile: {
+      getUser: {
+        cancel: () => queryClient.cancelQueries({ queryKey: key, exact: true }),
+        setData: (
+          _input: undefined,
+          update: (current: Snapshot | undefined) => Snapshot | undefined,
+        ) => queryClient.setQueryData<Snapshot>(key, update),
+      },
+    },
+  };
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => utils,
     profile: {
@@ -135,6 +147,29 @@ const mount = (
 };
 
 describe("profile context structural sharing", () => {
+  it.each([false, true])(
+    "preserves overlapping farm and inbox notification removals across cancellation (inbox first=%p)",
+    async (inboxFirst) => {
+      const initial = snapshot();
+      const other = initial.notifications[0]!;
+      initial.notifications = [
+        { href: "/farm", name: "1 farm crop is ready to harvest", color: "green" },
+        { href: "/inbox", name: "1 message", color: "blue" },
+        other,
+      ];
+      const test = mount(initial);
+      const update = test.current().updateNotifications;
+      const changes = [
+        (current: Parameters<typeof clearInboxNotifications>[0]) =>
+          syncFarmNotifications(current, [], new Date(BASE)),
+        clearInboxNotifications,
+      ];
+      if (inboxFirst) changes.reverse();
+      await test.settle(() => Promise.all(changes.map(update)));
+      expect(test.read().notifications).toEqual([other]);
+      expect(test.read().userData).toBe(initial.userData);
+    },
+  );
   it("keeps imperative profile readers idle during observer bookkeeping while publishing updates and removal", async () => {
     let latest: ReturnType<typeof useUserDataRef> | undefined;
     const changed = vi.fn();
