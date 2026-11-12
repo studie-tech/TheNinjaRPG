@@ -4564,7 +4564,7 @@ async function executeMergeStacksForItemBucket(
  * **mergeAllStacks** passes `preloaded` rows of this item, already limited to the
  * requested scope (carried or home) and to positive, non-auction stacks.
  */
-async function executeMergeStacksForItem(
+export async function executeMergeStacksForItem(
   drizzle: DrizzleClient,
   userId: string,
   itemId: string,

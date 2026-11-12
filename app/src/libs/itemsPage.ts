@@ -319,6 +319,12 @@ export const bulkSellMessage = (
  * Why the player cannot reach their home storage, or null when they can: awake or asleep
  * in their own village, as for furnishing the home.
  */
+/** Statuses that may use home storage; sleeping at home is allowed. */
+export const HOME_STORAGE_STATUSES = [
+  "AWAKE",
+  "ASLEEP",
+] as const satisfies UserStatus[];
+
 export const homeStorageBlockReason = (user: {
   sector: number;
   status: UserStatus;
@@ -327,8 +333,7 @@ export const homeStorageBlockReason = (user: {
   if (!user.village || user.sector !== user.village.sector) {
     return "Return to your own village to use your home storage";
   }
-  // Sleeping at home is allowed, so this is not an awake-only action.
-  if (!["AWAKE", "ASLEEP"].includes(user.status)) {
+  if (!(HOME_STORAGE_STATUSES as readonly UserStatus[]).includes(user.status)) {
     return "You cannot use your home storage right now";
   }
   return null;
