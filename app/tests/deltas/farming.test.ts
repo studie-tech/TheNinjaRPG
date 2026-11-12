@@ -508,6 +508,18 @@ describe("syncFarmNotifications", () => {
     expect(syncFarmNotifications(current, [growing], now)).toBe(current);
   });
 
+  it("counts confirmed readiness before the calibrated clock reaches completion", () => {
+    expect(
+      syncFarmNotifications(
+        [waterNotice],
+        [{ ...growing, finishAt: new Date(now.getTime() + 1000), isReady: true }],
+        now,
+      ),
+    ).toEqual([
+      { href: "/farm", name: "1 farm crop is ready to harvest", color: "green" },
+    ]);
+  });
+
   it("leaves a profile without notifications untouched", () => {
     expect(syncFarmNotifications(undefined, [ready], now)).toBeUndefined();
   });

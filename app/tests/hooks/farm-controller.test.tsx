@@ -88,7 +88,7 @@ afterEach(() => {
 });
 
 /** Run the real controller/cache pipeline; only server transport and the profile context binding are supplied. */
-const harness = (response: FarmMutationResponse, deferred = false) => {
+const harness = (response: FarmMutationResponse, deferred = false, timeDiff = 0) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -123,7 +123,7 @@ const harness = (response: FarmMutationResponse, deferred = false) => {
   vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
     () =>
       ({
-        timeDiff: 0,
+        timeDiff,
         notifications: notifications(),
         updateNotifications: async (update) => {
           await updateQueryCache<UserCache>(client, profileKey, (old) => ({
@@ -369,3 +369,51 @@ it("clears the watering notice once the last thirsty plant is watered", async ()
   expect(test.notifications()).toEqual([poll]);
   expect(test.profileReads()).toBe(0);
 });
+
+it.each([false, true])(
+  "counts crops confirmed ready despite clock calibration lag (bulk=%p)",
+  async (bulk) => {
+    const serverNow = new Date();
+    vi.spyOn(Date, "now").mockReturnValue(serverNow.getTime());
+    const watered = {
+      ...plot,
+      finishAt: serverNow,
+      lastWateredAt: serverNow,
+      isReady: true,
+      canWater: false,
+    };
+    const test = harness(
+      {
+        success: true,
+        message: "Watered",
+        userPatch: {},
+        userDelta: { farmingExperience: 1 },
+        farmingExperienceDelta: 1,
+        updatedPlot: watered,
+        updatedPlots: [{ before: plot, after: watered }],
+      },
+      false,
+      1000,
+    );
+    test.client.setQueryData<UserCache>(test.profileKey, (old) =>
+      old
+        ? {
+            ...old,
+            notifications: [
+              { href: "/farm", name: "1 farm plant is ready to water", color: "blue" },
+            ],
+          }
+        : old,
+    );
+    await act(async () => {
+      if (bulk) await test.view.result.current.waterAll();
+      else test.view.result.current.water(plot);
+    });
+    await waitFor(() => expect(test.view.result.current.pendingPlotSlots.size).toBe(0));
+    expect(test.notifications()).toEqual([
+      { href: "/farm", name: "1 farm crop is ready to harvest", color: "green" },
+    ]);
+    expect(test.view.result.current.summary.ready).toBe(1);
+    expect(test.profileReads()).toBe(0);
+  },
+);
