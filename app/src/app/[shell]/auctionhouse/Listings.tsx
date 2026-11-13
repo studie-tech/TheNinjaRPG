@@ -134,12 +134,11 @@ export const AuctionListing: React.FC<AuctionListingProps> = ({
     lastElement: isUpdatingFilters ? null : lastElement,
   });
 
-  // Flatten all pages data and filter out listings with missing userItem data
+  // Flatten all pages data and filter out listings whose item no longer exists
   // (can happen if item was deleted between query time and render time)
   const allListings =
-    listings?.pages
-      .flatMap((page) => page.data)
-      .filter((listing) => listing.userItem?.item) ?? [];
+    listings?.pages.flatMap((page) => page.data).filter((listing) => listing.item) ??
+    [];
 
   // Only blame the filters for an empty result when one is actually set
   const hasFilters = Boolean(
@@ -314,9 +313,9 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
   bidStanding,
   onOpen,
 }) => {
-  const item = listing.userItem.item;
+  const item = listing.item;
   const currencyLabel = auctionCurrencyUnit(listing.currencyType);
-  const stackQuantity = listing.userItem.quantity;
+  const stackQuantity = listing.quantity;
   const showPerUnitPricing = item.canStack && stackQuantity > 1;
   const { bidderMinLevel, bidderMaxLevel } = listing;
   const showBidderLevelHint =
@@ -450,9 +449,9 @@ const AuctionLotCard: React.FC<AuctionLotCardProps> = ({
               </div>
             )}
           </div>
-          {item.canStack && listing.userItem.quantity > 1 ? (
+          {item.canStack && listing.quantity > 1 ? (
             <p className="mt-1.5 text-muted-foreground text-xs">
-              Qty {listing.userItem.quantity}
+              Qty {listing.quantity}
             </p>
           ) : null}
         </div>

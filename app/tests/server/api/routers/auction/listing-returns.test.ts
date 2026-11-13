@@ -214,6 +214,57 @@ describeWithDatabase(
       expect(await carried("buyer", "ore")).toEqual([9]);
     });
 
+    it("shows a cancelled listing's own item and quantity after it joins the stack", async () => {
+      const listing = await listOre();
+      const seller = await callerFor(auctionRouter, "seller");
+      await seller.cancelAuction({ auctionId: listing.id });
+      expect(await carried("seller", "ore")).toEqual([10]);
+      const { data } = await seller.getAuctionListings({
+        status: "CANCELLED",
+        onlyMine: true,
+        limit: 10,
+      });
+      expect(data.map((row) => [row.id, row.item.name, row.quantity])).toEqual([
+        [listing.id, "Silver ore", 4],
+      ]);
+      const details = await seller.getAuctionListing({ auctionId: listing.id });
+      expect([details?.item.name, details?.quantity]).toEqual(["Silver ore", 4]);
+    });
+
+    it("shows a sold listing's quantity after the buyer's stacks join", async () => {
+      const listing = await listOre();
+      const buyer = await callerFor(auctionRouter, "buyer");
+      await buyer.placeBid({ auctionId: listing.id, amount: 8 });
+      expect(await carried("buyer", "ore")).toEqual([9]);
+      const { data } = await buyer.getAuctionListings({ status: "SOLD", limit: 10 });
+      expect(data.map((row) => [row.item.name, row.quantity])).toEqual([
+        ["Silver ore", 4],
+      ]);
+    });
+
+    it("names a cancelled trade offer's item after it joins the stack", async () => {
+      const seller = await callerFor(auctionRouter, "seller");
+      await seller.createAuctionOffer({
+        offerType: "TRADE",
+        requestedItemId: "gem",
+        requestedQuantity: 2,
+        offeredUserItemId: "seller-ore",
+        offeredQuantity: 4,
+      });
+      const [offer] = await (await getTestDatabase()).select().from(auctionOffer);
+      await seller.cancelAuctionOffer({ offerId: offer!.id });
+      expect(await carried("seller", "ore")).toEqual([10]);
+      const { data } = await seller.getAuctionOffers({
+        offerType: "TRADE",
+        status: "CANCELLED",
+        onlyMine: true,
+        limit: 10,
+      });
+      expect(data.map((row) => [row.offeredItem?.name, row.offeredQuantity])).toEqual([
+        ["Silver ore", 4],
+      ]);
+    });
+
     it("keeps the cancel successful when the merge fails", async () => {
       const listing = await listOre();
       let failedClaims = 0;

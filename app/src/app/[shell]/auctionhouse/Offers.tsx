@@ -504,7 +504,7 @@ function OfferCard({
               Payment:{" "}
               {offer.offerType === "REQUEST"
                 ? `${offer.ryo.toLocaleString()} ryo (total)`
-                : `${offer.offeredQuantity?.toLocaleString()} × ${offered?.item.name ?? "Unavailable item"}`}
+                : `${offer.offeredQuantity?.toLocaleString()} × ${offer.offeredItem?.name ?? "Unavailable item"}`}
             </p>
           </div>
         )}
@@ -561,7 +561,7 @@ function OfferCard({
                     {offer.requestedItem?.name}. You receive{" "}
                     {offer.offerType === "REQUEST"
                       ? `${offer.ryo.toLocaleString()} ryo in your bank`
-                      : `${offer.offeredQuantity} × ${offered?.item.name}`}
+                      : `${offer.offeredQuantity} × ${offer.offeredItem?.name}`}
                     .
                   </DialogDescription>
                 </DialogHeader>

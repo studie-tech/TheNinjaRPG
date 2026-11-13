@@ -55,12 +55,9 @@ const listingFor = (overrides: object = {}) => ({
     },
   ],
   seller: { userId: "seller", username: "Seller", avatar: "/seller.webp" },
-  userItem: {
-    quantity: 4,
-    durability: 10,
-    imbuements: [],
-    item: { name: "Ore", canStack: true },
-  },
+  quantity: 4,
+  item: { name: "Ore", canStack: true },
+  userItem: { durability: 10, imbuements: [] },
   ...overrides,
 });
 

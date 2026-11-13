@@ -136,6 +136,7 @@ export const auctionOfferProcedures = {
           ctx,
           input,
           offeredUserItemId,
+          offered?.itemId ?? null,
         );
         await logOffer(tx, ctx.userId, id, "CREATE", input);
         return {

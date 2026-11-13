@@ -54,6 +54,8 @@ describeWithDatabase("auction bid atomicity", () => {
       id: "auction",
       sellerId: "seller",
       userItemId: "lot-instance",
+      itemId: "lot",
+      quantity: 1,
       listingType: "AUCTION",
       startingPrice: 10,
       currentPrice: 10,

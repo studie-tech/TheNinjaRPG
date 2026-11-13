@@ -98,7 +98,8 @@ export const findAuctionListingForGetAuctionListing = (
 
 /** Relations every auction listing read loads; each query adds its own `bids`. */
 const auctionListingRelations = {
-  userItem: { with: { item: true, imbuements: { with: { item: true } } } },
+  item: true,
+  userItem: { with: { imbuements: { with: { item: true } } } },
   seller: { columns: { userId: true, username: true, avatar: true } },
   targetUser: { columns: { userId: true, username: true, avatar: true } },
 } as const;
@@ -125,8 +126,7 @@ export const selectAuctionListingForGetAuctionListings = (
   client
     .select({ id: auctionListing.id })
     .from(auctionListing)
-    .innerJoin(userItem, eq(auctionListing.userItemId, userItem.id))
-    .innerJoin(item, eq(userItem.itemId, item.id));
+    .innerJoin(item, eq(auctionListing.itemId, item.id));
 
 /** Build the `auctionListing` listing for `getAuctionListings`, using predicates on `id`. */
 export const listAuctionListingForGetAuctionListings = (
@@ -221,6 +221,7 @@ export const insertAuctionListingForCreateAuctionListing = (
   auctionId: string,
   ctx: { userId: string },
   auctionUserItemId: string,
+  listed: { itemId: string; quantity: number },
   listingType: "DIRECT" | "AUCTION",
   targetUserId: undefined | string,
   startingPrice: number,
@@ -234,6 +235,8 @@ export const insertAuctionListingForCreateAuctionListing = (
     id: auctionId,
     sellerId: ctx.userId,
     userItemId: auctionUserItemId,
+    itemId: listed.itemId,
+    quantity: listed.quantity,
     listingType,
     targetUserId: targetUserId || null,
     startingPrice,
@@ -356,8 +359,8 @@ export const insertAuctionBidForPlaceBid = (
     .values({ id: bidId, auctionId, bidderId: ctx.userId, amount });
 
 /**
- * Build the `auctionListing` lookup for `cancelAuction`, selecting `userItemId`, `status`
- * and the listed item's `itemId`, using predicates on `id` and `sellerId`.
+ * Build the `auctionListing` lookup for `cancelAuction`, selecting only `userItemId`,
+ * `itemId` and `status`, using predicates on `id` and `sellerId`.
  */
 export const findAuctionListingForCancelAuction = (
   client: Pick<DrizzleClient, "query">,
@@ -371,9 +374,9 @@ export const findAuctionListingForCancelAuction = (
     ),
     columns: {
       userItemId: true,
+      itemId: true,
       status: true,
     },
-    with: { userItem: { columns: { itemId: true } } },
   });
 
 /** Execute the database statement for `cancelAuction`. */

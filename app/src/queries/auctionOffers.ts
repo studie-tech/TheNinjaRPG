@@ -95,6 +95,7 @@ export const listAuctionOfferForGetAuctionOffers = (
     with: {
       owner: { columns: { userId: true, username: true } },
       requestedItem: true,
+      offeredItem: true,
       offeredUserItem: {
         with: { item: true, imbuements: { with: { item: true } } },
       },
@@ -136,6 +137,7 @@ export const insertAuctionOfferForCreateAuctionOffer = (
         offeredQuantity: number;
       },
   offeredUserItemId: null | string,
+  offeredItemId: null | string,
 ) =>
   client.insert(auctionOffer).values({
     id,
@@ -144,6 +146,7 @@ export const insertAuctionOfferForCreateAuctionOffer = (
     requestedItemId: input.requestedItemId,
     requestedQuantity: input.requestedQuantity,
     offeredUserItemId,
+    offeredItemId,
     offeredQuantity: input.offerType === "TRADE" ? input.offeredQuantity : null,
     ryo: input.offerType === "REQUEST" ? input.ryo : 0,
   });

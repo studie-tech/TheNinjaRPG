@@ -377,6 +377,7 @@ export const auctionRouter = createTRPCRouter({
           auctionId,
           ctx,
           auctionUserItemId,
+          { itemId: userItemData.itemId, quantity: listingQuantity },
           listingType,
           targetUserId,
           startingPrice,
@@ -599,7 +600,7 @@ export const auctionRouter = createTRPCRouter({
           await Promise.all([
             recordBidActivity(ctx.drizzle, bidLog, true),
             mergeDeliveredItems(ctx.drizzle, [
-              { ownerId: ctx.userId, itemId: auction.userItem?.itemId },
+              { ownerId: ctx.userId, itemId: auction.itemId },
             ]),
           ]);
           notifyAuctionSettlement(ctx.drizzle, settlement);
@@ -658,7 +659,7 @@ export const auctionRouter = createTRPCRouter({
         );
         if (settlement) {
           await mergeDeliveredItems(ctx.drizzle, [
-            { ownerId: ctx.userId, itemId: auction.userItem?.itemId },
+            { ownerId: ctx.userId, itemId: auction.itemId },
           ]);
           notifyAuctionSettlement(ctx.drizzle, settlement);
           return { success: true, message: "Buyout successful - auction completed" };
@@ -723,7 +724,7 @@ export const auctionRouter = createTRPCRouter({
       await Promise.all([
         insertActionLogForCancelAuction(ctx.drizzle, ctx, auctionId, auction),
         mergeDeliveredItems(ctx.drizzle, [
-          { ownerId: ctx.userId, itemId: auction.userItem?.itemId },
+          { ownerId: ctx.userId, itemId: auction.itemId },
         ]),
       ]);
 
@@ -753,7 +754,7 @@ export const completeAuctionInternal = async (
       // Who received the listed item; the caller merges deliveries once per player.
       delivery: {
         ownerId: settlement.winningBid?.bidderId ?? auction.sellerId,
-        itemId: auction.userItem?.itemId,
+        itemId: auction.itemId,
       },
     };
   } catch (error) {

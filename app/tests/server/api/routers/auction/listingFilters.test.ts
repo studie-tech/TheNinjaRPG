@@ -35,6 +35,8 @@ describeWithDatabase("auction listing price filters", () => {
         id: id as string,
         sellerId: "seller",
         userItemId: `${id}-instance`,
+        itemId: "lot",
+        quantity: 1,
         listingType: "AUCTION" as const,
         startingPrice: price as number,
         currentPrice: price as number,
