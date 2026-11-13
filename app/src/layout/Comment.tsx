@@ -198,10 +198,9 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
 
   return (
     <Post
-      dense
       options={
         props.user && (
-          <div className="flex flex-row flex-wrap justify-end">
+          <div className="flex flex-row gap-1">
             {props.toggleReaction && (
               <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
                 <PopoverTrigger asChild>
@@ -312,7 +311,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
             {props.children}
           </div>
           {/* In flow below the message, so a long message or wrapped actions never overlap it. */}
-          <div className="mt-1 flex flex-row flex-wrap items-center justify-end">
+          <div className="flex flex-row items-center justify-end gap-1">
             {/* Server and browser locale or timezone settings can format this date
                 differently during hydration. */}
             <p className="pr-2 text-gray-600 text-xs italic" suppressHydrationWarning>
@@ -329,7 +328,7 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
               />
             )}
             {props.system && props.comment?.isReported && (
-              <span className="inline-flex size-[40px] items-center justify-center">
+              <span className="inline-flex p-0.5">
                 <Flag className="h-6 w-6 fill-orange-500" aria-hidden="true" />
                 <span className="sr-only">Reported</span>
               </span>
@@ -379,5 +378,5 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
   );
 };
 
-/** A 40px icon action in a post's header or footer row. */
-const postActionClassName = "size-[40px] shrink-0 rounded-md hover:bg-accent";
+/** An icon action in a post's header or footer row, sized to its icon. */
+const postActionClassName = "size-auto shrink-0 rounded-md p-0.5 hover:bg-accent";

@@ -30,8 +30,6 @@ export interface PostProps {
   hover_effect?: boolean;
   href?: string;
   tavernStyling?: boolean;
-  /** Narrow avatar column and tighter spacing for conversation and list rows. */
-  dense?: boolean;
 }
 
 const Post: React.FC<PostProps> = (props) => {
@@ -68,38 +66,33 @@ const Post: React.FC<PostProps> = (props) => {
 
   // Blocks
   const UsernameBlock = props.user && (
-    <div>
+    <div className="basis-1/4">
       <div className={`${userColor} font-bold`}>{props.user.username}</div>
-      <div
-        className={cn(
-          "flex flex-wrap gap-1 pt-1 text-xs [&>span]:whitespace-nowrap",
-          props.dense ? "pb-2" : "pb-4",
-        )}
-      >
-        <span className="rounded-md bg-slate-300 p-1 text-black">
+      <div className="pt-1 pb-4 text-xs">
+        <span className="m-1 rounded-md bg-slate-300 p-1 text-black">
           Lvl. {props.user.level}
         </span>
-        <span className="rounded-md bg-slate-300 p-1 text-black">
+        <span className="m-1 rounded-md bg-slate-300 p-1 text-black">
           {showUserRank(props.user)}
         </span>
         {props.user.displayTitle && (
-          <span className={`${titleColor} rounded-md p-1`}>
+          <span className={`${titleColor} m-1 rounded-md p-1`}>
             {props.user.displayTitle}
           </span>
         )}
         {props.user.villageKageId && props.user.villageKageId === props.user.userId && (
-          <span className="rounded-md bg-slate-300 p-1 text-black">
+          <span className="m-1 rounded-md bg-slate-300 p-1 text-black">
             {props.user?.isOutlaw ? "Daimyo" : "Kage"}
           </span>
         )}
         {props.user?.role !== "USER" && (
-          <span className={`${userRole} rounded-md p-1 ${roleTextColor}`}>
+          <span className={`${userRole} m-1 rounded-md p-1 ${roleTextColor}`}>
             {capitalizeFirstLetter(props.user?.role)}
           </span>
         )}
         {props.user.villageName && props.user.villageHexColor && (
           <span
-            className="rounded-md p-1"
+            className="m-1 rounded-md p-1"
             style={{
               backgroundColor: props.user.villageHexColor,
               color: contrastingTextColor(props.user.villageHexColor),
@@ -112,43 +105,27 @@ const Post: React.FC<PostProps> = (props) => {
     </div>
   );
 
-  const titleBlock = props.title && (
-    <h3 className="font-bold text-lg tracking-tight sm:text-2xl">{props.title}</h3>
-  );
-  // Options sit in flow beside the title and username so they never cover them.
-  // Without a header they keep the corner, where cards such as quests expect them.
-  const hasHeader = !!(titleBlock || UsernameBlock);
   const content = (
     <>
-      <div className="wrap-break-word min-w-0 grow basis-1/2">
+      <div className="grow basis-1/2">
         <div className="flex h-full flex-col justify-center">
-          {hasHeader && (
-            <div className="flex items-start gap-2">
-              <div className="min-w-0 flex-1">
-                {titleBlock}
-                {UsernameBlock}
-              </div>
-              {props.options && (
-                <div className="mr-1 flex max-w-[60%] shrink-0 flex-wrap items-center justify-end gap-1">
-                  {props.options}
-                </div>
-              )}
-            </div>
+          {props.title && (
+            <h3 className="basis-1/5 font-bold text-2xl tracking-tight">
+              {props.title}
+            </h3>
           )}
+          {UsernameBlock}
           <div className="relative basis-3/4 font-normal">{props.children}</div>
         </div>
       </div>
-      {props.options && !hasHeader && (
-        <div className="absolute top-3 right-3">{props.options}</div>
-      )}
+      {props.options && <div className="absolute top-3 right-3">{props.options}</div>}
     </>
   );
 
   return (
     <div
       className={cn(
-        `relative mb-3 flex flex-row rounded-lg border ${color} px-1 shadow`,
-        props.dense ? "py-2" : "py-3",
+        `relative mb-3 flex flex-row rounded-lg border ${color} px-1 py-3 shadow`,
         props.align_middle ? "items-center" : "",
         props.hover_effect ? hover : "",
         props.className,
@@ -156,14 +133,7 @@ const Post: React.FC<PostProps> = (props) => {
     >
       {props.image}
       {props.user && (
-        <div
-          className={cn(
-            "truncate text-center sm:text-base",
-            props.dense
-              ? "mr-2 w-14 shrink-0 sm:w-24"
-              : "mr-3 basis-2/12 sm:basis-3/12",
-          )}
-        >
+        <div className="mr-3 basis-2/12 truncate text-center sm:basis-3/12 sm:text-base">
           <Link href={`/username/${props.user.username}`}>
             <AvatarImage
               href={props.user.avatar}

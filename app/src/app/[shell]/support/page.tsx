@@ -158,7 +158,6 @@ export default function SupportPage() {
                 <div key={ticket.id}>
                   <div ref={i === allTickets.length - 1 ? setLastElement : null}>
                     <Post
-                      dense
                       title={ticket.title}
                       hover_effect={true}
                       color={

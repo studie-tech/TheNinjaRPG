@@ -470,8 +470,7 @@ export const RichInput = (props: RichInputProps) => {
     setUrlEntry(null);
   };
 
-  // Keep common actions visible while formatting controls wrap on phones and scroll
-  // within narrow fields on wider screens.
+  // Keep common actions visible while formatting controls scroll within narrow fields.
   const editorActions = (
     <>
       {uploading && (
@@ -706,7 +705,7 @@ export const RichInput = (props: RichInputProps) => {
               <div
                 key={`${props.id}:${props.refreshKey}`}
                 ref={toolbarRef}
-                className="rich-input-toolbar flex min-w-0 flex-1 flex-wrap items-center gap-1 p-1 sm:flex-nowrap sm:overflow-x-auto [&>*]:shrink-0"
+                className="rich-input-toolbar flex min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto p-1 [&>*]:shrink-0"
                 role="toolbar"
                 aria-label="Text formatting"
               >
