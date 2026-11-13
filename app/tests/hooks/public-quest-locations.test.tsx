@@ -47,7 +47,12 @@ const advance = async (ms: number) => {
 };
 
 /** Exercise the feature hook against the same public projection used by the server. */
-const setup = (offset = 0, deferred = false, initialOffset = offset) => {
+const setup = (
+  offset = 0,
+  deferred = false,
+  initialOffset = offset,
+  isActive = true,
+) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -130,10 +135,17 @@ const setup = (offset = 0, deferred = false, initialOffset = offset) => {
       {children}
     </TrpcTestProviders>
   );
-  const view = renderHook(({ timeDiff }) => usePublicQuestLocations(timeDiff), {
-    wrapper,
-    initialProps: { timeDiff: initialOffset },
-  });
+  const view = renderHook(
+    ({ timeDiff, isActive = true }: { timeDiff: number; isActive?: boolean }) =>
+      usePublicQuestLocations(timeDiff, isActive),
+    {
+      wrapper,
+      initialProps: { timeDiff: initialOffset, isActive } as {
+        timeDiff: number;
+        isActive?: boolean;
+      },
+    },
+  );
   return {
     view,
     wrapper,
@@ -381,4 +393,108 @@ it("retains ten-second error recovery and immediate focus/network recovery", asy
   });
   await settle();
   expect(t.view.result.current.data?.[0]?.name).toBe("Online");
+});
+
+it.each([false, true])(
+  "suspends hidden polling, subscription, focus and reconnect recovery during publication=%s",
+  async (publication) => {
+    if (publication) now = Date.UTC(2026, 10, 3);
+    const t = setup();
+    await settle();
+    t.view.rerender({ timeDiff: 0, isActive: false });
+    await act(async () => t.view.result.current.recoverPublicLocations());
+    for (let interval = 0; interval < 30; interval++) await advance(10_000);
+    await act(async () => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+    });
+    await settle();
+    expect(t.read).toHaveBeenCalledTimes(1);
+    t.setName("Resumed");
+    t.view.rerender({ timeDiff: 0, isActive: true });
+    await settle();
+    expect(t.read).toHaveBeenCalledTimes(2);
+    expect(t.view.result.current.data?.[0]?.name).toBe("Resumed");
+  },
+);
+
+it("prepares a hidden destination once and defers genuine content revisions until activation", async () => {
+  const t = setup(0, false, 0, false);
+  await settle();
+  expect(t.read).toHaveBeenCalledTimes(1);
+  expect(t.view.result.current.data?.[0]?.name).toBe("Landmark");
+  t.setName("Published");
+  await act(async () => t.view.result.current.updatePublicLocations(now));
+  await advance(300_000);
+  expect(t.read).toHaveBeenCalledTimes(1);
+  t.view.rerender({ timeDiff: 0, isActive: true });
+  await settle();
+  expect(t.read).toHaveBeenCalledTimes(2);
+  expect(t.revisions.at(-1)).toBe(now - 300_000);
+  expect(t.view.result.current.data?.[0]?.name).toBe("Published");
+});
+
+it.each([1000, 300_000])(
+  "catches up once when reactivating a %s-ms cached snapshot",
+  async (hiddenFor) => {
+    const t = setup();
+    await settle();
+    t.view.rerender({ timeDiff: 0, isActive: false });
+    await advance(hiddenFor);
+    t.setName("Reactivated");
+    t.view.rerender({ timeDiff: 0, isActive: true });
+    await settle();
+    expect(t.read).toHaveBeenCalledTimes(2);
+    expect(t.view.result.current.data?.[0]?.name).toBe("Reactivated");
+  },
+);
+
+it("suspends error retries while hidden and recovers once on activation", async () => {
+  const t = setup();
+  await settle();
+  t.fail(true);
+  await advance(300_000);
+  expect(t.view.result.current.isError).toBe(true);
+  t.view.rerender({ timeDiff: 0, isActive: false });
+  t.fail(false);
+  await advance(300_000);
+  expect(t.read).toHaveBeenCalledTimes(2);
+  t.view.rerender({ timeDiff: 0, isActive: true });
+  await settle();
+  expect(t.read).toHaveBeenCalledTimes(3);
+  expect(t.view.result.current.isError).toBe(false);
+});
+
+it("defers midnight publication while hidden and prepares the current day on activation", async () => {
+  now = Date.UTC(2026, 10, 2, 23, 59, 58);
+  const t = setup();
+  await settle();
+  t.view.rerender({ timeDiff: 0, isActive: false });
+  await advance(310_000);
+  expect(t.read).toHaveBeenCalledTimes(1);
+  t.view.rerender({ timeDiff: 0, isActive: true });
+  await settle();
+  expect(t.read).toHaveBeenCalledTimes(2);
+  expect(t.view.result.current.data?.[0]?.questId).toBe("starting");
+});
+
+it("preserves a shared active observer's polling and joins its pending read on activation", async () => {
+  const t = setup(0, true);
+  const active = renderHook(() => usePublicQuestLocations(0), { wrapper: t.wrapper });
+  await settle();
+  await act(async () => t.pending[0]!());
+  await settle();
+  t.view.rerender({ timeDiff: 0, isActive: false });
+  t.setName("Shared");
+  await advance(300_000);
+  expect(t.read).toHaveBeenCalledTimes(2);
+  t.view.rerender({ timeDiff: 0, isActive: true });
+  await settle();
+  expect(t.read).toHaveBeenCalledTimes(2);
+  await act(async () => t.pending[1]!());
+  await settle();
+  expect(active.result.current.data?.[0]?.name).toBe("Shared");
+  expect(t.view.result.current.data?.[0]?.name).toBe("Shared");
 });

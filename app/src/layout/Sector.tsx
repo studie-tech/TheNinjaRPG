@@ -515,36 +515,44 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     data: publicLocations = [],
     updatePublicLocations,
     recoverPublicLocations,
-  } = usePublicQuestLocations(timeDiff);
+  } = usePublicQuestLocations(timeDiff, props.isActive);
+  const contentHandlers = useRef({
+    updatePublicLocations,
+    recoverPublicLocations,
+    refreshDungeonEntrances,
+    recoverDungeonEntrances,
+  });
+  contentHandlers.current = {
+    updatePublicLocations,
+    recoverPublicLocations,
+    refreshDungeonEntrances,
+    recoverDungeonEntrances,
+  };
   useEffect(() => {
     if (!pusher) return;
     const channel = pusher.subscribe("map-content");
     const update = (event: { revision: number }) => {
       if (!Number.isSafeInteger(event.revision) || event.revision < 0) return;
-      updatePublicLocations(event.revision);
+      contentHandlers.current.updatePublicLocations(event.revision);
       void utils.mapAsset.getAll.invalidate();
-      refreshDungeonEntrances();
+      contentHandlers.current.refreshDungeonEntrances();
       // Active runs carry their private presentation in the profile snapshot.
       if (userRef.current?.userQuests.some((entry) => !entry.completed && !entry.endAt))
         void utils.profile.getUser.invalidate();
     };
+    // Activity changes replace dungeon handlers without restarting the shared subscription.
+    const recover = () => {
+      contentHandlers.current.recoverPublicLocations();
+      contentHandlers.current.recoverDungeonEntrances();
+    };
     channel.bind("updated", update);
-    channel.bind("pusher:subscription_succeeded", recoverPublicLocations);
-    channel.bind("pusher:subscription_succeeded", recoverDungeonEntrances);
+    channel.bind("pusher:subscription_succeeded", recover);
     return () => {
       channel.unbind("updated", update);
-      channel.unbind("pusher:subscription_succeeded", recoverPublicLocations);
-      channel.unbind("pusher:subscription_succeeded", recoverDungeonEntrances);
+      channel.unbind("pusher:subscription_succeeded", recover);
       pusher.unsubscribe("map-content");
     };
-  }, [
-    pusher,
-    utils,
-    updatePublicLocations,
-    recoverPublicLocations,
-    refreshDungeonEntrances,
-    recoverDungeonEntrances,
-  ]);
+  }, [pusher, utils]);
   // Quest locations read only quest progress, the sector and the role; the profile object
   // itself changes on every step, and a new list rebuilds the travel window.
   const userQuests = userData?.userQuests;
