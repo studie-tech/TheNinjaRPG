@@ -39,7 +39,7 @@ const confirmation = (props: Partial<ComponentProps<typeof Confirm>> = {}) => (
 const openConfirmation = () => {
   const trigger = screen.getByRole("button", { name: "Open purchase confirmation" });
   trigger.focus();
-  fireEvent.keyDown(trigger, { key: "Enter" });
+  fireEvent.click(trigger);
   expect(
     document.activeElement === screen.getByRole("button", { name: "Proceed" }),
   ).toBe(true);

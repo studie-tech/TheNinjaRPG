@@ -83,12 +83,6 @@ export const Confirm: React.FC<ConfirmProps> = (props) => {
           e.stopPropagation();
           if (!props.disabled) setShowModal(true);
         }}
-        onKeyDown={(e: React.KeyboardEvent) => {
-          if (e.key !== "Enter" && e.key !== " ") return;
-          e.preventDefault();
-          e.stopPropagation();
-          if (!props.disabled) setShowModal(true);
-        }}
         className={cn(
           !isButtonTrigger &&
             "inline-flex items-center rounded-md text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
