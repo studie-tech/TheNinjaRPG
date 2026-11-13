@@ -33,13 +33,13 @@ import {
   getTotalItemQuantity,
 } from "@/libs/crafting";
 import {
-  countListedInventorySlots,
   countsTowardInventoryStorage,
   getInventoryBucket,
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
   splitIntoStacks,
 } from "@/libs/item";
+import { countHeldInventorySlots } from "@/libs/itemsPage";
 import { getOccupationChangeDaysRemaining } from "@/libs/occupation";
 import { getPvpBoost } from "@/libs/pvpExperience";
 import {
@@ -292,7 +292,7 @@ export const occupationRouter = createTRPCRouter({
           return errorResponse(
             getInventoryBucketFullMessage(
               outputBucket,
-              countListedInventorySlots(useritems, outputBucket),
+              countHeldInventorySlots(useritems, outputBucket),
             ),
           );
         }

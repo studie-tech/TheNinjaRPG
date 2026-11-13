@@ -110,7 +110,7 @@ describeWithDatabase("equipped items and backpack capacity", () => {
       });
       expect(await api.buy(input)).toMatchObject({
         success: false,
-        message: getInventoryBucketFullMessage(bucket),
+        message: getInventoryBucketFullMessage(bucket, { auction: 0, crafting: 1 }),
       });
       const afterRejection = await db.query.userData.findFirst({
         where: eq(userData.userId, userId),
@@ -215,7 +215,7 @@ describeWithDatabase("equipped items and backpack capacity", () => {
     ).toMatchObject({
       success: false,
       message:
-        "Inventory is full (2 slots are held by your auction listings and trade offers)",
+        "Inventory is full (3 slots are held: 2 by auction listings or trade offers, 1 by an unfinished craft)",
     });
 
   });
@@ -229,7 +229,7 @@ describeWithDatabase("equipped items and backpack capacity", () => {
     // The occupied head slot prevents the next helmet from auto-equipping.
     expect(await api.buy({ itemId: "gear", villageId, stack: 1 })).toMatchObject({
       success: false,
-      message: "Inventory is full",
+      message: "Inventory is full (1 slot is held by an unfinished craft)",
     });
   });
 
@@ -248,7 +248,7 @@ describeWithDatabase("equipped items and backpack capacity", () => {
       expect((await home.toggleStoreItem({ userItemId: "stored" })).success).toBe(true);
       expect(await home.toggleStoreItem({ userItemId: "stored-next" })).toMatchObject({
         success: false,
-        message: getInventoryBucketFullMessage(bucket),
+        message: getInventoryBucketFullMessage(bucket, { auction: 0, crafting: 1 }),
       });
       const api = await callerFor(itemRouter, userId);
       const before = (await api.getUserItems()).filter(

@@ -91,7 +91,6 @@ import {
   compatibleEquipSlots,
   computeAutoEquipAssignments,
   computeLoadoutAssignments,
-  countListedInventorySlots,
   countsTowardInventoryStorage,
   findFreeEquipSlot,
   getEffectiveStackSize,
@@ -109,7 +108,11 @@ import {
   readItemListFilterSlot,
 } from "@/libs/item";
 import { getItemPurchaseAllowance, itemPurchaseLimitMessage } from "@/libs/itemEconomy";
-import { bulkSellBlockReason, bulkSellMessage } from "@/libs/itemsPage";
+import {
+  bulkSellBlockReason,
+  bulkSellMessage,
+  countHeldInventorySlots,
+} from "@/libs/itemsPage";
 import { getJutsuSlotIncreaseError } from "@/libs/jutsuSlots";
 import {
   buildMissingLoadouts,
@@ -3359,11 +3362,12 @@ export const itemRouter = createTRPCRouter({
             return errorResponse(
               getInventoryBucketFullMessage(
                 purchaseBucket,
-                countListedInventorySlots(useritems, purchaseBucket),
+                countHeldInventorySlots(useritems, purchaseBucket),
               ),
             );
           }
           topUpOnly = true;
+
         }
       }
       // buy_item quest tracker (NPC item shop purchases; auction buyouts do not advance it).

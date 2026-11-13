@@ -73,9 +73,31 @@ describe("planHomeStorageMove", () => {
         userItemId: "stored",
         name: "stored",
         reason:
-          "does not fit: Inventory is full (2 slots are held by your auction listings and trade offers)",
+          "does not fit: Inventory is full (2 slots are held by auction listings or trade offers)",
       },
     ]);
+  });
+
+  it("names the backpack slots held by unfinished crafts when a withdrawal does not fit", () => {
+    const capacity = getInventoryBucketCapacity("normal", user);
+    const rows = [
+      ...Array.from({ length: capacity }, (_, index) =>
+        row(`carried-${index}`, {
+          craftingFinishedAt: index < 1 ? new Date(Date.now() + 3_600_000) : null,
+        }),
+      ),
+      row("stored", { storedAtHome: true }),
+    ];
+    const plan = planHomeStorageMove({
+      rows,
+      userItemIds: ["stored"],
+      toHome: false,
+      user,
+      homeStorage: 12,
+    });
+    expect(plan.refused[0]?.reason).toBe(
+      "does not fit: Inventory is full (1 slot is held by an unfinished craft)",
+    );
   });
 
   it("stores carried stacks until their home bucket is full, in request order", () => {

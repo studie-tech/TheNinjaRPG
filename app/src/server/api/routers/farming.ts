@@ -40,7 +40,6 @@ import {
   mapPlotToState,
 } from "@/libs/farming";
 import {
-  countListedInventorySlots,
   countsTowardInventoryStorage,
   getEffectiveStackSize,
   getInventoryBucket,
@@ -50,6 +49,7 @@ import {
   isEquippableUserItem,
   splitIntoStacks,
 } from "@/libs/item";
+import { countHeldInventorySlots } from "@/libs/itemsPage";
 import {
   filterQuestTrackersForDbPersist,
   getNewTrackers,
@@ -2297,10 +2297,7 @@ const guardItemAwardInventoryCapacity = (
   ).length;
   if (bucketCount + newStacksRequired > getInventoryBucketCapacity(bucket, user)) {
     return errorResponse(
-      getInventoryBucketFullMessage(
-        bucket,
-        countListedInventorySlots(userItems, bucket),
-      ),
+      getInventoryBucketFullMessage(bucket, countHeldInventorySlots(userItems, bucket)),
     );
   }
 
@@ -2349,7 +2346,7 @@ const guardBulkItemAwardInventoryCapacity = (
       return errorResponse(
         getInventoryBucketFullMessage(
           bucket,
-          countListedInventorySlots(inventoryItems, bucket),
+          countHeldInventorySlots(inventoryItems, bucket),
         ),
       );
     }

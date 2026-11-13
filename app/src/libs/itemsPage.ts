@@ -17,7 +17,6 @@ import {
   applyActiveVariant,
   byItemName,
   calcItemSellingPrice,
-  countListedInventorySlots,
   countsTowardInventoryStorage,
   getEquipBlockReason,
   getHomeStorageBucket,
@@ -26,6 +25,7 @@ import {
   getInventoryBucket,
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
+  type InventoryBucket,
   isCompatibleEquipSlot,
 } from "@/libs/item";
 import { needsInventoryRepair } from "@/libs/repair";
@@ -345,6 +345,7 @@ type HomeStorageRow = {
   equipped: ItemSlot;
   storedAtHome: boolean;
   isInAuction: boolean;
+  craftingFinishedAt: Date | null;
   item: { name: string; itemType: ItemType; isEventItem: boolean };
 };
 
@@ -399,7 +400,7 @@ export const planHomeStorageMove = <T extends HomeStorageRow>({
       } else {
         const bucket = getInventoryBucket(ui.item);
         if ((used.get(bucket) ?? 0) >= getInventoryBucketCapacity(bucket, user)) {
-          return `does not fit: ${getInventoryBucketFullMessage(bucket, countListedInventorySlots(rows, bucket))}`;
+          return `does not fit: ${getInventoryBucketFullMessage(bucket, countHeldInventorySlots(rows, bucket))}`;
         }
       }
       return null;
@@ -463,6 +464,19 @@ export const countUnlistedBagStacks = (
   ).length;
   return { auction, crafting };
 };
+
+/** Stacks of one inventory bucket that use bag space without showing in the backpack. */
+export const countHeldInventorySlots = (
+  rows: (Parameters<typeof countUnlistedBagStacks>[0][number] & {
+    item: Parameters<typeof getInventoryBucket>[0];
+  })[],
+  bucket: InventoryBucket,
+  now: Date = new Date(),
+) =>
+  countUnlistedBagStacks(
+    rows.filter((row) => getInventoryBucket(row.item) === bucket),
+    now,
+  );
 
 /** Says which unlisted stacks still use bag space, or null when every counted stack is listed. */
 export const unlistedBagStacksNote = ({
