@@ -36,8 +36,7 @@ it("puts each key directly before its action's name", () => {
   expect(rows.map((row) => row.textContent)).toEqual(["QChakra Sword", "Widow's Bite"]);
   // An unset key draws a centred plus icon rather than a text glyph.
   expect(rows[1]?.querySelector("button svg")).not.toBeNull();
-  // Rows sit next to each other at their own width, not in wide grid columns.
-  expect(rows[0]?.parentElement?.className).toContain("flex-wrap");
+  expect(rows[0]?.parentElement?.className).toContain("grid");
   expect(rows[0]?.firstElementChild?.getAttribute("aria-label")).toBe(
     "Chakra Sword: hotkey Q",
   );
