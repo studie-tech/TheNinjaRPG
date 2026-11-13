@@ -142,7 +142,7 @@ export const getUserFactionNotifications = (
       setupDeadline.getTime() - now.getTime() <= KAGE_DEFENSE_REMINDER_HOURS * 3600_000;
     notifications.push({
       href: "/townhall",
-      name: "Missing kage schedule!",
+      name: "Missing schedule",
       color: isUrgent && !isPaused ? "red" : "blue",
       alwaysShow: true,
     });
@@ -161,7 +161,7 @@ export const getUserFactionNotifications = (
   if (openRaidSectors.length > 0) {
     notifications.push({
       href: "/travel",
-      name: `Open ${pluralize("Raid", openRaidSectors)} available (${sectorList(openRaidSectors)})`,
+      name: `${pluralize("Raid", openRaidSectors)} (${sectorList(openRaidSectors)})`,
       color: "blue",
       alwaysShow: true,
     });
