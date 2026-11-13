@@ -1,5 +1,5 @@
 import { beforeEach, expect, it } from "bun:test";
-import { and, asc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import {
   item,
   quest,
@@ -22,6 +22,7 @@ import {
   insertUsers,
   insertUserVotes,
 } from "../../setup/factories";
+import { beforeStatements } from "../../setup/statements";
 import {
   callerFor,
   describeWithDatabase,
@@ -168,6 +169,48 @@ describeWithDatabase("collected quest items", () => {
     ]);
   });
 
+  it("takes what the backpack lacks from the equipped stack", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(userItem)
+      .set({ equipped: "ITEM_1" })
+      .where(eq(userItem.id, "herb-stack"));
+    await insertUserItems([
+      { id: "herb-tote", userId: playerId, itemId: "herb", quantity: 1 },
+    ]);
+    const { user } = await fetchUpdatedUser({ client: db, userId: playerId });
+    // The visit collected a herb into the backpack; start from one there and three equipped.
+    await db.update(userItem).set({ quantity: 1 }).where(eq(userItem.id, "herb-tote"));
+    await db.update(userItem).set({ quantity: 3 }).where(eq(userItem.id, "herb-stack"));
+    const result = await handleQuestConsequences(
+      db,
+      user!,
+      [
+        { type: "remove_item", ids: ["herb"] },
+        { type: "remove_item", ids: ["herb"] },
+      ],
+      [],
+    );
+    expect(result.claimed).toBe(true);
+    const rows = await db
+      .select({ id: userItem.id, quantity: userItem.quantity })
+      .from(userItem)
+      .where(eq(userItem.userId, playerId));
+    expect(rows).toEqual([{ id: "herb-stack", quantity: 2 }]);
+    expect(
+      result.inventoryChanges?.map(({ id, beforeQuantity, quantity }) => [
+        id,
+        beforeQuantity,
+        quantity,
+      ]),
+    ).toEqual(
+      expect.arrayContaining([
+        ["herb-tote", 1, 0],
+        ["herb-stack", 3, 2],
+      ]),
+    );
+  });
+
   it.each([
     ["the quantity it was read at", 10, 9, true],
     ["a stack that grew since it was read", 14, 13, false],
@@ -175,21 +218,27 @@ describeWithDatabase("collected quest items", () => {
     "takes one unit from %s and projects the client inventory only then",
     async (_, current, expected, projected) => {
       const db = await getTestDatabase();
-      await db
-        .update(userItem)
-        .set({ equipped: "ITEM_1" })
-        .where(eq(userItem.id, "herb-stack"));
       const { user } = await fetchUpdatedUser({ client: db, userId: playerId });
-      // Only the equipped stack is left, so the delivery takes from it.
-      await db
-        .delete(userItem)
-        .where(and(eq(userItem.userId, playerId), eq(userItem.equipped, "NONE")));
+      // The visit collected a herb onto the stack; start the delivery from ten.
       await db
         .update(userItem)
-        .set({ quantity: current })
+        .set({ quantity: 10 })
         .where(eq(userItem.id, "herb-stack"));
-      const result = await handleQuestConsequences(
+      // The stack changes between the delivery's read and its write.
+      const grows = beforeStatements(
         db,
+        userItem,
+        [
+          () =>
+            db
+              .update(userItem)
+              .set({ quantity: current })
+              .where(eq(userItem.id, "herb-stack")),
+        ],
+        { when: (values) => "quantity" in values },
+      );
+      const result = await handleQuestConsequences(
+        grows,
         user!,
         [{ type: "remove_item", ids: ["herb"] }],
         [],

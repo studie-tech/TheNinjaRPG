@@ -1913,13 +1913,13 @@ describeWithDatabase(
       await insertItems([{ id: "scroll" }]);
       await insertUserItems([
         {
-          id: "stack",
+          id: "a-equipped",
           userId: "helper",
           itemId: "scroll",
           quantity: 3,
           equipped: "CHEST",
         },
-        { id: "spare", userId: "helper", itemId: "scroll" },
+        { id: "z-backpack", userId: "helper", itemId: "scroll" },
       ]);
       const { user } = await fetchUpdatedUser({ client, userId: "helper" });
       expect(user?.questPartyId).toBeNull();
@@ -1938,7 +1938,7 @@ describeWithDatabase(
           where: eq(userItem.userId, "helper"),
           orderBy: asc(userItem.id),
         }),
-      ).toMatchObject([{ id: "stack", quantity: 3 }]);
+      ).toMatchObject([{ id: "a-equipped", quantity: 3 }]);
     });
 
     it("allocates separate delivery rows without consuming unavailable inventory", async () => {

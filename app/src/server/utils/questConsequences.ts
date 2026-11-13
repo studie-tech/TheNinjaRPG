@@ -20,7 +20,6 @@ import {
   eliteJoninMilestoneUpdate,
 } from "@/libs/eliteJonin";
 import { qualifiesForFarmActivityReward } from "@/libs/farming";
-import { isCarriedUserItem } from "@/libs/item";
 import { isPetTaskAttempt } from "@/libs/pets/tasks";
 import { eliteJoninExamBlockMessage } from "@/libs/profile";
 import { boostPvpGain, getPvpBoost } from "@/libs/pvpExperience";
@@ -754,22 +753,15 @@ export const handleQuestConsequences = async (
       removedItemCounts.set(id, (removedItemCounts.get(id) ?? 0) + 1);
     }
   }
-  // Profile snapshots carry equipped items only, so deliveries read the carried stacks of the
-  // delivered items and take from the backpack first; an equipped copy goes only when the
-  // backpack lacks enough. A snapshot row keeps the quantity the client was given.
-  const additionalItems =
+  // Deliveries take from the carried stacks of the delivered items as they are now, backpack
+  // stacks first; an equipped copy goes only when the backpack lacks enough.
+  const ownedItems = (
     removedItemCounts.size > 0
       ? await listUserItemForHandleQuestConsequences(client, user, [
           ...removedItemCounts.keys(),
         ])
-      : [];
-  const ownedItems = [
-    ...new Map(
-      [...additionalItems, ...user.items.filter((row) => isCarriedUserItem(row))].map(
-        (row) => [row.id, row] as const,
-      ),
-    ).values(),
-  ].sort((a, b) => Number(a.equipped !== "NONE") - Number(b.equipped !== "NONE"));
+      : []
+  ).sort((a, b) => Number(a.equipped !== "NONE") - Number(b.equipped !== "NONE"));
   const deliveries = [...removedItemCounts].flatMap(([id, count]) => {
     let remaining = count;
     return ownedItems.flatMap((row) => {
