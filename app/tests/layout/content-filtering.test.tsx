@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { StrictMode } from "react";
+import { renderToString } from "react-dom/server";
 import {
   battleTypesField,
   buildFilter,
@@ -202,6 +203,94 @@ describe("shared filter fields", () => {
 describe("persisted and reset filters", () => {
   beforeEach(() => window.sessionStorage.clear());
 
+  it("keeps the prerendered and initial client filter at its defaults until restoration", () => {
+    const schema = makeSchema();
+    const seed = renderHook(() =>
+      useContentFiltering(schema, { persistKey: "test-list" }),
+    );
+    act(() => seed.result.current.setters.category("ARMOR"));
+    seed.unmount();
+    const Probe = () => {
+      const state = useContentFiltering(schema, { persistKey: "test-list" });
+      return <span>{`${state.isReady}:${state.values.category}`}</span>;
+    };
+    expect(renderToString(<Probe />)).toBe("<span>false:WEAPON</span>");
+    const renders: { ready: boolean; category: string }[] = [];
+    renderHook(() => {
+      const state = useContentFiltering(schema, { persistKey: "test-list" });
+      renders.push({ ready: state.isReady, category: state.values.category });
+      return state;
+    });
+    expect(renders[0]).toEqual({ ready: false, category: "WEAPON" });
+    expect(renders.at(-1)).toEqual({ ready: true, category: "ARMOR" });
+  });
+
+  it.each(["missing", "malformed", "stale", "blocked"])(
+    "becomes ready with default values when saved storage is %s",
+    (mode) => {
+      const schema = makeSchema();
+      if (mode === "malformed" || mode === "stale") {
+        const seed = renderHook(() =>
+          useContentFiltering(schema, { persistKey: "test-list" }),
+        );
+        seed.unmount();
+        const key = window.sessionStorage.key(0)!;
+        window.sessionStorage.setItem(
+          key,
+          mode === "malformed"
+            ? "{"
+            : JSON.stringify({ defaultsKey: "other", values: {} }),
+        );
+      }
+      if (mode === "blocked") {
+        vi.spyOn(
+          Object.getPrototypeOf(window.sessionStorage),
+          "getItem",
+        ).mockImplementation(() => {
+          throw new Error("Storage blocked");
+        });
+        vi.spyOn(
+          Object.getPrototypeOf(window.sessionStorage),
+          "setItem",
+        ).mockImplementation(() => {
+          throw new Error("Storage blocked");
+        });
+      }
+      const view = renderHook(() =>
+        useContentFiltering(schema, { persistKey: "test-list" }),
+      );
+      expect(view.result.current.isReady).toBe(true);
+      expect(buildFilter(view.result.current, schema)).toEqual({ category: "WEAPON" });
+    },
+  );
+
+  it("restores each persistence key before it becomes ready and persists resets", () => {
+    const schema = makeSchema();
+    const renders: { key: string; ready: boolean; category: string }[] = [];
+    const view = renderHook(
+      ({ key }) => {
+        const state = useContentFiltering(schema, { persistKey: key });
+        renders.push({ key, ready: state.isReady, category: state.values.category });
+        return state;
+      },
+      { initialProps: { key: "first-list" } },
+    );
+    act(() => view.result.current.setters.category("ARMOR"));
+    view.rerender({ key: "second-list" });
+    expect(renders.find((render) => render.key === "second-list")?.ready).toBe(false);
+    expect(view.result.current.isReady).toBe(true);
+    expect(view.result.current.values.category).toBe("WEAPON");
+    view.rerender({ key: "first-list" });
+    expect(view.result.current.values.category).toBe("ARMOR");
+    act(() => view.result.current.reset());
+    expect(view.result.current.isReady).toBe(true);
+    view.unmount();
+    const remount = renderHook(() =>
+      useContentFiltering(schema, { persistKey: "first-list" }),
+    );
+    expect(remount.result.current.values.category).toBe("WEAPON");
+  });
+
   it("restores a persisted filter when the list mounts again", () => {
     const schema = makeSchema();
     const first = renderHook(() =>
@@ -255,6 +344,7 @@ describe("persisted and reset filters", () => {
     expect(second.result.current.values.stats).toEqual([]);
     const unkeyed = renderHook(() => useContentFiltering(makeSchema()));
     expect(unkeyed.result.current.values.stats).toEqual([]);
+    expect(unkeyed.result.current.isReady).toBe(true);
   });
 
   it("resets every field and exclusion to the schema defaults", () => {

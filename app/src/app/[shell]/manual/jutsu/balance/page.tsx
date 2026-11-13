@@ -156,8 +156,11 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
   const filter = getFilter(filterState);
 
   // Queries
-  const { data, isPending } = api.data.getJutsuBalanceStatistics.useQuery(filter);
+  const { data, isPending } = api.data.getJutsuBalanceStatistics.useQuery(filter, {
+    enabled: filterState.cf.isReady,
+  });
 
+  const isLoading = !filterState.cf.isReady || isPending;
   const utils = api.useUtils();
 
   // Check if user can change content
@@ -239,8 +242,8 @@ const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
         it transparent if any jutsu or combination of jutsus is over/under-powered and
         in need of balance adjustment.
       </p>
-      {isPending && <Loader explanation="Loading data" />}
-      {!isPending && tableData && <Table data={tableData} columns={columns} />}
+      {isLoading && <Loader explanation="Loading data" />}
+      {!isLoading && tableData && <Table data={tableData} columns={columns} />}
 
       <ContentDetailsModal type="jutsu" {...details} />
     </ContentBox>

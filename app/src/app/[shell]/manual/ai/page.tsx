@@ -34,6 +34,7 @@ export default function ManualAI() {
   } = api.profile.getPublicUsers.useInfiniteQuery(
     { ...getFilter(state), limit: 30, orderBy: "Weakest", isAi: true },
     {
+      enabled: state.cf.isReady,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
     },
   );
@@ -72,7 +73,7 @@ export default function ManualAI() {
   });
 
   // Derived
-  const totalLoading = isFetching || load1 || load2;
+  const totalLoading = !state.cf.isReady || isFetching || load1 || load2;
 
   return (
     <>
@@ -137,7 +138,7 @@ export default function ManualAI() {
           </div>
         ))}
         <ListLoader
-          initialLoading={isPending}
+          initialLoading={!state.cf.isReady || isPending}
           loading={totalLoading}
           explanation="Loading data"
         />

@@ -766,6 +766,7 @@ describe("staff item selector refreshes", () => {
       vi.spyOn(itemFiltering, "default").mockImplementation(() => null);
       vi.spyOn(itemFiltering, "useFiltering").mockReturnValue({
         itemType: "ANY",
+        cf: { isReady: true },
       } as never);
       vi.spyOn(itemFiltering, "getFilter").mockReturnValue({} as never);
       vi.spyOn(ItemWithEffects, "default").mockImplementation(({ item, onDelete }) => (

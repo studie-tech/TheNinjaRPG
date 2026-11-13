@@ -259,6 +259,8 @@ export interface ContentFilteringState<
     | readonly ExclusionCategoryConfig<string>[]
     | undefined,
 > {
+  /** Persisted values have been restored, or this filter has no persistence key. */
+  isReady: boolean;
   values: ValuesFromSchema<F>;
   debounced: ValuesFromSchema<F>;
   setters: SettersFromSchema<F>;
@@ -442,33 +444,47 @@ export const useContentFiltering = <
 
   // A stored filter applies after mount, so prerendered markup matches the first render.
   // Its defaults key must match: a filter saved under other defaults or fields is dropped.
+  const restorationKey = `${storageKey}:${defaultsKey}`;
   const [restoredKey, setRestoredKey] = useState<string | undefined>(undefined);
   useEffect(() => {
-    if (!storageKey || restoredKey === defaultsKey) return;
+    if (!storageKey || restoredKey === restorationKey) return;
     const stored = readStoredFilter(storageKey, defaultsKey);
-    if (stored) {
-      const restoredValues = {
-        ...initialValues,
-        ...stored.values,
-      } as ValuesFromSchema<F>;
-      setFieldState({
-        values: restoredValues,
-        debounced: restoredValues,
-        appliedDefaultsKey: defaultsKey,
-      });
-      setExcludedState({
-        ...initialExcluded,
-        ...stored.excluded,
-      } as ExcludedFromSchema<E>);
-    }
-    setRestoredKey(defaultsKey);
-  }, [storageKey, restoredKey, defaultsKey, initialValues, initialExcluded]);
+    const restoredValues = {
+      ...initialValues,
+      ...stored?.values,
+    } as ValuesFromSchema<F>;
+    setFieldState({
+      values: restoredValues,
+      debounced: restoredValues,
+      appliedDefaultsKey: defaultsKey,
+    });
+    setExcludedState({
+      ...initialExcluded,
+      ...stored?.excluded,
+    } as ExcludedFromSchema<E>);
+    setRestoredKey(restorationKey);
+  }, [
+    storageKey,
+    restoredKey,
+    restorationKey,
+    defaultsKey,
+    initialValues,
+    initialExcluded,
+  ]);
 
   useEffect(() => {
-    if (!storageKey || restoredKey !== defaultsKey) return;
+    if (!storageKey || restoredKey !== restorationKey) return;
     if (appliedDefaultsKey !== defaultsKey) return;
     writeStoredFilter(storageKey, { defaultsKey, values, excluded });
-  }, [storageKey, restoredKey, defaultsKey, appliedDefaultsKey, values, excluded]);
+  }, [
+    storageKey,
+    restoredKey,
+    restorationKey,
+    defaultsKey,
+    appliedDefaultsKey,
+    values,
+    excluded,
+  ]);
 
   const setExcluded = useMemo(() => {
     const out = {} as ExcludedSettersFromSchema<E>;
@@ -504,6 +520,7 @@ export const useContentFiltering = <
   };
 
   return {
+    isReady: !storageKey || restoredKey === restorationKey,
     values,
     debounced,
     setters,

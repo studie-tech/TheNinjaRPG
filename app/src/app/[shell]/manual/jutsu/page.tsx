@@ -39,6 +39,7 @@ export default function ManualJutsus() {
   } = api.jutsu.getAll.useInfiniteQuery(
     { limit: 10, ...getFilter(state) },
     {
+      enabled: state.cf.isReady,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
     },
@@ -61,7 +62,7 @@ export default function ManualJutsus() {
   });
 
   // Derived
-  const totalLoading = isFetching || load1 || load2;
+  const totalLoading = !state.cf.isReady || isFetching || load1 || load2;
 
   return (
     <>
@@ -148,7 +149,7 @@ export default function ManualJutsus() {
           <div>No jutsus found given the search criteria.</div>
         )}
         <ListLoader
-          initialLoading={isPending}
+          initialLoading={!state.cf.isReady || isPending}
           loading={totalLoading}
           explanation="Loading data"
         />

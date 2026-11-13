@@ -33,6 +33,7 @@ export default function ManualQuests() {
   } = api.quests.getAll.useInfiniteQuery(
     { limit: 10, ...getFilter(state) },
     {
+      enabled: state.cf.isReady,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
     },
@@ -57,7 +58,7 @@ export default function ManualQuests() {
   });
 
   // Derived
-  const totalLoading = isFetching || load1 || load2;
+  const totalLoading = !state.cf.isReady || isFetching || load1 || load2;
 
   // Return JSX
   return (
@@ -152,7 +153,7 @@ export default function ManualQuests() {
           </div>
         ))}
         <ListLoader
-          initialLoading={isPending}
+          initialLoading={!state.cf.isReady || isPending}
           loading={totalLoading}
           explanation="Loading data"
         />

@@ -39,6 +39,7 @@ export default function ManualItems() {
       ...getFilter(state),
     },
     {
+      enabled: state.cf.isReady,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
     },
   );
@@ -68,7 +69,7 @@ export default function ManualItems() {
   });
 
   // Derived
-  const totalLoading = isFetching || load1 || load2;
+  const totalLoading = !state.cf.isReady || isFetching || load1 || load2;
 
   return (
     <>
@@ -112,7 +113,7 @@ export default function ManualItems() {
                 <Button
                   id={`create-${state.itemType}`}
                   className="w-full"
-                  disabled={load1 || isOpeningCreated}
+                  disabled={!state.cf.isReady || load1 || isOpeningCreated}
                   loading={load1 || isOpeningCreated}
                   onClick={() =>
                     create({
@@ -151,7 +152,7 @@ export default function ManualItems() {
           </div>
         ))}
         <ListLoader
-          initialLoading={isPending}
+          initialLoading={!state.cf.isReady || isPending}
           loading={totalLoading}
           explanation="Loading data"
         />
