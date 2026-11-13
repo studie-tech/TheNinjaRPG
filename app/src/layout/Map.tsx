@@ -25,7 +25,7 @@ import {
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { calcGlobalTravelTime } from "@/libs/travel";
 import { getReadableVillageHexColor } from "@/utils/color";
-import { useUserData } from "@/utils/UserContext";
+import { selectUserWithoutPosition, useUserDataSelector } from "@/utils/UserContext";
 import type { GlobeJourney } from "@/validators/travel";
 
 interface MapProps {
@@ -53,7 +53,7 @@ interface MapProps {
 }
 
 const GlobalMap: React.FC<MapProps> = (props) => {
-  const { data: userData, timeDiff } = useUserData();
+  const { data: userData, timeDiff } = useUserDataSelector(selectUserWithoutPosition);
   const { currentStep } = useTutorialStep();
   // Hover lives outside React state here so only the hover cards re-render per sector.
   const [hover] = useState(createHoverStore);
