@@ -1198,10 +1198,12 @@ export const listUserItemForMergeAllStacks = (
   client: Pick<DrizzleClient, "query">,
   ctx: { userId: string },
   storedAtHome: false | true,
+  itemIds?: string[],
 ) =>
   client.query.userItem.findMany({
     where: and(
       eq(userItem.userId, ctx.userId),
+      itemIds ? inArray(userItem.itemId, itemIds) : undefined,
       gt(userItem.quantity, 0),
       eq(userItem.storedAtHome, storedAtHome),
       eq(userItem.isInAuction, false),

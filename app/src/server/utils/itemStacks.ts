@@ -8,8 +8,8 @@ import type { DrizzleClient } from "@/server/db";
 import { groupBy } from "@/utils/grouping";
 
 /**
- * Owners without an active battle. Battle settlement writes absolute quantities for the rows
- * it loaded, so stacks are not merged while the owner's battle record is set.
+ * Owners without an active battle. A battle owns the player's inventory until it settles, so
+ * stacks that come together during one stay apart for the Merge button.
  */
 export const ownerOutOfBattle = (): SQL => isNull(userData.battleId);
 
@@ -30,16 +30,15 @@ export const mergeUserItemStacks = async (
   const wanted = new Set(itemIds);
   if (wanted.size === 0) return [];
   try {
-    const rows = await listUserItemForMergeAllStacks(client, { userId }, storedAtHome);
+    const rows = await listUserItemForMergeAllStacks(client, { userId }, storedAtHome, [
+      ...wanted,
+    ]);
     // Every merge settles before the caller answers, so a client that reads the inventory
     // again after a failed merge sees what the others did.
     const settled = await Promise.allSettled(
       [
         ...groupBy(
-          rows.filter(
-            (row) =>
-              row.item && wanted.has(row.itemId) && getEffectiveStackSize(row.item) > 1,
-          ),
+          rows.filter((row) => row.item && getEffectiveStackSize(row.item) > 1),
           "itemId",
         ),
       ].map(([itemId, itemRows]) =>

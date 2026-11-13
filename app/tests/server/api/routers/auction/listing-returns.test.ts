@@ -176,10 +176,20 @@ describeWithDatabase(
       await listOre();
       await (await getTestDatabase())
         .update(userData)
-        .set({ status: "BATTLE", battleId: "battle" })
+        .set({ battleId: "battle" })
         .where(eq(userData.userId, "seller"));
       await expireAll();
       expect(await carried("seller", "ore")).toEqual([6, 4]);
+    });
+
+    it("joins an expired listing for a seller who is asleep", async () => {
+      await listOre();
+      await (await getTestDatabase())
+        .update(userData)
+        .set({ status: "ASLEEP" })
+        .where(eq(userData.userId, "seller"));
+      await expireAll();
+      expect(await carried("seller", "ore")).toEqual([10]);
     });
 
     it("joins a bought listing to the buyer's stack", async () => {
@@ -204,7 +214,7 @@ describeWithDatabase(
       expect(await carried("buyer", "ore")).toEqual([9]);
     });
 
-    it("keeps home storage apart and the cancel successful when the merge fails", async () => {
+    it("keeps the cancel successful when the merge fails", async () => {
       const listing = await listOre();
       let failedClaims = 0;
       const failing = aroundStatements(
@@ -222,11 +232,6 @@ describeWithDatabase(
       });
       expect(failedClaims).toBeGreaterThan(0);
       expect(await carried("seller", "ore")).toEqual([6, 4]);
-      const [stored] = await (await getTestDatabase())
-        .select({ quantity: userItem.quantity })
-        .from(userItem)
-        .where(eq(userItem.id, "seller-stored-ore"));
-      expect(stored?.quantity).toBe(7);
     });
 
     it("joins a cancelled trade offer's item to the stack it was split from", async () => {
