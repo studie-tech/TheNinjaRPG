@@ -560,7 +560,12 @@ export const homeRouter = createTRPCRouter({
     }),
 
   toggleStoreItem: protectedProcedure
-    .meta({ mcp: { description: "Store or retrieve item from home" } })
+    .meta({
+      mcp: {
+        description:
+          "Store or retrieve item from home; it joins a matching stack there, which can replace its id",
+      },
+    })
     .input(homeStorageInputSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -634,7 +639,12 @@ export const homeRouter = createTRPCRouter({
       };
     }),
   moveUserItems: protectedProcedure
-    .meta({ mcp: { description: "Store or take out several items at home at once" } })
+    .meta({
+      mcp: {
+        description:
+          "Store or take out several items at home at once; they join matching stacks there, reported in inventoryChanges",
+      },
+    })
     .input(
       z.object({
         userItemIds: z
@@ -647,7 +657,8 @@ export const homeRouter = createTRPCRouter({
     )
     .output(
       baseServerResponse.extend({
-        // Omitted when a stack changed during the move, so clients read the inventory again.
+        // Omitted when a stack changed during the move or its stacks did not finish joining,
+        // so clients read the inventory again.
         movedUserItemIds: z.array(z.string()).optional(),
         // Stacks the moved items joined at their destination, applied after the move.
         inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
