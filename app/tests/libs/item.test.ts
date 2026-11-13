@@ -1030,6 +1030,9 @@ describe("backpack storage usage", () => {
     expect(getInventoryBucketFullMessage("cooking", held(0, 2))).toBe(
       "Cooking inventory is full (2 slots are held by unfinished crafts)",
     );
+    expect(getInventoryBucketFullMessage("normal", held(1, 1))).toBe(
+      "Inventory is full (2 slots are held: 1 by an auction listing or trade offer, 1 by an unfinished craft)",
+    );
     expect(getInventoryBucketFullMessage("normal", held(2, 1))).toBe(
       "Inventory is full (3 slots are held: 2 by auction listings or trade offers, 1 by an unfinished craft)",
     );

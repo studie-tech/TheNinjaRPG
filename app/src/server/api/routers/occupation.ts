@@ -289,11 +289,12 @@ export const occupationRouter = createTRPCRouter({
           carriedCookingStacks + queuedCookingStacks + newStacksRequired >
           getInventoryBucketCapacity(outputBucket, user)
         ) {
+          const held = countHeldInventorySlots(useritems, outputBucket);
           return errorResponse(
-            getInventoryBucketFullMessage(
-              outputBucket,
-              countHeldInventorySlots(useritems, outputBucket),
-            ),
+            getInventoryBucketFullMessage(outputBucket, {
+              ...held,
+              crafting: held.crafting + queuedCookingStacks,
+            }),
           );
         }
       }

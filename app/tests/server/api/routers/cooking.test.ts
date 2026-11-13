@@ -15,6 +15,7 @@ import {
   userVote,
 } from "@/drizzle/schema";
 import { combatEnergyRecoverySql } from "@/libs/combat/database";
+import { getInventoryBucketCapacity } from "@/libs/item";
 import { itemRouter } from "@/server/api/routers/item";
 import { occupationRouter } from "@/server/api/routers/occupation";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
@@ -604,6 +605,55 @@ describeWithDatabase("Cooking production and consumption", () => {
       (await fetchUpdatedUser({ client: db, userId })).user?.cookingExperience,
     ).toBe(30);
     expect((await readUser())?.cookingExperience).toBe(30);
+  });
+
+  it("names queued cooking crafts in the full cooking inventory message", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(userData)
+      .set({ occupation: "CRAFTING" })
+      .where(eq(userData.userId, userId));
+    await insertItems([
+      {
+        id: "stew",
+        name: "Stew",
+        itemType: "COOKING",
+        canBeCrafted: true,
+        stackSize: 1,
+      },
+    ]);
+    await db.insert(craftingRequirement).values({
+      id: "recipe-stew",
+      craftItemId: "stew",
+      requirementItemId: "rice",
+      quantity: 1,
+    });
+    const capacity = getInventoryBucketCapacity("cooking", (await readUser())!);
+    await insertUserItems(
+      Array.from({ length: capacity - 1 }, (_, index) => ({
+        id: `stew-${index}`,
+        userId,
+        itemId: "stew",
+      })),
+    );
+    const later = new Date(Date.now() + 3_600_000);
+    await db.insert(userQueue).values({
+      id: "queued-stew",
+      userId,
+      kind: "CRAFT",
+      position: 1,
+      itemId: "stew",
+      quantity: 1,
+      materials: [],
+      durationSeconds: 60,
+      startsAt: later,
+      finishesAt: new Date(later.getTime() + 60_000),
+    });
+    const caller = await callerFor(occupationRouter, userId);
+    expect(await caller.craftItem({ itemId: "stew", quantity: 1 })).toMatchObject({
+      success: false,
+      message: "Cooking inventory is full (1 slot is held by an unfinished craft)",
+    });
   });
 
   it("rejects rank, ingredient and shared-capacity failures before taking ingredients", async () => {
