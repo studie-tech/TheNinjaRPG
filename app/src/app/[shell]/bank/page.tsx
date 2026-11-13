@@ -332,6 +332,7 @@ export default function Bank() {
             placeholder="Amount to transfer"
             max={bank}
             label="Send"
+            showLabel={true}
             icon={<Send className="h-5 w-5" />}
             className="mt-2 px-1"
           />
@@ -415,7 +416,11 @@ export default function Bank() {
   );
 }
 
-/** Numeric amount field followed by its labelled submit button; starts blank. */
+/**
+ * Numeric amount field with its submit button attached on the same row; starts blank.
+ * In narrow columns the button shows only its icon below `sm`, keeping its text as the
+ * accessible name, unless `showLabel` keeps the text visible at every width.
+ */
 const AmountForm = ({
   form,
   onSubmit,
@@ -424,6 +429,7 @@ const AmountForm = ({
   max,
   label,
   icon,
+  showLabel = false,
   className,
   disabled,
   pending,
@@ -439,42 +445,53 @@ const AmountForm = ({
   max: number;
   label: string;
   icon: React.ReactNode;
+  showLabel?: boolean;
   className?: string;
 }) => (
   <Form {...form}>
-    <form
-      onSubmit={onSubmit}
-      className={cn("flex flex-row flex-wrap items-start gap-1", className)}
-      aria-busy={pending}
-    >
-      <fieldset disabled={disabled} className="contents">
+    <form onSubmit={onSubmit} className={className} aria-busy={pending}>
+      <fieldset disabled={disabled}>
         <FormField
           control={form.control}
           name="amount"
           render={({ field }) => (
-            <FormItem className="flex min-w-0 flex-1 basis-32 flex-col">
-              <FormControl>
-                <NumberInput
-                  id={id}
-                  aria-label={placeholder}
-                  placeholder={placeholder}
-                  min={1}
-                  max={max}
-                  name={field.name}
-                  ref={field.ref}
-                  onBlur={field.onBlur}
-                  value={field.value as number | undefined}
-                  onOptionalValueChange={field.onChange}
-                />
-              </FormControl>
+            <FormItem className="flex w-full flex-col">
+              <div className="flex w-full">
+                <FormControl>
+                  <NumberInput
+                    id={id}
+                    aria-label={placeholder}
+                    placeholder={placeholder}
+                    min={1}
+                    max={max}
+                    name={field.name}
+                    ref={field.ref}
+                    onBlur={field.onBlur}
+                    value={field.value as number | undefined}
+                    onOptionalValueChange={field.onChange}
+                    className="min-w-0 flex-1 rounded-r-none border-r-0"
+                  />
+                </FormControl>
+                <Button
+                  type="submit"
+                  className={cn(
+                    "shrink-0 rounded-l-none",
+                    showLabel ? "px-3" : "px-2.5 sm:px-3",
+                  )}
+                  loading={pending}
+                >
+                  {icon}
+                  <span
+                    className={showLabel ? "ml-1" : "sr-only sm:not-sr-only sm:ml-1"}
+                  >
+                    {label}
+                  </span>
+                </Button>
+              </div>
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button type="submit" className="shrink-0" loading={pending}>
-          {icon}
-          <span className="ml-1">{label}</span>
-        </Button>
       </fieldset>
     </form>
   </Form>
