@@ -559,13 +559,22 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
               <VolumeX className="h-6 w-6 p-1 xl:h-7 xl:w-7" suppressHydrationWarning />
             )}
             {isSettingsTrigger && !triggerClassName && (
-              // Keeps the sound state visible on the gear; toggled by class so hydration matches.
-              <VolumeX
+              // Keep both sound states discoverable on the gear without changing hydration markup.
+              <span
                 aria-hidden="true"
-                data-muted-mark
-                className={`absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full bg-white p-[1px] text-slate-700 ring-1 ring-slate-400 ${audioEnabled ? "hidden" : ""}`}
-                suppressHydrationWarning
-              />
+                className="absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full bg-white p-[1px] text-slate-700 ring-1 ring-slate-400"
+              >
+                <Volume2
+                  data-audio-mark
+                  className={`h-full w-full ${audioEnabled ? "" : "hidden"}`}
+                  suppressHydrationWarning
+                />
+                <VolumeX
+                  data-muted-mark
+                  className={`h-full w-full ${audioEnabled ? "hidden" : ""}`}
+                  suppressHydrationWarning
+                />
+              </span>
             )}
           </span>
         </button>
