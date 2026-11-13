@@ -179,12 +179,6 @@
   flex: 1 0 18rem;
   max-width: 100%;
 }
-.merch-section-heading>a {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
 .merch-section-heading h2,.merch-faq h2,.merch-design-story h2 {
   font: 400 39px/1.15 Georgia,serif;
   margin: 0;
@@ -215,8 +209,8 @@
   background: #eee3d0;
 }
 .merch-tile-number {
-  font-size: 12px;
-  letter-spacing: 1px;
+  font-size: 9px;
+  letter-spacing: 1.5px;
   position: relative;
   z-index: 2;
 }
@@ -226,7 +220,7 @@
   height: 78%;
   object-fit: contain;
   top: 10%;
-  right: 0;
+  right: -14%;
   opacity: .75;
   transition: transform .3s;
 }
@@ -245,14 +239,14 @@
   margin: 0 0 10px;
 }
 .merch-collection-tile p {
-  font-size: 12px;
+  font-size: 11px;
   margin: 0 0 20px;
 }
 .merch-tile-link {
   display: flex;
   gap: 15px;
   align-items: center;
-  font-size: 12px;
+  font-size: 10px;
 }
 .merch-catalog {
   padding-top: 20px;
@@ -1070,111 +1064,10 @@
     padding: 30px 5%;
   }
 }
-/* Narrow containers (the game column): tile text and art stack instead of overlapping */
-@container merch (max-width:1000px) {
-  .merch-collection-tile {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    min-height: 0;
-  }
-  .merch-collection-tile:after {
-    display: none;
-  }
-  .merch-collection-tile img {
-    position: static;
-    width: 100%;
-    height: 170px;
-    opacity: 1;
-  }
-  .merch-collection-tile>div {
-    position: static;
-    margin-top: auto;
-  }
-}
 /* Single-column product page: keep title, price and "Add to bag" near the fold */
 @container merch (max-width:850px) {
   .merch-detail-photo {
     max-height: 55vh;
     margin-inline: auto;
-  }
-}
-@container merch (min-width:480px) and (max-width:650px) {
-  .merch-collection-tile img {
-    height: 110px;
-  }
-  .merch-tile-number,.merch-tile-link {
-    font-size: 12px;
-    letter-spacing: 0;
-  }
-}
-@container merch (max-width:479px) {
-  .merch-collection-tile {
-    display: grid;
-    grid-template-columns: minmax(0,1fr) 38%;
-    grid-template-rows: auto 1fr;
-    column-gap: 12px;
-  }
-  .merch-tile-number {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  .merch-collection-tile img {
-    grid-column: 2;
-    grid-row: 1/3;
-    height: 150px;
-    align-self: center;
-  }
-  .merch-collection-tile>div {
-    grid-column: 1;
-    grid-row: 2;
-    align-self: end;
-  }
-  .merch-collection-tile p {
-    margin-bottom: 12px;
-  }
-  /* Phone hero: three cards side by side, so no title is covered */
-  .merch-hero-pieces {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
-    left: 5%;
-    right: 5%;
-    bottom: 16px;
-    width: auto;
-    height: auto;
-  }
-  .merch-hero-piece,.merch-hero-piece-0,.merch-hero-piece-1,.merch-hero-piece-2 {
-    position: relative;
-    inset: auto;
-    flex: 1 1 0;
-    min-width: 0;
-    width: auto;
-    padding: 8px;
-  }
-  .merch-hero-piece-0 {
-    transform: rotate(-3deg);
-  }
-  .merch-hero-piece-1 {
-    transform: rotate(2deg);
-  }
-  .merch-hero-piece-2 {
-    transform: rotate(-1deg);
-  }
-  .merch-hero-piece img,.merch-hero-piece-2 img {
-    height: 110px;
-  }
-  .merch-piece-number {
-    display: none;
-  }
-  .merch-piece-label {
-    align-items: flex-start;
-    gap: 4px;
-    font-size: 11px;
-    line-height: 1.25;
-  }
-  .merch-piece-label svg {
-    flex-shrink: 0;
-    width: 12px;
   }
 }
