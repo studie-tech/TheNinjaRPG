@@ -166,4 +166,9 @@ describe("actionAimsAtFighter", () => {
     expect(tapAims(heal, "distant", 2)).toBe(true);
     expect(tapAims(heal, "distant", 4)).toBe(false);
   });
+
+  it("counts a tap aimed at the fighter's own tile when it cannot cast yet", () => {
+    const { tapAims } = scenario(30);
+    expect(tapAims(selfBuff, "actor", 2)).toBe(true);
+  });
 });
