@@ -71,8 +71,8 @@ describe("battlefield tap inspection", () => {
     ["ally", true, false],
     ["pet", true, false],
     ["enemy", true, true],
-  ] as const)("tapping %s, casting: %p, inspects: %p", (userId, casts, inspects) => {
-    expect(inspectsBattlefieldTap(snapshot(), "me", userId, casts)).toBe(inspects);
+  ] as const)("tapping %s, aiming: %p, inspects: %p", (userId, aims, inspects) => {
+    expect(inspectsBattlefieldTap(snapshot(), "me", userId, aims)).toBe(inspects);
   });
   it("inspects when the viewer is not a fighter", () => {
     expect(inspectsBattlefieldTap(snapshot(), "spectator", "ally", true)).toBe(true);

@@ -60,6 +60,14 @@ export const validateActionTarget = (
 };
 
 /**
+ * Whether a tap on a fighter aims the selected action: it casts on the tapped tile, or the
+ * action aims at the fighter's own tile ({@link actionAimsAtFighter}). The sprite under the
+ * pointer can stand on a neighbouring tile, so both count.
+ */
+export const tapAimsAction = (info: TargetCheck, fighterId: string) =>
+  validateActionTarget(info).isValid || actionAimsAtFighter(info, fighterId);
+
+/**
  * Whether the actor, on their turn, aims the selected action at a fighter: the action reaches
  * the fighter's tile even when the actor lacks the action points or the action cools down.
  * Outside the actor's turn nothing is aimed.

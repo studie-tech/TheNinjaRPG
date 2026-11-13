@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   actionAimsAtFighter,
+  tapAimsAction,
   validateActionTarget,
 } from "@/libs/combat/targetValidation";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
@@ -75,7 +76,20 @@ const scenario = (actorActionPoints: number, activeUserId = "actor") => {
       },
       fighterId,
     );
-  return { check, aimsFromTile };
+  /** Whether a tap whose pointer is on one tile and whose sprite hit is a fighter aims. */
+  const tapAims = (action: CombatAction, fighterId: string, col: number) =>
+    tapAimsAction(
+      {
+        user: battle.usersState.find((user) => user.userId === "actor")!,
+        battle,
+        action,
+        grid,
+        target: tile(col),
+        timeDiff: 0,
+      },
+      fighterId,
+    );
+  return { check, aimsFromTile, tapAims };
 };
 
 const heal = makeCombatAction({
@@ -144,5 +158,12 @@ describe("actionAimsAtFighter", () => {
     const { aimsFromTile } = scenario(30);
     expect(aimsFromTile(selfBuff, "actor", 2)).toBe(true);
     expect(aimsFromTile(heal, "distant", 2)).toBe(false);
+  });
+
+  it("counts a tap that casts on the tile under the pointer, whichever sprite it hit", () => {
+    const { tapAims } = scenario(100);
+    // The heal lands on the ally's tile; the sprite hit is a teammate out of its reach.
+    expect(tapAims(heal, "distant", 2)).toBe(true);
+    expect(tapAims(heal, "distant", 4)).toBe(false);
   });
 });
