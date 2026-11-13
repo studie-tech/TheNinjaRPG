@@ -191,3 +191,24 @@ it("reads the list again when the count changes without reaching zero", async ()
     ]),
   );
 });
+
+it("reads the list again when the news arrives while a read is in flight", async () => {
+  // That read may have reset the server counter before the news raised it.
+  notifications = [];
+  listReadDelay = 100;
+  seedEarlierList();
+  const { rerender } = render();
+  void queryClient.refetchQueries({ queryKey: conversationsKey() });
+  await waitFor(() => expect(events).toEqual(["list read"]));
+  notifications = [inboxNews];
+  rerender();
+  await waitFor(() => expect(events).toContain("badge cleared"));
+  expect(events).toEqual(["list read", "list read", "badge cleared"]);
+});
+
+it("clears news that was already there on mount after one read", async () => {
+  listReadDelay = 100;
+  render();
+  await waitFor(() => expect(events).toContain("badge cleared"));
+  expect(events).toEqual(["list read", "badge cleared"]);
+});
