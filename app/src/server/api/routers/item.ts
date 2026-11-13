@@ -4439,17 +4439,20 @@ async function executeMergeStacksForItemBucket(
 
   // Restores every row this attempt touched back to its original quantity in one UPDATE. The
   // `updatedAt = claimedAt` stamp scopes the write to our own claims/publishes, and the per-row
-  // quantity guard matches both a still-claimed row (-q) and an already-published one (its
-  // target), so even a partially applied publish is fully undone. `updatedAt` intentionally stays
-  // at `claimedAt`: positive rows are never touched by the stale-claim reaper, and the tombstone
+  // quantity guard matches a still-claimed row (-q) and, once the publish has been sent, an
+  // already-published one (its target), so even a partially applied publish is fully undone.
+  // Before the publish only claimed rows match: another merge that claimed in the same
+  // millisecond may have published those targets itself. `updatedAt` intentionally stays at
+  // `claimedAt`: positive rows are never touched by the stale-claim reaper, and the tombstone
   // delete additionally guards on quantity 0.
+  let publishSent = false;
   const restoreOriginalQuantities = () =>
     updateUserItemForRestoreOriginalQuantities(
       drizzle,
       sortedItems,
       userId,
       claimedAt,
-      publishTargets,
+      publishSent ? publishTargets : undefined,
     );
 
   let publishedRows = 0;
@@ -4472,6 +4475,7 @@ async function executeMergeStacksForItemBucket(
 
     // Phase 2: atomically publish every keeper and convert extras to hidden tombstones in one
     // UPDATE, so a process crash cannot commit only a subset of the target quantities/deletions.
+    publishSent = true;
     const publishResult = await updateUserItemForExecuteMergeStacksForItemBucket2(
       drizzle,
       publishTargets,

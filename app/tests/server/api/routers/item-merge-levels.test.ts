@@ -1,4 +1,4 @@
-import { beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, setSystemTime } from "bun:test";
 import { eq } from "drizzle-orm";
 import { getInventoryQuantities } from "@/deltas/item";
 import { HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
@@ -24,6 +24,7 @@ describeWithDatabase("consumable merges across ownership levels", () => {
       { id: "weapon", itemType: "WEAPON", canStack: true, stackSize: 10 },
     ]);
   });
+  afterEach(() => setSystemTime());
 
   it.each([false, true])(
     "retains the highest-level keeper and stack cap (home: %s)",
@@ -278,6 +279,52 @@ describeWithDatabase("consumable merges across ownership levels", () => {
         .map((row) => row.quantity)
         .sort((a, b) => b - a),
     ).toEqual(quantities);
+  });
+
+  it("keeps a merge that claims first when a second merge claims in the same millisecond", async () => {
+    await insertUserItems(
+      [3, 3].map((quantity, index) => ({
+        id: `twin-${index}`,
+        userId: "merge-user",
+        itemId: "consumable",
+        quantity,
+      })),
+    );
+    // Both merges stamp their claims with the same time.
+    setSystemTime(new Date());
+    const database = await getTestDatabase();
+    const first = await callerFor(itemRouter, "merge-user");
+    // The second merge read [3, 3]; the first merge completes after its stale-claim recovery
+    // and before its claim.
+    const raced = beforeStatements(
+      database,
+      userItem,
+      [
+        async () => {},
+        async () =>
+          expect((await first.mergeStacks({ itemId: "consumable" })).success).toBe(
+            true,
+          ),
+      ],
+      { when: (values) => "updatedAt" in values },
+    );
+    expect(
+      (
+        await callerForDatabase(itemRouter, "merge-user", raced).mergeStacks({
+          itemId: "consumable",
+        })
+      ).success,
+    ).toBe(false);
+    expect(
+      (
+        await database
+          .select({ quantity: userItem.quantity })
+          .from(userItem)
+          .where(eq(userItem.userId, "merge-user"))
+      )
+        .map((row) => row.quantity)
+        .filter((quantity) => quantity > 0),
+    ).toEqual([6]);
   });
 
   it("merges a stack above the stack size when the total exactly fills the rows", async () => {
