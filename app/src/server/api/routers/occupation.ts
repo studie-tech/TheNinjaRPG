@@ -33,6 +33,7 @@ import {
   getTotalItemQuantity,
 } from "@/libs/crafting";
 import {
+  countListedInventorySlots,
   countsTowardInventoryStorage,
   getInventoryBucket,
   getInventoryBucketCapacity,
@@ -288,7 +289,12 @@ export const occupationRouter = createTRPCRouter({
           carriedCookingStacks + queuedCookingStacks + newStacksRequired >
           getInventoryBucketCapacity(outputBucket, user)
         ) {
-          return errorResponse(getInventoryBucketFullMessage(outputBucket));
+          return errorResponse(
+            getInventoryBucketFullMessage(
+              outputBucket,
+              countListedInventorySlots(useritems, outputBucket),
+            ),
+          );
         }
       }
       // Derived

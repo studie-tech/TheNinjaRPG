@@ -91,6 +91,7 @@ import {
   compatibleEquipSlots,
   computeAutoEquipAssignments,
   computeLoadoutAssignments,
+  countListedInventorySlots,
   countsTowardInventoryStorage,
   findFreeEquipSlot,
   getEffectiveStackSize,
@@ -3354,8 +3355,14 @@ export const itemRouter = createTRPCRouter({
             getInventoryBucket(ui.item) === purchaseBucket,
         ).length;
         if (bucketCount >= getInventoryBucketCapacity(purchaseBucket, user)) {
-          if (!isStackablePurchase)
-            return errorResponse(getInventoryBucketFullMessage(purchaseBucket));
+          if (!isStackablePurchase) {
+            return errorResponse(
+              getInventoryBucketFullMessage(
+                purchaseBucket,
+                countListedInventorySlots(useritems, purchaseBucket),
+              ),
+            );
+          }
           topUpOnly = true;
         }
       }

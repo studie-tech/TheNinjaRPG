@@ -25,6 +25,7 @@ import {
   compatibleEquipSlots,
   computeAutoEquipAssignments,
   computeLoadoutAssignments,
+  countListedInventorySlots,
   countMergeableStackTypes,
   countsTowardInventoryStorage,
   type EquipConstraintInfo,
@@ -1012,6 +1013,38 @@ describe("COOKING item type", () => {
 });
 
 describe("backpack storage usage", () => {
+  it("names the slots held by listings in a full inventory", () => {
+    expect(getInventoryBucketFullMessage("normal", 0)).toBe("Inventory is full");
+    expect(getInventoryBucketFullMessage("normal", 1)).toBe(
+      "Inventory is full (1 slot is held by your auction listings and trade offers)",
+    );
+    expect(getInventoryBucketFullMessage("materials", 3)).toBe(
+      "Materials inventory is full (3 slots are held by your auction listings and trade offers)",
+    );
+  });
+
+  it("counts carried listings and offers in one bucket", () => {
+    type Row = Parameters<typeof countListedInventorySlots>[0][number];
+    const row = (fields: Partial<Row>, itemType = "WEAPON"): Row => ({
+      storedAtHome: false,
+      equipped: "NONE" as const,
+      isInAuction: true,
+      item: { itemType, isEventItem: false },
+      ...fields,
+    });
+    const rows = [
+      row({}),
+      row({}),
+      row({ isInAuction: false }),
+      row({ storedAtHome: true }),
+      row({ equipped: "HAND_1" }),
+      row({}, "MATERIAL"),
+    ];
+    expect(countListedInventorySlots(rows, "normal")).toBe(2);
+    expect(countListedInventorySlots(rows, "materials")).toBe(1);
+    expect(countListedInventorySlots(rows, "cooking")).toBe(0);
+  });
+
   it.each(ItemSlots.filter((slot) => slot !== "NONE"))(
     "excludes stacks equipped in %s",
     (equipped) => {

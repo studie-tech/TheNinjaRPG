@@ -53,6 +53,31 @@ describe("homeStorageBlockReason", () => {
 });
 
 describe("planHomeStorageMove", () => {
+  it("names the backpack slots held by listings when a withdrawal does not fit", () => {
+    const capacity = getInventoryBucketCapacity("normal", user);
+    const rows = [
+      ...Array.from({ length: capacity }, (_, index) =>
+        row(`carried-${index}`, { isInAuction: index < 2 }),
+      ),
+      row("stored", { storedAtHome: true }),
+    ];
+    const plan = planHomeStorageMove({
+      rows,
+      userItemIds: ["stored"],
+      toHome: false,
+      user,
+      homeStorage: 12,
+    });
+    expect(plan.refused).toEqual([
+      {
+        userItemId: "stored",
+        name: "stored",
+        reason:
+          "does not fit: Inventory is full (2 slots are held by your auction listings and trade offers)",
+      },
+    ]);
+  });
+
   it("stores carried stacks until their home bucket is full, in request order", () => {
     // A 12-slot home holds 12 items and 2 materials.
     const rows = [

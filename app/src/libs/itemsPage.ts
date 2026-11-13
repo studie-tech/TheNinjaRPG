@@ -17,6 +17,7 @@ import {
   applyActiveVariant,
   byItemName,
   calcItemSellingPrice,
+  countListedInventorySlots,
   countsTowardInventoryStorage,
   getEquipBlockReason,
   getHomeStorageBucket,
@@ -398,7 +399,7 @@ export const planHomeStorageMove = <T extends HomeStorageRow>({
       } else {
         const bucket = getInventoryBucket(ui.item);
         if ((used.get(bucket) ?? 0) >= getInventoryBucketCapacity(bucket, user)) {
-          return `does not fit: ${getInventoryBucketFullMessage(bucket)}`;
+          return `does not fit: ${getInventoryBucketFullMessage(bucket, countListedInventorySlots(rows, bucket))}`;
         }
       }
       return null;

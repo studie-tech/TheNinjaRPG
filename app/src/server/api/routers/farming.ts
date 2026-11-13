@@ -40,6 +40,7 @@ import {
   mapPlotToState,
 } from "@/libs/farming";
 import {
+  countListedInventorySlots,
   countsTowardInventoryStorage,
   getEffectiveStackSize,
   getInventoryBucket,
@@ -2295,7 +2296,12 @@ const guardItemAwardInventoryCapacity = (
     (ui) => getInventoryBucket(ui.item) === bucket,
   ).length;
   if (bucketCount + newStacksRequired > getInventoryBucketCapacity(bucket, user)) {
-    return errorResponse(getInventoryBucketFullMessage(bucket));
+    return errorResponse(
+      getInventoryBucketFullMessage(
+        bucket,
+        countListedInventorySlots(userItems, bucket),
+      ),
+    );
   }
 
   return null;
@@ -2340,7 +2346,12 @@ const guardBulkItemAwardInventoryCapacity = (
       (userItem) => getInventoryBucket(userItem.item) === bucket,
     ).length;
     if (bucketCount + needed > getInventoryBucketCapacity(bucket, user)) {
-      return errorResponse(getInventoryBucketFullMessage(bucket));
+      return errorResponse(
+        getInventoryBucketFullMessage(
+          bucket,
+          countListedInventorySlots(inventoryItems, bucket),
+        ),
+      );
     }
   }
   return null;

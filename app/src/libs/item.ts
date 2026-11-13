@@ -172,18 +172,40 @@ export const getInventoryBucketCapacity = (
   }
 };
 
-export const getInventoryBucketFullMessage = (bucket: InventoryBucket): string => {
-  switch (bucket) {
-    case "cooking":
-      return "Cooking inventory is full";
-    case "materials":
-      return "Materials inventory is full";
-    case "event":
-      return "Event item inventory is full";
-    case "normal":
-      return "Inventory is full";
-  }
+/**
+ * The message for a full inventory bucket. Listings and trade offers keep their items in the
+ * backpack until they settle, so the message names the slots they hold.
+ */
+export const getInventoryBucketFullMessage = (
+  bucket: InventoryBucket,
+  listedSlots = 0,
+): string => {
+  const full = {
+    cooking: "Cooking inventory is full",
+    materials: "Materials inventory is full",
+    event: "Event item inventory is full",
+    normal: "Inventory is full",
+  }[bucket];
+  if (listedSlots <= 0) return full;
+  return `${full} (${listedSlots} ${listedSlots === 1 ? "slot is" : "slots are"} held by your auction listings and trade offers)`;
 };
+
+/** Carried slots in a bucket that hold an item listed at auction or offered in a trade. */
+export const countListedInventorySlots = (
+  rows: readonly {
+    storedAtHome: boolean;
+    equipped: ItemSlot;
+    isInAuction: boolean;
+    item: BucketItemFields;
+  }[],
+  bucket: InventoryBucket,
+) =>
+  rows.filter(
+    (row) =>
+      row.isInAuction &&
+      countsTowardInventoryStorage(row) &&
+      getInventoryBucket(row.item) === bucket,
+  ).length;
 
 /** Resolve a home's per-bucket capacity from its configured storage and bucket limits. */
 export const getHomeStorageBucketCapacity = (
