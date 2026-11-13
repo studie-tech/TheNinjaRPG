@@ -62,7 +62,7 @@ export const useConversationCacheUpdate = () => {
 
 /**
  * List the player's conversations and mirror the inbox counter reset that the listing
- * performs on the server. A list read before the inbox badge appeared is read again first,
+ * performs on the server. A list not read after the inbox badge appeared is read again first,
  * so the badge clears only once the server counter has been reset.
  * @param options - How the listing refetches; the inbox page refreshes it on every mount
  */
@@ -92,7 +92,7 @@ export function useInboxConversations(
       };
     }
     if (inboxNews === 0 || !data || isFetching) return;
-    if (dataUpdatedAt >= news.current.seenAt) {
+    if (dataUpdatedAt > news.current.seenAt) {
       void updateNotifications(clearInboxNotifications);
     } else if (!news.current.refetched) {
       // One read per news; after a failed read the badge waits for the next list read.

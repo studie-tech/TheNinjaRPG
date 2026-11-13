@@ -27,11 +27,9 @@ const render = (options?: Parameters<typeof useInboxConversations>[0], consumers
           client={fakeTrpcClient(async (path) => {
             if (path !== "comments.getUserConversations") throw new Error(path);
             events.push("list read");
-            if (failListReads) {
-              // A failure that arrives after the hook rendered the running read.
-              await new Promise((resolve) => setTimeout(resolve, 30));
-              throw new Error("Too many requests");
-            }
+            // Responses arrive after a network round trip, never in the millisecond they started.
+            await new Promise((resolve) => setTimeout(resolve, failListReads ? 30 : 5));
+            if (failListReads) throw new Error("Too many requests");
             return [];
           })}
           queryClient={queryClient}
@@ -83,6 +81,21 @@ afterEach(() => {
 it("reads the conversation list again before clearing a badge that arrived after it", async () => {
   // The chat panel keeps the list it read earlier; the server counter only resets on a read.
   seedEarlierList();
+  render();
+  await waitFor(() => expect(events).toEqual(["list read", "badge cleared"]));
+});
+
+it("reads a list cached in the same millisecond the badge appears", async () => {
+  // The clock stands still until the server read starts, as on a fast machine.
+  const frozenAt = Date.now();
+  const now = Date.now.bind(Date);
+  vi.spyOn(Date, "now").mockImplementation(() =>
+    events.includes("list read") ? now() + 1 : frozenAt,
+  );
+  queryClient.setQueryData(
+    getQueryKey(testApi.comments.getUserConversations, undefined, "query"),
+    [],
+  );
   render();
   await waitFor(() => expect(events).toEqual(["list read", "badge cleared"]));
 });
