@@ -6,9 +6,16 @@ import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { nextUtcDayAt, periodStart } from "@/utils/time";
 import { MAP_LOCATION_REFRESH_MS } from "@/validators/mapLocation";
 
-/** Prepare destination scenery once; keep visible scenes fresh on publication and recovery signals. */
+/**
+ * Prepare hidden destination scenery once, then poll and recover only while active.
+ * Missed subscription signals must reconcile their revision before activation reads;
+ * joining a pre-event snapshot could otherwise mark stale scenery fresh.
+ * @param timeDiff - Client time minus server time, in milliseconds.
+ * @param isActive - Allow refreshes while retaining the initial hidden preparation read.
+ */
 export const usePublicQuestLocations = (timeDiff: number, isActive = true) => {
   const [contentRevision, setContentRevision] = useState(0);
+  // Keep obsolete keys disabled until a deferred subscription signal is reconciled.
   const [needsRecovery, setNeedsRecovery] = useState(false);
   const day = periodStart("daily", new Date(Date.now() - timeDiff)).getTime();
   const publicationRecoveryUntil = day + timeDiff + 5 * 60_000;
@@ -55,7 +62,10 @@ export const usePublicQuestLocations = (timeDiff: number, isActive = true) => {
     setContentRevision((previous) => Math.max(previous, revision));
   }, []);
 
-  /** Recover missed notifications without allowing a pending pre-subscription read to overwrite them. */
+  /**
+   * Remember hidden recovery signals without fetching. Active recovery bypasses older
+   * worker caches and rejects pre-event reads even when an edit revision cannot advance.
+   */
   const recoverPublicLocations = useCallback(() => {
     const { input, cache, timeDiff, isActive } = current.current;
     if (!isActive) {

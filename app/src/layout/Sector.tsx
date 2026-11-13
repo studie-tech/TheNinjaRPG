@@ -516,6 +516,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     updatePublicLocations,
     recoverPublicLocations,
   } = usePublicQuestLocations(timeDiff, props.isActive);
+  // Read current handlers without restarting the subscription when scene activity changes.
   const contentHandlers = useRef({
     updatePublicLocations,
     recoverPublicLocations,
@@ -540,7 +541,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       if (userRef.current?.userQuests.some((entry) => !entry.completed && !entry.endAt))
         void utils.profile.getUser.invalidate();
     };
-    // Activity changes replace dungeon handlers without restarting the shared subscription.
+    /** Recover current public scenery and dungeon availability after subscription reconnects. */
     const recover = () => {
       contentHandlers.current.recoverPublicLocations();
       contentHandlers.current.recoverDungeonEntrances();
