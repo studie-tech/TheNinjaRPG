@@ -702,7 +702,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
           initialBreak={props.initialBreak}
           topRightContent={
             <div className="flex items-center gap-1">
-              {searchButtonElement}
               {conversation && (
                 <Button
                   type="button"
@@ -715,6 +714,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                   <RefreshCw className="h-4 w-4" />
                 </Button>
               )}
+              {searchButtonElement}
               {props.topRightContent}
             </div>
           }
