@@ -95,9 +95,10 @@ const Building: React.FC<BuildingProps> = (props) => {
   // Render
   return (
     <div className="relative flex min-w-0 flex-col items-center justify-center text-center">
-      {/* Only damaged structures show their health, in a softer colour than danger red. */}
+      {/* Only damaged structures show their health, in a softer colour than danger red.
+          The bar overlays the top of the art so damaged tiles keep the grid's row heights. */}
       {showBar && structure.curSp < structure.maxSp && (
-        <div className="w-2/3">
+        <div className="absolute top-0 left-1/2 z-10 w-2/3 -translate-x-1/2">
           <StatusBar
             key={structure.curSp}
             title=""

@@ -147,13 +147,10 @@ export default function VillageOverview() {
               <Link
                 href={href}
                 aria-label={`${prettyNumber(villageData?.populationCount ?? 0)} ${userData?.isOutlaw ? "faction" : "village"} population`}
-                className="flex flex-col items-start rounded-md px-1 hover:text-orange-500"
+                className="flex flex-row hover:cursor-pointer hover:text-orange-500"
               >
-                <span className="flex flex-row">
-                  <Users aria-hidden className="mr-2 h-6 w-6" />
-                  {prettyNumber(villageData?.populationCount ?? 0)}
-                </span>
-                <span className="text-xs">Population</span>
+                <Users aria-hidden className="mr-2 h-6 w-6" />
+                {prettyNumber(villageData?.populationCount ?? 0)}
               </Link>
               <VillageStat
                 icon={ReceiptJapaneseYen}
@@ -255,7 +252,7 @@ export default function VillageOverview() {
   );
 }
 
-/** A labelled header figure whose explanation opens on tap as well as click. */
+/** A header figure whose explanation opens on tap as well as click. */
 const VillageStat: React.FC<VillageStatProps> = ({
   icon: Icon,
   label,
@@ -267,13 +264,10 @@ const VillageStat: React.FC<VillageStatProps> = ({
       <button
         type="button"
         aria-label={`${label}: ${value}`}
-        className="flex flex-col items-start rounded-md px-1 text-left hover:text-orange-500 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+        className="flex flex-row rounded-sm hover:cursor-pointer hover:text-orange-500 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
       >
-        <span className="flex flex-row">
-          <Icon aria-hidden className="mr-2 h-6 w-6" />
-          {value}
-        </span>
-        <span className="text-xs">{label}</span>
+        <Icon aria-hidden className="mr-2 h-6 w-6" />
+        {value}
       </button>
     </PopoverTrigger>
     <PopoverContent className="w-auto max-w-72 p-3 text-sm">
