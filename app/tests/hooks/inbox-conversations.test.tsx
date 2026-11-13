@@ -16,6 +16,7 @@ const updateNotifications = vi.fn(async () => {});
 const events: string[] = [];
 let queryClient: QueryClient;
 let failListReads = false;
+let listReadDelay = 5;
 let notifications: { href: string; name: string; notificationCount: number }[] = [];
 
 const render = (options?: Parameters<typeof useInboxConversations>[0], consumers = 1) =>
@@ -28,7 +29,9 @@ const render = (options?: Parameters<typeof useInboxConversations>[0], consumers
             if (path !== "comments.getUserConversations") throw new Error(path);
             events.push("list read");
             // Responses arrive after a network round trip, never in the millisecond they started.
-            await new Promise((resolve) => setTimeout(resolve, failListReads ? 30 : 5));
+            await new Promise((resolve) =>
+              setTimeout(resolve, failListReads ? 30 : listReadDelay),
+            );
             if (failListReads) throw new Error("Too many requests");
             return [];
           })}
@@ -40,18 +43,18 @@ const render = (options?: Parameters<typeof useInboxConversations>[0], consumers
     },
   );
 
+const conversationsKey = () =>
+  getQueryKey(testApi.comments.getUserConversations, undefined, "query");
+
 /** A conversation list the panel read a second before the inbox news arrived. */
 const seedEarlierList = () =>
-  queryClient.setQueryData(
-    getQueryKey(testApi.comments.getUserConversations, undefined, "query"),
-    [],
-    { updatedAt: Date.now() - 1000 },
-  );
+  queryClient.setQueryData(conversationsKey(), [], { updatedAt: Date.now() - 1000 });
 
 beforeEach(() => {
   installBrowserGlobals();
   events.length = 0;
   failListReads = false;
+  listReadDelay = 5;
   notifications = [inboxNews];
   updateNotifications.mockReset();
   updateNotifications.mockImplementation(async () => {
@@ -61,14 +64,14 @@ beforeEach(() => {
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
   Object.assign(vi.spyOn(client, "api" as never), { comments: testApi.comments });
-  vi.spyOn(userContext, "useUserData").mockImplementation(
-    () =>
-      ({
-        data: { userId: "reader" },
-        notifications,
-        updateNotifications,
-      }) as never,
-  );
+  const userData = () =>
+    ({
+      data: { userId: "reader" },
+      notifications,
+      updateNotifications,
+    }) as never;
+  vi.spyOn(userContext, "useUserData").mockImplementation(userData);
+  vi.spyOn(userContext, "useUserDataSelector").mockImplementation(userData);
 });
 
 afterEach(() => {
@@ -109,11 +112,7 @@ it("clears the badge after the read a page mount starts, without a second read",
 });
 
 it("leaves the list alone without inbox news", async () => {
-  vi.spyOn(userContext, "useUserData").mockReturnValue({
-    data: { userId: "reader" },
-    notifications: [],
-    updateNotifications,
-  } as never);
+  notifications = [];
   seedEarlierList();
   const { result } = render();
   await waitFor(() => expect(result.current[0]?.data).toEqual([]));
@@ -128,6 +127,31 @@ it("reads the list once for a badge whose read fails, leaving the badge", async 
   await waitFor(() => expect(events).toContain("list read"));
   await new Promise((resolve) => setTimeout(resolve, 300));
   expect(events).toEqual(["list read"]);
+});
+
+it("waits for the list read in flight when the list is written locally", async () => {
+  listReadDelay = 100;
+  seedEarlierList();
+  render();
+  await waitFor(() => expect(events).toEqual(["list read"]));
+  // Opening a conversation marks it read in the cached list while the read is in flight.
+  queryClient.setQueryData(conversationsKey(), []);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(events).toEqual(["list read"]);
+  await waitFor(() => expect(events).toEqual(["list read", "badge cleared"]));
+});
+
+it("keeps the badge when the read after a local write fails", async () => {
+  failListReads = true;
+  seedEarlierList();
+  render();
+  await waitFor(() => expect(events).toEqual(["list read"]));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  // A conversation marked read in the cached list, which then reads the list again.
+  queryClient.setQueryData(conversationsKey(), []);
+  await queryClient.invalidateQueries({ queryKey: conversationsKey() });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(events).toEqual(["list read", "list read"]);
 });
 
 it("reads the list again when more news arrives", async () => {

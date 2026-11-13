@@ -79,7 +79,7 @@ export function useInboxConversations(
     ...options,
   });
   const inboxNews = getInboxNews(notifications);
-  const { data, dataUpdatedAt, isFetching, refetch } = result;
+  const { data, dataUpdatedAt, fetchStatus, isError, refetch } = result;
   // When the current news was first seen. The server only ever resets the counter to zero, so
   // any other count is new news.
   const news = useRef({ count: 0, seenAt: 0, refetched: false });
@@ -91,14 +91,24 @@ export function useInboxConversations(
         refetched: false,
       };
     }
-    if (inboxNews === 0 || !data || isFetching) return;
-    if (dataUpdatedAt > news.current.seenAt) {
+    if (inboxNews === 0 || !data || fetchStatus !== "idle") return;
+    // A local write to the list also moves `dataUpdatedAt`; a failed read since then means
+    // the server counter may still hold the news.
+    if (dataUpdatedAt > news.current.seenAt && !isError) {
       void updateNotifications(clearInboxNotifications);
     } else if (!news.current.refetched) {
       // One read per news; after a failed read the badge waits for the next list read.
       news.current.refetched = true;
       void refetch({ cancelRefetch: false });
     }
-  }, [inboxNews, data, dataUpdatedAt, isFetching, refetch, updateNotifications]);
+  }, [
+    inboxNews,
+    data,
+    dataUpdatedAt,
+    fetchStatus,
+    isError,
+    refetch,
+    updateNotifications,
+  ]);
   return result;
 }

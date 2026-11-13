@@ -66,6 +66,7 @@ it("reconciles cleared inbox news when the phone chat list loads", () => {
           data: [],
           isPending: false,
           dataUpdatedAt: Number.MAX_SAFE_INTEGER,
+          fetchStatus: "idle",
         }),
       },
     },

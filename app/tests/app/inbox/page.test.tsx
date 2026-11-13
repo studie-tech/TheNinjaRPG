@@ -30,6 +30,7 @@ beforeEach(() => {
           isPending: false,
           // Read after the inbox news arrived, so the server counter is already reset.
           dataUpdatedAt: Number.MAX_SAFE_INTEGER,
+          fetchStatus: "idle",
         }),
       },
       exitConversation: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
