@@ -1016,7 +1016,7 @@ describe("backpack storage usage", () => {
   it("names the slots held by listings in a full inventory", () => {
     expect(getInventoryBucketFullMessage("normal", 0)).toBe("Inventory is full");
     expect(getInventoryBucketFullMessage("normal", 1)).toBe(
-      "Inventory is full (1 slot is held by your auction listings and trade offers)",
+      "Inventory is full (1 slot is held by an auction listing or trade offer)",
     );
     expect(getInventoryBucketFullMessage("materials", 3)).toBe(
       "Materials inventory is full (3 slots are held by your auction listings and trade offers)",

@@ -187,7 +187,11 @@ export const getInventoryBucketFullMessage = (
     normal: "Inventory is full",
   }[bucket];
   if (listedSlots <= 0) return full;
-  return `${full} (${listedSlots} ${listedSlots === 1 ? "slot is" : "slots are"} held by your auction listings and trade offers)`;
+  const held =
+    listedSlots === 1
+      ? "1 slot is held by an auction listing or trade offer"
+      : `${listedSlots} slots are held by your auction listings and trade offers`;
+  return `${full} (${held})`;
 };
 
 /** Carried slots in a bucket that hold an item listed at auction or offered in a trade. */
