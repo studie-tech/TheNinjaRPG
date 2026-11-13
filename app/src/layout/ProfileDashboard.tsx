@@ -1179,7 +1179,9 @@ function ElapsedMeter({
 
 /**
  * Present board or travel actions with ban precedence in the restriction label. Phones get a
- * compact row (thumbnail, title, action) so the catalogue does not push the logbook far down.
+ * compact row (square thumbnail, title, action) so the catalogue does not push the logbook far
+ * down; wider screens show a 4:3 image above the text. The action is pinned to the card bottom,
+ * so actions line up across a row of cards.
  */
 function ContentCard({
   entry,
@@ -1193,13 +1195,13 @@ function ContentCard({
   const badgeLabel = dashboardContentBadgeLabel(entry);
   return (
     <Card className="group flex flex-row overflow-hidden sm:flex-col">
-      <div className="relative w-20 shrink-0 overflow-hidden bg-muted sm:aspect-[16/7] sm:w-full">
+      <div className="relative m-3 mr-0 aspect-square w-24 shrink-0 self-start overflow-hidden rounded-md bg-muted sm:m-0 sm:aspect-[4/3] sm:w-full sm:rounded-none">
         {entry.image ? (
           <Image
             src={entry.image}
             alt=""
             width={640}
-            height={280}
+            height={480}
             className="absolute inset-0 h-full w-full object-cover object-center"
           />
         ) : (
@@ -1231,7 +1233,7 @@ function ContentCard({
           </div>
           <CardTitle className="text-base">{entry.name}</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-2 p-3 pt-0 text-sm sm:p-6 sm:pt-0">
+        <CardContent className="flex flex-1 flex-col gap-2 p-3 pt-0 text-sm sm:p-6 sm:pt-0">
           <p className="hidden text-muted-foreground sm:line-clamp-3">
             {stripHtmlPreview(entry.description) ||
               "No description has been published."}
@@ -1244,18 +1246,20 @@ function ContentCard({
               Available until {new Date(entry.endsAt).toLocaleString()}
             </p>
           )}
-          <RowAction
-            href={destination}
-            icon={entry.availability === "travel" ? MapPin : ArrowRight}
-            restriction={entry.availabilityReason}
-            restrictionLabel={
-              entry.availability === "travel" && !isBanned
-                ? "Must be awake"
-                : "Cannot start quests"
-            }
-          >
-            {actionLabel}
-          </RowAction>
+          <div className="mt-auto pt-1">
+            <RowAction
+              href={destination}
+              icon={entry.availability === "travel" ? MapPin : ArrowRight}
+              restriction={entry.availabilityReason}
+              restrictionLabel={
+                entry.availability === "travel" && !isBanned
+                  ? "Must be awake"
+                  : "Cannot start quests"
+              }
+            >
+              {actionLabel}
+            </RowAction>
+          </div>
         </CardContent>
       </div>
     </Card>
@@ -1266,7 +1270,7 @@ function ContentCard({
 function ContentCardSkeleton() {
   return (
     <Card className="flex flex-row overflow-hidden sm:flex-col" aria-hidden="true">
-      <Skeleton className="w-20 shrink-0 rounded-none sm:aspect-[16/7] sm:w-full" />
+      <Skeleton className="m-3 mr-0 aspect-square w-24 shrink-0 self-start rounded-md sm:m-0 sm:aspect-[4/3] sm:w-full sm:rounded-none" />
       <div className="flex min-w-0 flex-1 flex-col gap-2 p-3 sm:p-6">
         <Skeleton className="h-6 w-24" />
         <Skeleton className="h-5 w-3/4" />
@@ -1276,7 +1280,7 @@ function ContentCardSkeleton() {
           <Skeleton className="h-4 w-2/3" />
         </div>
         <Skeleton className="h-4 w-28" />
-        <Skeleton className="h-8 w-full" />
+        <Skeleton className="mt-auto h-8 w-full" />
       </div>
     </Card>
   );
