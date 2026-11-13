@@ -60,6 +60,8 @@ describeWithDatabase("auction history items migration", () => {
         listing("logged-gone", "deleted"),
         listing("early", "listed"),
         listing("negative", "listed"),
+        listing("fraction", "listed"),
+        listing("unnamed", "listed"),
         listing("filled", "listed", { itemId: "gem", quantity: 7 }),
       ]);
     const created = (relatedId: string, changes: object) => ({
@@ -78,6 +80,8 @@ describeWithDatabase("auction history items migration", () => {
       { ...created("gone", {}), changes: "CREATE_AUCTION by an old client" },
       created("early", { itemId: "ore" }),
       created("negative", { itemId: "ore", quantity: -3 }),
+      created("fraction", { itemId: "gem", quantity: 4.7 }),
+      created("unnamed", { itemId: null, quantity: "many" }),
       created("filled", { itemId: "ore", quantity: 2 }),
       {
         ...created("held", { itemId: "gem", quantity: 9 }),
@@ -131,11 +135,13 @@ describeWithDatabase("auction history items migration", () => {
       { id: "claimed", itemId: "ore", quantity: 6 },
       { id: "early", itemId: "ore", quantity: 4 },
       { id: "filled", itemId: "gem", quantity: 7 },
+      { id: "fraction", itemId: "gem", quantity: 4 },
       { id: "gone", itemId: "", quantity: 0 },
       { id: "held", itemId: "ore", quantity: 4 },
       { id: "logged-gone", itemId: "gem", quantity: 5 },
       { id: "merged", itemId: "ore", quantity: 2 },
       { id: "negative", itemId: "ore", quantity: 3 },
+      { id: "unnamed", itemId: "ore", quantity: 4 },
     ]);
   });
 

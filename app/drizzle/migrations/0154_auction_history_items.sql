@@ -4,8 +4,8 @@ ALTER TABLE `AuctionOffer` ADD `offeredItemId` varchar(191);
 -- The fills below touch only rows still empty, so running them again after the deploy also
 -- fills listings and trade offers that the previous build created in between.
 -- Listings take the item and quantity logged when they were created; the log holds them as a
--- JSON object or as JSON text. Listings logged without a quantity take what their stack holds
--- now. A quantity read while its stack was in the middle of a merge is negated.
+-- JSON object or as JSON text. Listings logged without a usable item or quantity take what
+-- their stack holds now. A quantity read while its stack was in the middle of a merge is negated.
 UPDATE `AuctionListing`
 LEFT JOIN (
   SELECT `relatedId`, CASE
@@ -19,12 +19,14 @@ LEFT JOIN (
   AND `listingLog`.`created`->>'$.action' = 'CREATE_AUCTION'
 LEFT JOIN `UserItem` ON `UserItem`.`id` = `AuctionListing`.`userItemId`
 SET `AuctionListing`.`itemId` = COALESCE(
-    `listingLog`.`created`->>'$.itemId',
+    CASE WHEN JSON_TYPE(`listingLog`.`created`->'$.itemId') = 'STRING'
+      THEN `listingLog`.`created`->>'$.itemId' END,
     `UserItem`.`itemId`,
     ''
   ),
   `AuctionListing`.`quantity` = COALESCE(
-    ABS(CAST(`listingLog`.`created`->>'$.quantity' AS SIGNED)),
+    CASE WHEN `listingLog`.`created`->>'$.quantity' REGEXP '^-?[0-9]{1,9}$'
+      THEN ABS(CAST(`listingLog`.`created`->>'$.quantity' AS SIGNED)) END,
     ABS(`UserItem`.`quantity`),
     0
   )
