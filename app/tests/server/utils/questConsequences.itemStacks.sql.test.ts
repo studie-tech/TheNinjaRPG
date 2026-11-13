@@ -169,6 +169,53 @@ describeWithDatabase("collected quest items", () => {
     ]);
   });
 
+  it.each([
+    [
+      "grew past the units delivered, it keeps the rest",
+      1,
+      3,
+      ["delete"] as const,
+      [2],
+    ],
+    ["shrank to the units delivered, it is removed", 3, 1, ["update"] as const, []],
+  ])(
+    "takes one unit from a stack that %s",
+    async (_, read, current, operations, expected) => {
+      const db = await getTestDatabase();
+      const { user } = await fetchUpdatedUser({ client: db, userId: playerId });
+      await db
+        .update(userItem)
+        .set({ quantity: read })
+        .where(eq(userItem.id, "herb-stack"));
+      // The stack changes between the delivery's read and its first write.
+      const changes = beforeStatements(
+        db,
+        userItem,
+        [
+          () =>
+            db
+              .update(userItem)
+              .set({ quantity: current })
+              .where(eq(userItem.id, "herb-stack")),
+        ],
+        { operations: [...operations] },
+      );
+      const result = await handleQuestConsequences(
+        changes,
+        user!,
+        [{ type: "remove_item", ids: ["herb"] }],
+        [],
+      );
+      expect(result.claimed).toBe(true);
+      const rows = await db
+        .select({ quantity: userItem.quantity })
+        .from(userItem)
+        .where(eq(userItem.id, "herb-stack"));
+      expect(rows.map((row) => row.quantity)).toEqual(expected);
+      expect(result.inventoryChanges).toBeUndefined();
+    },
+  );
+
   it("takes what the backpack lacks from the equipped stack", async () => {
     const db = await getTestDatabase();
     await db

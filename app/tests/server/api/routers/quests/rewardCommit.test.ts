@@ -567,16 +567,12 @@ describe("quest reward commit", () => {
 
   it("consumes the concrete inventory row for a delivered item", async () => {
     const { user, missionHistory } = makeUser();
-    const hydratedUser = {
-      ...user,
-      items: [{ id: "user-item-1", itemId: "item-1", quantity: 1 }],
-    };
     const { client, sets, deleteFrom, deleteWhere } = makeClient([
       { rowsAffected: 1 },
       { rowsAffected: 1 },
     ]);
 
-    const result = await commit(client, hydratedUser, missionHistory, {
+    const result = await commit(client, user, missionHistory, {
       resolved: false,
       consequences: [{ type: "remove_item", ids: ["item-1"] }],
     });
