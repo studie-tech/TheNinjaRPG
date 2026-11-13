@@ -153,14 +153,11 @@ export default function ManualSkillTree({
             </p>
           </>
         )}
-        <Link
-          href={isBloodright ? "/manual/skillTree" : "/manual/bloodright"}
-          className="mt-4 inline-block"
-        >
-          <Button id="switch-skill-path" variant="outline">
+        <Button asChild id="switch-skill-path" variant="outline" className="mt-4">
+          <Link href={isBloodright ? "/manual/skillTree" : "/manual/bloodright"}>
             {isBloodright ? "Switch to Skill Tree" : "Switch to Bloodright"}
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </ContentBox>
 
       <ContentBox

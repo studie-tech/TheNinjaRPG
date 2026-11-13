@@ -37,18 +37,18 @@ export default function BugReport() {
         your voice be heard! Alternatively, report bugs directly on GitHub and help us
         improve the game.
         <div className="flex flex-wrap justify-center gap-3 p-5">
-          <Link href={DISCORD_INVITE_URL}>
-            <Button>
+          <Button asChild>
+            <Link href={DISCORD_INVITE_URL}>
               <SiDiscord aria-hidden="true" className="mr-2 h-4 w-4" />
               Join Discord
-            </Button>
-          </Link>
-          <Link href={GITHUB_ISSUES_URL}>
-            <Button variant="outline">
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={GITHUB_ISSUES_URL}>
               <SiGithub aria-hidden="true" className="mr-2 h-4 w-4" />
               Open GitHub issues
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </ContentBox>
       <ContentBox
@@ -91,12 +91,12 @@ export default function BugReport() {
           of new features.
         </p>
         <div className="flex justify-center p-5">
-          <Link href={GITHUB_REPO_URL}>
-            <Button variant="outline">
+          <Button asChild variant="outline">
+            <Link href={GITHUB_REPO_URL}>
               <SiGithub aria-hidden="true" className="mr-2 h-4 w-4" />
               View the source on GitHub
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </ContentBox>
     </>

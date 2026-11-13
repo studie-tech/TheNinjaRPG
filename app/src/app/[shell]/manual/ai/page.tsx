@@ -89,11 +89,11 @@ export default function ManualAI() {
               </Button>
             </Link>
             {userData && canChangeContent(userData.role) && (
-              <Link href="/manual/ai/completeness">
-                <Button id="ai-completeness" hoverText="Animation Completeness">
+              <Button asChild id="ai-completeness" hoverText="Animation Completeness">
+                <Link href="/manual/ai/completeness">
                   <ListChecks className="h-6 w-6" />
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             )}
           </div>
         }
