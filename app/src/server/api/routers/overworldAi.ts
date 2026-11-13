@@ -12,6 +12,7 @@ import { getUserProgressionUpdate } from "@/deltas/profile";
 import { getQuestRewardProjectionUpdate } from "@/deltas/quests";
 import { type OverworldHabitat, OverworldHabitats } from "@/drizzle/constants";
 import { overworldAiPlacement, type UserQuest } from "@/drizzle/schema";
+import { isCarriedUserItem } from "@/libs/item";
 import {
   findActionableBoundObjective,
   hasFriendlyBindingToPlacement,
@@ -504,11 +505,16 @@ export const overworldAiRouter = createTRPCRouter({
       };
 
       // getNewTrackers reads `useritems` for delivery possession checks, while the shared
-      // consequence handler resolves the concrete row to delete through `items`.
-      // fetchUpdatedUser only hydrates equipped items, so both properties must use the full
-      // inventory fetched above for an unequipped delivery item to be consumed.
-      const userForTrackers = { ...activeUser, items: useritems, useritems };
-      const ownedItemIds = useritems.map((i) => i.itemId);
+      // consequence handler resolves the concrete stacks to take from through `items`.
+      // fetchUpdatedUser only hydrates equipped items, so both properties use the carried
+      // stacks of the inventory fetched above, the only stacks a delivery can take.
+      const carriedItems = useritems.filter((row) => isCarriedUserItem(row));
+      const userForTrackers = {
+        ...activeUser,
+        items: carriedItems,
+        useritems: carriedItems,
+      };
+      const ownedItemIds = carriedItems.map((i) => i.itemId);
       const noUserChange = getOverworldUnchangedPatch(requiresUserRefresh);
       // 1) Bound-objective sub-path (defeat_opponents | dialog | deliver_item).
       const boundCandidates = getBoundObjectiveCandidates(activeUser);

@@ -10,6 +10,7 @@ import {
   anbuSquad,
   battle,
   battleHistory,
+  item,
   overworldAiPlacement,
   overworldAiPlacementQuest,
   quest,
@@ -17,6 +18,7 @@ import {
   trainingLog,
   userCookingJob,
   userData,
+  userItem,
   userQuestAttempt,
   userQueue,
 } from "@/drizzle/schema";
@@ -28,7 +30,9 @@ import { AllObjectives } from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
   insertDefaultAiProfile,
+  insertItems,
   insertQuests,
+  insertUserItems,
   insertUsers,
 } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
@@ -56,6 +60,8 @@ describeWithDatabase("overworld interaction profile updates", () => {
       questHistory,
       quest,
       userQuestAttempt,
+      userItem,
+      item,
       userData,
     );
     await insertUsers([
@@ -112,7 +118,7 @@ describeWithDatabase("overworld interaction profile updates", () => {
     const call = source.indexOf("api.overworldAi.interactWithOverworldAi.useMutation(");
     const callbacks = source
       .slice(call)
-      .match(/useMutation\((\{[\s\S]*?\n    \})\);/)?.[1];
+      .match(/useMutation\((\{[\s\S]*?\n {4}\})\);/)?.[1];
     if (!callbacks) throw new Error("NPC callbacks were not found");
     const transpiler = new (require("bun").Transpiler)({ loader: "tsx" });
     const factory = transpiler.transformSync(
@@ -657,6 +663,115 @@ describeWithDatabase("overworld interaction profile updates", () => {
         where: eq(userData.userId, "npc-cache-actor"),
       }))!.money,
     ).toBe(moneyBefore + 11);
+  });
+
+  /** Take an overworld quest whose objective delivers a herb to the NPC. */
+  const assignDelivery = async () => {
+    const db = await getTestDatabase();
+    await insertItems([{ id: "npc-herb", canStack: true, stackSize: 10 }]);
+    await insertQuests([
+      {
+        id: "cache-delivery-quest",
+        questType: "overworld",
+        hidden: false,
+        maxAttempts: 10,
+        maxCompletes: 10,
+        content: {
+          objectives: [
+            AllObjectives.parse({
+              id: "deliver",
+              task: "deliver_item",
+              overworldPlacementId: "cache-giver",
+              deliverItemIds: ["npc-herb"],
+            }),
+          ],
+          reward: ObjectiveReward.parse({}),
+          sceneBackground: "",
+          sceneCharacters: [],
+        },
+      },
+    ]);
+    await db.insert(overworldAiPlacementQuest).values({
+      placementId: "cache-giver",
+      questId: "cache-delivery-quest",
+      chance: 100,
+    });
+    const { caller, snapshot } = await prepared();
+    expect(
+      (
+        await caller.interactWithOverworldAi({
+          placementId: "cache-giver",
+          positionVersion: 0,
+        })
+      ).success,
+    ).toBe(true);
+    snapshot.user!.activeNpcQuestId = "cache-delivery-quest";
+    return { db, caller };
+  };
+  const herbs = async () =>
+    Object.fromEntries(
+      (
+        await (
+          await getTestDatabase()
+        ).query.userItem.findMany({
+          where: eq(userItem.itemId, "npc-herb"),
+        })
+      ).map((row) => [row.id, row.quantity]),
+    );
+  const delivered = async () =>
+    (
+      await (
+        await getTestDatabase()
+      ).query.questHistory.findFirst({
+        where: eq(questHistory.questId, "cache-delivery-quest"),
+      })
+    )?.completed;
+
+  it("delivers a herb from the backpack, not from home storage or a listing", async () => {
+    const { caller } = await assignDelivery();
+    await insertUserItems([
+      {
+        id: "a-stored",
+        userId: "npc-cache-actor",
+        itemId: "npc-herb",
+        storedAtHome: true,
+      },
+      {
+        id: "b-listed",
+        userId: "npc-cache-actor",
+        itemId: "npc-herb",
+        isInAuction: true,
+      },
+      { id: "c-carried", userId: "npc-cache-actor", itemId: "npc-herb", quantity: 3 },
+    ]);
+    expect(
+      (
+        await caller.interactWithOverworldAi({
+          placementId: "cache-giver",
+          positionVersion: 0,
+        })
+      ).success,
+    ).toBe(true);
+    expect(await delivered()).toBe(1);
+    expect(await herbs()).toEqual({ "a-stored": 1, "b-listed": 1, "c-carried": 2 });
+  });
+
+  it("does not take a delivery the backpack cannot make", async () => {
+    const { caller } = await assignDelivery();
+    await insertUserItems([
+      {
+        id: "a-stored",
+        userId: "npc-cache-actor",
+        itemId: "npc-herb",
+        storedAtHome: true,
+      },
+    ]);
+    await caller.interactWithOverworldAi({
+      placementId: "cache-giver",
+      positionVersion: 0,
+    });
+    expect(await delivered()).toBe(0);
+    expect(await herbs()).toEqual({ "a-stored": 1 });
   });
 
   it("returns the NPC's next dialog after a branch that continues at the same NPC", async () => {

@@ -20,6 +20,7 @@ import {
   eliteJoninMilestoneUpdate,
 } from "@/libs/eliteJonin";
 import { qualifiesForFarmActivityReward } from "@/libs/farming";
+import { isCarriedUserItem } from "@/libs/item";
 import { isPetTaskAttempt } from "@/libs/pets/tasks";
 import { eliteJoninExamBlockMessage } from "@/libs/profile";
 import { boostPvpGain, getPvpBoost } from "@/libs/pvpExperience";
@@ -758,8 +759,9 @@ export const handleQuestConsequences = async (
       (sum, row) => sum + (row.itemId === id ? Math.max(0, row.quantity) : 0),
       0,
     );
+  const carriedItems = user.items.filter((row) => isCarriedUserItem(row));
   const missingItemIds = [...removedItemCounts]
-    .filter(([id, count]) => countUnits(user.items, id) < count)
+    .filter(([id, count]) => countUnits(carriedItems, id) < count)
     .map(([id]) => id);
   // Profile snapshots carry equipped items only; shared deliveries must also take
   // unequipped quest copies. Read additional rows only when the snapshot lacks enough.
@@ -769,7 +771,7 @@ export const handleQuestConsequences = async (
       : [];
   const ownedItems = [
     ...new Map(
-      [...user.items, ...additionalItems].map((row) => [row.id, row] as const),
+      [...carriedItems, ...additionalItems].map((row) => [row.id, row] as const),
     ).values(),
   ];
   const deliveries = [...removedItemCounts].flatMap(([id, count]) => {

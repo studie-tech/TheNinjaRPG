@@ -306,7 +306,15 @@ describeWithDatabase("travel.getSectorData quest landmark placements", () => {
       ...viewer,
       userQuests,
       completedQuests: [],
-      useritems: [{ itemId: "scroll" }],
+      useritems: [
+        {
+          itemId: "scroll",
+          quantity: 1,
+          storedAtHome: false,
+          isInAuction: false,
+          craftingFinishedAt: null,
+        },
+      ],
     } as unknown as Parameters<typeof getNewTrackers>[0];
     const placementStatus = new Map([["remote", true]]);
     actor.questData = getNewTrackers(
