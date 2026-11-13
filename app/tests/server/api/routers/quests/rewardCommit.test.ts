@@ -163,6 +163,7 @@ const makeClient = (
       questHistory: {
         findFirst: vi.fn().mockResolvedValue(historyAfterLostCompletion),
       },
+      userItem: { findMany: vi.fn().mockResolvedValue([]) },
     },
   };
   return { client: client as never, sets, update, deleteFrom, deleteWhere, select };

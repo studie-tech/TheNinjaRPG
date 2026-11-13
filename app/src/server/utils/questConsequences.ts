@@ -14,7 +14,7 @@ import {
   SENSEI_STUDENT_RYO_PER_MISSION,
   type UserRole,
 } from "@/drizzle/constants";
-import { quest, questHistory, type UserItem, userData } from "@/drizzle/schema";
+import { quest, questHistory, userData } from "@/drizzle/schema";
 import {
   eliteJoninMilestoneBlockMessage,
   eliteJoninMilestoneUpdate,
@@ -754,26 +754,22 @@ export const handleQuestConsequences = async (
       removedItemCounts.set(id, (removedItemCounts.get(id) ?? 0) + 1);
     }
   }
-  const countUnits = (rows: Pick<UserItem, "itemId" | "quantity">[], id: string) =>
-    rows.reduce(
-      (sum, row) => sum + (row.itemId === id ? Math.max(0, row.quantity) : 0),
-      0,
-    );
-  const carriedItems = user.items.filter((row) => isCarriedUserItem(row));
-  const missingItemIds = [...removedItemCounts]
-    .filter(([id, count]) => countUnits(carriedItems, id) < count)
-    .map(([id]) => id);
-  // Profile snapshots carry equipped items only; shared deliveries must also take
-  // unequipped quest copies. Read additional rows only when the snapshot lacks enough.
+  // Profile snapshots carry equipped items only, so deliveries read the carried stacks of the
+  // delivered items and take from the backpack first; an equipped copy goes only when the
+  // backpack lacks enough. A snapshot row keeps the quantity the client was given.
   const additionalItems =
-    missingItemIds.length > 0
-      ? await listUserItemForHandleQuestConsequences(client, user, missingItemIds)
+    removedItemCounts.size > 0
+      ? await listUserItemForHandleQuestConsequences(client, user, [
+          ...removedItemCounts.keys(),
+        ])
       : [];
   const ownedItems = [
     ...new Map(
-      [...carriedItems, ...additionalItems].map((row) => [row.id, row] as const),
+      [...additionalItems, ...user.items.filter((row) => isCarriedUserItem(row))].map(
+        (row) => [row.id, row] as const,
+      ),
     ).values(),
-  ];
+  ].sort((a, b) => Number(a.equipped !== "NONE") - Number(b.equipped !== "NONE"));
   const deliveries = [...removedItemCounts].flatMap(([id, count]) => {
     let remaining = count;
     return ownedItems.flatMap((row) => {

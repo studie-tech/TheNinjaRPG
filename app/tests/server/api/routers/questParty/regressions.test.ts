@@ -1908,7 +1908,7 @@ describeWithDatabase(
       ).toBe(true);
     });
 
-    it("takes one unit for duplicate IDs within an ordinary delivery", async () => {
+    it("takes one unit for duplicate IDs within an ordinary delivery, backpack first", async () => {
       const client = await getTestDatabase();
       await insertItems([{ id: "scroll" }]);
       await insertUserItems([
@@ -1938,10 +1938,7 @@ describeWithDatabase(
           where: eq(userItem.userId, "helper"),
           orderBy: asc(userItem.id),
         }),
-      ).toMatchObject([
-        { id: "spare", quantity: 1 },
-        { id: "stack", quantity: 2 },
-      ]);
+      ).toMatchObject([{ id: "stack", quantity: 3 }]);
     });
 
     it("allocates separate delivery rows without consuming unavailable inventory", async () => {

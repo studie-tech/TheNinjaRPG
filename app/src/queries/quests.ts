@@ -1801,20 +1801,17 @@ export const selectQuestHistoryForWhere2 = (
     );
 
 /**
- * Build the `userItem` listing for `handleQuestConsequences`, selecting only `id` and
- * `itemId`, including predicates on `userId`, `itemId`, `quantity`.
+ * Build the `userItem` listing for `handleQuestConsequences`, selecting only `id`, `itemId`,
+ * `quantity` and `equipped`, for the carried stacks of the given items.
  */
 export const listUserItemForHandleQuestConsequences = (
   client: Pick<DrizzleClient, "query">,
   user: { userId: string },
-  missingItemIds: string[],
+  itemIds: string[],
 ) =>
   client.query.userItem.findMany({
-    where: and(
-      carriedUserItemWhere(user.userId),
-      inArray(userItem.itemId, missingItemIds),
-    ),
-    columns: { id: true, itemId: true, quantity: true },
+    where: and(carriedUserItemWhere(user.userId), inArray(userItem.itemId, itemIds)),
+    columns: { id: true, itemId: true, quantity: true, equipped: true },
   });
 
 /**

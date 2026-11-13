@@ -1,5 +1,5 @@
 import { beforeEach, expect, it } from "bun:test";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import {
   item,
   quest,
@@ -136,6 +136,38 @@ describeWithDatabase("collected quest items", () => {
     },
   );
 
+  it("delivers from the backpack before an equipped stack", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(userItem)
+      .set({ equipped: "ITEM_1", quantity: 1 })
+      .where(eq(userItem.id, "herb-stack"));
+    await insertUserItems([
+      { id: "herb-tote", userId: playerId, itemId: "herb", quantity: 9 },
+    ]);
+    const { user } = await fetchUpdatedUser({ client: db, userId: playerId });
+    const result = await handleQuestConsequences(
+      db,
+      user!,
+      [{ type: "remove_item", ids: ["herb"] }],
+      [],
+    );
+    expect(result.claimed).toBe(true);
+    const rows = await db
+      .select({
+        id: userItem.id,
+        quantity: userItem.quantity,
+        equipped: userItem.equipped,
+      })
+      .from(userItem)
+      .where(eq(userItem.userId, playerId));
+    expect(rows.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+      { id: "herb-stack", quantity: 1, equipped: "ITEM_1" },
+      // The visit collects one herb onto the backpack stack before the delivery takes one.
+      { id: "herb-tote", quantity: 9, equipped: "NONE" },
+    ]);
+  });
+
   it.each([
     ["the quantity it was read at", 10, 9, true],
     ["a stack that grew since it was read", 14, 13, false],
@@ -148,6 +180,10 @@ describeWithDatabase("collected quest items", () => {
         .set({ equipped: "ITEM_1" })
         .where(eq(userItem.id, "herb-stack"));
       const { user } = await fetchUpdatedUser({ client: db, userId: playerId });
+      // Only the equipped stack is left, so the delivery takes from it.
+      await db
+        .delete(userItem)
+        .where(and(eq(userItem.userId, playerId), eq(userItem.equipped, "NONE")));
       await db
         .update(userItem)
         .set({ quantity: current })

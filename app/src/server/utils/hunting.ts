@@ -82,8 +82,8 @@ export const settleHuntingBattle = async (
       }
       await insertHuntingReceiptForSettleHuntingBattle(tx, current, meta, receipt);
       await settlePlayer(tx, playerBattle, playerResult);
-      // Battle items are settled above, so materials may join them. The stacks were read at
-      // start because combat settlement cannot fetch.
+      // Granted items join stacks only outside a battle, so the materials follow the player's
+      // settlement above. The stacks were read at start because combat settlement cannot fetch.
       if (result.outcome === "Won" && receipt.materials.length)
         await grantUserItems(
           tx,
