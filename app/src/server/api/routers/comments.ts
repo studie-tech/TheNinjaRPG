@@ -554,6 +554,8 @@ export const commentsRouter = createTRPCRouter({
       // messages are ephemeral team coordination and must not bump teammates'
       // inboxNews counter or fan out `newInbox` pusher events.
       const skipInboxNotifications = isRaidChatConversationId(convo.id);
+      // The sender has read their own message, so only the other members get inbox news.
+      const inboxRecipientIds = usersIdsInConvo.filter((id) => id !== effectiveUserId);
 
       // Extract quoted user IDs - filter out null/undefined values
       const quotedUserIds = quotes.flatMap((q) =>
@@ -590,11 +592,11 @@ export const commentsRouter = createTRPCRouter({
         // Update conversation
         updateConversationForCreateConversationComment(ctx.drizzle, convo),
         // Inbox news (database update)
-        ...(usersIdsInConvo.length > 0 && !convo.isPublic && !skipInboxNotifications
+        ...(inboxRecipientIds.length > 0 && !convo.isPublic && !skipInboxNotifications
           ? [
               updateUserDataForCreateConversationComment(
                 ctx.drizzle,
-                usersIdsInConvo,
+                inboxRecipientIds,
                 convo.id,
               ),
             ]
@@ -647,15 +649,13 @@ export const commentsRouter = createTRPCRouter({
           commentId: commentId,
         }),
         // Inbox news (pusher notifications)
-        ...(usersIdsInConvo.length > 0 && !convo.isPublic && !skipInboxNotifications
-          ? usersIdsInConvo
-              .filter((id) => id !== effectiveUserId)
-              .map((userId) =>
-                pusher.trigger(userId, "event", {
-                  type: "newInbox",
-                  conversationId: convo.id,
-                }),
-              )
+        ...(inboxRecipientIds.length > 0 && !convo.isPublic && !skipInboxNotifications
+          ? inboxRecipientIds.map((userId) =>
+              pusher.trigger(userId, "event", {
+                type: "newInbox",
+                conversationId: convo.id,
+              }),
+            )
           : []),
       ]);
 
