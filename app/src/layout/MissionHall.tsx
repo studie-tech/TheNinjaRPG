@@ -31,7 +31,10 @@ import { useSingleFlight } from "@/hooks/useSingleFlight";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
-import MissionPicker from "@/layout/MissionPicker";
+import MissionPicker, {
+  MISSION_TILE_CLASSES,
+  MISSION_TILE_IMAGE_CLASSES,
+} from "@/layout/MissionPicker";
 import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import {
   filterMissionHallQuests,
@@ -394,10 +397,16 @@ export default function MissionHall({ userData }: MissionHallProps) {
                           "disabled:cursor-not-allowed disabled:opacity-60",
                           grayScale || isSpecificStartBlocked
                             ? "grayscale filter"
-                            : "rounded-lg transition-transform hover:scale-[1.03] hover:cursor-pointer hover:ring-2 hover:ring-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:hover:scale-100",
+                            : MISSION_TILE_CLASSES,
                         )}
                       >
-                        <Image alt="" src={setting.image} width={256} height={256} />
+                        <Image
+                          alt=""
+                          className={MISSION_TILE_IMAGE_CLASSES}
+                          src={setting.image}
+                          width={256}
+                          height={256}
+                        />
                         <p className="font-bold">{setting.name}</p>
                         <p className="flex flex-col">
                           {count} available · random

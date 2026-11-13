@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Circle, CircleHelp, Gift, Loader2, RotateCcw } from "lucide-react";
+import { Check, CircleHelp, Gift, Hourglass, Loader2, RotateCcw } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -129,10 +129,14 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
         </>
       ) : (
         <>
-          <Circle
-            className="h-10 w-10 stroke-muted-foreground"
-            aria-label="Not done yet"
-          />
+          <div
+            role="img"
+            aria-label="In progress"
+            className="flex flex-col items-center gap-0.5 text-amber-700 dark:text-amber-400"
+          >
+            <Hourglass className="h-8 w-8" aria-hidden="true" />
+            <span className="whitespace-nowrap font-semibold text-sm">In progress</span>
+          </div>
           {isTimeEventCountdown && <Loader2 className="h-10 w-10 animate-spin" />}
         </>
       )}
@@ -155,17 +159,21 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
         />
       </div>
       <div className="basis-3/4">
-        <div className="flex flex-row">
+        <div className="flex flex-row items-center gap-2 pr-3">
           <p className="grow pl-2 font-bold">
             {titlePrefix}
             {title}
           </p>
           {objective.description && objective.description !== "" && (
             <>
-              <CircleHelp
-                className="h-5 w-5 hover:cursor-pointer hover:text-orange-500"
+              <button
+                type="button"
+                aria-label="Objective details"
+                className="shrink-0 rounded-full hover:text-orange-500 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => setModalOpen(true)}
-              />
+              >
+                <CircleHelp className="h-5 w-5" aria-hidden="true" />
+              </button>
               {modalOpen && (
                 <Modal
                   title="Objective Details"
@@ -199,7 +207,7 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
             </div>
           )}
           {"sector" in parsed && (
-            <div className="flex flex-row items-center">
+            <div className="flex flex-row items-center pr-3">
               <div className="grow">
                 {!("hideLocation" in parsed && parsed.hideLocation) && (
                   <>

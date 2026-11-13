@@ -68,12 +68,16 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
           aria-busy={pendingMissionId ? true : undefined}
           className={cn(
             "disabled:cursor-not-allowed disabled:opacity-60",
-            disabled || interactionDisabled
-              ? "grayscale filter"
-              : "rounded-lg transition-transform hover:scale-[1.03] hover:cursor-pointer hover:ring-2 hover:ring-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:hover:scale-100",
+            disabled || interactionDisabled ? "grayscale filter" : MISSION_TILE_CLASSES,
           )}
         >
-          <Image alt="" src={setting.image} width={256} height={256} />
+          <Image
+            alt=""
+            className={MISSION_TILE_IMAGE_CLASSES}
+            src={setting.image}
+            width={256}
+            height={256}
+          />
           <p className="font-bold">{setting.name}</p>
           <p>[Select out of {missions.length} available]</p>
         </button>
@@ -98,12 +102,15 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
                   <button
                     type="button"
                     disabled={isMissionDisabled}
-                    className="rounded-lg transition-transform hover:scale-[1.03] hover:ring-2 hover:ring-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:ring-0 motion-reduce:hover:scale-100"
+                    className={cn(
+                      MISSION_TILE_CLASSES,
+                      "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:ring-0",
+                    )}
                   >
                     <div className="flex flex-col items-center justify-center">
                       <Image
                         alt=""
-                        className="rounded-lg"
+                        className={cn("rounded-lg", MISSION_TILE_IMAGE_CLASSES)}
                         src={mission.image || setting.image}
                         width={128}
                         height={128}
@@ -172,5 +179,13 @@ export const MissionPicker: React.FC<MissionPickerProps> = ({
 };
 
 export default MissionPicker;
+
+/** Hover and focus affordance shared by Mission Hall and mission picker tiles. */
+export const MISSION_TILE_CLASSES =
+  "group rounded-lg transition-transform hover:scale-[1.03] hover:cursor-pointer hover:ring-2 hover:ring-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:hover:scale-100";
+
+/** Brightens and lifts the tile art and, unless motion is reduced, grows it while the tile is hovered or focused. */
+export const MISSION_TILE_IMAGE_CLASSES =
+  "transition duration-300 ease-out group-hover:brightness-110 group-hover:drop-shadow-lg group-focus-visible:brightness-110 group-focus-visible:drop-shadow-lg group-disabled:group-hover:brightness-100 group-disabled:group-hover:drop-shadow-none motion-safe:group-hover:scale-105 motion-safe:group-focus-visible:scale-105 motion-safe:group-disabled:group-hover:scale-100";
 
 type PickerMission = { id: string; name: string; image?: string };
