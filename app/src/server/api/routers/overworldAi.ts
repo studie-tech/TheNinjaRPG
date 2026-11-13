@@ -504,10 +504,10 @@ export const overworldAiRouter = createTRPCRouter({
         latitude: activeUser.latitude,
       };
 
-      // getNewTrackers reads `useritems` for delivery possession checks, while the shared
-      // consequence handler resolves the concrete stacks to take from through `items`.
-      // fetchUpdatedUser only hydrates equipped items, so both properties use the carried
-      // stacks of the inventory fetched above, the only stacks a delivery can take.
+      // getNewTrackers reads `useritems` for delivery possession checks. fetchUpdatedUser only
+      // hydrates equipped items, so both inventory properties use the carried stacks of the
+      // inventory fetched above, the only stacks a delivery can take; the shared consequence
+      // handler reads those stacks again when it delivers.
       const carriedItems = useritems.filter((row) => isCarriedUserItem(row));
       const userForTrackers = {
         ...activeUser,
