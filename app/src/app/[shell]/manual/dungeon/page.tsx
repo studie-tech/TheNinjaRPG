@@ -105,6 +105,7 @@ function DungeonEditor() {
   const [message, setMessage] = useState("");
   const [panel, setPanel] = useState("details");
   const [draftVersion, setDraftVersion] = useState(0);
+  const draftSession = useRef(0);
   const formRef = useRef<HTMLDivElement>(null);
   // Validate before navigation or row re-keying can discard a local quantity draft.
   const roomsRef = useRef<HTMLDivElement>(null);
@@ -207,6 +208,7 @@ function DungeonEditor() {
           onClick={() =>
             unsavedGuard.confirmDiscard(() => {
               const fresh = newDungeon();
+              draftSession.current++;
               setId(undefined);
               setContent(fresh);
               setSavedContent(JSON.stringify(fresh));
@@ -229,6 +231,7 @@ function DungeonEditor() {
             if (!row) return;
             unsavedGuard.confirmDiscard(() => {
               const loaded = dungeonContentSchema.parse(row.content);
+              draftSession.current++;
               setId(row.id);
               setContent(loaded);
               setSavedContent(JSON.stringify(loaded));
@@ -624,16 +627,18 @@ function DungeonEditor() {
                       if (!validateNumberInputs(roomsRef.current)) return;
                       const removed = content.tiers.at(-1);
                       const removedNumber = content.tiers.length;
+                      const removedFromSession = draftSession.current;
                       patch({ tiers: normalizeRooms(content.tiers.slice(0, -1)) });
                       setTier(0);
                       setFloor(0);
                       if (!removed) return;
-                      showUndoToast(`Tier ${removedNumber} removed.`, () =>
+                      showUndoToast(`Tier ${removedNumber} removed.`, () => {
+                        if (draftSession.current !== removedFromSession) return;
                         setContent((current) => ({
                           ...current,
                           tiers: normalizeRooms([...current.tiers, removed]),
-                        })),
-                      );
+                        }));
+                      });
                     }}
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />

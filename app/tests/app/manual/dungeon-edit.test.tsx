@@ -146,6 +146,52 @@ it.each(["success", "error"])(
   },
 );
 
+it.each(["same draft", "another dungeon", "new dungeon"])(
+  "only restores a removed tier in its own draft after choosing %s",
+  async (destination) => {
+    const content = dungeonContent();
+    content.name = "Dungeon A";
+    content.tiers.push(structuredClone(content.tiers[0]!));
+    content.tiers[0]!.at(-1)!.kind = "mini-boss";
+    const undo = vi.fn<() => void>();
+    vi.spyOn(toast, "showUndoToast").mockImplementation((_message, onUndo) => {
+      undo.mockImplementation(onUndo);
+    });
+    const { view, queryClient } = mountEditor({
+      save: vi.fn(),
+      definitions: [
+        { id: "A", content },
+        { id: "B", content: { ...dungeonContent(), name: "Dungeon B" } },
+      ],
+    });
+    await chooseOption(view, "Edit existing dungeon", "Dungeon A");
+    fireEvent.click(view.getByRole("tab", { name: "Encounters" }));
+    fireEvent.click(view.getByRole("button", { name: "Remove last tier" }));
+    fireEvent.change(view.getByLabelText("Name"), {
+      target: { value: "Edited dungeon A" },
+    });
+    if (destination !== "same draft") {
+      if (destination === "another dungeon")
+        await chooseOption(view, "Edit existing dungeon", "Dungeon B", false);
+      else fireEvent.click(view.getByRole("button", { name: "New dungeon" }));
+      fireEvent.click(await view.findByRole("button", { name: "Discard changes" }));
+    }
+    await act(async () => undo());
+    fireEvent.click(view.getByRole("tab", { name: "Encounters" }));
+    expect(view.getByRole("combobox", { name: "Tier" }).textContent).toContain(
+      destination === "same draft" ? "Tier 1 of 2" : "Tier 1 of 1",
+    );
+    expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe(
+      destination === "same draft"
+        ? "Edited dungeon A"
+        : destination === "another dungeon"
+          ? "Dungeon B"
+          : "",
+    );
+    queryClient.clear();
+  },
+);
+
 it.each(["", "11", "1.5"])(
   "resets invalid enemy quantity %s for a new dungeon and saves the fresh draft",
   async (value) => {
