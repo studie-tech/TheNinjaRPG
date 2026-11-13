@@ -9,7 +9,12 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverClose,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useLocalStorage } from "@/hooks/localstorage";
 import Link from "@/layout/Link";
 import type { GameLayoutId } from "@/libs/gameLayouts";
@@ -57,14 +62,13 @@ const NotificationList: React.FC<NotificationListProps> = ({
     notification: NavBarDropdownLink,
     key: string,
     isInPopover = false,
-    onOpen = onNavigate,
   ) => (
     <Link
       key={key}
       href={notification.href}
       id={notification.id}
       className={layout === "mobile" ? "block w-full" : undefined}
-      onClick={onOpen}
+      onClick={onNavigate}
     >
       <div
         className={cn(
@@ -97,43 +101,38 @@ const NotificationList: React.FC<NotificationListProps> = ({
       if (!firstNotification) return null;
 
       return (
-        <NotificationGroupPopover key={`group-${group}`}>
-          {(close) => (
-            <>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    "flex cursor-pointer flex-row items-center rounded-lg border-2 border-slate-800 text-left text-xs hover:opacity-70 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring lg:text-base",
-                    layout === "mobile"
-                      ? "w-full shrink-0 whitespace-normal px-3 py-2"
-                      : "py-[1px] pl-3",
-                    notificationBg(firstNotification.color),
-                  )}
-                >
-                  <NotificationIcon
-                    color={firstNotification.color}
-                    className="mr-1 h-5 w-5"
-                  />
-                  {group} ({count})
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-96 p-0">
-                <div className="p-4">
-                  <h4 className="mb-3 font-semibold text-sm">{group}</h4>
-                  <div className="flex flex-col gap-1">
-                    {groupNotifications.map((notification, i) =>
-                      renderNotification(notification, `${group}-${i}`, true, () => {
-                        close();
-                        onNavigate?.();
-                      }),
-                    )}
-                  </div>
-                </div>
-              </PopoverContent>
-            </>
-          )}
-        </NotificationGroupPopover>
+        <Popover key={`group-${group}`}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                "flex cursor-pointer flex-row items-center rounded-lg border-2 border-slate-800 text-left text-xs hover:opacity-70 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring lg:text-base",
+                layout === "mobile"
+                  ? "w-full shrink-0 whitespace-normal px-3 py-2"
+                  : "py-[1px] pl-3",
+                notificationBg(firstNotification.color),
+              )}
+            >
+              <NotificationIcon
+                color={firstNotification.color}
+                className="mr-1 h-5 w-5"
+              />
+              {group} ({count})
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-96 p-0">
+            <div className="p-4">
+              <h4 className="mb-3 font-semibold text-sm">{group}</h4>
+              <div className="flex flex-col gap-1">
+                {groupNotifications.map((notification, i) => (
+                  <PopoverClose key={`${group}-${i}`} asChild>
+                    {renderNotification(notification, `${group}-${i}`, true)}
+                  </PopoverClose>
+                ))}
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       );
     })
     .filter(Boolean);
@@ -145,18 +144,6 @@ const NotificationList: React.FC<NotificationListProps> = ({
   }
 
   return <div className="grid grid-cols-1 gap-[1px]">{allElements}</div>;
-};
-
-/** A notification group's sub-popover, closed once one of its rows is opened. */
-const NotificationGroupPopover: React.FC<{
-  children: (close: () => void) => React.ReactNode;
-}> = ({ children }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      {children(() => setIsOpen(false))}
-    </Popover>
-  );
 };
 
 interface CollapsibleNotificationsProps {
