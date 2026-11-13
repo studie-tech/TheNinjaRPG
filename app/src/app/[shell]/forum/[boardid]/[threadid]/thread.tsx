@@ -1,5 +1,7 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
+import { getQueryKey } from "@trpc/react-query";
 import { CheckCircle2, Link2, LockKeyhole, Quote, ThumbsUp } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
@@ -45,6 +47,7 @@ export default function Thread({
   const params = useSearchParams();
   const router = useRouter();
   const utils = api.useUtils();
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [quote, setQuote] = useState("");
   const [tools, setTools] = useState(false);
@@ -233,7 +236,14 @@ export default function Thread({
   // refetching the thread and the board lists.
   const applyReaction = async (change: ForumReactionChange) => {
     const filter = { thread_id: threadId, limit: FORUM_THREAD_POSTS_PER_PAGE };
-    await utils.comments.getForumComments.cancel(filter);
+    // Only reads containing this post can overwrite its confirmed reaction.
+    await queryClient.cancelQueries({
+      queryKey: getQueryKey(api.comments.getForumComments, filter, "query"),
+      predicate: (query) => {
+        const cached = query.state.data as ThreadData | undefined;
+        return cached?.data.some((post) => post.id === change.postId) ?? false;
+      },
+    });
     utils.comments.getForumComments.setQueriesData(filter, {}, (current) =>
       current ? applyForumReaction(current, change) : current,
     );

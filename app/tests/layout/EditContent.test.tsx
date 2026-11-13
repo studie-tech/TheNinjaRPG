@@ -1005,6 +1005,9 @@ describe("MassEffectEditor numeric drafts", () => {
 });
 
 describe("MassEffectEditor drafts overview", () => {
+  beforeEach(() => installBrowserGlobals());
+  afterEach(() => restoreBrowserGlobals());
+
   const entries = [
     {
       id: "first",
@@ -1053,6 +1056,44 @@ describe("MassEffectEditor drafts overview", () => {
     fireEvent.click(saveAll());
     await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
     expect(save.mock.calls.map((call) => call[0].id)).toEqual(["first", "second"]);
+  });
+
+  it("counts and protects filtered-out drafts while saving only listed entries", async () => {
+    const mount = (listedEntries: typeof entries) => (
+      <MassEffectEditor
+        kind="jutsu"
+        entries={listedEntries}
+        selectedFields={["power"]}
+      />
+    );
+    const hasUnloadGuard = () => {
+      const event = new window.Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    const view = render(mount(entries));
+    fireEvent.input(view.getAllByRole("spinbutton")[0]!, { target: { value: "5" } });
+    fireEvent.input(view.getAllByRole("spinbutton")[2]!, { target: { value: "6" } });
+    view.rerender(mount([entries[1]!]));
+    expect(view.getByText("2 entries with unsaved changes")).toBeTruthy();
+    expect(hasUnloadGuard()).toBe(true);
+    fireEvent.click(view.getByRole("button", { name: "Save visible changes" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(view.getByText("1 entry with unsaved changes")).toBeTruthy(),
+    );
+    expect(save.mock.calls[0]![0].id).toBe("second");
+    expect(hasUnloadGuard()).toBe(true);
+    expect(
+      (view.getByRole("button", { name: "Save visible changes" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    view.rerender(mount(entries));
+    expect((view.getAllByRole("spinbutton")[0] as HTMLInputElement).value).toBe("5");
+    fireEvent.click(view.getByRole("button", { name: "Save all" }));
+    await waitFor(() => expect(view.getByText("No unsaved changes")).toBeTruthy());
+    expect(save.mock.calls.map((call) => call[0].id)).toEqual(["second", "first"]);
+    expect(hasUnloadGuard()).toBe(false);
   });
 
   it("lists drafts in hidden columns next to the entry", () => {

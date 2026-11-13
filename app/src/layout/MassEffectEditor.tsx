@@ -178,10 +178,11 @@ export const MassEffectEditor = <
       rows.push(row);
     });
   }
-  const dirtyEntryIds = (entries ?? [])
+  const visibleDirtyEntryIds = (entries ?? [])
     .filter((entry) => modified[entry.id])
     .map((entry) => entry.id);
-  const unsavedGuard = useUnsavedChangesGuard(dirtyEntryIds.length > 0);
+  const dirtyEntryCount = Object.keys(modified).length;
+  const unsavedGuard = useUnsavedChangesGuard(dirtyEntryCount > 0);
 
   // Mutations
   const itemUpdate = api.item.update.useMutation({
@@ -280,7 +281,7 @@ export const MassEffectEditor = <
 
   /** Save each entry with drafts in list order, one at a time, stopping at a failure. */
   const saveAll = async () => {
-    for (const entryId of dirtyEntryIds) {
+    for (const entryId of visibleDirtyEntryIds) {
       if (!(await saveEntry(entryId))) return;
     }
   };
@@ -312,17 +313,19 @@ export const MassEffectEditor = <
       {unsavedGuard.dialog}
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 pt-2">
         <p className="text-muted-foreground text-sm" aria-live="polite">
-          {dirtyEntryIds.length === 0
+          {dirtyEntryCount === 0
             ? "No unsaved changes"
-            : `${dirtyEntryIds.length} ${dirtyEntryIds.length === 1 ? "entry" : "entries"} with unsaved changes`}
+            : `${dirtyEntryCount} ${dirtyEntryCount === 1 ? "entry" : "entries"} with unsaved changes`}
         </p>
         <Button
           id="mass-edit-save-all"
           size="sm"
-          disabled={editorPending || dirtyEntryIds.length === 0}
+          disabled={editorPending || visibleDirtyEntryIds.length === 0}
           onClick={() => void saveAll()}
         >
-          Save all
+          {visibleDirtyEntryIds.length < dirtyEntryCount
+            ? "Save visible changes"
+            : "Save all"}
         </Button>
       </div>
       <Table<Row, keyof Row>

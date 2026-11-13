@@ -2,8 +2,16 @@
 
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
+import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import * as navigation from "next/navigation";
 import type { RouterOutputs } from "@/app/_trpc/client";
@@ -33,10 +41,18 @@ let moderator: boolean;
 let refreshDuringRemoval: boolean;
 let removalPaths: string[];
 let requestedPages: number[];
+let holdPageTwo: boolean;
+let holdReaction: boolean;
+let finishPageTwo: (() => void) | undefined;
+let finishReaction: (() => void) | undefined;
 let savedObserver: PropertyDescriptor | undefined;
 
 beforeEach(() => {
   installBrowserGlobals({ events: [], scrollIntoView: true });
+  holdPageTwo = false;
+  holdReaction = false;
+  finishPageTwo = undefined;
+  finishReaction = undefined;
   failReads = false;
   rejectRemoval = false;
   moderator = false;
@@ -129,7 +145,7 @@ function threadPage(cursor = 0): ThreadData {
     board: {
       id: "board",
       name: "Strategy",
-      permissions: { read: true, remove: true, moderate: moderator },
+      permissions: { read: true, remove: true, vote: true, moderate: moderator },
     },
     data: posts.slice(
       cursor * FORUM_THREAD_POSTS_PER_PAGE,
@@ -153,6 +169,13 @@ function renderThread() {
             if (op.path === "comments.getForumComments") {
               const cursor = (op.input as { cursor: number }).cursor;
               requestedPages.push(cursor);
+              if (holdPageTwo && cursor === 1) {
+                finishPageTwo = () => {
+                  observer.next({ result: { data: threadPage(cursor) } });
+                  observer.complete();
+                };
+                return;
+              }
               if (failReads) {
                 observer.error(
                   TRPCClientError.from(new Error("Discussion refresh interrupted")),
@@ -182,6 +205,16 @@ function renderThread() {
                   return;
                 }
                 failReads = true;
+              }
+            }
+            if (op.path === "forum.react") {
+              data = { success: true, message: "Reaction saved" };
+              if (holdReaction) {
+                finishReaction = () => {
+                  observer.next({ result: { data } });
+                  observer.complete();
+                };
+                return;
               }
             }
             observer.next({ result: { data } });
@@ -295,3 +328,55 @@ it("returns from an emptied final page to the reconciled cached previous page wh
   await waitFor(() => expect(requestedPages.at(-1)).toBe(0));
   expect(view.queryByRole("button", { name: "Page 2" })).toBeNull();
 });
+
+it.each([false, true])(
+  "lets the destination page load when a reaction starts before navigation=%s",
+  async (reactBeforeNavigation) => {
+    holdPageTwo = true;
+    holdReaction = reactBeforeNavigation;
+    const opening = posts[0]!;
+    posts = Array.from({ length: FORUM_THREAD_POSTS_PER_PAGE + 1 }, (_, index) => ({
+      ...opening,
+      id: `entry-${index}`,
+      content: `<p>entry ${index}</p>`,
+    }));
+    const view = renderThread();
+    await waitFor(() => expect(requestedPages).toEqual([0]));
+    const react = () =>
+      fireEvent.click(
+        within(view.container.querySelector("#post-entry-0")!).getByRole("button", {
+          name: /Helpful/,
+        }),
+      );
+    if (reactBeforeNavigation) {
+      react();
+      await waitFor(() => expect(finishReaction).toBeDefined());
+    }
+    fireEvent.click(view.getAllByRole("button", { name: "Page 2" })[0]!);
+    await waitFor(() => expect(finishPageTwo).toBeDefined());
+    if (reactBeforeNavigation) await act(async () => finishReaction?.());
+    else react();
+    const pageKey = (cursor: number) => {
+      const input = {
+        thread_id: "topic",
+        limit: FORUM_THREAD_POSTS_PER_PAGE,
+        cursor,
+      };
+      return getQueryKey(testApi.comments.getForumComments, input, "query");
+    };
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData<ThreadData>(pageKey(0))?.data[0]?.reactions,
+      ).toEqual([{ userId: "reader", reaction: "helpful" }]),
+    );
+    expect(queryClient.getQueryState(pageKey(1))?.fetchStatus).toBe("fetching");
+    await act(async () => finishPageTwo?.());
+    await waitFor(() =>
+      expect(
+        view.container.querySelector(`#post-entry-${FORUM_THREAD_POSTS_PER_PAGE}`),
+      ).not.toBeNull(),
+    );
+    expect(view.container.querySelector("#post-entry-0")).toBeNull();
+    expect(requestedPages).toEqual([0, 1]);
+  },
+);
