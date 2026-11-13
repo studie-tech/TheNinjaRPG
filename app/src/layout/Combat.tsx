@@ -46,7 +46,7 @@ import {
 import { isBattleHotkeyBlocked } from "@/libs/combat/hotkeys";
 import { inspectsBattlefieldTap } from "@/libs/combat/inspection";
 import {
-  actionReachesTarget,
+  actionAimsAtFighter,
   validateActionTarget,
 } from "@/libs/combat/targetValidation";
 import { getTurnControl, resolveControlledActorId } from "@/libs/combat/turn";
@@ -856,7 +856,7 @@ const Combat: React.FC<CombatProps> = (props) => {
         battle,
         userIdRef.current,
         character.userId,
-        isValid || (!!check && actionReachesTarget(check)),
+        !!check && actionAimsAtFighter(check, character.userId),
       )
     )
       inspectTapped(character.userId);

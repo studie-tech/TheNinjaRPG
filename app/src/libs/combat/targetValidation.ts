@@ -60,10 +60,23 @@ export const validateActionTarget = (
 };
 
 /**
- * Whether the selected action can be aimed at the target from the actor's position,
- * regardless of whose turn it is, the actor's action points or the action's cooldown.
+ * Whether the actor, on their turn, aims the selected action at a fighter: the action reaches
+ * the fighter's tile even when the actor lacks the action points or the action cools down.
+ * Outside the actor's turn nothing is aimed.
  */
-export const actionReachesTarget = (info: TargetCheck) => aimAction(info).isValid;
+export const actionAimsAtFighter = (info: TargetCheck, fighterId: string) => {
+  const { user, battle, grid, timeDiff } = info;
+  if (!info.action) return false;
+  const { actor } = calcActiveUser(battle, user.userId, timeDiff, {
+    precomputedUserId: info.precomputedUserId,
+    precomputedActions: info.precomputedActions,
+  });
+  if (actor.userId !== user.userId) return false;
+  const fighter = battle.usersState.find((state) => state.userId === fighterId);
+  const target =
+    fighter && grid.getHex({ col: fighter.longitude, row: fighter.latitude });
+  return !!target && aimAction({ ...info, target }).isValid;
+};
 
 const aimAction = (info: TargetCheck) => {
   const { user, battle, action, grid, target } = info;

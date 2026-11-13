@@ -34,10 +34,10 @@ export function resolveCombatInspection(
 }
 
 /**
- * Whether tapping a fighter on the battlefield inspects them. A tap that aims the selected
- * action at the viewer's own side, such as a buff on themselves or an ally, keeps the panel
- * where it is, even when the action cannot be used yet (another turn, too few action points
- * or a cooldown).
+ * Whether tapping a fighter on the battlefield inspects them. On the viewer's turn, a tap that
+ * aims the selected action at their own side, such as a buff on themselves or an ally, keeps
+ * the panel where it is, even with too few action points or the action cooling down. Outside
+ * their turn every tap inspects.
  */
 export function inspectsBattlefieldTap(
   battle: ReturnedBattle | null | undefined,
