@@ -769,7 +769,9 @@ const mergeMovedStacks = async (
   if (itemIds.size === 0) return [];
   try {
     const rows = await listUserItemForMergeAllStacks(client, { userId }, storedAtHome);
-    const results = await Promise.all(
+    // Every merge settles before the move answers, so a client that reads the inventory again
+    // after a failed merge sees what the others did.
+    const settled = await Promise.allSettled(
       [
         ...groupBy(
           rows.filter((row) => row.item && itemIds.has(row.itemId)),
@@ -784,6 +786,11 @@ const mergeMovedStacks = async (
           inArray(userData.status, [...HOME_STORAGE_STATUSES]),
         ),
       ),
+    );
+    const failure = settled.find((result) => result.status === "rejected");
+    if (failure) throw failure.reason;
+    const results = settled.flatMap((result) =>
+      result.status === "fulfilled" ? [result.value] : [],
     );
     return results.every((result) => result.success && result.inventoryChanges)
       ? results.flatMap((result) => result.inventoryChanges ?? [])

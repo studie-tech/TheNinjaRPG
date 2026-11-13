@@ -4549,7 +4549,8 @@ async function executeMergeStacksForItemBucket(
 }
 
 /**
- * Merge stacks for one item type (`mergeStacks`, `mergeAllStacks`).
+ * Merge stacks for one item type (`mergeStacks`, `mergeAllStacks`, and home storage moves,
+ * which merge the moved items at their destination).
  *
  * **Carried inventory:** Without `preloaded`, the query uses `storedAtHome === false` only.
  * Use `mergeAllStacks({ storedAtHome: true })` with preloaded home rows to merge storage.
@@ -4561,8 +4562,11 @@ async function executeMergeStacksForItemBucket(
  * `executeMergeStacksForItemBucket`) so concurrent store/retrieve cannot leave a
  * partial merge that duplicates quantities.
  *
- * **mergeAllStacks** passes `preloaded` rows of this item, already limited to the
- * requested scope (carried or home) and to positive, non-auction stacks.
+ * **mergeAllStacks** and home storage moves pass `preloaded` rows of this item, already
+ * limited to the requested scope (carried or home) and to positive, non-auction stacks.
+ *
+ * **Owner:** `ownerWhere` is the owner state the claim and publish require, an awake owner by
+ * default; home storage moves also accept an asleep one.
  */
 export async function executeMergeStacksForItem(
   drizzle: DrizzleClient,

@@ -36,9 +36,7 @@ export const useHomeStorageMove = ({
         ? updateInventory((rows) => {
             const switched = getHomeStorageMovedInventory(rows, moved, input.toHome);
             // Then the moved stacks join the stacks already at their destination.
-            return (
-              switched && getInventoryQuantities(switched, data.inventoryChanges ?? [])
-            );
+            return switched && getInventoryQuantities(switched, data.inventoryChanges);
           }, snapshot)
         : invalidateInventory());
     },
