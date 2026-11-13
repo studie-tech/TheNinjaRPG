@@ -13,8 +13,7 @@ import { getActionAffectedTiles } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getPossibleActionTiles } from "@/libs/hexgrid";
 
-/** Shared by interaction and highlights so desktop and touch use identical target rules. */
-export const validateActionTarget = (info: {
+type TargetCheck = {
   user: ReturnedUserState;
   battle: ReturnedBattle;
   action: CombatAction | undefined;
@@ -23,21 +22,22 @@ export const validateActionTarget = (info: {
   timeDiff: number;
   precomputedUserId?: string;
   precomputedActions?: CombatAction[];
-}): {
+};
+
+/** Shared by interaction and highlights so desktop and touch use identical target rules. */
+export const validateActionTarget = (
+  info: TargetCheck,
+): {
   isValid: boolean;
   origin?: TerrainHex;
   possibleTiles?: Grid<TerrainHex>;
   greenTiles?: Set<TerrainHex>;
   redTiles?: Set<TerrainHex>;
 } => {
-  const { user, battle, action, grid, target, timeDiff } = info;
+  const { user, battle, action, timeDiff } = info;
 
   // No action selected
   if (!action) return { isValid: false };
-
-  // Get user's current position
-  const origin = grid.getHex({ col: user.longitude, row: user.latitude });
-  if (!origin) return { isValid: false };
 
   // Check if user is the active actor. `user` here is the actor the human
   // controls (self, or piloted summon on its turn — callers pass the controlled
@@ -55,6 +55,23 @@ export const validateActionTarget = (info: {
 
   // Check action cooldown
   if (getRemainingCooldown(action, battle.round) > 0) return { isValid: false };
+
+  return aimAction(info);
+};
+
+/**
+ * Whether the selected action can be aimed at the target from the actor's position,
+ * regardless of whose turn it is, the actor's action points or the action's cooldown.
+ */
+export const actionReachesTarget = (info: TargetCheck) => aimAction(info).isValid;
+
+const aimAction = (info: TargetCheck) => {
+  const { user, battle, action, grid, target } = info;
+  if (!action) return { isValid: false };
+
+  // Get user's current position
+  const origin = grid.getHex({ col: user.longitude, row: user.latitude });
+  if (!origin) return { isValid: false };
 
   // Get possible tiles for the action
   const possibleTiles = getPossibleActionTiles(action, origin, grid);

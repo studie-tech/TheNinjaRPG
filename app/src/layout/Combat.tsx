@@ -45,7 +45,10 @@ import {
 } from "@/libs/combat/constants";
 import { isBattleHotkeyBlocked } from "@/libs/combat/hotkeys";
 import { inspectsBattlefieldTap } from "@/libs/combat/inspection";
-import { validateActionTarget } from "@/libs/combat/targetValidation";
+import {
+  actionReachesTarget,
+  validateActionTarget,
+} from "@/libs/combat/targetValidation";
 import { getTurnControl, resolveControlledActorId } from "@/libs/combat/turn";
 import type { BattleState, CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { isBattleInLobby } from "@/libs/combat/util";
@@ -833,24 +836,28 @@ const Combat: React.FC<CombatProps> = (props) => {
       action = actionRef.current,
       grid = gridRef.current;
     const user = battle?.usersState.find((user) => user.userId === userIdRef.current);
-    const isValid =
-      !!battle &&
-      !!action &&
-      !!grid &&
-      !!user &&
-      validateActionTarget({
-        user,
-        battle,
-        action,
-        grid,
-        target,
-        timeDiff,
-        precomputedUserId: userIdRef.current,
-        precomputedActions: precomputedActionsRef.current,
-      }).isValid;
+    const check =
+      battle && action && grid && user
+        ? {
+            user,
+            battle,
+            action,
+            grid,
+            target,
+            timeDiff,
+            precomputedUserId: userIdRef.current,
+            precomputedActions: precomputedActionsRef.current,
+          }
+        : undefined;
+    const isValid = !!check && validateActionTarget(check).isValid;
     if (
       character?.userId &&
-      inspectsBattlefieldTap(battle, userIdRef.current, character.userId, isValid)
+      inspectsBattlefieldTap(
+        battle,
+        userIdRef.current,
+        character.userId,
+        isValid || (!!check && actionReachesTarget(check)),
+      )
     )
       inspectTapped(character.userId);
     if (!battle || !action || !isValid || !canPerformAction()) return;

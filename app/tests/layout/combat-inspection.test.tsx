@@ -93,15 +93,18 @@ it("keeps a fighter pinned in the picker when the battlefield is tapped", () => 
   fireEvent.click(screen.getByRole("button", { name: "Tap ally" }));
   expect(screen.getByTestId("inspected").textContent).toBe("ally:70");
   // A tap follows the fighter without pinning them.
-  expect((picker as HTMLSelectElement).value).not.toBe("ally");
-  expect(screen.getByRole("option", { name: "Following: Twin (2)" })).toBeTruthy();
+  expect((picker as HTMLSelectElement).selectedOptions[0]?.text).toBe(
+    "Following: Twin (2)",
+  );
 });
 
 it("returns to automatic inspection after following a tap", () => {
   render(<TappingLayout shown={battle()} />, { wrapper: Provider });
   const picker = screen.getByRole("combobox", { name: "Inspect character" });
   fireEvent.click(screen.getByRole("button", { name: "Tap ally" }));
-  expect(screen.getByRole("option", { name: "Following: Twin (2)" })).toBeTruthy();
+  expect((picker as HTMLSelectElement).selectedOptions[0]?.text).toBe(
+    "Following: Twin (2)",
+  );
   fireEvent.change(picker, { target: { value: "" } });
   expect(screen.getByTestId("inspected").textContent).toBe("enemy:90");
 });

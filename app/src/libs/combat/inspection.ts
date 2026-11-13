@@ -34,16 +34,18 @@ export function resolveCombatInspection(
 }
 
 /**
- * Whether tapping a fighter on the battlefield inspects them. A tap that casts an action on
- * the viewer's own side, such as a buff on themselves or an ally, keeps the panel where it is.
+ * Whether tapping a fighter on the battlefield inspects them. A tap that aims the selected
+ * action at the viewer's own side, such as a buff on themselves or an ally, keeps the panel
+ * where it is, even when the action cannot be used yet (another turn, too few action points
+ * or a cooldown).
  */
 export function inspectsBattlefieldTap(
   battle: ReturnedBattle | null | undefined,
   viewerId: string | undefined,
   tappedUserId: string,
-  casts: boolean,
+  aimsAction: boolean,
 ) {
-  if (!casts) return true;
+  if (!aimsAction) return true;
   const users = battle?.usersState ?? [];
   const viewer = users.find((user) => user.userId === viewerId);
   const tapped = users.find((user) => user.userId === tappedUserId);
