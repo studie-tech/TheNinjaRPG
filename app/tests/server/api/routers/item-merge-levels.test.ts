@@ -279,4 +279,32 @@ describeWithDatabase("consumable merges across ownership levels", () => {
         .sort((a, b) => b - a),
     ).toEqual(quantities);
   });
+
+  it("merges a stack above the stack size when the total exactly fills the rows", async () => {
+    await insertUserItems(
+      [25, 3, 1].map((quantity, index) => ({
+        id: `fitting-${index}`,
+        userId: "merge-user",
+        itemId: "consumable",
+        quantity,
+      })),
+    );
+    const api = await callerFor(itemRouter, "merge-user");
+    expect(await api.mergeStacks({ itemId: "consumable" })).toMatchObject({
+      success: true,
+    });
+    expect(
+      (
+        await (
+          await getTestDatabase()
+        )
+          .select({ quantity: userItem.quantity })
+          .from(userItem)
+          .where(eq(userItem.userId, "merge-user"))
+      )
+        .map((row) => row.quantity)
+        .filter((quantity) => quantity > 0)
+        .sort((a, b) => b - a),
+    ).toEqual([10, 10, 9]);
+  });
 });
