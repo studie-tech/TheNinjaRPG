@@ -949,8 +949,9 @@ function Travel() {
           target={targetPosition}
           showSorrounding={showSorrounding}
           showActive={showOtherUsers}
+          isActive={!!showSector}
           autoAttackMode={autoAttackMode}
-          isWorldExpanded={isWorldExpanded && !isPreparingSector}
+          isWorldExpanded={isWorldExpanded && !!showSector}
           cameraFocusRevision={cameraFocusRevision}
           setWorldExpanded={setWorldExpanded}
           setShowSorrounding={setShowSorrounding}
@@ -971,7 +972,7 @@ function Travel() {
     showOtherUsers,
     autoAttackMode,
     isWorldExpanded,
-    isPreparingSector,
+    showSector,
     cameraFocusRevision,
     villages,
   ]);

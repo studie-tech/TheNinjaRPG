@@ -28,6 +28,7 @@ const setup = (origin: { col: number; row: number }) => {
       },
     },
     prepareUserUpdate: vi.fn(),
+    isActiveRef: { current: true },
     autoAttackMode: true,
     sector: 3,
     userRef: { current: { anbuId: "anbu", status: "AWAKE", village: { sector: 3 } } },
@@ -77,4 +78,66 @@ it("walks toward an enemy on another tile instead of attacking", () => {
   test.maybeAutoAttack();
   expect(test.attack).not.toHaveBeenCalled();
   expect(test.scope.setTarget).toHaveBeenCalledWith({ x: 4, y: 6 });
+});
+
+it.each([
+  { col: 4, row: 6 },
+  { col: 1, row: 1 },
+])("does not attack or pursue enemies while the sector is hidden (%j)", (origin) => {
+  const test = setup(origin);
+  test.scope.isActiveRef.current = false;
+  test.maybeAutoAttack();
+  expect(test.attack).not.toHaveBeenCalled();
+  expect(test.scope.setTarget).not.toHaveBeenCalled();
+});
+
+it("ignores sector movement keys while hidden and accepts them when visible again", () => {
+  const scope = {
+    isActiveRef: { current: false },
+    isTravelKeyBlocked: () => false,
+    originRef: { current: { col: 5, row: 5 } },
+    pathFinderRef: { current: {} },
+    setTarget: vi.fn(),
+  };
+  const onKeyDown = evaluate(
+    `${block("  const onDocumentKeyDown =", "  const { mutate: checkQuest")}\nreturn onDocumentKeyDown;`,
+    scope,
+  ) as (event: { key: string }) => void;
+  for (const key of ["w", "s", "q", "e", "a", "d"]) onKeyDown({ key });
+  expect(scope.setTarget).not.toHaveBeenCalled();
+  scope.isActiveRef.current = true;
+  onKeyDown({ key: "w" });
+  expect(scope.setTarget).toHaveBeenCalledWith({ x: 5, y: 6 });
+});
+
+it("defers an arrival prompt until the retained sector is visible", () => {
+  const npc = { userId: "npc" };
+  const scope = {
+    isActiveRef: { current: false },
+    userRef: { current: { longitude: 5, latitude: 5 } },
+    liveNpcs: () => [npc],
+    locationGroups: [],
+    arrivedLocationsRef: { current: [] },
+    arrivalNpc: null,
+    npcDialog: null,
+    isInteracting: false,
+    canAttemptAwakeAction: () => true,
+    isBlockingPopupOpen: false,
+    arrivalPromptDecision: vi.fn(() => ({
+      prompt: npc,
+      lastPromptedPlacementId: "npc",
+    })),
+    lastPromptedPlacementIdRef: { current: null },
+    setArrivalNpc: vi.fn(),
+  };
+  const updatePositionActions = evaluate(
+    `${block("  const updatePositionActions =", "  positionChangedRef.current =")}\nreturn updatePositionActions;`,
+    scope,
+  ) as () => void;
+  updatePositionActions();
+  expect(scope.arrivalPromptDecision).not.toHaveBeenCalled();
+  expect(scope.setArrivalNpc).not.toHaveBeenCalled();
+  scope.isActiveRef.current = true;
+  updatePositionActions();
+  expect(scope.setArrivalNpc).toHaveBeenCalledWith(npc);
 });

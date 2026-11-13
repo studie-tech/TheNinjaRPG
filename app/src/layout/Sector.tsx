@@ -137,6 +137,8 @@ const Sector = (props: SectorProps) => {
 const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) => {
   const { sector, sectorWindow, target, showActive, autoAttackMode, centerEntry } =
     props;
+  const isActiveRef = useRef(props.isActive);
+  isActiveRef.current = props.isActive;
   const sectorMap = centerEntry.map;
   const { setPosition } = props;
   const { isWorldExpanded, setWorldExpanded } = props;
@@ -616,7 +618,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
 
   // Movement based on ASDQWE keys
   const onDocumentKeyDown = (event: KeyboardEvent) => {
-    if (isTravelKeyBlocked(event)) return;
+    if (!isActiveRef.current || isTravelKeyBlocked(event)) return;
     if (originRef.current && pathFinderRef.current) {
       const x = originRef.current.col;
       const y = originRef.current.row;
@@ -986,7 +988,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     let crossingPromise: ReturnType<typeof moveStepAsync> | null = null;
     let crossDest: { sector: number; x: number; y: number } | null = null;
     const cross = pendingCrossRef.current;
-    if (cross && routeTargetRef.current === requestTarget) {
+    if (isActiveRef.current && cross && routeTargetRef.current === requestTarget) {
       if (
         isOnSectorMapEdge(sectorMap, cross, { x: data.longitude, y: data.latitude })
       ) {
@@ -1815,6 +1817,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     // Keep arrival prompts behind other dialogs and permit explicit recovery-capable
     // interactions. Only the player's chosen action wakes or checks out the character.
     if (
+      !isActiveRef.current ||
       isInteracting ||
       !canAttemptAwakeAction(userRef.current) ||
       npcDialog ||
@@ -1840,10 +1843,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     (npc) => npc.npcWander && npc.npcInteractionType !== "AMBIENT",
   );
   useEffect(() => {
-    if (!hasRoamingNpc) return;
+    if (!props.isActive || !hasRoamingNpc) return;
     const timer = window.setInterval(() => positionChangedRef.current(), 1000);
     return () => window.clearInterval(timer);
-  }, [hasRoamingNpc]);
+  }, [hasRoamingNpc, props.isActive]);
   useEffect(() => {
     updatePositionActions();
   }, [
@@ -1854,12 +1857,14 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     isInteracting,
     isBlockingPopupOpen,
     userData?.status,
+    props.isActive,
   ]);
 
   // Auto-attack logic for ANBU users
   const maybeAutoAttack = () => {
     const userData = userRef.current;
     if (
+      isActiveRef.current &&
       autoAttackMode &&
       userData?.anbuId &&
       userData?.status === "AWAKE" &&
@@ -1914,7 +1919,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   autoAttackRef.current = maybeAutoAttack;
   useEffect(() => {
     maybeAutoAttack();
-  }, [sorrounding, autoAttackMode, isAttacking, userData?.status]);
+  }, [sorrounding, autoAttackMode, isAttacking, userData?.status, props.isActive]);
 
   // Clear heal target if user moves away or target moves away
   useEffect(() => {
@@ -1931,7 +1936,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
 
   /** Advance the latest scene destination without a React render for each retarget. */
   function continueMovement() {
-    if (!mountedRef.current || walkAnimatingRef.current || movePendingRef.current)
+    if (
+      !isActiveRef.current ||
+      !mountedRef.current ||
+      walkAnimatingRef.current ||
+      movePendingRef.current
+    )
       return;
     const destination = routeTargetRef.current;
     const user = userRef.current;
@@ -2315,6 +2325,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             row: animatedPositionRef.current?.y ?? userRef.current?.latitude ?? 0,
             nav: windowNavRef.current,
             enabled:
+              isActiveRef.current &&
               canAttemptAwakeAction(userRef.current) &&
               !showSorroundingRef.current &&
               performance.now() >= ignoreMapClicksUntilRef.current,
@@ -2357,12 +2368,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     if (travel.isReady) travel.scene.current?.recenter();
   }, [travel.isReady, props.cameraFocusRevision, profile?.status]);
   useEffect(() => {
-    if (!travel.isReady || !canAttemptAwakeAction(profile)) return;
+    if (!props.isActive || !travel.isReady || !canAttemptAwakeAction(profile)) return;
     travelCallbacks.current.onReady();
     continueMovement();
     document.addEventListener("keydown", onDocumentKeyDown);
     return () => document.removeEventListener("keydown", onDocumentKeyDown);
-  }, [travel.isReady, profile?.status]);
+  }, [travel.isReady, profile?.status, props.isActive]);
   useEffect(() => {
     sectorWindowRef.current = sectorWindow;
     if (!travel.isReady) return;
@@ -2644,7 +2655,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           }}
         />
       )}
-      {logbookModalQuestId && (
+      {props.isActive && logbookModalQuestId && (
         <QuestUpdateModal
           questId={logbookModalQuestId}
           onClose={() => setLogbookModalQuestId(null)}
@@ -2692,7 +2703,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         />
       )}
       {/* Hunting can receive focus later without dismissing this NPC arrival. */}
-      {arrivalNpc && (
+      {props.isActive && arrivalNpc && (
         <Modal
           isOpen={!!arrivalNpc}
           dismissOnInteractOutside={false}
@@ -2735,7 +2746,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           </div>
         </Modal>
       )}
-      {npcDialog && pendingNpcInteractRef.current && (
+      {props.isActive && npcDialog && pendingNpcInteractRef.current && (
         <Modal
           isOpen={!!npcDialog}
           setIsOpen={(open) => {
@@ -2830,6 +2841,8 @@ interface SectorProps {
   target: SectorPoint | null;
   showSorrounding: boolean;
   showActive: boolean;
+  /** Retain the scene between tabs without initiating hidden player actions. */
+  isActive: boolean;
   autoAttackMode: boolean;
   isWorldExpanded: boolean;
   /** Re-selecting the player tab resumes camera follow without remounting the scene. */

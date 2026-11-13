@@ -221,8 +221,6 @@ const TowerDefensePage: React.FC = () => {
                           disabled={isStarting}
                           variant="outline"
                           className="border-destructive/50 text-destructive hover:bg-destructive/10"
-                          aria-hidden
-                          tabIndex={-1}
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -393,7 +391,7 @@ const TowerDefensePage: React.FC = () => {
                 <AbandonRunConfirm
                   onAbandon={abandonRun}
                   button={
-                    <Button variant="outline" tabIndex={-1}>
+                    <Button variant="outline">
                       <Home className="mr-2 h-4 w-4" />
                       Abandon Run
                     </Button>
