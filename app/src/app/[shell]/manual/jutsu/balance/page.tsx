@@ -24,7 +24,7 @@ import { summarizeBattleOutcomes } from "@/libs/statistics";
 import { groupBy } from "@/utils/grouping";
 import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualJutsusBalance() {
   // State
@@ -54,7 +54,7 @@ interface JutsuEffectsBalanceProps {
 const JutsuEffectsBalance: React.FC<JutsuEffectsBalanceProps> = (props) => {
   // Two-level filtering
   const state = useJutsuFiltering();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
 
   const details = useContentDetails();
 
@@ -148,7 +148,7 @@ interface JutsuUsageBalanceProps {
 const JutsuUsageBalance: React.FC<JutsuUsageBalanceProps> = (props) => {
   // State
   const filterState = useFiltering({ persistKey: "manual-jutsu-balance" });
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
 
   const details = useContentDetails();
 

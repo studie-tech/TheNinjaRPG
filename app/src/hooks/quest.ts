@@ -31,7 +31,7 @@ import { expandAiCopies } from "@/libs/quest";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canAwardReputation } from "@/utils/permissions";
 import { objectKeys } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import type {
   AllObjectivesType,
   QuestNodePositions,
@@ -47,7 +47,7 @@ export const useQuestEditForm = (quest: Quest, refetch: () => Promise<unknown>) 
   const submitContent = useContentSubmit();
 
   // Get user data for permission checks
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const userRole = userData?.role ?? "USER";
   const hasReputationPermission = canAwardReputation(userRole);
 

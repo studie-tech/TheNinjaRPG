@@ -27,7 +27,7 @@ import RichInput from "@/layout/RichInput";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Coordinate stable post links, visible read positions, drafts and confirmed-removal cache reconciliation. */
 export default function Thread({
@@ -37,7 +37,11 @@ export default function Thread({
   threadId: string;
   initialPage: ThreadData;
 }) {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    username: u.username,
+    level: u.level,
+  }));
   const params = useSearchParams();
   const router = useRouter();
   const utils = api.useUtils();
@@ -481,7 +485,11 @@ function ForumPost({
   onSelect: () => void;
 }) {
   const fieldPrefix = useId();
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    username: u.username,
+    level: u.level,
+  }));
   const [editing, setEditing] = useState(false);
   const [history, setHistory] = useState(false);
   const [reason, setReason] = useState("");

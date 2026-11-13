@@ -34,7 +34,7 @@ import { showMutationToast } from "@/libs/toast";
 import { canPostAsAi } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
 import { safeLocalStorageRemoveItem } from "@/utils/storage";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Keep browse shortcuts compact in the header and expose staff tools only to eligible accounts. */
 export const ForumNavigation = ({
@@ -198,7 +198,7 @@ export const ForumWatchButton = ({
   scope: "THREAD" | "BOARD";
   scopeId: string;
 }) => {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => u.userId);
   const utils = api.useUtils();
   const { data } = api.forum.personal.useQuery(undefined, { enabled: !!user });
   const watch = data?.watches.find((w) => w.scope === scope && w.scopeId === scopeId);
@@ -268,7 +268,10 @@ export const ForumComposer = ({
   ) => Promise<boolean>;
 }) => {
   const fieldPrefix = useId();
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    role: u.role,
+  }));
   const form = useForm<Draft>({
     defaultValues: { content: "", title: "", kind: defaultKind, tags: "", image: "" },
   });

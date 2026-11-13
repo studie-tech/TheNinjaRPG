@@ -6,11 +6,11 @@ import * as queueCount from "@/hooks/useRankedQueueCount";
 import { RankedMode } from "@/layout/battlearena/RankedMode";
 import * as pvpRank from "@/layout/PvpRank";
 import * as toast from "@/libs/toast";
-import * as userContext from "@/utils/UserContext";
 import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const mutations: Record<string, ReturnType<typeof vi.fn>> = {};
 let user: Record<string, unknown>;
@@ -69,7 +69,7 @@ beforeEach(() => {
       checkRankedPvpMatches: { useMutation: useMutation("checkRankedPvpMatches") },
     },
   });
-  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () => ({ data: user, prepareUserUpdate: vi.fn(), updateUser: vi.fn() }) as never,
   );
   vi.spyOn(queueCount, "useRankedQueueCountCache").mockReturnValue({

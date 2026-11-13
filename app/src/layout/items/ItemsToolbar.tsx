@@ -14,7 +14,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { fedItemLoadouts } from "@/utils/paypal";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 
 /**
  * The item loadout selector and whole-inventory actions: unequip all, merge all stacks,
@@ -24,7 +24,7 @@ import { useRequiredUserData } from "@/utils/UserContext";
  * other actions with ⋯.
  */
 export function ItemsToolbar({ userData, userItems }: ItemsToolbarProps) {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const utils = api.useUtils();
   // Phones show the secondary actions on request; wider screens always show them.
   const [showMore, setShowMore] = useState(false);

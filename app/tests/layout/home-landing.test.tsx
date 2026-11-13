@@ -7,7 +7,8 @@ import HomeLanding from "@/layout/HomeLanding";
 import * as Loader from "@/layout/Loader";
 import * as Welcome from "@/layout/Welcome";
 import type { UserWithRelations } from "@/routers/profile";
-import * as UserContext from "@/utils/UserContext";
+import type * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 const replace = vi.fn();
 const referral = vi.fn();
@@ -24,7 +25,7 @@ beforeEach(() => {
     data: undefined,
     status: "success",
   } as typeof session;
-  vi.spyOn(UserContext, "useUserData").mockImplementation(() => session);
+  mockUserContextValue(() => session);
   vi.spyOn(clerk, "useClerk").mockReturnValue({ signOut: vi.fn() } as never);
   vi.spyOn(navigation, "useRouter").mockReturnValue({
     replace,

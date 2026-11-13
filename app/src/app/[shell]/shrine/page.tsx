@@ -29,7 +29,7 @@ import {
 import { isRaidCurrentlyActive } from "@/libs/raids";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** Explains why a ramen menu follows the shrine on a war page. */
 const SHRINE_RAMEN_SUBTITLE = "Eat to recover chakra & stamina before the next assault";
@@ -41,7 +41,12 @@ export default function Shrine() {
     pusher,
     prepareUserUpdate,
     updateUser,
-  } = useRequiredUserData();
+  } = useRequiredUserDataSelector((profile) => ({
+    userId: profile.userId,
+    sector: profile.sector,
+    status: profile.status,
+    villageId: profile.villageId,
+  }));
   const { data: sectorData } = api.travel.getSectorData.useQuery(
     { sector: userData?.sector || 0 },
     { enabled: !!userData, refetchInterval: 10000 },

@@ -25,9 +25,9 @@ import type { BattleState, CombatResult, ReturnedBattle } from "@/libs/combat/ty
 import * as toast from "@/libs/toast";
 import * as tutorialLib from "@/libs/tutorial";
 import * as tutorialSteps from "@/libs/tutorialSteps";
-import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { makeCompleteBattle, makeUser } from "../setup/combat";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Profile = {
   userId: string;
@@ -103,7 +103,7 @@ beforeEach(() => {
   };
   toasts = vi.fn();
   stub(toast, "showMutationToast", toasts);
-  stub(UserContext, "useRequiredUserData", () => ({
+  mockUserContextValue(() => ({
     data: state.profile,
     timeDiff: 0,
     updateUser: async () => true,
@@ -212,6 +212,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   for (const spy of spies.splice(0)) spy.mockRestore();
+  vi.restoreAllMocks();
   clients.splice(0).forEach((queryClient) => queryClient.clear());
   restoreBrowserGlobals();
 });

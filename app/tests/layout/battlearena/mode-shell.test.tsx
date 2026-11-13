@@ -7,11 +7,11 @@ import { ArenaModeShell } from "@/layout/battlearena/ArenaModeShell";
 import { BattleSetupPanel } from "@/layout/battlearena/BattleSetupPanel";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import * as jutsuLoadout from "@/layout/JutsuLoadoutSelector";
-import * as userContext from "@/utils/UserContext";
 import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const setAutoCombat = vi.fn();
 
@@ -26,7 +26,7 @@ beforeEach(() => {
       },
     },
   });
-  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: {
       userId: "me",
       userQuests: [

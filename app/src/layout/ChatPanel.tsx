@@ -20,7 +20,8 @@ import {
   getInboxNews,
 } from "@/libs/chatPanel";
 import { cn } from "@/libs/shadui";
-import { useUserData } from "@/utils/UserContext";
+import type { UserWithRelations } from "@/routers/profile";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /**
  * The button sits in every layout, so the panel's conversation, editor and AI code
@@ -37,7 +38,7 @@ const ChatPanelBody = dynamic(() => import("@/layout/ChatPanelContent"), {
  * screen. Conversations only subscribe to live updates while the panel shows them.
  */
 export function ChatPanel({ children, className }: ChatPanelProps) {
-  const { data: userData, notifications } = useUserData();
+  const { data: userData, notifications } = useUserDataSelector(selectChatPanelUser);
   const [panel, setPanel] = useAtom(chatPanelAtom);
   const mentions = useAtomValue(chatMentionsAtom);
   const tavernActivity = useAtomValue(chatTavernActivityAtom);
@@ -151,3 +152,12 @@ interface ChatPanelProps {
   children: React.ReactNode;
   className?: string;
 }
+
+const selectChatPanelUser = (user: NonNullable<UserWithRelations>) => ({
+  level: user.level,
+  tutorialOn: user.tutorialOn,
+  userQuests: user.userQuests,
+  chatMuted: user.chatMuted,
+  mutedConversationIds: user.mutedConversationIds,
+  unmutedTavernIds: user.unmutedTavernIds,
+});

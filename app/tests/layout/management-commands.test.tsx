@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import Loader from "@/layout/Loader";
 import { ManagementCommands } from "@/layout/profileEdit/ManagementCommands";
 import { cn } from "@/libs/shadui";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 let pending: Record<string, boolean>;
 const user = { userId: "owner", role: "OWNER" } as unknown as ComponentProps<
@@ -33,7 +33,7 @@ beforeEach(() => {
     profile: { awardExperienceToAll: mutation("experience") },
     skillTree: { resetAllUsersSkillPoints: mutation("skills") },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () => ({ updateUser: vi.fn(), prepareUserUpdate: vi.fn() }) as never,
   );
 });

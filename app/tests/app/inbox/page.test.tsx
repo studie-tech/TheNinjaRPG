@@ -6,11 +6,11 @@ import Inbox from "@/app/[shell]/inbox/page";
 import { clearInboxNotifications } from "@/deltas/chat";
 import * as newConversation from "@/layout/NewConversationPrompt";
 import * as blacklist from "@/layout/UserBlacklistControl";
-import * as userContext from "@/utils/UserContext";
 import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const updateNotifications = vi.fn();
 const inboxNews = { href: "/inbox", name: "2 messages", notificationCount: 2 };
@@ -29,13 +29,11 @@ beforeEach(() => {
       exitConversation: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
   });
-  const player = { data: { userId: "reader" } } as never;
-  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue(player);
-  vi.spyOn(userContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "reader" },
     notifications: [inboxNews, otherNews],
     updateNotifications,
-  } as never);
+  });
   vi.spyOn(navigation, "useSearchParams").mockReturnValue(
     new URLSearchParams() as never,
   );

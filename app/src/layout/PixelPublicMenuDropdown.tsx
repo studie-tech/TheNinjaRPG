@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/menubar";
 import Link from "@/layout/Link";
 import { BUGS_NAV_LINK, getMainNavbarLinks } from "@/libs/menus";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 
 interface PixelPublicMenuDropdownProps {
   /** Landing section links listed above the site pages, for headers that hide them. */
@@ -24,7 +24,7 @@ const PixelPublicMenuDropdown: React.FC<PixelPublicMenuDropdownProps> = ({
   sectionLinks = [],
   align = "start",
 }) => {
-  const { notifications } = useUserData();
+  const { notifications } = useUserInfo();
   const menuItems = [...getMainNavbarLinks(notifications), BUGS_NAV_LINK];
 
   return (

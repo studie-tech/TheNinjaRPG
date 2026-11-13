@@ -50,7 +50,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import { canSeeHiddenBountyInfo } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 import { createBountySchema } from "@/validators/bounty";
 
 type CreateBountyFormData = z.infer<typeof createBountySchema>;
@@ -61,7 +61,7 @@ interface BountyBoardProps {
 
 export default function BountyBoard({ userData }: BountyBoardProps) {
   const util = api.useUtils();
-  const { updateUser } = useRequiredUserData();
+  const { updateUser } = useRequiredUserInfo();
   const [bountyStatus, setBountyStatus] = useState<BountyStatus | "all">("OPEN");
   const [addingMoneyTo, setAddingMoneyTo] = useState<string | null>(null);
   const [addMoneyAmount, setAddMoneyAmount] = useState<number>(0);

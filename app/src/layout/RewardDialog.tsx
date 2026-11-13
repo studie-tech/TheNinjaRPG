@@ -14,7 +14,7 @@ import {
 import { STARTER_VILLAGES, UserRanks } from "@/drizzle/constants";
 import { EditContent, type FormEntry } from "@/layout/EditContent";
 import { canAwardReputation } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   ObjectiveReward,
   type ObjectiveRewardInputType,
@@ -98,7 +98,7 @@ export const useRewardDialogFormData = (amountFields: readonly RewardField[]) =>
   const { data: bloodlines } = api.bloodline.getAllNames.useQuery(undefined);
   const { data: badges } = api.badge.getAll.useQuery(undefined);
   const { data: titles } = api.title.getAllNames.useQuery();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const hasReputationPermission = canAwardReputation(userData?.role ?? "USER");
 
   const data: FormEntry<RewardField>[] = [

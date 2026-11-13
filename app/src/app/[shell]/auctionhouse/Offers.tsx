@@ -51,7 +51,7 @@ import { isEquippableUserItem, isImbuing, userItemDisplay } from "@/libs/item";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector, useRequiredUserInfo } from "@/utils/UserContext";
 import { createAuctionOfferSchema } from "@/validators/auction";
 
 export function AuctionOffers({
@@ -189,7 +189,7 @@ export function NewOfferDialog({
   });
   const requestedId = useWatch({ control: form.control, name: "requestedItemId" });
   const offeredId = useWatch({ control: form.control, name: "offeredUserItemId" });
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const create = api.auction.createAuctionOffer.useMutation({
     onMutate: prepareUserUpdate,
     onSuccess: async (result, _variables, revision) => {
@@ -417,12 +417,15 @@ function OfferCard({
   inventoryError: boolean;
   retryInventory: () => void;
 }) {
-  const { data: user } = useRequiredUserData();
+  const { data: user } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    level: u.level,
+  }));
   const utils = api.useUtils();
   const [isOpen, setIsOpen] = useState(false);
   const [suppliedId, setSuppliedId] = useState("");
   const [error, setError] = useState("");
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const refresh = async () => {
     await Promise.all([
       utils.auction.getAuctionOffers.invalidate(),

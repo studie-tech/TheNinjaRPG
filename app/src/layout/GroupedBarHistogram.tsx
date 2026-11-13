@@ -5,7 +5,7 @@ import { ClearDataConfirm } from "@/layout/ClearDataConfirm";
 import ContentBox from "@/layout/ContentBox";
 import { groupBy } from "@/utils/grouping";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Statistics box drawing one side-by-side bar series per group over a numeric x axis, with
@@ -18,7 +18,7 @@ import { useUserData } from "@/utils/UserContext";
 export const GroupedBarHistogram = <Row,>(props: GroupedBarHistogramProps<Row>) => {
   const { rows, toPoint, xLabel, yLabel } = props;
   const chartRef = useRef<HTMLCanvasElement>(null);
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const canClear = canChangeContent(userData?.role ?? "USER");
 
   useEffect(() => {

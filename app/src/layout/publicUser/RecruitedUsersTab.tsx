@@ -12,7 +12,7 @@ import { UserAvatarTile } from "@/layout/UserAvatarTile";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { showMutationToast } from "@/libs/toast";
 import { canDeleteReferral } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 // ---------------- Recruited Users Tab ----------------
 
@@ -37,7 +37,7 @@ export const RecruitedUsersTab: React.FC<RecruitedUsersTabProps> = ({
   parentUsername,
   parentRecruitedCount,
 }) => {
-  const { data: currentUser } = useUserData();
+  const { data: currentUser } = useUserDataSelector((u) => ({ role: u.role }));
   const canDelete = currentUser && canDeleteReferral(currentUser.role);
   const [removedRecruitIds, setRemovedRecruitIds] = useState<Set<string>>(
     () => new Set(),

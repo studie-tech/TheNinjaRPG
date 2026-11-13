@@ -13,7 +13,7 @@ import { parseHtml } from "@/utils/parse";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { canViewFullBattleLog } from "@/utils/permissions";
 import { insertComponentsIntoText } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 interface CombatHistoryProps {
   battleId: string;
@@ -25,7 +25,12 @@ interface CombatHistoryProps {
 const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
   // State
   const { battleId, battleVersion, battleRound, results } = props;
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    role: u.role,
+    staffAccount: u.staffAccount,
+    federalStatus: u.federalStatus,
+    showBattleDescription: u.showBattleDescription,
+  }));
   const [openRounds, setOpenRounds] = useState<number[]>([]);
 
   // Check if user can view full battle log (staff role or gold federal status)

@@ -9,6 +9,7 @@ import ChatBox from "@/layout/ChatBox";
 import * as richInput from "@/layout/RichInput";
 import * as userContext from "@/utils/UserContext";
 import { TrpcTestProviders, testApi } from "../setup/trpc";
+import { mockUserContextValue } from "../setup/userContext";
 
 const clients: QueryClient[] = [];
 const storageKey = "seichiAiChat:history-reader";
@@ -37,7 +38,7 @@ afterEach(() => {
 
 const session = () => {
   Object.assign(vi.spyOn(client, "api" as never), { misc: testApi.misc });
-  vi.spyOn(userContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "history-reader", username: "Me", level: 50 },
   } as never);
   vi.spyOn(richInput, "default").mockReturnValue(<textarea aria-label="Question" />);

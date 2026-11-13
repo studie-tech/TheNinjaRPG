@@ -13,7 +13,7 @@ import type { BattleUpdate } from "@/libs/combat/log";
 import type { BattleState, ReturnedBattle } from "@/libs/combat/types";
 import { showMutationToast } from "@/libs/toast";
 import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Hook to precompute maps for ground effects, user effects, and user positions.
@@ -30,7 +30,7 @@ export const useBattleMaps = (battle: ReturnedBattle | null): BattleMaps => {
  * Confirmed actions and eligible public events update exact battle baselines; gaps still read.
  */
 export const useCombatUpdates = (state: BattleState, isDriverEnabled = true) => {
-  const { pusher, data: userData } = useUserData();
+  const { pusher, data: userData } = useUserDataSelector((u) => ({ userId: u.userId }));
   const utils = api.useUtils();
   const queryClient = useQueryClient();
   const battleId = state.battle?.id;
@@ -413,7 +413,9 @@ export type CombatPreferences = ReturnType<typeof useCombatPreferences>;
  */
 export const useAutoCombatSetting = (): [boolean, (enabled: boolean) => void] => {
   const utils = api.useUtils();
-  const { data: userData, updateUser } = useUserData();
+  const { data: userData, updateUser } = useUserDataSelector((u) => ({
+    defaultAutoCombat: u.defaultAutoCombat,
+  }));
   const { mutate: updatePreferences } = api.profile.updatePreferences.useMutation({
     // Flicking the switch back and forth would otherwise leave two writes in
     // flight with no ordering guarantee, and whichever landed last would win;

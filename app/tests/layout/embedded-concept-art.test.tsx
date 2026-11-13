@@ -8,6 +8,7 @@ import * as Image from "@/layout/Image";
 import * as Link from "@/layout/Link";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 let settle: (value: { success: boolean; message: string }) => void = () => undefined;
 const toggle = vi.fn(
@@ -34,9 +35,7 @@ beforeEach(() => {
       toggleEmotion: { useMutation: () => ({ mutateAsync: toggle }) },
     },
   });
-  vi.spyOn(UserContext, "useUserData").mockImplementation(
-    () => ({ data: { userId: "viewer" } }) as never,
-  );
+  mockUserContextValue(() => ({ data: { userId: "viewer" } }) as never);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   vi.spyOn(Image, "default").mockImplementation((({ alt }: { alt: string }) => (
     <img alt={alt} />

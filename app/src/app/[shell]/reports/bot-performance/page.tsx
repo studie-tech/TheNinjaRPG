@@ -18,11 +18,13 @@ import Table from "@/layout/Table";
 import { downloadCsv } from "@/utils/dom";
 import { isStaffRole } from "@/utils/permissions";
 import { formatPercent } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import type { ModBotPerformanceInput } from "@/validators/reports";
 
 export default function BotPerformance() {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((profile) => ({
+    role: profile.role,
+  }));
   const [filters, setFilters] = useState<ModBotPerformanceInput>({
     days: 30,
     interval: "daily",

@@ -402,7 +402,10 @@ export const canWarnUsers = (user: UserData) => {
   ].includes(user.role);
 };
 
-export const canDeleteComment = (user: UserData, commentAuthorId: string) => {
+export const canDeleteComment = (
+  user: Pick<UserData, "role" | "userId">,
+  commentAuthorId: string,
+) => {
   return (
     [
       "MODERATOR",

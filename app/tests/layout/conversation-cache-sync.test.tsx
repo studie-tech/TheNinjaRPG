@@ -43,6 +43,7 @@ import {
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
+import { mockUserContextValue } from "../setup/userContext";
 
 const clients: QueryClient[] = [];
 /** Procedures a test did not expect; the query error alone would pass unnoticed. */
@@ -86,11 +87,11 @@ beforeEach(() => {
     reports: testApi.reports,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(userContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: user,
     notifications: [],
   } as never);
-  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({ data: user } as never);
+  mockUserContextValue({ data: user } as never);
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
 });
 
@@ -383,8 +384,8 @@ it("keeps team and panel messages synchronized in both send directions without d
     unsubscribe: vi.fn(),
     connection: { bind: vi.fn(), unbind: vi.fn() },
   };
-  vi.spyOn(userContext, "useUserData").mockReturnValue({ data: user, pusher } as never);
-  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({ data: user, pusher } as never);
+  mockUserContextValue({
     data: user,
     pusher,
   } as never);
@@ -629,7 +630,7 @@ it("clears cached unread markers only after authorized reads, including messages
     unsubscribe: vi.fn(),
     connection: { bind: vi.fn(), unbind: vi.fn() },
   };
-  vi.spyOn(userContext, "useUserData").mockReturnValue({ data: user, pusher } as never);
+  mockUserContextValue({ data: user, pusher } as never);
   const { wrapper, queryClient } = session((path, input) => {
     if (path === "comments.getUserConversations")
       return [

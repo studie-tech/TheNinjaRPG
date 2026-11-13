@@ -8,7 +8,7 @@ import * as Image from "@/layout/Image";
 import MissionHall from "@/layout/MissionHall";
 import * as MissionPicker from "@/layout/MissionPicker";
 import * as toast from "@/libs/toast";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 type StartResult = RouterOutputs["quests"]["startQuest"];
 let selectMission: ComponentProps<typeof MissionPicker.default>["onMissionSelect"];
@@ -29,7 +29,7 @@ beforeEach(() => {
     prepareQuestStartUpdate: () => ({}),
     updateQuestStart: invalidate,
   } as never);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     prepareUserUpdate: () => 7,
     updateUser,
   } as never);

@@ -55,7 +55,7 @@ import { showMutationToast } from "@/libs/toast";
 import { getVotingLink } from "@/libs/voting";
 import { canReviewLinkPromotions } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import {
   type LinkPromotionInput,
   type LinkPromotionReviewInput,
@@ -65,7 +65,11 @@ import {
 
 export function ProfileSharing() {
   // State
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({ userId: u.userId, votes: u.votes }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const [recruitTab, setRecruitTab] = useState<string>("Link");
 
@@ -272,7 +276,7 @@ export function ProfileSharing() {
 // Subcomponents
 const RecruitLinkTab: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({ userId: u.userId }));
   const recruitUrl = `${SITE_URL}/?ref=${userData?.userId ?? ""}`;
   const [genin, chunin, jonin, eliteJonin] = RECRUIT_RANK_MILESTONES;
   const [copied, setCopied] = useState<boolean>(false);
@@ -354,7 +358,10 @@ const RecruitLinkTab: React.FC = () => {
 
 const RecruitGuideTab: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    role: u.role,
+  }));
 
   // Form
   const linkForm = useForm<LinkPromotionInput>({
@@ -632,7 +639,7 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
 
 const RecruitRewardsTab: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({ userId: u.userId }));
 
   // Query
   const {

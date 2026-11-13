@@ -24,13 +24,17 @@ import Link from "@/layout/Link";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { getBanOrSilenceRestriction, isStaffRole } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import type { CreateApplicationSchema } from "@/validators/applications";
 import { createApplicationSchema } from "@/validators/applications";
 
 export default function Staff() {
   // User Data
-  const { data: me } = useUserData();
+  const { data: me } = useUserDataSelector((profile) => ({
+    role: profile.role,
+    isBanned: profile.isBanned,
+    isSilenced: profile.isSilenced,
+  }));
   const isStaff = me?.role ? isStaffRole(me.role) : false;
   const applicationRestriction = me ? getBanOrSilenceRestriction(me) : null;
 

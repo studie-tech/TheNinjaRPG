@@ -41,7 +41,7 @@ import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { useUserPicker } from "@/utils/search";
 import { addDays } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   type ForumPolicy,
   forumAudiences,
@@ -53,7 +53,7 @@ import {
 /** Load one scoped staff workspace and retain scoped approvals, recovery, structure, access and audit views. */
 export default function ForumManagement() {
   const fieldPrefix = useId();
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({ username: u.username }));
   const [tab, setTab] = useState("review");
   const [query, setQuery] = useState("");
   const [reviewPage, setReviewPage] = useState(0);

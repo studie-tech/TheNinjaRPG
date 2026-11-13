@@ -20,7 +20,7 @@ import SkillTreeFiltering, {
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualSkillTreeBalance() {
   // State
@@ -50,7 +50,7 @@ interface SkillTreeEffectsBalanceProps {
 const SkillTreeEffectsBalance: React.FC<SkillTreeEffectsBalanceProps> = (props) => {
   // Two-level filtering
   const state = useSkillTreeFiltering();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
 
   const details = useContentDetails();
 
@@ -136,7 +136,7 @@ interface SkillTreeUsageBalanceProps {
 const SkillTreeUsageBalance: React.FC<SkillTreeUsageBalanceProps> = (props) => {
   // State
   const filterState = useFiltering();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
 
   const details = useContentDetails();
 

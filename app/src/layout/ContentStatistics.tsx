@@ -11,7 +11,7 @@ import StatisticsFiltering, {
 } from "@/layout/StatisticsFiltering";
 import { LevelStats, UsageStats } from "@/layout/UsageStatistics";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Public usage statistics of one content entry; only the clear action needs staff. */
 export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
@@ -22,7 +22,7 @@ export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
   const statsFilter = useStatisticsFiltering();
   const filterParams = getStatisticsFilter(statsFilter);
 
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const { data, isPending } = api.data.getStatistics.useQuery(
     { id, type, ...filterParams },
     { enabled: !!id },

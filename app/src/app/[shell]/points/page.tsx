@@ -88,7 +88,11 @@ import {
 } from "@/utils/paypal";
 import { useRecipientPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import {
+  useRequiredUserData,
+  useRequiredUserDataSelector,
+  useRequiredUserInfo,
+} from "@/utils/UserContext";
 import type { BuyRepsSchema, SearchPaypalTransactionSchema } from "@/validators/points";
 import { buyRepsSchema, searchPaypalTransactionSchema } from "@/validators/points";
 import { StoreBundles } from "./StoreBundles";
@@ -445,7 +449,10 @@ const PayPalSubscriptionButton = (props: {
   onSuccess?: () => void;
 }) => {
   // User state
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((profile) => ({
+    userId: profile.userId,
+    reputationPoints: profile.reputationPoints,
+  }));
   const [{ isResolved }] = usePayPalScriptReducer();
 
   // Track mount state to prevent operations after unmount
@@ -457,7 +464,7 @@ const PayPalSubscriptionButton = (props: {
     };
   }, []);
 
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   // Mutation for starting subscription
   const { mutate: subscribe, isPending: isSubscribing } =
     api.paypal.resolveSubscription.useMutation({
@@ -784,7 +791,7 @@ const FederalStore = () => {
  * Subscriptions overview component
  */
 const SubscriptionsOverview = () => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserInfo();
   const { data: subscriptions, refetch } = api.paypal.getPaypalSubscriptions.useQuery(
     undefined,
     { enabled: !!userData },

@@ -18,7 +18,7 @@ import { defineFilteringSchema, useContentFiltering } from "@/layout/ContentFilt
 import { ForumNavigation, ForumSearch, ForumTopicList } from "@/layout/Forum";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Provide the Suspense boundary required by URL-backed forum filters. */
 export default function Forum() {
@@ -56,7 +56,7 @@ function ForumBrowse({
   updateUrl: (url: URL, mode?: "push" | "replace") => void;
 }) {
   const fieldPrefix = useId();
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({ userId: u.userId }));
   const params = useSearchParams();
   const rawView = params.get("view") ?? "boards";
   const view = ["latest", "unread", "watched", "mine", "unanswered", "alerts"].includes(

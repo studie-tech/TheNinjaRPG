@@ -20,6 +20,7 @@ import * as routing from "@/utils/routing";
 import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { huntingHabitatContent } from "../setup/hunting";
+import { mockUserContextValue } from "../setup/userContext";
 
 const testApi = createTRPCReact<AppRouter>();
 const UserContext = createContext<ReturnType<typeof userContext.useUserData> | null>(
@@ -65,7 +66,7 @@ beforeEach(() => {
     tournament: testApi.tournament,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(userContext, "useUserData").mockImplementation(() => {
+  mockUserContextValue(() => {
     const value = useContext(UserContext);
     if (!value) throw new Error("Test user context unavailable");
     return value;
@@ -81,8 +82,11 @@ afterEach(() => {
 });
 
 /** Mount the board with the production profile revision and battle-event handlers. */
+// The provider defaults come from the real hook; the board reads this test provider instead.
+const useProviderDefaults = userContext.useUserInfo;
+
 const LiveTab = ({ actor }: { actor: boolean }) => {
-  const defaults = userContext.useUserInfo();
+  const defaults = useProviderDefaults();
   const pusher = usePusherHandler("hunter");
   const queryClient = useQueryClient();
   const profile = testApi.profile.getUser.useQuery();
@@ -107,7 +111,7 @@ const setup = (
   options: { eventAfterResponse?: boolean; lostResponse?: boolean } = {},
 ) => {
   const connections: Connection[] = [];
-  vi.spyOn(Pusher, "default").mockImplementation(function () {
+  vi.spyOn(Pusher, "default").mockImplementation((() => {
     const connection: Connection = {
       socket_id: `${connections.length + 1}.1`,
       receive: async () => undefined,
@@ -123,7 +127,7 @@ const setup = (
       unsubscribe: vi.fn(),
       disconnect: vi.fn(),
     };
-  } as never);
+  }) as never);
   const content = huntingHabitatContent();
   const board = {
     user: { ...snapshot().userData, sector: 1, huntingExperience: 123 },

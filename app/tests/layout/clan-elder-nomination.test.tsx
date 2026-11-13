@@ -7,7 +7,7 @@ import * as navigation from "@/hooks/navigation";
 import * as AvatarImage from "@/layout/Avatar";
 import * as ContentBox from "@/layout/ContentBox";
 import { ClanInfo } from "@/layout/clan/ClanInfo";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 type ClanData = ComponentProps<typeof ClanInfo>["clanData"];
 
@@ -104,7 +104,7 @@ beforeEach(() => {
       onChange={(event) => onValueChange(event.target.value)}
     />
   )) as never);
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         data: {
@@ -180,7 +180,7 @@ it("explains a closed window and an ineligible clan", () => {
 
 it("hides the nomination from outlaw factions", () => {
   setSystemTime(new Date("2026-11-26T12:00:00Z"));
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         data: {

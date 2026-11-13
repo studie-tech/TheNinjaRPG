@@ -13,10 +13,10 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualTowerDefenseCharacters() {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"enemies" | "players">("enemies");
 

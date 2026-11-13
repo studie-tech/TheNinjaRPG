@@ -49,7 +49,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import TowerDefenseUpgrades from "@/layout/TowerDefenseUpgrades";
 import { getFirstOfNextMonth } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 // Load the game renderer only when the tower-defense page is opened
 const TowerDefenseCanvas = dynamic(() => import("@/layout/TowerDefense"), {
@@ -65,7 +65,10 @@ const GAME_NAME = "Tower Defense";
 const PAGE_SUBTITLE = "Survive as many waves as possible!";
 
 const TowerDefensePage: React.FC = () => {
-  const { data: userData, isClerkLoaded } = useUserData();
+  const { data: userData, isClerkLoaded } = useUserDataSelector((profile) => ({
+    userId: profile.userId,
+    sfxOn: profile.sfxOn,
+  }));
   const sfxEnabledRef = useRef(userData?.sfxOn);
   useEffect(() => {
     sfxEnabledRef.current = userData?.sfxOn;

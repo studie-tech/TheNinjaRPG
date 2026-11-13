@@ -41,7 +41,7 @@ import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
 import { getCategoryColor, getPriorityColor } from "@/libs/support";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 import { createSupportTicketSchema } from "@/validators/support";
 
 type CreateTicketFormData = z.infer<typeof createSupportTicketSchema>;
@@ -49,7 +49,7 @@ type CreateTicketFormDataInput = z.input<typeof createSupportTicketSchema>;
 
 export default function CreateSupportTicket() {
   const router = useRouter();
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserInfo();
   const [currentTag, setCurrentTag] = useState("");
   const [imageUploading, setImageUploading] = useState(false);
 

@@ -19,8 +19,8 @@ import {
 } from "@/drizzle/constants";
 import * as ContentBox from "@/layout/ContentBox";
 import { KageDefense } from "@/layout/KageDefense";
-import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { mockUserContextValue } from "../setup/userContext";
 
 const publish = vi.fn();
 let hall: Record<string, unknown>;
@@ -61,7 +61,7 @@ beforeEach(() => {
     ),
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     updateUser: vi.fn(),
     prepareUserUpdate: vi.fn(),
     timeDiff: 0,

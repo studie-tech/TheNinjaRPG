@@ -8,12 +8,12 @@ import * as loadoutNames from "@/hooks/useLoadoutNames";
 import { TrainingMode } from "@/layout/battlearena/TrainingMode";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import * as jutsuLoadout from "@/layout/JutsuLoadoutSelector";
-import * as userContext from "@/utils/UserContext";
 import { createStatSchema } from "@/validators/combat";
 import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const { maxValues } = createStatSchema(10, 10, undefined);
 let mutate: ReturnType<typeof vi.fn>;
@@ -24,7 +24,7 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     combat: { startArenaBattle: { useMutation: () => ({ mutate, isPending: false }) } },
   });
-  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: {
       userId: "me",
       status: "AWAKE",

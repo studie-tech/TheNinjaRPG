@@ -6,6 +6,7 @@ import ManualBalance from "@/app/[shell]/manual/balance/page";
 import ManualBackupPage from "@/app/[shell]/manual/content_backups/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 beforeEach(() => {
   vi.spyOn(ContentBox, "default").mockImplementation(
@@ -96,7 +97,7 @@ it("links each balance data source from its content row and column", () => {
 
 it("creates a backup of the content type named on each button", () => {
   const createBackup = vi.fn();
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { role: "OWNER" },
   } as never);
   Object.assign(vi.spyOn(client, "api" as never), {

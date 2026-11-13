@@ -21,6 +21,7 @@ import {
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
 import { spyOnToasts } from "../setup/toastMock";
+import { mockUserContextValue } from "../setup/userContext";
 
 const mocks = {
   profile: { id: "custom", includeDefaultRules: true, rules: [] as AiRuleType[] },
@@ -52,9 +53,7 @@ const api = {
 beforeEach(() => {
   vi.clearAllMocks();
   Object.assign(vi.spyOn(client, "api" as never), api);
-  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
-    () => ({ data: { role: mocks.role } }) as never,
-  );
+  mockUserContextValue(() => ({ data: { role: mocks.role } }) as never);
   spyOnToasts();
   vi.spyOn(ContentBox, "default").mockImplementation((({
     children,

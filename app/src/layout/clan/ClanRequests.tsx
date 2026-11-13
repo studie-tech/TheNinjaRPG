@@ -9,7 +9,7 @@ import UserRequestSystem from "@/layout/UserRequestSystem";
 import { hasRequiredRank } from "@/libs/rank";
 import { showMutationToast } from "@/libs/toast";
 import type { BaseServerResponse } from "@/server/api/trpc";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 interface ClanRequestsProps {
   clanId: string;
@@ -20,7 +20,12 @@ interface ClanRequestsProps {
 /** Manage clan or faction invitations and applications using the viewer's membership role. */
 export const ClanRequests: React.FC<ClanRequestsProps> = (props) => {
   // Destructure
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    clanId: u.clanId,
+    isOutlaw: u.isOutlaw,
+    rank: u.rank,
+    userId: u.userId,
+  }));
   const { clanId, clanLeaderId, isLeaderOrColeader } = props;
   const groupLabel = userData?.isOutlaw ? "faction" : "clan";
 

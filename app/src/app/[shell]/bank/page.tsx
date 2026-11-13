@@ -334,7 +334,7 @@ export default function Bank() {
             label="Send"
             showLabel={true}
             icon={<Send className="h-5 w-5" />}
-            className="mt-2 px-1"
+            className="mt-2"
           />
         </div>
         <Modal

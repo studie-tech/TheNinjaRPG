@@ -34,7 +34,7 @@ import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
 import { getPreferredDamageElement } from "@/libs/combat/elementalDamage";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import {
   ActionMoveTowardsOpponent,
   AiRule,
@@ -56,7 +56,14 @@ export const BattleSettingsEdit: React.FC<{ userId: string }> = ({ userId }) => 
       // Tagging invalidates inventory queries, so reload these choices on return.
       { enabled: !!userId, refetchOnMount: "always" },
     );
-  const { data: userData, updateUser } = useRequiredUserData();
+  const { data: userData, updateUser } = useRequiredUserDataSelector((u) => ({
+    preferredDamageElement: u.preferredDamageElement,
+    preferredGeneral1: u.preferredGeneral1,
+    preferredGeneral2: u.preferredGeneral2,
+    primaryElement: u.primaryElement,
+    showBattleDescription: u.showBattleDescription,
+    showPvpRecord: u.showPvpRecord,
+  }));
   const utils = api.useUtils();
   const [battleDescriptionDraft, setBattleDescriptionDraft] = useState(
     userData?.showBattleDescription ?? false,

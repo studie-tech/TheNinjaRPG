@@ -25,7 +25,7 @@ import {
   safeLocalStorageRemoveItem,
   safeLocalStorageSetItem,
 } from "@/utils/storage";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import { type ChatMessageSchema, chatMessageSchema } from "@/validators/chat";
 
 export interface ChatBoxProps {
@@ -47,7 +47,10 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   onAskTavern,
 }) => {
   // State
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    level: u.level,
+  }));
   const messagesRef = useRef<null | HTMLDivElement>(null);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   // The conversation is kept per player in this browser until they clear it.

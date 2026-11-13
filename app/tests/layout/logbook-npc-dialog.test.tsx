@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import * as client from "@/app/_trpc/client";
 import * as logbook from "@/layout/Logbook";
 import * as Modal from "@/layout/Modal";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 const procedure = {
   useQuery: () => ({ data: undefined }),
@@ -55,7 +55,7 @@ afterEach(() => {
 
 /** Render a consecutive quest whose active step is a dialog, optionally bound to an NPC. */
 const renderDialogStep = (overworldPlacementId?: string) => {
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "viewer", role: "USER", status: "AWAKE", dailyMissions: 0 },
     prepareUserUpdate: () => 1,
     updateUser: vi.fn(),

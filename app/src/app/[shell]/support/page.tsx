@@ -22,11 +22,14 @@ import { getStatusIcon } from "@/libs/supportIcons";
 import { parseHtml } from "@/utils/parse";
 import { isStaffRole } from "@/utils/permissions";
 import { formatTimeAgo } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 export default function SupportPage() {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((profile) => ({
+    role: profile.role,
+    userId: profile.userId,
+  }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   // Support ticket filtering state
   const filterState = useSupportTicketFiltering();

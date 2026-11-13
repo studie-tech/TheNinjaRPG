@@ -11,10 +11,10 @@ import {
   INITIATIVE_TERRITORY_BONUS,
 } from "@/libs/combat/constants";
 import { canModifyCombatSettings } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualCombat() {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const isAdmin = userData?.role ? canModifyCombatSettings(userData.role) : false;
 
   return (

@@ -13,7 +13,7 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { calcCP, calcHP, calcSP, levelUpBlockMessage } from "@/libs/profile";
 import { showMutationToast, triggerConfetti } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 interface LevelUpBtnProps {
   id?: string;
@@ -23,7 +23,17 @@ interface LevelUpBtnProps {
 
 const LevelUpBtn: React.FC<LevelUpBtnProps> = ({ id, className = "mt-2" }) => {
   // State
-  const { data: userData, updateUser, prepareUserUpdate } = useRequiredUserData();
+  const {
+    data: userData,
+    updateUser,
+    prepareUserUpdate,
+  } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    level: u.level,
+    rank: u.rank,
+    experience: u.experience,
+    village: u.village,
+  }));
   const [showModal, setShowModal] = useState<boolean>(false);
 
   // tRPC utility

@@ -10,6 +10,7 @@ import type { BattleState } from "@/libs/combat/types";
 import * as userContext from "@/utils/UserContext";
 import { deferred } from "../setup/deferred";
 import { TrpcTestProviders, testApi } from "../setup/trpc";
+import { mockUserContextValue } from "../setup/userContext";
 
 const clients: QueryClient[] = [];
 const channels = new Set<TestChannel>();
@@ -66,7 +67,7 @@ beforeEach(() => {
     combat: testApi.combat,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(userContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "viewer" },
   } as never);
 });

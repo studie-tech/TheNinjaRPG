@@ -35,7 +35,7 @@ import { subscribeSharedChannel } from "@/libs/sharedChannel";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { calculatePercent } from "@/utils/math";
 import { secondsFromDate } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 interface RaidBrowserProps {
   title?: string;
@@ -66,7 +66,11 @@ const RaidBrowser: React.FC<RaidBrowserProps> = (props) => {
     timeDiff,
     prepareUserUpdate,
     updateUser,
-  } = useRequiredUserData();
+  } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    isBanned: u.isBanned,
+    sector: u.sector,
+  }));
 
   // Queries
   const { data: availableRaidsData, isFetching: raidsFetching } =

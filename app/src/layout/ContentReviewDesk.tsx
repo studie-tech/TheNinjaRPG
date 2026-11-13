@@ -26,14 +26,14 @@ import {
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { formatTimeAgo } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
  * The content review desk: suggestions from the content audit and from staff, one at a time,
  * with keyboard shortcuts for fast review. Staff who cannot review see their own suggestions.
  */
 export const ContentReviewDesk: React.FC = () => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({ role: u.role }));
   const [tab, setTab] = useState<Tab>("Pending");
   const [category, setCategory] = useState<ContentProposalCategory | null>(null);
   const [source, setSource] = useState<ContentProposalSource | null>(null);

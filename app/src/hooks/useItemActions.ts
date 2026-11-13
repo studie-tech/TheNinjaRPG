@@ -15,7 +15,7 @@ import {
 } from "@/libs/itemConsumption";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
-import { useRequiredUserData, useUserDataSelector } from "@/utils/UserContext";
+import { useRequiredUserInfo, useUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Binds per-item tRPC mutations to the shared inventory and profile cache controllers.
@@ -31,7 +31,7 @@ export const useItemActions = ({
   useritem: UserItemWithRelations | undefined;
   onDone: () => void;
 }) => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const utils = api.useUtils();
   const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
     useInventoryCacheUpdate();

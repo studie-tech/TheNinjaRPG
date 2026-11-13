@@ -14,7 +14,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { getTutorialBattleReturnPage } from "@/libs/tutorial";
 import { TUTORIAL_STEPS, type TutorialStepConfig } from "@/libs/tutorialSteps";
-import { useRequiredUserData, userBattleAtom } from "@/utils/UserContext";
+import { useRequiredUserDataSelector, userBattleAtom } from "@/utils/UserContext";
 
 interface CombatResultScreenProps {
   result: CombatResult;
@@ -34,7 +34,11 @@ export const CombatResultScreen: React.FC<CombatResultScreenProps> = (props) => 
   const tutorialReturnLockRef = useRef(false);
   const battleType = battleRef.current?.battleType;
   const setBattleAtom = useSetAtom(userBattleAtom);
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    isOutlaw: u.isOutlaw,
+    tutorialOn: u.tutorialOn,
+    userQuests: u.userQuests,
+  }));
 
   const showShrineAgain = result?.outcome === "Won" && battleType === "SHRINE_WAR";
   const showTravelBtn = battleType === "QUEST" && !getIsolatedPyramid(userData);

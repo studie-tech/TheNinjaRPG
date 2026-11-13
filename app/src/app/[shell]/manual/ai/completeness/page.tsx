@@ -9,11 +9,11 @@ import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Content editors find AIs whose actions lack their own sprite animation sheets. */
 export default function ManualAiCompleteness() {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const canEdit = !!userData && canChangeContent(userData.role);
   const { data, isPending, error, refetch } =
     api.spriteAnimation.getAiCoverage.useQuery(undefined, { enabled: canEdit });

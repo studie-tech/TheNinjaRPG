@@ -9,12 +9,12 @@ import Loader from "@/layout/Loader";
 import { describeTitleEffect } from "@/libs/titles";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Manage active and archived catalog entries without exposing private legacy player labels. */
 export default function ManualTitles() {
   const router = useRouter();
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((profile) => ({ role: profile.role }));
   const canEdit = !!user && canChangeContent(user.role);
   const { data, isPending, isError, refetch } = api.title.getAll.useQuery(undefined, {
     enabled: canEdit,

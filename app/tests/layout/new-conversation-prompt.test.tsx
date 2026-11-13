@@ -5,7 +5,7 @@ import type { Dispatch, SetStateAction } from "react";
 import * as clientModule from "@/app/_trpc/client";
 import * as modal from "@/layout/Modal";
 import { NewConversationPrompt } from "@/layout/NewConversationPrompt";
-import * as userContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 afterEach(() => {
   cleanup();
@@ -23,7 +23,7 @@ it("notifies its parent after a committed dialog change and preserves queued fun
       },
     },
   });
-  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: {
       userId: "me",
       role: "USER",

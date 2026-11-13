@@ -59,7 +59,7 @@ import { getRandomElement, shuffle } from "@/utils/array";
 import { isRetryableTrpcError } from "@/utils/error";
 import { secureRandomInt } from "@/utils/math";
 import { safeLocalStorageGetItem } from "@/utils/storage";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector, useUserInfo } from "@/utils/UserContext";
 import {
   attributes,
   colors,
@@ -82,7 +82,7 @@ const Register: React.FC = () => {
     status: userStatus,
     isClerkLoaded,
     isSignedIn,
-  } = useUserData();
+  } = useUserDataSelector((profile) => ({ userId: profile.userId }));
 
   // Redirect authenticated users away from register page
   useEffect(() => {
@@ -150,7 +150,7 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
   const utils = api.useUtils();
 
   // Clerk user id, stored as the new character's userId (for GTM event)
-  const { userId } = useUserData();
+  const { userId } = useUserInfo();
 
   // Create avatar mutation
   const createAvatar = api.avatar.createAvatar.useMutation();

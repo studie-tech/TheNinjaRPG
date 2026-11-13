@@ -5,7 +5,7 @@ import { api, type RouterInputs, type RouterOutputs } from "@/app/_trpc/client";
 import { applyConversationRead, clearInboxNotifications } from "@/deltas/chat";
 import { getInboxNews } from "@/libs/chatPanel";
 import { updateQueryCache } from "@/utils/queryCache";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 type CommentPage = RouterOutputs["comments"]["getConversationComments"];
 
@@ -68,7 +68,11 @@ export const useConversationCacheUpdate = () => {
 export function useInboxConversations(
   options: { staleTime?: number; refetchOnMount?: "always" } = {},
 ) {
-  const { data: userData, notifications, updateNotifications } = useUserData();
+  const {
+    data: userData,
+    notifications,
+    updateNotifications,
+  } = useUserDataSelector((u) => u.userId);
   const result = api.comments.getUserConversations.useQuery(undefined, {
     enabled: !!userData,
     ...options,

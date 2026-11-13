@@ -20,6 +20,7 @@ import {
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
 import { dungeonContent } from "../../setup/dungeon";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type SaveInput = RouterInputs["coop"]["dungeon"]["save"];
 type SaveResult = RouterOutputs["coop"]["dungeon"]["save"];
@@ -452,7 +453,7 @@ function mountEditor({
       getCatalog: { useQuery: () => ({ data: { packages, nodes: [] } }) },
     },
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { role: "CONTENT-ADMIN" },
   } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(

@@ -16,6 +16,7 @@ import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { deferred } from "../setup/deferred";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Input = RouterInputs["profile"]["updatePreferences"];
 type Result = RouterOutputs["profile"]["updatePreferences"];
@@ -87,7 +88,7 @@ beforeEach(() => {
       },
     },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => {
+  mockUserContextValue(() => {
     controller = useActionPreferenceCacheUpdate(cache, key, actor);
     const { data } = useQuery<UserCache>({ queryKey: key, enabled: false });
     return { data: data?.userData, actionPreferences: controller } as never;

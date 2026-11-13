@@ -4,6 +4,7 @@ import ManualMain from "@/app/[shell]/manual/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as ImageLinkGrid from "@/layout/ImageLinkGrid";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type Tile = { href: string; label?: string };
 let grids: Tile[][];
@@ -27,7 +28,7 @@ afterEach(() => {
 /** Player tiles and staff tiles rendered for the role, in display order. */
 const manualGrids = (role: string) => {
   grids = [];
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: { role } } as never);
+  mockUserContextValue({ data: { role } } as never);
   render(<ManualMain />);
   const [player = [], staff = []] = grids;
   return { player, staff };

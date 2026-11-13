@@ -5,8 +5,8 @@ import * as countdown from "@/layout/Countdown";
 import * as image from "@/layout/Image";
 import * as link from "@/layout/Link";
 import { Objective } from "@/layout/Objective";
-import * as userContext from "@/utils/UserContext";
 import { AllObjectives, QuestTracker } from "@/validators/objectives";
+import { mockUserContextValue } from "../setup/userContext";
 
 describe("collection objective countdown", () => {
   let actor: Record<string, unknown>;
@@ -18,7 +18,7 @@ describe("collection objective countdown", () => {
       },
     });
     actor = { userId: "collector", role: "USER", status: "AWAKE", autoWakeUp: true };
-    vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+    mockUserContextValue({
       data: actor,
       timeDiff: 0,
     } as never);

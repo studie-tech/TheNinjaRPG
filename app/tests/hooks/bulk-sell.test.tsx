@@ -13,6 +13,7 @@ import * as inventory from "@/hooks/useInventoryCacheUpdate";
 import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
 import { deferred } from "../setup/deferred";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Result = client.RouterOutputs["item"]["sellUserItems"];
 type Input = client.RouterInputs["item"]["sellUserItems"];
@@ -49,7 +50,7 @@ it.each([false, true])(
     const showMutationToast = vi
       .spyOn(toast, "showMutationToast")
       .mockImplementation(() => undefined);
-    vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+    mockUserContextValue({
       prepareUserUpdate: () => 42,
       updateUser,
     } as never);

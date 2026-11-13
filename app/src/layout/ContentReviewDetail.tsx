@@ -55,7 +55,7 @@ import {
 import { questSceneOf } from "@/libs/contentReview/questScene";
 import { showMutationToast } from "@/libs/toast";
 import { formatSoundLength, formatTimeAgo } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 import { withContentReviewCount } from "@/utils/userNotificationCounts";
 import { flattenLeaves, wordDiff } from "@/utils/wordDiff";
 
@@ -95,7 +95,7 @@ const ProposalReview: React.FC<ContentReviewDetailProps & { proposal: Proposal }
   props,
 ) => {
   const { id, position, onMove, onDecided, proposal } = props;
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const utils = api.useUtils();
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [edits, setEdits] = useState<Record<string, string>>({});

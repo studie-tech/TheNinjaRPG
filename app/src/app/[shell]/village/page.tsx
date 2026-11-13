@@ -32,12 +32,12 @@ import Loader from "@/layout/Loader";
 import { hasRequiredRank } from "@/libs/rank";
 import { showMutationToast } from "@/libs/toast";
 import { prettyNumber } from "@/utils/string";
-import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
+import { useRequiredUserInfo, useRequireInVillage } from "@/utils/UserContext";
 
 export default function VillageOverview() {
   // State
   const { userData, sectorVillage } = useRequireInVillage();
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const { currentStep } = useTutorialStep();
 
   // Queries

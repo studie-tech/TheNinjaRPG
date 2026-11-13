@@ -17,7 +17,7 @@ import Modal from "@/layout/Modal";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { secondsPassed } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserData, useRequiredUserInfo } from "@/utils/UserContext";
 
 /** Keep dialog and confirmation state scoped to a single character. */
 const DeleteUserButton = (props: DeleteUserButtonProps) => (
@@ -28,7 +28,7 @@ const DeleteUserButton = (props: DeleteUserButtonProps) => (
 export function CharacterDeletionSettings({
   userData,
 }: Pick<DeleteUserButtonProps, "userData">) {
-  const { timeDiff } = useRequiredUserData();
+  const { timeDiff } = useRequiredUserInfo();
   return (
     <div className="space-y-5 text-sm leading-relaxed">
       <p>

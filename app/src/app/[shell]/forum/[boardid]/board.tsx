@@ -23,7 +23,7 @@ import {
 import { ForumTopicTools } from "@/layout/ForumModeration";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Combine board policy, URL-backed topic discovery, watches and permitted creation/moderation tools. */
 export default function Board({
@@ -33,7 +33,10 @@ export default function Board({
   boardId: string;
   initialThreads: RouterOutputs["forum"]["getThreads"];
 }) {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    level: u.level,
+  }));
   const router = useRouter();
   const utils = api.useUtils();
   const params = useSearchParams();

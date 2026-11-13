@@ -24,12 +24,12 @@ import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
 import { canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import { CreateSpeciesModal } from "./SpeciesEditor";
 
 /** Public species catalogue with the same role-gated controls as other Manual pages. */
 export default function ManualCompanions() {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
   const [search, setSearch] = useState("");

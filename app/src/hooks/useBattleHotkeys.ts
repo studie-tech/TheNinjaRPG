@@ -13,7 +13,7 @@ import {
   resolveHotkeys,
 } from "@/libs/combat/hotkeys";
 import { showMutationToast } from "@/libs/toast";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import type { SetLoadoutHotkeysSchema } from "@/validators/loadout";
 
 /** Which loadout a key is stored in: jutsu and basics, or items. */
@@ -32,7 +32,10 @@ export const useBattleHotkeys = (
     itemLoadoutId?: string | null;
   } = {},
 ) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({
+    jutsuLoadout: u.jutsuLoadout,
+    itemLoadout: u.itemLoadout,
+  }));
   const jutsuLoadoutId =
     options.jutsuLoadoutId !== undefined
       ? options.jutsuLoadoutId

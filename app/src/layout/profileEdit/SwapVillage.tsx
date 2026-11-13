@@ -9,14 +9,18 @@ import { ActionSelector } from "@/layout/CombatActions";
 import Loader from "@/layout/Loader";
 import { RepPurchaseConfirmModal } from "@/layout/RepPurchaseConfirmModal";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Swap village
  */
 export const SwapVillage: React.FC = () => {
   // State
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({ reputationPoints: u.reputationPoints }));
   const _utils = api.useUtils();
   const [village, setVillage] = useState<Village | undefined>(undefined);
   const [isOpen, setIsOpen] = useState<boolean>(false);

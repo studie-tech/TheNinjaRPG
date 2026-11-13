@@ -24,7 +24,7 @@ import { LabeledField } from "@/layout/LabeledField";
 import Loader from "@/layout/Loader";
 import { SearchSelect } from "@/layout/SearchSelect";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   type HuntingContract,
   type HuntingHabitatContent,
@@ -33,7 +33,7 @@ import {
 
 /** Author habitats and contract rules through permission-checked hunting procedures. */
 export default function HuntingEditor() {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({ role: u.role }));
   const allowed = !!user && canChangeContent(user.role);
   const utils = api.useUtils();
   const [id, setId] = useState<string>();

@@ -15,14 +15,14 @@ import WordCloud from "@/layout/Wordcloud";
 import { countBy, countEffectCalculations } from "@/libs/contentCompleteness";
 import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Inspect bloodline completeness and diversity with selectable content details. */
 export default function ManualBloodlineCompleteness() {
   const details = useContentDetails();
 
   // User data for permissions
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
 
   // Queries
   const { data, isPending } = api.bloodline.getAll.useQuery({ limit: 500 }, {});

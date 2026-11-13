@@ -30,7 +30,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import { groupBy } from "@/utils/grouping";
 import { pushToCombat } from "@/utils/routing";
 import { secondsFromDate } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
 import type { ObjectiveRewardType } from "@/validators/rewards";
 import {
@@ -54,7 +54,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
   // Destructure
   const { userData, tournamentId, rewards } = props;
 
-  const { timeDiff, pusher, prepareUserUpdate, updateUser } = useUserData();
+  const { timeDiff, pusher, prepareUserUpdate, updateUser } = useUserInfo();
 
   const utils = api.useUtils();
 

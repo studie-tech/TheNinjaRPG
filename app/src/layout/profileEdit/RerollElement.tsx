@@ -8,7 +8,7 @@ import Confirm from "@/layout/Confirm";
 import { showMutationToast } from "@/libs/toast";
 import { getBloodlineElements } from "@/libs/userElements";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 interface ElementRerollButtonProps {
   elementType: "primary" | "secondary";
@@ -56,7 +56,16 @@ const ElementRerollButton: React.FC<ElementRerollButtonProps> = ({
 /** Paid innate rerolls are unavailable while a bloodline overrides the pair. */
 export const RerollElement: React.FC = () => {
   // State
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
+    primaryElement: u.primaryElement,
+    reputationPoints: u.reputationPoints,
+    secondaryElement: u.secondaryElement,
+    bloodline: u.bloodline,
+  }));
 
   // Training an overridden innate element does not make its stored slot rerollable.
   const hasBloodlineElements = getBloodlineElements(userData).length > 0;

@@ -6,7 +6,7 @@ import * as Avatar from "@/layout/Avatar";
 import * as ContentBox from "@/layout/ContentBox";
 import RaidBrowser from "@/layout/RaidBrowser";
 import * as TeamChatPanel from "@/layout/TeamChatPanel";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 const settled = async (): Promise<void> => undefined;
 const claim = vi.fn();
@@ -43,7 +43,7 @@ beforeEach(() => {
   vi.spyOn(ActiveTimedBuffs, "ActiveTimedBuffs").mockImplementation(() => null);
   vi.spyOn(TeamChatPanel, "TeamChatPanel").mockImplementation(() => null);
   vi.spyOn(Avatar, "default").mockImplementation(({ alt }) => <img alt={alt} />);
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "actor", sector: 5, isBanned: false },
     pusher: undefined,
     prepareUserUpdate: () => undefined,

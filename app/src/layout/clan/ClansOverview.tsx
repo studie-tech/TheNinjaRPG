@@ -4,11 +4,14 @@ import { AvatarNameCell } from "@/layout/AvatarNameCell";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** List the viewer's village clans or syndicate factions with leaders and member counts. */
 export const ClansOverview: React.FC = () => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    isOutlaw: u.isOutlaw,
+    villageId: u.villageId,
+  }));
   const locationLabel = userData?.isOutlaw ? "syndicate" : "village";
   const groupLabel = userData?.isOutlaw ? "Faction" : "Clan";
   const groupLabelPlural = userData?.isOutlaw ? "Factions" : "Clans";

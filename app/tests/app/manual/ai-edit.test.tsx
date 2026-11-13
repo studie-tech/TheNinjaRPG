@@ -23,6 +23,7 @@ import * as toast from "@/libs/toast";
 import type { AiWithRelations } from "@/routers/profile";
 import { humanizeIdentifier } from "@/utils/string";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const save = vi.fn();
 const names = { useQuery: () => ({ data: [], isPending: false }) };
@@ -84,7 +85,7 @@ beforeEach(() => {
     },
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: { role: "CONTENT-ADMIN" },
   } as never);
   vi.spyOn(ais, "useAiEditForm").mockImplementation((user) => {

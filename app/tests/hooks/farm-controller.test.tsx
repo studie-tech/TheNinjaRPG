@@ -8,7 +8,7 @@ import * as appClient from "@/app/_trpc/client";
 import type { UserCache } from "@/deltas/profile";
 import { useFarmController } from "@/hooks/farm-controller";
 import { updateQueryCache } from "@/utils/queryCache";
-import * as userContext from "@/utils/UserContext";
+import type * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type {
   FarmMutationResponse,
@@ -18,6 +18,7 @@ import type {
 import { QuestTracker } from "@/validators/objectives";
 import { deferred as createDeferred } from "../setup/deferred";
 import { TrpcTestProviders, testApi } from "../setup/trpc";
+import { mockUserContextValue } from "../setup/userContext";
 
 const clients: QueryClient[] = [];
 const cleanups: (() => void)[] = [];
@@ -120,7 +121,7 @@ const harness = (response: FarmMutationResponse, deferred = false, timeDiff = 0)
     },
   });
   cleanups.push(observer.subscribe(() => {}));
-  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         timeDiff,

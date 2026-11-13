@@ -22,6 +22,7 @@ import {
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
 import { TrpcTestProviders, testApi } from "../../setup/trpc";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type ThreadData = RouterOutputs["comments"]["getForumComments"];
 let queryClient: QueryClient;
@@ -71,7 +72,7 @@ beforeEach(() => {
     forum: testApi.forum,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(UserContext, "useUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         data: {

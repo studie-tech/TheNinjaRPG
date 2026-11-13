@@ -52,7 +52,7 @@ import { round } from "@/utils/math";
 import { isSiteOwnerAccount } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserData, useRequiredUserInfo } from "@/utils/UserContext";
 import {
   type BlackMarketOfferSchema,
   type BlackMarketOfferSchemaInput,
@@ -175,7 +175,7 @@ const PityBloodlineRoll: React.FC<{
 }> = ({ userData }) => {
   // tRPC utils
   const utils = api.useUtils();
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
 
   // Get data from DB
   const { data: prevRolls, isPending: isPendingRolls } =
@@ -291,7 +291,7 @@ const Bloodline: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
 const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   userData,
 }) => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
 
   // State
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);

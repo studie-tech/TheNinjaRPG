@@ -7,11 +7,12 @@ import { maskBattle } from "@/libs/combat/masking";
 import * as UserContext from "@/utils/UserContext";
 import { makeBattleUser, makeCompleteBattle } from "../setup/combat";
 import { actualImage } from "../setup/preload";
+import { mockUserContextValue } from "../setup/userContext";
 
 beforeEach(() => {
   // Other suites replace the layout Image module; avatars need the real one.
   vi.spyOn(image, "default").mockImplementation(actualImage);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "viewer" },
     timeDiff: 0,
   } as ReturnType<typeof UserContext.useUserData>);

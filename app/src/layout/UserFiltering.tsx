@@ -6,7 +6,7 @@ import {
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 import { canSeeIps } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import { tagTypes } from "@/validators/combat";
 
 interface UserFilteringProps {
@@ -130,7 +130,7 @@ const USER_FILTERING_SCHEMA = defineFilteringSchema({
 });
 
 const UserFiltering: React.FC<UserFilteringProps> = (props) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const context = {
     canSeeIps: Boolean(userData && canSeeIps(userData.role)),
     aiToggles: props.aiToggles,

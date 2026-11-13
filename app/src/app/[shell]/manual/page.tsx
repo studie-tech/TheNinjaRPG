@@ -44,11 +44,11 @@ import {
   canViewRecruitmentAnalytics,
   isStaffRole,
 } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Render the content catalog and additional management links permitted by the user's role. */
 export default function ManualMain() {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
   const role = userData?.role ?? "USER";
   const canEditContent = canChangeContent(role);
   const isStaff = isStaffRole(role);

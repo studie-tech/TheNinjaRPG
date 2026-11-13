@@ -22,7 +22,7 @@ import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualBloodlineBalance() {
   // State
@@ -52,7 +52,7 @@ interface BloodlineEffectsBalanceProps {
 const BloodlineEffectsBalance: React.FC<BloodlineEffectsBalanceProps> = (props) => {
   // Two-level filtering
   const state = useBloodlineFiltering();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
 
   const details = useContentDetails();
 
@@ -153,7 +153,7 @@ interface BloodlineUsageBalanceProps {
 const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
   // State
   const filterState = useFiltering();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
 
   const details = useContentDetails();
 

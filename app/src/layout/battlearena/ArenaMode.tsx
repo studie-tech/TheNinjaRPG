@@ -19,11 +19,16 @@ import type { GenericObject } from "@/layout/ItemWithEffects";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** The arena: fight an AI opponent picked for your level. */
 export function ArenaMode({ aiId, setAiId }: ArenaModeProps) {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    autoWakeUp: u.autoWakeUp,
+    dailyArenaFights: u.dailyArenaFights,
+    level: u.level,
+    status: u.status,
+  }));
 
   // The tutorial teaches fighting by hand, so its fights never start on auto.
   const { currentStep, completeTutorialAction } = useTutorialStep();

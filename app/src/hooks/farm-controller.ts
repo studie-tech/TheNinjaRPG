@@ -14,7 +14,7 @@ import { useNow } from "@/hooks/useNow";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 import { summarizeFarmPlots } from "@/libs/farming";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 import type {
   FarmEffect,
   FarmMutationResponse,
@@ -29,7 +29,7 @@ export function useFarmController() {
     getQueryKey(api.farming.getFarmState, undefined, "query"),
   );
   const { timeDiff, prepareUserUpdate, updateUser, updateNotifications } =
-    useRequiredUserData();
+    useRequiredUserInfo();
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null);
   const [pendingPlotSlots, setPendingPlotSlots] = useState<Set<number>>(new Set());
   const pendingPlotSlotsRef = useRef<Set<number>>(new Set());

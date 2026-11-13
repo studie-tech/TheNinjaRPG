@@ -16,6 +16,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type Result = { success: boolean; message: string };
 
@@ -43,7 +44,7 @@ beforeEach(() => {
     ),
   );
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "u", role: "USER" },
   } as never);
   Object.assign(vi.spyOn(client, "api" as never), {

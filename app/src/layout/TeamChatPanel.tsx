@@ -12,14 +12,19 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { getMessagingRestriction } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** Shared raid/quest chat using conversation permissions and live message invalidation. */
 export const TeamChatPanel: React.FC<TeamChatPanelProps> = ({
   conversationId,
   title = "Team Chat",
 }) => {
-  const { data: userData, pusher } = useRequiredUserData();
+  const { data: userData, pusher } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    isBanned: u.isBanned,
+    isSilenced: u.isSilenced,
+    level: u.level,
+  }));
   const util = api.useUtils();
   const { refreshConversationComments } = useConversationCacheUpdate();
   const [message, setMessage] = useState("");

@@ -5,7 +5,7 @@ import * as client from "@/app/_trpc/client";
 import ReportStatistics from "@/app/[shell]/reports/statistics/page";
 import * as Avatar from "@/layout/Avatar";
 import * as ContentBox from "@/layout/ContentBox";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 let query: { data: unknown; isFetching: boolean };
 const refetch = vi.fn(async () => undefined);
@@ -34,10 +34,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const signIn = (role: string) =>
-  vi
-    .spyOn(UserContext, "useRequiredUserData")
-    .mockReturnValue({ data: { userId: "u", role } } as never);
+const signIn = (role: string) => mockUserContextValue({ data: { userId: "u", role } });
 
 it("tells players the statistics are staff-only instead of loading forever", () => {
   signIn("USER");

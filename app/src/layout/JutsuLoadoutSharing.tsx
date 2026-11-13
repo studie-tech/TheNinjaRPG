@@ -27,12 +27,20 @@ import { modalScrollableBodyClassName, modalViewportClassName } from "@/layout/M
 import type { computeJutsuLoadoutPreview } from "@/libs/jutsu";
 import { exportJutsuLoadout } from "@/libs/loadout";
 import { fedJutsuLoadouts } from "@/utils/paypal";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import { LOADOUT_SHARE_MAX_LENGTH } from "@/validators/loadout";
 
 /** Connect sharing controls to authenticated tRPC and refresh slots/equipment after import. */
 export const JutsuLoadoutSharing = (props: SharingControls) => {
-  const { data: user, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: user,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
+    jutsuLoadout: u.jutsuLoadout,
+    staffAccount: u.staffAccount,
+    federalStatus: u.federalStatus,
+  }));
   const utils = api.useUtils();
   const loadouts = api.jutsu.getLoadouts.useQuery(undefined, {
     enabled: !!user && fedJutsuLoadouts(user) > 0,

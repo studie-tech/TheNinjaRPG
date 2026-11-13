@@ -30,7 +30,7 @@ import { getActiveRewardNodes } from "@/libs/rewardNodes";
 import { showFormErrorsToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
 import { canAwardReputation, isStaffRole } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   MAX_REWARD_PACKAGES,
   QuestReward,
@@ -58,7 +58,7 @@ export const RewardEditor = ({
   isObjectiveReward?: boolean;
   hideFields?: string[];
 }) => {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({ role: u.role }));
   const {
     data: catalog,
     isError,
@@ -367,7 +367,7 @@ export const RewardEditor = ({
 export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
   const { idx, reward, rewards, setRewards, hideFields = [] } = props;
 
-  const { data: rewardUser } = useUserData();
+  const { data: rewardUser } = useUserDataSelector((u) => ({ role: u.role }));
   // Parse reward with schema
   const parsedReward = ObjectiveReward.safeParse(reward);
   const shownReward = parsedReward.success ? parsedReward.data : reward;

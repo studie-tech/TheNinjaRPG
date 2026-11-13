@@ -43,7 +43,7 @@ import { canEditClans } from "@/utils/permissions";
 import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
-import { useRequiredUserData, useUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector, useUserInfo } from "@/utils/UserContext";
 import { type ClanSearchSchema, getClanSearchSchema } from "@/validators/clan";
 
 interface ClanBattlesProps {
@@ -60,8 +60,15 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     timeDiff,
     updateUser,
     prepareUserUpdate,
-  } = useRequiredUserData();
-  const { pusher } = useUserData();
+  } = useRequiredUserDataSelector((u) => ({
+    clanId: u.clanId,
+    isOutlaw: u.isOutlaw,
+    role: u.role,
+    userId: u.userId,
+    status: u.status,
+    autoWakeUp: u.autoWakeUp,
+  }));
+  const { pusher } = useUserInfo();
   const groupLabel = userData?.isOutlaw ? "Faction" : "Clan";
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
   const [deletingBattleId, setDeletingBattleId] = useState<string | null>(null);

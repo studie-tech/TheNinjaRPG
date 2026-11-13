@@ -31,7 +31,7 @@ import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import { canPostAsAi, getMessagingRestriction } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import {
   type CreateConversationSchema,
   createConversationSchema,
@@ -57,7 +57,12 @@ export interface NewConversationPromptProps {
 }
 
 export const NewConversationPrompt: React.FC<NewConversationPromptProps> = (props) => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    role: u.role,
+    isBanned: u.isBanned,
+    isSilenced: u.isSilenced,
+    level: u.level,
+  }));
   const { refreshConversationList } = useConversationCacheUpdate();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(
     props.defaultOpen ?? false,

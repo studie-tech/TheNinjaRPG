@@ -10,7 +10,7 @@ import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Historical AI Avatar Change
@@ -29,7 +29,11 @@ interface HistoricalAiAvatarProps {
 export const HistoricalAiAvatar: React.FC<HistoricalAiAvatarProps> = (props) => {
   // Queries & mutations
   const [lastElement, setLastElement] = useState<HTMLButtonElement | null>(null);
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({ username: u.username }));
   const { size = "square" } = props;
   const disabledRef = useRef(Boolean(props.disabled));
   const operationGenerationRef = useRef(props.operationGeneration ?? 0);

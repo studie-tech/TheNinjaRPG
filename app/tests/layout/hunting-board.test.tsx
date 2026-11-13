@@ -15,6 +15,7 @@ import { pushToCombat } from "@/utils/routing";
 import * as UserContext from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { huntingContract, huntingHabitatContent } from "../setup/hunting";
+import { mockUserContextValue } from "../setup/userContext";
 
 const now = new Date();
 const session = {
@@ -131,14 +132,11 @@ beforeEach(() => {
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
   updateUser.mockClear();
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ updateUser } as never);
   // Count this test's feedback independently of Bun's retained module mocks.
   vi.spyOn(toast, "showMutationToast")
     .mockImplementation(() => undefined)
     .mockClear();
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
-    () => ({ data: user }) as never,
-  );
+  mockUserContextValue(() => ({ data: user, updateUser }));
   vi.spyOn(ContentBox, "default").mockImplementation(
     ({ children }: { children: ReactNode }) => <div>{children}</div>,
   );

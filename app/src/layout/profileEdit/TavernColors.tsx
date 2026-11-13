@@ -13,11 +13,21 @@ import {
   TAVERN_COLOR_STYLES,
 } from "@/libs/tavernColors";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** Preset-only tavern styling controls. Username and title are separate purchases. */
 export const TavernColors: React.FC = () => {
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
+    displayTitle: u.displayTitle,
+    reputationPoints: u.reputationPoints,
+    tavernTitleColor: u.tavernTitleColor,
+    tavernUsernameColor: u.tavernUsernameColor,
+    username: u.username,
+  }));
   const [usernameColor, setUsernameColor] = useState<TavernColorPreset>(
     userData?.tavernUsernameColor ?? "DEFAULT",
   );

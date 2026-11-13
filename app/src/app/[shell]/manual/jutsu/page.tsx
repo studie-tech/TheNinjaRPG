@@ -18,11 +18,11 @@ import Link from "@/layout/Link";
 import ListLoader from "@/layout/ListLoader";
 import { useInfinitePagination } from "@/libs/pagination";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualJutsus() {
   // Settings
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // Two-level filtering

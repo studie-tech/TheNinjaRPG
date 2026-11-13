@@ -5,11 +5,18 @@ import { Button } from "@/components/ui/button";
 import Loader from "@/layout/Loader";
 import { describeTitleEffect } from "@/libs/titles";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** Choose the public label from profile-loaded titles while all collected bonuses stay active. */
 export const Titles = () => {
-  const { data: user, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: user,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
+    activeTitleId: u.activeTitleId,
+    titles: u.titles,
+  }));
   const data = user?.titles ?? [];
   const utils = api.useUtils();
   const select = api.title.select.useMutation({

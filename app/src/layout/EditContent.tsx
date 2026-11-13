@@ -65,7 +65,7 @@ import { calculateContentDiff } from "@/utils/diff";
 import { canAwardReputation } from "@/utils/permissions";
 import { humanizeIdentifier } from "@/utils/string";
 import { objectKeys } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import { showUploadError, UploadButton } from "@/utils/uploadthing";
 import type { ZodAllTags } from "@/validators/combat";
 import {
@@ -1437,7 +1437,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   const { tag, idx, effects, setEffects } = props;
 
   // Get user data for permission checks
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const userRole = userData?.role ?? "USER";
   const hasReputationPermission = canAwardReputation(userRole);
 

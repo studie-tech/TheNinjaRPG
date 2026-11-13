@@ -13,7 +13,7 @@ import {
   chatPanelAtom,
   chatTavernActivityAtom,
 } from "@/libs/chatPanel";
-import * as context from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 beforeEach(() => {
   getDefaultStore().set(chatPanelAtom, { owner: "panel", tab: "tavern" });
@@ -38,7 +38,7 @@ it("reconciles cleared inbox news when the phone chat list loads", () => {
     { href: "/inbox", name: "2 messages", notificationCount: 2 },
     { href: "/news", name: "News" },
   ];
-  vi.spyOn(context, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: {
       userId: "reader",
       tutorialOn: true,
@@ -73,7 +73,7 @@ it("reconciles cleared inbox news when the phone chat list loads", () => {
 it("shows new tavern messages per tavern on the phone chat list", () => {
   getDefaultStore().set(chatTavernActivityAtom, { global: 3, akikaze: 2 });
   getDefaultStore().set(chatMentionsAtom, { global: 1 });
-  vi.spyOn(context, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: {
       userId: "reader",
       tutorialOn: true,

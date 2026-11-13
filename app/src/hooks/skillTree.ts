@@ -7,7 +7,7 @@ import { useContentSubmit } from "@/hooks/contentSubmit";
 import type { FormEntry } from "@/layout/EditContent";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canAccessHiddenSkillTree } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import type {
   ZodAllTags,
   ZodSkillTreeInput,
@@ -32,7 +32,7 @@ export const useSkillTreeCatalogInvalidation = () => {
 export const useSkillTreeEditForm = (data: SkillTree, refetch: () => void) => {
   // Get utils
   const invalidateSkillTreeCatalog = useSkillTreeCatalogInvalidation();
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({ role: u.role }));
 
   const skillTree = { ...data };
 

@@ -8,11 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Embed an existing public community poll; shared votes still require this topic's voting permission. */
 export function ForumPoll({ threadId }: { threadId: string }) {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => u.userId);
   const poll = api.forum.threadPoll.useQuery({ threadId }, { refetchInterval: 20000 });
   const utils = api.useUtils();
   const [error, setError] = useState("");

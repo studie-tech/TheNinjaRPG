@@ -10,6 +10,7 @@ import {
   INITIATIVE_TERRITORY_BONUS,
 } from "@/libs/combat/constants";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 beforeEach(() => {
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
@@ -21,7 +22,7 @@ beforeEach(() => {
   vi.spyOn(BattleLengthHistogram, "BattleLengthHistogram").mockImplementation(
     () => null,
   );
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: undefined } as never);
+  mockUserContextValue({ data: undefined } as never);
 });
 
 afterEach(() => {

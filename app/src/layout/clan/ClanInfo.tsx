@@ -73,7 +73,7 @@ import { hasRequiredRank } from "@/libs/rank";
 import { showMutationToast } from "@/libs/toast";
 import type { ClanRouter } from "@/routers/clan";
 import { canEditClans } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector, useRequiredUserInfo } from "@/utils/UserContext";
 import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
 import {
   createMoneyTransferSchema,
@@ -95,7 +95,19 @@ interface ClanInfoProps {
 /** Clan overview card with leadership actions. */
 export const ClanInfo: React.FC<ClanInfoProps> = (props) => {
   // Destructure
-  const { data: userData, updateUser, prepareUserUpdate } = useRequiredUserData();
+  const {
+    data: userData,
+    updateUser,
+    prepareUserUpdate,
+  } = useRequiredUserDataSelector((u) => ({
+    clanId: u.clanId,
+    isOutlaw: u.isOutlaw,
+    money: u.money,
+    reputationPoints: u.reputationPoints,
+    role: u.role,
+    userId: u.userId,
+    village: u.village,
+  }));
   const { clanData, defaultBackHref } = props;
   const clanId = clanData.id;
   const groupLabel = userData?.isOutlaw ? "Faction" : "Clan";
@@ -1344,7 +1356,7 @@ const BoostRow: React.FC<BoostRowProps> = ({
 
 /** Confirm a clan-bank conversion and keep expected rejections visible for retry. */
 function ClanPointConversion({ clanId, points }: { clanId: string; points: number }) {
-  const { updateUser, prepareUserUpdate } = useRequiredUserData();
+  const { updateUser, prepareUserUpdate } = useRequiredUserInfo();
   const [isOpen, setIsOpen] = useState(false);
   const [amount, setAmount] = useState(1);
   const [error, setError] = useState("");

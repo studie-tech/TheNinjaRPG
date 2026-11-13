@@ -20,7 +20,7 @@ import {
   canEnableGlobalTavern,
   canUnequipAllUsers,
 } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 
 /**
  * Site Management Functionality
@@ -37,7 +37,7 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
 
   // Utility
   const utils = api.useUtils();
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
 
   // Global tavern toggle
   const { data: globalTavernEnabled = true } =

@@ -32,6 +32,7 @@ import type { UserDeltaResponse } from "@/validators/userCache";
 import { defaultWarRules } from "@/validators/war";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { testRouter } from "../setup/router";
+import { mockUserContextValue } from "../setup/userContext";
 import { controllableMutation, stubSelect } from "./helpers/warUi";
 
 type ObjectiveInfo = NonNullable<RouterOutputs["war"]["getObjectiveWarInfo"]>;
@@ -247,7 +248,7 @@ beforeEach(() => {
     profile: { searchUsers: { useQuery: () => ({ data: [] }) } },
     combat: { startShrineBattle: attack },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () => ({ data: user, timeDiff, updateUser, prepareUserUpdate: () => 7 }) as never,
   );
   vi.spyOn(UserContext, "useUserDataSelector").mockImplementation(

@@ -5,14 +5,14 @@ import { api } from "@/app/_trpc/client";
 import Loader from "@/layout/Loader";
 import NindoChange from "@/layout/NindoChange";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Nindo change component
  */
 export const OwnNindoChange: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({ userId: u.userId }));
   const utils = api.useUtils();
 
   // Mutations

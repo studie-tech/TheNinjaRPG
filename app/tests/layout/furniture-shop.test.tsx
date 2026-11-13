@@ -58,7 +58,7 @@ import Shop from "@/layout/Shop";
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 const user = {
   level: 50,
@@ -95,7 +95,7 @@ beforeEach(() => {
       },
     },
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     prepareUserUpdate: vi.fn(),
     updateUser,
   } as never);

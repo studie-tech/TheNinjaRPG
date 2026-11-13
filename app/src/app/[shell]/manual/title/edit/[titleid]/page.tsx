@@ -15,7 +15,7 @@ import Loader from "@/layout/Loader";
 import { SuggestChange } from "@/layout/SuggestChange";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import { type TitleData, TitleValidator } from "@/validators/title";
 
 /** Load an authorized catalog record before mounting its editable form. */
@@ -25,7 +25,7 @@ export default function TitleEdit({
   params: Promise<{ titleid: string }>;
 }) {
   const { titleid } = use(params);
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((profile) => ({ role: profile.role }));
   const canEdit = !!user && canChangeContent(user.role);
   const { data, isPending, isError, refetch } = api.title.get.useQuery(
     { id: titleid },

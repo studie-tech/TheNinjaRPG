@@ -11,14 +11,14 @@ import {
 } from "@/libs/profileDashboard";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 import { moveItem } from "@/utils/array";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 
 export function DashboardSettings({
   userData,
 }: {
   userData: NonNullable<UserWithRelations>;
 }) {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const [priority, setPriority] = useState(() =>
     getDashboardContentPriority(userData.dashboardContentPriority),
   );

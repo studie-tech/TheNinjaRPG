@@ -5,12 +5,12 @@ import type { UserItemWithRelations } from "@/drizzle/schema";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import type { ItemsToolbar as ItemsToolbarComponent } from "@/layout/items/ItemsToolbar";
 import * as mergeAll from "@/layout/MergeAllStacksButton";
-import * as userContext from "@/utils/UserContext";
 import {
   flushRadixFocus,
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const mutation = () => ({ useMutation: () => ({ mutate: vi.fn(), isPending: false }) });
 let ItemsToolbar: typeof ItemsToolbarComponent;
@@ -35,7 +35,7 @@ beforeAll(async () => {
 beforeEach(() => {
   installBrowserGlobals();
   mockClient();
-  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     prepareUserUpdate: vi.fn(),
     updateUser: vi.fn(),
   } as never);

@@ -23,12 +23,13 @@ import {
 import { hasEffectGraphics, isNonBattleItem } from "@/libs/contentCompleteness";
 import { findPredecessor } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
+import type { UserWithRelations } from "@/routers/profile";
 import type { AiRelations } from "@/server/api/routers/ai";
 import type { ItemRelations } from "@/server/api/routers/item";
 import type { JutsuRelations } from "@/server/api/routers/jutsu";
 import { canChangeContent } from "@/utils/permissions";
 import type { DeepPartial } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import type {
   ZodAllTags,
   ZodBloodlineType,
@@ -108,7 +109,7 @@ export const ItemHelper: React.FC<ItemHelperProps> = (props) => {
 };
 
 export const JutsuHelper: React.FC<JutsuHelperProps> = ({ jutsu }) => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector(selectRole);
 
   // Load injector counts and references
   const jutsuId = (jutsu as { id?: string })?.id ?? "";
@@ -137,7 +138,7 @@ export const JutsuHelper: React.FC<JutsuHelperProps> = ({ jutsu }) => {
 };
 
 export const SkillTreeHelper: React.FC<SkillTreeHelperProps> = ({ skillTree }) => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector(selectRole);
 
   // Only show if user has permission
   if (!userData) return null;
@@ -162,7 +163,7 @@ export const SkillTreeHelper: React.FC<SkillTreeHelperProps> = ({ skillTree }) =
 };
 
 export const BloodlineHelper: React.FC<BloodlineHelperProps> = ({ bloodline }) => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector(selectRole);
 
   // Only show if user has permission
   if (!userData) return null;
@@ -180,7 +181,7 @@ export const BloodlineHelper: React.FC<BloodlineHelperProps> = ({ bloodline }) =
 };
 
 export const AiHelper: React.FC<AiHelperProps> = ({ ai }) => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector(selectRole);
   const aiId = ai.userId ?? "";
   const isEditor = !!userData && canChangeContent(userData.role);
 
@@ -1381,3 +1382,5 @@ interface RelationSectionProps {
 }
 
 type AiBossFight = RouterOutputs["ai"]["getBossFight"];
+
+const selectRole = (user: NonNullable<UserWithRelations>) => ({ role: user.role });

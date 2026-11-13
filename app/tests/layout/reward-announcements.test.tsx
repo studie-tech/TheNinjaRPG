@@ -5,9 +5,9 @@ import * as ContentBox from "@/layout/ContentBox";
 import RaidBrowser from "@/layout/RaidBrowser";
 import { UnclaimedSeasonRewards } from "@/layout/UnclaimedSeasonRewards";
 import * as toast from "@/libs/toast";
-import * as UserContext from "@/utils/UserContext";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
 import type { UserDeltaResponse } from "@/validators/userCache";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Success = (
   result: UserDeltaResponse,
@@ -31,7 +31,7 @@ beforeEach(() => {
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
     <div>{children}</div>
   ));
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "actor" },
     prepareUserUpdate: () => undefined,
     updateUser,

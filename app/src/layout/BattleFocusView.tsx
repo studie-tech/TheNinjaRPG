@@ -21,7 +21,7 @@ import StatusBar from "@/layout/StatusBar";
 import { VisualizeEffects } from "@/layout/VisualizeEffects";
 import type { BattleState, ReturnedUserState } from "@/libs/combat/types";
 import { cn } from "@/libs/shadui";
-import { combatPresentedBattleAtom, useUserData } from "@/utils/UserContext";
+import { combatPresentedBattleAtom, useUserInfo } from "@/utils/UserContext";
 
 /**
  * Inset battle dialog with fighters, actions and history above the game layout.
@@ -363,7 +363,7 @@ function FighterCard({
   compact?: boolean;
   extra?: number;
 }) {
-  const { timeDiff } = useUserData();
+  const { timeDiff } = useUserInfo();
   const pools = useEffectivePools({
     battleUser: user,
     usersEffects: battle?.usersEffects,

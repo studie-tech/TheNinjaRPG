@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import CombatHistory from "@/layout/CombatHistory";
 import * as elementImage from "@/layout/ElementImage";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 const spies: { mockRestore: () => void }[] = [];
 const entry = (
@@ -26,11 +26,9 @@ const entry = (
 const query = vi.fn();
 
 beforeEach(() => {
-  spies.push(
-    vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
-      data: { userId: "player", role: "USER", showBattleDescription: true },
-    } as never),
-  );
+  mockUserContextValue({
+    data: { userId: "player", role: "USER", showBattleDescription: true },
+  });
   spies.push(
     vi
       .spyOn(elementImage, "default")
@@ -77,6 +75,7 @@ afterEach(() => {
   cleanup();
   query.mockClear();
   for (const spy of spies.splice(0)) spy.mockRestore();
+  vi.restoreAllMocks();
 });
 
 it("renders rounds newest first, with placeholders, separators and highlighted stat words", () => {

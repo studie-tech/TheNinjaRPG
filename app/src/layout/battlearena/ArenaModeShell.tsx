@@ -10,13 +10,17 @@ import {
   type ArenaMode,
   sparExamProgress,
 } from "@/libs/battleArena";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Tabs for all five arena modes and the spar exam reminder. The page title owns back navigation.
  */
 export function ArenaModeShell({ mode, onSelect, children }: ArenaModeShellProps) {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    userQuests: u.userQuests,
+    questData: u.questData,
+  }));
   const { data: challenges } = api.sparring.getUserChallenges.useQuery(undefined, {
     staleTime: 5000,
     enabled: !!userData,

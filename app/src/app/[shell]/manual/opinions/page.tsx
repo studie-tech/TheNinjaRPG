@@ -14,13 +14,15 @@ import RichInput from "@/layout/RichInput";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { humanizeConstant } from "@/utils/string";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import { type UserReviewSchema, userReviewSchema } from "@/validators/reports";
 
 /** Let players submit staff reviews and inspect their existing submissions. */
 export default function ManualOpinions() {
   // User state
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({
+    userId: profile.userId,
+  }));
 
   // Users Query
   const { data, isPending: isLoadingUsers } = api.profile.getPublicUsers.useQuery(

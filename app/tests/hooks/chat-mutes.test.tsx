@@ -13,6 +13,7 @@ import * as toast from "@/libs/toast";
 import { mergeQueryChanges } from "@/utils/queryCache";
 import * as userContext from "@/utils/UserContext";
 import { TrpcTestProviders, testApi } from "../setup/trpc";
+import { mockUserContextValue } from "../setup/userContext";
 
 type PreferenceResponse = {
   success: boolean;
@@ -54,9 +55,7 @@ function setup(
     data = { ...data, ...next };
   });
   const prepareUserUpdate = vi.fn(() => 7);
-  vi.spyOn(userContext, "useUserData").mockImplementation(
-    () => ({ data, prepareUserUpdate, updateUser }) as never,
-  );
+  mockUserContextValue(() => ({ data, prepareUserUpdate, updateUser }) as never);
   const feedback = vi.spyOn(toast, "showMutationToast").mockImplementation(() => {});
   const queryClient = new QueryClient({
     mutationCache: new MutationCache({

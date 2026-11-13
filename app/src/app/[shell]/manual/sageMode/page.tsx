@@ -11,11 +11,11 @@ import ListLoader from "@/layout/ListLoader";
 import SageModeFiltering, { getFilter, useFiltering } from "@/layout/SageModeFiltering";
 import { useInfinitePagination } from "@/libs/pagination";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Public catalog of sage modes, with staff create/delete on the list. */
 export default function ManualSageModes() {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const state = useFiltering();
   const {

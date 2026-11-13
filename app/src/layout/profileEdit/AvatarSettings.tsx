@@ -15,7 +15,7 @@ import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
 
 /** Group avatar generation, history, and uploads without mounting inactive panels. */
@@ -56,7 +56,17 @@ export function AvatarSettings() {
 /** Generate a paid avatar and apply the server's authoritative cache update. */
 const NewAiAvatar: React.FC = () => {
   // Queries & mutations
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
+    avatar: u.avatar,
+    rank: u.rank,
+    reputationPoints: u.reputationPoints,
+    userId: u.userId,
+    username: u.username,
+  }));
 
   // tRPC utility
   const utils = api.useUtils();
@@ -150,7 +160,16 @@ const NewAiAvatar: React.FC = () => {
  */
 const AvatarChange: React.FC = () => {
   // State
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
+    avatar: u.avatar,
+    userId: u.userId,
+    staffAccount: u.staffAccount,
+    federalStatus: u.federalStatus,
+  }));
   const uploadRevision = useRef<number | undefined>(undefined);
 
   // Only show if we have userData

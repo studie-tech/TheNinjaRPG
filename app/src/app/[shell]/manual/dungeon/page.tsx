@@ -46,7 +46,7 @@ import { getRewardPreview } from "@/libs/objectives";
 import { showMutationToast, showUndoToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { formatLocalDateTimeInput } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   type DungeonContent,
   type DungeonFloor,
@@ -56,7 +56,7 @@ import {
 
 /** Players browse published dungeons; content editors retain the authoring tools. */
 export default function DungeonManual() {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({ role: u.role }));
   const [isPlayerView, setIsPlayerView] = useState(false);
   if (!user) return <Loader explanation="Loading dungeons" />;
   if (!canChangeContent(user.role)) return <DungeonCatalogue />;
@@ -91,7 +91,7 @@ export default function DungeonManual() {
 
 /** Edit encounters, entry requirements and rewards using the shared server validator. */
 function DungeonEditor() {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({ role: u.role }));
   const utils = api.useUtils();
   const allowed = !!user && canChangeContent(user.role);
   const [id, setId] = useState<string>();

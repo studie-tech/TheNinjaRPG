@@ -7,6 +7,7 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as Report from "@/layout/Report";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const finalize = vi.fn();
 const statusQueries: { id: string; enabled: boolean }[] = [];
@@ -47,7 +48,7 @@ beforeEach(() => {
   finalize.mockClear();
   statusQueries.length = 0;
   vi.spyOn(navigation, "useRouter").mockReturnValue({ replace: vi.fn() } as never);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: undefined } as never);
+  mockUserContextValue({ data: undefined } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
     <div>{children}</div>
   ));

@@ -15,7 +15,7 @@ import Table from "@/layout/Table";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { canDeleteStaffApplication, isStaffRole } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 type ApplicationRow = {
   id: string;
@@ -29,7 +29,7 @@ type ApplicationRow = {
 };
 
 export default function ApplicationsPage() {
-  const { data: me } = useUserData();
+  const { data: me } = useUserDataSelector((profile) => ({ role: profile.role }));
   const isStaff = me?.role ? isStaffRole(me.role) : false;
   const canDelete = !!me && canDeleteStaffApplication(me.role);
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);

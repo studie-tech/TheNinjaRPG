@@ -8,10 +8,10 @@ import {
 import ContentBox from "@/layout/ContentBox";
 import { ImageLinkGrid } from "@/layout/ImageLinkGrid";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function TowerDefenseManual() {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
   const role = userData?.role ?? "USER";
   const canEditContent = canChangeContent(role);
 

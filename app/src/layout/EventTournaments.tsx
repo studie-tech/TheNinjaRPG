@@ -23,7 +23,7 @@ import { showMutationToast } from "@/libs/toast";
 import { currentEventRound } from "@/libs/tournament/events";
 import { canManageTournaments } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
-import { useUserData, useUserInfo } from "@/utils/UserContext";
+import { useUserDataSelector, useUserInfo } from "@/utils/UserContext";
 import type { EventGame, EventTournamentState } from "@/validators/tournament";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
@@ -46,7 +46,14 @@ export const EventTournaments = ({
   tournamentId?: string;
   staff?: boolean;
 }) => {
-  const { data: user, status: userStatus, isSignedIn } = useUserData();
+  const {
+    data: user,
+    status: userStatus,
+    isSignedIn,
+  } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    role: u.role,
+  }));
   const reconcile = useEventActionCache();
   const [editing, setEditing] = useState(false);
   const canManage = canManageTournaments(user?.role ?? "USER");
@@ -824,7 +831,7 @@ const date = (value: number) => new Date(value).toLocaleString();
 
 /** Reconcile synchronized launches, rewards and participation through the profile query. */
 const useEventActionCache = () => {
-  const { pusher, prepareUserUpdate, updateUser } = useUserData();
+  const { pusher, prepareUserUpdate, updateUser } = useUserInfo();
   const utils = api.useUtils();
   const { refreshEventTournamentNotices } = useEventTournamentNoticeCache();
   return {

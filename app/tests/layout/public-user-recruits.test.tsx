@@ -6,7 +6,7 @@ import * as Modal from "@/layout/Modal";
 import { RecruitedUsersTab } from "@/layout/publicUser/RecruitedUsersTab";
 import * as UserAvatarTile from "@/layout/UserAvatarTile";
 import * as toast from "@/libs/toast";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 const remove = vi.fn(async () => ({ success: true, message: "Removed" }));
 const invalidate = vi.fn(async () => undefined);
@@ -27,9 +27,7 @@ beforeEach(() => {
     }),
     staff: { deleteReferral: { useMutation: () => ({ mutateAsync: remove }) } },
   });
-  vi.spyOn(UserContext, "useUserData").mockImplementation(
-    () => ({ data: { role: "OWNER" } }) as never,
-  );
+  mockUserContextValue(() => ({ data: { role: "OWNER" } }) as never);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
     <div>{children}</div>

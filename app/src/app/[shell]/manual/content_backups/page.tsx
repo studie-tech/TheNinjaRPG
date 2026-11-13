@@ -9,11 +9,11 @@ import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { showMutationToast } from "@/libs/toast";
 import { canControlBackups } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualBackupPage() {
   // State
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const hasAccess = canControlBackups(userData?.role ?? "USER");
 
   // tRPC utils

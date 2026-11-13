@@ -12,6 +12,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../setup/browserGlobals";
+import { mockUserContextValue } from "../setup/userContext";
 
 let level: number;
 
@@ -19,7 +20,7 @@ beforeEach(() => {
   level = MESSAGING_MIN_LEVEL;
   installBrowserGlobals();
   vi.spyOn(media, "useMediaQuery").mockReturnValue(true);
-  vi.spyOn(context, "useUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         data: {

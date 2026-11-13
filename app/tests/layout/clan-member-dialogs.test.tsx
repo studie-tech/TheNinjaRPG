@@ -6,7 +6,7 @@ import * as ContentBox from "@/layout/ContentBox";
 import { ClanMembers } from "@/layout/clan/ClanMembers";
 import * as Modal from "@/layout/Modal";
 import * as Table from "@/layout/Table";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 const member = (userId: string, username: string) => ({
   userId,
@@ -54,7 +54,7 @@ beforeEach(() => {
       demoteMember: mutation,
     },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         data: { userId: "leader", role: "USER", isOutlaw: false },

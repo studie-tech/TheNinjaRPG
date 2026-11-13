@@ -16,7 +16,7 @@ import Modal from "@/layout/Modal";
 import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { showMutationToast } from "@/libs/toast";
 import { canModifyUserBadges } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 // Keep statistics code and its query off the initial public-profile load.
 const BadgeStatisticsModal = dynamic(() =>
@@ -55,7 +55,7 @@ export const BadgesTab: React.FC<BadgesTabProps> = ({
   username,
   currentBadges,
 }) => {
-  const { data: currentUser } = useUserData();
+  const { data: currentUser } = useUserDataSelector((u) => ({ role: u.role }));
   const canModify = currentUser && canModifyUserBadges(currentUser.role);
   const [statisticsBadge, setStatisticsBadge] = useState<Pick<
     Badge,

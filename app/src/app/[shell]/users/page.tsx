@@ -22,11 +22,13 @@ import { useInfinitePagination } from "@/libs/pagination";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { canSeeIps } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import type { GetPublicUsersSchema } from "@/validators/user";
 
 export default function Users() {
-  const { data: userData, isClerkLoaded } = useRequiredUserData();
+  const { data: userData, isClerkLoaded } = useRequiredUserDataSelector((profile) => ({
+    role: profile.role,
+  }));
   const tabNames: TabName[] = [
     "Online",
     "Strongest",

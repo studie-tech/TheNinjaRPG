@@ -10,8 +10,9 @@ import { getSavedPetSettingsUpdate } from "@/deltas/pets";
 import type { UserCache } from "@/deltas/profile";
 import { usePetCacheUpdate } from "@/hooks/usePetCacheUpdate";
 import { useVillageMaintenanceCacheUpdate } from "@/hooks/useVillageMaintenanceCacheUpdate";
-import * as UserContext from "@/utils/UserContext";
+import type * as UserContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { mockUserContextValue } from "../setup/userContext";
 
 const api = createTRPCReact<AppRouter>();
 const clients: QueryClient[] = [];
@@ -98,7 +99,7 @@ const setup = () => {
       typeof UserContext.useUserInfo
     >["updateUser"],
   };
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         ...userCache,

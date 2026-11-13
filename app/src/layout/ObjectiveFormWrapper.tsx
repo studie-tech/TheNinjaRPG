@@ -25,7 +25,7 @@ import {
 import { calculateContentDiff } from "@/utils/diff";
 import { canAwardReputation } from "@/utils/permissions";
 import type { DeepPartial } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import type { ZodAllTags } from "@/validators/combat";
 import { getTagSchema, questBuffTypes, questDebuffTypes } from "@/validators/combat";
 import { supportsMapStructure } from "@/validators/mapLocation";
@@ -50,7 +50,7 @@ export const ObjectiveFormWrapper: React.FC<ObjectiveFormWrapperProps> = (props)
   const { idx, objective, objectives, setObjectives } = props;
 
   // Get user data for permission checks
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const userRole = userData?.role ?? "USER";
   const hasReputationPermission = canAwardReputation(userRole);
 

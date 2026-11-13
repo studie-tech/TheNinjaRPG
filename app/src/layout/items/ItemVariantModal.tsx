@@ -9,7 +9,7 @@ import Modal from "@/layout/Modal";
 import { isEquippableUserItem } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
 import { getVillageLoyaltyShopCost } from "@/libs/villageLoyalty";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import { displayCostType } from "@/validators/item";
 
 /** Browses, purchases, unlocks and selects item variants, refreshing affected inventory views. */
@@ -19,7 +19,15 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   onClose,
 }) => {
   const utils = api.useUtils();
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
+    isOutlaw: u.isOutlaw,
+    joinedVillageAt: u.joinedVillageAt,
+    villageId: u.villageId,
+  }));
   const variants = userItem.item.variants ?? [];
   const { data: itemNames } = api.item.getAllNames.useQuery(undefined, {
     enabled: variants.some((variant) => Boolean(variant.requiredItemId)),

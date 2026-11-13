@@ -36,7 +36,7 @@ import { showMutationToast } from "@/libs/toast";
 import type { ImageWithRelations } from "@/routers/conceptart";
 import { canDeleteConceptArt } from "@/utils/permissions";
 import { secondsPassed } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   image: ImageWithRelations | undefined | null;
@@ -50,7 +50,10 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 const ConceptImage: React.FC<InputProps> = (props) => {
   // Destructure props & state
   const { image, showDetails } = props;
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    role: u.role,
+  }));
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);

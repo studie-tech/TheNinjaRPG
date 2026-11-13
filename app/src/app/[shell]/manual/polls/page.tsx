@@ -48,7 +48,7 @@ import {
   canEditPolls,
 } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   type AddPollOptionSchema,
   type CreatePollSchema,
@@ -58,7 +58,10 @@ import {
 } from "@/validators/poll";
 
 export default function PollsPage() {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({
+    role: profile.role,
+    userId: profile.userId,
+  }));
   const [activeTab, setActiveTab] = useState<string>("active");
   const [selectedPollId, setSelectedPollId] = useState<string>("");
 
@@ -213,7 +216,10 @@ function PollAccordion({
   selectedPollId: string;
   setSelectedPollId: React.Dispatch<React.SetStateAction<string>>;
 }) {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({
+    role: profile.role,
+    userId: profile.userId,
+  }));
   const userCanEditPolls = userData?.role ? canEditPolls(userData.role) : false;
   const [showEditDialog, setShowEditDialog] = useState(false);
   const subtitle = `Created by ${poll.createdBy.username} • ${format(new Date(poll.createdAt), "PPP")} • ${poll.totalVotes} votes${!poll.isActive ? " • Closed" : ""}`;
@@ -283,7 +289,10 @@ function PollContent({
   const [optionType, setOptionType] = useState<PollOptionType>("text");
 
   // Get user data
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({
+    role: profile.role,
+    userId: profile.userId,
+  }));
   // Check permissions based on user role
   const userCanAddOptions = userData?.role
     ? canAddNonCustomPollOptions(userData.role)

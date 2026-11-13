@@ -25,6 +25,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type Bid = { auctionId: string; amount: number };
 const placeBid = vi.fn((_input: Bid) => new Promise<never>(() => undefined));
@@ -64,7 +65,7 @@ const listingFor = (overrides: object = {}) => ({
 });
 
 const renderDialog = (listing: object, user: object = {}, utils: object = {}) => {
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "viewer", level: 20, bank: 1000, reputationPoints: 0, ...user },
     updateUser: vi.fn(),
     timeDiff: 0,

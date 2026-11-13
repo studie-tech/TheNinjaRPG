@@ -27,6 +27,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type Result = RouterOutputs["poll"]["createPoll"];
 type CreateInput = RouterInputs["poll"]["createPoll"];
@@ -149,7 +150,7 @@ describe("poll save flows", () => {
         deletePollOption: { useMutation: noMutation },
       },
     });
-    vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    mockUserContextValue({
       data: { userId: "admin", role: "CONTENT-ADMIN" },
     } as never);
     vi.spyOn(UserSearchSelect, "default").mockImplementation(() => null);
@@ -336,7 +337,7 @@ describe("poll list", () => {
         deletePollOption: { useMutation: noMutation },
       },
     });
-    vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    mockUserContextValue({
       data: { userId: "admin", role: "CONTENT-ADMIN" },
     } as never);
     vi.spyOn(UserSearchSelect, "default").mockImplementation(() => null);
@@ -451,7 +452,7 @@ describe("poll creation form options", () => {
       },
       profile: { searchUsers: { useQuery: () => ({ data: players }) } },
     });
-    vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    mockUserContextValue({
       data: { role: "OWNER" },
     } as never);
     vi.spyOn(Avatar, "default").mockImplementation(() => null);
@@ -589,7 +590,7 @@ describe("poll user options", () => {
         },
       },
     });
-    vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    mockUserContextValue({
       data: { role: "OWNER" },
     } as never);
     vi.spyOn(UserSearchSelect, "default").mockImplementation(({ useFormMethods }) => (

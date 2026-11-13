@@ -36,7 +36,7 @@ import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 import { countBoostingShrines, getShrineBoost } from "@/utils/village";
 
 type CraftableItem = Item & {
@@ -104,7 +104,7 @@ export const CraftingCatalog: React.FC<CraftingCatalogProps> = ({
   const craftingReductionPercent = userData
     ? getActivityBonuses(userData).craftingReductionPercent
     : 0;
-  const { timeDiff = 0, prepareUserUpdate, updateUser } = useUserData();
+  const { timeDiff = 0, prepareUserUpdate, updateUser } = useUserInfo();
   const territoryWarBoost = userData
     ? getTerritoryWarBoost(userData, new Date(Date.now() - timeDiff))
     : 0;

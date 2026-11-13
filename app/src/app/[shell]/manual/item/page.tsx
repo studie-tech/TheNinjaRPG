@@ -13,11 +13,11 @@ import ListLoader from "@/layout/ListLoader";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualItems() {
   // Settings
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   const utils = api.useUtils();

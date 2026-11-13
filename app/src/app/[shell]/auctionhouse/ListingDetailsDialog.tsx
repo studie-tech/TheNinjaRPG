@@ -39,7 +39,7 @@ import Table from "@/layout/Table";
 import { finishedImbuementItems } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import {
   auctionCurrencyUnit,
   formatAuctionCurrency,
@@ -58,7 +58,16 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   setIsOpen,
 }) => {
   // User data
-  const { data: userData, updateUser, timeDiff } = useRequiredUserData();
+  const {
+    data: userData,
+    updateUser,
+    timeDiff,
+  } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    bank: u.bank,
+    level: u.level,
+    reputationPoints: u.reputationPoints,
+  }));
 
   // State
   const [bidAmount, setBidAmount] = useState("");

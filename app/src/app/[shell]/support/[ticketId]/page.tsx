@@ -42,7 +42,7 @@ import {
   isStaffRole,
 } from "@/utils/permissions";
 import { formatTimeAgo } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 type TicketUpdateAction = {
   kind: "status" | "priority" | "category" | "assignment" | "visibility" | "tag";
@@ -52,7 +52,10 @@ type TicketUpdateAction = {
 export default function TicketDetail(props: { params: Promise<{ ticketId: string }> }) {
   // State
   const params = use(props.params);
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((profile) => ({
+    role: profile.role,
+    userId: profile.userId,
+  }));
   const [refreshKey, setRefreshKey] = useState(0);
   const [newTag, setNewTag] = useState("");
 

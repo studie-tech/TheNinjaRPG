@@ -18,7 +18,7 @@ import Link from "@/layout/Link";
 import { cn } from "@/libs/shadui";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { formatTimeAgo } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Players to spar with: near your level and online by default, narrowed to your village on
@@ -29,7 +29,11 @@ export function OpponentFinder({
   challengedIds,
   isChallenging,
 }: OpponentFinderProps) {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    level: u.level,
+    userId: u.userId,
+    villageId: u.villageId,
+  }));
   const [nearLevel, setNearLevel] = useState(true);
   const [onlineNow, setOnlineNow] = useState(true);
   const [myVillage, setMyVillage] = useState(false);

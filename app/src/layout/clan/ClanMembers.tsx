@@ -16,7 +16,7 @@ import Table from "@/layout/Table";
 import { showUserRank } from "@/libs/profile";
 import { showMutationToast } from "@/libs/toast";
 import { canEditClans } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import { checkAssassin, checkCoLeader } from "@/validators/clan";
 
 interface ClanMembersProps {
@@ -28,7 +28,11 @@ interface ClanMembersProps {
 export const ClanMembers: React.FC<ClanMembersProps> = (props) => {
   // Destructure
   const { userId, clanId } = props;
-  const { data: userData, updateUser, prepareUserUpdate } = useRequiredUserData();
+  const {
+    data: userData,
+    updateUser,
+    prepareUserUpdate,
+  } = useRequiredUserDataSelector((u) => ({ isOutlaw: u.isOutlaw, role: u.role }));
   const groupLabel = userData?.isOutlaw ? "faction" : "clan";
 
   // State

@@ -22,7 +22,7 @@ import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
-import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
+import { useRequiredUserInfo, useUserInfo } from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
 type ShrineBattleData = RouterOutputs["shrine"]["getShrineBattles"][number];
@@ -43,7 +43,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
   isProtected = false,
 }) => {
   const utils = api.useUtils();
-  const { updateUser, prepareUserUpdate } = useRequiredUserData();
+  const { updateUser, prepareUserUpdate } = useRequiredUserInfo();
   const router = useRouter();
 
   // Query for shrine battles

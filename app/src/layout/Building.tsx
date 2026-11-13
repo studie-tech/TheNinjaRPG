@@ -24,7 +24,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { isFactionVillage } from "@/libs/war";
 import { canAdministrateWars } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import {
   calcBankInterest,
   calcStructureUpgrade,
@@ -38,7 +38,12 @@ const Building: React.FC<BuildingProps> = (props) => {
   const { structure, village, showBar, showUpgrade } = props;
 
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    clanId: u.clanId,
+    role: u.role,
+    kageId: u.village?.kageId,
+  }));
 
   // Calculate effective level (includes war victory bonus)
   const effectiveLevel = getEffectiveStructureLevel(structure);
@@ -76,7 +81,7 @@ const Building: React.FC<BuildingProps> = (props) => {
             {structureRewardEntries(structure)}
           </PopoverContent>
         </Popover>
-        {userData && userData?.village?.kageId === userData?.userId && showUpgrade && (
+        {userData && userData.kageId === userData.userId && showUpgrade && (
           <UpgradeButton
             structure={structure}
             village={village}
@@ -192,7 +197,9 @@ const UpgradeButton = ({
   clanId: string | null;
 }) => {
   const utils = api.useUtils();
-  const { data: userData } = useRequiredUserData();
+  const { data: clanPoints } = useRequiredUserDataSelector((u) => ({
+    points: u.clan?.points ?? 0,
+  }));
   // Faction villages spend their clan's points, like kage.upgradeStructure
   const usesClanPoints = isFactionVillage(village);
 
@@ -213,7 +220,7 @@ const UpgradeButton = ({
 
   const fundsLabel = usesClanPoints ? "clan points" : "village tokens";
   const currentFunds = usesClanPoints
-    ? (userData?.clan?.points ?? 0)
+    ? (clanPoints?.points ?? 0)
     : (data?.villageData.tokens ?? 0);
   const { cost, tax, discount, total } = calcStructureUpgrade(structure, {
     ...village,

@@ -27,7 +27,7 @@ import PublicUserComponent from "@/layout/PublicUser";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { canTakeKage } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 import {
   createPrestigeTransferSchema,
   type PrestigeTransferSchema,
@@ -40,7 +40,7 @@ export const KageHall: React.FC<{
   navTabs: React.ReactNode;
 }> = ({ user, navTabs }) => {
   // Ability to update user
-  const { updateUser } = useRequiredUserData();
+  const { updateUser } = useRequiredUserInfo();
 
   // tRPC utility
   const utils = api.useUtils();

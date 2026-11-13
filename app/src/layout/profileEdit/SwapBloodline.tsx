@@ -13,14 +13,22 @@ import { getFreeBloodlineSwaps } from "@/libs/bloodline";
 import { showMutationToast } from "@/libs/toast";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { DAY_S, secondsFromDate } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Swap bloodline
  */
 export const SwapBloodline: React.FC = () => {
   // State
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
+    reputationPoints: u.reputationPoints,
+    staffAccount: u.staffAccount,
+    federalStatus: u.federalStatus,
+  }));
   const [bloodline, setBloodline] = useState<Bloodline | undefined>(undefined);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const utils = api.useUtils();

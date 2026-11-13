@@ -7,12 +7,12 @@ import ContentBox from "@/layout/ContentBox";
 import { HomeScene } from "@/layout/HomeScene";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Display the server-authorized decoration snapshot with navigation and no owner actions. */
 export default function HomeVisitPage() {
   const params = useParams<{ userId: string }>();
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({ userId: u.userId }));
   const query = api.home.getVisitedHome.useQuery(
     { userId: params.userId },
     { enabled: !!user, staleTime: 0, retry: false },

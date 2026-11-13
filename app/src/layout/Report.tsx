@@ -12,7 +12,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import type { UserCard } from "@/queries/userColumns";
 import { parseHtml } from "@/utils/parse";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   type systems,
   type UserReportSchema,
@@ -35,7 +35,7 @@ interface ReportUserProps {
 }
 
 const ReportUser: React.FC<ReportUserProps> = (props) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ isBanned: u.isBanned }));
   const [showModal, setShowModal] = useState<boolean>(false);
   // React mutation state updates on the next render. This ref closes the same-tick
   // double-click / Enter gap before tRPC can expose `isPending`.

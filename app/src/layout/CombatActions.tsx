@@ -21,7 +21,7 @@ import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { isActionRangeLimited } from "@/libs/hexgrid";
 import { cn } from "@/libs/shadui";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import type { ZodAllTags } from "@/validators/combat";
 
 interface ActionItemProps
@@ -106,7 +106,7 @@ interface ActionSelectorProps extends ActionSelectorSettingsProps {
 }
 
 export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const { items, counts, levels, renderItem, ...settings } = props;
   const { combatMode, selectedId, currentRound, userActionPoints, onClick } = props;
   const filtered = items?.filter(

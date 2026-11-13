@@ -9,6 +9,7 @@ import * as CombatActions from "@/layout/CombatActions";
 import * as ContentBox from "@/layout/ContentBox";
 import * as UserContext from "@/utils/UserContext";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../../setup/trpc";
+import { mockUserContextValue } from "../../setup/userContext";
 
 let queryClient: QueryClient;
 let requestedPages: number[];
@@ -49,7 +50,7 @@ beforeEach(() => {
     useUtils: testApi.useUtils,
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: undefined } as never);
+  mockUserContextValue({ data: undefined } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
     <section>{children}</section>
   ));

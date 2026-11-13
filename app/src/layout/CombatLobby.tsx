@@ -12,7 +12,7 @@ import JutsuLoadoutSelector from "@/layout/JutsuLoadoutSelector";
 import Link from "@/layout/Link";
 import type { BattleState, ReturnedBattle } from "@/libs/combat/types";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData, userBattleAtom } from "@/utils/UserContext";
+import { useRequiredUserDataSelector, userBattleAtom } from "@/utils/UserContext";
 
 interface CombatLobbyProps {
   /** The rendered battle snapshot. */
@@ -50,7 +50,9 @@ export const CombatLobby: React.FC<CombatLobbyProps> = ({
   } | null>(null);
   const battleId = battle?.id;
   const setBattleAtom = useSetAtom(userBattleAtom);
-  const { data: userData, timeDiff } = useRequiredUserData();
+  const { data: userData, timeDiff } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+  }));
   const suid = userData?.userId;
 
   // Session battle user state (the human's own account — used for lobby/ready

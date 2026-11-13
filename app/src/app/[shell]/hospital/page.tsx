@@ -31,7 +31,7 @@ import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
+import { useRequiredUserInfo, useRequireInVillage } from "@/utils/UserContext";
 
 export default function Hospital() {
   // Settings
@@ -177,7 +177,7 @@ interface HealOthersComponentProps {
 export const HealOthersComponent: React.FC<HealOthersComponentProps> = (props) => {
   // Settings
   const { userData, timeDiff } = props;
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
 
   const pools = calcMedninHealablePool(userData);
   const medninRank = calcMedninRank(userData);

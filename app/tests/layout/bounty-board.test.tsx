@@ -16,6 +16,7 @@ import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 const bounty = (id: string, username: string) => ({
   id,
@@ -114,7 +115,7 @@ beforeEach(() => {
     },
   });
   updateUser.mockClear();
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({ updateUser } as never);
+  mockUserContextValue({ updateUser } as never);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
   for (const [name, stub] of Object.entries(dialogStubs)) {

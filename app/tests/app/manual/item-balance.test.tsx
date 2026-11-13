@@ -10,6 +10,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const usage = [
   { name: "Kunai", itemId: "kunai", battleWon: 1, count: 3, equippedCount: 4 },
@@ -24,7 +25,7 @@ beforeEach(() => {
     <div>{children}</div>
   ));
   vi.spyOn(ItemBalanceFiltering, "default").mockImplementation(() => null);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { role: "USER" },
   } as never);
   Object.assign(vi.spyOn(client, "api" as never), {

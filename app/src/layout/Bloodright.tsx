@@ -18,12 +18,16 @@ import { QueryError } from "@/layout/QueryError";
 import { freeResetNote } from "@/libs/skillReset";
 import { showMutationToast } from "@/libs/toast";
 import { isStaffMember } from "@/utils/permissions";
-import { useRequiredUserData, useUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector, useUserDataSelector } from "@/utils/UserContext";
 import type { userDeltaResponseSchema } from "@/validators/userCache";
 
 export const Bloodright = () => {
   const utils = api.useUtils();
-  const { data: user, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: user,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({ seichiSilver: u.seichiSilver }));
   const { data, isPending, isError, refetch } = api.bloodright.get.useQuery();
   const onSuccess = async (
     result: z.infer<typeof userDeltaResponseSchema>,
@@ -187,7 +191,13 @@ export const Bloodright = () => {
 
 export const ResetBloodright = () => {
   const utils = api.useUtils();
-  const { data: user, prepareUserUpdate, updateUser } = useUserData();
+  const {
+    data: user,
+    prepareUserUpdate,
+    updateUser,
+  } = useUserDataSelector((u) => ({
+    staffAccount: u.staffAccount,
+  }));
   const { data: info, isError, refetch } = api.skillTree.getResetInfo.useQuery();
   const reset = api.bloodright.reset.useMutation({
     onMutate: prepareUserUpdate,

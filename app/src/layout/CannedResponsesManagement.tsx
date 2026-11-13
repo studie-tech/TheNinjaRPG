@@ -15,7 +15,7 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { showMutationToast } from "@/libs/toast";
 import { canEditCannedResponses } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 interface CannedResponsesManagementProps {
   isOpen: boolean;
@@ -26,7 +26,7 @@ export default function CannedResponsesManagement({
   isOpen,
   setIsOpen,
 }: CannedResponsesManagementProps) {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingResponse, setEditingResponse] = useState<CannedResponse | null>(null);
   const [formData, setFormData] = useState({ title: "", description: "" });

@@ -10,7 +10,7 @@ import Loader from "@/layout/Loader";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 interface CurrentSageModeProps {
   sageModeId: string;
@@ -30,7 +30,11 @@ export const CurrentSageMode: React.FC<CurrentSageModeProps> = (props) => {
     achievementProgress,
     prepareUserUpdate,
     updateUser,
-  } = useRequiredUserData();
+  } = useRequiredUserDataSelector((u) => ({
+    reputationPoints: u.reputationPoints,
+    status: u.status,
+    autoWakeUp: u.autoWakeUp,
+  }));
   const utils = api.useUtils();
   const { data, isFetching } = api.sageMode.get.useQuery({ id: props.sageModeId }, {});
 

@@ -15,7 +15,7 @@ import {
 } from "@/libs/farming";
 import { cn } from "@/libs/shadui";
 import { formatHoursMinutes } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
 
 type FarmPlotInspectorProps = {
@@ -47,7 +47,7 @@ export function FarmPlotInspector({
   onHarvest,
   onBrowseSeeds,
 }: FarmPlotInspectorProps) {
-  const { timeDiff } = useRequiredUserData();
+  const { timeDiff } = useRequiredUserInfo();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [selectedSeedId, setSelectedSeedId] = useState<string | null>(null);
   const [selectedFertilizerId, setSelectedFertilizerId] = useState<string | null>(null);

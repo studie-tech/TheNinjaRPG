@@ -57,13 +57,13 @@ import { showMutationToast } from "@/libs/toast";
 import { isTutorialItemBuyStep, isTutorialPageMatch } from "@/libs/tutorial";
 import type { UserWithRelations } from "@/routers/profile";
 import { useAwake, usePublicPathname } from "@/utils/routing";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 
 const Shop: React.FC<ShopProps> = (props) => {
   const { userData, defaultType, minCost, minRepsCost, minSeichiSilverCost, catalog } =
     props;
 
-  const { prepareUserUpdate, updateUser } = useUserData();
+  const { prepareUserUpdate, updateUser } = useUserInfo();
   const silverCopy = SILVER_COPY[catalog?.silverLabel ?? "seichi"];
 
   const [isOpen, setIsOpen] = useState<boolean>(false);

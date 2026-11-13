@@ -2,10 +2,10 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, render, screen } from "@testing-library/react";
 import * as battleHotkeys from "@/hooks/useBattleHotkeys";
 import { LoadoutHotkeysPanel } from "@/layout/HotkeyControls";
-import * as userContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 beforeEach(() => {
-  vi.spyOn(userContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { role: "USER" },
   } as never);
   vi.spyOn(battleHotkeys, "useBattleHotkeys").mockReturnValue({

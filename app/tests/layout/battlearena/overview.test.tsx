@@ -5,7 +5,7 @@ import * as combatHooks from "@/hooks/combat";
 import * as loadoutNames from "@/hooks/useLoadoutNames";
 import { ArenaOverview } from "@/layout/battlearena/ArenaOverview";
 import * as setupPanel from "@/layout/battlearena/BattleSetupPanel";
-import * as userContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 let towers: unknown[] = [];
 let userQuests: unknown[] = [];
@@ -49,7 +49,7 @@ beforeEach(() => {
       getRankedQueueCount: { useQuery: () => ({ data: 4 }) },
     },
   });
-  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         data: {

@@ -13,7 +13,7 @@ import {
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 import { canViewStaffOnlyComments } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 interface SupportTicketFilteringProps {
   state: SupportTicketFilteringState;
@@ -101,7 +101,10 @@ export const getFilter = (state: SupportTicketFilteringState) =>
   buildFilter(state.cf, state.schema);
 
 export const useFiltering = () => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({
+    role: u.role,
+    userId: u.userId,
+  }));
   const isStaff = Boolean(userData?.role && canViewStaffOnlyComments(userData.role));
   const userId = userData?.userId;
   const { data } = api.profile.getPublicUsers.useQuery(

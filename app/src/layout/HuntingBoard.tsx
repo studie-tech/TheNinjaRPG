@@ -21,7 +21,7 @@ import {
 } from "@/libs/hunting/contracts";
 import { getScrollBehavior } from "@/utils/dom";
 import { pushToCombat } from "@/utils/routing";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 import type { HuntingReceipt } from "@/validators/hunting";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
@@ -42,7 +42,7 @@ export function HuntingBoard({
 }) {
   const router = useRouter();
   const utils = api.useUtils();
-  const { updateUser, prepareUserUpdate, pusher } = useUserData();
+  const { updateUser, prepareUserUpdate, pusher } = useUserInfo();
   const [habitatId, setHabitatId] = useState("");
   const [creature, setCreature] = useState("");
   const [rank, setRank] = useState("");

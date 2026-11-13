@@ -21,7 +21,7 @@ import { BattleTypes } from "@/drizzle/constants";
 import { cn } from "@/libs/shadui";
 import { canChangeContent } from "@/utils/permissions";
 import { safeSessionStorageGetItem, safeSessionStorageSetItem } from "@/utils/storage";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Generic, type-safe filtering system.
@@ -201,7 +201,7 @@ export const hiddenVisibilityField = (defaultValue?: boolean) =>
 
 /** `ContentFiltering` context telling content editors from players. */
 export const useContentEditContext = (): ContentEditContext => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   return { canEdit: Boolean(userData && canChangeContent(userData.role)) };
 };
 

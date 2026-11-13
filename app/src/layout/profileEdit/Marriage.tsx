@@ -14,7 +14,7 @@ import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import type { BaseServerResponse } from "@/server/api/trpc";
 import { useUserPicker } from "@/utils/search";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Marriage
@@ -50,7 +50,7 @@ export const Marriage: React.FC = () => {
   };
 
   // Queries & mutations
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({ userId: u.userId }));
   const { mutate: create, isPending: isCreating } =
     api.marriage.createRequest.useMutation({ onSuccess });
   const { mutate: accept, isPending: isAccepting } =

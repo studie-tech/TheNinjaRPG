@@ -33,7 +33,7 @@ import { showMutationToast } from "@/libs/toast";
 import { safeLocalStorageGetItem, safeLocalStorageSetItem } from "@/utils/storage";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { sleep } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import { storePurchaseLockSchema } from "@/validators/nativePurchases";
 
 /**
@@ -53,7 +53,15 @@ const PURCHASE_ATTEMPT_STORAGE_KEY = "tnr:unsettled-store-purchases";
  */
 export default function NativeStore() {
   const isNativeShell = useNativeShell();
-  const { data: userData, userId, prepareUserUpdate, updateUser } = useUserData();
+  const {
+    data: userData,
+    userId,
+    prepareUserUpdate,
+    updateUser,
+  } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    reputationPoints: u.reputationPoints,
+  }));
   // The profile query keeps its last result once it is disabled, so cached userData
   // outlives the session. Treating it as the current player would leave the store up and
   // buyable after a sign-out has already logged RevenueCat out, and the purchase would

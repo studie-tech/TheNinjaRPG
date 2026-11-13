@@ -5,10 +5,11 @@ import * as client from "@/app/_trpc/client";
 import { AuctionListing } from "@/app/[shell]/auctionhouse/Listings";
 import * as pagination from "@/libs/pagination";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 beforeEach(() => {
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "viewer" },
     timeDiff: 0,
   } as never);

@@ -5,11 +5,13 @@ import {
   getStructureMaintenanceOwnerPatch,
 } from "@/deltas/kage";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** Reconcile an exact paid maintenance bill in the initiating village and profile caches. */
 export const useVillageMaintenanceCacheUpdate = (villageId: string) => {
-  const { data, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { data, prepareUserUpdate, updateUser } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+  }));
   const village = useQueryCacheUpdate<RouterOutputs["village"]["get"]>(
     getQueryKey(api.village.get, { id: villageId }, "query"),
   );

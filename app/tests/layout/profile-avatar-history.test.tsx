@@ -5,7 +5,7 @@ import * as Avatar from "@/layout/Avatar";
 import { HistoricalAiAvatar } from "@/layout/HistoricalAiAvatar";
 import * as Modal from "@/layout/Modal";
 import * as pagination from "@/libs/pagination";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 let avatars: { id: number; avatar: string }[];
 let isPending: boolean;
@@ -43,7 +43,7 @@ beforeEach(() => {
       deleteAvatar: { useMutation: () => ({ mutate: remove, isPending: false }) },
     },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () => ({ data: { username: "Player" }, updateUser: vi.fn() }) as never,
   );
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);

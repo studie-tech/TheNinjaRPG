@@ -13,7 +13,7 @@ import { sparExamProgress } from "@/libs/battleArena";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** Sparring: exam progress, challenges to and from you, and players to challenge. */
 export function SparringMode() {
@@ -22,7 +22,11 @@ export function SparringMode() {
     pusher,
     prepareUserUpdate,
     updateUser,
-  } = useRequiredUserData();
+  } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    userQuests: u.userQuests,
+    questData: u.questData,
+  }));
   const utils = api.useUtils();
   const router = useRouter();
   const [useRankedRules, setUseRankedRules] = useState(false);

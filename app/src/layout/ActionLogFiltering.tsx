@@ -8,7 +8,7 @@ import {
   useContentFiltering,
 } from "@/layout/ContentFiltering";
 import { canSeeSecretData } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 interface ActionLogFilteringProps {
   state: ActionLogFilteringState;
@@ -39,7 +39,7 @@ const makeActionLogSchema = (logType: LogType = "user") =>
   });
 
 const ActionLogFiltering: React.FC<ActionLogFilteringProps> = (props) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const context = {
     canSeeUsernames: Boolean(userData && canSeeSecretData(userData.role)),
   };

@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getRewardArray } from "@/libs/objectives";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 
 export function UnclaimedSeasonRewards() {
   // Fetch unclaimed rewards for the logged-in user
   const utils = api.useUtils();
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const { data: unclaimedRewards } =
     api.pvpRank.getUnclaimedUserSeasonRewards.useQuery(undefined);
 

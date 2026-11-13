@@ -36,7 +36,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { canDeleteComment, canSeeSecretData } from "@/utils/permissions";
 import { splitQuotedReply } from "@/utils/richText";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   type DeleteCommentSchema,
   type MutateCommentSchema,
@@ -48,7 +48,11 @@ import {
  * reactions, and hover actions. Mutations stay with `CommentOnConversation`.
  */
 export function CompactComment(props: CompactCommentProps) {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    username: u.username,
+    role: u.role,
+  }));
   const [emojiOpen, setEmojiOpen] = useState(false);
   const { user, comment } = props;
   const isAuthor = !!userData && userData.userId === user.userId;

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import {
   isEndedSubscriptionStatus,
   type stripePurchaseSchema,
@@ -26,7 +26,7 @@ export const StripeCheckoutButton = ({
   disabled?: boolean;
 }) => {
   const utils = api.useUtils();
-  const { data: user } = useRequiredUserData();
+  const { data: user } = useRequiredUserDataSelector((u) => ({ userId: u.userId }));
   const { data: availability } = api.stripe.availability.useQuery();
   const [message, setMessage] = useState("");
   // A transport failure may hide a created session; retry its key instead of charging anew.
@@ -182,7 +182,7 @@ export const StripePaymentReturn = () => {
 /** Resume or cancel saved payer reservations without changing their purchase terms. */
 export const StripePendingCheckouts = () => {
   const utils = api.useUtils();
-  const { data: user } = useRequiredUserData();
+  const { data: user } = useRequiredUserDataSelector((u) => ({ userId: u.userId }));
   const pending = api.stripe.getPendingCheckouts.useQuery();
   const [message, setMessage] = useState("");
   const resume = api.stripe.createCheckout.useMutation({

@@ -13,7 +13,7 @@ import { showMutationToast } from "@/libs/toast";
 import { statTrainingBlockMessage } from "@/libs/train";
 import type { UserWithRelations } from "@/routers/profile";
 import { getQueueTotalCapacity } from "@/utils/paypal";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 
 export const EnergyTrainingQueue = ({
   user,
@@ -137,7 +137,7 @@ export const EnergyTrainingQueue = ({
 
 /** Keep account and captcha state in sync after any Energy queue edit. */
 export const useEnergyTrainingQueue = (refreshCaptcha: () => Promise<void>) => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const [error, setError] = useState<string | null>(null);
   const { mutate: saveQueue, isPending } =
     api.train.updateEnergyTrainingQueue.useMutation({

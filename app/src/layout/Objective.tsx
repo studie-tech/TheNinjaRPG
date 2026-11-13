@@ -23,7 +23,7 @@ import { collapseRewards } from "@/libs/rewards";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
 import { getCollectDeadline, hasEndDatePassed } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import type { AllObjectivesType, QuestTrackerType } from "@/validators/objectives";
 import { getObjectiveSchema } from "@/validators/objectives";
 import type { QuestRewardType } from "@/validators/rewardPackages";
@@ -47,7 +47,13 @@ export const Objective: React.FC<ObjectiveProps> = (props) => {
     timeDiff,
     prepareUserUpdate,
     updateUser,
-  } = useRequiredUserData();
+  } = useRequiredUserDataSelector((u) => ({
+    role: u.role,
+    status: u.status,
+    autoWakeUp: u.autoWakeUp,
+    battleId: u.battleId,
+    userQuests: u.userQuests,
+  }));
   const { objective, tier, tracker, titlePrefix, checkRewards } = props;
   const { image, title } = getObjectiveImage(objective);
 

@@ -64,7 +64,7 @@ import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
 import { showFormErrorsToast, showMutationToast } from "@/libs/toast";
 import { getBanOrSilenceRestriction } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import { readUploadResult, showUploadError, UploadDropzone } from "@/utils/uploadthing";
 import {
   conceptArtFilterSchema,
@@ -82,7 +82,15 @@ export default function ConceptArt() {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const [creationType, setCreationType] = useState<"image" | "video">("image");
   const [deletedImageIds, setDeletedImageIds] = useState<Set<string>>(() => new Set());
-  const { data: userData, updateUser, prepareUserUpdate } = useUserData();
+  const {
+    data: userData,
+    updateUser,
+    prepareUserUpdate,
+  } = useUserDataSelector((u) => ({
+    isBanned: u.isBanned,
+    isSilenced: u.isSilenced,
+    reputationPoints: u.reputationPoints,
+  }));
 
   // Routing
   const router = useRouter();

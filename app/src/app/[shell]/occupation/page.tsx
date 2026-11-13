@@ -33,7 +33,7 @@ import {
 } from "@/libs/occupation";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Occupation data
@@ -64,7 +64,15 @@ export default function Occupations() {
   // Utils
 
   // State
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((profile) => ({
+    occupation: profile.occupation,
+    occupationSignupAt: profile.occupationSignupAt,
+    role: profile.role,
+  }));
   const [selectedOccupation, setSelectedOccupation] = useState<OccupationType | null>(
     null,
   );

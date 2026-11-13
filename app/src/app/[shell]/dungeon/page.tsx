@@ -40,14 +40,24 @@ import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { useUserPicker } from "@/utils/search";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import type { DungeonContent, DungeonRewardReceipt } from "@/validators/dungeon";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Show entry requirements, human or companion squads, readiness and completion claims. */
 export default function DungeonPage() {
   // Reuse the account's calibrated server clock for deadlines, as other game timers do.
-  const { data: user, timeDiff, updateUser, prepareUserUpdate } = useRequiredUserData();
+  const {
+    data: user,
+    timeDiff,
+    updateUser,
+    prepareUserUpdate,
+  } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    rank: u.rank,
+    sector: u.sector,
+    petTask: u.petTask,
+  }));
   const router = useRouter();
   const [selectedPets, setSelectedPets] = useState<string[]>([]);
   const collection = api.pets.getCollection.useQuery(undefined, { enabled: !!user });

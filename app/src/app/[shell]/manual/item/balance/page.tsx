@@ -26,7 +26,7 @@ import { summarizeBattleOutcomes } from "@/libs/statistics";
 import { groupBy } from "@/utils/grouping";
 import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualItemsBalance() {
   // State
@@ -56,7 +56,7 @@ interface ItemEffectsBalanceProps {
 const ItemEffectsBalance: React.FC<ItemEffectsBalanceProps> = (props) => {
   // Two-level filtering
   const state = useItemFiltering();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
 
   // Get filter object
   const filter = getItemFilter(state);
@@ -151,7 +151,7 @@ interface ItemUsageBalanceProps {
 const ItemUsageBalance: React.FC<ItemUsageBalanceProps> = (props) => {
   // State
   const filterState = useFiltering();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
 
   // Get filter object
   const filter = getFilter(filterState);

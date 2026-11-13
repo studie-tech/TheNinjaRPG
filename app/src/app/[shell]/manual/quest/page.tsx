@@ -12,11 +12,11 @@ import ListLoader from "@/layout/ListLoader";
 import QuestFiltering, { getFilter, useFiltering } from "@/layout/QuestFiltering";
 import { useInfinitePagination } from "@/libs/pagination";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualQuests() {
   // Settings
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // Filtering

@@ -2,11 +2,12 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { ActionSelector } from "@/layout/CombatActions";
 import * as userContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
 
 beforeEach(() => {
-  vi.spyOn(userContext, "useUserData").mockReturnValue({ data: undefined } as never);
+  mockUserContextValue({ data: undefined } as never);
 });
 
 afterEach(() => {

@@ -24,6 +24,7 @@ import * as Modal from "@/layout/Modal";
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type Result = RouterOutputs["applications"]["delete"];
 type DeleteInput = RouterInputs["applications"]["delete"];
@@ -78,7 +79,7 @@ beforeEach(() => {
       ) : null,
   );
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "owner", role: "OWNER" },
   } as never);
   Object.assign(vi.spyOn(client, "api" as never), {

@@ -18,6 +18,7 @@ import {
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
 import { huntingHabitatContent } from "../../setup/hunting";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type SaveInput = RouterInputs["hunting"]["save"];
 type SaveResult = RouterOutputs["hunting"]["save"];
@@ -73,7 +74,7 @@ it("uses server-assigned contract IDs when saving the habitat draft again", asyn
       },
     },
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { role: "CONTENT-ADMIN" },
   } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(

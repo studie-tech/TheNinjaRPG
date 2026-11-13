@@ -8,7 +8,7 @@ import { getInventoryQuantities } from "@/deltas/item";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import Confirm from "@/layout/Confirm";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 
 interface MergeAllStacksButtonProps {
   storedAtHome: boolean;
@@ -25,7 +25,7 @@ export const MergeAllStacksButton: React.FC<MergeAllStacksButtonProps> = ({
   count,
   onMerged,
 }) => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
     useInventoryCacheUpdate();
 

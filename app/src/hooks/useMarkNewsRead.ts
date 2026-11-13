@@ -1,14 +1,18 @@
 import { useEffect, useRef } from "react";
 import { api } from "@/app/_trpc/client";
 import { clearNewsNotifications } from "@/deltas/forum";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Mark the news read when the player opens the news board with unread news, and drop the
  * News badge from the cached profile once the server confirms it. Runs once per mount.
  */
 export const useMarkNewsRead = () => {
-  const { data: userData, notifications, updateNotifications } = useUserData();
+  const {
+    data: userData,
+    notifications,
+    updateNotifications,
+  } = useUserDataSelector((u) => u.userId);
   const hasRequested = useRef(false);
   const { mutate: readNews } = api.forum.readNews.useMutation();
   const unreadNews =

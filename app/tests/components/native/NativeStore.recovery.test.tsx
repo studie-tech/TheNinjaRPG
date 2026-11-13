@@ -13,6 +13,7 @@ import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
 import { capacitorWindow, installCapacitor, removeCapacitor } from "../../setup/native";
 import { spyOnToasts } from "../../setup/toastMock";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type AsyncMock = ReturnType<typeof vi.fn<(...args: unknown[]) => Promise<unknown>>>;
 type SyncMock = ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
@@ -126,7 +127,7 @@ const stubModules = () => {
       },
     },
   });
-  vi.spyOn(userContext, "useUserData").mockImplementation((() => ({
+  mockUserContextValue((() => ({
     ...user,
     prepareUserUpdate: mocks.prepareUserUpdate,
     updateUser: mocks.updateUser,

@@ -2,11 +2,13 @@ import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Switch } from "@/components/ui/switch";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** Persist how awake-only actions handle a sleeping character. */
 export const ActionSettings = () => {
-  const { data: user, actionPreferences } = useRequiredUserData();
+  const { data: user, actionPreferences } = useRequiredUserDataSelector((u) => ({
+    autoWakeUp: u.autoWakeUp,
+  }));
   const [error, setError] = useState<string>();
   const { mutate, isPending } = api.profile.updatePreferences.useMutation({
     onMutate: (input) => {

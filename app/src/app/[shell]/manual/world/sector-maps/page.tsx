@@ -39,7 +39,7 @@ import { downloadSectorForTiled } from "@/libs/sector-map/tiled-download";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { parseJsonSafe } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 type PreviewResult = {
   success: boolean;
@@ -91,7 +91,11 @@ const toPreviewResult = (data: {
 function SectorMapEditorContent() {
   const utils = api.useUtils();
   const searchParams = useSearchParams();
-  const { data: userData, updateUser, prepareUserUpdate } = useUserData();
+  const {
+    data: userData,
+    updateUser,
+    prepareUserUpdate,
+  } = useUserDataSelector((profile) => ({ role: profile.role }));
   const canEdit = Boolean(userData && canChangeContent(userData.role));
   // Sector can be pre-selected via ?sector= (e.g. clicking a tile on the globe
   // in /manual/world), so editors land straight on that sector's maps.

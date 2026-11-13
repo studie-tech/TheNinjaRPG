@@ -23,7 +23,7 @@ import * as preview from "@/layout/GameAssetPreview";
 import * as Link from "@/layout/Link";
 import * as Modal from "@/layout/Modal";
 import * as toast from "@/libs/toast";
-import * as userContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Page = { data: GameAsset[]; nextCursor: number | null };
 type Result = { success: boolean; message: string };
@@ -86,7 +86,7 @@ beforeEach(() => {
   vi.spyOn(navigation, "useSearchParams").mockReturnValue(
     new URLSearchParams() as never,
   );
-  vi.spyOn(userContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { role: "CONTENT" },
   } as never);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
@@ -461,7 +461,7 @@ describe("asset overview playback", () => {
 
   it("offers inline playback in list view and keeps details as a separate action", async () => {
     pageAssets = [sound];
-    vi.spyOn(userContext, "useUserData").mockReturnValue({ data: undefined } as never);
+    mockUserContextValue({ data: undefined } as never);
     const view = overview();
     await view.findByRole("button", { name: "Play Whoosh" });
     fireEvent.click(view.getByRole("button", { name: "List view" }));

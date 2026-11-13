@@ -158,7 +158,7 @@ import { useUserPicker } from "@/utils/search";
 import { safeLocalStorageSetItem } from "@/utils/storage";
 import { capitalizeFirstLetter, formatAmount } from "@/utils/string";
 import { getTimeLeftStr } from "@/utils/time";
-import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
+import { useRequiredUserInfo, useRequireInVillage } from "@/utils/UserContext";
 import type { BaseServerResponse } from "@/validators/base";
 
 // Favorites live on the ranked loadout, whose cleanup drops jutsu ranked cannot use
@@ -284,7 +284,7 @@ interface TrainingProps {
 
 /** Component for sensei system */
 const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   // Settings
   const { userData } = props;
 
@@ -503,7 +503,7 @@ const StatsTraining: React.FC<
 > = (props) => {
   // Settings
   const { userData, timeDiff } = props;
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const kind = props.section === "Elements" ? "ELEMENT" : "MASTERY";
   const session = getMasteryTrainingState(userData, kind);
   const [energy, setEnergy] = useState<number | null>(null);
@@ -1082,7 +1082,7 @@ const StatsTraining: React.FC<
 const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Settings
   const { userData, timeDiff } = props;
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [jutsu, setJutsu] = useState<Jutsu | undefined>(undefined);
   // Successive levels of the selected jutsu to buy in one go
@@ -1628,7 +1628,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
 /** Component for covert operations training (stealth & sensory) */
 const CovertTraining: React.FC<TrainingProps> = (props) => {
   const { userData, timeDiff } = props;
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
 
   // Stealth status derived from userData
   const stealthStatus = getStealthStatus(

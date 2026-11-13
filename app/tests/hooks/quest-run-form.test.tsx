@@ -12,6 +12,7 @@ import {
   RaidObjective,
   SimpleObjective,
 } from "@/validators/objectives";
+import { mockUserContextValue } from "../setup/userContext";
 
 const tickets = [{ ids: ["ticket"], number: 2 }];
 const floor = InstantStartBattleObjective.parse({
@@ -57,7 +58,7 @@ beforeEach(() => {
       update: { useMutation: () => ({ mutateAsync: save, isPending: false }) },
     },
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { role: "OWNER" },
   } as never);
   vi.spyOn(toast, "showFormErrorsToast").mockImplementation(() => undefined);

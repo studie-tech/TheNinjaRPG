@@ -26,11 +26,19 @@ import { RankedLoadoutSelector } from "@/layout/PvpRank";
 import { rankedProgress } from "@/libs/battleArena";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** Ranked PvP: your division, the queue and the ranked loadout. */
 export function RankedMode() {
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
+    rankedLp: u.rankedLp,
+    status: u.status,
+    villagePrestige: u.villagePrestige,
+  }));
   const utils = api.useUtils();
   const { refreshRankedQueueCount } = useRankedQueueCountCache();
 

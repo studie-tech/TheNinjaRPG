@@ -10,11 +10,11 @@ import { UserInfoCell } from "@/layout/UserInfoCell";
 import { useInfinitePagination } from "@/libs/pagination";
 import { canSeeIps } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function PublicProfile(props: { params: Promise<{ ip: string }> }) {
   const params = use(props.params);
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   const {

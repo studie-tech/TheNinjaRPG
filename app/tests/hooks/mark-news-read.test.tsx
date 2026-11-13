@@ -5,6 +5,7 @@ import { clearNewsNotifications } from "@/deltas/forum";
 import { useMarkNewsRead } from "@/hooks/useMarkNewsRead";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 const news: NavBarDropdownLink = {
   href: "/news",
@@ -25,7 +26,7 @@ const setup = (notifications: NavBarDropdownLink[]) => {
       options: { onSuccess: (result: { success: boolean }) => void },
     ) => options.onSuccess({ success: true }),
   );
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "player" },
     notifications,
     updateNotifications,

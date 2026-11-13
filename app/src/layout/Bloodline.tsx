@@ -18,7 +18,8 @@ import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
 import { RepPurchaseConfirmModal } from "@/layout/RepPurchaseConfirmModal";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import type { UserWithRelations } from "@/routers/profile";
+import { useRequiredUserDataSelector, useRequiredUserInfo } from "@/utils/UserContext";
 
 /**
  * Show Current bloodline & let user remove it
@@ -32,7 +33,11 @@ interface PurchaseBloodlineProps {
  */
 export const PurchaseBloodline: React.FC<PurchaseBloodlineProps> = (props) => {
   // State
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector(selectBloodlineBuyer);
   const [bloodline, setBloodline] = useState<Bloodline | undefined>(undefined);
   const [isOpen, setIsOpen] = useState<boolean>(false);
 
@@ -158,7 +163,11 @@ interface CurrentBloodlineProps {
 
 export const CurrentBloodline: React.FC<CurrentBloodlineProps> = (props) => {
   // Get current bloodline
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector(selectBloodlineBuyer);
   const { data, isFetching } = api.bloodline.get.useQuery(
     { id: props.bloodlineId },
     {},
@@ -233,7 +242,7 @@ interface RollBloodlineProps {
   initialBreak?: boolean;
 }
 export const RollBloodline: React.FC<RollBloodlineProps> = (props) => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   // State
   const { mutate: roll, isPending: isRolling } = api.bloodline.roll.useMutation({
     onMutate: prepareUserUpdate,
@@ -286,3 +295,8 @@ export const RollBloodline: React.FC<RollBloodlineProps> = (props) => {
     </div>
   );
 };
+
+const selectBloodlineBuyer = (user: NonNullable<UserWithRelations>) => ({
+  villageId: user.villageId,
+  reputationPoints: user.reputationPoints,
+});

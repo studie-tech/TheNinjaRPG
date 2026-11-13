@@ -21,12 +21,12 @@ import ListLoader from "@/layout/ListLoader";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualBloodlineReskins() {
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const router = useRouter();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const canEdit = Boolean(userData && canChangeContent(userData.role));
   const [selectedBloodlineId, setSelectedBloodlineId] = useState<string>("");
 

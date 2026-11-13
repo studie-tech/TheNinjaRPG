@@ -32,7 +32,7 @@ import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { useInfinitePagination } from "@/libs/pagination";
 import { cn } from "@/libs/shadui";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import {
   type AuctionListingRow,
   auctionCurrencyUnit,
@@ -48,7 +48,9 @@ export const AuctionListing: React.FC<AuctionListingProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [sellerSearchTerm, setSellerSearchTerm] = useState("");
-  const { timeDiff, data: userData } = useRequiredUserData();
+  const { timeDiff, data: userData } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+  }));
 
   // State
   const [minPrice, setMinPrice] = useState("");

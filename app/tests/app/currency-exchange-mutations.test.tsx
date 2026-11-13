@@ -13,6 +13,7 @@ import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Options = {
   onMutate: unknown;
@@ -55,7 +56,7 @@ beforeEach(() => {
     prepareUserUpdate,
     updateUser,
   };
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue(userApi as never);
+  mockUserContextValue(userApi as never);
   vi.spyOn(UserContext, "useRequireInVillage").mockReturnValue(userApi as never);
   vi.spyOn(bankInterest, "usePendingBankInterest").mockReturnValue({
     data: undefined,

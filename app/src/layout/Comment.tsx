@@ -24,7 +24,7 @@ import { canDeleteComment, canSeeSecretData } from "@/utils/permissions";
 import { splitQuotedReply } from "@/utils/richText";
 import { stripHtmlPreview } from "@/utils/string";
 import { formatDateTime } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import type { DeleteCommentSchema, MutateCommentSchema } from "@/validators/comments";
 import { mutateCommentSchema } from "@/validators/comments";
 import type { systems } from "@/validators/reports";
@@ -155,7 +155,11 @@ interface BaseCommentProps extends PostProps {
   setQuoteId?: (id: string) => void;
 }
 const BaseComment: React.FC<BaseCommentProps> = (props) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    username: u.username,
+    role: u.role,
+  }));
   const [emojiOpen, setEmojiOpen] = useState(false);
 
   // Handle submit: an edit sends only the author's own text; the server keeps attached quotes

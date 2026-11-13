@@ -16,7 +16,7 @@ import { NewConversationPrompt } from "@/layout/NewConversationPrompt";
 import { UserBlacklistPopover } from "@/layout/UserBlacklistControl";
 import { isRaidChatConversationId } from "@/libs/raids";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 export default function Inbox() {
   return (
@@ -30,7 +30,10 @@ function InboxContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const linkedConversationId = searchParams.get("conversationId");
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    username: u.username,
+  }));
   const [selectedConvo, setSelectedConvo] = useState<string | null>(
     linkedConversationId,
   );
@@ -94,7 +97,10 @@ interface ShowConversationsProps {
 }
 const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
   // Get user data & destructure
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    username: u.username,
+  }));
   const { setSelectedConvo } = props;
   const [pendingConvoId, setPendingConvoId] = useState<string | null>(null);
   const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false);

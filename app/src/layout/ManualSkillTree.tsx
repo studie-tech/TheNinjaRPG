@@ -25,7 +25,7 @@ import SkillTreeFiltering, {
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { canAccessHiddenSkillTree, canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualSkillTree({
   isBloodright = false,
@@ -34,7 +34,7 @@ export default function ManualSkillTree({
 }) {
   // Settings
   const invalidateSkillTreeCatalog = useSkillTreeCatalogInvalidation();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // Filtering

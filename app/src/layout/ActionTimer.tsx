@@ -8,7 +8,7 @@ import { areBattleAllies } from "@/libs/combat/participants";
 import { calcApReduction } from "@/libs/combat/turn";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { clamp } from "@/utils/math";
-import { combatPendingActionAtom, useUserData } from "@/utils/UserContext";
+import { combatPendingActionAtom, useUserInfo } from "@/utils/UserContext";
 
 interface ActionTimerProps {
   action?: CombatAction | undefined;
@@ -24,7 +24,7 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
   const { action, user, battle, isPending } = props;
 
   // Data from the DB
-  const { timeDiff } = useUserData();
+  const { timeDiff } = useUserInfo();
   const isPageActive = usePageActive();
   const pendingAction = useAtomValue(combatPendingActionAtom);
   // The submitted action reserves its AP until the response settles the real value.

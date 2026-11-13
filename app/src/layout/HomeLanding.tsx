@@ -11,7 +11,7 @@ import Loader from "@/layout/Loader";
 import Welcome from "@/layout/Welcome";
 import { readCampaignSource, storeLandingAttribution } from "@/libs/campaignSource";
 import { nativeHomeRedirectAtom } from "@/libs/native/homeRedirect";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /**
  * HomeLanding
@@ -28,7 +28,7 @@ export const HomeLanding: React.FC = () => {
     userId,
     isSignedIn,
     isClerkLoaded,
-  } = useUserData();
+  } = useUserDataSelector((u) => u.userId);
   const setReferral = api.register.setReferralSource.useMutation();
   const utils = api.useUtils();
   const [isRetrying, setIsRetrying] = useState(false);

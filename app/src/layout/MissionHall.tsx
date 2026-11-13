@@ -50,7 +50,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 
 interface MissionHallProps {
   userData: NonNullable<UserWithRelations>;
@@ -59,7 +59,7 @@ interface MissionHallProps {
 /** Start mission and crime runs while reconciling entry costs, discovery lists and announcements. */
 export default function MissionHall({ userData }: MissionHallProps) {
   const { prepareQuestStartUpdate, updateQuestStart } = useQuestStartCacheUpdate();
-  const { prepareUserUpdate, updateUser } = useUserData();
+  const { prepareUserUpdate, updateUser } = useUserInfo();
   const activeContext = `${userData.userId}:${userData.sector}`;
   const activeUserIdRef = useRef(userData.userId);
   activeUserIdRef.current = userData.userId;

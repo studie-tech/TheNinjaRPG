@@ -55,7 +55,7 @@ import {
   getTimeLeftStr,
   isNewSlotDue,
 } from "@/utils/time";
-import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
+import { useRequiredUserInfo, useUserInfo } from "@/utils/UserContext";
 import { countBoostingShrines, getShrineBoostPercentage } from "@/utils/village";
 import type { BoostTemplateEntry } from "@/validators/shrine";
 import type { UserDeltaResponse } from "@/validators/userCache";
@@ -296,7 +296,7 @@ const OverviewTab = ({ user, isActive }: TabProps) => {
 /** Manage timed village boosts, refreshing the slot clock only while this tab is active. */
 const BoostsTab = ({ user, isActive }: TabProps) => {
   const utils = api.useUtils();
-  const { updateUser } = useRequiredUserData();
+  const { updateUser } = useRequiredUserInfo();
   const { prepareUserUpdate, updateShrineVillage } = useUpdateShrineVillage();
   const { timeDiff } = useUserInfo();
   const nowMs = useNow(60_000, { enabled: isActive }) - timeDiff;
@@ -1301,7 +1301,7 @@ const BoostTypeChecklist = ({
 );
 
 const useUpdateShrineVillage = () => {
-  const { updateUser, prepareUserUpdate } = useRequiredUserData();
+  const { updateUser, prepareUserUpdate } = useRequiredUserInfo();
   const updateShrineVillage = (
     result: UserDeltaResponse,
     revision: number | undefined,

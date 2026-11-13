@@ -49,6 +49,7 @@ import { QuestReward, type QuestRewardType } from "@/validators/rewardPackages";
 import { ObjectiveReward } from "@/validators/rewards";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { spyOnToasts } from "../setup/toastMock";
+import { mockUserContextValue } from "../setup/userContext";
 
 const save = vi.fn(async (_input: { id: string; data: { effects: ZodAllTags[] } }) => ({
   success: true,
@@ -691,16 +692,15 @@ describe("reward node editing", () => {
   it.each([undefined, "CONTENT-ADMIN"])(
     "waits for custom catalog groups before exposing saved controls (role: %s)",
     async (role) => {
-      const user = vi
-        .spyOn(UserContext, "useUserData")
-        .mockReturnValue({ data: role ? { role } : undefined } as never);
+      let profile: unknown = { data: role ? { role } : undefined };
+      mockUserContextValue(() => profile);
       try {
         rewardCatalog = undefined;
         const view = render(<SavedRewardForm optionalExperience={100} />);
         expect(view.getByText("Loading rewards")).toBeDefined();
         expect(view.queryByRole("spinbutton")).toBeNull();
         expect(view.queryByRole("combobox", { name: "Add reward node" })).toBeNull();
-        user.mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
+        profile = { data: { role: "CONTENT-ADMIN" } };
         rewardCatalog = {
           packages: [],
           nodes: [
@@ -735,7 +735,7 @@ describe("reward node editing", () => {
         ).toBe(experience);
         expect(document.activeElement).toBe(experience);
       } finally {
-        user.mockRestore();
+        vi.restoreAllMocks();
       }
     },
   );
@@ -756,9 +756,7 @@ describe("reward node editing", () => {
           ...options,
         }) as never,
     );
-    const user = vi
-      .spyOn(UserContext, "useUserData")
-      .mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
+    mockUserContextValue({ data: { role: "CONTENT-ADMIN" } });
     try {
       const view = render(
         <QueryClientProvider client={client}>
@@ -824,7 +822,7 @@ describe("reward node editing", () => {
     } finally {
       cleanup();
       query.mockRestore();
-      user.mockRestore();
+      vi.restoreAllMocks();
       client.clear();
     }
   });

@@ -456,6 +456,11 @@ export const useRequiredUserDataSelector = <T,>(
 /** Require a character for consumers that render the complete profile. */
 export const useRequiredUserData = () => useRequiredUserDataSelector((user) => user);
 
+const selectUserId = (user: NonNullable<UserWithRelations>) => user.userId;
+
+/** Require a character for consumers that only use session metadata or cache actions. */
+export const useRequiredUserInfo = () => useRequiredUserDataSelector(selectUserId);
+
 /**
  * A hook which requires the user to be in their village,
  * otherwise redirect to the profile page. Can optionally be

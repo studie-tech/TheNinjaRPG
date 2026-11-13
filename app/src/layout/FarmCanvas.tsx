@@ -6,7 +6,7 @@ import { useVisualEffects } from "@/hooks/visual-effects";
 import WebGlError from "@/layout/WebGLError";
 import { createFarmScene } from "@/libs/rendering/scenes/farm";
 import { FARM_CANVAS_MIN_HEIGHT } from "@/libs/rendering/scenes/farmLayout";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 import type { FarmEffect, FarmVisualState } from "@/validators/farming";
 
 export type FarmCanvasHandle = {
@@ -29,7 +29,7 @@ const FarmCanvasInner = ({
   onFieldClick,
   ref,
 }: FarmCanvasProps) => {
-  const { timeDiff } = useUserData();
+  const { timeDiff } = useUserInfo();
   const { visualEffects } = useVisualEffects();
   const showDayNightMapOverlays = visualEffects.dayNight;
   const mountRef = useRef<HTMLDivElement | null>(null);

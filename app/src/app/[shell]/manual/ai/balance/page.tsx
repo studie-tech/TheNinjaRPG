@@ -22,7 +22,7 @@ import { summarizeBattleOutcomes } from "@/libs/statistics";
 import { groupBy } from "@/utils/grouping";
 import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualAIsBalance() {
   // State
@@ -46,7 +46,7 @@ export default function ManualAIsBalance() {
 const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => {
   // State
   const filterState = useFiltering();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
 
   // Get filter object
   const filter = getFilter(filterState);
@@ -131,7 +131,7 @@ const AiUsageBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => 
 const AiEffectsBalance: React.FC<{ navTabs: React.ReactNode }> = ({ navTabs }) => {
   // State
   const filterState = useUserFiltering();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
 
   // Set default effect filter on mount
   useEffect(() => {

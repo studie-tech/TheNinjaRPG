@@ -4,9 +4,10 @@ import type { ReactNode } from "react";
 import * as sheet from "@/components/ui/sheet";
 import { BloodlineHelper } from "@/layout/ContentHelp";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 beforeEach(() => {
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: { role: "CONTENT-ADMIN" },
   } as never);
   vi.spyOn(sheet, "Sheet").mockImplementation((({

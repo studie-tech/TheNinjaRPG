@@ -37,7 +37,7 @@ import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { pushToCombat } from "@/utils/routing";
 import { useUserPicker } from "@/utils/search";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 import { type KageWindow, kageScheduleSchema } from "@/validators/kage";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
@@ -45,7 +45,7 @@ import type { UserDeltaResponse } from "@/validators/userCache";
 export const KageDefense = ({ user }: { user: NonNullable<UserWithRelations> }) => {
   const utils = api.useUtils();
   const router = useRouter();
-  const { pusher, prepareUserUpdate, updateUser, timeDiff } = useRequiredUserData();
+  const { pusher, prepareUserUpdate, updateUser, timeDiff } = useRequiredUserInfo();
   const [draft, setDraft] = useState<KageWindow[] | null>(null);
   const { methods: nomineeForm, user: nominee } = useUserPicker();
   const nomineeId = nominee?.userId;
