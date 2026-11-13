@@ -42,6 +42,14 @@ const render = (options?: Parameters<typeof useInboxConversations>[0], consumers
     },
   );
 
+/** A conversation list the panel read a second before the inbox news arrived. */
+const seedEarlierList = () =>
+  queryClient.setQueryData(
+    getQueryKey(testApi.comments.getUserConversations, undefined, "query"),
+    [],
+    { updatedAt: Date.now() - 1000 },
+  );
+
 beforeEach(() => {
   installBrowserGlobals();
   events.length = 0;
@@ -74,19 +82,13 @@ afterEach(() => {
 
 it("reads the conversation list again before clearing a badge that arrived after it", async () => {
   // The chat panel keeps the list it read earlier; the server counter only resets on a read.
-  queryClient.setQueryData(
-    getQueryKey(testApi.comments.getUserConversations, undefined, "query"),
-    [],
-  );
+  seedEarlierList();
   render();
   await waitFor(() => expect(events).toEqual(["list read", "badge cleared"]));
 });
 
 it("clears the badge after the read a page mount starts, without a second read", async () => {
-  queryClient.setQueryData(
-    getQueryKey(testApi.comments.getUserConversations, undefined, "query"),
-    [],
-  );
+  seedEarlierList();
   render({ staleTime: 30_000, refetchOnMount: "always" });
   await waitFor(() => expect(events).toContain("badge cleared"));
   expect(events.filter((event) => event === "list read")).toHaveLength(1);
@@ -99,10 +101,7 @@ it("leaves the list alone without inbox news", async () => {
     notifications: [],
     updateNotifications,
   } as never);
-  queryClient.setQueryData(
-    getQueryKey(testApi.comments.getUserConversations, undefined, "query"),
-    [],
-  );
+  seedEarlierList();
   const { result } = render();
   await waitFor(() => expect(result.current[0]?.data).toEqual([]));
   expect(events).toEqual([]);
@@ -111,10 +110,7 @@ it("leaves the list alone without inbox news", async () => {
 
 it("reads the list once for a badge whose read fails, leaving the badge", async () => {
   failListReads = true;
-  queryClient.setQueryData(
-    getQueryKey(testApi.comments.getUserConversations, undefined, "query"),
-    [],
-  );
+  seedEarlierList();
   render();
   await waitFor(() => expect(events).toContain("list read"));
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -137,10 +133,7 @@ it("reads the list again when more news arrives", async () => {
 });
 
 it("shares one read between views mounted together", async () => {
-  queryClient.setQueryData(
-    getQueryKey(testApi.comments.getUserConversations, undefined, "query"),
-    [],
-  );
+  seedEarlierList();
   render(undefined, 2);
   await waitFor(() => expect(events).toContain("badge cleared"));
   expect(events.filter((event) => event === "list read")).toHaveLength(1);
