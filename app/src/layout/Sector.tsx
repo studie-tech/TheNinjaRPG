@@ -379,6 +379,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const { data } = api.travel.getSectorData.useQuery(
     { sector: sector },
     {
+      // Prepare an uncached destination offscreen, then sleep until its scene is visible.
+      enabled: (query) => props.isActive || query.state.data === undefined,
       placeholderData: (previous) => previous,
       notifyOnChangeProps: ["data"],
       // Keep own vitals/appearance and all other presence reactive; own coordinates come from the scene.
@@ -393,18 +395,18 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           users: data.users?.filter((user) => user.userId !== profile?.userId),
         };
       },
-      // Presence and fights change while the tab is open; pusher events can be
-      // missed, so poll the sector snapshot on a short interval. Pause that
-      // interval while the tab is in the background.
-      refetchInterval: 10_000,
+      // Recover missed presence events only while the sector is visible.
+      refetchInterval: props.isActive ? 10_000 : false,
       // A confirmed movement patch is fresh for the same window as the presence poll.
       staleTime: 10_000,
       refetchIntervalInBackground: false,
+      refetchOnWindowFocus: props.isActive,
+      refetchOnReconnect: props.isActive,
     },
   );
   useVillageDutyPursuit({
     sector,
-    enabled: !!data?.patrolThreat && profile?.status === "AWAKE",
+    enabled: props.isActive && !!data?.patrolThreat && profile?.status === "AWAKE",
     protectors: data?.protectors ?? [],
     startedAt: data?.patrolShiftAt,
     revision: data?.patrolRevision,
@@ -445,7 +447,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     data: sectorDungeons,
     onContentUpdated: refreshDungeonEntrances,
     onContentSubscribed: recoverDungeonEntrances,
-  } = useDungeonAvailability(sector, userData?.sector === sector, timeDiff);
+  } = useDungeonAvailability(
+    sector,
+    props.isActive && userData?.sector === sector,
+    timeDiff,
+  );
   const dungeonStructures = useMemo(
     () =>
       (sectorDungeons ?? []).map((d) => ({

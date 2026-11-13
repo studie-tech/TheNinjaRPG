@@ -14,6 +14,7 @@ import {
   ContentProposalSources,
   type ContentProposalStatus,
 } from "@/drizzle/constants";
+import { useContentReviewQueue } from "@/hooks/useContentReviewQueue";
 import ContentBox from "@/layout/ContentBox";
 import { CategoryBadge, ContentReviewDetail } from "@/layout/ContentReviewDetail";
 import { ContentReviewStats } from "@/layout/ContentReviewStats";
@@ -42,15 +43,9 @@ export const ContentReviewDesk: React.FC = () => {
   const status = TAB_STATUS[tab];
   const utils = api.useUtils();
 
-  const { data: counts } = api.contentReview.getCounts.useQuery(undefined, {
-    enabled: !!userData,
-  });
-  const queue = api.contentReview.getQueue.useInfiniteQuery(
+  const { counts, queue } = useContentReviewQueue(
     { status: status ?? "PENDING", category, source, limit: 25 },
-    {
-      enabled: !!userData && !!status,
-      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    },
+    !!userData && !!status,
   );
   const bulkApprove = api.contentReview.bulkApprove.useMutation({
     onSuccess: async (data) => {
@@ -72,15 +67,6 @@ export const ContentReviewDesk: React.FC = () => {
   const outdatedOnLoad =
     queue.data?.pages.reduce((sum, page) => sum + page.outdatedCount, 0) ?? 0;
 
-  // A queue read that outdates suggestions leaves the tab counts and the sidebar badge
-  // stale; refetching the queue returns 0 for them, so this settles after one round.
-  useEffect(() => {
-    if (outdatedOnLoad === 0) return;
-    void Promise.all([
-      utils.contentReview.getCounts.invalidate(),
-      utils.profile.getUser.invalidate(),
-    ]);
-  }, [outdatedOnLoad, utils]);
   const canReview = counts?.canReview ?? false;
   const selectedIndex = items.findIndex((item) => item.id === selectedId);
 
