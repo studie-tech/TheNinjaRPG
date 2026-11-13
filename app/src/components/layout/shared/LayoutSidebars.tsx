@@ -300,6 +300,13 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
   onEventClick,
   onThemeToggle,
 }) => {
+  const iconClassName = cn(
+    "h-6 w-6 rounded-full p-1 xl:h-7 xl:w-7",
+    variant === "default"
+      ? "bg-blue-100 text-slate-700 group-hover/icon:bg-blue-300 group-hover/icon:text-black"
+      : "bg-slate-700/80 text-orange-50 group-hover/icon:bg-slate-600 group-hover/icon:text-white",
+  );
+
   return (
     <div className="flex flex-row items-center gap-1 in-data-stacked-icons:flex-col in-data-stacked-icons:gap-1.5">
       {isSignedIn && (
@@ -325,7 +332,7 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
         aria-label="Event Notifications"
         className={SIGNED_IN_ICON_TARGET}
       >
-        <Bell className={SIGNED_IN_ICON} />
+        <Bell className={iconClassName} />
       </Link>
       <Link
         href="/help"
@@ -333,7 +340,7 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
         aria-label="Bugs"
         className={SIGNED_IN_ICON_TARGET}
       >
-        <Bug className={SIGNED_IN_ICON} />
+        <Bug className={iconClassName} />
       </Link>
       <GameSettingsPopover
         userData={userData}
@@ -349,7 +356,13 @@ export const SignedInIcons: React.FC<SignedInIconsProps> = ({
           className={SIGNED_IN_ICON_TARGET}
           onClick={onThemeToggle}
         >
-          <Eclipse aria-hidden className={SIGNED_IN_ICON} />
+          <Eclipse
+            aria-hidden
+            className={cn(
+              iconClassName,
+              variant === "default" && "bg-yellow-100 dark:bg-blue-100",
+            )}
+          />
         </button>
       )}
     </div>
@@ -597,7 +610,3 @@ const UNAVAILABLE_STATUS_LABELS: Partial<Record<UserStatus, string>> = {
 /** Phone-sized hit area around each header icon; the frames' desktop bars keep it compact. */
 const SIGNED_IN_ICON_TARGET =
   "group/icon inline-flex items-center justify-center max-md:min-h-[44px] max-md:min-w-[44px]";
-
-/** The visible circle, in the dark chrome of the frames' other header controls. */
-const SIGNED_IN_ICON =
-  "h-6 w-6 rounded-full bg-slate-700/80 p-1 text-orange-50 group-hover/icon:bg-slate-600 group-hover/icon:text-white xl:h-7 xl:w-7";

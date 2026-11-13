@@ -529,6 +529,7 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
   const { audioEnabled } = useGameSettings(userData);
   const isSettingsTrigger = trigger === "settings";
   const [open, setOpen] = useState(false);
+  const activeLayout = useActiveLayout();
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -538,14 +539,14 @@ export const GameSettingsPopover: React.FC<GameSettingsProps> = ({
           aria-label={isSettingsTrigger ? "Game settings" : "Audio settings"}
           className={
             triggerClassName ??
-            "group/audio inline-flex items-center justify-center rounded-full text-orange-50 max-md:min-h-[44px] max-md:min-w-[44px]"
+            `group/audio inline-flex items-center justify-center rounded-full max-md:min-h-[44px] max-md:min-w-[44px] ${activeLayout === "default" ? "text-slate-700" : "text-orange-50"}`
           }
         >
           <span
             className={
               triggerClassName
                 ? undefined
-                : "relative inline-flex rounded-full bg-slate-700/80 group-hover/audio:bg-slate-600 group-hover/audio:text-white"
+                : `relative inline-flex rounded-full ${activeLayout === "default" ? "bg-blue-100 group-hover/audio:bg-blue-300 group-hover/audio:text-black" : "bg-slate-700/80 group-hover/audio:bg-slate-600 group-hover/audio:text-white"}`
             }
           >
             {isSettingsTrigger ? (
