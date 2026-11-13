@@ -406,15 +406,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
       {!hideImage && <div className="mx-3 hidden basis-1/3 md:block">{image}</div>}
 
       <div className={cn("basis-full text-sm", hideImage || "md:basis-2/3")}>
-        {/* Phones stack the image above the text so the text keeps the card's width. */}
-        <div className="flex flex-col sm:flex-row">
+        <div className="flex flex-row">
           {!hideImage && (
-            <div className="relative mx-auto mb-2 block w-28 shrink-0 sm:mx-0 sm:mb-0 sm:w-auto md:hidden md:basis-1/3">
-              {image}
-            </div>
+            <div className="relative block md:hidden md:basis-1/3">{image}</div>
           )}
 
-          <div className="relative flex min-w-0 basis-full flex-col sm:pl-5 md:pl-0">
+          <div className="relative flex min-w-0 basis-full flex-col pl-5 md:pl-0">
             {imageExtra && <div className="flex flex-row">{imageExtra}</div>}
             <div className="flex items-start justify-between gap-2">
               {!hideTitle ? (
@@ -566,7 +563,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
             />
           )}
           {!hideData && !isFurniture && (
-            <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-sm md:text-base">
+            <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-xs md:text-base">
               {"bloodline" in item && item.bloodline !== null && (
                 <p className="col-span-2">
                   <b>Bloodline</b>: {(item?.bloodline as Bloodline)?.name}
@@ -1504,7 +1501,7 @@ const FurnitureDetails = ({
   item: Item;
   showHidden: boolean;
 }) => (
-  <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-sm md:text-base">
+  <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-xs md:text-base">
     <p>
       <b>Item type</b>: furniture
     </p>
