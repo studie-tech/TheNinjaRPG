@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "9a26715a-631d-445f-89fd-5f9f982b9633",
+  "id": "650b64dd-d6ca-4af1-8965-9d9e28d5af62",
   "prevId": "10da2c29-d8fc-4cd9-9963-e88e320a35e8",
   "tables": {
     "AbEvent": {
@@ -994,14 +994,16 @@
           "type": "varchar(191)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": "''"
         },
         "quantity": {
           "name": "quantity",
           "type": "int unsigned",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
+          "autoincrement": false,
+          "default": 0
         },
         "listingType": {
           "name": "listingType",

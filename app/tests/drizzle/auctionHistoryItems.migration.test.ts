@@ -21,7 +21,7 @@ const migration = await readFile(
 );
 
 /** The data statements; the test database already has the migration's columns. */
-const backfill = migration.slice(migration.indexOf("-- Existing listings"));
+const backfill = migration.slice(migration.indexOf("-- The fills below"));
 
 describeWithDatabase("auction history items migration", () => {
   beforeEach(async () => {
@@ -35,12 +35,15 @@ describeWithDatabase("auction history items migration", () => {
       { id: "merging", userId: "seller", itemId: "ore", quantity: -6 },
       { id: "offered", userId: "seller", itemId: "gem", quantity: 2 },
     ]);
-    const listing = (id: string, userItemId: string) => ({
+    const listing = (
+      id: string,
+      userItemId: string,
+      filled = { itemId: "", quantity: 0 },
+    ) => ({
+      ...filled,
       id,
       sellerId: "seller",
       userItemId,
-      itemId: "",
-      quantity: 0,
       listingType: "AUCTION" as const,
       startingPrice: 1,
       currentPrice: 1,
@@ -56,6 +59,8 @@ describeWithDatabase("auction history items migration", () => {
         listing("merged", "listed"),
         listing("logged-gone", "deleted"),
         listing("early", "listed"),
+        listing("negative", "listed"),
+        listing("filled", "listed", { itemId: "gem", quantity: 7 }),
       ]);
     const created = (relatedId: string, changes: object) => ({
       id: `log-${relatedId}`,
@@ -72,6 +77,8 @@ describeWithDatabase("auction history items migration", () => {
       },
       { ...created("gone", {}), changes: "CREATE_AUCTION by an old client" },
       created("early", { itemId: "ore" }),
+      created("negative", { itemId: "ore", quantity: -3 }),
+      created("filled", { itemId: "ore", quantity: 2 }),
       {
         ...created("held", { itemId: "gem", quantity: 9 }),
         id: "log-bid",
@@ -89,6 +96,16 @@ describeWithDatabase("auction history items migration", () => {
         offeredQuantity: 2,
       },
       {
+        id: "trade-filled",
+        ownerId: "seller",
+        offerType: "TRADE",
+        requestedItemId: "gem",
+        requestedQuantity: 1,
+        offeredUserItemId: "offered",
+        offeredItemId: "ore",
+        offeredQuantity: 2,
+      },
+      {
         id: "request",
         ownerId: "seller",
         offerType: "REQUEST",
@@ -100,6 +117,8 @@ describeWithDatabase("auction history items migration", () => {
   });
 
   it("records each listing's item and quantity from its creation, else from its stack", async () => {
+    // A second run fills only rows still empty, such as listings created during the deploy.
+    await runRawSql(backfill);
     await runRawSql(backfill);
     const rows = await (await getTestDatabase())
       .select({
@@ -111,10 +130,12 @@ describeWithDatabase("auction history items migration", () => {
     expect(rows.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
       { id: "claimed", itemId: "ore", quantity: 6 },
       { id: "early", itemId: "ore", quantity: 4 },
+      { id: "filled", itemId: "gem", quantity: 7 },
       { id: "gone", itemId: "", quantity: 0 },
       { id: "held", itemId: "ore", quantity: 4 },
       { id: "logged-gone", itemId: "gem", quantity: 5 },
       { id: "merged", itemId: "ore", quantity: 2 },
+      { id: "negative", itemId: "ore", quantity: 3 },
     ]);
   });
 
@@ -126,6 +147,7 @@ describeWithDatabase("auction history items migration", () => {
     expect(rows.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
       { id: "request", offeredItemId: null },
       { id: "trade", offeredItemId: "gem" },
+      { id: "trade-filled", offeredItemId: "ore" },
     ]);
   });
 });

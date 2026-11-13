@@ -3895,9 +3895,12 @@ export const auctionListing = mysqlTable(
     sellerId: varchar("sellerId", { length: 191 }).notNull(),
     buyerId: varchar("buyerId", { length: 191 }),
     userItemId: varchar("userItemId", { length: 191 }).notNull(),
-    /** The listed item and quantity, kept for history once the stack changes hands or joins another. */
-    itemId: varchar("itemId", { length: 191 }).notNull(),
-    quantity: int("quantity", { unsigned: true }).notNull(),
+    /**
+     * The listed item and quantity, kept for history once the stack changes hands or joins
+     * another. Every listing sets them; the defaults let a build without them still insert.
+     */
+    itemId: varchar("itemId", { length: 191 }).default("").notNull(),
+    quantity: int("quantity", { unsigned: true }).default(0).notNull(),
     listingType: mysqlEnum("listingType", consts.AUCTION_LISTING_TYPES).notNull(),
     targetUserId: varchar("targetUserId", { length: 191 }),
     startingPrice: double("startingPrice").notNull(),
