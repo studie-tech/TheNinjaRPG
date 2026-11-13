@@ -1181,6 +1181,12 @@ describe("countMergeableStackTypes", () => {
     },
   );
 
+  it("counts stacks above the stack size whose total exactly fills their rows", () => {
+    expect(countMergeableStackTypes([stack(25), stack(3), stack(1)], false, now)).toBe(
+      1,
+    );
+  });
+
   it("counts an item type whose carried stacks can be packed tighter", () => {
     expect(countMergeableStackTypes([stack(4), stack(3)], false, now)).toBe(1);
     expect(countMergeableStackTypes([stack(7), stack(7)], false, now)).toBe(1);
