@@ -296,6 +296,7 @@ export const RollBloodline: React.FC<RollBloodlineProps> = (props) => {
   );
 };
 
+/** Subscribe bloodline purchase controls to village and point-balance changes. */
 const selectBloodlineBuyer = (user: NonNullable<UserWithRelations>) => ({
   villageId: user.villageId,
   reputationPoints: user.reputationPoints,

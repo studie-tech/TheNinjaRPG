@@ -88,11 +88,12 @@ export default function OccupationFarming({
     revealElement("farm-panel", "nearest");
   }, [selectedSlotIndex, isWide, isDocked]);
 
+  /** Clear the plot selection when switching to a storehouse panel. */
   const selectTab = (next: FarmTab) => {
     controller.setSelectedSlotIndex(null);
     setTab(next);
   };
-  // Shortcuts elsewhere on the farm jump to the storehouse; its own tab bar is already in view.
+  /** Bring an offscreen storehouse panel into view when opened by a farm shortcut. */
   const openTab = (next: FarmTab) => {
     selectTab(next);
     revealElement("farm-storehouse", "start");

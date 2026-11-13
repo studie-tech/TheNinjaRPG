@@ -147,6 +147,7 @@ export const moveHomeCamera = (
   const before = other ? Math.hypot(previous.x - other.x, previous.y - other.y) : 0;
   if (other && before > 0) {
     const after = Math.hypot(next.x - other.x, next.y - other.y);
+    /** Express the pinch midpoint in viewport percentages for anchored zooming. */
     const toView = (point: { x: number; y: number }) => ({
       x: (((point.x + other.x) / 2 - rect.left) / rect.width) * 100,
       y: (((point.y + other.y) / 2 - rect.top) / rect.height) * 100,

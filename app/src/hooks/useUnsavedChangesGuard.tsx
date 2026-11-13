@@ -23,10 +23,12 @@ export const useUnsavedChangesGuard = (isDirty: boolean) => {
 
   useEffect(() => {
     if (!isDirty) return;
+    /** Require browser confirmation before closing or reloading a dirty editor. */
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
+    /** Defer in-app links and toolbar-back navigation until draft discard is confirmed. */
     const onClick = (event: MouseEvent) => {
       if (isReplaying.current || event.defaultPrevented || !isPlainClick(event)) return;
       const target = event.target instanceof Element ? event.target : null;
@@ -55,12 +57,14 @@ export const useUnsavedChangesGuard = (isDirty: boolean) => {
     };
   }, [isDirty, router]);
 
+  /** Run a draft-replacing action immediately when clean, or queue it for confirmation. */
   const confirmDiscard = (action: () => void) => {
     if (isDirty) setPendingAction(() => action);
     else action();
   };
 
   const isOpen = pendingAction !== null;
+  /** Treat dialog dismissal as cancellation of the deferred action. */
   const setIsOpen = (open: SetStateAction<boolean>) => {
     const next = typeof open === "function" ? open(isOpen) : open;
     if (!next) setPendingAction(null);

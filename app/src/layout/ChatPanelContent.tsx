@@ -886,6 +886,7 @@ type InboxConversation = RouterOutputs["comments"]["getUserConversations"][numbe
 
 type PhoneChat = { kind: "tavern"; tavern: string } | { kind: "inbox" };
 
+/** Refresh the chat overview for tutorial eligibility and mute preferences only. */
 const selectChatOverviewUser = (user: NonNullable<UserWithRelations>) => ({
   tutorialOn: user.tutorialOn,
   userQuests: user.userQuests,

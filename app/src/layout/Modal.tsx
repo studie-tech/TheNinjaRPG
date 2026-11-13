@@ -17,9 +17,11 @@ import { cn } from "@/libs/shadui";
 /** How long an accepted action may take to report loading before the dialog closes. */
 const ACCEPT_START_GRACE_MS = 150;
 
+/** Bound the dialog to the viewport while allowing its middle grid row to shrink and scroll. */
 export const modalViewportClassName =
   "max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden";
 
+/** Contain body scrolling so the title and action footer stay reachable. */
 export const modalScrollableBodyClassName =
   "min-h-0 space-y-2 overflow-y-auto overscroll-contain py-4";
 
@@ -122,6 +124,7 @@ export const Modal: React.FC<ModalProps> = (props) => {
     return () => clearTimeout(timer);
   }, [awaitingSettle, isLoading, isOpen, setIsOpen]);
 
+  /** Apply Proceed validation and the caller's acceptance and loading-aware close policy. */
   const handleAccept = (
     e:
       | React.MouseEvent<HTMLButtonElement, MouseEvent>

@@ -153,6 +153,7 @@ interface ChatPanelProps {
   className?: string;
 }
 
+/** Keep panel eligibility and mute state reactive without subscribing to unrelated profile fields. */
 const selectChatPanelUser = (user: NonNullable<UserWithRelations>) => ({
   level: user.level,
   tutorialOn: user.tutorialOn,

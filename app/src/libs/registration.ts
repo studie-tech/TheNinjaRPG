@@ -70,7 +70,9 @@ export const registrationStepReadiness = (
   values: Partial<Record<RegistrationField, unknown>>,
   invalidFields: readonly string[],
 ): boolean[] => {
+  /** Require a chosen value before allowing the current registration step to advance. */
   const isFilled = (field: RegistrationField) => Boolean(values[field]);
+  /** Respect the form's validation result for each step's required fields. */
   const isValid = (field: RegistrationField) => !invalidFields.includes(field);
   const isUsernameLongEnough =
     typeof values.username === "string" && values.username.trim().length >= 2;

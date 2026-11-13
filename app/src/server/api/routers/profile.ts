@@ -666,8 +666,8 @@ export const profileRouter = createTRPCRouter({
       // Derived
       const targetName = target.username;
       // The requested state is applied as given, so a repeated tap cannot undo it.
-      // Two concurrent adds may store a duplicate row; removal clears every row for
-      // the pair, so that self-inflicted race costs nothing.
+      // Concurrent adds can duplicate this account's list entry until it is removed;
+      // deleting by both user IDs clears every duplicate.
       if (input.active) {
         if (entry) {
           return {

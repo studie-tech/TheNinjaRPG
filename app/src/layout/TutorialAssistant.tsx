@@ -1945,6 +1945,7 @@ export const trackLayout = (update: () => Element | null) => {
   let stableRuns = 0;
   const resizeObserver =
     typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => schedule());
+  /** Measure the target, follow its resize events and stop polling once its bounds settle. */
   const run = () => {
     const element = update();
     if (element !== observed) {
@@ -1961,10 +1962,12 @@ export const trackLayout = (update: () => Element | null) => {
       poll = null;
     }
   };
+  /** Restart the settling window without creating overlapping poll timers. */
   const startPoll = () => {
     stableRuns = 0;
     poll ??= setInterval(run, 250);
   };
+  /** Coalesce layout changes into one animation-frame measurement and resume fallback polling. */
   function schedule() {
     startPoll();
     frame ??= requestAnimationFrame(() => {

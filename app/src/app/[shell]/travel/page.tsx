@@ -281,9 +281,8 @@ function Travel() {
   const { data: villageData } = api.village.getAll.useQuery(undefined, {
     enabled: !!userData,
   });
-  // Sector.tsx observes this same key on a 10s refetchInterval, and the payload carries Dates,
-  // which defeat structural sharing, so reading the whole payload would re-render the page on
-  // every poll. Selecting the one string it reads keeps the poll inside the sector scene.
+  // The visible sector observes this key on a 10s interval. Selecting only the village
+  // name keeps unrelated presence changes from re-rendering the travel page.
   const { data: sectorVillageName } = api.travel.getSectorData.useQuery(
     { sector: userData?.sector ?? -1 },
     {

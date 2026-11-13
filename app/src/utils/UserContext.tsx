@@ -456,6 +456,7 @@ export const useRequiredUserDataSelector = <T,>(
 /** Require a character for consumers that render the complete profile. */
 export const useRequiredUserData = () => useRequiredUserDataSelector((user) => user);
 
+/** Keep session-only consumers subscribed to account changes rather than profile values. */
 const selectUserId = (user: NonNullable<UserWithRelations>) => user.userId;
 
 /** Require a character for consumers that only use session metadata or cache actions. */

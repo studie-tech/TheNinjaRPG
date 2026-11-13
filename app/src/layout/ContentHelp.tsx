@@ -1383,4 +1383,5 @@ interface RelationSectionProps {
 
 type AiBossFight = RouterOutputs["ai"]["getBossFight"];
 
+/** Keep helper visibility synchronized with permissions without unrelated profile renders. */
 const selectRole = (user: NonNullable<UserWithRelations>) => ({ role: user.role });

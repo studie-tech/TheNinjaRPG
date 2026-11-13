@@ -122,6 +122,7 @@ export const MassEffectEditor = <
     [],
   );
 
+  /** Keep confirmed edits as the baseline until the refreshed list includes them. */
   const baseEffectsOf = (entry: T) => committed[entry.id]?.effects ?? entry.effects;
 
   type Row = {
@@ -195,6 +196,7 @@ export const MassEffectEditor = <
     meta: { handlesTransportError: true },
   });
 
+  /** Reconcile the list without turning a confirmed write into a failed or dirty draft. */
   const refreshEntries = async () => {
     try {
       await props.onEntriesUpdated?.();

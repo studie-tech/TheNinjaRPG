@@ -114,6 +114,7 @@ const useBottomNavInset = (navRef: React.RefObject<HTMLDivElement | null>) => {
     const nav = navRef.current;
     if (!nav) return;
     const root = document.documentElement;
+    /** Include raised links in the overlay inset, and clear it when the nav is hidden. */
     const measure = () => {
       const rect = nav.getBoundingClientRect();
       if (!rect.height) {

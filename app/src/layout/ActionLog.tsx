@@ -147,6 +147,7 @@ const ContentChange: React.FC<{ change: string }> = ({ change }) => {
   );
 };
 
+/** Render one audited field, distinguishing removal from an empty value. */
 const ChangeField: React.FC<{ path: string; value: string | undefined }> = (props) => (
   <li className="break-all">
     <code className="text-muted-foreground">{props.path}</code>

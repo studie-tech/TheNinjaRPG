@@ -70,7 +70,7 @@ export default function Thread({
   const thread = comments.data?.thread;
   const board = comments.data?.board;
   const postsTopRef = useRef<HTMLDivElement>(null);
-  // Page buttons sit above and below the posts; either one opens the new page at its top.
+  /** Open either pagination control at the top of the newly selected post page. */
   const goToPage = (nextPage: number) => {
     setPage(nextPage);
     postsTopRef.current?.scrollIntoView({ block: "start" });

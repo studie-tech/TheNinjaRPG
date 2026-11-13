@@ -138,6 +138,7 @@ export default function ManualMain() {
     },
     { name: "rewards", label: "Rewards", img: IMG_MANUAL_REWARDS, visible: isStaff },
   ];
+  /** Turn a visible manual section into alphabetized tiles with canonical manual links. */
   const toTiles = (pages: ManualEntry[]) =>
     pages
       .sort((a, b) => a.label.localeCompare(b.label))

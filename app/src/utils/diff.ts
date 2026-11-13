@@ -48,6 +48,7 @@ export const parseContentChange = (change: string): ParsedContentChange | null =
   return { kind, fields };
 };
 
+/** Keep string changes readable and encode other leaf values for the field-level audit log. */
 const formatChangeValue = (value: unknown) =>
   typeof value === "string" ? value : JSON.stringify(value);
 

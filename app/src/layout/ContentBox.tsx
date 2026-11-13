@@ -30,8 +30,7 @@ const ContentBox: React.FC<ContentBoxProps> = (props) => {
 
   const router = useRouter();
 
-  // Go back only when the previous page is part of the game, which keeps a list's scroll
-  // and filters; a page opened from another site or a fresh tab goes to its parent page.
+  /** Preserve in-app history and list state; direct entries use the configured parent route. */
   const handleBack = () => {
     if (hasInAppPreviousEntry()) {
       router.back();

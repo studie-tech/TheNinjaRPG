@@ -659,6 +659,7 @@ const usePixelHeroVideoPlayback = (
       });
     };
 
+    /** Attach the deferred hero media and honor its current visibility and motion preference. */
     const attachSource = () => {
       isAttached = true;
       video.src = HERO_VIDEO_SRC;
@@ -678,6 +679,7 @@ const usePixelHeroVideoPlayback = (
     };
 
     let idleHandle: number | undefined;
+    /** Schedule hero source attachment after load, preferring idle time for media work. */
     const scheduleAttach = () => {
       idleHandle =
         typeof window.requestIdleCallback === "function"

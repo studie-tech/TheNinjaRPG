@@ -28,6 +28,7 @@ const clockFor = (intervalMs: number) => {
   const listeners = new Set<() => void>();
   let now = Date.now();
   let timer: number | undefined;
+  /** Publish one shared timestamp, then align the next wakeup to the interval boundary. */
   const tick = () => {
     now = Date.now();
     for (const listener of listeners) listener();
@@ -60,6 +61,7 @@ const clockFor = (intervalMs: number) => {
   return clock;
 };
 
+/** Let disabled consumers read the clock without keeping its ticker alive. */
 const ignoreSubscription = () => () => {};
 
 type SharedClock = {

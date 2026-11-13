@@ -278,7 +278,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   const walkAnimatingRef = useRef(false);
   const motionStepsRef = useRef(new Map<string, TravelMotionStep>());
-  /** Latest walk per remote user; a newer move ends the walk it replaces. */
+  /** Unique walk ownership survives cancellation while an earlier callback is still awaiting sleep. */
   const remoteWalksRef = useRef(new Map<string, symbol>());
   const movePendingRef = useRef(false);
   const moveTargetRef = useRef<TravelSnapshot["routeTarget"]>(null);

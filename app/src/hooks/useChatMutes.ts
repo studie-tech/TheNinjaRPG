@@ -128,6 +128,7 @@ export const useChatMutes = () => {
   };
 };
 
+/** Subscribe mute controls to account identity and preferences without unrelated profile updates. */
 const selectChatMutes = (user: NonNullable<UserWithRelations>) => ({
   userId: user.userId,
   chatMuted: user.chatMuted,

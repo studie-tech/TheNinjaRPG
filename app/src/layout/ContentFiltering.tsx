@@ -510,6 +510,7 @@ export const useContentFiltering = <
     return out;
   }, [schema.exclusions]);
 
+  /** Reset visible, applied and excluded values together so persistence records the same filter. */
   const reset = () => {
     setFieldState({
       values: initialValues,
@@ -531,12 +532,6 @@ export const useContentFiltering = <
   };
 };
 
-/**
- * Build a filter payload from debounced values and the schema.
- * - Omits empty values based on field type and optional emptyValues
- * - Applies normalizeForFilter if provided
- * - Adds exclusions if any are non-empty
- */
 /** Whether a field's value leaves the filter off, per its type and `emptyValues`. */
 const isFieldEmpty = (field: AnyFieldConfig, value: unknown) => {
   if (field.type === "multi-select") return !Array.isArray(value) || value.length === 0;
@@ -553,6 +548,10 @@ const isFieldEmpty = (field: AnyFieldConfig, value: unknown) => {
   return !value;
 };
 
+/**
+ * Build an API filter from debounced values, omitting empty fields, normalizing values
+ * through the schema and including only nonempty exclusions.
+ */
 export const buildFilter = <
   F extends readonly AnyFieldConfig[],
   E extends readonly ExclusionCategoryConfig<string>[] | undefined =

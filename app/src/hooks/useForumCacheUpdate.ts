@@ -8,6 +8,7 @@ import { FORUM_THREAD_POSTS_PER_PAGE } from "@/drizzle/constants";
 export const useForumCacheUpdate = (threadId: string) => {
   const utils = api.useUtils();
   const client = useQueryClient();
+  /** Patch the post across cached pages while preserving unrelated destination reads. */
   const updateReaction = async (change: ForumReactionChange) => {
     const filter = { thread_id: threadId, limit: FORUM_THREAD_POSTS_PER_PAGE };
     // Reactions are absolute, revision-free patches. Only reads containing this post
