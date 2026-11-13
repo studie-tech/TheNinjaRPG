@@ -1,6 +1,12 @@
 import { beforeEach, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { auctionListing, auctionOffer, item, userItem } from "@/drizzle/schema";
+import {
+  actionLog,
+  auctionListing,
+  auctionOffer,
+  item,
+  userItem,
+} from "@/drizzle/schema";
 import { insertItems, insertUserItems } from "../setup/factories";
 import {
   describeWithDatabase,
@@ -15,11 +21,11 @@ const migration = await readFile(
 );
 
 /** The data statements; the test database already has the migration's columns. */
-const backfill = migration.slice(migration.indexOf("UPDATE"));
+const backfill = migration.slice(migration.indexOf("-- Existing listings"));
 
 describeWithDatabase("auction history items migration", () => {
   beforeEach(async () => {
-    await resetTables(auctionOffer, auctionListing, userItem, item);
+    await resetTables(actionLog, auctionOffer, auctionListing, userItem, item);
     await insertItems([
       { id: "ore", name: "Ore", canStack: true, stackSize: 100 },
       { id: "gem", name: "Gem", canStack: true, stackSize: 100 },
@@ -47,7 +53,31 @@ describeWithDatabase("auction history items migration", () => {
         listing("held", "listed"),
         listing("claimed", "merging"),
         listing("gone", "deleted"),
+        listing("merged", "listed"),
+        listing("logged-gone", "deleted"),
+        listing("early", "listed"),
       ]);
+    const created = (relatedId: string, changes: object) => ({
+      id: `log-${relatedId}`,
+      userId: "seller",
+      tableName: "auctionListing",
+      relatedId,
+      changes: JSON.stringify({ action: "CREATE_AUCTION", ...changes }),
+    });
+    await db.insert(actionLog).values([
+      created("merged", { itemId: "ore", quantity: 2 }),
+      {
+        ...created("logged-gone", {}),
+        changes: { action: "CREATE_AUCTION", itemId: "gem", quantity: 5 },
+      },
+      { ...created("gone", {}), changes: "CREATE_AUCTION by an old client" },
+      created("early", { itemId: "ore" }),
+      {
+        ...created("held", { itemId: "gem", quantity: 9 }),
+        id: "log-bid",
+        changes: JSON.stringify({ action: "PLACE_BID", itemId: "gem", quantity: 9 }),
+      },
+    ]);
     await db.insert(auctionOffer).values([
       {
         id: "trade",
@@ -69,7 +99,7 @@ describeWithDatabase("auction history items migration", () => {
     ]);
   });
 
-  it("records each listing's item and the quantity its stack holds", async () => {
+  it("records each listing's item and quantity from its creation, else from its stack", async () => {
     await runRawSql(backfill);
     const rows = await (await getTestDatabase())
       .select({
@@ -80,8 +110,11 @@ describeWithDatabase("auction history items migration", () => {
       .from(auctionListing);
     expect(rows.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
       { id: "claimed", itemId: "ore", quantity: 6 },
+      { id: "early", itemId: "ore", quantity: 4 },
       { id: "gone", itemId: "", quantity: 0 },
       { id: "held", itemId: "ore", quantity: 4 },
+      { id: "logged-gone", itemId: "gem", quantity: 5 },
+      { id: "merged", itemId: "ore", quantity: 2 },
     ]);
   });
 
