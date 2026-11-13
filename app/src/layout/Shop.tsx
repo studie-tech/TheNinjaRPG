@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ItemTypes, TUTORIAL_ITEM_ID } from "@/drizzle/constants";
 import type { Item, ItemType } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -490,157 +491,140 @@ const Shop: React.FC<ShopProps> = (props) => {
         </div>
       </div>
 
-      <div className="border-b bg-linear-to-b from-amber-950/10 to-muted/30 px-2 py-3 md:px-6 md:py-4">
-        <div className="mx-auto flex max-w-5xl flex-col gap-1.5 sm:gap-2">
-          <div
-            className="flex gap-0.5 overflow-x-auto overscroll-x-contain rounded-lg bg-muted/90 p-0.5 shadow-inner ring-1 ring-border/50 sm:grid sm:grid-cols-4 sm:gap-1 sm:overflow-visible sm:rounded-xl sm:p-1 lg:grid-cols-8 dark:bg-muted/40"
-            role="tablist"
-            aria-label="Item category"
-            onKeyDown={(event) => {
-              // Arrow keys, Home and End move between categories like other tab lists.
-              const tabs = Array.from(
-                event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
-              );
-              const index = tabs.indexOf(event.target as HTMLButtonElement);
-              if (index < 0) return;
-              const moves: Partial<Record<string, number>> = {
-                ArrowRight: (index + 1) % tabs.length,
-                ArrowLeft: (index - 1 + tabs.length) % tabs.length,
-                Home: 0,
-                End: tabs.length - 1,
-              };
-              const next = moves[event.key];
-              if (next === undefined) return;
-              event.preventDefault();
-              tabs[next]?.focus();
-              tabs[next]?.click();
-            }}
-          >
-            {itemTypeTabOptions.map((t) => (
-              <button
-                key={t}
-                type="button"
-                role="tab"
-                aria-selected={selectedItemType === t}
-                tabIndex={selectedItemType === t ? 0 : -1}
-                className={cn(
-                  "flex min-w-[4.5rem] shrink-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1.5 font-semibold text-[10px] transition-all sm:min-w-0 sm:flex-row sm:gap-2 sm:rounded-lg sm:px-1 sm:py-3 sm:text-xs",
-                  selectedItemType === t
-                    ? "bg-background text-foreground shadow-sm ring-1 ring-border/60"
-                    : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
-                )}
-                onClick={() => {
-                  if (selectedItemType === t) return;
-                  filteringState.setItemType(t);
-                  setItemConfirmOpen(false);
-                }}
-              >
-                {categoryTabIcon(t)}
-                <span className="text-center leading-tight">
-                  {SHOP_ITEM_TYPE_TAB_LABEL[t]}
-                </span>
-              </button>
-            ))}
-          </div>
-          <p className="hidden text-balance text-center text-muted-foreground text-xs leading-relaxed sm:block">
-            {tabHint}
-          </p>
-        </div>
-      </div>
-
-      <div className="border-b bg-muted/25 px-2 py-3 md:px-5 md:py-4">
-        <div className="mx-auto flex max-w-5xl flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <Label
-              htmlFor={catalogSearchId}
-              className="text-muted-foreground text-xs uppercase"
+      <Tabs
+        value={selectedItemType}
+        onValueChange={(value) => {
+          filteringState.setItemType(value as ItemType);
+          setItemConfirmOpen(false);
+        }}
+        className="contents"
+      >
+        <div className="border-b bg-linear-to-b from-amber-950/10 to-muted/30 px-2 py-3 md:px-6 md:py-4">
+          <div className="mx-auto flex max-w-5xl flex-col gap-1.5 sm:gap-2">
+            <TabsList
+              className="flex flex-nowrap justify-start gap-0.5 overflow-x-auto overscroll-x-contain rounded-lg bg-muted/90 p-0.5 shadow-inner ring-1 ring-border/50 sm:grid sm:grid-cols-4 sm:gap-1 sm:overflow-visible sm:rounded-xl sm:p-1 lg:grid-cols-8 dark:bg-muted/40"
+              aria-label="Item category"
             >
-              Search catalog
-            </Label>
-            <div className="relative mt-1">
-              <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id={catalogSearchId}
-                placeholder="Search by item name…"
-                value={filteringState.name}
-                onChange={(e) => filteringState.setName(e.target.value)}
-                className="h-11 rounded-xl border-border/80 bg-background pl-10 shadow-sm"
-              />
-            </div>
-          </div>
-          <p className="hidden text-muted-foreground text-xs sm:block lg:max-w-xs lg:text-right">
-            More filters (rarity, slot, effects, …) stay in the filter button above.
-          </p>
-        </div>
-      </div>
-
-      <div className="px-1.5 py-2 sm:px-3 sm:py-3 md:p-5" id={catalogListDomId}>
-        {!catalogItems.length && (isFetching || hasNextPage) ? (
-          <div className="flex min-h-[40vh] flex-col items-center justify-center">
-            <Loader explanation="Loading catalog…" />
-            {hasNextPage ? (
-              <div ref={setLastElement} className="h-px w-full" aria-hidden />
-            ) : null}
-          </div>
-        ) : !catalogItems.length ? (
-          <div className="flex min-h-[36vh] flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/20 px-6 py-16 text-center">
-            <ShoppingBag className="mb-3 h-12 w-12 text-muted-foreground opacity-60" />
-            <p className="font-medium text-lg">No items match your filters</p>
-            <p className="mt-1 max-w-sm text-muted-foreground text-sm">
-              {filteringState.name.trim()
-                ? "Try clearing the name search or opening the filter panel to reset rarity, slot, or effects."
-                : "Try another category tab or widen filters in the panel above."}
+              {itemTypeTabOptions.map((t) => (
+                <TabsTrigger
+                  key={t}
+                  value={t}
+                  className={cn(
+                    "flex min-w-[4.5rem] shrink-0 flex-col items-center justify-center gap-0.5 whitespace-normal rounded-md px-1 py-1.5 font-semibold text-[10px] transition-all sm:min-w-0 sm:flex-row sm:gap-2 sm:rounded-lg sm:px-1 sm:py-3 sm:text-xs",
+                    selectedItemType === t
+                      ? "bg-background text-foreground shadow-sm ring-1 ring-border/60"
+                      : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
+                  )}
+                >
+                  {categoryTabIcon(t)}
+                  <span className="text-center leading-tight">
+                    {SHOP_ITEM_TYPE_TAB_LABEL[t]}
+                  </span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <p className="hidden text-balance text-center text-muted-foreground text-xs leading-relaxed sm:block">
+              {tabHint}
             </p>
           </div>
-        ) : (
-          <>
-            <ul className="mx-auto grid max-w-7xl list-none grid-cols-3 gap-1 sm:gap-2 md:grid-cols-4 md:gap-3 lg:grid-cols-6">
-              {catalogItems.map((row) => {
-                const rowFactor = shopItemDiscountFactor(
-                  getShopDiscounts(userData, userData.village?.structures, row),
-                );
-                const rowPrice = getShopStackPrice(row, 1, rowFactor);
-                return (
-                  <li
-                    key={row.id}
-                    id={
-                      row.id === TUTORIAL_ITEM_ID && !isOpen
-                        ? "tutorial-itemshop-item"
-                        : undefined
-                    }
-                    className="h-full min-h-0 min-w-0"
-                  >
-                    <ShopCatalogCard
-                      item={row}
-                      selected={item?.id === row.id}
-                      ryoPrice={rowPrice.ryoCost}
-                      canAfford={canAffordShopPrice(userData, rowPrice)}
-                      seichiCatalogWord={silverCopy.catalog}
-                      onSelect={() => {
-                        if (item?.id === row.id) {
-                          setItemConfirmOpen(false);
-                        } else {
-                          setItem(row);
-                          setStacksize(1);
-                          setIsOpen(true);
-                        }
-                      }}
-                    />
-                  </li>
-                );
-              })}
-            </ul>
-            {hasNextPage ? (
-              <div ref={setLastElement} className="h-px w-full" aria-hidden />
-            ) : null}
-            {isFetching && catalogItems.length > 0 && (
-              <div className="flex justify-center py-8">
-                <Loader explanation="Updating catalog…" />
+        </div>
+
+        <div className="border-b bg-muted/25 px-2 py-3 md:px-5 md:py-4">
+          <div className="mx-auto flex max-w-5xl flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <Label
+                htmlFor={catalogSearchId}
+                className="text-muted-foreground text-xs uppercase"
+              >
+                Search catalog
+              </Label>
+              <div className="relative mt-1">
+                <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id={catalogSearchId}
+                  placeholder="Search by item name…"
+                  value={filteringState.name}
+                  onChange={(e) => filteringState.setName(e.target.value)}
+                  className="h-11 rounded-xl border-border/80 bg-background pl-10 shadow-sm"
+                />
               </div>
+            </div>
+            <p className="hidden text-muted-foreground text-xs sm:block lg:max-w-xs lg:text-right">
+              More filters (rarity, slot, effects, …) stay in the filter button above.
+            </p>
+          </div>
+        </div>
+
+        <TabsContent value={selectedItemType} className="mt-0">
+          <div className="px-1.5 py-2 sm:px-3 sm:py-3 md:p-5" id={catalogListDomId}>
+            {!catalogItems.length && (isFetching || hasNextPage) ? (
+              <div className="flex min-h-[40vh] flex-col items-center justify-center">
+                <Loader explanation="Loading catalog…" />
+                {hasNextPage ? (
+                  <div ref={setLastElement} className="h-px w-full" aria-hidden />
+                ) : null}
+              </div>
+            ) : !catalogItems.length ? (
+              <div className="flex min-h-[36vh] flex-col items-center justify-center rounded-2xl border border-dashed bg-muted/20 px-6 py-16 text-center">
+                <ShoppingBag className="mb-3 h-12 w-12 text-muted-foreground opacity-60" />
+                <p className="font-medium text-lg">No items match your filters</p>
+                <p className="mt-1 max-w-sm text-muted-foreground text-sm">
+                  {filteringState.name.trim()
+                    ? "Try clearing the name search or opening the filter panel to reset rarity, slot, or effects."
+                    : "Try another category tab or widen filters in the panel above."}
+                </p>
+              </div>
+            ) : (
+              <>
+                <ul className="mx-auto grid max-w-7xl list-none grid-cols-3 gap-1 sm:gap-2 md:grid-cols-4 md:gap-3 lg:grid-cols-6">
+                  {catalogItems.map((row) => {
+                    const rowFactor = shopItemDiscountFactor(
+                      getShopDiscounts(userData, userData.village?.structures, row),
+                    );
+                    const rowPrice = getShopStackPrice(row, 1, rowFactor);
+                    return (
+                      <li
+                        key={row.id}
+                        id={
+                          row.id === TUTORIAL_ITEM_ID && !isOpen
+                            ? "tutorial-itemshop-item"
+                            : undefined
+                        }
+                        className="h-full min-h-0 min-w-0"
+                      >
+                        <ShopCatalogCard
+                          item={row}
+                          selected={item?.id === row.id}
+                          ryoPrice={rowPrice.ryoCost}
+                          canAfford={canAffordShopPrice(userData, rowPrice)}
+                          seichiCatalogWord={silverCopy.catalog}
+                          onSelect={() => {
+                            if (item?.id === row.id) {
+                              setItemConfirmOpen(false);
+                            } else {
+                              setItem(row);
+                              setStacksize(1);
+                              setIsOpen(true);
+                            }
+                          }}
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+                {hasNextPage ? (
+                  <div ref={setLastElement} className="h-px w-full" aria-hidden />
+                ) : null}
+                {isFetching && catalogItems.length > 0 && (
+                  <div className="flex justify-center py-8">
+                    <Loader explanation="Updating catalog…" />
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {purchaseModal}
     </ContentBox>
