@@ -31,7 +31,15 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
     federalStatus: u.federalStatus,
     showBattleDescription: u.showBattleDescription,
   }));
-  const [openRounds, setOpenRounds] = useState<number[]>([]);
+  const [roundChoices, setRoundChoices] = useState<{
+    battleId: string;
+    rounds: Record<number, boolean>;
+  }>({ battleId, rounds: {} });
+  useEffect(() => {
+    setRoundChoices((choices) =>
+      choices.battleId === battleId ? choices : { battleId, rounds: {} },
+    );
+  }, [battleId]);
 
   // Check if user can view full battle log (staff role or gold federal status)
   const canViewFull = userData
@@ -91,17 +99,11 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
   // Create the history
   const history: React.ReactNode[] = [];
 
-  // Open the latest rounds by default and whenever a new round appears, keeping any
-  // earlier round the player opened
-  useEffect(() => {
-    if (maxRound) {
-      const latest = [maxRound, maxRound - 1].filter((r) => r > 0);
-      setOpenRounds((rounds) => [...new Set([...rounds, ...latest])]);
-    }
-  }, [maxRound]);
-
   sortedGroups?.forEach((entries, round) => {
-    const isOpen = openRounds.includes(round);
+    // Only explicit choices persist; the default follows the latest two rounds.
+    const choice =
+      roundChoices.battleId === battleId ? roundChoices.rounds[round] : undefined;
+    const isOpen = choice ?? (round >= maxRound - 1 && round <= maxRound);
     const roundTime = placeholderRounds.has(round) ? undefined : entries[0]?.createdAt;
     const timeString = roundTime
       ? roundTime.toLocaleTimeString([], {
@@ -120,9 +122,13 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
           isOpen && "bg-accent",
         )}
         onClick={() => {
-          setOpenRounds((prev) =>
-            isOpen ? prev.filter((r) => r !== round) : [...prev, round],
-          );
+          setRoundChoices((prev) => ({
+            battleId,
+            rounds: {
+              ...(prev.battleId === battleId ? prev.rounds : {}),
+              [round]: !isOpen,
+            },
+          }));
         }}
       >
         <div className="h-2 w-2 rounded-full bg-muted-foreground" />

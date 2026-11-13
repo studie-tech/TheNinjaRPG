@@ -53,8 +53,8 @@ export const MassEffectEditor = <
   const [committed, setCommitted] = useState<
     Record<string, { effects: ZodAllTags[]; baseUpdatedAt: number }>
   >({});
-  // Hold the same entry's claim through both the write and its awaited list refresh.
-  const saveFlight = useSingleFlight<string>();
+  // Hold the entry or batch claim through every write and the final list refresh.
+  const saveFlight = useSingleFlight<string | true>();
   const { pending: pendingId, isPending: editorPending } = saveFlight;
 
   useEffect(
@@ -182,7 +182,7 @@ export const MassEffectEditor = <
     .filter((entry) => modified[entry.id])
     .map((entry) => entry.id);
   const dirtyEntryCount = Object.keys(modified).length;
-  const unsavedGuard = useUnsavedChangesGuard(dirtyEntryCount > 0);
+  const unsavedGuard = useUnsavedChangesGuard(dirtyEntryCount > 0 || editorPending);
 
   // Mutations
   const itemUpdate = api.item.update.useMutation({
@@ -195,8 +195,17 @@ export const MassEffectEditor = <
     meta: { handlesTransportError: true },
   });
 
-  /** Save every effect of one entry; true when the write succeeded. */
-  const saveEntry = async (entryId: string): Promise<boolean> => {
+  const refreshEntries = async () => {
+    try {
+      await props.onEntriesUpdated?.();
+    } catch {
+      // Committed local snapshots keep successful writes truthful when the list
+      // cannot be refreshed immediately.
+    }
+  };
+
+  /** Save every effect of one entry; a batch owns the claim and final refresh. */
+  const saveEntry = async (entryId: string, inBatch = false): Promise<boolean> => {
     const entry = (entries || []).find((e) => e.id === entryId);
     if (!entry) return false;
     // Saving one row submits every effect for its entry, including sibling rows.
@@ -224,8 +233,10 @@ export const MassEffectEditor = <
       });
       return false;
     }
-    if (!saveFlight.claim(entry.id)) return false;
-    props.onPendingChange?.(true);
+    if (!inBatch) {
+      if (!saveFlight.claim(entry.id)) return false;
+      props.onPendingChange?.(true);
+    }
     try {
       const res =
         kind === "item"
@@ -259,12 +270,7 @@ export const MassEffectEditor = <
         delete next[entryId];
         return next;
       });
-      try {
-        await props.onEntriesUpdated?.();
-      } catch {
-        // The committed local snapshot keeps the successful write truthful if
-        // the authoritative list cannot be refreshed immediately.
-      }
+      if (!inBatch) await refreshEntries();
       return true;
     } catch (error) {
       // The draft is retained for a retry.
@@ -274,15 +280,27 @@ export const MassEffectEditor = <
       );
       return false;
     } finally {
-      saveFlight.release(entry.id);
-      props.onPendingChange?.(false);
+      if (!inBatch) {
+        saveFlight.release(entry.id);
+        props.onPendingChange?.(false);
+      }
     }
   };
 
   /** Save each entry with drafts in list order, one at a time, stopping at a failure. */
   const saveAll = async () => {
-    for (const entryId of visibleDirtyEntryIds) {
-      if (!(await saveEntry(entryId))) return;
+    if (visibleDirtyEntryIds.length === 0 || !saveFlight.claim(true)) return;
+    props.onPendingChange?.(true);
+    let saved = false;
+    try {
+      for (const entryId of visibleDirtyEntryIds) {
+        if (!(await saveEntry(entryId, true))) break;
+        saved = true;
+      }
+      if (saved) await refreshEntries();
+    } finally {
+      saveFlight.release(true);
+      props.onPendingChange?.(false);
     }
   };
 

@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as useSize from "@radix-ui/react-use-size";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import {
+  InfiniteQueryObserver,
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from "@tanstack/react-query";
 import {
   act,
   cleanup,
@@ -48,6 +53,7 @@ import {
 import { QuestReward, type QuestRewardType } from "@/validators/rewardPackages";
 import { ObjectiveReward } from "@/validators/rewards";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { deferred } from "../setup/deferred";
 import { spyOnToasts } from "../setup/toastMock";
 import { mockUserContextValue } from "../setup/userContext";
 
@@ -1032,8 +1038,32 @@ describe("MassEffectEditor drafts overview", () => {
   });
 
   it("enables saving only for edited entries and saves all of them in order", async () => {
+    const pageReads: number[] = [];
+    const queryClient = new QueryClient();
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: ["content"],
+      queryFn: async ({ pageParam }) => {
+        pageReads.push(pageParam);
+        return { nextCursor: pageParam + 50 };
+      },
+      initialPageParam: 0,
+      getNextPageParam: (last) => last.nextCursor,
+      initialData: {
+        pages: [0, 50, 100].map((cursor) => ({ nextCursor: cursor + 50 })),
+        pageParams: [0, 50, 100],
+      },
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => undefined);
+    const refresh = vi.fn(() => observer.refetch());
     const view = render(
-      <MassEffectEditor kind="jutsu" entries={entries} selectedFields={["power"]} />,
+      <MassEffectEditor
+        kind="jutsu"
+        entries={entries}
+        selectedFields={["power"]}
+        onEntriesUpdated={refresh}
+        onPendingChange={pending}
+      />,
     );
     const saveFirst = () =>
       view.getAllByRole("button", {
@@ -1056,7 +1086,99 @@ describe("MassEffectEditor drafts overview", () => {
     fireEvent.click(saveAll());
     await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
     expect(save.mock.calls.map((call) => call[0].id)).toEqual(["first", "second"]);
+    await waitFor(() => expect(pending).toHaveBeenLastCalledWith(false));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(pageReads).toEqual([0, 50, 100]);
+    expect(pending.mock.calls).toEqual([[true], [false]]);
+    unsubscribe();
+    queryClient.clear();
   });
+
+  it("stops a batch at the first rejected write and refreshes its confirmed saves once", async () => {
+    save.mockResolvedValueOnce({ success: true, message: "Saved" });
+    save.mockResolvedValueOnce({ success: false, message: "Cannot save" });
+    const refresh = vi.fn(async () => undefined);
+    const third = { ...entries[1]!, id: "third", name: "Third" };
+    const view = render(
+      <MassEffectEditor
+        kind="jutsu"
+        entries={[...entries, third]}
+        selectedFields={["power"]}
+        onEntriesUpdated={refresh}
+        onPendingChange={pending}
+      />,
+    );
+    for (const input of view.getAllByRole("spinbutton"))
+      fireEvent.input(input, { target: { value: "9" } });
+    fireEvent.click(view.getByRole("button", { name: "Save all" }));
+    await waitFor(() => expect(pending).toHaveBeenLastCalledWith(false));
+    expect(save.mock.calls.map((call) => call[0].id)).toEqual(["first", "second"]);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(view.getByText("2 entries with unsaved changes")).toBeTruthy();
+    expect(
+      (
+        view.getAllByRole("button", {
+          name: "Save jutsu effects for First",
+        })[0] as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    expect((view.getAllByRole("spinbutton")[0] as HTMLInputElement).value).toBe("9");
+    expect(toast).toHaveBeenCalledWith({ success: false, message: "Cannot save" });
+  });
+
+  it.each(["single", "batch"])(
+    "keeps a %s save pending until refresh settles and preserves commits when refresh rejects",
+    async (mode) => {
+      const firstWrite = deferred<{ success: boolean; message: string }>();
+      const refreshResult = deferred();
+      save.mockImplementationOnce(() => firstWrite.promise);
+      const refresh = vi.fn(() => refreshResult.promise);
+      const view = render(
+        <MassEffectEditor
+          kind="jutsu"
+          entries={entries}
+          selectedFields={["power"]}
+          onEntriesUpdated={refresh}
+          onPendingChange={pending}
+        />,
+      );
+      fireEvent.input(view.getAllByRole("spinbutton")[0]!, {
+        target: { value: "5" },
+      });
+      fireEvent.input(view.getAllByRole("spinbutton")[2]!, {
+        target: { value: "6" },
+      });
+      const button = view.getByRole("button", { name: "Save all" });
+      const first = view.getAllByRole("button", {
+        name: "Save jutsu effects for First",
+      })[0]!;
+      // Two submissions in one tick still claim just one operation.
+      fireEvent.click(mode === "batch" ? button : first);
+      fireEvent.click(mode === "batch" ? button : first);
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(refresh).not.toHaveBeenCalled();
+      expect(pending.mock.calls).toEqual([[true]]);
+      await act(async () => firstWrite.resolve({ success: true, message: "Saved" }));
+      await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+      expect(save).toHaveBeenCalledTimes(mode === "batch" ? 2 : 1);
+      for (const input of view.getAllByRole("spinbutton"))
+        expect(input.matches(":disabled")).toBe(true);
+      expect(pending.mock.calls).toEqual([[true]]);
+      const unload = new window.Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(unload);
+      expect(unload.defaultPrevented).toBe(true);
+      await act(async () => refreshResult.reject(new Error("Refresh unavailable")));
+      await waitFor(() => expect(pending).toHaveBeenLastCalledWith(false));
+      expect(view.queryByRole("status")).toBeNull();
+      expect((view.getAllByRole("spinbutton")[0] as HTMLInputElement).value).toBe("5");
+      expect(
+        view.getByText(
+          mode === "batch" ? "No unsaved changes" : "1 entry with unsaved changes",
+        ),
+      ).toBeTruthy();
+      expect(toast.mock.calls.every(([result]) => result.success)).toBe(true);
+    },
+  );
 
   it("counts and protects filtered-out drafts while saving only listed entries", async () => {
     const mount = (listedEntries: typeof entries) => (
