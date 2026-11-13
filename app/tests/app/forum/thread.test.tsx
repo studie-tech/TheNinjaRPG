@@ -131,10 +131,10 @@ afterEach(() => {
 });
 
 /** Build the server page from mutable fixture posts so later reads can represent removal or restoration. */
-function threadPage(cursor = 0): ThreadData {
+function threadPage(cursor = 0, threadId = "topic"): ThreadData {
   return {
     thread: {
-      id: "topic",
+      id: threadId,
       boardId: "board",
       userId: "reader",
       title: "Discussion",
@@ -167,11 +167,14 @@ function renderThread() {
           observable((observer) => {
             let data: unknown = [];
             if (op.path === "comments.getForumComments") {
-              const cursor = (op.input as { cursor: number }).cursor;
+              const { cursor, thread_id } = op.input as {
+                cursor: number;
+                thread_id: string;
+              };
               requestedPages.push(cursor);
               if (holdPageTwo && cursor === 1) {
                 finishPageTwo = () => {
-                  observer.next({ result: { data: threadPage(cursor) } });
+                  observer.next({ result: { data: threadPage(cursor, thread_id) } });
                   observer.complete();
                 };
                 return;
@@ -182,7 +185,7 @@ function renderThread() {
                 );
                 return;
               }
-              data = threadPage(cursor);
+              data = threadPage(cursor, thread_id);
             }
             if (
               op.path === "comments.deleteForumComment" ||
@@ -222,11 +225,16 @@ function renderThread() {
           }),
     ],
   });
-  return render(
+  const discussion = (threadId: string) => (
     <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
-      <Thread threadId="topic" initialPage={threadPage()} />
-    </TrpcTestProviders>,
+      <Thread threadId={threadId} initialPage={threadPage(0, threadId)} />
+    </TrpcTestProviders>
   );
+  const view = render(discussion("topic"));
+  return {
+    ...view,
+    rerenderThread: (threadId: string) => view.rerender(discussion(threadId)),
+  };
 }
 
 it.each([false, true])(
@@ -272,6 +280,36 @@ it.each([false, true])(
     expect(view.getByText("2 posts")).toBeTruthy();
   },
 );
+
+it("applies a pending reaction to its original thread after the route input changes", async () => {
+  holdReaction = true;
+  const view = renderThread();
+  await waitFor(() => expect(requestedPages).toEqual([0]));
+  fireEvent.click(
+    within(view.container.querySelector("#post-opening")!).getByRole("button", {
+      name: /Helpful/,
+    }),
+  );
+  await waitFor(() => expect(finishReaction).toBeDefined());
+  view.rerenderThread("other-topic");
+  expect(
+    view.container.querySelector('a[href="/forum/board/other-topic?post=opening"]'),
+  ).not.toBeNull();
+  await act(async () => finishReaction?.());
+  const cachedThread = (thread_id: string) => {
+    const input = { thread_id, limit: FORUM_THREAD_POSTS_PER_PAGE, cursor: 0 };
+    return queryClient.getQueryData<ThreadData>(
+      getQueryKey(testApi.comments.getForumComments, input, "query"),
+    );
+  };
+  await waitFor(() =>
+    expect(cachedThread("topic")?.data[0]?.reactions).toEqual([
+      { userId: "reader", reaction: "helpful" },
+    ]),
+  );
+  expect(cachedThread("other-topic")?.data[0]?.reactions).toEqual([]);
+  expect(requestedPages).toEqual([0]);
+});
 
 it("retains the post and total when the server rejects removal", async () => {
   rejectRemoval = true;

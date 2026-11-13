@@ -1,7 +1,5 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { getQueryKey } from "@trpc/react-query";
 import { CheckCircle2, Link2, LockKeyhole, Quote, ThumbsUp } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
@@ -9,12 +7,13 @@ import { useForm } from "react-hook-form";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { applyForumReaction, type ForumReactionChange } from "@/deltas/forum";
+import type { ForumReactionChange } from "@/deltas/forum";
 import {
   FORUM_MIN_LEVEL,
   FORUM_THREAD_POSTS_PER_PAGE,
   forumLevelMessage,
 } from "@/drizzle/constants";
+import { useForumCacheUpdate } from "@/hooks/useForumCacheUpdate";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { ForumComposer, ForumNavigation, ForumWatchButton } from "@/layout/Forum";
@@ -47,7 +46,7 @@ export default function Thread({
   const params = useSearchParams();
   const router = useRouter();
   const utils = api.useUtils();
-  const queryClient = useQueryClient();
+  const { updateReaction } = useForumCacheUpdate(threadId);
   const [page, setPage] = useState(0);
   const [quote, setQuote] = useState("");
   const [tools, setTools] = useState(false);
@@ -232,22 +231,6 @@ export default function Thread({
       utils.forum.getAll.invalidate(),
     ]);
   };
-  // A confirmed reaction changes only that post, so patch it in place instead of
-  // refetching the thread and the board lists.
-  const applyReaction = async (change: ForumReactionChange) => {
-    const filter = { thread_id: threadId, limit: FORUM_THREAD_POSTS_PER_PAGE };
-    // Only reads containing this post can overwrite its confirmed reaction.
-    await queryClient.cancelQueries({
-      queryKey: getQueryKey(api.comments.getForumComments, filter, "query"),
-      predicate: (query) => {
-        const cached = query.state.data as ThreadData | undefined;
-        return cached?.data.some((post) => post.id === change.postId) ?? false;
-      },
-    });
-    utils.comments.getForumComments.setQueriesData(filter, {}, (current) =>
-      current ? applyForumReaction(current, change) : current,
-    );
-  };
   return (
     <ContentBox
       title={thread?.title ?? "Forum discussion"}
@@ -392,7 +375,7 @@ export default function Thread({
                   )
                 }
                 onChange={refresh}
-                onReact={applyReaction}
+                onReact={updateReaction}
                 onQuote={() => {
                   setQuote(
                     `<blockquote><p>${post.user?.username ?? "Player"} wrote:</p>${post.content}</blockquote><p><br></p><p><br></p><!--${Date.now()}-->`,
