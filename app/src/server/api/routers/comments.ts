@@ -554,8 +554,11 @@ export const commentsRouter = createTRPCRouter({
       // messages are ephemeral team coordination and must not bump teammates'
       // inboxNews counter or fan out `newInbox` pusher events.
       const skipInboxNotifications = isRaidChatConversationId(convo.id);
-      // The sender has read their own message, so only the other members get inbox news.
-      const inboxRecipientIds = usersIdsInConvo.filter((id) => id !== effectiveUserId);
+      // The author has read their own message, also when staff send it as an AI, so only the
+      // other members get inbox news.
+      const inboxRecipientIds = usersIdsInConvo.filter(
+        (id) => id !== effectiveUserId && id !== ctx.userId,
+      );
 
       // Extract quoted user IDs - filter out null/undefined values
       const quotedUserIds = quotes.flatMap((q) =>

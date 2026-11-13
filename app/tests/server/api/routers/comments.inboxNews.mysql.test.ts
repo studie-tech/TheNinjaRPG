@@ -58,4 +58,33 @@ describeWithDatabase("inbox news for a private message", () => {
       friend: 1,
     });
   });
+
+  it("counts a message staff send as an AI for neither the staff member nor the AI", async () => {
+    await insertUsers([
+      { userId: "staff", username: "Staff", level: 50, role: "EVENT" },
+      { userId: "ai", username: "AI", level: 50, isAi: true },
+    ]);
+    await (await getTestDatabase()).insert(user2conversation).values([
+      { userId: "staff", conversationId: "private-convo" },
+      { userId: "ai", conversationId: "private-convo" },
+    ]);
+    const api = await callerFor(commentsRouter, "staff");
+    const result = await api.createConversationComment({
+      object_id: "private-convo",
+      comment: "The gate opens at noon.",
+      quoteIds: null,
+      senderId: "ai",
+    });
+    expect(result.success).toBe(true);
+    const rows = await (await getTestDatabase())
+      .select({ userId: userData.userId, inboxNews: userData.inboxNews })
+      .from(userData)
+      .where(inArray(userData.userId, ["staff", "ai", "sender", "friend"]));
+    expect(Object.fromEntries(rows.map((row) => [row.userId, row.inboxNews]))).toEqual({
+      staff: 0,
+      ai: 0,
+      sender: 1,
+      friend: 1,
+    });
+  });
 });
