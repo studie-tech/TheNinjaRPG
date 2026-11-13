@@ -99,7 +99,7 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
     isPending: isPlacingBid,
     variables: placeBidVariables,
   } = api.auction.placeBid.useMutation({
-    onSuccess: async (data) => {
+    onSuccess: async (data, variables) => {
       showMutationToast(data);
       if (data.success) {
         if ("amountToDeduct" in data && data.amountToDeduct && userData && listing) {
@@ -121,6 +121,10 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
         void Promise.all([
           utils.auction.getAuctionListings.invalidate(),
           utils.auction.getAuctionListing.invalidate(),
+          // A buyout delivers the item, which may join a carried stack.
+          listing?.buyoutPrice && variables.amount >= listing.buyoutPrice
+            ? utils.item.getUserItems.invalidate()
+            : undefined,
         ]);
       }
     },

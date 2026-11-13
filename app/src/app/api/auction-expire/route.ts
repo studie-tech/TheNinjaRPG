@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { handleEndpointError, lockWithGameTimer } from "@/libs/gamesettings";
 import { listAuctionListingForGET } from "@/queries/auction";
-import { completeAuctionInternal } from "@/server/api/routers/auction";
+import {
+  completeAuctionInternal,
+  mergeDeliveredItems,
+} from "@/server/api/routers/auction";
 import { drizzleDB } from "@/server/db";
 import { authenticateCronRequest } from "@/server/utils/cron";
 
@@ -30,10 +33,12 @@ export async function GET(request: Request) {
     }
 
     // Process all expired auctions in parallel
+    const deliveries: Parameters<typeof mergeDeliveredItems>[1] = [];
     const results = await Promise.all(
       expiredAuctions.map(async (auction) => {
         try {
           const result = await completeAuctionInternal(drizzleDB, auction.id);
+          if ("delivery" in result) deliveries.push(result.delivery);
           return {
             auctionId: auction.id,
             success: result.success,
@@ -54,6 +59,9 @@ export async function GET(request: Request) {
         }
       }),
     );
+
+    // Settled items join their owners' stacks after every listing has settled.
+    await mergeDeliveredItems(drizzleDB, deliveries);
 
     const successful = results.filter(
       (r: (typeof results)[number]) => r.success,

@@ -356,8 +356,8 @@ export const insertAuctionBidForPlaceBid = (
     .values({ id: bidId, auctionId, bidderId: ctx.userId, amount });
 
 /**
- * Build the `auctionListing` lookup for `cancelAuction`, selecting only `userItemId`
- * and `status`, using predicates on `id` and `sellerId`.
+ * Build the `auctionListing` lookup for `cancelAuction`, selecting `userItemId`, `status`
+ * and the listed item's `itemId`, using predicates on `id` and `sellerId`.
  */
 export const findAuctionListingForCancelAuction = (
   client: Pick<DrizzleClient, "query">,
@@ -373,6 +373,7 @@ export const findAuctionListingForCancelAuction = (
       userItemId: true,
       status: true,
     },
+    with: { userItem: { columns: { itemId: true } } },
   });
 
 /** Execute the database statement for `cancelAuction`. */
