@@ -9,6 +9,8 @@ import type { AppRouter } from "@/api/root";
 import * as client from "@/app/_trpc/client";
 import { usePublicQuestLocations } from "@/hooks/usePublicQuestLocations";
 import { publicQuestLocations } from "@/libs/mapLocations";
+import type { DrizzleClient } from "@/server/db";
+import { fetchPublicQuestLocations } from "@/server/utils/mapLocations";
 import { MoveToObjective } from "@/validators/objectives";
 import { TrpcTestProviders, testApi } from "../setup/trpc";
 
@@ -497,4 +499,155 @@ it("preserves a shared active observer's polling and joins its pending read on a
   await settle();
   expect(active.result.current.data?.[0]?.name).toBe("Shared");
   expect(t.view.result.current.data?.[0]?.name).toBe("Shared");
+});
+
+it("finishes hidden asset preparation and replaces its pre-recovery snapshot on activation", async () => {
+  const t = setup(0, true, 0, false);
+  await settle();
+  const recover = t.view.result.current.recoverPublicLocations;
+  await advance(1000);
+  t.setName("Recovered");
+  await act(async () => recover());
+  expect(t.read).toHaveBeenCalledTimes(1);
+  await act(async () => t.pending[0]!());
+  await settle();
+  expect(t.view.result.current.data?.[0]?.name).toBe("Landmark");
+  expect(t.view.result.current.recoverPublicLocations).toBe(recover);
+  t.view.rerender({ timeDiff: 0, isActive: true });
+  await settle();
+  expect(t.read).toHaveBeenCalledTimes(2);
+  expect(t.revisions.at(-1)).toBe(now);
+  await act(async () => t.pending[1]!());
+  await settle();
+  expect(t.view.result.current.data?.[0]?.name).toBe("Recovered");
+});
+
+it.each(["newer", "same", "future"])(
+  "rejects deferred pre-event completions with a %s recovery revision",
+  async (mode) => {
+    if (mode === "same") now = Date.UTC(2026, 10, 2);
+    const t = setup(0, true, 0, mode === "future");
+    await settle();
+    if (mode === "future") {
+      await act(async () => t.view.result.current.updatePublicLocations(now + 60_000));
+      await settle();
+      t.view.rerender({ timeDiff: 0, isActive: false });
+    }
+    if (mode === "newer") await advance(1000);
+    const revision = mode === "future" ? now + 60_000 : now;
+    t.setName("Recovered");
+    await act(async () => t.view.result.current.recoverPublicLocations());
+    const prepReads = mode === "future" ? 2 : 1;
+    expect(t.read).toHaveBeenCalledTimes(prepReads);
+    t.view.rerender({ timeDiff: 0, isActive: true });
+    await settle();
+    expect(t.read).toHaveBeenCalledTimes(prepReads + 1);
+    expect(t.revisions.at(-1)).toBe(revision);
+    await act(async () => {
+      t.pending[prepReads]!();
+      for (const complete of t.pending.slice(0, prepReads)) complete();
+    });
+    await settle();
+    expect(t.view.result.current.data?.[0]?.name).toBe("Recovered");
+  },
+);
+
+it("recovers the current publication day after hidden clock correction without an obsolete read", async () => {
+  now = Date.UTC(2026, 10, 2, 23, 59, 59);
+  const offset = 120_000;
+  const t = setup(offset, false, 0, false);
+  await settle();
+  await act(async () => t.view.result.current.recoverPublicLocations());
+  await advance(offset + 2000);
+  t.view.rerender({ timeDiff: offset, isActive: true });
+  await settle();
+  expect(t.read).toHaveBeenCalledTimes(2);
+  expect(t.revisions.at(-1)).toBe(now - offset);
+  expect(t.view.result.current.data?.[0]?.questId).toBe("starting");
+});
+
+it("leaves another active observer's older-key read running during deferred recovery", async () => {
+  const t = setup(0, true, 0, false);
+  const active = renderHook(() => usePublicQuestLocations(0), { wrapper: t.wrapper });
+  await settle();
+  await advance(1000);
+  t.setName("Recovered");
+  await act(async () => t.view.result.current.recoverPublicLocations());
+  t.view.rerender({ timeDiff: 0, isActive: true });
+  await settle();
+  expect(t.read).toHaveBeenCalledTimes(2);
+  await act(async () => {
+    t.pending[1]!();
+    t.pending[0]!();
+  });
+  await settle();
+  expect(t.view.result.current.data?.[0]?.name).toBe("Recovered");
+  expect(active.result.current.data?.[0]?.name).toBe("Landmark");
+});
+
+it("bypasses another worker's cached catalogue after hidden subscription recovery", async () => {
+  const findMany = vi
+    .fn()
+    .mockResolvedValueOnce([
+      {
+        id: "public",
+        hidden: false,
+        startsAt: null,
+        endsAt: null,
+        content: {
+          objectives: [
+            MoveToObjective.parse({
+              id: "tower",
+              task: "move_to_location",
+              sector: 724,
+              longitude: 3,
+              latitude: 4,
+              structureAssetId: "asset",
+              locationName: "Removed scenery",
+            }),
+          ],
+        },
+      },
+    ])
+    .mockResolvedValue([]);
+  // This worker receives no invalidation when another worker edits the database.
+  const serverClient = { query: { quest: { findMany } } } as unknown as DrizzleClient;
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  clients.push(queryClient);
+  const revisions: number[] = [];
+  const trpc = testApi.createClient({
+    links: [
+      () =>
+        ({ op }) =>
+          observable((observer) => {
+            const input = op.input as { revision: number };
+            revisions.push(input.revision);
+            void fetchPublicQuestLocations(serverClient, input).then((data) => {
+              observer.next({ result: { data } });
+              observer.complete();
+            });
+          }),
+    ],
+  });
+  const wrapper = ({ children }: PropsWithChildren) => (
+    <TrpcTestProviders client={trpc} queryClient={queryClient}>
+      {children}
+    </TrpcTestProviders>
+  );
+  const view = renderHook(({ active }) => usePublicQuestLocations(0, active), {
+    wrapper,
+    initialProps: { active: false },
+  });
+  await settle();
+  expect(view.result.current.data?.[0]?.name).toBe("Removed scenery");
+  await advance(1000);
+  await act(async () => view.result.current.recoverPublicLocations());
+  expect(findMany).toHaveBeenCalledTimes(1);
+  view.rerender({ active: true });
+  await settle();
+  expect(revisions).toEqual([Date.UTC(2026, 10, 2), now]);
+  expect(findMany).toHaveBeenCalledTimes(2);
+  expect(view.result.current.data).toEqual([]);
 });
