@@ -68,6 +68,8 @@ describeWithDatabase("inbox news for a private message", () => {
       { userId: "staff", conversationId: "private-convo" },
       { userId: "ai", conversationId: "private-convo" },
     ]);
+    const events = vi.spyOn(Pusher.prototype, "trigger");
+    events.mockClear();
     const api = await callerFor(commentsRouter, "staff");
     const result = await api.createConversationComment({
       object_id: "private-convo",
@@ -86,5 +88,10 @@ describeWithDatabase("inbox news for a private message", () => {
       sender: 1,
       friend: 1,
     });
+    const inboxEventsFor = events.mock.calls
+      .filter(([, , data]) => (data as { type?: string })?.type === "newInbox")
+      .map(([channel]) => channel)
+      .sort();
+    expect(inboxEventsFor).toEqual(["friend", "sender"]);
   });
 });
