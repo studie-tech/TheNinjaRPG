@@ -28,6 +28,24 @@ const readSector = new Function(
   "scope",
   `with (scope) { ${transpiler.transformSync(source.slice(start, end) + source.slice(dungeonStart, dungeonEnd))}; return data; }`,
 );
+const parentSource = readFileSync(
+  new URL("../../src/app/[shell]/travel/page.tsx", import.meta.url),
+  "utf8",
+);
+const parentStart = parentSource.indexOf("  const { data: sectorVillageName }");
+const parentEnd = parentSource.indexOf("  const { data: mapAssets }", parentStart);
+if (parentStart < 0 || parentEnd < 0) throw new Error("Missing parent sector query");
+const readParent = new Function(
+  "scope",
+  `with (scope) { ${transpiler.transformSync(parentSource.slice(parentStart, parentEnd))} }`,
+);
+const updateStart = source.indexOf("  const updateUsersList = async (");
+const updateEnd = source.indexOf("  /** Stand the own marker", updateStart);
+if (updateStart < 0 || updateEnd < 0) throw new Error("Missing presence merge");
+const presenceMerge = new Function(
+  "scope",
+  `with (scope) { ${transpiler.transformSync(source.slice(updateStart, updateEnd))}; return updateUsersList; }`,
+);
 const clients: QueryClient[] = [];
 let now: number;
 beforeEach(() => {
@@ -69,7 +87,7 @@ const advance = async (ms: number) => {
   await settle();
 };
 /** Mount the actual presence, patrol and dungeon hooks used by the retained sector. */
-const setup = (isActive: boolean) => {
+const setup = (isActive: boolean, observeParent = false) => {
   let generation = 0;
   const read = vi.fn((path: string) => {
     if (path === "travel.getSectorData")
@@ -95,8 +113,11 @@ const setup = (isActive: boolean) => {
     </TrpcTestProviders>
   );
   const view = renderHook(
-    (props: { isActive: boolean; sector: number }) =>
-      readSector({
+    (props: { isActive: boolean; sector: number }) => {
+      const utils = testApi.useUtils();
+      if (observeParent)
+        readParent({ api: testApi, userData: { sector: props.sector } });
+      const data = readSector({
         api: testApi,
         props,
         sector: props.sector,
@@ -105,7 +126,22 @@ const setup = (isActive: boolean) => {
         timeDiff: 0,
         useVillageDutyPursuit,
         useDungeonAvailability,
-      }) as RouterOutputs["travel"]["getSectorData"],
+      }) as RouterOutputs["travel"]["getSectorData"];
+      const updateRemote = presenceMerge({
+        userRef: { current: { userId: "actor" } },
+        userData: { userId: "actor" },
+        usersRef: { current: [] },
+        sectorRef: { current: props.sector },
+        actorRevisionRef: { current: 0 },
+        isActiveRef: { current: props.isActive },
+        isUserCurrentlyStealthed: () => false,
+        mapAttackRelation: () => "NEUTRAL",
+        warData: undefined,
+        publishSurroundings: () => {},
+        utils,
+      }) as (data: unknown) => Promise<void>;
+      return { data, updateRemote };
+    },
     { wrapper, initialProps: { isActive, sector: 3 } },
   );
   return {
@@ -155,13 +191,42 @@ it("catches up once on stale activation, polls while visible and pauses again on
   test.rerender({ isActive: true, sector: 3 });
   await settle();
   expect(test.calls("travel.getSectorData")).toBe(2);
-  expect(test.result.current.patrolRevision).toBe(1);
+  expect(test.result.current.data.patrolRevision).toBe(1);
   expect(test.calls("villageDuty.patrol")).toBe(2);
   expect(test.calls("coop.dungeon.getAvailable")).toBe(2);
   await advance(10_000);
   expect(test.calls("travel.getSectorData")).toBe(3);
   test.rerender({ isActive: false, sector: 3 });
   test.rerender({ isActive: true, sector: 3 });
+  await settle();
+  expect(test.calls("travel.getSectorData")).toBe(3);
+});
+
+it("defers unknown hidden presence with an enabled parent observer and catches up on activation", async () => {
+  const test = setup(false, true);
+  await settle();
+  expect(test.calls("travel.getSectorData")).toBe(1);
+  await act(async () => {
+    await test.result.current.updateRemote({ userId: "new", sector: 3 });
+  });
+  await settle();
+  expect(test.calls("travel.getSectorData")).toBe(1);
+  await act(async () => {
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+    onlineManager.setOnline(false);
+    onlineManager.setOnline(true);
+  });
+  await settle();
+  expect(test.calls("travel.getSectorData")).toBe(1);
+  test.change();
+  test.rerender({ isActive: true, sector: 3 });
+  await settle();
+  expect(test.calls("travel.getSectorData")).toBe(2);
+  expect(test.result.current.data.patrolRevision).toBe(1);
+  await act(async () => {
+    await test.result.current.updateRemote({ userId: "another", sector: 3 });
+  });
   await settle();
   expect(test.calls("travel.getSectorData")).toBe(3);
 });

@@ -87,6 +87,7 @@ it("keeps the viewer's own marker when its profile still records the previous se
   const invalidate = vi.fn(async () => {});
   const viewer = { userId: "self", sector: 228, longitude: 12, latitude: 3 };
   const scope = {
+    isActiveRef: { current: true },
     userRef: { current: { userId: "self" } },
     userData: { userId: "self" },
     usersRef: {
@@ -97,7 +98,7 @@ it("keeps the viewer's own marker when its profile still records the previous se
     },
     sectorRef: { current: 227 },
     actorRevisionRef: { current: 0 },
-    remoteWalksRef: { current: new Map<string, number>() },
+    remoteWalksRef: { current: new Map<string, symbol>() },
     isUserCurrentlyStealthed: () => false,
     mapAttackRelation: () => "NEUTRAL",
     warData: undefined,
@@ -222,17 +223,20 @@ it.each([true, false])(
   },
 );
 
-/** Remote walks step through a straight path, one tile per (zero-length) walking step. */
+/** Remote walks use straight paths and optionally controlled step completion. */
 const walkScope = (
   users: { userId: string; longitude: number; latitude: number }[],
+  controlled = false,
 ) => {
+  const sleepers: (() => void)[] = [];
   const scope = {
+    isActiveRef: { current: true },
     userRef: { current: { userId: "self" } },
     userData: { userId: "self" },
     usersRef: { current: users.map((user) => ({ ...user, sector: 1 })) },
     sectorRef: { current: 1 },
     actorRevisionRef: { current: 0 },
-    remoteWalksRef: { current: new Map<string, number>() },
+    remoteWalksRef: { current: new Map<string, symbol>() },
     motionStepsRef: { current: new Map() },
     gridRef: { current: {} },
     findHex: (_grid: unknown, { x, y }: { x: number; y: number }) => ({
@@ -241,24 +245,31 @@ const walkScope = (
     }),
     pathFinderRef: {
       current: {
-        getShortestPath: (
-          from: { col: number; row: number },
-          to: { col: number; row: number },
-        ) => {
-          const path = [];
-          for (let col = from.col, row = from.row; col !== to.col || row !== to.row; ) {
-            col += Math.sign(to.col - col);
-            row += Math.sign(to.row - row);
-            path.push({ col, row });
-          }
-          return path;
-        },
+        getShortestPath: vi.fn(
+          (from: { col: number; row: number }, to: { col: number; row: number }) => {
+            const path = [];
+            for (
+              let col = from.col, row = from.row;
+              col !== to.col || row !== to.row;
+            ) {
+              col += Math.sign(to.col - col);
+              row += Math.sign(to.row - row);
+              path.push({ col, row });
+            }
+            return path;
+          },
+        ),
       },
     },
     worldMotionHeading: () => ({ direction: "horizontal", facing: 1 }),
-    publishMotionStep: () => null,
-    sleep: () => new Promise((resolve) => setTimeout(resolve, 0)),
-    SECTOR_WALK_STEP_MS: 0,
+    publishMotionStep: vi.fn(),
+    sleep: vi.fn(
+      () =>
+        new Promise<void>((resolve) =>
+          controlled ? sleepers.push(resolve) : setTimeout(resolve, 0),
+        ),
+    ),
+    SECTOR_WALK_STEP_MS: 100,
     isUserCurrentlyStealthed: () => false,
     mapAttackRelation: () => "NEUTRAL",
     warData: undefined,
@@ -269,7 +280,46 @@ const walkScope = (
     `${block("  const updateUsersList = async (", "\n\n  /** Stand the own marker")}\nreturn updateUsersList;`,
     scope,
   ) as (data: unknown) => Promise<void>;
-  return { scope, updateUsersList };
+  scope.publishMotionStep.mockImplementation(
+    evaluate(
+      `${block("  const publishMotionStep = (", "\n\n  /** Copy the live user list")}\nreturn publishMotionStep;`,
+      scope,
+    ),
+  );
+  let onEvent = (_data: unknown) => {};
+  evaluate(
+    block(
+      "  // Listen to websocket events for this sector",
+      "  useEffect(() => {\n    showUsersRef",
+    ),
+    {
+      ...scope,
+      props: { sector: 1 },
+      pusher: {},
+      updateUsersList,
+      useEffect: (effect: () => void) => effect(),
+      subscribeSharedChannel: (
+        _pusher: unknown,
+        _sector: string,
+        handlers: { event: typeof onEvent },
+      ) => {
+        onEvent = handlers.event;
+      },
+    },
+  );
+  const releaseStep = async () => {
+    expect(sleepers.length).toBeGreaterThan(0);
+    sleepers.shift()!();
+    // Let the walk and its nested instant merge finish their promise continuations.
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+  };
+  return {
+    scope,
+    updateUsersList,
+    broadcast: (data: unknown) => onEvent(data),
+    releaseStep,
+    sleepers,
+  };
 };
 
 it("walks a remote user by identity while others leave the list mid-walk", async () => {
@@ -317,3 +367,103 @@ it("ends a remote walk when a newer move for the same user arrives", async () =>
   expect(scope.usersRef.current).toHaveLength(1);
   expect(scope.usersRef.current[0]).toMatchObject({ longitude: 1, latitude: 3 });
 });
+
+const remotePosition = (longitude: number, latitude = 0) => ({
+  userId: "walker",
+  sector: 1,
+  longitude,
+  latitude,
+});
+
+it("merges hidden broadcasts without paths or timers and animates after reactivation", async () => {
+  const test = walkScope([remotePosition(0)], true);
+  test.scope.isActiveRef.current = false;
+  test.broadcast(remotePosition(10));
+  expect(test.scope.usersRef.current[0]).toMatchObject(remotePosition(10));
+  expect(test.scope.pathFinderRef.current.getShortestPath).not.toHaveBeenCalled();
+  expect(test.scope.sleep).not.toHaveBeenCalled();
+  expect(test.scope.publishMotionStep).not.toHaveBeenCalled();
+  expect(test.scope.actorRevisionRef.current).toBe(1);
+  expect(test.scope.utils.travel.getSectorData.invalidate).not.toHaveBeenCalled();
+
+  test.scope.isActiveRef.current = true;
+  test.broadcast(remotePosition(12));
+  expect(test.scope.usersRef.current[0]?.longitude).toBe(11);
+  expect(test.scope.pathFinderRef.current.getShortestPath).toHaveBeenCalledTimes(1);
+  await test.releaseStep();
+  expect(test.scope.usersRef.current[0]?.longitude).toBe(12);
+  await test.releaseStep();
+  expect(test.scope.sleep).toHaveBeenCalledTimes(2);
+  expect(test.scope.sleep).toHaveBeenNthCalledWith(1, 100);
+  expect(test.scope.publishMotionStep).toHaveBeenCalledTimes(2);
+  expect(test.scope.remoteWalksRef.current.size).toBe(0);
+  expect(test.scope.motionStepsRef.current.size).toBe(0);
+});
+
+it("settles a walk that becomes hidden after its pending step without scheduling more tiles", async () => {
+  const test = walkScope([remotePosition(0)], true);
+  const walk = test.updateUsersList(remotePosition(10));
+  expect(test.scope.usersRef.current[0]?.longitude).toBe(1);
+  test.scope.isActiveRef.current = false;
+  await test.releaseStep();
+  await walk;
+  expect(test.scope.usersRef.current[0]).toMatchObject(remotePosition(10));
+  expect(test.scope.sleep).toHaveBeenCalledTimes(1);
+  expect(test.scope.publishMotionStep).toHaveBeenCalledTimes(1);
+  expect(test.scope.remoteWalksRef.current.size).toBe(0);
+  expect(test.scope.motionStepsRef.current.size).toBe(0);
+  test.scope.isActiveRef.current = true;
+  expect(test.scope.usersRef.current[0]?.longitude).toBe(10);
+});
+
+it("keeps a newer hidden destination when an older walk callback resumes", async () => {
+  const test = walkScope([remotePosition(0)], true);
+  const walk = test.updateUsersList(remotePosition(10));
+  test.scope.isActiveRef.current = false;
+  test.broadcast(remotePosition(20));
+  expect(test.scope.usersRef.current[0]?.longitude).toBe(20);
+  expect(test.scope.motionStepsRef.current.size).toBe(0);
+  await test.releaseStep();
+  await walk;
+  expect(test.scope.usersRef.current[0]?.longitude).toBe(20);
+  expect(test.scope.sleep).toHaveBeenCalledTimes(1);
+  expect(test.scope.remoteWalksRef.current.size).toBe(0);
+});
+
+it("does not reuse cancelled walk ownership when a scene reactivates before an old callback", async () => {
+  const test = walkScope([remotePosition(0)], true);
+  const oldWalk = test.updateUsersList(remotePosition(10));
+  test.scope.isActiveRef.current = false;
+  test.broadcast(remotePosition(20));
+  test.scope.isActiveRef.current = true;
+  const replacement = test.updateUsersList(remotePosition(22));
+  const replacementToken = test.scope.remoteWalksRef.current.get("walker");
+  const replacementMotion = test.scope.motionStepsRef.current.get("walker");
+  expect(test.scope.usersRef.current[0]?.longitude).toBe(21);
+  await test.releaseStep();
+  await oldWalk;
+  expect(test.scope.usersRef.current[0]?.longitude).toBe(21);
+  expect(test.scope.remoteWalksRef.current.get("walker")).toBe(replacementToken);
+  expect(test.scope.motionStepsRef.current.get("walker")).toBe(replacementMotion);
+  expect(test.scope.sleep).toHaveBeenCalledTimes(2);
+  await test.releaseStep();
+  await test.releaseStep();
+  await replacement;
+  expect(test.scope.usersRef.current[0]?.longitude).toBe(22);
+  expect(test.scope.remoteWalksRef.current.size).toBe(0);
+  expect(test.scope.motionStepsRef.current.size).toBe(0);
+});
+
+it.each(["stealth", "departure"])(
+  "removes a hidden %s broadcast without animating or refetching",
+  (kind) => {
+    const test = walkScope([remotePosition(0)], true);
+    test.scope.isActiveRef.current = false;
+    test.scope.isUserCurrentlyStealthed = () => kind === "stealth";
+    test.broadcast({ ...remotePosition(10), sector: kind === "departure" ? 2 : 1 });
+    expect(test.scope.usersRef.current).toHaveLength(0);
+    expect(test.scope.pathFinderRef.current.getShortestPath).not.toHaveBeenCalled();
+    expect(test.scope.sleep).not.toHaveBeenCalled();
+    expect(test.scope.utils.travel.getSectorData.invalidate).not.toHaveBeenCalled();
+  },
+);

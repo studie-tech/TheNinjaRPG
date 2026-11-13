@@ -290,6 +290,9 @@ function Travel() {
       enabled: !!userData && userData.sector !== undefined,
       select: (data) => data?.sectorData?.village?.name ?? null,
       notifyOnChangeProps: ["data"],
+      // The visible sector scene owns presence recovery; the label must not wake a hidden one.
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     },
   );
   const { data: mapAssets } = useMapAssetLibrary(!!userData);

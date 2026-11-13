@@ -279,7 +279,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const walkAnimatingRef = useRef(false);
   const motionStepsRef = useRef(new Map<string, TravelMotionStep>());
   /** Latest walk per remote user; a newer move ends the walk it replaces. */
-  const remoteWalksRef = useRef(new Map<string, number>());
+  const remoteWalksRef = useRef(new Map<string, symbol>());
   const movePendingRef = useRef(false);
   const moveTargetRef = useRef<TravelSnapshot["routeTarget"]>(null);
   const mountedRef = useRef(true);
@@ -751,7 +751,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       if (idx !== -1 && usersRef.current[idx]) {
         if (instantMove) {
           // User exists - instant movement, which also ends any walk in progress
-          remoteWalksRef.current.delete(data.userId);
+          if (remoteWalksRef.current.delete(data.userId))
+            motionStepsRef.current.delete(data.userId);
           usersRef.current[idx] = {
             ...usersRef.current[idx],
             ...data,
@@ -774,7 +775,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             if (path) {
               const heading = worldMotionHeading(currentHex, targetHex);
               const walks = remoteWalksRef.current;
-              const walk = (walks.get(data.userId) ?? 0) + 1;
+              const walk = Symbol();
               walks.set(data.userId, walk);
               for (const tile of path) {
                 // The list changes while a walk sleeps: others leave and arrive, and a newer
@@ -784,6 +785,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
                 );
                 const before = usersRef.current[index];
                 if (!before || walks.get(data.userId) !== walk) break;
+                if (!isActiveRef.current) {
+                  // A retained scene keeps the destination without animating hidden tiles.
+                  await updateUsersList(data, true, true);
+                  break;
+                }
                 const motion = publishMotionStep(
                   data.userId,
                   { sector: data.sector, x: before.longitude, y: before.latitude },
@@ -814,7 +820,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       } else if (data.userId !== userRef.current?.userId) {
         // New identities come from the authenticated, masked sector snapshot. The viewer's
         // own marker comes from that snapshot's merge, which a refetch cannot change.
-        void utils.travel.getSectorData.invalidate();
+        // Mark hidden presence stale without waking another observer of this sector.
+        void utils.travel.getSectorData.invalidate(
+          { sector: sectorRef.current },
+          { refetchType: isActiveRef.current ? "active" : "none" },
+        );
       }
       // Remove users who are no longer in the sector; compare against the
       // live sector ref, which crossings advance before the prop catches up.
@@ -1720,7 +1730,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
               }
               return;
             }
-            void updateUsersList(data);
+            void updateUsersList(data, !isActiveRef.current);
           }
         },
       });
