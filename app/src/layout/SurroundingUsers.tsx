@@ -23,6 +23,7 @@ import {
   getKnownEffectiveLevel,
   getKnownExpBracket,
   getScoutingUsers,
+  passesBracketFilter,
 } from "@/libs/profile";
 import { hasRequiredRank } from "@/libs/rank";
 import type { SectorUser } from "@/libs/sector-map/world-types";
@@ -35,9 +36,11 @@ export const SurroundingUsers: React.FC<SurroundingUsersProps> = (props) => {
   const { userData, storedBrackets, setStoredBrackets } = props;
   const { data: villages } = api.village.getAll.useQuery(undefined);
   const nearbyUsers = getScoutingUsers(props.users, userData.userId, null);
-  const users = getScoutingUsers(props.users, userData.userId, storedBrackets).filter(
+  const users = nearbyUsers.filter(
     (user) =>
-      !props.excludeAllies || mapAttackRelation(userData, user, props.wars) !== "ALLY",
+      passesBracketFilter(user, storedBrackets) &&
+      (!props.excludeAllies ||
+        mapAttackRelation(userData, user, props.wars) !== "ALLY"),
   );
 
   return (
