@@ -66,6 +66,7 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     tournament: testApi.tournament,
     profile: testApi.profile,
+    comments: testApi.comments,
     useUtils: testApi.useUtils,
   });
   // Bun retains module mocks across suites; read this fixture's live provider.

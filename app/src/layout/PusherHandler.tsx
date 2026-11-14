@@ -136,15 +136,23 @@ export const usePusherHandler = (
       // A list read resets inbox news, even when its observer unmounts before delivery.
       // Successful server reads establish ordering without comparing client and server clocks.
       let inboxAcknowledged = queryClient.getQueryData(inboxKey) !== undefined;
+      let inboxReadRevision = 0;
+      let profileInboxRevision: number | undefined;
       const unsubscribeInboxReads = queryClient.getQueryCache().subscribe((event) => {
-        if (
-          event.type !== "updated" ||
-          event.action.type !== "success" ||
-          event.action.manual
-        )
-          return;
-        if (event.query.queryHash === inboxHash) inboxAcknowledged = true;
-        else if (event.query.queryHash === profileHash) inboxAcknowledged = false;
+        if (event.type !== "updated") return;
+        if (event.query.queryHash === profileHash && event.action.type === "fetch")
+          profileInboxRevision = inboxReadRevision;
+        if (event.action.type !== "success" || event.action.manual) return;
+        if (event.query.queryHash === inboxHash) {
+          inboxAcknowledged = true;
+          inboxReadRevision++;
+        } else if (
+          event.query.queryHash === profileHash &&
+          profileInboxRevision === inboxReadRevision
+        ) {
+          // A profile response can supersede only acknowledgements known when its read began.
+          inboxAcknowledged = false;
+        }
       });
       /** Whether a visible inbox list observes the conversation listing. */
       const inboxQuery = () =>
