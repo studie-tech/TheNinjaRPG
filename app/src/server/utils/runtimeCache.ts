@@ -119,9 +119,9 @@ export const createRuntimeCache = <Client, T>({
   };
 
   const readShared = async (client: Client): Promise<T> => {
-    await pendingInvalidation;
     let version: string;
     try {
+      await pendingInvalidation;
       version = await currentVersion();
     } catch {
       // Without the shared version no instance can prove its copy current.
@@ -139,25 +139,39 @@ export const createRuntimeCache = <Client, T>({
     return promise;
   };
 
-  /** Make every instance read the database again; call after a successful write. */
+  /** Confirm a new shared version; the SDK can resolve failed writes without storing them. */
+  const writeVersionKey = async () => {
+    const version = nanoid();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await cache.set(versionKey, version, { ttl: VERSION_TTL_SECONDS });
+        if ((await cache.get(versionKey)) === version) return;
+      } catch {
+        // Retry both rejected operations and writes that were not persisted.
+      }
+    }
+    throw new Error(`Could not invalidate the shared ${name} cache. Please try again.`);
+  };
+
+  /** Make every instance read the database again; reject if the shared version cannot be confirmed. */
   const invalidate = (): Promise<void> => {
     generation += 1;
     memory = undefined;
     pendingVersion = undefined;
     // The tag drops superseded payloads of every deployment at once.
     const invalidation = Promise.all([
-      cache.set(versionKey, nanoid(), { ttl: VERSION_TTL_SECONDS }),
-      cache.expireTag(payloadTag),
-    ]).then(
-      () => undefined,
-      (error: unknown) => {
-        console.error(`Runtime Cache invalidation failed for ${name}`, error);
-      },
-    );
+      writeVersionKey(),
+      // Versioned keys provide freshness even when obsolete payload cleanup fails.
+      cache.expireTag(payloadTag).catch(() => undefined),
+    ]).then(() => undefined);
     pendingInvalidation = invalidation;
-    void invalidation.then(() => {
-      if (pendingInvalidation === invalidation) pendingInvalidation = undefined;
-    });
+    void invalidation.then(
+      () => {
+        if (pendingInvalidation === invalidation) pendingInvalidation = undefined;
+      },
+      // Retain the failed invalidation so this instance reads the database until a retry succeeds.
+      () => undefined,
+    );
     return invalidation;
   };
   if (!store) invalidators.add(invalidate);

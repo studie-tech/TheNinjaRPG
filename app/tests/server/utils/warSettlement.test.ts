@@ -45,12 +45,7 @@ import { acceptWarAllyOffer, withdrawWarAlly } from "@/server/utils/warAlly";
 import { defaultWarRules } from "@/validators/war";
 import { insertUsers } from "../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../setup/serverModules";
-import {
-  interceptExecute,
-  pollUntil,
-  sqlText,
-  withoutTransactions,
-} from "../../setup/statements";
+import { interceptExecute, sqlText, withoutTransactions } from "../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -486,10 +481,7 @@ describeWithDatabase("guarded war settlement and delivery", () => {
     expect((await handleWarEnd(await snapshot(db), client)).status).toBe(
       "ATTACKER_VICTORY",
     );
-    // A rejected sibling can return before the independent boost write completes.
-    expect(
-      await pollUntil(async () => !!(await savedWar(db))?.settlement?.boostsDelivered),
-    ).toBe(true);
+    expect((await savedWar(db))?.settlement?.boostsDelivered).toBe(true);
     expect(
       (await listCachedGameSettings(client)).find(
         (row) => row.name === "war-attacker-regen",

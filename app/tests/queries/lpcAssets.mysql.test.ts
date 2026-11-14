@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFile } from "node:fs/promises";
+import { setImmediate } from "node:timers/promises";
 import { eq } from "drizzle-orm";
 import { json, mysqlTable, varchar } from "drizzle-orm/mysql-core";
 import sharp from "sharp";
@@ -10,6 +11,7 @@ import { UPLOADTHING_HOST } from "@/libs/uploadthing";
 import { deleteUnreferencedLpcAsset, listLpcAssets } from "@/queries/asset";
 import { findLpcDesignForSelection } from "@/queries/lpc";
 import { gameAssetRouter } from "@/routers/asset";
+import * as lpcCatalog from "@/server/utils/lpcCatalog";
 import * as ssrf from "@/server/utils/ssrf";
 import { gameAssetValidator } from "@/validators/asset";
 import type { LpcConfig } from "@/validators/lpcAsset";
@@ -287,12 +289,24 @@ describeWithDatabase("LPC GameAsset persistence", () => {
       where: eq(gameAsset.id, "katana"),
     });
     const config = { ...saved!.lpcConfig!, replacementSlot: "shirt" };
-    await expect(
-      caller.update({
+    const invalidating = deferred();
+    const release = deferred();
+    const invalidate = lpcCatalog.invalidateLpcCatalog;
+    vi.spyOn(lpcCatalog, "invalidateLpcCatalog").mockImplementation(async () => {
+      invalidating.resolve();
+      await release.promise;
+      await invalidate();
+    });
+    const update = caller
+      .update({
         id: "katana",
         data: gameAssetValidator.parse({ ...saved, lpcConfig: config }),
-      }),
-    ).rejects.toThrow("Action log unavailable");
+      })
+      .catch((error: unknown) => error);
+    await invalidating.promise;
+    expect(await Promise.race([update, setImmediate("pending")])).toBe("pending");
+    release.resolve();
+    expect(await update).toMatchObject({ message: "Action log unavailable" });
     expect(before.designs.katana!.replacementSlot).toBe("none");
     expect((await caller.getLpcSceneCatalog()).designs.katana!.replacementSlot).toBe(
       "shirt",

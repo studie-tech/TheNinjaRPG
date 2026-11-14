@@ -243,7 +243,7 @@ export const gameAssetRouter = createTRPCRouter({
         ...input.data,
       });
       // Update database
-      await Promise.all([
+      const writes = await Promise.allSettled([
         updateGameAssetForUpdate(ctx.drizzle, input, entry).then(() => {
           // Saved artwork must replace the cache even if the independent log write fails.
           if (entry.type === "LPC" || input.data.type === "LPC")
@@ -251,6 +251,8 @@ export const gameAssetRouter = createTRPCRouter({
         }),
         insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
       ]);
+      const failed = writes.find((result) => result.status === "rejected");
+      if (failed) throw failed.reason;
       await outdateProposalsFor(
         ctx.drizzle,
         "GAME_ASSET",
@@ -317,10 +319,13 @@ export const gameAssetRouter = createTRPCRouter({
           return errorResponse(
             "This design is used by an item or variant. Reassign its appearances before deleting it.",
           );
-        await Promise.all([
+        // Finish shared invalidation before returning an independent log failure.
+        const writes = await Promise.allSettled([
           invalidateLpcCatalog(),
           insertActionLogForDelete(ctx.drizzle, ctx, entry),
         ]);
+        const failed = writes.find((result) => result.status === "rejected");
+        if (failed) throw failed.reason;
       } else {
         await Promise.all([
           deleteGameAssetForDelete(ctx.drizzle, input),

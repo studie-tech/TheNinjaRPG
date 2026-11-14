@@ -1105,7 +1105,8 @@ export const questsRouter = createTRPCRouter({
         return errorResponse("Cannot delete tutorial quest");
       // Permission check
       if (canChangeContent(user.role)) {
-        await Promise.all([
+        // Shared invalidation must finish even when independent cleanup fails.
+        const writes = await Promise.allSettled([
           deleteQuestForDelete(ctx.drizzle, input).then(invalidateAchievementCatalogue),
           deleteQuestHistoryForDelete(ctx.drizzle, input),
           deleteRaidParticipationForDelete(ctx.drizzle, input),
@@ -1115,6 +1116,8 @@ export const questsRouter = createTRPCRouter({
           deleteUserQuestAttemptForDelete(ctx.drizzle, input),
           insertActionLogForDelete(ctx.drizzle, ctx, entry),
         ]);
+        const failed = writes.find((result) => result.status === "rejected");
+        if (failed) throw failed.reason;
         await outdateProposalsFor(
           ctx.drizzle,
           "QUEST",

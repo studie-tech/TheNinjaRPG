@@ -294,7 +294,8 @@ const finishWarSettlement = async (client: DrizzleClient, endedWar: War) => {
         insertGameSettingForFinishWarSettlement(client, boostNames),
       );
     }
-    await Promise.all([
+    // Finish boost publication and its invalidation before reporting sibling failures.
+    const writes = await Promise.allSettled([
       updateWarMercenaryForFinishWarSettlement(client, endedAt, endedWar),
       endedWar.rules
         ? updateUserDataForFinishWarSettlement(client, endedWar)
@@ -337,6 +338,8 @@ const finishWarSettlement = async (client: DrizzleClient, endedWar: War) => {
         executeRowsForFinishWarSettlement3(client, cleanupCutoff, receipt),
       ),
     ]);
+    const failed = writes.find((result) => result.status === "rejected");
+    if (failed) throw failed.reason;
     // The feed entry is durable before its count receipt is claimed; retries never increment twice.
     if (!receipt.notified)
       await retryOnDeadlock(() =>

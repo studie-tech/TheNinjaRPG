@@ -589,13 +589,16 @@ export const bloodlineRouter = createTRPCRouter({
       }
       // Mutate
       const bloodrightRefund = bloodrightSwapRefund(null);
-      await Promise.all([
+      // Shared invalidation must finish even when a sibling write fails.
+      const writes = await Promise.allSettled([
         deleteBloodlineForDelete(ctx.drizzle, input).then(
           invalidateBloodlineCollectionCatalogue,
         ),
         updateUserDataForDelete(ctx.drizzle, bloodrightRefund, input),
         insertActionLogForDelete(ctx.drizzle, ctx, entry),
       ]);
+      const failed = writes.find((result) => result.status === "rejected");
+      if (failed) throw failed.reason;
       await outdateProposalsFor(
         ctx.drizzle,
         "BLOODLINE",

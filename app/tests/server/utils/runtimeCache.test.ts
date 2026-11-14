@@ -95,6 +95,39 @@ describe("createRuntimeCache", () => {
     expect(database.reads).toBe(2);
   });
 
+  it("retries an unpersisted version write before confirming invalidation", async () => {
+    const { store } = memoryStore();
+    const database = { reads: 0, rows: [[1], [2]] };
+    const editor = instance(store, database);
+    const other = instance(store, database);
+    expect(await other.read({})).toEqual([1]);
+    store.set.mockClear().mockImplementationOnce(async () => undefined);
+    await editor.invalidate();
+    expect(store.set).toHaveBeenCalledTimes(2);
+    expect(await other.read({})).toEqual([2]);
+  });
+
+  it.each(["resolved", "rejected"])(
+    "rejects an unconfirmed invalidation after %s cache failures and bypasses its stale payload",
+    async (failure) => {
+      const { store } = memoryStore();
+      const database = { reads: 0, rows: [[1], [2], [3]] };
+      const cache = instance(store, database);
+      expect(await cache.read({})).toEqual([1]);
+      const set = store.set.getMockImplementation()!;
+      store.set.mockClear();
+      if (failure === "resolved") store.set.mockResolvedValue(undefined);
+      else store.set.mockRejectedValue(new Error("cache unavailable"));
+      store.expireTag.mockResolvedValue(undefined);
+      await expect(cache.invalidate()).rejects.toThrow("Could not invalidate");
+      expect(store.set).toHaveBeenCalledTimes(3);
+      expect(await cache.read({})).toEqual([2]);
+      store.set.mockImplementation(set);
+      await cache.invalidate();
+      expect(await cache.read({})).toEqual([3]);
+    },
+  );
+
   it("shares one read between concurrent misses and hands each caller its own copy", async () => {
     const { store } = memoryStore();
     const database = { reads: 0, rows: [[1, 2]] };
@@ -163,8 +196,7 @@ describe("createRuntimeCache", () => {
     expect(await cache.read({})).toEqual([1]);
     expect(await cache.read({})).toEqual([2]);
     store.expireTag.mockRejectedValue(new Error("cache unavailable"));
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-    await cache.invalidate();
+    await expect(cache.invalidate()).rejects.toThrow("Could not invalidate");
   });
 
   it("invalidates every Runtime Cache together", async () => {
