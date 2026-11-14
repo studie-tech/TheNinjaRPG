@@ -255,10 +255,12 @@ export const gameAssetRouter = createTRPCRouter({
       });
       // Update database
       await Promise.all([
-        updateGameAssetForUpdate(ctx.drizzle, input, entry),
+        updateGameAssetForUpdate(ctx.drizzle, input, entry).then(() => {
+          // Saved artwork must replace the cache even if the independent log write fails.
+          if (entry.type === "LPC" || input.data.type === "LPC") invalidateLpcCatalog();
+        }),
         insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
       ]);
-      if (entry.type === "LPC" || input.data.type === "LPC") invalidateLpcCatalog();
       await outdateProposalsFor(
         ctx.drizzle,
         "GAME_ASSET",

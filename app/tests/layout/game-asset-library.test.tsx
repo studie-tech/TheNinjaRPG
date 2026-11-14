@@ -128,7 +128,7 @@ beforeEach(() => {
         getAll: { invalidate: () => cache.invalidateQueries({ queryKey: ["assets"] }) },
         getAllFolders: { invalidate: noOp },
         getLpcCatalog: { invalidate: noOp },
-        getLpcSceneCatalog: { invalidate: noOp, setData: noOp },
+        getLpcSceneCatalog: { cancel: noOp, invalidate: noOp, setData: noOp },
         getAllNames: { invalidate: noOp },
         getNameTags: { invalidate: noOp },
       },

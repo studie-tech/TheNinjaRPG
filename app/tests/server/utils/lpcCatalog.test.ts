@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "bun:test";
 import { buildLpcCatalog } from "@/libs/lpc/catalog";
 import type { DrizzleClient } from "@/server/db";
 import { fetchLpcCatalog, invalidateLpcCatalog } from "@/server/utils/lpcCatalog";
+import { deferred } from "../../setup/deferred";
 import { lpcAssets } from "../../setup/lpc";
 
 afterEach(() => vi.restoreAllMocks());
@@ -66,6 +67,21 @@ it("reads past the cache for editors and keeps their newer snapshot", async () =
   const edited = [{ ...lpcAssets[0]!, id: "saved-elsewhere" }];
   findMany.mockResolvedValue(edited);
   expect((await fetchLpcCatalog(client, { fresh: true })).assets).toBe(edited);
+  expect((await fetchLpcCatalog(client)).assets).toBe(edited);
+  expect(findMany).toHaveBeenCalledTimes(2);
+});
+
+it("keeps the newer read when equal-timestamp reads finish in reverse order", async () => {
+  vi.spyOn(Date, "now").mockReturnValue(1000);
+  const { client, findMany } = database();
+  const older = deferred<typeof lpcAssets>();
+  findMany.mockImplementationOnce(() => older.promise);
+  const loading = fetchLpcCatalog(client, { fresh: true });
+  const edited = [{ ...lpcAssets[0]!, id: "saved-elsewhere" }];
+  findMany.mockResolvedValue(edited);
+  await fetchLpcCatalog(client, { fresh: true });
+  older.resolve(lpcAssets);
+  await loading;
   expect((await fetchLpcCatalog(client)).assets).toBe(edited);
   expect(findMany).toHaveBeenCalledTimes(2);
 });

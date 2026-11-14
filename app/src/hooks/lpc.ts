@@ -20,9 +20,12 @@ export const useLpcCatalogInvalidation = () => {
         utils.gameAsset.getLpcCatalog.invalidate(),
         utils.client.gameAsset.getLpcSceneCatalog
           .query({ fresh: true }, { context: { skipBatch: true } })
-          .then((catalog) =>
-            utils.gameAsset.getLpcSceneCatalog.setData(undefined, catalog),
-          )
+          .then((catalog) => {
+            // Stop stale writes, then supply saved artwork before pending scene readers settle.
+            const cancelled = utils.gameAsset.getLpcSceneCatalog.cancel();
+            utils.gameAsset.getLpcSceneCatalog.setData(undefined, catalog);
+            return cancelled;
+          })
           // The next scene then requests the catalog again.
           .catch(() => utils.gameAsset.getLpcSceneCatalog.invalidate()),
       ]),

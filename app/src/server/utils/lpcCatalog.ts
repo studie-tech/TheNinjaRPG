@@ -12,6 +12,7 @@ type LpcCatalogSnapshot = {
   assets: Awaited<ReturnType<typeof listLpcAssets>>;
   catalog: LpcCatalog;
   at: number;
+  sequence: number;
   generation: number;
 };
 
@@ -22,6 +23,7 @@ const pendingSnapshots = new WeakMap<
   { promise: Promise<LpcCatalogSnapshot>; generation: number }
 >();
 let generation = 0;
+let readSequence = 0;
 
 /** Drop cached snapshots and prevent in-flight reads from refilling them; call after LPC writes. */
 export const invalidateLpcCatalog = () => {
@@ -61,18 +63,18 @@ const loadSnapshot = async (client: LpcClient) => {
   const startedGeneration = generation;
   // A slow read cannot claim freshness newer than its snapshot.
   const startedAt = Date.now();
+  // Reads can share a timestamp but must retain their start order.
+  const sequence = ++readSequence;
   const assets = await listLpcAssets(client);
   const snapshot = {
     assets,
     catalog: buildLpcCatalog(assets),
     at: startedAt,
+    sequence,
     generation: startedGeneration,
   };
   const cached = snapshots.get(client);
-  if (
-    startedGeneration === generation &&
-    (!cached || cached.generation !== generation || cached.at <= startedAt)
-  )
+  if (startedGeneration === generation && (!cached || cached.sequence < sequence))
     snapshots.set(client, snapshot);
   return snapshot;
 };

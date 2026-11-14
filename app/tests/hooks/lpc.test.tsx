@@ -4,6 +4,7 @@ import { cleanup, renderHook } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { useLpcCatalogInvalidation, useLpcCatalogLoader } from "@/hooks/lpc";
 import { buildLpcCatalog } from "@/libs/lpc/catalog";
+import { deferred } from "../setup/deferred";
 import { lpcAssets } from "../setup/lpc";
 
 afterEach(() => {
@@ -38,6 +39,7 @@ const fixture = (cached?: typeof lpcAssets) => {
       getLpcCatalog: { invalidate: discoveryInvalidation },
       getLpcSceneCatalog: {
         getData: () => compiled,
+        cancel: vi.fn(async () => {}),
         fetch,
         invalidate: sceneInvalidation,
         setData,
@@ -63,10 +65,16 @@ const queryCacheFixture = () => {
   const queryKey = ["gameAsset.getLpcSceneCatalog"];
   let assets = lpcAssets;
   const network = vi.fn(async () => buildLpcCatalog(assets));
+  const freshQuery = vi.fn(async () => buildLpcCatalog(assets));
   const utils = {
+    client: { gameAsset: { getLpcSceneCatalog: { query: freshQuery } } },
     gameAsset: {
+      getLpcCatalog: { invalidate: async () => {} },
       getLpcSceneCatalog: {
         getData: () => cache.getQueryData(queryKey),
+        cancel: () => cache.cancelQueries({ queryKey }),
+        setData: (_input: undefined, catalog: ReturnType<typeof buildLpcCatalog>) =>
+          cache.setQueryData(queryKey, catalog),
         fetch: (_input: undefined, options: { staleTime: number; gcTime: number }) =>
           cache.fetchQuery({ queryKey, queryFn: network, ...options }),
         invalidate: () => cache.invalidateQueries({ queryKey }),
@@ -76,6 +84,7 @@ const queryCacheFixture = () => {
   Object.assign(vi.spyOn(client, "api" as never), { useUtils: () => utils });
   return {
     network,
+    freshQuery,
     invalidate: utils.gameAsset.getLpcSceneCatalog.invalidate,
     save: (edited: typeof lpcAssets) => {
       assets = edited;
@@ -124,6 +133,30 @@ describe("scene character catalog loading", () => {
     expect(await preview.result.current()).toEqual(buildLpcCatalog(edited));
     expect(scenes.network).toHaveBeenCalledTimes(2);
   });
+
+  it.each(["before", "during"] as const)(
+    "keeps saved artwork when a scene request starts %s the fresh read and finishes later",
+    async (timing) => {
+      const scenes = queryCacheFixture();
+      const older = deferred<ReturnType<typeof buildLpcCatalog>>();
+      const fresh = deferred<ReturnType<typeof buildLpcCatalog>>();
+      scenes.network.mockImplementationOnce(() => older.promise);
+      scenes.freshQuery.mockImplementationOnce(() => fresh.promise);
+      const loader = renderHook(() => useLpcCatalogLoader());
+      const invalidation = renderHook(() => useLpcCatalogInvalidation());
+      const startScene = () => loader.result.current();
+      const beforeSave = timing === "before" ? startScene() : undefined;
+      const saving = invalidation.result.current();
+      const loading = beforeSave ?? startScene();
+      const edited = buildLpcCatalog([{ ...lpcAssets[0]!, id: "saved-artwork" }]);
+      fresh.resolve(edited);
+      await saving;
+      older.resolve(buildLpcCatalog(lpcAssets));
+      expect(await loading).toEqual(edited);
+      expect(await loader.result.current()).toEqual(edited);
+      expect(scenes.network).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("shares a prepared request with the first scene and refreshes later scenes", async () => {
     const request = fixture();

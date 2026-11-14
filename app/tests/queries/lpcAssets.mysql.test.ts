@@ -14,9 +14,14 @@ import * as ssrf from "@/server/utils/ssrf";
 import { gameAssetValidator } from "@/validators/asset";
 import type { LpcConfig } from "@/validators/lpcAsset";
 import { seedLpcAssets } from "../../drizzle/seeds/lpc";
+import { deferred } from "../setup/deferred";
 import { insertItems, insertUsers } from "../setup/factories";
 import { rateLimitResponse, stubRateLimitTransport } from "../setup/rateLimit";
-import { beforeStatements, failStatements } from "../setup/statements";
+import {
+  aroundStatements,
+  beforeStatements,
+  failStatements,
+} from "../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -257,6 +262,41 @@ describeWithDatabase("LPC GameAsset persistence", () => {
       buildLpcCatalog(await caller.getLpcCatalog()).designs.katana!.replacementSlot,
     ).toBe("shirt");
     expect((await caller.delete({ id: "body" })).success).toBe(false);
+  });
+
+  it("replaces the scene snapshot after a saved LPC edit even when its log fails", async () => {
+    const database = await getTestDatabase();
+    await seedLpcAssets(database);
+    await insertUsers([{ userId: "lpc-editor", role: "CODER" }]);
+    const wrote = deferred();
+    const observed = aroundStatements(database, gameAsset, async (run) => {
+      const result = await run();
+      wrote.resolve();
+      return result;
+    });
+    const failing = beforeStatements(observed, actionLog, [
+      async () => {
+        // Fail logging after the artwork commits, exposing an independently stale cache.
+        await wrote.promise;
+        throw new Error("Action log unavailable");
+      },
+    ]);
+    const caller = callerForDatabase(gameAssetRouter, "lpc-editor", failing);
+    const before = await caller.getLpcSceneCatalog();
+    const saved = await database.query.gameAsset.findFirst({
+      where: eq(gameAsset.id, "katana"),
+    });
+    const config = { ...saved!.lpcConfig!, replacementSlot: "shirt" };
+    await expect(
+      caller.update({
+        id: "katana",
+        data: gameAssetValidator.parse({ ...saved, lpcConfig: config }),
+      }),
+    ).rejects.toThrow("Action log unavailable");
+    expect(before.designs.katana!.replacementSlot).toBe("none");
+    expect((await caller.getLpcSceneCatalog()).designs.katana!.replacementSlot).toBe(
+      "shirt",
+    );
   });
 
   it.each(["full", "travel"] as const)(
