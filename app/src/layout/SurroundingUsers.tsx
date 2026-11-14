@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
+  IMG_ICON_HEAL,
   IMG_ICON_MOVE,
   IMG_SECTOR_ATTACK,
+  IMG_SECTOR_INFO,
   IMG_SECTOR_ROB,
   MAX_PVP_BRACKET,
   MEDNIN_MIN_RANK,
@@ -149,14 +151,15 @@ export const SurroundingUsers: React.FC<SurroundingUsersProps> = (props) => {
               return (
                 <li
                   key={user.userId}
-                  className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-2 py-2 text-sm lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)] lg:gap-3 lg:py-3"
+                  className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-2 py-2 text-sm lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)] lg:gap-3 lg:py-3"
                 >
-                  <div className="flex min-w-0 items-center gap-3">
+                  {/* Share the avatar across both detail rows on mobile and keep one player cell on desktop. */}
+                  <div className="contents lg:flex lg:min-w-0 lg:items-center lg:gap-3">
                     <AvatarImage
                       href={user.avatar}
                       alt={user.username}
                       size={40}
-                      className="m-0 w-10 shrink-0 rounded-lg"
+                      className="row-span-2 m-0 w-10 shrink-0 rounded-lg"
                     />
                     <span className="min-w-0 font-semibold wrap-anywhere">
                       {user.username}
@@ -174,10 +177,10 @@ export const SurroundingUsers: React.FC<SurroundingUsersProps> = (props) => {
                     Lvl. {getKnownEffectiveLevel(user) ?? "?"} · Bracket{" "}
                     {getKnownExpBracket(user) ?? "?"}
                   </span>
-                  <span className="text-muted-foreground col-start-2 row-start-1 justify-self-end lg:col-start-auto lg:row-start-auto lg:justify-self-auto">
+                  <span className="text-muted-foreground col-start-3 row-start-1 justify-self-end lg:col-start-auto lg:row-start-auto lg:justify-self-auto">
                     [{user.longitude}, {user.latitude}]
                   </span>
-                  <div className="col-span-2 flex flex-wrap items-center gap-2 lg:col-span-1">
+                  <div className="col-span-3 flex flex-wrap items-center gap-2 lg:col-span-1">
                     {!sameHex && (
                       <ScoutAction
                         label="Move"
@@ -228,19 +231,32 @@ export const SurroundingUsers: React.FC<SurroundingUsersProps> = (props) => {
                             <Button
                               variant="outline"
                               size="sm"
+                              className="gap-2 px-2 lg:px-3"
                               aria-label={`Heal ${user.username}`}
                             >
+                              <Image
+                                src={IMG_ICON_HEAL}
+                                width={20}
+                                height={20}
+                                alt=""
+                              />
                               Heal
                             </Button>
                           }
                         />
                       )}
                     {!user.isMasked && (
-                      <Button variant="outline" size="sm" asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2 px-2 lg:px-3"
+                        asChild
+                      >
                         <Link
                           href={`/userid/${user.userId}`}
                           aria-label={`Profile of ${user.username}`}
                         >
+                          <Image src={IMG_SECTOR_INFO} width={20} height={20} alt="" />
                           Profile
                         </Link>
                       </Button>
@@ -278,7 +294,7 @@ const ScoutAction = ({
     size="sm"
     onClick={onClick}
     aria-disabled={isUnavailable}
-    className={`gap-2 ${isUnavailable ? "opacity-50" : ""}`}
+    className={`gap-2 px-2 lg:px-3 ${isUnavailable ? "opacity-50" : ""}`}
     title={title}
     aria-label={`${label} ${targetName}`}
   >
