@@ -2052,11 +2052,8 @@ const questDiscoveryColumns = {
   ...questDiscoveryHistoryColumns,
 };
 
-/**
- * Listing fields and availability inputs without objective content. The objective rules
- * availability enforces are evaluated in SQL and returned as their summary.
- */
-const questAvailabilityColumns = {
+/** Listing and eligibility fields shared by lightweight quest discovery projections. */
+const questDiscoveryListingColumns = {
   id: quest.id,
   name: quest.name,
   image: quest.image,
@@ -2080,6 +2077,20 @@ const questAvailabilityColumns = {
   requiredBukijutsuMastery: quest.requiredBukijutsuMastery,
   requiredBloodlineMastery: quest.requiredBloodlineMastery,
   requiredSageMastery: quest.requiredSageMastery,
+  maxLevel: quest.maxLevel,
+  maxAttempts: quest.maxAttempts,
+  maxCompletes: quest.maxCompletes,
+  retryDelay: quest.retryDelay,
+  startsAt: quest.startsAt,
+  endsAt: quest.endsAt,
+};
+
+/**
+ * Listing fields and availability inputs without objective content. The objective rules
+ * availability enforces are evaluated in SQL and returned as their summary.
+ */
+const questAvailabilityColumns = {
+  ...questDiscoveryListingColumns,
   content: sql`JSON_OBJECT(
     'reward', JSON_EXTRACT(${quest.content}, '$.reward'),
     'rewardMode', JSON_EXTRACT(${quest.content}, '$.rewardMode'),
@@ -2105,12 +2116,6 @@ const questAvailabilityColumns = {
       }),
     };
   }),
-  maxLevel: quest.maxLevel,
-  maxAttempts: quest.maxAttempts,
-  maxCompletes: quest.maxCompletes,
-  retryDelay: quest.retryDelay,
-  startsAt: quest.startsAt,
-  endsAt: quest.endsAt,
   ...questDiscoveryHistoryColumns,
 };
 
@@ -2162,29 +2167,7 @@ export const fetchQuestDiscoverySummaryCandidates = async (
 ) =>
   client
     .select({
-      id: quest.id,
-      name: quest.name,
-      image: quest.image,
-      description: quest.description,
-      questRank: quest.questRank,
-      medicalRank: quest.medicalRank,
-      huntingRank: quest.huntingRank,
-      gatheringRank: quest.gatheringRank,
-      requiredLevel: quest.requiredLevel,
-      requiredFarmingLevel: quest.requiredFarmingLevel,
-      prerequisiteQuestId: quest.prerequisiteQuestId,
-      questType: quest.questType,
-      hidden: quest.hidden,
-      requiredVillage: quest.requiredVillage,
-      requiredBloodlineId: quest.requiredBloodlineId,
-      requiredSageModeId: quest.requiredSageModeId,
-      requiredSageRank: quest.requiredSageRank,
-      requiredNinjutsuMastery: quest.requiredNinjutsuMastery,
-      requiredGenjutsuMastery: quest.requiredGenjutsuMastery,
-      requiredTaijutsuMastery: quest.requiredTaijutsuMastery,
-      requiredBukijutsuMastery: quest.requiredBukijutsuMastery,
-      requiredBloodlineMastery: quest.requiredBloodlineMastery,
-      requiredSageMastery: quest.requiredSageMastery,
+      ...questDiscoveryListingColumns,
       // Eligibility needs the fixed promotion and reward mode, but not objective JSON.
       content:
         sql`JSON_OBJECT('reward', JSON_EXTRACT(${quest.content}, '$.reward'), 'rewardMode', JSON_EXTRACT(${quest.content}, '$.rewardMode'))`.mapWith(
@@ -2194,12 +2177,6 @@ export const fetchQuestDiscoverySummaryCandidates = async (
               "reward" | "rewardMode"
             >,
         ),
-      maxLevel: quest.maxLevel,
-      maxAttempts: quest.maxAttempts,
-      maxCompletes: quest.maxCompletes,
-      retryDelay: quest.retryDelay,
-      startsAt: quest.startsAt,
-      endsAt: quest.endsAt,
       previousAttempts: questHistory.previousAttempts,
       previousCompletes: questHistory.previousCompletes,
       periodCompletes: questHistory.periodCompletes,
