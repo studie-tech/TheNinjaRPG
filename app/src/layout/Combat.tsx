@@ -823,7 +823,8 @@ const Combat: React.FC<CombatProps> = (props) => {
       resultRef.current
     )
       return;
-    if (character?.userId) inspectUser(character.userId);
+    if (character?.userId && character.userId !== controlledActorId)
+      inspectUser(character.userId);
     setAggroTarget(
       config.showAggro && character?.userId && aggro.has(character.userId)
         ? character

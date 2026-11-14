@@ -1,10 +1,13 @@
-import { afterEach, beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, mock } from "bun:test";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { Provider } from "jotai";
 import { useCombatInspection } from "@/hooks/useCombatInspection";
 import { CombatInspectionPicker } from "@/layout/CombatInspectionPicker";
+import type { CombatInspection } from "@/libs/combat/inspection";
+import { resolveCombatInspection } from "@/libs/combat/inspection";
 import type { ReturnedBattle } from "@/libs/combat/types";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { readSource, runInScope, sliceExpressionAfter } from "../setup/sourceSlice";
 
 beforeEach(installBrowserGlobals);
 afterEach(() => {
@@ -70,3 +73,65 @@ it("clears selection when the displayed roster removes a character and when a ne
   view.rerender(<Layout shown={battle("next")} />);
   expect(screen.getByTestId("inspected").textContent).toBe("enemy:90");
 });
+
+it.each([
+  { initialId: null, clickedId: "me", expectedId: "enemy" },
+  { initialId: "ally", clickedId: "me", expectedId: "ally" },
+  { initialId: null, clickedId: "ally", expectedId: "ally" },
+  { initialId: "ally", clickedId: "enemy", expectedId: "enemy" },
+])(
+  "inspects $expectedId after tapping $clickedId with selection $initialId while submitting the action",
+  ({ initialId, clickedId, expectedId }) => {
+    const shown = battle();
+    let selection: CombatInspection = initialId
+      ? { battleId: shown.id, userId: initialId }
+      : null;
+    const target = { col: 2, row: 3 };
+    const performAction = mock();
+    const validateActionTarget = mock(() => ({ isValid: true }));
+    const onTap = sliceExpressionAfter(
+      readSource("layout/Combat.tsx"),
+      /combatCallbacks\.current\.onTap = \(target, character\) =>\s*/,
+    );
+    const cursor = document.body.style.cursor;
+    document.body.style.cursor = "";
+    try {
+      runInScope(onTap, {
+        target,
+        character: { userId: clickedId },
+        controlledActorId: "me",
+        touchDetailsOpenRef: { current: false },
+        suppressClickUntilRef: { current: 0 },
+        resultRef: { current: null },
+        inspectUser: (userId: string) => {
+          selection = { battleId: shown.id, userId };
+        },
+        setAggroTarget() {},
+        config: { showAggro: false },
+        battleRef: { current: shown },
+        actionRef: { current: { id: "ability" } },
+        gridRef: { current: {} },
+        userIdRef: { current: "me" },
+        timeDiff: 0,
+        precomputedActionsRef: { current: [] },
+        validateActionTarget,
+        canPerformAction: () => true,
+        performAction,
+      });
+      expect(resolveCombatInspection(shown, "me", selection)?.userId).toBe(expectedId);
+      expect(validateActionTarget).toHaveBeenCalledWith(
+        expect.objectContaining({ user: shown.usersState[0], target }),
+      );
+      expect(performAction).toHaveBeenCalledTimes(1);
+      expect(performAction).toHaveBeenCalledWith({
+        battleId: shown.id,
+        version: shown.version,
+        actionId: "ability",
+        longitude: target.col,
+        latitude: target.row,
+      });
+    } finally {
+      document.body.style.cursor = cursor;
+    }
+  },
+);
