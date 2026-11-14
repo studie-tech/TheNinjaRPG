@@ -11,6 +11,7 @@ import {
   and,
   asc,
   count,
+  desc,
   eq,
   exists,
   gt,
@@ -22,6 +23,7 @@ import {
   lte,
   ne,
   notExists,
+  notInArray,
   or,
   type SQL,
   sql,
@@ -2259,10 +2261,9 @@ export const hasNoBattleWhere = (userId: string) =>
  * Backpack stacks a fresh row of the same item may join: the carried, unequipped, non-auction
  * stacks the Merge button would combine with it (no variant, no imbuement, not mid-craft,
  * level 1 unless consumable; see `getItemStackMergeBucketKey`), still at full durability.
- * Positive quantities skip rows claimed or emptied by a running merge. Nothing joins while
- * the owner is in a battle, whose settlement writes battle quantities back to its rows.
+ * Positive quantities skip rows claimed or emptied by a running merge.
  */
-const grantableUserItemWhere = (userId: string, now: Date) =>
+const joinableUserItemWhere = (userId: string, now: Date) =>
   and(
     eq(userItem.userId, userId),
     eq(userItem.storedAtHome, false),
@@ -2277,8 +2278,14 @@ const grantableUserItemWhere = (userId: string, now: Date) =>
       sql`EXISTS (SELECT 1 FROM ${item} WHERE ${item.id} = ${userItem.itemId} AND ${item.itemType} = ${"CONSUMABLE"})`,
     ),
     sql`NOT EXISTS (SELECT 1 FROM ${userItemImbuement} WHERE ${userItemImbuement.userItemId} = ${userItem.id})`,
-    hasNoBattleWhere(userId),
   );
+
+/**
+ * Joinable stacks outside a battle: nothing joins while the owner is in one, whose settlement
+ * writes battle quantities back to its rows.
+ */
+const grantableUserItemWhere = (userId: string, now: Date) =>
+  and(joinableUserItemWhere(userId, now), hasNoBattleWhere(userId));
 
 /**
  * Build the listing of each granted item's stack settings with the backpack stacks it may
@@ -2331,6 +2338,38 @@ export const updateUserItemForGrantUserItems = (
         sql`${userItem.quantity} + ${quantity} <= ${effectiveStackSizeSql(userItem.itemId)}`,
       ),
     );
+
+/**
+ * Build the top-up adding dropped units of one item to the fullest joinable backpack stack
+ * with room for them. Settlement runs while the owner is still in that battle, so the
+ * stacks it writes back are excluded by ID instead of waiting for the battle to end.
+ */
+export const updateUserItemForBattleDrop = (
+  client: Pick<DrizzleClient, "update">,
+  userId: string,
+  itemId: string,
+  quantity: number,
+  battleUserItemIds: string[],
+  now: Date,
+) =>
+  client
+    .update(userItem)
+    .set({
+      quantity: sql`${userItem.quantity} + ${quantity}`,
+      updatedAt: nextSnapshotSql(userItem.updatedAt),
+    })
+    .where(
+      and(
+        eq(userItem.itemId, itemId),
+        joinableUserItemWhere(userId, now),
+        battleUserItemIds.length > 0
+          ? notInArray(userItem.id, battleUserItemIds)
+          : undefined,
+        sql`${userItem.quantity} + ${quantity} <= ${effectiveStackSizeSql(userItem.itemId)}`,
+      ),
+    )
+    .orderBy(desc(userItem.quantity), asc(userItem.id))
+    .limit(1);
 
 /** Build insertion of caller-prepared inventory rows. */
 export const insertUserItems = (
