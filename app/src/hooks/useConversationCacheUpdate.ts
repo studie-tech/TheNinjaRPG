@@ -74,23 +74,25 @@ export function useInboxConversations(
     notifications,
     updateNotifications,
   } = useUserDataSelector((u) => u.userId);
+  const inboxNews = getInboxNews(notifications);
+  const client = useQueryClient();
+  // A count change can follow an in-flight read's server reset. Capture shared reads
+  // before useQuery starts this mount's own read so each consumer waits for a newer read.
+  const news = useRef({
+    count: inboxNews,
+    refetched: false,
+    readInFlight:
+      client.isFetching({
+        queryKey: getQueryKey(api.comments.getUserConversations, undefined, "query"),
+        exact: true,
+      }) > 0,
+    mounted: false,
+  });
   const result = api.comments.getUserConversations.useQuery(undefined, {
     enabled: !!userData,
     ...options,
   });
-  const inboxNews = getInboxNews(notifications);
-  const client = useQueryClient();
   const { data, fetchStatus, refetch } = result;
-  // The server only ever resets the counter to zero, so any other count is new news.
-  // News that arrives while a list read is in flight may have
-  // been counted after that read reset the server counter, so the read does not count for it;
-  // news already there on mount predates any read this hook starts.
-  const news = useRef({
-    count: 0,
-    refetched: false,
-    readInFlight: false,
-    mounted: false,
-  });
   useEffect(() => {
     const queryHash = hashKey(
       getQueryKey(api.comments.getUserConversations, undefined, "query"),
@@ -101,10 +103,14 @@ export function useInboxConversations(
         event.type !== "updated" ||
         event.action.type !== "success" ||
         event.action.manual ||
-        news.current.count === 0 ||
-        news.current.readInFlight
+        news.current.count === 0
       )
         return;
+      if (news.current.readInFlight) {
+        // This read predates the news; subsequent shared reads can acknowledge it.
+        news.current.readInFlight = false;
+        return;
+      }
       // Only a successful server read proves the reset; local writes and wall clocks do not.
       news.current.refetched = true;
       const { count } = news.current;

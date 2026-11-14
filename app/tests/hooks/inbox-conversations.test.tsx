@@ -280,3 +280,22 @@ it("clears news that was already there on mount after one read", async () => {
   await waitFor(() => expect(events).toContain("badge cleared"));
   expect(events).toEqual(["list read", "badge cleared"]);
 });
+
+it("keeps news that arrives during a shared read when another consumer mounts", async () => {
+  notifications = [];
+  updateNotifications.mockImplementation(async (update) => {
+    const before = notifications;
+    notifications = update(before) ?? before;
+    if (notifications !== before) events.push("badge cleared");
+  });
+  listReadDelay = 150;
+  seedEarlierList();
+  const first = render();
+  void queryClient.refetchQueries({ queryKey: conversationsKey() });
+  await waitFor(() => expect(events).toEqual(["list read"]));
+  notifications = [inboxNews];
+  first.rerender();
+  render();
+  await waitFor(() => expect(events).toContain("badge cleared"));
+  expect(events).toEqual(["list read", "list read", "badge cleared"]);
+});
