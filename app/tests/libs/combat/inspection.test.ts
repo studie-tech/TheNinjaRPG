@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { resolveCombatInspection } from "@/libs/combat/inspection";
+import {
+  holdsPin,
+  inspectsBattlefieldTap,
+  resolveCombatInspection,
+} from "@/libs/combat/inspection";
 import type { ReturnedBattle } from "@/libs/combat/types";
 
 const snapshot = () =>
@@ -54,5 +58,48 @@ describe("combat inspection", () => {
     const shown = snapshot();
     shown.usersState = shown.usersState.filter((user) => user.direction === "left");
     expect(resolveCombatInspection(shown, "me", null)).toBeUndefined();
+  });
+});
+
+describe("battlefield tap inspection", () => {
+  it.each([
+    ["me", false, true],
+    ["ally", false, true],
+    ["pet", false, true],
+    ["enemy", false, true],
+    ["me", true, false],
+    ["ally", true, false],
+    ["pet", true, false],
+    ["enemy", true, true],
+  ] as const)("tapping %s, aiming: %p, inspects: %p", (userId, aims, inspects) => {
+    expect(inspectsBattlefieldTap(snapshot(), "me", userId, aims)).toBe(inspects);
+  });
+  it("inspects when the viewer is not a fighter", () => {
+    expect(inspectsBattlefieldTap(snapshot(), "spectator", "ally", true)).toBe(true);
+  });
+});
+
+describe("pinned inspection", () => {
+  const pin = (userId: string) => ({ battleId: "battle", userId, pinned: true });
+  it("holds a pin on a living fighter of the shown battle", () => {
+    expect(holdsPin(snapshot(), pin("enemy"))).toBe(true);
+  });
+  it.each([
+    ["a defeated fighter", snapshot(), pin("dead")],
+    ["a fighter who is gone", snapshot(), pin("nobody")],
+    [
+      "a fighter who fled",
+      (() => {
+        const shown = snapshot();
+        shown.usersState[3]!.fledBattle = true;
+        return shown;
+      })(),
+      pin("enemy"),
+    ],
+    ["another battle", snapshot(), { ...pin("enemy"), battleId: "old" }],
+    ["a followed tap", snapshot(), { battleId: "battle", userId: "enemy" }],
+    ["no selection", snapshot(), null],
+  ] as const)("releases %s", (_, shown, selection) => {
+    expect(holdsPin(shown, selection)).toBe(false);
   });
 });
