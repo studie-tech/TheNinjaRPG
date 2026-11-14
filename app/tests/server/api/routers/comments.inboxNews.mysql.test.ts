@@ -7,6 +7,7 @@ import {
   userData,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import * as commentsQueries from "@/queries/comments";
 import { commentsRouter } from "@/server/api/routers/comments";
 import { insertUsers } from "../../../setup/factories";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
@@ -56,6 +57,35 @@ describeWithDatabase("inbox news for a private message", () => {
     expect(Object.fromEntries(rows.map((row) => [row.userId, row.inboxNews]))).toEqual({
       sender: 0,
       friend: 1,
+    });
+  });
+
+  it("timestamps counting before a slower write delays delivery", async () => {
+    let now = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const update = commentsQueries.updateConversationForCreateConversationComment;
+    vi.spyOn(
+      commentsQueries,
+      "updateConversationForCreateConversationComment",
+    ).mockImplementation(((...args: Parameters<typeof update>) =>
+      update(...args).then((result) => {
+        now = 4_000;
+        return result;
+      })) as never);
+    const events = vi.spyOn(Pusher.prototype, "trigger");
+    events.mockClear();
+    const api = await callerFor(commentsRouter, "sender");
+    const result = await api.createConversationComment({
+      object_id: "private-convo",
+      comment: "Meet at the gate at noon.",
+      quoteIds: null,
+      senderId: null,
+    });
+    expect(result.success).toBe(true);
+    expect(events).toHaveBeenCalledWith("friend", "event", {
+      type: "newInbox",
+      conversationId: "private-convo",
+      countedAt: 1_000,
     });
   });
 

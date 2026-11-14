@@ -196,11 +196,24 @@ it("counts a delivered private message in the cached profile without rereading i
   expect(inboxNews()).toBe(2);
   expect(readProfile).not.toHaveBeenCalled();
   unsubscribeList();
+  // A delayed delivery after a list acknowledgement must not recreate the badge,
+  // even after the list unmounts and the profile's older timestamp would accept it.
+  await act(async () =>
+    receiveEvent({ type: "newInbox", conversationId: "chat", countedAt: 10_000 }),
+  );
+  await waitFor(() => expect(readProfile).toHaveBeenCalledTimes(1));
+  expect(inboxNews()).toBeUndefined();
+  // A new authoritative profile restores the incremental path for later deliveries.
+  await act(async () =>
+    receiveEvent({ type: "newInbox", conversationId: "chat", countedAt: 20_000 }),
+  );
+  expect(inboxNews()).toBe(1);
+  expect(readProfile).toHaveBeenCalledTimes(1);
   // A profile read just before the delivery may already count it, so the count is reread.
   await act(async () =>
     receiveEvent({ type: "newInbox", conversationId: "chat", countedAt: 1_500 }),
   );
-  await waitFor(() => expect(readProfile).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(readProfile).toHaveBeenCalledTimes(2));
   unsubscribe();
 });
 

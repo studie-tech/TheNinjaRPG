@@ -13,6 +13,7 @@ import {
   SECTOR_ARRIVAL_BATCH_LIMIT,
   SECTOR_ARRIVAL_BATCH_MS,
 } from "@/libs/travel";
+import { deferred } from "../setup/deferred";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 import { mockUserContextValue } from "../setup/userContext";
 
@@ -50,7 +51,7 @@ const updateEnd = source.indexOf("  /** Stand the own marker", updateStart);
 if (updateStart < 0 || updateEnd < 0) throw new Error("Missing presence merge");
 const presenceMerge = new Function(
   "scope",
-  `with (scope) { ${transpiler.transformSync(source.slice(updateStart, updateEnd))}; return updateUsersList; }`,
+  `with (scope) { ${transpiler.transformSync(source.slice(updateStart, updateEnd))}; return { updateUsersList, cancelArrival }; }`,
 );
 const clients: QueryClient[] = [];
 let now: number;
@@ -94,7 +95,11 @@ const advance = async (ms: number) => {
   await settle();
 };
 /** Mount the actual presence, patrol and dungeon hooks used by the retained sector. */
-const setup = (isActive: boolean, observeParent = false) => {
+const setup = (
+  isActive: boolean,
+  observeParent = false,
+  arrivalRead?: (userIds: string[]) => Promise<unknown[]>,
+) => {
   let generation = 0;
   const read = vi.fn((path: string, input?: unknown) => {
     if (path === "travel.getSectorData")
@@ -106,7 +111,9 @@ const setup = (isActive: boolean, observeParent = false) => {
       };
     if (path === "travel.getSectorUsers") {
       const { userIds } = input as { userIds: string[] };
-      return userIds.map((userId) => ({ userId, username: userId, sector: 3 }));
+      return arrivalRead
+        ? arrivalRead(userIds)
+        : userIds.map((userId) => ({ userId, username: userId, sector: 3 }));
     }
     if (path === "coop.dungeon.getAvailable") return [];
     if (path === "villageDuty.patrol")
@@ -127,7 +134,10 @@ const setup = (isActive: boolean, observeParent = false) => {
     (props: { isActive: boolean; sector: number }) => {
       const utils = testApi.useUtils();
       const arrivalsRef = useRef({
-        wanted: new Set<string>(),
+        wanted: new Map<
+          string,
+          { movement?: { longitude: number; latitude: number } }
+        >(),
         queued: new Set<string>(),
         timer: undefined as ReturnType<typeof setTimeout> | undefined,
       });
@@ -145,7 +155,7 @@ const setup = (isActive: boolean, observeParent = false) => {
         useVillageDutyPursuit,
         useDungeonAvailability,
       }) as RouterOutputs["travel"]["getSectorData"];
-      const updateRemote = presenceMerge({
+      const { updateUsersList: updateRemote, cancelArrival } = presenceMerge({
         userRef: { current: { userId: "actor" } },
         userData: { userId: "actor" },
         usersRef: { current: [] },
@@ -166,8 +176,11 @@ const setup = (isActive: boolean, observeParent = false) => {
         isSectorPresenceStatus,
         SECTOR_ARRIVAL_BATCH_LIMIT,
         SECTOR_ARRIVAL_BATCH_MS,
-      }) as (data: unknown) => Promise<void>;
-      return { data, updateRemote };
+      }) as {
+        updateUsersList: (data: unknown) => Promise<void>;
+        cancelArrival: (userId: string) => void;
+      };
+      return { data, updateRemote, cancelArrival, arrivals: arrivalsRef.current };
     },
     { wrapper, initialProps: { isActive, sector: 3 } },
   );
@@ -295,3 +308,96 @@ it("defers unknown hidden presence and resolves visible arrivals without a secto
     "third",
   ]);
 });
+
+it("keeps newer movement but server-formatted identities when an arrival read settles", async () => {
+  const pending = deferred<unknown[]>();
+  const test = setup(true, false, () => pending.promise);
+  await settle();
+  await act(async () =>
+    test.result.current.updateRemote({
+      userId: "arrival",
+      sector: 3,
+      status: "AWAKE",
+      longitude: 1,
+      latitude: 1,
+    }),
+  );
+  await advance(SECTOR_ARRIVAL_BATCH_MS);
+  await act(async () =>
+    test.result.current.updateRemote({
+      userId: "arrival",
+      sector: 3,
+      status: "AWAKE",
+      longitude: 2,
+      latitude: 3,
+      username: "Unmasked name",
+      avatar: "unmasked.webp",
+    }),
+  );
+  pending.resolve([
+    {
+      userId: "arrival",
+      sector: 3,
+      longitude: 1,
+      latitude: 1,
+      username: "ANBU",
+      avatar: "mask.webp",
+    },
+  ]);
+  await settle();
+  expect(test.result.current.data.users).toEqual([
+    expect.objectContaining({
+      userId: "arrival",
+      longitude: 2,
+      latitude: 3,
+      username: "ANBU",
+      avatar: "mask.webp",
+    }),
+  ]);
+});
+
+it.each([false, true])(
+  "does not consume a returning player's arrival with an earlier response (failure: %s)",
+  async (fail) => {
+    const first = deferred<unknown[]>();
+    let reads = 0;
+    const test = setup(true, false, async () => {
+      if (++reads === 1) return first.promise;
+      return [{ userId: "arrival", sector: 3, longitude: 7, latitude: 7 }];
+    });
+    await settle();
+    await act(async () =>
+      test.result.current.updateRemote({
+        userId: "arrival",
+        sector: 3,
+        status: "AWAKE",
+        longitude: 1,
+        latitude: 1,
+      }),
+    );
+    await advance(SECTOR_ARRIVAL_BATCH_MS);
+    test.result.current.cancelArrival("arrival");
+    await act(async () =>
+      test.result.current.updateRemote({
+        userId: "arrival",
+        sector: 3,
+        status: "AWAKE",
+        longitude: 7,
+        latitude: 7,
+      }),
+    );
+    if (fail) first.reject(new Error("Arrival read failed"));
+    else first.resolve([{ userId: "arrival", sector: 3, longitude: 1, latitude: 1 }]);
+    await settle();
+    expect(test.result.current.data.users).toEqual([]);
+    expect(test.result.current.arrivals.wanted.has("arrival")).toBe(true);
+    await advance(SECTOR_ARRIVAL_BATCH_MS);
+    expect(test.result.current.data.users).toEqual([
+      expect.objectContaining({
+        userId: "arrival",
+        longitude: 7,
+        latitude: 7,
+      }),
+    ]);
+  },
+);
