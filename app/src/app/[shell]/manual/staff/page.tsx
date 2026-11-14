@@ -47,7 +47,12 @@ export default function Staff() {
 
   // Applications
   const utils = api.useUtils();
-  const { data: myApps } = api.applications.list.useQuery({ onlyMine: true });
+  // Only a player with a character can have applications; a signed-in Clerk session that
+  // has not finished registration has no UserData row, so the server would throw NOT_FOUND.
+  const { data: myApps } = api.applications.list.useQuery(
+    { onlyMine: true },
+    { enabled: !!me },
+  );
   const pending = myApps?.data?.find((a) => a.state === "PENDING");
 
   const form = useForm<CreateApplicationSchema>({
