@@ -145,7 +145,7 @@ export const usePusherHandler = (
         if (event.action.type !== "success" || event.action.manual) return;
         if (event.query.queryHash === inboxHash) {
           inboxAcknowledged = true;
-          inboxReadRevision++;
+          inboxReadRevision += 1;
         } else if (
           event.query.queryHash === profileHash &&
           profileInboxRevision === inboxReadRevision

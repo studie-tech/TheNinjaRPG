@@ -5,6 +5,7 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { type PropsWithChildren, useRef } from "react";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
+import type { UserData } from "@/drizzle/schema";
 import { useDungeonAvailability } from "@/hooks/useDungeonAvailability";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import { useVillageDutyPursuit } from "@/hooks/useVillageDuty";
@@ -136,7 +137,9 @@ const setup = (
       const arrivalsRef = useRef({
         wanted: new Map<
           string,
-          { movement?: { longitude: number; latitude: number } }
+          {
+            movement?: Pick<UserData, "longitude" | "latitude" | "status" | "battleId">;
+          }
         >(),
         queued: new Set<string>(),
         timer: undefined as ReturnType<typeof setTimeout> | undefined,
@@ -309,52 +312,63 @@ it("defers unknown hidden presence and resolves visible arrivals without a secto
   ]);
 });
 
-it("keeps newer movement but server-formatted identities when an arrival read settles", async () => {
-  const pending = deferred<unknown[]>();
-  const test = setup(true, false, () => pending.promise);
-  await settle();
-  await act(async () =>
-    test.result.current.updateRemote({
-      userId: "arrival",
-      sector: 3,
-      status: "AWAKE",
-      longitude: 1,
-      latitude: 1,
-    }),
-  );
-  await advance(SECTOR_ARRIVAL_BATCH_MS);
-  await act(async () =>
-    test.result.current.updateRemote({
-      userId: "arrival",
-      sector: 3,
-      status: "AWAKE",
-      longitude: 2,
-      latitude: 3,
-      username: "Unmasked name",
-      avatar: "unmasked.webp",
-    }),
-  );
-  pending.resolve([
-    {
-      userId: "arrival",
-      sector: 3,
-      longitude: 1,
-      latitude: 1,
-      username: "ANBU",
-      avatar: "mask.webp",
-    },
-  ]);
-  await settle();
-  expect(test.result.current.data.users).toEqual([
-    expect.objectContaining({
-      userId: "arrival",
-      longitude: 2,
-      latitude: 3,
-      username: "ANBU",
-      avatar: "mask.webp",
-    }),
-  ]);
-});
+it.each([
+  { status: "BATTLE", battleId: "new-battle" },
+  { status: "AWAKE", battleId: null },
+])(
+  "keeps newer movement and combat state but server-formatted arrival identities ($status)",
+  async ({ status, battleId }) => {
+    const pending = deferred<unknown[]>();
+    const test = setup(true, false, () => pending.promise);
+    await settle();
+    await act(async () =>
+      test.result.current.updateRemote({
+        userId: "arrival",
+        sector: 3,
+        status: "AWAKE",
+        longitude: 1,
+        latitude: 1,
+      }),
+    );
+    await advance(SECTOR_ARRIVAL_BATCH_MS);
+    await act(async () =>
+      test.result.current.updateRemote({
+        userId: "arrival",
+        sector: 3,
+        status,
+        battleId,
+        longitude: 2,
+        latitude: 3,
+        username: "Unmasked name",
+        avatar: "unmasked.webp",
+      }),
+    );
+    pending.resolve([
+      {
+        userId: "arrival",
+        sector: 3,
+        longitude: 1,
+        latitude: 1,
+        status: status === "BATTLE" ? "AWAKE" : "BATTLE",
+        battleId: status === "BATTLE" ? null : "old-battle",
+        username: "ANBU",
+        avatar: "mask.webp",
+      },
+    ]);
+    await settle();
+    expect(test.result.current.data.users).toEqual([
+      expect.objectContaining({
+        userId: "arrival",
+        longitude: 2,
+        latitude: 3,
+        status,
+        battleId,
+        username: "ANBU",
+        avatar: "mask.webp",
+      }),
+    ]);
+  },
+);
 
 it.each([false, true])(
   "does not consume a returning player's arrival with an earlier response (failure: %s)",

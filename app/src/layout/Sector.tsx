@@ -291,7 +291,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const remoteWalksRef = useRef(new Map<string, symbol>());
   /** Announced players missing from the snapshot; a burst resolves through one narrow read. */
   const arrivalsRef = useRef({
-    wanted: new Map<string, { movement?: Pick<UserData, "longitude" | "latitude"> }>(),
+    wanted: new Map<
+      string,
+      { movement?: Pick<UserData, "longitude" | "latitude" | "status" | "battleId"> }
+    >(),
     queued: new Set<string>(),
     timer: undefined as ReturnType<typeof setTimeout> | undefined,
   });
@@ -915,8 +918,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     };
     try {
       const users = await utils.client.travel.getSectorUsers.query({ sector, userIds });
-      // A departure cancels this identity. Only movement received during the read can
-      // override its coordinates; all identity and disguise fields remain server-formatted.
+      // A departure cancels this identity. Newer broadcasts retain position and combat
+      // state together; identity and disguise fields remain server-formatted.
       const arrived = users.flatMap((user) => {
         const pending = requested.get(user.userId);
         return pending && arrivals.wanted.get(user.userId) === pending
@@ -947,7 +950,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     const arrivals = arrivalsRef.current;
     const pending = arrivals.wanted.get(data.userId);
     if (pending) {
-      pending.movement = { longitude: data.longitude, latitude: data.latitude };
+      pending.movement = {
+        longitude: data.longitude,
+        latitude: data.latitude,
+        status: data.status,
+        battleId: data.battleId ?? null,
+      };
       return;
     }
     arrivals.wanted.set(data.userId, {});
