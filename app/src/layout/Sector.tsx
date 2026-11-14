@@ -106,7 +106,12 @@ import type {
 import { subscribeSharedChannel } from "@/libs/sharedChannel";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
-import { isTravelKeyBlocked } from "@/libs/travel";
+import {
+  isSectorPresenceStatus,
+  isTravelKeyBlocked,
+  SECTOR_ARRIVAL_BATCH_LIMIT,
+  SECTOR_ARRIVAL_BATCH_MS,
+} from "@/libs/travel";
 import { isTutorialActive, isTutorialCaptureStep } from "@/libs/tutorial";
 import { getAllyStatus, isAutoAttackTarget, mapAttackRelation } from "@/utils/alliance";
 import { isStaffRole } from "@/utils/permissions";
@@ -284,6 +289,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const motionStepsRef = useRef(new Map<string, TravelMotionStep>());
   /** Unique walk ownership survives cancellation while an earlier callback is still awaiting sleep. */
   const remoteWalksRef = useRef(new Map<string, symbol>());
+  /** Announced players missing from the snapshot; a burst resolves through one narrow read. */
+  const arrivalsRef = useRef({
+    wanted: new Set<string>(),
+    queued: new Set<string>(),
+    timer: undefined as ReturnType<typeof setTimeout> | undefined,
+  });
   const movePendingRef = useRef(false);
   const moveTargetRef = useRef<TravelSnapshot["routeTarget"]>(null);
   const mountedRef = useRef(true);
@@ -357,7 +368,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     prepareUserUpdate,
   } = useRequiredUserDataSelector(selectUserWithoutPosition);
   const userData = profile ? userRef.current : undefined;
-  const { prepareSectorUpdate, updateSector } = useSectorCacheUpdate(props.sector);
+  const { prepareSectorUpdate, updateSector, isSectorFetching, addArrivals } =
+    useSectorCacheUpdate(props.sector);
   const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
     useInventoryCacheUpdate();
   const appearanceSignature = useMemo(
@@ -730,6 +742,87 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     if (publishSurroundingsRef.current) setSorrounding([...usersRef.current]);
   };
 
+  /** Mark this sector's presence stale; a visible scene rereads its whole snapshot. */
+  const reloadSectorPresence = () =>
+    void utils.travel.getSectorData.invalidate(
+      { sector: sectorRef.current },
+      { refetchType: isActiveRef.current ? "active" : "none" },
+    );
+
+  /** Resolve the queued newcomers that the snapshot still lacks and add them to it. */
+  const flushArrivals = async () => {
+    const arrivals = arrivalsRef.current;
+    arrivals.timer = undefined;
+    const sector = sectorRef.current;
+    if (!isActiveRef.current || sector !== props.sector) {
+      // A hidden or crossing scene reads its snapshot when it is shown.
+      arrivals.queued.clear();
+      arrivals.wanted.clear();
+      return reloadSectorPresence();
+    }
+    // An unfinished snapshot read may predate the arrivals; resolve them after it settles.
+    if (isSectorFetching()) {
+      arrivals.timer = setTimeout(() => void flushArrivals(), SECTOR_ARRIVAL_BATCH_MS);
+      return;
+    }
+    const shown = new Set(
+      utils.travel.getSectorData.getData({ sector })?.users.map((u) => u.userId),
+    );
+    const queued = [...arrivals.queued];
+    arrivals.queued.clear();
+    const userIds: string[] = [];
+    for (const userId of queued) {
+      if (shown.has(userId)) arrivals.wanted.delete(userId);
+      else if (userIds.length < SECTOR_ARRIVAL_BATCH_LIMIT) userIds.push(userId);
+      else arrivals.queued.add(userId);
+    }
+    if (arrivals.queued.size > 0) {
+      arrivals.timer = setTimeout(() => void flushArrivals(), SECTOR_ARRIVAL_BATCH_MS);
+    }
+    if (userIds.length === 0) return;
+    const snapshot = prepareSectorUpdate();
+    if (snapshot.query.revision === undefined) {
+      for (const userId of userIds) arrivals.wanted.delete(userId);
+      return reloadSectorPresence();
+    }
+    try {
+      const users = await utils.client.travel.getSectorUsers.query({ sector, userIds });
+      // Players who left while the read was pending stay off the map.
+      const arrived = users.filter((user) => arrivals.wanted.has(user.userId));
+      for (const userId of userIds) arrivals.wanted.delete(userId);
+      if (!mountedRef.current || sectorRef.current !== sector) return;
+      const positions = new Map(
+        usersRef.current.map((user) => [
+          user.userId,
+          { longitude: user.longitude, latitude: user.latitude },
+        ]),
+      );
+      await addArrivals(snapshot, arrived, positions);
+    } catch {
+      for (const userId of userIds) arrivals.wanted.delete(userId);
+      reloadSectorPresence();
+    }
+  };
+
+  /**
+   * Queue an announced player the snapshot lacks. Only the statuses the snapshot shows can
+   * add a player, so other broadcasts, such as a global traveller's departure, read nothing.
+   */
+  const requestArrival = (data: UserData) => {
+    if (!isSectorPresenceStatus(data.status)) return;
+    const arrivals = arrivalsRef.current;
+    if (arrivals.wanted.has(data.userId)) return;
+    arrivals.wanted.add(data.userId);
+    arrivals.queued.add(data.userId);
+    arrivals.timer ??= setTimeout(() => void flushArrivals(), SECTOR_ARRIVAL_BATCH_MS);
+  };
+
+  /** Forget a pending arrival for a player who left or hid. */
+  const cancelArrival = (userId: string) => {
+    arrivalsRef.current.wanted.delete(userId);
+    arrivalsRef.current.queued.delete(userId);
+  };
+
   // Convenience method for updating user list
   const updateUsersList = async (
     data: UserData,
@@ -748,6 +841,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       // Uses isUserCurrentlyStealthed to check expiry, mirroring server-side logic
       if (isUserCurrentlyStealthed(data) && data.userId !== userData?.userId) {
         // Remove from local users list if they went stealth
+        cancelArrival(data.userId);
         const idx = usersRef.current.findIndex((u) => u.userId === data.userId);
         if (idx !== -1) {
           usersRef.current.splice(idx, 1);
@@ -831,13 +925,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           }
         }
       } else if (data.userId !== userRef.current?.userId) {
-        // New identities come from the authenticated, masked sector snapshot. The viewer's
-        // own marker comes from that snapshot's merge, which a refetch cannot change.
-        // Mark hidden presence stale without waking another observer of this sector.
-        void utils.travel.getSectorData.invalidate(
-          { sector: sectorRef.current },
-          { refetchType: isActiveRef.current ? "active" : "none" },
-        );
+        // New identities come from the authenticated, masked sector reads. The viewer's
+        // own marker comes from the snapshot's merge, which an arrival read cannot change.
+        requestArrival(data);
       }
       // Remove users who are no longer in the sector; compare against the
       // live sector ref, which crossings advance before the prop catches up.
@@ -1721,8 +1811,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   // Track mount state and reset the cursor on unmount
   useEffect(() => {
     mountedRef.current = true;
+    const arrivals = arrivalsRef.current;
     return () => {
       mountedRef.current = false;
+      clearTimeout(arrivals.timer);
+      arrivals.timer = undefined;
+      arrivals.queued.clear();
+      arrivals.wanted.clear();
       document.body.style.cursor = "default";
     };
   }, []);
@@ -1735,6 +1830,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           if (data.userId && data.userId !== userRef.current?.userId) {
             // A broadcast with another sector means the user left this one
             if (data.sector !== props.sector) {
+              cancelArrival(data.userId);
               const idx = usersRef.current.findIndex((u) => u.userId === data.userId);
               if (idx !== -1) {
                 usersRef.current.splice(idx, 1);

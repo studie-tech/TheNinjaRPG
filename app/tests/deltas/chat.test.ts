@@ -1,7 +1,31 @@
 import { expect, it } from "bun:test";
 import type { RouterOutputs } from "@/app/_trpc/client";
-import { applyConversationRead, matchesConversationSearch } from "@/deltas/chat";
-import { isConversationUnread } from "@/libs/chatPanel";
+import {
+  applyConversationRead,
+  clearInboxNotifications,
+  incrementInboxNotifications,
+  matchesConversationSearch,
+} from "@/deltas/chat";
+import { getInboxNews, isConversationUnread } from "@/libs/chatPanel";
+import type { NavBarDropdownLink } from "@/libs/menus";
+
+it("counts a delivered message in the inbox notice the profile builds, keeping other notices", () => {
+  const news: NavBarDropdownLink = { href: "/news", name: "1 news", color: "blue" };
+  const first = incrementInboxNotifications([news]);
+  expect(first).toEqual([
+    news,
+    { href: "/inbox", name: "1 messages", color: "hidden", notificationCount: 1 },
+  ]);
+  expect(first[0]).toBe(news);
+  const second = incrementInboxNotifications(first);
+  expect(getInboxNews(second)).toBe(2);
+  expect(second.find((link) => link.href === "/inbox")?.name).toBe("2 messages");
+  expect(second).toHaveLength(2);
+  expect(getInboxNews(incrementInboxNotifications(undefined))).toBe(1);
+  // A list read acknowledging the incremented count clears it.
+  expect(clearInboxNotifications(second, 2)).toEqual([news]);
+  expect(clearInboxNotifications(second, 1)).toBe(second);
+});
 
 it("keeps newer activity unread and preserves later confirmed reads and unrelated conversations", () => {
   const at = (minute: number) => new Date(Date.UTC(2026, 10, 1, 12, minute));

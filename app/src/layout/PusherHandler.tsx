@@ -10,7 +10,7 @@ import superjson from "superjson";
 import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
-import { addConversationMention } from "@/deltas/chat";
+import { addConversationMention, incrementInboxNotifications } from "@/deltas/chat";
 import { BATTLE_ALERT_SFX_URL, MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { env } from "@/env/client.mjs";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
@@ -33,7 +33,7 @@ import {
 } from "@/utils/audio";
 import { transformImageUrl } from "@/utils/image";
 import { pushToCombat, usePublicPathname } from "@/utils/routing";
-import { updateUserCache } from "@/utils/userCache";
+import { updateUserCache, updateUserNotifications } from "@/utils/userCache";
 import type { UserRecovery } from "@/validators/base";
 
 // Events sent to the user from websockets
@@ -300,15 +300,22 @@ export const usePusherHandler = (
           void utils.comments.getTavernIds.invalidate();
           void utils.comments.getConversationComments.reset();
         } else if (data.type === "newInbox") {
-          void utils.comments.getUserConversations.invalidate();
-          const shouldNotify = await resolveNotificationProfile(data.conversationId);
-          if (shouldNotify && canNotifyConversation(data.conversationId)) {
-            try {
-              // Cancel cached refreshes so the authoritative read starts after this delivery.
-              await utils.profile.getUser.invalidate(undefined, { refetchType: "all" });
-            } catch {
-              // UserContext exposes a failed refresh; an eligible message can still show its toast.
-            }
+          const shouldNotify =
+            (await resolveNotificationProfile(data.conversationId)) &&
+            canNotifyConversation(data.conversationId);
+          if (!shouldNotify) {
+            void utils.comments.getUserConversations.invalidate();
+          } else {
+            // The delivery already counted this message in the server's inbox news. A mounted
+            // inbox list rereads once for the new count, which also resets that counter.
+            void utils.comments.getUserConversations.invalidate(undefined, {
+              refetchType: "none",
+            });
+            await updateUserNotifications(
+              queryClient,
+              getQueryKey(api.profile.getUser, undefined, "query"),
+              incrementInboxNotifications,
+            );
             if (!canNotifyConversation(data.conversationId)) return;
             if (!isOnInbox()) {
               const canOpenChat =
