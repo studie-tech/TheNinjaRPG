@@ -218,7 +218,7 @@ describe("Home scene", () => {
         );
         expect(mask.querySelector("source")?.outerHTML).toBe(mobileSource.outerHTML);
         expect(mask.style.clipPath).toBe(
-          `polygon(${polygon.map(([x, y]) => `${x}% ${y}%`).join(",")})`,
+          `polygon(${polygon.map(([x, y]) => `${x}% ${y}%`).join(", ")})`,
         );
         expect(mask.style.zIndex).toBe(`${Math.round((depth * plan.size) / 10)}`);
       });
@@ -230,7 +230,7 @@ describe("Home scene", () => {
       ).toBe(scene);
       expect(
         scene.querySelector("[data-home-camera]")?.getAttribute("style"),
-      ).toContain(`scale(${getHomeOverviewCamera(homeType).scale})`);
+      ).toContain(cameraTransform(getHomeOverviewCamera(homeType)));
       expect(view.getByLabelText("Camera zoom").textContent).toBe("100%");
     },
   );
@@ -2117,7 +2117,9 @@ describe("multi-room home scene", () => {
     expect(view.queryByRole("group", { name: "Furniture controls" })).toBeNull();
     expect(navigation.classList.contains("bottom-2")).toBe(true);
     fireEvent.click(within(navigation).getByRole("button", { name: "Reset view" }));
-    expect(sceneCamera(scene)).toEqual(getHomeOverviewCamera("TOWN_HOUSE"));
+    expect(sceneCamera(scene)).toEqual(
+      serializedCamera(getHomeOverviewCamera("TOWN_HOUSE")),
+    );
   });
 
   it("drags a garden within its clearing and rejects an indoor drop", async () => {
@@ -2467,7 +2469,9 @@ describe("multi-room home scene", () => {
         (initialScale * Math.hypot(600 - firstX, 200 - firstY)) /
           Math.hypot(400 - firstX, 200 - firstY),
       );
-      expect(sceneCamera(scene).scale).toBeCloseTo(pinchedScale, 10);
+      expect(sceneCamera(scene).scale).toBe(
+        serializedCamera({ x: 0, y: 0, scale: pinchedScale }).scale,
+      );
       firePointerEvent(scene, "pointerup", 2, 600, 200);
       firePointerEvent(bed, "pointermove", 1, 220, 200);
       firePointerEvent(first, "pointerup", 1, 220, 200);
@@ -2527,7 +2531,7 @@ describe("multi-room home scene", () => {
         .getByRole("group", { name: "Home scene" })
         .querySelector("[data-home-camera]")
         ?.getAttribute("style"),
-    ).toContain(`translate(${focused.x}%, ${focused.y}%) scale(${focused.scale})`);
+    ).toContain(cameraTransform(focused));
   });
 
   it("keeps visitors from invoking home actions or decoration", () => {
@@ -2656,6 +2660,21 @@ const gardenPlacement = (homeType: HomeType): HomePlacement => {
       y: room.outdoor.reduce((sum, point) => sum + point.y, 0) / room.outdoor.length,
     }),
   };
+};
+
+/** Compare browser-serialized transforms, whose CSS numbers have six significant digits. */
+const cameraTransform = ({ x, y, scale }: HomeCamera) => {
+  const style = document.createElement("div").style;
+  style.transform = `translate(${x}%, ${y}%) scale(${scale})`;
+  return style.transform;
+};
+
+const serializedCamera = (camera: HomeCamera): HomeCamera => {
+  const values = cameraTransform(camera)
+    .match(/translate\(([-\d.e]+)%, ([-\d.e]+)%\) scale\(([-\d.e]+)\)/)!
+    .slice(1)
+    .map(Number);
+  return { x: values[0]!, y: values[1]!, scale: values[2]! };
 };
 
 /** Recover the visible camera values used to convert a user's pixel gesture to world coordinates. */

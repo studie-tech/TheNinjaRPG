@@ -616,13 +616,12 @@ describe("objective war townhall health", () => {
     expect(labels.map((label) => label.textContent)).toEqual(
       health.map((current) => `HP (${current} / 10000)`),
     );
-    expect(
-      labels.map(
-        (label) =>
-          (label.parentElement!.querySelector(".bg-red-500") as HTMLElement).style
-            .width,
-      ),
-    ).toEqual(health.map((current) => `${(current / 10000) * 100}%`));
+    labels.forEach((label, index) => {
+      const width = (label.parentElement!.querySelector(".bg-red-500") as HTMLElement)
+        .style.width;
+      expect(width.endsWith("%")).toBe(true);
+      expect(Number.parseFloat(width)).toBeCloseTo((health[index]! / 10000) * 100, 10);
+    });
   };
 
   const viewers = [

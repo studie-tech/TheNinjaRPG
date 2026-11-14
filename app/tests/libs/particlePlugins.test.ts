@@ -19,7 +19,7 @@ describe("registerParticlePlugins", () => {
     await registerParticlePlugins();
     await tsParticles.init();
 
-    const drawers = await tsParticles.pluginManager.getShapeDrawers({} as never, true);
+    const drawers = tsParticles.pluginManager.initializers.shapes;
     // Background shapes and reward shapes share the registered engine.
     expect(drawers.has("circle")).toBe(true);
     expect(drawers.has("triangle")).toBe(true);

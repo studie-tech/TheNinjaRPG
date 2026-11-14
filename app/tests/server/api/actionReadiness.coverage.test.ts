@@ -208,7 +208,8 @@ const inspectMutations = (overrides = new Map<string, string>()) => {
     modules.set(file, module);
     const ast = parse(overrides.get(file) ?? readFileSync(file, "utf8"), {
       sourceType: "module",
-      plugins: ["typescript", "jsx"],
+      sourceFilename: file,
+      plugins: file.endsWith(".tsx") ? ["typescript", "jsx"] : ["typescript"],
     });
     for (const statement of ast.program.body) {
       if (statement.type === "ImportDeclaration") {
