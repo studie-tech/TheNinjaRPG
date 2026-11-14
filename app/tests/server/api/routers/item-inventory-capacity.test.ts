@@ -195,12 +195,30 @@ describeWithDatabase("equipped items and backpack capacity", () => {
         const api = await callerFor(itemRouter, userId);
         expect(await api.buy({ itemId: "potion", villageId, stack: 2 })).toMatchObject({
           success: false,
-          message: getInventoryBucketFullMessage("normal"),
+          message: getInventoryBucketFullMessage("normal", { auction: 0, crafting: 1 }),
         });
         expect(await potionRows()).toEqual([["potions", quantity]]);
         expect(await money()).toBe(10000);
       },
     );
+
+    it("names held slots when a stackable purchase cannot fit and rolls back", async () => {
+      await fillBackpack("normal", 3);
+      await insertUserItems([
+        { id: "potions", userId, itemId: "potion", quantity: 9 },
+        { id: "listed-a", userId, itemId: "potion", isInAuction: true },
+        { id: "listed-b", userId, itemId: "potion", isInAuction: true },
+      ]);
+      const before = await potionRows();
+      const api = await callerFor(itemRouter, userId);
+      expect(await api.buy({ itemId: "potion", villageId, stack: 2 })).toMatchObject({
+        success: false,
+        message:
+          "Inventory is full (3 slots are held: 2 by auction listings or trade offers, 1 by an unfinished craft)",
+      });
+      expect(await potionRows()).toEqual(before);
+      expect(await money()).toBe(10000);
+    });
   });
 
   it("names the backpack slots held by listings when a purchase does not fit", async () => {
@@ -217,7 +235,6 @@ describeWithDatabase("equipped items and backpack capacity", () => {
       message:
         "Inventory is full (3 slots are held: 2 by auction listings or trade offers, 1 by an unfinished craft)",
     });
-
   });
 
   it("buys directly into an empty equipment slot when the backpack is full", async () => {

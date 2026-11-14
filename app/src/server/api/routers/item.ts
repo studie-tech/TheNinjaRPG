@@ -3367,7 +3367,6 @@ export const itemRouter = createTRPCRouter({
             );
           }
           topUpOnly = true;
-
         }
       }
       // buy_item quest tracker (NPC item shop purchases; auction buyouts do not advance it).
@@ -3493,7 +3492,12 @@ export const itemRouter = createTRPCRouter({
         throw error;
       });
       if (purchaseCommitted === "FULL")
-        return errorResponse(getInventoryBucketFullMessage(purchaseBucket));
+        return errorResponse(
+          getInventoryBucketFullMessage(
+            purchaseBucket,
+            countHeldInventorySlots(useritems, purchaseBucket),
+          ),
+        );
       if (purchaseCommitted !== true && allowance.limit != null) {
         const counters = await fetchPurchaseCounters(
           ctx.drizzle,
