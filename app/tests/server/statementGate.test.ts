@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { userData } from "@/drizzle/schema";
+import { scopedRead, withRequestScope } from "@/server/requestScope";
 import { gateStatements, runBehindStatementGate } from "@/server/statementGate";
+import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { deferred } from "../setup/deferred";
 import { planetScaleFixture } from "../setup/planetscale";
 
@@ -89,5 +91,89 @@ describe("statement gate", () => {
     const result = await database.update(userData).set({ curHealth: 1 });
     expect(result.rowsAffected).toBe(1);
     expect(statements).toHaveLength(1);
+  });
+
+  it("shares request reads without sharing a caller's rejected gate", async () => {
+    const { database, statements } = gatedFixture();
+    const gate = deferred();
+    const closed = new Error("isolated player");
+    const load = () => database.select({ userId: userData.userId }).from(userData);
+    await withRequestScope(async () => {
+      const restricted = runBehindStatementGate(gate.promise, () =>
+        scopedRead("players", load),
+      );
+      const ordinary = scopedRead("players", load);
+      const results = Promise.allSettled([restricted, ordinary]);
+      gate.reject(closed);
+      expect(await results).toEqual([
+        { status: "rejected", reason: closed },
+        { status: "fulfilled", value: [{ userId: "hero" }] },
+      ]);
+      expect(await scopedRead("players", load)).toEqual([{ userId: "hero" }]);
+    });
+    expect(statements).toHaveLength(1);
+  });
+
+  it("withholds a cached request read until its own caller is cleared", async () => {
+    const { database, statements } = gatedFixture();
+    const gate = deferred();
+    const load = () => database.select({ userId: userData.userId }).from(userData);
+    await withRequestScope(async () => {
+      await scopedRead("players", load);
+      let delivered = false;
+      const restricted = runBehindStatementGate(gate.promise, () =>
+        scopedRead("players", load).then(() => {
+          delivered = true;
+        }),
+      );
+      await settle();
+      expect(delivered).toBe(false);
+      gate.resolve();
+      await restricted;
+      expect(delivered).toBe(true);
+    });
+    expect(statements).toHaveLength(1);
+  });
+
+  it("keeps a process-wide average available to callers outside a rejected gate", async () => {
+    const fixture = planetScaleFixture(() => ({
+      fields: [{ name: "average", type: "DECIMAL" }],
+      rows: [["1500"]],
+    }));
+    const database = gateStatements(fixture.database);
+    const gate = deferred();
+    const closed = new Error("isolated player");
+    const restricted = runBehindStatementGate(gate.promise, () =>
+      fetchPvpExperienceAverage(database),
+    );
+    const ordinary = fetchPvpExperienceAverage(database);
+    const results = Promise.allSettled([restricted, ordinary]);
+    gate.reject(closed);
+    expect(await results).toMatchObject([
+      { status: "rejected", reason: closed },
+      { status: "fulfilled", value: { value: 1500 } },
+    ]);
+    expect((await fetchPvpExperienceAverage(database)).value).toBe(1500);
+    expect(fixture.statements).toHaveLength(1);
+  });
+
+  it("keeps writes and transactions gated inside a shared-read loader", async () => {
+    const { database, statements } = gatedFixture();
+    const gate = deferred();
+    const closed = new Error("isolated player");
+    const pending = runBehindStatementGate(gate.promise, () =>
+      scopedRead("invalid-loader", () =>
+        Promise.all([
+          database.update(userData).set({ curHealth: 1 }).execute(),
+          database.transaction(async () => {}),
+        ]),
+      ),
+    );
+    const result = Promise.allSettled([pending]);
+    await settle();
+    expect(statements).toEqual([]);
+    gate.reject(closed);
+    expect(await result).toEqual([{ status: "rejected", reason: closed }]);
+    expect(statements).toEqual([]);
   });
 });

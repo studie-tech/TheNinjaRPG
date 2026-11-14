@@ -4,24 +4,45 @@ import { isReadOnlyQuery } from "@/server/dbRetry";
 /**
  * Hold a procedure's database work behind a check that runs alongside its first reads.
  *
- * Inside `runBehindStatementGate`, every statement issued through a gated client waits
- * for the gate: reads are sent at once but their results are withheld until it settles,
+ * Inside `runBehindStatementGate`, procedure statements wait for the gate: reads are
+ * sent at once but their results are withheld until it settles,
  * and writes and transactions are not sent before it settles. A rejected gate rejects
  * every such statement with its own error, so a procedure stops at its first awaited
  * statement and cannot reach a write, or any side effect that follows a read, on stale
- * permission. The caller decides what the procedure answers once the gate rejects.
+ * permission. Shared read loaders may populate caches independently; each consumer
+ * waits for its own gate. The caller decides what the procedure answers on rejection.
  *
  * Side effects a procedure fires before awaiting any statement are not held, so a
  * procedure under a gate reads before it calls external services.
  */
-const storage = new AsyncLocalStorage<Promise<unknown>>();
+const storage = new AsyncLocalStorage<{
+  gate: Promise<unknown>;
+  isSharedRead?: boolean;
+}>();
 const gatedSessions = new WeakSet<object>();
 
 /** Run `fn` with every statement of gated clients held until `gate` settles. */
 export const runBehindStatementGate = <T>(gate: Promise<unknown>, fn: () => T): T => {
   // Statements observe the rejection; the caller awaits the gate itself.
   void gate.catch(() => {});
-  return storage.run(gate, fn);
+  return storage.run({ gate }, fn);
+};
+
+/**
+ * Keep shared read loaders independent of a caller's clearance, then hold that caller's
+ * result. Only read-only cache loaders belong here: their reads and cache population
+ * may finish before clearance, while their consumers still wait. Nested loaders share
+ * that work; writes and transactions remain gated even inside a loader.
+ */
+export const runSharedReadBehindStatementGate = async <T>(
+  load: () => Promise<T>,
+): Promise<T> => {
+  const context = storage.getStore();
+  if (!context || context.isSharedRead) return load();
+  // Await thenable query builders in the loader's context before sharing the result.
+  const pending = storage.run({ ...context, isSharedRead: true }, async () => load());
+  const [result] = await Promise.all([pending, context.gate]);
+  return result;
 };
 
 /**
@@ -41,16 +62,20 @@ export const gateStatements = <Client extends object>(client: Client): Client =>
     const prepared = prepareQuery(query, ...options);
     const execute = prepared.execute.bind(prepared);
     prepared.execute = (...args) => {
-      const gate = storage.getStore();
-      if (!gate) return execute(...args);
-      return isReadOnlyQuery(query.sql)
-        ? Promise.all([execute(...args), gate]).then(([result]) => result)
-        : gate.then(() => execute(...args));
+      const context = storage.getStore();
+      if (!context) return execute(...args);
+      if (isReadOnlyQuery(query.sql)) {
+        const pending = execute(...args);
+        return context.isSharedRead
+          ? pending
+          : Promise.all([pending, context.gate]).then(([result]) => result);
+      }
+      return context.gate.then(() => execute(...args));
     };
     return prepared;
   };
   session.transaction = (...args) => {
-    const gate = storage.getStore();
+    const gate = storage.getStore()?.gate;
     return gate ? gate.then(() => transaction(...args)) : transaction(...args);
   };
   return client;
