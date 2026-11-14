@@ -75,6 +75,7 @@ import {
   rewardChoiceContentIds,
 } from "@/libs/rewardChoice";
 import { getSageMasteryDisplayRank, sageRanksAtOrBelow } from "@/libs/sageMode";
+import { hasNoBattleWhere } from "@/queries/item";
 import { grantableTitleWhere } from "@/queries/title";
 import {
   extendWarParticipantSql,
@@ -1214,21 +1215,6 @@ export const insertSageModeRollsForUpdateRewards = (
     sageModeId: rolledSageMode.id,
   });
 
-/** Build the `userItem` insert for `updateRewards`. */
-export const insertUserItemForUpdateRewards = (
-  client: Pick<DrizzleClient, "insert">,
-  itemsToInsert: { id: string; name: string; quantity: number }[],
-  user: { userId: string },
-) =>
-  client.insert(userItem).values(
-    itemsToInsert.map(({ id, quantity }) => ({
-      id: nanoid(),
-      userId: user.userId,
-      itemId: id,
-      quantity: quantity,
-    })),
-  );
-
 /** Build the `userBadge` insert for `updateRewards`. */
 export const insertUserBadgeForUpdateRewards = (
   client: Pick<DrizzleClient, "insert">,
@@ -1814,41 +1800,66 @@ export const selectQuestHistoryForWhere2 = (
       ),
     );
 
-/** Build the `userItem` insert for `executeClaimedQuestConsequences`. */
-export const insertUserItemForExecuteClaimedQuestConsequences = (
-  client: Pick<DrizzleClient, "insert">,
-  collectedItems: string[],
-  user: { userId: string },
-) =>
-  client.insert(userItem).values(
-    collectedItems.map(
-      (id) =>
-        ({
-          id: nanoid(),
-          userId: user.userId,
-          itemId: id,
-          quantity: 1,
-          equipped: "NONE",
-        }) as const,
-    ),
-  );
-
 /**
- * Build the `userItem` listing for `handleQuestConsequences`, selecting only `id` and
- * `itemId`, including predicates on `userId`, `itemId`, `quantity`.
+ * Build the `userItem` listing for `handleQuestConsequences`, selecting only `id`, `itemId`,
+ * `quantity` and `equipped`, for the carried stacks of the given items.
  */
 export const listUserItemForHandleQuestConsequences = (
   client: Pick<DrizzleClient, "query">,
   user: { userId: string },
-  missingItemIds: string[],
+  itemIds: string[],
 ) =>
   client.query.userItem.findMany({
-    where: and(
-      carriedUserItemWhere(user.userId),
-      inArray(userItem.itemId, missingItemIds),
-    ),
-    columns: { id: true, itemId: true, quantity: true },
+    where: and(carriedUserItemWhere(user.userId), inArray(userItem.itemId, itemIds)),
+    columns: { id: true, itemId: true, quantity: true, equipped: true },
   });
+
+/**
+ * Build the `userItem` decrement for `deliverQuestItems`: from the quantity it was read at when
+ * given, otherwise from whatever the stack holds, leaving at least one unit.
+ */
+export const updateUserItemForDeliverQuestItems = (
+  client: Pick<DrizzleClient, "update">,
+  userId: string,
+  userItemId: string,
+  take: number,
+  readQuantity?: number,
+) =>
+  client
+    .update(userItem)
+    .set({ quantity: sql`${userItem.quantity} - ${take}` })
+    .where(
+      and(
+        eq(userItem.id, userItemId),
+        eq(userItem.userId, userId),
+        readQuantity === undefined
+          ? gt(userItem.quantity, take)
+          : eq(userItem.quantity, readQuantity),
+        eq(userItem.storedAtHome, false),
+        eq(userItem.isInAuction, false),
+        hasNoBattleWhere(userId),
+      ),
+    );
+
+/** Build the `userItem` deletion for `deliverQuestItems` when a delivery takes the whole stack. */
+export const deleteUserItemForDeliverQuestItems = (
+  client: Pick<DrizzleClient, "delete">,
+  userId: string,
+  userItemId: string,
+  take: number,
+) =>
+  client
+    .delete(userItem)
+    .where(
+      and(
+        eq(userItem.id, userItemId),
+        eq(userItem.userId, userId),
+        eq(userItem.quantity, take),
+        eq(userItem.storedAtHome, false),
+        eq(userItem.isInAuction, false),
+        hasNoBattleWhere(userId),
+      ),
+    );
 
 /** Build the `overworldAiPlacement` listing for `prepareOverworldBindings`, using predicates on `id`. */
 export const listOverworldAiPlacementForPrepareOverworldBindings = (

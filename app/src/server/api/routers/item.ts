@@ -93,6 +93,7 @@ import {
   computeLoadoutAssignments,
   countsTowardInventoryStorage,
   findFreeEquipSlot,
+  getEffectiveStackSize,
   getHomeStorageBucket,
   getHomeStorageBucketCapacity,
   getHomeStorageBucketFullMessage,
@@ -332,6 +333,7 @@ import {
 import { planConsumeEffects } from "@/server/utils/consumeEffects";
 import { consumeMeal } from "@/server/utils/cooking";
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
+import { grantUserItems } from "@/server/utils/itemGrants";
 import { applyLoadoutRename, backfillLoadouts } from "@/server/utils/loadout";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
@@ -3337,17 +3339,24 @@ export const itemRouter = createTRPCRouter({
       if (canAutoEquip) {
         equipped = findFreeEquipSlot(info.slot, useritems) ?? "NONE";
       }
+      // A stackable backpack purchase joins the carried stacks it fits on, so a full backpack
+      // only rejects it once the purchase transaction finds no room on them.
+      const purchaseBucket = getInventoryBucket(info);
+      const isStackablePurchase =
+        !isFurniture && equipped === "NONE" && getEffectiveStackSize(info) > 1;
+      let topUpOnly = false;
       // Resolve auto-equip first: a purchase placed directly into an equipment
       // slot can succeed even when the backpack is full.
       if (!isFurniture && equipped === "NONE") {
-        const purchaseBucket = getInventoryBucket(info);
         const bucketCount = useritems.filter(
           (ui) =>
             countsTowardInventoryStorage(ui) &&
             getInventoryBucket(ui.item) === purchaseBucket,
         ).length;
         if (bucketCount >= getInventoryBucketCapacity(purchaseBucket, user)) {
-          return errorResponse(getInventoryBucketFullMessage(purchaseBucket));
+          if (!isStackablePurchase)
+            return errorResponse(getInventoryBucketFullMessage(purchaseBucket));
+          topUpOnly = true;
         }
       }
       // buy_item quest tracker (NPC item shop purchases; auction buyouts do not advance it).
@@ -3395,11 +3404,12 @@ export const itemRouter = createTRPCRouter({
           questData: filterQuestTrackersForDbPersist(trackers, buyer, true),
         };
       }
-      // Commit the user-snapshot claim, fund deduction, quest update, and item insert
+      // Commit the user-snapshot claim, fund deduction, quest update, and item delivery
       // together. The updatedAt CAS serializes the earlier capacity read with other
       // inventory mutations, while the transaction prevents charging without delivery.
       // Persist the same complete row returned to the cache, including timestamps,
       // so an equipped purchase needs no readback of database-generated defaults.
+      // A stackable backpack purchase joins carried stacks and opens rows only as needed.
       const purchasedItem: UserItem = {
         id: nanoid(),
         userId: uid,
@@ -3422,6 +3432,7 @@ export const itemRouter = createTRPCRouter({
         dropChancePerc: 0,
       };
       const quotaConflict = new Error("Purchase quota changed");
+      const fullBackpack = new Error("Backpack full");
       const purchaseCommitted = await retryOnDeadlock(() =>
         ctx.drizzle.transaction(async (tx) => {
           const result = await updateUserDataForBuy(
@@ -3451,13 +3462,27 @@ export const itemRouter = createTRPCRouter({
             if (claimed.rowsAffected !== 1) throw quotaConflict;
           }
 
-          await insertUserItems(tx, [purchasedItem]);
+          if (isStackablePurchase) {
+            const { unstacked } = await grantUserItems(
+              tx,
+              uid,
+              [{ itemId: iid, quantity: input.stack }],
+              { topUpOnly },
+            );
+            // Throw to roll back the payment when the carried stacks lack room.
+            if (topUpOnly && unstacked.length > 0) throw fullBackpack;
+          } else {
+            await insertUserItems(tx, [purchasedItem]);
+          }
           return true;
         }),
       ).catch((error: unknown) => {
         if (error === quotaConflict) return "QUOTA" as const;
+        if (error === fullBackpack) return "FULL" as const;
         throw error;
       });
+      if (purchaseCommitted === "FULL")
+        return errorResponse(getInventoryBucketFullMessage(purchaseBucket));
       if (purchaseCommitted !== true && allowance.limit != null) {
         const counters = await fetchPurchaseCounters(
           ctx.drizzle,

@@ -508,7 +508,17 @@ describe("location chains reloaded from authored quests", () => {
           },
           { id: "end", task: "win_quest" },
         ]);
-        Object.assign(actor, { useritems: [{ itemId: "scroll" }] });
+        Object.assign(actor, {
+          useritems: [
+            {
+              itemId: "scroll",
+              quantity: 1,
+              storedAtHome: false,
+              isInAuction: false,
+              craftingFinishedAt: null,
+            },
+          ],
+        });
         read(undefined, placements);
         expect(actor.questData![0]!.goals[0]).toMatchObject({
           sector: 0,
@@ -564,7 +574,17 @@ describe("location chains reloaded from authored quests", () => {
           nextObjectiveId: "detail",
         }),
       );
-      Object.assign(actor, { useritems: [{ itemId: "scroll" }] });
+      Object.assign(actor, {
+        useritems: [
+          {
+            itemId: "scroll",
+            quantity: 1,
+            storedAtHome: false,
+            isInAuction: false,
+            craftingFinishedAt: null,
+          },
+        ],
+      });
       read(undefined, placements);
       Object.assign(actor, placements[0]);
       read(undefined, placements);

@@ -63,6 +63,8 @@ const makeCaller = (
   const insertItems = vi.fn().mockResolvedValue({ rowsAffected: 1 });
   const drizzle = withEmptyIsolationHistory({
     query: { userItem: { findMany: vi.fn().mockResolvedValue([]) } },
+    // The walker carries no stack the collected scroll could join.
+    select: () => ({ from: () => ({ leftJoin: () => ({ where: async () => [] }) }) }),
     update: () => ({ set: () => ({ where: async () => ({ rowsAffected: 1 }) }) }),
     insert: () => ({ values: insertItems }),
   });

@@ -61,7 +61,7 @@ describeWithDatabase("location quest inventory recovery", () => {
     invalidatePublishedMapCache();
   });
 
-  it("projects a confirmed whole-stack delivery against the canonical inventory", async () => {
+  it("projects a confirmed delivery against the canonical inventory", async () => {
     const db = await getTestDatabase();
     const user = (await db.query.userData.findFirst({
       where: eq(userData.userId, userId),
@@ -97,11 +97,60 @@ describeWithDatabase("location quest inventory recovery", () => {
     expect(result.success).toBe(true);
     expect(result.itemsChanged).toBe(true);
     expect(result.inventoryChanges).toEqual([
-      { id: "delivery-stack", itemId: "merge-herb", beforeQuantity: 3, quantity: 0 },
+      { id: "delivery-stack", itemId: "merge-herb", beforeQuantity: 3, quantity: 2 },
     ]);
     expect(getInventoryQuantities(before, result.inventoryChanges)).toEqual(
       await items.getUserItems(),
     );
+  });
+
+  it("does not complete a delivery whose item is only stored at home", async () => {
+    const db = await getTestDatabase();
+    const user = (await db.query.userData.findFirst({
+      where: eq(userData.userId, userId),
+    }))!;
+    await insertQuests([
+      {
+        id: "delivery",
+        questType: "mission",
+        content: {
+          objectives: [
+            DeliverItem.parse({
+              id: "deliver",
+              task: "deliver_item",
+              sector: user.sector,
+              longitude: user.longitude,
+              latitude: user.latitude,
+              deliverItemIds: ["merge-herb"],
+            }),
+          ],
+          reward: ObjectiveReward.parse({}),
+          sceneBackground: "",
+          sceneCharacters: [],
+        },
+      },
+    ]);
+    await insertQuestHistory([{ userId, questId: "delivery", questType: "mission" }]);
+    await insertUserItems([
+      {
+        id: "stored-herb",
+        userId,
+        itemId: "merge-herb",
+        quantity: 3,
+        storedAtHome: true,
+      },
+    ]);
+    const result = await (await callerFor(questsRouter, userId)).checkLocationQuest();
+    expect(result.itemsChanged).toBe(false);
+    const history = await db.query.questHistory.findFirst({
+      where: eq(questHistory.questId, "delivery"),
+    });
+    expect(history?.completed).toBe(0);
+    const [stored] = await db
+      .select({ quantity: userItem.quantity })
+      .from(userItem)
+      .where(eq(userItem.id, "stored-herb"));
+    expect(stored?.quantity).toBe(3);
   });
 
   it.each(["empty", "fresh", "stale"] as const)(

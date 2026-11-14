@@ -725,7 +725,15 @@ for (const task of ["collect_item", "deliver_item"] as const) {
           sector: 1,
           longitude: 1,
           latitude: 1,
-          useritems: [{ itemId: "scroll" }],
+          useritems: [
+            {
+              itemId: "scroll",
+              quantity: 1,
+              storedAtHome: false,
+              isInAuction: false,
+              craftingFinishedAt: null,
+            },
+          ],
         });
         const result = getNewTrackers(
           user,
@@ -774,7 +782,15 @@ for (const task of ["collect_item", "deliver_item"] as const) {
           sector: 1,
           longitude: 1,
           latitude: 1,
-          useritems: [{ itemId: "scroll" }],
+          useritems: [
+            {
+              itemId: "scroll",
+              quantity: 1,
+              storedAtHome: false,
+              isInAuction: false,
+              craftingFinishedAt: null,
+            },
+          ],
         });
         const result = getNewTrackers(
           user,

@@ -1,19 +1,20 @@
 import type { CombatResult, CompleteBattle } from "@/libs/combat/types";
 import { huntingVictoryReceipt } from "@/libs/hunting/contracts";
+import { splitIntoStacks } from "@/libs/item";
 import { getTerritoryWarBoost } from "@/libs/territoryWar";
 import { deleteBattleIfVersionMatches } from "@/queries/combat";
 import {
   insertHuntingReceiptForSettleHuntingBattle,
-  insertUserItemForSettleHuntingBattle,
   updateHuntingProgressForSettleHuntingBattle,
   updateHuntingSessionForSettleHuntingBattle,
 } from "@/queries/hunting";
 import type { DrizzleClient } from "@/server/db";
+import { grantUserItems } from "@/server/utils/itemGrants";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 
 /**
  * Claim and settle a personal encounter exactly once using only preloaded battle data.
- * MySQL cannot DELETE Battle, INSERT inventory/receipt rows and UPDATE allowance
+ * MySQL cannot DELETE Battle, grant materials, INSERT the receipt and UPDATE allowance
  * and character recovery in one statement; the transaction prevents partial grants.
  * The callback must run guarded player recovery on the supplied transaction client.
  */
@@ -78,11 +79,23 @@ export const settleHuntingBattle = async (
         );
         if (progress.rowsAffected !== 1)
           throw new Error("Hunting allowance changed during settlement");
-        if (receipt.materials.length)
-          await insertUserItemForSettleHuntingBattle(tx, receipt, meta);
       }
       await insertHuntingReceiptForSettleHuntingBattle(tx, current, meta, receipt);
       await settlePlayer(tx, playerBattle, playerResult);
+      // Granted items join stacks only outside a battle, so the materials follow the player's
+      // settlement above. The stacks were read at start because combat settlement cannot fetch.
+      if (result.outcome === "Won" && receipt.materials.length)
+        await grantUserItems(
+          tx,
+          meta.userId,
+          receipt.materials.flatMap((material) =>
+            splitIntoStacks(
+              material.quantity,
+              meta.materialStacks[material.itemId] ?? 1,
+            ).map((quantity) => ({ itemId: material.itemId, quantity })),
+          ),
+          { preloaded: meta.grantStacks ?? [] },
+        );
       return playerResult;
     }),
   );

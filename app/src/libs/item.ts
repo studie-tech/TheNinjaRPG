@@ -315,6 +315,21 @@ export const isEquippableUserItem = (
 ): boolean => getEquipBlockReason(ui, now) === null;
 
 /**
+ * Whether a stack is in the player's hands: holding units, carried rather than stored at home,
+ * not listed or offered, and not being crafted. Quest deliveries and entry costs take only
+ * these stacks, as `carriedUserItemWhere` does in SQL.
+ */
+export const isCarriedUserItem = (
+  ui: {
+    quantity: number;
+    storedAtHome: boolean;
+    isInAuction: boolean;
+    craftingFinishedAt: Date | null;
+  },
+  now: Date = new Date(),
+): boolean => ui.quantity > 0 && isEquippableUserItem(ui, now);
+
+/**
  * Whether any of a user item's imbuements is still in progress at `now`.
  * Separate from getEquipBlockReason because the inventory picker reasons about
  * imbuements independently of home/auction/crafting availability.

@@ -1,4 +1,4 @@
-import { beforeEach, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
   item,
@@ -118,6 +118,90 @@ describeWithDatabase("equipped items and backpack capacity", () => {
       expect(afterRejection?.money).toBe(afterPurchase?.money);
     },
   );
+
+  describe("stackable purchases", () => {
+    const potionRows = async () =>
+      (
+        await (
+          await getTestDatabase()
+        ).query.userItem.findMany({
+          where: eq(userItem.itemId, "potion"),
+        })
+      ).map((row) => [row.id, row.quantity]);
+    const money = async () =>
+      (
+        await (
+          await getTestDatabase()
+        ).query.userData.findFirst({
+          where: eq(userData.userId, userId),
+        })
+      )?.money;
+    beforeEach(async () => {
+      await insertItems([
+        {
+          id: "potion",
+          name: "Potion",
+          itemType: "CONSUMABLE",
+          slot: "NONE",
+          cost: 10,
+          inShop: true,
+          canStack: true,
+          stackSize: 10,
+        },
+      ]);
+    });
+
+    it("adds the purchase to the stack already carried", async () => {
+      await insertUserItems([{ id: "potions", userId, itemId: "potion", quantity: 3 }]);
+      const api = await callerFor(itemRouter, userId);
+      expect((await api.buy({ itemId: "potion", villageId, stack: 2 })).success).toBe(
+        true,
+      );
+      expect(await potionRows()).toEqual([["potions", 5]]);
+    });
+
+    it("buys into a carried stack with room when the backpack is full", async () => {
+      await fillBackpack("normal", 1);
+      await insertUserItems([{ id: "potions", userId, itemId: "potion", quantity: 3 }]);
+      const api = await callerFor(itemRouter, userId);
+      expect((await api.buy({ itemId: "potion", villageId, stack: 2 })).success).toBe(
+        true,
+      );
+      expect(await potionRows()).toEqual([["potions", 5]]);
+      expect(await money()).toBe(10000 - 20);
+    });
+
+    it("splits a full backpack purchase across the carried stacks with room", async () => {
+      await fillBackpack("normal", 2);
+      await insertUserItems([
+        { id: "potions-a", userId, itemId: "potion", quantity: 8 },
+        { id: "potions-b", userId, itemId: "potion", quantity: 7 },
+      ]);
+      const api = await callerFor(itemRouter, userId);
+      expect((await api.buy({ itemId: "potion", villageId, stack: 5 })).success).toBe(
+        true,
+      );
+      expect((await potionRows()).sort()).toEqual([
+        ["potions-a", 10],
+        ["potions-b", 10],
+      ]);
+    });
+
+    it.each([9, 10])(
+      "rejects a full backpack purchase the carried stack of %i cannot take, without charging",
+      async (quantity) => {
+        await fillBackpack("normal", 1);
+        await insertUserItems([{ id: "potions", userId, itemId: "potion", quantity }]);
+        const api = await callerFor(itemRouter, userId);
+        expect(await api.buy({ itemId: "potion", villageId, stack: 2 })).toMatchObject({
+          success: false,
+          message: getInventoryBucketFullMessage("normal"),
+        });
+        expect(await potionRows()).toEqual([["potions", quantity]]);
+        expect(await money()).toBe(10000);
+      },
+    );
+  });
 
   it("buys directly into an empty equipment slot when the backpack is full", async () => {
     await fillBackpack("normal");

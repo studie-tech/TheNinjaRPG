@@ -163,6 +163,14 @@ const makeClient = (
       questHistory: {
         findFirst: vi.fn().mockResolvedValue(historyAfterLostCompletion),
       },
+      // The carried stacks a delivery reads.
+      userItem: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([
+            { id: "user-item-1", itemId: "item-1", quantity: 1, equipped: "NONE" },
+          ]),
+      },
     },
   };
   return { client: client as never, sets, update, deleteFrom, deleteWhere, select };
@@ -190,6 +198,8 @@ const makeGatheringClient = () => {
       where: vi
         .fn()
         .mockResolvedValue([{ id: "herb-1", name: "Herb", rarity: "COMMON" }]),
+      // The player carries no stack the gathered herbs could join.
+      leftJoin: vi.fn(() => ({ where: vi.fn().mockResolvedValue([]) })),
     })),
   }));
   const insert = vi.fn(() => ({
@@ -557,16 +567,12 @@ describe("quest reward commit", () => {
 
   it("consumes the concrete inventory row for a delivered item", async () => {
     const { user, missionHistory } = makeUser();
-    const hydratedUser = {
-      ...user,
-      items: [{ id: "user-item-1", itemId: "item-1" }],
-    };
     const { client, sets, deleteFrom, deleteWhere } = makeClient([
       { rowsAffected: 1 },
       { rowsAffected: 1 },
     ]);
 
-    const result = await commit(client, hydratedUser, missionHistory, {
+    const result = await commit(client, user, missionHistory, {
       resolved: false,
       consequences: [{ type: "remove_item", ids: ["item-1"] }],
     });

@@ -157,7 +157,15 @@ const makeLegacyLocationUser = () => {
       userId: "legacy-user",
       ...location,
       status: "AWAKE",
-      useritems: [{ itemId: "delivered-item" }],
+      useritems: [
+        {
+          itemId: "delivered-item",
+          quantity: 1,
+          storedAtHome: false,
+          isInAuction: false,
+          craftingFinishedAt: null,
+        },
+      ],
     },
   );
 };

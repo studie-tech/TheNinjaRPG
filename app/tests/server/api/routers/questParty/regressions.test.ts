@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import * as Sentry from "@sentry/nextjs";
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import {
   aiProfile,
   battle,
@@ -1908,18 +1908,18 @@ describeWithDatabase(
       ).toBe(true);
     });
 
-    it("removes one owned row for duplicate IDs within an ordinary delivery", async () => {
+    it("takes one unit for duplicate IDs within an ordinary delivery, backpack first", async () => {
       const client = await getTestDatabase();
       await insertItems([{ id: "scroll" }]);
       await insertUserItems([
         {
-          id: "stack",
+          id: "a-equipped",
           userId: "helper",
           itemId: "scroll",
           quantity: 3,
           equipped: "CHEST",
         },
-        { id: "spare", userId: "helper", itemId: "scroll" },
+        { id: "z-backpack", userId: "helper", itemId: "scroll" },
       ]);
       const { user } = await fetchUpdatedUser({ client, userId: "helper" });
       expect(user?.questPartyId).toBeNull();
@@ -1934,8 +1934,11 @@ describeWithDatabase(
         ).claimed,
       ).toBe(true);
       expect(
-        await client.query.userItem.findMany({ where: eq(userItem.userId, "helper") }),
-      ).toMatchObject([{ id: "spare", quantity: 1 }]);
+        await client.query.userItem.findMany({
+          where: eq(userItem.userId, "helper"),
+          orderBy: asc(userItem.id),
+        }),
+      ).toMatchObject([{ id: "a-equipped", quantity: 3 }]);
     });
 
     it("allocates separate delivery rows without consuming unavailable inventory", async () => {

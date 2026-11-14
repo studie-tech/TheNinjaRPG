@@ -10,6 +10,7 @@ import type { Quest, UserData, UserItem, UserQuest } from "@/drizzle/schema";
 import { getActivityBonuses } from "@/libs/activityBonuses";
 import type { BloodlineCollectionProgress } from "@/libs/bloodline";
 import { getFarmingLevel } from "@/libs/farming";
+import { isCarriedUserItem } from "@/libs/item";
 import {
   findCompletedPredecessor,
   findPredecessor,
@@ -936,9 +937,9 @@ export const getNewTrackers = (
               "deliverItemIds" in objective &&
               objective.deliverItemIds
             ) {
-              // Verify user has these items
+              // Verify user carries these items
               const check = objective.deliverItemIds.every((id) =>
-                user.useritems?.some((ui) => ui.itemId === id),
+                user.useritems?.some((ui) => ui.itemId === id && isCarriedUserItem(ui)),
               );
               if (!check) {
                 notifications.push(
@@ -1463,7 +1464,7 @@ const getPendingQuestItemEffects = (
       }
     } else if (objective.task === "deliver_item") {
       const removed: string[] = [];
-      // The consequence handler retires one owned row per distinct item ID.
+      // The consequence handler takes one unit per distinct item ID.
       for (const itemId of new Set(objective.deliverItemIds)) {
         const collectionId = collectionsByItem.get(itemId)?.shift();
         const items = collectionId ? outstanding.get(collectionId) : undefined;

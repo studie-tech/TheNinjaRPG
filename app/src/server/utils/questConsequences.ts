@@ -42,22 +42,22 @@ import {
 import { villageMissionCompletionEvents } from "@/libs/villageMission";
 import { nextSnapshotSql } from "@/queries/concurrency";
 import { reduceActiveFarmPlotTimers } from "@/queries/farming";
-import { deleteUserItemsWithPositiveQuantity } from "@/queries/item";
 import { incrementUserMoney } from "@/queries/profile";
 import {
+  deleteUserItemForDeliverQuestItems,
   executeResultForCommitQuestObjectiveRewards,
   fetchUserQuestByQuestId,
   findQuestRewardSkillPoints,
   findUserPvpRewardState,
   insertBankTransfersForCommitQuestObjectiveRewards,
   insertQuestHistoryForCommitQuestObjectiveRewards,
-  insertUserItemForExecuteClaimedQuestConsequences,
   listQuestsByIds,
   listUserItemForHandleQuestConsequences,
   revertQuestCompletionAfterFailedClaim,
   selectQuestHistoryForWhere2,
   updateQuestHistoryForCommitQuestObjectiveRewards,
   updateQuestHistoryForExecuteClaimedQuestConsequences,
+  updateUserItemForDeliverQuestItems,
 } from "@/queries/quests";
 import { initiateBattle } from "@/routers/combat";
 import type { UserWithRelations } from "@/routers/profile";
@@ -65,6 +65,7 @@ import { startQuestPartyEncounter } from "@/routers/questParty";
 import type { DrizzleClient } from "@/server/db";
 import type { ActionReadiness } from "@/server/utils/actionReadiness";
 import { claimUserSnapshot } from "@/server/utils/concurrency";
+import { grantUserItems } from "@/server/utils/itemGrants";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import {
@@ -745,32 +746,31 @@ export const handleQuestConsequences = async (
   const collected = consequences.filter((c) => c.type === "add_item");
   // Items removed
   const removed = consequences.filter((c) => c.type === "remove_item");
-  // Each delivery retires one owned row per distinct item ID, including missed receipts.
+  // Each delivery takes one unit per distinct item ID, including missed receipts.
   const removedItemCounts = new Map<string, number>();
   for (const consequence of removed) {
     for (const id of new Set(consequence.ids)) {
       removedItemCounts.set(id, (removedItemCounts.get(id) ?? 0) + 1);
     }
   }
-  const missingItemIds = [...removedItemCounts]
-    .filter(
-      ([id, count]) => user.items.filter((item) => item.itemId === id).length < count,
-    )
-    .map(([id]) => id);
-  // Profile snapshots carry equipped items only; shared deliveries must also retire
-  // unequipped quest copies. Read additional rows only when the snapshot lacks enough.
-  const additionalItems =
-    missingItemIds.length > 0
-      ? await listUserItemForHandleQuestConsequences(client, user, missingItemIds)
-      : [];
-  const ownedItems = [...user.items, ...additionalItems];
-  const removedUserItemIds = [...removedItemCounts].flatMap(([id, count]) =>
-    [
-      ...new Set(
-        ownedItems.filter((item) => item.itemId === id).map((item) => item.id),
-      ),
-    ].slice(0, count),
-  );
+  // Deliveries take from the carried stacks of the delivered items as they are now, backpack
+  // stacks first; an equipped copy goes only when the backpack lacks enough.
+  const ownedItems = (
+    removedItemCounts.size > 0
+      ? await listUserItemForHandleQuestConsequences(client, user, [
+          ...removedItemCounts.keys(),
+        ])
+      : []
+  ).sort((a, b) => Number(a.equipped !== "NONE") - Number(b.equipped !== "NONE"));
+  const deliveries = [...removedItemCounts].flatMap(([id, count]) => {
+    let remaining = count;
+    return ownedItems.flatMap((row) => {
+      const take =
+        row.itemId === id ? Math.min(Math.max(0, row.quantity), remaining) : 0;
+      remaining -= take;
+      return take > 0 ? [{ id: row.id, quantity: row.quantity, take }] : [];
+    });
+  });
   // Opponents to attack
   let opponent = consequences.find((c) => c.type === "combat");
   // Objective attackers ambush a player who is out travelling, so they are rolled only for the
@@ -870,7 +870,7 @@ export const handleQuestConsequences = async (
           startedQuestIds,
           endedQuestIds,
           collected,
-          removedUserItemIds,
+          deliveries,
           opponent,
         });
 
@@ -879,7 +879,7 @@ export const handleQuestConsequences = async (
         claimed: true,
         inventoryChanges: getQuestConsequenceInventoryUpdate(
           ownedItems,
-          removedUserItemIds,
+          deliveries,
           consequences,
           itemsRemoved,
         ),
@@ -905,7 +905,7 @@ const executeClaimedQuestConsequences = async ({
   startedQuestIds,
   endedQuestIds,
   collected,
-  removedUserItemIds,
+  deliveries,
   opponent,
 }: {
   client: DrizzleClient;
@@ -915,7 +915,7 @@ const executeClaimedQuestConsequences = async ({
   startedQuestIds: string[];
   endedQuestIds: string[];
   collected: QuestConsequence[];
-  removedUserItemIds: string[];
+  deliveries: QuestItemDelivery[];
   opponent: QuestConsequence | undefined;
 }) => {
   user.updatedAt = claimedAt;
@@ -941,11 +941,10 @@ const executeClaimedQuestConsequences = async ({
   // Ending a run frees its Pyramid slot before a replacement can claim it. Completed
   // history may already be closed while the caller's quest projection is still open.
   if (startedQuestIds.length > 0) await closeQuests;
-  // Materialize the lazy write once so the mutation phase and row-count check share one execution.
-  const itemRemoval =
-    removedUserItemIds.length > 0
-      ? Promise.resolve(deleteUserItemsWithPositiveQuantity(client, removedUserItemIds))
-      : Promise.resolve({ rowsAffected: 0 });
+  // Start the delivery once so the mutation phase and the success check share one execution.
+  const itemRemoval = deliverQuestItems(client, user.userId, deliveries);
+  // A battle owns the delivered stacks once it starts, so deliveries finish first.
+  if (opponent && deliveries.length > 0) await itemRemoval;
   await Promise.all([
     startedQuestIds.length === 0 ? closeQuests : undefined,
     ...(startedQuestIds.length > 0
@@ -1024,9 +1023,15 @@ const executeClaimedQuestConsequences = async ({
         ]
       : []),
     ...(collectedItems.length > 0
-      ? [insertUserItemForExecuteClaimedQuestConsequences(client, collectedItems, user)]
+      ? [
+          grantUserItems(
+            client,
+            user.userId,
+            collectedItems.map((itemId) => ({ itemId, quantity: 1 })),
+            { excludeUserItemIds: deliveries.map(({ id }) => id) },
+          ),
+        ]
       : []),
-    // The deletion guard leaves rows held by an active merge untouched.
     itemRemoval,
     opponent
       ? (async () => {
@@ -1088,8 +1093,43 @@ const executeClaimedQuestConsequences = async ({
   return {
     battleUserUpdate,
     committedActivity: battleActivity ?? questActivity,
-    itemsRemoved: (await itemRemoval).rowsAffected === removedUserItemIds.length,
+    itemsRemoved: await itemRemoval,
   };
+};
+
+/**
+ * Take each delivery's units from its stack, from the quantity it was read at: a stack that
+ * keeps units is decremented, one that runs out is deleted. A stack that changed since gives
+ * the units from what it holds now, by a relative decrement that keeps units a concurrent
+ * grant added or a deletion when exactly the delivered units remain. The guards skip rows held
+ * by an active merge, listed, stored or owned by a battle. Resolves whether every delivery
+ * matched its read, which the inventory projection assumes; otherwise the client refetches.
+ */
+const deliverQuestItems = async (
+  client: DrizzleClient,
+  userId: string,
+  deliveries: QuestItemDelivery[],
+) => {
+  const results = await Promise.all(
+    deliveries.map(async ({ id, quantity, take }) => {
+      const removal = () =>
+        deleteUserItemForDeliverQuestItems(client, userId, id, take);
+      const exact =
+        take < quantity
+          ? await updateUserItemForDeliverQuestItems(client, userId, id, take, quantity)
+          : await removal();
+      if (exact.rowsAffected === 1) return true;
+      const decremented = await updateUserItemForDeliverQuestItems(
+        client,
+        userId,
+        id,
+        take,
+      );
+      if (decremented.rowsAffected !== 1 && take < quantity) await removal();
+      return false;
+    }),
+  );
+  return results.every(Boolean);
 };
 
 /** Tier quest bootstrap plus achievement log; tasks are independent and run together. */
@@ -1127,6 +1167,9 @@ export const petTaskContentCondition = (task: PetTask, role: UserRole) =>
     lte(quest.petTaskMinutes, PET_TASK_MAX_MINUTES),
     canPlayHiddenQuests(role) ? undefined : eq(quest.hidden, false),
   )})`;
+
+/** Units a quest delivery takes from one stack, with the quantity it was read at. */
+type QuestItemDelivery = { id: string; quantity: number; take: number };
 
 type UserQuestFromGetReward = ReturnType<typeof getReward>["userQuest"];
 
