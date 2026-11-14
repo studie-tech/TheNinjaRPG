@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
   actionAimsAtFighter,
-  tapAimsAction,
   validateActionTarget,
 } from "@/libs/combat/targetValidation";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
@@ -47,15 +46,15 @@ const scenario = (actorActionPoints: number, activeUserId = "actor") => {
     if (!hex) throw new Error("Missing fixture tile");
     return hex;
   };
-  /** Validate a tap on the fighter's own tile, and whether the action aims at them. */
-  const check = (action: CombatAction, fighterId: string) => {
+  /** Check casting at the pointer and aiming at the hit fighter independently. */
+  const check = (action: CombatAction, fighterId: string, pointerCol?: number) => {
     const fighter = battle.usersState.find((user) => user.userId === fighterId)!;
     const info = {
       user: battle.usersState.find((user) => user.userId === "actor")!,
       battle,
       action,
       grid,
-      target: tile(fighter.longitude),
+      target: tile(pointerCol ?? fighter.longitude),
       timeDiff: 0,
     };
     return {
@@ -76,20 +75,7 @@ const scenario = (actorActionPoints: number, activeUserId = "actor") => {
       },
       fighterId,
     );
-  /** Whether a tap whose pointer is on one tile and whose sprite hit is a fighter aims. */
-  const tapAims = (action: CombatAction, fighterId: string, col: number) =>
-    tapAimsAction(
-      {
-        user: battle.usersState.find((user) => user.userId === "actor")!,
-        battle,
-        action,
-        grid,
-        target: tile(col),
-        timeDiff: 0,
-      },
-      fighterId,
-    );
-  return { check, aimsFromTile, tapAims };
+  return { check, aimsFromTile };
 };
 
 const heal = makeCombatAction({
@@ -160,15 +146,10 @@ describe("actionAimsAtFighter", () => {
     expect(aimsFromTile(heal, "distant", 2)).toBe(false);
   });
 
-  it("counts a tap that casts on the tile under the pointer, whichever sprite it hit", () => {
-    const { tapAims } = scenario(100);
+  it("validates the pointer tile separately when the hit sprite stands out of reach", () => {
+    const { check } = scenario(100);
     // The heal lands on the ally's tile; the sprite hit is a teammate out of its reach.
-    expect(tapAims(heal, "distant", 2)).toBe(true);
-    expect(tapAims(heal, "distant", 4)).toBe(false);
-  });
-
-  it("counts a tap aimed at the fighter's own tile when it cannot cast yet", () => {
-    const { tapAims } = scenario(30);
-    expect(tapAims(selfBuff, "actor", 2)).toBe(true);
+    expect(check(heal, "distant", 2)).toEqual({ valid: true, aims: false });
+    expect(check(heal, "distant", 4)).toEqual({ valid: false, aims: false });
   });
 });

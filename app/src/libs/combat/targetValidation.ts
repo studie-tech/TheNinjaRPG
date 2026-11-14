@@ -13,17 +13,6 @@ import { getActionAffectedTiles } from "@/libs/combat/util";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { getPossibleActionTiles } from "@/libs/hexgrid";
 
-type TargetCheck = {
-  user: ReturnedUserState;
-  battle: ReturnedBattle;
-  action: CombatAction | undefined;
-  grid: Grid<TerrainHex>;
-  target: TerrainHex;
-  timeDiff: number;
-  precomputedUserId?: string;
-  precomputedActions?: CombatAction[];
-};
-
 /** Shared by interaction and highlights so desktop and touch use identical target rules. */
 export const validateActionTarget = (
   info: TargetCheck,
@@ -60,14 +49,6 @@ export const validateActionTarget = (
 };
 
 /**
- * Whether a tap on a fighter aims the selected action: it casts on the tapped tile, or the
- * action aims at the fighter's own tile ({@link actionAimsAtFighter}). The sprite under the
- * pointer can stand on a neighbouring tile, so both count.
- */
-export const tapAimsAction = (info: TargetCheck, fighterId: string) =>
-  validateActionTarget(info).isValid || actionAimsAtFighter(info, fighterId);
-
-/**
  * Whether the actor, on their turn, aims the selected action at a fighter: the action reaches
  * the fighter's tile even when the actor lacks the action points or the action cools down.
  * Outside the actor's turn nothing is aimed.
@@ -86,6 +67,7 @@ export const actionAimsAtFighter = (info: TargetCheck, fighterId: string) => {
   return !!target && aimAction({ ...info, target }).isValid;
 };
 
+/** Share target geometry without turn, action-point or cooldown availability gates. */
 const aimAction = (info: TargetCheck) => {
   const { user, battle, action, grid, target } = info;
   if (!action) return { isValid: false };
@@ -123,4 +105,15 @@ const aimAction = (info: TargetCheck) => {
     greenTiles.size > 0 && (hasCoordinatePattern || !redTiles.has(target));
 
   return { isValid, origin, possibleTiles, greenTiles, redTiles };
+};
+
+type TargetCheck = {
+  user: ReturnedUserState;
+  battle: ReturnedBattle;
+  action: CombatAction | undefined;
+  grid: Grid<TerrainHex>;
+  target: TerrainHex;
+  timeDiff: number;
+  precomputedUserId?: string;
+  precomputedActions?: CombatAction[];
 };

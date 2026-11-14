@@ -45,7 +45,10 @@ import {
 } from "@/libs/combat/constants";
 import { isBattleHotkeyBlocked } from "@/libs/combat/hotkeys";
 import { inspectsBattlefieldTap } from "@/libs/combat/inspection";
-import { tapAimsAction, validateActionTarget } from "@/libs/combat/targetValidation";
+import {
+  actionAimsAtFighter,
+  validateActionTarget,
+} from "@/libs/combat/targetValidation";
 import { getTurnControl, resolveControlledActorId } from "@/libs/combat/turn";
 import type { BattleState, CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { isBattleInLobby } from "@/libs/combat/util";
@@ -853,7 +856,8 @@ const Combat: React.FC<CombatProps> = (props) => {
         battle,
         userIdRef.current,
         character.userId,
-        !!check && tapAimsAction(check, character.userId),
+        // Sprite bounds can cross tiles, so either the pointer or fighter tile can aim.
+        isValid || (!!check && actionAimsAtFighter(check, character.userId)),
       )
     )
       inspectTapped(character.userId);
