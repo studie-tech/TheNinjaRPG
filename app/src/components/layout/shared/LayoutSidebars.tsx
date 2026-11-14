@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DISCORD_INVITE_URL,
   GITHUB_ISSUES_URL,
-  GITHUB_REPO_URL,
   IMG_LAYOUT_USERBANNER_MIDDLE,
   IMG_LAYOUT_USERSBANNER_BOTTOM,
   IMG_LAYOUT_USERSBANNER_TOP,
@@ -98,18 +97,6 @@ const PARTICIPATE_LINKS = [
 const MenuBoxCombat = dynamic(() => import("@/layout/MenuBoxCombat"), {
   loading: () => <SidebarLoadingSkeleton />,
 });
-
-const GithubStar: React.FC = () => (
-  <div className="flex justify-center pt-6 pl-2 align-center">
-    <Link
-      href={GITHUB_REPO_URL}
-      className="inline-flex min-h-10 items-center gap-2 font-bold hover:underline"
-    >
-      <SiGithub aria-hidden="true" className="h-4 w-4" />
-      Star on GitHub
-    </Link>
-  </div>
-);
 
 interface LayoutLeftSidebarProps {
   variant: GameLayoutId;
@@ -275,9 +262,6 @@ export const LayoutRightSidebarContent: React.FC<LayoutRightSidebarContentProps>
           className={layoutVariantClasses[variant].rightSidebarReservation}
         />
       )}
-      {/* The error and its retry live in the left column only, which every frame
-          also shows in its player sheet. */}
-      <GithubStar />
     </>
   );
 };
