@@ -1,6 +1,7 @@
 import { beforeEach, expect, it } from "bun:test";
-import { village } from "@/drizzle/schema";
-import { fetchSectorVillage } from "@/queries/village";
+import { userData, village } from "@/drizzle/schema";
+import { fetchSectorVillage, fetchUserSectorVillage } from "@/queries/village";
+import { insertUsers } from "../setup/factories";
 import {
   describeWithDatabase,
   getTestDatabase,
@@ -49,5 +50,28 @@ describeWithDatabase("fetchSectorVillage", () => {
     expect(await sectorVillage(4, true)).toBe("stronghold");
     expect(await sectorVillage(1, true)).toBe("syndicate");
     expect(await sectorVillage(99, true)).toBe("syndicate");
+  });
+});
+
+describeWithDatabase("fetchUserSectorVillage", () => {
+  beforeEach(async () => {
+    await resetTables(village, userData);
+    await insertVillages([
+      ["village", 1, "VILLAGE"],
+      ["safezone", 2, "SAFEZONE"],
+    ]);
+    await insertUsers([
+      { userId: "in-village", username: "InVillage", sector: 1 },
+      { userId: "in-safezone", username: "InSafezone", sector: 2 },
+      { userId: "in-wilds", username: "InWilds", sector: 99 },
+    ]);
+  });
+
+  it("returns the village in the user's stored sector", async () => {
+    const db = await getTestDatabase();
+    expect((await fetchUserSectorVillage(db, "in-village"))?.id).toBe("village");
+    expect((await fetchUserSectorVillage(db, "in-safezone"))?.id).toBe("safezone");
+    expect(await fetchUserSectorVillage(db, "in-wilds")).toBeNull();
+    expect(await fetchUserSectorVillage(db, "missing")).toBeNull();
   });
 });

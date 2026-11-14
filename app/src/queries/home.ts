@@ -119,6 +119,16 @@ export const updateUserDataForToggleSleep = (
       ),
     );
 
+/** Build the `userData` lookup for `getAvailableUpgrades`, selecting only `homeType`, using predicates on `userId`. */
+export const findUserDataForGetAvailableUpgrades = (
+  client: Pick<DrizzleClient, "query">,
+  ctx: { userId: string },
+) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, ctx.userId),
+    columns: { homeType: true },
+  });
+
 /** Build the `userHome` lookup for `upgradeHome`, using predicates on `userId`. */
 export const findUserHomeForUpgradeHome = (
   client: Pick<DrizzleClient, "query">,

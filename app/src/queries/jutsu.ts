@@ -838,25 +838,24 @@ export const selectUserJutsuForFetchOwned = (
     .from(userJutsu)
     .where(eq(userJutsu.userId, ctx.userId));
 
-/** Build the `userJutsu` update for `unequipAll`, setting `equipped`, using predicates on `userId`. */
-export const updateUserJutsuForUnequipAll = (
-  client: Pick<DrizzleClient, "update">,
-  ctx: { userId: string },
+/**
+ * Clear equipped jutsu and the owner's active loadout together, so loadout selection
+ * cannot commit between the equipment clear and the active-pointer lookup.
+ * Join equipment before the shared loadout so every owned jutsu row is updated.
+ */
+export const executeUnequipAllJutsus = (
+  client: Pick<DrizzleClient, "execute">,
+  userId: string,
 ) =>
-  client
-    .update(userJutsu)
-    .set({ equipped: false })
-    .where(eq(userJutsu.userId, ctx.userId));
-
-/** Build the `jutsuLoadout` update for `unequipAll`, setting `jutsuIds`, using predicates on `id`. */
-export const updateJutsuLoadoutForUnequipAll = (
-  client: Pick<DrizzleClient, "update">,
-  loadout: { id: string },
-) =>
-  client
-    .update(jutsuLoadout)
-    .set({ jutsuIds: [] })
-    .where(eq(jutsuLoadout.id, loadout.id));
+  client.execute(sql`
+    UPDATE ${userData}
+    LEFT JOIN ${userJutsu} ON ${userJutsu.userId} = ${userData.userId}
+    LEFT JOIN ${jutsuLoadout}
+      ON ${jutsuLoadout.id} = ${userData.jutsuLoadout}
+      AND ${jutsuLoadout.userId} = ${userData.userId}
+    SET ${userJutsu.equipped} = false, ${jutsuLoadout.jutsuIds} = JSON_ARRAY()
+    WHERE ${userData.userId} = ${userId}
+  `);
 
 /** Build the `userJutsu` update for `toggleEquip`, setting `equipped`, using predicates on `id`, `userId`, `equipped`. */
 export const updateUserJutsuForToggleEquip = (

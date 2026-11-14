@@ -225,7 +225,7 @@ describeWithDatabase("arena readiness reads", () => {
           expect(reads).toBe(0);
           expect(cache.getQueryState(key)?.isInvalidated).toBe(false);
           const projected = cache.getQueryData<UserCache>(key)?.userData;
-          expect(applied).toBe(!(queued === "companion" && status === "HOSPITALIZED"));
+          expect(applied).toBe(queued !== "companion");
           expect(projected).toMatchObject({
             status: "BATTLE",
             battleId: saved.battleId,
@@ -235,9 +235,7 @@ describeWithDatabase("arena readiness reads", () => {
             curEnergy: saved.curEnergy,
             experience: saved.experience,
             petExperience:
-              queued === "companion" && status === "HOSPITALIZED"
-                ? initial.petExperience
-                : saved.petExperience,
+              queued === "companion" ? initial.petExperience : saved.petExperience,
             offence: saved.offence,
             pveFights: saved.pveFights,
             energyQueueHead: saved.energyQueueHead,

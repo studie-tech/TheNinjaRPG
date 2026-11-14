@@ -93,6 +93,16 @@ export const deleteUser2conversationForDisband = (
     .delete(user2conversation)
     .where(eq(user2conversation.conversationId, party.id));
 
+/** Build the `userData` lookup for `overview`, selecting only `questPartyId`, using predicates on `userId`. */
+export const findUserDataForOverview = (
+  client: Pick<DrizzleClient, "query">,
+  ctx: { userId: string },
+) =>
+  client.query.userData.findFirst({
+    where: eq(userData.userId, ctx.userId),
+    columns: { questPartyId: true },
+  });
+
 /** Build the `questParty` listing for `overview`, using predicates on `isPublic`, `invitedUserIds`, `memberIds`. */
 export const listQuestPartyForOverview = (
   client: Pick<DrizzleClient, "query">,

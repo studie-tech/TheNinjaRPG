@@ -104,6 +104,7 @@ import {
 } from "@/libs/rewardChoice";
 import { collapseRewards } from "@/libs/rewards";
 import { callDiscordContent } from "@/libs/socials";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import {
   fetchUser,
   fetchViewerRole,
@@ -357,11 +358,8 @@ export const questsRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       // Query
-      const [{ user }, events, inventory] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+      const [user, events, inventory] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchQuestDiscoveryCandidates(ctx.drizzle, ctx.userId, {
           questTypes: ["event"],
           villageId: input.villageId ?? undefined,
@@ -370,7 +368,6 @@ export const questsRouter = createTRPCRouter({
         }),
         listCarriedItemsForQuestEntry(ctx.drizzle, ctx),
       ]);
-      if (!user) return [];
       events.forEach((r) => {
         controlShownQuestLocationInformation(r);
       });
@@ -388,11 +385,8 @@ export const questsRouter = createTRPCRouter({
     .input(z.object({ villageId: z.string(), level: z.number() }))
     .query(async ({ ctx, input }) => {
       // Query
-      const [{ user }, missions, activeWars] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+      const [user, missions, activeWars] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchQuestDiscoveryCandidates(ctx.drizzle, ctx.userId, {
           questTypes: [...MISSION_HALL_QUEST_TYPES],
           villageId: input.villageId,
@@ -400,7 +394,6 @@ export const questsRouter = createTRPCRouter({
         }),
         fetchActiveWars(ctx.drizzle, input.villageId, ctx.userId),
       ]);
-      if (!user) return [];
       const villageInWar = isWarMissionAvailable({
         questType: "war",
         villageId: user.villageId,
@@ -427,18 +420,14 @@ export const questsRouter = createTRPCRouter({
         return [];
       }
       // Query
-      const [{ user }, quests, inventory] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+      const [user, quests, inventory] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchQuestDiscoveryCandidates(ctx.drizzle, ctx.userId, {
           questTypes: [input.questType],
           level: input.level,
         }),
         listCarriedItemsForQuestEntry(ctx.drizzle, ctx),
       ]);
-      if (!user) return [];
       quests.forEach((r) => {
         controlShownQuestLocationInformation(r);
       });
@@ -461,16 +450,12 @@ export const questsRouter = createTRPCRouter({
         return [];
       }
       // Query without the level cap so quests above the user's level are included
-      const [{ user }, quests] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+      const [user, quests] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchQuestDiscoveryCandidates(ctx.drizzle, ctx.userId, {
           questTypes: [input.questType],
         }),
       ]);
-      if (!user) return [];
       quests.forEach((r) => {
         controlShownQuestLocationInformation(r);
       });

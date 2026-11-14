@@ -267,7 +267,7 @@ import { fetchQuestEntryInventory, listVisibleRaidQuests } from "@/queries/quest
 import { findSectorWithVillage } from "@/queries/shrine";
 import { fetchUserSkills } from "@/queries/skillTree";
 import { fetchActiveTerritoryWar } from "@/queries/territoryWar";
-import { fetchSectorVillage } from "@/queries/village";
+import { fetchUserSectorVillage } from "@/queries/village";
 import {
   claimVillageDutyPatrol,
   fetchVillageDutyHome,
@@ -1045,15 +1045,18 @@ export const combatRouter = createTRPCRouter({
     )
     .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      // Get information
-      const [{ user, requiresProgressionRefresh }, selectedAI] = await Promise.all([
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+      // Get information; initiateBattle settles the participants and the actor's readiness.
+      const [stored, selectedAI, sectorVillage] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         findUserDataForStartArenaBattle(ctx.drizzle, input),
+        fetchUserSectorVillage(ctx.drizzle, ctx.userId),
       ]);
+      const { user, requiresUserRefresh } = await settleBattleGuardMembership(
+        ctx.drizzle,
+        stored,
+      );
       // Check that user was found
       if (!user) return errorResponse("Attacking user not found");
-      // Read the arena location after progression has settled the player's membership.
-      const sectorVillage = await fetchSectorVillage(ctx.drizzle, user.sector);
       if (!sectorVillage) return errorResponse("Arena village not found");
       if (user.isBanned) return errorResponse("No arena while banned");
       if (!input.stats && user.dailyArenaFights >= BATTLE_ARENA_DAILY_LIMIT) {
@@ -1071,7 +1074,7 @@ export const combatRouter = createTRPCRouter({
             targetIds: [selectedAI.userId],
             client: ctx.drizzle,
             actionUserId: ctx.userId,
-            requiresUserRefresh: requiresProgressionRefresh,
+            requiresUserRefresh,
             originSocketId: input.originSocketId,
             targetStatDistribution: input.stats ?? undefined,
             biome: "default",
@@ -1659,22 +1662,17 @@ export const combatRouter = createTRPCRouter({
     .output(userDeltaResponseSchema.extend({ battleId: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Get information (use fetchActiveWars to get village relations with sectors)
-      const [
-        { user, requiresProgressionRefresh },
-        activeWars,
-        sectorData,
-        shrineAis,
-        isHome,
-      ] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+      const [stored, activeWars, sectorData, shrineAis, isHome] = await Promise.all([
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchActiveWars(ctx.drizzle),
         findSectorWithVillage(ctx.drizzle, input.sector),
         listUserDataForStartShrineBattle(ctx.drizzle),
         fetchVillageDutyHome(ctx.drizzle, input.sector),
       ]);
+      const { user, requiresUserRefresh } = await settleBattleGuardMembership(
+        ctx.drizzle,
+        stored,
+      );
 
       // Check that user was found
       if (!user) return errorResponse("User not found");
@@ -1742,7 +1740,7 @@ export const combatRouter = createTRPCRouter({
               client: ctx.drizzle,
               userIds: [user.userId],
               actionUserId: ctx.userId,
-              requiresUserRefresh: requiresProgressionRefresh,
+              requiresUserRefresh,
               originSocketId: input.originSocketId,
               sector: input.sector,
               forceDefenderVillageId: shrineOwnerVillageId,
@@ -1761,7 +1759,7 @@ export const combatRouter = createTRPCRouter({
           forceDefenderVillageId: shrineOwnerVillageId,
           client: ctx.drizzle,
           actionUserId: ctx.userId,
-          requiresUserRefresh: requiresProgressionRefresh,
+          requiresUserRefresh,
           originSocketId: input.originSocketId,
           biome: "default",
         },
@@ -1837,6 +1835,25 @@ export const combatRouter = createTRPCRouter({
 /***********************************************
  * CONVENIENCE FUNCTIONS USED ON COMBAT ENDPOINTS
  ***********************************************/
+/**
+ * Battle-start guards read the stored profile. A pending negative-prestige expulsion
+ * changes village membership, so that actor is settled through the full profile pipeline
+ * first; every other settlement runs in initiateBattle's participant preload.
+ */
+const settleBattleGuardMembership = async (
+  client: DrizzleClient,
+  user: Awaited<ReturnType<typeof fetchActionUser>>,
+) => {
+  if (user.isOutlaw || user.villagePrestige >= 0 || user.village?.type !== "VILLAGE")
+    return { user, requiresUserRefresh: false };
+  const settled = await fetchUpdatedUser({
+    client,
+    userId: user.userId,
+    includeNotifications: false,
+  });
+  return { user: settled.user, requiresUserRefresh: true };
+};
+
 /**
  * Send committed public changes to everyone on the battle's channel, solo fights included,
  * since Colosseum spectators follow them; oversized payloads retain log or version recovery
