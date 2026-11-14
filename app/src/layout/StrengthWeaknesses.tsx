@@ -44,7 +44,7 @@ import { getEffectiveThemeTextColor } from "@/libs/themePreference";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { useActiveLayout } from "@/utils/LayoutContext";
-import { canAccessHiddenSkillTree } from "@/utils/permissions";
+import { canAccessHiddenSkillTree, getContentRole } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { useRequiredUserData, useRequiredUserInfo } from "@/utils/UserContext";
 
@@ -523,7 +523,7 @@ interface SkillsTabProps {
 
 export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
   const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
-  const includeHidden = canAccessHiddenSkillTree(userData.role);
+  const includeHidden = canAccessHiddenSkillTree(getContentRole(userData));
   // State for folder UI
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);

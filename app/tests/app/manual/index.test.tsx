@@ -3,6 +3,7 @@ import { cleanup, render } from "@testing-library/react";
 import ManualMain from "@/app/[shell]/manual/page";
 import * as ContentBox from "@/layout/ContentBox";
 import * as ImageLinkGrid from "@/layout/ImageLinkGrid";
+import * as StaffPlayerViewSwitch from "@/layout/StaffPlayerViewSwitch";
 import * as UserContext from "@/utils/UserContext";
 import { mockUserContextValue } from "../../setup/userContext";
 
@@ -14,6 +15,9 @@ beforeEach(() => {
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
     <div>{children}</div>
   ));
+  vi.spyOn(StaffPlayerViewSwitch, "StaffPlayerViewSwitch").mockImplementation(
+    () => null,
+  );
   vi.spyOn(ImageLinkGrid, "ImageLinkGrid").mockImplementation(({ entries }) => {
     grids.push(entries);
     return null;

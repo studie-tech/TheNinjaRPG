@@ -38,9 +38,13 @@ export const userQuestHistoryRelation = {
         AND hidden_quest.hidden = TRUE)`,
       // RQB rewrites columns to the history alias. Keep the outer userData role
       // qualified explicitly; findMany combat preloads can contain different roles.
-      inArray(
-        sql`${sql.identifier("userData")}.${sql.identifier("role")}`,
-        UserRoles.filter(canPlayHiddenQuests),
+      and(
+        inArray(
+          sql`${sql.identifier("userData")}.${sql.identifier("role")}`,
+          UserRoles.filter(canPlayHiddenQuests),
+        ),
+        // Staff playing as a regular player meet only released quests (`getContentRole`).
+        sql`${sql.identifier("userData")}.${sql.identifier("playsAsPlayer")} = FALSE`,
       ),
     ),
   ),

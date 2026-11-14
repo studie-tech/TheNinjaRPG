@@ -34,7 +34,7 @@ import { gearMissingMastery } from "@/libs/mastery";
 import { cn } from "@/libs/shadui";
 import { hasRequiredSkill } from "@/libs/skillRequirements";
 import type { UserWithRelations } from "@/routers/profile";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, getContentRole } from "@/utils/permissions";
 
 /**
  * The Equipped figure beside the backpack, where a slot opens its picker and an item its
@@ -173,10 +173,10 @@ export function ItemsWorkspace({
       : openedView;
   const hasPanel = view.kind !== "backpack";
   // Hidden items show only to content staff, as everywhere else items are listed.
-  const choosable = canChangeContent(userData.role)
+  const choosable = canChangeContent(getContentRole(userData))
     ? userItems
     : userItems.filter((ui) => !ui.item.hidden);
-  const choosableBag = canChangeContent(userData.role)
+  const choosableBag = canChangeContent(getContentRole(userData))
     ? listItems
     : listItems.filter((ui) => !ui.item.hidden);
 

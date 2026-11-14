@@ -18,7 +18,7 @@ import {
 import { findSkillWithFolderById } from "@/queries/skillTree";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { createTRPCRouter, errorResponse, protectedProcedure } from "@/server/api/trpc";
-import { canAccessHiddenSkillTree } from "@/utils/permissions";
+import { canAccessHiddenSkillTree, getContentRole } from "@/utils/permissions";
 import { bloodrightTierSchema } from "@/validators/skillTree";
 import { userDeltaResponseSchema } from "@/validators/userCache";
 
@@ -32,7 +32,10 @@ export const bloodrightRouter = createTRPCRouter({
       tiers: tiers.filter(
         (tier) =>
           tier.bloodlineId === user?.bloodlineId &&
-          isSkillVisible(tier, canAccessHiddenSkillTree(user?.role)),
+          isSkillVisible(
+            tier,
+            !!user && canAccessHiddenSkillTree(getContentRole(user)),
+          ),
       ),
       purchased: user?.bloodright ?? [],
       spent: user?.bloodrightSpent ?? 0,
@@ -55,7 +58,7 @@ export const bloodrightRouter = createTRPCRouter({
         tier.pathType !== "BLOODRIGHT" ||
         !user.bloodlineId ||
         tier.bloodlineId !== user.bloodlineId ||
-        !isSkillVisible(tier, canAccessHiddenSkillTree(user.role))
+        !isSkillVisible(tier, canAccessHiddenSkillTree(getContentRole(user)))
       )
         return errorResponse("Bloodright tier not found for your bloodline");
       const purchased = user.bloodright;

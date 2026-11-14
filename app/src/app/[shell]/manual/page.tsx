@@ -37,6 +37,7 @@ import {
 import ContentBox from "@/layout/ContentBox";
 import { ImageLinkGrid } from "@/layout/ImageLinkGrid";
 import Link from "@/layout/Link";
+import { StaffPlayerViewSwitch } from "@/layout/StaffPlayerViewSwitch";
 import {
   canChangeContent,
   canControlBackups,
@@ -175,6 +176,7 @@ export default function ManualMain() {
           subtitle="Content, moderation and operations tools for your role"
           initialBreak={true}
         >
+          <StaffPlayerViewSwitch />
           <ImageLinkGrid entries={staffTiles} />
         </ContentBox>
       )}

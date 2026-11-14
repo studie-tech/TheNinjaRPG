@@ -1,10 +1,10 @@
 import type { Quest, UserData } from "@/drizzle/schema";
 import type { UserWithRelations } from "@/routers/profile";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, getContentRole } from "@/utils/permissions";
 
 /** Projects private quest state for client responses without changing server-owned trackers. */
 export const getPublicQuestUser = <
-  T extends Pick<UserData, "questData" | "sector" | "role"> & {
+  T extends Pick<UserData, "questData" | "sector" | "role" | "playsAsPlayer"> & {
     userQuests: { quest?: Pick<Quest, "id" | "content"> | null }[];
     questParty?: unknown;
   },
@@ -36,7 +36,7 @@ export const getPublicQuestUser = <
  */
 export const controlShownQuestLocationInformation = (
   quest?: Pick<Quest, "id" | "content"> | null,
-  user?: Pick<UserData, "questData" | "sector" | "role">,
+  user?: Pick<UserData, "questData" | "sector" | "role" | "playsAsPlayer">,
 ) => {
   const tracker = user?.questData?.find((q) => q.id === quest?.id);
   quest?.content.objectives.forEach((objective) => {
@@ -59,7 +59,7 @@ export const controlShownQuestLocationInformation = (
       "hideLocation" in objective &&
       objective.hideLocation &&
       user?.sector !== objective.sector &&
-      !canChangeContent(user?.role || "USER")
+      !canChangeContent(user ? getContentRole(user) : "USER")
     ) {
       if (status) {
         delete status.sector;
@@ -79,10 +79,13 @@ export const controlShownQuestLocationInformation = (
 /** Project visible, unassigned achievements as initial history entries without persisting them. */
 export const mockAchievementHistoryEntries = (
   achievements: Quest[],
-  user: Pick<NonNullable<UserWithRelations>, "userId" | "role" | "userQuests">,
+  user: Pick<
+    NonNullable<UserWithRelations>,
+    "userId" | "role" | "playsAsPlayer" | "userQuests"
+  >,
 ) => {
   return achievements
-    .filter((q) => !q.hidden || canChangeContent(user.role))
+    .filter((q) => !q.hidden || canChangeContent(getContentRole(user)))
     .filter((q) => !user.userQuests?.find((uq) => uq.questId === q.id))
     .map((a) => ({
       id: a.id,

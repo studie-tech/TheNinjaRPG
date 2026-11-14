@@ -224,6 +224,7 @@ import {
   canEditQuests,
   canEditStarterQuests,
   canPlayHiddenQuests,
+  getContentRole,
   isRestrictedToSelf,
 } from "@/utils/permissions";
 import { getNextUserSnapshotAt, secondsFromDate, secondsFromNow } from "@/utils/time";
@@ -1259,7 +1260,7 @@ export const questsRouter = createTRPCRouter({
             eq(userData.rank, user.rank),
             sql`EXISTS (SELECT 1 FROM ${userPet} WHERE ${userPet.id} = ${pet.id} AND ${userPet.userId} = ${ctx.userId} AND ${userPet.revision} = ${pet.revision})`,
             petTaskAttemptCondition(task, ctx.userId),
-            petTaskContentCondition(task, user.role),
+            petTaskContentCondition(task, getContentRole(user)),
           ],
           set: {
             petTask: task,
@@ -1540,7 +1541,7 @@ export const questsRouter = createTRPCRouter({
           ? questHistoryPrefetch
           : undefined);
       const attemptBlock =
-        activeAttempt && questAttemptBlockMessage(activeAttempt, user.role);
+        activeAttempt && questAttemptBlockMessage(activeAttempt, getContentRole(user));
       if (attemptBlock) return errorResponse(attemptBlock);
 
       // Figure out if any finished quests & get rewards
@@ -1986,7 +1987,7 @@ export const questsRouter = createTRPCRouter({
         (entry) => entry.questId === input.questId && !entry.endAt,
       );
       const attemptBlock =
-        activeAttempt && questAttemptBlockMessage(activeAttempt, user.role);
+        activeAttempt && questAttemptBlockMessage(activeAttempt, getContentRole(user));
       if (attemptBlock) return errorResponse(attemptBlock);
       // Get updated quest information with start_battle task and retry flag
       const { trackers, notifications, consequences } = getNewTrackers(user, [
@@ -2133,7 +2134,10 @@ const petTaskAttemptCondition = (task: PetTask, userId: string) =>
 
 /** Explain invalid or unfinished tasks without discarding the player's ability to return safely. */
 const petTaskReturnBlockMessage = (
-  owner: Pick<UserData, "isBanned" | "isAi" | "status" | "battleId" | "role">,
+  owner: Pick<
+    UserData,
+    "isBanned" | "isAi" | "status" | "battleId" | "role" | "playsAsPlayer"
+  >,
   task: PetTask,
   contract: Quest | null | undefined,
   history:
@@ -2157,7 +2161,7 @@ const petTaskReturnBlockMessage = (
     !contract ||
     !isPetTaskContract(contract) ||
     contract.updatedAt.getTime() !== task.questVersion ||
-    (contract.hidden && !canPlayHiddenQuests(owner.role))
+    (contract.hidden && !canPlayHiddenQuests(getContentRole(owner)))
   )
     return "This contract changed or is unavailable. Return your companion without rewards.";
   if (

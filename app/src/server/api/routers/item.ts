@@ -293,9 +293,9 @@ import {
   debitUserMoney,
   fetchAllGameSettings,
   fetchCanListHiddenContent,
+  fetchContentViewerRole,
   fetchLoadoutUser,
   fetchUser,
-  fetchViewerRole,
   incrementUserMoney,
 } from "@/queries/profile";
 import {
@@ -355,6 +355,7 @@ import {
   canAwardReputation,
   canChangeContent,
   canEditItems,
+  getContentRole,
   isRestrictedToSelf,
 } from "@/utils/permissions";
 import { sanitizeVariantText } from "@/utils/sanitize";
@@ -963,7 +964,7 @@ export const itemRouter = createTRPCRouter({
     .input(getItemEvolutionsSchema)
     .query(async ({ ctx, input }) => {
       const [viewerRole, evolutions] = await Promise.all([
-        fetchViewerRole(ctx.drizzle, ctx.userId),
+        fetchContentViewerRole(ctx.drizzle, ctx.userId),
         listItemForGetEvolutions(ctx.drizzle, input),
       ]);
       return filterVisibleEvolutions(evolutions, canChangeContent(viewerRole));
@@ -993,7 +994,7 @@ export const itemRouter = createTRPCRouter({
       if (!evolutionItem) return errorResponse("Evolution item not found");
       const parentItemId = evolutionItem.parentItemId;
       if (!parentItemId) return errorResponse("Target item is not an evolution");
-      if (evolutionItem.hidden && !canChangeContent(user.role))
+      if (evolutionItem.hidden && !canChangeContent(getContentRole(user)))
         return errorResponse("This evolution is not yet available");
 
       const userItemObj = userItems.find((ui) => ui.id === input.userItemId);
@@ -3297,7 +3298,7 @@ export const itemRouter = createTRPCRouter({
         return errorResponse("Farm items are traded at the farm, not the item shop");
       }
       if (user.isBanned) return errorResponse("You are banned");
-      if (info.hidden && !canChangeContent(user.role)) {
+      if (info.hidden && !canChangeContent(getContentRole(user))) {
         return errorResponse("Item is hidden, cannot be bought");
       }
       const isFurniture = info.itemType === "FURNITURE";

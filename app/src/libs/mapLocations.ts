@@ -3,7 +3,7 @@ import type { Quest, UserData, UserQuest } from "@/drizzle/schema";
 import { findCompletedPredecessor, isQuestObjectiveAvailable } from "@/libs/objectives";
 import { isValidSectorId } from "@/libs/sector-map/sector-ids";
 import { calculateContentDiff } from "@/utils/diff";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, getContentRole } from "@/utils/permissions";
 import { getUtcDayKey, hasEndDatePassed } from "@/utils/time";
 import type { MapLocation } from "@/validators/mapLocation";
 import { mapLocationFields } from "@/validators/mapLocation";
@@ -126,7 +126,7 @@ const resolveObjectiveCoordinates = (
   objectives: AllObjectivesType[],
   tracker: QuestTrackerType,
   placements: MapPlacement[],
-  viewer: Pick<UserData, "sector" | "role">,
+  viewer: Pick<UserData, "sector" | "role" | "playsAsPlayer">,
 ) => {
   const coordinates: Pick<AllObjectivesType, "sector" | "longitude" | "latitude"> = {};
   let current = objective;
@@ -159,7 +159,7 @@ const resolveObjectiveCoordinates = (
   if (
     hasConcealedLocation &&
     coordinates.sector !== viewer.sector &&
-    !canChangeContent(viewer.role)
+    !canChangeContent(getContentRole(viewer))
   )
     return null;
   return coordinates;
@@ -167,7 +167,7 @@ const resolveObjectiveCoordinates = (
 
 /** Public scenery survives completion; private scenery follows the selected same-location chain. */
 export const getQuestMapLocations = (
-  user: Pick<UserData, "questData" | "sector" | "role"> & {
+  user: Pick<UserData, "questData" | "sector" | "role" | "playsAsPlayer"> & {
     userQuests: Pick<UserQuest, "completed" | "endAt" | "quest">[];
   },
   publicLocations: MapLocation[],

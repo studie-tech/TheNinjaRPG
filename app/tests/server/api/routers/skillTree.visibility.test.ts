@@ -68,8 +68,10 @@ const invoke = async (
   }) as Promise<unknown>;
 };
 
-const setup = (role: UserRole | null) => {
-  const user = role ? { role, username: "staff-fixture", skillPoints: 10 } : null;
+const setup = (role: UserRole | null, playsAsPlayer = false) => {
+  const user = role
+    ? { role, playsAsPlayer, username: "staff-fixture", skillPoints: 10 }
+    : null;
   stubProfile("fetchUpdatedUser", async () => ({ user }));
   const skills = [
     skill("public"),
@@ -537,6 +539,19 @@ describe("hidden skill-tree permissions", () => {
         await invoke("purchaseSkill", drizzle, { skillId: "secret" }),
       ).toMatchObject({ success: allowed });
       expect(write).toHaveBeenCalledTimes(allowed ? 2 : 0);
+    },
+  );
+
+  it.each(["CONTENT", "CODER", "OWNER"] as UserRole[])(
+    "shows and sells %s staff who play as a regular player only released skills",
+    async (role) => {
+      const { drizzle, write } = setup(role, true);
+      expect(await invoke("getAllNames", drizzle)).toHaveLength(1);
+      expect(await invoke("get", drizzle, { id: "secret" })).toBeNull();
+      expect(
+        await invoke("purchaseSkill", drizzle, { skillId: "secret" }),
+      ).toMatchObject({ success: false });
+      expect(write).not.toHaveBeenCalled();
     },
   );
 

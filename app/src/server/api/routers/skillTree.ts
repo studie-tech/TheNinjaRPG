@@ -16,7 +16,7 @@ import { skillTree } from "@/drizzle/schema";
 import { isSkillVisible } from "@/libs/skillRequirements";
 import { getResetAllowance } from "@/libs/skillReset";
 import { callDiscordContent } from "@/libs/socials";
-import { fetchViewerRole, findUserById } from "@/queries/profile";
+import { fetchContentViewerRole, findUserById } from "@/queries/profile";
 import {
   deleteSkillTreeFolderForDeleteFolder,
   deleteSkillTreeForDelete,
@@ -74,6 +74,7 @@ import {
   canAccessHiddenSkillTree,
   canChangeContent,
   canUnequipAllUsers,
+  getContentRole,
 } from "@/utils/permissions";
 import { SkillTreeValidator } from "@/validators/combat";
 import { idSchema } from "@/validators/misc";
@@ -101,7 +102,7 @@ export const skillTreeRouter = createTRPCRouter({
     .meta({ mcp: { description: "Get all skill names for selectors" } })
     .query(async ({ ctx }) => {
       const [viewerRole, skills] = await Promise.all([
-        fetchViewerRole(ctx.drizzle, ctx.userId),
+        fetchContentViewerRole(ctx.drizzle, ctx.userId),
         listSkillTreeForGetAllNames(ctx.drizzle),
       ]);
       return skills
@@ -114,7 +115,7 @@ export const skillTreeRouter = createTRPCRouter({
     .input(idSchema)
     .query(async ({ ctx, input }) => {
       const [viewerRole, skill] = await Promise.all([
-        fetchViewerRole(ctx.drizzle, ctx.userId),
+        fetchContentViewerRole(ctx.drizzle, ctx.userId),
         findSkillWithFolderById(ctx.drizzle, input.id),
       ]);
       // React Query rejects undefined query data, so missing/hidden skills resolve to null.
@@ -143,7 +144,7 @@ export const skillTreeRouter = createTRPCRouter({
       const baseFilters = skillTreeDatabaseFilter(input || {});
 
       // Visibility must be applied before pagination, so this query depends on the viewer.
-      const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);
+      const viewerRole = await fetchContentViewerRole(ctx.drizzle, ctx.userId);
       if (!canAccessHiddenSkillTree(viewerRole)) {
         baseFilters.push(
           eq(skillTree.hidden, false),
@@ -172,7 +173,7 @@ export const skillTreeRouter = createTRPCRouter({
     .meta({ mcp: { description: "Get user's purchased skills" } })
     .query(async ({ ctx }) => {
       const [viewerRole, skills] = await Promise.all([
-        fetchViewerRole(ctx.drizzle, ctx.userId),
+        fetchContentViewerRole(ctx.drizzle, ctx.userId),
         fetchUserSkills(ctx.drizzle, ctx.userId),
       ]);
       const activatedSkills = skills.filter((entry) => entry.activated);
@@ -212,7 +213,7 @@ export const skillTreeRouter = createTRPCRouter({
       if (
         !skill ||
         skill.pathType === "BLOODRIGHT" ||
-        !isSkillVisible(skill, canAccessHiddenSkillTree(user.role))
+        !isSkillVisible(skill, canAccessHiddenSkillTree(getContentRole(user)))
       ) {
         return errorResponse("Skill not found");
       }
@@ -725,7 +726,7 @@ export const skillTreeRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const [viewerRole, folders, assignments] = await Promise.all([
-        fetchViewerRole(ctx.drizzle, ctx.userId),
+        fetchContentViewerRole(ctx.drizzle, ctx.userId),
         listSkillTreeFolderForGetAllFolders(ctx.drizzle),
         input?.skillFoldersOnly
           ? listSkillTreeFolderAssignments(ctx.drizzle)
@@ -760,7 +761,7 @@ export const skillTreeRouter = createTRPCRouter({
         listSkillTreeFolderForGetAllFolders(ctx.drizzle),
         listSkillTreeForGetFolderStats(ctx.drizzle),
         fetchUserSkills(ctx.drizzle, ctx.userId),
-        fetchViewerRole(ctx.drizzle, ctx.userId),
+        fetchContentViewerRole(ctx.drizzle, ctx.userId),
       ]);
       const includeHidden = canAccessHiddenSkillTree(viewerRole);
       const folders = allFolders.filter((folder) => includeHidden || !folder.hidden);

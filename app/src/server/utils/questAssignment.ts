@@ -66,7 +66,7 @@ import {
 } from "@/server/utils/regeneration";
 import { fetchPublishedSectorMaps } from "@/server/utils/sectorMap";
 import { chunkArray } from "@/utils/array";
-import { canPlayHiddenQuests } from "@/utils/permissions";
+import { canPlayHiddenQuests, getContentRole } from "@/utils/permissions";
 import { hasEndDatePassed, regenTicksSince, secondsFromDate } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import type { InventoryQuantityChange } from "@/validators/inventory";
@@ -886,7 +886,7 @@ export const fetchUncompletedQuests = async (
   );
   return history
     .map((quest) => quest.Quest)
-    .filter((q) => !q.hidden || canPlayHiddenQuests(user.role));
+    .filter((q) => !q.hidden || canPlayHiddenQuests(getContentRole(user)));
 };
 
 /** Assign the next unfinished bootstrap quest and return its history with the loaded quest, if any. */

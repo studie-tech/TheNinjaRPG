@@ -87,7 +87,7 @@ import {
   userRegenerationGainSql,
 } from "@/server/utils/regeneration";
 import { recordVillageMissionProgress } from "@/server/utils/villageMission";
-import { canPlayHiddenQuests } from "@/utils/permissions";
+import { canPlayHiddenQuests, getContentRole } from "@/utils/permissions";
 import { getNextUserSnapshotAt, periodStart } from "@/utils/time";
 import type { QueryCondition } from "@/utils/typeutils";
 import type { UserRecoveryActivity } from "@/validators/base";
@@ -210,11 +210,13 @@ export const commitQuestObjectiveRewards = async (info: {
   // their new version; authored edits require the versioned run to restart.
   const liveQuestCondition = userQuest
     ? petTask
-      ? petTaskContentCondition(petTask, user.role)
+      ? petTaskContentCondition(petTask, getContentRole(user))
       : sql`EXISTS (SELECT 1 FROM ${quest} WHERE ${and(
           eq(quest.id, userQuest.questId),
           ne(quest.questType, "village_mission"),
-          canPlayHiddenQuests(user.role) ? undefined : eq(quest.hidden, false),
+          canPlayHiddenQuests(getContentRole(user))
+            ? undefined
+            : eq(quest.hidden, false),
           userQuest.quest.questType === "battlepyramid" || userQuest.isolated
             ? eq(quest.updatedAt, userQuest.quest.updatedAt)
             : undefined,
@@ -1145,7 +1147,7 @@ const runCheckRewardsPrepInParallel = async (
     prepTasks.push(insertNextQuest(client, user, "tier"));
   }
   if (resolved && userQuest?.quest.questType === "achievement") {
-    if (!userQuest.quest.hidden || canPlayHiddenQuests(user.role)) {
+    if (!userQuest.quest.hidden || canPlayHiddenQuests(getContentRole(user))) {
       if (userQuest.quest.maxCompletes > 1) {
         prepTasks.push(upsertQuestEntry(client, user, userQuest.quest, "system"));
       }

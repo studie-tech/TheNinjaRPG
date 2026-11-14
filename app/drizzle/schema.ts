@@ -3311,6 +3311,8 @@ export const userData = mysqlTable(
       .default([])
       .notNull(),
     autoWakeUp: boolean("autoWakeUp").default(true).notNull(),
+    // Staff who play as a regular player meet only released content; see `getContentRole`.
+    playsAsPlayer: boolean("playsAsPlayer").default(false).notNull(),
     rememberProfileTab: boolean("rememberProfileTab").default(false).notNull(),
     musicOn: boolean("musicOn").default(true).notNull(),
     sfxOn: boolean("sfxOn").default(true).notNull(),

@@ -7,7 +7,11 @@ import { sageMode } from "@/drizzle/schema";
 
 import { callDiscordContent } from "@/libs/socials";
 import { fetchActionUser } from "@/queries/actionReadiness";
-import { fetchAllGameSettings, fetchUser, fetchViewerRole } from "@/queries/profile";
+import {
+  fetchAllGameSettings,
+  fetchContentViewerRole,
+  fetchUser,
+} from "@/queries/profile";
 import {
   deleteSageModeForDelete,
   fetchSageMode,
@@ -63,7 +67,7 @@ export const sageModeRouter = createTRPCRouter({
    * only for content staff (`canChangeContent`); everyone else sees visible rows.
    */
   getAllNames: publicProcedure.query(async ({ ctx }) => {
-    const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);
+    const viewerRole = await fetchContentViewerRole(ctx.drizzle, ctx.userId);
     const allowHidden = canChangeContent(viewerRole);
     return await listSageModeForGetAllNames(ctx.drizzle, allowHidden);
   }),
@@ -81,7 +85,7 @@ export const sageModeRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const { skip, cursorAfter } = offsetPage(input);
-      const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);
+      const viewerRole = await fetchContentViewerRole(ctx.drizzle, ctx.userId);
       const allowHiddenFilter = canChangeContent(viewerRole);
       const baseFilters = sageModeDatabaseFilter(input, allowHiddenFilter);
       const results = await listSageModeForGetAll(

@@ -587,6 +587,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const questData = userData?.questData;
   const userSector = userData?.sector;
   const userRole = userData?.role;
+  const playsAsPlayer = userData?.playsAsPlayer ?? false;
   const questLocations = useMemo<MapLocation[]>(
     () => [
       ...(userQuests && userSector !== undefined && userRole
@@ -596,6 +597,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
               questData: questData ?? null,
               sector: userSector,
               role: userRole,
+              playsAsPlayer,
             },
             publicLocations,
             data?.questPlacements ?? [],
@@ -619,6 +621,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       questData,
       userSector,
       userRole,
+      playsAsPlayer,
       publicLocations,
       sectorDungeons,
       data?.questPlacements,

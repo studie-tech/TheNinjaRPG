@@ -217,9 +217,9 @@ import { fetchJutsuEquipCaps } from "@/queries/jutsuEquipLimit";
 import {
   debitUserMoney,
   fetchCanListHiddenContent,
+  fetchContentViewerRole,
   fetchLoadoutUser,
   fetchUser,
-  fetchViewerRole,
   findUserDataForGetUsername,
   incrementUserMoney,
   refundUserReputationPoints,
@@ -261,6 +261,7 @@ import {
   canModerateReskin,
   canReskinFreely,
   canTransferJutsu,
+  getContentRole,
   isRestrictedToSelf,
 } from "@/utils/permissions";
 import { getNextUserSnapshotAt } from "@/utils/time";
@@ -862,7 +863,7 @@ export const jutsuRouter = createTRPCRouter({
     .input(getEvolutionsSchema)
     .query(async ({ ctx, input }) => {
       const [viewerRole, evolutions] = await Promise.all([
-        fetchViewerRole(ctx.drizzle, ctx.userId),
+        fetchContentViewerRole(ctx.drizzle, ctx.userId),
         listJutsuForGetEvolutions(ctx.drizzle, input),
       ]);
       return filterVisibleEvolutions(evolutions, canChangeContent(viewerRole));
@@ -900,7 +901,7 @@ export const jutsuRouter = createTRPCRouter({
       if (!evolutionJutsu) return errorResponse("Evolution jutsu not found");
       if (!evolutionJutsu.parentJutsuId)
         return errorResponse("Target jutsu is not an evolution");
-      if (evolutionJutsu.hidden && !canChangeContent(user.role))
+      if (evolutionJutsu.hidden && !canChangeContent(getContentRole(user)))
         return errorResponse("This evolution is not yet available");
       const userJutsuObj = userJutsus.find((j) => j.id === input.userJutsuId);
       if (!userJutsuObj) return errorResponse("You don't own this jutsu");
@@ -1426,7 +1427,7 @@ export const jutsuRouter = createTRPCRouter({
           `Only ${left} more level${left === 1 ? "" : "s"} of this jutsu can be trained`,
         );
       }
-      if (info.hidden && !canChangeContent(user.role)) {
+      if (info.hidden && !canChangeContent(getContentRole(user))) {
         return errorResponse("Jutsu is hidden, cannot be trained");
       }
       const active = findJutsuInTraining(userjutsus, Date.now());
@@ -1830,7 +1831,11 @@ export const jutsuRouter = createTRPCRouter({
 
       // Guards
       if (!userjutsuObj) return errorResponse("Jutsu not found");
-      if (!isEquipped && userjutsuObj.jutsu.hidden && !canChangeContent(user.role))
+      if (
+        !isEquipped &&
+        userjutsuObj.jutsu.hidden &&
+        !canChangeContent(getContentRole(user))
+      )
         return errorResponse("Jutsu is hidden, cannot be equipped");
 
       // Check if jutsu can be equipped (bloodline item handled separately below for a

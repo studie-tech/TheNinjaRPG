@@ -5,7 +5,7 @@ import { applyLinkedJutsuReskin } from "@/libs/jutsu/reskins";
 import { calcJutsuEquipLimit, canUseJutsu } from "@/libs/jutsuRequirements";
 import type { MasteryStatSource } from "@/libs/mastery";
 import type { UserWithRelations } from "@/routers/profile";
-import { canChangeContent } from "@/utils/permissions";
+import { canChangeContent, getContentRole } from "@/utils/permissions";
 import { tagTypes } from "@/validators/combat";
 import type { JutsuEquipLimit } from "@/validators/jutsuEquipLimit";
 
@@ -301,7 +301,7 @@ export const computeJutsuLoadoutAssignments = (args: {
     caps: args.caps,
     onExcluded: args.onExcluded,
     validateJutsu: ({ jutsu }) => {
-      if (jutsu.hidden && !canChangeContent(user.role)) {
+      if (jutsu.hidden && !canChangeContent(getContentRole(user))) {
         // Content and ownership reads can straddle an edit; retain the visibility category.
         return { message: `${jutsu.name} is hidden`, reason: "unavailable" };
       }
@@ -330,7 +330,7 @@ export const computeJutsuLoadoutPreview = (
   const entries = [...new Set(args.jutsuIds)].map((jutsuId) => {
     const content = args.content.find((entry) => entry.id === jutsuId);
     const unavailable =
-      !content || (content.hidden && !canChangeContent(args.user.role));
+      !content || (content.hidden && !canChangeContent(getContentRole(args.user)));
     const exclusion = exclusions.get(jutsuId);
     // Selection diagnostics include owned names; the preview renders its name separately.
     const prefix = `${args.userjutsus.find((entry) => entry.jutsuId === jutsuId)?.jutsu.name}: `;
