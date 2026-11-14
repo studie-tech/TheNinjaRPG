@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { getQueryKey } from "@trpc/react-query";
 import { getDefaultStore } from "jotai";
 import * as navigation from "next/navigation";
@@ -27,6 +27,7 @@ beforeEach(() => {
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
   Object.assign(vi.spyOn(client, "api" as never), {
     profile: testApi.profile,
+    comments: testApi.comments,
     tournament: testApi.tournament,
     useUtils: testApi.useUtils,
   });
@@ -40,17 +41,15 @@ afterEach(() => {
 
 it("suppresses the inbox toast from the page the user is on, not the one they subscribed on", async () => {
   let receiveEvent!: (data: UserEvent) => Promise<void>;
-  vi.spyOn(Pusher, "default").mockImplementation(function () {
-    return {
-      subscribe: () => ({
-        bind: (_event: string, handler: typeof receiveEvent) => {
-          receiveEvent = handler;
-        },
-      }),
-      unsubscribe: vi.fn(),
-      disconnect: vi.fn(),
-    };
-  } as never);
+  vi.spyOn(Pusher, "default").mockImplementation((() => ({
+    subscribe: () => ({
+      bind: (_event: string, handler: typeof receiveEvent) => {
+        receiveEvent = handler;
+      },
+    }),
+    unsubscribe: vi.fn(),
+    disconnect: vi.fn(),
+  })) as never);
   const showToast = vi
     .spyOn(toast, "showMutationToast")
     .mockImplementation(() => undefined);
@@ -114,19 +113,94 @@ it("suppresses the inbox toast from the page the user is on, not the one they su
   expect(getDefaultStore().get(chatPanelAtom).openRequested).not.toBe(true);
 });
 
+it("counts a delivered private message in the cached profile without rereading it", async () => {
+  let receiveEvent!: (data: UserEvent) => Promise<void>;
+  vi.spyOn(Pusher, "default").mockImplementation((() => ({
+    subscribe: () => ({
+      bind: (_event: string, handler: typeof receiveEvent) => {
+        receiveEvent = handler;
+      },
+    }),
+    unsubscribe: vi.fn(),
+    disconnect: vi.fn(),
+  })) as never);
+  vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
+  vi.spyOn(routing, "usePublicPathname").mockImplementation(() => "/profile");
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  queryClients.push(queryClient);
+  const profileKey = getQueryKey(testApi.profile.getUser, undefined, "query");
+  const profile = {
+    userData: {
+      userId: "player",
+      level: MESSAGING_MIN_LEVEL,
+      chatMuted: false,
+      mutedConversationIds: ["muted"],
+      unmutedTavernIds: [],
+    },
+    notifications: [{ href: "/news", name: "1 news", color: "blue" as const }],
+  };
+  const readProfile = vi.fn(async () => profile);
+  queryClient.setQueryDefaults(profileKey, { queryFn: readProfile });
+  queryClient.setQueryData(profileKey, profile);
+  // An observer makes any profile invalidation start a read.
+  const observer = new QueryObserver(queryClient, {
+    queryKey: profileKey,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+  const trpcClient = testApi.createClient({ links: [] });
+  const wrapper = ({ children }: PropsWithChildren) => (
+    <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
+      {children}
+    </TrpcTestProviders>
+  );
+  renderHook(() => usePusherHandler("player"), { wrapper });
+  const inboxNews = () =>
+    queryClient
+      .getQueryData<UserCache>(profileKey)
+      ?.notifications?.find((link) => link.href === "/inbox")?.notificationCount;
+
+  await act(async () => receiveEvent({ type: "newInbox", conversationId: "chat" }));
+  await act(async () => receiveEvent({ type: "newInbox", conversationId: "chat" }));
+  expect(inboxNews()).toBe(2);
+  // The server does not count muted conversations, so neither does the cache.
+  await act(async () => receiveEvent({ type: "newInbox", conversationId: "muted" }));
+  expect(inboxNews()).toBe(2);
+  expect(
+    queryClient.getQueryData<UserCache>(profileKey)?.notifications?.[0]?.href,
+  ).toBe("/news");
+  expect(readProfile).not.toHaveBeenCalled();
+  // A shown inbox list rereads instead, resetting the server count it would otherwise show.
+  const listKey = getQueryKey(
+    testApi.comments.getUserConversations,
+    undefined,
+    "query",
+  );
+  const readList = vi.fn(async () => []);
+  const list = new QueryObserver(queryClient, { queryKey: listKey, queryFn: readList });
+  const unsubscribeList = list.subscribe(() => undefined);
+  await waitFor(() => expect(readList).toHaveBeenCalledTimes(1));
+  await act(async () => receiveEvent({ type: "newInbox", conversationId: "chat" }));
+  await waitFor(() => expect(readList).toHaveBeenCalledTimes(2));
+  expect(inboxNews()).toBe(2);
+  expect(readProfile).not.toHaveBeenCalled();
+  unsubscribeList();
+  unsubscribe();
+});
+
 it("counts only public conversation pings as Tavern notifications", async () => {
   let receiveEvent!: (data: UserEvent) => Promise<void>;
-  vi.spyOn(Pusher, "default").mockImplementation(function () {
-    return {
-      subscribe: () => ({
-        bind: (_event: string, handler: typeof receiveEvent) => {
-          receiveEvent = handler;
-        },
-      }),
-      unsubscribe: vi.fn(),
-      disconnect: vi.fn(),
-    };
-  } as never);
+  vi.spyOn(Pusher, "default").mockImplementation((() => ({
+    subscribe: () => ({
+      bind: (_event: string, handler: typeof receiveEvent) => {
+        receiveEvent = handler;
+      },
+    }),
+    unsubscribe: vi.fn(),
+    disconnect: vi.fn(),
+  })) as never);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/profile");
   const store = getDefaultStore();
@@ -167,17 +241,15 @@ it("counts only public conversation pings as Tavern notifications", async () => 
 
 it("keeps the notification list when a battle event finds the derived combat entry", async () => {
   let receiveEvent!: (data: UserEvent) => Promise<void>;
-  vi.spyOn(Pusher, "default").mockImplementation(function () {
-    return {
-      subscribe: () => ({
-        bind: (_event: string, handler: typeof receiveEvent) => {
-          receiveEvent = handler;
-        },
-      }),
-      unsubscribe: vi.fn(),
-      disconnect: vi.fn(),
-    };
-  } as never);
+  vi.spyOn(Pusher, "default").mockImplementation((() => ({
+    subscribe: () => ({
+      bind: (_event: string, handler: typeof receiveEvent) => {
+        receiveEvent = handler;
+      },
+    }),
+    unsubscribe: vi.fn(),
+    disconnect: vi.fn(),
+  })) as never);
   vi.spyOn(routing, "usePublicPathname").mockReturnValue("/profile");
   const pushToCombat = vi
     .spyOn(routing, "pushToCombat")
@@ -267,18 +339,16 @@ it.each([
   "settles own battle admission without profile reads (%s)",
   async ({ outcome, eventAfterResponse, abandon, recovery }) => {
     let receiveEvent!: (data: UserEvent) => Promise<void>;
-    vi.spyOn(Pusher, "default").mockImplementation(function () {
-      return {
-        connection: { socket_id: "own-tab" },
-        subscribe: () => ({
-          bind: (_event: string, handler: typeof receiveEvent) => {
-            receiveEvent = handler;
-          },
-        }),
-        unsubscribe: vi.fn(),
-        disconnect: vi.fn(),
-      };
-    } as never);
+    vi.spyOn(Pusher, "default").mockImplementation((() => ({
+      connection: { socket_id: "own-tab" },
+      subscribe: () => ({
+        bind: (_event: string, handler: typeof receiveEvent) => {
+          receiveEvent = handler;
+        },
+      }),
+      unsubscribe: vi.fn(),
+      disconnect: vi.fn(),
+    })) as never);
     vi.spyOn(routing, "usePublicPathname").mockReturnValue("/battlearena");
     const navigate = vi
       .spyOn(routing, "pushToCombat")

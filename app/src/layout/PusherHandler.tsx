@@ -120,6 +120,19 @@ export const usePusherHandler = (
           (!conversationId || !store.get(chatViewedConversationsAtom)[conversationId])
         );
       };
+      /** Whether a visible inbox list observes the conversation listing. */
+      const isInboxListShown = () =>
+        !!queryClient
+          .getQueryCache()
+          .find({
+            queryKey: getQueryKey(
+              api.comments.getUserConversations,
+              undefined,
+              "query",
+            ),
+            exact: true,
+          })
+          ?.isActive();
       /** Wait for the initial profile before applying account, visibility and mute guards. */
       const resolveNotificationProfile = async (
         conversationId: string | undefined,
@@ -303,11 +316,12 @@ export const usePusherHandler = (
           const shouldNotify =
             (await resolveNotificationProfile(data.conversationId)) &&
             canNotifyConversation(data.conversationId);
-          if (!shouldNotify) {
+          if (!shouldNotify || isInboxListShown()) {
+            // A shown list's reread also resets the server's inbox news, so no count appears.
             void utils.comments.getUserConversations.invalidate();
           } else {
-            // The delivery already counted this message in the server's inbox news. A mounted
-            // inbox list rereads once for the new count, which also resets that counter.
+            // The delivery already counted this message in the server's inbox news; the next
+            // list read resets that counter and clears this count.
             void utils.comments.getUserConversations.invalidate(undefined, {
               refetchType: "none",
             });
@@ -316,6 +330,8 @@ export const usePusherHandler = (
               getQueryKey(api.profile.getUser, undefined, "query"),
               incrementInboxNotifications,
             );
+          }
+          if (shouldNotify) {
             if (!canNotifyConversation(data.conversationId)) return;
             if (!isOnInbox()) {
               const canOpenChat =
