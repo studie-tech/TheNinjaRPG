@@ -22,6 +22,7 @@ import { dungeonContent } from "../../../setup/dungeon";
 import { insertUsers } from "../../../setup/factories";
 import { insertQuestTeamWorld, insertTeamQuest } from "../../../setup/questParty";
 import { stubRateLimitTransport } from "../../../setup/rateLimit";
+import { resetServerModuleStubs, stubProfile } from "../../../setup/serverModules";
 import { aroundStatements } from "../../../setup/statements";
 import {
   callerFor,
@@ -191,6 +192,27 @@ describeWithDatabase("co-op activity adapters", () => {
     expect(
       (await (await callerFor(coopRouter, "invitee")).quest.overview()).teams,
     ).toContainEqual(expect.objectContaining({ id: "zz-invitation", invited: true }));
+  });
+
+  it("lists teams for a player outside a team without loading the profile", async () => {
+    const caller = await callerFor(coopRouter, "leader");
+    expect(
+      (await caller.quest.create({ questId: "team-quest", isPublic: true })).success,
+    ).toBe(true);
+    await insertUsers([{ userId: "browser", username: "browser" }]);
+    stubProfile("fetchUpdatedUser", () => {
+      throw new Error("The overview loaded the profile of a player outside a team");
+    });
+    try {
+      const overview = await (await callerFor(coopRouter, "browser")).quest.overview();
+      expect(overview.current).toBeNull();
+      expect(overview.teams).toContainEqual(
+        expect.objectContaining({ questId: "team-quest", invited: false }),
+      );
+    } finally {
+      resetServerModuleStubs();
+    }
+    expect((await caller.quest.overview()).current?.questId).toBe("team-quest");
   });
 
   it.each(["contention", "failure"] as const)(
