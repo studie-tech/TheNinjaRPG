@@ -2102,14 +2102,15 @@ export const selectUserDataForExecuteMergeStacksForItemBucket = (
 
 /**
  * Build the `userItem` update for `restoreOriginalQuantities`, setting `quantity`,
- * including predicates on `userId`, `updatedAt`, `id`.
+ * including predicates on `userId`, `updatedAt`, `id`. It matches rows still holding the
+ * claim and, given `publishTargets`, rows already at their published target.
  */
 export const updateUserItemForRestoreOriginalQuantities = (
   client: Pick<DrizzleClient, "update">,
   sortedItems: UserItemMergeBucketRow[],
   userId: string,
   claimedAt: Date,
-  publishTargets: Pick<
+  publishTargets?: Pick<
     import("@/drizzle/schema").CraftingRequirement,
     "id" | "quantity"
   >[],
@@ -2129,10 +2130,12 @@ export const updateUserItemForRestoreOriginalQuantities = (
           ...sortedItems.map((item, index) =>
             and(
               eq(userItem.id, item.id),
-              or(
-                eq(userItem.quantity, -item.quantity),
-                eq(userItem.quantity, publishTargets[index]?.quantity ?? 0),
-              ),
+              publishTargets
+                ? or(
+                    eq(userItem.quantity, -item.quantity),
+                    eq(userItem.quantity, publishTargets[index]?.quantity ?? 0),
+                  )
+                : eq(userItem.quantity, -item.quantity),
             ),
           ),
         ),

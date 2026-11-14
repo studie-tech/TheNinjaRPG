@@ -1,10 +1,11 @@
-import { beforeEach, expect, it } from "bun:test";
+import { afterEach, beforeEach, expect, it, setSystemTime } from "bun:test";
 import { eq } from "drizzle-orm";
 import { getInventoryQuantities } from "@/deltas/item";
 import { HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
 import { item, userData, userItem } from "@/drizzle/schema";
 import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { itemRouter } from "@/server/api/routers/item";
+import { deferred } from "../../../setup/deferred";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import { beforeStatements } from "../../../setup/statements";
 import {
@@ -24,6 +25,7 @@ describeWithDatabase("consumable merges across ownership levels", () => {
       { id: "weapon", itemType: "WEAPON", canStack: true, stackSize: 10 },
     ]);
   });
+  afterEach(() => setSystemTime());
 
   it.each([false, true])(
     "retains the highest-level keeper and stack cap (home: %s)",
@@ -251,4 +253,169 @@ describeWithDatabase("consumable merges across ownership levels", () => {
       ]);
     },
   );
+
+  it.each([
+    ["one stack above the stack size", [25]],
+    ["more units than its rows can hold at the stack size", [25, 3]],
+  ])("keeps every unit of %s", async (_, quantities) => {
+    await insertUserItems(
+      quantities.map((quantity, index) => ({
+        id: `oversized-${index}`,
+        userId: "merge-user",
+        itemId: "consumable",
+        quantity,
+      })),
+    );
+    const api = await callerFor(itemRouter, "merge-user");
+    expect((await api.mergeStacks({ itemId: "consumable" })).success).toBe(true);
+    expect(
+      (
+        await (
+          await getTestDatabase()
+        )
+          .select({ quantity: userItem.quantity })
+          .from(userItem)
+          .where(eq(userItem.userId, "merge-user"))
+      )
+        .map((row) => row.quantity)
+        .sort((a, b) => b - a),
+    ).toEqual(quantities);
+  });
+
+  it("keeps a merge that claims first when a second merge claims in the same millisecond", async () => {
+    await insertUserItems(
+      [3, 3].map((quantity, index) => ({
+        id: `twin-${index}`,
+        userId: "merge-user",
+        itemId: "consumable",
+        quantity,
+      })),
+    );
+    // Both merges stamp their claims with the same time.
+    setSystemTime(new Date());
+    const database = await getTestDatabase();
+    const first = await callerFor(itemRouter, "merge-user");
+    // The second merge read [3, 3]; the first merge completes after its stale-claim recovery
+    // and before its claim.
+    const raced = beforeStatements(
+      database,
+      userItem,
+      [
+        async () => {},
+        async () =>
+          expect((await first.mergeStacks({ itemId: "consumable" })).success).toBe(
+            true,
+          ),
+      ],
+      { when: (values) => "updatedAt" in values },
+    );
+    expect(
+      (
+        await callerForDatabase(itemRouter, "merge-user", raced).mergeStacks({
+          itemId: "consumable",
+        })
+      ).success,
+    ).toBe(false);
+    expect(
+      (
+        await database
+          .select({ quantity: userItem.quantity })
+          .from(userItem)
+          .where(eq(userItem.userId, "merge-user"))
+      )
+        .map((row) => row.quantity)
+        .filter((quantity) => quantity > 0),
+    ).toEqual([6]);
+  });
+
+  it("keeps another merge's published stack when its publish affects no rows", async () => {
+    await insertUserItems(
+      [3, 3].map((quantity, index) => ({
+        id: `twin-${index}`,
+        userId: "merge-user",
+        itemId: "consumable",
+        quantity,
+      })),
+    );
+    setSystemTime(new Date());
+    const database = await getTestDatabase();
+    const ready = deferred<void>();
+    const resume = deferred<void>();
+    // Hold a stale reader before its claim, then let it restore the active merge's
+    // negatives. A third merge can publish before that active merge sends its publish.
+    const staleReader = beforeStatements(
+      database,
+      userItem,
+      [
+        async () => {},
+        async () => {
+          ready.resolve();
+          await resume.promise;
+        },
+      ],
+      { when: (values) => "updatedAt" in values },
+    );
+    const staleMerge = callerForDatabase(
+      itemRouter,
+      "merge-user",
+      staleReader,
+    ).mergeStacks({ itemId: "consumable" });
+    await ready.promise;
+    const raced = beforeStatements(
+      database,
+      userItem,
+      [
+        async () => {},
+        async () => {},
+        async () => {
+          resume.resolve();
+          expect((await staleMerge).success).toBe(false);
+          const api = await callerFor(itemRouter, "merge-user");
+          expect((await api.mergeStacks({ itemId: "consumable" })).success).toBe(true);
+        },
+      ],
+      { operations: ["update"] },
+    );
+    expect(
+      (
+        await callerForDatabase(itemRouter, "merge-user", raced).mergeStacks({
+          itemId: "consumable",
+        })
+      ).success,
+    ).toBe(false);
+    expect(
+      await database
+        .select({ quantity: userItem.quantity })
+        .from(userItem)
+        .where(eq(userItem.userId, "merge-user")),
+    ).toEqual([{ quantity: 6 }]);
+  }, 30000);
+
+  it("merges a stack above the stack size when the total exactly fills the rows", async () => {
+    await insertUserItems(
+      [25, 3, 1].map((quantity, index) => ({
+        id: `fitting-${index}`,
+        userId: "merge-user",
+        itemId: "consumable",
+        quantity,
+      })),
+    );
+    const api = await callerFor(itemRouter, "merge-user");
+    expect(await api.mergeStacks({ itemId: "consumable" })).toMatchObject({
+      success: true,
+    });
+    expect(
+      (
+        await (
+          await getTestDatabase()
+        )
+          .select({ quantity: userItem.quantity })
+          .from(userItem)
+          .where(eq(userItem.userId, "merge-user"))
+      )
+        .map((row) => row.quantity)
+        .filter((quantity) => quantity > 0)
+        .sort((a, b) => b - a),
+    ).toEqual([10, 10, 9]);
+  });
 });

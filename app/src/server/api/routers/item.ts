@@ -4398,6 +4398,11 @@ async function executeMergeStacksForItemBucket(
   const numFullStacks = Math.floor(totalQuantity / stackSize);
   const remainder = totalQuantity % stackSize;
   const targetStacks = numFullStacks + (remainder > 0 ? 1 : 0);
+  // Publishing only rewrites existing rows, so stacks holding more than they could at the
+  // stack size (after the item's stack size was lowered) stay as they are.
+  if (targetStacks > bucketItems.length) {
+    return { success: true, didMerge: false, message: "", inventoryChanges: [] };
+  }
 
   // Keep the strongest ownership progression when consolidating consumables. Gear
   // buckets already share a level, so their deterministic ID ordering stays intact.
@@ -4434,17 +4439,20 @@ async function executeMergeStacksForItemBucket(
 
   // Restores every row this attempt touched back to its original quantity in one UPDATE. The
   // `updatedAt = claimedAt` stamp scopes the write to our own claims/publishes, and the per-row
-  // quantity guard matches both a still-claimed row (-q) and an already-published one (its
-  // target), so even a partially applied publish is fully undone. `updatedAt` intentionally stays
-  // at `claimedAt`: positive rows are never touched by the stale-claim reaper, and the tombstone
-  // delete additionally guards on quantity 0.
+  // quantity guard matches a still-claimed row (-q) and, once the publish has been sent, an
+  // already-published one (its target), so even a partially applied publish is fully undone.
+  // Before the publish and after a confirmed zero-row publish, only claimed rows match:
+  // another merge in the same millisecond may have published those targets itself. `updatedAt`
+  // intentionally stays at `claimedAt`: positive rows are never touched by the stale-claim
+  // reaper, and the tombstone delete additionally guards on quantity 0.
+  let restorePublishedTargets = false;
   const restoreOriginalQuantities = () =>
     updateUserItemForRestoreOriginalQuantities(
       drizzle,
       sortedItems,
       userId,
       claimedAt,
-      publishTargets,
+      restorePublishedTargets ? publishTargets : undefined,
     );
 
   let publishedRows = 0;
@@ -4467,6 +4475,7 @@ async function executeMergeStacksForItemBucket(
 
     // Phase 2: atomically publish every keeper and convert extras to hidden tombstones in one
     // UPDATE, so a process crash cannot commit only a subset of the target quantities/deletions.
+    restorePublishedTargets = true;
     const publishResult = await updateUserItemForExecuteMergeStacksForItemBucket2(
       drizzle,
       publishTargets,
@@ -4476,6 +4485,8 @@ async function executeMergeStacksForItemBucket(
       userId,
     );
     publishedRows = publishResult.rowsAffected;
+    // A definitive zero-row result cannot own positive targets; a thrown result is unknown.
+    restorePublishedTargets = publishedRows > 0;
 
     if (publishedRows !== sortedItems.length) {
       const restored = await restoreOriginalQuantities();
