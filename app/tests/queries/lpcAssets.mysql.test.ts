@@ -249,6 +249,10 @@ describeWithDatabase("LPC GameAsset persistence", () => {
     });
     expect(result.success, result.message).toBe(true);
     expect(before.designs.katana!.replacementSlot).toBe("none");
+    // The save replaces this instance's cached scene snapshot.
+    expect((await caller.getLpcSceneCatalog()).designs.katana!.replacementSlot).toBe(
+      "shirt",
+    );
     expect(
       buildLpcCatalog(await caller.getLpcCatalog()).designs.katana!.replacementSlot,
     ).toBe("shirt");

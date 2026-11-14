@@ -123,11 +123,12 @@ beforeEach(() => {
   // Keep the real query and mutation lifecycle; isolate only transport and unrelated UI.
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({
+      client: { gameAsset: { getLpcSceneCatalog: { query: noOp } } },
       gameAsset: {
         getAll: { invalidate: () => cache.invalidateQueries({ queryKey: ["assets"] }) },
         getAllFolders: { invalidate: noOp },
         getLpcCatalog: { invalidate: noOp },
-        getLpcSceneCatalog: { invalidate: noOp },
+        getLpcSceneCatalog: { invalidate: noOp, setData: noOp },
         getAllNames: { invalidate: noOp },
         getNameTags: { invalidate: noOp },
       },

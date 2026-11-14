@@ -1,5 +1,6 @@
 import { insertLpcSeedAsset, listGameAssetForGetSceneAssets } from "@/queries/asset";
 import type { DrizzleClient } from "@/server/db";
+import { invalidateLpcCatalog } from "@/server/utils/lpcCatalog";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { chunkArray } from "@/utils/array";
 import { lpcSeedAssets } from "../data/lpc/seed";
@@ -20,6 +21,7 @@ export const seedLpcAssets = async (client: DrizzleClient) => {
     await Promise.all(
       batch.map((asset) => retryOnDeadlock(() => insertLpcSeedAsset(client, asset))),
     );
+  invalidateLpcCatalog();
   return {
     designs: assets.length,
     inserted: assets.length - existing.length,
