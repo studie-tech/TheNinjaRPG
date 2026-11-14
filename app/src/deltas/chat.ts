@@ -1,4 +1,5 @@
 import type { RouterOutputs } from "@/app/_trpc/client";
+import { getInboxNews } from "@/libs/chatPanel";
 import type { NavBarDropdownLink } from "@/libs/menus";
 
 /** Advance one inbox read marker to the timestamp confirmed by an authorized read. */
@@ -56,10 +57,14 @@ export const retainTavernActivity = (
   return remaining.length === entries.length ? activity : Object.fromEntries(remaining);
 };
 
-/** Clear the inbox news acknowledged by viewing the private conversation list. */
+/** Clear acknowledged inbox news while preserving a superseding cached count. */
 export const clearInboxNotifications = (
   notifications: NavBarDropdownLink[] | undefined,
-) => notifications?.filter((entry) => entry.href !== "/inbox");
+  expectedCount?: number,
+) =>
+  expectedCount !== undefined && getInboxNews(notifications) !== expectedCount
+    ? notifications
+    : notifications?.filter((entry) => entry.href !== "/inbox");
 
 /**
  * Whether a live comment belongs in the active search results, matching the server's

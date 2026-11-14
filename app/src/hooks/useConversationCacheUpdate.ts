@@ -1,6 +1,6 @@
 import { hashKey, type InfiniteData, useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { api, type RouterInputs, type RouterOutputs } from "@/app/_trpc/client";
 import { applyConversationRead, clearInboxNotifications } from "@/deltas/chat";
 import { getInboxNews } from "@/libs/chatPanel";
@@ -62,7 +62,8 @@ export const useConversationCacheUpdate = () => {
 
 /**
  * List the player's conversations and mirror the inbox counter reset that the listing
- * performs on the server.
+ * performs on the server. A list not read after the inbox badge appeared is read again first,
+ * so the badge clears only once the server counter has been reset.
  * @param options - How the listing refetches; the inbox page refreshes it on every mount
  */
 export function useInboxConversations(
@@ -73,14 +74,68 @@ export function useInboxConversations(
     notifications,
     updateNotifications,
   } = useUserDataSelector((u) => u.userId);
+  const inboxNews = getInboxNews(notifications);
+  const client = useQueryClient();
+  // A count change can follow an in-flight read's server reset. Capture shared reads
+  // before useQuery starts this mount's own read so each consumer waits for a newer read.
+  const news = useRef({
+    count: inboxNews,
+    refetched: false,
+    readInFlight:
+      client.isFetching({
+        queryKey: getQueryKey(api.comments.getUserConversations, undefined, "query"),
+        exact: true,
+      }) > 0,
+    mounted: false,
+  });
   const result = api.comments.getUserConversations.useQuery(undefined, {
     enabled: !!userData,
     ...options,
   });
+  const { data, fetchStatus, refetch } = result;
   useEffect(() => {
-    if (result.data && getInboxNews(notifications) > 0) {
-      void updateNotifications(clearInboxNotifications);
+    const queryHash = hashKey(
+      getQueryKey(api.comments.getUserConversations, undefined, "query"),
+    );
+    return client.getQueryCache().subscribe((event) => {
+      if (
+        event.query.queryHash !== queryHash ||
+        event.type !== "updated" ||
+        event.action.type !== "success" ||
+        event.action.manual ||
+        news.current.count === 0
+      )
+        return;
+      if (news.current.readInFlight) {
+        // This read predates the news; subsequent shared reads can acknowledge it.
+        news.current.readInFlight = false;
+        return;
+      }
+      // Only a successful server read proves the reset; local writes and wall clocks do not.
+      news.current.refetched = true;
+      const { count } = news.current;
+      void updateNotifications((notifications) =>
+        clearInboxNotifications(notifications, count),
+      );
+    });
+  }, [client, updateNotifications]);
+  useEffect(() => {
+    if (inboxNews !== news.current.count) {
+      news.current = {
+        count: inboxNews,
+        refetched: false,
+        readInFlight: news.current.mounted && fetchStatus !== "idle",
+        mounted: true,
+      };
     }
-  }, [result.data, notifications, updateNotifications]);
+    news.current.mounted = true;
+    if (inboxNews === 0 || !data || fetchStatus !== "idle") return;
+    if (!news.current.refetched) {
+      // One read per news; after a failed read the badge waits for the next list read.
+      news.current.refetched = true;
+      news.current.readInFlight = false;
+      void refetch({ cancelRefetch: false });
+    }
+  }, [inboxNews, data, fetchStatus, refetch]);
   return result;
 }
