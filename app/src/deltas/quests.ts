@@ -61,7 +61,7 @@ export const getQuestStartUserUpdate = (
 
 /**
  * Patch a loaded discovery listing after a confirmed quest start, from the settled profile.
- * A start only reopens an attempt: listed attempt counters follow the profile's attempt rows,
+ * With unchanged eligibility, listed attempt counters follow the profile's attempt rows,
  * entry stock follows the confirmed debits, and quests whose completed prerequisite was
  * reopened close. Return undefined when listed entry stock cannot be confirmed.
  */
@@ -107,8 +107,8 @@ export const getQuestStartDiscoveryUpdate = <T extends QuestStartDiscoveryRow>(
 };
 
 /**
- * Upcoming quests are blocked by level or mastery, which a start leaves unchanged; reopening
- * a completed prerequisite can close them and needs reconciliation.
+ * Keep upcoming quests when level and mastery eligibility is unchanged; reopening a completed
+ * prerequisite can close them and needs reconciliation.
  */
 export const getQuestStartUpcomingUpdate = <T>(
   rows: T[],

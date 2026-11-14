@@ -8,6 +8,7 @@ import {
   getQuestStartUpcomingUpdate,
   getReopenedQuestIds,
 } from "@/deltas/quests";
+import { MasteryNames } from "@/drizzle/constants";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { trpcPathFromKey } from "@/libs/queryTelemetry";
 import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
@@ -17,12 +18,12 @@ import { periodStart } from "@/utils/time";
 export const useQuestStartCacheUpdate = () => {
   const client = useQueryClient();
   const inventory = useInventoryCacheUpdate();
-  /** Capture both inventory views, every loaded discovery listing and the completed quests. */
+  /** Capture inventory, discovery listings and the profile eligibility baseline before starting. */
   const prepareQuestStartUpdate = () => ({
     periodStartAt: periodStart("daily", new Date()).getTime(),
     inventory: inventory.prepareInventoryUpdate(),
     discovery: captureDiscovery(client),
-    completedQuests: readProfile(client)?.completedQuests ?? [],
+    user: readProfile(client),
   });
   /**
    * Patch the discovery listings that are current with the profile from the settled start.
@@ -42,8 +43,12 @@ export const useQuestStartCacheUpdate = () => {
     // A new quest period can open candidates absent from the captured listings.
     const isCurrentPeriod =
       snapshot.periodStartAt === periodStart("daily", new Date()).getTime();
+    // Starting a quest can finish mastery training and unlock absent candidates.
+    const hasSameMasteries = MasteryNames.every(
+      (stat) => snapshot.user?.[stat] === user?.[stat],
+    );
     const reopened = user
-      ? getReopenedQuestIds(snapshot.completedQuests, user.completedQuests)
+      ? getReopenedQuestIds(snapshot.user?.completedQuests ?? [], user.completedQuests)
       : [];
     await Promise.all([
       inventory.updateInventory(
@@ -59,7 +64,10 @@ export const useQuestStartCacheUpdate = () => {
           .map((query) => {
             const { queryKey, queryHash } = query;
             const captured = snapshot.discovery.get(queryHash);
-            const settled = captured?.current && isCurrentPeriod ? user : undefined;
+            const settled =
+              captured?.current && isCurrentPeriod && hasSameMasteries
+                ? user
+                : undefined;
             const options = { revision: captured?.revision };
             const update = upcoming
               ? updateQueryCache<RouterOutputs["quests"]["upcomingQuests"]>(
