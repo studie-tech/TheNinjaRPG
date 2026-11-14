@@ -765,9 +765,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       arrivals.timer = setTimeout(() => void flushArrivals(), SECTOR_ARRIVAL_BATCH_MS);
       return;
     }
-    const shown = new Set(
-      utils.travel.getSectorData.getData({ sector })?.users.map((u) => u.userId),
-    );
+    // The live list, not the snapshot: a player who left and returned has a stale snapshot row.
+    const shown = new Set(usersRef.current.map((u) => u.userId));
     const queued = [...arrivals.queued];
     arrivals.queued.clear();
     const userIds: string[] = [];
