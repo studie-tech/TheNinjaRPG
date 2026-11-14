@@ -38,6 +38,7 @@ import {
   RepairItemSelectionModal,
 } from "@/layout/items/ItemRepair";
 import { ItemVariantModal } from "@/layout/items/ItemVariantModal";
+import { MakeCosmetic } from "@/layout/items/MakeCosmetic";
 import Loader from "@/layout/Loader";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { meetsEvolutionStatRequirements } from "@/libs/evolution";
@@ -111,6 +112,10 @@ export function ItemInspector({
     },
   });
 
+  const { data: wardrobe } = api.cosmetic.get.useQuery();
+  const selectedCosmetic = wardrobe?.slots.find(
+    (entry) => entry.slot === useritem.equipped,
+  );
   const { data: availableEvolutions } = api.item.getEvolutions.useQuery(
     { itemId: useritem.itemId },
     { staleTime: 5 * 60 * 1000 },
@@ -166,7 +171,10 @@ export function ItemInspector({
       ? Math.round((useritem.durability / useritem.item.maxDurability) * 100)
       : null;
   const hasMoreActions =
-    useritem.item.canStack || hasVariants || (availableEvolutions?.length ?? 0) > 0;
+    fittingSlots(useritem.item).length > 0 ||
+    useritem.item.canStack ||
+    hasVariants ||
+    (availableEvolutions?.length ?? 0) > 0;
 
   return (
     <section
@@ -374,6 +382,13 @@ export function ItemInspector({
                   )}
                 </>
               )}
+              {selectedCosmetic && (
+                <p className="text-sm">
+                  Cosmetic appearance ·{" "}
+                  {selectedCosmetic.variant?.name ?? selectedCosmetic.item?.name}
+                </p>
+              )}
+              <MakeCosmetic userItem={useritem} />
               {hasVariants && (
                 <Button
                   variant="outline"

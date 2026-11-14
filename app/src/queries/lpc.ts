@@ -1,5 +1,6 @@
 import { and, eq, exists, gt, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { gameAsset, userData, userItem } from "@/drizzle/schema";
+import { cosmeticSlotRelation } from "@/queries/cosmetic";
 import type { DrizzleClient } from "@/server/db";
 
 /** Resolve an explicit design assignment alongside the content editor's other upfront reads. */
@@ -44,6 +45,7 @@ export const updateSpriteBodyStyle = (
 
 /** Private resolver inputs join the sector snapshot; callers publish only the resolved recipe. */
 export const spriteUserRelations = {
+  cosmeticSlots: cosmeticSlotRelation,
   attributes: { columns: { attribute: true } },
   items: {
     // Instance IDs distinguish two worn copies; the base item ID alone cannot identify them.

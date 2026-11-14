@@ -54,6 +54,7 @@ import type { CreatorTrialState } from "@/libs/combat/creatorTrial";
 import type { EncounterWaveState } from "@/libs/combat/encounters";
 import type { DungeonBattleState } from "@/libs/dungeon";
 import type { TerrainHex } from "@/libs/hexgrid";
+import type { SpriteUser } from "@/libs/lpc/appearance";
 import type {
   CharacterAnimations,
   SpriteAnimationEvent,
@@ -140,7 +141,9 @@ export type CombatQueryCompletedQuest = {
  * This type matches the `client.query.userData.findMany` with combat relations.
  * Some fields are optional as they're not included in all combat queries (e.g., summons).
  */
-export type CombatQueryUser = UserData &
+export type CombatQueryUser = {
+  cosmeticSlots?: SpriteUser["cosmeticSlots"];
+} & UserData &
   ActivityCompletions & {
     /** An AI-controlled copy retains its owner's loadout gates throughout combat. */
     isVillageDutyCopy?: true;
@@ -200,6 +203,8 @@ export type ProcessedItem = CombatQueryUserItem & {
  * Shared between ProcessingBattleUser and BattleUserState.
  */
 export type CombatUserFields = {
+  /** Slot visuals captured at initiation for in-memory loadout recomposition. */
+  cosmeticSlots?: SpriteUser["cosmeticSlots"];
   /** An AI-controlled village defender uses player loadout and action requirements. */
   isVillageDutyCopy?: true;
   /** Private creation/clothing snapshot captured at initiation and retained across loadout edits. */

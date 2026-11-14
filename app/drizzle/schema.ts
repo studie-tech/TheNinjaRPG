@@ -2150,6 +2150,50 @@ export const userItemVariantRelations = relations(userItemVariant, ({ one }) => 
   }),
 }));
 
+export const userCosmetic = mysqlTable(
+  "UserCosmetic",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    itemId: varchar("itemId", { length: 191 }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("UserCosmetic_user_item_key").on(table.userId, table.itemId),
+    index("UserCosmetic_item_idx").on(table.itemId),
+  ],
+);
+
+export const userCosmeticSlot = mysqlTable(
+  "UserCosmeticSlot",
+  {
+    userId: varchar("userId", { length: 191 }).notNull(),
+    slot: mysqlEnum("slot", consts.ItemSlots).notNull(),
+    itemId: varchar("itemId", { length: 191 }).notNull(),
+    variantId: varchar("variantId", { length: 191 }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.slot] }),
+    index("UserCosmeticSlot_item_idx").on(table.itemId),
+    index("UserCosmeticSlot_variant_idx").on(table.variantId),
+  ],
+);
+
+export const userCosmeticRelations = relations(userCosmetic, ({ one }) => ({
+  user: one(userData, { fields: [userCosmetic.userId], references: [userData.userId] }),
+  item: one(item, { fields: [userCosmetic.itemId], references: [item.id] }),
+}));
+export const userCosmeticSlotRelations = relations(userCosmeticSlot, ({ one }) => ({
+  user: one(userData, {
+    fields: [userCosmeticSlot.userId],
+    references: [userData.userId],
+  }),
+  item: one(item, { fields: [userCosmeticSlot.itemId], references: [item.id] }),
+  variant: one(itemVariant, {
+    fields: [userCosmeticSlot.variantId],
+    references: [itemVariant.id],
+  }),
+}));
+
 export const craftingRequirement = mysqlTable(
   "CraftingRequirement",
   {
@@ -3561,6 +3605,8 @@ export const userDataRelations = relations(userData, ({ one, many }) => ({
   userQuests: many(questHistory, { relationName: "userQuests" }),
   completedQuests: many(questHistory, { relationName: "completedQuests" }),
   conversations: many(user2conversation),
+  cosmetics: many(userCosmetic),
+  cosmeticSlots: many(userCosmeticSlot),
   items: many(userItem),
   farmPlots: many(farmPlot),
   farmCollectionLogs: many(farmCollectionLog),

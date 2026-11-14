@@ -4,6 +4,8 @@ import {
   huntingProgress,
   huntingReceipt,
   huntingSession,
+  userCosmetic,
+  userCosmeticSlot,
 } from "@/drizzle/schema";
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
 import { deleteRowsForUser } from "@/queries/accountDeletion";
@@ -199,9 +201,14 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
   // Batch 4: Game progress & items
   await Promise.all([
     // A linked ad click goes with the character, so a recreated one is not reported again.
-    ...[huntingSession, huntingProgress, huntingReceipt, adClick].map((table) =>
-      deleteRowsForUser(client, table, userId),
-    ),
+    ...[
+      huntingSession,
+      huntingProgress,
+      huntingReceipt,
+      adClick,
+      userCosmetic,
+      userCosmeticSlot,
+    ].map((table) => deleteRowsForUser(client, table, userId)),
     deleteAiSpriteAnimationBindings(client, userId),
     deleteAiTransformationsFor(client, userId),
     deleteUserItems(client, userId),

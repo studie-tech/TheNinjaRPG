@@ -1,3 +1,4 @@
+import { cosmeticSlotRelation } from "@/queries/cosmetic";
 /**
  * Database access for combat; authorization and transaction scopes stay in callers.
  */
@@ -581,6 +582,7 @@ export const listUserDataForQueryBattleUsers = (
       ),
     }),
     with: {
+      cosmeticSlots: cosmeticSlotRelation,
       spriteAnimationBindings: { with: { animation: true } },
       raidBuffs: true,
       titles: true,
@@ -1789,6 +1791,7 @@ export const listUserDataForProcessUsersForBattle = (
 ) =>
   client.query.userData.findMany({
     with: {
+      cosmeticSlots: cosmeticSlotRelation,
       spriteAnimationBindings: { with: { animation: true } },
       bloodline: { with: { bloodrightTiers: true } },
       sageMode: true,

@@ -61,6 +61,26 @@ const renderFigure = (props: Partial<Parameters<typeof EquipmentFigure>[0]> = {}
 const slotOf = (slot: ItemSlot) =>
   document.querySelector<HTMLButtonElement>(`[data-slot="${slot}"]`)!;
 
+it("displays cosmetic art while retaining the real gear's wear and level", () => {
+  renderFigure({
+    cosmeticSlots: [
+      {
+        slot: "HAND_1",
+        item: {
+          slot: "HAND",
+          name: "Cosmetic Axe",
+          image: "https://example.com/axe.png",
+        },
+      },
+    ],
+  });
+  const hand = slotOf("HAND_1");
+  expect(hand.textContent).toContain("Cosmetic Axe art");
+  expect(hand.getAttribute("aria-label")).toContain("Shadowsteel Katana");
+  expect(hand.getAttribute("aria-label")).toContain("Cosmetic Axe");
+  expect(hand.querySelector("[data-durability]")).not.toBeNull();
+});
+
 it("renders 15 labelled slots in reading order", () => {
   renderFigure();
   const order = [...document.querySelectorAll("[data-slot]")].map((el) =>
