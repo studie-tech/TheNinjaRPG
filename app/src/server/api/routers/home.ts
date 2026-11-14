@@ -1,4 +1,5 @@
-import { sql } from "drizzle-orm";
+import * as Sentry from "@sentry/nextjs";
+import { inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { HomeType, UserRequestState, UserStatus } from "@/drizzle/constants";
 import {
@@ -11,7 +12,7 @@ import {
   MAP_WAR_TORN_BATTLEGROUND_SECTOR,
   MAX_BULK_SELL_ITEMS,
 } from "@/drizzle/constants";
-import { userItem } from "@/drizzle/schema";
+import { userData, userItem } from "@/drizzle/schema";
 import {
   getHomeLayout,
   type HomeFurniture,
@@ -24,6 +25,7 @@ import { getHomeRooms, homeRoomStylesError } from "@/libs/homeProperty";
 import {
   applyActiveVariant,
   countsTowardInventoryStorage,
+  getEffectiveStackSize,
   getHomeStorageBucket,
   getHomeStorageBucketCapacity,
   getHomeStorageBucketFullMessage,
@@ -32,6 +34,7 @@ import {
   getInventoryBucketFullMessage,
 } from "@/libs/item";
 import {
+  HOME_STORAGE_STATUSES,
   homeStorageBlockReason,
   homeStorageMoveMessage,
   planHomeStorageMove,
@@ -54,9 +57,10 @@ import {
   updateUserDataForToggleSleep,
   updateUserDataForUpgradeHome,
 } from "@/queries/home";
+import { listUserItemForMergeAllStacks } from "@/queries/item";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
 import { fetchSectorVillage } from "@/queries/village";
-import { fetchUserItems } from "@/routers/item";
+import { executeMergeStacksForItem, fetchUserItems } from "@/routers/item";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { fetchRequest, updateRequestState } from "@/routers/sparring";
 import {
@@ -68,6 +72,7 @@ import {
 import type { DrizzleClient } from "@/server/db";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getSectorTileType } from "@/server/utils/sectorMap";
+import { groupBy } from "@/utils/grouping";
 import { secondsFromNow } from "@/utils/time";
 import {
   type HomePlacement,
@@ -75,6 +80,7 @@ import {
   homeFurnitureSaveInputSchema,
   homeUpgradeInputSchema,
 } from "@/validators/home";
+import { inventoryQuantityChangeSchema } from "@/validators/inventory";
 import { DEFAULT_FURNITURE_DATA } from "@/validators/itemFurniture";
 import { idSchema } from "@/validators/misc";
 
@@ -554,7 +560,12 @@ export const homeRouter = createTRPCRouter({
     }),
 
   toggleStoreItem: protectedProcedure
-    .meta({ mcp: { description: "Store or retrieve item from home" } })
+    .meta({
+      mcp: {
+        description:
+          "Store or retrieve item from home; it joins a matching stack there, which can replace its id",
+      },
+    })
     .input(homeStorageInputSchema)
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
@@ -612,6 +623,14 @@ export const homeRouter = createTRPCRouter({
       if (result.rowsAffected === 0) {
         return errorResponse("Inventory changed, please refresh and try again");
       }
+      // The home page reads the inventory again after a move, so the merge needs no projection.
+      await mergeMovedStacks(
+        ctx.drizzle,
+        ctx.userId,
+        useritems,
+        [userItemResult],
+        !userItemResult.storedAtHome,
+      );
       return {
         success: true,
         message: userItemResult.storedAtHome
@@ -620,7 +639,12 @@ export const homeRouter = createTRPCRouter({
       };
     }),
   moveUserItems: protectedProcedure
-    .meta({ mcp: { description: "Store or take out several items at home at once" } })
+    .meta({
+      mcp: {
+        description:
+          "Store or take out several items at home at once; they join matching stacks there, reported in inventoryChanges",
+      },
+    })
     .input(
       z.object({
         userItemIds: z
@@ -633,8 +657,11 @@ export const homeRouter = createTRPCRouter({
     )
     .output(
       baseServerResponse.extend({
-        // Omitted when a stack changed during the move, so clients read the inventory again.
+        // Omitted when a stack changed during the move or its stacks did not finish joining,
+        // so clients read the inventory again.
         movedUserItemIds: z.array(z.string()).optional(),
+        // Stacks the moved items joined at their destination, applied after the move.
+        inventoryChanges: z.array(inventoryQuantityChangeSchema).optional(),
         refused: z.array(
           z.object({ userItemId: z.string(), name: z.string(), reason: z.string() }),
         ),
@@ -686,14 +713,93 @@ export const homeRouter = createTRPCRouter({
           refused,
         };
       }
+      const inventoryChanges = await mergeMovedStacks(
+        ctx.drizzle,
+        ctx.userId,
+        useritems,
+        moving,
+        input.toHome,
+      );
+      const message = homeStorageMoveMessage(movingIds.length, input.toHome, refused);
+      // A merge that lost a race leaves stacks the client cannot project; it reads them again.
+      if (!inventoryChanges) return { success: true, message, refused };
       return {
         success: true,
-        message: homeStorageMoveMessage(movingIds.length, input.toHome, refused),
+        message,
         movedUserItemIds: movingIds,
+        inventoryChanges,
         refused,
       };
     }),
 });
+
+/**
+ * Merge the moved items with the stacks already at their destination by the Merge button's
+ * rules, so a deposit or withdrawal joins the stack there. The inventory read before the move
+ * decides which items have another stack to join; a merge that loses a race or fails leaves
+ * the stacks apart for the Merge button, since the move itself has already committed.
+ * @returns The confirmed quantity changes, or undefined when a merge did not complete
+ */
+const mergeMovedStacks = async (
+  client: DrizzleClient,
+  userId: string,
+  useritems: { id: string; itemId: string; storedAtHome: boolean; quantity: number }[],
+  moved: {
+    id: string;
+    itemId: string;
+    item: { canStack: boolean; stackSize: number };
+  }[],
+  storedAtHome: boolean,
+) => {
+  const movedIds = new Set(moved.map((row) => row.id));
+  const itemIds = new Set(
+    moved
+      .filter(
+        (row) =>
+          getEffectiveStackSize(row.item) > 1 &&
+          useritems.filter(
+            (other) =>
+              other.itemId === row.itemId &&
+              other.quantity > 0 &&
+              (movedIds.has(other.id) || other.storedAtHome === storedAtHome),
+          ).length > 1,
+      )
+      .map((row) => row.itemId),
+  );
+  if (itemIds.size === 0) return [];
+  try {
+    const rows = await listUserItemForMergeAllStacks(client, { userId }, storedAtHome);
+    // Every merge settles before the move answers, so a client that reads the inventory again
+    // after a failed merge sees what the others did.
+    const settled = await Promise.allSettled(
+      [
+        ...groupBy(
+          rows.filter((row) => row.item && itemIds.has(row.itemId)),
+          "itemId",
+        ),
+      ].map(([itemId, itemRows]) =>
+        executeMergeStacksForItem(
+          client,
+          userId,
+          itemId,
+          { userItems: itemRows, item: itemRows[0]?.item },
+          inArray(userData.status, [...HOME_STORAGE_STATUSES]),
+        ),
+      ),
+    );
+    const failure = settled.find((result) => result.status === "rejected");
+    if (failure) throw failure.reason;
+    const results = settled.flatMap((result) =>
+      result.status === "fulfilled" ? [result.value] : [],
+    );
+    return results.every((result) => result.success && result.inventoryChanges)
+      ? results.flatMap((result) => result.inventoryChanges ?? [])
+      : undefined;
+  } catch (error) {
+    Sentry.captureException(error, { tags: { source: "home.mergeMovedStacks" } });
+    return undefined;
+  }
+};
 
 type HomeFurnitureUser = NonNullable<
   Awaited<ReturnType<typeof fetchHomeFurnitureUser>>

@@ -1,7 +1,7 @@
 "use client";
 
 import { api, type RouterOutputs } from "@/app/_trpc/client";
-import { getHomeStorageMovedInventory } from "@/deltas/item";
+import { getHomeStorageMovedInventory, getInventoryQuantities } from "@/deltas/item";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { showMutationToast } from "@/libs/toast";
 
@@ -9,8 +9,9 @@ type HomeStorageMoveResult = RouterOutputs["home"]["moveUserItems"];
 
 /**
  * Store stacks in home storage or take them out, one or many per request, and reconcile both
- * inventory views. Confirmed stacks switch sides in the cache; a refused move, a move whose
- * stacks changed meanwhile, or a failed request reads the inventory again.
+ * inventory views. Confirmed stacks switch sides in the cache and join the stacks the server
+ * merged them into; a refused move, a move whose stacks changed meanwhile, or a failed
+ * request reads the inventory again.
  */
 export const useHomeStorageMove = ({
   onMoved,
@@ -32,10 +33,11 @@ export const useHomeStorageMove = ({
       }
       const moved = data.movedUserItemIds;
       await (moved
-        ? updateInventory(
-            (rows) => getHomeStorageMovedInventory(rows, moved, input.toHome),
-            snapshot,
-          )
+        ? updateInventory((rows) => {
+            const switched = getHomeStorageMovedInventory(rows, moved, input.toHome);
+            // Then the moved stacks join the stacks already at their destination.
+            return switched && getInventoryQuantities(switched, data.inventoryChanges);
+          }, snapshot)
         : invalidateInventory());
     },
     onError: async (error) => {

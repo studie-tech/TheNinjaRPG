@@ -88,3 +88,50 @@ it("reconciles refused stacks after a partially successful storage move", async 
   expect(move.updateInventory).not.toHaveBeenCalled();
   move.queryClient.clear();
 });
+
+it("applies the stacks the moved items joined after moving them", async () => {
+  const move = renderMove({
+    success: true,
+    message: "Stored 1 item in your home.",
+    movedUserItemIds: ["herb-carried"],
+    inventoryChanges: [
+      { id: "herb-carried", itemId: "herb", beforeQuantity: 4, quantity: 9 },
+      { id: "herb-stored", itemId: "herb", beforeQuantity: 5, quantity: 0 },
+    ],
+    refused: [],
+  });
+  act(() => move.result.current.moveItems(["herb-carried"], true));
+  await waitFor(() => expect(move.updateInventory).toHaveBeenCalledTimes(1));
+  const [update] = move.updateInventory.mock.calls[0] as unknown as [
+    (
+      rows: { id: string; itemId: string; quantity: number; storedAtHome: boolean }[],
+    ) => unknown,
+  ];
+  expect(
+    update([
+      { id: "herb-carried", itemId: "herb", quantity: 4, storedAtHome: false },
+      { id: "herb-stored", itemId: "herb", quantity: 5, storedAtHome: true },
+    ]),
+  ).toEqual([{ id: "herb-carried", itemId: "herb", quantity: 9, storedAtHome: true }]);
+  move.queryClient.clear();
+});
+
+it("reads the inventory again when the joined stacks are withheld", async () => {
+  const move = renderMove({
+    success: true,
+    message: "Stored 1 item in your home.",
+    movedUserItemIds: ["herb-carried"],
+    refused: [],
+  });
+  act(() => move.result.current.moveItems(["herb-carried"], true));
+  await waitFor(() => expect(move.updateInventory).toHaveBeenCalledTimes(1));
+  const [update] = move.updateInventory.mock.calls[0] as unknown as [
+    (
+      rows: { id: string; itemId: string; quantity: number; storedAtHome: boolean }[],
+    ) => unknown,
+  ];
+  expect(
+    update([{ id: "herb-carried", itemId: "herb", quantity: 4, storedAtHome: false }]),
+  ).toBeUndefined();
+  move.queryClient.clear();
+});
