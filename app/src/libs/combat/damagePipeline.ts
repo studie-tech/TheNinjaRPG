@@ -707,7 +707,6 @@ export const applyDamageModifierPipelineToConsequences = ({
       );
       curseBonusByUser.set(consequence.userId, curseBonus);
     }
-    if (dmgEffect.type === "pierce") curseBonus = 1;
     const rawDamage = consequence[damageKey] ?? 0;
     const { damage } = computeDamagePacket({
       rawDamage: rawDamage * curseBonus,
