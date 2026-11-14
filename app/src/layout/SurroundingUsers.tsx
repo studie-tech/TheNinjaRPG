@@ -123,10 +123,11 @@ export const SurroundingUsers: React.FC<SurroundingUsersProps> = (props) => {
             : "No awake users match your scouting filters. Select All or turn off Exclude allies to see more players."}
         </p>
       ) : (
-        <div>
+        <div className="lg:supports-[grid-template-columns:subgrid]:grid lg:supports-[grid-template-columns:subgrid]:grid-cols-[repeat(4,max-content)_minmax(0,1fr)] lg:supports-[grid-template-columns:subgrid]:gap-x-3">
+          {/* Share content-sized desktop tracks; supported older browsers retain proportional columns. */}
           <div
             aria-hidden="true"
-            className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)] gap-3 border-b px-2 py-2 text-sm font-semibold lg:grid"
+            className="hidden grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,3fr)] gap-3 border-b px-2 py-2 text-sm font-semibold lg:grid lg:supports-[grid-template-columns:subgrid]:col-span-full lg:supports-[grid-template-columns:subgrid]:grid-cols-subgrid"
           >
             <span>Player</span>
             <span>Village</span>
@@ -134,7 +135,10 @@ export const SurroundingUsers: React.FC<SurroundingUsersProps> = (props) => {
             <span>Position</span>
             <span>Actions</span>
           </div>
-          <ul aria-label="Scouted players" className="divide-y">
+          <ul
+            aria-label="Scouted players"
+            className="divide-y lg:supports-[grid-template-columns:subgrid]:col-span-full lg:supports-[grid-template-columns:subgrid]:grid lg:supports-[grid-template-columns:subgrid]:grid-cols-subgrid"
+          >
             {users.map((user) => {
               const sameHex =
                 user.latitude === props.hex.row && user.longitude === props.hex.col;
@@ -151,7 +155,7 @@ export const SurroundingUsers: React.FC<SurroundingUsersProps> = (props) => {
               return (
                 <li
                   key={user.userId}
-                  className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-2 py-2 text-sm lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)] lg:gap-3 lg:py-3"
+                  className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-2 py-2 text-sm lg:grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,3fr)] lg:gap-3 lg:py-3 lg:supports-[grid-template-columns:subgrid]:col-span-full lg:supports-[grid-template-columns:subgrid]:grid-cols-subgrid"
                 >
                   {/* Share the avatar across both detail rows on mobile and keep one player cell on desktop. */}
                   <div className="contents lg:flex lg:min-w-0 lg:items-center lg:gap-3">
