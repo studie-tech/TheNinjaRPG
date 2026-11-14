@@ -1,6 +1,6 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { useStore } from "jotai";
 import Pusher from "pusher-js";
@@ -10,7 +10,11 @@ import superjson from "superjson";
 import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
-import { addConversationMention } from "@/deltas/chat";
+import {
+  addConversationMention,
+  incrementInboxNotifications,
+  isInboxDeliveryAfterProfile,
+} from "@/deltas/chat";
 import { BATTLE_ALERT_SFX_URL, MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { env } from "@/env/client.mjs";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
@@ -33,7 +37,7 @@ import {
 } from "@/utils/audio";
 import { transformImageUrl } from "@/utils/image";
 import { pushToCombat, usePublicPathname } from "@/utils/routing";
-import { updateUserCache } from "@/utils/userCache";
+import { updateUserCache, updateUserNotifications } from "@/utils/userCache";
 import type { UserRecovery } from "@/validators/base";
 
 // Events sent to the user from websockets
@@ -54,6 +58,8 @@ export type UserEvent = {
   sector?: number;
   conversationId?: string;
   isPublic?: boolean;
+  /** Server time just before a delivered private message starts counting in inbox news. */
+  countedAt?: number;
 };
 
 /**
@@ -120,6 +126,38 @@ export const usePusherHandler = (
           (!conversationId || !store.get(chatViewedConversationsAtom)[conversationId])
         );
       };
+      const inboxKey = getQueryKey(
+        api.comments.getUserConversations,
+        undefined,
+        "query",
+      );
+      const inboxHash = hashKey(inboxKey);
+      const profileHash = hashKey(getQueryKey(api.profile.getUser, undefined, "query"));
+      // A list read resets inbox news, even when its observer unmounts before delivery.
+      // Successful server reads establish ordering without comparing client and server clocks.
+      let inboxAcknowledged = queryClient.getQueryData(inboxKey) !== undefined;
+      let inboxReadRevision = 0;
+      let profileInboxRevision: number | undefined;
+      const unsubscribeInboxReads = queryClient.getQueryCache().subscribe((event) => {
+        if (event.type !== "updated") return;
+        if (event.query.queryHash === profileHash && event.action.type === "fetch")
+          profileInboxRevision = inboxReadRevision;
+        if (event.action.type !== "success" || event.action.manual) return;
+        if (event.query.queryHash === inboxHash) {
+          inboxAcknowledged = true;
+          inboxReadRevision += 1;
+        } else if (
+          event.query.queryHash === profileHash &&
+          profileInboxRevision === inboxReadRevision
+        ) {
+          // A profile response can supersede only acknowledgements known when its read began.
+          inboxAcknowledged = false;
+        }
+      });
+      /** Whether a visible inbox list observes the conversation listing. */
+      const inboxQuery = () =>
+        queryClient.getQueryCache().find({ queryKey: inboxKey, exact: true });
+      const isInboxListShown = () => !!inboxQuery()?.isActive();
       /** Wait for the initial profile before applying account, visibility and mute guards. */
       const resolveNotificationProfile = async (
         conversationId: string | undefined,
@@ -300,15 +338,41 @@ export const usePusherHandler = (
           void utils.comments.getTavernIds.invalidate();
           void utils.comments.getConversationComments.reset();
         } else if (data.type === "newInbox") {
-          void utils.comments.getUserConversations.invalidate();
-          const shouldNotify = await resolveNotificationProfile(data.conversationId);
-          if (shouldNotify && canNotifyConversation(data.conversationId)) {
+          const shouldNotify =
+            (await resolveNotificationProfile(data.conversationId)) &&
+            canNotifyConversation(data.conversationId);
+          if (!shouldNotify || isInboxListShown()) {
+            // A shown list's reread also resets the server's inbox news, so no count appears.
+            void utils.comments.getUserConversations.invalidate();
+          } else if (
+            inboxAcknowledged ||
+            inboxQuery()?.state.fetchStatus === "fetching" ||
+            !isInboxDeliveryAfterProfile(
+              utils.profile.getUser.getData()?.serverTime,
+              data.countedAt,
+            )
+          ) {
+            // Profile reads can include a delivery, and list reads can acknowledge it.
+            // Either uncertainty needs the authoritative count.
+            void utils.comments.getUserConversations.invalidate();
             try {
-              // Cancel cached refreshes so the authoritative read starts after this delivery.
               await utils.profile.getUser.invalidate(undefined, { refetchType: "all" });
             } catch {
               // UserContext exposes a failed refresh; an eligible message can still show its toast.
             }
+          } else {
+            // The delivery already counted this message in the server's inbox news; the next
+            // list read resets that counter and clears this count.
+            void utils.comments.getUserConversations.invalidate(undefined, {
+              refetchType: "none",
+            });
+            await updateUserNotifications(
+              queryClient,
+              getQueryKey(api.profile.getUser, undefined, "query"),
+              incrementInboxNotifications,
+            );
+          }
+          if (shouldNotify) {
             if (!canNotifyConversation(data.conversationId)) return;
             if (!isOnInbox()) {
               const canOpenChat =
@@ -413,6 +477,7 @@ export const usePusherHandler = (
       }
       // Cleanup
       return () => {
+        unsubscribeInboxReads();
         for (const unsubscribe of pendingBattleSubscriptions) unsubscribe();
         pusher.unsubscribe(userId);
         if (clanId) pusher.unsubscribe(clanId);

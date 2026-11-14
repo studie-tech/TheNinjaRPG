@@ -7,7 +7,21 @@ import {
   type UserUpdate,
   type UserUpdateOptions,
 } from "@/deltas/profile";
+import type { NavBarDropdownLink } from "@/libs/menus";
 import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
+
+/** Apply notification changes to the latest profile, preserving unrelated profile reconciliation. */
+export const updateUserNotifications = (
+  client: QueryClient,
+  key: QueryKey,
+  update: (
+    current: NavBarDropdownLink[] | undefined,
+  ) => NavBarDropdownLink[] | undefined,
+) =>
+  updateQueryCache<UserCache>(client, key, (old) => {
+    const notifications = update(old.notifications) ?? old.notifications;
+    return notifications === old.notifications ? old : { ...old, notifications };
+  });
 
 /** Capture a settled profile revision; undefined requires mutation reconciliation. */
 export const prepareUserUpdate = (client: QueryClient, key: QueryKey) =>

@@ -8,6 +8,7 @@ import {
   asc,
   desc,
   eq,
+  gt,
   inArray,
   isNull,
   notExists,
@@ -157,9 +158,10 @@ export const findUserDataForGetUserConversations = (
   ctx: { userId: string },
 ) =>
   client.query.userData.findFirst({
+    columns: { userId: true },
     where: eq(userData.userId, ctx.userId),
     with: {
-      creatorBlacklist: true,
+      creatorBlacklist: { columns: { targetUserId: true } },
       conversations: {
         with: {
           conversation: {
@@ -183,12 +185,15 @@ export const findUserDataForGetUserConversations = (
     },
   });
 
-/** Build the `userData` update for `getUserConversations`, setting `inboxNews`, using predicates on `userId`. */
+/** Build the `userData` update for `getUserConversations`, resetting `inboxNews` only while it is set. */
 export const updateUserDataForGetUserConversations = (
   client: Pick<DrizzleClient, "update">,
   ctx: { userId: string },
 ) =>
-  client.update(userData).set({ inboxNews: 0 }).where(eq(userData.userId, ctx.userId));
+  client
+    .update(userData)
+    .set({ inboxNews: 0 })
+    .where(and(eq(userData.userId, ctx.userId), gt(userData.inboxNews, 0)));
 
 /** Build the `conversation` deletion for `exitConversation`, using predicates on `id`. */
 export const deleteConversationForExitConversation = (

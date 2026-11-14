@@ -55,6 +55,8 @@ beforeEach(() => {
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
   Object.assign(vi.spyOn(client, "api" as never), {
     home: testApi.home,
+    profile: testApi.profile,
+    comments: testApi.comments,
     tournament: testApi.tournament,
     useUtils: testApi.useUtils,
   });

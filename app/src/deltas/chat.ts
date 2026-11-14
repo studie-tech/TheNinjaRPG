@@ -66,6 +66,42 @@ export const clearInboxNotifications = (
     ? notifications
     : notifications?.filter((entry) => entry.href !== "/inbox");
 
+/** Server clock tolerance between a profile read and a delivery's counting. */
+const INBOX_DELIVERY_MARGIN_MS = 1000;
+
+/**
+ * Whether a delivered message was counted clearly after the cached profile was read, so the
+ * profile's inbox news cannot include it yet. Unknown times leave the count to a profile read.
+ */
+export const isInboxDeliveryAfterProfile = (
+  profileServerTime: number | undefined,
+  countedAt: number | undefined,
+) =>
+  profileServerTime !== undefined &&
+  countedAt !== undefined &&
+  profileServerTime < countedAt - INBOX_DELIVERY_MARGIN_MS;
+
+/**
+ * Count a delivered private message in the inbox notification, matching the entry the
+ * profile builds from the server's `inboxNews` counter.
+ */
+export const incrementInboxNotifications = (
+  notifications: NavBarDropdownLink[] | undefined,
+  by = 1,
+): NavBarDropdownLink[] => {
+  const count = getInboxNews(notifications) + by;
+  const entry: NavBarDropdownLink = {
+    href: "/inbox",
+    name: `${count} messages`,
+    color: "hidden",
+    notificationCount: count,
+  };
+  const current = notifications ?? [];
+  return current.some((link) => link.href === "/inbox")
+    ? current.map((link) => (link.href === "/inbox" ? { ...link, ...entry } : link))
+    : [...current, entry];
+};
+
 /**
  * Whether a live comment belongs in the active search results, matching the server's
  * case-insensitive search of the content and the author's username.
