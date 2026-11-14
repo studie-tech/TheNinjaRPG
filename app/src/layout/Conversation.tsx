@@ -32,7 +32,7 @@ import { canPostAsAi, getConversationComposeRestriction } from "@/utils/permissi
 import { buildQuoteBlock, stripBlockquotes } from "@/utils/sanitize";
 import { useUserPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { selectUserWithoutPosition, useUserDataSelector } from "@/utils/UserContext";
 import { type SearchFormSchema, searchFormSchema } from "@/validators/chat";
 import type { MutateCommentSchema } from "@/validators/comments";
 import { mutateCommentSchema } from "@/validators/comments";
@@ -93,7 +93,7 @@ export const ConversationSkeleton: React.FC<ConversationProps> = (props) => {
  */
 export const useConversation = (props: ConversationLogicProps) => {
   const isNativeShell = useNativeShell();
-  const { data: userData, pusher } = useUserData();
+  const { data: userData, pusher } = useUserDataSelector(selectUserWithoutPosition);
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const [editorKey, setEditorKey] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>("");

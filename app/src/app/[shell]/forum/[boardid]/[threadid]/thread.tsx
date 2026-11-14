@@ -2,7 +2,7 @@
 
 import { CheckCircle2, Link2, LockKeyhole, Quote, ThumbsUp } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -84,8 +84,10 @@ export default function Thread({
   });
   const observedPosts = useRef(new Set<string>());
   const scrolledPost = useRef<string | null>(null);
-  const readMutationRef = useRef(read.mutate);
-  readMutationRef.current = read.mutate;
+  const markRead = useEffectEvent(
+    (postId: string, callbacks: Parameters<typeof read.mutate>[1]) =>
+      read.mutate({ postId }, callbacks),
+  );
   useEffect(() => {
     const target = resolved.data;
     if (!target) return;
@@ -127,25 +129,22 @@ export default function Thread({
       candidate = null;
       const id = target.dataset.readPost;
       if (!id) return;
-      readMutationRef.current(
-        { postId: id },
-        {
-          onSuccess: (result) => {
-            if (!result.success) {
-              retry = setTimeout(() => {
-                if (active) observer.observe(target);
-              }, 5000);
-              return;
-            }
-            observedPosts.current.add(id);
-          },
-          onError: () => {
+      markRead(id, {
+        onSuccess: (result) => {
+          if (!result.success) {
             retry = setTimeout(() => {
               if (active) observer.observe(target);
             }, 5000);
-          },
+            return;
+          }
+          observedPosts.current.add(id);
         },
-      );
+        onError: () => {
+          retry = setTimeout(() => {
+            if (active) observer.observe(target);
+          }, 5000);
+        },
+      });
     };
     const observer = new IntersectionObserver(
       (entries) => {
@@ -231,6 +230,37 @@ export default function Thread({
       utils.forum.getAll.invalidate(),
     ]);
   };
+  // A list apart from the composer keeps quoting from re-rendering every post.
+  const posts =
+    thread &&
+    board &&
+    comments.data?.data.map((post, index) => (
+      <ForumPost
+        key={post.id}
+        post={post}
+        thread={thread}
+        board={board}
+        number={page * FORUM_THREAD_POSTS_PER_PAGE + index + 1}
+        selected={selectedPosts.includes(post.id)}
+        onSelect={() =>
+          setSelectedPosts((ids) =>
+            ids.includes(post.id)
+              ? ids.filter((id) => id !== post.id)
+              : [...ids, post.id],
+          )
+        }
+        onChange={refresh}
+        onReact={updateReaction}
+        onQuote={() => {
+          setQuote(
+            `<blockquote><p>${post.user?.username ?? "Player"} wrote:</p>${post.content}</blockquote><p><br></p><p><br></p><!--${Date.now()}-->`,
+          );
+          document
+            .getElementById("forum-composer")
+            ?.scrollIntoView({ block: "center", behavior: "smooth" });
+        }}
+      />
+    ));
   return (
     <ContentBox
       title={thread?.title ?? "Forum discussion"}
@@ -359,33 +389,7 @@ export default function Thread({
             )}
             aria-busy={comments.isPlaceholderData}
           >
-            {comments.data?.data.map((post, index) => (
-              <ForumPost
-                key={post.id}
-                post={post}
-                thread={thread}
-                board={board}
-                number={page * FORUM_THREAD_POSTS_PER_PAGE + index + 1}
-                selected={selectedPosts.includes(post.id)}
-                onSelect={() =>
-                  setSelectedPosts((ids) =>
-                    ids.includes(post.id)
-                      ? ids.filter((id) => id !== post.id)
-                      : [...ids, post.id],
-                  )
-                }
-                onChange={refresh}
-                onReact={updateReaction}
-                onQuote={() => {
-                  setQuote(
-                    `<blockquote><p>${post.user?.username ?? "Player"} wrote:</p>${post.content}</blockquote><p><br></p><p><br></p><!--${Date.now()}-->`,
-                  );
-                  document
-                    .getElementById("forum-composer")
-                    ?.scrollIntoView({ block: "center", behavior: "smooth" });
-                }}
-              />
-            ))}
+            {posts}
           </div>
           {(comments.data?.totalPages ?? 0) > 1 && (
             <Pagination
@@ -507,6 +511,7 @@ function ForumPost({
     action: () => Promise<{ success: boolean; message: string }>,
     removesPost = false,
   ) => {
+    const removedPostId = removesPost ? post.id : undefined;
     setError("");
     try {
       const result = await action();
@@ -516,7 +521,7 @@ function ForumPost({
         return;
       }
       setEditing(false);
-      await onChange(removesPost ? post.id : undefined);
+      await onChange(removedPostId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "The action could not be completed.");
     }

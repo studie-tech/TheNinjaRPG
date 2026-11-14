@@ -1,11 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import {
+  clearSentChatDraft,
   countChatNotifications,
   countTavernUnread,
   getInboxNews,
   isConversationMuted,
   isConversationUnread,
   isTavernMuted,
+  saveChatDraft,
   toggleMutedConversation,
   unreadForTavern,
 } from "@/libs/chatPanel";
@@ -15,6 +17,25 @@ const user = (
   mutedConversationIds: string[] = [],
   unmutedTavernIds: string[] = [],
 ) => ({ chatMuted, mutedConversationIds, unmutedTavernIds });
+
+describe("chat drafts", () => {
+  it("keeps unsent text per conversation and forgets blank drafts", () => {
+    const drafts = { tavern: "hi", inbox: "later" };
+    expect(saveChatDraft(drafts, "tavern", "hello")).toEqual({
+      tavern: "hello",
+      inbox: "later",
+    });
+    expect(saveChatDraft(drafts, "tavern", "  ")).toEqual({ inbox: "later" });
+    expect(saveChatDraft({}, "tavern", "new")).toEqual({ tavern: "new" });
+  });
+
+  it("clears a draft only when the sent text matches it", () => {
+    const drafts = { tavern: "sent", inbox: "later" };
+    expect(clearSentChatDraft(drafts, "tavern", "sent")).toEqual({ inbox: "later" });
+    expect(clearSentChatDraft(drafts, "tavern", "older")).toBe(drafts);
+    expect(clearSentChatDraft(drafts, "missing", "sent")).toBe(drafts);
+  });
+});
 
 describe("chat mutes", () => {
   it("silences a muted conversation, or every conversation when chat is muted", () => {
