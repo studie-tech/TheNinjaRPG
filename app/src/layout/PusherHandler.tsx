@@ -10,7 +10,11 @@ import superjson from "superjson";
 import type { UserWithRelations } from "@/api/routers/profile";
 import { api } from "@/app/_trpc/client";
 import { ToastAction } from "@/components/ui/toast";
-import { addConversationMention, incrementInboxNotifications } from "@/deltas/chat";
+import {
+  addConversationMention,
+  incrementInboxNotifications,
+  isInboxDeliveryAfterProfile,
+} from "@/deltas/chat";
 import { BATTLE_ALERT_SFX_URL, MESSAGING_MIN_LEVEL } from "@/drizzle/constants";
 import { env } from "@/env/client.mjs";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
@@ -54,6 +58,8 @@ export type UserEvent = {
   sector?: number;
   conversationId?: string;
   isPublic?: boolean;
+  /** Server time at which a delivered private message had been counted in inbox news. */
+  countedAt?: number;
 };
 
 /**
@@ -319,6 +325,19 @@ export const usePusherHandler = (
           if (!shouldNotify || isInboxListShown()) {
             // A shown list's reread also resets the server's inbox news, so no count appears.
             void utils.comments.getUserConversations.invalidate();
+          } else if (
+            !isInboxDeliveryAfterProfile(
+              utils.profile.getUser.getData()?.serverTime,
+              data.countedAt,
+            )
+          ) {
+            // A profile read near the delivery may already count it; read the count instead.
+            void utils.comments.getUserConversations.invalidate();
+            try {
+              await utils.profile.getUser.invalidate(undefined, { refetchType: "all" });
+            } catch {
+              // UserContext exposes a failed refresh; an eligible message can still show its toast.
+            }
           } else {
             // The delivery already counted this message in the server's inbox news; the next
             // list read resets that counter and clears this count.

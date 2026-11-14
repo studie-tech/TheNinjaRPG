@@ -99,6 +99,7 @@ it("keeps the viewer's own marker when its profile still records the previous se
     sectorRef: { current: 227 },
     actorRevisionRef: { current: 0 },
     remoteWalksRef: { current: new Map<string, symbol>() },
+    arrivalsRef: { current: { wanted: new Set<string>(), queued: new Set<string>() } },
     isUserCurrentlyStealthed: () => false,
     mapAttackRelation: () => "NEUTRAL",
     warData: undefined,
@@ -237,6 +238,7 @@ const walkScope = (
     sectorRef: { current: 1 },
     actorRevisionRef: { current: 0 },
     remoteWalksRef: { current: new Map<string, symbol>() },
+    arrivalsRef: { current: { wanted: new Set<string>(), queued: new Set<string>() } },
     motionStepsRef: { current: new Map() },
     gridRef: { current: {} },
     findHex: (_grid: unknown, { x, y }: { x: number; y: number }) => ({
@@ -276,10 +278,10 @@ const walkScope = (
     publishSurroundings: () => undefined,
     utils: { travel: { getSectorData: { invalidate: vi.fn(async () => {}) } } },
   };
-  const updateUsersList = evaluate(
-    `${block("  const updateUsersList = async (", "\n\n  /** Stand the own marker")}\nreturn updateUsersList;`,
+  const { updateUsersList, cancelArrival } = evaluate(
+    `${block("  const updateUsersList = async (", "\n\n  /** Stand the own marker")}\nreturn { updateUsersList, cancelArrival };`,
     scope,
-  ) as (data: unknown) => Promise<void>;
+  ) as { updateUsersList: (data: unknown) => Promise<void>; cancelArrival: unknown };
   scope.publishMotionStep.mockImplementation(
     evaluate(
       `${block("  const publishMotionStep = (", "\n\n  /** Copy the live user list")}\nreturn publishMotionStep;`,
@@ -297,6 +299,7 @@ const walkScope = (
       props: { sector: 1 },
       pusher: {},
       updateUsersList,
+      cancelArrival,
       useEffect: (effect: () => void) => effect(),
       subscribeSharedChannel: (
         _pusher: unknown,

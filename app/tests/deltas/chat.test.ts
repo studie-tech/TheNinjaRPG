@@ -4,6 +4,7 @@ import {
   applyConversationRead,
   clearInboxNotifications,
   incrementInboxNotifications,
+  isInboxDeliveryAfterProfile,
   matchesConversationSearch,
 } from "@/deltas/chat";
 import { getInboxNews, isConversationUnread } from "@/libs/chatPanel";
@@ -25,6 +26,14 @@ it("counts a delivered message in the inbox notice the profile builds, keeping o
   // A list read acknowledging the incremented count clears it.
   expect(clearInboxNotifications(second, 2)).toEqual([news]);
   expect(clearInboxNotifications(second, 1)).toBe(second);
+});
+
+it("counts a delivery locally only when it was counted clearly after the profile read", () => {
+  expect(isInboxDeliveryAfterProfile(1_000, 5_000)).toBe(true);
+  expect(isInboxDeliveryAfterProfile(4_500, 5_000)).toBe(false);
+  expect(isInboxDeliveryAfterProfile(6_000, 5_000)).toBe(false);
+  expect(isInboxDeliveryAfterProfile(undefined, 5_000)).toBe(false);
+  expect(isInboxDeliveryAfterProfile(1_000, undefined)).toBe(false);
 });
 
 it("keeps newer activity unread and preserves later confirmed reads and unrelated conversations", () => {

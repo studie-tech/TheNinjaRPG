@@ -49,6 +49,7 @@ it.each([false, true])(
       expect(trigger).toHaveBeenCalledWith("recipient", "event", {
         type: "newInbox",
         conversationId: "chat",
+        countedAt: expect.any(Number),
       });
       expect(notify).toHaveBeenCalledTimes(1);
     }

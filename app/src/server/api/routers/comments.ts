@@ -657,6 +657,7 @@ export const commentsRouter = createTRPCRouter({
               pusher.trigger(userId, "event", {
                 type: "newInbox",
                 conversationId: convo.id,
+                countedAt: Date.now(),
               }),
             )
           : []),
@@ -995,6 +996,7 @@ export const createConvo = async (info: {
       void pusher.trigger(userId, "event", {
         type: "newInbox",
         conversationId: insertId,
+        countedAt: Date.now(),
       }),
   );
   notifyPrivateConversation(client, {

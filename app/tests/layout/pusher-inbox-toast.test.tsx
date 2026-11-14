@@ -140,6 +140,7 @@ it("counts a delivered private message in the cached profile without rereading i
       unmutedTavernIds: [],
     },
     notifications: [{ href: "/news", name: "1 news", color: "blue" as const }],
+    serverTime: 1_000,
   };
   const readProfile = vi.fn(async () => profile);
   queryClient.setQueryDefaults(profileKey, { queryFn: readProfile });
@@ -162,11 +163,17 @@ it("counts a delivered private message in the cached profile without rereading i
       .getQueryData<UserCache>(profileKey)
       ?.notifications?.find((link) => link.href === "/inbox")?.notificationCount;
 
-  await act(async () => receiveEvent({ type: "newInbox", conversationId: "chat" }));
-  await act(async () => receiveEvent({ type: "newInbox", conversationId: "chat" }));
+  await act(async () =>
+    receiveEvent({ type: "newInbox", conversationId: "chat", countedAt: 10_000 }),
+  );
+  await act(async () =>
+    receiveEvent({ type: "newInbox", conversationId: "chat", countedAt: 10_000 }),
+  );
   expect(inboxNews()).toBe(2);
   // The server does not count muted conversations, so neither does the cache.
-  await act(async () => receiveEvent({ type: "newInbox", conversationId: "muted" }));
+  await act(async () =>
+    receiveEvent({ type: "newInbox", conversationId: "muted", countedAt: 10_000 }),
+  );
   expect(inboxNews()).toBe(2);
   expect(
     queryClient.getQueryData<UserCache>(profileKey)?.notifications?.[0]?.href,
@@ -182,11 +189,18 @@ it("counts a delivered private message in the cached profile without rereading i
   const list = new QueryObserver(queryClient, { queryKey: listKey, queryFn: readList });
   const unsubscribeList = list.subscribe(() => undefined);
   await waitFor(() => expect(readList).toHaveBeenCalledTimes(1));
-  await act(async () => receiveEvent({ type: "newInbox", conversationId: "chat" }));
+  await act(async () =>
+    receiveEvent({ type: "newInbox", conversationId: "chat", countedAt: 10_000 }),
+  );
   await waitFor(() => expect(readList).toHaveBeenCalledTimes(2));
   expect(inboxNews()).toBe(2);
   expect(readProfile).not.toHaveBeenCalled();
   unsubscribeList();
+  // A profile read just before the delivery may already count it, so the count is reread.
+  await act(async () =>
+    receiveEvent({ type: "newInbox", conversationId: "chat", countedAt: 1_500 }),
+  );
+  await waitFor(() => expect(readProfile).toHaveBeenCalledTimes(1));
   unsubscribe();
 });
 

@@ -2,11 +2,17 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { focusManager, onlineManager, QueryClient } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import type { PropsWithChildren } from "react";
+import { type PropsWithChildren, useRef } from "react";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
 import { useDungeonAvailability } from "@/hooks/useDungeonAvailability";
+import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import { useVillageDutyPursuit } from "@/hooks/useVillageDuty";
+import {
+  isSectorPresenceStatus,
+  SECTOR_ARRIVAL_BATCH_LIMIT,
+  SECTOR_ARRIVAL_BATCH_MS,
+} from "@/libs/travel";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 import { mockUserContextValue } from "../setup/userContext";
 
@@ -56,6 +62,7 @@ beforeEach(() => {
     travel: testApi.travel,
     coop: testApi.coop,
     villageDuty: testApi.villageDuty,
+    useUtils: testApi.useUtils,
   });
   mockUserContextValue({
     userId: "actor",
@@ -89,7 +96,7 @@ const advance = async (ms: number) => {
 /** Mount the actual presence, patrol and dungeon hooks used by the retained sector. */
 const setup = (isActive: boolean, observeParent = false) => {
   let generation = 0;
-  const read = vi.fn((path: string) => {
+  const read = vi.fn((path: string, input?: unknown) => {
     if (path === "travel.getSectorData")
       return {
         users: [],
@@ -97,6 +104,10 @@ const setup = (isActive: boolean, observeParent = false) => {
         patrolThreat: true,
         patrolRevision: generation,
       };
+    if (path === "travel.getSectorUsers") {
+      const { userIds } = input as { userIds: string[] };
+      return userIds.map((userId) => ({ userId, username: userId, sector: 3 }));
+    }
     if (path === "coop.dungeon.getAvailable") return [];
     if (path === "villageDuty.patrol")
       return { success: true, message: "Checked patrol" };
@@ -115,6 +126,13 @@ const setup = (isActive: boolean, observeParent = false) => {
   const view = renderHook(
     (props: { isActive: boolean; sector: number }) => {
       const utils = testApi.useUtils();
+      const arrivalsRef = useRef({
+        wanted: new Set<string>(),
+        queued: new Set<string>(),
+        timer: undefined as ReturnType<typeof setTimeout> | undefined,
+      });
+      const { prepareSectorUpdate, isSectorFetching, addArrivals } =
+        useSectorCacheUpdate(props.sector);
       if (observeParent)
         readParent({ api: testApi, userData: { sector: props.sector } });
       const data = readSector({
@@ -139,6 +157,15 @@ const setup = (isActive: boolean, observeParent = false) => {
         warData: undefined,
         publishSurroundings: () => {},
         utils,
+        props,
+        mountedRef: { current: true },
+        arrivalsRef,
+        prepareSectorUpdate,
+        isSectorFetching,
+        addArrivals,
+        isSectorPresenceStatus,
+        SECTOR_ARRIVAL_BATCH_LIMIT,
+        SECTOR_ARRIVAL_BATCH_MS,
       }) as (data: unknown) => Promise<void>;
       return { data, updateRemote };
     },
@@ -202,15 +229,20 @@ it("catches up once on stale activation, polls while visible and pauses again on
   expect(test.calls("travel.getSectorData")).toBe(3);
 });
 
-it("defers unknown hidden presence with an enabled parent observer and catches up on activation", async () => {
+it("defers unknown hidden presence and resolves visible arrivals without a sector reread", async () => {
   const test = setup(false, true);
   await settle();
   expect(test.calls("travel.getSectorData")).toBe(1);
   await act(async () => {
-    await test.result.current.updateRemote({ userId: "new", sector: 3 });
+    await test.result.current.updateRemote({
+      userId: "new",
+      sector: 3,
+      status: "AWAKE",
+    });
   });
-  await settle();
+  await advance(SECTOR_ARRIVAL_BATCH_MS);
   expect(test.calls("travel.getSectorData")).toBe(1);
+  expect(test.calls("travel.getSectorUsers")).toBe(0);
   await act(async () => {
     focusManager.setFocused(false);
     focusManager.setFocused(true);
@@ -224,9 +256,42 @@ it("defers unknown hidden presence with an enabled parent observer and catches u
   await settle();
   expect(test.calls("travel.getSectorData")).toBe(2);
   expect(test.result.current.data.patrolRevision).toBe(1);
+  // A departing traveller's status never appears on the map, so it reads nothing.
   await act(async () => {
-    await test.result.current.updateRemote({ userId: "another", sector: 3 });
+    await test.result.current.updateRemote({
+      userId: "away",
+      sector: 3,
+      status: "TRAVEL",
+    });
   });
-  await settle();
-  expect(test.calls("travel.getSectorData")).toBe(3);
+  await advance(SECTOR_ARRIVAL_BATCH_MS);
+  expect(test.calls("travel.getSectorUsers")).toBe(0);
+  // A burst of visible arrivals shares one narrow read and joins the snapshot.
+  await act(async () => {
+    await test.result.current.updateRemote({
+      userId: "another",
+      sector: 3,
+      status: "AWAKE",
+    });
+    await test.result.current.updateRemote({
+      userId: "another",
+      sector: 3,
+      status: "AWAKE",
+    });
+    await test.result.current.updateRemote({
+      userId: "third",
+      sector: 3,
+      status: "BATTLE",
+    });
+  });
+  await advance(SECTOR_ARRIVAL_BATCH_MS);
+  expect(test.calls("travel.getSectorUsers")).toBe(1);
+  expect(
+    test.read.mock.calls.find(([path]) => path === "travel.getSectorUsers")?.[1],
+  ).toEqual({ sector: 3, userIds: ["another", "third"] });
+  expect(test.calls("travel.getSectorData")).toBe(2);
+  expect(test.result.current.data.users.map((user) => user.userId)).toEqual([
+    "another",
+    "third",
+  ]);
 });

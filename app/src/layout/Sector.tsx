@@ -742,86 +742,6 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     if (publishSurroundingsRef.current) setSorrounding([...usersRef.current]);
   };
 
-  /** Mark this sector's presence stale; a visible scene rereads its whole snapshot. */
-  const reloadSectorPresence = () =>
-    void utils.travel.getSectorData.invalidate(
-      { sector: sectorRef.current },
-      { refetchType: isActiveRef.current ? "active" : "none" },
-    );
-
-  /** Resolve the queued newcomers that the snapshot still lacks and add them to it. */
-  const flushArrivals = async () => {
-    const arrivals = arrivalsRef.current;
-    arrivals.timer = undefined;
-    const sector = sectorRef.current;
-    if (!isActiveRef.current || sector !== props.sector) {
-      // A hidden or crossing scene reads its snapshot when it is shown.
-      arrivals.queued.clear();
-      arrivals.wanted.clear();
-      return reloadSectorPresence();
-    }
-    // An unfinished snapshot read may predate the arrivals; resolve them after it settles.
-    if (isSectorFetching()) {
-      arrivals.timer = setTimeout(() => void flushArrivals(), SECTOR_ARRIVAL_BATCH_MS);
-      return;
-    }
-    // The live list, not the snapshot: a player who left and returned has a stale snapshot row.
-    const shown = new Set(usersRef.current.map((u) => u.userId));
-    const queued = [...arrivals.queued];
-    arrivals.queued.clear();
-    const userIds: string[] = [];
-    for (const userId of queued) {
-      if (shown.has(userId)) arrivals.wanted.delete(userId);
-      else if (userIds.length < SECTOR_ARRIVAL_BATCH_LIMIT) userIds.push(userId);
-      else arrivals.queued.add(userId);
-    }
-    if (arrivals.queued.size > 0) {
-      arrivals.timer = setTimeout(() => void flushArrivals(), SECTOR_ARRIVAL_BATCH_MS);
-    }
-    if (userIds.length === 0) return;
-    const snapshot = prepareSectorUpdate();
-    if (snapshot.query.revision === undefined) {
-      for (const userId of userIds) arrivals.wanted.delete(userId);
-      return reloadSectorPresence();
-    }
-    try {
-      const users = await utils.client.travel.getSectorUsers.query({ sector, userIds });
-      // Players who left while the read was pending stay off the map.
-      const arrived = users.filter((user) => arrivals.wanted.has(user.userId));
-      for (const userId of userIds) arrivals.wanted.delete(userId);
-      if (!mountedRef.current || sectorRef.current !== sector) return;
-      const positions = new Map(
-        usersRef.current.map((user) => [
-          user.userId,
-          { longitude: user.longitude, latitude: user.latitude },
-        ]),
-      );
-      await addArrivals(snapshot, arrived, positions);
-    } catch {
-      for (const userId of userIds) arrivals.wanted.delete(userId);
-      reloadSectorPresence();
-    }
-  };
-
-  /**
-   * Queue an announced player the snapshot lacks. Only the statuses the snapshot shows can
-   * add a player, so other broadcasts, such as a global traveller's departure, read nothing.
-   */
-  const requestArrival = (data: UserData) => {
-    if (!isSectorPresenceStatus(data.status)) return;
-    const arrivals = arrivalsRef.current;
-    if (arrivals.wanted.has(data.userId)) return;
-    arrivals.wanted.add(data.userId);
-    arrivals.queued.add(data.userId);
-    arrivals.timer ??= setTimeout(() => void flushArrivals(), SECTOR_ARRIVAL_BATCH_MS);
-  };
-
-  /** Forget a pending arrival for a player who left or hid. */
-  const cancelArrival = (userId: string) => {
-    arrivalsRef.current.wanted.delete(userId);
-    arrivalsRef.current.queued.delete(userId);
-  };
-
   // Convenience method for updating user list
   const updateUsersList = async (
     data: UserData,
@@ -939,6 +859,86 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     actorRevisionRef.current++;
     // Only update state if not explicitly skipped (to avoid excessive updates during animation)
     if (!skipStateUpdate) publishSurroundings();
+  };
+
+  /** Mark this sector's presence stale; a visible scene rereads its whole snapshot. */
+  const reloadSectorPresence = () =>
+    void utils.travel.getSectorData.invalidate(
+      { sector: sectorRef.current },
+      { refetchType: isActiveRef.current ? "active" : "none" },
+    );
+
+  /** Resolve the queued newcomers that the snapshot still lacks and add them to it. */
+  const flushArrivals = async () => {
+    const arrivals = arrivalsRef.current;
+    arrivals.timer = undefined;
+    const sector = sectorRef.current;
+    if (!isActiveRef.current || sector !== props.sector) {
+      // A hidden or crossing scene reads its snapshot when it is shown.
+      arrivals.queued.clear();
+      arrivals.wanted.clear();
+      return reloadSectorPresence();
+    }
+    // An unfinished snapshot read may predate the arrivals; resolve them after it settles.
+    if (isSectorFetching()) {
+      arrivals.timer = setTimeout(() => void flushArrivals(), SECTOR_ARRIVAL_BATCH_MS);
+      return;
+    }
+    // The live list, not the snapshot: a player who left and returned has a stale snapshot row.
+    const shown = new Set(usersRef.current.map((u) => u.userId));
+    const queued = [...arrivals.queued];
+    arrivals.queued.clear();
+    const userIds: string[] = [];
+    for (const userId of queued) {
+      if (shown.has(userId)) arrivals.wanted.delete(userId);
+      else if (userIds.length < SECTOR_ARRIVAL_BATCH_LIMIT) userIds.push(userId);
+      else arrivals.queued.add(userId);
+    }
+    if (arrivals.queued.size > 0) {
+      arrivals.timer = setTimeout(() => void flushArrivals(), SECTOR_ARRIVAL_BATCH_MS);
+    }
+    if (userIds.length === 0) return;
+    const snapshot = prepareSectorUpdate();
+    if (snapshot.query.revision === undefined) {
+      for (const userId of userIds) arrivals.wanted.delete(userId);
+      return reloadSectorPresence();
+    }
+    try {
+      const users = await utils.client.travel.getSectorUsers.query({ sector, userIds });
+      // Players who left while the read was pending stay off the map.
+      const arrived = users.filter((user) => arrivals.wanted.has(user.userId));
+      for (const userId of userIds) arrivals.wanted.delete(userId);
+      if (!mountedRef.current || sectorRef.current !== sector) return;
+      const positions = new Map(
+        usersRef.current.map((user) => [
+          user.userId,
+          { longitude: user.longitude, latitude: user.latitude },
+        ]),
+      );
+      await addArrivals(snapshot, arrived, positions);
+    } catch {
+      for (const userId of userIds) arrivals.wanted.delete(userId);
+      reloadSectorPresence();
+    }
+  };
+
+  /**
+   * Queue an announced player the snapshot lacks. Only the statuses the snapshot shows can
+   * add a player, so other broadcasts, such as a global traveller's departure, read nothing.
+   */
+  const requestArrival = (data: UserData) => {
+    if (!isSectorPresenceStatus(data.status)) return;
+    const arrivals = arrivalsRef.current;
+    if (arrivals.wanted.has(data.userId)) return;
+    arrivals.wanted.add(data.userId);
+    arrivals.queued.add(data.userId);
+    arrivals.timer ??= setTimeout(() => void flushArrivals(), SECTOR_ARRIVAL_BATCH_MS);
+  };
+
+  /** Forget a pending arrival for a player who left or hid. */
+  const cancelArrival = (userId: string) => {
+    arrivalsRef.current.wanted.delete(userId);
+    arrivalsRef.current.queued.delete(userId);
   };
 
   /** Stand the own marker on a tile instantly; state publishes when the walk settles. */
