@@ -693,6 +693,9 @@ export const battleHistory = mysqlTable(
     battleType: mysqlEnum("battleType", consts.BattleTypes),
     attackedId: varchar("attackedId", { length: 191 }).notNull(),
     defenderId: varchar("defenderId", { length: 191 }).notNull(),
+    // How the battle ended for each side, recorded as that fighter is settled.
+    attackerOutcome: mysqlEnum("attackerOutcome", consts.BattleOutcomes),
+    defenderOutcome: mysqlEnum("defenderOutcome", consts.BattleOutcomes),
   },
   (table) => {
     return {

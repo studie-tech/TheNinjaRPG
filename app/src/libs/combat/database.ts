@@ -96,6 +96,7 @@ import {
   selectMpvpBattleQueueForCreateAction,
   updateAnbuSquadForUpdateVillageAnbuClan,
   updateBattleForUpdateBattleState,
+  updateBattleHistoryForUpdateUser,
   updateBountyForUpdateUser,
   updateClanForUpdateClanLeaders,
   updateClanForUpdateVillageAnbuClan,
@@ -139,6 +140,7 @@ import { settleDungeonBattle } from "@/server/utils/dungeon";
 import { settleHuntingBattle } from "@/server/utils/hunting";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { purgeRaidChatMembership } from "@/server/utils/raidChat";
+import { logError } from "@/server/utils/sentry";
 import {
   settleTerritoryWarCombat,
   territoryWarAwards,
@@ -1276,6 +1278,28 @@ const deliverDroppedItem = async (
 };
 
 /**
+ * Record how a battle ended for one fighter in the battle history. The record only informs
+ * players, so a failure is reported instead of failing a settlement whose other writes may
+ * already have committed; inside a hunting transaction it fails with the rest.
+ */
+const recordBattleOutcome = (
+  client: DrizzleClient,
+  battleId: string,
+  userId: string,
+  outcome: CombatResult["outcome"],
+  settlingHunt: boolean,
+) => {
+  const write = updateBattleHistoryForUpdateUser(client, battleId, userId, outcome);
+  return settlingHunt
+    ? write
+    : write.then(
+        () => undefined,
+        (error: unknown) =>
+          logError(error, "Battle outcome not recorded", { battleId, userId }),
+      );
+};
+
+/**
  * Persist player recovery and progression from the preloaded combat result.
  * Hunting calls may set settlingHunt only inside settleHuntingBattle's transaction;
  * ordinary action/poll callbacks skip those rewards to prevent a second settlement.
@@ -1297,13 +1321,16 @@ export const updateUser = async (
     // Event battles are exhibition matches: preserve inventory, pools, progression,
     // immunity and every ordinary combat statistic. Only release this battle's claim.
     const settledAt = new Date();
-    await updateUserDataForUpdateUser(
-      client,
-      settledAt,
-      combatEnergyRecoverySql,
-      curBattle,
-      userId,
-    );
+    await Promise.all([
+      updateUserDataForUpdateUser(
+        client,
+        settledAt,
+        combatEnergyRecoverySql,
+        curBattle,
+        userId,
+      ),
+      recordBattleOutcome(client, curBattle.id, userId, result.outcome, false),
+    ]);
     void updateUserOnMap(pusher, user.sector, {
       ...user,
       longitude: user.originalLongitude,
@@ -1641,6 +1668,9 @@ export const updateUser = async (
               }),
           ]
         : []),
+      // Record how the battle ended for this fighter in the battle history
+      () =>
+        recordBattleOutcome(client, curBattle.id, userId, result.outcome, settlingHunt),
       // Update bounties
       ...(result.bountiesClaimed.length > 0
         ? [() => updateBountyForUpdateUser(client, userId, result)]

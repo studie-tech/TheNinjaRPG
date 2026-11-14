@@ -2,6 +2,7 @@ import type { CombatCacheSnapshot, CombatProfileUpdate } from "@/deltas/combat";
 import type {
   AttackMethod,
   AttackTarget,
+  BattleOutcome,
   BattleType,
   CombatBiome,
   ElementName,
@@ -624,7 +625,7 @@ export type CombatResult = {
   villageMissionPvpKills?: number;
   energyReward?: number;
   masteryGains?: Partial<Record<MasteryName, number>>;
-  outcome: "Won" | "Lost" | "Draw" | "Fled";
+  outcome: BattleOutcome;
   didWin: number;
   eloDiff: number;
   lpDiff: number;

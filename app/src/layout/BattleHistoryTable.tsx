@@ -3,6 +3,7 @@
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { type BattleType, IMG_AVATAR_DEFAULT } from "@/drizzle/constants";
+import { BattleOutcomeLabel } from "@/layout/BattleOutcomeLabel";
 import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
 
@@ -42,6 +43,7 @@ export const BattleHistoryTable = ({
       defenderAvatar: entry.defender?.avatar || IMG_AVATAR_DEFAULT,
       battleId: entry.battleId,
       battleType: entry.battleType || "Unknown",
+      outcome: <BattleOutcomeLabel outcome={entry.outcome} />,
       createdAt: entry.createdAt,
     }));
 
@@ -58,6 +60,7 @@ export const BattleHistoryTable = ({
             showBattleType
               ? { key: "battleType", header: "Type", type: "capitalized" }
               : { key: "battleId", header: "Battle ID", type: "string" },
+            { key: "outcome", header: "Result", type: "jsx" },
             { key: "createdAt", header: "Date", type: "date" },
           ]}
           linkPrefix="/battlelog/"

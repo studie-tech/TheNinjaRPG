@@ -10,6 +10,7 @@ import { type CombatLayoutComponentId, useCombatPreferences } from "@/hooks/comb
 import { loadCombat } from "@/hooks/combatEntry";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import ActionTimer from "@/layout/ActionTimer";
+import { BattleResultSummary } from "@/layout/BattleOutcomeLabel";
 import CombatHistory from "@/layout/CombatHistory";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
@@ -216,6 +217,7 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
 
   return (
     <ContentBox title="Spectate" subtitle={subtitle} defaultBackHref="/profile">
+      {battleHistory && <BattleResultSummary entry={battleHistory} />}
       <div className="flex flex-col gap-1">
         {spectateLayoutOrder.map((id) => (
           <div key={id}>{renderComponent(id)}</div>

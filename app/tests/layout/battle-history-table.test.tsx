@@ -40,6 +40,9 @@ const row = (id: number): Row => ({
   attackedId: "deleted",
   defenderId: "actor",
   battleType: "COMBAT",
+  attackerOutcome: null,
+  defenderOutcome: id === 3 ? "Won" : null,
+  outcome: id === 3 ? "Won" : null,
   // A deleted relation is null at runtime despite Drizzle inferring a required attacker.
   attacker: null as unknown as Row["attacker"],
   defender: { userId: "actor", username: "Actor", avatar: null },
@@ -138,4 +141,13 @@ it("does not fetch inactive tabs and resets the cursor when the user or type cha
   expect(requests.at(-1)?.userId).toBe("two");
   expect(requests.at(-1)?.cursor).toBeUndefined();
   expect(view.queryByText("battle-1")).toBeNull();
+});
+
+it("shows the listed player's result for each battle, and a dash where none was recorded", async () => {
+  const view = mount({ userId: "actor" });
+  const won = (await view.findByText("battle-3")).closest("tr");
+  expect(won?.textContent).toContain("Won");
+  const unrecorded = view.getByText("battle-2").closest("tr");
+  expect(unrecorded?.textContent).toContain("—");
+  expect(view.getByRole("columnheader", { name: "Result" })).toBeDefined();
 });

@@ -29,6 +29,7 @@ import type { CombatCacheSnapshot } from "@/deltas/combat";
 import {
   BATTLE_ARENA_HEAL_COST,
   type BattleDataEntryType,
+  type BattleOutcome,
   type BattleType,
   type BattleTypes,
   type CombatBiome,
@@ -1034,6 +1035,29 @@ export const insertBattleForCreateBattle = (
     activeUserId: activeUserId,
     forceKeepPools: info.forceKeepPools ?? false,
   });
+
+/**
+ * Build the `battleHistory` update recording how a battle ended for one fighter, on their
+ * side of each history row of that battle; the other side keeps its own record.
+ */
+export const updateBattleHistoryForUpdateUser = (
+  client: Pick<DrizzleClient, "update">,
+  battleId: string,
+  userId: string,
+  outcome: BattleOutcome,
+) =>
+  client
+    .update(battleHistory)
+    .set({
+      attackerOutcome: sql`IF(${battleHistory.attackedId} = ${userId}, ${outcome}, ${battleHistory.attackerOutcome})`,
+      defenderOutcome: sql`IF(${battleHistory.defenderId} = ${userId}, ${outcome}, ${battleHistory.defenderOutcome})`,
+    })
+    .where(
+      and(
+        eq(battleHistory.battleId, battleId),
+        or(eq(battleHistory.attackedId, userId), eq(battleHistory.defenderId, userId)),
+      ),
+    );
 
 /** Build the `battleHistory` insert for `createBattle`. */
 export const insertBattleHistoryForCreateBattle = (
