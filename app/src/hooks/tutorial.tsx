@@ -172,14 +172,24 @@ export const useTutorialStep = () => {
 
   /**
    * Leads to the step's page. Battles keep the player until they end, and the battle
-   * start itself enters /combat.
+   * start itself enters /combat. A failed save can undo only this navigation.
    */
   const navigateToStep = (step: number) => {
     if (store.get(tutorialPageGuidanceAtom)) return;
     const stepPage = TUTORIAL_STEPS[step]?.page;
     const involvesBattle = pathname === "/combat" || stepPage === "/combat";
     if (stepPage && !involvesBattle && !isSamePage(stepPage, pathname)) {
+      const previousPage = window.location.href;
+      const nextPage = new URL(stepPage, previousPage).href;
       router.push(stepPage);
+      return () => {
+        // Include the source while the optimistic route is still loading; leave an
+        // independent navigation alone. Read the live URL even if this hook unmounted.
+        if ([previousPage, nextPage].includes(window.location.href)) {
+          const { pathname, search, hash } = new URL(previousPage);
+          router.replace(`${pathname}${search}${hash}`);
+        }
+      };
     }
   };
 
@@ -194,20 +204,24 @@ export const useTutorialStep = () => {
     onMutate: async ({ step }) => {
       const previousStep = stepNumber;
       await updateUser({ tutorialStep: step });
-      navigateToStep(step);
-      return { previousStep };
+      const rollbackNavigation = navigateToStep(step);
+      return { previousStep, rollbackNavigation };
     },
-    onSuccess: async (data, _variables, context) => {
+    onSuccess: async (data) => {
       const savedStep = data.success ? data.userPatch?.tutorialStep : undefined;
       if (savedStep !== undefined) {
         await updateUser({ tutorialStep: savedStep });
-      } else if (context) {
-        await updateUser({ tutorialStep: context.previousStep });
       }
     },
     // Settled rather than onError, which would replace the shared transport-failure feedback.
-    onSettled: async (_data, error, _variables, context) => {
-      if (error && context) await updateUser({ tutorialStep: context.previousStep });
+    onSettled: async (data, error, _variables, context) => {
+      if (
+        context &&
+        (error || !data?.success || data.userPatch?.tutorialStep === undefined)
+      ) {
+        await updateUser({ tutorialStep: context.previousStep });
+        context.rollbackNavigation?.();
+      }
     },
   });
 

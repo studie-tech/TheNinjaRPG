@@ -96,16 +96,17 @@ export function HuntingBoard({
       showActionReadinessToast(result);
       setMessage(result.message);
       if (result.success && "battleId" in result && result.battleId) {
+        if (!onStarted) loadBattle(result.battleId);
         // Clear the previous result before publishing the new battle, as arena starts do.
         onStarted?.();
         await updateUser(result, { revision });
         await Promise.all([
           utils.hunting.getBoard.invalidate(),
           utils.hunting.getSession.invalidate(),
-          utils.combat.getBattle.invalidate(),
+          // Embedded hunts reuse the combat page; navigating hunts keep their prefetch.
+          onStarted ? utils.combat.getBattle.invalidate() : undefined,
         ]);
         if (!onStarted) {
-          loadBattle(result.battleId);
           pushToCombat(router, result.battleId);
         }
       } else {

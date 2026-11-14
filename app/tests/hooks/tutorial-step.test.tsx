@@ -24,6 +24,7 @@ let tutorialStep = 0;
 let pathname = "/profile";
 let updateUser = vi.fn();
 let push = vi.fn();
+let replace = vi.fn();
 let mutationOptions: StepMutationOptions | undefined;
 
 beforeEach(() => {
@@ -31,6 +32,7 @@ beforeEach(() => {
   pathname = "/profile";
   updateUser = vi.fn();
   push = vi.fn();
+  replace = vi.fn();
   mutationOptions = undefined;
   vi.spyOn(UserContext, "useUserDataSelector").mockImplementation(
     () =>
@@ -41,7 +43,7 @@ beforeEach(() => {
       }) as never,
   );
   vi.spyOn(routing, "usePublicPathname").mockImplementation(() => pathname);
-  vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
+  vi.spyOn(navigation, "useRouter").mockReturnValue({ push, replace } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     profile: {
       updateTutorialStep: {
@@ -56,6 +58,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState({}, "", "/");
   act(() => {
     store.set(UserContext.userBattleAtom, undefined);
     store.set(UserContext.combatActionIdAtom, undefined);
@@ -97,6 +100,7 @@ describe("useTutorialStep combat subscriptions", () => {
 describe("useTutorialStep step saving", () => {
   const stepIndex = (id: string) => TUTORIAL_STEPS.findIndex((step) => step.id === id);
   const saveStep = async (step: number) => {
+    window.history.replaceState({}, "", pathname);
     renderHook(() => useTutorialStep());
     const options = mutationOptions;
     if (!options) throw new Error("The step mutation was not created");
@@ -112,7 +116,7 @@ describe("useTutorialStep step saving", () => {
     expect(updateUser).toHaveBeenCalledWith({ tutorialStep: next });
     expect(push).toHaveBeenCalledTimes(1);
     expect(push).toHaveBeenCalledWith(TUTORIAL_STEPS[next]?.page);
-    expect(context).toEqual({ previousStep: tutorialStep });
+    expect(context.previousStep).toBe(tutorialStep);
   });
 
   it("leaves navigation to an open lesson, which follows the saved step", async () => {
@@ -151,21 +155,75 @@ describe("useTutorialStep step saving", () => {
     expect(updateUser).toHaveBeenCalledWith({ tutorialStep });
     updateUser.mockClear();
     await options.onSettled(
-      { success: true },
+      { success: true, userPatch: { tutorialStep: tutorialStep + 1 } },
       null,
       { step: tutorialStep + 1 },
       context,
     );
     expect(updateUser).not.toHaveBeenCalled();
   });
+
+  it.each(["transport", "rejection"])(
+    "restores a collapsed lesson's page after a %s failure",
+    async (failure) => {
+      tutorialStep = stepIndex("academy-accept-trials");
+      pathname = "/academy";
+      const nextStep = tutorialStep + 1;
+      const { options, context } = await saveStep(nextStep);
+      // The source component unmounts when the optimistic destination commits.
+      cleanup();
+      window.history.replaceState({}, "", "/village");
+      await options.onSettled(
+        failure === "rejection" ? { success: false } : undefined,
+        failure === "transport" ? new Error("offline") : null,
+        { step: nextStep },
+        context,
+      );
+      expect(updateUser).toHaveBeenLastCalledWith({ tutorialStep });
+      expect(replace).toHaveBeenCalledWith("/academy");
+    },
+  );
+
+  it("cancels a still-loading optimistic page when saving fails", async () => {
+    tutorialStep = stepIndex("academy-accept-trials");
+    pathname = "/academy";
+    const { options, context } = await saveStep(tutorialStep + 1);
+    await options.onSettled(
+      undefined,
+      new Error("offline"),
+      { step: tutorialStep + 1 },
+      context,
+    );
+    expect(replace).toHaveBeenCalledWith("/academy");
+  });
+
+  it("preserves an independent navigation when an optimistic save fails", async () => {
+    tutorialStep = stepIndex("academy-accept-trials");
+    pathname = "/academy";
+    const { options, context } = await saveStep(tutorialStep + 1);
+    window.history.replaceState({}, "", "/profile");
+    await options.onSettled(
+      undefined,
+      new Error("offline"),
+      { step: tutorialStep + 1 },
+      context,
+    );
+    expect(updateUser).toHaveBeenLastCalledWith({ tutorialStep });
+    expect(replace).not.toHaveBeenCalled();
+  });
 });
 
+type StepMutationContext = {
+  previousStep: number;
+  rollbackNavigation?: () => void;
+};
+
 type StepMutationOptions = {
-  onMutate: (variables: { step: number }) => Promise<{ previousStep: number }>;
+  onMutate: (variables: { step: number }) => Promise<StepMutationContext>;
   onSettled: (
-    data: unknown,
+    data: { success: boolean; userPatch?: { tutorialStep: number } } | undefined,
     error: Error | null,
     variables: { step: number },
-    context: { previousStep: number } | undefined,
+    context: StepMutationContext | undefined,
   ) => Promise<void>;
 };
