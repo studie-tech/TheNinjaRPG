@@ -306,10 +306,12 @@ export default function MyJutsu() {
 
   const { mutate: unequipAll, isPending: isUnequipping } =
     api.jutsu.unequipAll.useMutation({
-      onSuccess: async (data) => {
+      onMutate: prepareUserUpdate,
+      onSuccess: async (data, _variables, revision) => {
         showMutationToast(data);
         if (data.success) {
           await Promise.all([
+            updateUser(data, { revision }),
             utils.jutsu.getUserJutsus.invalidate(),
             utils.jutsu.getLoadouts.invalidate(),
           ]);

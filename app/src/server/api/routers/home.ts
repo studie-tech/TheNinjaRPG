@@ -49,6 +49,7 @@ import {
   executeResultForUpgradeHome,
   executeRowsForPublishHomeFurnitureLayout,
   fetchHomeFurnitureUser,
+  findUserDataForGetAvailableUpgrades,
   findUserDataForInviteHomeVisitor,
   findUserDataForInviteHomeVisitor2,
   findUserHomeForUpgradeHome,
@@ -448,10 +449,7 @@ export const homeRouter = createTRPCRouter({
     .meta({ mcp: { description: "Get available home upgrades" } })
     .query(async ({ ctx }) => {
       // Query
-      const { user } = await fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-      });
+      const user = await findUserDataForGetAvailableUpgrades(ctx.drizzle, ctx);
       // Guard
       if (!user) return [];
       // Return all other home types with what a move to each costs or refunds

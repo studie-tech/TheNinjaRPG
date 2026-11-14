@@ -21,6 +21,7 @@ import {
   getStartedJutsuTrainingUpdate,
   getStartedJutsuUserUpdate,
   getTransferLevelUserUpdate,
+  getUnequipAllJutsuUserUpdate,
   getUpdateUserJutsuOrderUserUpdate,
 } from "@/deltas/jutsu";
 import { getUserProgressionUpdate } from "@/deltas/profile";
@@ -109,6 +110,7 @@ import {
   findJutsuInTraining,
   isJutsuInTraining,
 } from "@/libs/train";
+import { fetchActionUser } from "@/queries/actionReadiness";
 import { fetchItemLoadouts } from "@/queries/item";
 import {
   deleteJutsuForDelete,
@@ -557,17 +559,14 @@ export const jutsuRouter = createTRPCRouter({
     .input(idSchema)
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      // fetchUpdatedUser loads the relations canUseJutsu reads (bloodline/village/
-      // elements), as in toggleEquip. It may persist the usual throttled regen/quest
-      // maintenance on the user row, never money/XP/loadout state.
-      const [caps, loadouts, data, userjutsus] = await Promise.all([
+      // The stored profile carries the relations canUseJutsu reads (bloodline, village,
+      // items, skills, titles). Selecting has no status requirement, so it needs no readiness.
+      const [caps, loadouts, user, userjutsus] = await Promise.all([
         fetchJutsuEquipCaps(ctx.drizzle),
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
-        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
       ]);
-      const { user } = data;
-      if (!user) return errorResponse("User not found");
       // Pass the validator here (full user relations are loaded) so a stale
       // loadout cannot re-equip hidden/ineligible jutsu or exceed equip caps.
       const id = input.id;
@@ -588,16 +587,10 @@ export const jutsuRouter = createTRPCRouter({
           }),
       );
       const loadout = loadouts.find((loadout) => loadout.id === id);
-      const progression =
-        result.success && loadout && data.requiresProgressionRefresh === false
-          ? getUserProgressionUpdate(user, data.publishedAchievementIds)
-          : undefined;
-      return progression && loadout
+      return result.success && loadout
         ? {
             ...result,
-            ...progression,
             ...getSelectJutsuLoadoutUserUpdate({
-              progressionUserPatch: progression.userPatch,
               id,
               loadoutJutsuIds: loadout.jutsuIds,
             }),
@@ -1777,26 +1770,17 @@ export const jutsuRouter = createTRPCRouter({
 
   unequipAll: protectedProcedure
     .meta({ mcp: { description: "Unequip all jutsus" } })
-    .output(baseServerResponse)
+    .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
-      const [data, loadouts] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
-        fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
-      ]);
-      const { user } = data;
-      if (!user) return errorResponse("User not found");
-
-      const loadout = loadouts.find((l) => l.id === user.jutsuLoadout);
-
-      await Promise.all([
+      const [, loadoutResult] = await Promise.all([
         updateUserJutsuForUnequipAll(ctx.drizzle, ctx),
-        loadout ? updateJutsuLoadoutForUnequipAll(ctx.drizzle, loadout) : null,
+        updateJutsuLoadoutForUnequipAll(ctx.drizzle, ctx.userId),
       ]);
-
-      return { success: true, message: "All jutsu unequipped" };
+      return {
+        success: true,
+        message: "All jutsu unequipped",
+        ...getUnequipAllJutsuUserUpdate(loadoutResult.rowsAffected > 0),
+      };
     }),
 
   toggleEquip: protectedProcedure
@@ -1817,17 +1801,14 @@ export const jutsuRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [caps, userjutsus, data, loadouts] = await Promise.all([
+      // The stored profile carries the relations the equip gates read. Equipping has
+      // no status requirement, so it needs no readiness.
+      const [caps, userjutsus, user, loadouts] = await Promise.all([
         fetchJutsuEquipCaps(ctx.drizzle),
         fetchUserJutsus(ctx.drizzle, ctx.userId),
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-        }),
+        fetchActionUser(ctx.drizzle, ctx.userId),
         fetchJutsuLoadouts(ctx.drizzle, ctx.userId),
       ]);
-      const { user } = data;
-      if (!user) return errorResponse("User not found");
 
       const userjutsuObj = userjutsus.find((j) => j.id === input.userJutsuId);
       const isEquipped = userjutsuObj?.equipped || false;

@@ -32,6 +32,7 @@ import {
   findQuestPartyForRemoveMember,
   findUserDataForInvite,
   findUserDataForInvite2,
+  findUserDataForOverview,
   findUserDataForRemoveMember,
   insertQuestPartyForCreate,
   listOverworldAiPlacementForStartQuestPartyEncounter,
@@ -174,14 +175,19 @@ export const questPartyRouter = createTRPCRouter({
     }),
   /** Return the current team and discoverable invitations without exposing private trackers. */
   overview: protectedProcedure.query(async ({ ctx }) => {
-    const [{ user }, parties] = await Promise.all([
-      fetchUpdatedUser({
-        client: ctx.drizzle,
-        userId: ctx.userId,
-        allowQuestPartySyncFallback: true,
-      }),
+    const [member, parties] = await Promise.all([
+      findUserDataForOverview(ctx.drizzle, ctx),
       listQuestPartyForOverview(ctx.drizzle, ctx),
     ]);
+    // Only a team member needs the synchronized tracker and the active objectives.
+    const { user } = member?.questPartyId
+      ? await fetchUpdatedUser({
+          client: ctx.drizzle,
+          userId: ctx.userId,
+          allowQuestPartySyncFallback: true,
+          includeNotifications: false,
+        })
+      : { user: undefined };
     const objectiveIds = new Set(
       user?.questParty?.quest.content.objectives.map((entry) => entry.id) ?? [],
     );

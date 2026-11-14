@@ -52,22 +52,27 @@ export const getTransferLevelUserUpdate = ({
     : { reputationPoints: needsReputation ? -transferCost : 0 },
 });
 
-/** Combine confirmed progression with the selected jutsu loadout and its ordered jutsu IDs. */
+/** Point the profile at the selected jutsu loadout and its ordered jutsu IDs. */
 export const getSelectJutsuLoadoutUserUpdate = ({
-  progressionUserPatch,
   id,
   loadoutJutsuIds,
 }: {
-  progressionUserPatch: UserCachePatch | undefined;
   id: string;
   loadoutJutsuIds: string[];
 }) => ({
   userPatch: {
-    ...progressionUserPatch,
     jutsuLoadout: id,
     loadout: { jutsuIds: loadoutJutsuIds },
   },
 });
+
+/** Empty the profile's active loadout when unequipping all changed it; otherwise confirm a no-op. */
+export const getUnequipAllJutsuUserUpdate = (
+  clearedActiveLoadout: boolean,
+): Pick<UserDeltaResponse, "userPatch" | "userDelta"> =>
+  clearedActiveLoadout
+    ? { userPatch: { loadout: { jutsuIds: [] } } }
+    : { userDelta: {} };
 
 /**
  * Combine the confirmed import projection with loadout fields only when the imported loadout

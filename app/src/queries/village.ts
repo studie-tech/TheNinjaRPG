@@ -210,6 +210,21 @@ export const fetchSectorVillage = async (
   return result || null;
 };
 
+/** Fetch the village in a user's current sector, resolving the sector inside the statement. */
+export const fetchUserSectorVillage = async (client: DrizzleClient, userId: string) => {
+  const result = await client.query.village.findFirst({
+    where: inArray(
+      village.sector,
+      client
+        .select({ sector: userData.sector })
+        .from(userData)
+        .where(eq(userData.userId, userId)),
+    ),
+    with: villageRelations,
+  });
+  return result || null;
+};
+
 /**
  * Fetches villages from the server.
  * @param client - The DrizzleClient instance used for querying the server.

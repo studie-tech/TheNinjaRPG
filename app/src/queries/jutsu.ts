@@ -848,15 +848,29 @@ export const updateUserJutsuForUnequipAll = (
     .set({ equipped: false })
     .where(eq(userJutsu.userId, ctx.userId));
 
-/** Build the `jutsuLoadout` update for `unequipAll`, setting `jutsuIds`, using predicates on `id`. */
+/**
+ * Build the `jutsuLoadout` update for `unequipAll`, setting `jutsuIds` on the owner's
+ * active loadout, resolved from `UserData.jutsuLoadout` inside the statement.
+ */
 export const updateJutsuLoadoutForUnequipAll = (
-  client: Pick<DrizzleClient, "update">,
-  loadout: { id: string },
+  client: Pick<DrizzleClient, "update" | "select">,
+  userId: string,
 ) =>
   client
     .update(jutsuLoadout)
     .set({ jutsuIds: [] })
-    .where(eq(jutsuLoadout.id, loadout.id));
+    .where(
+      and(
+        eq(jutsuLoadout.userId, userId),
+        inArray(
+          jutsuLoadout.id,
+          client
+            .select({ id: userData.jutsuLoadout })
+            .from(userData)
+            .where(eq(userData.userId, userId)),
+        ),
+      ),
+    );
 
 /** Build the `userJutsu` update for `toggleEquip`, setting `equipped`, using predicates on `id`, `userId`, `equipped`. */
 export const updateUserJutsuForToggleEquip = (
