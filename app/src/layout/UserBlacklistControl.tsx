@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, UserPlus, UserRoundX } from "lucide-react";
+import { UserPlus, UserRoundX } from "lucide-react";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useBlacklistCacheUpdate } from "@/hooks/useBlacklistCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
+import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
@@ -49,7 +50,10 @@ const UserBlacklistControl: React.FC = () => {
         <Button
           className="w-full"
           type="submit"
-          onClick={() => toggleEntry({ userId: targetUser?.userId || "" })}
+          disabled={isPending || !targetUser}
+          onClick={() => {
+            if (targetUser) toggleEntry({ userId: targetUser.userId, active: true });
+          }}
         >
           <UserPlus className="mr-2 h-5 w-5" />
           Add to blacklist
@@ -61,28 +65,45 @@ const UserBlacklistControl: React.FC = () => {
             <p className="pb-1 text-xs italic">
               Hide their messages, do not show your messages to them
             </p>
-            <div className="grid grid-cols-6">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
               {data
                 ?.filter((u) => u.target)
                 .map((user) => {
+                  const username = user.target.username;
                   return (
                     <div
                       key={`blacklist-${user.target.userId}`}
-                      className="relative flex flex-col items-center text-xs"
+                      className="flex min-w-0 flex-col items-center gap-1 text-xs"
                     >
                       <AvatarImage
                         href={user.target.avatar}
-                        alt={user.target.username}
+                        alt={username}
                         hover_effect={false}
                         size={100}
                       />
-                      {user.target.username}
-                      <Ban
-                        className="absolute top-0 right-0 h-8 w-8 rounded-full bg-red-500 p-1 hover:cursor-pointer hover:text-orange-500"
-                        onClick={() =>
-                          toggleEntry({ userId: user.target.userId || "" })
+                      <span className="w-full truncate text-center" title={username}>
+                        {username}
+                      </span>
+                      <Confirm
+                        id={`unblock-${user.target.userId}`}
+                        title={`Unblock ${username}?`}
+                        triggerLabel={`Unblock ${username}`}
+                        triggerClassName="w-full"
+                        button={
+                          <span className="w-full rounded-md border px-1 py-0.5 text-center hover:bg-muted">
+                            Unblock
+                          </span>
                         }
-                      />
+                        proceed_label="Unblock"
+                        onAccept={() =>
+                          toggleEntry({ userId: user.target.userId, active: false })
+                        }
+                      >
+                        <p>
+                          {username} will see your messages again, and you will see
+                          theirs.
+                        </p>
+                      </Confirm>
                     </div>
                   );
                 })}

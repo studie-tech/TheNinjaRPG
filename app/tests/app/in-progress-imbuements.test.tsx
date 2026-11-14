@@ -20,6 +20,7 @@ import * as Modal from "@/layout/Modal";
 import * as pagination from "@/libs/pagination";
 import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { mockUserContextValue } from "../setup/userContext";
 
 const procedure = {
   useQuery: () => ({ data: undefined, isPending: false }),
@@ -83,7 +84,7 @@ const stubApi = (
   });
 
 const stubCraftingUser = (data: object = {}) =>
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: {
       userId: "viewer",
       occupation: "CRAFTING",
@@ -348,7 +349,7 @@ it("leaves a removed imbuement off the imbue confirmation of an item selected ea
   stubApi({}, [settledRow, crystal], {
     removeImbuement: { useMutation: () => ({ mutateAsync, isPending: false }) },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: {
       userId: "viewer",
       occupation: "CRAFTING",

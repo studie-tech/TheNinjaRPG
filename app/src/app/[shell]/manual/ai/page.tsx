@@ -1,6 +1,6 @@
 "use client";
 
-import { ChartCandlestick, FilePlus } from "lucide-react";
+import { ChartCandlestick, FilePlus, ListChecks } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -13,15 +13,15 @@ import ListLoader from "@/layout/ListLoader";
 import UserFiltering, { getFilter, useFiltering } from "@/layout/UserFiltering";
 import { useInfinitePagination } from "@/libs/pagination";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualAI() {
   // Settings
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // Two-level filtering
-  const state = useFiltering();
+  const state = useFiltering({ persistKey: "manual-ai" });
 
   // Data
   const {
@@ -34,6 +34,7 @@ export default function ManualAI() {
   } = api.profile.getPublicUsers.useInfiniteQuery(
     { ...getFilter(state), limit: 30, orderBy: "Weakest", isAi: true },
     {
+      enabled: state.cf.isReady,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
     },
   );
@@ -57,7 +58,10 @@ export default function ManualAI() {
 
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
-  const { onCreated, onDeleted } = useContentListActions(refetch, "/manual/ai/edit");
+  const { onCreated, onDeleted, isOpeningCreated } = useContentListActions(
+    refetch,
+    "/manual/ai/edit",
+  );
 
   // Mutations
   const { mutate: create, isPending: load1 } = api.profile.create.useMutation({
@@ -69,7 +73,7 @@ export default function ManualAI() {
   });
 
   // Derived
-  const totalLoading = isFetching || load1 || load2;
+  const totalLoading = !state.cf.isReady || isFetching || load1 || load2;
 
   return (
     <>
@@ -84,6 +88,13 @@ export default function ManualAI() {
                 <ChartCandlestick className="h-6 w-6" />
               </Button>
             </Link>
+            {userData && canChangeContent(userData.role) && (
+              <Button asChild id="ai-completeness" hoverText="Animation Completeness">
+                <Link href="/manual/ai/completeness">
+                  <ListChecks className="h-6 w-6" />
+                </Link>
+              </Button>
+            )}
           </div>
         }
       >
@@ -102,7 +113,12 @@ export default function ManualAI() {
         topRightContent={
           <div className="flex flex-row items-center gap-2">
             {userData && canChangeContent(userData.role) && (
-              <Button id="create-ai" onClick={() => create()}>
+              <Button
+                id="create-ai"
+                onClick={() => create()}
+                disabled={load1 || isOpeningCreated}
+                loading={load1 || isOpeningCreated}
+              >
                 <FilePlus className="mr-2 h-5 w-5" /> New AI
               </Button>
             )}
@@ -122,7 +138,7 @@ export default function ManualAI() {
           </div>
         ))}
         <ListLoader
-          initialLoading={isPending}
+          initialLoading={!state.cf.isReady || isPending}
           loading={totalLoading}
           explanation="Loading data"
         />

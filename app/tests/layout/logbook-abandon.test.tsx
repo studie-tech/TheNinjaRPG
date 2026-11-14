@@ -7,7 +7,7 @@ import { QuestTypes } from "@/drizzle/constants";
 import * as logbook from "@/layout/Logbook";
 import * as Modal from "@/layout/Modal";
 import { canAbandonQuestType } from "@/utils/permissions";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 type EntryProps = ComponentProps<typeof logbook.LogbookEntry>;
 
@@ -30,7 +30,7 @@ const renderEntry = (
   props: Partial<EntryProps> = {},
   startedAt: Date | null = new Date(0),
 ) => {
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "viewer", role, status: "AWAKE", dailyMissions: 0 },
     prepareUserUpdate: () => 1,
     updateUser: vi.fn(),

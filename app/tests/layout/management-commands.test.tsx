@@ -6,7 +6,8 @@ import * as client from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import Loader from "@/layout/Loader";
 import { ManagementCommands } from "@/layout/profileEdit/ManagementCommands";
-import * as UserContext from "@/utils/UserContext";
+import { cn } from "@/libs/shadui";
+import { mockUserContextValue } from "../setup/userContext";
 
 let pending: Record<string, boolean>;
 const user = { userId: "owner", role: "OWNER" } as unknown as ComponentProps<
@@ -32,7 +33,7 @@ beforeEach(() => {
     profile: { awardExperienceToAll: mutation("experience") },
     skillTree: { resetAllUsersSkillPoints: mutation("skills") },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () => ({ updateUser: vi.fn(), prepareUserUpdate: vi.fn() }) as never,
   );
 });
@@ -48,11 +49,17 @@ const expectedTrigger = (
   label: string,
   isPending: boolean,
   variant: "destructive" | "default" = "destructive",
-  className = "w-full",
+  className?: string,
 ) => {
   const Icon = icon;
   const { container, unmount } = render(
-    <Button variant={variant} disabled={isPending} className={className}>
+    // Confirm makes the button itself the dialog trigger.
+    <Button
+      aria-haspopup="dialog"
+      variant={variant}
+      disabled={isPending}
+      className={cn("w-full", ["cursor-pointer", className].filter(Boolean).join(" "))}
+    >
       {isPending ? (
         <Loader size={5} />
       ) : (
@@ -69,7 +76,7 @@ const expectedTrigger = (
 };
 
 const triggers = (view: ReturnType<typeof render>) =>
-  [...view.container.querySelectorAll("[role='button'] > button")].map(
+  [...view.container.querySelectorAll("button[aria-haspopup='dialog']")].map(
     (button) => button.outerHTML,
   );
 

@@ -9,8 +9,8 @@ import * as contentBox from "@/layout/ContentBox";
 import * as countdown from "@/layout/Countdown";
 import * as ramen from "@/layout/RamenShop";
 import * as warField from "@/layout/WarFieldActions";
-import * as userContext from "@/utils/UserContext";
 import { defaultWarRules } from "@/validators/war";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type SectorData = RouterOutputs["travel"]["getSectorData"];
 type ShrineBattle = RouterOutputs["shrine"]["getShrineBattles"][number];
@@ -61,12 +61,6 @@ beforeEach(() => {
     ],
   } as unknown as SectorData;
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
-  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
-    () =>
-      ({
-        data: { userId: "viewer", villageId, sector: sectorNumber, status: "AWAKE" },
-      }) as never,
-  );
   vi.spyOn(contentBox, "default").mockImplementation(({ children }) => (
     <div>{children}</div>
   ));
@@ -95,6 +89,10 @@ afterEach(() => {
 });
 
 const mount = () => {
+  // The viewer's village and sector are set per test, so serve them at mount.
+  mockUserContextValue({
+    data: { userId: "viewer", villageId, sector: sectorNumber, status: "AWAKE" },
+  });
   const war = sectorData.warData![0]!;
   war.warMercenaries = sideVillageId
     ? [

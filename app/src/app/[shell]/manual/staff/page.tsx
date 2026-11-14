@@ -14,7 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { StaffApplicationTargetRole } from "@/drizzle/constants";
 import { StaffApplicationTargetRoles } from "@/drizzle/constants";
@@ -25,13 +24,17 @@ import Link from "@/layout/Link";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { getBanOrSilenceRestriction, isStaffRole } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import type { CreateApplicationSchema } from "@/validators/applications";
 import { createApplicationSchema } from "@/validators/applications";
 
 export default function Staff() {
   // User Data
-  const { data: me } = useUserData();
+  const { data: me } = useUserDataSelector((profile) => ({
+    role: profile.role,
+    isBanned: profile.isBanned,
+    isSilenced: profile.isSilenced,
+  }));
   const isStaff = me?.role ? isStaffRole(me.role) : false;
   const applicationRestriction = me ? getBanOrSilenceRestriction(me) : null;
 
@@ -383,7 +386,7 @@ interface UserListProps {
 const UserList: React.FC<UserListProps> = (props) => {
   // Destructure information
   const { users, expectedLength, columnCount = 2 } = props;
-  // Show skeleton if expectedLength is set & there are no users
+  // Show vacant seats if expectedLength is set & there are no users
   if (expectedLength && users.length === 0) {
     return (
       <div
@@ -393,12 +396,16 @@ const UserList: React.FC<UserListProps> = (props) => {
             : "flex flex-row justify-center",
         )}
       >
-        {Array.from(
-          { length: expectedLength },
-          (_, idx) => `staff-skeleton-${idx}`,
-        ).map((key) => (
-          <Skeleton key={key} className="m-2 aspect-square basis-1/2 rounded-xl" />
-        ))}
+        {Array.from({ length: expectedLength }, (_, idx) => `staff-vacant-${idx}`).map(
+          (key) => (
+            <div
+              key={key}
+              className="m-2 flex aspect-square basis-1/2 items-center justify-center rounded-xl border-2 border-muted-foreground/40 border-dashed font-semibold text-muted-foreground"
+            >
+              Vacant
+            </div>
+          ),
+        )}
       </div>
     );
   }

@@ -4,7 +4,7 @@ import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import DiscordLinksStaffPage from "@/app/[shell]/reports/discord/page";
 import * as ContentBox from "@/layout/ContentBox";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const linkedAt = new Date("2026-03-04T12:00:00Z");
 const unlinkedAt = new Date("2026-05-06T12:00:00Z");
@@ -14,9 +14,7 @@ beforeEach(() => {
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (
     <div>{children}</div>
   ));
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
-    data: { userId: "mod", role: "MODERATOR" },
-  } as never);
+  mockUserContextValue({ data: { userId: "mod", role: "MODERATOR" } });
   Object.assign(vi.spyOn(client, "api" as never), {
     discord: {
       getStatus: { useQuery: () => ({ data: { enabled: true } }) },

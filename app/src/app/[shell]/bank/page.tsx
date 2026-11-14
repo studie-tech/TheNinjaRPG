@@ -4,10 +4,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   ChevronsLeft,
   ChevronsRight,
-  ChevronsUp,
   Coins,
   Gift,
   Landmark,
+  Send,
   Waypoints,
 } from "lucide-react";
 import { useState } from "react";
@@ -30,7 +30,7 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { BANK_INTEREST_CLAIM_DAYS, IMG_BUILDING_BANK } from "@/drizzle/constants";
 import { useClaimBankInterest, usePendingBankInterest } from "@/hooks/useBankInterest";
 import BanInfo from "@/layout/BanInfo";
@@ -38,9 +38,11 @@ import ContentBox from "@/layout/ContentBox";
 import GraphBankLedger from "@/layout/GraphBankLedger";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
+import Modal from "@/layout/Modal";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { useInfinitePagination } from "@/libs/pagination";
+import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { useUserPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
@@ -56,6 +58,11 @@ import {
 export default function Bank() {
   // State
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
+  const [pendingTransfer, setPendingTransfer] = useState<{
+    targetId: string;
+    username: string;
+    amount: number;
+  } | null>(null);
 
   // User data
   const { userData, access, timeDiff, prepareUserUpdate, updateUser } =
@@ -76,15 +83,15 @@ export default function Bank() {
 
   // Forms
   const toBankForm = useForm<MoneyTransferSchemaInput, unknown, MoneyTransferSchema>({
-    defaultValues: { amount: "" },
+    defaultValues: { amount: undefined },
     resolver: zodResolver(fromPocketSchema),
   });
   const toPocketForm = useForm<MoneyTransferSchemaInput, unknown, MoneyTransferSchema>({
-    defaultValues: { amount: "" },
+    defaultValues: { amount: undefined },
     resolver: zodResolver(fromBankSchema),
   });
   const toUserForm = useForm<MoneyTransferSchemaInput, unknown, MoneyTransferSchema>({
-    defaultValues: { amount: "" },
+    defaultValues: { amount: undefined },
     resolver: zodResolver(fromBankSchema),
   });
 
@@ -129,6 +136,7 @@ export default function Bank() {
           { revision },
         );
         toUserForm.reset();
+        setPendingTransfer(null);
       }
     },
   });
@@ -170,6 +178,12 @@ export default function Bank() {
       sender: entry.sender?.username ?? "Unknown",
       receiver: entry.receiver?.username ?? "Unknown",
       amountFormatted: entry.amount.toLocaleString(),
+      // Date only keeps rows one line tall on phones; the full time shows on hover
+      date: (
+        <span className="whitespace-nowrap" title={entry.createdAt.toLocaleString()}>
+          {entry.createdAt.toLocaleDateString()}
+        </span>
+      ),
     }));
   type Transfer = ArrayElement<typeof allTransfers>;
 
@@ -183,17 +197,22 @@ export default function Bank() {
   const columns: ColumnDefinitionType<Transfer, keyof Transfer>[] = [
     { key: "sender", header: "Sender", type: "string" },
     { key: "receiver", header: "Receiver", type: "string" },
-    { key: "type", header: "Type", type: "string" },
+    { key: "type", header: "Type", type: "string", className: "hidden sm:table-cell" },
     { key: "amountFormatted", header: "Amount", type: "string" },
-    { key: "createdAt", header: "Date", type: "date" },
+    { key: "date", header: "Date", type: "jsx" },
   ];
 
   // Submit handlers
   const onDeposit = toBankForm.handleSubmit((data) => toBank(data));
   const onWithdraw = toPocketForm.handleSubmit((data) => toPocket(data));
+  // Transfers to another player cannot be undone, so they open a summary first
   const onTransfer = toUserForm.handleSubmit((data) => {
     if (targetUser) {
-      transfer({ targetId: targetUser.userId, amount: data.amount });
+      setPendingTransfer({
+        targetId: targetUser.userId,
+        username: targetUser.username,
+        amount: data.amount,
+      });
     } else {
       showMutationToast({ success: false, message: "No receiver selected" });
     }
@@ -203,7 +222,8 @@ export default function Bank() {
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!access) return <Loader explanation="Accessing Bank" />;
   if (userData.isBanned) return <BanInfo />;
-  if (l1 || l2 || l3 || l4) return <Loader explanation="Processing bank transaction" />;
+  // One transaction at a time: every bank control waits while any of them is pending.
+  const isTransacting = l1 || l2 || l3 || l4;
 
   return (
     <>
@@ -230,8 +250,12 @@ export default function Bank() {
               <AmountForm
                 form={toBankForm}
                 onSubmit={onDeposit}
+                disabled={isTransacting}
+                pending={l1}
                 id="amount-to-bank"
                 placeholder="Transfer to bank"
+                max={money}
+                label="Deposit"
                 icon={<ChevronsRight className="h-5 w-5" />}
               />
             </div>
@@ -244,8 +268,12 @@ export default function Bank() {
               <AmountForm
                 form={toPocketForm}
                 onSubmit={onWithdraw}
+                disabled={isTransacting}
+                pending={l2}
                 id="amount-to-pocket"
                 placeholder="Transfer to pocket"
+                max={bank}
+                label="Withdraw"
                 icon={<ChevronsLeft className="h-5 w-5" />}
               />
             </div>
@@ -269,6 +297,8 @@ export default function Bank() {
             </p>
             <Button
               onClick={() => claimInterest()}
+              disabled={isTransacting}
+              loading={l4}
               className="w-full"
               animation="pulse"
             >
@@ -296,12 +326,44 @@ export default function Bank() {
           <AmountForm
             form={toUserForm}
             onSubmit={onTransfer}
+            disabled={isTransacting}
+            pending={l3}
             id="amount-to-user"
             placeholder="Amount to transfer"
-            icon={<ChevronsUp className="h-5 w-5" />}
-            className="relative mt-2 mr-1 px-1"
+            max={bank}
+            label="Send"
+            showLabel={true}
+            icon={<Send className="h-5 w-5" />}
+            className="mt-2"
           />
         </div>
+        <Modal
+          id="bank-transfer-confirm"
+          title="Confirm transfer"
+          isOpen={!!pendingTransfer}
+          setIsOpen={(open) => {
+            if (!open) setPendingTransfer(null);
+          }}
+          proceed_label="Send ryo"
+          proceed_loading_label="Sending..."
+          isLoading={l3}
+          keepOpenOnAccept={true}
+          onAccept={() => {
+            if (pendingTransfer) {
+              transfer({
+                targetId: pendingTransfer.targetId,
+                amount: pendingTransfer.amount,
+              });
+            }
+          }}
+        >
+          {pendingTransfer && (
+            <p>
+              Send <b>{pendingTransfer.amount.toLocaleString()} ryo</b> from your bank
+              to <b>{pendingTransfer.username}</b>? Transfers cannot be undone.
+            </p>
+          )}
+        </Modal>
       </ContentBox>
       <ContentBox
         title="Bank Ledger"
@@ -311,8 +373,8 @@ export default function Bank() {
         topRightContent={
           <Dialog>
             <DialogTrigger asChild>
-              <Button type="submit">
-                <Waypoints className="h-5 w-5" />
+              <Button type="button" aria-label="Open transfer graph">
+                <Waypoints className="h-5 w-5" aria-hidden="true" />
               </Button>
             </DialogTrigger>
             <DialogContent className="min-h-[99%] min-w-[99%]">
@@ -354,44 +416,83 @@ export default function Bank() {
   );
 }
 
-/** Amount input with its submit button inside the field. */
+/**
+ * Numeric amount field with its submit button attached on the same row; starts blank.
+ * In narrow columns the button shows only its icon below `sm`, keeping its text as the
+ * accessible name, unless `showLabel` keeps the text visible at every width.
+ */
 const AmountForm = ({
   form,
   onSubmit,
   id,
   placeholder,
+  max,
+  label,
   icon,
-  className = "relative",
+  showLabel = false,
+  className,
+  disabled,
+  pending,
 }: {
   form: UseFormReturn<MoneyTransferSchemaInput, unknown, MoneyTransferSchema>;
   onSubmit: React.FormEventHandler<HTMLFormElement>;
+  /** Blocks input while any bank transaction is pending. */
+  disabled: boolean;
+  /** Spins this form's button while its own transaction is pending. */
+  pending: boolean;
   id: string;
   placeholder: string;
+  max: number;
+  label: string;
   icon: React.ReactNode;
+  showLabel?: boolean;
   className?: string;
 }) => (
   <Form {...form}>
-    <form onSubmit={onSubmit} className={className}>
-      <FormField
-        control={form.control}
-        name="amount"
-        render={({ field }) => (
-          <FormItem className="flex w-full flex-col">
-            <FormControl>
-              <Input
-                id={id}
-                placeholder={placeholder}
-                {...field}
-                value={field.value as number}
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <Button className="absolute top-0 right-0" type="submit">
-        {icon}
-      </Button>
+    <form onSubmit={onSubmit} className={className} aria-busy={pending}>
+      <fieldset disabled={disabled}>
+        <FormField
+          control={form.control}
+          name="amount"
+          render={({ field }) => (
+            <FormItem className="flex w-full flex-col">
+              <div className="flex w-full">
+                <FormControl>
+                  <NumberInput
+                    id={id}
+                    aria-label={placeholder}
+                    placeholder={placeholder}
+                    min={1}
+                    max={max}
+                    name={field.name}
+                    ref={field.ref}
+                    onBlur={field.onBlur}
+                    value={field.value as number | undefined}
+                    onOptionalValueChange={field.onChange}
+                    className="min-w-0 flex-1 rounded-r-none border-r-0"
+                  />
+                </FormControl>
+                <Button
+                  type="submit"
+                  className={cn(
+                    "shrink-0 rounded-l-none",
+                    showLabel ? "px-3" : "px-2.5 sm:px-3",
+                  )}
+                  loading={pending}
+                >
+                  {icon}
+                  <span
+                    className={showLabel ? "ml-1" : "sr-only sm:not-sr-only sm:ml-1"}
+                  >
+                    {label}
+                  </span>
+                </Button>
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </fieldset>
     </form>
   </Form>
 );

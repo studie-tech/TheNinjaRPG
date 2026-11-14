@@ -13,11 +13,11 @@ import { climbLabelFontSize, PyramidMode } from "@/layout/battlearena/PyramidMod
 import * as image from "@/layout/Image";
 import * as logbook from "@/layout/Logbook";
 import * as questTeams from "@/layout/QuestTeams";
-import * as userContext from "@/utils/UserContext";
 import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 let startQuest: ReturnType<typeof vi.fn>;
 let mutationOptions: NonNullable<
@@ -107,7 +107,7 @@ beforeEach(() => {
       },
     },
   });
-  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         data: {

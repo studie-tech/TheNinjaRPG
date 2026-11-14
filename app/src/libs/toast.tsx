@@ -207,6 +207,30 @@ export const showMutationToast = (data: {
 };
 
 /**
+ * Confirm an unsaved in-form removal with an Undo button that restores it, for removals
+ * frequent enough that a confirmation dialog would slow editing down.
+ */
+export const showUndoToast = (message: string, onUndo: () => void) => {
+  showMutationToast({
+    success: true,
+    title: "Removed",
+    message,
+    action: (
+      <ToastAction
+        altText="Undo removal"
+        className="h-5 md:h-10"
+        onClick={() => {
+          onUndo();
+          toast.dismiss();
+        }}
+      >
+        Undo
+      </ToastAction>
+    ),
+  });
+};
+
+/**
  * Show hookForm errors as a toast
  * @param errors
  */

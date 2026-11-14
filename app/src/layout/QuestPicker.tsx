@@ -27,7 +27,7 @@ import { useRequiredUserData } from "@/utils/UserContext";
 interface QuestPickerProps {
   questType: QuestType;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   defaultBackHref?: string;
   introduction?: string;
   unavailableText?: string;
@@ -166,9 +166,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
       defaultBackHref={props.defaultBackHref}
     >
       {props.introduction && (
-        <p className="mb-4 px-3 pt-3 text-center font-bold text-xl">
-          {props.introduction}
-        </p>
+        <p className="mb-4 px-3 pt-3 text-muted-foreground">{props.introduction}</p>
       )}
       {startError && (
         <div className="p-3">
@@ -215,9 +213,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
         <div className="bg-popover">
           {availableQuests.length === 0 && (
             <p className="p-3 font-bold">
-              {props.unavailableText
-                ? props.unavailableText
-                : `No current ${props.questType} quests available`}
+              {props.unavailableText ?? "No quests available right now."}
             </p>
           )}
           {availableQuests.map((quest) => {
@@ -272,6 +268,7 @@ const QuestPicker: React.FC<QuestPickerProps> = (props) => {
                     <ItemWithEffects
                       item={quest}
                       showEdit="quest"
+                      playerView
                       footer={
                         <div className="space-y-2">
                           <QuestEntryStock stock={entryStock} />

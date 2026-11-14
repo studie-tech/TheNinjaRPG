@@ -26,11 +26,19 @@ import { RankedLoadoutSelector } from "@/layout/PvpRank";
 import { rankedProgress } from "@/libs/battleArena";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** Ranked PvP: your division, the queue and the ranked loadout. */
 export function RankedMode() {
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
+    rankedLp: u.rankedLp,
+    status: u.status,
+    villagePrestige: u.villagePrestige,
+  }));
   const utils = api.useUtils();
   const { refreshRankedQueueCount } = useRankedQueueCountCache();
 
@@ -61,27 +69,32 @@ export function RankedMode() {
   const { mutate: queue, isPending: isQueuing } =
     api.pvpRank.queueForRankedPvp.useMutation({
       onMutate: prepareUserUpdate,
-      onSuccess: (data, _variables, revision) => {
+      onSuccess: async (data, _variables, revision) => {
         if (data.success || data.userRecovery)
           void updateUser(data, { revision, refetch: false });
         showMutationToast(data);
         if (data.success) {
-          void utils.pvpRank.getRankedPvpQueue.invalidate();
-          void refreshRankedQueueCount();
-          if (data.removedJutsuIds?.length || data.removedItemIds?.length) {
-            void utils.pvpRank.getRankedLoadout.invalidate();
-          }
+          // Awaited so the button stays pending until the queued state arrives
+          await Promise.all([
+            utils.pvpRank.getRankedPvpQueue.invalidate(),
+            refreshRankedQueueCount(),
+            data.removedJutsuIds?.length || data.removedItemIds?.length
+              ? utils.pvpRank.getRankedLoadout.invalidate()
+              : undefined,
+          ]);
         }
       },
     });
 
   const { mutate: leaveQueue, isPending: isLeaving } =
     api.pvpRank.leaveRankedPvpQueue.useMutation({
-      onSuccess: (data) => {
+      onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          void utils.pvpRank.getRankedPvpQueue.invalidate();
-          void refreshRankedQueueCount();
+          await Promise.all([
+            utils.pvpRank.getRankedPvpQueue.invalidate(),
+            refreshRankedQueueCount(),
+          ]);
         }
       },
     });

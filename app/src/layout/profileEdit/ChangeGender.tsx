@@ -27,7 +27,7 @@ import { useSingleFlight } from "@/hooks/useSingleFlight";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import { type Gender, genders } from "@/validators/register";
 import { type GenderChangeSchema, genderChangeSchema } from "@/validators/user";
 
@@ -36,7 +36,14 @@ import { type GenderChangeSchema, genderChangeSchema } from "@/validators/user";
  */
 export const ChangeGender: React.FC = () => {
   // State
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
+    gender: u.gender,
+    reputationPoints: u.reputationPoints,
+  }));
   const [showGenderConfirmation, setShowGenderConfirmation] = useState(false);
   const genderChangeFlight = useSingleFlight();
   const isChangingGender = genderChangeFlight.isPending;

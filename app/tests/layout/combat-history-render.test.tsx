@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
+import { BATTLE_LOG_DEFAULT_LIMIT, BATTLE_LOG_FULL_LIMIT } from "@/drizzle/constants";
 import CombatHistory from "@/layout/CombatHistory";
 import * as elementImage from "@/layout/ElementImage";
-import * as UserContext from "@/utils/UserContext";
+import * as parse from "@/utils/parse";
+import { mockUserContextValue } from "../setup/userContext";
 
 const spies: { mockRestore: () => void }[] = [];
 const entry = (
@@ -24,13 +26,33 @@ const entry = (
   appliedEffects,
 });
 const query = vi.fn();
+let historyEntries: ReturnType<typeof entry>[];
 
 beforeEach(() => {
-  spies.push(
-    vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
-      data: { userId: "player", role: "USER", showBattleDescription: true },
-    } as never),
-  );
+  historyEntries = [
+    entry(2, 5, "Player attacks. It is now Rival's turn", [
+      {
+        txt: "Rival takes 40 Taijutsu damage from Highest Strength and Speed",
+        color: "red",
+        types: ["Fire", "Water"],
+      },
+    ]),
+    entry(2, 7, "End Turn: Player waits", [
+      {
+        txt: "Ninjutsu Genjutsu Bukijutsu Intelligence Willpower boost",
+        color: "blue",
+      },
+      { txt: "Unknown shade", color: "black" },
+    ]),
+    entry(2, 6, "Rival heals. It is now Player's turn", [
+      { txt: "Rival heals Taijutsu Taijutsu", color: "green" },
+    ]),
+    entry(4, 9, "Player flees"),
+  ];
+
+  mockUserContextValue({
+    data: { userId: "player", role: "USER", showBattleDescription: true },
+  });
   spies.push(
     vi
       .spyOn(elementImage, "default")
@@ -44,26 +66,7 @@ beforeEach(() => {
         useQuery: (input: unknown, options: unknown) => {
           query(input, options);
           return {
-            data: [
-              entry(2, 5, "Player attacks. It is now Rival's turn", [
-                {
-                  txt: "Rival takes 40 Taijutsu damage from Highest Strength and Speed",
-                  color: "red",
-                  types: ["Fire", "Water"],
-                },
-              ]),
-              entry(2, 7, "End Turn: Player waits", [
-                {
-                  txt: "Ninjutsu Genjutsu Bukijutsu Intelligence Willpower boost",
-                  color: "blue",
-                },
-                { txt: "Unknown shade", color: "black" },
-              ]),
-              entry(2, 6, "Rival heals. It is now Player's turn", [
-                { txt: "Rival heals Taijutsu Taijutsu", color: "green" },
-              ]),
-              entry(4, 9, "Player flees"),
-            ],
+            data: historyEntries,
             isFetching: false,
           };
         },
@@ -77,6 +80,7 @@ afterEach(() => {
   cleanup();
   query.mockClear();
   for (const spy of spies.splice(0)) spy.mockRestore();
+  vi.restoreAllMocks();
 });
 
 it("renders rounds newest first, with placeholders, separators and highlighted stat words", () => {
@@ -123,7 +127,7 @@ it("renders rounds newest first, with placeholders, separators and highlighted s
   );
   expect(effects.map((node) => node.className)).toEqual([
     "text-blue-500",
-    "text-black",
+    "text-foreground",
     "text-green-500",
     "text-red-500",
   ]);
@@ -171,4 +175,74 @@ it("renders a stat word repeated in one effect without duplicate keys", () => {
     args.some((arg) => String(arg).includes("same key")),
   );
   expect(keyWarnings).toEqual([]);
+});
+
+/** Six actions per round exercise the work done by an ordinary live log update. */
+const liveEntries = (rounds: number) =>
+  Array.from({ length: rounds * 6 }, (_, index) =>
+    entry(Math.floor(index / 6) + 1, index + 1, `Attack ${index}`),
+  );
+
+it.each([
+  ["USER", "NONE", false, BATTLE_LOG_DEFAULT_LIMIT],
+  ["CONTENT-ADMIN", "NONE", false, BATTLE_LOG_FULL_LIMIT],
+  ["USER", "GOLD", false, BATTLE_LOG_FULL_LIMIT],
+  ["USER", "NONE", true, BATTLE_LOG_FULL_LIMIT],
+] as const)(
+  "keeps rolling defaults bounded for %s/%s/staff=%s without changing its log limit",
+  (role, federalStatus, staffAccount, limit) => {
+    mockUserContextValue({
+      data: {
+        userId: "player",
+        role,
+        federalStatus,
+        staffAccount,
+        showBattleDescription: true,
+      },
+    });
+    const parser = vi.spyOn(parse, "parseHtml");
+    historyEntries = [];
+    const tree = (round: number, version = round * 6) => (
+      <CombatHistory battleId="battle" battleRound={round} battleVersion={version} />
+    );
+    const view = render(tree(0));
+    for (let round = 1; round <= 20; round++) {
+      historyEntries = liveEntries(round);
+      view.rerender(tree(round));
+    }
+    expect(view.container.querySelectorAll("ol > li > div > div")).toHaveLength(12);
+    parser.mockClear();
+    view.rerender(tree(20, 121));
+    expect(parser).toHaveBeenCalledTimes(12);
+    expect(query).toHaveBeenLastCalledWith(
+      expect.objectContaining({ limit }),
+      expect.anything(),
+    );
+  },
+);
+
+it("retains manual opens and closes across advancing rounds and resets them for another battle", () => {
+  historyEntries = liveEntries(4);
+  const tree = (round: number, battleId = "battle") => (
+    <CombatHistory battleId={battleId} battleRound={round} battleVersion={round * 6} />
+  );
+  const view = render(tree(4));
+  const visibleRounds = () =>
+    Array.from(view.container.querySelectorAll("ol > li"))
+      .filter((round) => round.querySelector("p"))
+      .map((round) => round.querySelector("button span")?.textContent);
+  fireEvent.click(view.getByText("Round 1").closest("button")!);
+  fireEvent.click(view.getByText("Round 4").closest("button")!);
+  expect(visibleRounds()).toEqual(["Round 3", "Round 1"]);
+  historyEntries = liveEntries(5);
+  view.rerender(tree(5));
+  expect(visibleRounds()).toEqual(["Round 5", "Round 1"]);
+  historyEntries = liveEntries(6);
+  view.rerender(tree(6));
+  expect(visibleRounds()).toEqual(["Round 6", "Round 5", "Round 1"]);
+  view.rerender(tree(6, "another-battle"));
+  expect(visibleRounds()).toEqual(["Round 6", "Round 5"]);
+  historyEntries = liveEntries(4);
+  view.rerender(tree(4));
+  expect(visibleRounds()).toEqual(["Round 4", "Round 3"]);
 });

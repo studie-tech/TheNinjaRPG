@@ -4,8 +4,8 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { UnclaimedSeasonRewards } from "@/layout/UnclaimedSeasonRewards";
 import * as toast from "@/libs/toast";
-import * as UserContext from "@/utils/UserContext";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
+import { mockUserContextValue } from "../setup/userContext";
 
 let queryClient: QueryClient;
 let claim: ReturnType<typeof vi.fn>;
@@ -21,9 +21,7 @@ beforeEach(() => {
     pvpRank: testApi.pvpRank,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
-    () => ({ prepareUserUpdate: () => 1, updateUser }) as never,
-  );
+  mockUserContextValue(() => ({ prepareUserUpdate: () => 1, updateUser }) as never);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   vi.spyOn(toast, "showRewardToast").mockImplementation(() => undefined);
 });

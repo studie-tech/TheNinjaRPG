@@ -85,9 +85,6 @@ export default function GameLayoutsPage() {
                   </span>
                 </div>
                 <div className="space-y-3 p-5">
-                  <p className="break-words text-muted-foreground text-xs">
-                    {theme.id}
-                  </p>
                   <h2 id={`name-${theme.id}`} className="font-semibold text-xl">
                     {theme.name}
                   </h2>

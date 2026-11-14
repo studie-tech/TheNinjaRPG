@@ -5,23 +5,26 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import ContentBox from "@/layout/ContentBox";
 import { HomeScene } from "@/layout/HomeScene";
+import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Display the server-authorized decoration snapshot with navigation and no owner actions. */
 export default function HomeVisitPage() {
   const params = useParams<{ userId: string }>();
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({ userId: u.userId }));
   const query = api.home.getVisitedHome.useQuery(
     { userId: params.userId },
     { enabled: !!user, staleTime: 0, retry: false },
   );
   const home = query.data?.home;
+  const isOwnHome = !!user && user.userId === params.userId;
   return (
     <ContentBox
       padding={false}
-      title={home ? `${home.username}'s Home` : "Home visit"}
-      defaultBackHref="/users"
+      title={isOwnHome ? "Your Home" : home ? `${home.username}'s Home` : "Home visit"}
+      subtitle={isOwnHome ? "Visitor preview" : undefined}
+      defaultBackHref={isOwnHome ? "/home" : "/users"}
     >
       {!user ? (
         <p className="p-3">Sign in to visit player homes.</p>
@@ -38,10 +41,19 @@ export default function HomeVisitPage() {
         </p>
       ) : (
         <>
-          <p className="p-3 text-muted-foreground text-sm">
-            You are visiting. Explore the rooms and yard to see this player's
-            decorations.
-          </p>
+          {isOwnHome ? (
+            <p className="p-3 text-muted-foreground text-sm">
+              This is how visitors see your home.{" "}
+              <Link href="/home" className="font-semibold underline">
+                Back to your home
+              </Link>
+            </p>
+          ) : (
+            <p className="p-3 text-muted-foreground text-sm">
+              You are visiting. Explore the rooms and yard to see this player's
+              decorations.
+            </p>
+          )}
           <HomeScene
             homeType={home.homeType}
             biome={home.biome}

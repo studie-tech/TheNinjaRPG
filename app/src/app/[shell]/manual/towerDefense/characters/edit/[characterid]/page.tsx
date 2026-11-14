@@ -2,7 +2,7 @@
 
 import { Image as ImageIcon, Upload } from "lucide-react";
 import { use, useCallback, useState } from "react";
-import type { UseFormReturn } from "react-hook-form";
+import { type UseFormReturn, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -20,6 +20,7 @@ import {
   type AnimationPatch,
   useTowerDefenseCharacterEditForm,
 } from "@/hooks/towerDefenseCharacter";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
@@ -90,13 +91,15 @@ const SingleEditCharacter: React.FC<SingleEditCharacterProps> = ({ character }) 
     updateAnimation,
     handleCharacterSubmit,
   } = useTowerDefenseCharacterEditForm(character);
+  const entryName = useWatch({ control: form.control, name: "name" });
+  const heading = useEditorTitle("character", entryName);
 
   const typeLabel = isPlayer ? "Player" : "Enemy";
 
   return (
     <>
       <ContentBox
-        title="Content Panel"
+        title={heading}
         subtitle={`${typeLabel} Configuration`}
         defaultBackHref="/manual/towerDefense/characters"
       >

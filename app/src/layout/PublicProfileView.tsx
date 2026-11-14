@@ -39,7 +39,12 @@ export const PublicProfileView: React.FC<{
 }> = ({ userId, user }) => (
   <PublicUserComponent
     userId={userId}
-    title="Users"
+    title={
+      user.displayTitle ? `${user.username} [${user.displayTitle}]` : user.username
+    }
+    subtitle={`Lvl. ${user.level} ${showUserRank(user)}${
+      user.village?.name ? ` of ${user.village.name}` : ""
+    }`}
     // Same lookup that built the metadata, handed to the client component so the server
     // render carries this player's name, rank and village instead of a placeholder
     // identical to every other profile's.

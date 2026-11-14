@@ -25,9 +25,11 @@ import {
   type SetStateAction,
   startTransition,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
+import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,6 +81,7 @@ import type { Jutsu } from "@/drizzle/schema";
 import { useTutorialStep } from "@/hooks/tutorial";
 import { useJutsuTrainingCacheUpdate } from "@/hooks/useJutsuTrainingCacheUpdate";
 import { useMasteryTrainingQueue } from "@/hooks/useMasteryTrainingQueue";
+import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -153,9 +156,9 @@ import { isInArray } from "@/utils/array";
 import { getQueueTotalCapacity, getQueueWaitingSlots } from "@/utils/paypal";
 import { useUserPicker } from "@/utils/search";
 import { safeLocalStorageSetItem } from "@/utils/storage";
-import { capitalizeFirstLetter } from "@/utils/string";
+import { capitalizeFirstLetter, formatAmount } from "@/utils/string";
 import { getTimeLeftStr } from "@/utils/time";
-import { useRequiredUserData, useRequireInVillage } from "@/utils/UserContext";
+import { useRequiredUserInfo, useRequireInVillage } from "@/utils/UserContext";
 import type { BaseServerResponse } from "@/validators/base";
 
 // Favorites live on the ranked loadout, whose cleanup drops jutsu ranked cannot use
@@ -232,6 +235,10 @@ export default function Training() {
                     : 0),
               }}
               countLabel="in queue"
+              iconOnlyOptions={trainingSections.options}
+              labelClassName={(option) =>
+                option === activeSection ? "not-sr-only" : "sm:not-sr-only"
+              }
               icons={{
                 Stats: <Swords aria-hidden="true" className="h-4 w-4" />,
                 Masteries: <Medal aria-hidden="true" className="h-4 w-4" />,
@@ -277,7 +284,7 @@ interface TrainingProps {
 
 /** Component for sensei system */
 const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   // Settings
   const { userData } = props;
 
@@ -387,22 +394,28 @@ const SenseiSystem: React.FC<Pick<TrainingProps, "userData">> = (props) => {
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
               {students.map((user) => (
                 <div className="relative" key={user.userId}>
-                  <UserAvatarTile user={user} className="text-center">
-                    {user.rank === "GENIN" && (
-                      <Confirm
-                        title="Remove Student"
-                        button={
-                          <XCircle className="absolute top-[3%] right-[13%] h-9 w-9 cursor-pointer rounded-full bg-slate-300 p-1 hover:text-orange-500" />
-                        }
-                        onAccept={(e) => {
-                          e.preventDefault();
-                          remove({ studentId: user.userId });
-                        }}
-                      >
-                        You are about to remove this user as your student. Confirm?
-                      </Confirm>
-                    )}
-                  </UserAvatarTile>
+                  <UserAvatarTile user={user} className="text-center" />
+                  {user.rank === "GENIN" && (
+                    <Confirm
+                      title="Remove Student"
+                      triggerLabel={`Remove ${user.username} as your student`}
+                      triggerClassName="absolute top-[3%] right-[13%] rounded-full"
+                      button={
+                        <XCircle className="h-9 w-9 rounded-full bg-slate-300 p-1 text-slate-900 hover:text-orange-500" />
+                      }
+                      tone="destructive"
+                      proceed_label="Remove student"
+                      proceed_loading_label="Removing"
+                      isLoading={isRemoving}
+                      onAccept={(e) => {
+                        e.preventDefault();
+                        remove({ studentId: user.userId });
+                      }}
+                    >
+                      Remove {user.username} as your student? This ends your sensei
+                      relationship with them.
+                    </Confirm>
+                  )}
                 </div>
               ))}
             </div>
@@ -490,7 +503,7 @@ const StatsTraining: React.FC<
 > = (props) => {
   // Settings
   const { userData, timeDiff } = props;
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const kind = props.section === "Elements" ? "ELEMENT" : "MASTERY";
   const session = getMasteryTrainingState(userData, kind);
   const [energy, setEnergy] = useState<number | null>(null);
@@ -1069,18 +1082,18 @@ const StatsTraining: React.FC<
 const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Settings
   const { userData, timeDiff } = props;
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [jutsu, setJutsu] = useState<Jutsu | undefined>(undefined);
   // Successive levels of the selected jutsu to buy in one go
   const [levelCount, setLevelCount] = useState<number>(1);
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
-  // Re-renders the box when the countdown ends: the refetch it triggers returns the
-  // same rows, which alone would leave the finished training's overlay on screen.
-  const [, setTrainingFinishedAt] = useState<number>();
   // finishTraining is a server timestamp; compare it on the server clock, the same one
-  // the countdown and the server's training guards use.
-  const serverNow = Date.now() - timeDiff;
+  // the countdown and the server's training guards use. The clock is state so typing in
+  // the confirm dialog reuses the sorted list; it moves when a training ends or the rows
+  // change, since the refetch after a finished countdown can return the same rows.
+  const [clientNow, setClientNow] = useState(() => Date.now());
+  const serverNow = clientNow - timeDiff;
 
   // tRPC useUtils
   const utils = api.useUtils();
@@ -1106,6 +1119,14 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     isPending: isRefetchingUserJutsu,
     isError: isOwnershipUnavailable,
   } = api.jutsu.getUserJutsus.useQuery({});
+  useEffect(() => {
+    if (userJutsus) setClientNow(Date.now());
+  }, [userJutsus]);
+  useRefreshAt(
+    (userJutsus ?? []).map((owned) => owned.finishTraining),
+    () => setClientNow(Date.now()),
+    timeDiff,
+  );
   const { data: trainingQueue, isError: isQueueUnavailable } =
     api.jutsu.getTrainingQueue.useQuery(undefined);
   // Keep priorities fixed across offset pages; later favorite/training changes re-sort
@@ -1142,7 +1163,8 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
   // Jutsus
   const {
     data: jutsus,
-    isFetching,
+    isPlaceholderData: isFilteringJutsus,
+    isFetchingNextPage,
     fetchNextPage,
     hasNextPage,
   } = api.jutsu.getAll.useInfiniteQuery(
@@ -1170,20 +1192,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
 
   // Worn gear and activated skills raise masteries, as the server's training gate counts
   const { data: userItems } = api.item.getUserItems.useQuery(undefined);
-  const masteries = effectiveMasteries({
-    ...userData,
-    items: userItems ?? [],
-  });
-
-  const userJutsuCounts = userJutsus?.map((userJutsu) => {
-    return {
-      id: userJutsu.jutsuId,
-      quantity: isJutsuInTraining(userJutsu, serverNow)
-        ? userJutsu.level - 1
-        : userJutsu.level,
-    };
-  });
-
   // Tutorial management hook
   const { currentStep, completeTutorialAction } = useTutorialStep();
   const isJutsuPickStep = isTutorialJutsuPickStep(currentStep);
@@ -1270,14 +1278,6 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     });
   };
 
-  // Jutsu in active training or waiting in the queue, shown right after favorites
-  const trainingJutsuIds = new Set([
-    ...(userJutsus ?? [])
-      .filter((uj) => isJutsuInTraining(uj, serverNow))
-      .map((uj) => uj.jutsuId),
-    ...(trainingQueue?.waiting ?? []).map((job) => job.jutsuId),
-  ]);
-
   // Selecting a jutsu restyles every tile of the grid and mounts or unmounts the confirm
   // modal; as a transition, that render does not block the tap's next paint.
   const setJutsuConfirmOpen: Dispatch<SetStateAction<boolean>> = (open) => {
@@ -1289,74 +1289,34 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     });
   };
 
-  // Collect all ancestor jutsu IDs that the user has evolved past
-  const evolvedAncestorIds = new Set<string>();
-  for (const uj of userJutsus ?? []) {
-    for (const id of uj.ancestorIds) evolvedAncestorIds.add(id);
-  }
-
-  // Filtering jutsus
-  const alljutsus =
-    jutsus?.pages
-      .flatMap((page) => page.data)
-      .filter((j) => {
-        if (j.parentJutsuId)
-          return (
-            // Training/leveling is item-free, so ignore the bloodline item requirement here
-            canUseJutsu(j, userData, true, masteries, true) &&
-            (userJutsus?.some((uj) => uj.jutsuId === j.id) ?? false)
-          );
-        return canTrainJutsu(j, userData, masteries);
-      })
-      .filter((j) => !evolvedAncestorIds.has(j.id))
-      .filter((j) => {
-        const userJutsu = userJutsus?.find((uj) => uj.jutsuId === j.id);
-        return userJutsu || !isJutsuTrainToLearnRestricted(j.jutsuType);
-      })
-      .map((j) => {
-        const uj = userJutsus?.find((uj) => uj.jutsuId === j.id);
-        return {
-          ...j,
-          level: uj?.level || 0,
-          highlight: isJutsuPickStep && j.id === TUTORIAL_JUTSU_ID,
-          isFavorite: favoriteJutsuIds.includes(j.id),
-        };
-      })
-      .filter((j) => j.level < JUTSU_LEVEL_CAP)
-      // Favorites first, then jutsu in training/queued, then highest level
-      .sort(
-        (a, b) =>
-          Number(b.isFavorite) - Number(a.isFavorite) ||
-          Number(trainingJutsuIds.has(b.id)) - Number(trainingJutsuIds.has(a.id)) ||
-          b.level - a.level,
-      ) ?? [];
-
-  const tutorialJutsuLevel =
-    userJutsus?.find((uj) => uj.jutsuId === TUTORIAL_JUTSU_ID)?.level || 0;
-  if (
-    isJutsuPickStep &&
-    tutorialJutsu &&
-    canTrainJutsu(tutorialJutsu, userData, masteries) &&
-    // The list drops capped jutsu; pinning one back would show a tile whose
-    // confirm modal can only say "Level capped".
-    tutorialJutsuLevel < JUTSU_LEVEL_CAP &&
-    !alljutsus.some((j) => j.id === tutorialJutsu.id)
-  ) {
-    alljutsus.unshift({
-      // jutsu.get carries no relations, unlike the paginated jutsu.getAll rows
-      bloodline: null,
-      ...tutorialJutsu,
-      level: tutorialJutsuLevel,
-      highlight: true,
-      isFavorite: favoriteJutsuIds.includes(tutorialJutsu.id),
-    });
-  } else if (isJutsuPickStep) {
-    const pinnedIdx = alljutsus.findIndex((j) => j.id === TUTORIAL_JUTSU_ID);
-    if (pinnedIdx > 0) {
-      const [pinned] = alljutsus.splice(pinnedIdx, 1);
-      if (pinned) alljutsus.unshift(pinned);
-    }
-  }
+  // Memoized so the tiles keep their identity while the confirm dialog's level count changes
+  const storedFavoriteIds = rankedLoadout?.loadout.favoriteJutsuIds;
+  const jutsuPages = jutsus?.pages;
+  const { alljutsus, userJutsuCounts } = useMemo(
+    () =>
+      buildTrainableJutsuTiles({
+        pages: jutsuPages,
+        userJutsus,
+        trainingQueue,
+        userData,
+        userItems,
+        favoriteJutsuIds: storedFavoriteIds,
+        tutorialJutsu,
+        isJutsuPickStep,
+        serverNow,
+      }),
+    [
+      jutsuPages,
+      userJutsus,
+      trainingQueue,
+      userData,
+      userItems,
+      storedFavoriteIds,
+      tutorialJutsu,
+      isJutsuPickStep,
+      serverNow,
+    ],
+  );
 
   // Training time
   const finishTrainingAt = findJutsuInTraining(userJutsus, serverNow);
@@ -1418,7 +1378,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
     if (!Number.isFinite(levelCount)) {
       proceed_label = "Enter a number of levels";
     } else if (!canAfford) {
-      proceed_label = `Need ${cost - userData.money} more ryo`;
+      proceed_label = `Need ${formatAmount(cost - userData.money)} more ryo`;
     } else if (isCapped) {
       proceed_label = `Level capped`;
     } else if (!okRank) {
@@ -1439,8 +1399,40 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
         title: finishTrainingAt.jutsu?.name ?? "Jutsu",
         detail: `level ${finishTrainingAt.level}`,
         finishesAt: finishTrainingAt.finishTraining,
-        stopLabel: "Stop training (no refund)",
-        onStop: isRefetchingUserJutsu ? undefined : () => cancel(),
+        stopControl: isRefetchingUserJutsu ? undefined : (
+          <Confirm
+            title="Stop jutsu training"
+            disabled={isPending}
+            triggerLabel="Stop training (no refund)"
+            button={
+              <span className="flex h-9 w-9 items-center justify-center">
+                <XCircle className="h-4 w-4 text-red-600" aria-hidden />
+              </span>
+            }
+            proceed_label="Stop training"
+            proceed_loading_label="Stopping"
+            confirmClassName="bg-red-600 text-white hover:bg-red-700"
+            isLoading={isStoppingTrain}
+            keepOpenOnAccept
+            onAccept={(_e, { close }) =>
+              cancel(undefined, {
+                onSuccess: (data) => {
+                  if (data.success) close();
+                },
+              })
+            }
+          >
+            <p>
+              Stop training {finishTrainingAt.jutsu?.name ?? "this jutsu"} to level{" "}
+              {finishTrainingAt.level}? It has{" "}
+              <Countdown
+                targetDate={finishTrainingAt.finishTraining}
+                timeDiff={timeDiff}
+              />{" "}
+              left. The level is not gained, and the ryo paid for it is not refunded.
+            </p>
+          </Confirm>
+        ),
       }
     : null;
 
@@ -1466,7 +1458,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
           timeDiff={timeDiff}
           emptyText="Nothing in training. Select a jutsu below to start."
           onActiveFinish={async () => {
-            setTrainingFinishedAt(Date.now());
+            setClientNow(Date.now());
             await refreshTraining();
           }}
         />
@@ -1610,8 +1602,18 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
             </Modal>
           )}
         </div>
-        {/* The list can be taller than the screen, so the loader sticks in view */}
-        {(isFetching || listPriorities === null) && (
+        {isFetchingNextPage && (
+          <div
+            role="status"
+            className="flex items-center justify-center gap-2 py-3 text-sm"
+          >
+            <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+            Loading more jutsu
+          </div>
+        )}
+        {/* The list can be taller than the screen, so the loader sticks in view. Only a
+            first load or a filter change covers it; later pages load below the list. */}
+        {(listPriorities === null || !jutsus || isFilteringJutsus) && (
           <div className="absolute inset-0 z-10 bg-slate-950/10 backdrop-blur-sm">
             <div className="sticky top-24 flex justify-center py-16">
               <Loader explanation="Loading jutsu" />
@@ -1626,7 +1628,7 @@ const JutsuTraining: React.FC<TrainingProps> = (props) => {
 /** Component for covert operations training (stealth & sensory) */
 const CovertTraining: React.FC<TrainingProps> = (props) => {
   const { userData, timeDiff } = props;
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
 
   // Stealth status derived from userData
   const stealthStatus = getStealthStatus(
@@ -1950,4 +1952,119 @@ const getTrainingLabel = (stat: CombatStatName | TimedMasteryName) => {
     default:
       return stat.charAt(0).toUpperCase() + stat.slice(1);
   }
+};
+
+/**
+ * Training-grid tiles and the trained level of every owned jutsu. One call over the query
+ * data, so the compiler reuses both while the confirm dialog's level count changes.
+ */
+const buildTrainableJutsuTiles = (input: {
+  pages: RouterOutputs["jutsu"]["getAll"][] | undefined;
+  userJutsus: RouterOutputs["jutsu"]["getUserJutsus"] | undefined;
+  trainingQueue: RouterOutputs["jutsu"]["getTrainingQueue"] | undefined;
+  userData: NonNullable<UserWithRelations>;
+  userItems: RouterOutputs["item"]["getUserItems"] | undefined;
+  favoriteJutsuIds: string[] | undefined;
+  tutorialJutsu: RouterOutputs["jutsu"]["get"] | undefined;
+  isJutsuPickStep: boolean;
+  serverNow: number;
+}) => {
+  const { pages, userJutsus, trainingQueue, userData, userItems, tutorialJutsu } =
+    input;
+  const { isJutsuPickStep, serverNow } = input;
+  const favoriteJutsuIds = input.favoriteJutsuIds ?? [];
+  const userJutsuById = new Map(
+    (userJutsus ?? []).map((owned) => [owned.jutsuId, owned]),
+  );
+
+  const masteries = effectiveMasteries({
+    ...userData,
+    items: userItems ?? [],
+  });
+
+  const userJutsuCounts = userJutsus?.map((userJutsu) => {
+    return {
+      id: userJutsu.jutsuId,
+      quantity: isJutsuInTraining(userJutsu, serverNow)
+        ? userJutsu.level - 1
+        : userJutsu.level,
+    };
+  });
+
+  // Jutsu in active training or waiting in the queue, shown right after favorites
+  const trainingJutsuIds = new Set([
+    ...(userJutsus ?? [])
+      .filter((uj) => isJutsuInTraining(uj, serverNow))
+      .map((uj) => uj.jutsuId),
+    ...(trainingQueue?.waiting ?? []).map((job) => job.jutsuId),
+  ]);
+
+  // Collect all ancestor jutsu IDs that the user has evolved past
+  const evolvedAncestorIds = new Set<string>();
+  for (const uj of userJutsus ?? []) {
+    for (const id of uj.ancestorIds) evolvedAncestorIds.add(id);
+  }
+
+  // Filtering jutsus
+  const alljutsus =
+    pages
+      ?.flatMap((page) => page.data)
+      .filter((j) => {
+        if (j.parentJutsuId)
+          return (
+            // Training/leveling is item-free, so ignore the bloodline item requirement here
+            canUseJutsu(j, userData, true, masteries, true) && userJutsuById.has(j.id)
+          );
+        return canTrainJutsu(j, userData, masteries);
+      })
+      .filter((j) => !evolvedAncestorIds.has(j.id))
+      .filter(
+        (j) => userJutsuById.has(j.id) || !isJutsuTrainToLearnRestricted(j.jutsuType),
+      )
+      .map((j) => {
+        const uj = userJutsuById.get(j.id);
+        return {
+          ...j,
+          level: uj?.level || 0,
+          highlight: isJutsuPickStep && j.id === TUTORIAL_JUTSU_ID,
+          isFavorite: favoriteJutsuIds.includes(j.id),
+        };
+      })
+      .filter((j) => j.level < JUTSU_LEVEL_CAP)
+      // Favorites first, then jutsu in training/queued, then highest level
+      .sort(
+        (a, b) =>
+          Number(b.isFavorite) - Number(a.isFavorite) ||
+          Number(trainingJutsuIds.has(b.id)) - Number(trainingJutsuIds.has(a.id)) ||
+          b.level - a.level,
+      ) ?? [];
+
+  const tutorialJutsuLevel =
+    userJutsus?.find((uj) => uj.jutsuId === TUTORIAL_JUTSU_ID)?.level || 0;
+  if (
+    isJutsuPickStep &&
+    tutorialJutsu &&
+    canTrainJutsu(tutorialJutsu, userData, masteries) &&
+    // The list drops capped jutsu; pinning one back would show a tile whose
+    // confirm modal can only say "Level capped".
+    tutorialJutsuLevel < JUTSU_LEVEL_CAP &&
+    !alljutsus.some((j) => j.id === tutorialJutsu.id)
+  ) {
+    alljutsus.unshift({
+      // jutsu.get carries no relations, unlike the paginated jutsu.getAll rows
+      bloodline: null,
+      ...tutorialJutsu,
+      level: tutorialJutsuLevel,
+      highlight: true,
+      isFavorite: favoriteJutsuIds.includes(tutorialJutsu.id),
+    });
+  } else if (isJutsuPickStep) {
+    const pinnedIdx = alljutsus.findIndex((j) => j.id === TUTORIAL_JUTSU_ID);
+    if (pinnedIdx > 0) {
+      const [pinned] = alljutsus.splice(pinnedIdx, 1);
+      if (pinned) alljutsus.unshift(pinned);
+    }
+  }
+
+  return { alljutsus, userJutsuCounts };
 };

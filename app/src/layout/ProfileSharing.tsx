@@ -11,7 +11,7 @@ import {
   Loader2,
   Trophy,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { badgeVariants } from "@/components/ui/badge";
@@ -39,6 +39,7 @@ import {
   type RecruitMilestoneRank,
   SITE_URL,
   VOTE_REWARD_REPUTATION,
+  VOTING_SITE_NAMES,
 } from "@/drizzle/constants";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import AvatarImage from "@/layout/Avatar";
@@ -54,7 +55,7 @@ import { showMutationToast } from "@/libs/toast";
 import { getVotingLink } from "@/libs/voting";
 import { canReviewLinkPromotions } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import {
   type LinkPromotionInput,
   type LinkPromotionReviewInput,
@@ -64,7 +65,11 @@ import {
 
 export function ProfileSharing() {
   // State
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({ userId: u.userId, votes: u.votes }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const [recruitTab, setRecruitTab] = useState<string>("Link");
 
@@ -119,6 +124,8 @@ export function ProfileSharing() {
   ).length;
   const progress = (completedVotes / totalVotes) * 100;
   const allVotesCompleted = completedVotes === totalVotes;
+  // Gold ornaments and the pulse only invite a claim that can be made.
+  const claimReady = allVotesCompleted && !userData?.votes?.claimed;
 
   // Process data
   const summaryByRecruit = new Map(
@@ -159,11 +166,9 @@ export function ProfileSharing() {
   return (
     <>
       <ContentBox title="TNR Promotion" subtitle="Earn by helping us grow">
-        <p className="mb-4 italic">
-          Vote on the following sites to earn reputation points. Once you have voted on
-          all voting sites, and the votes have succesfully registered, you can claim{" "}
-          {VOTE_REWARD_REPUTATION} reputation point per day. Note that sites may be
-          added/removed from this list regularly.
+        <p className="mb-4 text-muted-foreground">
+          Vote on every site below. Once all votes have registered, claim{" "}
+          {VOTE_REWARD_REPUTATION} reputation point per day.
         </p>
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -180,7 +185,7 @@ export function ProfileSharing() {
                     }
                   }}
                 >
-                  <span>{site}</span>
+                  <span>{VOTING_SITE_NAMES[site]}</span>
                   {hasVoted ? (
                     <CheckCircle2 className="h-5 w-5 text-green-500" />
                   ) : (
@@ -203,10 +208,10 @@ export function ProfileSharing() {
 
           <Button
             className="flex h-12 w-full items-center justify-center gap-2"
-            disabled={!allVotesCompleted || isPending || userData?.votes?.claimed}
+            disabled={!claimReady || isPending}
             onClick={() => claimVotes()}
-            decoration="gold"
-            animation="pulse"
+            decoration={claimReady ? "gold" : "none"}
+            animation={claimReady && !isPending ? "pulse" : undefined}
           >
             {isPending ? (
               <>
@@ -271,19 +276,50 @@ export function ProfileSharing() {
 // Subcomponents
 const RecruitLinkTab: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({ userId: u.userId }));
   const recruitUrl = `${SITE_URL}/?ref=${userData?.userId ?? ""}`;
   const [genin, chunin, jonin, eliteJonin] = RECRUIT_RANK_MILESTONES;
   const [copied, setCopied] = useState<boolean>(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timeout = window.setTimeout(() => setCopied(false), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [copied]);
 
   // Render
   return (
     <div>
-      <p className="italic">
-        Every new member you recruit for your village will potentially earn you rewards.
-        We hope you will help us spread the word of the game and invite your friends (or
-        strangers) to join you in your journey. (PS. recruitments during alpha & beta
-        versions of the game will still be active in final release)
+      <button
+        type="button"
+        className="flex w-full cursor-copy flex-row items-center gap-3 rounded-lg border bg-card p-4 text-left text-card-foreground hover:bg-popover"
+        aria-label={`Copy recruitment link ${recruitUrl}`}
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(recruitUrl);
+            setCopied(true);
+          } catch (_error) {
+            showMutationToast({
+              success: false,
+              message: "Could not copy to clipboard. Please copy the link manually.",
+            });
+          }
+        }}
+      >
+        <p className="min-w-0 grow break-all">{recruitUrl}</p>
+        {copied ? (
+          <span className="flex shrink-0 items-center gap-1 text-green-700 text-sm dark:text-green-400">
+            <Check className="h-6 w-6" aria-hidden="true" />
+            Copied
+          </span>
+        ) : (
+          <ClipboardCopy className="h-8 w-8 shrink-0" aria-hidden="true" />
+        )}
+      </button>
+      <span role="status" className="sr-only">
+        {copied ? "Recruitment link copied" : ""}
+      </span>
+      <p className="mt-3 text-muted-foreground">
+        Share your link. Every new member who joins through it can earn you rewards.
       </p>
       <ul className="py-2">
         <li className="px-2 py-2">
@@ -316,31 +352,16 @@ const RecruitLinkTab: React.FC = () => {
           {eliteJonin.reputation}. {SHARED_IP_MILESTONE_RULE}
         </li>
       </ul>
-      <button
-        type="button"
-        className={`flex w-full flex-row items-center rounded-lg border bg-card p-4 text-card-foreground italic hover:bg-popover ${!copied ? "cursor-copy" : "cursor-no-drop"}`}
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(recruitUrl);
-            setCopied(true);
-          } catch (_error) {
-            showMutationToast({
-              success: false,
-              message: "Could not copy to clipboard. Please copy the link manually.",
-            });
-          }
-        }}
-      >
-        <p className="grow">{recruitUrl}</p>
-        <ClipboardCopy className="h-8 w-8" />
-      </button>
     </div>
   );
 };
 
 const RecruitGuideTab: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    role: u.role,
+  }));
 
   // Form
   const linkForm = useForm<LinkPromotionInput>({
@@ -618,7 +639,7 @@ const ReviewPromotionAction: React.FC<ReviewPromotionActionProps> = ({
 
 const RecruitRewardsTab: React.FC = () => {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({ userId: u.userId }));
 
   // Query
   const {

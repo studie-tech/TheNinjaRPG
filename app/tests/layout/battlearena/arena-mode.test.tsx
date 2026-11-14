@@ -19,8 +19,8 @@ import { ArenaMode } from "@/layout/battlearena/ArenaMode";
 import * as image from "@/layout/Image";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import * as jutsuLoadout from "@/layout/JutsuLoadoutSelector";
-import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { mockUserContextValue } from "../../setup/userContext";
 
 let mutate: ReturnType<typeof vi.fn>;
 let toggleSleep: ReturnType<typeof vi.fn>;
@@ -48,7 +48,7 @@ beforeEach(() => {
     },
     combat: { startArenaBattle: { useMutation: () => ({ mutate, isPending: false }) } },
   });
-  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         data: { userId: "me", level: 22, status, autoWakeUp, dailyArenaFights: 3 },
@@ -218,7 +218,7 @@ it.each(["ASLEEP", "HOSPITALIZED"] as const)(
     const revision = prepareUserUpdate(cache, key);
     const updateUser = (patch: UserUpdate | undefined, options?: UserUpdateOptions) =>
       updateUserCache(cache, key, patch, options);
-    vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+    mockUserContextValue({
       data: initial.userData,
       updateUser,
       prepareUserUpdate: () => prepareUserUpdate(cache, key),
@@ -321,7 +321,7 @@ it("preserves the profile after a lost battle response and allows retry", async 
     queryFn: read,
   });
   const unsubscribe = observer.subscribe(() => {});
-  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: initial.userData,
     prepareUserUpdate: () => prepareUserUpdate(cache, key),
     updateUser: (patch: UserUpdate | undefined, options?: UserUpdateOptions) =>
@@ -375,7 +375,7 @@ it.each(["missing revision", "superseded revision", "withheld projection"] as co
       queryFn: read,
     });
     const unsubscribe = observer.subscribe(() => {});
-    vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+    mockUserContextValue({
       data: initial.userData,
       prepareUserUpdate: () => prepareUserUpdate(cache, key),
       updateUser: (patch: UserUpdate | undefined, options?: UserUpdateOptions) =>

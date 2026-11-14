@@ -16,8 +16,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { MAP_SECTOR_ID_MAX } from "@/drizzle/constants";
 import { useDelayState } from "@/hooks/useDelayState";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
@@ -30,7 +39,7 @@ import { downloadSectorForTiled } from "@/libs/sector-map/tiled-download";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { parseJsonSafe } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 type PreviewResult = {
   success: boolean;
@@ -82,7 +91,11 @@ const toPreviewResult = (data: {
 function SectorMapEditorContent() {
   const utils = api.useUtils();
   const searchParams = useSearchParams();
-  const { data: userData, updateUser, prepareUserUpdate } = useUserData();
+  const {
+    data: userData,
+    updateUser,
+    prepareUserUpdate,
+  } = useUserDataSelector((profile) => ({ role: profile.role }));
   const canEdit = Boolean(userData && canChangeContent(userData.role));
   // Sector can be pre-selected via ?sector= (e.g. clicking a tile on the globe
   // in /manual/world), so editors land straight on that sector's maps.
@@ -206,6 +219,11 @@ function SectorMapEditorContent() {
   useEffect(() => {
     if (!canEdit || !maps) return;
     if (autoLoadedSectorRef.current === sector) return;
+    // Unsaved JSON (an upload or edits) stays put while the sector number is corrected.
+    if (baseline && jsonText !== baseline.json) {
+      autoLoadedSectorRef.current = sector;
+      return;
+    }
     const published = maps.find((map) => map.status === "PUBLISHED");
     const latest = published ?? [...maps].sort((a, b) => b.version - a.version)[0];
     if (latest) {
@@ -225,7 +243,7 @@ function SectorMapEditorContent() {
       setPreview(null);
       setParseError("");
     }
-  }, [maps, sector, canEdit]);
+  }, [maps, sector, canEdit, baseline, jsonText]);
 
   const { mutate: previewMap, isPending: isPreviewing } =
     api.worldMap.previewTiledSectorMap.useMutation({
@@ -392,6 +410,12 @@ function SectorMapEditorContent() {
     }
   };
 
+  // Unsaved changes: the editor differs from what it was seeded with. Drives
+  // the status line, which action buttons are shown and the leave confirmation.
+  const isDirty =
+    baseline !== null && (jsonText !== baseline.json || name !== baseline.name);
+  const unsavedGuard = useUnsavedChangesGuard(isDirty);
+
   if (!userData) return <Loader explanation="Loading userdata" />;
 
   if (!canEdit) {
@@ -407,10 +431,11 @@ function SectorMapEditorContent() {
   }
 
   const busy = isPreviewing || isSaving || isPublishing || isArchiving;
-  // Unsaved changes: the editor differs from what it was seeded with. Drives
-  // the status line and which action buttons are relevant to show at all.
-  const isDirty =
-    baseline !== null && (jsonText !== baseline.json || name !== baseline.name);
+  // The live map, when the History filter includes it, named in publish confirmations.
+  const publishedMap = maps?.find((map) => map.status === "PUBLISHED");
+  const replacesLiveMap = publishedMap
+    ? `, replacing the live v${publishedMap.version}`
+    : ", replacing its current live map";
   const statusText = (() => {
     if (!sourceLabel) return "";
     if (sourceLabel.kind === "upload") {
@@ -430,6 +455,7 @@ function SectorMapEditorContent() {
 
   return (
     <>
+      {unsavedGuard.dialog}
       <ContentBox
         title="Sector Maps"
         subtitle="Tiled imports"
@@ -591,19 +617,31 @@ function SectorMapEditorContent() {
                     <Save className="mr-2 h-4 w-4" />
                     Save Draft
                   </Button>
-                  <Button
-                    type="button"
-                    onClick={() => handleSave(true)}
+                  <Confirm
+                    title="Publish sector map"
                     disabled={busy || !isValidSectorId(sector) || !normalized.map}
-                    title={
-                      normalized.map
-                        ? undefined
-                        : "Fix the validation errors shown above first"
+                    isLoading={isSaving}
+                    proceed_label="Publish"
+                    proceed_loading_label="Publishing"
+                    onAccept={() => handleSave(true)}
+                    button={
+                      <Button
+                        type="button"
+                        disabled={busy || !isValidSectorId(sector) || !normalized.map}
+                        title={
+                          normalized.map
+                            ? undefined
+                            : "Fix the validation errors shown above first"
+                        }
+                      >
+                        <Rocket className="mr-2 h-4 w-4" />
+                        Publish
+                      </Button>
                     }
                   >
-                    <Rocket className="mr-2 h-4 w-4" />
-                    Publish
-                  </Button>
+                    Publish these changes to Sector {sector}? Players see the map
+                    immediately{replacesLiveMap}.
+                  </Confirm>
                 </>
               )}
             </div>
@@ -615,6 +653,13 @@ function SectorMapEditorContent() {
               Validation
             </div>
             {busy && <Loader explanation="Processing map" />}
+            {!busy && !parseError && !preview && (
+              <p className="text-muted-foreground text-sm">
+                {sourceLabel?.kind === "version" && !isDirty
+                  ? "This saved version passed validation when it was stored. Edit the JSON and press Validate to check changes."
+                  : "Upload or edit Tiled JSON, then press Validate to check it."}
+              </p>
+            )}
             {parseError && <p className="text-red-500 text-sm">{parseError}</p>}
             {preview?.map && (
               <div className="space-y-1 text-sm">
@@ -656,18 +701,20 @@ function SectorMapEditorContent() {
         title="History"
         subtitle={`Sector ${sector}`}
         topRightContent={
-          <select
-            className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
+          <Select
             value={statusFilter}
-            onChange={(event) =>
-              setStatusFilter(event.target.value as typeof statusFilter)
-            }
+            onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}
           >
-            <option value="ALL">All</option>
-            <option value="DRAFT">Draft</option>
-            <option value="PUBLISHED">Published</option>
-            <option value="ARCHIVED">Archived</option>
-          </select>
+            <SelectTrigger aria-label="Map status" className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All</SelectItem>
+              <SelectItem value="DRAFT">Draft</SelectItem>
+              <SelectItem value="PUBLISHED">Published</SelectItem>
+              <SelectItem value="ARCHIVED">Archived</SelectItem>
+            </SelectContent>
+          </Select>
         }
       >
         {isFetching && <Loader explanation="Loading maps" />}
@@ -696,34 +743,53 @@ function SectorMapEditorContent() {
                   type="button"
                   size="sm"
                   variant="secondary"
-                  onClick={() => void handleLoadMap(map.id)}
+                  onClick={() =>
+                    unsavedGuard.confirmDiscard(() => void handleLoadMap(map.id))
+                  }
                   disabled={busy}
                 >
                   <FileJson className="mr-1 h-4 w-4" />
                   Load JSON
                 </Button>
                 {map.status !== "PUBLISHED" && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => publishMap({ id: map.id })}
+                  <Confirm
+                    title="Publish sector map"
                     disabled={busy}
+                    isLoading={isPublishing}
+                    proceed_label="Publish"
+                    proceed_loading_label="Publishing"
+                    onAccept={() => publishMap({ id: map.id })}
+                    button={
+                      <Button type="button" size="sm" disabled={busy}>
+                        <Rocket className="mr-1 h-4 w-4" />
+                        Publish
+                      </Button>
+                    }
                   >
-                    <Rocket className="mr-1 h-4 w-4" />
-                    Publish
-                  </Button>
+                    Publish v{map.version} of Sector {map.sector}? Players see it
+                    immediately{replacesLiveMap}.
+                  </Confirm>
                 )}
                 {map.status !== "ARCHIVED" && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => archiveMap({ id: map.id })}
+                  <Confirm
+                    title="Archive sector map"
                     disabled={busy}
+                    isLoading={isArchiving}
+                    proceed_label="Archive"
+                    proceed_loading_label="Archiving"
+                    onAccept={() => archiveMap({ id: map.id })}
+                    button={
+                      <Button type="button" size="sm" variant="outline" disabled={busy}>
+                        <Archive className="mr-1 h-4 w-4" />
+                        Archive
+                      </Button>
+                    }
                   >
-                    <Archive className="mr-1 h-4 w-4" />
-                    Archive
-                  </Button>
+                    Archive v{map.version} of Sector {map.sector}?
+                    {map.status === "PUBLISHED"
+                      ? " This is the live map: players lose it immediately."
+                      : " The draft stays in the History under Archived."}
+                  </Confirm>
                 )}
               </div>
             </div>

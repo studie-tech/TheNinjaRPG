@@ -1,6 +1,6 @@
 "use client";
 
-import { Compass, House, MessageCircle } from "lucide-react";
+import { Compass, Menu, MessageCircle } from "lucide-react";
 import { Suspense } from "react";
 import {
   Sheet,
@@ -18,7 +18,7 @@ import Loader from "@/layout/Loader";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
 import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
-import { CHAT_BUTTON_LAYER } from "./shared/LayoutChrome";
+import { CHAT_BUTTON_LAYER, MobileSidebarStack } from "./shared/LayoutChrome";
 import { MobileNotificationsPopover } from "./shared/LayoutNotifications";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
 import { isClerkElement, keepSheetOpenForClerk } from "./shared/layoutUtils";
@@ -28,6 +28,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
   const {
     children,
     userData,
+    pathname,
     navbarMenuItems,
     signedInIcons,
     leftSideBar,
@@ -50,10 +51,12 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
 
   return (
     <div data-world-page className="tnr-theme-game" data-layout-variant={props.variant}>
+      {/* The primary nav's Chat button is the launcher; this bubble only appears while
+          the battle focus view covers that nav (see .theme-focus-chat). */}
       <div
         data-battle-focus-layer
         className={cn(
-          "fixed hidden min-[1100px]:block",
+          "theme-focus-chat fixed",
           userData
             ? cn(
                 "bottom-5",
@@ -79,7 +82,7 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
                 className="theme-header-button"
                 aria-label="Open player menu"
               >
-                <House aria-hidden="true" />
+                <Menu aria-hidden="true" />
               </SheetTrigger>
               <SheetContent
                 side="left"
@@ -90,10 +93,11 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
                 <SheetHeader className="text-left">
                   <SheetTitle>Player menu</SheetTitle>
                 </SheetHeader>
-                <Suspense fallback={<Loader explanation="Loading player menu" />}>
-                  {leftSideBarMainMenu}
-                  {leftSideBar}
-                </Suspense>
+                <MobileSidebarStack
+                  isCombat={pathname === "/combat"}
+                  leftSideBar={leftSideBar}
+                  mainMenu={leftSideBarMainMenu}
+                />
               </SheetContent>
             </Sheet>
             {showMobileNotifications && (

@@ -165,8 +165,9 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     form.setValue("effects", newEffects, { shouldDirty: true });
   };
 
-  // Are we loading data
-  const loading = l1 || l2 || l3 || l4 || l5 || l6 || loadingSpecies;
+  // Loading covers the option lists the form needs; saving stays separate so the form stays up.
+  const loading = l1 || l2 || l4 || l5 || l6 || loadingSpecies;
+  const isSaving = l3;
 
   // Watch for changes to avatar
   const imageUrl = useWatch({
@@ -292,6 +293,7 @@ export const useJutsuEditForm = (data: Jutsu, refetch: () => void) => {
     form,
     formData: visibleFormData,
     loading,
+    isSaving,
     setEffects,
     handleJutsuSubmit,
     reskinParentId,

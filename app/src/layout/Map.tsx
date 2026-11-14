@@ -1,5 +1,12 @@
 import { Cloud, Flag, ScrollText, ZoomIn, ZoomOut } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { MAP_WAR_TORN_BATTLEGROUND_SECTOR } from "@/drizzle/constants";
@@ -18,7 +25,7 @@ import {
 import type { GlobalMapData } from "@/libs/sector-map/world-types";
 import { calcGlobalTravelTime } from "@/libs/travel";
 import { getReadableVillageHexColor } from "@/utils/color";
-import { useUserData } from "@/utils/UserContext";
+import { selectUserWithoutPosition, useUserDataSelector } from "@/utils/UserContext";
 import type { GlobeJourney } from "@/validators/travel";
 
 interface MapProps {
@@ -46,7 +53,7 @@ interface MapProps {
 }
 
 const GlobalMap: React.FC<MapProps> = (props) => {
-  const { data: userData, timeDiff } = useUserData();
+  const { data: userData, timeDiff } = useUserDataSelector(selectUserWithoutPosition);
   const { currentStep } = useTutorialStep();
   // Hover lives outside React state here so only the hover cards re-render per sector.
   const [hover] = useState(createHoverStore);
@@ -133,7 +140,10 @@ const GlobalMap: React.FC<MapProps> = (props) => {
     ],
   );
   const current = useRef({ state, props });
-  current.current = { state, props };
+  // Layout effects run before the scene's factory effect, so it reads this render's values.
+  useLayoutEffect(() => {
+    current.current = { state, props };
+  });
   const { scene, error } = useGameScene(
     "globe",
     mountRef,

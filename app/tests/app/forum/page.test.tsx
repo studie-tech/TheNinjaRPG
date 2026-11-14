@@ -17,6 +17,7 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as Link from "@/layout/Link";
 import * as UserContext from "@/utils/UserContext";
 import { TrpcTestProviders, testApi } from "../../setup/trpc";
+import { mockUserContextValue } from "../../setup/userContext";
 
 let params: URLSearchParams;
 let originalUrl: string;
@@ -42,7 +43,7 @@ beforeEach(() => {
     forum: testApi.forum,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "reader", role: "USER" },
   } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (

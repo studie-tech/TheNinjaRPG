@@ -8,7 +8,13 @@ import {
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useState } from "react";
+import {
+  Popover,
+  PopoverClose,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useLocalStorage } from "@/hooks/localstorage";
 import Link from "@/layout/Link";
 import type { GameLayoutId } from "@/libs/gameLayouts";
@@ -37,11 +43,14 @@ const NOTIFICATION_ICONS: Partial<
 interface NotificationListProps {
   notifications?: NavBarDropdownLink[];
   layout: "desktop" | "mobile";
+  /** Called when a row is opened, so an enclosing popover can close over the new page. */
+  onNavigate?: () => void;
 }
 
 const NotificationList: React.FC<NotificationListProps> = ({
   notifications,
   layout,
+  onNavigate,
 }) => {
   if (!notifications || notifications.length === 0) return null;
 
@@ -59,6 +68,7 @@ const NotificationList: React.FC<NotificationListProps> = ({
       href={notification.href}
       id={notification.id}
       className={layout === "mobile" ? "block w-full" : undefined}
+      onClick={onNavigate}
     >
       <div
         className={cn(
@@ -93,9 +103,10 @@ const NotificationList: React.FC<NotificationListProps> = ({
       return (
         <Popover key={`group-${group}`}>
           <PopoverTrigger asChild>
-            <div
+            <button
+              type="button"
               className={cn(
-                "flex cursor-pointer flex-row items-center rounded-lg border-2 border-slate-800 text-xs hover:opacity-70 lg:text-base",
+                "flex cursor-pointer flex-row items-center rounded-lg border-2 border-slate-800 text-left text-xs hover:opacity-70 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring lg:text-base",
                 layout === "mobile"
                   ? "w-full shrink-0 whitespace-normal px-3 py-2"
                   : "py-[1px] pl-3",
@@ -107,15 +118,17 @@ const NotificationList: React.FC<NotificationListProps> = ({
                 className="mr-1 h-5 w-5"
               />
               {group} ({count})
-            </div>
+            </button>
           </PopoverTrigger>
           <PopoverContent className="w-96 p-0">
             <div className="p-4">
               <h4 className="mb-3 font-semibold text-sm">{group}</h4>
               <div className="flex flex-col gap-1">
-                {groupNotifications.map((notification, i) =>
-                  renderNotification(notification, `${group}-${i}`, true),
-                )}
+                {groupNotifications.map((notification, i) => (
+                  <PopoverClose key={`${group}-${i}`} asChild>
+                    {renderNotification(notification, `${group}-${i}`, true)}
+                  </PopoverClose>
+                ))}
               </div>
             </div>
           </PopoverContent>
@@ -206,12 +219,13 @@ export const MobileNotificationsPopover: React.FC<MobileNotificationsPopoverProp
   notifications,
   variant,
 }) => {
+  const [isOpen, setIsOpen] = useState(false);
   const count = notifications?.length ?? 0;
   const isPixel = variant === "pixel";
   const hasNotifications = count > 0;
 
   return (
-    <Popover>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -265,7 +279,11 @@ export const MobileNotificationsPopover: React.FC<MobileNotificationsPopoverProp
         </div>
         {hasNotifications ? (
           <div className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto pr-1">
-            <NotificationList notifications={notifications} layout="mobile" />
+            <NotificationList
+              notifications={notifications}
+              layout="mobile"
+              onNavigate={() => setIsOpen(false)}
+            />
           </div>
         ) : (
           <p className={cn("py-2 text-sm", isPixel && "text-slate-300")}>

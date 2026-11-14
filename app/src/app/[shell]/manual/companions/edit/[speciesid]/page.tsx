@@ -3,10 +3,11 @@
 import { use } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { canChangeContent } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import { SpeciesEditor } from "../../SpeciesEditor";
 
 /** Edit stable species records; retirement preserves companions already adopted. */
@@ -14,7 +15,7 @@ export default function PetSpeciesEdit(props: {
   params: Promise<{ speciesid: string }>;
 }) {
   const { speciesid } = use(props.params);
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({ role: u.role }));
   const canEdit = !!userData && canChangeContent(userData.role);
   const {
     data: species,
@@ -22,9 +23,10 @@ export default function PetSpeciesEdit(props: {
     error,
     refetch,
   } = api.petSpecies.get.useQuery({ id: speciesid }, { enabled: canEdit });
+  const heading = useEditorTitle("companion species", species?.name);
   return (
     <ContentBox
-      title="Content Panel"
+      title={heading}
       subtitle="Companion Species Management"
       defaultBackHref="/manual/companions"
       noRightAlign

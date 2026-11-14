@@ -8,6 +8,7 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
+import { UserInfoCell } from "@/layout/UserInfoCell";
 import { useInfinitePagination } from "@/libs/pagination";
 import { useUserSearch } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
@@ -40,7 +41,10 @@ export default function VillageUsers(props: {
       staleTime: 1000 * 60 * 5, // every 5min
     },
   );
-  const allUsers = users?.pages.flatMap((page) => page.data);
+  const allUsers = users?.pages
+    .flatMap((page) => page.data)
+    .map((user) => ({ ...user, info: <UserInfoCell user={user} /> }));
+  const villageName = allUsers?.find((user) => user.village?.name)?.village?.name;
   type User = ArrayElement<typeof allUsers>;
 
   useInfinitePagination({
@@ -51,11 +55,9 @@ export default function VillageUsers(props: {
 
   const columns: ColumnDefinitionType<User, keyof User>[] = [
     { key: "avatar", header: "", type: "avatar" },
-    { key: "username", header: "Username", type: "string" },
-    { key: "rank", header: "Rank", type: "capitalized" },
+    { key: "info", header: "Info", type: "jsx" },
   ];
   if (activeTab === "Strongest") {
-    columns.push({ key: "level", header: "Lvl.", type: "string" });
     columns.push({ key: "experience", header: "Experience", type: "string" });
   } else if (activeTab === "Online") {
     columns.push({ key: "updatedAt", header: "Last Active", type: "time_passed" });
@@ -65,7 +67,7 @@ export default function VillageUsers(props: {
 
   return (
     <ContentBox
-      title="Village Users"
+      title={villageName ? `${villageName} members` : "Village members"}
       subtitle={`${activeTab} users`}
       defaultBackHref="/village"
       padding={false}

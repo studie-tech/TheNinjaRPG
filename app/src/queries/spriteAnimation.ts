@@ -17,6 +17,24 @@ export const fetchAnimationAi = (client: DrizzleClient, id: string) =>
       items: { with: { item: true } },
     },
   });
+/** Every AI with only the fields that determine its actions and their sheet bindings. */
+export const listAiAnimationCoverage = (client: DrizzleClient) =>
+  client.query.userData.findMany({
+    where: eq(userData.isAi, true),
+    columns: { userId: true, username: true, level: true, rank: true },
+    with: {
+      spriteAnimationBindings: { columns: { actionKey: true } },
+      jutsus: {
+        columns: { jutsuId: true },
+        with: { jutsu: { columns: { name: true } } },
+      },
+      items: {
+        columns: { itemId: true },
+        with: { item: { columns: { name: true, itemType: true } } },
+      },
+    },
+    orderBy: asc(userData.username),
+  });
 /** One AI's own sheets are named after it or already bound to it. */
 const spriteSheetFilter = (client: DrizzleClient, input: SpriteSheetSearch) =>
   and(

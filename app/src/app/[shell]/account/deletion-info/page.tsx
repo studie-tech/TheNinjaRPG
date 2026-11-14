@@ -1,4 +1,6 @@
+import { CHARACTER_DELETION_DELAY_DAYS } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
+import Link from "@/layout/Link";
 import { buildMetadata } from "@/libs/seo";
 
 export const metadata = buildMetadata({
@@ -40,6 +42,29 @@ export default function AccountDeletionInformation() {
           <p>
             Deletion is permanent and applies to the same account on all devices,
             including the website. Removing the app alone does not delete your account.
+          </p>
+        </section>
+        <section className="space-y-2">
+          <h2 className="font-bold text-lg">Delete your character on the website</h2>
+          <ol className="list-decimal space-y-2 pl-5">
+            <li>
+              Sign in on the website and open{" "}
+              <Link href="/profile/edit" className="underline underline-offset-4">
+                Settings
+              </Link>
+              .
+            </li>
+            <li>Choose Delete character, then Start deletion timer.</li>
+            <li>
+              After the {CHARACTER_DELETION_DELAY_DAYS}-day waiting period, return to
+              the same page and confirm deletion. The timer never deletes anything on
+              its own, and you can keep playing or cancel the request until you confirm.
+            </li>
+          </ol>
+          <p>
+            This removes your character and its game progress. Your sign-in account
+            remains, so you can create a new character with it later. To delete the
+            sign-in account itself, use the app or email us as described above.
           </p>
         </section>
         <section className="space-y-2">

@@ -28,14 +28,14 @@ import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { useUserPicker } from "@/utils/search";
 import { secondsFromDate } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 
 /** Serving council, public removal motions and vacancy-specific successor appointments. */
 export const ElderHall: React.FC<{
   user: NonNullable<UserWithRelations>;
   navTabs: React.ReactNode;
 }> = ({ user, navTabs }) => {
-  const { timeDiff, updateUser, prepareUserUpdate } = useRequiredUserData();
+  const { timeDiff, updateUser, prepareUserUpdate } = useRequiredUserInfo();
   const syncedTime = Date.now() - timeDiff;
   const [removalReason, setRemovalReason] = useState("");
   const { methods: nomineeForm, user: nominee } = useUserPicker();

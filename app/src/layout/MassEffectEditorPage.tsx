@@ -5,7 +5,7 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { EffectFieldSelector, MassEffectEditor } from "@/layout/MassEffectEditor";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export const MassEffectEditorPage = ({
   subtitle,
@@ -15,7 +15,7 @@ export const MassEffectEditorPage = ({
   renderFilter,
   ...editorProps
 }: MassEffectEditorPageProps) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const [fields, setFields] = useState<string[]>([]);
   const [isSavingEffects, setIsSavingEffects] = useState(false);
   const canEdit = Boolean(userData && canChangeContent(userData.role));

@@ -4,7 +4,7 @@ import * as client from "@/app/_trpc/client";
 import * as Modal from "@/layout/Modal";
 import { NameChange } from "@/layout/profileEdit/NameChange";
 import * as toast from "@/libs/toast";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 let resolveUpdate: (value: { success: boolean; message: string }) => void;
 const updateUsername = vi.fn(
@@ -22,7 +22,7 @@ beforeEach(() => {
       updateUsername: { useMutation: () => ({ mutateAsync: updateUsername }) },
     },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         data: { reputationPoints: 1000 },

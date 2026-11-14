@@ -11,6 +11,7 @@ import { showUserRank } from "@/libs/profile";
 
 interface PublicUserSkeletonProps {
   title: string;
+  subtitle?: string;
   defaultBackHref?: string;
   initialBreak?: boolean;
   /** Mirrors the stable signed-in state used by the loaded render. */
@@ -28,12 +29,13 @@ interface PublicUserSkeletonProps {
  * Cumulative Layout Shift threshold in Search Console.
  *
  * The structure below deliberately mirrors the loaded render rather than approximating
- * it: the same guest-only intro box, the same two-column grid, and an avatar reserved at
+ * it: the same guest-only intro, the same two-column grid, and an avatar reserved at
  * the same `w-full` the loaded one is given. A placeholder that reserves the wrong shape
  * still shifts the page, just by less.
  */
 export const PublicUserSkeleton: React.FC<PublicUserSkeletonProps> = ({
   title,
+  subtitle,
   defaultBackHref,
   initialBreak,
   isGuest,
@@ -44,34 +46,29 @@ export const PublicUserSkeleton: React.FC<PublicUserSkeletonProps> = ({
     : null;
   return (
     <>
-      {isGuest && (
-        <ContentBox
-          title="Public Profile"
-          subtitle={seedName ? `Profile: ${seedName}` : "Loading profile"}
-          defaultBackHref={defaultBackHref}
-          initialBreak={initialBreak}
-        >
-          {/* With a seed this is the same copy the loaded render shows, so the panel needs
-            no placeholder at all and never resizes. Without one, the intro is a single
-            short paragraph whose height only varies with the username, so three rows
-            reserve it to within a line at desktop width. */}
-          {seed ? (
-            publicUserIntro(seed.username)
-          ) : (
-            <div className="flex flex-col gap-2">
-              {Array.from({ length: 3 }, (_, i) => (
-                <Skeleton key={i} className={i === 2 ? "h-4 w-2/3" : "h-4 w-full"} />
-              ))}
-            </div>
-          )}
-        </ContentBox>
-      )}
       <ContentBox
         title={title}
-        subtitle={seedName ? `Profile: ${seedName}` : "Loading profile"}
-        defaultBackHref={isGuest ? undefined : defaultBackHref}
-        initialBreak={isGuest ? true : initialBreak}
+        subtitle={subtitle ?? (seedName ? `Profile: ${seedName}` : "Loading profile")}
+        defaultBackHref={defaultBackHref}
+        initialBreak={initialBreak}
       >
+        {/* With a seed this is the same copy the loaded render shows, so the intro needs
+          no placeholder at all and never resizes. Without one, the intro is a single
+          short paragraph whose height only varies with the username, so three rows
+          reserve it to within a line at desktop width. */}
+        {isGuest && (
+          <div className="mb-4">
+            {seed ? (
+              publicUserIntro(seed.username)
+            ) : (
+              <div className="flex flex-col gap-2">
+                {Array.from({ length: 3 }, (_, i) => (
+                  <Skeleton key={i} className={i === 2 ? "h-4 w-2/3" : "h-4 w-full"} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-2">
           <div className="flex flex-col gap-2">
             {seed && (

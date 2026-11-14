@@ -390,7 +390,7 @@ export function ItemsWorkspace({
           forceMount
           tabIndex={isNarrow ? 0 : -1}
           className={cn(
-            "mt-0 min-w-0 overflow-y-auto border-t-2 border-dashed bg-poppopover p-3 @min-[600px]:max-h-[600px] @min-[600px]:border-t-0 @min-[600px]:border-l-2",
+            "mt-0 min-w-0 overflow-y-auto border-t-2 border-dashed bg-card p-3 @min-[600px]:max-h-[600px] @min-[600px]:border-t-0 @min-[600px]:border-l-2",
             phoneTab === "equipment" && "@max-[600px]:hidden",
             hasPanel && !isNarrow && "@min-[600px]:hidden",
           )}
@@ -538,7 +538,7 @@ export function ItemsWorkspace({
           <div
             ref={panelRef}
             data-items-panel
-            className="col-start-2 row-start-1 max-h-[600px] min-w-0 overflow-y-auto border-l-2 border-dashed bg-poppopover p-3"
+            className="col-start-2 row-start-1 max-h-[600px] min-w-0 overflow-y-auto border-l-2 border-dashed bg-card p-3"
           >
             {panel}
           </div>

@@ -1064,3 +1064,10 @@
     padding: 30px 5%;
   }
 }
+/* Single-column product page: keep title, price and "Add to bag" near the fold */
+@container merch (max-width:850px) {
+  .merch-detail-photo {
+    max-height: 55vh;
+    margin-inline: auto;
+  }
+}

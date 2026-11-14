@@ -38,11 +38,18 @@ const SliderField: React.FC<SliderFieldProps> = (props) => {
     }
   };
 
+  // The selection is always shown, including zero, without forced decimals.
   const selectedLabel = props.formatWatchedValue
     ? props.formatWatchedValue(props.watchedValue)
-    : props.watchedValue
-      ? `Selected: ${props.watchedValue.toFixed(2)} ${props.watchedTotal ? `/ ${props.watchedTotal.toFixed(2)}` : ""} ${props.unit ?? ""}`
-      : "";
+    : [
+        `Selected: ${formatSliderNumber(props.watchedValue)}`,
+        props.watchedTotal !== undefined
+          ? `/ ${formatSliderNumber(props.watchedTotal)}`
+          : "",
+        props.unit ?? "",
+      ]
+        .filter(Boolean)
+        .join(" ");
 
   return (
     <div className="m-1">
@@ -116,6 +123,8 @@ export const UncontrolledSliderField: React.FC<UncontrolledSliderFieldProps> = (
 };
 
 const STEPPER_ICON_CLASS = "inline-block h-10 w-10 fill-orange-100 text-orange-800";
+const STEPPER_BUTTON_CLASS =
+  "inline-flex shrink-0 rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed";
 
 /** The range input between its minus and plus buttons. */
 const SliderStepper: React.FC<{
@@ -129,21 +138,35 @@ const SliderStepper: React.FC<{
     : "hover:cursor-pointer hover:fill-orange-600";
   return (
     <div className={`flex flex-row items-center ${disabled ? "opacity-50" : ""}`}>
-      <MinusCircle
-        aria-disabled={disabled}
-        className={`mr-2 ${STEPPER_ICON_CLASS} ${iconState}`}
+      <button
+        type="button"
+        aria-label="Decrease"
+        aria-controls={inputProps.id}
+        disabled={disabled}
+        className={`mr-2 ${STEPPER_BUTTON_CLASS}`}
         onClick={onDecrement}
-      />
+      >
+        <MinusCircle className={`${STEPPER_ICON_CLASS} ${iconState}`} />
+      </button>
       <input
         type="range"
         {...inputProps}
         className="h-5 w-full cursor-pointer appearance-none rounded-lg bg-orange-200 accent-orange-800 disabled:cursor-not-allowed"
       />
-      <PlusCircle
-        aria-disabled={disabled}
-        className={`ml-2 ${STEPPER_ICON_CLASS} ${iconState}`}
+      <button
+        type="button"
+        aria-label="Increase"
+        aria-controls={inputProps.id}
+        disabled={disabled}
+        className={`ml-2 ${STEPPER_BUTTON_CLASS}`}
         onClick={onIncrement}
-      />
+      >
+        <PlusCircle className={`${STEPPER_ICON_CLASS} ${iconState}`} />
+      </button>
     </div>
   );
 };
+
+/** Thousands separators and at most two decimals, so whole values print as "500". */
+export const formatSliderNumber = (value: number) =>
+  value.toLocaleString(undefined, { maximumFractionDigits: 2 });

@@ -22,7 +22,7 @@ import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
-import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
+import { useRequiredUserInfo, useUserInfo } from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
 type ShrineBattleData = RouterOutputs["shrine"]["getShrineBattles"][number];
@@ -43,7 +43,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
   isProtected = false,
 }) => {
   const utils = api.useUtils();
-  const { updateUser, prepareUserUpdate } = useRequiredUserData();
+  const { updateUser, prepareUserUpdate } = useRequiredUserInfo();
   const router = useRouter();
 
   // Query for shrine battles
@@ -96,10 +96,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
 
   // Determine if user can create a challenge
   const canCreateChallenge =
-    defenderVillageId &&
-    sideVillageId !== defenderVillageId &&
-    !isChallenging &&
-    !isProtected;
+    defenderVillageId && sideVillageId !== defenderVillageId && !isProtected;
 
   // Check if user is already in any battle
   const userInBattle = shrineBattles?.some((battle) =>
@@ -119,9 +116,14 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
             size="lg"
             className="w-full max-w-md"
             onClick={() => challengeShrine({ sectorNumber })}
+            disabled={isChallenging}
           >
-            <Swords className="mr-2 h-5 w-5" />
-            Create Shrine Attack Party
+            {isChallenging ? (
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <Swords className="mr-2 h-5 w-5" />
+            )}
+            {isChallenging ? "Creating Attack Party..." : "Create Shrine Attack Party"}
           </Button>
         </div>
       )}
@@ -203,6 +205,7 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
           label="Attackers"
           entries={attackers}
           canJoin={canJoinAsAttacker}
+          isJoining={isJoining}
           onJoin={() => onJoin("ATTACKER")}
         />
 
@@ -217,6 +220,7 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
           label="Defenders"
           entries={defenders}
           canJoin={canJoinAsDefender}
+          isJoining={isJoining}
           onJoin={() => onJoin("DEFENDER")}
         >
           {defenders.length === 0 && (
@@ -250,7 +254,7 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
                 disabled={isLeaving}
               >
                 <DoorOpen className="mr-1 h-4 w-4" />
-                Leave
+                {isLeaving ? "Leaving..." : "Leave"}
               </Button>
 
               <Button
@@ -260,11 +264,11 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
                 className={cn(!canInitiate && "opacity-50")}
               >
                 {isInitiating ? (
-                  <Loader2 className="h-8 w-8 animate-spin" />
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                 ) : (
                   <CirclePlay className="mr-1 h-4 w-4" />
                 )}
-                Start Battle
+                {isInitiating ? "Starting..." : "Start Battle"}
               </Button>
             </>
           )}
@@ -278,7 +282,7 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
                   disabled={isJoining}
                 >
                   <Users className="mr-1 h-4 w-4" />
-                  Join Attack
+                  {isJoining ? "Joining..." : "Join Attack"}
                 </Button>
               )}
               {canJoinAsDefender && (
@@ -289,7 +293,7 @@ const ShrineBattleCard: React.FC<ShrineBattleCardProps> = ({
                   disabled={isJoining}
                 >
                   <Shield className="mr-1 h-4 w-4" />
-                  Defend
+                  {isJoining ? "Joining..." : "Defend"}
                 </Button>
               )}
             </div>
@@ -315,6 +319,7 @@ const QueueSide: React.FC<QueueSideProps> = ({
   label,
   entries,
   canJoin,
+  isJoining,
   onJoin,
   children,
 }) => (
@@ -331,7 +336,7 @@ const QueueSide: React.FC<QueueSideProps> = ({
         { length: SHRINE_BATTLE_MAX_USERS_PER_SIDE - entries.length },
         (_, idx) => `${side}-empty-${idx}`,
       ).map((key) => (
-        <EmptySlot key={key} canJoin={canJoin} onJoin={onJoin} />
+        <EmptySlot key={key} canJoin={canJoin && !isJoining} onJoin={onJoin} />
       ))}
     </div>
     {children}
@@ -403,6 +408,7 @@ interface QueueSideProps {
   label: string;
   entries: ShrineBattleData["queue"];
   canJoin: boolean;
+  isJoining: boolean;
   onJoin: () => void;
   children?: React.ReactNode;
 }

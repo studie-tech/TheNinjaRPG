@@ -702,7 +702,6 @@ const Conversation: React.FC<ConversationProps> = (props) => {
           initialBreak={props.initialBreak}
           topRightContent={
             <div className="flex items-center gap-1">
-              {searchButtonElement}
               {conversation && (
                 <Button
                   type="button"
@@ -715,6 +714,7 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                   <RefreshCw className="h-4 w-4" />
                 </Button>
               )}
+              {searchButtonElement}
               {props.topRightContent}
             </div>
           }
@@ -784,8 +784,13 @@ const Conversation: React.FC<ConversationProps> = (props) => {
                     control={control}
                     error={errors.comment?.message}
                     onSubmit={handleSubmitComment}
+                    // Support replies tend to run over several paragraphs.
+                    submitOnEnter={
+                      props.supportTicketCreatedByUserId ? "never" : "desktop"
+                    }
                     enableMentions={true}
                     allowClipboardPaste={true}
+                    chatPaste={true}
                   />
                 )}
                 <div className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 transform flex-row-reverse">

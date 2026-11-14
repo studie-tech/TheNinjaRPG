@@ -7,8 +7,8 @@ import * as client from "@/app/_trpc/client";
 import { ClanOrders } from "@/layout/clan/ClanOrders";
 import * as groupOrders from "@/layout/GroupOrders";
 import * as toast from "@/libs/toast";
-import * as UserContext from "@/utils/UserContext";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
+import { mockUserContextValue } from "../setup/userContext";
 
 let queryClient: QueryClient;
 let fallback: ReturnType<typeof vi.fn>;
@@ -25,7 +25,7 @@ beforeEach(() => {
     clan: testApi.clan,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () => ({ data: { userId: "leader", isOutlaw: false } }) as never,
   );
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);

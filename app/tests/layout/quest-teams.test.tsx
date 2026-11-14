@@ -7,8 +7,8 @@ import { QuestTeams } from "@/layout/QuestTeams";
 import * as TeamChatPanel from "@/layout/TeamChatPanel";
 import { AUTO_WAKE_MESSAGE, actionStatusMessage } from "@/libs/actionReadiness";
 import * as toast from "@/libs/toast";
-import * as UserContext from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Options = {
   onMutate: () => number | undefined;
@@ -96,7 +96,7 @@ beforeEach(() => {
     autoWakeUp: true,
     ...encounterLocation,
   };
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: actor,
     prepareUserUpdate: () => 7,
     updateUser,

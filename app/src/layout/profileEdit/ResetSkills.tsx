@@ -11,14 +11,21 @@ import { freeResetNote } from "@/libs/skillReset";
 import { showMutationToast } from "@/libs/toast";
 import { isStaffMember } from "@/utils/permissions";
 import { getFirstOfNextMonth } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Reset skills component
  */
 export const ResetSkills: React.FC = () => {
   // State
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
+    reputationPoints: u.reputationPoints,
+    staffAccount: u.staffAccount,
+  }));
   const utils = api.useUtils();
 
   // Get reset info

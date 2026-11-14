@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import AvatarImage from "@/layout/Avatar";
+import { cn } from "@/libs/shadui";
 import { getUnique } from "@/utils/grouping";
 import type { UserSearchResult } from "@/validators/register";
 
@@ -46,13 +47,14 @@ const UserSearchSelect: React.FC<UserSearchSelectProps> = (props) => {
   });
   const searchTerm = useDebouncedValue(watchUsername);
 
-  const { data: searchResults } = api.profile.searchUsers.useQuery(
+  // Previous matches stay visible, dimmed, while the next search loads.
+  const { data: searchResults, isPlaceholderData } = api.profile.searchUsers.useQuery(
     {
       username: searchTerm,
       showYourself: props.showYourself,
       showAi: props.showAi ?? true,
     },
-    { enabled: searchTerm !== "" },
+    { enabled: searchTerm !== "", placeholderData: (previous) => previous },
   );
 
   const filteredUsers = watchUsers.filter((u) => u?.userId);
@@ -60,14 +62,14 @@ const UserSearchSelect: React.FC<UserSearchSelectProps> = (props) => {
   const selectedVisual = filteredUsers.map((user) => (
     <span
       key={user.userId}
-      className="inline-flex items-center rounded-lg border border-amber-900 bg-gray-100 px-2 font-medium text-gray-800 text-sm"
+      className="inline-flex items-center rounded-lg border border-amber-900 bg-muted px-2 font-medium text-foreground text-sm"
     >
       <div className="m-1 w-8">
         <AvatarImage href={user.avatar} alt={user.username} size={100} />
       </div>
       <p className="whitespace-nowrap">{user.username}</p>
       <X
-        className="ml-2 h-6 w-6 rounded-full hover:bg-gray-300"
+        className="ml-2 h-6 w-6 rounded-full hover:bg-accent"
         onClick={(e) => {
           e.preventDefault();
           form.setValue(
@@ -108,11 +110,17 @@ const UserSearchSelect: React.FC<UserSearchSelectProps> = (props) => {
         </div>
       )}
       {searchResults && watchUsername && (
-        <div className="mt-1 w-full rounded-lg border-2 border-slate-500 bg-slate-100">
+        <div
+          aria-busy={isPlaceholderData}
+          className={cn(
+            "mt-1 w-full rounded-lg border-2 border-border bg-popover text-popover-foreground transition-opacity",
+            isPlaceholderData && "opacity-60",
+          )}
+        >
           {searchResults?.map((user) => (
             <button
               type="button"
-              className="flex w-full flex-row items-center p-2.5 text-left hover:bg-slate-200"
+              className="flex w-full flex-row items-center p-2.5 text-left hover:bg-accent hover:text-accent-foreground"
               key={user.userId}
               onClick={(e) => {
                 e.preventDefault();
@@ -127,7 +135,7 @@ const UserSearchSelect: React.FC<UserSearchSelectProps> = (props) => {
               <div className="basis-1/12">
                 <AvatarImage href={user.avatar} alt={user.username} size={100} />
               </div>
-              <div className="ml-2 text-black">
+              <div className="ml-2">
                 <p>{user.username}</p>
                 <p>
                   Lvl. {user.level} {user.rank}
@@ -135,7 +143,9 @@ const UserSearchSelect: React.FC<UserSearchSelectProps> = (props) => {
               </div>
             </button>
           ))}
-          {searchResults.length === 0 && <div className="p-2.5">No users found</div>}
+          {searchResults.length === 0 && (
+            <div className="p-2.5 text-muted-foreground">No users found</div>
+          )}
         </div>
       )}
     </div>

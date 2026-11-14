@@ -108,18 +108,29 @@ export const CharacterPreview = ({
   }, [signature, animation, catalog, loadLpcCatalog]);
   return (
     <figure className={cn("mx-auto w-64 max-w-full text-center", className)}>
-      <div className="relative">
-        <div
-          ref={mount}
-          className="aspect-square w-full overflow-hidden rounded-lg bg-black/10"
-          role="img"
-          aria-label={`Animated appearance: ${label}`}
-        />
+      <div
+        ref={mount}
+        className="aspect-square w-full overflow-hidden rounded-lg bg-black/10"
+        role="img"
+        aria-label={`Animated appearance: ${label}`}
+      />
+      {/* The rotate control sits below the figure so it never covers the character. */}
+      <div className="mt-1 flex items-start justify-center gap-2">
+        <figcaption
+          className="text-muted-foreground min-h-6 min-w-0 text-sm"
+          role="status"
+        >
+          {error
+            ? "Character preview unavailable. You can continue editing."
+            : ready
+              ? label
+              : "Loading character preview…"}
+        </figcaption>
         <Button
           type="button"
           variant="outline"
           size="icon"
-          className="absolute top-1 right-1 h-8 w-8"
+          className="h-8 w-8 shrink-0"
           aria-label="Rotate character preview"
           hoverText="Rotate preview"
           disabled={!ready || error}
@@ -130,13 +141,6 @@ export const CharacterPreview = ({
           <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
       </div>
-      <figcaption className="text-muted-foreground min-h-6 text-sm" role="status">
-        {error
-          ? "Character preview unavailable. You can continue editing."
-          : ready
-            ? label
-            : "Loading character preview…"}
-      </figcaption>
     </figure>
   );
 };

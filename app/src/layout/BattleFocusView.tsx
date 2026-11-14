@@ -21,7 +21,7 @@ import StatusBar from "@/layout/StatusBar";
 import { VisualizeEffects } from "@/layout/VisualizeEffects";
 import type { BattleState, ReturnedUserState } from "@/libs/combat/types";
 import { cn } from "@/libs/shadui";
-import { combatPresentedBattleAtom, useUserData } from "@/utils/UserContext";
+import { combatPresentedBattleAtom, useUserInfo } from "@/utils/UserContext";
 
 /**
  * Inset battle dialog with fighters, actions and history above the game layout.
@@ -44,10 +44,8 @@ export function BattleFocusView({
   onShowLayout,
 }: BattleFocusViewProps) {
   const presentedBattle = useAtomValue(combatPresentedBattleAtom);
-  const battle =
-    presentedBattle?.id === liveBattle?.id
-      ? (presentedBattle ?? liveBattle)
-      : liveBattle;
+  const isPresentingLive = presentedBattle?.id === liveBattle?.id;
+  const battle = isPresentingLive ? (presentedBattle ?? liveBattle) : liveBattle;
   const { selectedUser } = useCombatInspection(battle, controlledActorId);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const [viewElement, setViewElement] = useState<HTMLDivElement | null>(null);
@@ -329,7 +327,7 @@ export function BattleFocusView({
         data-battle-focus-dialog
         showCloseButton={false}
         aria-describedby={undefined}
-        className="flex h-[99%] min-w-[99%] flex-col gap-0 overflow-hidden rounded-lg p-0"
+        className="flex h-[99%] max-h-none min-w-[99%] flex-col gap-0 overflow-hidden rounded-lg p-0"
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
         onInteractOutside={(event) => {
@@ -365,7 +363,7 @@ function FighterCard({
   compact?: boolean;
   extra?: number;
 }) {
-  const { timeDiff } = useUserData();
+  const { timeDiff } = useUserInfo();
   const pools = useEffectivePools({
     battleUser: user,
     usersEffects: battle?.usersEffects,

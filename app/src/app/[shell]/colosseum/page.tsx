@@ -10,35 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { type BattleType, BattleTypes } from "@/drizzle/constants";
+import { type BattleType, BattleTypeLabels, BattleTypes } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import type { ArrayElement } from "@/utils/typeutils";
-
-const battleTypeLabels: Record<BattleType, string> = {
-  ARENA: "Arena",
-  HUNTING: "Hunting",
-  COMBAT: "Open World PvP",
-  SPARRING: "Sparring",
-  KAGE_AI: "Kage AI",
-  KAGE_PVP: "Kage PvP",
-  CLAN_CHALLENGE: "Clan Challenge",
-  CLAN_BATTLE: "Clan Battle",
-  TERRITORY_WAR: "Territory War",
-  SHRINE_WAR: "Shrine War",
-  TOURNAMENT: "Tournament",
-  QUEST: "Quest",
-  VILLAGE_PROTECTOR: "Village Protector",
-  TRAINING: "Training",
-  RANKED_PVP: "Ranked PvP",
-  RANKED_SPARRING: "Ranked Sparring",
-  RANDOM_ENCOUNTER: "Random Encounter",
-  RAID: "Raid",
-  OVERWORLD: "Overworld",
-};
 
 export default function ColosseumPage() {
   const router = useRouter();
@@ -53,7 +31,7 @@ export default function ColosseumPage() {
       const users = battle.users;
       return {
         id: battle.id,
-        battleType: battleTypeLabels[battle.battleType],
+        battleType: BattleTypeLabels[battle.battleType],
         createdAt: battle.createdAt,
         players: (
           <div className="flex flex-row items-center gap-2">
@@ -101,6 +79,7 @@ export default function ColosseumPage() {
   return (
     <ContentBox
       title="Colosseum"
+      defaultBackHref="/village"
       subtitle="Live Spectate Ongoing Battles"
       padding={false}
       topRightContent={
@@ -109,7 +88,7 @@ export default function ColosseumPage() {
           onValueChange={(v) => setSelectedType(v as BattleType)}
         >
           <SelectTrigger className="w-40">
-            <SelectValue>{battleTypeLabels[selectedType]}</SelectValue>
+            <SelectValue>{BattleTypeLabels[selectedType]}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             {BattleTypes.filter((type) =>
@@ -124,7 +103,7 @@ export default function ColosseumPage() {
               ].includes(type),
             ).map((type, i) => (
               <SelectItem key={`${type}-${i}`} value={type}>
-                {battleTypeLabels[type]}
+                {BattleTypeLabels[type]}
               </SelectItem>
             ))}
           </SelectContent>

@@ -5,6 +5,7 @@ import * as client from "@/app/_trpc/client";
 import Hospital, { HealOthersComponent } from "@/app/[shell]/hospital/page";
 import type { UserWithRelations } from "@/routers/profile";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const healer = {
   userId: "healer",
@@ -36,7 +37,7 @@ const renderPatient = (curHealth: number) => {
     },
     useUtils: () => ({}),
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     prepareUserUpdate: vi.fn(),
     updateUser: vi.fn(),
   } as never);

@@ -24,6 +24,7 @@ import {
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../../setup/trpc";
+import { mockUserContextValue } from "../../setup/userContext";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);
@@ -100,12 +101,7 @@ beforeEach(() => {
     useUtils: testApi.useUtils,
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
-  vi.spyOn(UserContext, "useUserData").mockImplementation(
-    () => ({ data: { role } }) as never,
-  );
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
-    () => ({ data: { role } }) as never,
-  );
+  mockUserContextValue(() => ({ data: { role } }) as never);
   vi.spyOn(ContentBox, "default").mockImplementation(
     ({ title, children, topRightContent }) => (
       <section aria-label={title}>

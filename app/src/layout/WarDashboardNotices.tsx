@@ -14,12 +14,12 @@ import { FeedbackAlert, type MutationFeedback } from "@/layout/FeedbackAlert";
 import Link from "@/layout/Link";
 import { MercenaryOffers } from "@/layout/WarMercenaries";
 import { addDays } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 
 /** Surface open camps and expiring claims in the dashboard's standard themed container. */
 export const WarDashboardNotices = () => {
   const [feedback, setFeedback] = useState<MutationFeedback | null>(null);
-  const { timeDiff } = useRequiredUserData();
+  const { timeDiff } = useRequiredUserInfo();
   const utils = api.useUtils();
   const claims = api.war.getWarPointClaims.useQuery(undefined, {
     refetchInterval: 60000,

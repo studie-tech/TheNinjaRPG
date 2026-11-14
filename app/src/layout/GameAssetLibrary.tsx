@@ -45,7 +45,7 @@ import { assetSortOptions, assetTypeLabels } from "@/libs/assetLibrary";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent, canSuggestContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import { gameAssetValidator } from "@/validators/asset";
 
 /** Search and browse assets with URL-backed filters and permission-gated editing. */
@@ -54,7 +54,7 @@ export function GameAssetLibrary() {
   const router = useRouter();
   const utils = api.useUtils();
   const invalidateLpcCatalog = useLpcCatalogInvalidation();
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({ role: u.role }));
   const canEdit = !!user && canChangeContent(user.role);
   const canSuggest = canSuggestContent(user?.role);
   const [search, setSearch] = useState(params.get("q") ?? "");

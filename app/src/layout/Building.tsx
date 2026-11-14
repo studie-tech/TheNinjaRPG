@@ -3,6 +3,7 @@
 import { CircleArrowUp, Info, LockKeyhole, RefreshCw } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Tooltip,
   TooltipContent,
@@ -23,7 +24,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { isFactionVillage } from "@/libs/war";
 import { canAdministrateWars } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import {
   calcBankInterest,
   calcStructureUpgrade,
@@ -37,7 +38,12 @@ const Building: React.FC<BuildingProps> = (props) => {
   const { structure, village, showBar, showUpgrade } = props;
 
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    clanId: u.clanId,
+    role: u.role,
+    kageId: u.village?.kageId,
+  }));
 
   // Calculate effective level (includes war victory bonus)
   const effectiveLevel = getEffectiveStructureLevel(structure);
@@ -46,9 +52,6 @@ const Building: React.FC<BuildingProps> = (props) => {
   // Blocks
   const TextBlock = (
     <div className="min-w-0 space-y-1 text-xs">
-      <p className="flex min-h-8 items-center justify-center font-bold leading-tight">
-        {structure.name}
-      </p>
       {getRaidStructureMultiplier(structure) > 1 && (
         <p className="text-green-500">
           Raid bonus: +{FACTION_RAID_BOOST_PERCENT}% benefits until{" "}
@@ -61,22 +64,24 @@ const Building: React.FC<BuildingProps> = (props) => {
           {delta > 0 && <span className="text-green-500"> (+{delta})</span>}
           {delta < 0 && <span className="text-red-500"> (−{Math.abs(delta)})</span>}
         </p>{" "}
-        <TooltipProvider delayDuration={50}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 shrink-0"
-                aria-label={`${structure.name} bonuses`}
-              >
-                <Info className="size-4" aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{structureRewardEntries(structure)}</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        {userData && userData?.village?.kageId === userData?.userId && showUpgrade && (
+        {/* A popover opens on tap as well as click; this is the only place the bonuses show. */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 shrink-0"
+              aria-label={`${structure.name} bonuses`}
+            >
+              <Info className="size-4" aria-hidden="true" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto max-w-72 p-3 text-left text-sm">
+            <p className="mb-1 font-semibold">{structure.name}</p>
+            {structureRewardEntries(structure)}
+          </PopoverContent>
+        </Popover>
+        {userData && userData.kageId === userData.userId && showUpgrade && (
           <UpgradeButton
             structure={structure}
             village={village}
@@ -95,20 +100,22 @@ const Building: React.FC<BuildingProps> = (props) => {
   // Render
   return (
     <div className="relative flex min-w-0 flex-col items-center justify-center text-center">
-      {showBar && (
-        <div className="w-2/3">
+      {/* Only damaged structures show their health, in a softer colour than danger red.
+          The bar overlays the top of the art so damaged tiles keep the grid's row heights. */}
+      {showBar && structure.curSp < structure.maxSp && (
+        <div className="absolute top-0 left-1/2 z-10 w-2/3 -translate-x-1/2">
           <StatusBar
             key={structure.curSp}
             title=""
             tooltip="Health"
-            color="bg-red-500"
+            color="bg-yellow-500"
             current={structure.curSp}
             total={structure.maxSp}
           />
         </div>
       )}
       <div className="grid min-w-0 items-center">
-        <Link href={structure.route}>
+        <Link href={structure.route} className="group block">
           <Image
             className={cn(
               "aspect-square w-full object-contain object-bottom",
@@ -121,6 +128,9 @@ const Building: React.FC<BuildingProps> = (props) => {
             loading={props.eager ? "eager" : "lazy"}
             id={`tutorial${structure.route.replace("/", "-")}`}
           />
+          <p className="flex min-h-8 items-center justify-center font-bold text-xs leading-tight group-hover:underline">
+            {structure.name}
+          </p>
         </Link>
         {TextBlock}
       </div>
@@ -153,6 +163,9 @@ const RestoreStructureButton = ({
     <Confirm
       title="Restore Structure Points"
       proceed_label="Restore"
+      proceed_loading_label="Restoring"
+      isLoading={isPending}
+      disabled={isPending}
       onAccept={() => restorePoints({ structureId })}
       button={
         <Button
@@ -184,7 +197,9 @@ const UpgradeButton = ({
   clanId: string | null;
 }) => {
   const utils = api.useUtils();
-  const { data: userData } = useRequiredUserData();
+  const { data: clanPoints } = useRequiredUserDataSelector((u) => ({
+    points: u.clan?.points ?? 0,
+  }));
   // Faction villages spend their clan's points, like kage.upgradeStructure
   const usesClanPoints = isFactionVillage(village);
 
@@ -205,7 +220,7 @@ const UpgradeButton = ({
 
   const fundsLabel = usesClanPoints ? "clan points" : "village tokens";
   const currentFunds = usesClanPoints
-    ? (userData?.clan?.points ?? 0)
+    ? (clanPoints?.points ?? 0)
     : (data?.villageData.tokens ?? 0);
   const { cost, tax, discount, total } = calcStructureUpgrade(structure, {
     ...village,

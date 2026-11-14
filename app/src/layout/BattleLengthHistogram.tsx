@@ -1,5 +1,6 @@
 import type React from "react";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
+import { BattleTypeLabels } from "@/drizzle/constants";
 import BattleLengthFiltering, {
   getFilter,
   useFiltering,
@@ -30,7 +31,7 @@ export const BattleLengthHistogram: React.FC = () => {
       rows={data}
       toPoint={toPoint}
       xLabel="Rounds"
-      yLabel="Number of Battles"
+      yLabel="Share of battles of that type (%)"
       filter={<BattleLengthFiltering state={filteringState} />}
       clearTitle="Clear All Battle Length Data"
       clearText="Are you sure you want to clear all battle length data? This action cannot be undone and will reset all battle length statistics. This action will be logged for future audit and review."
@@ -41,9 +42,12 @@ export const BattleLengthHistogram: React.FC = () => {
   );
 };
 
-/** Adapt normalized round counts into the shared histogram's battle-type series. */
+/**
+ * Adapt round counts into the shared histogram's battle-type series. Each type's counts are
+ * normalized to a share of that type's battles, shown as a percentage.
+ */
 const toPoint = (row: RouterOutputs["data"]["getBattleLengthStatistics"][number]) => ({
-  group: row.battleType,
+  group: BattleTypeLabels[row.battleType],
   x: row.rounds,
-  y: row.normalized,
+  y: Math.round(row.normalized * 1000) / 10,
 });

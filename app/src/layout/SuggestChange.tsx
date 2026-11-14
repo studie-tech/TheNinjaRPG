@@ -26,7 +26,7 @@ import { CATEGORY_LABELS } from "@/libs/contentReview/labels";
 import { showMutationToast } from "@/libs/toast";
 import { formatTrpcErrorMessage } from "@/utils/error";
 import { canSuggestContent } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 interface SuggestChangeProps {
   entityType: ContentProposalEntityType;
@@ -50,7 +50,7 @@ const minLengthHint = (length: number, min: number) =>
  */
 export const SuggestChange: React.FC<SuggestChangeProps> = (props) => {
   const { entityType, entityId, getData, label = "Suggest a change" } = props;
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({ role: u.role }));
   const [category, setCategory] = useState<ContentProposalCategory>("CONSISTENCY");
   const [title, setTitle] = useState("");
   const [rationale, setRationale] = useState("");

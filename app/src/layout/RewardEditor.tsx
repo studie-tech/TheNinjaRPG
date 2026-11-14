@@ -9,6 +9,13 @@ import { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { ContentType } from "@/drizzle/constants";
 import {
   EditContent,
@@ -23,7 +30,7 @@ import { getActiveRewardNodes } from "@/libs/rewardNodes";
 import { showFormErrorsToast } from "@/libs/toast";
 import { calculateContentDiff } from "@/utils/diff";
 import { canAwardReputation, isStaffRole } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   MAX_REWARD_PACKAGES,
   QuestReward,
@@ -51,7 +58,7 @@ export const RewardEditor = ({
   isObjectiveReward?: boolean;
   hideFields?: string[];
 }) => {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({ role: u.role }));
   const {
     data: catalog,
     isError,
@@ -166,19 +173,18 @@ export const RewardEditor = ({
       {allowPackages && (
         <div className="space-y-2">
           <div className="flex flex-wrap gap-2">
-            <select
-              aria-label="Reward package"
-              className="min-w-0 flex-1 rounded border bg-background p-2"
-              value={selectedPackage}
-              onChange={(event) => setSelectedPackage(event.target.value)}
-            >
-              <option value="">Select a reward package</option>
-              {catalog?.packages.map((pack) => (
-                <option key={pack.id} value={pack.id}>
-                  {pack.name}
-                </option>
-              ))}
-            </select>
+            <Select value={selectedPackage} onValueChange={setSelectedPackage}>
+              <SelectTrigger aria-label="Reward package" className="min-w-0 flex-1">
+                <SelectValue placeholder="Select a reward package" />
+              </SelectTrigger>
+              <SelectContent>
+                {catalog?.packages.map((pack) => (
+                  <SelectItem key={pack.id} value={pack.id}>
+                    {pack.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               type="button"
               disabled={!source || packages.length >= MAX_REWARD_PACKAGES}
@@ -268,12 +274,10 @@ export const RewardEditor = ({
         </div>
       )}
       <div className="flex flex-wrap gap-2">
-        <select
-          aria-label="Add reward node"
-          className="min-w-0 flex-1 rounded border bg-background p-2"
+        <Select
           value=""
-          onChange={(event) => {
-            const node = groups.find((node) => node.id === event.target.value);
+          onValueChange={(value) => {
+            const node = groups.find((node) => node.id === value);
             if (!node) return;
             if (!activeNodes.some((active) => active.id === node.id)) {
               setOpenedNodeIds([...activeNodes.map((node) => node.id), node.id]);
@@ -282,24 +286,28 @@ export const RewardEditor = ({
             copyNode(node);
           }}
         >
-          <option value="">Add a reward node</option>
-          {groups
-            .filter(
-              (node) =>
-                (node.id !== "milestone" &&
-                  allowPackages &&
-                  packages.length < MAX_REWARD_PACKAGES) ||
-                !activeNodes.some((active) => active.id === node.id),
-            )
-            .map((node) => (
-              <option key={node.id} value={node.id}>
-                {node.name}
-                {activeNodes.some((active) => active.id === node.id)
-                  ? " (another node)"
-                  : ""}
-              </option>
-            ))}
-        </select>
+          <SelectTrigger aria-label="Add reward node" className="min-w-0 flex-1">
+            <SelectValue placeholder="Add a reward node" />
+          </SelectTrigger>
+          <SelectContent>
+            {groups
+              .filter(
+                (node) =>
+                  (node.id !== "milestone" &&
+                    allowPackages &&
+                    packages.length < MAX_REWARD_PACKAGES) ||
+                  !activeNodes.some((active) => active.id === node.id),
+              )
+              .map((node) => (
+                <SelectItem key={node.id} value={node.id}>
+                  {node.name}
+                  {activeNodes.some((active) => active.id === node.id)
+                    ? " (another node)"
+                    : ""}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
       </div>
       {activeNodes.map((node) => (
         <details key={node.id} open className="rounded border p-2">
@@ -359,7 +367,7 @@ export const RewardEditor = ({
 export const RewardFormWrapper: React.FC<RewardFormWrapperProps> = (props) => {
   const { idx, reward, rewards, setRewards, hideFields = [] } = props;
 
-  const { data: rewardUser } = useUserData();
+  const { data: rewardUser } = useUserDataSelector((u) => ({ role: u.role }));
   // Parse reward with schema
   const parsedReward = ObjectiveReward.safeParse(reward);
   const shownReward = parsedReward.success ? parsedReward.data : reward;

@@ -29,7 +29,7 @@ import {
 } from "@/libs/objectiveWar";
 import { pushToCombat } from "@/utils/routing";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Present masked objectives and war actions using the shared game surfaces and controls. */
@@ -51,7 +51,11 @@ export const ObjectiveWarPanel = ({
     updateUser,
     prepareUserUpdate,
     timeDiff,
-  } = useRequiredUserData();
+  } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    sector: u.sector,
+    villageId: u.villageId,
+  }));
   const router = useRouter();
   const utils = api.useUtils();
   const { data, error, isPending, refetch } = api.war.getObjectiveWarInfo.useQuery(

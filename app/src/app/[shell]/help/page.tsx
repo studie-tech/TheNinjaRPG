@@ -1,4 +1,5 @@
 import { SiDiscord, SiGithub } from "@icons-pack/react-simple-icons";
+import { Button } from "@/components/ui/button";
 import {
   DISCORD_INVITE_URL,
   GITHUB_ISSUES_URL,
@@ -9,23 +10,23 @@ import Link from "@/layout/Link";
 
 export default function BugReport() {
   const link_t3 = (
-    <Link className="font-bold" href="https://create.t3.gg/">
+    <Link className="link-inline" href="https://create.t3.gg/">
       T3 stack
     </Link>
   );
   const link_github = (
-    <Link className="font-bold" href={GITHUB_REPO_URL}>
+    <Link className="link-inline" href={GITHUB_REPO_URL}>
       GitHub
     </Link>
   );
   const link_issues = (
-    <Link className="font-bold" href={GITHUB_ISSUES_URL}>
+    <Link className="link-inline" href={GITHUB_ISSUES_URL}>
       GitHub Issues
     </Link>
   );
   return (
     <>
-      <ContentBox title="Report Bugs" subtitle="Found a bug? Let us know!">
+      <ContentBox title="Help & Feedback" subtitle="Found a bug? Let us know!">
         We need your help in making our gaming experience even better. Join our vibrant
         Discord community and become an integral part of our bug-reporting team. By
         sharing your valuable insights, you&lsquo;ll contribute to identifying and
@@ -33,23 +34,21 @@ export default function BugReport() {
         in fine-tuning the gameplay, improving the overall user experience, and ensuring
         a seamless adventure for everyone. Together, let&lsquo;s forge a stronger
         connection and make this game the best it can be. Join our Discord today and let
-        your voice be heard! Alternatively, report bugs directly on Github and help us
+        your voice be heard! Alternatively, report bugs directly on GitHub and help us
         improve the game.
-        <div className="flex flex-row justify-center space-x-5 p-5">
-          <Link
-            href={DISCORD_INVITE_URL}
-            className="flex flex-col items-center font-bold hover:opacity-50"
-          >
-            <SiDiscord className="text-black dark:text-white" size={100} />
-            <p>Go to Discord</p>
-          </Link>
-          <Link
-            href={GITHUB_ISSUES_URL}
-            className="flex flex-col items-center font-bold hover:opacity-50"
-          >
-            <SiGithub className="text-black dark:text-white" size={100} />
-            <p>Go to GitHub</p>
-          </Link>
+        <div className="flex flex-wrap justify-center gap-3 p-5">
+          <Button asChild>
+            <Link href={DISCORD_INVITE_URL}>
+              <SiDiscord aria-hidden="true" className="mr-2 h-4 w-4" />
+              Join Discord
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={GITHUB_ISSUES_URL}>
+              <SiGithub aria-hidden="true" className="mr-2 h-4 w-4" />
+              Open GitHub issues
+            </Link>
+          </Button>
         </div>
       </ContentBox>
       <ContentBox
@@ -70,11 +69,11 @@ export default function BugReport() {
             been extremely beneficial both personally and in my professional life. With
             this latest version of TNR, I hope that by enabling others to contribute to
             the codebase, we can inspire more people, young and old, to learn to code,
-            while also creating an inclusive, supportive and awesome developmer
+            while also creating an inclusive, supportive and awesome developer
             community&quot;. ~Terr
           </i>
         </p>
-        <h2 className="mt-3 text-2xl">How to Contribute?</h2>
+        <h2 className="mt-3 font-bold text-lg">How to Contribute?</h2>
         <p>
           The latest version of TNR is based on the {link_t3} and the source code is
           made available on {link_github}. You&rsquo;re highly encouraged to check out
@@ -85,27 +84,20 @@ export default function BugReport() {
           technologies it&rsquo;s composed of yourself, and from there open a pull
           request on GitHub.
         </p>
-        <h2 className="mt-3 text-2xl">Feature Requests</h2>
+        <h2 className="mt-3 font-bold text-lg">Feature Requests</h2>
         <p>
-          Even if you have not coding skills or desire to learn, {link_issues} is where
+          Even if you have no coding skills or desire to learn, {link_issues} is where
           you can request new game features, or help giving feedback during development
           of new features.
         </p>
-        <div className="flex flex-row justify-center p-5">
-          <Link
-            href={GITHUB_REPO_URL}
-            className="flex flex-col items-center font-bold hover:opacity-50"
-          >
-            <SiGithub className="text-black dark:text-white" size={100} />
-            <p>Go to GitHub</p>
-          </Link>
+        <div className="flex justify-center p-5">
+          <Button asChild variant="outline">
+            <Link href={GITHUB_REPO_URL}>
+              <SiGithub aria-hidden="true" className="mr-2 h-4 w-4" />
+              View the source on GitHub
+            </Link>
+          </Button>
         </div>
-        <Link
-          href="https://github.com/MathiasGruber/TNR-Core3"
-          className="font-bold text-xs italic"
-        >
-          - Link to old Core3 Code
-        </Link>
       </ContentBox>
     </>
   );

@@ -12,7 +12,7 @@ import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 import { objectiveImageMap } from "@/validators/objectives";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
@@ -24,7 +24,7 @@ export const VillageMission = ({
   navTabs: React.ReactNode;
 }) => {
   const utils = api.useUtils();
-  const { updateUser, prepareUserUpdate } = useRequiredUserData();
+  const { updateUser, prepareUserUpdate } = useRequiredUserInfo();
   const [message, setMessage] = useState("");
   const { data, isPending, isError, refetch } = api.villageMission.get.useQuery(
     { id: villageId },

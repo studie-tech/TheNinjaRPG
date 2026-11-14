@@ -21,6 +21,7 @@ import {
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
 import { TrpcTestProviders, testApi } from "../../setup/trpc";
+import { mockUserContextValue } from "../../setup/userContext";
 
 let queryClient: QueryClient;
 let hasLocations: boolean;
@@ -48,7 +49,7 @@ beforeEach(() => {
     forum: testApi.forum,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "staff", role: "CODING-ADMIN" },
   } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(({ children }) => (

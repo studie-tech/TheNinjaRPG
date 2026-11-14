@@ -16,6 +16,7 @@ import * as Loader from "@/layout/Loader";
 import * as UserContext from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { dungeonContent } from "../../setup/dungeon";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type PartyState = RouterOutputs["coop"]["dungeon"]["getState"];
 type RunStatus = PartyState["runs"][number]["status"];
@@ -124,7 +125,7 @@ const mount = (
     },
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "a", sector: 1 },
     timeDiff: 1234,
     updateUser,

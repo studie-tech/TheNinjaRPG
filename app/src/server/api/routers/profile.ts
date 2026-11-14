@@ -650,9 +650,9 @@ export const profileRouter = createTRPCRouter({
     }),
   toggleBlacklistEntry: protectedProcedure
     .meta({
-      mcp: { description: "Add or remove a player from blacklist" },
+      mcp: { description: "Add (active) or remove a player from blacklist" },
     })
-    .input(z.object({ userId: z.string() }))
+    .input(z.object({ userId: z.string(), active: z.boolean() }))
     .output(baseServerResponse)
     .mutation(async ({ ctx, input }) => {
       // Query
@@ -665,14 +665,24 @@ export const profileRouter = createTRPCRouter({
       if (ctx.userId === input.userId) return errorResponse("Not yourself");
       // Derived
       const targetName = target.username;
-      // Mutate
-      if (!entry) {
+      // The requested state is applied as given, so a repeated tap cannot undo it.
+      // Concurrent adds can duplicate this account's list entry until it is removed;
+      // deleting by both user IDs clears every duplicate.
+      if (input.active) {
+        if (entry) {
+          return {
+            success: true,
+            message: `${targetName} is already on your blacklist`,
+          };
+        }
         await insertUserBlackListForToggleBlacklistEntry(ctx.drizzle, ctx, input);
         return { success: true, message: `Added ${targetName} to blacklist` };
-      } else {
-        await deleteUserBlackListForToggleBlacklistEntry(ctx.drizzle, entry);
-        return { success: true, message: `Removed ${targetName} from blacklist` };
       }
+      if (!entry) {
+        return { success: true, message: `${targetName} is not on your blacklist` };
+      }
+      await deleteUserBlackListForToggleBlacklistEntry(ctx.drizzle, ctx, input);
+      return { success: true, message: `Removed ${targetName} from blacklist` };
     }),
   // Get AI names for content editors or arena selection
   getAllAiNames: publicProcedure

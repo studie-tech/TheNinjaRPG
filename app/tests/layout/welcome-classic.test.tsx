@@ -104,18 +104,18 @@ describe("classic welcome page", () => {
     );
   });
 
-  it("renders the snap sections and five feature sections with their screenshots", () => {
+  it("renders document-scrolled sections and five feature sections with their screenshots", () => {
     const view = render(<Welcome />);
     const scroller = view.container.firstElementChild!;
-    expect(scroller.className).toBe(
-      "flex h-screen snap-y snap-mandatory flex-col gap-4 overflow-y-scroll",
-    );
+    expect(scroller.className).toBe("flex flex-col gap-4");
+    expect(view.container.querySelector("[class*='snap-']")).toBeNull();
+    expect(view.container.textContent).toContain("players have played TheNinja-RPG!");
     const sections = [...scroller.children];
     expect(sections.map((section) => section.className)).toEqual([
-      "flex snap-start snap-always flex-col gap-4 justify-start",
-      "flex snap-start snap-always flex-col justify-center gap-4 pl-3 font-bold text-5xl text-foreground",
-      ...Array(5).fill("flex snap-start snap-always flex-col justify-center gap-4"),
-      "flex snap-start snap-always flex-col justify-center gap-4",
+      "flex flex-col gap-4 justify-start",
+      "pl-3 font-bold text-2xl text-foreground md:text-3xl",
+      ...Array(5).fill("flex flex-col justify-center gap-4"),
+      "flex flex-col justify-center gap-4",
     ]);
     expect(sections[0]!.firstElementChild!.className).toBe(
       "mr-auto ml-auto flex w-[99%] max-w-[768px] flex-col items-center rounded-xl bg-popover/75 mb-10",
@@ -154,5 +154,18 @@ describe("classic welcome page", () => {
     expect(view.container.querySelector(".mb-4.inline")?.className).toBe(
       "mb-4 inline items-center gap-2 text-xl",
     );
+  });
+
+  it("serves the pixel landing in document flow without a hero video source", () => {
+    vi.spyOn(LayoutContext, "useActiveLayout").mockReturnValue("pixel" as never);
+    vi.spyOn(LayoutContext, "useIsPixelLanding").mockReturnValue(true);
+    const container = document.createElement("div");
+    container.innerHTML = renderToStaticMarkup(<Welcome />);
+    const main = container.querySelector("main")!;
+    expect(main.className).not.toContain("overflow-y-auto");
+    const video = container.querySelector("video")!;
+    expect(video.hasAttribute("src")).toBe(false);
+    expect(video.hasAttribute("autoplay")).toBe(false);
+    expect(video.getAttribute("preload")).toBe("none");
   });
 });

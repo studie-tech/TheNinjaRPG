@@ -7,9 +7,9 @@ import * as itemWithEffects from "@/layout/ItemWithEffects";
 import ManualSkillTree from "@/layout/ManualSkillTree";
 import * as skillTreeFiltering from "@/layout/SkillTreeFiltering";
 import * as pagination from "@/libs/pagination";
-import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
+import { mockUserContextValue } from "../setup/userContext";
 
 let queryClient: QueryClient;
 let skills: { id: string; name: string; folder: { name: string } | null }[];
@@ -27,9 +27,7 @@ beforeEach(() => {
     bloodline: testApi.bloodline,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(UserContext, "useUserData").mockImplementation(
-    () => ({ data: { userId: "me", role } }) as never,
-  );
+  mockUserContextValue(() => ({ data: { userId: "me", role } }) as never);
   vi.spyOn(navigation, "useRouter").mockReturnValue({
     push: vi.fn(),
     back: vi.fn(),

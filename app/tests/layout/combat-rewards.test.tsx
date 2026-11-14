@@ -69,7 +69,7 @@ it("preserves ordinary rewards, mastery names, signed territory changes, bountie
     "Hyorin War HP: -16.00",
     "Shrine HP in sector 724: -17.00",
     "War Shrine HP (Siege): +18.00",
-    "Bounty claimed: 19.00 Ryo",
+    "Bounty claimed: 19 Ryo",
     "Looted: Boar hide",
     "PvP Energy reward: 0",
   ])

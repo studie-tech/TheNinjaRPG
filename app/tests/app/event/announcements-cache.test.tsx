@@ -23,6 +23,7 @@ import * as UserContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { deferred } from "../../setup/deferred";
 import { actualShowMutationToast } from "../../setup/preload";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const key = [["profile", "getUser"], { type: "query" }];
 type Result = RouterOutputs["misc"]["submitNotification"];
@@ -109,7 +110,7 @@ const setup = () => {
   const updateUser = vi.fn((patch, options) =>
     updateUserCache(queryClient, key, patch, options),
   );
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: snapshot().userData,
     prepareUserUpdate: () => prepareUserUpdate(queryClient, key),
     updateUser,

@@ -8,6 +8,7 @@ import { getFarmGrowTimeSeconds } from "@/libs/farming";
 import * as userContext from "@/utils/UserContext";
 import { DecreaseFarmingTime } from "@/validators/combat";
 import type { FarmPlotState, FarmStateResponse } from "@/validators/farming";
+import { mockUserContextValue } from "../setup/userContext";
 
 const plot = (patch: Partial<FarmPlotState> = {}): FarmPlotState => ({
   id: "plot-1",
@@ -74,7 +75,7 @@ describe("FarmPlotInspector", () => {
   });
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+    mockUserContextValue({
       timeDiff: 0,
     } as never);
     vi.spyOn(Image, "default").mockImplementation(((props: {

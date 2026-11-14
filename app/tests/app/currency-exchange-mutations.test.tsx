@@ -13,6 +13,7 @@ import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Options = {
   onMutate: unknown;
@@ -55,7 +56,7 @@ beforeEach(() => {
     prepareUserUpdate,
     updateUser,
   };
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue(userApi as never);
+  mockUserContextValue(userApi as never);
   vi.spyOn(UserContext, "useRequireInVillage").mockReturnValue(userApi as never);
   vi.spyOn(bankInterest, "usePendingBankInterest").mockReturnValue({
     data: undefined,
@@ -115,7 +116,7 @@ describe("bank transfers", () => {
     ) as HTMLInputElement;
     const typeAll = () => {
       for (const input of [toBank, toPocket, toUser])
-        fireEvent.change(input, { target: { value: "25" } });
+        fireEvent.input(input, { target: { value: "25" } });
     };
     for (const name of ["toBank", "toPocket", "transfer"]) {
       expect(captured[name]?.onMutate).toBe(prepareUserUpdate);

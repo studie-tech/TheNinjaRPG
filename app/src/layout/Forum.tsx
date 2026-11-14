@@ -11,12 +11,19 @@ import {
   Search,
   ShieldCheck,
 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import ContentImageSelector from "@/layout/ContentImageSelector";
 import { ForumAttachments } from "@/layout/ForumAttachments";
 import Link from "@/layout/Link";
@@ -27,7 +34,7 @@ import { showMutationToast } from "@/libs/toast";
 import { canPostAsAi } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
 import { safeLocalStorageRemoveItem } from "@/utils/storage";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Keep browse shortcuts compact in the header and expose staff tools only to eligible accounts. */
 export const ForumNavigation = ({
@@ -64,34 +71,41 @@ export const ForumNavigation = ({
     </nav>
   );
 };
-/** Render server-authorized topics with unread/resume links and optional staff selection. */
+/**
+ * Render server-authorized topics with unread/resume links and optional staff selection.
+ * The whole row opens the topic; inner links and the selection box stay separate targets.
+ */
 export const ForumTopicList = ({
   threads,
   selectable,
   selected,
   onSelect,
+  empty,
 }: {
   threads: RouterOutputs["forum"]["getThreads"]["threads"];
   selectable?: boolean;
   selected?: string[];
   onSelect?: (id: string) => void;
+  /** Replaces the generic empty state, e.g. to invite the first topic on a board. */
+  empty?: ReactNode;
 }) => (
   <div className="bg-popover divide-y rounded-lg border">
-    {threads.length === 0 && (
-      <div className="p-8 text-center">
-        <MessageSquare className="text-muted-foreground mx-auto mb-3 h-8 w-8" />
-        <p className="font-semibold">No discussions found</p>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Try another search or start a topic in a board.
-        </p>
-      </div>
-    )}
+    {threads.length === 0 &&
+      (empty ?? (
+        <ForumEmptyState
+          title="No discussions found"
+          detail="Try another search or start a topic in a board."
+        />
+      ))}
     {threads.map((t) => (
-      <div key={t.id} className="flex min-w-0 items-start gap-3 p-4 sm:items-center">
+      <div
+        key={t.id}
+        className="hover:bg-muted/40 relative flex min-w-0 items-start gap-3 p-4 sm:items-center"
+      >
         {selectable && (
           <input
             type="checkbox"
-            className="mt-1 h-5 w-5 shrink-0"
+            className="relative z-10 mt-1 h-5 w-5 shrink-0"
             aria-label={`Select ${t.title}`}
             checked={selected?.includes(t.id) ?? false}
             onChange={() => onSelect?.(t.id)}
@@ -99,7 +113,7 @@ export const ForumTopicList = ({
         )}
         <MessageSquare
           aria-hidden
-          className={`mt-1 hidden h-5 w-5 shrink-0 sm:block ${t.unread ? "text-orange-600" : "text-muted-foreground"}`}
+          className={`mt-1 hidden h-5 w-5 shrink-0 sm:block ${t.unread ? "text-warning" : "text-muted-foreground"}`}
         />
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2 text-xs">
@@ -122,33 +136,34 @@ export const ForumTopicList = ({
             )}
             {t.kind === "QUESTION" && (
               <span
-                className={
-                  t.acceptedPostId ? "text-green-700" : "text-muted-foreground"
-                }
+                className={t.acceptedPostId ? "text-success" : "text-muted-foreground"}
               >
                 {t.acceptedPostId ? "Answered" : "Question"}
               </span>
             )}
             {t.kind === "ANNOUNCEMENT" && (
-              <span className="font-semibold text-orange-700">Announcement</span>
+              <span className="font-semibold text-warning">Announcement</span>
             )}
           </div>
           <Link
             href={`/forum/${t.boardId}/${t.id}`}
-            className="block text-base leading-snug font-semibold break-words hover:underline"
+            className="block text-base leading-snug font-semibold break-words after:absolute after:inset-0 hover:underline"
           >
             {t.title}
           </Link>
           <div className="text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
             <span>{t.user?.username ?? "Deleted player"}</span>
-            <Link href={`/forum/${t.boardId}`} className="hover:underline">
+            <Link
+              href={`/forum/${t.boardId}`}
+              className="relative z-10 hover:underline"
+            >
               {t.boardName}
             </Link>
             {t.tags?.map((tag) => (
               <Link
                 href={`/forum?view=latest&tag=${encodeURIComponent(tag)}`}
                 key={tag}
-                className="bg-muted rounded px-1.5"
+                className="bg-muted relative z-10 rounded px-1.5"
               >
                 {tag}
               </Link>
@@ -157,7 +172,7 @@ export const ForumTopicList = ({
           {t.resumePostId && (
             <Link
               href={`/forum/${t.boardId}/${t.id}?post=${t.resumePostId}`}
-              className="mt-2 inline-block text-xs font-medium text-orange-700 hover:underline"
+              className="relative z-10 mt-2 inline-block text-xs font-medium text-link hover:underline"
             >
               Resume reading
             </Link>
@@ -165,7 +180,7 @@ export const ForumTopicList = ({
         </div>
         <div className="text-muted-foreground shrink-0 text-right text-xs">
           <span className="text-foreground block font-semibold">
-            {Math.max(0, t.nPosts - 1)} replies
+            {replyCount(t.nPosts)} {replyCount(t.nPosts) === 1 ? "reply" : "replies"}
           </span>
           <time suppressHydrationWarning dateTime={t.updatedAt.toISOString()}>
             {t.updatedAt.toLocaleDateString()}
@@ -183,7 +198,7 @@ export const ForumWatchButton = ({
   scope: "THREAD" | "BOARD";
   scopeId: string;
 }) => {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => u.userId);
   const utils = api.useUtils();
   const { data } = api.forum.personal.useQuery(undefined, { enabled: !!user });
   const watch = data?.watches.find((w) => w.scope === scope && w.scopeId === scopeId);
@@ -253,7 +268,10 @@ export const ForumComposer = ({
   ) => Promise<boolean>;
 }) => {
   const fieldPrefix = useId();
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    role: u.role,
+  }));
   const form = useForm<Draft>({
     defaultValues: { content: "", title: "", kind: defaultKind, tags: "", image: "" },
   });
@@ -396,17 +414,32 @@ export const ForumComposer = ({
             />
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm">
-              Discussion type
-              <select
-                {...form.register("kind")}
-                className="bg-background mt-1 block h-10 w-full rounded-md border px-2"
-                disabled={isBlocked}
-              >
-                <option value="DISCUSSION">Discussion</option>
-                <option value="QUESTION">Question</option>
-              </select>
-            </label>
+            <div className="text-sm">
+              <span id={`${fieldPrefix}-kind`}>Discussion type</span>
+              <Controller
+                control={form.control}
+                name="kind"
+                render={({ field }) => (
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    disabled={isBlocked}
+                  >
+                    <SelectTrigger
+                      aria-labelledby={`${fieldPrefix}-kind`}
+                      className="mt-1 h-10"
+                      onBlur={field.onBlur}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DISCUSSION">Discussion</SelectItem>
+                      <SelectItem value="QUESTION">Question</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
             <label className="text-sm" htmlFor={`${fieldPrefix}-2`}>
               Tags
               <Input
@@ -522,6 +555,27 @@ export const ForumSearch = ({
 };
 
 /** Stored per account and composer scope; recovery is explicit and successful submission clears it. */
+/** Centered empty-list message, with an optional action such as starting a topic. */
+export const ForumEmptyState = ({
+  title,
+  detail,
+  action,
+}: {
+  title: string;
+  detail: string;
+  action?: ReactNode;
+}) => (
+  <div className="p-8 text-center">
+    <MessageSquare className="text-muted-foreground mx-auto mb-3 h-8 w-8" />
+    <p className="font-semibold">{title}</p>
+    <p className="text-muted-foreground mt-1 text-sm">{detail}</p>
+    {action && <div className="mt-4 flex justify-center">{action}</div>}
+  </div>
+);
+
+/** Replies to a topic: every post after its opening post. */
+const replyCount = (nPosts: number) => Math.max(0, nPosts - 1);
+
 type Draft = {
   content: string;
   title: string;

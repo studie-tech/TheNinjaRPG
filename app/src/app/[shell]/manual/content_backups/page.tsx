@@ -3,16 +3,17 @@
 import { DatabaseBackup } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import { Confirm } from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { showMutationToast } from "@/libs/toast";
 import { canControlBackups } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualBackupPage() {
   // State
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const hasAccess = canControlBackups(userData?.role ?? "USER");
 
   // tRPC utils
@@ -46,16 +47,17 @@ export default function ManualBackupPage() {
     ...b,
     actions: (
       <div className="flex gap-2">
-        <Button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            pushToDevMutation.mutate({ id: b.id });
-          }}
+        <Confirm
+          title="Push backup to dev?"
           disabled={pushToDevMutation.isPending}
+          isLoading={pushToDevMutation.isPending}
+          proceed_label="Push to Dev"
+          button={<Button disabled={pushToDevMutation.isPending}>Push to Dev</Button>}
+          onAccept={() => pushToDevMutation.mutate({ id: b.id })}
         >
-          Push to Dev
-        </Button>
+          Push backup {b.id} ({b.type}) to dev? It overwrites the {b.type} content on
+          the dev database.
+        </Confirm>
       </div>
     ),
   }));
@@ -98,8 +100,8 @@ export default function ManualBackupPage() {
 }
 
 const BACKUP_TYPES = [
-  ["bloodline", "Bloodlines"],
-  ["jutsu", "Jutsu"],
-  ["item", "Items"],
-  ["ai", "AI"],
+  ["bloodline", "Back up bloodlines"],
+  ["jutsu", "Back up jutsu"],
+  ["item", "Back up items"],
+  ["ai", "Back up AI"],
 ] as const;

@@ -2,9 +2,10 @@ import React from "react";
 import Link from "@/layout/Link";
 import { SITE_FOOTER_LINKS } from "@/libs/legalLinks";
 
+/** Site links and legal lines; each frame sets the text colour for its own backdrop. */
 const Footer: React.FC = () => {
   return (
-    <div className="col-span-6 text-center text-white" data-site-footer>
+    <div className="col-span-6 text-center" data-site-footer>
       <p className="text-xs" data-footer-links>
         {SITE_FOOTER_LINKS.map((link, index) => (
           <React.Fragment key={link.href}>

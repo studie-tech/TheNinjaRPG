@@ -7,10 +7,10 @@ import { PetTaskDispatch, PetTasks } from "@/layout/PetTasks";
 import * as RewardChoice from "@/layout/RewardChoice";
 import * as toast from "@/libs/toast";
 import { questsRouter } from "@/server/api/routers/quests";
-import * as UserContext from "@/utils/UserContext";
 import { updateUserCache } from "@/utils/userCache";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
+import { mockUserContextValue } from "../setup/userContext";
 
 let queryClient: QueryClient;
 let owner: {
@@ -73,7 +73,7 @@ beforeEach(() => {
     pets: testApi.pets,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({ data: owner, timeDiff: 0, prepareUserUpdate: () => 1, updateUser }) as never,
   );
@@ -251,7 +251,9 @@ it("offers recovery for invalid content and confirms returning without rewards",
     name: "Return your companion without rewards?",
   });
   expect(dialog.textContent).toContain("Entry items already consumed");
-  fireEvent.click(within(dialog).getByRole("button", { name: "Proceed" }));
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Return without rewards" }),
+  );
   await waitFor(() => expect(cancel).toHaveBeenCalledWith(receipt));
 });
 
@@ -312,7 +314,9 @@ it("merges a cancelled receipt without deleting a restarted cached attempt", asy
       .find((button) => button.tagName === "BUTTON")!,
   );
   const dialog = await view.findByRole("dialog");
-  fireEvent.click(within(dialog).getByRole("button", { name: "Proceed" }));
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Return without rewards" }),
+  );
   await waitFor(() => expect(updateUser).toHaveBeenCalledTimes(1));
   expect(
     queryClient.getQueryData<{ userData: { petTask: unknown; userQuests: unknown[] } }>(

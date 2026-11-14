@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing, SquarePen, Trash2, Users } from "lucide-react";
+import { BellRing, MessagesSquare, SquarePen, Trash2, Users } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, startTransition, useEffect, useState } from "react";
 import { api } from "@/app/_trpc/client";
@@ -9,13 +9,14 @@ import { useInboxConversations } from "@/hooks/useConversationCacheUpdate";
 import AvatarImage from "@/layout/Avatar";
 import ContentBox from "@/layout/ContentBox";
 import Conversation from "@/layout/Conversation";
+import { EmptyState } from "@/layout/EmptyState";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { NewConversationPrompt } from "@/layout/NewConversationPrompt";
 import { UserBlacklistPopover } from "@/layout/UserBlacklistControl";
 import { isRaidChatConversationId } from "@/libs/raids";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 export default function Inbox() {
   return (
@@ -29,7 +30,10 @@ function InboxContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const linkedConversationId = searchParams.get("conversationId");
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    username: u.username,
+  }));
   const [selectedConvo, setSelectedConvo] = useState<string | null>(
     linkedConversationId,
   );
@@ -93,7 +97,10 @@ interface ShowConversationsProps {
 }
 const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
   // Get user data & destructure
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    username: u.username,
+  }));
   const { setSelectedConvo } = props;
   const [pendingConvoId, setPendingConvoId] = useState<string | null>(null);
   const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false);
@@ -146,6 +153,26 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
             </li>
 
             <hr />
+            {filteredConversations?.length === 0 && (
+              <li className="p-3">
+                <EmptyState
+                  icon={MessagesSquare}
+                  title="No conversations yet"
+                  description="Private conversations with other players appear here."
+                  action={
+                    <NewConversationPrompt
+                      setSelectedConvo={setSelectedConvo}
+                      newButton={
+                        <span className={buttonVariants()}>
+                          <SquarePen className="mr-2 h-5 w-5" />
+                          Start a conversation
+                        </span>
+                      }
+                    />
+                  }
+                />
+              </li>
+            )}
             {filteredConversations?.map((convo) => {
               const isExiting = isExitingConversation && exitingConvoId === convo.id;
               // Raid chat membership follows the raid queue, so the server always
@@ -153,7 +180,7 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
               const canExit = !isRaidChatConversationId(convo.id);
               return (
                 <li
-                  className={`relative mx-3 my-3 flex h-12 flex-row items-center rounded-lg hover:bg-popover`}
+                  className="relative mx-3 my-3 flex min-h-12 flex-row items-center gap-2 rounded-lg py-1 hover:bg-popover"
                   key={convo.id}
                 >
                   <button
@@ -162,36 +189,39 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
                     onClick={() => setSelectedConvo(convo.id)}
                     aria-label={`Select conversation with ${convo.users.map((u) => u.userData.username).join(", ")}`}
                   />
-                  {convo.users.length > 0 &&
-                    convo.users.map((relation, i) => {
-                      const user = relation.userData;
-                      return (
-                        <div
-                          key={user.userId}
-                          className={`absolute w-14`}
-                          style={{ left: `${i * 2}rem` }}
-                        >
-                          <AvatarImage
-                            href={user.avatar}
-                            alt={user.username}
-                            size={50}
-                          />
-                        </div>
-                      );
-                    })}
-                  <span
-                    className="grow truncate text-sm"
-                    style={{
-                      marginLeft: `${(convo.users.length * 2 + 1.5).toString()}rem`,
-                    }}
-                  >
-                    {convo.title}
-                    <br />
-                    {convo.createdAt.toDateString()}
+                  {convo.users.length > 0 && (
+                    <div className="flex shrink-0 items-center -space-x-4">
+                      {convo.users.slice(0, INBOX_AVATARS_SHOWN).map((relation) => {
+                        const user = relation.userData;
+                        return (
+                          <div key={user.userId} className="w-12">
+                            <AvatarImage
+                              href={user.avatar}
+                              alt={user.username}
+                              size={50}
+                            />
+                          </div>
+                        );
+                      })}
+                      {convo.users.length > INBOX_AVATARS_SHOWN && (
+                        <span className="rounded-full bg-popover px-1.5 py-0.5 text-xs font-semibold">
+                          +{convo.users.length - INBOX_AVATARS_SHOWN}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <span className="min-w-0 flex-1 text-sm">
+                    <span className="block truncate">{convo.title}</span>
+                    <span className="block truncate text-muted-foreground">
+                      {convo.createdAt.toDateString()}
+                    </span>
                   </span>
-                  <div className="grow"></div>
                   {convo.hasNewMessages && (
-                    <BellRing className="h-6 w-6 animate-[wiggle_1s_ease-in-out_infinite] text-red-500 hover:cursor-pointer hover:text-orange-500" />
+                    <BellRing
+                      role="img"
+                      aria-label="New messages"
+                      className="h-6 w-6 animate-[wiggle_1s_ease-in-out_infinite] text-red-500 motion-reduce:animate-none"
+                    />
                   )}
                   {canExit && (
                     <Button
@@ -258,3 +288,6 @@ const ShowConversations: React.FC<ShowConversationsProps> = (props) => {
     </div>
   );
 };
+
+/** Overlapping avatars shown per conversation before the rest collapse into "+N". */
+const INBOX_AVATARS_SHOWN = 3;

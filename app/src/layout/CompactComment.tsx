@@ -36,7 +36,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { canDeleteComment, canSeeSecretData } from "@/utils/permissions";
 import { splitQuotedReply } from "@/utils/richText";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   type DeleteCommentSchema,
   type MutateCommentSchema,
@@ -48,7 +48,11 @@ import {
  * reactions, and hover actions. Mutations stay with `CommentOnConversation`.
  */
 export function CompactComment(props: CompactCommentProps) {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    username: u.username,
+    role: u.role,
+  }));
   const [emojiOpen, setEmojiOpen] = useState(false);
   const { user, comment } = props;
   const isAuthor = !!userData && userData.userId === user.userId;
@@ -125,7 +129,7 @@ export function CompactComment(props: CompactCommentProps) {
         ) : (
           <div
             data-reading-text
-            className="[&_blockquote]:text-muted-foreground text-[13px] break-words [&_blockquote]:my-[4px] [&_blockquote]:border-l-2 [&_blockquote]:pl-[8px] [&_blockquote]:text-[12px] [&_img]:max-h-[160px] [&_img]:rounded-md"
+            className="[&_blockquote]:text-muted-foreground text-[13px] break-words [&_blockquote]:my-[4px] [&_blockquote]:border-l-2 [&_blockquote]:pl-[8px] [&_blockquote]:text-[12px] [&_img]:max-h-[160px] [&_img]:max-w-full [&_img]:rounded-md"
           >
             {props.children}
           </div>
@@ -353,7 +357,7 @@ function UserMenu({
             <MenuItem
               destructive
               disabled={isPending}
-              onSelect={() => toggleBlock({ userId: user.userId })}
+              onSelect={() => toggleBlock({ userId: user.userId, active: true })}
             >
               <Ban /> Block user
             </MenuItem>
@@ -483,6 +487,7 @@ function CompactEditor({
         control={control}
         disabled={isPending}
         onSubmit={submit}
+        submitOnEnter="never"
         error={errors.comment?.message}
       />
     </form>

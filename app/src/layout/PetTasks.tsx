@@ -26,12 +26,16 @@ import {
 import { formatQuestEntryCost } from "@/libs/questRun";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
 import { formatSecondsToTimeDisplay } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector, useRequiredUserInfo } from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Compact task management for the selected companion; the accepted task stays visible after job changes. */
 export const PetTasks = ({ petId }: { petId: string }) => {
-  const { data: user, timeDiff } = useRequiredUserData();
+  const { data: user, timeDiff } = useRequiredUserDataSelector((u) => ({
+    occupation: u.occupation,
+    level: u.level,
+    rank: u.rank,
+  }));
   const [questId, setQuestId] = useState("");
   const feedback = usePetTaskFeedback();
   const task = api.quests.getPetTask.useQuery({ petId }, { enabled: !!user });
@@ -104,6 +108,10 @@ export const PetTasks = ({ petId }: { petId: string }) => {
             <Confirm
               title="Return your companion without rewards?"
               disabled={pending}
+              tone="destructive"
+              proceed_label="Return without rewards"
+              proceed_loading_label="Returning"
+              isLoading={cancel.isPending}
               button={
                 <Button variant="outline" disabled={pending}>
                   Return without rewards
@@ -195,7 +203,17 @@ export const PetTaskDispatch = ({
   minutes: number;
   entryRequirements: EntryRequirement[];
 }) => {
-  const { data: user } = useRequiredUserData();
+  const { data: user } = useRequiredUserDataSelector((u) => ({
+    rank: u.rank,
+    status: u.status,
+    autoWakeUp: u.autoWakeUp,
+    battleId: u.battleId,
+    isBanned: u.isBanned,
+    isAi: u.isAi,
+    petTask: u.petTask,
+    occupation: u.occupation,
+    activePetId: u.activePetId,
+  }));
   const [petId, setPetId] = useState("");
   const feedback = usePetTaskFeedback();
   const collection = api.pets.getCollection.useQuery(undefined, {
@@ -311,7 +329,7 @@ const PetTaskTerms = ({
 
 /** Refresh authoritative task/account state even after a lost response, keeping committed dispatches recoverable. */
 const usePetTaskFeedback = () => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const utils = api.useUtils();
   const openRewardChoice = useOpenRewardChoice();
   const [message, setMessage] = useState("");

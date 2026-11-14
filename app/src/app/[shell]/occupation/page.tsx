@@ -19,6 +19,7 @@ import {
   IMG_OCCUPATION_HUNTER,
   OCCUPATION_CHANGE_COOLDOWN_DAYS,
 } from "@/drizzle/constants";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Image from "@/layout/Image";
@@ -32,7 +33,7 @@ import {
 } from "@/libs/occupation";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Occupation data
@@ -63,7 +64,15 @@ export default function Occupations() {
   // Utils
 
   // State
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((profile) => ({
+    occupation: profile.occupation,
+    occupationSignupAt: profile.occupationSignupAt,
+    role: profile.role,
+  }));
   const [selectedOccupation, setSelectedOccupation] = useState<OccupationType | null>(
     null,
   );
@@ -92,18 +101,9 @@ export default function Occupations() {
     return <Loader explanation="Loading jobs data..." />;
   }
 
-  /**
-   * Handle occupation selection
-   * @param occupation - The occupation to select
-   */
-  const handleOccupationSelect = (occupation: OccupationType) => {
-    if (selectedOccupation === occupation) {
-      // Confirm selection
-      selectOccupation({ occupation });
-    } else {
-      // First click - select for confirmation
-      setSelectedOccupation(occupation);
-    }
+  /** Commit the chosen occupation once the player accepts the cooldown dialog. */
+  const handleOccupationConfirm = (occupation: OccupationType, close: () => void) => {
+    selectOccupation({ occupation }, { onSettled: close });
   };
 
   const canChange =
@@ -127,7 +127,8 @@ export default function Occupations() {
           </DialogHeader>
           <OccupationSelector
             selectedOccupation={selectedOccupation}
-            onOccupationSelect={handleOccupationSelect}
+            onOccupationSelect={setSelectedOccupation}
+            onOccupationConfirm={handleOccupationConfirm}
             currentOccupation={userData.occupation}
             isPending={isPending}
             isChanging
@@ -188,7 +189,8 @@ export default function Occupations() {
       ) : (
         <OccupationSelector
           selectedOccupation={selectedOccupation}
-          onOccupationSelect={handleOccupationSelect}
+          onOccupationSelect={setSelectedOccupation}
+          onOccupationConfirm={handleOccupationConfirm}
           isPending={isPending}
         />
       )}
@@ -212,6 +214,7 @@ export default function Occupations() {
 interface OccupationSelectorProps {
   selectedOccupation: OccupationType | null;
   onOccupationSelect: (occupation: OccupationType) => void;
+  onOccupationConfirm: (occupation: OccupationType, close: () => void) => void;
   currentOccupation?: OccupationType;
   isPending: boolean;
   isChanging?: boolean;
@@ -221,6 +224,7 @@ interface OccupationSelectorProps {
 const OccupationSelector: React.FC<OccupationSelectorProps> = ({
   selectedOccupation,
   onOccupationSelect,
+  onOccupationConfirm,
   currentOccupation,
   isPending,
   isChanging = false,
@@ -246,51 +250,77 @@ const OccupationSelector: React.FC<OccupationSelectorProps> = ({
           const isCurrentOccupation = currentOccupation === occupation.type;
           const isDisabled = isChanging && isCurrentOccupation;
 
+          const isSelected = selectedOccupation === occupation.type;
+
           return (
-            <button
-              type="button"
+            <div
               key={occupation.type}
-              disabled={isDisabled}
-              className={`cursor-pointer rounded-lg border p-6 text-center transition-all hover:shadow-lg ${selectedOccupation === occupation.type ? "border-primary bg-primary/5" : "border-border bg-card"} ${isDisabled ? "cursor-not-allowed opacity-50" : ""}`}
-              onClick={() => {
-                if (!isDisabled) {
-                  onOccupationSelect(occupation.type);
-                }
-              }}
+              className={`flex flex-col rounded-lg border p-6 text-center transition-all hover:shadow-lg ${isSelected ? "border-primary bg-primary/5" : "border-border bg-card"} ${isDisabled ? "opacity-50" : ""}`}
             >
-              <div className="mb-4 flex justify-center">
-                <Image
-                  src={occupation.image}
-                  alt={occupation.name}
-                  width={128}
-                  height={128}
-                  className="rounded-lg"
-                />
-              </div>
-              <h3 className="mb-2 font-semibold text-xl">{occupation.name}</h3>
-              <p className="mb-4 text-muted-foreground text-sm">
-                {occupation.description}
-              </p>
+              <button
+                type="button"
+                disabled={isDisabled || isPending}
+                aria-pressed={isSelected}
+                className={`flex-1 ${isDisabled || isPending ? "cursor-not-allowed" : "cursor-pointer"}`}
+                onClick={() => onOccupationSelect(occupation.type)}
+              >
+                <div className="mb-4 flex justify-center">
+                  <Image
+                    src={occupation.image}
+                    alt={occupation.name}
+                    width={128}
+                    height={128}
+                    className="rounded-lg"
+                  />
+                </div>
+                <h3 className="mb-2 font-semibold text-xl">{occupation.name}</h3>
+                <p className="mb-4 text-muted-foreground text-sm">
+                  {occupation.description}
+                </p>
+              </button>
               {isCurrentOccupation && isChanging ? (
-                <span className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm opacity-50">
+                <span className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm">
                   Current Occupation
                 </span>
-              ) : selectedOccupation === occupation.type ? (
-                <span className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm">
-                  {isPending
-                    ? isChanging
-                      ? "Changing..."
-                      : "Selecting..."
-                    : isChanging
-                      ? "Confirm Change"
-                      : "Confirm Selection"}
-                </span>
+              ) : isSelected ? (
+                <Confirm
+                  title={isChanging ? "Change Occupation" : "Choose Occupation"}
+                  proceed_label={isChanging ? "Change" : "Choose"}
+                  proceed_loading_label={isChanging ? "Changing..." : "Selecting..."}
+                  triggerClassName="w-full"
+                  disabled={isPending}
+                  isLoading={isPending}
+                  keepOpenOnAccept
+                  button={
+                    <Button className="w-full" disabled={isPending}>
+                      {isPending
+                        ? isChanging
+                          ? "Changing..."
+                          : "Selecting..."
+                        : isChanging
+                          ? "Confirm Change"
+                          : "Confirm Selection"}
+                    </Button>
+                  }
+                  onAccept={(_, { close }) =>
+                    onOccupationConfirm(occupation.type, close)
+                  }
+                >
+                  You are choosing the {occupation.name} occupation. You will not be
+                  able to change your occupation again for{" "}
+                  {OCCUPATION_CHANGE_COOLDOWN_DAYS} days.
+                </Confirm>
               ) : (
-                <span className="inline-flex w-full items-center justify-center rounded-md border border-input bg-background px-4 py-2 font-medium text-sm hover:bg-accent hover:text-accent-foreground">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={isDisabled || isPending}
+                  onClick={() => onOccupationSelect(occupation.type)}
+                >
                   Select
-                </span>
+                </Button>
               )}
-            </button>
+            </div>
           );
         })}
       </div>

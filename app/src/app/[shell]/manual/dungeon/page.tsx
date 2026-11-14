@@ -1,13 +1,20 @@
 "use client";
 
 import { Plus, Skull, Trash2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,6 +35,7 @@ import {
   MIN_PARTY_PLAYERS,
   RetryQuestDelays,
 } from "@/drizzle/constants";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import ContentBox from "@/layout/ContentBox";
 import { DungeonCatalogue } from "@/layout/DungeonCatalogue";
 import { LabeledField } from "@/layout/LabeledField";
@@ -35,10 +43,10 @@ import Loader from "@/layout/Loader";
 import { MapLocationPreview } from "@/layout/MapLocationPreview";
 import { SearchSelect } from "@/layout/SearchSelect";
 import { getRewardPreview } from "@/libs/objectives";
-import { showMutationToast } from "@/libs/toast";
+import { showMutationToast, showUndoToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { formatLocalDateTimeInput } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   type DungeonContent,
   type DungeonFloor,
@@ -48,7 +56,7 @@ import {
 
 /** Players browse published dungeons; content editors retain the authoring tools. */
 export default function DungeonManual() {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({ role: u.role }));
   const [isPlayerView, setIsPlayerView] = useState(false);
   if (!user) return <Loader explanation="Loading dungeons" />;
   if (!canChangeContent(user.role)) return <DungeonCatalogue />;
@@ -83,16 +91,21 @@ export default function DungeonManual() {
 
 /** Edit encounters, entry requirements and rewards using the shared server validator. */
 function DungeonEditor() {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({ role: u.role }));
   const utils = api.useUtils();
   const allowed = !!user && canChangeContent(user.role);
   const [id, setId] = useState<string>();
   const [content, setContent] = useState<DungeonContent>(newDungeon());
+  // The draft as last loaded or saved; any difference is unsaved work worth guarding.
+  const [savedContent, setSavedContent] = useState(() => JSON.stringify(content));
+  const submittedContent = useRef<string | null>(null);
+  const unsavedGuard = useUnsavedChangesGuard(JSON.stringify(content) !== savedContent);
   const [tier, setTier] = useState(0);
   const [floor, setFloor] = useState(0);
   const [message, setMessage] = useState("");
   const [panel, setPanel] = useState("details");
   const [draftVersion, setDraftVersion] = useState(0);
+  const draftSession = useRef(0);
   const formRef = useRef<HTMLDivElement>(null);
   // Validate before navigation or row re-keying can discard a local quantity draft.
   const roomsRef = useRef<HTMLDivElement>(null);
@@ -111,6 +124,7 @@ function DungeonEditor() {
       showMutationToast(result);
       if (result.success && "id" in result) {
         setId(result.id);
+        if (submittedContent.current) setSavedContent(submittedContent.current);
         await Promise.all([
           definitions.refetch(),
           utils.coop.dungeon.getAvailable.invalidate(),
@@ -171,6 +185,7 @@ function DungeonEditor() {
       } else setMessage(issue.message);
       return;
     }
+    submittedContent.current = JSON.stringify(content);
     save.mutate({ id, content: parsed.data });
   };
   if (!user) return <Loader explanation="Loading content permissions" />;
@@ -184,47 +199,60 @@ function DungeonEditor() {
       subtitle="Player parties and solo companion squads"
       defaultBackHref="/manual"
     >
+      {unsavedGuard.dialog}
       {/* Keep the submitted draft selected until its save result supplies or confirms the ID. */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Button
           variant="secondary"
           disabled={save.isPending}
-          onClick={() => {
-            setId(undefined);
-            setContent(newDungeon());
-            // Reset local input drafts even when their default quantity is unchanged.
-            setDraftVersion((version) => version + 1);
-            setTier(0);
-            setFloor(0);
-            setMessage("");
-            setPanel("details");
-          }}
+          onClick={() =>
+            unsavedGuard.confirmDiscard(() => {
+              const fresh = newDungeon();
+              draftSession.current++;
+              setId(undefined);
+              setContent(fresh);
+              setSavedContent(JSON.stringify(fresh));
+              // Reset local input drafts even when their default quantity is unchanged.
+              setDraftVersion((version) => version + 1);
+              setTier(0);
+              setFloor(0);
+              setMessage("");
+              setPanel("details");
+            })
+          }
         >
           New dungeon
         </Button>
-        <select
-          aria-label="Edit existing dungeon"
-          className="min-w-0 flex-1 rounded border bg-background p-2"
+        <Select
           disabled={save.isPending}
           value={id ?? ""}
-          onChange={(e) => {
-            const row = definitions.data?.find((d) => d.id === e.target.value);
+          onValueChange={(value) => {
+            const row = definitions.data?.find((d) => d.id === value);
             if (!row) return;
-            setId(row.id);
-            setContent(dungeonContentSchema.parse(row.content));
-            setTier(0);
-            setFloor(0);
-            setMessage("");
-            setPanel("details");
+            unsavedGuard.confirmDiscard(() => {
+              const loaded = dungeonContentSchema.parse(row.content);
+              draftSession.current++;
+              setId(row.id);
+              setContent(loaded);
+              setSavedContent(JSON.stringify(loaded));
+              setTier(0);
+              setFloor(0);
+              setMessage("");
+              setPanel("details");
+            });
           }}
         >
-          <option value="">Select dungeon</option>
-          {definitions.data?.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.content.name}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger aria-label="Edit existing dungeon" className="min-w-0 flex-1">
+            <SelectValue placeholder="Select dungeon" />
+          </SelectTrigger>
+          <SelectContent>
+            {definitions.data?.map((d) => (
+              <SelectItem key={d.id} value={d.id}>
+                {d.content.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button disabled={save.isPending} loading={save.isPending} onClick={submit}>
           Save dungeon
         </Button>
@@ -298,19 +326,28 @@ function DungeonEditor() {
                   />
                 </LabeledField>
                 <LabeledField label="Entrance artwork">
-                  <select
-                    aria-label="Entrance artwork"
-                    className="w-full rounded border bg-background p-2"
-                    value={content.structureAssetId}
-                    onChange={(e) => patch({ structureAssetId: e.target.value })}
+                  <Select
+                    value={content.structureAssetId || DEFAULT_ENTRANCE}
+                    onValueChange={(value) =>
+                      patch({
+                        structureAssetId: value === DEFAULT_ENTRANCE ? "" : value,
+                      })
+                    }
                   >
-                    <option value="">Default biome entrance</option>
-                    {assets.data?.map((asset) => (
-                      <option key={asset.id} value={asset.id}>
-                        {asset.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Entrance artwork">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={DEFAULT_ENTRANCE}>
+                        Default biome entrance
+                      </SelectItem>
+                      {assets.data?.map((asset) => (
+                        <SelectItem key={asset.id} value={asset.id}>
+                          {asset.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </LabeledField>
                 <LabeledField label="Entrance size multiplier">
                   <NumberInput
@@ -322,19 +359,23 @@ function DungeonEditor() {
                   />
                 </LabeledField>
                 <LabeledField label="Battle background">
-                  <select
-                    className="w-full rounded border bg-background p-2"
+                  <Select
                     value={content.background}
-                    onChange={(e) =>
-                      patch({
-                        background: e.target.value as DungeonContent["background"],
-                      })
+                    onValueChange={(value) =>
+                      patch({ background: value as DungeonContent["background"] })
                     }
                   >
-                    {COMBAT_BIOMES.map((b) => (
-                      <option key={b}>{b}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Battle background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COMBAT_BIOMES.map((b) => (
+                        <SelectItem key={b} value={b}>
+                          {b}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </LabeledField>
                 <div className="sm:col-span-2">
                   <LabeledField label="Description">
@@ -470,52 +511,21 @@ function DungeonEditor() {
                     />
                   </LabeledField>
                   {(["maxAttempts", "maxCompletes"] as const).map((field) => (
-                    <LabeledField
+                    <DungeonLimitField
                       key={field}
                       label={
                         field === "maxAttempts"
                           ? "Maximum lifetime attempts"
                           : "Maximum completions per reset period"
                       }
-                    >
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          aria-label={`Limit ${field === "maxAttempts" ? "attempts" : "completions"}`}
-                          checked={content.requirements[field] !== null}
-                          onCheckedChange={(limited) =>
-                            patch({
-                              requirements: {
-                                ...content.requirements,
-                                [field]: limited ? 1 : null,
-                              },
-                            })
-                          }
-                        />
-                        {content.requirements[field] !== null ? (
-                          <NumberInput
-                            aria-label={
-                              field === "maxAttempts"
-                                ? "Maximum lifetime attempts"
-                                : "Maximum completions per reset period"
-                            }
-                            min={1}
-                            value={content.requirements[field]!}
-                            onValueChange={(value) =>
-                              patch({
-                                requirements: {
-                                  ...content.requirements,
-                                  [field]: value,
-                                },
-                              })
-                            }
-                          />
-                        ) : (
-                          <span className="text-sm text-muted-foreground">
-                            Unlimited
-                          </span>
-                        )}
-                      </div>
-                    </LabeledField>
+                      switchLabel={`Limit ${field === "maxAttempts" ? "attempts" : "completions"}`}
+                      limit={content.requirements[field]}
+                      onChange={(value) =>
+                        patch({
+                          requirements: { ...content.requirements, [field]: value },
+                        })
+                      }
+                    />
                   ))}
                   {(["attemptDelay", "retryDelay"] as const).map((field) => (
                     <LabeledField
@@ -526,30 +536,44 @@ function DungeonEditor() {
                           : "Completion reset period"
                       }
                     >
-                      <select
-                        aria-label={
-                          field === "attemptDelay"
-                            ? "Attempt cooldown"
-                            : "Completion reset period"
-                        }
-                        className="w-full rounded border bg-background p-2"
+                      <Select
                         value={content.requirements[field]}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           patch({
                             requirements: {
                               ...content.requirements,
-                              [field]: e.target
-                                .value as DungeonContent["requirements"][typeof field],
+                              [field]:
+                                value as DungeonContent["requirements"][typeof field],
                             },
                           })
                         }
                       >
-                        {RetryQuestDelays.map((delay) => (
-                          <option key={delay} value={delay}>
-                            {delay === "none" ? "None (lifetime)" : delay}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger
+                          aria-label={
+                            field === "attemptDelay"
+                              ? "Attempt cooldown"
+                              : "Completion reset period"
+                          }
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {RetryQuestDelays.map((delay) => (
+                            <SelectItem key={delay} value={delay}>
+                              {delay === "none"
+                                ? field === "attemptDelay"
+                                  ? "No cooldown"
+                                  : "Never resets (lifetime)"
+                                : delay}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {field === "attemptDelay" && (
+                        <span className="block font-normal text-muted-foreground text-sm">
+                          Use Maximum lifetime attempts to cap attempts.
+                        </span>
+                      )}
                     </LabeledField>
                   ))}
                 </div>
@@ -564,22 +588,25 @@ function DungeonEditor() {
             >
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    aria-label="Tier"
-                    className="min-w-0 flex-1 rounded border bg-background p-2"
-                    value={tier}
-                    onChange={(e) => {
+                  <Select
+                    value={String(tier)}
+                    onValueChange={(value) => {
                       if (!validateNumberInputs(roomsRef.current)) return;
-                      setTier(Number(e.target.value));
+                      setTier(Number(value));
                       setFloor(0);
                     }}
                   >
-                    {content.tiers.map((_, i) => (
-                      <option key={i} value={i}>
-                        Tier {i + 1} of {content.tiers.length}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Tier" className="min-w-0 flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {content.tiers.map((_, i) => (
+                        <SelectItem key={i} value={String(i)}>
+                          Tier {i + 1} of {content.tiers.length}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button
                     variant="secondary"
                     disabled={content.tiers.length >= DUNGEON_MAX_TIERS}
@@ -598,9 +625,20 @@ function DungeonEditor() {
                     disabled={content.tiers.length <= 1}
                     onClick={() => {
                       if (!validateNumberInputs(roomsRef.current)) return;
+                      const removed = content.tiers.at(-1);
+                      const removedNumber = content.tiers.length;
+                      const removedFromSession = draftSession.current;
                       patch({ tiers: normalizeRooms(content.tiers.slice(0, -1)) });
                       setTier(0);
                       setFloor(0);
+                      if (!removed) return;
+                      showUndoToast(`Tier ${removedNumber} removed.`, () => {
+                        if (draftSession.current !== removedFromSession) return;
+                        setContent((current) => ({
+                          ...current,
+                          tiers: normalizeRooms([...current.tiers, removed]),
+                        }));
+                      });
                     }}
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -822,28 +860,30 @@ function DungeonEditor() {
                     className="grid grid-cols-[7rem_minmax(0,1fr)_auto] items-end gap-2 rounded-lg border bg-popover p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto]"
                     key={i}
                   >
-                    <select
-                      aria-label={`Drop ${i + 1} type`}
-                      className="rounded border bg-background p-2"
+                    <Select
                       value={drop.type}
-                      onChange={(e) => {
+                      onValueChange={(value) => {
                         const drops = [...content.rewards.drops];
                         drops[i] = {
                           ...drop,
-                          type: e.target
-                            .value as DungeonContent["rewards"]["drops"][number]["type"],
+                          type: value as DungeonContent["rewards"]["drops"][number]["type"],
                           id: "",
                           package: undefined,
-                          quantity: e.target.value === "jutsu" ? 1 : drop.quantity,
+                          quantity: value === "jutsu" ? 1 : drop.quantity,
                         };
                         patch({ rewards: { ...content.rewards, drops } });
                       }}
                     >
-                      <option value="item">Item</option>
-                      <option value="jutsu">Jutsu</option>
-                      <option value="package">Reward package</option>
-                      <option value="cache">Cache</option>
-                    </select>
+                      <SelectTrigger aria-label={`Drop ${i + 1} type`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="item">Item</SelectItem>
+                        <SelectItem value="jutsu">Jutsu</SelectItem>
+                        <SelectItem value="package">Reward package</SelectItem>
+                        <SelectItem value="cache">Cache</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <div className="col-span-2 min-w-0 sm:col-span-1">
                       <SearchSelect
                         label={`Drop ${i + 1} reward`}
@@ -1002,6 +1042,56 @@ const EnemyQuantity = ({
     />
   );
 };
+
+/**
+ * Optional numeric limit where null means unlimited. The caption targets the number
+ * input rather than the switch, and switching the limit back on restores the last value.
+ */
+const DungeonLimitField = ({
+  label,
+  switchLabel,
+  limit,
+  onChange,
+}: {
+  label: string;
+  switchLabel: string;
+  limit: number | null;
+  onChange: (value: number | null) => void;
+}) => {
+  const inputId = useId();
+  const [lastLimit, setLastLimit] = useState(limit ?? 1);
+  if (limit !== null && Number.isInteger(limit) && limit >= 1 && limit !== lastLimit) {
+    setLastLimit(limit);
+  }
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={inputId} className="block">
+        {label}
+      </Label>
+      <div className="flex items-center gap-2">
+        <Switch
+          aria-label={switchLabel}
+          checked={limit !== null}
+          onCheckedChange={(limited) => onChange(limited ? lastLimit : null)}
+        />
+        {limit !== null ? (
+          <NumberInput
+            id={inputId}
+            aria-label={label}
+            min={1}
+            value={limit}
+            onValueChange={onChange}
+          />
+        ) : (
+          <span className="text-muted-foreground text-sm">Unlimited</span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/** Select value standing for no entrance asset, which Radix Select cannot hold as "". */
+const DEFAULT_ENTRANCE = "default";
 
 /** Create the required five room slots; normalizeRooms assigns their boss roles. */
 const newTier = (): DungeonContent["tiers"][number] =>

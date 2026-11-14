@@ -1,9 +1,11 @@
 "use client";
 
 import { use, useMemo } from "react";
+import { useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { SageMode } from "@/drizzle/schema";
 import { useSageModeEditForm } from "@/hooks/sageMode";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { EditContent } from "@/layout/EditContent";
@@ -73,14 +75,15 @@ const SingleEditSageMode: React.FC<SingleEditSageModeProps> = (props) => {
     setLevel2Effects,
     handleSageModeSubmit,
   } = useSageModeEditForm(props.sageMode, props.refetch);
+  const entryName = useWatch({ control: form.control, name: "name" });
+  const heading = useEditorTitle("sage mode", entryName);
 
   return (
     <>
       <ContentBox
-        title="Content Panel"
+        title={heading}
         subtitle="Sage Mode Management"
         defaultBackHref="/manual/sageMode"
-        noRightAlign={true}
       >
         {!loading && (
           <EditContent

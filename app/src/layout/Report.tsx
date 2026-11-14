@@ -8,10 +8,11 @@ import { api } from "@/app/_trpc/client";
 import Modal from "@/layout/Modal";
 import Post from "@/layout/Post";
 import RichInput from "@/layout/RichInput";
+import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import type { UserCard } from "@/queries/userColumns";
 import { parseHtml } from "@/utils/parse";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   type systems,
   type UserReportSchema,
@@ -20,6 +21,10 @@ import {
 
 interface ReportUserProps {
   button: React.ReactNode;
+  /** Accessible name of the trigger; defaults to reporting the user. */
+  label?: string;
+  /** Classes for the trigger button. */
+  className?: string;
   system: (typeof systems)[number];
   user: UserCard;
   content: {
@@ -30,7 +35,7 @@ interface ReportUserProps {
 }
 
 const ReportUser: React.FC<ReportUserProps> = (props) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ isBanned: u.isBanned }));
   const [showModal, setShowModal] = useState<boolean>(false);
   // React mutation state updates on the next render. This ref closes the same-tick
   // double-click / Enter gap before tRPC can expose `isPending`.
@@ -138,7 +143,12 @@ const ReportUser: React.FC<ReportUserProps> = (props) => {
           e.stopPropagation();
           setShowModal(true);
         }}
-        className="inline-flex cursor-pointer items-center p-0"
+        aria-label={props.label ?? `Report ${props.user.username}`}
+        aria-haspopup="dialog"
+        className={cn(
+          "inline-flex cursor-pointer items-center justify-center p-0 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+          props.className,
+        )}
       >
         {props.button}
       </button>

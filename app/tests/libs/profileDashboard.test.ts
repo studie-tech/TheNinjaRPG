@@ -16,6 +16,7 @@ import {
   buildDashboardCatalogue,
   condenseDashboardMissionContent,
   dashboardContentActionLabel,
+  dashboardContentBadgeLabel,
   dashboardContentHref,
   dashboardLevelPercent,
   dashboardLevelProgress,
@@ -60,6 +61,33 @@ const createContent = (
   availabilityReason: null,
   endsAt: null,
   ...overrides,
+});
+
+describe("dashboardContentBadgeLabel", () => {
+  it("omits the group badge on condensed mission groups whose title names the group", () => {
+    const result = condenseDashboardMissionContent(
+      [
+        createContent("mission"),
+        createContent("errand"),
+        createContent("medical"),
+        createContent("pvp"),
+      ],
+      availableDailyCounts,
+    );
+
+    expect(result.map(dashboardContentBadgeLabel)).toEqual([null, null, null, null]);
+  });
+
+  it("labels individual content with its own group", () => {
+    expect(
+      dashboardContentBadgeLabel(
+        createContent("event", { category: "events", name: "Harvest Moon" }),
+      ),
+    ).toBe("Events");
+    expect(
+      dashboardContentBadgeLabel(createContent("errand", { name: "Fetch water" })),
+    ).toBe("Errands");
+  });
 });
 
 describe("condenseDashboardMissionContent", () => {

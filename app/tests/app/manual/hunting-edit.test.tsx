@@ -6,6 +6,7 @@ import {
   useMutation,
 } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import type { ReactNode } from "react";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
@@ -17,6 +18,7 @@ import {
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
 import { huntingHabitatContent } from "../../setup/hunting";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type SaveInput = RouterInputs["hunting"]["save"];
 type SaveResult = RouterOutputs["hunting"]["save"];
@@ -72,7 +74,7 @@ it("uses server-assigned contract IDs when saving the habitat draft again", asyn
       },
     },
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { role: "CONTENT-ADMIN" },
   } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(
@@ -82,13 +84,18 @@ it("uses server-assigned contract IDs when saving the habitat draft again", asyn
     defaultOptions: { mutations: { retry: false } },
   });
   const view = render(
-    <QueryClientProvider client={queryClient}>
-      <HuntingEditor />
-    </QueryClientProvider>,
+    <AppRouterContext.Provider value={{ push: vi.fn() } as never}>
+      <QueryClientProvider client={queryClient}>
+        <HuntingEditor />
+      </QueryClientProvider>
+    </AppRouterContext.Provider>,
   );
-  fireEvent.change(view.getByRole("combobox", { name: "Edit existing habitat" }), {
-    target: { value: "forest" },
-  });
+  const habitatPicker = view.getByRole("combobox", { name: "Edit existing habitat" });
+  fireEvent.keyDown(habitatPicker, { key: "Enter" });
+  await act(async () =>
+    fireEvent.click(await view.findByRole("option", { name: content.name })),
+  );
+  await waitFor(() => expect(document.activeElement).toBe(habitatPicker));
   fireEvent.click(view.getByRole("button", { name: "Add creature contract" }));
   for (const [label, value] of [
     ["Contract name", "Boar"],

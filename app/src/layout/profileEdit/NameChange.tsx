@@ -19,14 +19,18 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { showMutationToast } from "@/libs/toast";
 import { useUserSearch } from "@/utils/search";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Namechange component
  */
 export const NameChange: React.FC = () => {
   // State
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({ reputationPoints: u.reputationPoints }));
   const [showNameChangeConfirm, setShowNameChangeConfirm] = useState(false);
   const usernameFlight = useSingleFlight();
   const isChangingUsername = usernameFlight.isPending;

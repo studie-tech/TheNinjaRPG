@@ -1828,7 +1828,7 @@ describe("notification effects during cache updates", () => {
           mail,
           {
             href: "/townhall",
-            name: "Missing kage schedule!",
+            name: "Missing schedule",
             color: change === "urgent" ? "red" : "blue",
             alwaysShow: true,
           },

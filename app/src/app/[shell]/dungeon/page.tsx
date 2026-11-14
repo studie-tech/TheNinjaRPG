@@ -40,14 +40,24 @@ import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
 import { useUserPicker } from "@/utils/search";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import type { DungeonContent, DungeonRewardReceipt } from "@/validators/dungeon";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Show entry requirements, human or companion squads, readiness and completion claims. */
 export default function DungeonPage() {
   // Reuse the account's calibrated server clock for deadlines, as other game timers do.
-  const { data: user, timeDiff, updateUser, prepareUserUpdate } = useRequiredUserData();
+  const {
+    data: user,
+    timeDiff,
+    updateUser,
+    prepareUserUpdate,
+  } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    rank: u.rank,
+    sector: u.sector,
+    petTask: u.petTask,
+  }));
   const router = useRouter();
   const [selectedPets, setSelectedPets] = useState<string[]>([]);
   const collection = api.pets.getCollection.useQuery(undefined, { enabled: !!user });
@@ -123,6 +133,16 @@ export default function DungeonPage() {
     command: Parameters<typeof act.mutate>[0]["action"],
     userId?: string,
   ) => act.mutate({ id, action: command, userId });
+  /** Whether the pending party command is this one, so only the pressed button spins. */
+  const isSending = (
+    id: string,
+    command: Parameters<typeof act.mutate>[0]["action"],
+    userId?: string,
+  ) =>
+    act.isPending &&
+    act.variables?.id === id &&
+    act.variables.action === command &&
+    (userId === undefined || act.variables.userId === userId);
   const usernameOf = (userId: string) =>
     state.data?.users.find((u) => u.userId === userId)?.username;
   if (state.error)
@@ -153,6 +173,16 @@ export default function DungeonPage() {
     memberCount <= capacity &&
     current.state.memberIds.every((id) => current.state.readyIds.includes(id));
   const endingRun = runs.find((run) => run.id === abandonId);
+  const squadPets =
+    collection.data?.pets.filter(
+      (pet) =>
+        pet.generationStatus === "READY" &&
+        pet.species &&
+        canUsePet(pet, user) &&
+        user.petTask?.petId !== pet.id,
+    ) ?? [];
+  // Shown while entrances load so the picker does not jump in once they arrive
+  const hasEntrances = available.data?.length !== 0;
   return (
     <ContentBox
       title="Dungeon Pyramids"
@@ -223,6 +253,7 @@ export default function DungeonPage() {
               </div>
               <Button
                 disabled={pending}
+                loading={isSending(run.id, "accept")}
                 onClick={() => sendPartyAction(run.id, "accept")}
               >
                 Accept invitation
@@ -230,6 +261,7 @@ export default function DungeonPage() {
               <Button
                 variant="ghost"
                 disabled={pending}
+                loading={isSending(run.id, "decline")}
                 onClick={() => sendPartyAction(run.id, "decline")}
               >
                 Decline
@@ -251,7 +283,11 @@ export default function DungeonPage() {
                     All {run.state.clearedFloors.length} floors cleared
                   </p>
                 </div>
-                <Button disabled={pending} onClick={() => claim.mutate({ id: run.id })}>
+                <Button
+                  disabled={pending}
+                  loading={claim.isPending && claim.variables?.id === run.id}
+                  onClick={() => claim.mutate({ id: run.id })}
+                >
                   Claim completion rewards
                 </Button>
               </div>
@@ -397,6 +433,7 @@ export default function DungeonPage() {
                         size="sm"
                         variant="ghost"
                         disabled={pending}
+                        loading={isSending(current.id, "remove", id)}
                         onClick={() => sendPartyAction(current.id, "remove", id)}
                       >
                         Cancel invitation
@@ -421,6 +458,7 @@ export default function DungeonPage() {
                   <Button
                     variant="secondary"
                     disabled={pending || !selected[0]}
+                    loading={isSending(current.id, "invite")}
                     onClick={() => {
                       const target = selected[0];
                       if (target) sendPartyAction(current.id, "invite", target.userId);
@@ -442,6 +480,7 @@ export default function DungeonPage() {
                   <Button
                     variant={isReady ? "secondary" : "default"}
                     disabled={pending}
+                    loading={isSending(current.id, isReady ? "unready" : "ready")}
                     onClick={() =>
                       sendPartyAction(current.id, isReady ? "unready" : "ready")
                     }
@@ -453,6 +492,7 @@ export default function DungeonPage() {
                   <Button
                     variant={allReady ? "default" : "secondary"}
                     disabled={pending || !allReady}
+                    loading={isSending(current.id, "start")}
                     onClick={() => sendPartyAction(current.id, "start")}
                   >
                     <Swords className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -462,6 +502,7 @@ export default function DungeonPage() {
                 {current.leaderId === user.userId && current.status === "PAUSED" && (
                   <Button
                     disabled={pending}
+                    loading={isSending(current.id, "resume")}
                     onClick={() => sendPartyAction(current.id, "resume")}
                   >
                     Resume and ready up
@@ -487,38 +528,39 @@ export default function DungeonPage() {
         {/* Entrance lookups must not block party controls or completion claims. */}
         {!current && (
           <div className="space-y-3">
-            <fieldset className="min-w-0 space-y-2 rounded-lg border p-3">
-              <legend className="px-1 text-sm font-medium">
-                Solo squad companions ({selectedPets.length}/{DUNGEON_SOLO_PETS})
-              </legend>
-              {collection.error ? (
-                <p role="alert">
-                  {collection.error.message}{" "}
-                  <Button onClick={() => void collection.refetch()}>
-                    Retry companions
-                  </Button>
-                </p>
-              ) : collection.isPending ? (
-                <Loader explanation="Loading companions" />
-              ) : (
-                <>
-                  <p className="text-xs text-muted-foreground">
-                    Choose {DUNGEON_SOLO_PETS} fully generated, battle-ready companions
-                    who are not on a task.{" "}
+            {hasEntrances && (
+              <fieldset className="min-w-0 space-y-2 rounded-lg border p-3">
+                <legend className="px-1 text-sm font-medium">
+                  Solo squad companions ({selectedPets.length}/{DUNGEON_SOLO_PETS})
+                </legend>
+                {collection.error ? (
+                  <p role="alert">
+                    {collection.error.message}{" "}
+                    <Button onClick={() => void collection.refetch()}>
+                      Retry companions
+                    </Button>
+                  </p>
+                ) : collection.isPending ? (
+                  <Loader explanation="Loading companions" />
+                ) : squadPets.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No battle-ready companions. A squad companion must be fully
+                    generated, battle-enabled, allowed for your rank and not on a task.{" "}
                     <Link href="/pets" className="text-primary underline">
                       Manage companions
                     </Link>
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    {collection.data?.pets
-                      .filter(
-                        (pet) =>
-                          pet.generationStatus === "READY" &&
-                          pet.species &&
-                          canUsePet(pet, user) &&
-                          user.petTask?.petId !== pet.id,
-                      )
-                      .map((pet) => (
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      Choose {DUNGEON_SOLO_PETS} fully generated, battle-ready
+                      companions who are not on a task.{" "}
+                      <Link href="/pets" className="text-primary underline">
+                        Manage companions
+                      </Link>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {squadPets.map((pet) => (
                         <label
                           key={pet.id}
                           className="flex min-w-0 max-w-full items-center gap-2 rounded border px-3 py-2 text-sm"
@@ -545,10 +587,11 @@ export default function DungeonPage() {
                           </span>
                         </label>
                       ))}
-                  </div>
-                </>
-              )}
-            </fieldset>
+                    </div>
+                  </>
+                )}
+              </fieldset>
+            )}
             <h2 className="font-semibold">Dungeons in your sector</h2>
             {available.error ? (
               <p role="alert">
@@ -581,6 +624,11 @@ export default function DungeonPage() {
                     </div>
                     <Button
                       disabled={pending || !!dungeon.admission.error}
+                      loading={
+                        create.isPending &&
+                        create.variables?.id === dungeon.id &&
+                        !create.variables.petIds
+                      }
                       onClick={() => create.mutate({ id: dungeon.id })}
                     >
                       Create lobby
@@ -591,6 +639,11 @@ export default function DungeonPage() {
                         pending ||
                         !!dungeon.admission.error ||
                         selectedPets.length !== DUNGEON_SOLO_PETS
+                      }
+                      loading={
+                        create.isPending &&
+                        create.variables?.id === dungeon.id &&
+                        !!create.variables.petIds
                       }
                       onClick={() =>
                         create.mutate({ id: dungeon.id, petIds: selectedPets })

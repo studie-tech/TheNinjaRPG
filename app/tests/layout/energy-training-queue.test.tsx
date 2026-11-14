@@ -14,6 +14,7 @@ import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { spyOnToasts } from "../setup/toastMock";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Result = UserDeltaResponse;
 type QueueCallbacks = {
@@ -87,7 +88,7 @@ beforeEach(() => {
     children: ReactNode;
   }) => <div>{children}</div>) as never);
   spyOnToasts();
-  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         prepareUserUpdate: () => 7,

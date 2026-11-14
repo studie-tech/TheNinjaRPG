@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import type { ComponentProps } from "react";
+import { Button } from "@/components/ui/button";
 import Confirm from "@/layout/Confirm";
 import Modal from "@/layout/Modal";
 import {
@@ -38,7 +39,7 @@ const confirmation = (props: Partial<ComponentProps<typeof Confirm>> = {}) => (
 const openConfirmation = () => {
   const trigger = screen.getByRole("button", { name: "Open purchase confirmation" });
   trigger.focus();
-  fireEvent.keyDown(trigger, { key: "Enter" });
+  fireEvent.click(trigger);
   expect(
     document.activeElement === screen.getByRole("button", { name: "Proceed" }),
   ).toBe(true);
@@ -115,5 +116,71 @@ describe("Confirm focus with real dialogs", () => {
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     await waitFor(() => expect(document.activeElement === trigger).toBe(true));
     expect(onAccept).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Confirm trigger", () => {
+  it("makes a Button the trigger itself, so it is one full-width tab stop", () => {
+    render(
+      <Confirm
+        title="New avatar?"
+        button={<Button className="w-full">New Avatar</Button>}
+      >
+        Body
+      </Confirm>,
+    );
+    const trigger = screen.getByRole("button", { name: "New Avatar" });
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(trigger.className).toContain("w-full");
+    expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
+    fireEvent.click(trigger);
+    expect(screen.getByRole("dialog", { name: "New avatar?" })).toBeTruthy();
+  });
+
+  it("wraps icon content in a named button", () => {
+    render(
+      <Confirm title="Remove student?" triggerLabel="Remove Kakashi" button={<svg />}>
+        Body
+      </Confirm>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove Kakashi" }));
+    expect(screen.getByRole("dialog", { name: "Remove student?" })).toBeTruthy();
+  });
+
+  it("keeps clicks inside the dialog from reaching a clickable parent", () => {
+    const onParentClick = vi.fn();
+    render(
+      // biome-ignore lint/a11y/noStaticElementInteractions: stands in for a card link
+      // biome-ignore lint/a11y/useKeyWithClickEvents: stands in for a card link
+      <div onClick={onParentClick}>{confirmation()}</div>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open purchase confirmation" }));
+    const dialog = screen.getByRole("dialog", { name: "Purchase pass?" });
+    fireEvent.click(within(dialog).getByText("Confirm purchase details."));
+    fireEvent.click(within(dialog).getAllByRole("button", { name: "Close" })[0]!);
+    expect(onParentClick).not.toHaveBeenCalled();
+  });
+
+  it("stays open while the accepted action loads and closes once it settles", async () => {
+    const onAccept = vi.fn();
+    const view = render(confirmation({ onAccept, isLoading: false }));
+    openConfirmation();
+    fireEvent.click(screen.getByRole("button", { name: "Proceed" }));
+    view.rerender(confirmation({ onAccept, isLoading: true }));
+    expect(screen.getByRole("dialog", { name: "Purchase pass?" })).toBeTruthy();
+    view.rerender(confirmation({ onAccept, isLoading: false }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Purchase pass?" })).toBeNull(),
+    );
+    expect(onAccept).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes after accept when the action never starts loading", async () => {
+    render(confirmation({ onAccept: vi.fn(), isLoading: false }));
+    openConfirmation();
+    fireEvent.click(screen.getByRole("button", { name: "Proceed" }));
+    // The grace timer fires outside a React event; act flushes the close it schedules.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
+    expect(screen.queryByRole("dialog", { name: "Purchase pass?" })).toBeNull();
   });
 });

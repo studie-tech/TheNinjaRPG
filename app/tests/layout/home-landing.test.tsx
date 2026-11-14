@@ -7,15 +7,16 @@ import HomeLanding from "@/layout/HomeLanding";
 import * as Loader from "@/layout/Loader";
 import * as Welcome from "@/layout/Welcome";
 import type { UserWithRelations } from "@/routers/profile";
-import * as UserContext from "@/utils/UserContext";
+import type * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
-const push = vi.fn();
+const replace = vi.fn();
 const referral = vi.fn();
 let session: ReturnType<typeof UserContext.useUserData>;
 const character = { userId: "player" } as NonNullable<UserWithRelations>;
 
 beforeEach(() => {
-  push.mockReset();
+  replace.mockReset();
   referral.mockReset();
   session = {
     isClerkLoaded: true,
@@ -24,9 +25,12 @@ beforeEach(() => {
     data: undefined,
     status: "success",
   } as typeof session;
-  vi.spyOn(UserContext, "useUserData").mockImplementation(() => session);
+  mockUserContextValue(() => session);
   vi.spyOn(clerk, "useClerk").mockReturnValue({ signOut: vi.fn() } as never);
-  vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
+  vi.spyOn(navigation, "useRouter").mockReturnValue({
+    replace,
+    prefetch: vi.fn(),
+  } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
     register: { setReferralSource: { useMutation: () => ({ mutate: referral }) } },
     useUtils: () => ({ profile: { getUser: { invalidate: vi.fn(async () => {}) } } }),
@@ -52,7 +56,7 @@ describe("landing page session navigation", () => {
       session = { ...session, data: cached };
       const view = render(<HomeLanding />);
       expect(view.getByText("Public welcome")).toBeTruthy();
-      expect(push).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
       expect(referral).not.toHaveBeenCalled();
     },
   );
@@ -60,12 +64,12 @@ describe("landing page session navigation", () => {
   it("stops forwarding immediately when the user signs out before cached data clears", () => {
     session = { ...session, isSignedIn: true, userId: "player", data: character };
     const view = render(<HomeLanding />);
-    expect(push).toHaveBeenCalledWith("/profile");
-    push.mockClear();
+    expect(replace).toHaveBeenCalledWith("/profile");
+    replace.mockClear();
     session = { ...session, isSignedIn: false };
     view.rerender(<HomeLanding />);
     expect(view.getByText("Public welcome")).toBeTruthy();
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
     expect(referral).not.toHaveBeenCalled();
   });
 
@@ -78,13 +82,13 @@ describe("landing page session navigation", () => {
       data: character,
     };
     render(<HomeLanding />);
-    expect(push).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it("forwards a confirmed signed-in account without a character to registration", () => {
     session = { ...session, isSignedIn: true, userId: "player" };
     render(<HomeLanding />);
-    expect(push).toHaveBeenCalledWith("/register");
+    expect(replace).toHaveBeenCalledWith("/register");
     expect(referral).toHaveBeenCalledTimes(1);
   });
 
@@ -99,7 +103,7 @@ describe("landing page session navigation", () => {
         expect(input).toEqual({ utmSource: statistics ? "legacy" : undefined });
         expect(window.localStorage.getItem("ref")).toBe("Recruiter");
       });
-      push.mockImplementationOnce((path) => {
+      replace.mockImplementationOnce((path) => {
         expect(path).toBe("/register");
         expect(window.localStorage.getItem("ref")).toBe("Recruiter");
         expect(window.localStorage.getItem("utm_source")).toBe(
@@ -108,7 +112,7 @@ describe("landing page session navigation", () => {
       });
       render(<HomeLanding />);
       expect(referral).toHaveBeenCalledTimes(1);
-      expect(push).toHaveBeenCalledTimes(1);
+      expect(replace).toHaveBeenCalledTimes(1);
     },
   );
 
@@ -116,7 +120,7 @@ describe("landing page session navigation", () => {
     session = { ...session, isSignedIn: true, userId: "player" };
     window.localStorage.setItem("ref", "EarlierRecruiter");
     render(<HomeLanding />);
-    expect(push).toHaveBeenCalledWith("/register");
+    expect(replace).toHaveBeenCalledWith("/register");
     expect(window.localStorage.getItem("ref")).toBe("EarlierRecruiter");
   });
 });

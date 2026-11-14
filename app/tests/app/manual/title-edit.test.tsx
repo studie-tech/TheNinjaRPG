@@ -14,6 +14,7 @@ import * as EditContent from "@/layout/EditContent";
 import * as SuggestChange from "@/layout/SuggestChange";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type Result = { success: boolean; message: string };
 
@@ -50,7 +51,7 @@ beforeEach(() => {
     <span>{label}</span>
   ));
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "u", role: "CONTENT-ADMIN" },
   } as never);
   Object.assign(vi.spyOn(client, "api" as never), {

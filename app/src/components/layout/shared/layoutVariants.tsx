@@ -42,7 +42,7 @@ const PANEL_MENU_CLASSES = {
   rightMenuButton: "relative w-full theme-menu-button",
   rightMenuDecoration: "none" as const,
   rightMenuEnabled: "",
-  rightMenuDisabled: "",
+  rightMenuDisabled: "opacity-40",
   leftSidebarReservation: undefined,
   rightSidebarReservation: undefined,
 };

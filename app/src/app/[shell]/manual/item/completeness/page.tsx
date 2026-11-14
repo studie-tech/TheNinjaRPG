@@ -22,14 +22,14 @@ import {
 } from "@/libs/contentCompleteness";
 import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Inspect item completeness and diversity with selectable content details. */
 export default function ManualItemCompleteness() {
   const details = useContentDetails();
 
   // User data for permissions
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
 
   // Queries
   const { data, isPending } = api.item.getAll.useQuery({ limit: 500 }, {});
@@ -91,7 +91,7 @@ export default function ManualItemCompleteness() {
     { key: "effects", header: "Effects", type: "jsx" },
     { key: "missingGraphic", header: "Graphics", type: "jsx" },
     { key: "missingSfx", header: "SFX", type: "jsx" },
-    { key: "assetsExist", header: "Asset Missing", type: "jsx" },
+    { key: "assetsExist", header: "Assets Exist", type: "jsx" },
     { key: "description", header: "Description", type: "jsx" },
     { key: "total", header: "Total", type: "jsx" },
   ];

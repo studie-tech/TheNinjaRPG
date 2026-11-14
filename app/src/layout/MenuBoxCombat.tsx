@@ -13,20 +13,20 @@ import { VisualizeEffects } from "@/layout/VisualizeEffects";
 import {
   combatPresentedBattleAtom,
   userBattleAtom,
-  useUserData,
+  useUserDataSelector,
 } from "@/utils/UserContext";
 
 /** Inspect the presented combatant snapshot while preserving masked-player and AI profile restrictions. */
 const MenuBoxCombat: React.FC = () => {
   // State
-  const { data: userData, timeDiff } = useUserData();
+  const { data: userData, timeDiff } = useUserDataSelector((u) => ({
+    userId: u.userId,
+  }));
   const liveBattle = useAtomValue(userBattleAtom);
   const presentedBattle = useAtomValue(combatPresentedBattleAtom);
   // Follows the field, so a form never appears here before it has risen.
-  const battle =
-    presentedBattle?.id === liveBattle?.id
-      ? (presentedBattle ?? liveBattle)
-      : liveBattle;
+  const isPresentingLive = presentedBattle?.id === liveBattle?.id;
+  const battle = isPresentingLive ? (presentedBattle ?? liveBattle) : liveBattle;
 
   // Character inspection follows the visible snapshot.
   const { selectedUser: battleUser } = useCombatInspection(battle, userData?.userId);

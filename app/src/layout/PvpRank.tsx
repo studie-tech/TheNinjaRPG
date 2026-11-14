@@ -466,7 +466,8 @@ export const RankedLoadoutSelector: React.FC = () => {
                     setSelectedJutsu(processedJutsu?.find((jutsu) => jutsu.id === id));
                     setIsOpen(true);
                   }}
-                  emptyText="No jutsu available. Go to the training grounds in your village to learn some."
+                  isLoading={isLoadingJutsu}
+                  emptyText="No jutsu match the current filters."
                 />
               </TabsContent>
             </Tabs>

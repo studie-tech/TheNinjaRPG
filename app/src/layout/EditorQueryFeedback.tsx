@@ -14,7 +14,7 @@ export const EditorQueryFeedback: React.FC<EditorQueryFeedbackProps> = (props) =
     : `${capitalizeFirstLetter(label)} not found`;
   return (
     <ContentBox
-      title="Content Panel"
+      title={`Edit ${label}`}
       subtitle={subtitle}
       defaultBackHref={backHref}
       padding={false}

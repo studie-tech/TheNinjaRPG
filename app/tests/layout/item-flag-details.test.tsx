@@ -26,9 +26,9 @@ beforeEach(() => {
     item: { getAllNames: names, getEvolutions: names },
     jutsu: { getEvolutions: names },
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
-    data: { role: "USER" },
-  } as never);
+  vi.spyOn(UserContext, "useUserDataSelector").mockImplementation(
+    (select) => ({ data: select({ role: "USER" } as never) }) as never,
+  );
 });
 
 afterEach(() => {
@@ -91,4 +91,18 @@ it("highlights each required rank except NONE", () => {
     <ItemWithEffects item={content({ requiredSageRank: "S" })} hideImage />,
   );
   expect(rowText(sage, "Sage Rank Requirement")).toBe("Sage Rank Requirement: S");
+});
+
+it("shows the hidden flag to content staff only and names targets in plain words", () => {
+  const item = content({ hidden: false, target: "OTHER_USER", method: "SINGLE" });
+  const player = render(<ItemWithEffects item={item} hideImage />);
+  expect(player.queryByText("Hidden")).toBeNull();
+  expect(rowText(player, "Target")).toBe("Target: Other player");
+  expect(rowText(player, "Method")).toBe("Method: Single target");
+  cleanup();
+  vi.spyOn(UserContext, "useUserDataSelector").mockImplementation(
+    (select) => ({ data: select({ role: "CONTENT-ADMIN" } as never) }) as never,
+  );
+  const staff = render(<ItemWithEffects item={item} hideImage />);
+  expect(rowText(staff, "Hidden")).toBe("Hidden: no");
 });

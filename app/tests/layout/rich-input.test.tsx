@@ -7,6 +7,7 @@ import RichInput from "@/layout/RichInput";
 import * as UserSearchSelect from "@/layout/UserSearchSelect";
 import * as toast from "@/libs/toast";
 import * as image from "@/utils/image";
+import type { SubmitOnEnter } from "@/utils/richText";
 import * as uploadthing from "@/utils/uploadthing";
 import {
   flushRadixFocus,
@@ -68,6 +69,8 @@ const Composer = ({
   refreshKey = 0,
   allowClipboardPaste = true,
   allowImages,
+  chatPaste,
+  submitOnEnter,
 }: {
   initial?: string;
   resetValue?: string;
@@ -77,6 +80,8 @@ const Composer = ({
   refreshKey?: number;
   allowClipboardPaste?: boolean;
   allowImages?: boolean;
+  chatPaste?: boolean;
+  submitOnEnter?: SubmitOnEnter;
 }) => {
   const form = useForm({ defaultValues: { comment: initial } });
   return (
@@ -93,6 +98,8 @@ const Composer = ({
         enableMentions
         allowClipboardPaste={allowClipboardPaste}
         allowImages={allowImages}
+        chatPaste={chatPaste}
+        submitOnEnter={submitOnEnter}
         onUploadPendingChange={uploadPending}
         onSubmit={form.handleSubmit(submit)}
       />
@@ -189,6 +196,68 @@ describe("rich input composer", () => {
       },
     });
     expect(startUpload).not.toHaveBeenCalled();
+  });
+
+  it("drops images and rules from HTML pasted into a chat composer, keeping saved images", async () => {
+    const view = render(
+      <Composer
+        initial='<p>Saved<img src="https://example.com/saved.png"></p>'
+        chatPaste
+      />,
+    );
+    const editor = await editorFor(view);
+    const { default: Quill } = await import("quill");
+    const quill = Quill.find(editor.parentElement!) as InstanceType<typeof Quill>;
+    act(() => quill.setSelection(quill.getLength() - 1, 0, "silent"));
+    fireEvent.paste(editor, {
+      clipboardData: {
+        files: [],
+        getData: (type: string) =>
+          type === "text/html"
+            ? '<div><img src="https://example.com/avatar.png"></div><hr><p><strong>Copied line</strong></p>'
+            : "Copied line",
+      },
+    });
+    expect(editor.querySelector("strong")?.textContent).toBe("Copied line");
+    expect(editor.querySelector("hr")).toBeNull();
+    expect(
+      [...editor.querySelectorAll("img")].map((img) => img.getAttribute("src")),
+    ).toEqual(["https://example.com/saved.png"]);
+  });
+
+  it("keeps Enter for new lines on touch screens and in composers that send by button", async () => {
+    const original = window.matchMedia;
+    const setCoarse = (matches: boolean) => {
+      window.matchMedia = ((media: string) => ({
+        media,
+        matches: matches && media === "(pointer: coarse)",
+      })) as unknown as typeof window.matchMedia;
+    };
+    try {
+      setCoarse(true);
+      const touch = render(<Composer initial="Draft" />);
+      const touchEditor = await editorFor(touch);
+      expect(touchEditor.getAttribute("enterkeyhint")).toBe("enter");
+      fireEvent.keyDown(touchEditor, { key: "Enter", keyCode: 13 });
+      expect(submit).not.toHaveBeenCalled();
+      touch.unmount();
+
+      setCoarse(false);
+      const never = render(<Composer initial="Draft" submitOnEnter="never" />);
+      const neverEditor = await editorFor(never);
+      fireEvent.keyDown(neverEditor, { key: "Enter", keyCode: 13 });
+      expect(submit).not.toHaveBeenCalled();
+      never.unmount();
+
+      setCoarse(true);
+      const always = render(<Composer initial="Draft" submitOnEnter="always" />);
+      const alwaysEditor = await editorFor(always);
+      expect(alwaysEditor.getAttribute("enterkeyhint")).toBe("send");
+      fireEvent.keyDown(alwaysEditor, { key: "Enter", keyCode: 13 });
+      await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+    } finally {
+      window.matchMedia = original;
+    }
   });
 
   it("preserves advanced HTML loaded by form reset while the editor is loading", async () => {

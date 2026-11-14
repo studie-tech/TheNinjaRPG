@@ -9,7 +9,7 @@ import Link from "@/layout/Link";
 import { prepareGuideHtml } from "@/libs/guide/html";
 import { parseHtml } from "@/utils/parse";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 interface NeighborGuide {
   slug: string;
@@ -34,7 +34,7 @@ export const GuideArticleView: React.FC<GuideArticleViewProps> = ({
   related,
   catalog,
 }) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const isStaff = Boolean(userData && canChangeContent(userData.role));
   const { html, headings } = prepareGuideHtml(article.content);
   const categoryLabel = GUIDE_CATEGORY_LABELS[article.category as GuideCategory];
@@ -157,7 +157,7 @@ export const GuideArticleView: React.FC<GuideArticleViewProps> = ({
   );
 };
 
-const GuideToc: React.FC<{
+export const GuideToc: React.FC<{
   headings: { id: string; text: string; level: 2 | 3 }[];
 }> = ({ headings }) => (
   <ol className="mt-2 space-y-0.5 border-l pl-3 text-sm">

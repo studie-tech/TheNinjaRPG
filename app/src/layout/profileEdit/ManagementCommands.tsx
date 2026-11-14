@@ -4,13 +4,14 @@ import { type LucideIcon, ShieldOff, Trash2, Zap } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { Button } from "@/components/ui/button";
+import { Button, type ButtonProps } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import { MAX_MASS_EXPERIENCE_AWARD } from "@/drizzle/constants";
 import Confirm from "@/layout/Confirm";
 import Loader from "@/layout/Loader";
+import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import {
@@ -19,7 +20,7 @@ import {
   canEnableGlobalTavern,
   canUnequipAllUsers,
 } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 
 /**
  * Site Management Functionality
@@ -36,7 +37,7 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
 
   // Utility
   const utils = api.useUtils();
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
 
   // Global tavern toggle
   const { data: globalTavernEnabled = true } =
@@ -122,6 +123,7 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
       {canUnequipAllUsers(user) && (
         <Confirm
           title="Confirm Unequip All Gear"
+          triggerAsChild
           button={
             <StaffCommandButton
               icon={ShieldOff}
@@ -142,6 +144,7 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
       {canUnequipAllUsers(user) && (
         <Confirm
           title="Confirm Unequip All Jutsus"
+          triggerAsChild
           button={
             <StaffCommandButton
               icon={ShieldOff}
@@ -162,6 +165,7 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
       {canUnequipAllUsers(user) && (
         <Confirm
           title="Confirm Reset All Skill Trees"
+          triggerAsChild
           button={
             <StaffCommandButton
               icon={Trash2}
@@ -181,6 +185,7 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
       {canAwardExperience(user) && (
         <Confirm
           title="Confirm Mass Experience Award"
+          triggerAsChild
           button={
             <StaffCommandButton
               icon={Zap}
@@ -221,6 +226,7 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
       {canClearSectors(user.role) && (
         <Confirm
           title="Confirm Clear Sector"
+          triggerAsChild
           button={
             <StaffCommandButton
               icon={Trash2}
@@ -281,20 +287,27 @@ export const ManagementCommands: React.FC<ManagementCommandsProps> = ({ user }) 
 };
 
 /** A staff command's Confirm trigger, showing a loader while its mutation runs. */
-const StaffCommandButton: React.FC<{
-  icon: LucideIcon;
-  label: string;
-  isPending: boolean;
-  variant?: "destructive" | "default";
-  className?: string;
-}> = ({
+const StaffCommandButton: React.FC<
+  Omit<ButtonProps, "variant"> & {
+    icon: LucideIcon;
+    label: string;
+    isPending: boolean;
+    variant?: "destructive" | "default";
+  }
+> = ({
   icon: Icon,
   label,
   isPending,
   variant = "destructive",
-  className = "w-full",
+  className,
+  ...buttonProps
 }) => (
-  <Button variant={variant} disabled={isPending} className={className}>
+  <Button
+    {...buttonProps}
+    variant={variant}
+    disabled={isPending}
+    className={cn("w-full", className)}
+  >
     {isPending ? (
       <Loader size={5} />
     ) : (

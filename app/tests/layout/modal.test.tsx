@@ -189,6 +189,68 @@ describe("Modal", () => {
     });
   }
 
+  it("leaves Enter to multi-line, rich text and opted-out fields", () => {
+    const accept = vi.fn();
+    const close = vi.fn();
+    const { getByRole, getByTestId } = render(
+      <Modal
+        isOpen
+        setIsOpen={close}
+        title="Note"
+        onAccept={accept}
+        proceed_label="Save"
+      >
+        <textarea aria-label="Note" />
+        <div data-testid="rich" contentEditable suppressContentEditableWarning />
+        <div data-enter-ignore>
+          <input aria-label="Search" />
+        </div>
+        <input aria-label="Title" />
+      </Modal>,
+    );
+    const rich = getByTestId("rich");
+    // happy-dom does not derive isContentEditable from the attribute.
+    Object.defineProperty(rich, "isContentEditable", { value: true });
+    for (const field of [
+      getByRole("textbox", { name: "Note" }),
+      rich,
+      getByRole("textbox", { name: "Search" }),
+    ]) {
+      field.focus();
+      fireEvent.keyDown(field, { key: "Enter" });
+    }
+    expect(accept).not.toHaveBeenCalled();
+
+    const title = getByRole("textbox", { name: "Title" });
+    title.focus();
+    const consumed = new KeyboardEvent("keydown", { key: "Enter", bubbles: true });
+    consumed.preventDefault = () => {};
+    Object.defineProperty(consumed, "defaultPrevented", { value: true });
+    title.dispatchEvent(consumed);
+    expect(accept).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(title, { key: "Enter" });
+    expect(accept).toHaveBeenCalledTimes(1);
+  });
+
+  it("styles Proceed as destructive for the destructive tone", () => {
+    const { getByRole } = render(
+      <Modal
+        isOpen
+        setIsOpen={vi.fn()}
+        title="Drop"
+        tone="destructive"
+        proceed_label="Drop item"
+        onAccept={vi.fn()}
+      >
+        Body
+      </Modal>,
+    );
+    expect(getByRole("button", { name: "Drop item" }).className).toContain(
+      "bg-destructive",
+    );
+  });
+
   it("runs onClose when the dialog's own close control dismisses it", () => {
     vi.spyOn(dialogComponents, "Dialog").mockImplementation((({
       open,

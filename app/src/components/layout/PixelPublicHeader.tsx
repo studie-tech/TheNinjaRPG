@@ -6,7 +6,9 @@ import { IMG_LOGO_SHORT } from "@/drizzle/constants";
 import { GameSettingsPopover } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
-import PixelPublicMenuDropdown from "@/layout/PixelPublicMenuDropdown";
+import PixelPublicMenuDropdown, {
+  PixelPublicNavLink,
+} from "@/layout/PixelPublicMenuDropdown";
 import { cn } from "@/libs/shadui";
 
 interface PixelPublicHeaderLink {
@@ -50,39 +52,40 @@ const PixelPublicHeader: React.FC<PixelPublicHeaderProps> = ({
         <nav className="col-start-2 hidden justify-center gap-3 text-sm md:flex">
           <PixelPublicMenuDropdown />
           {navLinks.map((link) => (
-            <a
+            <PixelPublicNavLink
               key={link.href}
               href={link.href}
               className="tnr-ink-nav-link min-h-[48px]"
             >
               {link.name}
-            </a>
+            </PixelPublicNavLink>
           ))}
         </nav>
         <div className="col-start-2 flex items-center gap-[8px] justify-self-end md:col-start-3 md:gap-3">
-          <Link href="/login">
-            <Button
-              variant="outline"
-              size="sm"
-              className="tnr-ink-btn tnr-ink-btn-secondary min-h-[48px]"
-              style={{ minWidth: 64 }}
-            >
-              Log In
-            </Button>
-          </Link>
-          <Link href="/signup">
-            <Button
-              size="sm"
-              className="tnr-ink-btn tnr-ink-btn-primary tnr-ink-register min-h-[48px]"
-              style={{ minWidth: 64 }}
-            >
-              Register
-            </Button>
-          </Link>
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="tnr-ink-btn tnr-ink-btn-secondary min-h-[48px]"
+            style={{ minWidth: 64 }}
+          >
+            <Link href="/login">Log In</Link>
+          </Button>
+          <Button
+            asChild
+            size="sm"
+            className="tnr-ink-btn tnr-ink-btn-primary tnr-ink-register min-h-[48px]"
+            style={{ minWidth: 64 }}
+          >
+            <Link href="/signup">Register</Link>
+          </Button>
           <GameSettingsPopover
             trigger="settings"
             triggerClassName="tnr-ink-settings-btn min-h-[48px] min-w-[48px]"
           />
+          <div className="md:hidden">
+            <PixelPublicMenuDropdown sectionLinks={navLinks} align="end" />
+          </div>
         </div>
       </div>
     </header>

@@ -142,13 +142,14 @@ export const getUserFactionNotifications = (
       setupDeadline.getTime() - now.getTime() <= KAGE_DEFENSE_REMINDER_HOURS * 3600_000;
     notifications.push({
       href: "/townhall",
-      name: "Missing kage schedule!",
+      name: "Missing schedule",
       color: isUrgent && !isPaused ? "red" : "blue",
       alwaysShow: true,
     });
   }
 
-  // Raid notifications
+  // Raid notifications. Raids are opportunities to join, not threats, so they use the
+  // informational colour and leave red (and the red badge) to attacks and blocking states.
   const openRaids = user?.activeRaids?.filter((r) => r.raidType === "open") ?? [];
   const exclusiveRaids =
     user?.activeRaids?.filter((r) => r.raidType === "exclusive") ?? [];
@@ -160,8 +161,8 @@ export const getUserFactionNotifications = (
   if (openRaidSectors.length > 0) {
     notifications.push({
       href: "/travel",
-      name: `Open ${pluralize("Raid", openRaidSectors)} available (${sectorList(openRaidSectors)})`,
-      color: "red",
+      name: `${pluralize("Raid", openRaidSectors)} (${sectorList(openRaidSectors)})`,
+      color: "blue",
       alwaysShow: true,
     });
   }
@@ -170,7 +171,7 @@ export const getUserFactionNotifications = (
     notifications.push({
       href: "/travel",
       name: `Village ${pluralize("Raid", exclusiveRaidSectors)} active (${sectorList(exclusiveRaidSectors)})`,
-      color: "red",
+      color: "blue",
       alwaysShow: true,
     });
   }

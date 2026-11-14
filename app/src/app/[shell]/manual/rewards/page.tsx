@@ -13,7 +13,7 @@ import Modal from "@/layout/Modal";
 import { RewardFormWrapper } from "@/layout/RewardEditor";
 import { getRewardPreview } from "@/libs/objectives";
 import { canManageRewards, isStaffRole } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import {
   RewardNodeValidator,
   RewardPackageValidator,
@@ -26,7 +26,9 @@ import {
 
 /** Staff catalog browsing and permitted editing through the shared reward form. */
 export default function RewardsPage() {
-  const { data: user } = useRequiredUserData();
+  const { data: user } = useRequiredUserDataSelector((profile) => ({
+    role: profile.role,
+  }));
   const { data, isPending, isError, refetch } = api.rewardPackages.getCatalog.useQuery(
     undefined,
     { enabled: isStaffRole(user?.role) },

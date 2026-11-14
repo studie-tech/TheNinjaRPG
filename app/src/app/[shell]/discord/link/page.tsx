@@ -16,7 +16,7 @@ import {
   describeDiscordLinkResult,
   isDiscordLinkResult,
 } from "@/libs/discordLink";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Discord Linked Roles verification page. Discord opens it when a member claims the
@@ -88,7 +88,9 @@ const DiscordLinkOutcome: React.FC<{
 
 const DiscordLinkStart: React.FC = () => {
   const { isLoaded, isSignedIn } = useUser();
-  const { data: userData, status } = useUserData();
+  const { data: userData, status } = useUserDataSelector((u) => ({
+    username: u.username,
+  }));
   const { data, isPending } = api.discord.getStatus.useQuery();
 
   if (!isLoaded || isPending) return <Loader explanation="Loading" />;

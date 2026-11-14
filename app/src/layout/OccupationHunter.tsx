@@ -3,11 +3,13 @@
 import { HUNTING_RANKS, HUNTING_REQUIRED_EXP } from "@/drizzle/constants";
 import ContentBox from "@/layout/ContentBox";
 import { HuntingBoard } from "@/layout/HuntingBoard";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** Show the contract board and existing hunting progression only to Hunters. */
 export default function OccupationHunter() {
-  const { data: user } = useRequiredUserData();
+  const { data: user } = useRequiredUserDataSelector((u) => ({
+    occupation: u.occupation,
+  }));
   if (user?.occupation !== "HUNTER") return null;
   return (
     <>

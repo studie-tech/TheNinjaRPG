@@ -21,7 +21,9 @@ import * as StatusBar from "@/layout/StatusBar";
 import * as SuggestChange from "@/layout/SuggestChange";
 import * as toast from "@/libs/toast";
 import type { AiWithRelations } from "@/routers/profile";
+import { humanizeIdentifier } from "@/utils/string";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const save = vi.fn();
 const names = { useQuery: () => ({ data: [], isPending: false }) };
@@ -83,7 +85,7 @@ beforeEach(() => {
     },
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push: vi.fn() } as never);
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: { role: "CONTENT-ADMIN" },
   } as never);
   vi.spyOn(ais, "useAiEditForm").mockImplementation((user) => {
@@ -187,10 +189,12 @@ describe("manual AI editing", () => {
     ));
     const view = await mount();
     for (const field of ["preferredGeneral1", "preferredGeneral2", "primaryElement"]) {
-      fireEvent.click(view.getByRole("button", { name: `Clear ${field}` }));
-      expect(view.getByRole("combobox", { name: field }).textContent).toContain(
-        "Select option",
+      fireEvent.click(
+        view.getByRole("button", { name: `Clear ${humanizeIdentifier(field)}` }),
       );
+      expect(
+        view.getByRole("combobox", { name: humanizeIdentifier(field) }).textContent,
+      ).toContain("Select option");
     }
     fireEvent.click(view.getByRole("button", { name: "Save to Database" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));

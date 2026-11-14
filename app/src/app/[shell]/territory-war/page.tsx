@@ -24,12 +24,23 @@ import Loader from "@/layout/Loader";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Live standings/lobbies, with server-clock deadline refresh and recoverable action feedback. */
 export default function TerritoryWarPage() {
-  const { data: user, timeDiff, updateUser, prepareUserUpdate } = useRequiredUserData();
+  const {
+    data: user,
+    timeDiff,
+    updateUser,
+    prepareUserUpdate,
+  } = useRequiredUserDataSelector((profile) => ({
+    userId: profile.userId,
+    username: profile.username,
+    sector: profile.sector,
+    status: profile.status,
+    autoWakeUp: profile.autoWakeUp,
+  }));
   const router = useRouter();
   const utils = api.useUtils();
   const ownTeamRef = useRef<HTMLDivElement>(null);
@@ -171,6 +182,7 @@ export default function TerritoryWarPage() {
             {!ownTeam && (
               <Button
                 disabled={pending || !inSector || !canAttemptAwakeAction(user)}
+                loading={create.isPending}
                 onClick={() => create.mutate({ eventId: event.id })}
               >
                 Create guardian team
@@ -205,6 +217,7 @@ export default function TerritoryWarPage() {
                           <>
                             <Button
                               disabled={pending || !inSector}
+                              loading={start.isPending}
                               onClick={() => start.mutate({ teamId: team.id })}
                             >
                               Attack guardian
@@ -212,6 +225,7 @@ export default function TerritoryWarPage() {
                             <Button
                               variant="outline"
                               disabled={pending}
+                              loading={leave.isPending}
                               onClick={() => leave.mutate({ teamId: team.id })}
                             >
                               Leave
@@ -226,6 +240,9 @@ export default function TerritoryWarPage() {
                               !inSector ||
                               !canAttemptAwakeAction(user) ||
                               team.queue.length >= TERRITORY_WAR_TEAM_SIZE
+                            }
+                            loading={
+                              join.isPending && join.variables?.teamId === team.id
                             }
                             onClick={() => join.mutate({ teamId: team.id })}
                           >

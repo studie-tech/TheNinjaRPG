@@ -6,6 +6,7 @@ import * as ContentBox from "@/layout/ContentBox";
 import * as RewardEditor from "@/layout/RewardEditor";
 import * as UserContext from "@/utils/UserContext";
 import { ObjectiveReward } from "@/validators/rewards";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const rewards = ObjectiveReward.parse({ reward_money: 50 });
 const pack = { id: "pack-1", name: "Starter", description: "Some ryo", rewards };
@@ -17,7 +18,7 @@ beforeEach(() => {
     <div>{children}</div>
   ));
   vi.spyOn(RewardEditor, "RewardFormWrapper").mockImplementation(() => null);
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "staff", role: "CONTENT-ADMIN" },
   } as never);
   const mutation = (mutate = vi.fn()) => ({

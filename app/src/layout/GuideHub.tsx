@@ -19,7 +19,7 @@ import NavTabs from "@/layout/NavTabs";
 import { showMutationToast } from "@/libs/toast";
 import { groupBy } from "@/utils/grouping";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 interface GuideHubProps {
   articles: GuideArticle[];
@@ -28,7 +28,7 @@ interface GuideHubProps {
 const ALL_TAB = "All";
 
 export const GuideHub: React.FC<GuideHubProps> = ({ articles }) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const router = useRouter();
   const isStaff = Boolean(userData && canChangeContent(userData.role));
   const [category, setCategory] = useState<string>(ALL_TAB);

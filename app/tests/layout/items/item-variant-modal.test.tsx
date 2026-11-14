@@ -6,12 +6,12 @@ import * as client from "@/app/_trpc/client";
 import type { UserItemWithVariants } from "@/drizzle/schema";
 import { ItemVariantModal } from "@/layout/items/ItemVariantModal";
 import * as toast from "@/libs/toast";
-import * as UserContext from "@/utils/UserContext";
 import {
   flushRadixFocus,
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type Options = {
   onSuccess: (result: unknown, variables: unknown, revision: number) => Promise<void>;
@@ -45,7 +45,7 @@ beforeEach(() => {
   installBrowserGlobals({ resizeObserver: true });
   vi.clearAllMocks();
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "viewer" },
     prepareUserUpdate: vi.fn(),
     updateUser: vi.fn(async () => undefined),

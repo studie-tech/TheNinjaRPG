@@ -8,8 +8,8 @@ import * as itemWithEffects from "@/layout/ItemWithEffects";
 import { ShrineHall } from "@/layout/ShrineHall";
 import * as table from "@/layout/Table";
 import type { UserWithRelations } from "@/routers/profile";
-import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { mockUserContextValue } from "../setup/userContext";
 
 describe("ShrineHall reserve boost locks", () => {
   beforeEach(() => {
@@ -78,18 +78,19 @@ describe("ShrineHall reserve boost locks", () => {
 
   it("judges maintenance due dates against the server clock", () => {
     // The device runs two hours ahead of the server, so an hour-old due date is still upcoming.
-    vi.spyOn(UserContext, "useUserInfo").mockReturnValue({
-      timeDiff: 2 * 3600000,
-    } as never);
-    const view = renderShrineHall([
-      {
-        id: 1,
-        sector: 100,
-        villageId: "reserve-village",
-        shrineLevel: 2,
-        nextMaintainanceDueDate: new Date(Date.now() - 3600000),
-      },
-    ]);
+    const view = renderShrineHall(
+      [
+        {
+          id: 1,
+          sector: 100,
+          villageId: "reserve-village",
+          shrineLevel: 2,
+          nextMaintainanceDueDate: new Date(Date.now() - 3600000),
+        },
+      ],
+      {},
+      2 * 3600000,
+    );
     fireEvent.mouseDown(view.getByRole("tab", { name: "Maintenance" }), {
       button: 0,
       ctrlKey: false,
@@ -141,6 +142,7 @@ describe("ShrineHall reserve boost locks", () => {
 const renderShrineHall = (
   shrines: object[],
   defenders: { ais?: object[]; settings?: object } = {},
+  timeDiff = 0,
 ) => {
   const user = {
     userId: "kage",
@@ -185,8 +187,9 @@ const renderShrineHall = (
     },
     war: { getActiveWars: { useQuery: () => ({ data: [], refetch: vi.fn() }) } },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: user,
+    timeDiff,
     updateUser: vi.fn(),
     prepareUserUpdate: vi.fn(),
   } as never);

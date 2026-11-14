@@ -31,6 +31,7 @@ import {
 import { conversationQueryOptions } from "../setup/conversationQueryOptions";
 import { installEmojiPickerBrowserGlobals } from "../setup/emojiPicker";
 import { spyOnToasts } from "../setup/toastMock";
+import { mockUserContextValue } from "../setup/userContext";
 
 const actualEmojiPicker = EmojiPicker.EmojiPicker;
 const edit = vi.fn();
@@ -71,7 +72,7 @@ const EditorInput = ({
 beforeEach(() => {
   vi.clearAllMocks();
   Object.assign(vi.spyOn(client, "api" as never), api);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "friend", role: "USER" },
   } as never);
   spyOnToasts();

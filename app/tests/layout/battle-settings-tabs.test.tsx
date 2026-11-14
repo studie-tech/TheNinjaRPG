@@ -4,7 +4,7 @@ import * as client from "@/app/_trpc/client";
 import * as combat from "@/hooks/combat";
 import * as AiProfileEdit from "@/layout/AiProfileEdit";
 import { BattleSettingsEdit } from "@/layout/profileEdit/BattleSettingsEdit";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 beforeEach(() => {
   const mutation = {
@@ -24,7 +24,7 @@ beforeEach(() => {
     },
     ai: { updateAiProfile: mutation },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         data: {

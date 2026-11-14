@@ -4,7 +4,7 @@ import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 
 /**
  * Start an arena battle and move the player into it. A success navigates away, so only a
@@ -13,7 +13,7 @@ import { useRequiredUserData } from "@/utils/UserContext";
 export const useStartArenaBattle = (
   onStarted: (result: RouterOutputs["combat"]["startArenaBattle"]) => void,
 ) => {
-  const { pusher, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { pusher, prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const router = useRouter();
   const flight = useSingleFlight();
 

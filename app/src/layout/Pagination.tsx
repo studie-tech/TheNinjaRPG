@@ -1,58 +1,78 @@
 import type React from "react";
+import { Button } from "@/components/ui/button";
+import { getPageWindow } from "@/libs/pagination";
+import { cn } from "@/libs/shadui";
 
 interface PaginationProps {
   current: number;
   total: number;
-  setPage: React.Dispatch<React.SetStateAction<number>>;
+  setPage: (page: number) => void;
 }
 
+/**
+ * Page controls for a zero-based page index: Previous, the first and last pages, the pages
+ * around the current one and Next. The row wraps instead of overflowing narrow screens.
+ */
 const Pagination: React.FC<PaginationProps> = (props) => {
+  const pages = getPageWindow(props.current, props.total);
   return (
-    <div className="my-4 flex flex-row justify-center">
-      <nav aria-label="Pages">
-        <ul className="inline-flex -space-x-px">
-          <li>
-            <button
-              type="button"
-              className="ml-0 rounded-l-lg border border-gray-300 bg-white px-3 py-2 text-gray-500 leading-tight hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={props.current <= 0}
-              onClick={() => props.setPage(props.current - 1)}
+    <nav aria-label="Pages" className="my-4 flex justify-center">
+      <ul className="flex flex-wrap items-center justify-center gap-1">
+        <li>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="min-h-10"
+            disabled={props.current <= 0}
+            onClick={() => props.setPage(props.current - 1)}
+          >
+            Previous
+          </Button>
+        </li>
+        {pages.map((pageNum, index) =>
+          pageNum === null ? (
+            <li
+              // Gaps sit between fixed neighbours, so their position identifies them.
+              key={`gap-${index}`}
+              aria-hidden="true"
+              className="px-1 text-muted-foreground"
             >
-              Previous
-            </button>
-          </li>
-          {Array.from({ length: props.total }, (_, idx) => idx).map((pageNum) => {
-            return (
-              <li key={`page-${pageNum}`}>
-                <button
-                  type="button"
-                  className={
-                    pageNum === props.current
-                      ? "border border-gray-300 bg-blue-50 px-3 py-2 text-blue-600 hover:bg-blue-100 hover:text-blue-700"
-                      : "border border-gray-300 bg-white px-3 py-2 text-gray-500 leading-tight hover:bg-gray-100 hover:text-gray-700"
-                  }
-                  onClick={() => {
-                    props.setPage(pageNum);
-                  }}
-                >
-                  {pageNum + 1}
-                </button>
-              </li>
-            );
-          })}
-          <li>
-            <button
-              type="button"
-              className="rounded-r-lg border border-gray-300 bg-white px-3 py-2 text-gray-500 leading-tight hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={props.current >= props.total - 1}
-              onClick={() => props.setPage(props.current + 1)}
-            >
-              Next
-            </button>
-          </li>
-        </ul>
-      </nav>
-    </div>
+              …
+            </li>
+          ) : (
+            <li key={`page-${pageNum}`}>
+              <Button
+                type="button"
+                variant={pageNum === props.current ? "default" : "secondary"}
+                size="sm"
+                className={cn(
+                  "min-h-10 min-w-10",
+                  pageNum === props.current && "font-bold",
+                )}
+                aria-current={pageNum === props.current ? "page" : undefined}
+                aria-label={`Page ${pageNum + 1}`}
+                onClick={() => props.setPage(pageNum)}
+              >
+                {pageNum + 1}
+              </Button>
+            </li>
+          ),
+        )}
+        <li>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="min-h-10"
+            disabled={props.current >= props.total - 1}
+            onClick={() => props.setPage(props.current + 1)}
+          >
+            Next
+          </Button>
+        </li>
+      </ul>
+    </nav>
   );
 };
 

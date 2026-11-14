@@ -16,6 +16,33 @@ export const usePublicPathname = () => {
   return publicPathForShellPath(pathname) ?? pathname;
 };
 
+/**
+ * The sign-in page, returning to `path` afterwards when it is a same-site game path.
+ * Entry pages and anything that is not a plain absolute path sign in without a return.
+ */
+export const loginRedirectPath = (path: string) => {
+  const isSameSite =
+    path.startsWith("/") && !path.startsWith("//") && !path.includes("\\");
+  const pagePath = path.split(/[?#]/)[0];
+  if (!isSameSite || ["/", "/login", "/signup"].includes(pagePath ?? ""))
+    return "/login";
+  return `/login?redirect_url=${encodeURIComponent(path)}`;
+};
+
+/**
+ * Whether the previous history entry is a page of this site, so going back stays in the
+ * game. The Navigation API lists only this origin's entries; where it is unavailable the
+ * answer is false and callers navigate to a known page instead.
+ */
+export const hasInAppPreviousEntry = () => {
+  if (typeof window === "undefined") return false;
+  const navigation = window.navigation;
+  const index = navigation?.currentEntry?.index ?? 0;
+  if (!navigation || index < 1) return false;
+  const previous = navigation.entries()[index - 1];
+  return !!previous?.url && new URL(previous.url).origin === window.location.origin;
+};
+
 /** The battle whose start has already sent this tab to /combat. */
 let navigatedBattleId: string | null = null;
 
@@ -50,13 +77,13 @@ export const useAwake = (
   useEffect(() => {
     if (canRecover) return;
     if (userStatus === "HOSPITALIZED") {
-      void router.push("/hospital");
+      void router.replace("/hospital");
     } else if (userStatus === "BATTLE") {
-      void router.push("/combat");
+      void router.replace("/combat");
     } else if (userStatus === "TRAVEL" && pathname !== "/travel") {
-      void router.push("/travel");
+      void router.replace("/travel");
     } else if (userStatus === "ASLEEP") {
-      void router.push("/home");
+      void router.replace("/home");
     }
   }, [pathname, userStatus, router, canRecover]);
   return userStatus === "AWAKE";

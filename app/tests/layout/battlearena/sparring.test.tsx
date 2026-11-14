@@ -19,13 +19,13 @@ import * as image from "@/layout/Image";
 import * as itemLoadout from "@/layout/ItemLoadoutSelector";
 import * as jutsuLoadout from "@/layout/JutsuLoadoutSelector";
 import { sparringRouter } from "@/server/api/routers/sparring";
-import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 let finderInputs: Record<string, unknown>[];
 let finderOptions: Record<string, unknown>[];
@@ -148,7 +148,7 @@ beforeEach(() => {
       cancelChallenge: { useMutation: useMutation("cancelChallenge") },
     },
   });
-  vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "me", level: 30, villageId: "v-1", userQuests: [], questData: [] },
     updateUser: vi.fn(),
   } as never);
@@ -365,7 +365,7 @@ it.each(["AWAKE", "ASLEEP", "HOSPITALIZED"] as const)(
         data: challenges.map((challenge) => ({ ...challenge, useRankedRules: false })),
       }),
     });
-    vi.spyOn(userContext, "useRequiredUserData").mockReturnValue({
+    mockUserContextValue({
       data: initial.userData,
       prepareUserUpdate: () => prepareUserUpdate(cache, key),
       updateUser: (patch: UserUpdate | undefined, options?: UserUpdateOptions) =>

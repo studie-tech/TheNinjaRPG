@@ -360,7 +360,11 @@ export const WarMap: React.FC<{
               setShowModal(true);
             }
           }}
-          actionExplanation="Click tile to declare war on sector"
+          actionExplanation={
+            canDeclareWar
+              ? "Click tile to declare war on sector"
+              : "Hover or tap a sector to see its owner"
+          }
           hexasphere={globe}
         />
       )}
@@ -382,7 +386,7 @@ export const WarMap: React.FC<{
             (isLoadingRaidOptions || !raidOptions || !!raidBlock)
           }
         >
-          {isLoading && <Loader explanation="Execution Action" />}
+          {isLoading && <Loader explanation="Processing..." />}
           {!isLoading && modalContent}
           {declarationError && (
             <p role="alert" className="mt-2 text-destructive text-sm">

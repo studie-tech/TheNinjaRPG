@@ -40,10 +40,12 @@ import {
   canViewRecruitmentAnalytics,
   canViewRevenueAnalytics,
 } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualRecruitment() {
-  const { data: currentUser } = useUserData();
+  const { data: currentUser } = useUserDataSelector((profile) => ({
+    role: profile.role,
+  }));
   const allowed = canViewRecruitmentAnalytics(currentUser?.role ?? "USER");
   const filterState = useRecruitmentFiltering();
   const filter = getRecruitmentFilter(filterState) as {

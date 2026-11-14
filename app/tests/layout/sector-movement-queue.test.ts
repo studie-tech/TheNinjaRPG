@@ -32,6 +32,7 @@ const setup = () => {
     userData: { userId: "self" },
     userRef: { current: { status: "AWAKE", location: "" } },
     mountedRef: { current: true },
+    isActiveRef: { current: true },
     movePendingRef: { current: true },
     moveTargetRef: { current: requested as Destination | null },
     walkAnimatingRef: { current: false },
@@ -217,6 +218,29 @@ it("waits for the active move and then routes a queued tile in its selected sect
     1,
     0,
   );
+});
+
+it("pauses queued movement while the retained sector is hidden", () => {
+  const test = setup();
+  test.scope.routeTargetRef.current = { sector: 1, x: 4, y: 8 };
+  test.scope.movePendingRef.current = false;
+  test.scope.isActiveRef.current = false;
+  test.continueMovement();
+  expect(test.scope.move).not.toHaveBeenCalled();
+  expect(test.scope.routeTowardWorldTarget).not.toHaveBeenCalled();
+  test.scope.isActiveRef.current = true;
+  test.continueMovement();
+  expect(test.scope.move).toHaveBeenCalledTimes(1);
+});
+
+it("reconciles an in-flight move without starting a hidden border crossing", async () => {
+  const test = setup();
+  test.scope.isActiveRef.current = false;
+  test.scope.pendingCrossRef.current = "east";
+  await test.runJourneySegment(landed, Promise.resolve(), {}, test.requested);
+  expect(test.scope.moveStepAsync).not.toHaveBeenCalled();
+  expect(test.scope.snapMovementPosition).toHaveBeenCalledWith(landed);
+  expect(test.scope.commitMovePosition).toHaveBeenCalled();
 });
 
 it("uses the final world tile when a queued border leg belongs to the previous sector", () => {

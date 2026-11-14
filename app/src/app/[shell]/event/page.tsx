@@ -23,7 +23,7 @@ import {
 } from "@/utils/permissions";
 import { useRecipientPicker } from "@/utils/search";
 import { DAY_S, secondsPassed } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import { type MutateContentSchema, mutateContentSchema } from "@/validators/comments";
 import { type ChangeSettingSchema, changeSettingSchema } from "@/validators/misc";
 
@@ -83,7 +83,7 @@ const EventGainMultiplierPanel: React.FC<{
     timeDiff,
     prepareUserUpdate,
     updateUser,
-  } = useRequiredUserData();
+  } = useRequiredUserDataSelector((u) => ({ role: u.role }));
   const { data: settingData } = api.misc.getSetting.useQuery(
     { name: setting },
     { enabled: !!userData },
@@ -169,7 +169,7 @@ const TestErrorMonitoring: React.FC = () => {
   const [shouldThrow, setShouldThrow] = useState(false);
 
   // Query data
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({ role: u.role }));
 
   // Trpc error trigger
   const trpcErrorMutation = api.staff.throwError.useMutation();
@@ -219,7 +219,20 @@ const TestErrorMonitoring: React.FC = () => {
 const NotificationSystem: React.FC = () => {
   // User state
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    username: u.username,
+    avatar: u.avatar,
+    rank: u.rank,
+    level: u.level,
+    federalStatus: u.federalStatus,
+    role: u.role,
+    isOutlaw: u.isOutlaw,
+  }));
 
   // utils
   const utils = api.useUtils();
@@ -320,11 +333,9 @@ const NotificationSystem: React.FC = () => {
           )}
         </ContentBox>
       )}
-      <ContentBox
-        title="Notifications"
-        subtitle="All Previous Notifications"
-        initialBreak={true}
-      >
+      {/* Spaced like a follow-up section but titled as the page's heading. */}
+      <div className="h-4" />
+      <ContentBox title="Notifications" subtitle="All Previous Notifications">
         {isLoadingNotifications && <Loader explanation="Loading notifications" />}
         {!isLoadingNotifications && (
           <div className="grid grid-cols-1">

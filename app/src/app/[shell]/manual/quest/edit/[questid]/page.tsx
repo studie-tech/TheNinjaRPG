@@ -5,7 +5,7 @@ import { Copy, FileMinus, FilePlus } from "lucide-react";
 import { nanoid } from "nanoid";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import CytoscapeComponent from "react-cytoscapejs";
-import type { UseFormReturn } from "react-hook-form";
+import { type UseFormReturn, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -16,6 +16,7 @@ import {
 } from "@/drizzle/constants";
 import type { Quest } from "@/drizzle/schema";
 import { useQuestEditForm } from "@/hooks/quest";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { QuestHelper } from "@/layout/ContentHelp";
@@ -29,6 +30,7 @@ import { buildObjectiveEdges, getObjectiveImage } from "@/libs/objectives";
 import { PET_TASK_MIN_RANK_NAME } from "@/libs/pets/tasks";
 import { verifyQuestObjectiveFlow } from "@/libs/quest/validation";
 import { getQuestFlowPositions, restoreQuestFlowPositions } from "@/libs/questFlow";
+import { showUndoToast } from "@/libs/toast";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
 import type {
   AllObjectivesType,
@@ -101,8 +103,14 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
     getSuggestionData,
     isUpdating,
   } = useQuestEditForm(props.quest, props.refetch);
+  const entryName = useWatch({ control: form.control, name: "name" });
+  const heading = useEditorTitle("quest", entryName);
 
   const [selectedObjectiveId, setSelectedObjectiveId] = useState<string | null>(null);
+  const latestObjectives = useRef(objectives);
+  useEffect(() => {
+    latestObjectives.current = objectives;
+  });
 
   // Handlers for adding/removing objectives
   const addObjective = () => {
@@ -121,9 +129,16 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
   const removeObjective = (idx: number) => {
     if (isUpdating) return;
     const newObjectives = [...objectives];
-    newObjectives.splice(idx, 1);
+    const [removed] = newObjectives.splice(idx, 1);
     setObjectives(newObjectives);
     setSelectedObjectiveId(null);
+    if (!removed) return;
+    showUndoToast(`Objective ${idx + 1} removed.`, () => {
+      // Re-insert into the objectives as they are then, keeping later edits.
+      const current = [...latestObjectives.current];
+      current.splice(Math.min(idx, current.length), 0, removed);
+      setObjectives(current);
+    });
   };
 
   /** Duplicate an objective with fresh attachment ids while retaining each package's source. */
@@ -233,7 +248,7 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
         </span>
       )}
       <ContentBox
-        title="Content Panel"
+        title={heading}
         subtitle="Quest Management"
         defaultBackHref="/manual/quest"
         topRightContent={<QuestHelper quest={currentValues} />}
@@ -259,11 +274,8 @@ const SingleEditQuest: React.FC<SingleEditQuestProps> = (props) => {
             disable tasks.
           </p>
         )}
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="font-bold text-2xl">Edit Quest</h1>
-        </div>
-
         <EditContent
+          guardUnsavedChanges
           schema={QuestFormRawSchema}
           form={form as UseFormReturn<ZodQuestFormType>}
           formData={formData.filter((entry) => !String(entry.id).startsWith("reward_"))}

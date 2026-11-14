@@ -14,6 +14,7 @@ import {
   ContentProposalSources,
   type ContentProposalStatus,
 } from "@/drizzle/constants";
+import { useContentReviewQueue } from "@/hooks/useContentReviewQueue";
 import ContentBox from "@/layout/ContentBox";
 import { CategoryBadge, ContentReviewDetail } from "@/layout/ContentReviewDetail";
 import { ContentReviewStats } from "@/layout/ContentReviewStats";
@@ -26,14 +27,14 @@ import {
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { formatTimeAgo } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
  * The content review desk: suggestions from the content audit and from staff, one at a time,
  * with keyboard shortcuts for fast review. Staff who cannot review see their own suggestions.
  */
 export const ContentReviewDesk: React.FC = () => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({ role: u.role }));
   const [tab, setTab] = useState<Tab>("Pending");
   const [category, setCategory] = useState<ContentProposalCategory | null>(null);
   const [source, setSource] = useState<ContentProposalSource | null>(null);
@@ -42,15 +43,9 @@ export const ContentReviewDesk: React.FC = () => {
   const status = TAB_STATUS[tab];
   const utils = api.useUtils();
 
-  const { data: counts } = api.contentReview.getCounts.useQuery(undefined, {
-    enabled: !!userData,
-  });
-  const queue = api.contentReview.getQueue.useInfiniteQuery(
+  const { counts, queue } = useContentReviewQueue(
     { status: status ?? "PENDING", category, source, limit: 25 },
-    {
-      enabled: !!userData && !!status,
-      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    },
+    !!userData && !!status,
   );
   const bulkApprove = api.contentReview.bulkApprove.useMutation({
     onSuccess: async (data) => {
@@ -69,6 +64,9 @@ export const ContentReviewDesk: React.FC = () => {
   });
 
   const items = queue.data?.pages.flatMap((page) => page.items) ?? [];
+  const outdatedOnLoad =
+    queue.data?.pages.reduce((sum, page) => sum + page.outdatedCount, 0) ?? 0;
+
   const canReview = counts?.canReview ?? false;
   const selectedIndex = items.findIndex((item) => item.id === selectedId);
 
@@ -192,9 +190,11 @@ export const ContentReviewDesk: React.FC = () => {
             <Loader explanation="Loading suggestions" />
           ) : items.length === 0 ? (
             <p className="rounded-lg border border-dashed p-6 text-center">
-              {status === "PENDING"
-                ? "The queue is clear. New suggestions from the content audit show up here."
-                : "Nothing here."}
+              {status !== "PENDING"
+                ? "Nothing here."
+                : outdatedOnLoad > 0
+                  ? `The queue is clear: ${outdatedOnLoad} ${outdatedOnLoad === 1 ? "suggestion" : "suggestions"} became outdated while loading and moved to the Outdated tab.`
+                  : "The queue is clear. New suggestions from the content audit show up here."}
             </p>
           ) : (
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)]">

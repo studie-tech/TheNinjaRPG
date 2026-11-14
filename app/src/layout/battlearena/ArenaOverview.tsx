@@ -19,11 +19,18 @@ import { BattleSetupControls } from "@/layout/battlearena/BattleSetupPanel";
 import Image from "@/layout/Image";
 import { type ArenaMode, rankedProgress, sparExamProgress } from "@/libs/battleArena";
 import { cn } from "@/libs/shadui";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** Every arena mode as a card with its current status and a way in. */
 export function ArenaOverview({ onOpen }: ArenaOverviewProps) {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    dailyArenaFights: u.dailyArenaFights,
+    level: u.level,
+    rankedLp: u.rankedLp,
+    userId: u.userId,
+    userQuests: u.userQuests,
+    questData: u.questData,
+  }));
   const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [isAutoCombat] = useAutoCombatSetting();
   const loadoutNames = useLoadoutNames();

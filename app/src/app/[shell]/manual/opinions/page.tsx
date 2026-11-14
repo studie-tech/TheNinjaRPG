@@ -13,14 +13,16 @@ import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { capitalizeFirstLetter } from "@/utils/string";
-import { useUserData } from "@/utils/UserContext";
+import { humanizeConstant } from "@/utils/string";
+import { useUserDataSelector } from "@/utils/UserContext";
 import { type UserReviewSchema, userReviewSchema } from "@/validators/reports";
 
 /** Let players submit staff reviews and inspect their existing submissions. */
 export default function ManualOpinions() {
   // User state
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({
+    userId: profile.userId,
+  }));
 
   // Users Query
   const { data, isPending: isLoadingUsers } = api.profile.getPublicUsers.useQuery(
@@ -152,7 +154,7 @@ const ReportImage: React.FC<ReportimageProps> = (props) => {
       <div>
         <div className="font-bold">{user.username}</div>
         <div>
-          Lvl. {user.level} {capitalizeFirstLetter(user.role)}
+          Lvl. {user.level} {humanizeConstant(user.role)}
         </div>
       </div>
       {props.positive === true && (
@@ -175,20 +177,38 @@ const ReportImage: React.FC<ReportimageProps> = (props) => {
       <PopoverContent>
         <div className="relative max-w-[320px]">
           <div className="flex flex-row gap-2">
-            <ThumbsDown
-              className={cn(
-                "h-6 w-6",
-                watchedPositive === false ? "fill-orange-500" : "",
-              )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-[40px]"
+              aria-label="Negative rating"
+              aria-pressed={watchedPositive === false}
               onClick={() => createForm.setValue("positive", false)}
-            />{" "}
-            <ThumbsUp
-              className={cn(
-                "h-6 w-6",
-                watchedPositive === true ? "fill-orange-500" : "",
-              )}
+            >
+              <ThumbsDown
+                className={cn(
+                  "h-6 w-6",
+                  watchedPositive === false ? "fill-orange-500" : "",
+                )}
+              />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-[40px]"
+              aria-label="Positive rating"
+              aria-pressed={watchedPositive === true}
               onClick={() => createForm.setValue("positive", true)}
-            />{" "}
+            >
+              <ThumbsUp
+                className={cn(
+                  "h-6 w-6",
+                  watchedPositive === true ? "fill-orange-500" : "",
+                )}
+              />
+            </Button>
           </div>
           <Form {...createForm}>
             <form className="space-y-2" onSubmit={onSubmit}>

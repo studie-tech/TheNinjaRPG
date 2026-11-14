@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { IMG_AVATAR_DEFAULT, TOURNAMENT_ROUND_SECONDS } from "@/drizzle/constants";
 import type { TournamentMatch } from "@/drizzle/schema";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
+import { useNow } from "@/hooks/useNow";
 import AvatarImage from "@/layout/Avatar";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -23,12 +24,13 @@ import Countdown from "@/layout/Countdown";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { Reward } from "@/layout/Objective";
+import { QueryError } from "@/layout/QueryError";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { groupBy } from "@/utils/grouping";
 import { pushToCombat } from "@/utils/routing";
 import { secondsFromDate } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadthing";
 import type { ObjectiveRewardType } from "@/validators/rewards";
 import {
@@ -52,16 +54,34 @@ const Tournament: React.FC<TournamentProps> = (props) => {
   // Destructure
   const { userData, tournamentId, rewards } = props;
 
-  const { timeDiff, pusher, prepareUserUpdate, updateUser } = useUserData();
-  const syncedTime = Date.now() - timeDiff;
+  const { timeDiff, pusher, prepareUserUpdate, updateUser } = useUserInfo();
 
   const utils = api.useUtils();
 
   // Get router
   const router = useRouter();
 
-  // Queries
-  const { data } = api.tournament.getTournament.useQuery({ tournamentId });
+  // Queries. Each read advances the bracket server-side, so poll only while rounds run.
+  const {
+    data,
+    isPending: isLoadingTournament,
+    isError: isTournamentError,
+    isFetching: isFetchingTournament,
+    refetch: refetchTournament,
+  } = api.tournament.getTournament.useQuery(
+    { tournamentId },
+    {
+      refetchInterval: (query) =>
+        query.state.data?.status === "IN_PROGRESS"
+          ? TOURNAMENT_POLL_INTERVAL_MS
+          : false,
+    },
+  );
+  const hasNoTournament = !isLoadingTournament && !isTournamentError && !data;
+  const isInProgress = data?.status === "IN_PROGRESS";
+  // Ticking clock so the fight control appears when a match opens without a reload
+  const syncedTime =
+    useNow(TOURNAMENT_CLOCK_TICK_MS, { enabled: isInProgress }) - timeDiff;
 
   // Mutations
   const { mutate: createTournament, isPending: isCreating } =
@@ -80,22 +100,25 @@ const Tournament: React.FC<TournamentProps> = (props) => {
       },
     });
 
-  const { mutate: joinMatch, isPending: isJoiningMatch } =
-    api.tournament.joinMatch.useMutation({
-      onMutate: prepareUserUpdate,
-      onSuccess: async (data, _variables, revision) => {
-        if (data.success || data.userRecovery)
-          await updateUser(data, { revision, refetch: false });
-        showMutationToast(data);
-        await utils.tournament.getTournament.invalidate();
-        // A match can be joined without a battle starting — the opponent no-showed and this
-        // player took the round — so there is nothing to go to combat for
-        if (data.success && data.battleId) pushToCombat(router, data.battleId);
-      },
-      onError: (error) => {
-        showMutationToast({ success: false, message: error.message });
-      },
-    });
+  const {
+    mutate: joinMatch,
+    isPending: isJoiningMatch,
+    variables: joiningMatch,
+  } = api.tournament.joinMatch.useMutation({
+    onMutate: prepareUserUpdate,
+    onSuccess: async (data, _variables, revision) => {
+      if (data.success || data.userRecovery)
+        await updateUser(data, { revision, refetch: false });
+      showMutationToast(data);
+      await utils.tournament.getTournament.invalidate();
+      // A match can be joined without a battle starting — the opponent no-showed and this
+      // player took the round — so there is nothing to go to combat for
+      if (data.success && data.battleId) pushToCombat(router, data.battleId);
+    },
+    onError: (error) => {
+      showMutationToast({ success: false, message: error.message });
+    },
+  });
 
   // Form
   const createForm = useForm<
@@ -125,10 +148,6 @@ const Tournament: React.FC<TournamentProps> = (props) => {
   const rounds = [...matches.keys()];
   const initialSeeds = matches.get(1)?.length ?? 0;
 
-  if (isCreating) return <Loader explanation="Creating tournament" />;
-  if (isJoiningTournament) return <Loader explanation="Joining tournament" />;
-  if (isJoiningMatch) return <Loader explanation="Joining match" />;
-
   return (
     <ContentBox
       title={props.title}
@@ -141,10 +160,16 @@ const Tournament: React.FC<TournamentProps> = (props) => {
               title="Join tournament"
               proceed_label="Join"
               button={
-                <Button id="create-tournament" className="w-full">
+                <Button
+                  id="join-tournament"
+                  className="w-full"
+                  aria-label="Join tournament"
+                  loading={isJoiningTournament}
+                >
                   <UserRoundPlus className="h-5 w-5" />
                 </Button>
               }
+              disabled={isJoiningTournament}
               onAccept={(e) => {
                 e.preventDefault();
                 joinTournament({ tournamentId });
@@ -153,15 +178,21 @@ const Tournament: React.FC<TournamentProps> = (props) => {
               Do you wish to join this tournament?
             </Confirm>
           )}
-          {!data && props.canCreate && (
+          {hasNoTournament && props.canCreate && (
             <Confirm
               title="Create new tournament"
               proceed_label="Create"
               button={
-                <Button id="create-tournament" className="w-full">
+                <Button
+                  id="create-tournament"
+                  className="w-full"
+                  aria-label="Create tournament"
+                  loading={isCreating}
+                >
                   <Trophy className="h-5 w-5" />
                 </Button>
               }
+              disabled={isCreating}
               isValid={createForm.formState.isValid}
               onAccept={onSubmit}
             >
@@ -233,7 +264,15 @@ const Tournament: React.FC<TournamentProps> = (props) => {
         </>
       }
     >
-      {!data && <div>There are no current tournaments</div>}
+      {isLoadingTournament && <Loader explanation="Loading tournament" />}
+      {isTournamentError && !data && (
+        <QueryError
+          message="Could not load the tournament."
+          onRetry={() => void refetchTournament()}
+          isRetrying={isFetchingTournament}
+        />
+      )}
+      {hasNoTournament && <div>There are no current tournaments</div>}
       {data && (
         <div className="grid grid-cols-8">
           <div className="col-span-2">
@@ -271,6 +310,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                   )}
                   timeDiff={timeDiff}
                   onEndShow="Now"
+                  onFinish={() => void utils.tournament.getTournament.invalidate()}
                 />
               </div>
             )}
@@ -329,8 +369,14 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                                 [seed.userId2, seed.userId1].includes(
                                   userData.userId,
                                 ) && (
-                                  <Swords
-                                    className="h-8 w-8 grow text-slate-300 hover:cursor-pointer hover:text-orange-200"
+                                  <Button
+                                    type="button"
+                                    className="ml-2 shrink-0"
+                                    disabled={isJoiningMatch}
+                                    loading={
+                                      isJoiningMatch &&
+                                      joiningMatch?.matchId === seed.id
+                                    }
                                     onClick={() =>
                                       joinMatch({
                                         matchId: seed.id,
@@ -338,7 +384,10 @@ const Tournament: React.FC<TournamentProps> = (props) => {
                                         originSocketId: pusher?.connection.socket_id,
                                       })
                                     }
-                                  />
+                                  >
+                                    <Swords className="mr-1 h-4 w-4" />
+                                    Fight
+                                  </Button>
                                 )}
                               {seed.battleId && (
                                 <Link
@@ -388,6 +437,9 @@ const Tournament: React.FC<TournamentProps> = (props) => {
 };
 
 export default Tournament;
+
+const TOURNAMENT_POLL_INTERVAL_MS = 10_000;
+const TOURNAMENT_CLOCK_TICK_MS = 1_000;
 
 interface UserMatchProps {
   seed: TournamentMatch;

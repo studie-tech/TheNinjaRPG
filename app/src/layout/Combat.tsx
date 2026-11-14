@@ -1025,6 +1025,7 @@ const Combat: React.FC<CombatProps> = (props) => {
       {webglError && <WebGlError />}
       {/* BATTLE LOBBY SCREEN */}
       <CombatLobby
+        battle={battleState.battle}
         battleRef={battleRef}
         isInLobby={isInLobby}
         setBattleState={setBattleState}

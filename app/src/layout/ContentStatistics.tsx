@@ -11,7 +11,7 @@ import StatisticsFiltering, {
 } from "@/layout/StatisticsFiltering";
 import { LevelStats, UsageStats } from "@/layout/UsageStatistics";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Public usage statistics of one content entry; only the clear action needs staff. */
 export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
@@ -22,7 +22,7 @@ export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
   const statsFilter = useStatisticsFiltering();
   const filterParams = getStatisticsFilter(statsFilter);
 
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const { data, isPending } = api.data.getStatistics.useQuery(
     { id, type, ...filterParams },
     { enabled: !!id },
@@ -58,7 +58,13 @@ export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
   ) : (
     filtering
   );
-  const usage = filteredUsage && <UsageStats usage={filteredUsage} />;
+  const usage =
+    total > 0 ? (
+      filteredUsage && <UsageStats usage={filteredUsage} />
+    ) : (
+      <NoStatistics text="No battles recorded for this filter." />
+    );
+  const hasLevelData = levelDistribution?.some((entry) => entry.count > 0) ?? false;
 
   return (
     <>
@@ -75,13 +81,16 @@ export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
         topRightContent={levelStats ? undefined : filters}
       >
         {levelStats
-          ? levelDistribution && (
+          ? levelDistribution &&
+            (hasLevelData ? (
               <LevelStats
                 levelDistribution={levelDistribution}
                 title={levelStats.title}
                 xaxis={levelStats.xaxis}
               />
-            )
+            ) : (
+              <NoStatistics text={`No players have this ${label.toLowerCase()} yet.`} />
+            ))
           : usage}
       </ContentBox>
       {levelStats && (
@@ -97,6 +106,11 @@ export const ContentStatistics: React.FC<ContentStatisticsProps> = (props) => {
     </>
   );
 };
+
+/** Empty state in place of a chart that would otherwise draw an empty grid. */
+const NoStatistics: React.FC<{ text: string }> = ({ text }) => (
+  <p className="py-8 text-center text-muted-foreground">{text}</p>
+);
 
 interface ContentStatisticsProps {
   type: "jutsu" | "item" | "bloodline" | "ai";

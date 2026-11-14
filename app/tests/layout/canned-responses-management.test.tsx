@@ -7,6 +7,7 @@ import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
+import { mockUserContextValue } from "../setup/userContext";
 
 let queryClient: QueryClient;
 let create: ReturnType<typeof vi.fn>;
@@ -24,7 +25,7 @@ beforeEach(() => {
     support: testApi.support,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(UserContext, "useUserData").mockImplementation(
+  mockUserContextValue(
     () => ({ data: { userId: "staff", role: "MODERATOR" } }) as never,
   );
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);

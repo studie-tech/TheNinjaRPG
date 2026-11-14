@@ -13,7 +13,9 @@ import {
   getHomeRoomCamera,
   getHomeRooms,
   HOME_CAMERA_MAX_SCALE,
+  homeCameraTransform,
   homeRoomLayoutError,
+  moveHomeCamera,
   zoomHomeCamera,
   zoomHomeCameraTo,
 } from "@/libs/homeProperty";
@@ -2199,6 +2201,54 @@ describe("zoomHomeCameraTo", () => {
     const moved = { x: 55, y: 50 };
     expect(zoomHomeCameraTo(camera, 1.2, "TOWN_HOUSE", center, moved)).toEqual(
       boundHomeCamera(zoomHomeCamera(camera, 1.2, center, moved), "TOWN_HOUSE"),
+    );
+  });
+});
+
+describe("moveHomeCamera", () => {
+  const rect = { left: 100, top: 50, width: 400, height: 200 };
+  const camera = { x: -20, y: -20, scale: 1.2 };
+
+  it("pans by the pointer's travel in viewport percentages, within bounds", () => {
+    expect(
+      moveHomeCamera(
+        camera,
+        "TOWN_HOUSE",
+        rect,
+        { x: 300, y: 150 },
+        { x: 320, y: 140 },
+      ),
+    ).toEqual(boundHomeCamera({ x: -15, y: -25, scale: 1.2 }, "TOWN_HOUSE"));
+  });
+
+  it("pinches around the midpoint of both pointers", () => {
+    const other = { x: 200, y: 150 };
+    expect(
+      moveHomeCamera(
+        camera,
+        "TOWN_HOUSE",
+        rect,
+        { x: 300, y: 150 },
+        { x: 400, y: 150 },
+        other,
+      ),
+    ).toEqual(
+      zoomHomeCameraTo(
+        camera,
+        camera.scale * 2,
+        "TOWN_HOUSE",
+        { x: 37.5, y: 50 },
+        {
+          x: 50,
+          y: 50,
+        },
+      ),
+    );
+  });
+
+  it("writes the transform the camera layer renders", () => {
+    expect(homeCameraTransform({ x: -5, y: 10, scale: 1.5 })).toBe(
+      "translate(-5%, 10%) scale(1.5)",
     );
   });
 });

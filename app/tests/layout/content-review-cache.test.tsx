@@ -8,6 +8,7 @@ import { ContentReviewDetail } from "@/layout/ContentReviewDetail";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { mockUserContextValue } from "../setup/userContext";
 
 const key = [["profile", "getUser"], { type: "query" }];
 const actions = ["approve", "reject", "unreject", "revert", "bulkApprove"] as const;
@@ -96,7 +97,7 @@ beforeEach(() => {
       getCounts: { useQuery: () => ({ data: counts }) },
       getQueue: {
         useInfiniteQuery: () => ({
-          data: { pages: [{ items: [] }] },
+          data: { pages: [{ items: [], outdatedCount: 0 }] },
           isPending: false,
         }),
       },
@@ -129,7 +130,7 @@ const setup = () => {
   const updateUser = vi.fn((patch, options) =>
     updateUserCache(queryClient, key, patch, options),
   );
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: profile().userData,
     prepareUserUpdate: () => prepareUserUpdate(queryClient, key),
     updateUser,

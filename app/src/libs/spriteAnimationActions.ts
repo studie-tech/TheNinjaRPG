@@ -1,7 +1,10 @@
-import { NonActionItemTypes, TRANSFORMATION_ACTION } from "@/drizzle/constants";
+import {
+  type ItemType,
+  NonActionItemTypes,
+  TRANSFORMATION_ACTION,
+} from "@/drizzle/constants";
 import { getDefaultBasicActions } from "@/libs/combat/actions";
 import { spriteActionKey } from "@/libs/spriteAnimations";
-import type { fetchAnimationAi } from "@/queries/spriteAnimation";
 
 /** Use catalogue IDs so reusable sheets follow equipped actions rather than inventory rows. */
 export const animationActions = (ai: AnimationAi) => [
@@ -29,4 +32,30 @@ export const animationActions = (ai: AnimationAi) => [
     })),
 ];
 
-type AnimationAi = NonNullable<Awaited<ReturnType<typeof fetchAnimationAi>>>;
+/**
+ * Coverage of one AI's actions by their own sprite sheets. Actions without a sheet fall
+ * back to idle, so a missing idle sheet leaves the AI on its static image everywhere.
+ * Boss arrival only plays for transformation targets and is left out of the count.
+ */
+export const summarizeAnimationCoverage = (
+  ai: AnimationAi,
+  boundActionKeys: readonly string[],
+) => {
+  const bound = new Set(boundActionKeys);
+  const actions = animationActions(ai).filter(
+    (action) => action.key !== TRANSFORMATION_ACTION,
+  );
+  const missing = actions.filter((action) => !bound.has(action.key));
+  return {
+    hasIdle: bound.has("idle"),
+    animated: actions.length - missing.length,
+    total: actions.length,
+    missing: missing.map((action) => action.name),
+  };
+};
+
+/** AI fields that determine its animatable actions. */
+type AnimationAi = NonNullable<Parameters<typeof getDefaultBasicActions>[0]> & {
+  jutsus: { jutsuId: string; jutsu: { name: string } }[];
+  items: { itemId: string; item: { name: string; itemType: ItemType } }[];
+};

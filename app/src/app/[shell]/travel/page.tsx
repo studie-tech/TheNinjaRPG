@@ -123,7 +123,10 @@ const GlobalMap = dynamic(() => import("@/layout/Map"), {
   ssr: false,
   loading: () => <Loader explanation="Loading world map" />,
 });
-const Sector = dynamic(() => import("@/layout/Sector"), { ssr: false });
+const Sector = dynamic(() => import("@/layout/Sector"), {
+  ssr: false,
+  loading: () => <SectorLoadingPlaceholder />,
+});
 /** Bootstrap sector windows stay cached this long after travel unmounts. */
 const BOOT_WINDOW_RETENTION_MS = 30 * MINUTE_S * 1000;
 // Start both renderers alongside hydration while the map queries load.
@@ -185,6 +188,10 @@ function Travel() {
   const [cameraFocusRevision, setCameraFocusRevision] = useState(0);
   // A rejected arrival leaves the finished countdown in place with a manual retry.
   const [isArrivalRejected, setIsArrivalRejected] = useState(false);
+  // Once opened, each scene stays mounted (hidden and paused) so switching tabs keeps
+  // the globe's rotation and the sector's loaded terrain.
+  const [hasOpenedGlobal, setHasOpenedGlobal] = useState(false);
+  const [hasOpenedSector, setHasOpenedSector] = useState(false);
 
   const searchParams = useSearchParams();
   const [locationRequest, setLocationRequest] = useState<TravelLocation | null>(null);
@@ -274,15 +281,17 @@ function Travel() {
   const { data: villageData } = api.village.getAll.useQuery(undefined, {
     enabled: !!userData,
   });
-  // Sector.tsx observes this same key on a 10s refetchInterval, and the payload carries Dates,
-  // which defeat structural sharing, so reading the whole payload would re-render the page on
-  // every poll. Selecting the one string it reads keeps the poll inside the sector scene.
+  // The visible sector observes this key on a 10s interval. Selecting only the village
+  // name keeps unrelated presence changes from re-rendering the travel page.
   const { data: sectorVillageName } = api.travel.getSectorData.useQuery(
     { sector: userData?.sector ?? -1 },
     {
       enabled: !!userData && userData.sector !== undefined,
       select: (data) => data?.sectorData?.village?.name ?? null,
       notifyOnChangeProps: ["data"],
+      // The visible sector scene owns presence recovery; the label must not wake a hidden one.
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     },
   );
   const { data: mapAssets } = useMapAssetLibrary(!!userData);
@@ -857,6 +866,12 @@ function Travel() {
     currentSectorMap &&
     userData?.status !== "TRAVEL" &&
     !isGlobal;
+  useEffect(() => {
+    if (showGlobal) setHasOpenedGlobal(true);
+  }, [showGlobal]);
+  useEffect(() => {
+    if (showSector) setHasOpenedSector(true);
+  }, [showSector]);
 
   // Attack revealed stealthed player after moving to their position
   useEffect(() => {
@@ -936,8 +951,9 @@ function Travel() {
           target={targetPosition}
           showSorrounding={showSorrounding}
           showActive={showOtherUsers}
+          isActive={!!showSector}
           autoAttackMode={autoAttackMode}
-          isWorldExpanded={isWorldExpanded && !isPreparingSector}
+          isWorldExpanded={isWorldExpanded && !!showSector}
           cameraFocusRevision={cameraFocusRevision}
           setWorldExpanded={setWorldExpanded}
           setShowSorrounding={setShowSorrounding}
@@ -958,7 +974,7 @@ function Travel() {
     showOtherUsers,
     autoAttackMode,
     isWorldExpanded,
-    isPreparingSector,
+    showSector,
     cameraFocusRevision,
     villages,
   ]);
@@ -1029,8 +1045,6 @@ function Travel() {
   }, [autoDestination, userData, currentSectorMap, isStartingTravel, sectorLink]);
 
   if (!userData) return <Loader explanation="Loading userdata" />;
-  if (isJoining) return <Loader explanation="Joining" />;
-  if (isCreatingHideout) return <Loader explanation="Purchasing" />;
 
   // Derived
   const loadedVillages = villages && villages.length > 0;
@@ -1108,15 +1122,25 @@ function Travel() {
               <>
                 {userData?.anbuId &&
                   (autoAttackMode ? (
-                    <Zap
-                      className={`mr-2 h-7 w-7 text-red-500`}
+                    <button
+                      type="button"
+                      aria-label="Stop auto-attack"
+                      aria-pressed={true}
+                      className={mapToolClassName}
                       onClick={() => setAutoAttackMode(false)}
-                    />
+                    >
+                      <Zap className="h-7 w-7 text-red-500" />
+                    </button>
                   ) : (
-                    <ZapOff
-                      className={`mr-2 h-7 w-7 hover:text-red-500`}
+                    <button
+                      type="button"
+                      aria-label="Start auto-attack"
+                      aria-pressed={false}
+                      className={mapToolClassName}
                       onClick={() => setShowAutoAttackModal(true)}
-                    />
+                    >
+                      <ZapOff className="h-7 w-7 hover:text-red-500" />
+                    </button>
                   ))}
                 <StealthControls
                   onRevealed={(players) => {
@@ -1127,6 +1151,9 @@ function Travel() {
                 <TooltipProvider delayDuration={50}>
                   <Tooltip>
                     <TooltipTrigger
+                      aria-label="Show other players on the map"
+                      aria-pressed={showOtherUsers}
+                      className={mapToolClassName}
                       onClick={() =>
                         tutorialRunning
                           ? setRevealOthersInTutorial((prev) => !prev)
@@ -1134,9 +1161,9 @@ function Travel() {
                       }
                     >
                       {showOtherUsers ? (
-                        <Eye className={`mr-2 h-7 w-7 text-orange-500`} />
+                        <Eye className="h-7 w-7 text-orange-500" />
                       ) : (
-                        <EyeOff className={`mr-2 h-7 w-7`} />
+                        <EyeOff className="h-7 w-7" />
                       )}
                     </TooltipTrigger>
                     <TooltipContent>
@@ -1147,10 +1174,17 @@ function Travel() {
                   </Tooltip>
                 </TooltipProvider>
                 {userData.status === "AWAKE" && (
-                  <UserRoundSearch
-                    className={`mr-2 h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
+                  <button
+                    type="button"
+                    aria-label="Scout surrounding sectors"
+                    aria-pressed={showSorrounding}
+                    className={mapToolClassName}
                     onClick={() => setShowSorrounding((prev) => !prev)}
-                  />
+                  >
+                    <UserRoundSearch
+                      className={`h-7 w-7 hover:text-orange-500 ${showSorrounding ? "fill-orange-500" : ""}`}
+                    />
+                  </button>
                 )}
               </>
             )}
@@ -1341,9 +1375,15 @@ function Travel() {
             {joinVillageBtn && (
               <Confirm
                 title={`Join Village [${sectorVillage.name}]`}
-                proceed_label="Submit"
+                proceed_label="Join village"
                 button={<GitMerge className={`mx-1 h-7 w-7 hover:text-orange-500`} />}
-                onAccept={() => joinVillage({ villageId: sectorVillage.id })}
+                triggerLabel={`Join ${sectorVillage.name}`}
+                disabled={isJoining}
+                isLoading={isJoining}
+                keepOpenOnAccept
+                onAccept={(_, { close }) =>
+                  joinVillage({ villageId: sectorVillage.id }, { onSettled: close })
+                }
               >
                 Do you confirm that you wish to join {sectorVillage.name}? Please be
                 aware that if you join this village your training benefits & regen will
@@ -1354,15 +1394,18 @@ function Travel() {
             {canCreateHideout && (
               <Confirm
                 title="Purchase Hideout"
-                proceed_label={canAffordHideout ? "Submit" : "Not enough ryo"}
+                proceed_label={canAffordHideout ? "Purchase hideout" : "Not enough ryo"}
                 button={<HousePlus className={`mx-1 h-7 w-7 hover:text-orange-500`} />}
-                onAccept={() => {
-                  if (canAffordHideout) {
-                    purchaseHideout({
-                      clanId: userData.clanId || "",
-                      sector: currentSector ?? 0,
-                    });
-                  }
+                triggerLabel="Purchase hideout"
+                disabled={isCreatingHideout}
+                isLoading={isCreatingHideout}
+                keepOpenOnAccept
+                onAccept={(_, { close }) => {
+                  if (!canAffordHideout) return close();
+                  purchaseHideout(
+                    { clanId: userData.clanId || "", sector: currentSector ?? 0 },
+                    { onSettled: close },
+                  );
                 }}
               >
                 As a leader of a faction, you have the option of founding a hideout for
@@ -1388,19 +1431,40 @@ function Travel() {
       >
         {/* The countdown needs a viewport even while the destination scene is loading. */}
         <div className={userData.travelFinishAt ? "relative min-h-80" : "relative"}>
-          {showGlobal && MapComponent}
+          {(showGlobal || (hasOpenedGlobal && villages && globe)) && (
+            <div
+              aria-hidden={!showGlobal}
+              inert={!showGlobal}
+              className={!showGlobal ? PAUSED_SCENE_CLASS : undefined}
+            >
+              {MapComponent}
+            </div>
+          )}
           {mapError && <MapError />}
           {/* Prepare the destination offscreen so its scene is ready on arrival. */}
-          {(showSector || isPreparingSector) && (
+          {(showSector ||
+            isPreparingSector ||
+            (hasOpenedSector && SectorComponent)) && (
             <div
               aria-hidden={!showSector}
               inert={!showSector}
-              className={!showSector ? "invisible absolute inset-0" : undefined}
+              className={
+                showSector
+                  ? undefined
+                  : isPreparingSector
+                    ? "invisible absolute inset-0"
+                    : PAUSED_SCENE_CLASS
+              }
             >
               {SectorComponent}
             </div>
           )}
           {!villages && <Loader explanation="Loading data" />}
+          {villages &&
+            !isGlobal &&
+            !mapError &&
+            userData.status !== "TRAVEL" &&
+            (!showSector || !SectorComponent) && <SectorLoadingPlaceholder />}
           {showModal && globe && userData && targetSector !== null && (
             <Modal
               id="tutorial-global-travel"
@@ -1451,8 +1515,8 @@ function Travel() {
       </ContentBox>
       <div className="flex flex-wrap items-start justify-between gap-2 p-1">
         <div className="flex min-w-0 flex-wrap items-start gap-2">
-          {showSector && <JutsuLoadoutSelector size="small" label="Jutsu" />}
-          {showSector && <ItemLoadoutSelector size="small" label="Items" />}
+          {showSector && <JutsuLoadoutSelector size="small" label="Jutsu" compact />}
+          {showSector && <ItemLoadoutSelector size="small" label="Items" compact />}
         </div>
         {showSector && userData?.anbuId && autoAttackMode && (
           <div className="flex items-center font-semibold text-red-500 text-sm">
@@ -1922,8 +1986,32 @@ const RevealedPlayerCard = ({
   );
 };
 
+/**
+ * Hides a mounted scene and moves it out of the viewport, so the renderer's intersection
+ * observer suspends its frame loop until the scene's tab is shown again.
+ */
+const PAUSED_SCENE_CLASS =
+  "pointer-events-none invisible absolute inset-0 -translate-x-[200vw] overflow-hidden";
+
+/** Holds the sector scene's space with its loading pill until its data and code arrive. */
+const SectorLoadingPlaceholder = () => (
+  <div className="flex min-h-60 items-center justify-center">
+    <div
+      role="status"
+      className="bg-background/95 flex items-center gap-2 rounded-lg border px-3 py-2 text-sm shadow-md motion-reduce:[&_img]:animate-none"
+    >
+      <Loader noPadding size={20} />
+      <span>Loading world…</span>
+    </div>
+  </div>
+);
+
 // Alias the procedure so its action name is not interpreted as a React hook.
 const activateSensory = api.stealth.useSensory;
+
+/** A 40px icon toggle in the map's title bar. */
+const mapToolClassName =
+  "mr-1 inline-flex size-[40px] shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 
 /** Public player fields shown by sensory reveals and their map markers. */
 type RevealedPlayer = NonNullable<

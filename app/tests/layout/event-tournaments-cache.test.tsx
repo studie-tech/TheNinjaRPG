@@ -24,12 +24,15 @@ import * as userContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { eventTournamentConfigSchema } from "@/validators/tournament";
 import { testRouter } from "../setup/router";
+import { mockUserContextValue } from "../setup/userContext";
 
 const testApi = createTRPCReact<AppRouter>();
 const UserContext = createContext<ReturnType<typeof userContext.useUserData> | null>(
   null,
 );
 const key = getQueryKey(testApi.profile.getUser, undefined, "query");
+// Captured before the beforeEach spies replace the hook, so each tab reads the provider defaults.
+const readSessionDefaults = userContext.useUserInfo;
 const clients: QueryClient[] = [];
 const router = testRouter("tournament-cache");
 type Profile = NonNullable<RouterOutputs["profile"]["getUser"]>;
@@ -66,7 +69,7 @@ beforeEach(() => {
     useUtils: testApi.useUtils,
   });
   // Bun retains module mocks across suites; read this fixture's live provider.
-  vi.spyOn(userContext, "useUserData").mockImplementation(() => {
+  mockUserContextValue(() => {
     const value = useContext(UserContext);
     if (!value) throw new Error("Test user context unavailable");
     return value;
@@ -85,7 +88,7 @@ afterEach(() => {
 
 /** Mount one tab with its own profile cache and the production Pusher handler. */
 const LiveTab = ({ actor }: { actor: boolean }) => {
-  const defaults = userContext.useUserInfo();
+  const defaults = readSessionDefaults();
   const pusher = usePusherHandler("player");
   const queryClient = useQueryClient();
   const profile = testApi.profile.getUser.useQuery();
@@ -94,6 +97,7 @@ const LiveTab = ({ actor }: { actor: boolean }) => {
     <UserContext.Provider
       value={{
         ...defaults,
+        isSignedIn: true,
         pusher,
         data: profile.data?.userData,
         status: "success",
@@ -117,7 +121,7 @@ const setup = (
   } = {},
 ) => {
   const connections: Connection[] = [];
-  vi.spyOn(Pusher, "default").mockImplementation(function () {
+  vi.spyOn(Pusher, "default").mockImplementation((() => {
     const connection: Connection = {
       socket_id: `${connections.length + 1}.1`,
       receive: async () => undefined,
@@ -133,7 +137,7 @@ const setup = (
       unsubscribe: vi.fn(),
       disconnect: vi.fn(),
     };
-  } as never);
+  }) as never);
   const event = createEventState(
     eventTournamentConfigSchema.parse({
       name: "Cache Cup",

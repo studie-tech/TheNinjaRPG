@@ -50,19 +50,17 @@ export default function InstallPrompt() {
   }
 
   return (
-    <div className="fixed right-4 bottom-4 left-4 z-50 mx-auto max-w-sm">
-      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+    <div className="fixed right-4 bottom-[calc(var(--game-bottom-nav-h,0.5rem)+0.5rem)] left-4 z-50 mx-auto max-w-sm">
+      <div className="rounded-lg border border-border bg-popover p-4 text-popover-foreground shadow-lg">
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="mb-2 flex items-center">
               <div className="mr-2 text-2xl">🥷</div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">
-                Install TheNinja-RPG
-              </h3>
+              <h3 className="font-semibold">Install TheNinja-RPG</h3>
             </div>
 
             {isIOS ? (
-              <div className="mb-3 text-gray-600 text-sm dark:text-gray-300">
+              <div className="mb-3 text-muted-foreground text-sm">
                 <p className="mb-2">To install this app on your iOS device:</p>
                 <ol className="list-inside list-decimal space-y-1 text-xs">
                   <li>
@@ -73,7 +71,7 @@ export default function InstallPrompt() {
                 </ol>
               </div>
             ) : (
-              <p className="mb-3 text-gray-600 text-sm dark:text-gray-300">
+              <p className="mb-3 text-muted-foreground text-sm">
                 Install TheNinja-RPG on your device for a better gaming experience.
               </p>
             )}
@@ -101,13 +99,19 @@ export default function InstallPrompt() {
             </div>
           </div>
 
-          <Button onClick={hidePrompt} variant="ghost" size="sm" className="h-auto p-1">
-            <X className="h-4 w-4" />
+          <Button
+            onClick={hidePrompt}
+            variant="ghost"
+            size="sm"
+            aria-label="Dismiss install prompt"
+            className="-mt-3 -mr-3 h-[44px] min-h-[44px] w-[44px] min-w-[44px] p-0"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
           </Button>
         </div>
 
-        <div className="mt-3 flex items-center justify-center gap-4 border-gray-100 border-t pt-3 dark:border-gray-700">
-          <div className="flex items-center text-gray-500 text-xs">
+        <div className="mt-3 flex items-center justify-center gap-4 border-border border-t pt-3">
+          <div className="flex items-center text-muted-foreground text-xs">
             <Smartphone className="mr-1 h-3 w-3" />
             Mobile Optimized
           </div>

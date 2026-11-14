@@ -45,7 +45,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import { useActiveLayout } from "@/utils/LayoutContext";
 import { canAccessHiddenSkillTree } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserData, useRequiredUserInfo } from "@/utils/UserContext";
 
 // Main StrengthWeaknesses Component
 const StrengthWeaknesses: React.FC = () => {
@@ -515,7 +515,7 @@ interface SkillsTabProps {
 }
 
 export const SkillsTab: React.FC<SkillsTabProps> = ({ userData }) => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const includeHidden = canAccessHiddenSkillTree(userData.role);
   // State for folder UI
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -661,7 +661,7 @@ interface CovertTabProps {
 }
 
 export const CovertTab: React.FC<CovertTabProps> = ({ userData }) => {
-  const { timeDiff } = useRequiredUserData();
+  const { timeDiff } = useRequiredUserInfo();
 
   // Stealth status derived from userData
   const stealthStatus = getStealthStatus(

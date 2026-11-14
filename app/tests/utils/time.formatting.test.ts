@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, setSystemTime } from "bun:test";
 import {
   formatClockTime,
+  formatDateTime,
   formatHoursMinutes,
   getLocalDateStringMonthsAgo,
   getTimeLeftStr,
@@ -54,6 +55,14 @@ describe("getLocalDateStringMonthsAgo", () => {
   });
 });
 
+describe("formatDateTime", () => {
+  it("shows local date and time to the minute", () => {
+    expect(formatDateTime(new Date(2026, 10, 11, 15, 4, 59))).toBe(
+      "Nov 11, 2026, 3:04 PM",
+    );
+  });
+});
+
 describe("getTimeLeftStr", () => {
   const SECOND = 1000;
   const MINUTE = 60 * SECOND;
@@ -63,7 +72,11 @@ describe("getTimeLeftStr", () => {
 
   it("shows the two largest units from the first one set", () => {
     expect(label(2 * DAY + 3 * HOUR + 4 * MINUTE)).toBe("2 days, 3 hours");
-    expect(label(DAY)).toBe("1 days, 0 hours");
+    expect(label(DAY)).toBe("1 day, 0 hours");
+    expect(label(DAY + HOUR)).toBe("1 day, 1 hour");
+    expect(label(HOUR + MINUTE + SECOND)).toBe("1 hour, 1 min");
+    expect(label(MINUTE + SECOND)).toBe("1 min, 1 sec");
+    expect(label(SECOND)).toBe("1 sec");
     expect(label(3 * HOUR + 4 * MINUTE + 5 * SECOND)).toBe("3 hours, 4 mins");
     expect(label(4 * MINUTE + 5 * SECOND)).toBe("4 mins, 5 secs");
     expect(label(5 * SECOND + 999)).toBe("5 secs");

@@ -9,10 +9,10 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { getUpgradeColor, getUpgradeIcon } from "@/libs/towerDefense/upgrades";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualTowerDefenseUpgrades() {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
 
   // Fetch upgrades
   const { data: upgrades, isPending } = api.towerDefense.getUpgrades.useQuery();

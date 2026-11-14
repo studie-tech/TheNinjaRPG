@@ -25,7 +25,7 @@ export const EventTournamentNotice = () => {
   return (
     <aside
       aria-label="Tournament notifications"
-      className="fixed inset-x-3 bottom-20 z-40 mx-auto max-w-lg space-y-2 rounded-lg border border-orange-500 bg-background p-3 shadow-xl md:bottom-4"
+      className="fixed inset-x-3 bottom-[calc(var(--game-bottom-nav-h,0.5rem)+0.5rem)] z-40 mx-auto max-w-lg space-y-2 rounded-lg border border-orange-500 bg-background p-3 shadow-xl"
     >
       {data.map((notice) => (
         <Link

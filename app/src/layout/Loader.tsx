@@ -10,9 +10,13 @@ interface LoaderProps {
 
 const Loader: React.FC<LoaderProps> = (props) => {
   return (
-    <div className={`flex flex-col items-center ${props.noPadding ? "" : "py-2"}`}>
+    <div
+      role="status"
+      aria-label={props.explanation ? undefined : "Loading"}
+      className={`flex flex-col items-center ${props.noPadding ? "" : "py-2"}`}
+    >
       <Image
-        alt="Loader Icon"
+        alt=""
         src={IMG_LOADER}
         className="animate-spin"
         width={props.size ?? 30}

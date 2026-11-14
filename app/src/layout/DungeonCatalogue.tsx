@@ -10,11 +10,11 @@ import Countdown from "@/layout/Countdown";
 import { DungeonHallOfFame } from "@/layout/DungeonHallOfFame";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 
 /** Browse current dungeons and inspect published rewards without opening the staff editor. */
 export const DungeonCatalogue = () => {
-  const { timeDiff } = useUserData();
+  const { timeDiff } = useUserInfo();
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const detailsTrigger = useRef<HTMLButtonElement | null>(null);

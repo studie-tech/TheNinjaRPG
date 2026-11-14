@@ -64,7 +64,6 @@ export default function Clans() {
   });
 
   // Loaders
-  if (isCreating) return <Loader explanation="Creating clan" />;
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (!access) return <Loader explanation="Accessing Clan Hall" />;
 
@@ -100,7 +99,7 @@ export default function Clans() {
               title={`Create new ${groupLabel}`}
               proceed_label={proceedLabel}
               button={
-                <Button id="create-clan" className="w-full">
+                <Button id="create-clan" className="w-full" loading={isCreating}>
                   <ShieldPlus className="mr-2 h-5 w-5" />
                   Create
                 </Button>
@@ -110,6 +109,7 @@ export default function Clans() {
                   ? "bg-blue-600 text-white hover:bg-blue-700"
                   : "bg-red-600 text-white hover:bg-red-700"
               }
+              disabled={isCreating}
               isValid={createForm.formState.isValid}
               onAccept={canCreate ? onSubmit : undefined}
             >

@@ -8,8 +8,8 @@ import * as Image from "@/layout/Image";
 import * as Modal from "@/layout/Modal";
 import { BadgesTab } from "@/layout/publicUser/BadgesTab";
 import * as toast from "@/libs/toast";
-import * as UserContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { mockUserContextValue } from "../setup/userContext";
 
 const insert = vi.fn(async () => ({ success: true, message: "Added" }));
 const remove = vi.fn(async () => ({ success: true, message: "Removed" }));
@@ -53,9 +53,7 @@ beforeEach(() => {
       removeUserBadge: { useMutation: () => ({ mutateAsync: remove }) },
     },
   });
-  vi.spyOn(UserContext, "useUserData").mockImplementation(
-    () => ({ data: { role: "OWNER" } }) as never,
-  );
+  mockUserContextValue(() => ({ data: { role: "OWNER" } }) as never);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   vi.spyOn(Image, "default").mockImplementation((({ alt }: { alt: string }) => (
     <img alt={alt} />
@@ -106,7 +104,7 @@ it.each([
 ])(
   "shows badge statistics according to the viewer's role ($role)",
   ({ role, canViewStatistics }) => {
-    vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    mockUserContextValue({
       data: role === "guest" ? undefined : { role },
     } as never);
     const view = mount();

@@ -12,6 +12,7 @@ import { useBattleHotkeys } from "@/hooks/useBattleHotkeys";
 import type { HotkeyMap } from "@/libs/combat/hotkeys";
 import { updateQueryCache } from "@/utils/queryCache";
 import * as userContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 afterEach(() => {
   cleanup();
@@ -82,7 +83,7 @@ const mount = () => {
       setLoadoutHotkeys: { useMutation: item.useMutation },
     },
   });
-  vi.spyOn(userContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { jutsuLoadout: "jutsu-set", itemLoadout: "item-set" },
   } as never);
   const view = renderHook(

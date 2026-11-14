@@ -8,14 +8,13 @@ import { Label } from "@/components/ui/label";
 import { usePendingIds } from "@/hooks/usePendingIds";
 import AvatarImage from "@/layout/Avatar";
 import Confirm from "@/layout/Confirm";
-import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
 import UserRequestSystem from "@/layout/UserRequestSystem";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import type { BaseServerResponse } from "@/server/api/trpc";
 import { useUserPicker } from "@/utils/search";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /**
  * Marriage
@@ -51,7 +50,7 @@ export const Marriage: React.FC = () => {
   };
 
   // Queries & mutations
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({ userId: u.userId }));
   const { mutate: create, isPending: isCreating } =
     api.marriage.createRequest.useMutation({ onSuccess });
   const { mutate: accept, isPending: isAccepting } =
@@ -84,14 +83,14 @@ export const Marriage: React.FC = () => {
   return (
     <>
       <Label className="pt-2">Users who are married to you</Label>
-      <div className="grid grid-cols-6">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
         {marriages?.map((user) => {
           const isDivorcing = divorces.ids.has(user.userId);
 
           return (
             <div
               key={user.userId}
-              className="relative flex flex-col items-center text-xs"
+              className="relative flex min-w-0 flex-col items-center text-xs"
             >
               <AvatarImage
                 href={user.avatar}
@@ -99,7 +98,9 @@ export const Marriage: React.FC = () => {
                 hover_effect={false}
                 size={100}
               />
-              {user.username}
+              <span className="w-full truncate text-center" title={user.username}>
+                {user.username}
+              </span>
               <Confirm
                 id={`divorce-${user.userId}`}
                 title={`Divorce ${user.username}?`}
@@ -143,7 +144,13 @@ export const Marriage: React.FC = () => {
         })}
       </div>
 
-      <ContentBox title="Proposals" subtitle="" initialBreak={true} padding={false}>
+      <section
+        aria-labelledby="marriage-proposals-heading"
+        className="mt-4 border-t pt-4"
+      >
+        <h3 id="marriage-proposals-heading" className="px-3 font-semibold text-base">
+          Proposals
+        </h3>
         <div className="p-3">
           <div className="flex flex-col gap-1">
             <UserSearchSelect
@@ -183,7 +190,7 @@ export const Marriage: React.FC = () => {
             onCancel={cancel}
           />
         )}
-      </ContentBox>
+      </section>
     </>
   );
 };

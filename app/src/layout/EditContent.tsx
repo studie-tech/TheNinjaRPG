@@ -6,7 +6,7 @@ import { nanoid } from "nanoid";
 import type React from "react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { FieldValues, Path, PathValue, UseFormReturn } from "react-hook-form";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ import {
   type IMG_ORIENTATION,
   STARTER_VILLAGES,
 } from "@/drizzle/constants";
+import { UnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { ActionSelector } from "@/layout/CombatActions";
 import ContentAudioSelector from "@/layout/ContentAudioSelector";
 import ContentImage from "@/layout/ContentImage";
@@ -62,8 +63,9 @@ import { cn } from "@/libs/shadui";
 import { defaultWeightedCache, getWeightedCacheIssues } from "@/libs/weightedCache";
 import { calculateContentDiff } from "@/utils/diff";
 import { canAwardReputation } from "@/utils/permissions";
+import { humanizeIdentifier } from "@/utils/string";
 import { objectKeys } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import { showUploadError, UploadButton } from "@/utils/uploadthing";
 import type { ZodAllTags } from "@/validators/combat";
 import {
@@ -97,6 +99,7 @@ export const EditContent = <
   } = props;
   const [uploadingFields, setUploadingFields] = useState<string[]>([]);
   const isImageUploading = uploadingFields.length > 0;
+  const { isDirty } = useFormState({ control: form.control });
   const currentValues = form.getValues();
   const [targetingMethod, targetingRange] = useWatch({
     control: form.control,
@@ -266,9 +269,8 @@ export const EditContent = <
   }
 
   const FormTag = props.fieldsOnly ? "div" : "form";
-  // Count how many columns have been used
-  let columnCount = 0;
-  let lastCategory = "default";
+  // Sectioned forms keep their own order and show each section's heading.
+  const isSectioned = formData.some((formEntry) => formEntry.section);
 
   return (
     <Form {...form}>
@@ -280,8 +282,9 @@ export const EditContent = <
           }
           void props.onAccept?.(event);
         }}
-        className="grid grid-cols-1 items-center gap-1 md:grid-cols-2"
+        className="grid grid-cols-1 items-start gap-1 md:grid-cols-2"
       >
+        {props.guardUnsavedChanges && <UnsavedChangesGuard isDirty={isDirty} />}
         {/* Asset Picker Dialog */}
         {assetPickerOpen && !submitLoading && (
           <Modal
@@ -419,9 +422,13 @@ export const EditContent = <
             ),
           )
           .map((formEntry) => {
-            return { ...formEntry, category: getCategory(formEntry.id) };
+            return {
+              ...formEntry,
+              category: formEntry.section ?? getCategory(formEntry.id),
+            };
           })
           .sort((a, b) => {
+            if (isSectioned) return 0;
             // Default category first, then alphabetical by category
             if (a.category === "default" && b.category !== "default") return -1;
             if (a.category !== "default" && b.category === "default") return 1;
@@ -430,6 +437,7 @@ export const EditContent = <
             }
             return 0;
           })
+          .map(withCategorySpacer)
           .map((formEntry) => {
             // Derived
             const id = formEntry.id;
@@ -449,19 +457,18 @@ export const EditContent = <
               value: o.value !== "" ? o.value : "None",
             }));
 
-            // Figure out if we need to add a spacer
-            let includeSpacer = false;
-            if (formEntry.category !== lastCategory) {
-              includeSpacer = columnCount % 2 !== 0;
-              columnCount = 0;
-              lastCategory = formEntry.category;
-            }
-            columnCount += formEntry.doubleWidth ? 2 : 1;
+            const includeSpacer = !isSectioned && formEntry.includeSpacer;
+            const startsSection = isSectioned && formEntry.startsCategory;
 
             // Render
             return (
               <Fragment key={`formEntry-${id}`}>
                 {includeSpacer && <div key={`spacer-${id}`} />}
+                {startsSection && (
+                  <h3 className="col-span-full mt-3 border-b px-2 pb-1 font-semibold text-lg">
+                    {formEntry.category}
+                  </h3>
+                )}
                 <div
                   className={cn(
                     "p-2",
@@ -490,7 +497,7 @@ export const EditContent = <
                         return (
                           <FormItem>
                             <FormLabel htmlFor={id}>
-                              {formEntry.label ? formEntry.label : id}
+                              {fieldLabel(formEntry, id)}
                             </FormLabel>
                             <FormControl>
                               {type === "number" ? (
@@ -565,7 +572,7 @@ export const EditContent = <
                         return (
                           <FormItem>
                             <FormLabel htmlFor={id}>
-                              {formEntry.label ? formEntry.label : id}
+                              {fieldLabel(formEntry, id)}
                             </FormLabel>
                             <FormControl>
                               <Textarea
@@ -595,7 +602,7 @@ export const EditContent = <
                         return (
                           <FormItem>
                             <FormLabel>
-                              {formEntry.label ? formEntry.label : id}
+                              {fieldLabel(formEntry, id)}
                             </FormLabel>
                             <FormControl>
                               <Switch
@@ -627,7 +634,7 @@ export const EditContent = <
                                     : "60"
                                 }
                                 placeholder={currentValues[id] as string}
-                                label={formEntry.label ? formEntry.label : id}
+                                label={fieldLabel(formEntry, id)}
                                 control={form.control}
                                 isDirty={fieldState.isDirty}
                                 error={form.formState.errors[id]?.message as string}
@@ -715,7 +722,7 @@ export const EditContent = <
                             return (
                               <FormItem className="flex flex-col">
                                 <FormLabel>
-                                  {formEntry.label ? formEntry.label : id}
+                                  {fieldLabel(formEntry, id)}
                                 </FormLabel>
 
                                 {"multiple" in formEntry && formEntry.multiple ? (
@@ -832,7 +839,7 @@ export const EditContent = <
                       </div>
                       {formEntry.resetButton && (
                         <Button
-                          aria-label={`Clear ${formEntry.label ?? id}`}
+                          aria-label={`Clear ${fieldLabel(formEntry, id)}`}
                           className="ml-1 w-8 shrink-0 p-0"
                           type="button"
                           variant="ghost"
@@ -857,7 +864,7 @@ export const EditContent = <
                           control={form.control}
                           name={id}
                           render={({ field }) => {
-                            const label = formEntry.label ? formEntry.label : id;
+                            const label = fieldLabel(formEntry, id);
                             const handleOpen = () => {
                               const t =
                                 id === "staticAssetPath"
@@ -903,7 +910,8 @@ export const EditContent = <
                                   </div>
                                   <FormMessage />
                                 </FormItem>
-                                {/* Preview to the right */}
+                                {/* Preview to the right, only once an asset is picked */}
+                                {field.value ? (
                                 <div
                                   className={cn(
                                     "h-24",
@@ -965,6 +973,7 @@ export const EditContent = <
                                     })()
                                   )}
                                 </div>
+                                ) : null}
                               </div>
                             );
                           }}
@@ -981,7 +990,7 @@ export const EditContent = <
                             <FormItem>
                               <FormControl>
                                 <ContentImageSelector
-                                  label={formEntry.label ? formEntry.label : id}
+                                  label={fieldLabel(formEntry, id)}
                                   imageUrl={(field.value as string) ?? formEntry.href}
                                   id={props.relationId ?? nanoid()}
                                   allowImageUpload={props.allowImageUpload}
@@ -1012,7 +1021,7 @@ export const EditContent = <
                         return (
                           <FormItem>
                             <FormLabel>
-                              {formEntry.label ? formEntry.label : id}
+                              {fieldLabel(formEntry, id)}
                             </FormLabel>
                             <div className="items-left flex w-full flex-col gap-2">
                               {audioUrl ? (
@@ -1097,7 +1106,7 @@ export const EditContent = <
                           : [];
                         return (
                           <FormItem className="flex flex-col gap-2">
-                            <FormLabel>{formEntry.label ?? id}</FormLabel>
+                            <FormLabel>{fieldLabel(formEntry, id)}</FormLabel>
                             <div className="flex flex-col gap-2">
                               {dialogOptions.map((opt, optionIdx) => {
                                 const option: {
@@ -1235,7 +1244,7 @@ export const EditContent = <
                         const isRewardItems = id === "reward_items";
                         return (
                           <FormItem className="flex flex-col py-4">
-                            <FormLabel>{formEntry.label ?? id}</FormLabel>
+                            <FormLabel>{fieldLabel(formEntry, id)}</FormLabel>
                             <div className="flex flex-col gap-2">
                               {valueArr.map((entry, entryIdx) => (
                                 <div
@@ -1428,7 +1437,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
   const { tag, idx, effects, setEffects } = props;
 
   // Get user data for permission checks
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const userRole = userData?.role ?? "USER";
   const hasReputationPermission = canAwardReputation(userRole);
 
@@ -1693,7 +1702,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
       } else if ((value as string) === "aiId" && aiData) {
         return {
           id: value,
-          label: FORM_LABEL_MAP[value] ?? value,
+          label: FORM_LABEL_MAP[value],
           values: aiData
             .filter((ai) => ai.isSummon)
             .sort((a, b) => a.level - b.level)
@@ -1708,7 +1717,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           id: value,
           values: itemData,
           multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
+          label: FORM_LABEL_MAP[value],
           type: "db_values",
         };
       } else if ((value as string) === "jutsus" && jutsuData) {
@@ -1716,7 +1725,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           id: value,
           values: jutsuData,
           multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
+          label: FORM_LABEL_MAP[value],
           type: "db_values",
         };
       } else if ((value as string) === "jutsuIds" && jutsuData) {
@@ -1724,7 +1733,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           id: value,
           values: jutsuData.filter((j) => j.injectableInBattle),
           multiple: true,
-          label: FORM_LABEL_MAP[value] ?? value,
+          label: FORM_LABEL_MAP[value],
           type: "db_values",
         };
       } else if ((value as string) === "variantId") {
@@ -1751,7 +1760,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
             .filter((s) => s.skillType === "SPECIAL")
             .map((i) => ({ id: i.id, name: i.name })),
           multiple: false,
-          label: FORM_LABEL_MAP[value] ?? value,
+          label: FORM_LABEL_MAP[value],
           type: "db_values",
         };
       } else if ((value as string) === "reward_pets") {
@@ -1771,7 +1780,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           fullWidth: true,
         };
       } else if ((value as string) === "description") {
-        return { id: value, label: value, type: "richinput", doubleWidth: true };
+        return { id: value, type: "richinput", doubleWidth: true };
       } else if (innerType instanceof z.ZodString && value === "appearAnimation") {
         return {
           id: value,
@@ -1808,7 +1817,6 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           multiple: false,
           type: "db_values",
           searchable: true,
-          label: "appearSfx",
         };
       } else if (innerType instanceof z.ZodString && value === "disappearSfx") {
         return {
@@ -1817,13 +1825,12 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
           multiple: false,
           type: "db_values",
           searchable: true,
-          label: "disappearSfx",
         };
       } else if (
         innerType instanceof z.ZodLiteral ||
         innerType instanceof z.ZodString
       ) {
-        return { id: value, label: value, type: "text" };
+        return { id: value, type: "text" };
       } else if (innerType instanceof z.ZodNumber) {
         // Only noncombatconsumereward tag allows reward_reputation field
         const isReputationField =
@@ -1838,7 +1845,7 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
                 ? "Additional jutsu slots"
                 : props.type === "sageMode" && String(value) === "rounds"
                   ? "Instant (0) or mode duration"
-                  : (FORM_LABEL_MAP[value] ?? value),
+                  : FORM_LABEL_MAP[value],
           type: "number",
           readonly: isReputationField && !hasReputationPermission,
         };
@@ -1870,9 +1877,9 @@ export const EffectFormWrapper: React.FC<EffectFormWrapperProps> = (props) => {
         }
         return { id: value, type: "str_array", values: enumValues, multiple: true };
       } else if (innerType instanceof z.ZodBoolean) {
-        return { id: value, label: value, type: "boolean" };
+        return { id: value, type: "boolean" };
       } else {
-        return { id: value, label: value, type: "text" };
+        return { id: value, type: "text" };
       }
     });
 
@@ -2276,6 +2283,10 @@ const OUT_OF_BATTLE_HIDDEN_FIELDS = new Map<string, readonly string[]>([
 const hasComboboxValue = (value: unknown) =>
   value !== undefined && value !== null && value !== "";
 
+/** A form entry's label, or its field id written out as words when it has none. */
+const fieldLabel = (entry: { label?: string }, id: string | number | symbol) =>
+  entry.label || humanizeIdentifier(String(id));
+
 export type FormDbValue = { id: string; name: string };
 
 export type FormEntry<K> = {
@@ -2287,6 +2298,8 @@ export type FormEntry<K> = {
   resetButton?: boolean;
   searchable?: boolean;
   readonly?: boolean;
+  /** Heading of the form section; sectioned forms keep their entries' order. */
+  section?: string;
 } & (
   | { type: "coordinate_targeting" }
   | { type: "method_size" }
@@ -2343,6 +2356,8 @@ interface EditContentProps<T, K, S extends FieldValues> {
   submitDisabled?: boolean;
   submitLoading?: boolean;
   submitLoadingText?: string;
+  /** Ask before links or the back button discard unsaved edits to this form. */
+  guardUnsavedChanges?: boolean;
 }
 
 interface EffectFormWrapperProps {
@@ -2370,3 +2385,24 @@ interface RewardCatalogs {
   titles: FormDbValue[] | undefined;
   badges: FormDbValue[] | undefined;
 }
+
+/**
+ * Mark the first entry of each category, and whether it follows an odd number of columns
+ * so a spacer starts the category on a new row of the two-column grid.
+ */
+const withCategorySpacer = <T extends { category: string; doubleWidth?: boolean }>(
+  entry: T,
+  index: number,
+  entries: T[],
+): T & { includeSpacer: boolean; startsCategory: boolean } => {
+  if (entry.category === (entries[index - 1]?.category ?? "default"))
+    return { ...entry, includeSpacer: false, startsCategory: false };
+  let columns = 0;
+  for (
+    let i = index - 1;
+    i >= 0 && entries[i]?.category === entries[index - 1]?.category;
+    i--
+  )
+    columns += entries[i]?.doubleWidth ? 2 : 1;
+  return { ...entry, includeSpacer: columns % 2 !== 0, startsCategory: true };
+};

@@ -2,7 +2,10 @@ import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { editedReason, outdateProposalsFor } from "@/libs/contentReview/outdate";
-import { animationActions } from "@/libs/spriteAnimationActions";
+import {
+  animationActions,
+  summarizeAnimationCoverage,
+} from "@/libs/spriteAnimationActions";
 import { fetchUser } from "@/queries/profile";
 import {
   countSpriteAnimations,
@@ -11,6 +14,7 @@ import {
   findSpriteAnimation,
   insertSpriteAnimation,
   insertSpriteAnimationLog,
+  listAiAnimationCoverage,
   saveSpriteAnimationBinding,
   searchSpriteAnimations,
   touchAnimationAi,
@@ -54,6 +58,27 @@ export const spriteAnimationRouter = createTRPCRouter({
         ),
       };
     }),
+  /** Sprite sheet coverage of every AI's actions, for the AI completeness overview. */
+  getAiCoverage: protectedProcedure.query(async ({ ctx }) => {
+    const [editor, ais] = await Promise.all([
+      fetchUser(ctx.drizzle, ctx.userId),
+      listAiAnimationCoverage(ctx.drizzle),
+    ]);
+    if (editor.isBanned || !canChangeContent(editor.role)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Content editor access required",
+      });
+    }
+    return ais.map((ai) => ({
+      userId: ai.userId,
+      username: ai.username,
+      ...summarizeAnimationCoverage(
+        ai,
+        ai.spriteAnimationBindings.map((binding) => binding.actionKey),
+      ),
+    }));
+  }),
   /** Page through the library, either one AI's sheets or everything. */
   search: protectedProcedure
     .input(

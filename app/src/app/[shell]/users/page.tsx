@@ -22,11 +22,13 @@ import { useInfinitePagination } from "@/libs/pagination";
 import { getRankedRank } from "@/libs/ranked_pvp";
 import { canSeeIps } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import type { GetPublicUsersSchema } from "@/validators/user";
 
 export default function Users() {
-  const { data: userData, isClerkLoaded } = useRequiredUserData();
+  const { data: userData, isClerkLoaded } = useRequiredUserDataSelector((profile) => ({
+    role: profile.role,
+  }));
   const tabNames: TabName[] = [
     "Online",
     "Strongest",
@@ -183,16 +185,16 @@ export default function Users() {
     >
       <div className="grid grid-cols-3 p-2 text-center">
         <p>
-          <b>Online last 30min</b>
+          <b>Online now (30 min)</b>
           <br /> {userCountNow} users
         </p>
         <p>
-          <b>Max Online Ever</b>
+          <b>Record online at once</b>
           <br />
           {maxOnline} users
         </p>
         <p>
-          <b>Online today</b>
+          <b>Active in last 24h</b>
           <br /> {userCountDay} users
         </p>
       </div>

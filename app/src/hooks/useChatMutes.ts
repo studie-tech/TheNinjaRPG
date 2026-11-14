@@ -12,11 +12,16 @@ import {
   toggleMutedConversation,
 } from "@/libs/chatPanel";
 import { showMutationToast } from "@/libs/toast";
-import { useUserData } from "@/utils/UserContext";
+import type { UserWithRelations } from "@/routers/profile";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Read and change chat mutes, saved on the account so every device agrees. */
 export const useChatMutes = () => {
-  const { data: userData, prepareUserUpdate, updateUser } = useUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useUserDataSelector(selectChatMutes);
   const store = useStore();
   const pending = useAtomValue(chatMutePendingAtom);
   const pendingUserId = useRef<string | undefined>(undefined);
@@ -122,3 +127,11 @@ export const useChatMutes = () => {
     setChatMuted: (chatMuted: boolean) => save({ chatMuted }),
   };
 };
+
+/** Subscribe mute controls to account identity and preferences without unrelated profile updates. */
+const selectChatMutes = (user: NonNullable<UserWithRelations>) => ({
+  userId: user.userId,
+  chatMuted: user.chatMuted,
+  mutedConversationIds: user.mutedConversationIds,
+  unmutedTavernIds: user.unmutedTavernIds,
+});

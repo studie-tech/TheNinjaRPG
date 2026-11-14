@@ -165,10 +165,7 @@ describe("getUserFactionNotifications", () => {
           { raidType: "exclusive", sector: 7 },
         ],
       }),
-    ).toEqual([
-      "Open Raid available (Sector 0)",
-      "Village Raids active (Sectors 6, 7)",
-    ]);
+    ).toEqual(["Raid (Sector 0)", "Village Raids active (Sectors 6, 7)"]);
     expect(
       names({
         activeRaids: [
@@ -177,10 +174,18 @@ describe("getUserFactionNotifications", () => {
           { raidType: "exclusive", sector: 6 },
         ],
       }),
-    ).toEqual([
-      "Open Raids available (Sectors 1, 2)",
-      "Village Raid active (Sector 6)",
-    ]);
+    ).toEqual(["Raids (Sectors 1, 2)", "Village Raid active (Sector 6)"]);
+  });
+
+  it("marks raids as informational opportunities rather than critical threats", () => {
+    expect(
+      notify({
+        activeRaids: [
+          { raidType: "open", sector: 1 },
+          { raidType: "exclusive", sector: 6 },
+        ],
+      }).map((entry) => entry.color),
+    ).toEqual(["blue", "blue"]);
   });
 
   it("orders shrine, war, village war and raid notices", () => {
@@ -196,7 +201,7 @@ describe("getUserFactionNotifications", () => {
       "Shrine under attack (Sector 4)",
       "Sector under attack (Sector 7)",
       "At war: defending vs Foe",
-      "Open Raid available (Sector 1)",
+      "Raid (Sector 1)",
     ]);
   });
 

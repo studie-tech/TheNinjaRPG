@@ -9,8 +9,8 @@ import { getStructureMaintenanceUserUpdate } from "@/deltas/kage";
 import * as ContentBox from "@/layout/ContentBox";
 import { VillageStructureMaintenance } from "@/layout/VillageStructureMaintenance";
 import * as toast from "@/libs/toast";
-import * as UserContext from "@/utils/UserContext";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
+import { mockUserContextValue } from "../setup/userContext";
 
 const api = createTRPCReact<AppRouter>();
 let client: QueryClient;
@@ -60,17 +60,14 @@ it.each(["confirmed", "changed bill", "dropped response"])(
     };
     const profileKey = getQueryKey(api.profile.getUser, undefined, "query");
     client.setQueryData(profileKey, { userData: user });
-    vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
-      () =>
-        ({
-          data: user,
-          prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
-          updateUser: (
-            patch: Parameters<typeof updateUserCache>[2],
-            options: Parameters<typeof updateUserCache>[3],
-          ) => updateUserCache(client, profileKey, patch, options),
-        }) as never,
-    );
+    mockUserContextValue({
+      data: user as never,
+      prepareUserUpdate: () => prepareUserUpdate(client, profileKey),
+      updateUser: (
+        patch: Parameters<typeof updateUserCache>[2],
+        options: Parameters<typeof updateUserCache>[3],
+      ) => updateUserCache(client, profileKey, patch, options),
+    });
     const getVillage = vi.fn(() => ({ villageData: village, sectorCount: 3 }));
     const getProfile = vi.fn(() => ({ userData: user }));
     let settle!: () => void;

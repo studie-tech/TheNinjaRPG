@@ -6,6 +6,7 @@ import { EpidemicSfxSearch } from "@/layout/EpidemicSfxSearch";
 import * as toast from "@/libs/toast";
 import * as userContext from "@/utils/UserContext";
 import { deferred } from "../setup/deferred";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Result = { success: boolean; message: string; assetId?: string };
 type Callbacks = {
@@ -38,7 +39,7 @@ beforeEach(() => {
     message: "Imported",
     assetId: "new-sound",
   });
-  vi.spyOn(userContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { role: "CONTENT" },
   } as never);
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);

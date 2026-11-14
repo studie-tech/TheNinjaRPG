@@ -9,11 +9,11 @@ import * as carousel from "@/components/ui/carousel";
 import * as characterPreview from "@/layout/CharacterPreview";
 import { BOTID_BLOCKED_MESSAGE } from "@/libs/botid";
 import * as toast from "@/libs/toast";
-import * as userContext from "@/utils/UserContext";
 import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const { default: RegisterPage } = await import("@/app/[shell]/register/page");
 
@@ -58,13 +58,12 @@ const mount = (createCharacter: () => Promise<Outcome>) => {
     push: vi.fn(),
     replace: vi.fn(),
   } as never);
-  vi.spyOn(userContext, "useUserData").mockReturnValue({
-    data: undefined,
+  mockUserContextValue({
     status: "success",
     isClerkLoaded: true,
     isSignedIn: true,
     userId: "new-player",
-  } as never);
+  });
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({
       profile: { getUser: { invalidate: vi.fn(async () => undefined) } },

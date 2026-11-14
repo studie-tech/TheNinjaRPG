@@ -12,15 +12,15 @@ import ListLoader from "@/layout/ListLoader";
 import QuestFiltering, { getFilter, useFiltering } from "@/layout/QuestFiltering";
 import { useInfinitePagination } from "@/libs/pagination";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualQuests() {
   // Settings
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // Filtering
-  const state = useFiltering();
+  const state = useFiltering({ persistKey: "manual-quest" });
 
   // Query data
   const {
@@ -33,6 +33,7 @@ export default function ManualQuests() {
   } = api.quests.getAll.useInfiniteQuery(
     { limit: 10, ...getFilter(state) },
     {
+      enabled: state.cf.isReady,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
     },
@@ -42,7 +43,10 @@ export default function ManualQuests() {
     .map((q) => ({ ...q, village: { name: q.village?.name ?? "Any" } }));
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
-  const { onCreated, onDeleted } = useContentListActions(refetch, "/manual/quest/edit");
+  const { onCreated, onDeleted, isOpeningCreated } = useContentListActions(
+    refetch,
+    "/manual/quest/edit",
+  );
 
   // Mutations
   const { mutate: create, isPending: load1 } = api.quests.create.useMutation({
@@ -54,7 +58,7 @@ export default function ManualQuests() {
   });
 
   // Derived
-  const totalLoading = isFetching || load1 || load2;
+  const totalLoading = !state.cf.isReady || isFetching || load1 || load2;
 
   // Return JSX
   return (
@@ -119,7 +123,12 @@ export default function ManualQuests() {
           <div className="flex flex-row gap-2">
             {userData && canChangeContent(userData.role) && (
               <div className="flex flex-row gap-2">
-                <Button id="create-quest" onClick={() => create()}>
+                <Button
+                  id="create-quest"
+                  onClick={() => create()}
+                  disabled={load1 || isOpeningCreated}
+                  loading={load1 || isOpeningCreated}
+                >
                   <FilePlus className="mr-1 h-6 w-6" />
                   New
                 </Button>
@@ -144,7 +153,7 @@ export default function ManualQuests() {
           </div>
         ))}
         <ListLoader
-          initialLoading={isPending}
+          initialLoading={!state.cf.isReady || isPending}
           loading={totalLoading}
           explanation="Loading data"
         />

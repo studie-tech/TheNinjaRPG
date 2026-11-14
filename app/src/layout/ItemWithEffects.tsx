@@ -27,13 +27,19 @@ import { getPreventTypeName, getStatTypeLabels } from "@/libs/combat/util";
 import { EVOLUTION_STAT_FIELDS } from "@/libs/evolution";
 import { getFarmPlantExperience } from "@/libs/farming";
 import { masteryRewardLabels } from "@/libs/masteryRewards";
-import { getRewardArray } from "@/libs/objectives";
+import { getQuestRewardSummary } from "@/libs/objectives";
 import { cn } from "@/libs/shadui";
 import { parseHtml } from "@/utils/parse";
 import { canChangeContent, isStaffRole } from "@/utils/permissions";
-import { capitalizeFirstLetter, formatBattleUsageType } from "@/utils/string";
+import {
+  capitalizeFirstLetter,
+  formatAttackMethod,
+  formatAttackTarget,
+  formatBattleUsageType,
+  formatEnumLabel,
+} from "@/utils/string";
 import { formatHoursMinutes } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   activityBonusPowerLabel,
   getTagSchema,
@@ -87,6 +93,8 @@ export interface ItemWithEffectsProps {
   hideDetails?: boolean;
   showEvolutions?: boolean;
   imageExtra?: React.ReactNode;
+  /** Status message shown inside the card, under the entry's title. */
+  notice?: React.ReactNode;
   /** Actions shown after the entry's description, requirements and effects. */
   footer?: React.ReactNode;
   showEdit?:
@@ -110,6 +118,8 @@ export interface ItemWithEffectsProps {
   hideImage?: boolean;
   hideEffects?: boolean;
   hideDates?: boolean;
+  /** Player-facing listing: skips editor metadata such as dates, author and visibility. */
+  playerView?: boolean;
   hideData?: boolean;
   onDelete?: (id: string) => void;
   folderName?: string;
@@ -265,11 +275,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
     hideImage,
     hideEffects,
     hideDates,
+    playerView,
     hideData,
     onDelete,
     folderName,
   } = props;
-  const { data: userData } = useUserData();
+  // Only the role decides staff links, so other profile changes do not re-render each card.
+  const { data: role } = useUserDataSelector((user) => user.role);
   const isFurniture = "itemType" in item && item.itemType === "FURNITURE";
 
   // Get bloodline / sage-mode names for requirement labels
@@ -387,7 +399,8 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
   const imageExtra = props.imageExtra;
 
   // Define rewards from quests if they are there
-  const rewards = "content" in item ? getRewardArray(item.content.reward) : [];
+  const rewardSummary =
+    "content" in item && item.content ? getQuestRewardSummary(item.content) : undefined;
   return (
     <div className="mb-3 flex flex-row items-center rounded-lg border bg-popover p-2 align-middle shadow-sm">
       {!hideImage && <div className="mx-3 hidden basis-1/3 md:block">{image}</div>}
@@ -423,7 +436,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     <BarChartBig className="h-6 w-6 hover:text-popover-foreground/50" />
                   </Link>
                 )}
-                {showEdit && userData && canChangeContent(userData.role) && (
+                {showEdit && role && canChangeContent(role) && (
                   <>
                     {showCopy === "quest" && (
                       <QuestCloneControl
@@ -449,31 +462,37 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                         source={{ id: item.id, name: item.name }}
                       />
                     )}
-                    <Link href={`/manual/${showEdit}/edit/${item.id}`}>
+                    <Link
+                      href={`/manual/${showEdit}/edit/${item.id}`}
+                      aria-label={`Edit ${item.name}`}
+                    >
                       <SquarePen className="h-6 w-6 hover:text-popover-foreground/50" />
                     </Link>
                     {onDelete && (
                       <Confirm
-                        title="Confirm Deletion"
+                        title={`Delete ${item.name}?`}
+                        triggerLabel={`Delete ${item.name}`}
                         button={
                           <Trash2 className="h-6 w-6 hover:cursor-pointer hover:text-popover-foreground/50" />
                         }
+                        tone="destructive"
+                        proceed_label="Delete for all players"
                         onAccept={(e) => {
                           e.preventDefault();
                           onDelete(item.id);
                         }}
                       >
-                        You are about to delete this. Are you sure? This will affect ALL
-                        USERS WHO HAS THE CONTENT IN QUESTION.
+                        Delete {item.name} from the game? Every player who has it loses
+                        it. This cannot be undone.
                       </Confirm>
                     )}
                   </>
                 )}
                 {showEdit &&
                   SUGGESTABLE_CONTENT.includes(showEdit) &&
-                  userData &&
-                  isStaffRole(userData.role) &&
-                  !canChangeContent(userData.role) && (
+                  role &&
+                  isStaffRole(role) &&
+                  !canChangeContent(role) && (
                     <Link
                       href={`/manual/${showEdit}/edit/${item.id}`}
                       aria-label="Suggest a change"
@@ -484,7 +503,8 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   )}
               </div>
             </div>
-            {!hideDetails && !hideDates && (
+            {props.notice && <div className="my-1">{props.notice}</div>}
+            {!hideDetails && !hideDates && !playerView && (
               <div className="flex flex-row flex-wrap gap-2">
                 {item.createdAt && (
                   <div>
@@ -536,7 +556,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
           </div>
         </div>
         <div>
-          {!hideData && isFurniture && <FurnitureDetails item={item as Item} />}
+          {!hideData && isFurniture && (
+            <FurnitureDetails
+              item={item as Item}
+              showHidden={!!role && canChangeContent(role)}
+            />
+          )}
           {!hideData && !isFurniture && (
             <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-xs md:text-base">
               {"bloodline" in item && item.bloodline !== null && (
@@ -618,7 +643,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                   {item.farmSellValue > 0
                     ? ` · farm shop ${item.farmSellValue} coins`
                     : ""}
-                  {item.inShop && userData && canChangeContent(userData.role)
+                  {item.inShop && role && canChangeContent(role)
                     ? " · ⚠ also in item shop (should be off)"
                     : ""}
                 </p>
@@ -722,7 +747,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               )}
               {"type" in item && item.type && (
                 <p>
-                  <b>Type</b>: {item.type.toLowerCase()}
+                  <b>Type</b>: {formatEnumLabel(item.type)}
                 </p>
               )}
               {"onInitialBattleField" in item && item.onInitialBattleField && (
@@ -746,9 +771,12 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               {"inArena" in item &&
                 "isSummon" in item &&
                 "isEvent" in item &&
-                "inShrines" in item && (
+                "inShrines" in item &&
+                Boolean(
+                  item.inArena || item.isSummon || item.isEvent || item.inShrines,
+                ) && (
                   <p>
-                    <b>Classification:</b>
+                    <b>Classification</b>:{" "}
                     {[
                       item.inArena && "Arena",
                       item.isSummon && "Summon",
@@ -766,10 +794,10 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               )}
               {"itemType" in item && (
                 <p>
-                  <b>Item type</b>: {item.itemType.toLowerCase()}
+                  <b>Item type</b>: {formatEnumLabel(item.itemType)}
                 </p>
               )}
-              {"hidden" in item && (
+              {"hidden" in item && !playerView && role && canChangeContent(role) && (
                 <p>
                   <b>Hidden</b>: {item.hidden ? "yes" : "no"}
                 </p>
@@ -821,17 +849,17 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               )}
               {"target" in item && (
                 <p>
-                  <b>Target</b>: {item.target.toLowerCase()}
+                  <b>Target</b>: {formatAttackTarget(item.target)}
                 </p>
               )}
               {"method" in item && (
                 <p>
-                  <b>Method</b>: {item.method.toLowerCase()}
+                  <b>Method</b>: {formatAttackMethod(item.method)}
                 </p>
               )}
               {"weaponType" in item && item.weaponType && (
                 <p>
-                  <b>Weapon</b>: {item.weaponType.toLowerCase()}
+                  <b>Weapon</b>: {formatEnumLabel(item.weaponType)}
                 </p>
               )}
               {"maxDurability" in item && item.maxDurability !== undefined && (
@@ -845,7 +873,7 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
               )}
               {"slot" in item && item.slot && (
                 <p>
-                  <b>Equip</b>: {item.slot.toLowerCase()}
+                  <b>Equip</b>: {formatEnumLabel(item.slot)}
                 </p>
               )}
               {"requiredRank" in item && item.requiredRank && (
@@ -936,9 +964,9 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                     <b>Tier Level</b>: {item.tierLevel}
                   </p>
                 )}
-              {"content" in item && item.content && (
+              {rewardSummary && (
                 <div className="col-span-2">
-                  <b>Reward:</b> {rewards.join(", ")}
+                  <b>{rewardSummary.label}</b>: {rewardSummary.rewards.join(", ")}
                 </div>
               )}
               {"cost" in item && item.cost > 0 && (
@@ -1316,15 +1344,13 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                             </p>
                           )}
                         {"reward_money" in parsedEffect &&
-                          parsedEffect.reward_money &&
-                          parsedEffect.reward_money > 0 && (
+                          (parsedEffect.reward_money ?? 0) > 0 && (
                             <p>
                               <b>Reward Money</b>: {parsedEffect.reward_money}
                             </p>
                           )}
                         {"reward_reputation" in parsedEffect &&
-                          parsedEffect.reward_reputation &&
-                          parsedEffect.reward_reputation > 0 && (
+                          (parsedEffect.reward_reputation ?? 0) > 0 && (
                             <p>
                               <b>Reward Reputation</b>: {parsedEffect.reward_reputation}
                             </p>
@@ -1351,29 +1377,25 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                             </p>
                           )}
                         {"reward_tokens" in parsedEffect &&
-                          parsedEffect.reward_tokens &&
-                          parsedEffect.reward_tokens > 0 && (
+                          (parsedEffect.reward_tokens ?? 0) > 0 && (
                             <p>
                               <b>Reward Tokens</b>: {parsedEffect.reward_tokens}
                             </p>
                           )}
                         {"reward_prestige" in parsedEffect &&
-                          parsedEffect.reward_prestige &&
-                          parsedEffect.reward_prestige > 0 && (
+                          (parsedEffect.reward_prestige ?? 0) > 0 && (
                             <p>
                               <b>Reward Prestige</b>: {parsedEffect.reward_prestige}
                             </p>
                           )}
                         {"reward_clanpoints" in parsedEffect &&
-                          parsedEffect.reward_clanpoints &&
-                          parsedEffect.reward_clanpoints > 0 && (
+                          (parsedEffect.reward_clanpoints ?? 0) > 0 && (
                             <p>
                               <b>Reward Clanpoints</b>: {parsedEffect.reward_clanpoints}
                             </p>
                           )}
                         {"reward_anbupoints" in parsedEffect &&
-                          parsedEffect.reward_anbupoints &&
-                          parsedEffect.reward_anbupoints > 0 && (
+                          (parsedEffect.reward_anbupoints ?? 0) > 0 && (
                             <p>
                               <b>Reward Anbu Points</b>:{" "}
                               {parsedEffect.reward_anbupoints}
@@ -1387,26 +1409,30 @@ const ItemWithEffects: React.FC<ItemWithEffectsProps> = (props) => {
                             </p>
                           )}
                         {"reward_exp" in parsedEffect &&
-                          parsedEffect.reward_exp &&
-                          parsedEffect.reward_exp > 0 && (
+                          (parsedEffect.reward_exp ?? 0) > 0 && (
                             <p>
                               <b>Reward Exp</b>: {parsedEffect.reward_exp}
                             </p>
                           )}
                         {"reward_sage_mastery_experience" in parsedEffect &&
-                          parsedEffect.reward_sage_mastery_experience &&
-                          parsedEffect.reward_sage_mastery_experience > 0 && (
+                          (parsedEffect.reward_sage_mastery_experience ?? 0) > 0 && (
                             <p>
                               <b>Reward Sage Mode Exp</b>:{" "}
                               {parsedEffect.reward_sage_mastery_experience.toLocaleString()}
                             </p>
                           )}
                         {"reward_seichi_silver" in parsedEffect &&
-                          parsedEffect.reward_seichi_silver &&
-                          parsedEffect.reward_seichi_silver > 0 && (
+                          (parsedEffect.reward_seichi_silver ?? 0) > 0 && (
                             <p>
                               <b>Reward Seichi Silver</b>:{" "}
                               {parsedEffect.reward_seichi_silver}
+                            </p>
+                          )}
+                        {"reward_skillpoints" in parsedEffect &&
+                          (parsedEffect.reward_skillpoints ?? 0) > 0 && (
+                            <p>
+                              <b>Reward Skill Points</b>:{" "}
+                              {parsedEffect.reward_skillpoints}
                             </p>
                           )}
                         {"reward_hunter_items" in parsedEffect &&
@@ -1468,7 +1494,13 @@ const RankRequirement = ({ label, rank }: { label: string; rank: string | null }
     </div>
   ) : null;
 
-const FurnitureDetails = ({ item }: { item: Item }) => (
+const FurnitureDetails = ({
+  item,
+  showHidden,
+}: {
+  item: Item;
+  showHidden: boolean;
+}) => (
   <div className="my-2 grid grid-cols-2 rounded-lg bg-poppopover p-2 text-xs md:text-base">
     <p>
       <b>Item type</b>: furniture
@@ -1494,9 +1526,11 @@ const FurnitureDetails = ({ item }: { item: Item }) => (
     <p>
       <b>Can be Traded</b>: {item.canBeTraded ? "yes" : "no"}
     </p>
-    <p>
-      <b>Hidden</b>: {item.hidden ? "yes" : "no"}
-    </p>
+    {showHidden && (
+      <p>
+        <b>Hidden</b>: {item.hidden ? "yes" : "no"}
+      </p>
+    )}
     {item.cost > 0 && (
       <p className="col-span-2">
         <b>Shop Price:</b> {item.cost.toLocaleString()} ryo

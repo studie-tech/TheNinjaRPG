@@ -6,9 +6,10 @@ import { useEffect, useRef, useState } from "react";
 import type { z } from "zod";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import {
   isEndedSubscriptionStatus,
   type stripePurchaseSchema,
@@ -25,7 +26,7 @@ export const StripeCheckoutButton = ({
   disabled?: boolean;
 }) => {
   const utils = api.useUtils();
-  const { data: user } = useRequiredUserData();
+  const { data: user } = useRequiredUserDataSelector((u) => ({ userId: u.userId }));
   const { data: availability } = api.stripe.availability.useQuery();
   const [message, setMessage] = useState("");
   // A transport failure may hide a created session; retry its key instead of charging anew.
@@ -181,7 +182,7 @@ export const StripePaymentReturn = () => {
 /** Resume or cancel saved payer reservations without changing their purchase terms. */
 export const StripePendingCheckouts = () => {
   const utils = api.useUtils();
-  const { data: user } = useRequiredUserData();
+  const { data: user } = useRequiredUserDataSelector((u) => ({ userId: u.userId }));
   const pending = api.stripe.getPendingCheckouts.useQuery();
   const [message, setMessage] = useState("");
   const resume = api.stripe.createCheckout.useMutation({
@@ -324,13 +325,29 @@ export const StripeSubscriptions = () => {
           )}
           {!subscription.cancelAtPeriodEnd &&
             !isEndedSubscriptionStatus(subscription.status) && (
-              <Button
-                className="mt-2"
+              <Confirm
+                title="Cancel renewal"
+                proceed_label="Cancel renewal"
+                proceed_loading_label="Cancelling..."
+                confirmClassName="bg-red-600 text-white hover:bg-red-700"
+                isLoading={cancel.isPending}
+                keepOpenOnAccept={true}
                 disabled={cancel.isPending}
-                onClick={() => cancel.mutate({ checkoutId: subscription.checkoutId })}
+                triggerClassName="mt-2"
+                button={<Button>Cancel renewal</Button>}
+                onAccept={(_e, { close }) =>
+                  cancel.mutate(
+                    { checkoutId: subscription.checkoutId },
+                    { onSettled: close },
+                  )
+                }
               >
-                Cancel renewal
-              </Button>
+                <p>
+                  Stop renewing the <b>{subscription.federalStatus}</b> support for{" "}
+                  {subscription.recipientUsername ?? "this character"}? The period you
+                  already paid for is kept; no further payments are taken.
+                </p>
+              </Confirm>
             )}
         </div>
       ))}

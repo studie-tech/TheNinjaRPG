@@ -15,7 +15,7 @@ import { FeedbackAlert, type MutationFeedback } from "@/layout/FeedbackAlert";
 import Link from "@/layout/Link";
 import UserSearchSelect from "@/layout/UserSearchSelect";
 import { useUserPicker } from "@/utils/search";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
 /** Private hiring controls: identities are returned only to the employing Kage and the player. */
@@ -228,7 +228,7 @@ export const MercenaryOffers = () => {
 const useMercenaryFeedback = () => {
   const [feedback, setFeedback] = useState<MutationFeedback | null>(null);
   const utils = api.useUtils();
-  const { updateUser, prepareUserUpdate } = useRequiredUserData();
+  const { updateUser, prepareUserUpdate } = useRequiredUserInfo();
   const refresh = async (
     result: UserDeltaResponse,
     _variables: unknown,

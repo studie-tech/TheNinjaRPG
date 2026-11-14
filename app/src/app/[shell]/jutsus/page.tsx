@@ -15,7 +15,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ import {
 import type { UserItemWithItem, UserJutsuWithRelations } from "@/drizzle/schema";
 import { useJutsuCacheUpdate } from "@/hooks/useJutsuCacheUpdate";
 import { useJutsuLoadoutCacheUpdate } from "@/hooks/useJutsuLoadoutCacheUpdate";
+import { useRefreshAt } from "@/hooks/useRefreshAt";
 import AvatarImage from "@/layout/Avatar";
 import { ActionSelector } from "@/layout/CombatActions";
 import Confirm from "@/layout/Confirm";
@@ -93,8 +94,11 @@ export default function MyJutsu() {
     timeDiff,
     prepareUserUpdate,
   } = useRequiredUserData();
-  // finishTraining is a server timestamp, so compare it on the server clock
-  const serverNow = Date.now() - timeDiff;
+  // finishTraining is a server timestamp, so compare it on the server clock. The clock
+  // is state so typing in a dialog reuses the jutsu counts; it moves when a training
+  // ends or the rows change.
+  const [clientNow, setClientNow] = useState(() => Date.now());
+  const serverNow = clientNow - timeDiff;
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [sharingMode, setSharingMode] = useState<"export" | "import" | null>(null);
@@ -118,6 +122,7 @@ export default function MyJutsu() {
     moveForward: boolean;
   } | null>(null);
   const loadoutRequestInFlightRef = useRef(false);
+  const buyJutsuSlotInFlightRef = useRef(false);
 
   // Accordion state for jutsu category sections (multiple can be open simultaneously)
   const [openSections, setOpenSections] = useState<Set<string>>(
@@ -171,6 +176,14 @@ export default function MyJutsu() {
   const { data: userJutsus, isFetching: l1 } = api.jutsu.getUserJutsus.useQuery(
     jutsuInput,
     { enabled: !!userData, placeholderData: (previousData) => previousData },
+  );
+  useEffect(() => {
+    if (userJutsus) setClientNow(Date.now());
+  }, [userJutsus]);
+  useRefreshAt(
+    (userJutsus ?? []).map((owned) => owned.finishTraining),
+    () => setClientNow(Date.now()),
+    timeDiff,
   );
   // Open the details modal of one owned jutsu
   const openJutsu = (id: string) => {
@@ -342,7 +355,11 @@ export default function MyJutsu() {
         showMutationToast(data);
         if (data.success) {
           await updateUser(undefined, { revision, delta: data.userDelta });
+          setLoadoutConfirmation(null);
         }
+      },
+      onSettled: () => {
+        buyJutsuSlotInFlightRef.current = false;
       },
     });
 
@@ -484,6 +501,10 @@ export default function MyJutsu() {
 
   // Ryo from forgetting
 
+  const hasNoJutsu =
+    !!categorizedJutsus &&
+    Object.values(categorizedJutsus).every((arr) => arr.length === 0);
+
   // Loaders
   if (!userData) return <Loader explanation="Loading userdata" />;
 
@@ -497,6 +518,7 @@ export default function MyJutsu() {
     <>
       <ContentBox
         title="My Jutsu"
+        defaultBackHref="/profile"
         subtitle={subtitle}
         noRightAlign
         topRightContent={
@@ -598,17 +620,28 @@ export default function MyJutsu() {
               ? isUnequipping
                 ? undefined
                 : "Unequip all"
-              : canUpgrade
-                ? `Purchase for ${COST_EXTRA_JUTSU_SLOT} reps`
-                : `Need ${COST_EXTRA_JUTSU_SLOT - userData.reputationPoints} more reps`
+              : isUpgrading
+                ? "Purchasing"
+                : canUpgrade
+                  ? `Purchase for ${COST_EXTRA_JUTSU_SLOT} reps`
+                  : `Need ${COST_EXTRA_JUTSU_SLOT - userData.reputationPoints} more reps`
           }
+          keepOpenOnAccept={loadoutConfirmation === "upgrade"}
+          isLoading={loadoutConfirmation === "upgrade" && isUpgrading}
           proceedDisabled={
             isPending || (loadoutConfirmation === "unequip" ? !curEquip : !canUpgrade)
           }
           onAccept={(event) => {
             event.preventDefault();
             if (loadoutConfirmation === "unequip") unequipAll();
-            else if (loadoutConfirmation === "upgrade" && canUpgrade) buyJutsuSlot();
+            else if (
+              loadoutConfirmation === "upgrade" &&
+              canUpgrade &&
+              !buyJutsuSlotInFlightRef.current
+            ) {
+              buyJutsuSlotInFlightRef.current = true;
+              buyJutsuSlot();
+            }
           }}
         >
           {loadoutConfirmation === "unequip" ? (
@@ -627,7 +660,7 @@ export default function MyJutsu() {
         <JutsuStatQuickFilters state={state} />
 
         {/* Equipped Section - Always Visible */}
-        {categorizedJutsus && (
+        {categorizedJutsus && !hasNoJutsu && (
           <div className="mb-4">
             <h3 className="px-3 py-2 font-bold text-lg">
               Equipped Jutsu ({categorizedJutsus.equipped.length}/{maxEquip})
@@ -665,10 +698,11 @@ export default function MyJutsu() {
             {JUTSU_SECTIONS.map(([key, title]) => (
               <JutsuCategorySection
                 key={key}
+                section={key}
                 title={title}
                 jutsus={categorizedJutsus[key]}
                 isOpen={openSections.has(key)}
-                onToggle={() => toggleSection(key)}
+                onToggle={toggleSection}
                 onClick={openJutsu}
                 counts={userJutsuCounts}
                 transformToActionItems={transformToActionItems}
@@ -678,14 +712,12 @@ export default function MyJutsu() {
         )}
 
         {/* Show message when no jutsu */}
-        {!isFetching &&
-          categorizedJutsus &&
-          Object.values(categorizedJutsus).every((arr) => arr.length === 0) && (
-            <p className="py-4 text-center text-muted-foreground">
-              You have not learned any jutsu. Go to the training grounds in your village
-              to learn some.
-            </p>
-          )}
+        {!isFetching && hasNoJutsu && (
+          <p className="py-4 text-center text-muted-foreground">
+            You have not learned any jutsu. Go to the training grounds in your village
+            to learn some.
+          </p>
+        )}
 
         {isOpen && userjutsu && (
           <Modal
@@ -797,8 +829,13 @@ export default function MyJutsu() {
                       <Confirm
                         title="Transfer Level"
                         button={
-                          <Button id="transfer" variant="secondary">
-                            <ArrowRightLeft className="h-6 w-6 sm:mr-2" />
+                          <Button
+                            id="transfer"
+                            variant="secondary"
+                            aria-label="Transfer Level"
+                            hoverText="Transfer Level"
+                          >
+                            <ArrowRightLeft className="h-6 w-6 sm:mr-2" aria-hidden />
                             <p className="hidden sm:block">Transfer Level</p>
                           </Button>
                         }
@@ -934,8 +971,13 @@ export default function MyJutsu() {
                               id={`evolve-${evo.id}`}
                               variant="secondary"
                               disabled={isPending}
+                              aria-label={`Evolve to ${evo.name}`}
+                              hoverText={`Evolve to ${evo.name}`}
                             >
-                              <CircleFadingArrowUp className="h-6 w-6 sm:mr-2" />
+                              <CircleFadingArrowUp
+                                className="h-6 w-6 sm:mr-2"
+                                aria-hidden
+                              />
                               <p className="hidden sm:block">Evolve</p>
                             </Button>
                           }
@@ -996,8 +1038,13 @@ export default function MyJutsu() {
                     <Confirm
                       title="Remove Reskin"
                       button={
-                        <Button id="remove-reskin" variant="destructive">
-                          <Palette className="h-6 w-6 sm:mr-2" />
+                        <Button
+                          id="remove-reskin"
+                          variant="destructive"
+                          aria-label="Remove Reskin"
+                          hoverText="Remove Reskin"
+                        >
+                          <Palette className="h-6 w-6 sm:mr-2" aria-hidden />
                           <p className="hidden sm:block">Remove Reskin</p>
                         </Button>
                       }
@@ -1015,6 +1062,8 @@ export default function MyJutsu() {
                     <Button
                       id="reskin"
                       variant="outline"
+                      aria-label="Reskin"
+                      hoverText="Reskin"
                       onClick={() => {
                         reskinForm.reset({
                           jutsuId: userjutsu.jutsuId,
@@ -1032,24 +1081,38 @@ export default function MyJutsu() {
                         userjutsu.jutsu.jutsuType === "BLOODLINE"
                       }
                     >
-                      <Palette className="h-6 w-6 sm:mr-2" />
+                      <Palette className="h-6 w-6 sm:mr-2" aria-hidden />
                       <p className="hidden sm:block">Reskin</p>
                     </Button>
                   )}
                   <Confirm
                     title="Forget Jutsu"
+                    triggerLabel={`Forget ${userjutsu.jutsu.name}`}
                     button={
-                      <Button id="return" variant="destructive">
-                        <Trash2 className="h-6 w-6 sm:mr-2" />
+                      <Button
+                        id="return"
+                        variant="destructive"
+                        aria-label="Forget jutsu"
+                        hoverText="Forget jutsu"
+                      >
+                        <Trash2 className="h-6 w-6 sm:mr-2" aria-hidden />
                         <p className="hidden sm:block">Forget</p>
                       </Button>
                     }
+                    tone="destructive"
+                    proceed_label="Forget jutsu"
+                    proceed_loading_label="Forgetting"
+                    isLoading={isForgetting}
                     onAccept={(e) => {
                       e.preventDefault();
                       forget({ id: userjutsu.id });
                     }}
                   >
-                    <p>Confirm to forget this jutsu.</p>
+                    <p>
+                      Forget {userjutsu.jutsu.name} and lose its {userjutsu.level}{" "}
+                      {userjutsu.level === 1 ? "level" : "levels"} of training? This
+                      cannot be undone.
+                    </p>
                   </Confirm>
                 </div>
               </>
@@ -1322,10 +1385,11 @@ export default function MyJutsu() {
 
 // Sub-component for rendering accordion-style jutsu category sections
 interface JutsuCategorySectionProps {
+  section: string;
   title: string;
   jutsus: UserJutsuWithRelations[];
   isOpen: boolean;
-  onToggle: () => void;
+  onToggle: (section: string) => void;
   onClick: (id: string) => void;
   counts: { id: string; quantity: number }[] | undefined;
   transformToActionItems: (jutsus: UserJutsuWithRelations[]) => {
@@ -1340,8 +1404,16 @@ interface JutsuCategorySectionProps {
 }
 
 const JutsuCategorySection = memo((props: JutsuCategorySectionProps) => {
-  const { title, jutsus, isOpen, onToggle, onClick, counts, transformToActionItems } =
-    props;
+  const {
+    section,
+    title,
+    jutsus,
+    isOpen,
+    onToggle,
+    onClick,
+    counts,
+    transformToActionItems,
+  } = props;
   if (jutsus.length === 0) return null;
 
   return (
@@ -1349,7 +1421,7 @@ const JutsuCategorySection = memo((props: JutsuCategorySectionProps) => {
       <button
         type="button"
         className="flex w-full cursor-pointer flex-row items-center hover:bg-popover"
-        onClick={onToggle}
+        onClick={() => onToggle(section)}
       >
         <h2 className="mt-2 font-bold">
           {title} ({jutsus.length})

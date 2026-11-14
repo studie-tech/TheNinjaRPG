@@ -13,11 +13,14 @@ import ContentBox from "@/layout/ContentBox";
 import QuestPicker from "@/layout/QuestPicker";
 import { getGatheringRank, getGatheringRankProgress } from "@/libs/gathering";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 export default function OccupationGathering() {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    occupation: u.occupation,
+    gatheringExperience: u.gatheringExperience,
+  }));
 
   // Guard
   if (userData?.occupation !== "GATHERING") return null;

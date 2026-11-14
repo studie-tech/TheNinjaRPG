@@ -13,6 +13,7 @@ import type { BattleState } from "@/libs/combat/types";
 import * as UserContext from "@/utils/UserContext";
 import { deferred } from "../setup/deferred";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
+import { mockUserContextValue } from "../setup/userContext";
 
 // Keep the real history component, subscription hook and tRPC query lifecycle;
 // control only websocket delivery, user context and the server's log responses.
@@ -71,8 +72,8 @@ beforeEach(() => {
       unsubscribe,
     },
   };
-  vi.spyOn(UserContext, "useUserData").mockReturnValue(user as never);
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue(user as never);
+  mockUserContextValue(user as never);
+  mockUserContextValue(user as never);
 });
 afterEach(() => {
   cleanup();

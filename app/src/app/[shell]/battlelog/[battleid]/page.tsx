@@ -57,7 +57,11 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
     { battleId: battleId },
     { enabled: !!battleId },
   );
-  const { data: battleHistory } = api.combat.getBattleHistoryEntry.useQuery(
+  const {
+    data: battleHistory,
+    isPending: isLoadingHistory,
+    isError: isHistoryError,
+  } = api.combat.getBattleHistoryEntry.useQuery(
     { battleId: battleId },
     { enabled: !!battleId },
   );
@@ -202,7 +206,13 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
         minute: "2-digit",
       })
     : "";
-  const subtitle = dateString ? `Battle from ${dateString}` : "Loading...";
+  const subtitle = dateString
+    ? `Battle from ${dateString}`
+    : isHistoryError
+      ? "Could not load this battle"
+      : isLoadingHistory
+        ? "Loading..."
+        : "Battle not found";
 
   return (
     <ContentBox title="Spectate" subtitle={subtitle} defaultBackHref="/profile">

@@ -63,7 +63,8 @@ import {
 } from "@/libs/chatPanel";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
-import { useUserData } from "@/utils/UserContext";
+import type { UserWithRelations } from "@/routers/profile";
+import { useUserData, useUserDataSelector } from "@/utils/UserContext";
 
 /**
  * The AI SDK (`ai`, `@ai-sdk/react` and its swr dependency) loads only when the Ask
@@ -86,7 +87,7 @@ export default function ChatPanelBody({
   onToggleWide: () => void;
   onClose: () => void;
 }) {
-  const { data: userData, notifications } = useUserData();
+  const { data: userData, notifications } = useUserDataSelector(selectChatOverviewUser);
   const [panel, setPanel] = useAtom(chatPanelAtom);
   const mentions = useAtomValue(chatMentionsAtom);
   const tavernActivity = useAtomValue(chatTavernActivityAtom);
@@ -447,7 +448,7 @@ function InboxPane({
   hideRail: boolean;
   onMessageUser: (user: ChatStartUser) => void;
 }) {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ userId: u.userId }));
   const [panel, setPanel] = useAtom(chatPanelAtom);
   const mutes = useChatMutes();
   const { data: conversations, isPending } = useInboxConversations();
@@ -673,7 +674,7 @@ function ConversationMenu({ convo, meId }: { convo: InboxConversation; meId: str
               <MenuButton
                 destructive
                 disabled={isBlocking}
-                onClick={() => toggleBlock({ userId: partner.userId })}
+                onClick={() => toggleBlock({ userId: partner.userId, active: true })}
               >
                 <Ban /> Block {partner.userData.username}
               </MenuButton>
@@ -884,3 +885,12 @@ const conversationTitle = (convo: InboxConversation, meId: string) =>
 type InboxConversation = RouterOutputs["comments"]["getUserConversations"][number];
 
 type PhoneChat = { kind: "tavern"; tavern: string } | { kind: "inbox" };
+
+/** Refresh the chat overview for tutorial eligibility and mute preferences only. */
+const selectChatOverviewUser = (user: NonNullable<UserWithRelations>) => ({
+  tutorialOn: user.tutorialOn,
+  userQuests: user.userQuests,
+  chatMuted: user.chatMuted,
+  mutedConversationIds: user.mutedConversationIds,
+  unmutedTavernIds: user.unmutedTavernIds,
+});

@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import Loader from "@/layout/Loader";
-import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { useUserDataSelector } from "@/utils/UserContext";
 
@@ -54,7 +53,7 @@ const AcceptWarning: React.FC = () => {
   return (
     <Dialog open onOpenChange={() => {}}>
       <DialogContent
-        className={cn("max-w-4xl", "max-h-screen overflow-y-scroll")}
+        className="max-w-4xl"
         closeDisabled
         onEscapeKeyDown={preventClose}
         onInteractOutside={preventClose}

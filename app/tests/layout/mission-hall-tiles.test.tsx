@@ -109,10 +109,10 @@ describe("Mission Hall tiles", () => {
   it("counts only the tile's quest type on random tiles", () => {
     const view = render(<MissionHall userData={user()} />);
     const tile = (name: string) => view.getByText(name).closest("button");
-    expect(tile("Errand")?.textContent).toContain("[Random out of 1 available]");
-    expect(tile("D-rank")?.textContent).toContain("[Random out of 1 available]");
+    expect(tile("Errand")?.textContent).toContain("1 available · random");
+    expect(tile("D-rank")?.textContent).toContain("1 available · random");
     // A C-rank crime is not a mission, so a village player's tile has nothing to draw.
-    expect(tile("C-rank")?.textContent).toContain("[Random out of 0 available]");
+    expect(tile("C-rank")?.textContent).toContain("0 available · random");
     expect(tile("C-rank")?.hasAttribute("disabled")).toBe(true);
   });
 

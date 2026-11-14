@@ -21,7 +21,7 @@ import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { isActionRangeLimited } from "@/libs/hexgrid";
 import { cn } from "@/libs/shadui";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import type { ZodAllTags } from "@/validators/combat";
 
 interface ActionItemProps
@@ -64,6 +64,8 @@ interface ActionSelectorSettingsProps {
   labelSingles?: boolean;
   onClick: (id: string) => void;
   emptyText?: string;
+  /** Hides `emptyText` while the items are still loading. */
+  isLoading?: boolean;
   setLastElement?: (el: HTMLDivElement | null) => void;
   showInfoIcon?: boolean;
   /**
@@ -104,7 +106,7 @@ interface ActionSelectorProps extends ActionSelectorSettingsProps {
 }
 
 export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const { items, counts, levels, renderItem, ...settings } = props;
   const { combatMode, selectedId, currentRound, userActionPoints, onClick } = props;
   const filtered = items?.filter(
@@ -112,7 +114,9 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
   );
   const base = "gap-1 text-xs";
   const grid = props.gridClassNameOverwrite || "grid grid-cols-6 md:grid-cols-7";
-  const bgColor = props.showBgColor ? "rounded-lg border bg-slate-50 text-black" : "";
+  const bgColor = props.showBgColor
+    ? "rounded-lg border bg-card text-card-foreground"
+    : "";
 
   // Track previous round to detect round changes
   const prevRoundRef = useRef<number | undefined>(currentRound);
@@ -225,7 +229,7 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
                       isHighlight
                         ? "rounded-xl border-4 border-amber-500 bg-amber-300 text-black"
                         : "",
-                      bgColor ? `${bgColor} text-black` : "",
+                      bgColor,
                       isGreyed ? "opacity-20" : "",
                     )}
                     isGreyed={isGreyed}
@@ -242,7 +246,8 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
         // Doubles as the pagination sentinel: a batch that was filtered down to nothing
         // can still have more batches behind it.
         <div ref={props.setLastElement} className="flex flex-row text-base">
-          {props.emptyText ? props.emptyText : "Nothing Available"}
+          {!props.isLoading &&
+            (props.emptyText ? props.emptyText : "Nothing Available")}
         </div>
       )}
     </>
@@ -265,9 +270,11 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
   // Derived values
   const remainingCooldown = getRemainingCooldown(item, settings.currentRound);
   const cooldownPerc = cooldown ? (100 * remainingCooldown) / cooldown : 0;
-  const elements = item.effects
-    ? item.effects.flatMap((e) => ("elements" in e && e.elements ? e.elements : []))
-    : [];
+  const elements = [
+    ...new Set(
+      item.effects?.flatMap((e) => ("elements" in e && e.elements ? e.elements : [])),
+    ),
+  ];
   const effectiveActionCost = getEffectiveActionCost(item, settings);
   const insufficientAP = lacksActionPoints(effectiveActionCost, settings);
 
@@ -307,7 +314,7 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
           // biome-ignore lint/a11y/useKeyWithClickEvents: Container click is supplementary - audio controls are the primary interaction
           // biome-ignore lint/a11y/noStaticElementInteractions: Click handler supplements audio controls
           <div className={cn(settings.aspectRatioClass)} onClick={handleClick}>
-            <div className="relative flex aspect-square w-full items-center justify-center rounded-xl border-2 bg-slate-100">
+            <div className="relative flex aspect-square w-full items-center justify-center rounded-xl border-2 bg-muted">
               {/* biome-ignore lint/a11y/useMediaCaption: Audio assets are sound effects without caption content */}
               <audio
                 src={item.url}
@@ -438,16 +445,14 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
             </PopoverContent>
           </Popover>
         )}
-        {/* Elements overlay - top left */}
-        {elements.map((element, i) => (
-          <div
-            key={`${element}-${i}`}
-            className={`absolute top-[-5px]`}
-            style={{ left: `${i * 10}px` }}
-          >
-            <ElementImage element={element} className="w-6" />
+        {/* Elements overlay - a row inset from the top left corner */}
+        {elements.length > 0 && (
+          <div className="pointer-events-none absolute top-0.5 left-0.5 flex max-w-[calc(100%-0.25rem)] flex-row flex-wrap gap-px">
+            {elements.map((element) => (
+              <ElementImage key={element} element={element} className="w-5" />
+            ))}
           </div>
-        ))}
+        )}
         {/* Durability bar */}
         {item.durability !== undefined && item.maxDurability !== undefined && (
           <DurabilityBar
@@ -464,7 +469,13 @@ export const ActionOption: React.FC<ActionOptionProps> = (props) => {
           </div>
         )}
       </div>
-      {settings.showLabels && <span className="w-full break-words">{name}</span>}
+      {settings.showLabels && (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: pointer shortcut for the action control above, which handles keyboard selection
+        // biome-ignore lint/a11y/noStaticElementInteractions: a span avoids nesting buttons in catalogs that wrap the tile
+        <span className="w-full break-words" onClick={handleClick}>
+          {name}
+        </span>
+      )}
     </div>
   );
 };

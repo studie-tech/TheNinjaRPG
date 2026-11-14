@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import ContentBox from "@/layout/ContentBox";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import JutsuFiltering, { getFilter, useFiltering } from "@/layout/JutsuFiltering";
@@ -92,13 +93,20 @@ export default function ManualJutsuReskins() {
             key={item.id}
             ref={i === transformedReskins.length - 1 ? setLastElement : null}
           >
-            {isOrphaned && (
-              <p role="alert" className="font-bold text-red-500">
-                Orphaned: the base jutsu of this reskin was deleted. Edit it to assign
-                another base jutsu.
-              </p>
-            )}
-            <ItemWithEffects item={item} showEdit="jutsu/reskins" />
+            <ItemWithEffects
+              item={item}
+              showEdit="jutsu/reskins"
+              notice={
+                isOrphaned && (
+                  <Alert variant="destructive">
+                    <AlertDescription>
+                      Orphaned: the base jutsu of this reskin was deleted. Edit it to
+                      assign another base jutsu.
+                    </AlertDescription>
+                  </Alert>
+                )
+              }
+            />
           </div>
         ))}
         {!isFetching && transformedReskins?.length === 0 && (

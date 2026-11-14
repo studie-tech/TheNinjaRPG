@@ -4,7 +4,7 @@ import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { getBulkSoldInventory } from "@/deltas/item";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 
 type BulkSellResult = RouterOutputs["item"]["sellUserItems"];
 
@@ -21,7 +21,7 @@ export const useBulkSellItems = ({
   onSold: (result: BulkSellResult) => void;
   onSettled: () => void;
 }) => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const { prepareInventoryUpdate, updateInventory, invalidateInventory } =
     useInventoryCacheUpdate();
 

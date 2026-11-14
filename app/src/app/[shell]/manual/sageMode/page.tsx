@@ -11,11 +11,11 @@ import ListLoader from "@/layout/ListLoader";
 import SageModeFiltering, { getFilter, useFiltering } from "@/layout/SageModeFiltering";
 import { useInfinitePagination } from "@/libs/pagination";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Public catalog of sage modes, with staff create/delete on the list. */
 export default function ManualSageModes() {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   const state = useFiltering();
   const {
@@ -35,7 +35,7 @@ export default function ManualSageModes() {
   const allSageModes = sageModes?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
-  const { onCreated, onDeleted } = useContentListActions(
+  const { onCreated, onDeleted, isOpeningCreated } = useContentListActions(
     refetch,
     "/manual/sageMode/edit",
   );
@@ -78,7 +78,12 @@ export default function ManualSageModes() {
         topRightContent={
           <div className="flex flex-row gap-1 items-center">
             {userData && canChangeContent(userData.role) && (
-              <Button id="create-sagemode" onClick={() => create()}>
+              <Button
+                id="create-sagemode"
+                onClick={() => create()}
+                disabled={load1 || isOpeningCreated}
+                loading={load1 || isOpeningCreated}
+              >
                 <FilePlus className="h-5 w-5" />
               </Button>
             )}

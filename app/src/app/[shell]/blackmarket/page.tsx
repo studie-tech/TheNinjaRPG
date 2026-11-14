@@ -22,8 +22,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   PITY_BLOODLINE_ROLLS,
   REP_TRADE_MIN_LEVEL,
@@ -32,13 +32,14 @@ import {
   repTradeLevelMessage,
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
-import AvatarImage from "@/layout/Avatar";
+import { AvatarNameCell } from "@/layout/AvatarNameCell";
 import { CurrentBloodline, PurchaseBloodline } from "@/layout/Bloodline";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import GraphBlackmarketLedger from "@/layout/GraphBlackmarketLedger";
 import Loader from "@/layout/Loader";
 import NavTabs from "@/layout/NavTabs";
+import { QueryError } from "@/layout/QueryError";
 import Shop from "@/layout/Shop";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import UserSearchSelect from "@/layout/UserSearchSelect";
@@ -51,7 +52,7 @@ import { round } from "@/utils/math";
 import { isSiteOwnerAccount } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserData, useRequiredUserInfo } from "@/utils/UserContext";
 import {
   type BlackMarketOfferSchema,
   type BlackMarketOfferSchemaInput,
@@ -174,7 +175,7 @@ const PityBloodlineRoll: React.FC<{
 }> = ({ userData }) => {
   // tRPC utils
   const utils = api.useUtils();
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
 
   // Get data from DB
   const { data: prevRolls, isPending: isPendingRolls } =
@@ -290,7 +291,7 @@ const Bloodline: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
 const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   userData,
 }) => {
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
 
   // State
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
@@ -340,20 +341,27 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   const { methods: allowedSearchMethods, user: allowedUser } = useUserPicker(maxUsers);
 
   // Query
-  const { data, fetchNextPage, hasNextPage } =
-    api.blackmarket.getRyoOffers.useInfiniteQuery(
-      {
-        activeToggle: tab === "Active",
-        creator: creatorUser?.username,
-        buyer: buyerUser?.username,
-        limit: 30,
-      },
-      {
-        getNextPageParam: (lastPage) => lastPage.nextCursor,
-        placeholderData: (previousData) => previousData,
-        staleTime: 1000 * 60 * 30, // every 30min
-      },
-    );
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isPending: isLoadingOffers,
+    isError: isOffersError,
+    isFetching: isFetchingOffers,
+    refetch: refetchOffers,
+  } = api.blackmarket.getRyoOffers.useInfiniteQuery(
+    {
+      activeToggle: tab === "Active",
+      creator: creatorUser?.username,
+      buyer: buyerUser?.username,
+      limit: 30,
+    },
+    {
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      placeholderData: (previousData) => previousData,
+      staleTime: 1000 * 60 * 30, // every 30min
+    },
+  );
   const allOffers = data?.pages
     .flatMap((page) => page.data)
     .map((offer) => {
@@ -371,47 +379,73 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
           </div>
         ),
         creator: (
-          <div className="w-20 text-center">
-            <AvatarImage
-              href={offer.creatorAvatar}
-              alt={offer.creatorUsername}
-              size={100}
-            />
-            <p>{offer.creatorUsername}</p>
-          </div>
+          <AvatarNameCell avatar={offer.creatorAvatar} name={offer.creatorUsername} />
         ),
         buyer: (
-          <div className="w-20 text-center">
-            <AvatarImage
-              href={offer.purchaserAvatar}
-              alt={offer.purchaserUsername || "Unknown"}
-              size={100}
-            />
-            <p>{offer.purchaserUsername}</p>
-          </div>
+          <AvatarNameCell
+            avatar={offer.purchaserAvatar}
+            name={offer.purchaserUsername}
+          />
         ),
         allowed: (
-          <div className="w-20 text-center">
-            <AvatarImage
-              href={offer.allowedAvatar}
-              alt={offer.allowedUsername || "Unknown"}
-              size={100}
-            />
-            <p>{offer.allowedUsername}</p>
-          </div>
+          <AvatarNameCell avatar={offer.allowedAvatar} name={offer.allowedUsername} />
         ),
         actions: (
           <div className="flex flex-row gap-1">
             {showActive && hasRyo && !owner && !belowRepTradeMinLevel && (
-              <Button onClick={() => accept({ offerId: offer.id })}>
-                <ShoppingCart className="mr-2 h-5 w-5" />
-                Buy
-              </Button>
+              <Confirm
+                title="Buy reputation points"
+                proceed_label={`Pay ${offer.requestedRyo.toLocaleString()} ryo`}
+                proceed_loading_label="Buying..."
+                isLoading={isAccepting}
+                keepOpenOnAccept={true}
+                button={
+                  <Button>
+                    <ShoppingCart className="mr-2 h-5 w-5" />
+                    Buy
+                  </Button>
+                }
+                onAccept={(_e, { close }) =>
+                  accept(
+                    { offerId: offer.id },
+                    { onSuccess: (result) => result.success && close() },
+                  )
+                }
+              >
+                <p>
+                  Buy <b>{offer.repsForSale.toLocaleString()} reputation points</b> from{" "}
+                  {offer.creatorUsername} for{" "}
+                  <b>{offer.requestedRyo.toLocaleString()} ryo</b> (
+                  {offer.ryoPerRep.toLocaleString()} ryo per point)? The ryo leaves your
+                  pocket at once and the trade cannot be undone.
+                </p>
+              </Confirm>
             )}
             {showActive && (isOwner || (owner && canDelist)) && (
-              <Button onClick={() => delist({ offerId: offer.id })}>
-                <X className="h-6 w-6" />
-              </Button>
+              <Confirm
+                title="Delist offer"
+                proceed_label="Delist"
+                proceed_loading_label="Delisting..."
+                confirmClassName="bg-red-600 text-white hover:bg-red-700"
+                isLoading={isDelisting}
+                keepOpenOnAccept={true}
+                button={
+                  <Button aria-label="Delist offer">
+                    <X className="h-6 w-6" />
+                  </Button>
+                }
+                onAccept={(_e, { close }) =>
+                  delist(
+                    { offerId: offer.id },
+                    { onSuccess: (result) => result.success && close() },
+                  )
+                }
+              >
+                <p>
+                  Remove this offer of {offer.repsForSale.toLocaleString()} reputation
+                  points from the market? The points return to {offer.creatorUsername}.
+                </p>
+              </Confirm>
             )}
           </div>
         ),
@@ -444,10 +478,11 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
   // New offer form
   const form = useForm<BlackMarketOfferSchemaInput, unknown, BlackMarketOfferSchema>({
     resolver: zodResolver(blackMarketOfferSchema),
-    defaultValues: { reps: 0, ryo: 0 },
+    defaultValues: { reps: undefined, ryo: undefined },
   });
-  const offerReps = useWatch({ control: form.control, name: "reps" }) as number;
-  const offerRyo = useWatch({ control: form.control, name: "ryo" }) as number;
+  const offerReps = Number(useWatch({ control: form.control, name: "reps" }));
+  const offerRyo = Number(useWatch({ control: form.control, name: "ryo" }));
+  const hasOfferValues = offerReps > 0 && offerRyo > 0;
   const onSubmit = form.handleSubmit((data) =>
     create({ ...data, allowedUser: allowedUser?.userId }),
   );
@@ -539,7 +574,15 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
                       <FormItem className="w-full">
                         <FormLabel>Reps to Sell</FormLabel>
                         <FormControl>
-                          <Input {...field} value={field.value as number} />
+                          <NumberInput
+                            optional
+                            min={1}
+                            name={field.name}
+                            ref={field.ref}
+                            onBlur={field.onBlur}
+                            value={field.value as number | undefined}
+                            onOptionalValueChange={field.onChange}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -552,7 +595,15 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
                       <FormItem className="w-full">
                         <FormLabel>Ryo Request</FormLabel>
                         <FormControl>
-                          <Input {...field} value={field.value as number} />
+                          <NumberInput
+                            optional
+                            min={1}
+                            name={field.name}
+                            ref={field.ref}
+                            onBlur={field.onBlur}
+                            value={field.value as number | undefined}
+                            onOptionalValueChange={field.onChange}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -571,12 +622,10 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
                   <div className="col-span-2 px-1 py-2">
                     <Confirm
                       title="Create Offer"
-                      proceed_label={
-                        offerReps > 0 && offerRyo > 0 ? "Confirm" : "Fill in values"
-                      }
+                      proceed_label={hasOfferValues ? "Confirm" : "Fill in values"}
                       isValid={!isLoading && offerReps > 0}
                       confirmClassName={
-                        offerReps > 0 && offerRyo > 0
+                        hasOfferValues
                           ? "bg-blue-600 text-white hover:bg-blue-700"
                           : "bg-red-600 text-white hover:bg-red-700"
                       }
@@ -591,11 +640,11 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
                         await onSubmit();
                       }}
                     >
-                      {offerReps > 0 && offerRyo > 0 && (
+                      {hasOfferValues && (
                         <p>
                           Confirm that you wish to put{" "}
                           {Number(offerReps).toLocaleString()} reputation points up for
-                          sale for a total price of {Number(offerRyo).toLocaleString()}
+                          sale for a total price of {Number(offerRyo).toLocaleString()}{" "}
                           ryo, i.e. at a{" "}
                           <b>
                             ryo/rep price of{" "}
@@ -604,11 +653,11 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
                             ).toLocaleString()}
                           </b>
                           . This offer will be listed for at least{" "}
-                          {RYO_FOR_REP_DAYS_FROZEN}
-                          days, after which you can delist them.
+                          {RYO_FOR_REP_DAYS_FROZEN} days, after which you can delist
+                          them.
                         </p>
                       )}
-                      {(offerReps === 0 || offerRyo === 0) && (
+                      {!hasOfferValues && (
                         <p>Must enter reputation & ryo values above 0.</p>
                       )}
                     </Confirm>
@@ -620,18 +669,28 @@ const RyoShop: React.FC<{ userData: NonNullable<UserWithRelations> }> = ({
         </div>
       )}
       {/* TABLE OF CURRENT OFFERS */}
-      {!isLoading && allOffers && allOffers.length > 0 && (
+      {/* Stays mounted while an offer is bought or delisted so its dialog shows progress */}
+      {!isCreating && allOffers && allOffers.length > 0 && (
         <div className="border-t-2 border-dashed">
           <Table data={allOffers} columns={columns} setLastElement={setLastElement} />
         </div>
       )}
-      {!allOffers?.length && (
+      {isLoadingOffers && <Loader explanation="Loading offers" />}
+      {isOffersError && !allOffers && (
+        <QueryError
+          className="mt-3 border-t-2 border-dashed bg-popover p-3"
+          message="Could not load the offers."
+          onRetry={() => void refetchOffers()}
+          isRetrying={isFetchingOffers}
+        />
+      )}
+      {allOffers?.length === 0 && (
         <p className="mt-3 border-t-2 border-dashed bg-popover p-3">
           No offers currently listed.
         </p>
       )}
       {/* LOADERS */}
-      {isLoading && <Loader explanation="Loading" />}
+      {isCreating && <Loader explanation="Loading" />}
     </ContentBox>
   );
 };

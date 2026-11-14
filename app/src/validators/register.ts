@@ -136,11 +136,15 @@ export const registrationSchema = z
     attribute_1: z.enum(attributes),
     attribute_2: z.enum(attributes),
     attribute_3: z.enum(attributes),
-    read_tos: z.literal(true),
-    read_privacy: z.literal(true),
-    read_earlyaccess: z.literal(true),
+    read_tos: z.literal(true, { error: "Accept the Terms of Service to continue" }),
+    read_privacy: z.literal(true, { error: "Accept the Privacy Policy to continue" }),
+    read_earlyaccess: z.literal(true, {
+      error: "Accept that the game keeps changing to continue",
+    }),
     recruiter_userid: z.string().nullish(),
-    bloodlineId: z.string().min(1, "Bloodline selection is required"),
+    bloodlineId: z
+      .string({ error: "Bloodline selection is required" })
+      .min(1, "Bloodline selection is required"),
     musicOn: z.boolean().optional(),
     sfxOn: z.boolean().optional(),
     buttonSfxOn: z.boolean().optional(),

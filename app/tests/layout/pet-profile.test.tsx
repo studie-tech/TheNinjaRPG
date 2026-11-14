@@ -42,7 +42,6 @@ import { getPetAbilityCapacity } from "@/libs/pets/abilities";
 import { getDailyPetOptions, PET_PALETTES } from "@/libs/pets/catalogue";
 import * as petGender from "@/libs/pets/gender";
 import * as toast from "@/libs/toast";
-import * as UserContext from "@/utils/UserContext";
 import {
   prepareUserUpdate as captureUserUpdate,
   updateUserCache,
@@ -55,6 +54,7 @@ import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGl
 import { deferred } from "../setup/deferred";
 import { actualShowMutationToast } from "../setup/preload";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
+import { mockUserContextValue } from "../setup/userContext";
 
 // These workflows render multiple dialogs and large forms in one interaction.
 setDefaultTimeout(20_000);
@@ -243,7 +243,7 @@ beforeEach(() => {
   vi.spyOn(navigation, "useSearchParams").mockImplementation(
     () => new URLSearchParams(requestedPetId ? { petId: requestedPetId } : {}) as never,
   );
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () => ({ data: owner, timeDiff, prepareUserUpdate, updateUser }) as never,
   );
   vi.spyOn(SectorVillage, "useSectorVillage").mockImplementation(
@@ -369,7 +369,7 @@ const observeProfileCache = () => {
   updateUser.mockImplementation((patch, mutation) =>
     updateUserCache(queryClient, key, patch, mutation),
   );
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(() => {
+  mockUserContextValue(() => {
     const { data: cached } = testApi.profile.getUser.useQuery(undefined, {
       staleTime: Infinity,
     });

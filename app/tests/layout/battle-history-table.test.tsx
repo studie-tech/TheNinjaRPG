@@ -71,8 +71,9 @@ const mount = (props: Parameters<typeof BattleHistoryTable>[0] = {}) => {
 
 it("fetches older rows only on demand, keeps links, and disables repeated requests while loading", async () => {
   const view = mount({ userId: "profile", combatTypes: ["RANKED_PVP"] });
-  fireEvent.click(await view.findByText("battle-3"));
-  expect(push).toHaveBeenCalledWith("/battlelog/battle-3");
+  // Each row is a real link, so it opens in a new tab and takes keyboard focus.
+  const link = (await view.findByText("battle-3")).closest("a");
+  expect(link?.getAttribute("href")).toBe("/battlelog/battle-3");
   expect(requests).toHaveLength(1);
   expect(requests[0]).toMatchObject({
     userId: "profile",

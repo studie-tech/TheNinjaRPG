@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { AutoAttackToggle } from "@/layout/AutoAttackModal";
-import AvatarImage from "@/layout/Avatar";
+import { AvatarNameCell } from "@/layout/AvatarNameCell";
 import BanInfo from "@/layout/BanInfo";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
@@ -46,31 +46,15 @@ export default function ANBU() {
   const allSquads = data?.map((squad) => ({
     ...squad,
     memberCount: squad.members.length,
-    squadInfo: (
-      <div className="w-20 text-center">
-        <AvatarImage
-          href={squad.image}
-          alt={squad.name}
-          size={100}
-          hover_effect={true}
-        />
-        {squad.name}
-      </div>
-    ),
-    leaderInfo: (
-      <div className="w-20 text-center">
-        {squad.leader && (
-          <div>
-            <AvatarImage
-              href={squad.leader.avatar}
-              alt={squad.name}
-              size={100}
-              hover_effect={true}
-            />
-            {squad.leader.username}
-          </div>
-        )}
-      </div>
+    squadInfo: <AvatarNameCell avatar={squad.image} name={squad.name} hoverEffect />,
+    leaderInfo: squad.leader ? (
+      <AvatarNameCell
+        avatar={squad.leader.avatar}
+        name={squad.leader.username}
+        hoverEffect
+      />
+    ) : (
+      <div className="w-20" />
     ),
   }));
 
@@ -118,7 +102,6 @@ export default function ANBU() {
         Can not find the ANBU structure in this village.
       </ContentBox>
     );
-  if (isCreating) return <Loader explanation="Creating squad" />;
   if (userData.isBanned) return <BanInfo />;
 
   // Form handlers
@@ -159,11 +142,16 @@ export default function ANBU() {
                 title="Create a new squad"
                 proceed_label="Submit"
                 button={
-                  <Button id="create-anbu-squad" className="w-full">
+                  <Button
+                    id="create-anbu-squad"
+                    className="w-full"
+                    loading={isCreating}
+                  >
                     <UsersRound className="mr-2 h-5 w-5" />
                     New Squad
                   </Button>
                 }
+                disabled={isCreating}
                 isValid={createForm.formState.isValid}
                 onAccept={onSubmit}
               >

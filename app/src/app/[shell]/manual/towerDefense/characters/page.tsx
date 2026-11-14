@@ -13,10 +13,10 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualTowerDefenseCharacters() {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"enemies" | "players">("enemies");
 
@@ -94,6 +94,8 @@ export default function ManualTowerDefenseCharacters() {
               <Button
                 id="create-character"
                 onClick={() => create({ isPlayer: activeTab === "players" })}
+                disabled={isCreating}
+                loading={isCreating}
               >
                 <FilePlus className="mr-2 h-5 w-5" />
                 New {activeTab === "players" ? "Player" : "Enemy"}

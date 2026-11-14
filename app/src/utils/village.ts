@@ -72,6 +72,45 @@ export const canAccessStructure = (
   return relationship?.status === "ALLY" && structure.allyAccess !== 0;
 };
 
+/**
+ * Explains why `canAccessStructure` refused a building, naming where to travel when the
+ * player's own village has it.
+ * @param userData - The user data, whose village carries its structures.
+ * @param structureRoute - The requested structure, or none for the village itself.
+ * @param sectorVillage - The village in the player's current sector, if any.
+ * @returns A sentence for the player.
+ */
+export const structureAccessDeniedMessage = (
+  userData: Pick<NonNullable<UserWithRelations>, "village">,
+  structureRoute?: StructureRoute,
+  sectorVillage?: SectorVillage | null,
+) => {
+  const home = userData.village;
+  const homeStructure = structureRoute
+    ? home?.structures?.find((s) => s.route === structureRoute)
+    : undefined;
+  const hereStructure = structureRoute
+    ? sectorVillage?.structures.find((s) => s.route === structureRoute)
+    : undefined;
+  const place = hereStructure?.name ?? homeStructure?.name;
+  const travelHome = home && (!structureRoute || homeStructure);
+  if (!sectorVillage) {
+    if (!travelHome)
+      return "You need to be in a village to go there. Travel to one first.";
+    return place
+      ? `The ${place} is in ${home.name}. Travel there first.`
+      : `You are outside ${home.name}. Travel there first.`;
+  }
+  if (!hereStructure) {
+    return travelHome && home.id !== sectorVillage.id
+      ? `${sectorVillage.name} has no ${place ?? "such building"}. Travel to ${home.name} to use yours.`
+      : `${sectorVillage.name} has no ${place ?? "such building"}.`;
+  }
+  return travelHome
+    ? `The ${place} in ${sectorVillage.name} is closed to your village. Travel to ${home.name} to use yours.`
+    : `The ${place} in ${sectorVillage.name} is closed to your village.`;
+};
+
 export type StructureAttribute = Extract<keyof VillageStructure, `${string}PerLvl`>;
 
 /** What boost calculations read, which battle snapshots keep from each structure. */

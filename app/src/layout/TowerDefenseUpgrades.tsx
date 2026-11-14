@@ -1,16 +1,11 @@
-import { Coins, Lock, LogIn, Sparkles } from "lucide-react";
+import { Coins, Info, Lock, LogIn, Sparkles } from "lucide-react";
 import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import {
   TowerDefenseUpgradeCategories,
   type TowerDefenseUpgradeCategory,
@@ -59,10 +54,11 @@ const TowerDefenseUpgrades: React.FC<TowerDefenseUpgradesProps> = ({
   const utils = api.useUtils();
 
   const purchaseMutation = api.towerDefense.purchasePermanentUpgrade.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        void utils.towerDefense.getUserUpgrades.invalidate();
+        // Awaited so the card stays pending until its new level and cost arrive
+        await utils.towerDefense.getUserUpgrades.invalidate();
       }
     },
   });
@@ -127,70 +123,82 @@ const TowerDefenseUpgrades: React.FC<TowerDefenseUpgradesProps> = ({
     const isLoading = mode === "permanent" ? purchaseMutation.isPending : isPurchasing;
 
     return (
-      <TooltipProvider key={upgrade.id} delayDuration={100}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => canPurchase && !isLoading && handlePurchase(upgrade.id)}
-              disabled={!canPurchase || isLoading}
-              className={`flex w-full items-center gap-2 rounded-lg border-2 p-2.5 transition-all ${
-                isMaxLevel
-                  ? "border-yellow-500/50 bg-yellow-500/10"
-                  : canPurchase
-                    ? "cursor-pointer border-primary/50 bg-primary/5 hover:border-primary hover:bg-primary/15"
-                    : "cursor-not-allowed border-border bg-muted/30 opacity-60"
-              }
-              `}
-            >
-              {/* Icon */}
-              <div
-                className={`rounded-md p-1.5 ${getUpgradeColor(upgrade.upgradeType)} ${isMaxLevel ? "bg-yellow-500/20" : canPurchase ? "bg-primary/20" : "bg-muted"}`}
-              >
-                {getUpgradeIcon(upgrade.upgradeType, "h-4 w-4")}
-              </div>
+      <div key={upgrade.id} className="flex items-stretch gap-1">
+        <button
+          type="button"
+          onClick={() => canPurchase && !isLoading && handlePurchase(upgrade.id)}
+          disabled={!canPurchase || isLoading}
+          className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg border-2 p-2.5 transition-all ${
+            isMaxLevel
+              ? "border-yellow-500/50 bg-yellow-500/10"
+              : canPurchase && isLoading
+                ? "cursor-wait border-primary/50 bg-primary/5 opacity-60"
+                : canPurchase
+                  ? "cursor-pointer border-primary/50 bg-primary/5 hover:border-primary hover:bg-primary/15"
+                  : "cursor-not-allowed border-border bg-muted/30 opacity-60"
+          }`}
+          aria-busy={isLoading}
+        >
+          {/* Icon */}
+          <div
+            className={`rounded-md p-1.5 ${getUpgradeColor(upgrade.upgradeType)} ${isMaxLevel ? "bg-yellow-500/20" : canPurchase ? "bg-primary/20" : "bg-muted"}`}
+          >
+            {getUpgradeIcon(upgrade.upgradeType, "h-4 w-4")}
+          </div>
 
-              {/* Name and Level */}
-              <div className="min-w-0 flex-1 text-left">
-                <div className="truncate font-medium text-sm leading-tight">
-                  {upgrade.name}
-                </div>
-                <div className="text-muted-foreground text-xs">
-                  {mode === "inRun" && permanentLevel > 0 ? (
+          {/* Name and Level */}
+          <div className="min-w-0 flex-1 text-left">
+            <div className="truncate font-medium text-sm leading-tight">
+              {upgrade.name}
+            </div>
+            <div className="text-muted-foreground text-xs">
+              {mode === "inRun" && permanentLevel > 0 ? (
+                <>
+                  <span className="text-green-500">{permanentLevel}</span>
+                  {inRunLevel > 0 && (
                     <>
-                      <span className="text-green-500">{permanentLevel}</span>
-                      {inRunLevel > 0 && (
-                        <>
-                          <span className="text-muted-foreground">+</span>
-                          <span className="text-amber-500">{inRunLevel}</span>
-                        </>
-                      )}
+                      <span className="text-muted-foreground">+</span>
+                      <span className="text-amber-500">{inRunLevel}</span>
                     </>
-                  ) : (
-                    <span>{currentLevel}</span>
                   )}
-                  <span>/{upgrade.maxLevel}</span>
-                </div>
-              </div>
+                </>
+              ) : (
+                <span>{currentLevel}</span>
+              )}
+              <span>/{upgrade.maxLevel}</span>
+            </div>
+          </div>
 
-              {/* Cost or Max indicator */}
-              <div className="flex shrink-0 items-center gap-0.5 text-xs">
-                {isMaxLevel ? (
-                  <Sparkles className="h-3.5 w-3.5 text-white" />
-                ) : (
-                  <>
-                    <Coins
-                      className={`h-3 w-3 ${canAfford ? "text-green-500" : "text-red-500"}`}
-                    />
-                    <span className={canAfford ? "text-green-500" : "text-red-500"}>
-                      {cost}
-                    </span>
-                  </>
-                )}
-              </div>
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-xs bg-slate-700 text-white">
+          {/* Cost or Max indicator */}
+          <div className="flex shrink-0 items-center gap-0.5 text-xs">
+            {isMaxLevel ? (
+              <Sparkles className="h-3.5 w-3.5 text-white" />
+            ) : (
+              <>
+                <Coins
+                  className={`h-3 w-3 ${canAfford ? "text-green-500" : "text-red-500"}`}
+                />
+                <span className={canAfford ? "text-green-500" : "text-red-500"}>
+                  {cost}
+                </span>
+              </>
+            )}
+          </div>
+        </button>
+        {/* Details open on tap as well as click, separately from buying. */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-auto w-8 shrink-0"
+              aria-label={`${upgrade.name} details`}
+            >
+              <Info aria-hidden className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent side="top" className="w-auto max-w-xs p-3">
             <div className="space-y-1.5">
               <p className="font-semibold">{upgrade.name}</p>
               <p className="text-muted-foreground text-xs">{upgrade.description}</p>
@@ -235,9 +243,9 @@ const TowerDefenseUpgrades: React.FC<TowerDefenseUpgradesProps> = ({
                 )}
               </div>
             </div>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+          </PopoverContent>
+        </Popover>
+      </div>
     );
   };
 
@@ -357,7 +365,7 @@ const TowerDefenseUpgrades: React.FC<TowerDefenseUpgradesProps> = ({
           {renderTabs()}
 
           <p className="mt-3 text-center text-muted-foreground text-xs">
-            Hover over upgrades for details. Click to purchase.
+            Tap the info button for an upgrade's details. Tap an upgrade to buy it.
           </p>
         </CardContent>
       </Card>

@@ -32,7 +32,6 @@ export const QueryError: React.FC<QueryErrorProps> = ({
           type="button"
           size="sm"
           variant="outline"
-          className="hover:text-black"
           disabled={isRetrying}
           onClick={onRetry}
         >

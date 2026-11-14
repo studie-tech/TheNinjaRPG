@@ -28,7 +28,7 @@ import {
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import type { StatSchemaType } from "@/validators/combat";
 import { createStatSchema } from "@/validators/combat";
 
@@ -37,7 +37,15 @@ export function TrainingMode({
   statDistribution,
   setStatDistribution,
 }: TrainingModeProps) {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    autoWakeUp: u.autoWakeUp,
+    status: u.status,
+    defence: u.defence,
+    strength: u.strength,
+    speed: u.speed,
+    intelligence: u.intelligence,
+    willpower: u.willpower,
+  }));
   const { toggleSleep, isTogglingSleep } = useSleepToggle();
   const [autoCombat] = useAutoCombatSetting();
 

@@ -233,7 +233,7 @@ const ContentImageSelector: React.FC<ContentImageSelectorProps> = (props) => {
         </DialogTrigger>
 
         {allowImageUpload && (
-          <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto">
+          <DialogContent className="max-w-6xl">
             <DialogHeader>
               <DialogTitle>Edit {label}</DialogTitle>
             </DialogHeader>

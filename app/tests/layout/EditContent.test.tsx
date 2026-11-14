@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as useSize from "@radix-ui/react-use-size";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import {
+  InfiniteQueryObserver,
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from "@tanstack/react-query";
 import {
   act,
   cleanup,
@@ -19,7 +24,11 @@ import { useItemEditForm } from "@/hooks/item";
 import { useQuestEditForm } from "@/hooks/quest";
 import * as ContentImageSelector from "@/layout/ContentImageSelector";
 import { EffectFormWrapper } from "@/layout/EditContent";
-import { EffectFieldInputGeneric, MassEffectEditor } from "@/layout/MassEffectEditor";
+import {
+  draftFieldsOutside,
+  EffectFieldInputGeneric,
+  MassEffectEditor,
+} from "@/layout/MassEffectEditor";
 import { ObjectiveFormWrapper } from "@/layout/ObjectiveFormWrapper";
 import { RewardEditor, RewardFormWrapper } from "@/layout/RewardEditor";
 import * as toastHelpers from "@/libs/toast";
@@ -44,7 +53,9 @@ import {
 import { QuestReward, type QuestRewardType } from "@/validators/rewardPackages";
 import { ObjectiveReward } from "@/validators/rewards";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { deferred } from "../setup/deferred";
 import { spyOnToasts } from "../setup/toastMock";
+import { mockUserContextValue } from "../setup/userContext";
 
 const save = vi.fn(async (_input: { id: string; data: { effects: ZodAllTags[] } }) => ({
   success: true,
@@ -485,6 +496,8 @@ describe("quest structure drafts", () => {
 });
 
 describe("reward node editing", () => {
+  withRadixBrowserGlobals();
+
   it.each(["button", "selector"])(
     "validates drafts before copying a reward group via the %s",
     async (control) => {
@@ -496,19 +509,17 @@ describe("reward node editing", () => {
       const initialOrder = [...view.container.querySelectorAll("summary")].map(
         (node) => node.textContent,
       );
-      const copy = () =>
+      const copy = async () =>
         control === "button"
           ? fireEvent.click(
               within(currency).getByRole("button", { name: "Add Another Node" }),
             )
-          : fireEvent.change(view.getByRole("combobox", { name: "Add reward node" }), {
-              target: { value: "currency" },
-            });
+          : await pickRewardNode(view, /^Currency/);
       await act(async () => {
         ryo.focus();
         fireEvent.input(ryo, { target: { value: "" } });
       });
-      copy();
+      await copy();
       await waitFor(() =>
         expect(toastHelpers.showFormErrorsToast).toHaveBeenCalledTimes(1),
       );
@@ -527,7 +538,7 @@ describe("reward node editing", () => {
       await act(async () => {
         fireEvent.input(ryo, { target: { value: "350" } });
       });
-      copy();
+      await copy();
       await waitFor(() =>
         expect(view.getAllByRole("button", { name: "Remove Node" })).toHaveLength(1),
       );
@@ -687,16 +698,15 @@ describe("reward node editing", () => {
   it.each([undefined, "CONTENT-ADMIN"])(
     "waits for custom catalog groups before exposing saved controls (role: %s)",
     async (role) => {
-      const user = vi
-        .spyOn(UserContext, "useUserData")
-        .mockReturnValue({ data: role ? { role } : undefined } as never);
+      let profile: unknown = { data: role ? { role } : undefined };
+      mockUserContextValue(() => profile);
       try {
         rewardCatalog = undefined;
         const view = render(<SavedRewardForm optionalExperience={100} />);
         expect(view.getByText("Loading rewards")).toBeDefined();
         expect(view.queryByRole("spinbutton")).toBeNull();
         expect(view.queryByRole("combobox", { name: "Add reward node" })).toBeNull();
-        user.mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
+        profile = { data: { role: "CONTENT-ADMIN" } };
         rewardCatalog = {
           packages: [],
           nodes: [
@@ -731,7 +741,7 @@ describe("reward node editing", () => {
         ).toBe(experience);
         expect(document.activeElement).toBe(experience);
       } finally {
-        user.mockRestore();
+        vi.restoreAllMocks();
       }
     },
   );
@@ -752,9 +762,7 @@ describe("reward node editing", () => {
           ...options,
         }) as never,
     );
-    const user = vi
-      .spyOn(UserContext, "useUserData")
-      .mockReturnValue({ data: { role: "CONTENT-ADMIN" } } as never);
+    mockUserContextValue({ data: { role: "CONTENT-ADMIN" } });
     try {
       const view = render(
         <QueryClientProvider client={client}>
@@ -820,7 +828,7 @@ describe("reward node editing", () => {
     } finally {
       cleanup();
       query.mockRestore();
-      user.mockRestore();
+      vi.restoreAllMocks();
       client.clear();
     }
   });
@@ -869,9 +877,7 @@ describe("reward node editing", () => {
     const initialOrder = [...view.container.querySelectorAll("summary")].map(
       (node) => node.textContent,
     );
-    fireEvent.change(view.getByRole("combobox", { name: "Add reward node" }), {
-      target: { value: "progression" },
-    });
+    await pickRewardNode(view, /^Progression/);
     expect(
       [...view.container.querySelectorAll("summary")].map((node) => node.textContent),
     ).toEqual([...initialOrder, "Progression"]);
@@ -883,9 +889,7 @@ describe("reward node editing", () => {
     await waitFor(() =>
       expect(view.container.querySelector('input[name="reward_money"]')).toBeNull(),
     );
-    fireEvent.change(view.getByRole("combobox", { name: "Add reward node" }), {
-      target: { value: "currency" },
-    });
+    await pickRewardNode(view, /^Currency/);
     expect(
       view.container.querySelector<HTMLInputElement>('input[name="reward_money"]')!
         .value,
@@ -936,6 +940,7 @@ describe("MassEffectEditor numeric drafts", () => {
       expect(invalid.getAttribute("aria-invalid")).toBe("true");
       expect(view.container.firstElementChild?.getAttribute("aria-busy")).toBe("false");
 
+      fireEvent.input(inputs[2]!, { target: { value: "4" } });
       fireEvent.click(
         view.getByRole("button", { name: `Save ${kind} effects for Second` }),
       );
@@ -1005,6 +1010,241 @@ describe("MassEffectEditor numeric drafts", () => {
   }
 });
 
+describe("MassEffectEditor drafts overview", () => {
+  beforeEach(() => installBrowserGlobals());
+  afterEach(() => restoreBrowserGlobals());
+
+  const entries = [
+    {
+      id: "first",
+      name: "First",
+      effects: [DamageTag.parse({}), HealTag.parse({})],
+      updatedAt: new Date(),
+    },
+    {
+      id: "second",
+      name: "Second",
+      effects: [DamageTag.parse({})],
+      updatedAt: new Date(),
+    },
+  ];
+
+  it("asks for a field before showing the table", () => {
+    const view = render(
+      <MassEffectEditor kind="jutsu" entries={entries} selectedFields={[]} />,
+    );
+    expect(view.getByText(/Pick one or more effect fields/)).toBeTruthy();
+    expect(view.queryByRole("button", { name: /Save jutsu effects/ })).toBeNull();
+  });
+
+  it("enables saving only for edited entries and saves all of them in order", async () => {
+    const pageReads: number[] = [];
+    const queryClient = new QueryClient();
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: ["content"],
+      queryFn: async ({ pageParam }) => {
+        pageReads.push(pageParam);
+        return { nextCursor: pageParam + 50 };
+      },
+      initialPageParam: 0,
+      getNextPageParam: (last) => last.nextCursor,
+      initialData: {
+        pages: [0, 50, 100].map((cursor) => ({ nextCursor: cursor + 50 })),
+        pageParams: [0, 50, 100],
+      },
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => undefined);
+    const refresh = vi.fn(() => observer.refetch());
+    const view = render(
+      <MassEffectEditor
+        kind="jutsu"
+        entries={entries}
+        selectedFields={["power"]}
+        onEntriesUpdated={refresh}
+        onPendingChange={pending}
+      />,
+    );
+    const saveFirst = () =>
+      view.getAllByRole("button", {
+        name: "Save jutsu effects for First",
+      })[0] as HTMLButtonElement;
+    const saveAll = () =>
+      view.getByRole("button", { name: "Save all" }) as HTMLButtonElement;
+    expect(saveFirst().disabled).toBe(true);
+    expect(saveAll().disabled).toBe(true);
+    expect(view.getByText("No unsaved changes")).toBeTruthy();
+
+    const inputs = view.getAllByRole("spinbutton");
+    fireEvent.input(inputs[0]!, { target: { value: "5" } });
+    fireEvent.input(inputs[2]!, { target: { value: "6" } });
+    expect(saveFirst().disabled).toBe(false);
+    expect(view.getByText("2 entries with unsaved changes")).toBeTruthy();
+    // First has two effect rows, Second one.
+    expect(view.getAllByText("Unsaved")).toHaveLength(3);
+
+    fireEvent.click(saveAll());
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save.mock.calls.map((call) => call[0].id)).toEqual(["first", "second"]);
+    await waitFor(() => expect(pending).toHaveBeenLastCalledWith(false));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(pageReads).toEqual([0, 50, 100]);
+    expect(pending.mock.calls).toEqual([[true], [false]]);
+    unsubscribe();
+    queryClient.clear();
+  });
+
+  it("stops a batch at the first rejected write and refreshes its confirmed saves once", async () => {
+    save.mockResolvedValueOnce({ success: true, message: "Saved" });
+    save.mockResolvedValueOnce({ success: false, message: "Cannot save" });
+    const refresh = vi.fn(async () => undefined);
+    const third = { ...entries[1]!, id: "third", name: "Third" };
+    const view = render(
+      <MassEffectEditor
+        kind="jutsu"
+        entries={[...entries, third]}
+        selectedFields={["power"]}
+        onEntriesUpdated={refresh}
+        onPendingChange={pending}
+      />,
+    );
+    for (const input of view.getAllByRole("spinbutton"))
+      fireEvent.input(input, { target: { value: "9" } });
+    fireEvent.click(view.getByRole("button", { name: "Save all" }));
+    await waitFor(() => expect(pending).toHaveBeenLastCalledWith(false));
+    expect(save.mock.calls.map((call) => call[0].id)).toEqual(["first", "second"]);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(view.getByText("2 entries with unsaved changes")).toBeTruthy();
+    expect(
+      (
+        view.getAllByRole("button", {
+          name: "Save jutsu effects for First",
+        })[0] as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    expect((view.getAllByRole("spinbutton")[0] as HTMLInputElement).value).toBe("9");
+    expect(toast).toHaveBeenCalledWith({ success: false, message: "Cannot save" });
+  });
+
+  it.each(["single", "batch"])(
+    "keeps a %s save pending until refresh settles and preserves commits when refresh rejects",
+    async (mode) => {
+      const firstWrite = deferred<{ success: boolean; message: string }>();
+      const refreshResult = deferred();
+      save.mockImplementationOnce(() => firstWrite.promise);
+      const refresh = vi.fn(() => refreshResult.promise);
+      const view = render(
+        <MassEffectEditor
+          kind="jutsu"
+          entries={entries}
+          selectedFields={["power"]}
+          onEntriesUpdated={refresh}
+          onPendingChange={pending}
+        />,
+      );
+      fireEvent.input(view.getAllByRole("spinbutton")[0]!, {
+        target: { value: "5" },
+      });
+      fireEvent.input(view.getAllByRole("spinbutton")[2]!, {
+        target: { value: "6" },
+      });
+      const button = view.getByRole("button", { name: "Save all" });
+      const first = view.getAllByRole("button", {
+        name: "Save jutsu effects for First",
+      })[0]!;
+      // Two submissions in one tick still claim just one operation.
+      fireEvent.click(mode === "batch" ? button : first);
+      fireEvent.click(mode === "batch" ? button : first);
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(refresh).not.toHaveBeenCalled();
+      expect(pending.mock.calls).toEqual([[true]]);
+      await act(async () => firstWrite.resolve({ success: true, message: "Saved" }));
+      await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+      expect(save).toHaveBeenCalledTimes(mode === "batch" ? 2 : 1);
+      for (const input of view.getAllByRole("spinbutton"))
+        expect(input.matches(":disabled")).toBe(true);
+      expect(pending.mock.calls).toEqual([[true]]);
+      const unload = new window.Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(unload);
+      expect(unload.defaultPrevented).toBe(true);
+      await act(async () => refreshResult.reject(new Error("Refresh unavailable")));
+      await waitFor(() => expect(pending).toHaveBeenLastCalledWith(false));
+      expect(view.queryByRole("status")).toBeNull();
+      expect((view.getAllByRole("spinbutton")[0] as HTMLInputElement).value).toBe("5");
+      expect(
+        view.getByText(
+          mode === "batch" ? "No unsaved changes" : "1 entry with unsaved changes",
+        ),
+      ).toBeTruthy();
+      expect(toast.mock.calls.every(([result]) => result.success)).toBe(true);
+    },
+  );
+
+  it("counts and protects filtered-out drafts while saving only listed entries", async () => {
+    const mount = (listedEntries: typeof entries) => (
+      <MassEffectEditor
+        kind="jutsu"
+        entries={listedEntries}
+        selectedFields={["power"]}
+      />
+    );
+    const hasUnloadGuard = () => {
+      const event = new window.Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    const view = render(mount(entries));
+    fireEvent.input(view.getAllByRole("spinbutton")[0]!, { target: { value: "5" } });
+    fireEvent.input(view.getAllByRole("spinbutton")[2]!, { target: { value: "6" } });
+    view.rerender(mount([entries[1]!]));
+    expect(view.getByText("2 entries with unsaved changes")).toBeTruthy();
+    expect(hasUnloadGuard()).toBe(true);
+    fireEvent.click(view.getByRole("button", { name: "Save visible changes" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(view.getByText("1 entry with unsaved changes")).toBeTruthy(),
+    );
+    expect(save.mock.calls[0]![0].id).toBe("second");
+    expect(hasUnloadGuard()).toBe(true);
+    expect(
+      (view.getByRole("button", { name: "Save visible changes" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    view.rerender(mount(entries));
+    expect((view.getAllByRole("spinbutton")[0] as HTMLInputElement).value).toBe("5");
+    fireEvent.click(view.getByRole("button", { name: "Save all" }));
+    await waitFor(() => expect(view.getByText("No unsaved changes")).toBeTruthy());
+    expect(save.mock.calls.map((call) => call[0].id)).toEqual(["second", "first"]);
+    expect(hasUnloadGuard()).toBe(false);
+  });
+
+  it("lists drafts in hidden columns next to the entry", () => {
+    const view = render(
+      <MassEffectEditor kind="jutsu" entries={entries} selectedFields={["power"]} />,
+    );
+    fireEvent.input(view.getAllByRole("spinbutton")[0]!, { target: { value: "5" } });
+    view.rerender(
+      <MassEffectEditor kind="jutsu" entries={entries} selectedFields={["rounds"]} />,
+    );
+    expect(view.getAllByText("Unsaved · also saves power").length).toBeGreaterThan(0);
+  });
+});
+
+describe("draftFieldsOutside", () => {
+  it("names changed fields outside the visible columns and effect types", () => {
+    const base = [DamageTag.parse({}), HealTag.parse({})];
+    const draft = [
+      { ...base[0]!, power: 9, rounds: 2 },
+      { ...base[1]!, power: 3 },
+    ] as ZodAllTags[];
+    expect(draftFieldsOutside(base, draft, ["power"])).toEqual(["rounds"]);
+    expect(draftFieldsOutside(base, draft, ["power", "rounds"], ["damage"])).toEqual([
+      "power",
+    ]);
+    expect(draftFieldsOutside(base, base, [])).toEqual([]);
+  });
+});
+
 const CoordinateDraftForm = () => {
   const [effects, setEffects] = useState<ZodAllTags[]>([
     DamageTag.parse({
@@ -1046,7 +1286,7 @@ const CoordinateDraftForm = () => {
 };
 
 /** Radix selects and popovers need these browser APIs; installs them around each test of a describe. */
-const withRadixBrowserGlobals = () => {
+function withRadixBrowserGlobals() {
   beforeEach(() => {
     installBrowserGlobals({
       resizeObserver: true,
@@ -1058,7 +1298,15 @@ const withRadixBrowserGlobals = () => {
     cleanup();
     restoreBrowserGlobals();
   });
-};
+}
+
+/** Open the reward editor's "Add reward node" select and choose the node named `name`. */
+async function pickRewardNode(view: ReturnType<typeof render>, name: RegExp) {
+  fireEvent.keyDown(view.getByRole("combobox", { name: "Add reward node" }), {
+    key: "Enter",
+  });
+  fireEvent.click(await view.findByRole("option", { name }));
+}
 
 describe("effect drafts", () => {
   withRadixBrowserGlobals();
@@ -1208,7 +1456,7 @@ describe("effect drafts", () => {
       );
       fireEvent.click(view.getByRole("button", { name: "Save coordinate effects" }));
       expect(save).not.toHaveBeenCalled();
-      fireEvent.click(view.getByRole("combobox", { name: "target" }));
+      fireEvent.click(view.getByRole("combobox", { name: "Target" }));
       fireEvent.click(await view.findByRole("option", { name: target }));
       await waitFor(() =>
         expect(
@@ -1609,7 +1857,7 @@ describe("Special quest item drafts", () => {
     async (_name, initial) => {
       const view = render(<ItemQuestDraftForm initial={initial} />);
       if (initial.type === "heal") {
-        fireEvent.click(view.getByRole("combobox", { name: "type" }));
+        fireEvent.click(view.getByRole("combobox", { name: "Type" }));
         fireEvent.click(await view.findByRole("option", { name: "noncombatquest" }));
       }
       const field = view
@@ -1900,105 +2148,126 @@ describe("schema-derived field visibility", () => {
       "damage",
       "jutsu",
       [
-        "type",
-        "staticAssetPath",
-        "staticAnimation",
-        "appearAnimation",
-        "disappearAnimation",
+        "Type",
+        "Static asset path",
+        "Static animation",
+        "Appear animation",
+        "Disappear animation",
         "Animation scale (1–3×)",
-        "appearSfx",
-        "disappearSfx",
-        "rounds",
-        "power",
-        "powerPerLevel",
-        "target",
-        "friendlyFire",
-        "calculation",
-        "statTypes",
-        "generalTypes",
-        "elements",
-        "residualModifier",
-        "dmgModifier",
-        "allowBloodlineDamageIncrease",
-        "allowBloodlineDamageDecrease",
-        "description",
+        "Appear sfx",
+        "Disappear sfx",
+        "Rounds",
+        "Power",
+        "Power per level",
+        "Target",
+        "Friendly fire",
+        "Calculation",
+        "Stat types",
+        "General types",
+        "Elements",
+        "Residual modifier",
+        "Dmg modifier",
+        "Allow bloodline damage increase",
+        "Allow bloodline damage decrease",
+        "Description",
       ],
     ],
     [
       "heal",
       "bloodline",
       [
-        "type",
-        "staticAssetPath",
-        "staticAnimation",
-        "appearAnimation",
-        "disappearAnimation",
+        "Type",
+        "Static asset path",
+        "Static animation",
+        "Appear animation",
+        "Disappear animation",
         "Animation scale (1–3×)",
-        "appearSfx",
-        "disappearSfx",
-        "power",
-        "powerPerLevel",
-        "target",
-        "calculation",
-        "poolsAffected",
-        "description",
+        "Appear sfx",
+        "Disappear sfx",
+        "Power",
+        "Power per level",
+        "Target",
+        "Calculation",
+        "Pools affected",
+        "Description",
       ],
     ],
     [
       "noncombatgainskill",
       "item",
       [
-        "type",
-        "appearSfx",
-        "disappearSfx",
+        "Type",
+        "Appear sfx",
+        "Disappear sfx",
         "Skill Unlocked by Consumption",
-        "description",
+        "Description",
       ],
     ],
     [
       "noncombatquest",
       "item",
-      ["type", "appearSfx", "disappearSfx", "Special quest", "description"],
+      ["Type", "Appear sfx", "Disappear sfx", "Special quest", "Description"],
     ],
     [
       "repair",
       "item",
-      ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"],
+      [
+        "Type",
+        "Appear sfx",
+        "Disappear sfx",
+        "Power",
+        "Power per level",
+        "Description",
+      ],
     ],
     [
       "rollbloodline",
       "item",
       [
-        "type",
-        "appearSfx",
-        "disappearSfx",
-        "power",
-        "powerPerLevel",
-        "rank",
-        "description",
+        "Type",
+        "Appear sfx",
+        "Disappear sfx",
+        "Power",
+        "Power per level",
+        "Rank",
+        "Description",
       ],
     ],
     [
       "rollsagemode",
       "item",
-      ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"],
+      [
+        "Type",
+        "Appear sfx",
+        "Disappear sfx",
+        "Power",
+        "Power per level",
+        "Description",
+      ],
     ],
     [
       "removebloodline",
       "item",
-      ["type", "appearSfx", "disappearSfx", "power", "powerPerLevel", "description"],
+      [
+        "Type",
+        "Appear sfx",
+        "Disappear sfx",
+        "Power",
+        "Power per level",
+        "Description",
+      ],
     ],
     [
       "marriageslotincrease",
       "item",
       [
-        "type",
-        "appearSfx",
-        "disappearSfx",
-        "power",
-        "powerPerLevel",
-        "rank",
-        "description",
+        "Type",
+        "Appear sfx",
+        "Disappear sfx",
+        "Power",
+        "Power per level",
+        "Rank",
+        "Description",
       ],
     ],
   ] as const)("shows the %s tag fields for a %s", (type, wrapper, expected) => {
@@ -2126,6 +2395,8 @@ describe("MassEffectEditor save failures", () => {
           onPendingChange={pending}
         />,
       );
+      // Failed saves keep the draft, so each retry still has unsaved changes to send.
+      fireEvent.input(view.getByRole("spinbutton"), { target: { value: "4" } });
       for (let attempt = 1; attempt <= 3; attempt++) {
         fireEvent.click(
           view.getByRole("button", { name: `Save ${kind} effects for First` }),

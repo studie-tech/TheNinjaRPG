@@ -22,7 +22,7 @@ import NavTabs from "@/layout/NavTabs";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualBloodlineBalance() {
   // State
@@ -52,7 +52,7 @@ interface BloodlineEffectsBalanceProps {
 const BloodlineEffectsBalance: React.FC<BloodlineEffectsBalanceProps> = (props) => {
   // Two-level filtering
   const state = useBloodlineFiltering();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
 
   const details = useContentDetails();
 
@@ -102,7 +102,7 @@ const BloodlineEffectsBalance: React.FC<BloodlineEffectsBalanceProps> = (props) 
     BloodlineBalanceRow,
     keyof BloodlineBalanceRow
   >[] = [
-    { key: "name", header: "Bloodline", type: "string" },
+    { key: "name", header: "Name", type: "string" },
     { key: "links", header: "Links", type: "jsx" },
     {
       key: "statClassification",
@@ -113,7 +113,7 @@ const BloodlineEffectsBalance: React.FC<BloodlineEffectsBalanceProps> = (props) 
     { key: "rank", header: "Rank", type: "capitalized" },
     { key: "power", header: "Power", type: "number" },
     { key: "rounds", header: "Rounds", type: "number" },
-    { key: "powerPerLevel", header: "PowerPerLvl", type: "number" },
+    { key: "powerPerLevel", header: "Power/Level", type: "number" },
   ];
 
   return (
@@ -153,7 +153,7 @@ interface BloodlineUsageBalanceProps {
 const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
   // State
   const filterState = useFiltering();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
 
   const details = useContentDetails();
 
@@ -197,16 +197,16 @@ const BloodlineUsageBalance: React.FC<BloodlineUsageBalanceProps> = (props) => {
     BloodlineBalanceRow,
     keyof BloodlineBalanceRow
   >[] = [
-    { key: "name", header: "Bloodline", type: "string" },
+    { key: "name", header: "Name", type: "string" },
     { key: "links", header: "Links", type: "jsx" },
-    { key: "userCount", header: "#users", type: "number" },
-    { key: "totalUsage", header: "#uses", type: "number" },
+    { key: "userCount", header: "Users", type: "number" },
+    { key: "totalUsage", header: "Uses", type: "number" },
     { key: "wins", header: "Wins", type: "number" },
     { key: "flees", header: "Flees", type: "number" },
     { key: "losses", header: "Losses", type: "number" },
     {
       key: "winRate",
-      header: "WinRate",
+      header: "Win rate",
       type: "string",
     },
   ];

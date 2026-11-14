@@ -3,6 +3,7 @@ import { ElementNames, LetterRanks, StatTypes } from "@/drizzle/constants";
 import {
   buildFilter,
   ContentFiltering,
+  type ContentFilteringOptions,
   defineFilteringSchema,
   hiddenVisibilityField,
   useContentEditContext,
@@ -100,9 +101,12 @@ export const getFilter = (state: BloodFilteringState) =>
   buildFilter(state.cf, makeBloodlineFilteringSchema([...LetterRanks]));
 
 /** State for the Bloodline Filtering component */
-export const useFiltering = (defaultRank: LetterRank | "None" = "None") => {
+export const useFiltering = (
+  defaultRank: LetterRank | "None" = "None",
+  options?: ContentFilteringOptions,
+) => {
   const schema = makeBloodlineFilteringSchema([...LetterRanks], defaultRank);
-  const cf = useContentFiltering(schema);
+  const cf = useContentFiltering(schema, options);
   return {
     ...cf.values,
     cf,

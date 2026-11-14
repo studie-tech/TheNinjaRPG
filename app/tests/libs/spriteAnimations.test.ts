@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import {
+  animationActions,
+  summarizeAnimationCoverage,
+} from "@/libs/spriteAnimationActions";
+import {
   type CharacterAnimation,
   resolveSpriteAnimation,
   snapshotSpriteAnimations,
@@ -67,5 +71,40 @@ describe("AI animation metadata", () => {
       spriteAnimationSchema.safeParse({ ...idle, frameCount: 193, rows: 33 }).success,
     ).toBe(false);
     expect(spriteAnimationSchema.safeParse({ ...idle, fps: 1 }).success).toBe(false);
+  });
+});
+
+describe("summarizeAnimationCoverage", () => {
+  const ai = {
+    level: 10,
+    jutsus: [{ jutsuId: "fire", jutsu: { name: "Fireball" } }],
+    items: [
+      { itemId: "kunai", item: { name: "Kunai", itemType: "WEAPON" as const } },
+      { itemId: "ore", item: { name: "Ore", itemType: "MATERIAL" as const } },
+    ],
+  };
+  const actions = animationActions(ai).filter((action) => action.key !== "transform");
+
+  it("counts every animatable action except boss arrival", () => {
+    const coverage = summarizeAnimationCoverage(ai, []);
+    expect(coverage.hasIdle).toBe(false);
+    expect(coverage.animated).toBe(0);
+    expect(coverage.total).toBe(actions.length);
+    expect(coverage.missing).toContain("Fireball");
+    expect(coverage.missing).toContain("Kunai");
+    expect(coverage.missing).not.toContain("Ore");
+    expect(coverage.missing).not.toContain("Boss arrival");
+  });
+
+  it("reports bound actions as animated", () => {
+    const coverage = summarizeAnimationCoverage(ai, [
+      "idle",
+      "jutsu:fire",
+      "transform",
+    ]);
+    expect(coverage.hasIdle).toBe(true);
+    expect(coverage.animated).toBe(2);
+    expect(coverage.missing).not.toContain("Fireball");
+    expect(coverage.missing).not.toContain("Idle");
   });
 });

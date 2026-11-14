@@ -1,5 +1,5 @@
 import { useAtomValue } from "jotai";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { Progress } from "@/components/ui/progress";
 import { usePageActive } from "@/hooks/usePageActive";
 import Loader from "@/layout/Loader";
@@ -8,7 +8,7 @@ import { areBattleAllies } from "@/libs/combat/participants";
 import { calcApReduction } from "@/libs/combat/turn";
 import type { CombatAction, ReturnedBattle } from "@/libs/combat/types";
 import { clamp } from "@/utils/math";
-import { combatPendingActionAtom, useUserData } from "@/utils/UserContext";
+import { combatPendingActionAtom, useUserInfo } from "@/utils/UserContext";
 
 interface ActionTimerProps {
   action?: CombatAction | undefined;
@@ -24,7 +24,7 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
   const { action, user, battle, isPending } = props;
 
   // Data from the DB
-  const { timeDiff } = useUserData();
+  const { timeDiff } = useUserInfo();
   const isPageActive = usePageActive();
   const pendingAction = useAtomValue(combatPendingActionAtom);
   // The submitted action reserves its AP until the response settles the real value.
@@ -41,8 +41,6 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
     canAct: false,
     waiting: false,
   });
-  const stateRef = useRef(state);
-  stateRef.current = state;
 
   // Derived values
   const stunReduction = calcApReduction(battle, user.userId);
@@ -55,10 +53,8 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
   const spentStart = Math.max(0, Math.min(clampedActionAfter, clampedActionNow));
   const spentWidth = Math.max(0, clampedActionNow - Math.max(0, clampedActionAfter));
 
-  // Precompute actions for this user, recompute only when battle version changes
-  const precomputedActions = useMemo(() => {
-    return availableUserActions(battle, user.userId);
-  }, [battle?.version, user.userId]);
+  // Precompute actions for this user; the compiler reuses them until the battle changes.
+  const precomputedActions = availableUserActions(battle, user.userId);
 
   // Active updating of this component
   useLayoutEffect(() => {
@@ -80,24 +76,22 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
           : self && areBattleAllies(actor, self)
             ? "Ally"
             : "Opponent";
-        const info = left > 0 ? `${inform}: ${left.toFixed(1)}s` : "Finished!";
+        const info = left > 0 ? `${inform}: ${formatSecondsLeft(left)}s` : "Finished!";
         return { label: info, canAct, waiting };
       }
       return { label: "Lobby", canAct, waiting };
     };
 
+    // Returning the previous state skips the commit while the label is unchanged.
     const updateState = () => {
       const next = nextTimerState();
-      const prev = stateRef.current;
-      if (
+      setState((prev) =>
         prev.label === next.label &&
         prev.canAct === next.canAct &&
         prev.waiting === next.waiting
-      ) {
-        return;
-      }
-      stateRef.current = next;
-      setState(next);
+          ? prev
+          : next,
+      );
     };
 
     updateState();
@@ -213,5 +207,13 @@ const ActionTimer: React.FC<ActionTimerProps> = (props) => {
     </div>
   );
 };
+
+const ACTION_TIMER_PRECISE_SECONDS = 10;
+
+/** Whole seconds keep the label steady; tenths appear only for the final seconds. */
+export const formatSecondsLeft = (secondsLeft: number) =>
+  secondsLeft > ACTION_TIMER_PRECISE_SECONDS
+    ? String(Math.ceil(secondsLeft))
+    : secondsLeft.toFixed(1);
 
 export default ActionTimer;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFarmController } from "@/hooks/farm-controller";
@@ -88,21 +88,16 @@ export default function OccupationFarming({
     revealElement("farm-panel", "nearest");
   }, [selectedSlotIndex, isWide, isDocked]);
 
-  const selectTab = useCallback(
-    (next: FarmTab) => {
-      controller.setSelectedSlotIndex(null);
-      setTab(next);
-    },
-    [controller.setSelectedSlotIndex],
-  );
-  // Shortcuts elsewhere on the farm jump to the storehouse; its own tab bar is already in view.
-  const openTab = useCallback(
-    (next: FarmTab) => {
-      selectTab(next);
-      revealElement("farm-storehouse", "start");
-    },
-    [selectTab],
-  );
+  /** Clear the plot selection when switching to a storehouse panel. */
+  const selectTab = (next: FarmTab) => {
+    controller.setSelectedSlotIndex(null);
+    setTab(next);
+  };
+  /** Bring an offscreen storehouse panel into view when opened by a farm shortcut. */
+  const openTab = (next: FarmTab) => {
+    selectTab(next);
+    revealElement("farm-storehouse", "start");
+  };
 
   if (controller.query.isLoading) {
     return <Loader explanation="Loading farm..." />;
@@ -115,7 +110,6 @@ export default function OccupationFarming({
         title="Farming"
         subtitle="Grow crops for cooking ingredients"
         defaultBackHref={embedded ? undefined : defaultBackHref}
-        initialBreak={!embedded}
         alreadyHasH1={embedded}
       >
         <div role="alert" className="space-y-2">
@@ -258,7 +252,6 @@ export default function OccupationFarming({
       title="Your Farm"
       subtitle="Grow crops for cooking ingredients"
       defaultBackHref={defaultBackHref}
-      initialBreak
     >
       {farm}
     </ContentBox>

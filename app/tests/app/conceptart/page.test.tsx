@@ -17,6 +17,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type Options = {
   onMutate: unknown;
@@ -36,7 +37,7 @@ const images = [
 ];
 
 const mount = (reputationPoints: number) => {
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "artist", reputationPoints, isBanned: false, isSilenced: false },
     updateUser,
     prepareUserUpdate,

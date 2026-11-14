@@ -18,7 +18,7 @@ import { useSingleFlight } from "@/hooks/useSingleFlight";
 import { CharacterPreview } from "@/layout/CharacterPreview";
 import { showMutationToast } from "@/libs/toast";
 import type { BaseServerResponse } from "@/server/api/trpc";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import {
   attributes,
   type Color,
@@ -31,7 +31,13 @@ import {
 
 /** Edit saved palettes and compatible traits while sharing the authoritative appearance snapshot. */
 export const AttributeChange: React.FC = () => {
-  const { data: spriteUser, updateUser: updateSpriteUser } = useRequiredUserData();
+  const { data: spriteUser, updateUser: updateSpriteUser } =
+    useRequiredUserDataSelector((u) => ({
+      attributes: u.attributes,
+      gender: u.gender,
+      spriteBodyStyle: u.spriteBodyStyle,
+      items: u.items,
+    }));
   const saveFlight = useSingleFlight<string>();
   const pendingAttribute = saveFlight.pending;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

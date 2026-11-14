@@ -103,6 +103,7 @@ import type {
   SectorPoint,
   SectorUser,
 } from "@/libs/sector-map/world-types";
+import { subscribeSharedChannel } from "@/libs/sharedChannel";
 import { isUserCurrentlyStealthed } from "@/libs/stealth";
 import { showMutationToast } from "@/libs/toast";
 import { isTravelKeyBlocked } from "@/libs/travel";
@@ -116,7 +117,6 @@ import {
   useRequiredUserDataSelector,
   useUserDataRef,
 } from "@/utils/UserContext";
-import { shareUserCache } from "@/utils/userCacheSharing";
 import type { MapLocation } from "@/validators/mapLocation";
 
 /**
@@ -137,6 +137,8 @@ const Sector = (props: SectorProps) => {
 const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) => {
   const { sector, sectorWindow, target, showActive, autoAttackMode, centerEntry } =
     props;
+  const isActiveRef = useRef(props.isActive);
+  isActiveRef.current = props.isActive;
   const sectorMap = centerEntry.map;
   const { setPosition } = props;
   const { isWorldExpanded, setWorldExpanded } = props;
@@ -276,8 +278,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   );
   const walkAnimatingRef = useRef(false);
   const motionStepsRef = useRef(new Map<string, TravelMotionStep>());
-  /** Latest walk per remote user; a newer move ends the walk it replaces. */
-  const remoteWalksRef = useRef(new Map<string, number>());
+  /** Unique walk ownership survives cancellation while an earlier callback is still awaiting sleep. */
+  const remoteWalksRef = useRef(new Map<string, symbol>());
   const movePendingRef = useRef(false);
   const moveTargetRef = useRef<TravelSnapshot["routeTarget"]>(null);
   const mountedRef = useRef(true);
@@ -377,9 +379,9 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const { data } = api.travel.getSectorData.useQuery(
     { sector: sector },
     {
+      // Prepare an uncached destination offscreen, then sleep until its scene is visible.
+      enabled: (query) => props.isActive || query.state.data === undefined,
       placeholderData: (previous) => previous,
-      // Equal server Dates do not change the visible presence or village snapshot.
-      structuralSharing: shareUserCache,
       notifyOnChangeProps: ["data"],
       // Keep own vitals/appearance and all other presence reactive; own coordinates come from the scene.
       select: (data) => {
@@ -393,18 +395,18 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           users: data.users?.filter((user) => user.userId !== profile?.userId),
         };
       },
-      // Presence and fights change while the tab is open; pusher events can be
-      // missed, so poll the sector snapshot on a short interval. Pause that
-      // interval while the tab is in the background.
-      refetchInterval: 10_000,
+      // Recover missed presence events only while the sector is visible.
+      refetchInterval: props.isActive ? 10_000 : false,
       // A confirmed movement patch is fresh for the same window as the presence poll.
       staleTime: 10_000,
       refetchIntervalInBackground: false,
+      refetchOnWindowFocus: props.isActive,
+      refetchOnReconnect: props.isActive,
     },
   );
   useVillageDutyPursuit({
     sector,
-    enabled: !!data?.patrolThreat && profile?.status === "AWAKE",
+    enabled: props.isActive && !!data?.patrolThreat && profile?.status === "AWAKE",
     protectors: data?.protectors ?? [],
     startedAt: data?.patrolShiftAt,
     revision: data?.patrolRevision,
@@ -445,7 +447,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     data: sectorDungeons,
     onContentUpdated: refreshDungeonEntrances,
     onContentSubscribed: recoverDungeonEntrances,
-  } = useDungeonAvailability(sector, userData?.sector === sector, timeDiff);
+  } = useDungeonAvailability(
+    sector,
+    props.isActive && userData?.sector === sector,
+    timeDiff,
+  );
   const dungeonStructures = useMemo(
     () =>
       (sectorDungeons ?? []).map((d) => ({
@@ -509,36 +515,45 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     data: publicLocations = [],
     updatePublicLocations,
     recoverPublicLocations,
-  } = usePublicQuestLocations(timeDiff);
+  } = usePublicQuestLocations(timeDiff, props.isActive);
+  // Read current handlers without restarting the subscription when scene activity changes.
+  const contentHandlers = useRef({
+    updatePublicLocations,
+    recoverPublicLocations,
+    refreshDungeonEntrances,
+    recoverDungeonEntrances,
+  });
+  contentHandlers.current = {
+    updatePublicLocations,
+    recoverPublicLocations,
+    refreshDungeonEntrances,
+    recoverDungeonEntrances,
+  };
   useEffect(() => {
     if (!pusher) return;
     const channel = pusher.subscribe("map-content");
     const update = (event: { revision: number }) => {
       if (!Number.isSafeInteger(event.revision) || event.revision < 0) return;
-      updatePublicLocations(event.revision);
+      contentHandlers.current.updatePublicLocations(event.revision);
       void utils.mapAsset.getAll.invalidate();
-      refreshDungeonEntrances();
+      contentHandlers.current.refreshDungeonEntrances();
       // Active runs carry their private presentation in the profile snapshot.
       if (userRef.current?.userQuests.some((entry) => !entry.completed && !entry.endAt))
         void utils.profile.getUser.invalidate();
     };
+    /** Recover current public scenery and dungeon availability after subscription reconnects. */
+    const recover = () => {
+      contentHandlers.current.recoverPublicLocations();
+      contentHandlers.current.recoverDungeonEntrances();
+    };
     channel.bind("updated", update);
-    channel.bind("pusher:subscription_succeeded", recoverPublicLocations);
-    channel.bind("pusher:subscription_succeeded", recoverDungeonEntrances);
+    channel.bind("pusher:subscription_succeeded", recover);
     return () => {
       channel.unbind("updated", update);
-      channel.unbind("pusher:subscription_succeeded", recoverPublicLocations);
-      channel.unbind("pusher:subscription_succeeded", recoverDungeonEntrances);
+      channel.unbind("pusher:subscription_succeeded", recover);
       pusher.unsubscribe("map-content");
     };
-  }, [
-    pusher,
-    utils,
-    updatePublicLocations,
-    recoverPublicLocations,
-    refreshDungeonEntrances,
-    recoverDungeonEntrances,
-  ]);
+  }, [pusher, utils]);
   // Quest locations read only quest progress, the sector and the role; the profile object
   // itself changes on every step, and a new list rebuilds the travel window.
   const userQuests = userData?.userQuests;
@@ -618,7 +633,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
 
   // Movement based on ASDQWE keys
   const onDocumentKeyDown = (event: KeyboardEvent) => {
-    if (isTravelKeyBlocked(event)) return;
+    if (!isActiveRef.current || isTravelKeyBlocked(event)) return;
     if (originRef.current && pathFinderRef.current) {
       const x = originRef.current.col;
       const y = originRef.current.row;
@@ -745,7 +760,8 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       if (idx !== -1 && usersRef.current[idx]) {
         if (instantMove) {
           // User exists - instant movement, which also ends any walk in progress
-          remoteWalksRef.current.delete(data.userId);
+          if (remoteWalksRef.current.delete(data.userId))
+            motionStepsRef.current.delete(data.userId);
           usersRef.current[idx] = {
             ...usersRef.current[idx],
             ...data,
@@ -768,7 +784,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             if (path) {
               const heading = worldMotionHeading(currentHex, targetHex);
               const walks = remoteWalksRef.current;
-              const walk = (walks.get(data.userId) ?? 0) + 1;
+              const walk = Symbol();
               walks.set(data.userId, walk);
               for (const tile of path) {
                 // The list changes while a walk sleeps: others leave and arrive, and a newer
@@ -778,6 +794,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
                 );
                 const before = usersRef.current[index];
                 if (!before || walks.get(data.userId) !== walk) break;
+                if (!isActiveRef.current) {
+                  // A retained scene keeps the destination without animating hidden tiles.
+                  await updateUsersList(data, true, true);
+                  break;
+                }
                 const motion = publishMotionStep(
                   data.userId,
                   { sector: data.sector, x: before.longitude, y: before.latitude },
@@ -808,7 +829,11 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       } else if (data.userId !== userRef.current?.userId) {
         // New identities come from the authenticated, masked sector snapshot. The viewer's
         // own marker comes from that snapshot's merge, which a refetch cannot change.
-        void utils.travel.getSectorData.invalidate();
+        // Mark hidden presence stale without waking another observer of this sector.
+        void utils.travel.getSectorData.invalidate(
+          { sector: sectorRef.current },
+          { refetchType: isActiveRef.current ? "active" : "none" },
+        );
       }
       // Remove users who are no longer in the sector; compare against the
       // live sector ref, which crossings advance before the prop catches up.
@@ -988,7 +1013,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     let crossingPromise: ReturnType<typeof moveStepAsync> | null = null;
     let crossDest: { sector: number; x: number; y: number } | null = null;
     const cross = pendingCrossRef.current;
-    if (cross && routeTargetRef.current === requestTarget) {
+    if (isActiveRef.current && cross && routeTargetRef.current === requestTarget) {
       if (
         isOnSectorMapEdge(sectorMap, cross, { x: data.longitude, y: data.latitude })
       ) {
@@ -1701,25 +1726,23 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   // Listen to websocket events for this sector
   useEffect(() => {
     if (pusher) {
-      const channel = pusher.subscribe(props.sector.toString());
-      channel.bind("event", (data: UserData) => {
-        if (data.userId && data.userId !== userRef.current?.userId) {
-          // A broadcast with another sector means the user left this one
-          if (data.sector !== props.sector) {
-            const idx = usersRef.current.findIndex((u) => u.userId === data.userId);
-            if (idx !== -1) {
-              usersRef.current.splice(idx, 1);
-              actorRevisionRef.current++;
-              publishSurroundings();
+      return subscribeSharedChannel(pusher, props.sector.toString(), {
+        event: (data: UserData) => {
+          if (data.userId && data.userId !== userRef.current?.userId) {
+            // A broadcast with another sector means the user left this one
+            if (data.sector !== props.sector) {
+              const idx = usersRef.current.findIndex((u) => u.userId === data.userId);
+              if (idx !== -1) {
+                usersRef.current.splice(idx, 1);
+                actorRevisionRef.current++;
+                publishSurroundings();
+              }
+              return;
             }
-            return;
+            void updateUsersList(data, !isActiveRef.current);
           }
-          void updateUsersList(data);
-        }
+        },
       });
-      return () => {
-        pusher.unsubscribe(props.sector.toString());
-      };
     }
   }, [pusher, props.sector]);
 
@@ -1819,6 +1842,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     // Keep arrival prompts behind other dialogs and permit explicit recovery-capable
     // interactions. Only the player's chosen action wakes or checks out the character.
     if (
+      !isActiveRef.current ||
       isInteracting ||
       !canAttemptAwakeAction(userRef.current) ||
       npcDialog ||
@@ -1844,10 +1868,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     (npc) => npc.npcWander && npc.npcInteractionType !== "AMBIENT",
   );
   useEffect(() => {
-    if (!hasRoamingNpc) return;
+    if (!props.isActive || !hasRoamingNpc) return;
     const timer = window.setInterval(() => positionChangedRef.current(), 1000);
     return () => window.clearInterval(timer);
-  }, [hasRoamingNpc]);
+  }, [hasRoamingNpc, props.isActive]);
   useEffect(() => {
     updatePositionActions();
   }, [
@@ -1858,12 +1882,14 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     isInteracting,
     isBlockingPopupOpen,
     userData?.status,
+    props.isActive,
   ]);
 
   // Auto-attack logic for ANBU users
   const maybeAutoAttack = () => {
     const userData = userRef.current;
     if (
+      isActiveRef.current &&
       autoAttackMode &&
       userData?.anbuId &&
       userData?.status === "AWAKE" &&
@@ -1918,7 +1944,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   autoAttackRef.current = maybeAutoAttack;
   useEffect(() => {
     maybeAutoAttack();
-  }, [sorrounding, autoAttackMode, isAttacking, userData?.status]);
+  }, [sorrounding, autoAttackMode, isAttacking, userData?.status, props.isActive]);
 
   // Clear heal target if user moves away or target moves away
   useEffect(() => {
@@ -1935,7 +1961,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
 
   /** Advance the latest scene destination without a React render for each retarget. */
   function continueMovement() {
-    if (!mountedRef.current || walkAnimatingRef.current || movePendingRef.current)
+    if (
+      !isActiveRef.current ||
+      !mountedRef.current ||
+      walkAnimatingRef.current ||
+      movePendingRef.current
+    )
       return;
     const destination = routeTargetRef.current;
     const user = userRef.current;
@@ -2319,6 +2350,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
             row: animatedPositionRef.current?.y ?? userRef.current?.latitude ?? 0,
             nav: windowNavRef.current,
             enabled:
+              isActiveRef.current &&
               canAttemptAwakeAction(userRef.current) &&
               !showSorroundingRef.current &&
               performance.now() >= ignoreMapClicksUntilRef.current,
@@ -2361,12 +2393,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     if (travel.isReady) travel.scene.current?.recenter();
   }, [travel.isReady, props.cameraFocusRevision, profile?.status]);
   useEffect(() => {
-    if (!travel.isReady || !canAttemptAwakeAction(profile)) return;
+    if (!props.isActive || !travel.isReady || !canAttemptAwakeAction(profile)) return;
     travelCallbacks.current.onReady();
     continueMovement();
     document.addEventListener("keydown", onDocumentKeyDown);
     return () => document.removeEventListener("keydown", onDocumentKeyDown);
-  }, [travel.isReady, profile?.status]);
+  }, [travel.isReady, profile?.status, props.isActive]);
   useEffect(() => {
     sectorWindowRef.current = sectorWindow;
     if (!travel.isReady) return;
@@ -2648,7 +2680,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           }}
         />
       )}
-      {logbookModalQuestId && (
+      {props.isActive && logbookModalQuestId && (
         <QuestUpdateModal
           questId={logbookModalQuestId}
           onClose={() => setLogbookModalQuestId(null)}
@@ -2696,7 +2728,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         />
       )}
       {/* Hunting can receive focus later without dismissing this NPC arrival. */}
-      {arrivalNpc && (
+      {props.isActive && arrivalNpc && (
         <Modal
           isOpen={!!arrivalNpc}
           dismissOnInteractOutside={false}
@@ -2739,7 +2771,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           </div>
         </Modal>
       )}
-      {npcDialog && pendingNpcInteractRef.current && (
+      {props.isActive && npcDialog && pendingNpcInteractRef.current && (
         <Modal
           isOpen={!!npcDialog}
           setIsOpen={(open) => {
@@ -2834,6 +2866,8 @@ interface SectorProps {
   target: SectorPoint | null;
   showSorrounding: boolean;
   showActive: boolean;
+  /** Retain the scene between tabs without initiating hidden player actions. */
+  isActive: boolean;
   autoAttackMode: boolean;
   isWorldExpanded: boolean;
   /** Re-selecting the player tab resumes camera follow without remounting the scene. */

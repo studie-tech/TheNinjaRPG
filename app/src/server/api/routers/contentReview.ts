@@ -157,14 +157,15 @@ export const contentReviewRouter = createTRPCRouter({
   /**
    * One page of a review desk tab: pending suggestions oldest first, the other tabs
    * newest status change first. Reviewers see every suggestion, other staff only their
-   * own, and everyone else an empty page.
+   * own, and everyone else an empty page. `outdatedCount` is how many suggestions this
+   * read moved out of the pending list, so the client knows its counts are stale.
    */
   getQueue: protectedProcedure
     .input(reviewQueueSchema)
     .query(async ({ ctx, input }) => {
       const user = await fetchUser(ctx.drizzle, ctx.userId);
       if (!isStaffRole(user.role))
-        return { items: [], nextCursor: null, canReview: false };
+        return { items: [], nextCursor: null, canReview: false, outdatedCount: 0 };
       const canReview = canChangeContent(user.role);
       const offset = input.cursor ?? 0;
       const rows = await listContentProposalForGetQueue(
@@ -189,6 +190,7 @@ export const contentReviewRouter = createTRPCRouter({
         // Rows outdated on this page left the pending list, so the next page starts earlier.
         nextCursor: hasMore ? offset + input.limit - outdated.size : null,
         canReview,
+        outdatedCount: outdated.size,
       };
     }),
 

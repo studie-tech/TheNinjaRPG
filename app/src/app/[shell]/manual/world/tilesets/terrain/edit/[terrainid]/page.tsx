@@ -8,9 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { COMBAT_BIOMES } from "@/drizzle/constants";
 import type { MapTerrain } from "@/drizzle/schema";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import ContentImageSelector from "@/layout/ContentImageSelector";
@@ -108,12 +116,14 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
 
   const colors = useWatch({ control: form.control, name: "colors" });
   const textureUrl = useWatch({ control: form.control, name: "textureUrl" });
+  const entryName = useWatch({ control: form.control, name: "name" });
+  const heading = useEditorTitle("terrain", entryName);
 
   const colorLabels = ["Light shade", "Mid shade", "Dark shade (blocked)"] as const;
 
   return (
     <ContentBox
-      title="Content Panel"
+      title={heading}
       subtitle="Map Terrain Management"
       defaultBackHref="/manual/world/tilesets"
       noRightAlign={true}
@@ -193,21 +203,28 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
           </div>
           <div className="space-y-1">
             <Label htmlFor="terrain-biome">Combat arena (battle background)</Label>
-            <select
-              id="terrain-biome"
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
-              {...form.register("battleBiome")}
-            >
-              {COMBAT_BIOMES.map((biome) => (
-                <option key={biome} value={biome}>
-                  {biome}
-                </option>
-              ))}
-            </select>
+            <Controller
+              control={form.control}
+              name="battleBiome"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger id="terrain-biome" onBlur={field.onBlur}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMBAT_BIOMES.map((biome) => (
+                      <SelectItem key={biome} value={biome}>
+                        {biome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
         </div>
         <div className="space-y-3">
-          <div className="flex items-center justify-between rounded-md border p-3">
+          <div className="flex items-center justify-between gap-4 rounded-md border p-3">
             <div>
               <Label htmlFor="terrain-water">Water</Label>
               <p className="text-muted-foreground text-xs">
@@ -221,6 +238,7 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
               render={({ field }) => (
                 <Switch
                   id="terrain-water"
+                  className="shrink-0"
                   checked={field.value}
                   onCheckedChange={field.onChange}
                 />
@@ -249,9 +267,9 @@ const SingleEditMapTerrain: React.FC<SingleEditMapTerrainProps> = (props) => {
             />
           </div>
           <div className="space-y-1">
-            <Label>Texture overlay (optional, blended over the shades)</Label>
             <ContentImageSelector
-              label="Texture"
+              label="Texture overlay (optional, blended over the shades)"
+              emptyImageLabel="No texture"
               imageUrl={textureUrl}
               id={terrain.id}
               prompt={`seamless ${terrain.name} texture tile`}

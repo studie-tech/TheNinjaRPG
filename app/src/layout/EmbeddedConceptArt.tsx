@@ -9,7 +9,7 @@ import { type ConceptEmotion, ConceptReactions } from "@/layout/ConceptReactions
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { showMutationToast } from "@/libs/toast";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 interface EmbeddedConceptArtProps {
   imageId: string;
@@ -20,7 +20,7 @@ interface EmbeddedConceptArtProps {
  * Shows the image with voting buttons and a link to the full concept art page
  */
 const EmbeddedConceptArt: React.FC<EmbeddedConceptArtProps> = ({ imageId }) => {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({ userId: u.userId }));
   const utils = api.useUtils();
   const emotionFlight = useSingleFlight<ConceptEmotion>();
   const pendingEmotion = emotionFlight.pending;

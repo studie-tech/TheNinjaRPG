@@ -2,8 +2,16 @@
 
 import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { QueryClient } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { TRPCClientError } from "@trpc/client";
+import { getQueryKey } from "@trpc/react-query";
 import { observable } from "@trpc/server/observable";
 import * as navigation from "next/navigation";
 import type { RouterOutputs } from "@/app/_trpc/client";
@@ -17,7 +25,12 @@ import * as Link from "@/layout/Link";
 import * as Post from "@/layout/Post";
 import * as toast from "@/libs/toast";
 import * as UserContext from "@/utils/UserContext";
+import {
+  installBrowserGlobals,
+  restoreBrowserGlobals,
+} from "../../setup/browserGlobals";
 import { TrpcTestProviders, testApi } from "../../setup/trpc";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type ThreadData = RouterOutputs["comments"]["getForumComments"];
 let queryClient: QueryClient;
@@ -28,9 +41,18 @@ let moderator: boolean;
 let refreshDuringRemoval: boolean;
 let removalPaths: string[];
 let requestedPages: number[];
+let holdPageTwo: boolean;
+let holdReaction: boolean;
+let finishPageTwo: (() => void) | undefined;
+let finishReaction: (() => void) | undefined;
 let savedObserver: PropertyDescriptor | undefined;
 
 beforeEach(() => {
+  installBrowserGlobals({ events: [], scrollIntoView: true });
+  holdPageTwo = false;
+  holdReaction = false;
+  finishPageTwo = undefined;
+  finishReaction = undefined;
   failReads = false;
   rejectRemoval = false;
   moderator = false;
@@ -48,8 +70,10 @@ beforeEach(() => {
   savedObserver = Object.getOwnPropertyDescriptor(globalThis, "IntersectionObserver");
   Object.defineProperty(globalThis, "IntersectionObserver", {
     configurable: true,
-    value: function () {
-      return { observe() {}, unobserve() {}, disconnect() {} };
+    value: class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
     },
   });
   vi.spyOn(navigation, "useSearchParams").mockReturnValue(
@@ -64,7 +88,7 @@ beforeEach(() => {
     forum: testApi.forum,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(UserContext, "useUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         data: {
@@ -103,13 +127,14 @@ afterEach(() => {
   if (savedObserver)
     Object.defineProperty(globalThis, "IntersectionObserver", savedObserver);
   else Reflect.deleteProperty(globalThis, "IntersectionObserver");
+  restoreBrowserGlobals();
 });
 
 /** Build the server page from mutable fixture posts so later reads can represent removal or restoration. */
-function threadPage(cursor = 0): ThreadData {
+function threadPage(cursor = 0, threadId = "topic"): ThreadData {
   return {
     thread: {
-      id: "topic",
+      id: threadId,
       boardId: "board",
       userId: "reader",
       title: "Discussion",
@@ -120,7 +145,7 @@ function threadPage(cursor = 0): ThreadData {
     board: {
       id: "board",
       name: "Strategy",
-      permissions: { read: true, remove: true, moderate: moderator },
+      permissions: { read: true, remove: true, vote: true, moderate: moderator },
     },
     data: posts.slice(
       cursor * FORUM_THREAD_POSTS_PER_PAGE,
@@ -142,15 +167,25 @@ function renderThread() {
           observable((observer) => {
             let data: unknown = [];
             if (op.path === "comments.getForumComments") {
-              const cursor = (op.input as { cursor: number }).cursor;
+              const { cursor, thread_id } = op.input as {
+                cursor: number;
+                thread_id: string;
+              };
               requestedPages.push(cursor);
+              if (holdPageTwo && cursor === 1) {
+                finishPageTwo = () => {
+                  observer.next({ result: { data: threadPage(cursor, thread_id) } });
+                  observer.complete();
+                };
+                return;
+              }
               if (failReads) {
                 observer.error(
                   TRPCClientError.from(new Error("Discussion refresh interrupted")),
                 );
                 return;
               }
-              data = threadPage(cursor);
+              data = threadPage(cursor, thread_id);
             }
             if (
               op.path === "comments.deleteForumComment" ||
@@ -175,16 +210,31 @@ function renderThread() {
                 failReads = true;
               }
             }
+            if (op.path === "forum.react") {
+              data = { success: true, message: "Reaction saved" };
+              if (holdReaction) {
+                finishReaction = () => {
+                  observer.next({ result: { data } });
+                  observer.complete();
+                };
+                return;
+              }
+            }
             observer.next({ result: { data } });
             observer.complete();
           }),
     ],
   });
-  return render(
+  const discussion = (threadId: string) => (
     <TrpcTestProviders client={trpcClient} queryClient={queryClient}>
-      <Thread threadId="topic" initialPage={threadPage()} />
-    </TrpcTestProviders>,
+      <Thread threadId={threadId} initialPage={threadPage(0, threadId)} />
+    </TrpcTestProviders>
   );
+  const view = render(discussion("topic"));
+  return {
+    ...view,
+    rerenderThread: (threadId: string) => view.rerender(discussion(threadId)),
+  };
 }
 
 it.each([false, true])(
@@ -231,6 +281,36 @@ it.each([false, true])(
   },
 );
 
+it("applies a pending reaction to its original thread after the route input changes", async () => {
+  holdReaction = true;
+  const view = renderThread();
+  await waitFor(() => expect(requestedPages).toEqual([0]));
+  fireEvent.click(
+    within(view.container.querySelector("#post-opening")!).getByRole("button", {
+      name: /Helpful/,
+    }),
+  );
+  await waitFor(() => expect(finishReaction).toBeDefined());
+  view.rerenderThread("other-topic");
+  expect(
+    view.container.querySelector('a[href="/forum/board/other-topic?post=opening"]'),
+  ).not.toBeNull();
+  await act(async () => finishReaction?.());
+  const cachedThread = (thread_id: string) => {
+    const input = { thread_id, limit: FORUM_THREAD_POSTS_PER_PAGE, cursor: 0 };
+    return queryClient.getQueryData<ThreadData>(
+      getQueryKey(testApi.comments.getForumComments, input, "query"),
+    );
+  };
+  await waitFor(() =>
+    expect(cachedThread("topic")?.data[0]?.reactions).toEqual([
+      { userId: "reader", reaction: "helpful" },
+    ]),
+  );
+  expect(cachedThread("other-topic")?.data[0]?.reactions).toEqual([]);
+  expect(requestedPages).toEqual([0]);
+});
+
 it("retains the post and total when the server rejects removal", async () => {
   rejectRemoval = true;
   const view = renderThread();
@@ -273,7 +353,7 @@ it("returns from an emptied final page to the reconciled cached previous page wh
   ];
   const view = renderThread();
   await waitFor(() => expect(requestedPages.length).toBe(1));
-  fireEvent.click(view.getAllByRole("button", { name: "2" })[0]!);
+  fireEvent.click(view.getAllByRole("button", { name: "Page 2" })[0]!);
   const replyText = await view.findByText("reply content");
   fireEvent.click(
     within(replyText.closest("article")!).getByRole("button", { name: "Remove post" }),
@@ -284,5 +364,57 @@ it("returns from an emptied final page to the reconciled cached previous page wh
     FORUM_THREAD_POSTS_PER_PAGE,
   );
   await waitFor(() => expect(requestedPages.at(-1)).toBe(0));
-  expect(view.queryByRole("button", { name: "2" })).toBeNull();
+  expect(view.queryByRole("button", { name: "Page 2" })).toBeNull();
 });
+
+it.each([false, true])(
+  "lets the destination page load when a reaction starts before navigation=%s",
+  async (reactBeforeNavigation) => {
+    holdPageTwo = true;
+    holdReaction = reactBeforeNavigation;
+    const opening = posts[0]!;
+    posts = Array.from({ length: FORUM_THREAD_POSTS_PER_PAGE + 1 }, (_, index) => ({
+      ...opening,
+      id: `entry-${index}`,
+      content: `<p>entry ${index}</p>`,
+    }));
+    const view = renderThread();
+    await waitFor(() => expect(requestedPages).toEqual([0]));
+    const react = () =>
+      fireEvent.click(
+        within(view.container.querySelector("#post-entry-0")!).getByRole("button", {
+          name: /Helpful/,
+        }),
+      );
+    if (reactBeforeNavigation) {
+      react();
+      await waitFor(() => expect(finishReaction).toBeDefined());
+    }
+    fireEvent.click(view.getAllByRole("button", { name: "Page 2" })[0]!);
+    await waitFor(() => expect(finishPageTwo).toBeDefined());
+    if (reactBeforeNavigation) await act(async () => finishReaction?.());
+    else react();
+    const pageKey = (cursor: number) => {
+      const input = {
+        thread_id: "topic",
+        limit: FORUM_THREAD_POSTS_PER_PAGE,
+        cursor,
+      };
+      return getQueryKey(testApi.comments.getForumComments, input, "query");
+    };
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData<ThreadData>(pageKey(0))?.data[0]?.reactions,
+      ).toEqual([{ userId: "reader", reaction: "helpful" }]),
+    );
+    expect(queryClient.getQueryState(pageKey(1))?.fetchStatus).toBe("fetching");
+    await act(async () => finishPageTwo?.());
+    await waitFor(() =>
+      expect(
+        view.container.querySelector(`#post-entry-${FORUM_THREAD_POSTS_PER_PAGE}`),
+      ).not.toBeNull(),
+    );
+    expect(view.container.querySelector("#post-entry-0")).toBeNull();
+    expect(requestedPages).toEqual([0, 1]);
+  },
+);

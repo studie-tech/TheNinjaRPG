@@ -18,12 +18,8 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { ToastAction } from "@/components/ui/toast";
+import { toast } from "@/components/ui/use-toast";
 import {
   IMG_ICON_FACEBOOK,
   IMG_ICON_REDDIT,
@@ -33,13 +29,14 @@ import { useSingleFlight } from "@/hooks/useSingleFlight";
 import { type ConceptEmotion, ConceptReactions } from "@/layout/ConceptReactions";
 import Confirm from "@/layout/Confirm";
 import Image from "@/layout/Image";
+import Link from "@/layout/Link";
 import ReportUser from "@/layout/Report";
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import type { ImageWithRelations } from "@/routers/conceptart";
 import { canDeleteConceptArt } from "@/utils/permissions";
 import { secondsPassed } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   image: ImageWithRelations | undefined | null;
@@ -53,7 +50,10 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 const ConceptImage: React.FC<InputProps> = (props) => {
   // Destructure props & state
   const { image, showDetails } = props;
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    role: u.role,
+  }));
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
@@ -148,7 +148,11 @@ const ConceptImage: React.FC<InputProps> = (props) => {
    * so reconcile both query surfaces after success before accepting another reaction.
    */
   const toggleEmotion = async (type: ConceptEmotion) => {
-    if (!user || !image || deleteFlight.current() || !emotionFlight.claim(type)) return;
+    if (!user) {
+      showSignInToReactToast();
+      return;
+    }
+    if (!image || deleteFlight.current() || !emotionFlight.claim(type)) return;
 
     const imageId = image.id;
 
@@ -373,7 +377,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
           )}
         </div>
         <div
-          className={`absolute right-1 bottom-1 left-1 flex ${showDetails ? "h-12 text-lg" : "h-6 text-xs"} flex-row items-center rounded-md border border-slate-700 bg-slate-800 text-white opacity-90`}
+          className={`absolute right-1 bottom-1 left-1 flex ${showDetails ? "h-12 text-lg" : "h-[36px] text-sm"} flex-row items-center rounded-md border border-slate-700 bg-slate-800 text-white opacity-90`}
         >
           <ConceptReactions
             image={image}
@@ -381,7 +385,7 @@ const ConceptImage: React.FC<InputProps> = (props) => {
             pendingEmotion={emotionFlight.pending}
             disabled={isEmotionPending || isDeleting}
             firstButtonClassName="ml-1"
-            buttonClassName="flex cursor-pointer flex-row items-center gap-1 px-1 disabled:cursor-not-allowed disabled:opacity-70"
+            buttonClassName="flex min-h-[32px] min-w-[32px] cursor-pointer flex-row items-center justify-center gap-1 rounded px-1 disabled:cursor-not-allowed disabled:opacity-70"
             onToggle={(type) => void toggleEmotion(type)}
           />
           {isEmotionPending && (
@@ -489,37 +493,38 @@ const ConceptImage: React.FC<InputProps> = (props) => {
                 </PopoverContent>
               </Popover>
 
-              <TooltipProvider delayDuration={50}>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <Info className="mr-2 h-8 w-8 cursor-pointer hover:text-orange-500" />
-                  </TooltipTrigger>
-                  <TooltipContent>
+              <Popover>
+                <PopoverTrigger
+                  aria-label="Image details"
+                  className="mr-2 flex min-h-[32px] min-w-[32px] items-center justify-center"
+                >
+                  <Info className="h-8 w-8 cursor-pointer hover:text-orange-500" />
+                </PopoverTrigger>
+                <PopoverContent side="top" className="max-w-[90vw] break-words">
+                  <p>
+                    <b>Created by: </b>
+                    {image.user?.username}
+                  </p>
+                  <p className="mt-2">
+                    <b>Prompt: </b>
+                    {image.prompt}
+                  </p>
+                  {image.negative_prompt && (
                     <p>
-                      <b>Created by: </b>
-                      {image.user?.username}
+                      <b>Negative Prompt: </b>
+                      {image.negative_prompt}
                     </p>
-                    <p className="mt-2">
-                      <b>Prompt: </b>
-                      {image.prompt}
-                    </p>
-                    {image.negative_prompt && (
-                      <p>
-                        <b>Negative Prompt: </b>
-                        {image.negative_prompt}
-                      </p>
-                    )}
-                    <p className="mt-2">
-                      <b>Seed: </b>
-                      {image.seed}
-                    </p>
-                    <p>
-                      <b>CFG: </b>
-                      {image.guidance_scale}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+                  )}
+                  <p className="mt-2">
+                    <b>Seed: </b>
+                    {image.seed}
+                  </p>
+                  <p>
+                    <b>CFG: </b>
+                    {image.guidance_scale}
+                  </p>
+                </PopoverContent>
+              </Popover>
             </>
           )}
         </div>
@@ -529,3 +534,18 @@ const ConceptImage: React.FC<InputProps> = (props) => {
 };
 
 export default ConceptImage;
+
+/** Reactions need an account; signed-out visitors are pointed to sign-in instead. */
+const showSignInToReactToast = () =>
+  showMutationToast({
+    success: false,
+    title: "Sign in to react",
+    message: "Sign in or create a free account to react to concept art.",
+    action: (
+      <ToastAction altText="Sign in" asChild>
+        <Link href="/login" onClick={() => toast.dismiss()}>
+          Sign in
+        </Link>
+      </ToastAction>
+    ),
+  });

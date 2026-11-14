@@ -7,11 +7,13 @@ import ActionLogFiltering, {
 } from "@/layout/ActionLogFiltering";
 import ContentBox from "@/layout/ContentBox";
 import { changelogText } from "@/layout/seoTexts";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ActionLog() {
   // Queries
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({
+    userId: profile.userId,
+  }));
 
   // Two-level filtering
   const state = useFiltering();

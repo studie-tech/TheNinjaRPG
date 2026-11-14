@@ -25,6 +25,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type Bid = { auctionId: string; amount: number };
 const placeBid = vi.fn((_input: Bid) => new Promise<never>(() => undefined));
@@ -63,14 +64,14 @@ const listingFor = (overrides: object = {}) => ({
   ...overrides,
 });
 
-const renderDialog = (listing: object, user: object = {}) => {
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+const renderDialog = (listing: object, user: object = {}, utils: object = {}) => {
+  mockUserContextValue({
     data: { userId: "viewer", level: 20, bank: 1000, reputationPoints: 0, ...user },
     updateUser: vi.fn(),
     timeDiff: 0,
   } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
-    useUtils: () => ({}),
+    useUtils: () => utils,
     auction: {
       getAuctionListing: { useQuery: () => ({ data: listing, isLoading: false }) },
       placeBid: {
@@ -174,6 +175,39 @@ describe("bid and buyout confirmations", () => {
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);
+  });
+
+  it("closes the confirmation once the bid lands, without waiting for listings to refetch", async () => {
+    const neverSettles = () => new Promise<void>(() => undefined);
+    const listings = vi.fn(neverSettles);
+    const details = vi.fn(neverSettles);
+    placeBid.mockImplementationOnce(
+      () =>
+        Promise.resolve({
+          success: true,
+          message: "Bid placed",
+          amountToDeduct: 500,
+        }) as never,
+    );
+    renderDialog(
+      listingFor({ bids: [] }),
+      {},
+      {
+        auction: {
+          getAuctionListings: { invalidate: listings },
+          getAuctionListing: { invalidate: details },
+        },
+      },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Buy it now — 500 ryo" }));
+    await act(async () => {
+      fireEvent.click(
+        within(confirmation()).getByRole("button", { name: "Confirm Buyout" }),
+      );
+    });
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(listings).toHaveBeenCalledTimes(1);
+    expect(details).toHaveBeenCalledTimes(1);
   });
 
   it("closes an idle confirmation on cancel", () => {

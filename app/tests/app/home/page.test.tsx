@@ -41,6 +41,7 @@ import {
 } from "../../setup/browserGlobals";
 import { deferred } from "../../setup/deferred";
 import { TrpcTestProviders, testApi } from "../../setup/trpc";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const furniture: HomeFurniture[] = [
   {
@@ -171,8 +172,8 @@ beforeEach(() => {
     prepareUserUpdate: vi.fn(),
     updateUser: vi.fn(),
   };
-  vi.spyOn(UserContext, "useUserData").mockReturnValue(profile as never);
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue(profile as never);
+  mockUserContextValue(profile as never);
+  mockUserContextValue(profile as never);
   vi.spyOn(sleep, "useSleepToggle").mockReturnValue({
     toggleSleep: vi.fn(),
     isTogglingSleep: false,

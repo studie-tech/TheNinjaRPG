@@ -34,6 +34,7 @@ export default function ManualBalance() {
       content: "AI",
       usage: linkCell("/manual/ai/balance#Usage"),
       power: linkCell("/manual/ai/balance#Power"),
+      completeness: linkCell("/manual/ai/completeness"),
     },
     {
       content: "Skill Trees",

@@ -9,7 +9,7 @@ import { STORE_ORDER_RESERVATION_MINUTES } from "@/drizzle/constants";
 import { useStoreDeliveryRefresh } from "@/hooks/useStoreDeliveryRefresh";
 import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 import type { storeCheckoutSchema } from "@/validators/points";
 
 /**
@@ -30,7 +30,7 @@ export function StoreCheckout({
   const [{ isResolved, isRejected }] = usePayPalScriptReducer();
   const [message, setMessage] = useState<string>();
   const refreshStoreDelivery = useStoreDeliveryRefresh();
-  const { prepareUserUpdate, updateUser } = useRequiredUserData();
+  const { prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const prepare = api.paypal.createStoreOrder.useMutation();
   const resolve = api.paypal.captureStoreOrder.useMutation({
     onMutate: prepareUserUpdate,

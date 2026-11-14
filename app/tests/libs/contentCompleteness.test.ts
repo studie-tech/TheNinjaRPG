@@ -81,8 +81,8 @@ describe("summarizeBattleOutcomes", () => {
     ).toEqual({ wins: 3, flees: 1, losses: 4, totalUsage: 8, winRate: "37.5%" });
   });
 
-  it("reports a zero rate without usage", () => {
-    expect(summarizeBattleOutcomes([]).winRate).toBe("0.0%");
+  it("shows a dash instead of a win rate without usage", () => {
+    expect(summarizeBattleOutcomes([]).winRate).toBe("—");
   });
 });
 

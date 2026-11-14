@@ -37,7 +37,7 @@ import { getRewardArray } from "@/libs/objectives";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { isWithinDateRange } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 type RankedSeasonRecord = RouterOutputs["pvpRank"]["getSeasons"][number];
 
@@ -55,7 +55,7 @@ export function SeasonManager() {
   const [deleteTarget, setDeleteTarget] = useState<RankedSeasonRecord | null>(null);
   const endInFlightRef = useRef(false);
   const deleteInFlightRef = useRef(false);
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const canEditContent = canChangeContent(userData?.role ?? "USER");
 
   const utils = api.useUtils();
@@ -179,7 +179,7 @@ export function SeasonManager() {
                 </Button>
               </DialogTrigger>
               <DialogContent
-                className="max-h-[85vh] max-w-3xl overflow-y-auto"
+                className="max-w-3xl"
                 closeDisabled={isCreatePending}
                 onEscapeKeyDown={(event) => {
                   if (isCreatePending) event.preventDefault();
@@ -213,7 +213,7 @@ export function SeasonManager() {
                     </Button>
                   </DialogTrigger>
                   <DialogContent
-                    className="max-h-[85vh] max-w-3xl overflow-y-auto"
+                    className="max-w-3xl"
                     closeDisabled={isEditPending}
                     onEscapeKeyDown={(event) => {
                       if (isEditPending) event.preventDefault();

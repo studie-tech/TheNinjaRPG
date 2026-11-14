@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { useState } from "react";
+import { TUTORIAL_ITEM_ID } from "@/drizzle/constants";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 
 type Purchase = { itemId: string; stack: number; villageId?: string | null };
@@ -23,6 +25,7 @@ const furniture = {
   stackSize: 1,
   expireFromStoreAt: null,
 };
+let tutorialItem: typeof furniture | undefined;
 const homeInvalidation = vi.fn(async () => undefined);
 const invalidate = vi.fn(async () => undefined);
 const updateUser = vi.fn(async () => undefined);
@@ -58,7 +61,7 @@ import Shop from "@/layout/Shop";
 import * as pagination from "@/libs/pagination";
 import * as toast from "@/libs/toast";
 import * as routing from "@/utils/routing";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 const user = {
   level: 50,
@@ -72,6 +75,7 @@ const user = {
 beforeEach(() => {
   vi.clearAllMocks();
   purchaseResult = { success: true, message: "Purchased" };
+  tutorialItem = undefined;
   Object.assign(vi.spyOn(client, "api" as never), {
     useUtils: () => ({
       item: {
@@ -81,7 +85,7 @@ beforeEach(() => {
       home: { getUserHome: { invalidate: homeInvalidation } },
     }),
     item: {
-      get: { useQuery: () => ({ data: undefined }) },
+      get: { useQuery: () => ({ data: tutorialItem }) },
       getAll: { useInfiniteQuery: catalogQuery },
       getBloodlineRollOdds: { useQuery: () => ({}) },
       getPurchaseAllowance: {
@@ -95,7 +99,7 @@ beforeEach(() => {
       },
     },
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     prepareUserUpdate: vi.fn(),
     updateUser,
   } as never);
@@ -125,12 +129,22 @@ beforeEach(() => {
       ) : null,
   );
   vi.spyOn(ItemShopFiltering, "ItemShopFiltering").mockImplementation(() => null);
-  vi.spyOn(ItemShopFiltering, "useShopFiltering").mockImplementation(
-    (defaultType) =>
-      ({ itemType: defaultType, name: "", setName: vi.fn(), setItemType }) as never,
-  );
+  vi.spyOn(ItemShopFiltering, "useShopFiltering").mockImplementation((defaultType) => {
+    const [itemType, updateItemType] = useState(defaultType);
+    const [name, setName] = useState("");
+    return {
+      itemType,
+      name,
+      setName,
+      setItemType: (value) => {
+        setItemType(value);
+        updateItemType(value);
+      },
+    } as ReturnType<typeof ItemShopFiltering.useShopFiltering>;
+  });
   vi.spyOn(ItemShopFiltering, "getShopFilter").mockImplementation((state) => ({
     itemType: state.itemType,
+    name: state.name,
   }));
 });
 afterEach(() => {
@@ -142,8 +156,62 @@ describe("furniture catalog integration", () => {
   it("offers Furniture alongside ordinary item categories", () => {
     const view = render(<Shop userData={user} defaultType="WEAPON" />);
     expect(view.getByRole("tab", { name: "Weapon" })).toBeTruthy();
-    fireEvent.click(view.getByRole("tab", { name: "Furniture" }));
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Furniture" }), {
+      button: 0,
+      ctrlKey: false,
+    });
     expect(setItemType).toHaveBeenCalledWith("FURNITURE");
+  });
+
+  it("keeps search filters and clears the purchase dialog when changing categories", async () => {
+    purchaseResult = { success: false, message: "Inventory is full" };
+    const view = render(<Shop userData={user} defaultType="WEAPON" />);
+    fireEvent.change(view.getByRole("textbox"), { target: { value: "Painted" } });
+    fireEvent.click(view.getByRole("button", { name: /Painted Cabinet/ }));
+    await act(async () =>
+      fireEvent.click(view.getByRole("button", { name: "Buy for 100 ryo" })),
+    );
+    expect(view.getByRole("alert").textContent).toBe("Inventory is full");
+
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Furniture" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(catalogQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({ itemType: "FURNITURE", name: "Painted" }),
+      expect.anything(),
+    );
+    expect(view.queryByRole("dialog")).toBeNull();
+    expect(view.getByRole("tabpanel").querySelector("#tutorial-itemshop")).toBeTruthy();
+    fireEvent.click(view.getByRole("button", { name: /Painted Cabinet/ }));
+    expect(view.getByRole("dialog")).toBeTruthy();
+    expect(view.queryByRole("alert")).toBeNull();
+  });
+
+  it("keeps the tutorial item reachable after a category change and advances on purchase", async () => {
+    tutorialItem = {
+      ...furniture,
+      id: TUTORIAL_ITEM_ID,
+      name: "Shuriken",
+      itemType: "WEAPON",
+    };
+    const completeTutorialAction = vi.fn(async () => {});
+    vi.spyOn(routing, "usePublicPathname").mockReturnValue("/itemshop");
+    vi.spyOn(tutorial, "useTutorialStep").mockReturnValue({
+      currentStep: { id: "tools-buy-shuriken", page: "/itemshop" },
+      completeTutorialAction,
+    } as never);
+    const view = render(<Shop userData={user} defaultType="WEAPON" />);
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Furniture" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(view.container.querySelector("#tutorial-itemshop-item")).toBeTruthy();
+    fireEvent.click(view.getByRole("button", { name: /Shuriken/ }));
+    await act(async () =>
+      fireEvent.click(view.getByRole("button", { name: "Buy for 100 ryo" })),
+    );
+    expect(completeTutorialAction).toHaveBeenCalledWith("buyItem");
   });
 
   it("purchases through item.buy and refreshes the residence after delivery", async () => {

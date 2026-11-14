@@ -58,7 +58,7 @@ const COLLECTIONS = [
 export function MerchCollection() {
   const { products, loading, error, retry } = useMerch();
   const [collection, setCollection] = useState("All designs");
-  const [kind, setKind] = useState("Organic Hoodie");
+  const [kind, setKind] = useState("All pieces");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("featured");
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -81,8 +81,9 @@ export function MerchCollection() {
         : sort === "price"
           ? Number(productFromPrice(a)?.amount ?? Infinity) -
             Number(productFromPrice(b)?.amount ?? Infinity)
-          : (FEATURED_COLLECTION_ORDER[a.category] ?? Infinity) -
-            (FEATURED_COLLECTION_ORDER[b.category] ?? Infinity),
+          : featuredKindRank(a.kind) - featuredKindRank(b.kind) ||
+            (FEATURED_COLLECTION_ORDER[a.category] ?? Infinity) -
+              (FEATURED_COLLECTION_ORDER[b.category] ?? Infinity),
     );
   const selectCollection = (name: string) => {
     setCollection(name);
@@ -308,9 +309,7 @@ export function MerchCollection() {
               ? "Loading the collection…"
               : `${filtered.length} ${filtered.length === 1 ? "piece" : "pieces"}`}
           </span>
-          {(search ||
-            collection !== "All designs" ||
-            (activeKind !== "Organic Hoodie" && activeKind !== "All pieces")) && (
+          {(search || collection !== "All designs" || activeKind !== "All pieces") && (
             <button type="button" onClick={clearFilters}>
               Reset filters <X size={12} />
             </button>
@@ -460,4 +459,9 @@ export function MerchProductCard({ product }: { product: MerchProduct }) {
 
 function ShoppingPlaceholder() {
   return <span className="merch-photo-placeholder">Product preview coming soon</span>;
+}
+
+/** Featured order leads with hoodies, then the remaining product types. */
+function featuredKindRank(kind: string) {
+  return kind === "Organic Hoodie" ? 0 : 1;
 }

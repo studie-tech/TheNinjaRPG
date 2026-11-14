@@ -48,11 +48,12 @@ import { showRetryableErrorToast } from "@/libs/retryableToast";
 import { getRewardPickCount, isRewardChoiceQuest } from "@/libs/rewardChoice";
 import { cn } from "@/libs/shadui";
 import { showMutationToast, showRewardToast } from "@/libs/toast";
+import type { UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
 import { canAbandonQuestType } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData, useUserInfo } from "@/utils/UserContext";
+import { useRequiredUserDataSelector, useUserInfo } from "@/utils/UserContext";
 import type { QuestTrackerType } from "@/validators/objectives";
 import { hasAnyRewardValue } from "@/validators/rewards";
 
@@ -105,7 +106,8 @@ const Logbook: React.FC = () => {
  * ```
  */
 export const LogbookAchievements: React.FC = () => {
-  const { data: userData, achievementProgress } = useRequiredUserData();
+  const { data: userData, achievementProgress } =
+    useRequiredUserDataSelector(selectQuestProgress);
   const [activeElement, setActiveElement] = useState<string>("");
 
   // Achievement definitions are the same for every player and change only when staff edit
@@ -220,7 +222,7 @@ export default Logbook;
  * @returns The active logbook component.
  */
 export const LogbookActive: React.FC = () => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector(selectQuestProgress);
   const [activeElement, setActiveElement] = useState<string>("");
   const quests = userData?.userQuests?.filter(
     (uq) => !["tier", "achievement"].includes(uq.quest.questType),
@@ -425,7 +427,18 @@ export const QuestDialogScene: React.FC<QuestDialogSceneProps> = ({
  * @returns The rendered component.
  */
 export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
-  const { data: userData, prepareUserUpdate, updateUser } = useRequiredUserData();
+  const {
+    data: userData,
+    prepareUserUpdate,
+    updateUser,
+  } = useRequiredUserDataSelector((u) => ({
+    userQuests: u.userQuests,
+    dailyMissions: u.dailyMissions,
+    role: u.role,
+    status: u.status,
+    autoWakeUp: u.autoWakeUp,
+    battleId: u.battleId,
+  }));
   const { userQuest, tracker, hideTitle, showScene } = props;
   const quest = userQuest.quest;
   const tierOrDaily = ["tier", "daily"].includes(quest.questType);
@@ -722,7 +735,7 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
               <EventTimer quest={quest} />
             </div>
             {!["tier", "daily"].includes(quest.questType) && quest.description && (
-              <div data-reading-text>{parseHtml(quest.description)}</div>
+              <QuestBriefing key={quest.id} description={quest.description} />
             )}
           </>
         )}
@@ -831,6 +844,25 @@ export const LogbookEntry: React.FC<LogbookEntryProps> = (props) => {
 };
 
 /** A quest's objective cards, hiding those not yet relevant. Callers own the grid around them. */
+/** Quest story text, collapsed so the objectives stay near the quest name */
+const QuestBriefing: React.FC<{ description: string }> = ({ description }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div>
+      <Button
+        type="button"
+        variant="link"
+        className="h-auto p-0"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        {isOpen ? "Hide briefing" : "Read briefing"}
+      </Button>
+      {isOpen && <div data-reading-text>{parseHtml(description)}</div>}
+    </div>
+  );
+};
+
 export const QuestObjectives: React.FC<{
   quest: UserQuest["quest"];
   tracker: QuestTrackerType;
@@ -865,7 +897,7 @@ export const QuestUpdateModal: React.FC<{
   questId: string;
   onClose: () => void;
 }> = ({ questId, onClose }) => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector(selectQuestProgress);
   const userQuest = userData?.userQuests?.find((q) => q.questId === questId);
   const tracker = userData?.questData?.find((q) => q.id === questId);
   if (!userQuest || !tracker) return null;
@@ -961,3 +993,9 @@ export const useCheckRewards = () => {
 
   return { checkRewards, isCheckingRewards };
 };
+
+/** Quest progress fields shared by the logbook views. */
+const selectQuestProgress = (user: NonNullable<UserWithRelations>) => ({
+  userQuests: user.userQuests,
+  questData: user.questData,
+});

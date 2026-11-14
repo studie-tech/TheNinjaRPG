@@ -635,21 +635,37 @@ export function PetProfile() {
     </>
   );
 
-  if (!pet || !aiProfile)
+  if (!pet || !aiProfile) {
+    // Slot management only matters once a companion exists; before that the
+    // adoption empty state carries the slot count on its own.
+    const hasPets = data.pets.length > 0;
     return (
       <>
-        {collection}
+        {hasPets && collection}
         {/* A saved task remains recoverable when no companion row can be selected. */}
         {userData.petTask && (
           <ContentBox
             title="Companion task"
             subtitle="Manage your pending task"
-            initialBreak
+            initialBreak={hasPets}
           >
             <PetTasks petId={userData.petTask.petId} />
           </ContentBox>
         )}
-        <ContentBox title="Pet" subtitle="Find a companion on Wake Island" initialBreak>
+        <ContentBox
+          title="Pet"
+          subtitle={
+            hasPets
+              ? "Find a companion on Wake Island"
+              : `Find a companion on Wake Island · ${data.pets.length} / ${data.slots} collection slots`
+          }
+          initialBreak={hasPets || !!userData.petTask}
+        >
+          {!hasPets && message && (
+            <p role="alert" className="mb-3 text-red-600">
+              {message}
+            </p>
+          )}
           <div className="flex flex-col items-center gap-4 py-8 text-center">
             <PawPrint className="h-16 w-16 text-muted-foreground" aria-hidden="true" />
             <p className="max-w-lg">
@@ -668,6 +684,7 @@ export function PetProfile() {
         </ContentBox>
       </>
     );
+  }
 
   const rank = getPetRank(pet.rank);
   const level = getPetLevel(pet);

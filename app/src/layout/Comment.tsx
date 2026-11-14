@@ -4,6 +4,7 @@ import type React from "react";
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ConversationComment, UserReportComment } from "@/drizzle/schema";
@@ -22,7 +23,8 @@ import { showMutationToast } from "@/libs/toast";
 import { canDeleteComment, canSeeSecretData } from "@/utils/permissions";
 import { splitQuotedReply } from "@/utils/richText";
 import { stripHtmlPreview } from "@/utils/string";
-import { useUserData } from "@/utils/UserContext";
+import { formatDateTime } from "@/utils/time";
+import { useUserDataSelector } from "@/utils/UserContext";
 import type { DeleteCommentSchema, MutateCommentSchema } from "@/validators/comments";
 import { mutateCommentSchema } from "@/validators/comments";
 import type { systems } from "@/validators/reports";
@@ -153,7 +155,11 @@ interface BaseCommentProps extends PostProps {
   setQuoteId?: (id: string) => void;
 }
 const BaseComment: React.FC<BaseCommentProps> = (props) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    username: u.username,
+    role: u.role,
+  }));
   const [emojiOpen, setEmojiOpen] = useState(false);
 
   // Handle submit: an edit sends only the author's own text; the server keeps attached quotes
@@ -202,9 +208,14 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
             {props.toggleReaction && (
               <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
                 <PopoverTrigger asChild>
-                  <button type="button" aria-label="Add reaction" className="flex">
-                    <SmilePlus className="h-6 w-6 cursor-pointer hover:text-orange-500" />
-                  </button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={postActionClassName}
+                    aria-label="Add reaction"
+                  >
+                    <SmilePlus className="h-6 w-6 hover:text-orange-500" />
+                  </Button>
                 </PopoverTrigger>
                 <PopoverContent
                   align="end"
@@ -224,35 +235,58 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
               </Popover>
             )}
             {props.setQuoteId && (
-              <Quote
-                className={cn(
-                  "h-6 w-6",
-                  props.quoteIds?.includes(props.comment.id)
-                    ? "fill-orange-500"
-                    : "hover:text-orange-500",
-                )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className={postActionClassName}
+                aria-label={`Quote ${props.user.username}`}
+                aria-pressed={!!props.quoteIds?.includes(props.comment.id)}
                 onClick={() => {
                   if (props.setQuoteId && props.comment.id) {
                     props.setQuoteId(props.comment.id);
                   }
                 }}
-              />
+              >
+                <Quote
+                  className={cn(
+                    "h-6 w-6",
+                    props.quoteIds?.includes(props.comment.id)
+                      ? "fill-orange-500"
+                      : "hover:text-orange-500",
+                  )}
+                />
+              </Button>
             )}
             {isAuthor && props.editComment && (
-              <SquarePen
-                className={cn(
-                  "h-6 w-6",
-                  props.editing ? "fill-orange-500" : "hover:text-orange-500",
-                )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className={postActionClassName}
+                aria-label="Edit message"
+                aria-pressed={!!props.editing}
                 onClick={() => props.setEditing((prev) => !prev)}
-              />
+              >
+                <SquarePen
+                  className={cn(
+                    "h-6 w-6",
+                    props.editing ? "fill-orange-500" : "hover:text-orange-500",
+                  )}
+                />
+              </Button>
             )}
             {userData && (isAuthor || canSeeSecretData(userData.role)) && (
               <ModerationSummary
                 userId={props.user.userId}
                 username={props.user.username}
                 trigger={
-                  <BarChart2 className="h-6 w-6 cursor-pointer hover:text-orange-500" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={postActionClassName}
+                    aria-label={`Moderation summary for ${props.user.username}`}
+                  >
+                    <BarChart2 className="h-6 w-6 hover:text-orange-500" />
+                  </Button>
                 }
               />
             )}
@@ -271,30 +305,37 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
             control={control}
             disabled={props.isEditPending}
             onSubmit={onSubmit}
+            submitOnEnter="never"
             error={errors.comment?.message}
           />
         </form>
       ) : (
         <>
-          <div data-reading-text className="mb-6">
+          <div data-reading-text className="[&_img]:h-auto [&_img]:max-w-full">
             {props.children}
           </div>
-          <div className="absolute right-2 bottom-0 flex flex-row items-end gap-1">
+          {/* In flow below the message, so a long message or wrapped actions never overlap it. */}
+          <div className="flex flex-row items-center justify-end gap-1">
             {/* Server and browser locale or timezone settings can format this date
                 differently during hydration. */}
             <p className="pr-2 text-gray-600 text-xs italic" suppressHydrationWarning>
-              @{props.comment.createdAt.toLocaleString()}
+              {formatDateTime(props.comment.createdAt)}
             </p>
             {props.user && props.system && !props.comment?.isReported && (
               <ReportUser
                 user={props.user}
                 content={props.comment}
                 system={props.system}
+                label={`Report message by ${props.user.username}`}
+                className={postActionClassName}
                 button={<Flag className="h-6 w-6 hover:text-orange-500" />}
               />
             )}
             {props.system && props.comment?.isReported && (
-              <Flag className="h-6 w-6 fill-orange-500" />
+              <span className="inline-flex p-0.5">
+                <Flag className="h-6 w-6 fill-orange-500" aria-hidden="true" />
+                <span className="sr-only">Reported</span>
+              </span>
             )}
             {props.user &&
               userData &&
@@ -303,12 +344,9 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
                 <Confirm
                   id={`delete-comment-${props.comment.id}`}
                   title="Confirm Deletion"
-                  button={
-                    <Trash2
-                      aria-label="Delete comment"
-                      className="h-6 w-6 hover:text-orange-500"
-                    />
-                  }
+                  triggerLabel="Delete comment"
+                  triggerClassName={cn(postActionClassName, "justify-center")}
+                  button={<Trash2 className="h-6 w-6 hover:text-orange-500" />}
                   disabled={props.isDeletePending}
                   confirmClassName="bg-red-600 text-white hover:bg-red-700"
                   proceed_label="Delete comment"
@@ -343,3 +381,6 @@ const BaseComment: React.FC<BaseCommentProps> = (props) => {
     </Post>
   );
 };
+
+/** An icon action in a post's header or footer row, sized to its icon. */
+const postActionClassName = "size-auto shrink-0 rounded-md p-0.5 hover:bg-accent";

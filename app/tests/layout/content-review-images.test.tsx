@@ -12,8 +12,8 @@ import * as ContentImage from "@/layout/ContentImage";
 import { ContentReviewDetail } from "@/layout/ContentReviewDetail";
 import * as ItemWithEffects from "@/layout/ItemWithEffects";
 import * as logbook from "@/layout/Logbook";
-import * as UserContext from "@/utils/UserContext";
 import { spyOnToasts } from "../setup/toastMock";
+import { mockUserContextValue } from "../setup/userContext";
 
 const state: {
   before: Record<string, unknown>;
@@ -128,7 +128,7 @@ describe("proposal review detail", () => {
         </div>
       ),
     );
-    vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+    mockUserContextValue({
       prepareUserUpdate: vi.fn(),
       updateUser: vi.fn(),
     } as never);

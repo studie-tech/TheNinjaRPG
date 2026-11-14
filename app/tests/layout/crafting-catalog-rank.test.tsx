@@ -17,6 +17,7 @@ import { CraftingCatalog } from "@/layout/CraftingCatalog";
 import type { UserWithRelations } from "@/routers/profile";
 import * as userContext from "@/utils/UserContext";
 import { DecreaseCraftingTime } from "@/validators/combat";
+import { mockUserContextValue } from "../setup/userContext";
 import { stubCraftingCatalog } from "./helpers/craftingCatalog";
 
 type CatalogProps = ComponentProps<typeof CraftingCatalog>;
@@ -67,7 +68,7 @@ const renderCatalog = (rarity: ItemRarity, userData = apprentice) => {
 describe("CraftingCatalog crafting rank gate", () => {
   beforeEach(() => {
     // Keep context metadata local so another suite cannot supply the catalog's clock.
-    vi.spyOn(userContext, "useUserData").mockReturnValue({ timeDiff: 0 } as never);
+    mockUserContextValue({ timeDiff: 0 } as never);
     stubCraftingCatalog();
   });
 
@@ -160,7 +161,7 @@ describe("CraftingCatalog crafting rank gate", () => {
     const timeDiff = 3_600_000;
     let now = serverNow + timeDiff;
     vi.spyOn(Date, "now").mockImplementation(() => now);
-    vi.spyOn(userContext, "useUserData").mockReturnValue({ timeDiff } as never);
+    mockUserContextValue({ timeDiff } as never);
     const user = {
       craftingExperience: 0,
       village: { territoryWarBoostUntil: new Date(serverNow + 5000) },

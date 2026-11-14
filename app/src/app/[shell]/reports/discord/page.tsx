@@ -17,11 +17,13 @@ import Table from "@/layout/Table";
 import { DISCORD_LINK_FLAG_PREFIX } from "@/libs/discordLink";
 import { showMutationToast } from "@/libs/toast";
 import { canManageDiscordLinks, canViewDiscordLinks } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** Staff lookup of Discord links, their history and abuse flags. */
 export default function DiscordLinksStaffPage() {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((profile) => ({
+    role: profile.role,
+  }));
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
   const canView = !!userData && canViewDiscordLinks(userData.role);

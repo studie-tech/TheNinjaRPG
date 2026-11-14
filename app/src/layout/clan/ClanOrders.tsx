@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import type { UserNindo } from "@/drizzle/schema";
 import { GroupOrders } from "@/layout/GroupOrders";
 import { showMutationToast } from "@/libs/toast";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 interface ClanOrdersProps {
   clanId: string;
@@ -17,7 +17,9 @@ interface ClanOrdersProps {
 export const ClanOrders: React.FC<ClanOrdersProps> = (props) => {
   // Destructure
   const { clanId, order, canPost } = props;
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    isOutlaw: u.isOutlaw,
+  }));
   const groupLabel = userData?.isOutlaw ? "faction" : "clan";
 
   // utils

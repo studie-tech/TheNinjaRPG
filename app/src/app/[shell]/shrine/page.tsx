@@ -29,7 +29,10 @@ import {
 import { isRaidCurrentlyActive } from "@/libs/raids";
 import { showMutationToast } from "@/libs/toast";
 import { pushToCombat } from "@/utils/routing";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
+
+/** Explains why a ramen menu follows the shrine on a war page. */
+const SHRINE_RAMEN_SUBTITLE = "Eat to recover chakra & stamina before the next assault";
 
 export default function Shrine() {
   // Data from database
@@ -38,7 +41,12 @@ export default function Shrine() {
     pusher,
     prepareUserUpdate,
     updateUser,
-  } = useRequiredUserData();
+  } = useRequiredUserDataSelector((profile) => ({
+    userId: profile.userId,
+    sector: profile.sector,
+    status: profile.status,
+    villageId: profile.villageId,
+  }));
   const { data: sectorData } = api.travel.getSectorData.useQuery(
     { sector: userData?.sector || 0 },
     { enabled: !!userData, refetchInterval: 10000 },
@@ -220,13 +228,13 @@ export default function Shrine() {
                 The shrine has been defeated! Return to your village&apos;s Town Hall to
                 finalize the war and claim the sector.
               </p>
-              <Link href="/travel">
-                <Button size="lg">Travel to Village</Button>
-              </Link>
+              <Button asChild size="lg">
+                <Link href="/travel">Travel to Village</Link>
+              </Button>
             </div>
           </ContentBox>
         )}
-        <RamenShop initialBreak={true} />
+        <RamenShop initialBreak={true} subtitle={SHRINE_RAMEN_SUBTITLE} />
       </div>
     );
   }
@@ -278,7 +286,7 @@ export default function Shrine() {
                     attack party is formed against this shrine.
                   </div>
                 ) : isProtected ? (
-                  <div className="mb-4 font-semibold text-amber-600 text-sm">
+                  <div className="mb-4 font-semibold text-amber-800 dark:text-amber-300 text-sm">
                     {protectedNotice}
                   </div>
                 ) : canShowMpvpOption ? (
@@ -309,7 +317,9 @@ export default function Shrine() {
                 isProtected={isProtected}
               />
               {isProtected && (
-                <p className="mt-2 font-semibold text-amber-600">{protectedNotice}</p>
+                <p className="mt-2 font-semibold text-amber-800 dark:text-amber-300">
+                  {protectedNotice}
+                </p>
               )}
             </div>
           )}
@@ -371,7 +381,7 @@ export default function Shrine() {
               {userIsAttacker ? (
                 <>
                   {isProtected ? (
-                    <div className="mb-4 font-semibold text-amber-600 text-sm">
+                    <div className="mb-4 font-semibold text-amber-800 dark:text-amber-300 text-sm">
                       {protectedNotice}
                     </div>
                   ) : (
@@ -418,7 +428,7 @@ export default function Shrine() {
         </ContentBox>
       )}
 
-      <RamenShop initialBreak={hasNoActiveWars} />
+      <RamenShop subtitle={SHRINE_RAMEN_SUBTITLE} />
     </div>
   );
 }
@@ -726,9 +736,9 @@ const WarCard = ({
                   The shrine has been defeated. Quickly return to your village&apos;s
                   Town Hall to finalize the war and claim the sector!
                 </p>
-                <Link href="/travel">
-                  <Button>Travel to Village</Button>
-                </Link>
+                <Button asChild>
+                  <Link href="/travel">Travel to Village</Link>
+                </Button>
               </>
             )}
           </div>

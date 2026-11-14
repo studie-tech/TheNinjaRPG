@@ -27,6 +27,7 @@ import {
   SupportTicketPriorities,
 } from "@/drizzle/constants";
 import CannedResponsesManagement from "@/layout/CannedResponsesManagement";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Conversation from "@/layout/Conversation";
 import Link from "@/layout/Link";
@@ -41,7 +42,7 @@ import {
   isStaffRole,
 } from "@/utils/permissions";
 import { formatTimeAgo } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 type TicketUpdateAction = {
   kind: "status" | "priority" | "category" | "assignment" | "visibility" | "tag";
@@ -51,7 +52,10 @@ type TicketUpdateAction = {
 export default function TicketDetail(props: { params: Promise<{ ticketId: string }> }) {
   // State
   const params = use(props.params);
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((profile) => ({
+    role: profile.role,
+    userId: profile.userId,
+  }));
   const [refreshKey, setRefreshKey] = useState(0);
   const [newTag, setNewTag] = useState("");
 
@@ -223,23 +227,29 @@ export default function TicketDetail(props: { params: Promise<{ ticketId: string
               )}
               {canEscalateToGithub(userData?.role) && !ticket.githubIssueUrl && (
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      if (
-                        confirm(
-                          "Are you sure you want to escalate this ticket to GitHub?",
-                        )
-                      ) {
-                        escalateToGithub.mutate({ ticketId: params.ticketId });
-                      }
-                    }}
-                    disabled={escalateToGithub.isPending}
+                  <Confirm
+                    title="Escalate to GitHub?"
+                    proceed_label="Escalate"
+                    proceed_loading_label="Escalating"
+                    isLoading={escalateToGithub.isPending}
+                    button={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={escalateToGithub.isPending}
+                      >
+                        <SiGithub className="mr-2 text-black" size={10} />
+                        {escalateToGithub.isPending
+                          ? "Escalating"
+                          : "Escalate to GitHub"}
+                      </Button>
+                    }
+                    onAccept={() =>
+                      escalateToGithub.mutate({ ticketId: params.ticketId })
+                    }
                   >
-                    <SiGithub className="mr-2 text-black" size={10} />
-                    {escalateToGithub.isPending ? "Escalating" : "Escalate to GitHub"}
-                  </Button>
+                    This creates a GitHub issue from this ticket and links it here.
+                  </Confirm>
                 </div>
               )}
             </>

@@ -7,11 +7,13 @@ import { useForm } from "react-hook-form";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { ForumReactionChange } from "@/deltas/forum";
 import {
   FORUM_MIN_LEVEL,
   FORUM_THREAD_POSTS_PER_PAGE,
   forumLevelMessage,
 } from "@/drizzle/constants";
+import { useForumCacheUpdate } from "@/hooks/useForumCacheUpdate";
 import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { ForumComposer, ForumNavigation, ForumWatchButton } from "@/layout/Forum";
@@ -23,9 +25,10 @@ import Pagination from "@/layout/Pagination";
 import Post from "@/layout/Post";
 import ReportUser from "@/layout/Report";
 import RichInput from "@/layout/RichInput";
+import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import { parseHtml } from "@/utils/parse";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** Coordinate stable post links, visible read positions, drafts and confirmed-removal cache reconciliation. */
 export default function Thread({
@@ -35,10 +38,15 @@ export default function Thread({
   threadId: string;
   initialPage: ThreadData;
 }) {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    username: u.username,
+    level: u.level,
+  }));
   const params = useSearchParams();
   const router = useRouter();
   const utils = api.useUtils();
+  const { updateReaction } = useForumCacheUpdate(threadId);
   const [page, setPage] = useState(0);
   const [quote, setQuote] = useState("");
   const [tools, setTools] = useState(false);
@@ -52,6 +60,8 @@ export default function Thread({
     { thread_id: threadId, limit: FORUM_THREAD_POSTS_PER_PAGE, cursor: page },
     {
       initialData: page === 0 ? initialPage : undefined,
+      // Keep the current page on screen, dimmed, while the next one loads.
+      placeholderData: (previous) => previous,
       staleTime: 15000,
       refetchOnMount: "always",
       refetchInterval: 20000,
@@ -59,6 +69,12 @@ export default function Thread({
   );
   const thread = comments.data?.thread;
   const board = comments.data?.board;
+  const postsTopRef = useRef<HTMLDivElement>(null);
+  /** Open either pagination control at the top of the newly selected post page. */
+  const goToPage = (nextPage: number) => {
+    setPage(nextPage);
+    postsTopRef.current?.scrollIntoView({ block: "start" });
+  };
   const reply = api.comments.createForumComment.useMutation();
   const read = api.forum.markRead.useMutation({
     onSuccess: () => {
@@ -328,51 +344,61 @@ export default function Thread({
               }}
             />
           )}
+          <div ref={postsTopRef} className="scroll-mt-4" />
           {comments.data && comments.data.totalPages > 1 && (
             <Pagination
               current={page}
               total={comments.data.totalPages}
-              setPage={setPage}
+              setPage={goToPage}
             />
           )}
-          {comments.data?.data.map((post, index) => (
-            <ForumPost
-              key={post.id}
-              post={post}
-              thread={thread}
-              board={board}
-              number={page * FORUM_THREAD_POSTS_PER_PAGE + index + 1}
-              selected={selectedPosts.includes(post.id)}
-              onSelect={() =>
-                setSelectedPosts((ids) =>
-                  ids.includes(post.id)
-                    ? ids.filter((id) => id !== post.id)
-                    : [...ids, post.id],
-                )
-              }
-              onChange={refresh}
-              onQuote={() => {
-                setQuote(
-                  `<blockquote><p>${post.user?.username ?? "Player"} wrote:</p>${post.content}</blockquote><p><br></p><p><br></p><!--${Date.now()}-->`,
-                );
-                document
-                  .getElementById("forum-composer")
-                  ?.scrollIntoView({ block: "center", behavior: "smooth" });
-              }}
-            />
-          ))}
+          <div
+            className={cn(
+              "contents",
+              comments.isPlaceholderData && "[&>*]:opacity-60 [&>*]:transition-opacity",
+            )}
+            aria-busy={comments.isPlaceholderData}
+          >
+            {comments.data?.data.map((post, index) => (
+              <ForumPost
+                key={post.id}
+                post={post}
+                thread={thread}
+                board={board}
+                number={page * FORUM_THREAD_POSTS_PER_PAGE + index + 1}
+                selected={selectedPosts.includes(post.id)}
+                onSelect={() =>
+                  setSelectedPosts((ids) =>
+                    ids.includes(post.id)
+                      ? ids.filter((id) => id !== post.id)
+                      : [...ids, post.id],
+                  )
+                }
+                onChange={refresh}
+                onReact={updateReaction}
+                onQuote={() => {
+                  setQuote(
+                    `<blockquote><p>${post.user?.username ?? "Player"} wrote:</p>${post.content}</blockquote><p><br></p><p><br></p><!--${Date.now()}-->`,
+                  );
+                  document
+                    .getElementById("forum-composer")
+                    ?.scrollIntoView({ block: "center", behavior: "smooth" });
+                }}
+              />
+            ))}
+          </div>
           {(comments.data?.totalPages ?? 0) > 1 && (
             <Pagination
               current={page}
               total={comments.data?.totalPages ?? 0}
-              setPage={setPage}
+              setPage={goToPage}
             />
           )}
           {comments.data && page < comments.data.totalPages - 1 && (
             <Button
               variant="outline"
               className="w-full"
-              onClick={() => setPage(comments.data?.totalPages - 1)}
+              onClick={() => goToPage(comments.data.totalPages - 1)}
             >
               Go to latest posts
             </Button>
@@ -437,6 +463,7 @@ function ForumPost({
   number,
   onQuote,
   onChange,
+  onReact,
   selected,
   onSelect,
 }: {
@@ -446,11 +473,16 @@ function ForumPost({
   number: number;
   onQuote: () => void;
   onChange: (removedPostId?: string) => Promise<void>;
+  onReact: (change: ForumReactionChange) => Promise<void>;
   selected: boolean;
   onSelect: () => void;
 }) {
   const fieldPrefix = useId();
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    username: u.username,
+    level: u.level,
+  }));
   const [editing, setEditing] = useState(false);
   const [history, setHistory] = useState(false);
   const [reason, setReason] = useState("");
@@ -487,6 +519,21 @@ function ForumPost({
       await onChange(removesPost ? post.id : undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : "The action could not be completed.");
+    }
+  };
+  /** Reactions update the post in place without a toast; rejections show beside it. */
+  const reactTo = async (reaction: ForumReaction, active: boolean) => {
+    if (!user) return;
+    setError("");
+    try {
+      const result = await react.mutateAsync({ postId: post.id, reaction, active });
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+      await onReact({ postId: post.id, userId: user.userId, reaction, active });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The reaction could not be saved.");
     }
   };
   return (
@@ -644,7 +691,7 @@ function ForumPost({
         </div>
         {user && board.permissions.vote && (
           <div className="mt-2 flex flex-wrap gap-2">
-            {(["helpful", "❤️", "😂", "👏"] as const).map((reaction) => {
+            {FORUM_REACTIONS.map((reaction) => {
               const entries = post.reactions.filter((r) => r.reaction === reaction);
               const active = entries.some((r) => r.userId === user.userId);
               return (
@@ -654,11 +701,7 @@ function ForumPost({
                   size="sm"
                   aria-pressed={active}
                   disabled={react.isPending}
-                  onClick={() =>
-                    void run(() =>
-                      react.mutateAsync({ postId: post.id, reaction, active: !active }),
-                    )
-                  }
+                  onClick={() => void reactTo(reaction, !active)}
                 >
                   {reaction === "helpful" ? (
                     <>
@@ -765,4 +808,8 @@ function ForumPost({
   );
 }
 
+/** Reactions offered under each post, in display order. */
+const FORUM_REACTIONS = ["helpful", "❤️", "😂", "👏"] as const;
+
 type ThreadData = RouterOutputs["comments"]["getForumComments"];
+type ForumReaction = (typeof FORUM_REACTIONS)[number];

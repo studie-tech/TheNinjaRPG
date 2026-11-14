@@ -1,16 +1,7 @@
 "use client";
 
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import {
-  Earth,
-  Eye,
-  EyeOff,
-  House,
-  LogIn,
-  Menu,
-  MessageCircle,
-  Music,
-} from "lucide-react";
+import { Earth, Eye, EyeOff, LogIn, Menu, MessageCircle, Music } from "lucide-react";
 import type React from "react";
 import {
   Sheet,
@@ -29,6 +20,7 @@ import {
   IMG_LOGO_SHORT,
 } from "@/drizzle/constants";
 import { useActivityDock } from "@/hooks/useActivityDock";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import Footer from "@/layout/Footer";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -43,7 +35,11 @@ import {
 import { MobileNotificationsPopover } from "./shared/LayoutNotifications";
 import { StrongestUsersBanner } from "./shared/LayoutSidebars";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
-import { keepSheetOpenForClerk } from "./shared/layoutUtils";
+import {
+  keepSheetOpenForClerk,
+  SIDEBAR_COLUMNS_HIDDEN_QUERY,
+  SIDEBAR_COLUMNS_SHOWN_QUERY,
+} from "./shared/layoutUtils";
 import { MobileGameNav } from "./shared/MobileGameNav";
 
 /** Renders the Classic frame with account and settings controls available when its banner is hidden. */
@@ -73,8 +69,12 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
   showMobileNotifications,
 }) => {
   const { swapSides } = useActivityDock();
+  const areSidebarColumnsHidden = useMediaQuery(SIDEBAR_COLUMNS_HIDDEN_QUERY);
+  const areSidebarColumnsShown = useMediaQuery(SIDEBAR_COLUMNS_SHOWN_QUERY);
   const navbarMenuItemsLeft = navbarMenuItems.slice(0, 3);
   const navbarMenuItemsRight = navbarMenuItems.slice(3);
+  // Signed-in players go straight to their profile; "/" would only forward them there.
+  const logoHref = isSignedInLayout ? "/profile" : "/";
   return (
     <div data-world-page className="absolute top-0 bottom-0 w-full md:relative">
       <FloatingHelpButton
@@ -89,7 +89,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
           data-compact-hide
         >
           {!lightLayout && (
-            <Link href="/" data-light-layout-hide>
+            <Link href={logoHref} data-light-layout-hide>
               <Image
                 className="hidden md:block"
                 id="tutorial-logo"
@@ -102,12 +102,18 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
             </Link>
           )}
           <Link
-            href="/"
+            href={logoHref}
             className="absolute top-0 left-1/2 block min-w-0 -translate-x-1/2 md:hidden"
-            aria-label="The Ninja RPG home"
+            aria-label={
+              isSignedInLayout ? "The Ninja RPG profile" : "The Ninja RPG home"
+            }
           >
             <Image
-              className="h-auto w-48 max-w-[48vw] sm:w-66 min-[420px]:w-60"
+              className={cn(
+                "h-auto w-48 max-w-[48vw] sm:w-66 min-[420px]:w-60",
+                // Leaves room for the labelled sign-in pill beside it
+                !isSignedInLayout && "max-w-[24vw]",
+              )}
               id="tutorial-logo-mobile"
               src={IMG_LOGO_SHORT}
               width={250}
@@ -193,12 +199,12 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
           loading="lazy"
         />
         <div
-          className="relative top-[70px] h-[15px] w-full shrink-0 bg-fill bg-repeat-x md:hidden"
+          className="mt-[70px] h-[15px] w-full shrink-0 bg-fill bg-repeat-x md:hidden"
           data-compact-hide
           style={{ backgroundImage: `url(${IMG_LAYOUT_MOBILE_TOP})` }}
         ></div>
         <div
-          className="relative top-[70px] z-10 flex h-full flex-row md:top-[-122px]"
+          className="relative z-10 flex h-full flex-row md:top-[-122px]"
           data-compact-content
           data-sidebar-row
         >
@@ -218,7 +224,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                 className="z-10 pt-4 pr-4 pl-20 text-white"
                 data-sidebar-content="start"
               >
-                {leftSideBar}
+                {!areSidebarColumnsHidden && leftSideBar}
               </div>
             </div>
             <Image
@@ -230,7 +236,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
               alt="leftbanner"
               loading="lazy"
             ></Image>
-            <StrongestUsersBanner />
+            {areSidebarColumnsShown && <StrongestUsersBanner />}
           </div>
           <div className="flex w-full min-w-0 flex-1 flex-col">
             <div className="flex min-h-screen w-full flex-row md:min-h-0">
@@ -240,12 +246,13 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
               ></div>
               <div
                 data-reading-surface
-                className="flex min-h-[200px] w-full grow flex-col overflow-x-scroll bg-background"
+                className="flex min-h-[200px] w-full grow flex-col overflow-x-auto bg-background"
               >
                 {/* From md the footer bar below is in flow rather than fixed; one viewport
                     of minimum height keeps it below the fold (see PixelGameLayout.tsx).
-                    Phones also leave room to scroll content clear of an open lesson. */}
-                <div className="p-3 pb-[calc(7rem+var(--activity-dock-space,0px))] md:min-h-svh md:pb-3">
+                    Phones leave room to scroll content clear of the fixed bottom bar and an
+                    open lesson. */}
+                <div className="p-3 pb-[calc(7rem+env(safe-area-inset-bottom)+var(--activity-dock-space,0px))] md:min-h-svh md:pb-3">
                   {children}
                 </div>
               </div>
@@ -255,13 +262,15 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
               ></div>
             </div>
             <div
-              className="fixed bottom-0 flex h-20 max-h-28 w-full flex-col md:relative"
+              className="fixed bottom-0 flex h-[calc(5rem+env(safe-area-inset-bottom))] w-full flex-col md:relative md:h-20 md:max-h-28"
               data-compact-hide
             >
               <div className="absolute top-0 right-0 left-[-20px] -z-30 md:right-[-20px]">
                 <div className="h-5 bg-linear-to-b from-rose-950 to-rose-800"></div>
                 <div className="h-8 bg-rose-800"></div>
                 <div className="h-7 bg-linear-to-b from-rose-800 to-rose-950"></div>
+                {/* Below the bar, the home-indicator zone keeps the bar's colour. */}
+                <div className="h-[env(safe-area-inset-bottom)] bg-rose-950 md:hidden"></div>
               </div>
               <Image
                 className="absolute top-[-195px] left-[-120px] -z-20 hidden select-none md:block"
@@ -279,7 +288,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                 alt="rightbottomdecor"
                 loading="lazy"
               ></Image>
-              <div className="absolute top-2 right-0 left-0 hidden md:block">
+              <div className="absolute top-2 right-0 left-0 hidden text-white md:block">
                 <Footer />
               </div>
               {userData ? (
@@ -288,10 +297,10 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                   location={location}
                   yellowButtonClassName={variantClasses.yellowButton}
                   mobileNavbarButtonClassName={variantClasses.mobileNavbarButton}
-                  className="absolute top-0 right-0 bottom-0 left-0 md:hidden"
+                  className="absolute top-0 right-0 left-0 h-20 md:hidden"
                 />
               ) : (
-                <div className="absolute top-4 right-0 left-0 block md:hidden">
+                <div className="absolute top-4 right-0 left-0 block text-white md:hidden">
                   <Footer />
                 </div>
               )}
@@ -310,7 +319,7 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
                 loading="lazy"
               ></Image>
               <div className="p-2 pr-20 pl-4 text-white" data-sidebar-content="end">
-                {rightSideBar}
+                {!areSidebarColumnsHidden && rightSideBar}
               </div>
             </div>
             <Image
@@ -325,16 +334,12 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
           </div>
         </div>
         <div
-          className="absolute top-4 left-4 z-50 flex items-center gap-2 md:hidden [&_button]:flex [&_button]:min-h-[48px] [&_button]:min-w-[48px] [&_button]:items-center [&_button]:justify-center"
+          className="absolute top-4 left-[max(1rem,env(safe-area-inset-left))] z-50 flex items-center gap-2 md:hidden [&_button]:flex [&_button]:min-h-[48px] [&_button]:min-w-[48px] [&_button]:items-center [&_button]:justify-center"
           data-compact-hide
         >
           <Sheet open={leftSideBarOpen} onOpenChange={onLeftSideBarOpenChange}>
             <SheetTrigger className="block" aria-label="Open main menu">
-              {userData ? (
-                <House className={cn(variantClasses.yellowButton)} />
-              ) : (
-                <Menu className={cn(variantClasses.yellowButton)} />
-              )}
+              <Menu className={cn(variantClasses.yellowButton)} />
             </SheetTrigger>
             <SheetContent side="left" onInteractOutside={keepSheetOpenForClerk}>
               <SheetHeader className="text-left">
@@ -358,12 +363,14 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
         </div>
 
         <div
-          className="absolute top-4 right-4 z-50 block grid grid-cols-2 gap-2 md:hidden [&_button]:flex [&_button]:min-h-[48px] [&_button]:min-w-[48px] [&_button]:items-center [&_button]:justify-center"
+          className="absolute top-4 right-[max(1rem,env(safe-area-inset-right))] z-50 flex items-center gap-2 md:hidden [&_button]:flex [&_button]:min-h-[48px] [&_button]:min-w-[48px] [&_button]:items-center [&_button]:justify-center"
           data-compact-hide
         >
           <div className="flex justify-center">
             <LowerRightHelpBtn className="block md:hidden">
-              {userData ? (
+              {/* Keyed on the server-known session so a signed-in hard load never
+                  flashes the signed-out icons while the character loads. */}
+              {isSignedInLayout ? (
                 <MessageCircle className={cn(variantClasses.yellowButton)} />
               ) : (
                 <Music className={cn(variantClasses.yellowButton)} />
@@ -371,13 +378,19 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
             </LowerRightHelpBtn>
           </div>
           <Sheet open={rightSideBarOpen} onOpenChange={onRightSideBarOpenChange}>
-            <SheetTrigger aria-label="Open game menu" id="tutorial-gameBtn">
-              {userData ? (
+            {isSignedInLayout ? (
+              <SheetTrigger aria-label="Open game menu" id="tutorial-gameBtn">
                 <Earth className={cn(variantClasses.yellowButton)} />
-              ) : (
-                <LogIn className={cn(variantClasses.yellowButton)} />
-              )}
-            </SheetTrigger>
+              </SheetTrigger>
+            ) : (
+              <SheetTrigger
+                id="tutorial-gameBtn"
+                className="gap-1 rounded-full border-2 bg-yellow-500 px-3 font-bold text-base text-orange-950 shadow-black shadow-md transition-colors hover:bg-yellow-300"
+              >
+                <LogIn aria-hidden="true" className="h-4 w-4" />
+                Sign in
+              </SheetTrigger>
+            )}
             <SheetContent onInteractOutside={keepSheetOpenForClerk}>
               <VisuallyHidden.Root>
                 <SheetTitle>Game Menu</SheetTitle>

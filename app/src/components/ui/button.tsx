@@ -1,5 +1,6 @@
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
+import { Loader2 } from "lucide-react";
 import * as React from "react";
 import {
   Tooltip,
@@ -9,7 +10,6 @@ import {
 } from "@/components/ui/tooltip";
 import { IMG_LAYOUT_BUTTONDECOR } from "@/drizzle/constants";
 import Image from "@/layout/Image";
-import Loader from "@/layout/Loader";
 import { cn } from "@/libs/shadui";
 
 const buttonVariants = cva(
@@ -22,7 +22,7 @@ const buttonVariants = cva(
           "bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90",
         info: "bg-blue-600 text-destructive-foreground shadow-xs hover:bg-blue-600/90",
         outline:
-          "border border-input bg-white text-black shadow-xs hover:bg-slate-100 hover:text-accent-foreground",
+          "border border-input bg-background text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground",
         secondary:
           "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
@@ -68,10 +68,19 @@ const Button = ({
   loading = false,
   count,
   ref,
+  disabled,
   ...props
 }: ButtonProps) => {
   const Comp = asChild ? Slot : "button";
-  const isPulse = animation === "pulse";
+  // A loading button stays inert so the pending request cannot be submitted twice.
+  const isDisabled = asChild ? disabled : disabled || loading;
+  const isPulse = animation === "pulse" && !isDisabled;
+  const badge =
+    count !== undefined && count > 0 ? (
+      <div className="absolute top-0 right-[-3] z-50 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-orange-100 text-xs">
+        {count}
+      </div>
+    ) : null;
   const isGlow = animation === "glow";
   const widthClassesFromUser = React.useMemo(() => {
     if (typeof className !== "string") return undefined;
@@ -98,23 +107,32 @@ const Button = ({
     <Comp
       className={cn(
         buttonVariants({ variant, size, className }),
-        isPulse && "animate-pulse hover:animate-none",
+        isPulse && "motion-safe:animate-cta-pulse hover:animate-none",
         isGlow && "relative z-10",
       )}
       ref={ref}
+      disabled={isDisabled}
+      aria-busy={!asChild && loading ? true : undefined}
       {...props}
     >
       {asChild ? (
         children
       ) : (
         <>
-          {children}
-          {loading && <Loader size={20} />}
-          {count !== undefined && count > 0 && (
-            <div className="absolute top-0 right-[-3] z-50 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-orange-100 text-xs">
-              {count}
-            </div>
+          {loading ? (
+            <>
+              {/* Transparent rather than hidden, so the label keeps the button's size and name. */}
+              <span className="inline-flex items-center justify-center opacity-0">
+                {children}
+              </span>
+              <span className="absolute inset-0 flex items-center justify-center">
+                <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+              </span>
+            </>
+          ) : (
+            children
           )}
+          {badge}
         </>
       )}
     </Comp>
@@ -129,8 +147,10 @@ const Button = ({
       </TooltipProvider>
     );
   }
-  // If neither glow nor decoration is requested, return the element directly
-  if (!isGlow && decoration === "none") return element;
+  // A slotted child cannot take extra children, so its badge sits in the wrapper instead.
+  const wrappedBadge = asChild ? badge : null;
+  // Without glow, decoration or a slotted badge, return the element directly
+  if (!isGlow && decoration === "none" && !wrappedBadge) return element;
 
   // Wrap to support glow and/or decoration layers
   return (
@@ -151,6 +171,7 @@ const Button = ({
         </div>
       )}
       {element}
+      {wrappedBadge}
       {isGlow && (
         <div
           aria-hidden

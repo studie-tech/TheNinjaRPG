@@ -659,11 +659,20 @@ export const insertUserBlackListForToggleBlacklistEntry = (
     targetUserId: input.userId,
   });
 
-/** Build the `userBlackList` deletion for `toggleBlacklistEntry`, using predicates on `id`. */
+/** Build the `userBlackList` deletion for `toggleBlacklistEntry`, using predicates on `creatorUserId` and `targetUserId`. */
 export const deleteUserBlackListForToggleBlacklistEntry = (
   client: Pick<DrizzleClient, "delete">,
-  entry: { id: number },
-) => client.delete(userBlackList).where(eq(userBlackList.id, entry.id));
+  ctx: { userId: string },
+  input: { userId: string },
+) =>
+  client
+    .delete(userBlackList)
+    .where(
+      and(
+        eq(userBlackList.creatorUserId, ctx.userId),
+        eq(userBlackList.targetUserId, input.userId),
+      ),
+    );
 
 /** Build the `userData` listing for `getAllAiNames`, including predicates on `isAi`, `rank`, `inArena`. */
 export const listUserDataForGetAllAiNames = (
@@ -1447,7 +1456,13 @@ export const listUserDataForGetStrongestUsers = (
     extras: (table) => ({
       displayTitle: displayTitleSql(table).as("displayTitle"),
     }),
-    columns: { userId: true, username: true, avatarLight: true, rankedLp: true },
+    columns: {
+      userId: true,
+      username: true,
+      avatar: true,
+      avatarLight: true,
+      rankedLp: true,
+    },
     where: eq(userData.isAi, false),
     orderBy: [desc(userData.rankedLp), desc(userData.experience)],
     limit: STRONGEST_USERS_COUNT,

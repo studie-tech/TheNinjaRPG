@@ -13,7 +13,7 @@ import { parseHtml } from "@/utils/parse";
 import { getUserFederalStatus } from "@/utils/paypal";
 import { canViewFullBattleLog } from "@/utils/permissions";
 import { insertComponentsIntoText } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 interface CombatHistoryProps {
   battleId: string;
@@ -25,8 +25,21 @@ interface CombatHistoryProps {
 const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
   // State
   const { battleId, battleVersion, battleRound, results } = props;
-  const { data: userData } = useRequiredUserData();
-  const [openRounds, setOpenRounds] = useState<number[]>([]);
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    role: u.role,
+    staffAccount: u.staffAccount,
+    federalStatus: u.federalStatus,
+    showBattleDescription: u.showBattleDescription,
+  }));
+  const [roundChoices, setRoundChoices] = useState<{
+    battleId: string;
+    rounds: Record<number, boolean>;
+  }>({ battleId, rounds: {} });
+  useEffect(() => {
+    setRoundChoices((choices) =>
+      choices.battleId === battleId ? choices : { battleId, rounds: {} },
+    );
+  }, [battleId]);
 
   // Check if user can view full battle log (staff role or gold federal status)
   const canViewFull = userData
@@ -86,17 +99,11 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
   // Create the history
   const history: React.ReactNode[] = [];
 
-  // Ensure the latest round is opened by default or whenever a new round appears
-  useEffect(() => {
-    if (maxRound) {
-      const latest = maxRound;
-      const secondLatest = maxRound - 1;
-      setOpenRounds([latest, secondLatest].filter((r) => r > 0));
-    }
-  }, [maxRound]);
-
   sortedGroups?.forEach((entries, round) => {
-    const isOpen = openRounds.includes(round);
+    // Only explicit choices persist; the default follows the latest two rounds.
+    const choice =
+      roundChoices.battleId === battleId ? roundChoices.rounds[round] : undefined;
+    const isOpen = choice ?? (round >= maxRound - 1 && round <= maxRound);
     const roundTime = placeholderRounds.has(round) ? undefined : entries[0]?.createdAt;
     const timeString = roundTime
       ? roundTime.toLocaleTimeString([], {
@@ -111,25 +118,29 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
         type="button"
         key={`header-${round}`}
         className={cn(
-          "flex w-full cursor-pointer items-center gap-2 rounded-md px-1 py-1 hover:bg-slate-200",
-          isOpen && "bg-slate-300",
+          "flex w-full cursor-pointer items-center gap-2 rounded-md px-1 py-1 hover:bg-accent",
+          isOpen && "bg-accent",
         )}
         onClick={() => {
-          setOpenRounds((prev) =>
-            isOpen ? prev.filter((r) => r !== round) : [...prev, round],
-          );
+          setRoundChoices((prev) => ({
+            battleId,
+            rounds: {
+              ...(prev.battleId === battleId ? prev.rounds : {}),
+              [round]: !isOpen,
+            },
+          }));
         }}
       >
-        <div className="h-2 w-2 rounded-full bg-gray-700" />
+        <div className="h-2 w-2 rounded-full bg-muted-foreground" />
         <ChevronsDown
           className={cn(
-            "h-4 w-4 text-gray-700 transition-transform",
+            "h-4 w-4 text-muted-foreground transition-transform",
             !isOpen && "-rotate-90",
           )}
         />
-        <span className="font-semibold text-gray-800 text-sm">Round {round}</span>
+        <span className="font-semibold text-foreground text-sm">Round {round}</span>
         {timeString && (
-          <span className="ml-auto text-gray-500 text-xs">{timeString}</span>
+          <span className="ml-auto text-muted-foreground text-xs">{timeString}</span>
         )}
       </button>
     );
@@ -151,7 +162,7 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
               return (
                 <div
                   key={`v-${entry.battleVersion}`}
-                  className="py-1 pl-4 font-normal text-gray-600 text-sm"
+                  className="py-1 pl-4 font-normal text-muted-foreground text-sm"
                 >
                   {isNewUser && !isLastEntry ? <hr className="mt-0 mb-3" /> : null}
                   {userData?.showBattleDescription ? (
@@ -163,7 +174,7 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
                   )}
                   {effects?.map((effect, effectIdx) => {
                     const effectKey = `${entry.battleVersion}-${effectIdx}`;
-                    const color = EFFECT_TEXT_COLORS[effect.color] ?? "text-black";
+                    const color = EFFECT_TEXT_COLORS[effect.color] ?? "text-foreground";
                     const text = insertComponentsIntoText(
                       effect.txt,
                       STAT_KEYWORD_HIGHLIGHTS,
@@ -193,7 +204,7 @@ const CombatHistory: React.FC<CombatHistoryProps> = (props) => {
 
   // Show component
   return (
-    <div className="relative flex flex-col overflow-auto rounded-lg border bg-slate-100 pt-2">
+    <div className="relative flex flex-col overflow-auto rounded-lg border bg-card text-card-foreground pt-2">
       {isFetching && (
         <div className="absolute top-2 right-2">
           <Loader />

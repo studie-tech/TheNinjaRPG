@@ -4,7 +4,7 @@ import * as navigation from "next/navigation";
 import * as client from "@/app/_trpc/client";
 import { KageDefense } from "@/layout/KageDefense";
 import { pushToCombat } from "@/utils/routing";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Options = {
   onSuccess: (result: object, input?: undefined, revision?: number) => Promise<void>;
@@ -35,7 +35,7 @@ beforeEach(() => {
     ),
   });
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     updateUser,
     timeDiff: 0,
   } as never);

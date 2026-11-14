@@ -23,7 +23,7 @@ import { showMutationToast } from "@/libs/toast";
 import { currentEventRound } from "@/libs/tournament/events";
 import { canManageTournaments } from "@/utils/permissions";
 import { useUserPicker } from "@/utils/search";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector, useUserInfo } from "@/utils/UserContext";
 import type { EventGame, EventTournamentState } from "@/validators/tournament";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
@@ -46,17 +46,24 @@ export const EventTournaments = ({
   tournamentId?: string;
   staff?: boolean;
 }) => {
-  const { data: user, status: userStatus } = useUserData();
+  const {
+    data: user,
+    status: userStatus,
+    isSignedIn,
+  } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    role: u.role,
+  }));
   const reconcile = useEventActionCache();
   const [editing, setEditing] = useState(false);
   const canManage = canManageTournaments(user?.role ?? "USER");
   const list = api.tournament.listEvents.useQuery(undefined, {
-    enabled: !tournamentId,
+    enabled: !tournamentId && isSignedIn,
     refetchInterval: 15000,
   });
   const details = api.tournament.getEvent.useQuery(
     { tournamentId: tournamentId ?? "" },
-    { enabled: !!tournamentId, refetchInterval: 5000 },
+    { enabled: !!tournamentId && isSignedIn, refetchInterval: 5000 },
   );
   const utils = api.useUtils();
   const refresh = async () => {
@@ -110,6 +117,23 @@ export const EventTournaments = ({
         originSocketId: reconcile.originSocketId(),
       });
   };
+  // Signed-out visitors have no account to load, so they get a way in instead of a spinner.
+  if (!isSignedIn)
+    return (
+      <ContentBox title="Tournaments" subtitle="Compete for rewards">
+        <p className="mb-3">
+          Sign in to see upcoming tournaments and register your ninja.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild>
+            <Link href="/login">Sign in</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/signup">Create an account</Link>
+          </Button>
+        </div>
+      </ContentBox>
+    );
   if (userStatus === "pending") return <Loader explanation="Loading your account" />;
   if (staff && !canManage)
     return (
@@ -568,13 +592,16 @@ const ReadyCheck = ({
   pending: boolean;
   onAccept: () => void;
 }) => {
-  const seconds = useLiveCountdown((game.deadline - Date.now()) / 1000);
+  const { timeDiff } = useUserInfo();
+  const seconds = useLiveCountdown((game.deadline - (Date.now() - timeDiff)) / 1000);
+  // Re-read each render; the live countdown ticks every second while the window is open
+  const isOpen = Date.now() - timeDiff >= game.opensAt;
   const accepted = game.accepted.includes(userId);
   return (
     <div className="space-y-2">
       <p className="text-sm">
         Game {gameNumber}:{" "}
-        {Date.now() < game.opensAt
+        {!isOpen
           ? `Opens ${date(game.opensAt)}`
           : `Accept by ${date(game.deadline)} (${Math.ceil(seconds)}s)`}
       </p>
@@ -583,7 +610,7 @@ const ReadyCheck = ({
       </p>
       {inSeries && (
         <Button
-          disabled={pending || Date.now() < game.opensAt || seconds <= 0 || accepted}
+          disabled={pending || !isOpen || seconds <= 0 || accepted}
           onClick={onAccept}
         >
           Accept match
@@ -804,7 +831,7 @@ const date = (value: number) => new Date(value).toLocaleString();
 
 /** Reconcile synchronized launches, rewards and participation through the profile query. */
 const useEventActionCache = () => {
-  const { pusher, prepareUserUpdate, updateUser } = useUserData();
+  const { pusher, prepareUserUpdate, updateUser } = useUserInfo();
   const utils = api.useUtils();
   const { refreshEventTournamentNotices } = useEventTournamentNoticeCache();
   return {

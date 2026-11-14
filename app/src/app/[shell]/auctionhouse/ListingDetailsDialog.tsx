@@ -34,11 +34,12 @@ import Image from "@/layout/Image";
 import ItemWithEffects from "@/layout/ItemWithEffects";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
+import { QueryError } from "@/layout/QueryError";
 import Table from "@/layout/Table";
 import { finishedImbuementItems } from "@/libs/item";
 import { showMutationToast } from "@/libs/toast";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import {
   auctionCurrencyUnit,
   formatAuctionCurrency,
@@ -57,7 +58,16 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   setIsOpen,
 }) => {
   // User data
-  const { data: userData, updateUser, timeDiff } = useRequiredUserData();
+  const {
+    data: userData,
+    updateUser,
+    timeDiff,
+  } = useRequiredUserDataSelector((u) => ({
+    userId: u.userId,
+    bank: u.bank,
+    level: u.level,
+    reputationPoints: u.reputationPoints,
+  }));
 
   // State
   const [bidAmount, setBidAmount] = useState("");
@@ -72,7 +82,13 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   const utils = api.useUtils();
 
   // Query single auction listing
-  const { data: listing, isLoading } = api.auction.getAuctionListing.useQuery(
+  const {
+    data: listing,
+    isLoading,
+    isError: isListingError,
+    isFetching: isFetchingListing,
+    refetch: refetchListing,
+  } = api.auction.getAuctionListing.useQuery(
     { auctionId },
     { enabled: isOpen && !!auctionId },
   );
@@ -86,10 +102,6 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
     onSuccess: async (data) => {
       showMutationToast(data);
       if (data.success) {
-        await Promise.all([
-          utils.auction.getAuctionListings.invalidate(),
-          utils.auction.getAuctionListing.invalidate(),
-        ]);
         if ("amountToDeduct" in data && data.amountToDeduct && userData && listing) {
           const delta = data.amountToDeduct;
           if (listing.currencyType === "MONEY") {
@@ -105,6 +117,11 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
         setPendingBidAmount(null);
         setShowBidConfirmation(false);
         setShowBuyoutConfirmation(false);
+        // Listings refetch in the background; the dialog is released once the bid lands.
+        void Promise.all([
+          utils.auction.getAuctionListings.invalidate(),
+          utils.auction.getAuctionListing.invalidate(),
+        ]);
       }
     },
     onSettled: () => {
@@ -117,18 +134,31 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
       onSuccess: async (data) => {
         showMutationToast(data);
         if (data.success) {
-          await Promise.all([
+          setShowCancelConfirmation(false);
+          setIsOpen(false);
+          void Promise.all([
             utils.auction.getAuctionListings.invalidate(),
             utils.auction.getAuctionListing.invalidate(),
             utils.item.getUserItems.invalidate(),
           ]);
-          setShowCancelConfirmation(false);
-          setIsOpen(false);
         }
       },
     });
 
   // Guards
+  if (isListingError && !listing) {
+    return (
+      <Modal title="Auction Details" isOpen={isOpen} setIsOpen={setIsOpen}>
+        <QueryError
+          layout="stacked"
+          className="space-y-3 p-4 text-center"
+          message="Could not load this auction."
+          onRetry={() => void refetchListing()}
+          isRetrying={isFetchingListing}
+        />
+      </Modal>
+    );
+  }
   if (isLoading || !listing) {
     return (
       <Modal title="Auction Details" isOpen={isOpen} setIsOpen={setIsOpen}>

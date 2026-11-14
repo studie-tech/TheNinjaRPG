@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import ContentBox from "@/layout/ContentBox";
 import Loader from "@/layout/Loader";
+import { cn } from "@/libs/shadui";
 
 export default function CookieConsent() {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -34,7 +35,7 @@ export default function CookieConsent() {
     observer.observe(container, { attributes: true, childList: true, subtree: true });
 
     // The declaration loads additional scripts; its first load event is not completion.
-    const timeout = setTimeout(() => finish("error"), 30_000);
+    const timeout = setTimeout(() => finish("error"), DECLARATION_TIMEOUT_MS);
     const script = document.createElement("script");
     script.id = "CookieDeclaration";
     script.async = true;
@@ -65,22 +66,29 @@ export default function CookieConsent() {
           </AlertDescription>
         </Alert>
       )}
+      {/* Cookiebot owns the declaration markup. Cookie names stay whole on one line and
+          a table wider than a phone scrolls sideways instead of splitting them. */}
       <div
         id="cookie-consent-mount"
-        className={
+        className={cn(
+          "[&_table]:block! [&_table]:max-w-full [&_table]:overflow-x-auto [&_td]:break-normal! [&_td]:[overflow-wrap:normal]! [&_th]:break-normal! [&_th]:[overflow-wrap:normal]! [&_td:first-child]:whitespace-nowrap",
           status === "ready"
             ? "transition-opacity duration-200"
             : status === "error"
               ? "hidden"
-              : "opacity-0"
-        }
+              : "opacity-0",
+        )}
       />
     </ContentBox>
   );
 }
 
+/** How long the declaration may take to render before the reload prompt replaces it. */
+const DECLARATION_TIMEOUT_MS = 10_000;
+
+/** Sized like the declaration's first screen; the mount stays in layout beneath it. */
 const CookieConsentSkeleton: React.FC = () => (
-  <Skeleton className="flex h-[2000px] w-full items-start justify-center">
+  <Skeleton className="flex h-[600px] w-full items-start justify-center">
     <Loader explanation="Loading consent data" />
   </Skeleton>
 );

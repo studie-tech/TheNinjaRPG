@@ -13,17 +13,17 @@ import ListLoader from "@/layout/ListLoader";
 import { useInfinitePagination } from "@/libs/pagination";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualItems() {
   // Settings
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   const utils = api.useUtils();
 
   //Two-Way Filtering
-  const state = useFiltering();
+  const state = useFiltering({ allShopStatus: true, persistKey: "manual-item" });
 
   // Data
   const {
@@ -39,13 +39,17 @@ export default function ManualItems() {
       ...getFilter(state),
     },
     {
+      enabled: state.cf.isReady,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
     },
   );
   const allItems = items?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
-  const { onCreated } = useContentListActions(refetch, "/manual/item/edit");
+  const { onCreated, isOpeningCreated } = useContentListActions(
+    refetch,
+    "/manual/item/edit",
+  );
 
   // Mutations
   const { mutate: create, isPending: load1 } = api.item.create.useMutation({
@@ -65,7 +69,7 @@ export default function ManualItems() {
   });
 
   // Derived
-  const totalLoading = isFetching || load1 || load2;
+  const totalLoading = !state.cf.isReady || isFetching || load1 || load2;
 
   return (
     <>
@@ -109,6 +113,8 @@ export default function ManualItems() {
                 <Button
                   id={`create-${state.itemType}`}
                   className="w-full"
+                  disabled={!state.cf.isReady || load1 || isOpeningCreated}
+                  loading={load1 || isOpeningCreated}
                   onClick={() =>
                     create({
                       type: state.itemType !== "ANY" ? state.itemType : "WEAPON",
@@ -146,7 +152,7 @@ export default function ManualItems() {
           </div>
         ))}
         <ListLoader
-          initialLoading={isPending}
+          initialLoading={!state.cf.isReady || isPending}
           loading={totalLoading}
           explanation="Loading data"
         />

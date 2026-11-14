@@ -8,6 +8,7 @@ import * as ContentDetails from "@/hooks/useContentDetails";
 import * as Charts from "@/layout/ContentCompletenessCharts";
 import * as Links from "@/layout/ContentLinksCell";
 import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const description = "x".repeat(MIN_CONTENT_DESCRIPTION_LENGTH);
 const bloodline = (name: string, overrides: object = {}) => ({
@@ -38,7 +39,7 @@ beforeEach(() => {
     },
   });
   vi.spyOn(ContentDetails, "useContentDetails").mockReturnValue({} as never);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ data: undefined } as never);
+  mockUserContextValue({ data: undefined } as never);
   vi.spyOn(Links, "ContentLinksCell").mockImplementation(() => null);
   vi.spyOn(Charts, "ContentCompletenessPanel").mockImplementation(({ incomplete }) => (
     <div>{incomplete}</div>

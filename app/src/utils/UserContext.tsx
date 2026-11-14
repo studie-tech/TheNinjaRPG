@@ -32,12 +32,13 @@ import { showMutationToast } from "@/libs/toast";
 import type { AchievementProgress, UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
 import { updateQueryCache } from "@/utils/queryCache";
+import { loginRedirectPath } from "@/utils/routing";
 import {
   prepareUserUpdate as captureUserUpdate,
   updateUserCache,
 } from "@/utils/userCache";
 import { withoutUserPosition } from "@/utils/userCacheSharing";
-import { canAccessStructure } from "@/utils/village";
+import { canAccessStructure, structureAccessDeniedMessage } from "@/utils/village";
 
 /**
  * Atom for storing combat action
@@ -439,14 +440,27 @@ export const useRequiredUserDataSelector = <T,>(
   const info = useUserDataSelector(select);
   const { data, status, isClerkLoaded, isSignedIn } = info;
   useEffect(() => {
-    if (isClerkLoaded && (!isSignedIn || (data === undefined && status !== "pending")))
-      router.push("/");
+    if (!isClerkLoaded) return;
+    // Replace, not push: the guarded page must not stay in history to bounce Back forward.
+    if (!isSignedIn) {
+      router.replace(
+        loginRedirectPath(window.location.pathname + window.location.search),
+      );
+    } else if (data === undefined && status !== "pending") {
+      router.replace("/");
+    }
   }, [status, data, isClerkLoaded, isSignedIn, router]);
   return info;
 };
 
 /** Require a character for consumers that render the complete profile. */
 export const useRequiredUserData = () => useRequiredUserDataSelector((user) => user);
+
+/** Keep session-only consumers subscribed to account changes rather than profile values. */
+const selectUserId = (user: NonNullable<UserWithRelations>) => user.userId;
+
+/** Require a character for consumers that only use session metadata or cache actions. */
+export const useRequiredUserInfo = () => useRequiredUserDataSelector(selectUserId);
 
 /**
  * A hook which requires the user to be in their village,
@@ -474,7 +488,17 @@ export const useRequireInVillage = (structureRoute?: StructureRoute) => {
         const access = canAccessStructure(userData, structureRoute, sectorVillage);
         // Redirect user
         if (!sectorVillage || !access) {
-          void router.push("/");
+          showMutationToast({
+            success: false,
+            title: "Not reachable from here",
+            message: structureAccessDeniedMessage(
+              userData,
+              structureRoute,
+              sectorVillage,
+            ),
+            id: "structure-access-denied",
+          });
+          void router.replace("/");
         } else {
           setAccess(true);
         }

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { getFilter, useFiltering } from "@/layout/SupportTicketFiltering";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 // React Query hands back the same data object until the staff list changes.
 const staffPage = { data: { data: [{ userId: "mod", username: "Mod" }] } };
@@ -11,7 +11,7 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), {
     profile: { getPublicUsers: { useQuery: () => staffPage } },
   });
-  vi.spyOn(UserContext, "useUserData").mockImplementation(
+  mockUserContextValue(
     () => ({ data: { userId: "viewer", role: "MODERATOR" } }) as never,
   );
 });

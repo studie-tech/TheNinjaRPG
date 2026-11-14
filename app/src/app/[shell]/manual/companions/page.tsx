@@ -24,12 +24,12 @@ import Loader from "@/layout/Loader";
 import Table from "@/layout/Table";
 import { canChangeContent } from "@/utils/permissions";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import { CreateSpeciesModal } from "./SpeciesEditor";
 
 /** Public species catalogue with the same role-gated controls as other Manual pages. */
 export default function ManualCompanions() {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
   const [search, setSearch] = useState("");
@@ -53,7 +53,11 @@ export default function ManualCompanions() {
       </>
     ),
     status: (
-      <Badge variant={entry.isActive ? "default" : "outline"}>
+      <Badge variant="outline" className="gap-1.5 whitespace-nowrap font-normal">
+        <span
+          aria-hidden
+          className={`h-2 w-2 shrink-0 rounded-full ${entry.isActive ? "bg-green-500" : "bg-muted-foreground"}`}
+        />
         {entry.isActive ? "Available" : "Retired"}
       </Badge>
     ),
@@ -128,7 +132,6 @@ export default function ManualCompanions() {
         <p>No companion species match your filters.</p>
       ) : (
         <Table
-          compact
           data={rows}
           columns={[
             { key: "species", header: "Species", type: "jsx" },

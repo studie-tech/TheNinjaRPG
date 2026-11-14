@@ -15,6 +15,7 @@ import type { BattleUpdate } from "@/libs/combat/log";
 import type { BattleState } from "@/libs/combat/types";
 import * as UserContext from "@/utils/UserContext";
 import { TrpcTestProviders, testApi } from "../setup/trpc";
+import { mockUserContextValue } from "../setup/userContext";
 
 // Keep the real tRPC observer and mutation lifecycle; control network ordering.
 type ActionResponse = RouterOutputs["combat"]["performAction"];
@@ -50,7 +51,7 @@ beforeEach(() => {
     combat: testApi.combat,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "viewer" },
     pusher: {
       subscribe: () => ({

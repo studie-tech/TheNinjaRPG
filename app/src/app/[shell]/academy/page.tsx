@@ -10,10 +10,19 @@ import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import QuestPicker from "@/layout/QuestPicker";
 import { eliteJoninExamBlockMessage } from "@/libs/profile";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 export default function Academy() {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    rank: u.rank,
+    level: u.level,
+    offence: u.offence,
+    defence: u.defence,
+    strength: u.strength,
+    speed: u.speed,
+    intelligence: u.intelligence,
+    willpower: u.willpower,
+  }));
   const isElite = userData?.rank === "ELITE JONIN";
   const hasCompletedMilestones = isElite && userData.level >= MAX_PLAYER_LEVEL;
   const caps = getUserCaps("ELITE JONIN");
@@ -66,11 +75,13 @@ export default function Academy() {
       <QuestPicker
         questType="starter"
         title={activeElement === "" ? (isElite ? "Milestones" : "Lessons") : "Academy"}
-        subtitle={subtitle}
+        subtitle={activeElement === "" ? undefined : subtitle}
         unavailableText={
           hasCompletedMilestones
             ? "All Elite Jonin milestones are complete. No lessons available."
-            : undefined
+            : isElite
+              ? "No milestones available right now."
+              : "No lessons available right now."
         }
         initialBreak={activeElement === ""}
         activeQuestId={activeElement}

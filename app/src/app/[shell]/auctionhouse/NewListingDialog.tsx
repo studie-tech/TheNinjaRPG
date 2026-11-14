@@ -299,7 +299,7 @@ export const NewAuctionListingDialog: React.FC<{
                           readOnly
                           onFocus={openDropdown}
                           onClick={openDropdown}
-                          className="mb-2 w-full cursor-text border border-gray-400 bg-white font-semibold text-black placeholder:font-bold placeholder:text-gray-600"
+                          className="mb-2 w-full cursor-text border border-input bg-background font-semibold text-foreground placeholder:font-bold placeholder:text-muted-foreground"
                         />
                       </FormControl>
                     </PopoverTrigger>

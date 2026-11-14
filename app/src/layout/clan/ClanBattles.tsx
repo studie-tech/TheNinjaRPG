@@ -26,6 +26,7 @@ import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { usePendingIds } from "@/hooks/usePendingIds";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import AvatarImage from "@/layout/Avatar";
+import { AvatarNameCell } from "@/layout/AvatarNameCell";
 import ClanSearchSelect from "@/layout/ClanSearchSelect";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
@@ -42,7 +43,7 @@ import { canEditClans } from "@/utils/permissions";
 import { pushToCombat } from "@/utils/routing";
 import { capitalizeFirstLetter } from "@/utils/string";
 import { secondsFromDate } from "@/utils/time";
-import { useRequiredUserData, useUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector, useUserInfo } from "@/utils/UserContext";
 import { type ClanSearchSchema, getClanSearchSchema } from "@/validators/clan";
 
 interface ClanBattlesProps {
@@ -59,8 +60,15 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     timeDiff,
     updateUser,
     prepareUserUpdate,
-  } = useRequiredUserData();
-  const { pusher } = useUserData();
+  } = useRequiredUserDataSelector((u) => ({
+    clanId: u.clanId,
+    isOutlaw: u.isOutlaw,
+    role: u.role,
+    userId: u.userId,
+    status: u.status,
+    autoWakeUp: u.autoWakeUp,
+  }));
+  const { pusher } = useUserInfo();
   const groupLabel = userData?.isOutlaw ? "Faction" : "Clan";
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
   const [deletingBattleId, setDeletingBattleId] = useState<string | null>(null);
@@ -314,16 +322,12 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
     const border = hasWinner ? "grayscale border-2" : "";
     return (
       <div className="flex flex-row">
-        <div className="w-20 text-center">
-          <AvatarImage
-            className={border}
-            href={clan.image}
-            alt={clan.name}
-            size={100}
-            hover_effect={!hasWinner}
-          />
-          {clan.name}
-        </div>
+        <AvatarNameCell
+          avatarClassName={border}
+          avatar={clan.image}
+          name={clan.name}
+          hoverEffect={!hasWinner}
+        />
         <div className="grid grid-cols-3">
           {queue.map((q) => {
             const targetKey = `${battleId}:${q.userId}`;

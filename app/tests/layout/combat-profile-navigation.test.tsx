@@ -7,11 +7,12 @@ import { maskBattle } from "@/libs/combat/masking";
 import * as UserContext from "@/utils/UserContext";
 import { makeBattleUser, makeCompleteBattle } from "../setup/combat";
 import { actualImage } from "../setup/preload";
+import { mockUserContextValue } from "../setup/userContext";
 
 beforeEach(() => {
   // Other suites replace the layout Image module; avatars need the real one.
   vi.spyOn(image, "default").mockImplementation(actualImage);
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { userId: "viewer" },
     timeDiff: 0,
   } as ReturnType<typeof UserContext.useUserData>);
@@ -70,9 +71,7 @@ it.each([
         <MenuBoxCombat />
       </Provider>,
     );
-    expect(view.getAllByRole("img", { name: /AvatarImage$/ }).length).toBeGreaterThan(
-      0,
-    );
+    expect(view.getAllByRole("img").length).toBeGreaterThan(0);
     const avatarLink = view
       .queryAllByRole("link")
       .find((link) => link.querySelector("img"));
@@ -109,15 +108,16 @@ it.each([true, false])(
         <MenuBoxCombat />
       </Provider>,
     );
-    expect(view.getAllByRole("link", { name: "Opponent" })).toHaveLength(2);
+    // Both name links and the avatar open the profile.
+    expect(view.getAllByRole("link", { name: "Opponent" })).toHaveLength(3);
     fireEvent.change(view.getByRole("combobox", { name: "Inspect character" }), {
       target: { value: "ally" },
     });
     expect(view.queryAllByRole("link", { name: "Opponent" })).toHaveLength(0);
     const profiles = view.queryAllByRole("link", { name: "Teammate" });
-    expect(profiles).toHaveLength(isMasked ? 0 : 2);
+    expect(profiles).toHaveLength(isMasked ? 0 : 3);
     for (const profile of profiles)
       expect(profile.getAttribute("href")).toBe("/userid/ally");
-    expect(view.getByRole("img", { name: "Teammate AvatarImage" })).toBeTruthy();
+    expect(view.getByRole("img", { name: "Teammate" })).toBeTruthy();
   },
 );

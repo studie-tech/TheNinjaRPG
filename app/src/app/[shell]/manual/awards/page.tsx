@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
-import AvatarImage from "@/layout/Avatar";
+import { AvatarNameCell } from "@/layout/AvatarNameCell";
 import AwardsFiltering, { getFilter, useFiltering } from "@/layout/AwardsFiltering";
 import ContentBox from "@/layout/ContentBox";
-import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { useInfinitePagination } from "@/libs/pagination";
+import { humanizeConstant } from "@/utils/string";
 import type { ArrayElement } from "@/utils/typeutils";
 
 export default function AwardsManual() {
@@ -41,34 +41,27 @@ export default function AwardsManual() {
     .filter((award) => award.receiver && award.awardedBy)
     .map((award) => ({
       ...award,
+      reason: humanizeConstant(award.reason),
       awardedBy: (
-        <div className="w-20 text-center">
-          <Link href={`/username/${award.awardedBy.username}`}>
-            <AvatarImage
-              href={award.awardedBy?.avatar}
-              alt={award.awardedBy.username}
-              size={100}
-            />
-            <p>{award.awardedBy.username}</p>
-          </Link>
-        </div>
+        <AvatarNameCell
+          href={`/username/${award.awardedBy.username}`}
+          avatar={award.awardedBy.avatar}
+          name={award.awardedBy.username}
+        />
       ),
       receiver: (
-        <div className="w-20 text-center">
-          <Link href={`/username/${award.receiver.username}`}>
-            <AvatarImage
-              href={award.receiver?.avatar}
-              alt={award.receiver.username}
-              size={100}
-            />
-            <p>{award.receiver.username}</p>
-          </Link>
-        </div>
+        <AvatarNameCell
+          href={`/username/${award.receiver.username}`}
+          avatar={award.receiver.avatar}
+          name={award.receiver.username}
+        />
       ),
       rewards: (
         <div>
-          {award.reputationAmount > 0 && <p>Reputation: {award.reputationAmount}</p>}
-          {award.moneyAmount > 0 && <p>Money: {award.moneyAmount}</p>}
+          {award.reputationAmount > 0 && (
+            <p>Reputation: {award.reputationAmount.toLocaleString()}</p>
+          )}
+          {award.moneyAmount > 0 && <p>Money: {award.moneyAmount.toLocaleString()}</p>}
         </div>
       ),
     }));
@@ -80,7 +73,12 @@ export default function AwardsManual() {
     { key: "awardedBy", header: "Awarded By", type: "jsx" },
     { key: "rewards", header: "Rewards", type: "jsx" },
     { key: "reason", header: "Reason", type: "string" },
-    { key: "createdAt", header: "Date", type: "date" },
+    {
+      key: "createdAt",
+      header: "Date",
+      type: "date",
+      className: "whitespace-nowrap",
+    },
   ];
 
   if (!data) return <Loader explanation="Loading awards data..." />;

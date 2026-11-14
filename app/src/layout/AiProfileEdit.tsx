@@ -25,7 +25,7 @@ import { SearchSelect } from "@/layout/SearchSelect";
 import { showMutationToast } from "@/libs/toast";
 import { getUnique } from "@/utils/grouping";
 import { canChangeContent } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 import type { AiRuleType, ZodAllAiAction, ZodAllAiCondition } from "@/validators/ai";
 import {
   ActionMoveTowardsOpponent,
@@ -69,7 +69,7 @@ interface AiProfileEditProps {
 /** Edit an ordinary AI profile or a caller-controlled companion configuration with the same rule UI. */
 const AiProfileEdit: React.FC<AiProfileEditProps> = (props) => {
   // User information
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({ role: u.role }));
 
   // State
   const availableTabs = ["Default", "Custom"] as const;

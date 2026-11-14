@@ -9,10 +9,11 @@ import * as userContext from "@/utils/UserContext";
 import { DamageTag } from "@/validators/combat";
 import { coordinateTargetingSchema } from "@/validators/coordinateTargeting";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { mockUserContextValue } from "../setup/userContext";
 
 beforeEach(() => {
   installBrowserGlobals();
-  vi.spyOn(userContext, "useUserData").mockReturnValue({ data: undefined } as never);
+  mockUserContextValue({ data: undefined } as never);
   vi.spyOn(contentImage, "default").mockImplementation(({ alt, onClick }) => (
     <img alt={`${alt} art`} onClick={onClick} />
   ));

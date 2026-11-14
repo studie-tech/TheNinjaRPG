@@ -18,11 +18,14 @@ import type { UserWithRelations } from "@/routers/profile";
 import type { RamenOption } from "@/utils/ramen";
 import { calcRamenPrice, getRamenHealPercentage } from "@/utils/ramen";
 import { useAwake } from "@/utils/routing";
+import { formatAmount } from "@/utils/string";
 import { useRequiredUserData } from "@/utils/UserContext";
 
 interface RamenShopProps {
   initialBreak?: boolean;
   defaultBackHref?: string;
+  /** Replaces the default subtitle where the shop sits inside another feature. */
+  subtitle?: string;
   showImage?: boolean;
 }
 
@@ -30,7 +33,7 @@ const RamenShop: React.FC<RamenShopProps> = (props) => {
   return (
     <ContentBox
       title="Ramen Shop"
-      subtitle="Healthy food to regain chakra & stamina"
+      subtitle={props.subtitle ?? "Healthy food to regain chakra & stamina"}
       defaultBackHref={props.defaultBackHref}
       padding={false}
       initialBreak={props.initialBreak}
@@ -70,6 +73,10 @@ export const RamenMenu = ({ showImage }: RamenMenuProps) => {
   if (!userData) return <Loader explanation="Loading userdata" />;
   if (userData.isBanned) return <BanInfo />;
 
+  const isFull =
+    userData.curStamina >= userData.maxStamina &&
+    userData.curChakra >= userData.maxChakra;
+
   return (
     <>
       {showImage && (
@@ -84,6 +91,14 @@ export const RamenMenu = ({ showImage }: RamenMenuProps) => {
       {purchaseError && (
         <p role="alert" className="px-3 text-destructive text-sm">
           {purchaseError}
+        </p>
+      )}
+      {isFull && !isPending && (
+        <p
+          role="status"
+          className="px-3 pt-3 text-center text-muted-foreground text-sm"
+        >
+          Your stamina and chakra are full. Come back after training or battle.
         </p>
       )}
       {isPending && <Loader explanation="Purchasing food" />}
@@ -166,10 +181,12 @@ const MenuEntry: React.FC<MenuEntryProps> = (props) => {
     }
   };
 
+  const isUnavailable = !canAfford || noDiff;
+
   return (
     <button
       type="button"
-      className="text-left hover:cursor-pointer"
+      className={`text-center ${isUnavailable ? "cursor-not-allowed" : "hover:cursor-pointer"}`}
       disabled={isPending}
       onClick={onClick}
     >
@@ -178,11 +195,14 @@ const MenuEntry: React.FC<MenuEntryProps> = (props) => {
         src={image}
         width={256}
         height={256}
-        className={`hover:opacity-30 ${!canAfford || noDiff ? "cursor-not-allowed opacity-50 grayscale" : ""}`}
+        className={isUnavailable ? "opacity-50 grayscale" : "hover:opacity-30"}
       />
       <p>{title}</p>
-      <p className="text-green-700">+{healPerc.toFixed()}% SP/CP</p>
-      <p className="text-red-700">-{cost.toFixed(2)} ryo</p>
+      <p className="text-success">+{healPerc.toFixed()}% SP/CP</p>
+      <p className="text-destructive">-{formatAmount(cost)} ryo</p>
+      {!canAfford && (
+        <p className="font-normal text-destructive text-sm">Not enough ryo</p>
+      )}
     </button>
   );
 };

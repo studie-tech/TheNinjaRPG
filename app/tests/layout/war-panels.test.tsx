@@ -32,6 +32,7 @@ import type { UserDeltaResponse } from "@/validators/userCache";
 import { defaultWarRules } from "@/validators/war";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
 import { testRouter } from "../setup/router";
+import { mockUserContextValue } from "../setup/userContext";
 import { controllableMutation, stubSelect } from "./helpers/warUi";
 
 type ObjectiveInfo = NonNullable<RouterOutputs["war"]["getObjectiveWarInfo"]>;
@@ -247,7 +248,7 @@ beforeEach(() => {
     profile: { searchUsers: { useQuery: () => ({ data: [] }) } },
     combat: { startShrineBattle: attack },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () => ({ data: user, timeDiff, updateUser, prepareUserUpdate: () => 7 }) as never,
   );
   vi.spyOn(UserContext, "useUserDataSelector").mockImplementation(
@@ -348,11 +349,10 @@ describe("war field objectives", () => {
       const [masked, own] = within(table).getAllByRole("row").slice(1);
       expect(masked!.textContent).toContain("Mercenary");
       expect(masked!.classList.contains("cursor-pointer")).toBe(false);
-      fireEvent.click(masked!);
-      expect(router.push).not.toHaveBeenCalled();
-      fireEvent.click(own!);
-      expect(router.push).toHaveBeenCalledWith(`/userid/${user.userId}`);
-      router.push.mockClear();
+      expect(within(masked!).queryByRole("link")).toBeNull();
+      expect(within(own!).getByRole("link").getAttribute("href")).toBe(
+        `/userid/${user.userId}`,
+      );
     }
   });
 

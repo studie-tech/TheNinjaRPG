@@ -200,6 +200,19 @@ const contentGroup = (entry: {
   return entry.category as DashboardContentGroup;
 };
 
+/**
+ * Badge naming the card's dashboard group, or null when the card title already is that
+ * group's name (condensed mission-hall groups such as "Errands").
+ */
+export const dashboardContentBadgeLabel = (entry: {
+  category: string;
+  questType?: string;
+  name: string;
+}) => {
+  const label = dashboardContentGroupLabels[contentGroup(entry)];
+  return label === entry.name ? null : label;
+};
+
 export const orderDashboardContent = <
   T extends { category: string; questType?: string },
 >(

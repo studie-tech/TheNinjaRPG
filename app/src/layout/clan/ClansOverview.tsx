@@ -1,14 +1,17 @@
 import type React from "react";
 import { api } from "@/app/_trpc/client";
-import AvatarImage from "@/layout/Avatar";
+import { AvatarNameCell } from "@/layout/AvatarNameCell";
 import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** List the viewer's village clans or syndicate factions with leaders and member counts. */
 export const ClansOverview: React.FC = () => {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((u) => ({
+    isOutlaw: u.isOutlaw,
+    villageId: u.villageId,
+  }));
   const locationLabel = userData?.isOutlaw ? "syndicate" : "village";
   const groupLabel = userData?.isOutlaw ? "Faction" : "Clan";
   const groupLabelPlural = userData?.isOutlaw ? "Factions" : "Clans";
@@ -21,26 +24,15 @@ export const ClansOverview: React.FC = () => {
   const allClans = data?.map((clan) => ({
     ...clan,
     memberCount: clan.members.length,
-    clanInfo: (
-      <div className="w-20 text-center">
-        <AvatarImage href={clan.image} alt={clan.name} size={100} hover_effect={true} />
-        {clan.name}
-      </div>
-    ),
-    leaderInfo: (
-      <div className="w-20 text-center">
-        {clan.leader && (
-          <div>
-            <AvatarImage
-              href={clan.leader.avatar}
-              alt={clan.name}
-              size={100}
-              hover_effect={true}
-            />
-            {clan.leader.username}
-          </div>
-        )}
-      </div>
+    clanInfo: <AvatarNameCell avatar={clan.image} name={clan.name} hoverEffect />,
+    leaderInfo: clan.leader ? (
+      <AvatarNameCell
+        avatar={clan.leader.avatar}
+        name={clan.leader.username}
+        hoverEffect
+      />
+    ) : (
+      <div className="w-20" />
     ),
     villageType: clan.village?.type || "unknown",
   }));

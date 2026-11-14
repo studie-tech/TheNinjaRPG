@@ -1,7 +1,9 @@
 import { FileMinus, FilePlus } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
+import { useEffect, useRef } from "react";
 import ContentBox from "@/layout/ContentBox";
 import { EffectFormWrapper } from "@/layout/EditContent";
+import { showUndoToast } from "@/libs/toast";
 import { tagTypes, type ZodAllTags } from "@/validators/combat";
 
 /** Editable list of effect tags with add/remove icons and an empty state. */
@@ -20,6 +22,11 @@ export const EffectTagListEditor: React.FC<EffectTagListEditorProps> = (props) =
     ...formProps
   } = props;
   const validEffects = (effects?.filter((e) => e !== undefined) ?? []) as ZodAllTags[];
+  // Undo re-inserts into the list as it is then, keeping edits made after the removal.
+  const latestEffects = useRef(validEffects);
+  useEffect(() => {
+    latestEffects.current = validEffects;
+  });
   const iconClassName = `h-6 w-6 ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:text-orange-500"}`;
 
   const addTagIcon = (
@@ -61,8 +68,17 @@ export const EffectTagListEditor: React.FC<EffectTagListEditorProps> = (props) =
                   onClick={() => {
                     if (disabled) return;
                     const newEffects = [...validEffects];
-                    newEffects.splice(i, 1);
+                    const [removed] = newEffects.splice(i, 1);
                     setEffects(newEffects);
+                    if (!removed) return;
+                    showUndoToast(
+                      `${tagTitle} #${i + 1} (${removed.type}) removed.`,
+                      () => {
+                        const current = [...latestEffects.current];
+                        current.splice(Math.min(i, current.length), 0, removed);
+                        setEffects(current);
+                      },
+                    );
                   }}
                 />
               </div>

@@ -13,11 +13,11 @@ import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { useInfinitePagination } from "@/libs/pagination";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualBadges() {
   // Settings
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [badge, setBadge] = useState<Badge | undefined>(undefined);
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
@@ -45,7 +45,10 @@ export default function ManualBadges() {
     lastElement,
   });
 
-  const { onCreated, onDeleted } = useContentListActions(refetch, "/manual/badge/edit");
+  const { onCreated, onDeleted, isOpeningCreated } = useContentListActions(
+    refetch,
+    "/manual/badge/edit",
+  );
 
   // Mutations
   const { mutate: create, isPending: load1 } = api.badge.create.useMutation({
@@ -67,7 +70,12 @@ export default function ManualBadges() {
       defaultBackHref="/manual"
       topRightContent={
         userData && canChangeContent(userData.role) ? (
-          <Button id="create-badge" onClick={() => create()}>
+          <Button
+            id="create-badge"
+            onClick={() => create()}
+            disabled={load1 || isOpeningCreated}
+            loading={load1 || isOpeningCreated}
+          >
             <FilePlus className="mr-2 h-6 w-6" />
             New
           </Button>

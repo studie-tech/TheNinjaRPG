@@ -8,6 +8,7 @@ import DeleteUserButton, { CharacterDeletionSettings } from "@/layout/DeleteUser
 import * as UserContext from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { mockUserContextValue } from "../setup/userContext";
 
 type Result = UserDeltaResponse & { affectedUserId?: string };
 type Callbacks = {
@@ -61,7 +62,7 @@ beforeEach(() => {
       },
     },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () => ({ data: { userId }, timeDiff: 0, prepareUserUpdate, updateUser }) as never,
   );
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);

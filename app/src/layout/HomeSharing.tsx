@@ -65,7 +65,6 @@ export const HomeSharing = ({
           <Button
             variant="outline"
             size="sm"
-            className="hover:text-black"
             disabled={isChanging}
             onClick={() =>
               void change(
@@ -76,7 +75,7 @@ export const HomeSharing = ({
           >
             {isPublic ? "Make private" : "Make public"}
           </Button>
-          <Button asChild variant="outline" size="sm" className="hover:text-black">
+          <Button asChild variant="outline" size="sm">
             <Link href={`/home/visit/${encodeURIComponent(userId)}`}>
               Preview home visit
             </Link>
@@ -122,7 +121,6 @@ export const HomeSharing = ({
           <Button
             variant="outline"
             size="sm"
-            className="hover:text-black"
             disabled={requests.isFetching || isChanging}
             onClick={() => void requests.refetch()}
           >
@@ -143,14 +141,13 @@ export const HomeSharing = ({
             <Button
               size="sm"
               variant="outline"
-              className="hover:text-black"
               aria-label={`Revoke invitation for ${request.receiver.username}`}
               onClick={() => void change(() => cancel.mutateAsync({ id: request.id }))}
             >
               Revoke
             </Button>
           ) : (
-            <Button asChild size="sm" variant="outline" className="hover:text-black">
+            <Button asChild size="sm" variant="outline">
               <Link
                 href={`/home/visit/${encodeURIComponent(request.senderId)}`}
                 onClick={(event) => event.stopPropagation()}

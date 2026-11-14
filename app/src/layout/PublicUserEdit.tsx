@@ -46,7 +46,7 @@ import {
   canEditVillage,
   isRestrictedToSelf,
 } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import type { UpdateUserSchema } from "@/validators/user";
 import { updateUserSchema } from "@/validators/user";
 
@@ -97,7 +97,10 @@ export const EditUserComponent: React.FC<EditUserComponentProps> = ({
   const now = new Date();
 
   // Logged-in user – determines editing permissions
-  const { data: currentUser } = useUserData();
+  const { data: currentUser } = useUserDataSelector((u) => ({
+    userId: u.userId,
+    role: u.role,
+  }));
   const userRole = currentUser?.role || "USER";
   // Roles limited to self-editing may not read another user's items
   const restrictedToSelf = isRestrictedToSelf(userRole, currentUser?.userId, userId);

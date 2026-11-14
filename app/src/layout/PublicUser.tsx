@@ -47,7 +47,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -72,6 +72,7 @@ import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import Modal from "@/layout/Modal";
 import { ModerationSummary } from "@/layout/ModerationSummary";
+import NavTabs from "@/layout/NavTabs";
 import { NewConversationPrompt } from "@/layout/NewConversationPrompt";
 import { PoolStatusBars } from "@/layout/PoolStatusBars";
 import { EffectsPopover, PvpRecord } from "@/layout/ProfileStats";
@@ -154,6 +155,8 @@ export interface PublicUserSeed {
 interface PublicUserComponentProps {
   userId: string;
   title: string;
+  /** Replaces the default "Profile: <name>" subtitle, e.g. when the title is the name. */
+  subtitle?: string;
   initialProfile?: PublicUserSeed;
   defaultBackHref?: string;
   initialBreak?: boolean;
@@ -195,6 +198,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   const {
     userId,
     title,
+    subtitle,
     initialProfile,
     defaultBackHref,
     initialBreak,
@@ -659,6 +663,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
 
   // Derived
   const canChange = userData && canClearUserNindo(userData);
+  const isOwnProfile = !!userData && !!profile && userData.userId === profile.userId;
+  const nindo = profile?.nindo;
 
   const suppressStaleClearedNindo = Boolean(
     committedNindoClear &&
@@ -719,6 +725,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
     return (
       <PublicUserSkeleton
         title={title}
+        subtitle={subtitle}
         defaultBackHref={defaultBackHref}
         initialBreak={initialBreak}
         isGuest={isGuest}
@@ -747,22 +754,12 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
   // Render
   return (
     <>
-      {isGuest && (
-        <ContentBox
-          title="Public Profile"
-          subtitle={`Profile: ${profileName}`}
-          defaultBackHref={defaultBackHref}
-          initialBreak={initialBreak}
-        >
-          {publicUserIntro(profile.username)}
-        </ContentBox>
-      )}
       {/* USER STATISTICS */}
       <ContentBox
         title={title}
-        defaultBackHref={isGuest ? undefined : defaultBackHref}
-        subtitle={`Profile: ${profileName}`}
-        initialBreak={isGuest ? true : initialBreak}
+        defaultBackHref={defaultBackHref}
+        subtitle={subtitle ?? `Profile: ${profileName}`}
+        initialBreak={initialBreak}
         topRightContent={
           <div className="flex flex-row items-center gap-1 [&_svg]:block">
             {userData && canCloneUser(userData.role) && (
@@ -805,21 +802,24 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 </Tooltip>
               </TooltipProvider>
             )}
-            {userData && !userData.isBanned && !userData.isSilenced && (
-              <NewConversationPrompt
-                newButton={
-                  <TooltipProvider delayDuration={50}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <MessageCircle className="h-6 w-6 cursor-pointer hover:text-orange-500" />
-                      </TooltipTrigger>
-                      <TooltipContent>Message User</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                }
-                preSelectedUser={toSearchUser(profile)}
-              />
-            )}
+            {userData &&
+              !isOwnProfile &&
+              !userData.isBanned &&
+              !userData.isSilenced && (
+                <NewConversationPrompt
+                  newButton={
+                    <TooltipProvider delayDuration={50}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <MessageCircle className="h-6 w-6 cursor-pointer hover:text-orange-500" />
+                        </TooltipTrigger>
+                        <TooltipContent>Message User</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  }
+                  preSelectedUser={toSearchUser(profile)}
+                />
+              )}
             {userData && userData.role !== "USER" && (
               <>
                 <TooltipProvider delayDuration={50}>
@@ -1132,7 +1132,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 }
               />
             )}
-            {userData && (
+            {userData && !isOwnProfile && (
               <ReportUser
                 user={profile}
                 content={{
@@ -1199,6 +1199,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
           </div>
         }
       >
+        {isGuest && <div className="mb-4">{publicUserIntro(profile.username)}</div>}
         <div className="grid grid-cols-2">
           <div>
             <b>General</b>
@@ -1402,52 +1403,46 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
         enableBloodlineHistory ||
         enableCombatHistory) && (
         <Tabs
-          defaultValue={showActive}
+          value={showActive}
           className="mt-3 flex flex-col items-center justify-center"
           onValueChange={(value) => setShowActive(value)}
         >
           {userData && (
-            <div className="flex flex-col gap-1">
-              <TabsList className="text-center">
-                {showNindo && <TabsTrigger value="nindo">Nindo</TabsTrigger>}
-                {showCombatLogs && (
-                  <TabsTrigger value="graph">Combat Graph</TabsTrigger>
-                )}
-                {enableCombatHistory && (
-                  <TabsTrigger value="combatHistory">Combat History</TabsTrigger>
-                )}
-                {showTransactions && enablePaypal && (
-                  <TabsTrigger value="transactions">Transactions</TabsTrigger>
-                )}
-                {showReports && enableReports && (
-                  <TabsTrigger value="reports">Reports</TabsTrigger>
-                )}
-
-                {showMarriages && (
-                  <TabsTrigger value="marriages">Marriages</TabsTrigger>
-                )}
-                {showStudents && <TabsTrigger value="students">Students</TabsTrigger>}
-                {showRecruited && <TabsTrigger value="recruits">Recruits</TabsTrigger>}
-                {showTrainingLogs && enableLogs && (
-                  <TabsTrigger value="training">Training Log</TabsTrigger>
-                )}
-                {enableLogs && <TabsTrigger value="content">Content Log</TabsTrigger>}
-                {enableHistoricalIps && (
-                  <TabsTrigger value="historicalIps">IP log</TabsTrigger>
-                )}
-                {enableActivityEvents && (
-                  <TabsTrigger value="activityEvents">Activity</TabsTrigger>
-                )}
-                {enableBloodlineHistory && (
-                  <TabsTrigger value="bloodlineHistory">Bloodlines</TabsTrigger>
-                )}
-                <TabsTrigger value="ranked">Ranked</TabsTrigger>
-              </TabsList>
+            <div className="flex max-w-full flex-col gap-1 overflow-x-auto">
+              <NavTabs
+                accessibleTabs
+                remember={false}
+                label="Profile sections"
+                current={profileTabLabels[showActive as ProfileTab] ?? null}
+                options={(
+                  [
+                    showNindo && "nindo",
+                    showCombatLogs && "graph",
+                    enableCombatHistory && "combatHistory",
+                    showTransactions && enablePaypal && "transactions",
+                    showReports && enableReports && "reports",
+                    showMarriages && "marriages",
+                    showStudents && "students",
+                    showRecruited && "recruits",
+                    showTrainingLogs && enableLogs && "training",
+                    enableLogs && "content",
+                    enableHistoricalIps && "historicalIps",
+                    enableActivityEvents && "activityEvents",
+                    enableBloodlineHistory && "bloodlineHistory",
+                    "ranked",
+                  ] as const
+                )
+                  .filter((value): value is ProfileTab => !!value)
+                  .map((value) => profileTabLabels[value])}
+                values={profileTabValues}
+                listClassName="flex-wrap justify-center"
+              />
             </div>
           )}
 
           {/* USER NINDO */}
-          {showNindo && profile.nindo && (
+          {/* The default tab always renders, with an empty state when there is no nindo. */}
+          {showNindo && (
             <TabsContent value="nindo">
               <ContentBox
                 title="Nindo"
@@ -1455,7 +1450,7 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                 initialBreak={true}
                 topRightContent={
                   <div className="flex flex-row gap-1">
-                    {canChange && !suppressStaleClearedNindo && (
+                    {canChange && nindo && !suppressStaleClearedNindo && (
                       <TooltipProvider delayDuration={50}>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -1468,8 +1463,8 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                                 setClearNindoTarget({
                                   userId: profile.userId,
                                   username: profile.username,
-                                  nindoId: profile.nindo.id,
-                                  expectedContent: profile.nindo.content,
+                                  nindoId: nindo.id,
+                                  expectedContent: nindo.content,
                                 })
                               }
                             >
@@ -1487,10 +1482,14 @@ const PublicUserComponent: React.FC<PublicUserComponentProps> = (props) => {
                   <p role="status" aria-live="polite" className="text-center italic">
                     Nindo cleared.
                   </p>
-                ) : (
-                  <div className="relative overflow-x-scroll">
+                ) : profile.nindo ? (
+                  <div className="relative overflow-x-auto">
                     {parseHtml(profile.nindo.content)}
                   </div>
+                ) : (
+                  <p className="text-center text-muted-foreground">
+                    {profile.username} hasn&apos;t written a Ninja Way yet.
+                  </p>
                 )}
               </ContentBox>
             </TabsContent>
@@ -1719,3 +1718,28 @@ const toSearchUser = (
   avatar: profile.avatar,
   federalStatus: profile.federalStatus,
 });
+
+/** Tab labels of a profile's sections, keyed by their TabsContent value. */
+const profileTabLabels = {
+  nindo: "Nindo",
+  graph: "Combat Graph",
+  combatHistory: "Combat History",
+  transactions: "Transactions",
+  reports: "Reports",
+  marriages: "Marriages",
+  students: "Students",
+  recruits: "Recruits",
+  training: "Training Log",
+  content: "Content Log",
+  historicalIps: "IP log",
+  activityEvents: "Activity",
+  bloodlineHistory: "Bloodlines",
+  ranked: "Ranked",
+} as const satisfies Record<string, string>;
+
+/** The TabsContent value for each section label. */
+const profileTabValues: Partial<Record<string, string>> = Object.fromEntries(
+  Object.entries(profileTabLabels).map(([value, label]) => [label, value]),
+);
+
+type ProfileTab = keyof typeof profileTabLabels;

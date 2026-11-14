@@ -3,6 +3,13 @@
 import { Droplets, Leaf, ShoppingBag, Shovel, Wheat } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import Countdown from "@/layout/Countdown";
 import { getFarmBulkToolAvailability, getNextFarmEvents } from "@/libs/farming";
 import { cn } from "@/libs/shadui";
@@ -176,19 +183,21 @@ export function FarmOverview({
           )}
           {showPlant && (
             <div className="flex gap-2">
-              <select
-                aria-label="Seed to plant in empty plots"
-                className="h-9 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm"
-                value={seedId}
-                onChange={(event) => setSeedId(event.target.value)}
-                disabled={isPending}
-              >
-                {eligibleSeeds.map((seed) => (
-                  <option key={seed.itemId} value={seed.itemId}>
-                    {seed.name} ({seed.quantity})
-                  </option>
-                ))}
-              </select>
+              <Select value={seedId} onValueChange={setSeedId} disabled={isPending}>
+                <SelectTrigger
+                  aria-label="Seed to plant in empty plots"
+                  className="min-w-0 flex-1"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {eligibleSeeds.map((seed) => (
+                    <SelectItem key={seed.itemId} value={seed.itemId}>
+                      {seed.name} ({seed.quantity})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 type="button"
                 variant="outline"
@@ -220,19 +229,28 @@ export function FarmOverview({
           )}
           {showFertilize && (
             <div className="flex gap-2">
-              <select
-                aria-label="Fertilizer for growing crops"
-                className="h-9 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm"
+              <Select
                 value={fertilizerId}
-                onChange={(event) => setFertilizerId(event.target.value)}
+                onValueChange={setFertilizerId}
                 disabled={isPending}
               >
-                {state.availableFertilizers.map((fertilizer) => (
-                  <option key={fertilizer.userItemId} value={fertilizer.userItemId}>
-                    {fertilizer.name} ({fertilizer.quantity})
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  aria-label="Fertilizer for growing crops"
+                  className="min-w-0 flex-1"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {state.availableFertilizers.map((fertilizer) => (
+                    <SelectItem
+                      key={fertilizer.userItemId}
+                      value={fertilizer.userItemId}
+                    >
+                      {fertilizer.name} ({fertilizer.quantity})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 type="button"
                 variant="outline"

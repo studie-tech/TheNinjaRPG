@@ -17,13 +17,13 @@ import {
   getApprovalGroup,
   isStaffRole,
 } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ApplicationDetailPage() {
   // State
   const params = useParams<{ applicationId: string }>();
   const applicationId = params.applicationId;
-  const { data: me } = useUserData();
+  const { data: me } = useUserDataSelector((profile) => ({ role: profile.role }));
 
   // Derived
   const isStaff = me?.role ? isStaffRole(me.role) : false;

@@ -1,7 +1,7 @@
 "use client";
 
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
-import { Earth, House, MessageCircle } from "lucide-react";
+import { Earth, Menu, MessageCircle } from "lucide-react";
 import type React from "react";
 import PixelPublicHeader from "@/components/layout/PixelPublicHeader";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import { IMG_LOGO_SHORT } from "@/drizzle/constants";
 import { useActivityDock } from "@/hooks/useActivityDock";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import Footer from "@/layout/Footer";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -27,7 +28,10 @@ import {
 } from "./shared/LayoutChrome";
 import { MobileNotificationsPopover } from "./shared/LayoutNotifications";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
-import { keepSheetOpenForClerk } from "./shared/layoutUtils";
+import {
+  keepSheetOpenForClerk,
+  SIDEBAR_COLUMNS_HIDDEN_QUERY,
+} from "./shared/layoutUtils";
 import {
   ANONYMOUS_PIXEL_NAV_LINKS,
   PIXEL_MOBILE_HEADER_BUTTON_STYLE,
@@ -59,6 +63,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
   showMobileNotifications,
 }) => {
   const { swapSides } = useActivityDock();
+  const areSidebarColumnsHidden = useMediaQuery(SIDEBAR_COLUMNS_HIDDEN_QUERY);
   const isAnonymousLayout = !isSignedInLayout;
   return (
     <div
@@ -96,7 +101,11 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                 PIXEL_SIGNED_IN_SHELL_SURFACE,
               )}
             >
-              <Link href="/" className="flex items-center">
+              <Link
+                href="/profile"
+                className="flex items-center"
+                aria-label="The Ninja RPG profile"
+              >
                 <Image
                   className="h-auto w-[180px]"
                   id="tutorial-logo"
@@ -136,7 +145,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
             </div>
           )}
           {isSignedInLayout && (
-            <div className="fixed inset-x-0 top-0 z-50 border-sky-200/15 border-b bg-black/55 shadow-2xl shadow-black/35 backdrop-blur-md md:hidden">
+            <div className="fixed inset-x-0 top-0 z-50 border-sky-200/15 border-b bg-black/55 pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] shadow-2xl shadow-black/35 backdrop-blur-md md:hidden">
               <div className="relative mx-auto flex min-h-[72px] w-[calc(100%-24px)] items-center justify-between gap-3">
                 <div className="z-10 flex shrink-0 justify-start gap-2">
                   <Sheet open={leftSideBarOpen} onOpenChange={onLeftSideBarOpenChange}>
@@ -144,7 +153,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                       className={PIXEL_MOBILE_HEADER_BUTTON_STYLE}
                       aria-label="Open player menu"
                     >
-                      <House className={PIXEL_MOBILE_HEADER_ICON_STYLE} />
+                      <Menu className={PIXEL_MOBILE_HEADER_ICON_STYLE} />
                     </SheetTrigger>
                     <SheetContent
                       data-reading-surface
@@ -172,9 +181,9 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                   )}
                 </div>
                 <Link
-                  href="/"
+                  href="/profile"
                   className="absolute left-1/2 min-w-0 -translate-x-1/2"
-                  aria-label="The Ninja RPG home"
+                  aria-label="The Ninja RPG profile"
                 >
                   <Image
                     className="h-auto w-48 max-w-[48vw] sm:w-66 min-[420px]:w-60"
@@ -245,7 +254,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                     PIXEL_SIGNED_IN_SHELL_SURFACE,
                   )}
                 >
-                  {leftSideBar}
+                  {!areSidebarColumnsHidden && leftSideBar}
                 </div>
               </div>
             </div>
@@ -322,7 +331,7 @@ export const PixelGameLayout: React.FC<GameLayoutRenderProps> = ({
                     PIXEL_SIGNED_IN_SHELL_SURFACE,
                   )}
                 >
-                  {rightSideBar}
+                  {!areSidebarColumnsHidden && rightSideBar}
                 </div>
               </div>
             </div>

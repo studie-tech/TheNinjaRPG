@@ -9,6 +9,7 @@ import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import { reloadIfOutdated } from "@/libs/buildVersion";
 import { cn } from "@/libs/shadui";
+import { useUserInfo } from "@/utils/UserContext";
 
 interface ErrorBoundaryProps {
   error: Error & { digest?: string };
@@ -18,6 +19,8 @@ interface ErrorBoundaryProps {
 const ErrorBoundary: React.FC<ErrorBoundaryProps> = ({ error, reset }) => {
   const utils = api.useUtils();
   const [isRetrying, setIsRetrying] = useState(false);
+  // Signed-in players go straight to their profile; "/" would only forward them there.
+  const { isSignedIn } = useUserInfo();
 
   useEffect(() => {
     // An outdated bundle rendering data from a newer deploy reloads onto that deploy
@@ -73,12 +76,12 @@ const ErrorBoundary: React.FC<ErrorBoundaryProps> = ({ error, reset }) => {
             <RefreshCw className={cn("h-4 w-4", isRetrying && "animate-spin")} />
             Try Again
           </Button>
-          <Link href="/">
-            <Button variant="outline" size="lg" className="gap-2">
+          <Button asChild variant="outline" size="lg" className="gap-2">
+            <Link href={isSignedIn ? "/profile" : "/"}>
               <Home className="h-4 w-4" />
               Go Home
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
 
         <details className="mt-4 w-full">

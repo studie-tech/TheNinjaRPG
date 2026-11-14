@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import AvatarImage from "@/layout/Avatar";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { KageDefense } from "@/layout/KageDefense";
 import Link from "@/layout/Link";
@@ -26,7 +27,7 @@ import PublicUserComponent from "@/layout/PublicUser";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { canTakeKage } from "@/utils/permissions";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserInfo } from "@/utils/UserContext";
 import {
   createPrestigeTransferSchema,
   type PrestigeTransferSchema,
@@ -39,7 +40,7 @@ export const KageHall: React.FC<{
   navTabs: React.ReactNode;
 }> = ({ user, navTabs }) => {
   // Ability to update user
-  const { updateUser } = useRequiredUserData();
+  const { updateUser } = useRequiredUserInfo();
 
   // tRPC utility
   const utils = api.useUtils();
@@ -99,8 +100,6 @@ export const KageHall: React.FC<{
   // Checks
   if (!user.villageId) return <Loader explanation="Join a village first" />;
   if (isPending || !village) return <Loader explanation="Loading village" />;
-  if (isResigning) return <Loader explanation="Resigning as Kage" />;
-  if (isSendingPrestige) return <Loader explanation="Sending prestige" />;
 
   // Render
   return (
@@ -122,19 +121,40 @@ export const KageHall: React.FC<{
           known to have the power to shape the destiny of the village.
         </p>
         {isKage && (
-          <Button
-            id="challenge"
-            className="my-2 w-full"
-            onClick={() => resign({ villageId: village.villageData.id })}
+          <Confirm
+            title="Resign as Kage"
+            proceed_label="Resign"
+            proceed_loading_label="Resigning"
+            confirmClassName="bg-red-600 text-white hover:bg-red-700"
+            triggerClassName="my-2 w-full"
+            disabled={isResigning}
+            isLoading={isResigning}
+            keepOpenOnAccept
+            button={
+              <Button id="challenge" variant="destructive" className="w-full">
+                <DoorClosed className="mr-2 h-6 w-6" />
+                {isResigning ? "Resigning as Kage" : "Resign as Kage"}
+              </Button>
+            }
+            onAccept={(_, { close }) =>
+              resign(
+                { villageId: village.villageData.id },
+                { onSettled: () => close() },
+              )
+            }
           >
-            <DoorClosed className="mr-2 h-6 w-6" />
-            Resign as Kage
-          </Button>
+            Do you confirm that you wish to resign as Kage? The position passes
+            immediately to the village elder next in line, and it cannot be undone.
+          </Confirm>
         )}
 
         {isElder && (
           <Form {...prestigeForm}>
-            <form onSubmit={onSendPrestige} className="relative my-2">
+            <form
+              onSubmit={onSendPrestige}
+              className="relative my-2"
+              aria-busy={isSendingPrestige}
+            >
               <FormField
                 control={prestigeForm.control}
                 name="amount"
@@ -143,6 +163,7 @@ export const KageHall: React.FC<{
                     <FormControl>
                       <Input
                         id="amount"
+                        disabled={isSendingPrestige}
                         placeholder={`Send prestige (max ${user.villagePrestige})`}
                         {...field}
                         value={field.value as number | undefined}
@@ -152,7 +173,12 @@ export const KageHall: React.FC<{
                   </FormItem>
                 )}
               />
-              <Button className="absolute top-0 right-0" type="submit">
+              <Button
+                className="absolute top-0 right-0"
+                type="submit"
+                aria-label="Send prestige"
+                loading={isSendingPrestige}
+              >
                 <CircleArrowUp className="h-5 w-5" />
               </Button>
             </form>

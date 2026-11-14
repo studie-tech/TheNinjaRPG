@@ -227,7 +227,7 @@ describe("game settings sections", () => {
   });
 
   it.each([true, false])(
-    "marks the top-bar settings gear only while music is off (music on: %p)",
+    "shows the matching audio icon on the top-bar settings gear (music on: %p)",
     (musicOn) => {
       const playing = audioHook.useAudio({ src: "" });
       vi.spyOn(audioHook, "useAudio").mockImplementation(() => ({
@@ -242,11 +242,13 @@ describe("game settings sections", () => {
           onEventClick={() => {}}
         />,
       );
-      const mark = screen
-        .getByRole("button", { name: "Game settings" })
-        .querySelector("[data-muted-mark]");
-      expect(mark).not.toBeNull();
-      expect(mark?.getAttribute("class")?.split(" ").includes("hidden")).toBe(musicOn);
+      const button = screen.getByRole("button", { name: "Game settings" });
+      const audioMark = button.querySelector("[data-audio-mark]");
+      const mutedMark = button.querySelector("[data-muted-mark]");
+      expect(audioMark).not.toBeNull();
+      expect(mutedMark).not.toBeNull();
+      expect(audioMark?.classList.contains("hidden")).toBe(!musicOn);
+      expect(mutedMark?.classList.contains("hidden")).toBe(musicOn);
     },
   );
 

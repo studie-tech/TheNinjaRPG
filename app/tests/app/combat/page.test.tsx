@@ -32,6 +32,7 @@ import {
 } from "../../setup/browserGlobals";
 import { makeCompleteBattle, makeEffect, makeUser } from "../../setup/combat";
 import { dungeonBattleState } from "../../setup/dungeon";
+import { mockUserContextValue } from "../../setup/userContext";
 
 // Keep the real page and query lifecycles, substituting only its WebGL scene.
 const loadingEvents: string[] = [];
@@ -159,16 +160,14 @@ const mount = (
     misc: { getAllGameAssetNames: { prefetch: prefetchAssets } },
   };
   vi.spyOn(navigation, "useRouter").mockReturnValue({ push } as never);
-  vi.spyOn(userContext, "useRequiredUserData").mockImplementation(
+  mockUserContextValue(
     () =>
       ({
         data: profile,
+        timeDiff: 0,
         prepareUserUpdate: () => 0,
         updateUser: async () => true,
       }) as never,
-  );
-  vi.spyOn(userContext, "useUserData").mockImplementation(
-    () => ({ data: profile, timeDiff: 0 }) as never,
   );
   let combatConfig = {
     useTabs: false,

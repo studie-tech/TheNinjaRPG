@@ -15,7 +15,6 @@ import {
   ELEMENTAL_MASTERY_BOOST,
   ELEMENTAL_MASTERY_CAP,
 } from "@/drizzle/constants";
-import ContentBox from "@/layout/ContentBox";
 import Link from "@/layout/Link";
 import { canAttemptAwakeAction } from "@/libs/actionReadiness";
 import { activeTrainedElement, providedElements } from "@/libs/elementalMastery";
@@ -23,6 +22,7 @@ import { showMutationToast } from "@/libs/toast";
 import { useRequiredUserData } from "@/utils/UserContext";
 import type { UserDeltaResponse } from "@/validators/userCache";
 
+/** Settings section for choosing the active trained element. */
 export const ElementalMastery = () => {
   const { data: user, prepareUserUpdate, updateUser } = useRequiredUserData();
   const utils = api.useUtils();
@@ -59,8 +59,19 @@ export const ElementalMastery = () => {
   );
 
   return (
-    <ContentBox title="Elemental Mastery" subtitle="Choose your active trained element">
-      <p className="mb-3 text-sm text-muted-foreground">
+    <section
+      aria-labelledby="elemental-mastery-heading"
+      className="space-y-3 border-t pt-4"
+    >
+      <div>
+        <h3 id="elemental-mastery-heading" className="font-semibold text-base">
+          Elemental Mastery
+        </h3>
+        <p className="text-muted-foreground text-sm">
+          Choose your active trained element
+        </p>
+      </div>
+      <p className="text-sm text-muted-foreground">
         Each element caps at {ELEMENTAL_MASTERY_CAP.toLocaleString()} mastery and
         unlocks at its cap with a {ELEMENTAL_MASTERY_BOOST}% damage boost. One
         additional trained element can be active. Elemental progress adds no character
@@ -68,7 +79,7 @@ export const ElementalMastery = () => {
         elements; any element not currently provided can be trained.
       </p>
       {message && (
-        <p role="status" className="mb-3 text-sm">
+        <p role="status" className="text-sm">
           {message}
         </p>
       )}
@@ -113,6 +124,6 @@ export const ElementalMastery = () => {
           </p>
         )}
       </div>
-    </ContentBox>
+    </section>
   );
 };

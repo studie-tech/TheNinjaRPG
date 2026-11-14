@@ -31,7 +31,10 @@ import { useSingleFlight } from "@/hooks/useSingleFlight";
 import Image from "@/layout/Image";
 import Loader from "@/layout/Loader";
 import { LogbookEntry } from "@/layout/Logbook";
-import MissionPicker from "@/layout/MissionPicker";
+import MissionPicker, {
+  MISSION_TILE_CLASSES,
+  MISSION_TILE_IMAGE_CLASSES,
+} from "@/layout/MissionPicker";
 import { actionPrerequisiteUser } from "@/libs/actionReadiness";
 import {
   filterMissionHallQuests,
@@ -47,7 +50,7 @@ import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { capitalizeFirstLetter } from "@/utils/string";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 
 interface MissionHallProps {
   userData: NonNullable<UserWithRelations>;
@@ -56,7 +59,7 @@ interface MissionHallProps {
 /** Start mission and crime runs while reconciling entry costs, discovery lists and announcements. */
 export default function MissionHall({ userData }: MissionHallProps) {
   const { prepareQuestStartUpdate, updateQuestStart } = useQuestStartCacheUpdate();
-  const { prepareUserUpdate, updateUser } = useUserData();
+  const { prepareUserUpdate, updateUser } = useUserInfo();
   const activeContext = `${userData.userId}:${userData.sector}`;
   const activeUserIdRef = useRef(userData.userId);
   activeUserIdRef.current = userData.userId;
@@ -219,14 +222,29 @@ export default function MissionHall({ userData }: MissionHallProps) {
             Missions are special assignments that advance the game&apos;s narrative.
             They can only be started here at the Mission Hall.
           </p>
-          <p className="p-3 text-center font-bold text-md">
-            Errands [{userData.dailyErrands} / {ERRANDS_PER_DAY}] -{" "}
-            {capitalizeFirstLetter(classifier)}s [{userData.dailyMissions} /{" "}
-            {MISSIONS_PER_DAY}] - Medical [{userData.dailyMedicalMissions} /{" "}
-            {MEDICAL_MISSIONS_PER_DAY}] - PvP [{userData.dailyPvpMissions} /{" "}
-            {PVP_MISSIONS_PER_DAY}] - War [{userData.dailyWarMissions ?? 0} /{" "}
-            {WAR_MISSIONS_PER_DAY}]
-          </p>
+          <ul
+            aria-label="Daily limits"
+            className="flex flex-wrap justify-center gap-2 p-3 font-bold text-md"
+          >
+            {[
+              ["Errands", userData.dailyErrands, ERRANDS_PER_DAY],
+              [
+                `${capitalizeFirstLetter(classifier)}s`,
+                userData.dailyMissions,
+                MISSIONS_PER_DAY,
+              ],
+              ["Medical", userData.dailyMedicalMissions, MEDICAL_MISSIONS_PER_DAY],
+              ["PvP", userData.dailyPvpMissions, PVP_MISSIONS_PER_DAY],
+              ["War", userData.dailyWarMissions ?? 0, WAR_MISSIONS_PER_DAY],
+            ].map(([label, done, limit]) => (
+              <li
+                key={label}
+                className="whitespace-nowrap rounded-full border px-2.5 py-0.5"
+              >
+                {label} {done}/{limit}
+              </li>
+            ))}
+          </ul>
           {startBlockedMessage && (
             <p role="status" className="px-3 text-center font-semibold text-orange-500">
               {startBlockedMessage}
@@ -379,18 +397,19 @@ export default function MissionHall({ userData }: MissionHallProps) {
                           "disabled:cursor-not-allowed disabled:opacity-60",
                           grayScale || isSpecificStartBlocked
                             ? "grayscale filter"
-                            : "hover:cursor-pointer hover:opacity-30",
+                            : MISSION_TILE_CLASSES,
                         )}
                       >
                         <Image
-                          alt="small"
+                          alt=""
+                          className={MISSION_TILE_IMAGE_CLASSES}
                           src={setting.image}
                           width={256}
                           height={256}
                         />
                         <p className="font-bold">{setting.name}</p>
                         <p className="flex flex-col">
-                          [Random out of {count} available]
+                          {count} available · random
                           {rankInfo && (
                             <span className="text-yellow-500"> {rankInfo}</span>
                           )}

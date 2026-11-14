@@ -4,9 +4,9 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { act } from "react";
 import * as client from "@/app/_trpc/client";
 import { SuggestChange } from "@/layout/SuggestChange";
-import * as UserContext from "@/utils/UserContext";
 import { stubDialog } from "../setup/dialog";
 import { spyOnToasts } from "../setup/toastMock";
+import { mockUserContextValue } from "../setup/userContext";
 
 type MutationOptions = { onError?: (err: { message: string; data?: unknown }) => void };
 const mutate = vi.fn();
@@ -31,7 +31,7 @@ beforeEach(() => {
   Object.assign(vi.spyOn(client, "api" as never), api);
   spyOnToasts();
   vi.spyOn(useSize, "useSize").mockReturnValue({ width: 0, height: 0 });
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: { role: "CONTENT" },
   } as never);
 });

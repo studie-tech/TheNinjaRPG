@@ -6,7 +6,7 @@ import { KAGE_ELDER_REMOVAL_LOCK_SECS } from "@/drizzle/constants";
 import * as localstorage from "@/hooks/localstorage";
 import * as ContentBox from "@/layout/ContentBox";
 import * as search from "@/utils/search";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../../setup/userContext";
 
 const DAY_MS = 24 * 3600 * 1000;
 const idle = {
@@ -52,7 +52,7 @@ it("counts the kage's protected tenure on the server clock", () => {
     isBanned: false,
     isOutlaw: false,
   };
-  vi.spyOn(UserContext, "useRequiredUserData").mockReturnValue({
+  mockUserContextValue({
     data: elder,
     timeDiff,
     updateUser: vi.fn(),

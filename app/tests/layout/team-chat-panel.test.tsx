@@ -4,8 +4,8 @@ import { cleanup, render } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import { MESSAGING_MIN_LEVEL, messagingLevelMessage } from "@/drizzle/constants";
 import { TeamChatPanel } from "@/layout/TeamChatPanel";
-import * as UserContext from "@/utils/UserContext";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
+import { mockUserContextValue } from "../setup/userContext";
 
 let queryClient: QueryClient;
 let user: { userId: string; level: number; isBanned: boolean; isSilenced: boolean };
@@ -24,9 +24,7 @@ beforeEach(() => {
     comments: testApi.comments,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
-    () => ({ data: user }) as never,
-  );
+  mockUserContextValue(() => ({ data: user }) as never);
 });
 afterEach(() => {
   cleanup();

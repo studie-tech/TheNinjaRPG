@@ -7,11 +7,13 @@ import Loader from "@/layout/Loader";
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { isStaffRole } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 /** Display staff report aggregates with role gating before enabling the query. */
 export default function ReportStatistics() {
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((profile) => ({
+    role: profile.role,
+  }));
   const canView = !!userData && isStaffRole(userData.role);
 
   const { data, isFetching, refetch } = api.reports.getReportStatistics.useQuery(

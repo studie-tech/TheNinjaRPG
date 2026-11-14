@@ -2,7 +2,7 @@ import { api } from "@/app/_trpc/client";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import { showMutationToast } from "@/libs/toast";
 import { nextUtcDayAt } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserInfo } from "@/utils/UserContext";
 
 export const usePendingBankInterest = (enabled = true, timeDiff = 0) => {
   const query = api.bank.getPendingInterest.useQuery(undefined, {
@@ -21,7 +21,7 @@ export const usePendingBankInterest = (enabled = true, timeDiff = 0) => {
 };
 
 export const useClaimBankInterest = () => {
-  const { prepareUserUpdate, updateUser } = useUserData();
+  const { prepareUserUpdate, updateUser } = useUserInfo();
   const utils = api.useUtils();
   return api.bank.claimInterest.useMutation({
     onMutate: prepareUserUpdate,

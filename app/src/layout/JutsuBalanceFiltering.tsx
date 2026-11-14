@@ -2,6 +2,7 @@ import {
   battleTypesField,
   buildFilter,
   ContentFiltering,
+  type ContentFilteringOptions,
   defineFilteringSchema,
   minCountField,
   useContentFiltering,
@@ -49,8 +50,8 @@ export default JutsuBalanceFiltering;
 export const getFilter = (state: JutsuBalanceFilteringState) =>
   buildFilter(state.cf, JUTSU_BALANCE_FILTERING_SCHEMA);
 
-export const useFiltering = () => {
-  const cf = useContentFiltering(JUTSU_BALANCE_FILTERING_SCHEMA);
+export const useFiltering = (options?: ContentFilteringOptions) => {
+  const cf = useContentFiltering(JUTSU_BALANCE_FILTERING_SCHEMA, options);
   return {
     ...cf.values,
     cf,

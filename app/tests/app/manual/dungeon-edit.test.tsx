@@ -6,6 +6,7 @@ import {
   useMutation,
 } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import type { ReactNode } from "react";
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
@@ -19,6 +20,7 @@ import {
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
 import { dungeonContent } from "../../setup/dungeon";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type SaveInput = RouterInputs["coop"]["dungeon"]["save"];
 type SaveResult = RouterOutputs["coop"]["dungeon"]["save"];
@@ -58,11 +60,11 @@ it.each(["success", "error"])(
     });
     const select = view.getByRole("combobox", {
       name: "Edit existing dungeon",
-    }) as HTMLSelectElement;
+    }) as HTMLButtonElement;
     const newButton = view.getByRole("button", {
       name: "New dungeon",
     }) as HTMLButtonElement;
-    fireEvent.change(select, { target: { value: "A" } });
+    await chooseOption(view, "Edit existing dungeon", "Dungeon A");
     const capacity = view.getByLabelText("Maximum players") as HTMLInputElement;
     expect(capacity.value).toBe("3");
     fireEvent.input(capacity, { target: { value: "8" } });
@@ -82,7 +84,7 @@ it.each(["success", "error"])(
     expect(view.getByRole("tab", { name: "Current Dungeons" })).toBeTruthy();
     expect(view.queryByRole("button", { name: "Save dungeon" })).toBeNull();
     fireEvent.click(view.getByRole("button", { name: "Back to dungeon editor" }));
-    expect(select.value).toBe("A");
+    expect(select.textContent).toContain("Dungeon A");
     expect((view.getByLabelText("Tokens") as HTMLInputElement).value).toBe("5");
     expect(
       view.getByRole("tab", { name: "Rewards" }).getAttribute("aria-selected"),
@@ -96,7 +98,7 @@ it.each(["success", "error"])(
     expect(select.disabled).toBe(true);
     expect(newButton.disabled).toBe(true);
     fireEvent.click(newButton);
-    expect(select.value).toBe("A");
+    expect(select.textContent).toContain("Dungeon A");
     expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("Dungeon A");
 
     await act(async () => {
@@ -111,7 +113,13 @@ it.each(["success", "error"])(
     );
     expect(refetch).toHaveBeenCalledTimes(outcome === "success" ? 1 : 0);
     expect(invalidate).toHaveBeenCalledTimes(outcome === "success" ? 1 : 0);
-    fireEvent.change(select, { target: { value: "B" } });
+    if (outcome === "success") {
+      await chooseOption(view, "Edit existing dungeon", "Dungeon B");
+    } else {
+      // The failed save left the draft unsaved, so switching dungeons asks first.
+      await chooseOption(view, "Edit existing dungeon", "Dungeon B", false);
+      fireEvent.click(await view.findByRole("button", { name: "Discard changes" }));
+    }
     fireEvent.click(view.getByRole("button", { name: "Save dungeon" }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
     expect(save.mock.calls[1]?.[0]).toMatchObject({
@@ -123,7 +131,7 @@ it.each(["success", "error"])(
     });
     await waitFor(() => expect(newButton.disabled).toBe(false));
     fireEvent.click(newButton);
-    expect(select.value).toBe("");
+    expect(select.textContent).toContain("Select dungeon");
     expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("");
     fireEvent.change(view.getByLabelText("Name"), { target: { value: "New dungeon" } });
     fireEvent.click(view.getByRole("button", { name: "Save dungeon" }));
@@ -133,6 +141,52 @@ it.each(["success", "error"])(
     ).toBe("true");
     expect(view.getByRole("status").textContent).toContain(
       "Tier 1, floor 1: Choose an enemy",
+    );
+    queryClient.clear();
+  },
+);
+
+it.each(["same draft", "another dungeon", "new dungeon"])(
+  "only restores a removed tier in its own draft after choosing %s",
+  async (destination) => {
+    const content = dungeonContent();
+    content.name = "Dungeon A";
+    content.tiers.push(structuredClone(content.tiers[0]!));
+    content.tiers[0]!.at(-1)!.kind = "mini-boss";
+    const undo = vi.fn<() => void>();
+    vi.spyOn(toast, "showUndoToast").mockImplementation((_message, onUndo) => {
+      undo.mockImplementation(onUndo);
+    });
+    const { view, queryClient } = mountEditor({
+      save: vi.fn(),
+      definitions: [
+        { id: "A", content },
+        { id: "B", content: { ...dungeonContent(), name: "Dungeon B" } },
+      ],
+    });
+    await chooseOption(view, "Edit existing dungeon", "Dungeon A");
+    fireEvent.click(view.getByRole("tab", { name: "Encounters" }));
+    fireEvent.click(view.getByRole("button", { name: "Remove last tier" }));
+    fireEvent.change(view.getByLabelText("Name"), {
+      target: { value: "Edited dungeon A" },
+    });
+    if (destination !== "same draft") {
+      if (destination === "another dungeon")
+        await chooseOption(view, "Edit existing dungeon", "Dungeon B", false);
+      else fireEvent.click(view.getByRole("button", { name: "New dungeon" }));
+      fireEvent.click(await view.findByRole("button", { name: "Discard changes" }));
+    }
+    await act(async () => undo());
+    fireEvent.click(view.getByRole("tab", { name: "Encounters" }));
+    expect(view.getByRole("combobox", { name: "Tier" }).textContent).toContain(
+      destination === "same draft" ? "Tier 1 of 2" : "Tier 1 of 1",
+    );
+    expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe(
+      destination === "same draft"
+        ? "Edited dungeon A"
+        : destination === "another dungeon"
+          ? "Dungeon B"
+          : "",
     );
     queryClient.clear();
   },
@@ -156,6 +210,9 @@ it.each(["", "11", "1.5"])(
     fireEvent.change(view.getByLabelText("Name"), { target: { value: "Discard me" } });
     fireEvent.input(view.getByLabelText("Tokens"), { target: { value: "" } });
     fireEvent.click(view.getByRole("button", { name: "New dungeon" }));
+    // The renamed draft is unsaved, so starting over asks first.
+    expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("Discard me");
+    fireEvent.click(await view.findByRole("button", { name: "Discard changes" }));
     expect((view.getByLabelText("Name") as HTMLInputElement).value).toBe("");
     expect((view.getByLabelText("Tokens") as HTMLInputElement).value).toBe("0");
     expect(
@@ -237,9 +294,7 @@ it("searches enemies and rewards, preserves invalid quantity drafts, and saves g
     // Finish Radix's deferred focus restoration before opening another picker.
     await waitFor(() => expect(document.activeElement === trigger).toBe(true));
   };
-  fireEvent.change(view.getByRole("combobox", { name: "Edit existing dungeon" }), {
-    target: { value: "A" },
-  });
+  await chooseOption(view, "Edit existing dungeon", "Test dungeon");
   fireEvent.click(view.getByRole("tab", { name: "Encounters" }));
   const quantity = view.getByLabelText("Wave 1 enemy 1 quantity") as HTMLInputElement;
   expect(quantity.value).toBe("2");
@@ -250,14 +305,15 @@ it("searches enemies and rewards, preserves invalid quantity drafts, and saves g
     expect(save).not.toHaveBeenCalled();
     fireEvent.click(view.getByRole("button", { name: "Floor 2" }));
     expect(view.getByText("Tier 1 · Floor 1")).toBeTruthy();
-    fireEvent.change(view.getByRole("combobox", { name: "Tier" }), {
-      target: { value: "1" },
-    });
-    expect(
-      (view.getByRole("combobox", { name: "Tier" }) as HTMLSelectElement).value,
-    ).toBe("0");
+    // The invalid quantity blocks the switch, and validation keeps focus on it.
+    await chooseOption(view, "Tier", "Tier 2 of 2", false);
+    expect(view.getByRole("combobox", { name: "Tier" }).textContent).toContain(
+      "Tier 1 of 2",
+    );
     fireEvent.click(view.getByRole("button", { name: "Remove last tier" }));
-    expect(view.getByRole("option", { name: "Tier 2 of 2" })).toBeTruthy();
+    expect(view.getByRole("combobox", { name: "Tier" }).textContent).toContain(
+      "Tier 1 of 2",
+    );
     fireEvent.click(view.getByRole("combobox", { name: "Wave 1 enemy 1" }));
     fireEvent.click(await view.findByRole("option", { name: "Snow Wolf" }));
     expect(
@@ -284,9 +340,7 @@ it("searches enemies and rewards, preserves invalid quantity drafts, and saves g
   expect(view.queryByLabelText("Wave 2 enemy 1 quantity")).toBeNull();
   fireEvent.click(view.getByRole("button", { name: "Floor 2" }));
   expect(view.getByText("Tier 1 · Floor 2")).toBeTruthy();
-  fireEvent.change(view.getByRole("combobox", { name: "Tier" }), {
-    target: { value: "1" },
-  });
+  await chooseOption(view, "Tier", "Tier 2 of 2");
   expect(view.getByText("Tier 2 · Floor 1")).toBeTruthy();
   fireEvent.click(view.getByRole("button", { name: "Remove last tier" }));
   expect(view.getByText("Tier 1 · Floor 1")).toBeTruthy();
@@ -301,7 +355,7 @@ it("searches enemies and rewards, preserves invalid quantity drafts, and saves g
   fireEvent.click(await view.findByRole("option", { name: "Snow Wolf" }));
   fireEvent.click(view.getByRole("tab", { name: "Rewards" }));
   fireEvent.click(view.getByRole("button", { name: "Add random drop" }));
-  fireEvent.change(view.getByLabelText("Drop 1 type"), { target: { value: "cache" } });
+  await chooseOption(view, "Drop 1 type", "Cache");
   fireEvent.click(view.getByRole("combobox", { name: "Drop 1 reward" }));
   expect(view.queryByRole("option", { name: "Herb" })).toBeNull();
   fireEvent.change(view.getByRole("combobox", { name: "Search drop 1 reward" }), {
@@ -311,9 +365,7 @@ it("searches enemies and rewards, preserves invalid quantity drafts, and saves g
   fireEvent.input(view.getByLabelText("Drop 1 quantity"), { target: { value: "4" } });
   fireEvent.click(view.getByRole("switch", { name: "Drop 1 only once per player" }));
   fireEvent.click(view.getByRole("button", { name: "Add random drop" }));
-  fireEvent.change(view.getByLabelText("Drop 2 type"), {
-    target: { value: "package" },
-  });
+  await chooseOption(view, "Drop 2 type", "Reward package");
   fireEvent.click(view.getByRole("combobox", { name: "Drop 2 reward" }));
   fireEvent.change(view.getByRole("combobox", { name: "Search drop 2 reward" }), {
     target: { value: "starter" },
@@ -362,9 +414,7 @@ it("saves displayed enemy quantities after making room in a full wave", async ()
       { userId: "wolf", username: "Snow Wolf" },
     ],
   });
-  fireEvent.change(view.getByRole("combobox", { name: "Edit existing dungeon" }), {
-    target: { value: "A" },
-  });
+  await chooseOption(view, "Edit existing dungeon", "Test dungeon");
   fireEvent.click(view.getByRole("tab", { name: "Encounters" }));
   const quantity = view.getByLabelText("Wave 1 enemy 1 quantity") as HTMLInputElement;
   fireEvent.input(quantity, { target: { value: "9" } });
@@ -386,6 +436,20 @@ it("saves displayed enemy quantities after making room in a full wave", async ()
   ]);
   queryClient.clear();
 });
+
+/** Open the select named `label`, choose `option` and, by default, wait for Radix to refocus it. */
+async function chooseOption(
+  view: ReturnType<typeof render>,
+  label: string,
+  option: string,
+  restoresFocus = true,
+) {
+  const trigger = view.getByRole("combobox", { name: label });
+  fireEvent.keyDown(trigger, { key: "Enter" });
+  const choice = await view.findByRole("option", { name: option });
+  await act(async () => fireEvent.click(choice));
+  if (restoresFocus) await waitFor(() => expect(document.activeElement).toBe(trigger));
+}
 
 /** Mount the editor over stubbed catalogs; each test passes the data it is about. */
 function mountEditor({
@@ -435,7 +499,7 @@ function mountEditor({
       getCatalog: { useQuery: () => ({ data: { packages, nodes: [] } }) },
     },
   });
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({
+  mockUserContextValue({
     data: { role: "CONTENT-ADMIN" },
   } as never);
   vi.spyOn(ContentBox, "default").mockImplementation(
@@ -446,9 +510,11 @@ function mountEditor({
     defaultOptions: { mutations: { retry: false } },
   });
   const view = render(
-    <QueryClientProvider client={queryClient}>
-      <DungeonEditor />
-    </QueryClientProvider>,
+    <AppRouterContext.Provider value={{ push: vi.fn() } as never}>
+      <QueryClientProvider client={queryClient}>
+        <DungeonEditor />
+      </QueryClientProvider>
+    </AppRouterContext.Provider>,
   );
   return { view, queryClient };
 }

@@ -12,7 +12,7 @@ import {
 import { type HotkeyKind, useBattleHotkeys } from "@/hooks/useBattleHotkeys";
 import { BASIC_HOTKEY_ACTIONS, toHotkey } from "@/libs/combat/hotkeys";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 /** An action that can carry a battle key. */
 export type HotkeyTarget = { id: string; name: string; kind: HotkeyKind };
@@ -133,7 +133,7 @@ export function HotkeyChip({
         hotkey ? `${label}: hotkey ${hotkey.toUpperCase()}` : `Set hotkey for ${label}`
       }
       title={hotkey ? "Change hotkey" : "Set hotkey"}
-      className="bg-background hover:bg-muted inline-flex h-[26px] min-w-[26px] items-center justify-center rounded border px-[6px] font-mono text-[12px] font-bold"
+      className="bg-background hover:bg-muted inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border font-mono text-xs font-bold"
     >
       {hotkey ? (
         hotkey.toUpperCase()
@@ -155,7 +155,7 @@ export function LoadoutHotkeysPanel({
   kind: HotkeyKind;
   actions: { id: string; name: string; hidden?: boolean }[];
 }) {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   // Match the battle and inventory grids, which hide hidden content from players.
   const canSeeHidden = !!userData && canChangeContent(userData.role);
   const rows: HotkeyTarget[] = [
@@ -187,7 +187,7 @@ export function LoadoutHotkeysPanel({
       ) : rows.length === 0 ? (
         <p className="text-sm">Equip items to give them hotkeys.</p>
       ) : (
-        <ul className="flex flex-wrap gap-x-6 gap-y-1.5">
+        <ul className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-x-6 gap-y-3">
           {rows.map((row) => (
             <li key={row.id} className="flex min-w-0 items-center gap-2 text-sm">
               <HotkeyChip
@@ -195,7 +195,7 @@ export function LoadoutHotkeysPanel({
                 hotkey={hotkeys.byAction[row.id]}
                 onClick={() => assign(row)}
               />
-              <span className="truncate">{row.name}</span>
+              <span className="min-w-0 break-words">{row.name}</span>
             </li>
           ))}
         </ul>

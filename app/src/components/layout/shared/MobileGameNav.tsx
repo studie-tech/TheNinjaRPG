@@ -1,6 +1,7 @@
 "use client";
 
 import { Compass, House } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
 import Link from "@/layout/Link";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import type { MobileNavConfig } from "@/libs/mobileNavConfig";
@@ -45,9 +46,18 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
   mobileNavbarButtonClassName,
   className,
 }) => {
+  const navRef = useRef<HTMLDivElement>(null);
+  useBottomNavInset(navRef);
   return (
-    <div className={cn("grid grid-cols-7 items-center justify-center", className)}>
-      <div></div>
+    <div
+      ref={navRef}
+      className={cn(
+        // Two left shortcuts share the width of the three on the right, keeping the raised
+        // centre button in the middle without an empty slot. The insets clear a landscape notch.
+        "grid grid-cols-[1.5fr_1.5fr_1fr_1fr_1fr_1fr] items-center justify-center pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]",
+        className,
+      )}
+    >
       {mobileNavConfig.left.map((optionId) => (
         <div key={optionId}>
           <MobileGameNavButton
@@ -89,4 +99,46 @@ export const MobileGameNav: React.FC<MobileGameNavProps> = ({
       ))}
     </div>
   );
+};
+
+/** CSS variable holding how far the bottom nav reaches up from the viewport's bottom edge. */
+export const BOTTOM_NAV_INSET_VARIABLE = "--game-bottom-nav-h";
+
+/**
+ * Publish the nav's footprint, including the safe-area padding and the raised centre button,
+ * so fixed overlays (install prompt, tournament notice) can sit just above it. The value is
+ * 0 while the layout hides the nav at its own breakpoint or in compact mode.
+ */
+const useBottomNavInset = (navRef: React.RefObject<HTMLDivElement | null>) => {
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const root = document.documentElement;
+    /** Include raised links in the overlay inset, and clear it when the nav is hidden. */
+    const measure = () => {
+      const rect = nav.getBoundingClientRect();
+      if (!rect.height) {
+        root.style.setProperty(BOTTOM_NAV_INSET_VARIABLE, "0px");
+        return;
+      }
+      const top = Math.min(
+        rect.top,
+        ...Array.from(
+          nav.querySelectorAll("a"),
+          (link) => link.getBoundingClientRect().top,
+        ),
+      );
+      const inset = Math.max(0, Math.round(window.innerHeight - top));
+      root.style.setProperty(BOTTOM_NAV_INSET_VARIABLE, `${inset}px`);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+      root.style.removeProperty(BOTTOM_NAV_INSET_VARIABLE);
+    };
+  }, [navRef]);
 };

@@ -119,6 +119,9 @@
   color: var(--theme-muted);
   font-size: 0.85rem;
 }
+.theme-public-footer [data-footer-link] {
+  color: var(--theme-text);
+}
 .theme-public-page :where(a, button, input, select, [tabindex]):focus-visible {
   outline: 3px solid var(--theme-accent);
   outline-offset: 4px;
@@ -709,8 +712,18 @@ html[data-game-layout="20-eclipse-observatory"] .theme-welcome-community {
   }
 }
 @media (width < 380px) {
+  /* Register stays visible on 320-379px phones; the logo and padding give way instead */
+  .theme-public-logo {
+    width: min(16rem, 28vw);
+  }
+  .theme-public-account {
+    gap: 0.25rem;
+  }
+  .welcome-login {
+    padding-inline: 0.2rem;
+  }
   .theme-public-account .welcome-register {
-    display: none;
+    padding-inline: 0.5rem;
   }
 }
 @media (prefers-reduced-motion: reduce) {

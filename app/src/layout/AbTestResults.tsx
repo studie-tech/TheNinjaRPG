@@ -25,6 +25,7 @@ import {
   WALLPAPER_VARIANTS,
   wallpaperLabel,
 } from "@/libs/wallpaperExperiment";
+import { humanizeIdentifier } from "@/utils/string";
 
 /** Show full-history results for recently active tests, with source/device filters. */
 export const AbTestResults: React.FC = () => {
@@ -531,7 +532,7 @@ const inferControlTreatment = (
 const variantLabel = (experiment: string, variant: string) => {
   if (experiment === WALLPAPER_EXPERIMENT) return wallpaperLabel(variant);
   if (experiment === LEMU_EXPERIMENT) return lemuLabel(variant);
-  return variant;
+  return humanizeIdentifier(variant);
 };
 
 type VariantAgg = { variant: string; loaded: number; register: number };

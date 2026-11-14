@@ -1,9 +1,7 @@
 import type { ChartData, Chart as ChartJS, ChartOptions } from "chart.js";
-import { Bug } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
-import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface BloodlineStatisticsProps {
@@ -14,7 +12,6 @@ export const BloodlineStatistics: React.FC<BloodlineStatisticsProps> = ({
   trigger,
 }) => {
   const [open, setOpen] = useState(false);
-  const [showDebug, setShowDebug] = useState(false);
   const { data, isLoading } = api.bloodline.getNaturalRollStatistics.useQuery(
     undefined,
     { enabled: open },
@@ -56,21 +53,11 @@ export const BloodlineStatistics: React.FC<BloodlineStatisticsProps> = ({
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent className="w-[350px] md:w-[450px]" align="end">
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-lg">Bloodline Roll Statistics</h3>
-              <p className="text-muted-foreground text-sm">
-                Distribution of natural bloodline rolls by rank
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowDebug(!showDebug)}
-              className="h-8 w-8"
-            >
-              <Bug className="h-4 w-4" />
-            </Button>
+          <div>
+            <h3 className="font-semibold text-lg">Bloodline Roll Statistics</h3>
+            <p className="text-muted-foreground text-sm">
+              Distribution of natural bloodline rolls by rank
+            </p>
           </div>
 
           {isLoading ? (
@@ -85,20 +72,9 @@ export const BloodlineStatistics: React.FC<BloodlineStatisticsProps> = ({
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span>Total bloodline rolls:</span>
-                  <span className="font-semibold">{totalRolls}</span>
-                </div>
-
-                {showDebug && (
-                  <div className="mt-2 max-h-40 overflow-auto rounded bg-gray-100 p-2 text-xs">
-                    <p className="font-semibold">Raw Data:</p>
-                    <pre>{JSON.stringify(data, null, 2)}</pre>
-                    <p className="mt-2 font-semibold">Processed Data:</p>
-                    <pre>{JSON.stringify(chartData, null, 2)}</pre>
-                  </div>
-                )}
+              <div className="flex justify-between">
+                <span>Total bloodline rolls:</span>
+                <span className="font-semibold">{totalRolls}</span>
               </div>
 
               {open && <BloodlineRollChart chartData={chartData} />}

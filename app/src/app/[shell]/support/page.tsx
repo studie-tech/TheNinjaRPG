@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Plus, Tag, Users } from "lucide-react";
+import { AlertCircle, Loader2, Plus, Tag, Users } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
@@ -16,16 +16,20 @@ import SupportTicketFiltering, {
   useFiltering as useSupportTicketFiltering,
 } from "@/layout/SupportTicketFiltering";
 import { useInfinitePagination } from "@/libs/pagination";
+import { cn } from "@/libs/shadui";
 import { getCategoryColor, getPriorityColor, getStatusColor } from "@/libs/support";
 import { getStatusIcon } from "@/libs/supportIcons";
 import { parseHtml } from "@/utils/parse";
 import { isStaffRole } from "@/utils/permissions";
 import { formatTimeAgo } from "@/utils/time";
-import { useRequiredUserData } from "@/utils/UserContext";
+import { useRequiredUserDataSelector } from "@/utils/UserContext";
 
 export default function SupportPage() {
   // State
-  const { data: userData } = useRequiredUserData();
+  const { data: userData } = useRequiredUserDataSelector((profile) => ({
+    role: profile.role,
+    userId: profile.userId,
+  }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
   // Support ticket filtering state
   const filterState = useSupportTicketFiltering();
@@ -34,7 +38,7 @@ export default function SupportPage() {
   const isStaff = isStaffRole(userData?.role);
 
   // Query for tickets
-  const { data, isFetching, fetchNextPage, hasNextPage } =
+  const { data, isPlaceholderData, isFetchingNextPage, fetchNextPage, hasNextPage } =
     api.support.getTickets.useInfiniteQuery(
       {
         ...getSupportTicketFilter(filterState),
@@ -135,13 +139,19 @@ export default function SupportPage() {
         )}
 
         {/* Tickets List */}
-        <div className="space-y-4">
-          {isFetching ? (
+        <div
+          aria-busy={isPlaceholderData}
+          className={cn(
+            "space-y-4 transition-opacity",
+            isPlaceholderData && "opacity-60",
+          )}
+        >
+          {!data ? (
             <Loader explanation="Loading tickets..." />
           ) : (
             <>
               {allTickets.length === 0 && (
-                <div className="py-8 text-center text-gray-500">
+                <div className="py-8 text-center text-muted-foreground">
                   <AlertCircle className="mx-auto mb-4 h-12 w-12" />
                   <p>No tickets found</p>
                 </div>
@@ -163,8 +173,6 @@ export default function SupportPage() {
                     >
                       <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2 text-foreground-muted text-sm">
-                          <span>by {ticket.createdBy.username}</span>
-                          <Separator orientation="vertical" className="h-4" />
                           <span>{formatTimeAgo(ticket.createdAt)}</span>
                           {ticket.assignedTo && (
                             <>
@@ -195,8 +203,10 @@ export default function SupportPage() {
                           )}
                         </div>
 
-                        <div className="line-clamp-3 rounded-md border p-2 text-foreground text-sm">
-                          {parseHtml(ticket.description)}
+                        <div className="rounded-md border p-2 text-foreground text-sm">
+                          <div className="line-clamp-3">
+                            {parseHtml(ticket.description)}
+                          </div>
                         </div>
 
                         {ticket.tags && ticket.tags.length > 0 && (
@@ -218,6 +228,15 @@ export default function SupportPage() {
                   </div>
                 </div>
               ))}
+              {isFetchingNextPage && (
+                <div
+                  role="status"
+                  className="flex items-center justify-center gap-2 py-2"
+                >
+                  <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
+                  Loading more tickets
+                </div>
+              )}
             </>
           )}
         </div>

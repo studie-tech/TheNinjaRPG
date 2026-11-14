@@ -42,7 +42,10 @@ import {
   getHomePlacementRoom,
   getHomeRoomCamera,
   getHomeRooms,
+  type HomeCamera,
   type HomeRoomId,
+  homeCameraTransform,
+  moveHomeCamera,
   zoomHomeCameraTo,
 } from "@/libs/homeProperty";
 import { HOME_ART_PLANS } from "@/libs/homeRoomGeometry";
@@ -94,6 +97,24 @@ export const HomeScene = ({
   );
   const hasPinched = useRef(false);
   const hasPanned = useRef(false);
+  // A pan or pinch moves the camera layer directly and commits the camera when the last
+  // pointer lifts, so the scene does not re-render at pointer rate. The scene rect is
+  // measured once per gesture.
+  const cameraLayerRef = useRef<HTMLDivElement>(null);
+  const cameraGesture = useRef<{ rect: DOMRect; camera: HomeCamera } | null>(null);
+  const cameraCommitFrame = useRef<number | null>(null);
+  /** Forget a lifted pointer and commit the gesture's camera once none remain. */
+  const releaseCameraPointer = (pointerId: number) => {
+    cameraPointers.current.delete(pointerId);
+    const gesture = cameraGesture.current;
+    if (cameraPointers.current.size > 0 || !gesture) return;
+    cameraGesture.current = null;
+    if (cameraCommitFrame.current !== null) {
+      cancelAnimationFrame(cameraCommitFrame.current);
+      cameraCommitFrame.current = null;
+    }
+    setCamera(gesture.camera);
+  };
   /** Inventory selection frames the piece’s room without changing the decoration draft. */
   const focusRoom = (id: HomeRoomId) => {
     if (!rooms.some((room) => room.id === id)) return;
@@ -114,6 +135,7 @@ export const HomeScene = ({
   };
   useEffect(() => {
     cameraPointers.current.clear();
+    cameraGesture.current = null;
     hasPinched.current = false;
     setCamera(getHomeOverviewCamera(homeType));
     setActiveRoom("main");
@@ -480,7 +502,8 @@ export const HomeScene = ({
         }}
         onPointerMove={(event) => {
           const previous = cameraPointers.current.get(event.pointerId);
-          const rect = sceneRef.current?.getBoundingClientRect();
+          const rect =
+            cameraGesture.current?.rect ?? sceneRef.current?.getBoundingClientRect();
           if (!previous || !rect || !(rect.width > 0 && rect.height > 0)) return;
           const others = [...cameraPointers.current.entries()].filter(
             ([id]) => id !== event.pointerId,
@@ -499,50 +522,35 @@ export const HomeScene = ({
             ) > 4
           )
             hasPanned.current = true;
-          setCamera((current) => {
-            const before = other
-              ? Math.hypot(previous.x - other.x, previous.y - other.y)
-              : 0;
-            const after = other
-              ? Math.hypot(event.clientX - other.x, event.clientY - other.y)
-              : 0;
-            if (other && before > 0) {
-              const midpoint = {
-                x: (((previous.x + other.x) / 2 - rect.left) / rect.width) * 100,
-                y: (((previous.y + other.y) / 2 - rect.top) / rect.height) * 100,
-              };
-              const moved = {
-                x: (((event.clientX + other.x) / 2 - rect.left) / rect.width) * 100,
-                y: (((event.clientY + other.y) / 2 - rect.top) / rect.height) * 100,
-              };
-              return zoomHomeCameraTo(
-                current,
-                (current.scale * after) / before,
-                homeType,
-                midpoint,
-                moved,
-              );
-            }
-            return boundHomeCamera(
-              {
-                ...current,
-                x: current.x + ((event.clientX - previous.x) / rect.width) * 100,
-                y: current.y + ((event.clientY - previous.y) / rect.height) * 100,
-              },
-              homeType,
-            );
-          });
+          const next = moveHomeCamera(
+            cameraGesture.current?.camera ?? camera,
+            homeType,
+            rect,
+            previous,
+            { x: event.clientX, y: event.clientY },
+            other,
+          );
+          cameraGesture.current = { rect, camera: next };
+          if (cameraLayerRef.current)
+            cameraLayerRef.current.style.transform = homeCameraTransform(next);
+          // The selected piece's actions follow the camera, so editing commits once a frame.
+          if (selectedScreenBounds && cameraCommitFrame.current === null) {
+            cameraCommitFrame.current = requestAnimationFrame(() => {
+              cameraCommitFrame.current = null;
+              const gesture = cameraGesture.current;
+              if (gesture) setCamera(gesture.camera);
+            });
+          }
         }}
-        onPointerUp={(event) => cameraPointers.current.delete(event.pointerId)}
-        onPointerCancel={(event) => cameraPointers.current.delete(event.pointerId)}
-        onLostPointerCapture={(event) => cameraPointers.current.delete(event.pointerId)}
+        onPointerUp={(event) => releaseCameraPointer(event.pointerId)}
+        onPointerCancel={(event) => releaseCameraPointer(event.pointerId)}
+        onLostPointerCapture={(event) => releaseCameraPointer(event.pointerId)}
       >
         <div
+          ref={cameraLayerRef}
           className="absolute inset-0 origin-top-left"
           data-home-camera
-          style={{
-            transform: `translate(${camera.x}%, ${camera.y}%) scale(${camera.scale})`,
-          }}
+          style={{ transform: homeCameraTransform(camera) }}
         >
           {!hasImageError && (
             <HomePropertyBackdrop
@@ -876,9 +884,10 @@ export const HomeScene = ({
         <fieldset
           aria-label="Property navigation"
           data-home-controls
-          // Keep navigation opposite the selected piece's screen-space action row.
+          // Bottom-left stays clear of the starter fixtures (the garden that opens the farm sits
+          // bottom-right); flip to the top when a selected piece's action row needs the bottom.
           className={cn(
-            "absolute right-2 z-[10000] flex items-center gap-1 rounded-md bg-slate-950/85 p-1 shadow-md",
+            "absolute left-2 z-[10000] flex items-center gap-1 rounded-md bg-slate-950/85 p-1 shadow-md",
             selectedScreenBounds && selectedScreenBounds.top > 50
               ? "top-2"
               : "bottom-2",
@@ -887,7 +896,7 @@ export const HomeScene = ({
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8 hover:text-black"
+            className="h-8 w-8"
             aria-label="Zoom out"
             onClick={() =>
               setCamera((current) =>
@@ -909,7 +918,7 @@ export const HomeScene = ({
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8 hover:text-black"
+            className="h-8 w-8"
             aria-label="Zoom in"
             onClick={() =>
               setCamera((current) =>
@@ -925,7 +934,7 @@ export const HomeScene = ({
           <Button
             variant="outline"
             size="icon"
-            className="h-8 w-8 hover:text-black"
+            className="h-8 w-8"
             aria-label="Reset view"
             hoverText="Reset view"
             onClick={() => setCamera(getHomeOverviewCamera(homeType))}

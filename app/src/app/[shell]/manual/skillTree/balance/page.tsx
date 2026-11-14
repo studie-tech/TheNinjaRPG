@@ -20,7 +20,7 @@ import SkillTreeFiltering, {
 import Table, { type ColumnDefinitionType } from "@/layout/Table";
 import { canChangeContent } from "@/utils/permissions";
 import type { ArrayElement } from "@/utils/typeutils";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualSkillTreeBalance() {
   // State
@@ -50,7 +50,7 @@ interface SkillTreeEffectsBalanceProps {
 const SkillTreeEffectsBalance: React.FC<SkillTreeEffectsBalanceProps> = (props) => {
   // Two-level filtering
   const state = useSkillTreeFiltering();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
 
   const details = useContentDetails();
 
@@ -93,8 +93,8 @@ const SkillTreeEffectsBalance: React.FC<SkillTreeEffectsBalanceProps> = (props) 
     SkillTreeBalanceRow,
     keyof SkillTreeBalanceRow
   >[] = [
-    { key: "name", header: "Skill Name", type: "string" },
-    { key: "links", header: "Actions", type: "jsx" },
+    { key: "name", header: "Name", type: "string" },
+    { key: "links", header: "Links", type: "jsx" },
     { key: "tier", header: "Tier", type: "string" },
     { key: "costSkillPoints", header: "Cost", type: "string" },
     { key: "effect", header: "Effect", type: "string" },
@@ -136,7 +136,7 @@ interface SkillTreeUsageBalanceProps {
 const SkillTreeUsageBalance: React.FC<SkillTreeUsageBalanceProps> = (props) => {
   // State
   const filterState = useFiltering();
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((profile) => ({ role: profile.role }));
 
   const details = useContentDetails();
 
@@ -175,12 +175,12 @@ const SkillTreeUsageBalance: React.FC<SkillTreeUsageBalanceProps> = (props) => {
     SkillTreeBalanceRow,
     keyof SkillTreeBalanceRow
   >[] = [
-    { key: "name", header: "Skill Name", type: "string" },
+    { key: "name", header: "Name", type: "string" },
     { key: "links", header: "Links", type: "jsx" },
-    { key: "userCount", header: "#Users", type: "string" },
+    { key: "userCount", header: "Users", type: "string" },
     { key: "tier", header: "Tier", type: "string" },
     { key: "costSkillPoints", header: "Cost", type: "string" },
-    { key: "effects", header: "#Effects", type: "string" },
+    { key: "effects", header: "Effects", type: "string" },
   ];
 
   return (

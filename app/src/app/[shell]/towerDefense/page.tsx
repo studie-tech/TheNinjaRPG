@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type React from "react";
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,13 +42,14 @@ import {
 } from "@/drizzle/constants";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useHudStoreValues, useTowerDefense } from "@/hooks/useTowerDefense";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import Countdown from "@/layout/Countdown";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import TowerDefenseUpgrades from "@/layout/TowerDefenseUpgrades";
 import { getFirstOfNextMonth } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 // Load the game renderer only when the tower-defense page is opened
 const TowerDefenseCanvas = dynamic(() => import("@/layout/TowerDefense"), {
@@ -64,7 +65,10 @@ const GAME_NAME = "Tower Defense";
 const PAGE_SUBTITLE = "Survive as many waves as possible!";
 
 const TowerDefensePage: React.FC = () => {
-  const { data: userData, isClerkLoaded } = useUserData();
+  const { data: userData, isClerkLoaded } = useUserDataSelector((profile) => ({
+    userId: profile.userId,
+    sfxOn: profile.sfxOn,
+  }));
   const sfxEnabledRef = useRef(userData?.sfxOn);
   useEffect(() => {
     sfxEnabledRef.current = userData?.sfxOn;
@@ -153,12 +157,12 @@ const TowerDefensePage: React.FC = () => {
                   to earn or save permanent upgrade points. Log in to save your progress
                   and purchase permanent upgrades!
                 </p>
-                <Link href="/login">
-                  <Button variant="outline" size="sm" className="mt-1">
+                <Button asChild variant="outline" size="sm" className="mt-1">
+                  <Link href="/login">
                     <LogIn className="mr-2 h-4 w-4" />
                     Log In
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </div>
             </div>
           </div>
@@ -170,14 +174,14 @@ const TowerDefensePage: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Sword className="h-5 w-5" />
-                Battle Arena
+                {GAME_NAME}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Existing Session Panel - only for logged in users */}
               {!isGuest && gameState.existingSession && (
                 <div className="space-y-3 rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
-                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                  <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
                     <AlertCircle className="h-4 w-4" />
                     <span className="font-semibold">Active Run Found</span>
                   </div>
@@ -208,14 +212,20 @@ const TowerDefensePage: React.FC = () => {
                         {isStarting ? "Connecting..." : "Resume"}
                       </span>
                     </Button>
-                    <Button
-                      onClick={cancelExistingSession}
+                    <AbandonRunConfirm
+                      onAbandon={cancelExistingSession}
                       disabled={isStarting}
-                      variant="outline"
-                      className="border-destructive/50 text-destructive hover:bg-destructive/10"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                      triggerLabel="Abandon run"
+                      button={
+                        <Button
+                          disabled={isStarting}
+                          variant="outline"
+                          className="border-destructive/50 text-destructive hover:bg-destructive/10"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      }
+                    />
                   </div>
                 </div>
               )}
@@ -296,7 +306,7 @@ const TowerDefensePage: React.FC = () => {
           <div className="flex items-center gap-3">
             <Trophy className="h-5 w-5 text-amber-500" />
             <div>
-              <p className="font-semibold text-amber-600 dark:text-amber-400">
+              <p className="font-semibold text-amber-800 dark:text-amber-300">
                 Leaderboard resets monthly!
               </p>
               <p className="text-muted-foreground text-sm">
@@ -378,10 +388,15 @@ const TowerDefensePage: React.FC = () => {
                   <SkipForward className="mr-2 h-4 w-4" />
                   Next Wave
                 </Button>
-                <Button variant="outline" onClick={abandonRun}>
-                  <Home className="mr-2 h-4 w-4" />
-                  Abandon Run
-                </Button>
+                <AbandonRunConfirm
+                  onAbandon={abandonRun}
+                  button={
+                    <Button variant="outline">
+                      <Home className="mr-2 h-4 w-4" />
+                      Abandon Run
+                    </Button>
+                  }
+                />
               </div>
             </div>
           </div>
@@ -523,14 +538,52 @@ const TowerDefensePage: React.FC = () => {
 
 export default TowerDefensePage;
 
+/** Confirm before ending a run for good, and keep the dialog pending until it ends. */
+const AbandonRunConfirm = ({
+  onAbandon,
+  button,
+  disabled,
+  triggerLabel,
+}: {
+  onAbandon: () => Promise<void>;
+  button: React.ReactNode;
+  disabled?: boolean;
+  triggerLabel?: string;
+}) => {
+  const [isAbandoning, setIsAbandoning] = useState(false);
+  return (
+    <Confirm
+      title="Abandon run"
+      button={button}
+      disabled={disabled || isAbandoning}
+      triggerLabel={triggerLabel}
+      proceed_label="Abandon run"
+      proceed_loading_label="Abandoning..."
+      confirmClassName="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+      isLoading={isAbandoning}
+      keepOpenOnAccept
+      onAccept={async (_e, { close }) => {
+        setIsAbandoning(true);
+        await onAbandon().finally(() => {
+          setIsAbandoning(false);
+          close();
+        });
+      }}
+    >
+      This ends the run permanently. Its waves, score and in-run upgrades are lost and
+      cannot be restored.
+    </Confirm>
+  );
+};
+
 /** Reuse the leaderboard navigation control across tower-defense screen states. */
 const LeaderboardLink = () => (
-  <Link href="/manual/towerDefense/leaderboard">
-    <Button size="sm">
+  <Button asChild size="sm">
+    <Link href="/manual/towerDefense/leaderboard">
       <Trophy className="mr-2 h-4 w-4" />
       Leaderboard
-    </Button>
-  </Link>
+    </Link>
+  </Button>
 );
 
 /** Keep a recoverable tower-defense error visible until the player dismisses it. */

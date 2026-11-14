@@ -9,6 +9,7 @@ import {
 import {
   buildFilter,
   ContentFiltering,
+  type ContentFilteringOptions,
   defineFilteringSchema,
   hiddenVisibilityField,
   toOptions,
@@ -179,6 +180,14 @@ const itemFilteringSchema = defineFilteringSchema({
   ] as const,
 });
 
+/** The same fields with the shop filter cleared, so every known item is listed. */
+const allShopStatusItemFilteringSchema = {
+  ...itemFilteringSchema,
+  fields: itemFilteringSchema.fields.map((field) =>
+    field.id === "onlyInShop" ? { ...field, defaultValue: undefined } : field,
+  ) as unknown as typeof itemFilteringSchema.fields,
+};
+
 interface ItemFilteringProps {
   state: ItemFilteringState;
   disabled?: boolean;
@@ -189,7 +198,7 @@ const ItemFiltering: React.FC<ItemFilteringProps> = (props) => {
 
   return (
     <ContentFiltering
-      schema={itemFilteringSchema}
+      schema={props.state.schema}
       state={props.state.cf}
       context={context}
       triggerButtonId="filter-item"
@@ -201,13 +210,22 @@ const ItemFiltering: React.FC<ItemFilteringProps> = (props) => {
 export default ItemFiltering;
 
 export const getFilter = (state: ItemFilteringState) =>
-  buildFilter(state.cf, itemFilteringSchema);
+  buildFilter(state.cf, state.schema);
 
-export const useFiltering = () => {
-  const cf = useContentFiltering(itemFilteringSchema);
+/**
+ * Item filter state. Shop tools open on items sold in shops; `allShopStatus` opens on
+ * every item instead, for the encyclopedia.
+ */
+export const useFiltering = (
+  options?: ContentFilteringOptions & { allShopStatus?: boolean },
+) => {
+  const { allShopStatus, ...filteringOptions } = options ?? {};
+  const schema = allShopStatus ? allShopStatusItemFilteringSchema : itemFilteringSchema;
+  const cf = useContentFiltering(schema, filteringOptions);
   return {
     ...cf.values,
     cf,
+    schema,
     setEffect: cf.setters.effect,
     setOnlyInShop: cf.setters.onlyInShop,
   };

@@ -27,6 +27,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockUserContextValue } from "../../setup/userContext";
 
 type Result = RouterOutputs["poll"]["createPoll"];
 type CreateInput = RouterInputs["poll"]["createPoll"];
@@ -149,7 +150,7 @@ describe("poll save flows", () => {
         deletePollOption: { useMutation: noMutation },
       },
     });
-    vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    mockUserContextValue({
       data: { userId: "admin", role: "CONTENT-ADMIN" },
     } as never);
     vi.spyOn(UserSearchSelect, "default").mockImplementation(() => null);
@@ -336,7 +337,7 @@ describe("poll list", () => {
         deletePollOption: { useMutation: noMutation },
       },
     });
-    vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    mockUserContextValue({
       data: { userId: "admin", role: "CONTENT-ADMIN" },
     } as never);
     vi.spyOn(UserSearchSelect, "default").mockImplementation(() => null);
@@ -369,20 +370,29 @@ describe("poll list", () => {
     expect(header(view, "Second title").getAttribute("aria-expanded")).toBe("true");
   });
 
-  it("offers closing an active poll from the results and the voting view", () => {
+  it("offers closing an active poll from the results and the voting view", async () => {
     const view = render(
       <QueryClientProvider client={queryClient}>
         <PollsPage />
       </QueryClientProvider>,
     );
-    const results = view.getByRole("button", { name: "Close Poll" });
+    // The trigger's wrapper also carries the button role; the styled control is the <button>.
+    const closeButtons = () =>
+      view
+        .getAllByRole("button", { name: "Close Poll" })
+        .filter((button) => button.tagName === "BUTTON");
+    const results = closeButtons()[0]!;
     expect(results.className).toContain("bg-destructive");
     fireEvent.click(results);
-    fireEvent.click(view.getByRole("button", { name: "Vote Now" }));
-    const voting = view.getByRole("button", { name: "Close Poll" });
+    expect(closePoll).not.toHaveBeenCalled();
+    fireEvent.click(closeButtons().at(-1)!);
+    // The dialog closes once the accepted action had its chance to start loading.
+    fireEvent.click(await view.findByRole("button", { name: "Vote Now" }));
+    const voting = closeButtons()[0]!;
     expect(voting).not.toBe(results);
     expect(voting.className).toBe(results.className);
     fireEvent.click(voting);
+    fireEvent.click(closeButtons().at(-1)!);
     expect(closePoll.mock.calls).toEqual([
       [{ id: "poll-1", isActive: false }],
       [{ id: "poll-1", isActive: false }],
@@ -442,7 +452,7 @@ describe("poll creation form options", () => {
       },
       profile: { searchUsers: { useQuery: () => ({ data: players }) } },
     });
-    vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    mockUserContextValue({
       data: { role: "OWNER" },
     } as never);
     vi.spyOn(Avatar, "default").mockImplementation(() => null);
@@ -580,7 +590,7 @@ describe("poll user options", () => {
         },
       },
     });
-    vi.spyOn(UserContext, "useUserData").mockReturnValue({
+    mockUserContextValue({
       data: { role: "OWNER" },
     } as never);
     vi.spyOn(UserSearchSelect, "default").mockImplementation(({ useFormMethods }) => (

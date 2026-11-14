@@ -1,10 +1,11 @@
 "use client";
 
 import { use } from "react";
-import type { UseFormReturn } from "react-hook-form";
+import { type UseFormReturn, useWatch } from "react-hook-form";
 import { api } from "@/app/_trpc/client";
 import type { Bloodline } from "@/drizzle/schema";
 import { useBloodlineEditForm } from "@/hooks/bloodline";
+import { useEditorTitle } from "@/hooks/useEditorTitle";
 import { useRequireRole } from "@/hooks/useRequireRole";
 import ContentBox from "@/layout/ContentBox";
 import { BloodlineHelper } from "@/layout/ContentHelp";
@@ -78,15 +79,16 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
     setEffects,
     handleBloodlineSubmit,
   } = useBloodlineEditForm(props.bloodline, props.refetch);
+  const entryName = useWatch({ control: form.control, name: "name" });
+  const heading = useEditorTitle("bloodline", entryName);
 
   // Show panel controls
   return (
     <>
       <ContentBox
-        title="Content Panel"
+        title={heading}
         subtitle="Bloodline Management"
         defaultBackHref="/manual/bloodline"
-        noRightAlign={true}
         topRightContent={
           <BloodlineHelper
             bloodline={form.getValues() as unknown as ZodBloodlineType}
@@ -96,6 +98,7 @@ const SingleEditBloodline: React.FC<SingleEditBloodlineProps> = (props) => {
         {!loading && (
           <>
             <EditContent
+              guardUnsavedChanges
               schema={BloodlineValidator}
               form={form as unknown as UseFormReturn<ZodBloodlineType, any>}
               formData={formData}

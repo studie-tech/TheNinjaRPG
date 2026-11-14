@@ -18,15 +18,15 @@ import Link from "@/layout/Link";
 import ListLoader from "@/layout/ListLoader";
 import { useInfinitePagination } from "@/libs/pagination";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 export default function ManualBloodlines() {
   // Settings
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const [lastElement, setLastElement] = useState<HTMLDivElement | null>(null);
 
   // Two-level filtering
-  const state = useFiltering();
+  const state = useFiltering(undefined, { persistKey: "manual-bloodline" });
 
   // Data
   const {
@@ -39,6 +39,7 @@ export default function ManualBloodlines() {
   } = api.bloodline.getAll.useInfiniteQuery(
     { limit: 10, ...getFilter(state) },
     {
+      enabled: state.cf.isReady,
       getNextPageParam: (lastPage) => lastPage.nextCursor,
       placeholderData: (previousData) => previousData,
     },
@@ -46,7 +47,7 @@ export default function ManualBloodlines() {
   const allBloodlines = bloodlines?.pages.flatMap((page) => page.data);
   useInfinitePagination({ fetchNextPage, hasNextPage, lastElement });
 
-  const { onCreated, onDeleted } = useContentListActions(
+  const { onCreated, onDeleted, isOpeningCreated } = useContentListActions(
     refetch,
     "/manual/bloodline/edit",
   );
@@ -61,7 +62,7 @@ export default function ManualBloodlines() {
   });
 
   // Derived
-  const totalLoading = isFetching || load1 || load2;
+  const totalLoading = !state.cf.isReady || isFetching || load1 || load2;
 
   return (
     <>
@@ -109,7 +110,12 @@ export default function ManualBloodlines() {
           <div className="flex flex-row items-center gap-1">
             {userData && canChangeContent(userData.role) && (
               <>
-                <Button id="create-bloodline" onClick={() => create()}>
+                <Button
+                  id="create-bloodline"
+                  onClick={() => create()}
+                  disabled={load1 || isOpeningCreated}
+                  loading={load1 || isOpeningCreated}
+                >
                   <FilePlus className="h-5 w-5" />
                 </Button>
                 <Link href="/manual/bloodline/mass_edit">
@@ -144,7 +150,7 @@ export default function ManualBloodlines() {
           </div>
         ))}
         <ListLoader
-          initialLoading={isPending}
+          initialLoading={!state.cf.isReady || isPending}
           loading={totalLoading}
           explanation="Loading data"
         />

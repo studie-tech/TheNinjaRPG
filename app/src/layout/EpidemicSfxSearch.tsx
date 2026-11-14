@@ -9,7 +9,7 @@ import Loader from "@/layout/Loader";
 import { showMutationToast } from "@/libs/toast";
 import { canChangeContent } from "@/utils/permissions";
 import { formatSoundLength } from "@/utils/time";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 
 interface EpidemicSfxSearchProps {
   /** Runs after import caches refresh; a returned promise keeps import controls pending. */
@@ -21,7 +21,7 @@ interface EpidemicSfxSearchProps {
  * "Use this" copies the sound to our storage as a new SFX asset with its license recorded.
  */
 export const EpidemicSfxSearch: React.FC<EpidemicSfxSearchProps> = ({ onImported }) => {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
   const [draft, setDraft] = useState("");
   const [term, setTerm] = useState("");
   const [importError, setImportError] = useState<string | null>(null);

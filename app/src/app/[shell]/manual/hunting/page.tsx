@@ -5,15 +5,26 @@ import { useRef, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { NumberInput, validateNumberInputs } from "@/components/ui/number-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { HUNTING_CONTRACT_DEFAULTS, HUNTING_RANKS } from "@/drizzle/constants";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
+import { Confirm } from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { LabeledField } from "@/layout/LabeledField";
 import Loader from "@/layout/Loader";
 import { SearchSelect } from "@/layout/SearchSelect";
 import { canChangeContent } from "@/utils/permissions";
-import { useUserData } from "@/utils/UserContext";
+import { useUserDataSelector } from "@/utils/UserContext";
 import {
   type HuntingContract,
   type HuntingHabitatContent,
@@ -22,11 +33,14 @@ import {
 
 /** Author habitats and contract rules through permission-checked hunting procedures. */
 export default function HuntingEditor() {
-  const { data: user } = useUserData();
+  const { data: user } = useUserDataSelector((u) => ({ role: u.role }));
   const allowed = !!user && canChangeContent(user.role);
   const utils = api.useUtils();
   const [id, setId] = useState<string>();
   const [content, setContent] = useState<HuntingHabitatContent>(newHabitat);
+  // The habitat as last loaded or saved; any difference is unsaved work worth guarding.
+  const [savedContent, setSavedContent] = useState(() => JSON.stringify(content));
+  const unsavedGuard = useUnsavedChangesGuard(JSON.stringify(content) !== savedContent);
   const [message, setMessage] = useState("");
   const form = useRef<HTMLDivElement>(null);
   const definitions = api.hunting.getAll.useQuery(undefined, { enabled: allowed });
@@ -38,6 +52,7 @@ export default function HuntingEditor() {
       if (r.success && "id" in r) {
         setId(r.id);
         setContent(r.content);
+        setSavedContent(JSON.stringify(r.content));
         await Promise.all([
           definitions.refetch(),
           utils.hunting.getBoard.invalidate(),
@@ -51,8 +66,10 @@ export default function HuntingEditor() {
     onSuccess: async (r) => {
       setMessage(r.message);
       if (r.success) {
+        const fresh = newHabitat();
         setId(undefined);
-        setContent(newHabitat());
+        setContent(fresh);
+        setSavedContent(JSON.stringify(fresh));
         await Promise.all([
           definitions.refetch(),
           utils.hunting.getBoard.invalidate(),
@@ -97,51 +114,74 @@ export default function HuntingEditor() {
       subtitle="Habitats, creatures, contracts and materials"
       defaultBackHref="/manual"
     >
+      {unsavedGuard.dialog}
       <div className="space-y-4" ref={form}>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="secondary"
             disabled={pending}
-            onClick={() => {
-              setId(undefined);
-              setContent(newHabitat());
-              setMessage("");
-            }}
+            onClick={() =>
+              unsavedGuard.confirmDiscard(() => {
+                const fresh = newHabitat();
+                setId(undefined);
+                setContent(fresh);
+                setSavedContent(JSON.stringify(fresh));
+                setMessage("");
+              })
+            }
           >
             New habitat
           </Button>
-          <select
-            aria-label="Edit existing habitat"
-            className="min-w-0 flex-1 rounded border bg-background p-2"
+          <Select
             value={id ?? ""}
             disabled={pending}
-            onChange={(e) => {
-              const h = definitions.data?.find((h) => h.id === e.target.value);
+            onValueChange={(value) => {
+              const h = definitions.data?.find((h) => h.id === value);
               if (h) {
-                setId(h.id);
-                setContent(h.content);
-                setMessage("");
+                unsavedGuard.confirmDiscard(() => {
+                  setId(h.id);
+                  setContent(h.content);
+                  setSavedContent(JSON.stringify(h.content));
+                  setMessage("");
+                });
               }
             }}
           >
-            <option value="">Select habitat</option>
-            {definitions.data?.map((h) => (
-              <option key={h.id} value={h.id}>
-                {h.content.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              aria-label="Edit existing habitat"
+              className="min-w-0 flex-1"
+            >
+              <SelectValue placeholder="Select habitat" />
+            </SelectTrigger>
+            <SelectContent>
+              {definitions.data?.map((h) => (
+                <SelectItem key={h.id} value={h.id}>
+                  {h.content.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button loading={save.isPending} disabled={pending} onClick={submit}>
             Save habitat
           </Button>
           {id && (
-            <Button
-              variant="destructive"
+            <Confirm
+              title="Delete habitat?"
               disabled={pending}
-              onClick={() => remove.mutate({ id })}
+              isLoading={remove.isPending}
+              proceed_label="Delete"
+              confirmClassName="bg-red-600 text-white hover:bg-red-700"
+              button={
+                <Button variant="destructive" disabled={pending}>
+                  Delete habitat
+                </Button>
+              }
+              onAccept={() => remove.mutate({ id })}
             >
-              Delete habitat
-            </Button>
+              Delete &quot;{content.name}&quot; and its {content.contracts.length}{" "}
+              {content.contracts.length === 1 ? "contract" : "contracts"}? Hunters who
+              already accepted a contract keep their terms.
+            </Confirm>
           )}
         </div>
         {(message || definitions.error || ais.error || items.error) && (
@@ -174,14 +214,14 @@ export default function HuntingEditor() {
               onChange={(e) => patch({ description: e.target.value })}
             />
           </LabeledField>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+          <div className="flex items-center gap-2">
+            <Switch
+              id="habitat-enabled"
               checked={content.enabled}
-              onChange={(e) => patch({ enabled: e.target.checked })}
+              onCheckedChange={(enabled) => patch({ enabled })}
             />
-            Habitat enabled
-          </label>
+            <Label htmlFor="habitat-enabled">Habitat enabled</Label>
+          </div>
           <p className="text-muted-foreground text-sm">
             Use published, reachable sectors. Each contract assigns one personal sector.
             Changes apply to newly accepted contracts. Active hunters keep their
@@ -223,17 +263,23 @@ export default function HuntingEditor() {
                   />
                 </LabeledField>
                 <LabeledField label="Required hunting rank">
-                  <select
-                    className="w-full rounded border bg-background p-2"
+                  <Select
                     value={c.rank}
-                    onChange={(e) =>
-                      edit(ci, { rank: e.target.value as HuntingContract["rank"] })
+                    onValueChange={(value) =>
+                      edit(ci, { rank: value as HuntingContract["rank"] })
                     }
                   >
-                    {HUNTING_RANKS.map((r) => (
-                      <option key={r}>{r}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger aria-label="Required hunting rank">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {HUNTING_RANKS.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {r}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </LabeledField>
                 <LabeledField label="Combat difficulty">
                   <Input
@@ -284,14 +330,14 @@ export default function HuntingEditor() {
                     onValueChange={(v) => edit(ci, { experience: v })}
                   />
                 </LabeledField>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id={`contract-enabled-${c.id}`}
                     checked={c.enabled}
-                    onChange={(e) => edit(ci, { enabled: e.target.checked })}
+                    onCheckedChange={(enabled) => edit(ci, { enabled })}
                   />
-                  Contract enabled
-                </label>
+                  <Label htmlFor={`contract-enabled-${c.id}`}>Contract enabled</Label>
+                </div>
               </div>
               <h4 className="font-semibold">Materials</h4>
               <p className="text-sm">

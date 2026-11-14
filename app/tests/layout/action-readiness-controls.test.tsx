@@ -8,7 +8,7 @@ import * as ContentBox from "@/layout/ContentBox";
 import { ClanBattles } from "@/layout/clan/ClanBattles";
 import * as Image from "@/layout/Image";
 import * as Link from "@/layout/Link";
-import * as UserContext from "@/utils/UserContext";
+import { mockUserContextValue } from "../setup/userContext";
 
 let actor: Record<string, unknown>;
 const mutate = vi.fn(async () => ({ success: false }));
@@ -82,16 +82,13 @@ beforeEach(() => {
       initiateClanBattle: mutation,
     },
   });
-  vi.spyOn(UserContext, "useRequiredUserData").mockImplementation(
-    () =>
-      ({
-        data: actor,
-        timeDiff: 0,
-        updateUser: async () => {},
-        prepareUserUpdate: () => 1,
-      }) as never,
-  );
-  vi.spyOn(UserContext, "useUserData").mockReturnValue({ pusher: undefined } as never);
+  mockUserContextValue({
+    data: actor,
+    timeDiff: 0,
+    updateUser: async () => true,
+    prepareUserUpdate: (() => 1) as never,
+    pusher: undefined,
+  });
   vi.spyOn(nextNavigation, "useRouter").mockReturnValue({
     push: vi.fn(),
     prefetch: vi.fn(),
