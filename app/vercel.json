@@ -102,6 +102,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/hourly-ads-conversions",
+      "schedule": "20 * * * *"
+    },
+    {
       "path": "/api/auction-expire",
       "schedule": "*/5 * * * *"
     },

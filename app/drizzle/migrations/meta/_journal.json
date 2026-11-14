@@ -1079,6 +1079,13 @@
       "when": 1794610353211,
       "tag": "0154_auction_history_items",
       "breakpoints": false
+    },
+    {
+      "idx": 155,
+      "version": "5",
+      "when": 1794638471024,
+      "tag": "0155_pale_stone_men",
+      "breakpoints": false
     }
   ]
 }

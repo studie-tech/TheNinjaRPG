@@ -16,6 +16,7 @@ import { ReadingPreferencesProvider } from "@/hooks/useReadingPreferences";
 import AcceptWarning from "@/layout/AcceptWarning";
 import { ActiveSessionBoundary } from "@/layout/ActiveSessionBoundary";
 import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
+import { AdClickConsentWatcher } from "@/layout/AdClickConsentWatcher";
 import { EventTournamentNotice } from "@/layout/EventTournamentNotice";
 import { ExperimentSpeedInsights } from "@/layout/ExperimentSpeedInsights";
 import LayoutSwitcher from "@/layout/LayoutSwitcher";
@@ -204,6 +205,7 @@ export default async function RootLayout({
                   <TavernActivity />
                   <PWAManager />
                   <NativeBridge />
+                  <AdClickConsentWatcher />
                   <InstallPrompt />
                   <ExperimentSpeedInsights wallpaper={variant.wallpaper} />
                 </InstallPromptProvider>

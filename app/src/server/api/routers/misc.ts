@@ -7,7 +7,12 @@ import {
   getAwardReputationUserUpdate,
   getSetEventGameSettingUserUpdate,
 } from "@/deltas/misc";
-import { Sentiment, TRAINING_CAPTCHA_REFRESHES_PER_MINUTE } from "@/drizzle/constants";
+import {
+  AdClickConsents,
+  AdClickIdTypes,
+  Sentiment,
+  TRAINING_CAPTCHA_REFRESHES_PER_MINUTE,
+} from "@/drizzle/constants";
 import {
   captchaAnswerMatches,
   randomCaptchaValue,
@@ -20,6 +25,11 @@ import {
   updateGameSetting,
 } from "@/libs/gamesettings";
 import { WALLPAPER_VARIANTS } from "@/libs/wallpaperExperiment";
+import {
+  deleteLinkedAdClicksForWithdrawnConsent,
+  deleteUnlinkedAdClickForWithdrawnConsent,
+  insertAdClickForTrackVisitor,
+} from "@/queries/adConversions";
 import {
   deleteEmailReminderForDeleteEmailReminder,
   fetchEmailReminder,
@@ -72,6 +82,7 @@ import {
   serverError,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { AD_CLICK_ID_PATTERN, adClickConsentFor } from "@/server/utils/adConversions";
 import { offsetPage } from "@/server/utils/pagination";
 import {
   canAwardReputation,
@@ -106,13 +117,22 @@ const trackVisitorSchema = z.object({
   ref: z.string().max(191).optional(),
   utmSource: z.string().max(191).optional(),
   wallpaperVariant: z.enum(WALLPAPER_VARIANTS).optional(),
+  // Validated in the procedure, so a malformed click ID never drops the visit itself.
+  adClick: z
+    .object({
+      clickId: z.string().max(512),
+      clickIdType: z.enum(AdClickIdTypes),
+      marketingConsent: z.enum(AdClickConsents),
+    })
+    .optional(),
 });
 
 export const miscRouter = createTRPCRouter({
   trackVisitor: publicProcedure
     .meta({ mcp: { description: "Track visitor for analytics" } })
     .input(trackVisitorSchema)
-    .output(baseServerResponse)
+    // Whether the ad click was kept, so the device may remember it until registration.
+    .output(baseServerResponse.extend({ isAdClickKept: z.boolean().optional() }))
     .mutation(async ({ ctx, input }) => {
       // Only track if not logged in
       if (ctx.userId) return { success: true, message: "Already logged in" };
@@ -127,14 +147,55 @@ export const miscRouter = createTRPCRouter({
             : undefined,
       });
 
+      const adClick =
+        input.adClick && AD_CLICK_ID_PATTERN.test(input.adClick.clickId)
+          ? input.adClick
+          : null;
+      const adClickConsent = adClick
+        ? adClickConsentFor(adClick.marketingConsent, ctx.userCountry)
+        : null;
+
       // Insert new visitor and log AB test loaded events (if applicable) in parallel
       await Promise.all([
         insertVisitorLogForTrackVisitor(ctx.drizzle, ip, input, ctx),
+        ...(adClick && adClickConsent
+          ? [
+              insertAdClickForTrackVisitor(ctx.drizzle, {
+                clickId: adClick.clickId,
+                clickIdType: adClick.clickIdType,
+                ip,
+                consent: adClickConsent,
+              }),
+            ]
+          : []),
         ...experiments.map((experiment) =>
           insertAbEventForTrackVisitor(ctx.drizzle, experiment, input, ip, ctx),
         ),
       ]);
-      return { success: true, message: "Visitor tracked" };
+      return {
+        success: true,
+        message: "Visitor tracked",
+        isAdClickKept: Boolean(adClick && adClickConsent),
+      };
+    }),
+  // Public: a visitor can decline marketing cookies before or after signing in.
+  withdrawAdClickConsent: publicProcedure
+    .meta({ mcp: { description: "Forget the visitor's Google Ads click" } })
+    .input(z.object({ clickId: z.string().max(512).optional() }))
+    .output(baseServerResponse)
+    .mutation(async ({ ctx, input }) => {
+      if (!input.clickId && !ctx.userId) {
+        return { success: true, message: "No ad click to forget" };
+      }
+      await Promise.all([
+        ...(input.clickId
+          ? [deleteUnlinkedAdClickForWithdrawnConsent(ctx.drizzle, input.clickId)]
+          : []),
+        ...(ctx.userId
+          ? [deleteLinkedAdClicksForWithdrawnConsent(ctx.drizzle, ctx.userId)]
+          : []),
+      ]);
+      return { success: true, message: "Ad click forgotten" };
     }),
   getAllGameAssetNames: publicProcedure
     .meta({ mcp: { description: "Get all game asset names" } })

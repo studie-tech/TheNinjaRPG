@@ -4640,3 +4640,18 @@ export const MAX_ACTIVITY_REDUCTION_PERCENT = 60;
 export const MAX_HUNTING_BONUS_QUANTITY = 20;
 /** Per-effect and total extra units per successful gathering material. */
 export const MAX_GATHERING_BONUS_QUANTITY = 20;
+
+/**
+ * Consent recorded with a Google Ads click ID: the visitor accepted marketing cookies, or
+ * never answered the consent dialog outside the regions where Google requires consent.
+ */
+export const AdClickConsents = ["granted", "unanswered"] as const;
+export type AdClickConsent = (typeof AdClickConsents)[number];
+
+/** Google Ads click identifiers: gclid, or gbraid/wbraid where iOS limits tracking. */
+export const AdClickIdTypes = ["gclid", "gbraid", "wbraid"] as const;
+export type AdClickIdType = (typeof AdClickIdTypes)[number];
+
+/** Google Ads conversions the server reports for a linked ad click. */
+export const AdConversionActions = ["register", "tutorialComplete"] as const;
+export type AdConversionAction = (typeof AdConversionActions)[number];

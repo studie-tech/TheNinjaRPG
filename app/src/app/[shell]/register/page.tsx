@@ -48,6 +48,11 @@ import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
+import {
+  markAdClickLinked,
+  readMarketingConsent,
+  readStoredAdClick,
+} from "@/libs/campaignSource";
 import { trackConversion } from "@/libs/conversionTracking";
 import {
   firstInvalidRegistrationStep,
@@ -166,6 +171,7 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
         if (data.success) {
           // Publish the confirmed receipt before cache reconciliation can fail.
           trackConversion("register", data.registrationId ?? userId ?? undefined);
+          if (data.isAdClickLinked) markAdClickLinked();
           await utils.profile.getUser.invalidate();
           createAvatar.mutate();
         } else {
@@ -225,7 +231,12 @@ const RegisterForm: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
   // Handle form submission. An invalid submit returns to the first step with an error,
   // where each field shows its message inline.
   const handleCreateCharacter = form.handleSubmit(
-    (data) => createCharacter(data),
+    (data) =>
+      createCharacter({
+        ...data,
+        marketingConsent: readMarketingConsent(),
+        adClickId: readStoredAdClick(),
+      }),
     (errors) => {
       const invalid = firstInvalidRegistrationStep(Object.keys(errors));
       if (!invalid) return;

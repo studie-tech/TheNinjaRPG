@@ -1,5 +1,10 @@
 import * as Sentry from "@sentry/nextjs";
-import { huntingProgress, huntingReceipt, huntingSession } from "@/drizzle/schema";
+import {
+  adClick,
+  huntingProgress,
+  huntingReceipt,
+  huntingSession,
+} from "@/drizzle/schema";
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
 import { deleteRowsForUser } from "@/queries/accountDeletion";
 import { deleteAiTransformationsFor } from "@/queries/ai";
@@ -193,7 +198,8 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
 
   // Batch 4: Game progress & items
   await Promise.all([
-    ...[huntingSession, huntingProgress, huntingReceipt].map((table) =>
+    // A linked ad click goes with the character, so a recreated one is not reported again.
+    ...[huntingSession, huntingProgress, huntingReceipt, adClick].map((table) =>
       deleteRowsForUser(client, table, userId),
     ),
     deleteAiSpriteAnimationBindings(client, userId),

@@ -8,6 +8,7 @@ import {
   lockWithHourlyTimer,
 } from "@/libs/gamesettings";
 import {
+  deleteAdClickForGET,
   deleteAutomatedModerationForGET,
   deleteBattleActionForGET,
   deleteBattleForGET,
@@ -229,6 +230,9 @@ export async function GET(request: Request) {
 
     // Delete historical ips older than 90 days
     await deleteHistoricalIpForGET(drizzleDB, rangeCleanupBatchSize);
+
+    // Delete Google Ads clicks whose conversions Google no longer accepts
+    await deleteAdClickForGET(drizzleDB, rangeCleanupBatchSize);
 
     // Clean activity events older than 10 days
     await deleteUserActivityEventForGET(drizzleDB, rangeCleanupBatchSize);

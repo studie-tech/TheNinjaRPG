@@ -6610,6 +6610,65 @@ export const abEvent = mysqlTable(
 );
 export type AbEvent = InferSelectModel<typeof abEvent>;
 
+// Google Ads click IDs from landing URLs. Character creation links a click to the new
+// character, and the hourly conversion upload reports its sign-up and tutorial completion.
+export const adClick = mysqlTable(
+  "AdClick",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    clickId: varchar("clickId", { length: 191 }).notNull(),
+    clickIdType: mysqlEnum("clickIdType", consts.AdClickIdTypes).notNull(),
+    ipHash: varchar("ipHash", { length: 64 }).notNull(),
+    userId: varchar("userId", { length: 191 }),
+    adUserDataConsent: mysqlEnum("adUserDataConsent", consts.AdClickConsents).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    // When Google settled the conversion: processed it, or rejected it for good.
+    registerReportedAt: datetime("registerReportedAt", { mode: "date", fsp: 3 }),
+    tutorialReportedAt: datetime("tutorialReportedAt", { mode: "date", fsp: 3 }),
+  },
+  (table) => {
+    return {
+      clickIdUnique: uniqueIndex("AdClick_clickId_key").on(table.clickId),
+      ipHashCreatedAtIdx: index("AdClick_ipHash_createdAt_idx").on(
+        table.ipHash,
+        table.createdAt,
+      ),
+      userIdIdx: index("AdClick_userId_idx").on(table.userId),
+      createdAtIdx: index("AdClick_createdAt_idx").on(table.createdAt),
+    };
+  },
+);
+export type AdClick = InferSelectModel<typeof adClick>;
+
+// Conversions sent to the Data Manager API whose processing Google has not reported yet.
+// The next upload run reads each request's status by `requestId`, where Google names
+// failed events by their position in the request.
+export const adConversionUpload = mysqlTable(
+  "AdConversionUpload",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    requestId: varchar("requestId", { length: 191 }).notNull(),
+    eventIndex: int("eventIndex").notNull(),
+    adClickId: varchar("adClickId", { length: 191 }).notNull(),
+    action: mysqlEnum("action", consts.AdConversionActions).notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      requestIdIdx: index("AdConversionUpload_requestId_idx").on(table.requestId),
+      adClickActionUnique: uniqueIndex("AdConversionUpload_adClickId_action_key").on(
+        table.adClickId,
+        table.action,
+      ),
+      createdAtIdx: index("AdConversionUpload_createdAt_idx").on(table.createdAt),
+    };
+  },
+);
+
 // Tracks unique anonymous visitors before account creation
 export const visitorLog = mysqlTable(
   "VisitorLog",

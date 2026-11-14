@@ -20,6 +20,7 @@ const anonymousCaller = async () =>
     userId: null,
     userIp: "127.0.0.1",
     userAgent: undefined,
+    userCountry: undefined,
     abLemuReplacementVariant: undefined,
     wallpaperVariant: undefined,
   } as never);
