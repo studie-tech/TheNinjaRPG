@@ -149,9 +149,9 @@ export const SurroundingUsers: React.FC<SurroundingUsersProps> = (props) => {
               return (
                 <li
                   key={user.userId}
-                  className="grid min-w-0 grid-cols-2 items-center gap-3 px-2 py-3 text-sm lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)]"
+                  className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-2 py-2 text-sm lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)] lg:gap-3 lg:py-3"
                 >
-                  <div className="col-span-2 flex min-w-0 items-center gap-3 lg:col-span-1">
+                  <div className="flex min-w-0 items-center gap-3">
                     <AvatarImage
                       href={user.avatar}
                       alt={user.username}
@@ -170,11 +170,11 @@ export const SurroundingUsers: React.FC<SurroundingUsersProps> = (props) => {
                     />
                     {village?.name ?? "Unknown"}
                   </span>
-                  <span>
+                  <span className="justify-self-end lg:justify-self-auto">
                     Lvl. {getKnownEffectiveLevel(user) ?? "?"} · Bracket{" "}
                     {getKnownExpBracket(user) ?? "?"}
                   </span>
-                  <span className="text-muted-foreground">
+                  <span className="text-muted-foreground col-start-2 row-start-1 justify-self-end lg:col-start-auto lg:row-start-auto lg:justify-self-auto">
                     [{user.longitude}, {user.latitude}]
                   </span>
                   <div className="col-span-2 flex flex-wrap items-center gap-2 lg:col-span-1">
