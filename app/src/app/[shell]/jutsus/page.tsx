@@ -79,6 +79,10 @@ import { readUploadResult, showUploadError, UploadButton } from "@/utils/uploadt
 import type { JutsuReskinCreateSchema } from "@/validators/jutsu";
 import { jutsuReskinCreateSchema } from "@/validators/jutsu";
 
+/** Why a jutsu in training cannot take part in a level transfer. */
+const TRANSFER_TRAINING_REASON =
+  "Finish or cancel training in the Training Grounds first.";
+
 /** Manage learned jutsu, training and evolutions with shared requirement checks and cache updates. */
 export default function MyJutsu() {
   // tRPC utility
@@ -108,9 +112,9 @@ export default function MyJutsu() {
   const actionsTriggerRef = useRef<HTMLButtonElement>(null);
   const [isReskinOpen, setIsReskinOpen] = useState<boolean>(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const [userjutsu, setUserJutsu] = useState<UserJutsuWithRelations | undefined>(
-    undefined,
-  );
+  const [selectedUserJutsu, setUserJutsu] = useState<
+    UserJutsuWithRelations | undefined
+  >(undefined);
   const [transferTarget, setTransferTarget] = useState<
     UserJutsuWithRelations | undefined
   >(undefined);
@@ -177,6 +181,10 @@ export default function MyJutsu() {
     jutsuInput,
     { enabled: !!userData, placeholderData: (previousData) => previousData },
   );
+  // Keep open-dialog training and levels current when ownership data is refreshed.
+  const userjutsu =
+    userJutsus?.find((owned) => owned.id === selectedUserJutsu?.id) ??
+    selectedUserJutsu;
   useEffect(() => {
     if (userJutsus) setClientNow(Date.now());
   }, [userJutsus]);
@@ -209,6 +217,22 @@ export default function MyJutsu() {
         : userJutsu.level,
     };
   });
+
+  // Jutsu that can receive levels from the open jutsu. Ones in training stay listed but
+  // greyed out: the server refuses the transfer until the training ends.
+  const transferCandidates = userjutsu
+    ? (userJutsus ?? []).filter(
+        (uj) =>
+          uj.jutsu.jutsuType === userjutsu.jutsu.jutsuType &&
+          uj.jutsu.jutsuRank === userjutsu.jutsu.jutsuRank &&
+          uj.id !== userjutsu.id &&
+          !uj.jutsu.parentJutsuId &&
+          uj.level < JUTSU_TRANSFER_MAX_LEVEL,
+      )
+    : [];
+  const trainingTransferIds = transferCandidates
+    .filter((uj) => isJutsuInTraining(uj, serverNow))
+    .map((uj) => uj.id);
 
   // Transfer costs
   const prevFreeTransfers = filterFreeJutsuTransfers(recentTransfers ?? []);
@@ -901,6 +925,12 @@ export default function MyJutsu() {
                                 : `${transferCost} reputation points`}
                             </p>
                           </>
+                        ) : isJutsuInTraining(userjutsu, serverNow) ? (
+                          <p>
+                            {userjutsu.jutsu.name} is in training. Finish or cancel the
+                            training in the Training Grounds before transferring its
+                            levels.
+                          </p>
                         ) : (
                           <div className="flex flex-col gap-2">
                             <p>
@@ -909,33 +939,35 @@ export default function MyJutsu() {
                             </p>
                             <ActionSelector
                               gridClassNameOverwrite="grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))]"
-                              items={userJutsus
-                                ?.filter(
-                                  (uj) =>
-                                    uj.jutsu.jutsuType === userjutsu.jutsu.jutsuType &&
-                                    uj.jutsu.jutsuRank === userjutsu.jutsu.jutsuRank &&
-                                    uj.id !== userjutsu.id &&
-                                    !uj.jutsu.parentJutsuId &&
-                                    uj.level < JUTSU_TRANSFER_MAX_LEVEL &&
-                                    !isJutsuInTraining(uj, serverNow),
-                                )
-                                ?.map((uj) => ({
-                                  id: uj.id,
-                                  name: uj.jutsu.name,
-                                  image: uj.jutsu.image,
-                                  effects: uj.jutsu.effects,
-                                  type: "jutsu" as const,
-                                }))}
+                              items={transferCandidates.map((uj) => ({
+                                id: uj.id,
+                                name: uj.jutsu.name,
+                                image: uj.jutsu.image,
+                                effects: uj.jutsu.effects,
+                                type: "jutsu" as const,
+                                warning: trainingTransferIds.includes(uj.id)
+                                  ? TRANSFER_TRAINING_REASON
+                                  : undefined,
+                              }))}
+                              greyedIds={trainingTransferIds}
                               counts={userJutsuCounts}
                               labelSingles={true}
                               showBgColor={false}
                               showLabels={true}
                               onClick={(id) => {
+                                // The server refuses transfers into a jutsu in training.
+                                if (trainingTransferIds.includes(id)) return;
                                 setTransferTarget(
                                   userJutsus?.find((uj) => uj.id === id),
                                 );
                               }}
                             />
+                            {trainingTransferIds.length > 0 && (
+                              <p className="text-muted-foreground text-sm">
+                                Greyed-out jutsu are in training.{" "}
+                                {TRANSFER_TRAINING_REASON}
+                              </p>
+                            )}
                           </div>
                         )}
                       </Confirm>
