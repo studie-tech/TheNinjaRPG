@@ -26,8 +26,11 @@ export const useLpcCatalogInvalidation = () => {
             utils.gameAsset.getLpcSceneCatalog.setData(undefined, catalog);
             return cancelled;
           })
-          // The next scene then requests the catalog again.
-          .catch(() => utils.gameAsset.getLpcSceneCatalog.invalidate()),
+          .catch(async () => {
+            // A pending obsolete response must not mark the failed refresh as fresh.
+            await utils.gameAsset.getLpcSceneCatalog.cancel();
+            return utils.gameAsset.getLpcSceneCatalog.invalidate();
+          }),
       ]),
     [utils],
   );

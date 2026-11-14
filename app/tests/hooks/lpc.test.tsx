@@ -158,6 +158,32 @@ describe("scene character catalog loading", () => {
     },
   );
 
+  it.each([false, true])(
+    "retries after a failed save refresh despite a late obsolete response (cached: %s)",
+    async (hasCachedArtwork) => {
+      const scenes = queryCacheFixture();
+      const loader = renderHook(() => useLpcCatalogLoader());
+      const invalidation = renderHook(() => useLpcCatalogInvalidation());
+      const oldCatalog = buildLpcCatalog(lpcAssets);
+      if (hasCachedArtwork) {
+        await loader.result.current();
+        await scenes.invalidate();
+      }
+      const older = deferred<ReturnType<typeof buildLpcCatalog>>();
+      scenes.network.mockImplementationOnce(() => older.promise);
+      scenes.freshQuery.mockRejectedValueOnce(new Error("Catalog unavailable"));
+      // Cold readers handle cancellation through the renderer's existing failure path.
+      const loading = loader.result.current().catch(() => undefined);
+      await invalidation.result.current();
+      older.resolve(oldCatalog);
+      expect(await loading).toEqual(hasCachedArtwork ? oldCatalog : undefined);
+      const edited = [{ ...lpcAssets[0]!, id: "saved-artwork" }];
+      scenes.save(edited);
+      expect(await loader.result.current()).toEqual(buildLpcCatalog(edited));
+      expect(scenes.network).toHaveBeenCalledTimes(hasCachedArtwork ? 3 : 2);
+    },
+  );
+
   it("shares a prepared request with the first scene and refreshes later scenes", async () => {
     const request = fixture();
     const { result } = renderHook(() => useLpcCatalogLoader({ preload: true }));
