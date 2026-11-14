@@ -114,3 +114,32 @@ export const getSectorUserUpdate = (
     ),
   };
 };
+
+/**
+ * Add players who joined the sector after its snapshot, as the arrival read presents them.
+ * Players already shown keep their live map positions, so merging the snapshot moves nobody back.
+ */
+export const addSectorArrivals = (
+  current: RouterOutputs["travel"]["getSectorData"],
+  arrivals: RouterOutputs["travel"]["getSectorUsers"],
+  positions: ReadonlyMap<string, { longitude: number; latitude: number }>,
+): RouterOutputs["travel"]["getSectorData"] => {
+  // A viewer who cannot scout has an empty snapshot, which no arrival changes.
+  if (current.warData === null) return current;
+  const shown = new Set(current.users.map((row) => row.userId));
+  const added = arrivals.filter((row) => !shown.has(row.userId));
+  if (added.length === 0) return current;
+  return {
+    ...current,
+    users: [
+      ...current.users.map((row) => {
+        const live = positions.get(row.userId);
+        return live &&
+          (live.longitude !== row.longitude || live.latitude !== row.latitude)
+          ? { ...row, longitude: live.longitude, latitude: live.latitude }
+          : row;
+      }),
+      ...added,
+    ],
+  };
+};

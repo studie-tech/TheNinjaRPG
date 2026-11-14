@@ -33,7 +33,7 @@ import {
   village,
   war,
 } from "@/drizzle/schema";
-import { SECTOR_BATTLE_STALE_SECONDS } from "@/libs/travel";
+import { SECTOR_BATTLE_STALE_SECONDS, SECTOR_PRESENCE_STATUSES } from "@/libs/travel";
 import { spriteUserRelations } from "@/queries/lpc";
 import { fetchSector } from "@/queries/village";
 import { listVillageDutyPatrols } from "@/queries/villageDuty";
@@ -47,6 +47,53 @@ import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
 import { buildSectorWindowLayout } from "@/server/utils/sectorMap";
 import { secondsFromNow } from "@/utils/time";
 
+/** Public sector-map fields of another player, shared by the sector snapshot and arrivals. */
+const sectorUserColumns = {
+  userId: true,
+  username: true,
+  gender: true,
+  spriteBodyStyle: true,
+  longitude: true,
+  latitude: true,
+  location: true,
+  curHealth: true,
+  maxHealth: true,
+  sector: true,
+  status: true,
+  avatar: true,
+  avatarLight: true,
+  level: true,
+  experience: true,
+  rank: true,
+  isOutlaw: true,
+  isBanned: true,
+  immunityUntil: true,
+  robImmunityUntil: true,
+  updatedAt: true,
+  villageId: true,
+  battleId: true,
+  anbuId: true,
+  stealthActive: true,
+  stealthActivatedAt: true,
+  stealth: true,
+} as const;
+
+/** Sprite and ANBU relations a sector-map player needs for viewer-specific art and disguises. */
+const sectorUserRelations = {
+  ...spriteUserRelations,
+  anbuSquad: { columns: { id: true, name: true, image: true, villageId: true } },
+} as const;
+
+/** Other players the sector map shows: active, human and unbanned. */
+const sectorPresenceWhere = (sector: number) =>
+  and(
+    eq(userData.sector, sector),
+    eq(userData.isAi, false),
+    inArray(userData.status, [...SECTOR_PRESENCE_STATUSES]),
+    eq(userData.isBanned, false),
+    gte(userData.updatedAt, secondsFromNow(-36000)),
+  );
+
 /** Read the sector window without depending on the viewer's profile. */
 export const fetchSectorWindowData = (
   client: DrizzleClient,
@@ -55,54 +102,9 @@ export const fetchSectorWindowData = (
 ) =>
   Promise.all([
     client.query.userData.findMany({
-      columns: {
-        userId: true,
-        username: true,
-        gender: true,
-        spriteBodyStyle: true,
-        longitude: true,
-        latitude: true,
-        location: true,
-        curHealth: true,
-        maxHealth: true,
-        sector: true,
-        status: true,
-        avatar: true,
-        avatarLight: true,
-        level: true,
-        experience: true,
-        rank: true,
-        isOutlaw: true,
-        isBanned: true,
-        immunityUntil: true,
-        robImmunityUntil: true,
-        updatedAt: true,
-        villageId: true,
-        battleId: true,
-        anbuId: true,
-        stealthActive: true,
-        stealthActivatedAt: true,
-        stealth: true,
-      },
-      where: and(
-        eq(userData.sector, sector),
-        eq(userData.isAi, false),
-        inArray(userData.status, ["AWAKE", "BATTLE"]),
-        eq(userData.isBanned, false),
-        gte(userData.updatedAt, secondsFromNow(-36000)),
-        ne(userData.userId, userId),
-      ),
-      with: {
-        ...spriteUserRelations,
-        anbuSquad: {
-          columns: {
-            id: true,
-            name: true,
-            image: true,
-            villageId: true,
-          },
-        },
-      },
+      columns: sectorUserColumns,
+      where: and(sectorPresenceWhere(sector), ne(userData.userId, userId)),
+      with: sectorUserRelations,
     }),
     client.query.village.findFirst({
       where: eq(village.sector, sector),
@@ -265,6 +267,33 @@ export const findUserDataForGetSectorData = (
       },
       village: { columns: { kageId: true } },
     },
+  });
+
+/** Build the viewer lookup for `getSectorUsers`, projecting the fields that decide visibility. */
+export const findUserDataForGetSectorUsers = (
+  client: Pick<DrizzleClient, "query">,
+  ctx: { userId: string },
+) =>
+  client.query.userData.findFirst({
+    columns: { userId: true, villageId: true, sector: true, status: true },
+    where: eq(userData.userId, ctx.userId),
+  });
+
+/** Build the `userData` listing for `getSectorUsers`: the requested other players the sector map shows. */
+export const listUserDataForGetSectorUsers = (
+  client: Pick<DrizzleClient, "query">,
+  ctx: { userId: string },
+  sector: number,
+  userIds: string[],
+) =>
+  client.query.userData.findMany({
+    columns: sectorUserColumns,
+    where: and(
+      sectorPresenceWhere(sector),
+      inArray(userData.userId, userIds),
+      ne(userData.userId, ctx.userId),
+    ),
+    with: sectorUserRelations,
   });
 
 /** Build the `war` listing for `getSectorData`, using predicates on `status`. */

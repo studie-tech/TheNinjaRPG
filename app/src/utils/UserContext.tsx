@@ -18,7 +18,7 @@ import {
   useState,
 } from "react";
 import { api } from "@/app/_trpc/client";
-import type { UserCache, UserUpdate, UserUpdateOptions } from "@/deltas/profile";
+import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import type { StructureRoute } from "@/drizzle/constants";
 import { useActionPreferenceCacheUpdate } from "@/hooks/useActionPreferenceCacheUpdate";
 import { useMasteryQueueRefresh } from "@/hooks/useMasteryQueueRefresh";
@@ -31,11 +31,11 @@ import { getTerritoryWarBoostUntil } from "@/libs/territoryWar";
 import { showMutationToast } from "@/libs/toast";
 import type { AchievementProgress, UserWithRelations } from "@/routers/profile";
 import { parseHtml } from "@/utils/parse";
-import { updateQueryCache } from "@/utils/queryCache";
 import { loginRedirectPath } from "@/utils/routing";
 import {
   prepareUserUpdate as captureUserUpdate,
   updateUserCache,
+  updateUserNotifications,
 } from "@/utils/userCache";
 import { withoutUserPosition } from "@/utils/userCacheSharing";
 import { canAccessStructure, structureAccessDeniedMessage } from "@/utils/village";
@@ -276,10 +276,7 @@ export function UserContextProvider(props: {
   /** Apply notification changes together with other writers, preserving unrelated profile reconciliation. */
   const updateNotifications = useCallback(
     async (update: Parameters<UserContextValue["updateNotifications"]>[0]) => {
-      await updateQueryCache<UserCache>(queryClient, userQueryKey, (old) => {
-        const notifications = update(old.notifications) ?? old.notifications;
-        return notifications === old.notifications ? old : { ...old, notifications };
-      });
+      await updateUserNotifications(queryClient, userQueryKey, update);
     },
     [queryClient, userQueryKey],
   );

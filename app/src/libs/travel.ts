@@ -201,6 +201,19 @@ export const globalTravelFinishPatch = (
  */
 export const SECTOR_BATTLE_STALE_SECONDS = COMBAT_LOBBY_SECONDS + COMBAT_SECONDS * 5;
 
+/** Statuses that place another player on the sector map. */
+export const SECTOR_PRESENCE_STATUSES = ["AWAKE", "BATTLE"] as const;
+
+/** Most players one sector arrival read resolves. */
+export const SECTOR_ARRIVAL_BATCH_LIMIT = 50;
+
+/** How long a viewer gathers a burst of sector arrivals into one read. */
+export const SECTOR_ARRIVAL_BATCH_MS = 250;
+
+/** Whether a sector broadcast's status can add its player to the sector map. */
+export const isSectorPresenceStatus = (status: string | undefined) =>
+  (SECTOR_PRESENCE_STATUSES as readonly (string | undefined)[]).includes(status);
+
 /**
  * Drops BATTLE-status users whose fight is not live from the sector map.
  *

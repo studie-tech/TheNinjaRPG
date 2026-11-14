@@ -1,14 +1,15 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
-import { getSectorUserUpdate } from "@/deltas/travel";
+import { addSectorArrivals, getSectorUserUpdate } from "@/deltas/travel";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
 
 /** Bind caller-only sector reconciliation to the sector selected before an action starts. */
 export const useSectorCacheUpdate = (sector: number | undefined) => {
   const utils = api.useUtils();
-  const cache = useQueryCacheUpdate<RouterOutputs["travel"]["getSectorData"]>(
-    getQueryKey(api.travel.getSectorData, { sector }, "query"),
-  );
+  const client = useQueryClient();
+  const key = getQueryKey(api.travel.getSectorData, { sector }, "query");
+  const cache = useQueryCacheUpdate<RouterOutputs["travel"]["getSectorData"]>(key);
   /** Capture the exact sector and revision before movement, arrival or combat settlement. */
   const prepareSectorUpdate = () => ({ query: cache.prepareUpdate(), sector });
   /** Reuse the reconciled profile; uncertain results and world-wide changes retain a sector read. */
@@ -25,5 +26,17 @@ export const useSectorCacheUpdate = (sector: number | undefined) => {
       snapshot.query,
     );
   };
-  return { prepareSectorUpdate, updateSector };
+  /** Whether an unfinished snapshot read, which may predate an arrival, is still pending. */
+  const isSectorFetching = () => client.isFetching({ queryKey: key, exact: true }) > 0;
+  /** Add newcomers read after the captured revision; a snapshot read since then reloads instead. */
+  const addArrivals = (
+    snapshot: ReturnType<typeof prepareSectorUpdate>,
+    arrivals: RouterOutputs["travel"]["getSectorUsers"],
+    positions: ReadonlyMap<string, { longitude: number; latitude: number }>,
+  ) =>
+    cache.updateCache(
+      (current) => addSectorArrivals(current, arrivals, positions),
+      snapshot.query,
+    );
+  return { prepareSectorUpdate, updateSector, isSectorFetching, addArrivals };
 };

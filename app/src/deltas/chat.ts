@@ -67,6 +67,27 @@ export const clearInboxNotifications = (
     : notifications?.filter((entry) => entry.href !== "/inbox");
 
 /**
+ * Count a delivered private message in the inbox notification, matching the entry the
+ * profile builds from the server's `inboxNews` counter.
+ */
+export const incrementInboxNotifications = (
+  notifications: NavBarDropdownLink[] | undefined,
+  by = 1,
+): NavBarDropdownLink[] => {
+  const count = getInboxNews(notifications) + by;
+  const entry: NavBarDropdownLink = {
+    href: "/inbox",
+    name: `${count} messages`,
+    color: "hidden",
+    notificationCount: count,
+  };
+  const current = notifications ?? [];
+  return current.some((link) => link.href === "/inbox")
+    ? current.map((link) => (link.href === "/inbox" ? { ...link, ...entry } : link))
+    : [...current, entry];
+};
+
+/**
  * Whether a live comment belongs in the active search results, matching the server's
  * case-insensitive search of the content and the author's username.
  */
