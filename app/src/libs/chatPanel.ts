@@ -43,7 +43,7 @@ export const saveChatDraft = (
   key: string,
   text: string,
 ): Record<string, string> => {
-  const rest = Object.fromEntries(Object.entries(drafts).filter(([k]) => k !== key));
+  const { [key]: _previous, ...rest } = drafts;
   return text.trim() ? { ...rest, [key]: text } : rest;
 };
 
