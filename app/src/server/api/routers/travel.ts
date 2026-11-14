@@ -422,6 +422,7 @@ export const travelRouter = createTRPCRouter({
       if (user.status === "AWAKE" && !user.isAi) {
         users.push({
           attributes: user.attributes,
+          cosmeticSlots: user.cosmeticSlots,
           items: user.items,
           gender: user.gender,
           spriteBodyStyle: user.spriteBodyStyle,
@@ -467,7 +468,14 @@ export const travelRouter = createTRPCRouter({
           const warRelationship = getWarRelationship(warData, user, u) ?? null;
           const isMasked = disguise === "Mercenary";
           // Raw traits and inventory inputs stay server-side; masked users receive a uniform below.
-          const { attributes, items, gender, spriteBodyStyle, ...publicUser } = u;
+          const {
+            attributes,
+            items,
+            cosmeticSlots,
+            gender,
+            spriteBodyStyle,
+            ...publicUser
+          } = u;
           const participant = {
             ...publicUser,
             warRelationship,
@@ -475,6 +483,7 @@ export const travelRouter = createTRPCRouter({
             spriteAppearance: resolveSpriteAppearance({
               attributes,
               items,
+              cosmeticSlots,
               gender,
               spriteBodyStyle,
             }),

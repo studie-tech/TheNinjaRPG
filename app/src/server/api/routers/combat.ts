@@ -4426,7 +4426,10 @@ export const processUsersForBattle = async (
         ...inputUser,
         items: [],
       });
-      user.spriteEquipment = resolveSpriteEquipment(user.items);
+      user.spriteEquipment = resolveSpriteEquipment(
+        user.items,
+        inputUser.cosmeticSlots,
+      );
       user.spriteAppearance = withSpriteEquipment(
         user.spriteBaseAppearance,
         Object.values(user.spriteEquipment),

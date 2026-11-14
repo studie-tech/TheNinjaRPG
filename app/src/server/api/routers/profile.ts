@@ -81,6 +81,7 @@ import {
   getGlobalGameSettingNotifications,
 } from "@/libs/gameSettingBoost";
 import { getGameSetting, updateGameSetting } from "@/libs/gamesettings";
+import type { SpriteUser } from "@/libs/lpc/appearance";
 import {
   effectiveMasteries,
   type MasterySources,
@@ -3670,6 +3671,7 @@ export type UserWithRelations =
       activeReskin?: BloodlineReskin | null;
       anbuSquad?: { name: string; id?: string; points?: number } | null;
       attributes?: { attribute: string }[];
+      cosmeticSlots?: SpriteUser["cosmeticSlots"];
       clan?: Clan | null;
       items: (UserItem & {
         activeVariant?: import("@/libs/lpc/appearance").SpriteVariant | null;

@@ -9,6 +9,7 @@ import ContentImage from "@/layout/ContentImage";
 import Image from "@/layout/Image";
 import { USER_ITEM_DRAG_TYPE } from "@/layout/items/ItemCard";
 import { applyActiveVariant, showsItemLevelBadge } from "@/libs/item";
+import type { SpriteUser } from "@/libs/lpc/appearance";
 import { cn } from "@/libs/shadui";
 
 /**
@@ -17,6 +18,7 @@ import { cn } from "@/libs/shadui";
  */
 export function EquipmentFigure({
   userItems,
+  cosmeticSlots,
   activeSlot,
   dropTargets,
   masteryWarning,
@@ -36,6 +38,8 @@ export function EquipmentFigure({
       />
       {EQUIPMENT_LAYOUT.map(({ slot, label, pos }) => {
         const userItem = userItems.find((ui) => ui.equipped === slot);
+        const cosmetic =
+          userItem && cosmeticSlots?.find((entry) => entry.slot === slot);
         const isTarget = dropTargets?.includes(slot) ?? false;
         const isDimmed = !!dropTargets && !isTarget;
         const tile = (
@@ -45,7 +49,7 @@ export function EquipmentFigure({
             data-slot={slot}
             aria-label={
               userItem
-                ? `${label}: ${applyActiveVariant(userItem).name}`
+                ? `${label}: ${applyActiveVariant(userItem).name}${cosmetic?.item ? ` · Cosmetic ${cosmetic.variant?.name ?? cosmetic.item.name}` : ""}`
                 : `${label} slot, empty`
             }
             aria-current={slot === activeSlot ? "true" : undefined}
@@ -79,6 +83,7 @@ export function EquipmentFigure({
             {userItem ? (
               <EquippedTileContent
                 userItem={userItem}
+                cosmetic={cosmetic}
                 hotkey={hotkeys?.[userItem.itemId]}
                 warning={masteryWarning(userItem)}
               />
@@ -104,13 +109,21 @@ function EquippedTileContent({
   userItem,
   hotkey,
   warning,
+  cosmetic,
 }: {
   userItem: UserItemWithRelations;
   hotkey: string | undefined;
   warning: string | undefined;
+  cosmetic?: NonNullable<SpriteUser["cosmeticSlots"]>[number];
 }) {
   const { item } = userItem;
-  const look = applyActiveVariant(userItem as UserItemWithVariants);
+  const equippedLook = applyActiveVariant(userItem as UserItemWithVariants);
+  const look = cosmetic?.item
+    ? {
+        image: cosmetic.variant?.image ?? cosmetic.item.image,
+        name: cosmetic.variant?.name ?? cosmetic.item.name,
+      }
+    : equippedLook;
   const durability =
     item.maxDurability > 0
       ? Math.round((userItem.durability / item.maxDurability) * 100)
@@ -123,7 +136,7 @@ function EquippedTileContent({
         <ContentImage
           image={look.image}
           hideBorder={true}
-          alt={look.name}
+          alt={look.name ?? equippedLook.name}
           rarity={item.rarity}
           className="rounded-lg"
         />
@@ -205,6 +218,7 @@ const rarityBorderClass: Record<ItemRarity, string> = {
 interface EquipmentFigureProps {
   /** Carried items; the figure shows those equipped. */
   userItems: UserItemWithRelations[];
+  cosmeticSlots?: SpriteUser["cosmeticSlots"];
   /** Slot whose picker is open. */
   activeSlot: ItemSlot | undefined;
   /** While an item is dragged: the slots it can be dropped on. */

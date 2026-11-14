@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   COST_EXTRA_ITEM_SLOT,
   HomeTypeDetails,
@@ -21,6 +22,7 @@ import { useRefreshAt } from "@/hooks/useRefreshAt";
 import ContentBox from "@/layout/ContentBox";
 import { LoadoutHotkeysPanel } from "@/layout/HotkeyControls";
 import { BagCapacity, BagTabs } from "@/layout/items/BagTabs";
+import { CosmeticWorkspace } from "@/layout/items/CosmeticWorkspace";
 import { ItemsToolbar } from "@/layout/items/ItemsToolbar";
 import { type ItemsPlace, ItemsWorkspace } from "@/layout/items/ItemsWorkspace";
 import Loader from "@/layout/Loader";
@@ -168,98 +170,116 @@ export default function MyItems() {
   return (
     <>
       <ContentBox title="Items" defaultBackHref="/profile" padding={false}>
-        <ItemsToolbar userData={userData} userItems={userItems} />
-        {/* Wait for the updated equipment state before accepting another action. A refresh
+        <Tabs defaultValue="inventory">
+          <TabsList className="m-3" aria-label="Inventory view">
+            <TabsTrigger value="inventory">Inventory</TabsTrigger>
+            <TabsTrigger value="cosmetic">Cosmetic</TabsTrigger>
+          </TabsList>
+          <TabsContent value="cosmetic">
+            <CosmeticWorkspace user={{ ...userData, items: userItems ?? [] }} />
+          </TabsContent>
+          <TabsContent value="inventory">
+            <ItemsToolbar userData={userData} userItems={userItems} />
+            {/* Wait for the updated equipment state before accepting another action. A refresh
             shows as a small overlay so the grid keeps its place. */}
-        <div inert={isFetching} aria-busy={isFetching} className="relative">
-          {isFetching && (
-            <div
-              role="status"
-              className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md border bg-card/90 px-2 py-1 text-xs shadow-sm"
-            >
-              <Loader2 aria-hidden className="h-3 w-3 animate-spin" />
-              Refreshing items
+            <div inert={isFetching} aria-busy={isFetching} className="relative">
+              {isFetching && (
+                <div
+                  role="status"
+                  className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-md border bg-card/90 px-2 py-1 text-xs shadow-sm"
+                >
+                  <Loader2 aria-hidden className="h-3 w-3 animate-spin" />
+                  Refreshing items
+                </div>
+              )}
+              <ItemsWorkspace
+                userData={userData}
+                userItems={availableItems ?? []}
+                bag={shownPlace === "home" ? `home:${homeTab}` : activeTab}
+                home={
+                  isHomeShown
+                    ? {
+                        place: shownPlace,
+                        onPlaceChange: setPlace,
+                        items: storedItems.filter(
+                          (ui) =>
+                            homeTab === "all" ||
+                            getHomeStorageBucket(ui.item) === homeTab,
+                        ),
+                        count: storedItems.length,
+                        blockReason: homeMoveBlockReason,
+                        status: selectedHomeBag && (
+                          <BagCapacity
+                            used={selectedHomeBag.count}
+                            max={selectedHomeBag.max}
+                          />
+                        ),
+                        bagTabs: (
+                          <BagTabs
+                            bags={[
+                              { value: "all", count: storedItems.length },
+                              ...homeBags,
+                            ]}
+                            active={homeTab}
+                            onChange={setHomeTab}
+                            storageKey="homeStorageSelection"
+                          />
+                        ),
+                      }
+                    : undefined
+                }
+                backpackStatus={
+                  <div className="flex items-center gap-1">
+                    {selectedBag && (
+                      <BagCapacity used={selectedBag.count} max={selectedBag.max} />
+                    )}
+                    {/* Purchased slots extend the Gear bag only. */}
+                    {activeTab === "normal" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9"
+                        aria-label="Buy an extra Gear bag slot"
+                        hoverText="Buy an extra Gear bag slot"
+                        aria-busy={isBuyingItemSlot}
+                        disabled={isBuyingItemSlot}
+                        loading={isBuyingItemSlot}
+                        onClick={() => setIsBuyItemSlotOpen(true)}
+                      >
+                        <CircleFadingArrowUp className="h-5 w-5" />
+                      </Button>
+                    )}
+                  </div>
+                }
+                bagTabs={
+                  <>
+                    <BagTabs
+                      bags={[
+                        { value: "all", count: carriedItems?.length ?? 0 },
+                        ...bags,
+                      ]}
+                      active={activeTab}
+                      onChange={setActiveTab}
+                    />
+                    {unlistedNote && (
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {unlistedNote}
+                      </p>
+                    )}
+                  </>
+                }
+                bagItems={
+                  availableItems?.filter(
+                    (ui) =>
+                      ui.equipped === "NONE" &&
+                      (activeTab === "all" ||
+                        getInventoryBucket(ui.item) === activeTab),
+                  ) ?? []
+                }
+              />
             </div>
-          )}
-          <ItemsWorkspace
-            userData={userData}
-            userItems={availableItems ?? []}
-            bag={shownPlace === "home" ? `home:${homeTab}` : activeTab}
-            home={
-              isHomeShown
-                ? {
-                    place: shownPlace,
-                    onPlaceChange: setPlace,
-                    items: storedItems.filter(
-                      (ui) =>
-                        homeTab === "all" || getHomeStorageBucket(ui.item) === homeTab,
-                    ),
-                    count: storedItems.length,
-                    blockReason: homeMoveBlockReason,
-                    status: selectedHomeBag && (
-                      <BagCapacity
-                        used={selectedHomeBag.count}
-                        max={selectedHomeBag.max}
-                      />
-                    ),
-                    bagTabs: (
-                      <BagTabs
-                        bags={[
-                          { value: "all", count: storedItems.length },
-                          ...homeBags,
-                        ]}
-                        active={homeTab}
-                        onChange={setHomeTab}
-                        storageKey="homeStorageSelection"
-                      />
-                    ),
-                  }
-                : undefined
-            }
-            backpackStatus={
-              <div className="flex items-center gap-1">
-                {selectedBag && (
-                  <BagCapacity used={selectedBag.count} max={selectedBag.max} />
-                )}
-                {/* Purchased slots extend the Gear bag only. */}
-                {activeTab === "normal" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9"
-                    aria-label="Buy an extra Gear bag slot"
-                    hoverText="Buy an extra Gear bag slot"
-                    aria-busy={isBuyingItemSlot}
-                    disabled={isBuyingItemSlot}
-                    loading={isBuyingItemSlot}
-                    onClick={() => setIsBuyItemSlotOpen(true)}
-                  >
-                    <CircleFadingArrowUp className="h-5 w-5" />
-                  </Button>
-                )}
-              </div>
-            }
-            bagTabs={
-              <>
-                <BagTabs
-                  bags={[{ value: "all", count: carriedItems?.length ?? 0 }, ...bags]}
-                  active={activeTab}
-                  onChange={setActiveTab}
-                />
-                {unlistedNote && (
-                  <p className="text-muted-foreground mt-1 text-xs">{unlistedNote}</p>
-                )}
-              </>
-            }
-            bagItems={
-              availableItems?.filter(
-                (ui) =>
-                  ui.equipped === "NONE" &&
-                  (activeTab === "all" || getInventoryBucket(ui.item) === activeTab),
-              ) ?? []
-            }
-          />
-        </div>
+          </TabsContent>
+        </Tabs>
       </ContentBox>
       <Dialog
         open={isBuyItemSlotOpen}

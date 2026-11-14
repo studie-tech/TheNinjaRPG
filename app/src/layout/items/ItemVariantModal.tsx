@@ -4,6 +4,7 @@ import type React from "react";
 import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import type { UserItemWithRelations, UserItemWithVariants } from "@/drizzle/schema";
+import { useCosmetics } from "@/hooks/useCosmetics";
 import Image from "@/layout/Image";
 import Modal from "@/layout/Modal";
 import { isEquippableUserItem } from "@/libs/item";
@@ -19,6 +20,7 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
   onClose,
 }) => {
   const utils = api.useUtils();
+  const { refreshWardrobe } = useCosmetics();
   const {
     data: userData,
     prepareUserUpdate,
@@ -55,6 +57,7 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
       showMutationToast(result);
       if (result.success) {
         await Promise.all([
+          refreshWardrobe(),
           utils.item.getUserUnlockedVariants.invalidate({ itemId: userItem.item.id }),
           updateUser(undefined, { revision, delta: result.userDelta }),
         ]);
@@ -71,6 +74,7 @@ export const ItemVariantModal: React.FC<ItemVariantModalProps> = ({
       if (result.success) {
         onClose();
         await Promise.all([
+          refreshWardrobe(),
           utils.item.getUserUnlockedVariants.invalidate({ itemId: userItem.item.id }),
           utils.item.getUserItemsWithVariants.invalidate(),
         ]);

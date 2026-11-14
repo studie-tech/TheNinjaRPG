@@ -25,6 +25,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockCosmetics } from "../../setup/cosmetics";
 
 const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
 let sellMany: ReturnType<typeof vi.fn>;
@@ -35,6 +36,7 @@ let finish: (result: {
 }) => void;
 
 beforeEach(() => {
+  mockCosmetics();
   window.localStorage.clear();
   Object.defineProperty(window, "matchMedia", {
     configurable: true,

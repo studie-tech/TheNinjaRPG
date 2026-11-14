@@ -29,6 +29,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockCosmetics } from "../../setup/cosmetics";
 
 let equip: ReturnType<typeof vi.fn>;
 let settle: () => void;
@@ -47,7 +48,10 @@ const setFinePointer = (fine: boolean) =>
     }),
   });
 
+let cosmeticState: ReturnType<typeof mockCosmetics>;
+
 beforeEach(() => {
+  cosmeticState = mockCosmetics();
   window.localStorage.clear();
   equip = vi.fn();
   inspectorEquip = vi.fn();
@@ -534,6 +538,7 @@ it("puts the phone sheet's close button in the panel's own top bar", () => {
 const useRealInspector = () => {
   vi.spyOn(inspector, "ItemInspector").mockRestore();
   Object.assign(vi.spyOn(client, "api" as never), {
+    cosmetic: { get: { useQuery: () => cosmeticState.wardrobe } },
     item: { getEvolutions: { useQuery: () => ({ data: [] }) } },
   });
   vi.spyOn(itemWithEffects, "default").mockImplementation(() => <p>Item effects</p>);

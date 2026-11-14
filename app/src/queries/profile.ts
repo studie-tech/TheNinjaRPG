@@ -1,3 +1,4 @@
+import { cosmeticSlotRelation } from "@/queries/cosmetic";
 /**
  * Database access for profile; authorization and transaction scopes stay in callers.
  */
@@ -1899,6 +1900,7 @@ export const findUserDataForQueryUpdatedUser = (
       promotions: {
         limit: 1,
       },
+      cosmeticSlots: cosmeticSlotRelation,
       items: {
         where: and(ne(userItem.equipped, "NONE"), gt(userItem.quantity, 0)),
         with: {

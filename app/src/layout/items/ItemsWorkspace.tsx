@@ -10,6 +10,7 @@ import type { ItemSlot } from "@/drizzle/constants";
 import { MAX_BULK_SELL_ITEMS } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import { useBulkSellItems } from "@/hooks/useBulkSellItems";
+import { useCosmetics } from "@/hooks/useCosmetics";
 import { useHomeStorageMove } from "@/hooks/useHomeStorageMove";
 import { useItemActions } from "@/hooks/useItemActions";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -61,6 +62,7 @@ export function ItemsWorkspace({
     bag,
     view: { kind: "backpack" },
   });
+  const { wardrobe } = useCosmetics();
   const [phoneTab, setPhoneTab] = useState("equipment");
   const [dragging, setDragging] = useState<UserItemWithRelations | null>(null);
   const [isNarrow, setIsNarrow] = useState(false);
@@ -362,10 +364,17 @@ export function ItemsWorkspace({
         >
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-bold text-2xl text-foreground">Equipped</h2>
-            <EquipmentPreview user={userData} items={userItems} />
+            <EquipmentPreview
+              user={{
+                ...userData,
+                cosmeticSlots: wardrobe.data?.slots ?? userData.cosmeticSlots,
+              }}
+              items={userItems}
+            />
           </div>
           <div className="relative mx-auto w-full max-w-[290px]">
             <EquipmentFigure
+              cosmeticSlots={wardrobe.data?.slots}
               userItems={userItems}
               activeSlot={view.kind === "slot" ? view.slot : undefined}
               dropTargets={
