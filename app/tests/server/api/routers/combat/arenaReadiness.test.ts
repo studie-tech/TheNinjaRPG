@@ -47,7 +47,7 @@ import {
   insertUserVotes,
 } from "../../../../setup/factories";
 import { queueEnergy, queueMasteries } from "../../../../setup/queues";
-import { beforeStatements } from "../../../../setup/statements";
+import { aroundStatements, beforeStatements } from "../../../../setup/statements";
 import {
   describeWithDatabase,
   getTestDatabase,
@@ -721,23 +721,24 @@ describeWithDatabase("arena readiness reads", () => {
         ]);
         await queueEnergy(userId, [{ stat: "offence", energy: 100 }]);
         const initial = await fetchActionUser(client, userId);
-        const raced = beforeStatements(client, userData, [
+        // Production retries deadlocked autocommit statements at the transport.
+        // Either concurrent compensation write or the injected update can lose.
+        const retryingClient = aroundStatements(client, userData, (run) =>
+          retryOnDeadlock(run),
+        );
+        const raced = beforeStatements(retryingClient, userData, [
           () =>
-            client
+            retryingClient
               .update(userData)
               .set({ longitude: 6 })
               .where(eq(userData.userId, race === "actor moved" ? userId : targetId)),
           ...(race === "actor entered another battle"
             ? [
                 () =>
-                  // The mysql2 fixture has no transport retry. This idempotent
-                  // update can deadlock with the parallel compensation writes.
-                  retryOnDeadlock(async () =>
-                    client
-                      .update(userData)
-                      .set({ status: "BATTLE", battleId: "later-battle" })
-                      .where(eq(userData.userId, userId)),
-                  ),
+                  retryingClient
+                    .update(userData)
+                    .set({ status: "BATTLE", battleId: "later-battle" })
+                    .where(eq(userData.userId, userId)),
               ]
             : []),
         ]);
