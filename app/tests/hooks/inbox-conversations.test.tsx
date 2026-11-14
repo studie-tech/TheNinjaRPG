@@ -9,6 +9,7 @@ import { useInboxConversations } from "@/hooks/useConversationCacheUpdate";
 import type { NavBarDropdownLink } from "@/libs/menus";
 import * as userContext from "@/utils/UserContext";
 import { installBrowserGlobals, restoreBrowserGlobals } from "../setup/browserGlobals";
+import { deferred } from "../setup/deferred";
 import { fakeTrpcClient, TrpcTestProviders, testApi } from "../setup/trpc";
 
 const inboxNews = { href: "/inbox", name: "1 messages", notificationCount: 1 };
@@ -19,7 +20,7 @@ const updateNotifications = vi.fn(
 const events: string[] = [];
 let queryClient: QueryClient;
 let failListReads = false;
-let listReadDelay = 5;
+const listReadGates: Promise<void>[] = [];
 let notifications: NavBarDropdownLink[] = [];
 
 const render = (options?: Parameters<typeof useInboxConversations>[0], consumers = 1) =>
@@ -31,10 +32,8 @@ const render = (options?: Parameters<typeof useInboxConversations>[0], consumers
           client={fakeTrpcClient(async (path) => {
             if (path !== "comments.getUserConversations") throw new Error(path);
             events.push("list read");
-            // Keep the server read asynchronous, independently of the browser wall clock.
-            await new Promise((resolve) =>
-              setTimeout(resolve, failListReads ? 30 : listReadDelay),
-            );
+            // Reads stay asynchronous; tests can hold individual responses until assertions finish.
+            await listReadGates.shift();
             if (failListReads) throw new Error("Too many requests");
             return [];
           })}
@@ -57,7 +56,7 @@ beforeEach(() => {
   installBrowserGlobals();
   events.length = 0;
   failListReads = false;
-  listReadDelay = 5;
+  listReadGates.length = 0;
   notifications = [inboxNews];
   updateNotifications.mockReset();
   updateNotifications.mockImplementation(async () => {
@@ -136,34 +135,37 @@ it("leaves the list alone without inbox news", async () => {
 it("reads the list once for a badge whose read fails, leaving the badge", async () => {
   failListReads = true;
   seedEarlierList();
-  render();
-  await waitFor(() => expect(events).toContain("list read"));
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  const { result } = render();
+  await waitFor(() => expect(result.current[0]?.isError).toBe(true));
   expect(events).toEqual(["list read"]);
 });
 
 it("waits for the list read in flight when the list is written locally", async () => {
-  listReadDelay = 100;
+  const read = deferred();
+  listReadGates.push(read.promise);
   seedEarlierList();
   render();
   await waitFor(() => expect(events).toEqual(["list read"]));
   // Opening a conversation marks it read in the cached list while the read is in flight.
-  queryClient.setQueryData(conversationsKey(), []);
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await act(async () => {
+    queryClient.setQueryData(conversationsKey(), []);
+  });
   expect(events).toEqual(["list read"]);
+  await act(async () => read.resolve());
   await waitFor(() => expect(events).toEqual(["list read", "badge cleared"]));
 });
 
 it("keeps the badge when the read after a local write fails", async () => {
   failListReads = true;
   seedEarlierList();
-  render();
-  await waitFor(() => expect(events).toEqual(["list read"]));
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  const { result } = render();
+  await waitFor(() => expect(result.current[0]?.isError).toBe(true));
   // A conversation marked read in the cached list, which then reads the list again.
-  queryClient.setQueryData(conversationsKey(), []);
-  await queryClient.invalidateQueries({ queryKey: conversationsKey() });
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await act(async () => {
+    queryClient.setQueryData(conversationsKey(), []);
+    await queryClient.invalidateQueries({ queryKey: conversationsKey() });
+  });
+  expect(result.current[0]?.isError).toBe(true);
   expect(events).toEqual(["list read", "list read"]);
 });
 
@@ -185,13 +187,15 @@ it("waits for server recovery after a failed read and local write with a fixed c
 });
 
 it("preserves the badge after a cancelled read until a later server read succeeds", async () => {
-  listReadDelay = 100;
+  const read = deferred();
+  listReadGates.push(read.promise);
   seedEarlierList();
   const { result } = render();
   await waitFor(() => expect(events).toEqual(["list read"]));
   await act(async () => {
     await queryClient.cancelQueries({ queryKey: conversationsKey() });
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    read.resolve();
+    await read.promise;
   });
   expect(events).toEqual(["list read"]);
   await act(async () => {
@@ -201,7 +205,8 @@ it("preserves the badge after a cancelled read until a later server read succeed
 });
 
 it("preserves news cached before the successful read is rendered", async () => {
-  listReadDelay = 100;
+  const read = deferred();
+  listReadGates.push(read.promise);
   seedEarlierList();
   updateNotifications.mockImplementation(async (update) => {
     const before = notifications;
@@ -212,6 +217,7 @@ it("preserves news cached before the successful read is rendered", async () => {
   await waitFor(() => expect(events).toEqual(["list read"]));
   // Profile cache updates precede the next context render.
   notifications = [{ ...inboxNews, name: "2 messages", notificationCount: 2 }];
+  await act(async () => read.resolve());
   await waitFor(() =>
     expect(events).toEqual([
       "list read",
@@ -263,19 +269,23 @@ it("reads the list again when the count changes without reaching zero", async ()
 it("reads the list again when the news arrives while a read is in flight", async () => {
   // That read may have reset the server counter before the news raised it.
   notifications = [];
-  listReadDelay = 100;
+  const olderRead = deferred();
+  const currentRead = deferred();
+  listReadGates.push(olderRead.promise, currentRead.promise);
   seedEarlierList();
   const { rerender } = render();
   void queryClient.refetchQueries({ queryKey: conversationsKey() });
   await waitFor(() => expect(events).toEqual(["list read"]));
   notifications = [inboxNews];
   rerender();
+  await act(async () => olderRead.resolve());
+  await waitFor(() => expect(events).toEqual(["list read", "list read"]));
+  await act(async () => currentRead.resolve());
   await waitFor(() => expect(events).toContain("badge cleared"));
   expect(events).toEqual(["list read", "list read", "badge cleared"]);
 });
 
 it("clears news that was already there on mount after one read", async () => {
-  listReadDelay = 100;
   render();
   await waitFor(() => expect(events).toContain("badge cleared"));
   expect(events).toEqual(["list read", "badge cleared"]);
@@ -288,7 +298,9 @@ it("keeps news that arrives during a shared read when another consumer mounts", 
     notifications = update(before) ?? before;
     if (notifications !== before) events.push("badge cleared");
   });
-  listReadDelay = 150;
+  const olderRead = deferred();
+  const currentRead = deferred();
+  listReadGates.push(olderRead.promise, currentRead.promise);
   seedEarlierList();
   const first = render();
   void queryClient.refetchQueries({ queryKey: conversationsKey() });
@@ -296,6 +308,9 @@ it("keeps news that arrives during a shared read when another consumer mounts", 
   notifications = [inboxNews];
   first.rerender();
   render();
+  await act(async () => olderRead.resolve());
+  await waitFor(() => expect(events).toEqual(["list read", "list read"]));
+  await act(async () => currentRead.resolve());
   await waitFor(() => expect(events).toContain("badge cleared"));
   expect(events).toEqual(["list read", "list read", "badge cleared"]);
 });
