@@ -79,23 +79,44 @@ export function useInboxConversations(
     ...options,
   });
   const inboxNews = getInboxNews(notifications);
-  const { data, dataUpdatedAt, fetchStatus, isError, refetch } = result;
-  // When the current news was first seen. The server only ever resets the counter to zero, so
-  // any other count is new news. News that arrives while a list read is in flight may have
+  const client = useQueryClient();
+  const { data, fetchStatus, refetch } = result;
+  // The server only ever resets the counter to zero, so any other count is new news.
+  // News that arrives while a list read is in flight may have
   // been counted after that read reset the server counter, so the read does not count for it;
   // news already there on mount predates any read this hook starts.
   const news = useRef({
     count: 0,
-    seenAt: 0,
     refetched: false,
     readInFlight: false,
     mounted: false,
   });
   useEffect(() => {
+    const queryHash = hashKey(
+      getQueryKey(api.comments.getUserConversations, undefined, "query"),
+    );
+    return client.getQueryCache().subscribe((event) => {
+      if (
+        event.query.queryHash !== queryHash ||
+        event.type !== "updated" ||
+        event.action.type !== "success" ||
+        event.action.manual ||
+        news.current.count === 0 ||
+        news.current.readInFlight
+      )
+        return;
+      // Only a successful server read proves the reset; local writes and wall clocks do not.
+      news.current.refetched = true;
+      const { count } = news.current;
+      void updateNotifications((notifications) =>
+        clearInboxNotifications(notifications, count),
+      );
+    });
+  }, [client, updateNotifications]);
+  useEffect(() => {
     if (inboxNews !== news.current.count) {
       news.current = {
         count: inboxNews,
-        seenAt: inboxNews > 0 ? Date.now() : 0,
         refetched: false,
         readInFlight: news.current.mounted && fetchStatus !== "idle",
         mounted: true,
@@ -103,24 +124,12 @@ export function useInboxConversations(
     }
     news.current.mounted = true;
     if (inboxNews === 0 || !data || fetchStatus !== "idle") return;
-    // A local write to the list also moves `dataUpdatedAt`; a failed read since then means
-    // the server counter may still hold the news.
-    if (dataUpdatedAt > news.current.seenAt && !isError && !news.current.readInFlight) {
-      void updateNotifications(clearInboxNotifications);
-    } else if (!news.current.refetched) {
+    if (!news.current.refetched) {
       // One read per news; after a failed read the badge waits for the next list read.
       news.current.refetched = true;
       news.current.readInFlight = false;
       void refetch({ cancelRefetch: false });
     }
-  }, [
-    inboxNews,
-    data,
-    dataUpdatedAt,
-    fetchStatus,
-    isError,
-    refetch,
-    updateNotifications,
-  ]);
+  }, [inboxNews, data, fetchStatus, refetch]);
   return result;
 }
