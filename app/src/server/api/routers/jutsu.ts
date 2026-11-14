@@ -118,6 +118,7 @@ import {
   deleteUserJutsuForForget,
   executeRowsForSelectJutsuLoadout,
   executeTransferredForTransferLevel,
+  executeUnequipAllJutsus,
   executeWriteForImportJutsuLoadout,
   fetchActiveLoadoutJutsuIds,
   fetchBloodlineJutsuReskins,
@@ -194,7 +195,6 @@ import {
   updateJutsuLoadoutForRemoveJutsuIdFromLoadoutAtomically,
   updateJutsuLoadoutForRenameLoadout,
   updateJutsuLoadoutForSetLoadoutHotkeys,
-  updateJutsuLoadoutForUnequipAll,
   updateJutsuLoadoutIds,
   updateJutsuReskinForCreateReskin,
   updateJutsuReskinForEvolveJutsu,
@@ -209,7 +209,6 @@ import {
   updateUserJutsuForStopTraining,
   updateUserJutsuForToggleEquip,
   updateUserJutsuForTryEquipUserJutsuAtomically,
-  updateUserJutsuForUnequipAll,
   updateUserJutsuForUpdate,
   updateUserJutsuForUpdateReskin,
   updateUserJutsuForUpdateReskin2,
@@ -1772,14 +1771,14 @@ export const jutsuRouter = createTRPCRouter({
     .meta({ mcp: { description: "Unequip all jutsus" } })
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx }) => {
-      const [, loadoutResult] = await Promise.all([
-        updateUserJutsuForUnequipAll(ctx.drizzle, ctx),
-        updateJutsuLoadoutForUnequipAll(ctx.drizzle, ctx.userId),
-      ]);
+      // The lookup only controls the cache patch; the write resolves and clears the
+      // active loadout atomically with equipment, even if selection races this read.
+      const activeLoadout = await fetchActiveLoadoutJutsuIds(ctx.drizzle, ctx.userId);
+      await executeUnequipAllJutsus(ctx.drizzle, ctx.userId);
       return {
         success: true,
         message: "All jutsu unequipped",
-        ...getUnequipAllJutsuUserUpdate(loadoutResult.rowsAffected > 0),
+        ...getUnequipAllJutsuUserUpdate(activeLoadout !== null),
       };
     }),
 

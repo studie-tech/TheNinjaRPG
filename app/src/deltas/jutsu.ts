@@ -66,7 +66,7 @@ export const getSelectJutsuLoadoutUserUpdate = ({
   },
 });
 
-/** Empty the profile's active loadout when unequipping all changed it; otherwise confirm a no-op. */
+/** Empty the profile's selected loadout after unequipping all; otherwise confirm a no-op. */
 export const getUnequipAllJutsuUserUpdate = (
   clearedActiveLoadout: boolean,
 ): Pick<UserDeltaResponse, "userPatch" | "userDelta"> =>
