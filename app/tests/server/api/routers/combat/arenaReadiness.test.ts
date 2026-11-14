@@ -553,12 +553,14 @@ describeWithDatabase("arena readiness reads", () => {
     expect(await client.query.battle.findMany()).toEqual([]);
   });
 
-  it("retains display alert reads for ordinary profile callers", async () => {
+  it("reads display alerts only for callers that opt in", async () => {
     const client = await getTestDatabase();
-    const { statements } = await recordQueries(() =>
-      fetchUpdatedUser({ client, userId }),
+    const action = await recordQueries(() => fetchUpdatedUser({ client, userId }));
+    expect(notificationReads(action.statements)).toEqual([]);
+    const profile = await recordQueries(() =>
+      fetchUpdatedUser({ client, userId, includeNotifications: true }),
     );
-    expect(notificationReads(statements)).toHaveLength(3);
+    expect(notificationReads(profile.statements)).toHaveLength(3);
   });
 
   it("starts the AI lookup while the readiness participant read is still pending", async () => {

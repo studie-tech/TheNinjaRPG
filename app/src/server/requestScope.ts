@@ -5,9 +5,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
  *
  * The tRPC client batches whatever a page mounts into a single POST, and tRPC
  * resolves those procedures concurrently. The memo shares reads by key across the
- * batch, including the achievement catalogue and game settings that `fetchUpdatedUser`
- * needs. Concurrent callers share a pending query, and later callers reuse its
- * successful result within the request.
+ * batch, such as the wars, raids and shrine lobbies that `fetchUpdatedUser` needs.
+ * Concurrent callers share a pending query, and later callers reuse its successful
+ * result within the request. Catalogues that tolerate a short delay use the per-instance
+ * caches of `@/server/utils/instanceCache` instead.
  *
  * Only reads that satisfy all three of the following belong here:
  *

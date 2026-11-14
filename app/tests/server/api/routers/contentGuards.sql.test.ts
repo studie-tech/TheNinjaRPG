@@ -6,13 +6,17 @@ import {
   badge,
   bloodline,
   gameAsset,
+  quest,
   userBadge,
   userData,
 } from "@/drizzle/schema";
+import { fetchAchievementCatalogue } from "@/queries/profile";
 import { gameAssetRouter } from "@/server/api/routers/asset";
 import { badgeRouter } from "@/server/api/routers/badge";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
-import { insertUsers } from "../../../setup/factories";
+import { questsRouter } from "@/server/api/routers/quests";
+import { fetchBloodlineCollectionCatalogue } from "@/server/utils/questCollections";
+import { insertQuests, insertUsers } from "../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
@@ -195,6 +199,38 @@ describeWithDatabase("content procedure guards", () => {
       expect((await (await callerFor(bloodlineRouter, staffId)).create()).success).toBe(
         true,
       );
+    });
+
+    it("drops a deleted bloodline from this instance's collection catalogue at once", async () => {
+      const db = await getTestDatabase();
+      await db.insert(bloodline).values({
+        id: "line",
+        name: "Guard Line",
+        rank: "D",
+        image: IMG_AVATAR_DEFAULT,
+        description: "Guarded",
+        effects: [],
+      });
+      expect(await fetchBloodlineCollectionCatalogue(db)).toEqual([
+        { id: "line", rank: "D", hidden: false },
+      ]);
+      const caller = await callerFor(bloodlineRouter, staffId);
+      expect((await caller.delete({ id: "line" })).success).toBe(true);
+      expect(await fetchBloodlineCollectionCatalogue(db)).toEqual([]);
+    });
+  });
+
+  describe("quest", () => {
+    it("drops a deleted achievement from this instance's catalogue at once", async () => {
+      await resetTables(quest);
+      await insertQuests([{ id: "guard-achievement", questType: "achievement" }]);
+      const db = await getTestDatabase();
+      const ids = async () =>
+        (await fetchAchievementCatalogue(db)).map((entry) => entry.id);
+      expect(await ids()).toEqual(["guard-achievement"]);
+      const caller = await callerFor(questsRouter, staffId);
+      expect((await caller.delete({ id: "guard-achievement" })).success).toBe(true);
+      expect(await ids()).toEqual([]);
     });
   });
 });

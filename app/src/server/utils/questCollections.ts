@@ -8,21 +8,23 @@ import {
 } from "@/queries/quests";
 import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
-import { scopedRead } from "@/server/requestScope";
 import { queryInTransaction } from "@/server/utils/concurrency";
 import { getFarmCollectionCount } from "@/server/utils/farming";
+import { createInstanceCache } from "@/server/utils/instanceCache";
+import type { AllObjectivesType } from "@/validators/objectives";
 
 /**
  * Load collection and owned-jutsu snapshots only for unfinished goals of active quests.
  * @param inTransaction - Await queries in order on a shared PlanetScale transaction session.
- * @param preloaded - Independent reads from the profile's opening query wave. Transactions
- * always read their own snapshot on the transaction session instead.
+ * @param preloaded - Independent reads from the profile's opening query wave; jutsu
+ * targets it does not cover are read here. Transactions always read their own snapshot
+ * on the transaction session instead.
  */
 export const hydrateQuestCollections = async (
   client: DrizzleClient,
   user: NonNullable<UserWithRelations>,
   inTransaction = false,
-  preloaded?: BloodlineCollectionSnapshot,
+  preloaded?: QuestCollectionSnapshot,
 ) => {
   const objectives = getUserQuests(user).flatMap((quest) =>
     quest.content.objectives.filter(
@@ -34,14 +36,11 @@ export const hydrateQuestCollections = async (
   );
   const hasFarming = objectives.some((o) => o.task === "farming_collection_log");
   const hasBloodlines = objectives.some((o) => o.task === "bloodline_collection");
-  const objectiveJutsuIds = [
-    ...new Set(
-      objectives
-        .filter((objective) => objective.task === "train_specific_jutsu")
-        .flatMap(objectiveContentIds),
-    ),
-  ];
+  const objectiveJutsuIds = objectiveJutsuIdsOf(objectives);
   const snapshot = inTransaction ? undefined : preloaded;
+  const unloadedJutsuIds = objectiveJutsuIds.filter(
+    (id) => !snapshot?.objectiveJutsus?.jutsuIds.includes(id),
+  );
   const queries = [
     hasFarming ? getFarmCollectionCount(client, user.userId, inTransaction) : undefined,
     hasBloodlines
@@ -53,13 +52,22 @@ export const hydrateQuestCollections = async (
     hasBloodlines
       ? (snapshot?.rolls ?? fetchBloodlineCollectionRolls(client, user.userId))
       : undefined,
-    objectiveJutsuIds.length > 0
-      ? fetchOwnedObjectiveJutsus(client, user.userId, objectiveJutsuIds)
+    unloadedJutsuIds.length > 0
+      ? fetchOwnedObjectiveJutsus(client, user.userId, unloadedJutsuIds)
       : undefined,
   ] as const;
-  const [farmingCollectionCount, catalogue, rolls, ownedJutsus] = inTransaction
+  const [farmingCollectionCount, catalogue, rolls, loadedJutsus] = inTransaction
     ? await queryInTransaction(queries)
     : await Promise.all(queries);
+  const ownedJutsus =
+    objectiveJutsuIds.length > 0
+      ? [
+          ...(snapshot?.objectiveJutsus?.owned.filter((entry) =>
+            objectiveJutsuIds.includes(entry.jutsuId),
+          ) ?? []),
+          ...(loadedJutsus ?? []),
+        ]
+      : undefined;
   return {
     ...user,
     farmingCollectionCount,
@@ -77,13 +85,52 @@ export const hydrateQuestCollections = async (
   };
 };
 
-/** The visible catalogue is shared within a request; ownership is always read per caller. */
-export const fetchBloodlineCollectionCatalogue = (client: DrizzleClient) =>
-  scopedRead("bloodlineCollectionCatalogue", () =>
-    queryBloodlineCollectionCatalogue(client),
-  );
+// Bloodline editors invalidate this instance at once; other instances serve an edit
+// within the TTL. Ownership is always read per caller.
+const BLOODLINE_COLLECTION_CATALOGUE_TTL_MS = 60 * 1000;
+const bloodlineCollectionCatalogue = createInstanceCache(
+  BLOODLINE_COLLECTION_CATALOGUE_TTL_MS,
+  queryBloodlineCollectionCatalogue,
+);
 
-type BloodlineCollectionSnapshot = {
+/** The visible bloodline catalogue from the instance cache. */
+export const fetchBloodlineCollectionCatalogue = (client: DrizzleClient) =>
+  bloodlineCollectionCatalogue.read(client);
+
+/** Make this instance read the bloodline catalogue again; call after bloodline writes. */
+export const invalidateBloodlineCollectionCatalogue =
+  bloodlineCollectionCatalogue.invalidate;
+
+/**
+ * Read which `train_specific_jutsu` targets of the achievement catalogue the user owns.
+ * It depends only on the catalogue, so it joins the profile's opening query wave.
+ */
+export const fetchAchievementObjectiveJutsus = async (
+  client: DrizzleClient,
+  userId: string,
+  achievements: { content: { objectives: AllObjectivesType[] } }[],
+) => {
+  const jutsuIds = objectiveJutsuIdsOf(
+    achievements.flatMap((achievement) => achievement.content.objectives),
+  );
+  const owned =
+    jutsuIds.length > 0
+      ? await fetchOwnedObjectiveJutsus(client, userId, jutsuIds)
+      : [];
+  return { jutsuIds, owned };
+};
+
+/** Distinct jutsu named by `train_specific_jutsu` objectives. */
+const objectiveJutsuIdsOf = (objectives: AllObjectivesType[]) => [
+  ...new Set(
+    objectives
+      .filter((objective) => objective.task === "train_specific_jutsu")
+      .flatMap(objectiveContentIds),
+  ),
+];
+
+type QuestCollectionSnapshot = {
   catalogue: Awaited<ReturnType<typeof fetchBloodlineCollectionCatalogue>>;
   rolls: Awaited<ReturnType<typeof fetchBloodlineCollectionRolls>>;
+  objectiveJutsus?: Awaited<ReturnType<typeof fetchAchievementObjectiveJutsus>>;
 };

@@ -474,8 +474,9 @@ describeWithDatabase("Territory War participation", () => {
         message: "This Territory War has ended",
         userDelta: {},
       });
-      // Isolation, event, actor relations and recovery settings are independent reads.
-      expect(measured.statements).toHaveLength(4);
+      // Isolation, event and actor relations are independent reads; recovery settings
+      // come from the instance cache the profile read filled.
+      expect(measured.statements).toHaveLength(3);
       expect(
         measured.statements.every((statement) => /^select /i.test(statement)),
       ).toBe(true);

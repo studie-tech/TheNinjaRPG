@@ -1992,16 +1992,33 @@ export const fetchBloodlineCollectionRolls = (client: DrizzleClient, userId: str
     ),
   });
 
-/** Build the read of which listed jutsu a user owns, for `train_specific_jutsu` objectives. */
+/**
+ * Build the read of which listed jutsu a user owns, with the catalogue fields that
+ * classify their masteries, for `train_specific_jutsu` objectives.
+ */
 export const fetchOwnedObjectiveJutsus = (
-  client: DrizzleClient,
+  client: Pick<DrizzleClient, "query">,
   userId: string,
   jutsuIds: string[],
 ) =>
   client.query.userJutsu.findMany({
     columns: { jutsuId: true },
     where: and(eq(userJutsu.userId, userId), inArray(userJutsu.jutsuId, jutsuIds)),
-    with: { jutsu: true },
+    with: {
+      jutsu: {
+        columns: {
+          statClassification: true,
+          bloodlineId: true,
+          jutsuType: true,
+          requiredNinjutsuMastery: true,
+          requiredGenjutsuMastery: true,
+          requiredTaijutsuMastery: true,
+          requiredBukijutsuMastery: true,
+          requiredBloodlineMastery: true,
+          requiredSageMastery: true,
+        },
+      },
+    },
   });
 
 /** Build the bloodline collection catalogue query for caller-owned collection progress calculation. */

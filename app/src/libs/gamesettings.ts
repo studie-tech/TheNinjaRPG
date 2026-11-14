@@ -14,6 +14,7 @@ import type { DmgConfig } from "@/libs/combat/constants";
 import {
   findGameSettingByName,
   insertGameSettings,
+  invalidateGameSettings,
   selectGameSettingForFetchDmgConfig,
   updateGameSettingForUpdate,
   updateGameSettingForUpdateGameSetting,
@@ -53,6 +54,7 @@ export const updateGameSetting = async (
 ) => {
   const setting = await getGameSetting(client, settingName);
   await updateGameSettingForUpdateGameSetting(client, value, time, setting);
+  invalidateGameSettings();
 };
 
 /**

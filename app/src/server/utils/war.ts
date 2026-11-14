@@ -25,6 +25,7 @@ import {
   shouldEndRaid,
 } from "@/libs/war";
 import { updateVillageElderVoteForRejectWarDeclaration } from "@/queries/elder";
+import { invalidateGameSettings } from "@/queries/gamesettings";
 import {
   incrementNotificationCounters,
   insertNotificationForSubmitNotification,
@@ -336,6 +337,7 @@ const finishWarSettlement = async (client: DrizzleClient, endedWar: War) => {
         executeRowsForFinishWarSettlement3(client, cleanupCutoff, receipt),
       ),
     ]);
+    if (!receipt.boostsDelivered) invalidateGameSettings();
     // The feed entry is durable before its count receipt is claimed; retries never increment twice.
     if (!receipt.notified)
       await retryOnDeadlock(() =>

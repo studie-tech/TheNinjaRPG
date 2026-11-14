@@ -49,7 +49,6 @@ import {
   battleHistory,
   contentProposal,
   farmPlot,
-  gameSetting,
   historicalIp,
   item,
   jutsu,
@@ -89,6 +88,7 @@ import { bloodrightSwapRefund } from "@/libs/bloodright";
 import { petExperienceGainSql } from "@/libs/pets/experience";
 import { servedUfsUrl } from "@/libs/uploadthing";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
+import { listCachedGameSettings } from "@/queries/gamesettings";
 import { questPartyRelations } from "@/queries/questParty";
 import { userCardColumns } from "@/queries/userColumns";
 import { activeWarAllyWhere } from "@/queries/war";
@@ -101,6 +101,7 @@ import {
   userQuestHistoryRelation,
 } from "@/server/utils/achievementObjectives";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
+import { createInstanceCache } from "@/server/utils/instanceCache";
 import { hashIp } from "@/server/utils/ipHash";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { missingUserMessage } from "@/server/utils/sentry";
@@ -192,36 +193,44 @@ export const fetchUser = async (client: DrizzleClient, userId: string) => {
   return user;
 };
 
-/**
- * Global game state that `fetchUpdatedUser` needs on every call, memoized for the
- * duration of one HTTP request by {@link scopedRead}.
- *
- * User-independent predicates share one read per query across the tRPC batch.
- * `scopedRead` gives each caller a clone, so per-user rewrites (hiding quest
- * locations, attaching the user's own subset of wars/raids/lobbies) operate on
- * private copies.
- *
- * The lobby and raid cutoffs are evaluated against the first caller's `now`. Later
- * callers in the same request therefore inherit a cutoff that is milliseconds old,
- * which is well inside the minute-scale windows both filters describe.
- */
-export const fetchAchievementCatalogue = (client: DrizzleClient) =>
-  scopedRead("achievements", () =>
+// Achievements change only when staff edit quests, which invalidate this instance at
+// once; other instances serve an edit within the TTL. Rows stay complete because they
+// become the `quest` of each player's achievement entries.
+const ACHIEVEMENT_CATALOGUE_TTL_MS = 60 * 1000;
+const achievementCatalogue = createInstanceCache(
+  ACHIEVEMENT_CATALOGUE_TTL_MS,
+  (client: Pick<DrizzleClient, "select">) =>
     client
       .select()
       .from(quest)
       .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false))),
-  );
+);
 
-/** Load persisted settings and the computed PvP average in parallel, sharing the result within the request. */
-export const fetchAllGameSettings = (client: DrizzleClient) =>
-  scopedRead("gameSettings", async () => {
-    const [settings, average] = await Promise.all([
-      client.select().from(gameSetting),
-      fetchPvpExperienceAverage(client),
-    ]);
-    return [...settings, average];
-  });
+/**
+ * Visible achievements from the instance cache. Each caller receives a clone, so per-user
+ * rewrites such as hidden quest locations operate on private copies.
+ */
+export const fetchAchievementCatalogue = (client: Pick<DrizzleClient, "select">) =>
+  achievementCatalogue.read(client);
+
+/** Make this instance read achievements again; call after quest definition writes. */
+export const invalidateAchievementCatalogue = achievementCatalogue.invalidate;
+
+/** Load persisted settings from the instance cache, followed by the computed PvP average. */
+export const fetchAllGameSettings = async (client: DrizzleClient) => {
+  const [settings, average] = await Promise.all([
+    listCachedGameSettings(client),
+    fetchPvpExperienceAverage(client),
+  ]);
+  return [...settings, average];
+};
+
+/*
+ * Wars, shrine lobbies and raids gate actions or change with combat, so they stay fresh
+ * per request: {@link scopedRead} shares one read across the tRPC batch and hands each
+ * caller a clone for its own subset. The lobby and raid cutoffs are evaluated against
+ * the first caller's `now`, which is well inside the minute-scale windows they describe.
+ */
 
 /** Load a request-scoped active-poll lookup excluding polls already voted on by this user. */
 export const fetchHasUnvotedPolls = (

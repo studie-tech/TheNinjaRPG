@@ -1,8 +1,11 @@
 import { describe, expect, it, mock } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { MySqlDialect } from "drizzle-orm/mysql-core";
 import { fetchBloodlineCollectionRolls } from "@/queries/quests";
 import type { DrizzleClient } from "@/server/db";
 import { withRequestScope } from "@/server/requestScope";
 import {
+  fetchAchievementObjectiveJutsus,
   fetchBloodlineCollectionCatalogue,
   hydrateQuestCollections,
 } from "@/server/utils/questCollections";
@@ -244,6 +247,71 @@ describe("quest collection snapshots", () => {
       expect(findOwned).not.toHaveBeenCalled();
       expect(done.ownedObjectiveJutsus).toBeUndefined();
       expect(unlisted.ownedObjectiveJutsus).toBeUndefined();
+    });
+
+    it("serves preloaded achievement targets and reads only the targets they miss", async () => {
+      const { client, findOwned } = jutsuDatabase();
+      const preloaded = {
+        catalogue: [],
+        rolls: [],
+        objectiveJutsus: {
+          jutsuIds: ["achievement", "other-achievement"],
+          owned: [
+            { jutsuId: "achievement", jutsu: { statClassification: "Genjutsu" } },
+          ],
+        },
+      } as unknown as Parameters<typeof hydrateQuestCollections>[3];
+      const covered = await hydrateQuestCollections(
+        client,
+        userWithObjective(["achievement"]),
+        false,
+        preloaded,
+      );
+      expect(findOwned).not.toHaveBeenCalled();
+      expect(covered.ownedObjectiveJutsus).toEqual([
+        { jutsuId: "achievement", masteryTypes: ["Genjutsu"] },
+      ]);
+
+      const mixed = await hydrateQuestCollections(
+        client,
+        userWithObjective(["achievement", "listed"]),
+        false,
+        preloaded,
+      );
+      expect(findOwned).toHaveBeenCalledTimes(1);
+      const [{ where }] = findOwned.mock.calls[0] as unknown as [{ where: SQL }];
+      expect(new MySqlDialect().sqlToQuery(where).params).toEqual([
+        "collection-user",
+        "listed",
+      ]);
+      expect(mixed.ownedObjectiveJutsus).toEqual([
+        { jutsuId: "achievement", masteryTypes: ["Genjutsu"] },
+        { jutsuId: "listed", masteryTypes: ["Ninjutsu"] },
+      ]);
+    });
+
+    it("preloads ownership only for the catalogue's jutsu targets", async () => {
+      const { client, findOwned } = jutsuDatabase();
+      const objective = (trainJutsuIds: string[]) => ({
+        content: {
+          objectives: [
+            { id: "learn", task: "train_specific_jutsu", trainJutsuIds },
+            { id: "other", task: "pvp_kills" },
+          ],
+        },
+      });
+      const none = await fetchAchievementObjectiveJutsus(client, "collection-user", [
+        objective([]),
+      ] as never);
+      expect(none).toEqual({ jutsuIds: [], owned: [] });
+      expect(findOwned).not.toHaveBeenCalled();
+      const loaded = await fetchAchievementObjectiveJutsus(client, "collection-user", [
+        objective(["listed"]),
+        objective(["listed", "second"]),
+      ] as never);
+      expect(loaded.jutsuIds).toEqual(["listed", "second"]);
+      expect(loaded.owned).toHaveLength(1);
+      expect(findOwned).toHaveBeenCalledTimes(1);
     });
   });
 });
