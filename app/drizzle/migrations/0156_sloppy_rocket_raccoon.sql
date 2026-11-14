@@ -42,9 +42,9 @@ DROP INDEX `VillageElderVote_villageId_idx` ON `VillageElderVote`;
 DROP INDEX `VillageElderVoteEntry_voteId_idx` ON `VillageElderVoteEntry`;
 DROP INDEX `WarAlly_warId_idx` ON `WarAlly`;
 DROP INDEX `WebStoreOrder_buyerId_idx` ON `WebStoreOrder`;
-DROP INDEX `UserData_pvpExperienceAverage_idx` ON `UserData`;
+-- Replace the forced PvP index atomically so live average reads always have it.
+ALTER TABLE `UserData` DROP INDEX `UserData_pvpExperienceAverage_idx`, ADD INDEX `UserData_pvpExperienceAverage_idx` (`isAi`,`pvpExperience`,`experience`);
 CREATE INDEX `RankedLoadout_userId_idx` ON `RankedLoadout` (`userId`);
 CREATE INDEX `UserData_isAi_level_experience_idx` ON `UserData` (`isAi`,`level`,`experience`);
 CREATE INDEX `UserData_username_approvedTos_isAi_idx` ON `UserData` (`username`,`approvedTos`,`isAi`);
 CREATE INDEX `UserVote_secret_idx` ON `UserVote` (`secret`);
-CREATE INDEX `UserData_pvpExperienceAverage_idx` ON `UserData` (`isAi`,`pvpExperience`,`experience`);
