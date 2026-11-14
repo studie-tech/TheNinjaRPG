@@ -631,3 +631,32 @@ export const calcMaxEnergy = (user: MasteryBuffUser) => {
 /** Ryo a recruiter earns, before PvP boosts, when their recruit reaches `level`. */
 export const recruiterLevelReward = (level: number) =>
   RECRUITER_LEVEL_REWARD_FACTOR * level * level * level;
+
+/** Length of `UserData.username` (varchar 191). */
+export const USERNAME_MAX_LENGTH = 191;
+
+/**
+ * Names `cloneAi` may give a copy of `username`, best first: "<name> - copy", then
+ * "<name> - copy 2", "<name> - copy 3"... Cloning a copy reuses its original name rather than
+ * stacking suffixes, and the name is shortened so each candidate fits in `maxLength`.
+ */
+export const cloneAiUsernameCandidates = (
+  username: string,
+  count = 50,
+  maxLength = USERNAME_MAX_LENGTH,
+) => {
+  const base = username.replace(/ - copy(?: \d+)?$/, "").trim() || username;
+  return Array.from({ length: count }, (_, i) => {
+    const suffix = i === 0 ? " - copy" : ` - copy ${i + 1}`;
+    return `${base.slice(0, maxLength - suffix.length).trimEnd()}${suffix}`;
+  });
+};
+
+/**
+ * First candidate not in `taken`. Compared case-insensitively, like the username unique key.
+ * Undefined when every candidate is taken.
+ */
+export const pickCloneAiUsername = (candidates: string[], taken: string[]) => {
+  const used = new Set(taken.map((name) => name.toLowerCase()));
+  return candidates.find((name) => !used.has(name.toLowerCase()));
+};
