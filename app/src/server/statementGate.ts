@@ -41,8 +41,7 @@ export const runSharedReadBehindStatementGate = async <T>(
   if (!context || context.isSharedRead) return load();
   // Await thenable query builders in the loader's context before sharing the result.
   const pending = storage.run({ ...context, isSharedRead: true }, async () => load());
-  const [result] = await Promise.all([pending, context.gate]);
-  return result;
+  return awaitStatementGate(pending, context.gate);
 };
 
 /**
@@ -68,7 +67,7 @@ export const gateStatements = <Client extends object>(client: Client): Client =>
         const pending = execute(...args);
         return context.isSharedRead
           ? pending
-          : Promise.all([pending, context.gate]).then(([result]) => result);
+          : awaitStatementGate(pending, context.gate);
       }
       return context.gate.then(() => execute(...args));
     };
@@ -79,6 +78,14 @@ export const gateStatements = <Client extends object>(client: Client): Client =>
     return gate ? gate.then(() => transaction(...args)) : transaction(...args);
   };
   return client;
+};
+
+/** Withhold read failures as well as results, with the gate's error taking precedence. */
+const awaitStatementGate = async <T>(pending: Promise<T>, gate: Promise<unknown>) => {
+  // Observe an early failure while clearance is pending, without delaying a rejected gate.
+  void pending.catch(() => {});
+  await gate;
+  return pending;
 };
 
 /** The internal Drizzle session members every statement passes through. */

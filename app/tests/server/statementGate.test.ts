@@ -2,7 +2,11 @@ import { describe, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { userData } from "@/drizzle/schema";
 import { scopedRead, withRequestScope } from "@/server/requestScope";
-import { gateStatements, runBehindStatementGate } from "@/server/statementGate";
+import {
+  gateStatements,
+  runBehindStatementGate,
+  runSharedReadBehindStatementGate,
+} from "@/server/statementGate";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
 import { deferred } from "../setup/deferred";
 import { planetScaleFixture } from "../setup/planetscale";
@@ -20,6 +24,82 @@ const gatedFixture = () => {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
 
 describe("statement gate", () => {
+  for (const shared of [false, true]) {
+    const kind = shared ? "shared read" : "read";
+
+    it(`withholds a failed ${kind} and gives a rejected gate precedence`, async () => {
+      const failure = new Error("read failed");
+      const fixture = planetScaleFixture(() => {
+        throw failure;
+      });
+      const database = gateStatements(fixture.database);
+      const gate = deferred();
+      const closed = new Error("isolated player");
+      const load = () =>
+        database.select({ userId: userData.userId }).from(userData).execute();
+      let recovered = false;
+      const read = withRequestScope(() =>
+        runBehindStatementGate(gate.promise, () =>
+          (shared ? scopedRead("failed-players", load) : load()).catch((error) => {
+            recovered = true;
+            return error;
+          }),
+        ),
+      );
+      await settle();
+      const recoveredBeforeClearance = recovered;
+      gate.reject(closed);
+      expect(await read).toBe(closed);
+      expect(recoveredBeforeClearance).toBe(false);
+      expect(fixture.statements).toHaveLength(1);
+    });
+
+    it(`forwards a failed ${kind}'s database error only after clearance`, async () => {
+      const failure = new Error("read failed");
+      const fixture = planetScaleFixture(() => {
+        throw failure;
+      });
+      const database = gateStatements(fixture.database);
+      const gate = deferred();
+      const load = () =>
+        database.select({ userId: userData.userId }).from(userData).execute();
+      let recovered = false;
+      const read = withRequestScope(() =>
+        runBehindStatementGate(gate.promise, () =>
+          (shared ? scopedRead("failed-players", load) : load()).catch((error) => {
+            recovered = true;
+            return error;
+          }),
+        ),
+      );
+      await settle();
+      const recoveredBeforeClearance = recovered;
+      gate.resolve();
+      expect(await read).toMatchObject({ cause: failure });
+      expect(recoveredBeforeClearance).toBe(false);
+      expect(fixture.statements).toHaveLength(1);
+    });
+  }
+
+  it("rejects a denied shared read without waiting for its loader", async () => {
+    const pending = deferred();
+    const gate = deferred();
+    const closed = new Error("isolated player");
+    let rejected = false;
+    const read = runBehindStatementGate(gate.promise, () =>
+      runSharedReadBehindStatementGate(() => pending.promise).catch((error) => {
+        rejected = true;
+        return error;
+      }),
+    );
+    gate.reject(closed);
+    await settle();
+    const rejectedBeforeRead = rejected;
+    pending.resolve();
+    expect(await read).toBe(closed);
+    expect(rejectedBeforeRead).toBe(true);
+  });
+
   it("sends reads at once and withholds their results until the gate clears", async () => {
     const { database, statements } = gatedFixture();
     const gate = deferred();
