@@ -3,6 +3,7 @@ import { getQueryKey } from "@trpc/react-query";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { addSectorArrivals, getSectorUserUpdate } from "@/deltas/travel";
 import { useQueryCacheUpdate } from "@/hooks/useQueryCacheUpdate";
+import type { SectorUser } from "@/libs/sector-map/world-types";
 
 /** Bind caller-only sector reconciliation to the sector selected before an action starts. */
 export const useSectorCacheUpdate = (sector: number | undefined) => {
@@ -32,10 +33,10 @@ export const useSectorCacheUpdate = (sector: number | undefined) => {
   const addArrivals = (
     snapshot: ReturnType<typeof prepareSectorUpdate>,
     arrivals: RouterOutputs["travel"]["getSectorUsers"],
-    positions: ReadonlyMap<string, { longitude: number; latitude: number }>,
+    liveUsers: ReadonlyMap<string, SectorUser>,
   ) =>
     cache.updateCache(
-      (current) => addSectorArrivals(current, arrivals, positions),
+      (current) => addSectorArrivals(current, arrivals, liveUsers),
       snapshot.query,
     );
   return { prepareSectorUpdate, updateSector, isSectorFetching, addArrivals };

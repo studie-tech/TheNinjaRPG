@@ -5,7 +5,7 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { type PropsWithChildren, useRef } from "react";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
-import type { UserData } from "@/drizzle/schema";
+import { getSectorPresenceUpdate } from "@/deltas/travel";
 import { useDungeonAvailability } from "@/hooks/useDungeonAvailability";
 import { useSectorCacheUpdate } from "@/hooks/useSectorCacheUpdate";
 import { useVillageDutyPursuit } from "@/hooks/useVillageDuty";
@@ -138,7 +138,7 @@ const setup = (
         wanted: new Map<
           string,
           {
-            movement?: Pick<UserData, "longitude" | "latitude" | "status" | "battleId">;
+            presence?: ReturnType<typeof getSectorPresenceUpdate>;
           }
         >(),
         queued: new Set<string>(),
@@ -176,6 +176,7 @@ const setup = (
         prepareSectorUpdate,
         isSectorFetching,
         addArrivals,
+        getSectorPresenceUpdate,
         isSectorPresenceStatus,
         SECTOR_ARRIVAL_BATCH_LIMIT,
         SECTOR_ARRIVAL_BATCH_MS,
@@ -341,6 +342,23 @@ it.each([
         latitude: 3,
         username: "Unmasked name",
         avatar: "unmasked.webp",
+        curHealth: 100,
+        maxHealth: 120,
+        level: 51,
+        experience: 200,
+        rank: "JONIN",
+      }),
+    );
+    // Movement broadcasts can omit health; they must retain the heal received during the read.
+    await act(async () =>
+      test.result.current.updateRemote({
+        userId: "arrival",
+        sector: 3,
+        status,
+        battleId,
+        longitude: 3,
+        latitude: 4,
+        curHealth: undefined,
       }),
     );
     pending.resolve([
@@ -353,18 +371,25 @@ it.each([
         battleId: status === "BATTLE" ? null : "old-battle",
         username: "ANBU",
         avatar: "mask.webp",
+        curHealth: 30,
+        maxHealth: 100,
       },
     ]);
     await settle();
     expect(test.result.current.data.users).toEqual([
       expect.objectContaining({
         userId: "arrival",
-        longitude: 2,
-        latitude: 3,
+        longitude: 3,
+        latitude: 4,
         status,
         battleId,
         username: "ANBU",
         avatar: "mask.webp",
+        curHealth: 100,
+        maxHealth: 120,
+        level: 51,
+        experience: 200,
+        rank: "JONIN",
       }),
     ]);
   },

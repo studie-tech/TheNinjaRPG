@@ -13,6 +13,7 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { getInventoryQuantities } from "@/deltas/item";
 import type { UserUpdateOptions } from "@/deltas/profile";
+import { getSectorPresenceUpdate } from "@/deltas/travel";
 import {
   IMG_AVATAR_DEFAULT,
   IMG_SCENE_BACKGROUND,
@@ -294,7 +295,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const arrivalsRef = useRef({
     wanted: new Map<
       string,
-      { movement?: Pick<UserData, "longitude" | "latitude" | "status" | "battleId"> }
+      { presence?: ReturnType<typeof getSectorPresenceUpdate> }
     >(),
     queued: new Set<string>(),
     timer: undefined as ReturnType<typeof setTimeout> | undefined,
@@ -910,7 +911,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     // Entry identity distinguishes a return from an earlier arrival whose read is pending.
     const requested = new Map(userIds.map((id) => [id, arrivals.wanted.get(id)]));
     for (const pending of requested.values()) {
-      if (pending) pending.movement = undefined;
+      if (pending) pending.presence = undefined;
     }
     const clearRequested = () => {
       for (const [id, pending] of requested) {
@@ -919,23 +920,18 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     };
     try {
       const users = await utils.client.travel.getSectorUsers.query({ sector, userIds });
-      // A departure cancels this identity. Newer broadcasts retain position and combat
-      // state together; identity and disguise fields remain server-formatted.
+      // A departure cancels this identity. Defined public presence updates accumulate
+      // during the read; identity and disguise fields remain server-formatted.
       const arrived = users.flatMap((user) => {
         const pending = requested.get(user.userId);
         return pending && arrivals.wanted.get(user.userId) === pending
-          ? [{ ...user, ...pending.movement }]
+          ? [{ ...user, ...pending.presence }]
           : [];
       });
       clearRequested();
       if (!mountedRef.current || sectorRef.current !== sector) return;
-      const positions = new Map(
-        usersRef.current.map((user) => [
-          user.userId,
-          { longitude: user.longitude, latitude: user.latitude },
-        ]),
-      );
-      await addArrivals(snapshot, arrived, positions);
+      const liveUsers = new Map(usersRef.current.map((user) => [user.userId, user]));
+      await addArrivals(snapshot, arrived, liveUsers);
     } catch {
       clearRequested();
       reloadSectorPresence();
@@ -951,12 +947,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     const arrivals = arrivalsRef.current;
     const pending = arrivals.wanted.get(data.userId);
     if (pending) {
-      pending.movement = {
-        longitude: data.longitude,
-        latitude: data.latitude,
-        status: data.status,
-        battleId: data.battleId ?? null,
-      };
+      pending.presence = { ...pending.presence, ...getSectorPresenceUpdate(data) };
       return;
     }
     arrivals.wanted.set(data.userId, {});

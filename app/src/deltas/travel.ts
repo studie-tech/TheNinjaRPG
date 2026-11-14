@@ -2,6 +2,7 @@ import type { RouterOutputs } from "@/app/_trpc/client";
 import type { UserData } from "@/drizzle/schema";
 import { resolveSpriteAppearance } from "@/libs/lpc/appearance";
 import { getPublicQuestUser } from "@/libs/quest/projection";
+import type { SectorUser } from "@/libs/sector-map/world-types";
 import type { UserWithRelations } from "@/server/api/routers/profile";
 
 /** Project confirmed robbery credits and faction counters when no live stealth roll can change the actor. */
@@ -115,32 +116,51 @@ export const getSectorUserUpdate = (
   };
 };
 
+const sectorPresenceFields = [
+  "longitude",
+  "latitude",
+  "sector",
+  "status",
+  "battleId",
+  "location",
+  "villageId",
+  "level",
+  "experience",
+  "rank",
+  "curHealth",
+  "maxHealth",
+] as const;
+
+/** Project defined public presence changes without replacing authenticated identity or artwork. */
+export const getSectorPresenceUpdate = (user: Partial<SectorUser>) =>
+  Object.fromEntries(
+    sectorPresenceFields
+      .filter((field) => user[field] !== undefined)
+      .map((field) => [field, user[field]]),
+  ) as Partial<Pick<SectorUser, (typeof sectorPresenceFields)[number]>>;
+
 /**
- * Add players who joined the sector after its snapshot, as the arrival read presents them,
- * replacing the stale row of a player who left and returned. Players already shown keep their
- * live map positions, and departed players remain absent from the merged snapshot.
+ * Add authenticated arrivals while retaining existing players' live public presence and
+ * excluding departures. Names, artwork and viewer-specific disguises stay server-formatted.
  */
 export const addSectorArrivals = (
   current: RouterOutputs["travel"]["getSectorData"],
   arrivals: RouterOutputs["travel"]["getSectorUsers"],
-  positions: ReadonlyMap<string, { longitude: number; latitude: number }>,
+  liveUsers: ReadonlyMap<string, SectorUser>,
 ): RouterOutputs["travel"]["getSectorData"] => {
   // A viewer who cannot scout has an empty snapshot, which no arrival changes.
   if (current.warData === null || arrivals.length === 0) return current;
   const arrived = new Map(arrivals.map((row) => [row.userId, row]));
   const users = current.users
-    .filter((row) => positions.has(row.userId) || arrived.has(row.userId))
+    .filter((row) => liveUsers.has(row.userId) || arrived.has(row.userId))
     .map((row) => {
       const replacement = arrived.get(row.userId);
       if (replacement) {
         arrived.delete(row.userId);
         return replacement;
       }
-      const live = positions.get(row.userId);
-      return live &&
-        (live.longitude !== row.longitude || live.latitude !== row.latitude)
-        ? { ...row, longitude: live.longitude, latitude: live.latitude }
-        : row;
+      const live = liveUsers.get(row.userId);
+      return live ? { ...row, ...getSectorPresenceUpdate(live) } : row;
     });
   return { ...current, users: [...users, ...arrived.values()] };
 };
