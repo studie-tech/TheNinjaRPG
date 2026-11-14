@@ -118,7 +118,7 @@ describe("Curse", () => {
   });
 
   it.each([0, 50])(
-    "boosts Pierce by %i percent while preserving its damage-reduction bypass",
+    "excludes Pierce from a %i percent Curse bonus while preserving its damage-reduction bypass",
     (bonus) => {
       const pierce = makeEffect(
         "pierce",
@@ -145,7 +145,7 @@ describe("Curse", () => {
         scenario([mark(50, "attacker", "boosted", bonus), pierce, reduction]),
         "attacker",
       ).newBattle;
-      expect(user(battle, "defender").curHealth).toBe(5000 - 1250 * (1 + bonus / 100));
+      expect(user(battle, "defender").curHealth).toBe(3750);
     },
   );
 

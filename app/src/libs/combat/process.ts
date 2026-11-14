@@ -28,11 +28,7 @@ import {
   HP_DAMAGE_KEYS,
   REFLECT_CAP_RATIO,
 } from "./constants";
-import {
-  accumulateCurseConsequence,
-  accumulateCurseDamage,
-  getCurseDamageMultiplier,
-} from "./curse";
+import { accumulateCurseConsequence, accumulateCurseDamage } from "./curse";
 import {
   applyDamageModifierPipelineToConsequences,
   applyDiffuseToConsequences,
@@ -1467,9 +1463,8 @@ export const applySingleEffect = (resolution: EffectResolution, effect: UserEffe
               config,
             );
           } else if (effect.type === "pierce") {
-            const modifier =
-              calcDmgModifier(effect, curTarget, usersEffects) *
-              getCurseDamageMultiplier(newUsersEffects, effect.creatorId, usersEffects);
+            // Curse's damage bonus does not apply to Pierce.
+            const modifier = calcDmgModifier(effect, curTarget, usersEffects);
             info = damageUser(
               effect,
               newUser,
