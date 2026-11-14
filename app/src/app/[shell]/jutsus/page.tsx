@@ -112,9 +112,9 @@ export default function MyJutsu() {
   const actionsTriggerRef = useRef<HTMLButtonElement>(null);
   const [isReskinOpen, setIsReskinOpen] = useState<boolean>(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const [userjutsu, setUserJutsu] = useState<UserJutsuWithRelations | undefined>(
-    undefined,
-  );
+  const [selectedUserJutsu, setUserJutsu] = useState<
+    UserJutsuWithRelations | undefined
+  >(undefined);
   const [transferTarget, setTransferTarget] = useState<
     UserJutsuWithRelations | undefined
   >(undefined);
@@ -181,6 +181,10 @@ export default function MyJutsu() {
     jutsuInput,
     { enabled: !!userData, placeholderData: (previousData) => previousData },
   );
+  // Keep open-dialog training and levels current when ownership data is refreshed.
+  const userjutsu =
+    userJutsus?.find((owned) => owned.id === selectedUserJutsu?.id) ??
+    selectedUserJutsu;
   useEffect(() => {
     if (userJutsus) setClientNow(Date.now());
   }, [userJutsus]);
