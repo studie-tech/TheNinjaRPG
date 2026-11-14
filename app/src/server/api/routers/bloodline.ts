@@ -590,11 +590,12 @@ export const bloodlineRouter = createTRPCRouter({
       // Mutate
       const bloodrightRefund = bloodrightSwapRefund(null);
       await Promise.all([
-        deleteBloodlineForDelete(ctx.drizzle, input),
+        deleteBloodlineForDelete(ctx.drizzle, input).then(
+          invalidateBloodlineCollectionCatalogue,
+        ),
         updateUserDataForDelete(ctx.drizzle, bloodrightRefund, input),
         insertActionLogForDelete(ctx.drizzle, ctx, entry),
       ]);
-      invalidateBloodlineCollectionCatalogue();
       await outdateProposalsFor(
         ctx.drizzle,
         "BLOODLINE",

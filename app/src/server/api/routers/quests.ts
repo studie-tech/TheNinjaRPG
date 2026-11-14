@@ -1106,7 +1106,7 @@ export const questsRouter = createTRPCRouter({
       // Permission check
       if (canChangeContent(user.role)) {
         await Promise.all([
-          deleteQuestForDelete(ctx.drizzle, input),
+          deleteQuestForDelete(ctx.drizzle, input).then(invalidateAchievementCatalogue),
           deleteQuestHistoryForDelete(ctx.drizzle, input),
           deleteRaidParticipationForDelete(ctx.drizzle, input),
           deleteRaidDamageThresholdForDelete(ctx.drizzle, input),
@@ -1115,7 +1115,6 @@ export const questsRouter = createTRPCRouter({
           deleteUserQuestAttemptForDelete(ctx.drizzle, input),
           insertActionLogForDelete(ctx.drizzle, ctx, entry),
         ]);
-        invalidateAchievementCatalogue();
         await outdateProposalsFor(
           ctx.drizzle,
           "QUEST",

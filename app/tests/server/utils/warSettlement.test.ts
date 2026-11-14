@@ -33,6 +33,7 @@ import {
   warAlly,
 } from "@/drizzle/schema";
 import { Pusher } from "@/libs/pusher";
+import { listCachedGameSettings } from "@/queries/gamesettings";
 import { fetchActiveWar, fetchEndedWars } from "@/queries/war";
 import { shrineRouter } from "@/server/api/routers/shrine";
 import { villageRouter } from "@/server/api/routers/village";
@@ -44,7 +45,12 @@ import { acceptWarAllyOffer, withdrawWarAlly } from "@/server/utils/warAlly";
 import { defaultWarRules } from "@/validators/war";
 import { insertUsers } from "../../setup/factories";
 import { resetServerModuleStubs, stubProfile } from "../../setup/serverModules";
-import { interceptExecute, sqlText, withoutTransactions } from "../../setup/statements";
+import {
+  interceptExecute,
+  pollUntil,
+  sqlText,
+  withoutTransactions,
+} from "../../setup/statements";
 import {
   callerForDatabase,
   describeWithDatabase,
@@ -472,9 +478,23 @@ describeWithDatabase("guarded war settlement and delivery", () => {
         throw new Error("Quest cleanup unavailable");
       return execute();
     });
+    expect(
+      (await listCachedGameSettings(client)).find(
+        (row) => row.name === "war-attacker-regen",
+      )?.value,
+    ).toBe(0);
     expect((await handleWarEnd(await snapshot(db), client)).status).toBe(
       "ATTACKER_VICTORY",
     );
+    // A rejected sibling can return before the independent boost write completes.
+    expect(
+      await pollUntil(async () => !!(await savedWar(db))?.settlement?.boostsDelivered),
+    ).toBe(true);
+    expect(
+      (await listCachedGameSettings(client)).find(
+        (row) => row.name === "war-attacker-regen",
+      )?.value,
+    ).toBe(WAR_WINNING_BOOST_REGEN_PERC);
     expect(await savedWar(db)).toMatchObject({ settlementPending: true });
     expect(await fetchActiveWars(db, "attacker")).toHaveLength(0);
     expect(await savedWar(db)).toMatchObject({ settlementPending: false });

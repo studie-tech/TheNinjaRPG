@@ -15,10 +15,14 @@ import { gameAssetRouter } from "@/server/api/routers/asset";
 import { badgeRouter } from "@/server/api/routers/badge";
 import { bloodlineRouter } from "@/server/api/routers/bloodline";
 import { questsRouter } from "@/server/api/routers/quests";
+import type { DrizzleClient } from "@/server/db";
 import { fetchBloodlineCollectionCatalogue } from "@/server/utils/questCollections";
+import { deferred } from "../../../setup/deferred";
 import { insertQuests, insertUsers } from "../../../setup/factories";
+import { aroundStatements } from "../../../setup/statements";
 import {
   callerFor,
+  callerForDatabase,
   describeWithDatabase,
   getTestDatabase,
   resetTables,
@@ -27,6 +31,24 @@ import {
 const staffId = "content-staff";
 const bannedId = "content-banned";
 const playerId = "content-player";
+
+/** Fail logging after the definition deletion commits, preserving its successful write. */
+const failDeletionLog = (db: DrizzleClient, table: typeof bloodline | typeof quest) => {
+  const deleted = deferred();
+  return aroundStatements(
+    aroundStatements(db, table, async (run) => {
+      const result = await run();
+      deleted.resolve();
+      return result;
+    }),
+    actionLog,
+    async () => {
+      await deleted.promise;
+      throw new Error("Logging unavailable");
+    },
+    { operations: ["insert"] },
+  );
+};
 
 const badgeData = {
   name: "Guard Badge",
@@ -201,36 +223,50 @@ describeWithDatabase("content procedure guards", () => {
       );
     });
 
-    it("drops a deleted bloodline from this instance's collection catalogue at once", async () => {
-      const db = await getTestDatabase();
-      await db.insert(bloodline).values({
-        id: "line",
-        name: "Guard Line",
-        rank: "D",
-        image: IMG_AVATAR_DEFAULT,
-        description: "Guarded",
-        effects: [],
-      });
-      expect(await fetchBloodlineCollectionCatalogue(db)).toEqual([
-        { id: "line", rank: "D", hidden: false },
-      ]);
-      const caller = await callerFor(bloodlineRouter, staffId);
-      expect((await caller.delete({ id: "line" })).success).toBe(true);
-      expect(await fetchBloodlineCollectionCatalogue(db)).toEqual([]);
-    });
+    it.each([false, true])(
+      "drops a deleted bloodline from the catalogue even if logging fails: %s",
+      async (failsLogging) => {
+        const db = await getTestDatabase();
+        await db.insert(bloodline).values({
+          id: "line",
+          name: "Guard Line",
+          rank: "D",
+          image: IMG_AVATAR_DEFAULT,
+          description: "Guarded",
+          effects: [],
+        });
+        const client = failsLogging ? failDeletionLog(db, bloodline) : db;
+        expect(await fetchBloodlineCollectionCatalogue(client)).toEqual([
+          { id: "line", rank: "D", hidden: false },
+        ]);
+        const deletion = callerForDatabase(bloodlineRouter, staffId, client).delete({
+          id: "line",
+        });
+        if (failsLogging) await expect(deletion).rejects.toThrow("Logging unavailable");
+        else expect((await deletion).success).toBe(true);
+        expect(await fetchBloodlineCollectionCatalogue(client)).toEqual([]);
+      },
+    );
   });
 
   describe("quest", () => {
-    it("drops a deleted achievement from this instance's catalogue at once", async () => {
-      await resetTables(quest);
-      await insertQuests([{ id: "guard-achievement", questType: "achievement" }]);
-      const db = await getTestDatabase();
-      const ids = async () =>
-        (await fetchAchievementCatalogue(db)).map((entry) => entry.id);
-      expect(await ids()).toEqual(["guard-achievement"]);
-      const caller = await callerFor(questsRouter, staffId);
-      expect((await caller.delete({ id: "guard-achievement" })).success).toBe(true);
-      expect(await ids()).toEqual([]);
-    });
+    it.each([false, true])(
+      "drops a deleted achievement from the catalogue even if logging fails: %s",
+      async (failsLogging) => {
+        await resetTables(quest);
+        await insertQuests([{ id: "guard-achievement", questType: "achievement" }]);
+        const db = await getTestDatabase();
+        const client = failsLogging ? failDeletionLog(db, quest) : db;
+        const ids = async () =>
+          (await fetchAchievementCatalogue(client)).map((entry) => entry.id);
+        expect(await ids()).toEqual(["guard-achievement"]);
+        const deletion = callerForDatabase(questsRouter, staffId, client).delete({
+          id: "guard-achievement",
+        });
+        if (failsLogging) await expect(deletion).rejects.toThrow("Logging unavailable");
+        else expect((await deletion).success).toBe(true);
+        expect(await ids()).toEqual([]);
+      },
+    );
   });
 });

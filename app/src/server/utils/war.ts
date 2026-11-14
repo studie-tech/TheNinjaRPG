@@ -308,7 +308,7 @@ const finishWarSettlement = async (client: DrizzleClient, endedWar: War) => {
               boostEnd,
               stepGuard,
             ),
-          )
+          ).then(invalidateGameSettings)
         : Promise.resolve(),
       !receipt.structuresDelivered
         ? retryOnDeadlock(() =>
@@ -337,7 +337,6 @@ const finishWarSettlement = async (client: DrizzleClient, endedWar: War) => {
         executeRowsForFinishWarSettlement3(client, cleanupCutoff, receipt),
       ),
     ]);
-    if (!receipt.boostsDelivered) invalidateGameSettings();
     // The feed entry is durable before its count receipt is claimed; retries never increment twice.
     if (!receipt.notified)
       await retryOnDeadlock(() =>
