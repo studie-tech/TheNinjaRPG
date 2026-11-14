@@ -110,7 +110,7 @@ describeWithDatabase("equipped items and backpack capacity", () => {
       });
       expect(await api.buy(input)).toMatchObject({
         success: false,
-        message: getInventoryBucketFullMessage(bucket),
+        message: getInventoryBucketFullMessage(bucket, { auction: 0, crafting: 1 }),
       });
       const afterRejection = await db.query.userData.findFirst({
         where: eq(userData.userId, userId),
@@ -195,12 +195,46 @@ describeWithDatabase("equipped items and backpack capacity", () => {
         const api = await callerFor(itemRouter, userId);
         expect(await api.buy({ itemId: "potion", villageId, stack: 2 })).toMatchObject({
           success: false,
-          message: getInventoryBucketFullMessage("normal"),
+          message: getInventoryBucketFullMessage("normal", { auction: 0, crafting: 1 }),
         });
         expect(await potionRows()).toEqual([["potions", quantity]]);
         expect(await money()).toBe(10000);
       },
     );
+
+    it("names held slots when a stackable purchase cannot fit and rolls back", async () => {
+      await fillBackpack("normal", 3);
+      await insertUserItems([
+        { id: "potions", userId, itemId: "potion", quantity: 9 },
+        { id: "listed-a", userId, itemId: "potion", isInAuction: true },
+        { id: "listed-b", userId, itemId: "potion", isInAuction: true },
+      ]);
+      const before = await potionRows();
+      const api = await callerFor(itemRouter, userId);
+      expect(await api.buy({ itemId: "potion", villageId, stack: 2 })).toMatchObject({
+        success: false,
+        message:
+          "Inventory is full (3 slots are held: 2 by auction listings or trade offers, 1 by an unfinished craft)",
+      });
+      expect(await potionRows()).toEqual(before);
+      expect(await money()).toBe(10000);
+    });
+  });
+
+  it("names the backpack slots held by listings when a purchase does not fit", async () => {
+    await fillBackpack("normal", 2);
+    await insertUserItems([
+      { id: "listed-a", userId, itemId: "backpack-item", isInAuction: true },
+      { id: "listed-b", userId, itemId: "backpack-item", isInAuction: true },
+    ]);
+    const api = await callerFor(itemRouter, userId);
+    expect(
+      await api.buy({ itemId: "backpack-item", villageId, stack: 1 }),
+    ).toMatchObject({
+      success: false,
+      message:
+        "Inventory is full (3 slots are held: 2 by auction listings or trade offers, 1 by an unfinished craft)",
+    });
   });
 
   it("buys directly into an empty equipment slot when the backpack is full", async () => {
@@ -212,7 +246,7 @@ describeWithDatabase("equipped items and backpack capacity", () => {
     // The occupied head slot prevents the next helmet from auto-equipping.
     expect(await api.buy({ itemId: "gear", villageId, stack: 1 })).toMatchObject({
       success: false,
-      message: "Inventory is full",
+      message: "Inventory is full (1 slot is held by an unfinished craft)",
     });
   });
 
@@ -231,7 +265,7 @@ describeWithDatabase("equipped items and backpack capacity", () => {
       expect((await home.toggleStoreItem({ userItemId: "stored" })).success).toBe(true);
       expect(await home.toggleStoreItem({ userItemId: "stored-next" })).toMatchObject({
         success: false,
-        message: getInventoryBucketFullMessage(bucket),
+        message: getInventoryBucketFullMessage(bucket, { auction: 0, crafting: 1 }),
       });
       const api = await callerFor(itemRouter, userId);
       const before = (await api.getUserItems()).filter(

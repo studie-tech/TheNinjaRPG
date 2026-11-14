@@ -3,6 +3,7 @@ import type { ItemSlot } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
 import {
   backpackFilterChips,
+  countHeldInventorySlots,
   countUnlistedBagStacks,
   dropTargetsFor,
   equipLimitReason,
@@ -397,6 +398,32 @@ describe("countUnlistedBagStacks", () => {
       row({ equipped: "HEAD", craftingFinishedAt: later }),
     ];
     expect(countUnlistedBagStacks(rows, now)).toEqual({ auction: 0, crafting: 0 });
+  });
+
+  it("counts held stacks in one inventory bucket", () => {
+    const inBucket = (fields: Parameters<typeof row>[0], itemType = "WEAPON") => ({
+      ...row(fields),
+      item: { itemType, isEventItem: false },
+    });
+    const rows = [
+      inBucket({ isInAuction: true }),
+      inBucket({ craftingFinishedAt: later }),
+      inBucket({ isInAuction: true }, "MATERIAL"),
+      inBucket({ craftingFinishedAt: later }, "MATERIAL"),
+      inBucket({ craftingFinishedAt: later }, "MATERIAL"),
+    ];
+    expect(countHeldInventorySlots(rows, "normal", now)).toEqual({
+      auction: 1,
+      crafting: 1,
+    });
+    expect(countHeldInventorySlots(rows, "materials", now)).toEqual({
+      auction: 1,
+      crafting: 2,
+    });
+    expect(countHeldInventorySlots(rows, "cooking", now)).toEqual({
+      auction: 0,
+      crafting: 0,
+    });
   });
 });
 

@@ -49,6 +49,7 @@ import {
   isEquippableUserItem,
   splitIntoStacks,
 } from "@/libs/item";
+import { countHeldInventorySlots } from "@/libs/itemsPage";
 import {
   filterQuestTrackersForDbPersist,
   getNewTrackers,
@@ -2295,7 +2296,9 @@ const guardItemAwardInventoryCapacity = (
     (ui) => getInventoryBucket(ui.item) === bucket,
   ).length;
   if (bucketCount + newStacksRequired > getInventoryBucketCapacity(bucket, user)) {
-    return errorResponse(getInventoryBucketFullMessage(bucket));
+    return errorResponse(
+      getInventoryBucketFullMessage(bucket, countHeldInventorySlots(userItems, bucket)),
+    );
   }
 
   return null;
@@ -2340,7 +2343,12 @@ const guardBulkItemAwardInventoryCapacity = (
       (userItem) => getInventoryBucket(userItem.item) === bucket,
     ).length;
     if (bucketCount + needed > getInventoryBucketCapacity(bucket, user)) {
-      return errorResponse(getInventoryBucketFullMessage(bucket));
+      return errorResponse(
+        getInventoryBucketFullMessage(
+          bucket,
+          countHeldInventorySlots(inventoryItems, bucket),
+        ),
+      );
     }
   }
   return null;

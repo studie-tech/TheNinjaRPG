@@ -108,7 +108,11 @@ import {
   readItemListFilterSlot,
 } from "@/libs/item";
 import { getItemPurchaseAllowance, itemPurchaseLimitMessage } from "@/libs/itemEconomy";
-import { bulkSellBlockReason, bulkSellMessage } from "@/libs/itemsPage";
+import {
+  bulkSellBlockReason,
+  bulkSellMessage,
+  countHeldInventorySlots,
+} from "@/libs/itemsPage";
 import { getJutsuSlotIncreaseError } from "@/libs/jutsuSlots";
 import {
   buildMissingLoadouts,
@@ -3354,8 +3358,14 @@ export const itemRouter = createTRPCRouter({
             getInventoryBucket(ui.item) === purchaseBucket,
         ).length;
         if (bucketCount >= getInventoryBucketCapacity(purchaseBucket, user)) {
-          if (!isStackablePurchase)
-            return errorResponse(getInventoryBucketFullMessage(purchaseBucket));
+          if (!isStackablePurchase) {
+            return errorResponse(
+              getInventoryBucketFullMessage(
+                purchaseBucket,
+                countHeldInventorySlots(useritems, purchaseBucket),
+              ),
+            );
+          }
           topUpOnly = true;
         }
       }
@@ -3482,7 +3492,12 @@ export const itemRouter = createTRPCRouter({
         throw error;
       });
       if (purchaseCommitted === "FULL")
-        return errorResponse(getInventoryBucketFullMessage(purchaseBucket));
+        return errorResponse(
+          getInventoryBucketFullMessage(
+            purchaseBucket,
+            countHeldInventorySlots(useritems, purchaseBucket),
+          ),
+        );
       if (purchaseCommitted !== true && allowance.limit != null) {
         const counters = await fetchPurchaseCounters(
           ctx.drizzle,

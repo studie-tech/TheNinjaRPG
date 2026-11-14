@@ -25,6 +25,7 @@ import {
   getInventoryBucket,
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
+  type InventoryBucket,
   isCompatibleEquipSlot,
 } from "@/libs/item";
 import { needsInventoryRepair } from "@/libs/repair";
@@ -344,6 +345,7 @@ type HomeStorageRow = {
   equipped: ItemSlot;
   storedAtHome: boolean;
   isInAuction: boolean;
+  craftingFinishedAt: Date | null;
   item: { name: string; itemType: ItemType; isEventItem: boolean };
 };
 
@@ -398,7 +400,12 @@ export const planHomeStorageMove = <T extends HomeStorageRow>({
       } else {
         const bucket = getInventoryBucket(ui.item);
         if ((used.get(bucket) ?? 0) >= getInventoryBucketCapacity(bucket, user)) {
-          return `does not fit: ${getInventoryBucketFullMessage(bucket)}`;
+          // Accepted withdrawals already occupy bag slots in this batch's projected inventory.
+          const held = countHeldInventorySlots(
+            [...rows, ...moving.map((row) => ({ ...row, storedAtHome: false }))],
+            bucket,
+          );
+          return `does not fit: ${getInventoryBucketFullMessage(bucket, held)}`;
         }
       }
       return null;
@@ -425,7 +432,7 @@ export const homeStorageMoveBlockReason = <T extends HomeStorageRow>({
   return reason ? reason.charAt(0).toUpperCase() + reason.slice(1) : null;
 };
 
-/** Summarize a home storage move: how many stacks moved and why the others stayed. */
+/** Summarize moved stacks and group matching refusals to keep batch feedback compact. */
 export const homeStorageMoveMessage = (
   moved: number,
   toHome: boolean,
@@ -438,7 +445,15 @@ export const homeStorageMoveMessage = (
       : toHome
         ? `Stored ${items} in your home.`
         : `Took ${items} out of your home.`;
-  const stayed = refused.map(({ name, reason }) => `${name} ${reason}`).join("; ");
+  const groups = new Map<string, { name: string; count: number }>();
+  for (const { name, reason } of refused) {
+    groups.set(reason, { name, count: (groups.get(reason)?.count ?? 0) + 1 });
+  }
+  const stayed = [...groups]
+    .map(([reason, { name, count }]) =>
+      count === 1 ? `${name} ${reason}` : `${count} items (${reason})`,
+    )
+    .join("; ");
   return refused.length > 0 ? `${done} ${refused.length} stayed: ${stayed}.` : done;
 };
 
@@ -462,6 +477,19 @@ export const countUnlistedBagStacks = (
   ).length;
   return { auction, crafting };
 };
+
+/** Stacks of one inventory bucket that use bag space without showing in the backpack. */
+export const countHeldInventorySlots = (
+  rows: (Parameters<typeof countUnlistedBagStacks>[0][number] & {
+    item: Parameters<typeof getInventoryBucket>[0];
+  })[],
+  bucket: InventoryBucket,
+  now: Date = new Date(),
+) =>
+  countUnlistedBagStacks(
+    rows.filter((row) => getInventoryBucket(row.item) === bucket),
+    now,
+  );
 
 /** Says which unlisted stacks still use bag space, or null when every counted stack is listed. */
 export const unlistedBagStacksNote = ({

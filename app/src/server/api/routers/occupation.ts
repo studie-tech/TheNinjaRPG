@@ -39,6 +39,7 @@ import {
   getInventoryBucketFullMessage,
   splitIntoStacks,
 } from "@/libs/item";
+import { countHeldInventorySlots } from "@/libs/itemsPage";
 import { getOccupationChangeDaysRemaining } from "@/libs/occupation";
 import { getPvpBoost } from "@/libs/pvpExperience";
 import {
@@ -288,7 +289,13 @@ export const occupationRouter = createTRPCRouter({
           carriedCookingStacks + queuedCookingStacks + newStacksRequired >
           getInventoryBucketCapacity(outputBucket, user)
         ) {
-          return errorResponse(getInventoryBucketFullMessage(outputBucket));
+          const held = countHeldInventorySlots(useritems, outputBucket);
+          return errorResponse(
+            getInventoryBucketFullMessage(outputBucket, {
+              ...held,
+              crafting: held.crafting + queuedCookingStacks,
+            }),
+          );
         }
       }
       // Derived

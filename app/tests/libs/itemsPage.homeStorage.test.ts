@@ -53,6 +53,53 @@ describe("homeStorageBlockReason", () => {
 });
 
 describe("planHomeStorageMove", () => {
+  it("names the backpack slots held by listings when a withdrawal does not fit", () => {
+    const capacity = getInventoryBucketCapacity("normal", user);
+    const rows = [
+      ...Array.from({ length: capacity }, (_, index) =>
+        row(`carried-${index}`, { isInAuction: index < 2 }),
+      ),
+      row("stored", { storedAtHome: true }),
+    ];
+    const plan = planHomeStorageMove({
+      rows,
+      userItemIds: ["stored"],
+      toHome: false,
+      user,
+      homeStorage: 12,
+    });
+    expect(plan.refused).toEqual([
+      {
+        userItemId: "stored",
+        name: "stored",
+        reason:
+          "does not fit: Inventory is full (2 slots are held by auction listings or trade offers)",
+      },
+    ]);
+  });
+
+  it("names the backpack slots held by unfinished crafts when a withdrawal does not fit", () => {
+    const capacity = getInventoryBucketCapacity("normal", user);
+    const rows = [
+      ...Array.from({ length: capacity }, (_, index) =>
+        row(`carried-${index}`, {
+          craftingFinishedAt: index < 1 ? new Date(Date.now() + 3_600_000) : null,
+        }),
+      ),
+      row("stored", { storedAtHome: true }),
+    ];
+    const plan = planHomeStorageMove({
+      rows,
+      userItemIds: ["stored"],
+      toHome: false,
+      user,
+      homeStorage: 12,
+    });
+    expect(plan.refused[0]?.reason).toBe(
+      "does not fit: Inventory is full (1 slot is held by an unfinished craft)",
+    );
+  });
+
   it("stores carried stacks until their home bucket is full, in request order", () => {
     // A 12-slot home holds 12 items and 2 materials.
     const rows = [
@@ -101,6 +148,30 @@ describe("planHomeStorageMove", () => {
     ]);
   });
 
+  it.each([
+    [{ isInAuction: true }, "an auction listing or trade offer"],
+    [{ craftingFinishedAt: new Date(Date.now() + 3_600_000) }, "an unfinished craft"],
+  ] as const)("counts a held stack withdrawn earlier in the batch (%j)", (held, by) => {
+    const capacity = getInventoryBucketCapacity("normal", user);
+    const rows = [
+      ...Array.from({ length: capacity - 1 }, (_, index) => row(`carried-${index}`)),
+      row("held", { storedAtHome: true, ...held }),
+      row("stored", { storedAtHome: true }),
+    ];
+    const plan = planHomeStorageMove({
+      rows,
+      userItemIds: ["held", "stored"],
+      toHome: false,
+      user,
+      homeStorage: 12,
+    });
+    expect(plan.moving.map((ui) => ui.id)).toEqual(["held"]);
+    expect(plan.refused[0]?.reason).toBe(
+      `does not fit: Inventory is full (1 slot is held by ${by})`,
+    );
+    expect(rows.find((ui) => ui.id === "held")?.storedAtHome).toBe(true);
+  });
+
   it("refuses stacks that cannot move and names why", () => {
     const rows = [
       row("worn", { equipped: "HAND_1" }),
@@ -138,6 +209,20 @@ describe("planHomeStorageMove", () => {
 });
 
 describe("homeStorageMoveMessage", () => {
+  it("summarizes repeated capacity refusals once while keeping other reasons", () => {
+    const reason =
+      "does not fit: Inventory is full (3 slots are held: 2 by auction listings or trade offers, 1 by an unfinished craft)";
+    const refused = [
+      ...Array.from({ length: 10 }, () => ({ name: "Minor Repair Kit", reason })),
+      { name: "Ore", reason: "is equipped" },
+    ];
+    expect(homeStorageMoveMessage(0, false, refused)).toBe(
+      `Nothing was moved. 11 stayed: 10 items (${reason}); Ore is equipped.`,
+    );
+    expect(refused).toHaveLength(11);
+    expect(refused[0]).toEqual({ name: "Minor Repair Kit", reason });
+  });
+
   it("counts what moved and names what stayed", () => {
     expect(homeStorageMoveMessage(3, true, [])).toBe("Stored 3 items in your home.");
     expect(homeStorageMoveMessage(1, false, [])).toBe("Took 1 item out of your home.");

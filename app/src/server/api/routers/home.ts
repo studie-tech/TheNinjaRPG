@@ -33,6 +33,7 @@ import {
   getInventoryBucketFullMessage,
 } from "@/libs/item";
 import {
+  countHeldInventorySlots,
   HOME_STORAGE_STATUSES,
   homeStorageBlockReason,
   homeStorageMoveMessage,
@@ -600,7 +601,12 @@ export const homeRouter = createTRPCRouter({
           (ui) => getInventoryBucket(ui.item) === inventoryBucket,
         ).length;
         if (bucketCount >= getInventoryBucketCapacity(inventoryBucket, user)) {
-          return errorResponse(getInventoryBucketFullMessage(inventoryBucket));
+          return errorResponse(
+            getInventoryBucketFullMessage(
+              inventoryBucket,
+              countHeldInventorySlots(nonStoredItems, inventoryBucket),
+            ),
+          );
         }
       } else {
         // Check storage limits based on home-storage bucket

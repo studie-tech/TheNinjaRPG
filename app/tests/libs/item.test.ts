@@ -1012,6 +1012,32 @@ describe("COOKING item type", () => {
 });
 
 describe("backpack storage usage", () => {
+  it("names the slots held by listings, offers and crafts in a full inventory", () => {
+    const held = (auction: number, crafting: number) => ({ auction, crafting });
+    expect(getInventoryBucketFullMessage("normal")).toBe("Inventory is full");
+    expect(getInventoryBucketFullMessage("normal", held(0, 0))).toBe(
+      "Inventory is full",
+    );
+    expect(getInventoryBucketFullMessage("normal", held(1, 0))).toBe(
+      "Inventory is full (1 slot is held by an auction listing or trade offer)",
+    );
+    expect(getInventoryBucketFullMessage("materials", held(3, 0))).toBe(
+      "Materials inventory is full (3 slots are held by auction listings or trade offers)",
+    );
+    expect(getInventoryBucketFullMessage("normal", held(0, 1))).toBe(
+      "Inventory is full (1 slot is held by an unfinished craft)",
+    );
+    expect(getInventoryBucketFullMessage("cooking", held(0, 2))).toBe(
+      "Cooking inventory is full (2 slots are held by unfinished crafts)",
+    );
+    expect(getInventoryBucketFullMessage("normal", held(1, 1))).toBe(
+      "Inventory is full (2 slots are held: 1 by an auction listing or trade offer, 1 by an unfinished craft)",
+    );
+    expect(getInventoryBucketFullMessage("normal", held(2, 1))).toBe(
+      "Inventory is full (3 slots are held: 2 by auction listings or trade offers, 1 by an unfinished craft)",
+    );
+  });
+
   it.each(ItemSlots.filter((slot) => slot !== "NONE"))(
     "excludes stacks equipped in %s",
     (equipped) => {
