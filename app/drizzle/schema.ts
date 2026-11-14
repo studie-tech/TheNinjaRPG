@@ -3387,6 +3387,12 @@ export const userData = mysqlTable(
       experienceIdx: index("UserData_experience_idx").on(table.experience),
       levelIdx: index("UserData_level_idx").on(table.level),
       usernameKey: uniqueIndex("UserData_username_key").on(table.username),
+      // Search eligibility stays on the narrow username index before result limits apply.
+      usernameSearchIdx: index("UserData_username_approvedTos_isAi_idx").on(
+        table.username,
+        table.approvedTos,
+        table.isAi,
+      ),
       // PvP average (covering) and the PvP leaderboard tab: ORDER BY pvpExperience, experience
       pvpExperienceAverageIdx: index("UserData_pvpExperienceAverage_idx").on(
         table.isAi,

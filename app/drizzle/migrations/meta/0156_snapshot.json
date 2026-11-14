@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "01d643e5-3d93-4689-ba93-71cb2baaad51",
+  "id": "4899a876-18fc-47a2-95bb-8b74f6adcb9a",
   "prevId": "29ba729e-2a8f-405f-a85c-e7aa86e92ba9",
   "tables": {
     "AbEvent": {
@@ -19387,6 +19387,15 @@
             "username"
           ],
           "isUnique": true
+        },
+        "UserData_username_approvedTos_isAi_idx": {
+          "name": "UserData_username_approvedTos_isAi_idx",
+          "columns": [
+            "username",
+            "approvedTos",
+            "isAi"
+          ],
+          "isUnique": false
         },
         "UserData_pvpExperienceAverage_idx": {
           "name": "UserData_pvpExperienceAverage_idx",
