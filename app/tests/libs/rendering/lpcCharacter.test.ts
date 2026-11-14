@@ -713,7 +713,7 @@ describe("layered LPC actors", () => {
       viewer,
       users: [user],
       sector: 724,
-      minBracket: -1,
+      bracketFilter: null,
       showUsers: true,
       friendlyAttack: false,
       structureObjectiveIds: new Set(),

@@ -1017,7 +1017,7 @@ export const createTravelScene = async (options: {
         snapshot.sector !== lastActorSnapshot.sector ||
         snapshot.viewer !== lastActorSnapshot.viewer ||
         snapshot.showUsers !== lastActorSnapshot.showUsers ||
-        snapshot.minBracket !== lastActorSnapshot.minBracket ||
+        snapshot.bracketFilter !== lastActorSnapshot.bracketFilter ||
         snapshot.friendlyAttack !== lastActorSnapshot.friendlyAttack ||
         snapshot.wars !== lastActorSnapshot.wars ||
         snapshot.structureObjectiveIds !== lastActorSnapshot.structureObjectiveIds ||
@@ -1335,7 +1335,7 @@ const travelFrameInputs = (snapshot: TravelSnapshot) =>
     snapshot.row,
     snapshot.window,
     snapshot.showUsers,
-    snapshot.minBracket,
+    snapshot.bracketFilter,
     snapshot.friendlyAttack,
     snapshot.wars,
     snapshot.structureObjectiveIds,

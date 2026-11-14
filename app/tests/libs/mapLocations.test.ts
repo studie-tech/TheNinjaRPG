@@ -982,7 +982,7 @@ const renderThenMove = async (
     viewer: actor,
     users: [],
     sector: actor.sector,
-    minBracket: -1,
+    bracketFilter: null,
     showUsers: true,
     friendlyAttack: false,
     structureObjectiveIds: new Set(locations.map((location) => location.objectiveId)),

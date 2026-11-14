@@ -1462,7 +1462,7 @@ const canShowUser = (snapshot: TravelActorsSnapshot, user: SectorUser) =>
   (user.isNpc ||
     user.userId === snapshot.viewer?.userId ||
     user.isVillageDuty ||
-    passesBracketFilter(user, snapshot.minBracket));
+    passesBracketFilter(user, snapshot.bracketFilter));
 
 const part = (
   tile: TerrainHex,
@@ -1612,7 +1612,7 @@ export type TravelActorsSnapshot = {
   sector: number;
   viewer: UserWithRelations;
   users: SectorUser[];
-  minBracket: number;
+  bracketFilter: readonly number[] | null;
   showUsers: boolean;
   friendlyAttack: boolean;
   wars?: Parameters<typeof canShowMapAttack>[3];

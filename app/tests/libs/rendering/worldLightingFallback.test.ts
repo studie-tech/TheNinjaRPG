@@ -306,7 +306,7 @@ const travelSnapshot = (): TravelSnapshot => ({
   locations: [],
   mapAssets: [],
   showUsers: true,
-  minBracket: -1,
+  bracketFilter: null,
   friendlyAttack: false,
   structureObjectiveIds: new Set(),
 });
