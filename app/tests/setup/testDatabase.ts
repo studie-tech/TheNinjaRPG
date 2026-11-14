@@ -23,6 +23,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import * as schema from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
+import { gateStatements } from "@/server/statementGate";
 import { withAfterTasks } from "./after";
 import { pollUntil } from "./statements";
 import { readTestDatabaseUrl } from "./testDatabaseConfig";
@@ -171,9 +172,10 @@ export const getTestDatabase = async (): Promise<DrizzleClient> => {
       );
       return connection;
     };
-    // Production's PlanetScale driver builds relational queries without lateral joins.
+    // Production's PlanetScale driver builds relational queries without lateral joins,
+    // and its client holds statements behind the procedure's statement gate.
     client = normalizeWrites(
-      drizzle(pool, { schema, mode: "planetscale" }),
+      gateStatements(drizzle(pool, { schema, mode: "planetscale" })),
     ) as unknown as DrizzleClient;
   }
   return client;
