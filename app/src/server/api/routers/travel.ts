@@ -68,6 +68,7 @@ import {
   filterLiveSectorBattleUsers,
   findGlobalTravelDestination,
   findLandingNear,
+  SECTOR_ARRIVAL_BATCH_LIMIT,
 } from "@/libs/travel";
 import { isTutorialActive } from "@/libs/tutorial";
 import { villageDutyPatrols } from "@/libs/villageDuty";
@@ -84,6 +85,7 @@ import {
   fetchSectorWindowData,
   findUserDataForCreatorBody,
   findUserDataForGetSectorData,
+  findUserDataForGetSectorUsers,
   findUserForGlobalTravelFinish,
   findVillageForMoveInSector,
   insertActionLogForRobPlayer,
@@ -91,6 +93,7 @@ import {
   listQuestHistoryForGetSectorData2,
   listSectorForGetAllSectors,
   listUserDataForCompleteExpiredGlobalTravel,
+  listUserDataForGetSectorUsers,
   listWarForGetSectorData,
   selectBattleForGetSectorData,
   updateClanForRobPlayer,
@@ -458,46 +461,7 @@ export const travelRouter = createTRPCRouter({
       // Only draw battle markers for fights that still exist and are being played
       const liveBattleIds = new Set(liveBattles.map((b) => b.id));
 
-      // Filter out stealthed players (unless it's the current user)
-      // Then anonymize enemy ANBU squad members
-      const processedUsers = filterLiveSectorBattleUsers(users, liveBattleIds)
-        .filter((u) => u.userId === ctx.userId || !isUserCurrentlyStealthed(u))
-        .map((u) => {
-          const disguise = getMapDisguise(user, u, warData);
-          const warRelationship = getWarRelationship(warData, user, u) ?? null;
-          const isMasked = disguise === "Mercenary";
-          // Raw traits and inventory inputs stay server-side; masked users receive a uniform below.
-          const { attributes, items, gender, spriteBodyStyle, ...publicUser } = u;
-          const participant = {
-            ...publicUser,
-            warRelationship,
-            isMasked,
-            spriteAppearance: resolveSpriteAppearance({
-              attributes,
-              items,
-              gender,
-              spriteBodyStyle,
-            }),
-          };
-          if (isMasked)
-            return {
-              ...participant,
-              username: disguise,
-              spriteAppearance: anonymousSpriteAppearance(),
-              avatar: IMG_AVATAR_DEFAULT,
-              avatarLight: IMG_AVATAR_DEFAULT,
-            };
-          if (disguise && u.anbuSquad) {
-            return {
-              ...participant,
-              username: disguise,
-              spriteAppearance: anonymousSpriteAppearance(true),
-              avatar: u.anbuSquad.image,
-              avatarLight: u.anbuSquad.image,
-            };
-          }
-          return participant;
-        });
+      const processedUsers = toSectorParticipants(user, users, warData, liveBattleIds);
 
       const sectorMap =
         user.sector === input.sector
@@ -578,22 +542,8 @@ export const travelRouter = createTRPCRouter({
         visibleLocations.map((l) => `${l.sector}:${l.longitude}:${l.latitude}`),
       );
 
-      const creatorSheets =
-        creatorBody && snapshotSpriteAnimations(creatorBody.spriteAnimationBindings);
       return {
-        // A disguise renames the creator, so a disguised creator keeps the disguise.
-        users: creatorBody?.avatar
-          ? processedUsers.map((u) =>
-              isCreator(u)
-                ? {
-                    ...u,
-                    bodyArt: creatorBody.avatar,
-                    bodyIdle: creatorSheets?.idle,
-                    bodyMove: creatorSheets?.move,
-                  }
-                : u,
-            )
-          : processedUsers,
+        users: withCreatorBody(processedUsers, creatorBody),
         protectors: dutyPatrols,
         patrolShiftAt: dutyShift?.startedAt ?? null,
         patrolRevision: dutyShift?.revision ?? 0,
@@ -619,6 +569,45 @@ export const travelRouter = createTRPCRouter({
           visibleTiles.has(`${p.sector}:${p.longitude}:${p.latitude}`),
         ),
       };
+    }),
+  // Get players who joined the viewer's sector after its snapshot, as that snapshot shows them
+  getSectorUsers: protectedProcedure
+    .meta({
+      mcp: { description: "Get specific players within the current sector" },
+    })
+    .input(
+      z.object({
+        sector: sectorIdSchema,
+        userIds: z.array(z.string()).min(1).max(SECTOR_ARRIVAL_BATCH_LIMIT),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const [viewer, users, fetchedWarData, liveBattles] = await Promise.all([
+        findUserDataForGetSectorUsers(ctx.drizzle, ctx),
+        listUserDataForGetSectorUsers(ctx.drizzle, ctx, input.sector, input.userIds),
+        listWarForGetSectorData(ctx.drizzle),
+        selectBattleForGetSectorData(ctx.drizzle),
+      ]);
+      if (!viewer) {
+        throw serverError("NOT_FOUND", missingUserMessage(ctx.userId));
+      }
+      // The snapshot's scouting guard; a viewer elsewhere reloads its own sector instead.
+      if (
+        !["AWAKE", "TRAVEL", "QUEUED"].includes(viewer.status) ||
+        viewer.sector !== input.sector
+      ) {
+        return [];
+      }
+      const participants = toSectorParticipants(
+        viewer,
+        users,
+        withMercenaryParticipation(fetchedWarData),
+        new Set(liveBattles.map((b) => b.id)),
+      );
+      const creatorBody = participants.some(isCreator)
+        ? await findUserDataForCreatorBody(ctx.drizzle)
+        : undefined;
+      return withCreatorBody(participants, creatorBody);
     }),
   // Get village & alliance information for a given sector
   getVillageInSector: protectedProcedure
@@ -1297,6 +1286,77 @@ export const travelRouter = createTRPCRouter({
       }
     }),
 });
+
+/** Raw sector participant data before viewer-specific masking and sprite projection. */
+type SectorUserRow = Awaited<ReturnType<typeof fetchSectorWindowData>>[0][number];
+
+/**
+ * Present other players to one viewer: drop finished fights and stealthed players, then
+ * replace mercenary and foreign ANBU identities with their disguises. Raw traits and
+ * inventory stay server-side; only the resolved sprite appearance leaves.
+ */
+const toSectorParticipants = (
+  viewer: { userId: string; villageId: string | null },
+  users: SectorUserRow[],
+  warData: ReturnType<typeof withMercenaryParticipation>,
+  liveBattleIds: ReadonlySet<string>,
+) =>
+  filterLiveSectorBattleUsers(users, liveBattleIds)
+    .filter((u) => u.userId === viewer.userId || !isUserCurrentlyStealthed(u))
+    .map((u) => {
+      const disguise = getMapDisguise(viewer, u, warData);
+      const warRelationship = getWarRelationship(warData, viewer, u) ?? null;
+      const isMasked = disguise === "Mercenary";
+      const { attributes, items, gender, spriteBodyStyle, ...publicUser } = u;
+      const participant = {
+        ...publicUser,
+        warRelationship,
+        isMasked,
+        spriteAppearance: resolveSpriteAppearance({
+          attributes,
+          items,
+          gender,
+          spriteBodyStyle,
+        }),
+      };
+      if (isMasked)
+        return {
+          ...participant,
+          username: disguise,
+          spriteAppearance: anonymousSpriteAppearance(),
+          avatar: IMG_AVATAR_DEFAULT,
+          avatarLight: IMG_AVATAR_DEFAULT,
+        };
+      if (disguise && u.anbuSquad) {
+        return {
+          ...participant,
+          username: disguise,
+          spriteAppearance: anonymousSpriteAppearance(true),
+          avatar: u.anbuSquad.image,
+          avatarLight: u.anbuSquad.image,
+        };
+      }
+      return participant;
+    });
+
+/** Draw the creator with its full-body art; a disguised creator keeps the disguise's name. */
+const withCreatorBody = <T extends { username: string }>(
+  users: T[],
+  creatorBody: Awaited<ReturnType<typeof findUserDataForCreatorBody>>,
+) => {
+  if (!creatorBody?.avatar) return users;
+  const sheets = snapshotSpriteAnimations(creatorBody.spriteAnimationBindings);
+  return users.map((u) =>
+    isCreator(u)
+      ? {
+          ...u,
+          bodyArt: creatorBody.avatar,
+          bodyIdle: sheets?.idle,
+          bodyMove: sheets?.move,
+        }
+      : u,
+  );
+};
 
 /** Quests whose objectives guide where onboarding players land after global travel. */
 const ONBOARDING_QUEST_IDS = new Set([

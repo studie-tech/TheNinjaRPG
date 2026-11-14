@@ -11,6 +11,8 @@ it.each([false, true])(
   "publishes the inbox event only after successful storage (failure: %s)",
   async (fail) => {
     const { promise: stored, resolve: finish } = deferred<void>();
+    let now = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
     let completed = 0;
     const write = async () => {
       await stored;
@@ -39,6 +41,8 @@ it.each([false, true])(
       convoId: "chat",
     });
     expect(trigger).not.toHaveBeenCalled();
+    // Another write delays publication while a profile can already read the counter.
+    now = 4_000;
     finish();
     if (fail) {
       await expect(pending).rejects.toThrow("Storage failed");
@@ -49,6 +53,7 @@ it.each([false, true])(
       expect(trigger).toHaveBeenCalledWith("recipient", "event", {
         type: "newInbox",
         conversationId: "chat",
+        countedAt: 1_000,
       });
       expect(notify).toHaveBeenCalledTimes(1);
     }

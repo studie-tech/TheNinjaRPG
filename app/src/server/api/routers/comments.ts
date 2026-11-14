@@ -565,6 +565,8 @@ export const commentsRouter = createTRPCRouter({
         q.user?.userId ? [q.user.userId] : [],
       );
 
+      // A profile read after counting begins may already include this message.
+      const countedAt = Date.now();
       const [notifiedUserIds] = await Promise.all([
         fetchUsersToNotify(
           ctx.drizzle,
@@ -657,6 +659,7 @@ export const commentsRouter = createTRPCRouter({
               pusher.trigger(userId, "event", {
                 type: "newInbox",
                 conversationId: convo.id,
+                countedAt,
               }),
             )
           : []),
@@ -967,6 +970,8 @@ export const createConvo = async (info: {
   // Update DB concurrently
   const messageId = nanoid();
   const sanitized = sanitize(content);
+  // Capture before the counter write, independently of other writes' completion times.
+  const countedAt = Date.now();
   await Promise.all([
     insertConversationForCreateConvo(
       client,
@@ -995,6 +1000,7 @@ export const createConvo = async (info: {
       void pusher.trigger(userId, "event", {
         type: "newInbox",
         conversationId: insertId,
+        countedAt,
       }),
   );
   notifyPrivateConversation(client, {
