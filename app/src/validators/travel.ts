@@ -2,7 +2,6 @@ import { z } from "zod";
 import {
   MAP_SECTOR_ID_MAX,
   MAP_SECTOR_ID_MIN,
-  MAX_PVP_BRACKET,
   MAX_TRAVEL_PIN_LABEL_LENGTH,
   MAX_TRAVEL_PINS,
   SECTOR_HEIGHT,
@@ -35,12 +34,6 @@ export const startGlobalMoveSchema = z
 export const sectorFormSchema = z.object({ sector: sectorIdSchema });
 export type SectorFormInput = z.input<typeof sectorFormSchema>;
 export type SectorForm = z.infer<typeof sectorFormSchema>;
-
-export const bracketSliderSchema = z.object({
-  // -1 disables the bracket filter; 0–8 select an exact bracket
-  value: z.number().min(-1).max(MAX_PVP_BRACKET),
-});
-export type BracketSliderSchema = z.infer<typeof bracketSliderSchema>;
 
 /** Coordinates in an authored sector; map bounds and walkability are checked on arrival. */
 export const travelLocationSchema = z.object({

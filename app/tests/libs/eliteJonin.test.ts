@@ -21,7 +21,6 @@ import { isAvailableUserQuests } from "@/libs/quest/availability";
 import { getReward } from "@/libs/quest/rewards";
 import { ItemValidator, JutsuValidator } from "@/validators/combat";
 import { QuestFormSchema, QuestValidator } from "@/validators/objectives";
-import { bracketSliderSchema } from "@/validators/travel";
 
 const cappedJonin = {
   rank: "JONIN",
@@ -161,9 +160,7 @@ describe("Elite Jonin progression", () => {
       expect(canAttackBracket(8, bracket)).toBe(bracket >= 7);
       expect(canAttackBracket(bracket, 8)).toBe(bracket >= 7);
     }
-    expect(passesBracketFilter({ rank: "ELITE JONIN" }, 8)).toBe(true);
-    expect(bracketSliderSchema.safeParse({ value: 8 }).success).toBe(true);
-    expect(bracketSliderSchema.safeParse({ value: 9 }).success).toBe(false);
+    expect(passesBracketFilter({ rank: "ELITE JONIN" }, [8])).toBe(true);
   });
   it("accepts level-110 equipment and jutsu requirements", () => {
     expect(ItemValidator.shape.requiredLevel.safeParse(110).success).toBe(true);

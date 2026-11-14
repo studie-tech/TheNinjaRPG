@@ -42,7 +42,7 @@ import { MapLocationActions } from "@/layout/MapLocationActions";
 import Modal from "@/layout/Modal";
 import RaidBrowser from "@/layout/RaidBrowser";
 import { useOpenRewardChoice } from "@/layout/RewardChoice";
-import { SorroundingUsers } from "@/layout/SorroundingUsers";
+import { SurroundingUsers } from "@/layout/SurroundingUsers";
 import { TravelUserCard } from "@/layout/TravelUserCard";
 import WebGlError from "@/layout/WebGLError";
 import { showActionReadinessToast } from "@/libs/actionFeedback";
@@ -205,9 +205,13 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   publishSurroundingsRef.current =
     props.showSorrounding || autoAttackMode || !!healTargetUser;
   const [allyAttack, setAllyAttack] = useLocalStorage<boolean>("friendlyAttack", false);
-  const [storedBracket, setStoredBracket] = useLocalStorage<number>(
-    "minBracketOnScout",
-    -1,
+  const [storedBrackets, setStoredBrackets] = useLocalStorage<number[] | null>(
+    "scoutingBrackets",
+    null,
+  );
+  const [excludeAllies, setExcludeAllies] = useLocalStorage<boolean>(
+    "scoutingExcludeAllies",
+    true,
   );
   const [storedZoom, setStoredZoom] = useLocalStorage<number>("sectorZoom", 2.4);
   const liveZoomRef = useRef<number | null>(null);
@@ -2302,7 +2306,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       ),
     })),
     showUsers: showActive,
-    minBracket: storedBracket,
+    bracketFilter: storedBrackets,
     friendlyAttack: allyAttack,
     wars: warData,
     structureObjectiveIds: structureObjectiveIdsRef.current,
@@ -2647,7 +2651,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
         </Modal>
       )}
       {props.showSorrounding && sorrounding && userData && originRef.current && (
-        <SorroundingUsers
+        <SurroundingUsers
           setIsOpen={props.setShowSorrounding}
           users={sorrounding}
           userData={userData}
@@ -2655,8 +2659,10 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
           allyAttack={allyAttack}
           wars={warData}
           setAllyAttack={setAllyAttack}
-          storedBracket={storedBracket}
-          setStoredBracket={setStoredBracket}
+          storedBrackets={storedBrackets}
+          setStoredBrackets={setStoredBrackets}
+          excludeAllies={excludeAllies}
+          setExcludeAllies={setExcludeAllies}
           attackUser={(userId) => {
             const target = sorrounding.find((u) => u.userId === userId);
             if (target && !isAttacking && !movePendingRef.current) {

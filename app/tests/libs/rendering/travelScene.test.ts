@@ -93,7 +93,7 @@ const snapshotFixture = (): TravelSnapshot => ({
   actorRevision: 0,
   viewer,
   users: [player()],
-  minBracket: -1,
+  bracketFilter: null,
   showUsers: true,
   friendlyAttack: false,
   structureObjectiveIds: new Set(),

@@ -44,7 +44,7 @@ const recipes = (users: SectorUser[], patch: Partial<TravelActorsSnapshot> = {})
     users,
     viewer,
     sector: 724,
-    minBracket: -1,
+    bracketFilter: null,
     showUsers: true,
     friendlyAttack: false,
     structureObjectiveIds: new Set(),
@@ -60,7 +60,7 @@ describe("travel actor snapshots", () => {
       rank: "CHUNIN",
       experience: 0,
     });
-    const result = recipes([protector], { minBracket: 8 });
+    const result = recipes([protector], { bracketFilter: [8] });
     expect(result).toHaveLength(1);
     expect(result[0]?.parts.map((part) => part.kind)).not.toContain("attack");
     expect(result[0]?.parts.map((part) => part.kind)).not.toContain("heal");
@@ -71,22 +71,29 @@ describe("travel actor snapshots", () => {
     });
     expect(isAloneOnTile([protector, player()], player(), "self")).toBe(true);
   });
-  it.each([-1, 2])(
+  it.each([
+    { brackets: null },
+    { brackets: [2] },
+    { brackets: [1, 2] },
+    { brackets: [] },
+  ] as { brackets: number[] | null }[])(
     "keeps the own marker at bracket %s while filtering other players",
-    (minBracket) => {
+    ({ brackets: bracketFilter }) => {
       const result = recipes(
         [
           player({ userId: "self" }),
           player(),
           player({ userId: "matching", longitude: 6, experience: 600_000 }),
         ],
-        { minBracket },
+        { bracketFilter },
       );
       expect(result.some((recipe) => recipe.key === "user:self")).toBe(true);
       expect(result.some((recipe) => recipe.key === "user:other")).toBe(
-        minBracket === -1,
+        bracketFilter === null || bracketFilter.includes(1),
       );
-      expect(result.some((recipe) => recipe.key === "user:matching")).toBe(true);
+      expect(result.some((recipe) => recipe.key === "user:matching")).toBe(
+        bracketFilter === null || bracketFilter.includes(2),
+      );
     },
   );
   it("keeps only the own marker when active users are hidden", () => {
@@ -104,7 +111,7 @@ describe("travel actor snapshots", () => {
           player({ isNpc: true, npcPlacementId: "one", npcInteractionType }),
           player({ isNpc: true, npcPlacementId: "two", npcInteractionType }),
         ],
-        { minBracket: 8 },
+        { bracketFilter: [8] },
       );
       expect(result.map((recipe) => recipe.key)).toEqual([
         "npc:one:0:0",

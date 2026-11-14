@@ -89,7 +89,7 @@ const fixture = (sceneryBounds?: WeakMap<Container, WorldBounds>) => {
     users,
     viewer,
     sector: 724,
-    minBracket: -1,
+    bracketFilter: null,
     showUsers: true,
     friendlyAttack: false,
     structureObjectiveIds: new Set(),

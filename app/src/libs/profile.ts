@@ -212,17 +212,16 @@ export const canAttackBracket = (
     : targetBracket >= attackerBracket - 1;
 
 /**
- * Whether a user passes a scout/map bracket filter.
- * Matches the exact selected bracket when filterBracket >= 0;
- * use filterBracket < 0 to disable filtering entirely.
- * Unknown XP fails closed unless Elite rank already determines the bracket.
+ * Match scout/map brackets: null includes every player, while an empty selection matches none.
+ * Explicit selections exclude unknown XP unless Elite Jonin rank determines the bracket.
  */
 export const passesBracketFilter = (
   user: { experience?: number | null; rank?: UserRank },
-  filterBracket: number,
+  filterBrackets: readonly number[] | null,
 ): boolean => {
-  if (filterBracket < 0) return true;
-  return getKnownExpBracket(user) === filterBracket;
+  if (filterBrackets === null) return true;
+  const bracket = getKnownExpBracket(user);
+  return bracket !== null && filterBrackets.includes(bracket);
 };
 
 /** Bracket of a map user; null when a partial update omitted the XP that decides it. */
@@ -244,7 +243,10 @@ export const getKnownEffectiveLevel = (user: {
   return user.experience == null ? null : calcLevel(user.experience);
 };
 
-/** Awake players in the selected bracket, ordered by displayed level then name. */
+/**
+ * Return awake players other than the viewer, excluding NPCs and village-duty copies.
+ * Apply bracket selection and sort by displayed level then name without mutating the source.
+ */
 export const getScoutingUsers = <
   T extends Pick<
     SectorUser,
@@ -260,7 +262,7 @@ export const getScoutingUsers = <
 >(
   users: readonly T[],
   currentUserId: string,
-  filterBracket: number,
+  filterBrackets: readonly number[] | null,
 ) =>
   users
     .filter(
@@ -269,7 +271,7 @@ export const getScoutingUsers = <
         !user.isVillageDuty &&
         user.userId !== currentUserId &&
         user.status === "AWAKE" &&
-        passesBracketFilter(user, filterBracket),
+        passesBracketFilter(user, filterBrackets),
     )
     .sort((a, b) => {
       // Keep unknown levels after known levels.

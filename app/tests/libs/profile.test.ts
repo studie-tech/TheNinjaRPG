@@ -86,16 +86,22 @@ test("canAttackBracket allows same, higher, or one below", () => {
 });
 
 test("passesBracketFilter matches exact bracket only", () => {
-  expect(passesBracketFilter({ experience: undefined, rank: "JONIN" }, 5)).toBe(false);
-  expect(passesBracketFilter({ experience: null, rank: "JONIN" }, 5)).toBe(false);
-  expect(passesBracketFilter({ experience: undefined, rank: "JONIN" }, -1)).toBe(true);
-  expect(passesBracketFilter({ experience: 0, rank: "CHUNIN" }, 1)).toBe(true);
-  expect(passesBracketFilter({ experience: 0, rank: "CHUNIN" }, 2)).toBe(false);
-  expect(passesBracketFilter({ experience: 3_000_001, rank: "JONIN" }, 7)).toBe(true);
-  expect(passesBracketFilter({ experience: 3_000_001, rank: "JONIN" }, 2)).toBe(false);
-  expect(passesBracketFilter({ experience: 0, rank: "STUDENT" }, -1)).toBe(true);
-  expect(passesBracketFilter({ experience: 0, rank: "STUDENT" }, 0)).toBe(true);
-  expect(passesBracketFilter({ experience: 0, rank: "STUDENT" }, 1)).toBe(false);
+  expect(passesBracketFilter({ experience: undefined, rank: "JONIN" }, [5])).toBe(
+    false,
+  );
+  expect(passesBracketFilter({ experience: null, rank: "JONIN" }, [5])).toBe(false);
+  expect(passesBracketFilter({ experience: undefined, rank: "JONIN" }, null)).toBe(
+    true,
+  );
+  expect(passesBracketFilter({ experience: 0, rank: "CHUNIN" }, [1])).toBe(true);
+  expect(passesBracketFilter({ experience: 0, rank: "CHUNIN" }, [2])).toBe(false);
+  expect(passesBracketFilter({ experience: 3_000_001, rank: "JONIN" }, [7])).toBe(true);
+  expect(passesBracketFilter({ experience: 3_000_001, rank: "JONIN" }, [2])).toBe(
+    false,
+  );
+  expect(passesBracketFilter({ experience: 0, rank: "STUDENT" }, null)).toBe(true);
+  expect(passesBracketFilter({ experience: 0, rank: "STUDENT" }, [0])).toBe(true);
+  expect(passesBracketFilter({ experience: 0, rank: "STUDENT" }, [1])).toBe(false);
 });
 
 describe("getScoutingUsers", () => {
@@ -125,7 +131,7 @@ describe("getScoutingUsers", () => {
       makeUser("Lower", 30),
     ];
 
-    expect(getScoutingUsers(users, "self", -1).map((user) => user.username)).toEqual([
+    expect(getScoutingUsers(users, "self", null).map((user) => user.username)).toEqual([
       "Last",
       "Lower",
       "Middle",
@@ -139,7 +145,7 @@ describe("getScoutingUsers", () => {
       makeUser("Alpha", 30, { experience: calcLevelRequirements(30) + 1 }),
     ];
 
-    expect(getScoutingUsers(users, "self", -1).map((user) => user.username)).toEqual([
+    expect(getScoutingUsers(users, "self", null).map((user) => user.username)).toEqual([
       "Alpha",
       "Zeta",
     ]);
@@ -157,7 +163,7 @@ describe("getScoutingUsers", () => {
       makeUser("Other bracket", 1, { experience: 500_001 }),
     ];
 
-    expect(getScoutingUsers(users, "self", 1).map((user) => user.username)).toEqual([
+    expect(getScoutingUsers(users, "self", [1]).map((user) => user.username)).toEqual([
       "Low",
     ]);
   });
@@ -169,7 +175,7 @@ describe("getScoutingUsers", () => {
       makeUser("Student", 1, { rank: "STUDENT" }),
     ];
 
-    expect(getScoutingUsers(users, "self", 0).map((user) => user.username)).toEqual([
+    expect(getScoutingUsers(users, "self", [0]).map((user) => user.username)).toEqual([
       "Student",
       "Genin",
     ]);
@@ -182,7 +188,7 @@ describe("getScoutingUsers", () => {
       makeUser("Unknown A", 1, { experience: undefined }),
     ];
 
-    expect(getScoutingUsers(users, "self", -1).map((user) => user.username)).toEqual([
+    expect(getScoutingUsers(users, "self", null).map((user) => user.username)).toEqual([
       "Known",
       "Unknown A",
       "Unknown Z",
@@ -194,13 +200,13 @@ describe("getScoutingUsers", () => {
     const low = Object.freeze(makeUser("Low", 10));
     const users = Object.freeze([high, low]);
 
-    const sorted = getScoutingUsers(users, "self", -1);
+    const sorted = getScoutingUsers(users, "self", null);
 
     expect(sorted).toEqual([low, high]);
     expect(users).toEqual([high, low]);
     expect(sorted[0]).toBe(low);
     expect(sorted[1]).toBe(high);
-    expect(getScoutingUsers([], "self", -1)).toEqual([]);
+    expect(getScoutingUsers([], "self", null)).toEqual([]);
   });
 });
 

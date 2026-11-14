@@ -4,7 +4,7 @@ import * as client from "@/app/_trpc/client";
 import type { VillageAlliance } from "@/drizzle/schema";
 import * as Image from "@/layout/Image";
 import * as modal from "@/layout/Modal";
-import { SorroundingUsers } from "@/layout/SorroundingUsers";
+import { SurroundingUsers } from "@/layout/SurroundingUsers";
 import type { TerrainHex } from "@/libs/hexgrid";
 import { travelActionAvailability } from "@/libs/rendering/scenes/travelActors";
 import type { SectorUser } from "@/libs/sector-map/world-types";
@@ -74,24 +74,28 @@ describe("sector attack controls", () => {
         if (control === "scouting") {
           const attackUser = vi.fn();
           const view = render(
-            <SorroundingUsers
+            <SurroundingUsers
               userData={userData}
               users={[target]}
               hex={{ col: 5, row: 5 } as TerrainHex}
               allyAttack={false}
               wars={null}
-              storedBracket={-1}
+              storedBrackets={null}
+              excludeAllies={false}
+              setExcludeAllies={vi.fn()}
               setIsOpen={vi.fn()}
               setAllyAttack={vi.fn()}
-              setStoredBracket={vi.fn()}
+              setStoredBrackets={vi.fn()}
               attackUser={attackUser}
               robUser={vi.fn()}
               move={vi.fn()}
             />,
           );
-          const attack = view.queryByAltText("Attack-target");
+          const attack = view.queryByRole("button", { name: "Attack Mercenary" });
           expect(Boolean(attack)).toBe(canAttack);
-          expect(Boolean(view.queryByAltText("Info-target"))).toBe(!isMasked);
+          expect(
+            Boolean(view.queryByRole("link", { name: "Profile of Mercenary" })),
+          ).toBe(!isMasked);
           if (attack) {
             fireEvent.click(attack);
             expect(attackUser).toHaveBeenCalledWith("target");
@@ -135,21 +139,23 @@ describe("sector attack controls", () => {
     }) as SectorUser;
   const scoutingOffersAttack = (target: SectorUser) =>
     !!render(
-      <SorroundingUsers
+      <SurroundingUsers
         userData={viewer}
         users={[target]}
         hex={{ col: 5, row: 5 } as TerrainHex}
         allyAttack={false}
         wars={wars}
-        storedBracket={-1}
+        storedBrackets={null}
+        excludeAllies={false}
+        setExcludeAllies={vi.fn()}
         setIsOpen={vi.fn()}
         setAllyAttack={vi.fn()}
-        setStoredBracket={vi.fn()}
+        setStoredBrackets={vi.fn()}
         attackUser={vi.fn()}
         robUser={vi.fn()}
         move={vi.fn()}
       />,
-    ).queryByAltText("Attack-target");
+    ).queryByRole("button", { name: "Attack target" });
   const hoverOffersAttack = (target: SectorUser) =>
     travelActionAvailability(viewer, target, false, wars).attack;
 
@@ -196,22 +202,24 @@ it("closes scouting during travel and restores it after arrival", () => {
     hex: { col: 13, row: 13 } as TerrainHex,
     allyAttack: false,
     wars: null,
-    storedBracket: -1,
+    storedBrackets: null,
+    excludeAllies: false,
+    setExcludeAllies: vi.fn(),
     setIsOpen: vi.fn(),
     setAllyAttack: vi.fn(),
-    setStoredBracket: vi.fn(),
+    setStoredBrackets: vi.fn(),
     attackUser: vi.fn(),
     robUser: vi.fn(),
     move: vi.fn(),
   };
-  const view = render(<SorroundingUsers {...props} />);
+  const view = render(<SurroundingUsers {...props} />);
   expect(scoutingModal.mock.calls.at(-1)?.[0].isOpen).toBe(true);
   view.rerender(
-    <SorroundingUsers {...props} userData={{ ...props.userData, status: "TRAVEL" }} />,
+    <SurroundingUsers {...props} userData={{ ...props.userData, status: "TRAVEL" }} />,
   );
   expect(scoutingModal.mock.calls.at(-1)?.[0].isOpen).toBe(false);
   expect(view.queryByRole("dialog")).toBeNull();
-  view.rerender(<SorroundingUsers {...props} />);
+  view.rerender(<SurroundingUsers {...props} />);
   expect(scoutingModal.mock.calls.at(-1)?.[0].isOpen).toBe(true);
   expect(
     view.getByRole("dialog", { name: "Scouting. Your position: [13, 13]" }),
