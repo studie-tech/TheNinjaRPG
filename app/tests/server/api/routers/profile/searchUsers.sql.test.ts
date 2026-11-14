@@ -52,6 +52,28 @@ describeWithDatabase("user search", () => {
   it("matches LIKE wildcards literally", async () => {
     expect(await search("a_r")).toEqual(["na_ru"]);
   });
+
+  for (const match of ["prefix", "substring"] as const) {
+    for (const excluded of ["AI", "unapproved"] as const) {
+      it(`finds an eligible ${match} match after fifty shorter ${excluded} users`, async () => {
+        await resetTables(userData);
+        const prefix = match === "prefix" ? "Naru" : "Anaru";
+        await insertUsers([
+          { userId: "viewer", username: "Viewer", approvedTos: true },
+          ...Array.from({ length: 50 }, (_, i) => ({
+            userId: `excluded${i}`,
+            username: `${prefix}${i}`,
+            approvedTos: excluded !== "unapproved",
+            isAi: excluded === "AI",
+          })),
+          { userId: "eligible", username: `${prefix}human`, approvedTos: true },
+        ]);
+        expect(await search("naru", { showAi: false, showYourself: false })).toEqual([
+          `${prefix}human`,
+        ]);
+      });
+    }
+  }
 });
 
 /** Usernames the viewer's search returns for `username`. */

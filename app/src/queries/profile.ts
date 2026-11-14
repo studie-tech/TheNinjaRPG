@@ -1305,11 +1305,9 @@ export const deleteUserAttributeForDeleteAttribute = (
     );
 
 /**
- * Build the `userData` listing for `searchUsers`, shortest usernames first: those starting with
- * the term (a range on the username index), or those containing it elsewhere (a scan of that
- * index). Candidates are chosen on the narrow index alone; only the shortlist reads full rows for
- * the `approvedTos`, `isAi` and self filters, so a page comes back short only when nearly the
- * whole shortlist is filtered out.
+ * Build eligible prefix or non-prefix substring search results, shortest usernames first.
+ * Prefix matching uses a range on the username index. Eligibility filters run before the
+ * result limit so hidden matches cannot displace users the caller can select.
  */
 export const listUserDataForSearchUsers = (
   client: Pick<DrizzleClient, "query" | "select">,
@@ -1326,9 +1324,16 @@ export const listUserDataForSearchUsers = (
   const candidates = client
     .select({ userId: searchCandidate.userId })
     .from(searchCandidate, { forceIndex: "UserData_username_key" })
-    .where(matchesTerm(searchCandidate.username))
+    .where(
+      and(
+        matchesTerm(searchCandidate.username),
+        eq(searchCandidate.approvedTos, true),
+        ...(input.showAi ? [] : [eq(searchCandidate.isAi, false)]),
+        ...(input.showYourself ? [] : [ne(searchCandidate.userId, ctx.userId)]),
+      ),
+    )
     .orderBy(sql`LENGTH(${searchCandidate.username}) ASC`)
-    .limit(USER_SEARCH_CANDIDATES)
+    .limit(limit)
     .as("candidates");
   return client.query.userData.findMany({
     extras: (table) => ({
@@ -1348,14 +1353,9 @@ export const listUserDataForSearchUsers = (
         columns: { name: true, hexColor: true, kageId: true },
       },
     },
-    where: and(
-      inArray(
-        userData.userId,
-        client.select({ userId: candidates.userId }).from(candidates),
-      ),
-      eq(userData.approvedTos, true),
-      ...(input.showAi ? [] : [eq(userData.isAi, false)]),
-      ...(input.showYourself ? [] : [ne(userData.userId, ctx.userId)]),
+    where: inArray(
+      userData.userId,
+      client.select({ userId: candidates.userId }).from(candidates),
     ),
     orderBy: [sql`LENGTH(${userData.username}) ASC`],
     limit,
@@ -1364,9 +1364,6 @@ export const listUserDataForSearchUsers = (
 
 /** Results returned by one user search. */
 export const USER_SEARCH_LIMIT = 5;
-
-/** Shortest matching usernames read in full before the search filters apply. */
-const USER_SEARCH_CANDIDATES = 50;
 
 /** Table alias for the username-index candidate scan in user search. */
 const searchCandidate = alias(userData, "searchCandidate");
