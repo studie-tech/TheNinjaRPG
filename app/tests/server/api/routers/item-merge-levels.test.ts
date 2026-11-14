@@ -5,6 +5,7 @@ import { HOSPITAL_BASE_HEAL_SECONDS } from "@/drizzle/constants";
 import { item, userData, userItem } from "@/drizzle/schema";
 import { AUTO_CHECKOUT_MESSAGE, AUTO_WAKE_MESSAGE } from "@/libs/actionReadiness";
 import { itemRouter } from "@/server/api/routers/item";
+import { deferred } from "../../../setup/deferred";
 import { insertItems, insertUserItems, insertUsers } from "../../../setup/factories";
 import { beforeStatements } from "../../../setup/statements";
 import {
@@ -326,6 +327,69 @@ describeWithDatabase("consumable merges across ownership levels", () => {
         .filter((quantity) => quantity > 0),
     ).toEqual([6]);
   });
+
+  it("keeps another merge's published stack when its publish affects no rows", async () => {
+    await insertUserItems(
+      [3, 3].map((quantity, index) => ({
+        id: `twin-${index}`,
+        userId: "merge-user",
+        itemId: "consumable",
+        quantity,
+      })),
+    );
+    setSystemTime(new Date());
+    const database = await getTestDatabase();
+    const ready = deferred<void>();
+    const resume = deferred<void>();
+    // Hold a stale reader before its claim, then let it restore the active merge's
+    // negatives. A third merge can publish before that active merge sends its publish.
+    const staleReader = beforeStatements(
+      database,
+      userItem,
+      [
+        async () => {},
+        async () => {
+          ready.resolve();
+          await resume.promise;
+        },
+      ],
+      { when: (values) => "updatedAt" in values },
+    );
+    const staleMerge = callerForDatabase(
+      itemRouter,
+      "merge-user",
+      staleReader,
+    ).mergeStacks({ itemId: "consumable" });
+    await ready.promise;
+    const raced = beforeStatements(
+      database,
+      userItem,
+      [
+        async () => {},
+        async () => {},
+        async () => {
+          resume.resolve();
+          expect((await staleMerge).success).toBe(false);
+          const api = await callerFor(itemRouter, "merge-user");
+          expect((await api.mergeStacks({ itemId: "consumable" })).success).toBe(true);
+        },
+      ],
+      { operations: ["update"] },
+    );
+    expect(
+      (
+        await callerForDatabase(itemRouter, "merge-user", raced).mergeStacks({
+          itemId: "consumable",
+        })
+      ).success,
+    ).toBe(false);
+    expect(
+      await database
+        .select({ quantity: userItem.quantity })
+        .from(userItem)
+        .where(eq(userItem.userId, "merge-user")),
+    ).toEqual([{ quantity: 6 }]);
+  }, 30000);
 
   it("merges a stack above the stack size when the total exactly fills the rows", async () => {
     await insertUserItems(
