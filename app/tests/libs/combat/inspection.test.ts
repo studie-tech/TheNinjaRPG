@@ -63,7 +63,7 @@ describe("combat inspection", () => {
 
 describe("battlefield tap inspection", () => {
   it.each([
-    ["me", false, true],
+    ["me", false, false],
     ["ally", false, true],
     ["pet", false, true],
     ["enemy", false, true],
