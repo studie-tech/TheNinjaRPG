@@ -2699,6 +2699,12 @@ const fetchUpdatedUserOnce = async (
       })
     | undefined = fetchedUser;
 
+  // Queued learning can create ownership after the opening snapshot was read.
+  const hasDueJutsuQueue = hasDueTimedJob(
+    user?.queue.filter((entry) => entry.kind === "JUTSU") ?? [],
+    now,
+  );
+
   // Start timed jobs (jutsu levels, crafts) whose turn has come, backdated to when it
   // came. The in-memory check keeps every other request free of extra queries. When a
   // due queue was settled, the user is read again.
@@ -3251,7 +3257,7 @@ const fetchUpdatedUserOnce = async (
     const trackerUser = await hydrateQuestCollections(client, user, false, {
       catalogue: bloodlineCollectionCatalogue,
       rolls: bloodlineCollectionRolls,
-      objectiveJutsus: achievementObjectiveJutsus,
+      objectiveJutsus: hasDueJutsuQueue ? undefined : achievementObjectiveJutsus,
     });
     // Get the latest quest trackers
     const trackerResults = getNewTrackers(
