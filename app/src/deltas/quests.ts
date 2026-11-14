@@ -59,6 +59,75 @@ export const getQuestStartUserUpdate = (
   };
 };
 
+/**
+ * Patch a loaded discovery listing after a confirmed quest start, from the settled profile.
+ * A start only reopens an attempt: listed attempt counters follow the profile's attempt rows,
+ * entry stock follows the confirmed debits, and quests whose completed prerequisite was
+ * reopened close. Return undefined when listed entry stock cannot be confirmed.
+ */
+export const getQuestStartDiscoveryUpdate = <T extends QuestStartDiscoveryRow>(
+  rows: T[],
+  attempts: readonly QuestAttemptCounters[],
+  reopenedQuestIds: readonly string[],
+  inventoryChanges: InventoryQuantityChange[] | undefined,
+): T[] | undefined => {
+  if (!inventoryChanges && rows.some((row) => row.entryRequirements?.length)) return;
+  const debited = (itemId: string) =>
+    (inventoryChanges ?? [])
+      .filter((change) => change.itemId === itemId)
+      .reduce((sum, change) => sum + change.beforeQuantity - change.quantity, 0);
+  return rows.flatMap((row) => {
+    if (row.prerequisiteQuestId && reopenedQuestIds.includes(row.prerequisiteQuestId))
+      return [];
+    const attempt = attempts.find((entry) => entry.questId === row.id);
+    if (!attempt && !row.entryRequirements?.length) return [row];
+    return [
+      {
+        ...row,
+        ...(attempt
+          ? {
+              previousAttempts: attempt.previousAttempts,
+              previousCompletes: attempt.previousCompletes,
+              completed: attempt.completed,
+              periodCompletes: attempt.periodCompletes,
+              periodStartAt: attempt.periodStartAt,
+            }
+          : {}),
+        ...(row.entryRequirements
+          ? {
+              entryRequirements: row.entryRequirements.map((required) => ({
+                ...required,
+                owned: required.owned - debited(required.itemId),
+              })),
+            }
+          : {}),
+      },
+    ];
+  });
+};
+
+/**
+ * Upcoming quests are blocked by level or mastery, which a start leaves unchanged; reopening
+ * a completed prerequisite can close them and needs reconciliation.
+ */
+export const getQuestStartUpcomingUpdate = <T>(
+  rows: T[],
+  reopenedQuestIds: readonly string[],
+): T[] | undefined => (reopenedQuestIds.length ? undefined : rows);
+
+/** Completed quests a start reopened, comparing the profile before and after the start. */
+export const getReopenedQuestIds = (
+  before: readonly CompletedQuestEntry[],
+  after: readonly CompletedQuestEntry[],
+) =>
+  before
+    .filter(
+      (entry) =>
+        entry.completed === 1 &&
+        !after.some((next) => next.questId === entry.questId && next.completed === 1),
+    )
+    .map((entry) => entry.questId);
+
 /** Describe ticket debits only after every guarded entry charge and its receipt committed. */
 export const getQuestEntryInventoryChanges = (
   charges: { id: string; itemId: string; expectedQuantity: number; quantity: number }[],
@@ -315,9 +384,10 @@ export const getQuestRewardProjectionUpdate = ({
 };
 
 /**
- * Project the completion counters written by a successful claim. Only reward-free,
- * nonterminal progress leaves discovery and history unchanged; other lists still refresh.
- * Carry loaded counters as `before` and absolute claim counters as `after`.
+ * Project the completion counters written by a successful claim. Nonterminal progress that
+ * pays at most scalar balances leaves discovery and history unchanged: availability never
+ * reads money, experience, reputation or prestige, and level-ups are explicit. Other lists
+ * still refresh. Carry loaded counters as `before` and absolute claim counters as `after`.
  * Profile settlements and consequences require discovery refreshes even with zero rewards.
  */
 export const getQuestRewardCacheUpdate = (
@@ -362,8 +432,7 @@ export const getQuestRewardCacheUpdate = (
       !requiresDiscoveryRefresh &&
       !rewards.reward_level &&
       !rewards.reward_stats &&
-      delta !== undefined &&
-      Object.values(delta).every((value) => value === 0),
+      delta !== undefined,
   };
 };
 
@@ -393,3 +462,24 @@ export const getQuestRewardDashboardUpdate = (
     ),
   };
 };
+
+/** Attempt counters a profile attempt row shares with discovery rows. */
+type QuestAttemptCounters = Pick<
+  QuestHistory,
+  | "questId"
+  | "previousAttempts"
+  | "previousCompletes"
+  | "completed"
+  | "periodCompletes"
+  | "periodStartAt"
+>;
+
+/** A discovery row's quest, prerequisite and optional entry stock. */
+type QuestStartDiscoveryRow = {
+  id: string;
+  prerequisiteQuestId: string | null;
+  entryRequirements?: { itemId: string; owned: number }[];
+};
+
+/** A profile completion entry. */
+type CompletedQuestEntry = { questId: string; completed?: number };

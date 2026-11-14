@@ -126,6 +126,7 @@ import {
   executeResultForAbandon,
   fetchBoundPlacementStatus,
   fetchQuest,
+  fetchQuestAvailabilityCandidates,
   fetchQuestDiscoveryCandidates,
   fetchQuestsStartingQuest,
   fetchRestrictedNewQuestTargets,
@@ -387,7 +388,7 @@ export const questsRouter = createTRPCRouter({
       // Query
       const [user, missions, activeWars] = await Promise.all([
         fetchActionUser(ctx.drizzle, ctx.userId),
-        fetchQuestDiscoveryCandidates(ctx.drizzle, ctx.userId, {
+        fetchQuestAvailabilityCandidates(ctx.drizzle, ctx.userId, {
           questTypes: [...MISSION_HALL_QUEST_TYPES],
           villageId: input.villageId,
           level: input.level,
@@ -404,9 +405,6 @@ export const questsRouter = createTRPCRouter({
         if (e.questType === "mission" && e.questRank === "S") return false;
         if (e.questType === "war" && !villageInWar) return false;
         return isAvailableUserQuests(e, user, true).check;
-      });
-      filtered.forEach((r) => {
-        controlShownQuestLocationInformation(r);
       });
       return filtered;
     }),
@@ -452,13 +450,11 @@ export const questsRouter = createTRPCRouter({
       // Query without the level cap so quests above the user's level are included
       const [user, quests] = await Promise.all([
         fetchActionUser(ctx.drizzle, ctx.userId),
-        fetchQuestDiscoveryCandidates(ctx.drizzle, ctx.userId, {
+        fetchQuestAvailabilityCandidates(ctx.drizzle, ctx.userId, {
           questTypes: [input.questType],
         }),
       ]);
-      quests.forEach((r) => {
-        controlShownQuestLocationInformation(r);
-      });
+      if (!user) return [];
       return listUpcomingQuests(quests, user);
     }),
   startRandom: protectedProcedure

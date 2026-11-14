@@ -3,6 +3,9 @@ import type { RouterOutputs } from "@/app/_trpc/client";
 import {
   getQuestRewardCacheUpdate,
   getQuestRewardDashboardUpdate,
+  getQuestStartDiscoveryUpdate,
+  getQuestStartUpcomingUpdate,
+  getReopenedQuestIds,
   getRewardUserDelta,
 } from "@/deltas/quests";
 import { PostProcessedRewardSchema } from "@/validators/rewards";
@@ -132,18 +135,103 @@ it("projects completion counts across a UTC period rollover and preserves raid s
 });
 
 it.each([
-  {},
-  { reward_money: 1 },
-  { reward_money: -1 },
-  { reward_items: ["item"] },
-  { reward_stats: 1 },
-  { reward_level: 101 },
-])("refreshes reward-bearing discovery changes (%j)", (fields) => {
+  [{}, true],
+  [{ reward_money: 1, reward_exp: 20, reward_seichi_silver: 2 }, true],
+  [{ reward_money: -1 }, true],
+  [{ reward_prestige: 3 }, true],
+  [{ reward_items: ["item"] }, false],
+  [{ reward_stats: 1 }, false],
+  [{ reward_level: 101 }, false],
+  [{ reward_prestige: -1 }, false],
+])("keeps discovery for nonterminal balance-only claims (%j)", (fields, unchanged) => {
   const entry = { questId: "quest", quest: { retryDelay: "none" as const } };
   expect(
     getQuestRewardCacheUpdate(entry, null, reward(fields), false).discoveryUnchanged,
-  ).toBe(Object.keys(fields).length === 0);
+  ).toBe(unchanged);
   expect(
     getQuestRewardCacheUpdate(entry, null, reward(fields), true).discoveryUnchanged,
   ).toBe(false);
+  expect(
+    getQuestRewardCacheUpdate(entry, new Date(), reward(fields), false)
+      .discoveryUnchanged,
+  ).toBe(false);
+});
+
+describe("quest start discovery patches", () => {
+  const periodStartAt = new Date("2026-11-01T00:00:00Z");
+  const attempt = {
+    questId: "started",
+    previousAttempts: 3,
+    previousCompletes: 2,
+    completed: 0,
+    periodCompletes: 1,
+    periodStartAt,
+  };
+  const row = (id: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    prerequisiteQuestId: null as string | null,
+    previousAttempts: 2,
+    previousCompletes: 2,
+    completed: 1,
+    periodCompletes: 1,
+    periodStartAt,
+    ...extra,
+  });
+
+  it("syncs started attempt counters and keeps other rows by identity", () => {
+    const other = row("other");
+    const next = getQuestStartDiscoveryUpdate(
+      [row("started"), other],
+      [attempt],
+      [],
+      undefined,
+    );
+    expect(next?.[0]).toEqual({ ...row("started"), previousAttempts: 3, completed: 0 });
+    expect(next?.[1]).toBe(other);
+  });
+
+  it("closes quests whose reopened prerequisite is no longer completed", () => {
+    const rows = [row("started"), row("follow-up", { prerequisiteQuestId: "started" })];
+    expect(
+      getQuestStartDiscoveryUpdate(rows, [attempt], ["started"], [])?.map((r) => r.id),
+    ).toEqual(["started"]);
+  });
+
+  it("debits confirmed entry stock and refetches unconfirmed stock", () => {
+    const rows = [
+      {
+        ...row("ticketed"),
+        entryRequirements: [
+          { itemId: "ticket", quantity: 1, name: "Ticket", owned: 3 },
+        ],
+      },
+    ];
+    const changes = [
+      { id: "a", itemId: "ticket", beforeQuantity: 2, quantity: 1 },
+      { id: "b", itemId: "other", beforeQuantity: 5, quantity: 0 },
+    ];
+    expect(
+      getQuestStartDiscoveryUpdate(rows, [], [], changes)?.[0]?.entryRequirements,
+    ).toEqual([{ itemId: "ticket", quantity: 1, name: "Ticket", owned: 2 }]);
+    expect(getQuestStartDiscoveryUpdate(rows, [], [], undefined)).toBeUndefined();
+  });
+
+  it("keeps upcoming quests unless a completed prerequisite was reopened", () => {
+    const rows = [{ id: "upcoming" }];
+    expect(getQuestStartUpcomingUpdate(rows, [])).toBe(rows);
+    expect(getQuestStartUpcomingUpdate(rows, ["started"])).toBeUndefined();
+  });
+
+  it("lists completions the start reopened", () => {
+    expect(
+      getReopenedQuestIds(
+        [
+          { questId: "started", completed: 1 },
+          { questId: "kept", completed: 1 },
+          { questId: "failed", completed: 0 },
+        ],
+        [{ questId: "kept", completed: 1 }],
+      ),
+    ).toEqual(["started"]);
+  });
 });

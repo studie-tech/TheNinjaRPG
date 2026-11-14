@@ -203,6 +203,70 @@ it("refreshes loaded discovery inputs without inventory fan-out", async () => {
   t.reads.slice(5).forEach((read) => expect(read).toHaveBeenCalledTimes(1));
 });
 
+it.each([false, true])(
+  "patches listings read after the profile without discovery reads (reopened prerequisite: %p)",
+  async (reopensPrerequisite) => {
+    const t = setup(),
+      hook = t.view.result.current.starts;
+    const profileKey = getQueryKey(api.profile.getUser, undefined, "query");
+    const completed = { id: "done", questId: "prior", completed: 1 };
+    t.client.setQueryData(
+      profileKey,
+      { userData: { completedQuests: [completed], userQuests: [] } },
+      { updatedAt: Date.now() - 1000 },
+    );
+    const snapshot = hook.prepareQuestStartUpdate();
+    const attempt = {
+      questId: t.candidate.id,
+      previousAttempts: 1,
+      previousCompletes: 0,
+      completed: 0,
+      periodCompletes: 0,
+      periodStartAt: null,
+    };
+    t.client.setQueryData(profileKey, {
+      userData: {
+        completedQuests: reopensPrerequisite ? [] : [completed],
+        userQuests: [attempt],
+      },
+    });
+    await act(async () =>
+      hook.updateQuestStart(
+        { ...t.started, inventoryChanges: t.inventoryChanges },
+        snapshot,
+        true,
+      ),
+    );
+    const started = { ...t.candidate, previousAttempts: 1 };
+    expect(t.client.getQueryData(t.keys[5]!)).toEqual([started]);
+    expect(t.client.getQueryData(t.keys[6]!)).toEqual([
+      { ...started, entryRequirements: [] },
+    ]);
+    t.reads.slice(0, 7).forEach((read) => expect(read).not.toHaveBeenCalled());
+    expect(t.reads[7]).toHaveBeenCalledTimes(reopensPrerequisite ? 1 : 0);
+  },
+);
+
+it("refetches listings read before the profile last changed", async () => {
+  const t = setup(),
+    hook = t.view.result.current.starts;
+  const profileKey = getQueryKey(api.profile.getUser, undefined, "query");
+  t.client.setQueryData(
+    profileKey,
+    { userData: { completedQuests: [], userQuests: [] } },
+    { updatedAt: Date.now() + 1000 },
+  );
+  const snapshot = hook.prepareQuestStartUpdate();
+  await act(async () =>
+    hook.updateQuestStart(
+      { ...t.started, inventoryChanges: t.inventoryChanges },
+      snapshot,
+      true,
+    ),
+  );
+  t.reads.slice(5).forEach((read) => expect(read).toHaveBeenCalledTimes(1));
+});
+
 it.each([
   "profile recovery",
   "transport uncertainty",

@@ -137,8 +137,10 @@ export const getMissionHallTileQuests = <
  * @param questType - The Mission Hall type being listed.
  * @returns The quests, and a display suffix when the best one is below the player's rank.
  */
-export const filterMissionHallQuests = (
-  quests: Quest[],
+export const filterMissionHallQuests = <
+  T extends Parameters<typeof isAvailableUserQuests>[0],
+>(
+  quests: T[],
   user: NonNullable<UserWithRelations>,
   questType: QuestType,
 ) => {
@@ -148,7 +150,7 @@ export const filterMissionHallQuests = (
     rank: user.rank,
   });
   // Quests without a rank list alongside the player's own rank.
-  const rankOrder = (quest: Quest) =>
+  const rankOrder = (quest: T) =>
     MEDNIN_RANKS.indexOf(quest.medicalRank || userMedicalRank);
   const filtered = quests
     .filter((e) => e.questType === questType && isAvailableUserQuests(e, user).check)
