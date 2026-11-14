@@ -23,6 +23,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockCosmetics } from "../../setup/cosmetics";
 
 const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
 let moveItems: ReturnType<typeof vi.fn>;
@@ -33,6 +34,7 @@ let finishMove: (result: {
 let inspectorProps: Parameters<typeof inspector.ItemInspector>[0] | undefined;
 
 beforeEach(() => {
+  mockCosmetics();
   window.localStorage.clear();
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
