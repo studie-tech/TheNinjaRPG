@@ -7,8 +7,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
  * resolves those procedures concurrently. The memo shares reads by key across the
  * batch, such as the wars, raids and shrine lobbies that `fetchUpdatedUser` needs.
  * Concurrent callers share a pending query, and later callers reuse its successful
- * result within the request. Catalogues that tolerate a short delay use the per-instance
- * caches of `@/server/utils/instanceCache` instead.
+ * result within the request. User-independent catalogues shared across requests use
+ * `@/server/utils/runtimeCache` instead.
  *
  * Only reads that satisfy all three of the following belong here:
  *

@@ -86,6 +86,7 @@
     "@uploadthing/react": "^7.3.3",
     "@upstash/ratelimit": "^2.2.1",
     "@upstash/redis": "^1.41.0",
+    "@vercel/functions": "3.10.5",
     "@vercel/speed-insights": "^2.1.0",
     "ai": "^7.0.173",
     "alea": "1.0.1",

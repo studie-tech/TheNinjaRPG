@@ -28,8 +28,8 @@ it("starts collection reads before the initial profile read settles", async () =
     },
   } as unknown as DrizzleClient;
   const result = fetchUpdatedUser({ client, userId: "collection-wave" });
-  // Promise.all assimilates Drizzle's lazy thenables in microtasks.
-  await Promise.resolve();
+  // The catalogue read follows its Runtime Cache lookup; the profile read stays pending.
+  await new Promise((resolve) => setTimeout(resolve, 0));
   expect(findCatalogue).toHaveBeenCalledTimes(1);
   expect(findRolls).toHaveBeenCalledTimes(1);
   resolveUser(undefined);

@@ -54,7 +54,7 @@ export const updateGameSetting = async (
 ) => {
   const setting = await getGameSetting(client, settingName);
   await updateGameSettingForUpdateGameSetting(client, value, time, setting);
-  invalidateGameSettings();
+  await invalidateGameSettings();
 };
 
 /**

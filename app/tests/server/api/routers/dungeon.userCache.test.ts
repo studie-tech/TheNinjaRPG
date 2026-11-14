@@ -375,7 +375,7 @@ describeWithDatabase("confirmed dungeon reward progression", () => {
         userDelta: {},
       });
       // Recovery sources share the initial read phase; a rejected create performs no account write or confirmation read.
-      // Game settings come from the instance cache the profile read filled.
+      // Game settings come from the Runtime Cache the profile read filled.
       expect(measured.statements).toHaveLength(7);
       expect(
         measured.statements.every((statement) => /^select /i.test(statement)),

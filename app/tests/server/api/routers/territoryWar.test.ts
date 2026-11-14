@@ -475,7 +475,7 @@ describeWithDatabase("Territory War participation", () => {
         userDelta: {},
       });
       // Isolation, event and actor relations are independent reads; recovery settings
-      // come from the instance cache the profile read filled.
+      // come from the Runtime Cache the profile read filled.
       expect(measured.statements).toHaveLength(3);
       expect(
         measured.statements.every((statement) => /^select /i.test(statement)),

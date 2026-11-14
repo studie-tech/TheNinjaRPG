@@ -644,7 +644,7 @@ export const bloodlineRouter = createTRPCRouter({
       });
       // Update database
       await updateBloodlineForUpdate(ctx.drizzle, newData, input);
-      invalidateBloodlineCollectionCatalogue();
+      await invalidateBloodlineCollectionCatalogue();
       await Promise.all([
         insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
         outdateProposalsFor(

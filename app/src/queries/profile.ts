@@ -101,9 +101,9 @@ import {
   userQuestHistoryRelation,
 } from "@/server/utils/achievementObjectives";
 import type { ActionReadinessWrite } from "@/server/utils/actionReadiness";
-import { createInstanceCache } from "@/server/utils/instanceCache";
 import { hashIp } from "@/server/utils/ipHash";
 import { fetchPvpExperienceAverage } from "@/server/utils/pvpExperience";
+import { createRuntimeCache } from "@/server/utils/runtimeCache";
 import { missingUserMessage } from "@/server/utils/sentry";
 import { territoryWarBoostWindowsSql } from "@/server/utils/territoryWar";
 import { displayTitleSql } from "@/server/utils/titleDisplay";
@@ -193,30 +193,29 @@ export const fetchUser = async (client: DrizzleClient, userId: string) => {
   return user;
 };
 
-// Achievements change only when staff edit quests, which invalidate this instance at
-// once; other instances serve an edit within the TTL. Rows stay complete because they
-// become the `quest` of each player's achievement entries.
-const ACHIEVEMENT_CATALOGUE_TTL_MS = 60 * 1000;
-const achievementCatalogue = createInstanceCache(
-  ACHIEVEMENT_CATALOGUE_TTL_MS,
-  (client: Pick<DrizzleClient, "select">) =>
+// Achievements change only when staff edit quests, which invalidate the cache. Rows stay
+// complete because they become the `quest` of each player's achievement entries.
+const achievementCatalogue = createRuntimeCache({
+  name: "achievement-catalogue",
+  ttlSeconds: 60 * 60,
+  load: (client: Pick<DrizzleClient, "select">) =>
     client
       .select()
       .from(quest)
       .where(and(eq(quest.questType, "achievement"), eq(quest.hidden, false))),
-);
+});
 
 /**
- * Visible achievements from the instance cache. Each caller receives a clone, so per-user
+ * Visible achievements from the Runtime Cache. Each caller receives a clone, so per-user
  * rewrites such as hidden quest locations operate on private copies.
  */
 export const fetchAchievementCatalogue = (client: Pick<DrizzleClient, "select">) =>
   achievementCatalogue.read(client);
 
-/** Make this instance read achievements again; call after quest definition writes. */
+/** Make every instance read achievements again; await after quest definition writes. */
 export const invalidateAchievementCatalogue = achievementCatalogue.invalidate;
 
-/** Load persisted settings from the instance cache, followed by the computed PvP average. */
+/** Load persisted settings from the Runtime Cache, followed by the computed PvP average. */
 export const fetchAllGameSettings = async (client: DrizzleClient) => {
   const [settings, average] = await Promise.all([
     listCachedGameSettings(client),

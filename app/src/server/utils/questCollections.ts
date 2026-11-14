@@ -10,7 +10,7 @@ import type { UserWithRelations } from "@/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { queryInTransaction } from "@/server/utils/concurrency";
 import { getFarmCollectionCount } from "@/server/utils/farming";
-import { createInstanceCache } from "@/server/utils/instanceCache";
+import { createRuntimeCache } from "@/server/utils/runtimeCache";
 import type { AllObjectivesType } from "@/validators/objectives";
 
 /**
@@ -85,19 +85,18 @@ export const hydrateQuestCollections = async (
   };
 };
 
-// Bloodline editors invalidate this instance at once; other instances serve an edit
-// within the TTL. Ownership is always read per caller.
-const BLOODLINE_COLLECTION_CATALOGUE_TTL_MS = 60 * 1000;
-const bloodlineCollectionCatalogue = createInstanceCache(
-  BLOODLINE_COLLECTION_CATALOGUE_TTL_MS,
-  queryBloodlineCollectionCatalogue,
-);
+// Bloodline editors invalidate the cache. Ownership is always read per caller.
+const bloodlineCollectionCatalogue = createRuntimeCache({
+  name: "bloodline-collection-catalogue",
+  ttlSeconds: 60 * 60,
+  load: queryBloodlineCollectionCatalogue,
+});
 
-/** The visible bloodline catalogue from the instance cache. */
+/** The visible bloodline catalogue from the Runtime Cache. */
 export const fetchBloodlineCollectionCatalogue = (client: DrizzleClient) =>
   bloodlineCollectionCatalogue.read(client);
 
-/** Make this instance read the bloodline catalogue again; call after bloodline writes. */
+/** Make every instance read the bloodline catalogue again; await after bloodline writes. */
 export const invalidateBloodlineCollectionCatalogue =
   bloodlineCollectionCatalogue.invalidate;
 

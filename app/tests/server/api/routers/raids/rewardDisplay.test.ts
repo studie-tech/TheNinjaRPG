@@ -231,7 +231,7 @@ describeWithDatabase("raid reward display from confirmed grants", () => {
         ).reduce((sum, row) => sum + row.quantity, 0),
       ).toBe(3);
       for (const reread of rereads) expect(reread).not.toHaveBeenCalled();
-      // The second profile read serves the catalogue from the instance cache.
+      // The second profile read serves the catalogue from the Runtime Cache.
       expect(catalogueReads.mock.calls).toEqual([[catalogueQuery]]);
     },
   );

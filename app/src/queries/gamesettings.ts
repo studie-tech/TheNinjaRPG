@@ -5,21 +5,22 @@ import { and, eq, inArray, lt } from "drizzle-orm";
 import { DMG_SETTING_NAMES } from "@/drizzle/constants";
 import { gameSetting } from "@/drizzle/schema";
 import type { DrizzleClient } from "@/server/db";
-import { createInstanceCache } from "@/server/utils/instanceCache";
+import { createRuntimeCache } from "@/server/utils/runtimeCache";
 
 // The listing feeds global and war boosts and staff toggles. Boost expiry is compared
-// with the current time on every read, so the TTL only delays a new or edited value.
-// Timers, damage config and war rules read their own rows directly.
-const GAME_SETTINGS_TTL_MS = 30 * 1000;
-const gameSettings = createInstanceCache(
-  GAME_SETTINGS_TTL_MS,
-  (client: Pick<DrizzleClient, "select">) => client.select().from(gameSetting),
-);
+// with the current time on every read; boost and toggle writes invalidate the cache, and
+// the TTL bounds rows that timers and war rules write without it. Timers, damage config
+// and war rules read their own rows directly.
+const gameSettings = createRuntimeCache({
+  name: "game-settings",
+  ttlSeconds: 30,
+  load: (client: Pick<DrizzleClient, "select">) => client.select().from(gameSetting),
+});
 
-/** Every game setting row, from the instance cache. */
+/** Every game setting row, from the Runtime Cache. */
 export const listCachedGameSettings = gameSettings.read;
 
-/** Make this instance list game settings again; call after boost or toggle writes. */
+/** Make every instance list game settings again; await after boost or toggle writes. */
 export const invalidateGameSettings = gameSettings.invalidate;
 
 /** Build the `gameSetting` update for `decayClansAndAnbu`, setting `time`, using predicates on `id` and `time`. */

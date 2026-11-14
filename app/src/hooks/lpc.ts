@@ -8,10 +8,7 @@ export const useLpcDesigns = () => api.gameAsset.getLpcCatalog.useQuery();
 /** Artwork changes only when staff save it, so a recently loaded scene catalog is reused. */
 const LPC_SCENE_CATALOG_STALE_MS = 5 * 60 * 1000;
 
-/**
- * Saved artwork refreshes both editor discovery and compiled scene snapshots. Other server
- * instances may still cache the previous artwork, so the editor's scene snapshot reads past them.
- */
+/** Saved artwork refreshes both editor discovery and compiled scene snapshots. */
 export const useLpcCatalogInvalidation = () => {
   const utils = api.useUtils();
   return useCallback(
@@ -19,7 +16,7 @@ export const useLpcCatalogInvalidation = () => {
       Promise.all([
         utils.gameAsset.getLpcCatalog.invalidate(),
         utils.client.gameAsset.getLpcSceneCatalog
-          .query({ fresh: true }, { context: { skipBatch: true } })
+          .query(undefined, { context: { skipBatch: true } })
           .then((catalog) => {
             // Stop stale writes, then supply saved artwork before pending scene readers settle.
             const cancelled = utils.gameAsset.getLpcSceneCatalog.cancel();
