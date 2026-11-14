@@ -83,3 +83,21 @@ describeWithDatabase("public user filters", () => {
     expect(rows.map((row) => row.userId)).toEqual(["lvl-25", "lvl-36"]);
   });
 });
+
+describeWithDatabase("public user staff tab", () => {
+  beforeEach(async () => {
+    await resetTables(userData);
+    await insertUsers([
+      { userId: "player", username: "Player", role: "USER", tavernMessages: 900 },
+      { userId: "mod", username: "Mod", role: "MODERATOR", tavernMessages: 40 },
+      { userId: "owner", username: "Owner", role: "OWNER", tavernMessages: 70 },
+      { userId: "coder", username: "Coder", role: "CODER", tavernMessages: 10 },
+    ]);
+  });
+
+  it("lists every non-player role by tavern messages", async () => {
+    const input = getPublicUsersSchema.parse({ limit: 10, orderBy: "Staff" });
+    const rows = await listPublicUserRows(await getTestDatabase(), input, 0);
+    expect(rows.map((row) => row.userId)).toEqual(["owner", "mod", "coder"]);
+  });
+});

@@ -1086,6 +1086,13 @@
       "when": 1794638471024,
       "tag": "0155_pale_stone_men",
       "breakpoints": false
+    },
+    {
+      "idx": 156,
+      "version": "5",
+      "when": 1794671598283,
+      "tag": "0156_keen_proteus",
+      "breakpoints": false
     }
   ]
 }

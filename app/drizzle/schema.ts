@@ -659,7 +659,6 @@ export const battleAction = mysqlTable(
         table.battleRound,
       ),
       createdAtIdx: index("BattleAction_createdAt_idx").on(table.createdAt),
-      battleIdIdx: index("BattleAction_battleId_idx").on(table.battleId),
       battleIdRoundVersionIdx: index(
         "BattleAction_battleId_battleRound_battleVersion_idx",
       ).on(table.battleId, table.battleRound, table.battleVersion),
@@ -830,7 +829,6 @@ export const bloodlineReskin = mysqlTable(
   },
   (table) => {
     return {
-      bloodlineIdIdx: index("BloodlineReskin_bloodlineId_idx").on(table.bloodlineId),
       createdByIdx: index("BloodlineReskin_createdBy_idx").on(table.createdBy),
       bloodlineNameKey: uniqueIndex("BloodlineReskin_bloodlineId_name_key").on(
         table.bloodlineId,
@@ -961,7 +959,6 @@ export const userSkill = mysqlTable(
         table.userId,
         table.skillId,
       ),
-      userIdIdx: index("UserSkill_userId_idx").on(table.userId),
       skillIdIdx: index("UserSkill_skillId_idx").on(table.skillId),
     };
   },
@@ -1286,8 +1283,6 @@ export const mpvpBattleUser = mysqlTable(
   },
   (table) => {
     return {
-      clanBattleIdIdx: index("MpvpBattleUser_clanBattleId_idx").on(table.clanBattleId),
-      userIdIdx: index("MpvpBattleUser_userId_idx").on(table.userId),
       sideIdx: index("MpvpBattleUser_side_idx").on(table.side),
       // Unique constraint to prevent race conditions on slot allocation
       sideSlotKey: uniqueIndex("MpvpBattleUser_clanBattleId_side_slot_key").on(
@@ -2014,7 +2009,6 @@ export const item = mysqlTable(
       requiredLevelIdx: index("Item_requiredLevel_idx").on(table.requiredLevel),
       bloodlineIdIdx: index("Item_bloodlineId_idx").on(table.bloodlineId),
       requiredSkillIdIdx: index("Item_requiredSkillId_idx").on(table.requiredSkillId),
-      parentItemIdIdx: index("Item_parentItemId_idx").on(table.parentItemId),
       parentItemIdHiddenIdx: index("Item_parentItemId_hidden_idx").on(
         table.parentItemId,
         table.hidden,
@@ -2099,7 +2093,6 @@ export const itemVariant = mysqlTable(
   },
   (table) => {
     return {
-      itemIdIdx: index("ItemVariant_itemId_idx").on(table.itemId),
       itemOrderUniq: uniqueIndex("ItemVariant_itemId_order_key").on(
         table.itemId,
         table.order,
@@ -2128,7 +2121,6 @@ export const userItemVariant = mysqlTable(
   },
   (table) => {
     return {
-      userIdIdx: index("UserItemVariant_userId_idx").on(table.userId),
       userVariantUniq: uniqueIndex("UserItemVariant_userId_variantId_key").on(
         table.userId,
         table.variantId,
@@ -2279,7 +2271,6 @@ export const jutsu = mysqlTable(
       bloodlineReskinIdx: index("Jutsu_bloodlineReskinId_idx").on(
         table.bloodlineReskinId,
       ),
-      parentJutsuIdIdx: index("Jutsu_parentJutsuId_idx").on(table.parentJutsuId),
       parentJutsuIdHiddenIdx: index("Jutsu_parentJutsuId_hidden_idx").on(
         table.parentJutsuId,
         table.hidden,
@@ -2331,7 +2322,6 @@ export const jutsuReskin = mysqlTable(
   },
   (table) => {
     return {
-      userIdIdx: index("JutsuReskin_userId_idx").on(table.userId),
       jutsuIdIdx: index("JutsuReskin_jutsuId_idx").on(table.jutsuId),
       userIdJutsuIdKey: uniqueIndex("JutsuReskin_userId_jutsuId_key").on(
         table.userId,
@@ -2403,17 +2393,25 @@ export const itemLoadout = mysqlTable(
 );
 export type ItemLoadout = InferSelectModel<typeof itemLoadout>;
 
-export const rankedLoadout = mysqlTable("RankedLoadout", {
-  id: varchar("id", { length: 191 }).primaryKey().notNull(),
-  userId: varchar("userId", { length: 191 }).notNull(),
-  loadout: json("loadout").$type<RankedLoadoutSchema>().notNull(),
-  createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
-    .default(sql`(CURRENT_TIMESTAMP(3))`)
-    .notNull(),
-  updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
-    .default(sql`(CURRENT_TIMESTAMP(3))`)
-    .notNull(),
-});
+export const rankedLoadout = mysqlTable(
+  "RankedLoadout",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().notNull(),
+    userId: varchar("userId", { length: 191 }).notNull(),
+    loadout: json("loadout").$type<RankedLoadoutSchema>().notNull(),
+    createdAt: datetime("createdAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+    updatedAt: datetime("updatedAt", { mode: "date", fsp: 3 })
+      .default(sql`(CURRENT_TIMESTAMP(3))`)
+      .notNull(),
+  },
+  (table) => {
+    return {
+      userIdIdx: index("RankedLoadout_userId_idx").on(table.userId),
+    };
+  },
+);
 export type RankedLoadout = InferSelectModel<typeof rankedLoadout>;
 
 export const rankedLoadoutRelations = relations(rankedLoadout, ({ one }) => ({
@@ -2881,7 +2879,6 @@ export const logBattleLengths = mysqlTable(
   },
   (table) => {
     return {
-      battleTypeIdx: index("LogBattleLengths_battleType_idx").on(table.battleType),
       uniqueEntryIdx: unique("uniqueEntry").on(
         table.battleType,
         table.winnerLevel,
@@ -2996,7 +2993,6 @@ export const userAssociation = mysqlTable(
         table.userTwo,
         table.associationType,
       ),
-      userOneIdx: index("UserAttribute_userOne_idx").on(table.userOne),
       userTwoIdx: index("UserAttribute_userTwo_idx").on(table.userTwo),
     };
   },
@@ -3359,7 +3355,6 @@ export const userData = mysqlTable(
   },
   (table) => {
     return {
-      isAiIdx: index("UserData_isAi_idx").on(table.isAi),
       isAiUpdatedAtIdx: index("UserData_isAi_updatedAt_idx").on(
         table.isAi,
         table.updatedAt,
@@ -3369,6 +3364,12 @@ export const userData = mysqlTable(
       isAiRankedLpExperienceIdx: index("UserData_isAi_rankedLp_experience_idx").on(
         table.isAi,
         table.rankedLp,
+        table.experience,
+      ),
+      // Strongest and Weakest leaderboard tabs: ORDER BY level, experience (either direction)
+      isAiLevelExperienceIdx: index("UserData_isAi_level_experience_idx").on(
+        table.isAi,
+        table.level,
         table.experience,
       ),
       isEventIdx: index("UserData_isEvent_idx").on(table.isEvent),
@@ -3386,9 +3387,11 @@ export const userData = mysqlTable(
       experienceIdx: index("UserData_experience_idx").on(table.experience),
       levelIdx: index("UserData_level_idx").on(table.level),
       usernameKey: uniqueIndex("UserData_username_key").on(table.username),
+      // PvP average (covering) and the PvP leaderboard tab: ORDER BY pvpExperience, experience
       pvpExperienceAverageIdx: index("UserData_pvpExperienceAverage_idx").on(
         table.isAi,
         table.pvpExperience,
+        table.experience,
       ),
       bloodlineIdIdx: index("UserData_bloodlineId_idx").on(table.bloodlineId),
       bloodlineReskinIdIdx: index("UserData_bloodlineReskinId_idx").on(
@@ -3401,7 +3404,6 @@ export const userData = mysqlTable(
       ),
       battleIdIdx: index("UserData_battleId_idx").on(table.battleId),
       statusIdx: index("UserData_status_idx").on(table.status),
-      sectorIdx: index("UserData_sector_idx").on(table.sector),
       sectorUpdatedAtIdx: index("UserData_sector_updatedAt_idx").on(
         table.sector,
         table.updatedAt,
@@ -3656,7 +3658,6 @@ export const historicalIp = mysqlTable(
   (table) => {
     return {
       userIdIpKey: uniqueIndex("HistoricalIp_userId_ip_key").on(table.userId, table.ip),
-      userIdIdx: index("HistoricalIp_userId_idx").on(table.userId),
       userIpIdx: index("HistoricalIp_userIp_idx").on(table.ip),
       ipHashIdx: index("HistoricalIp_ipHash_idx").on(table.ipHash),
       usedAtIdx: index("HistoricalIp_usedAt_idx").on(table.usedAt),
@@ -3743,7 +3744,6 @@ export const userItem = mysqlTable(
   },
   (table) => {
     return {
-      userIdIdx: index("UserItem_userId_idx").on(table.userId),
       itemIdIdx: index("UserItem_itemId_idx").on(table.itemId),
       quantityIdx: index("UserItem_quantity_idx").on(table.quantity),
       equippedIdx: index("UserItem_equipped_idx").on(table.equipped),
@@ -3803,7 +3803,6 @@ export const userItemImbuement = mysqlTable(
   },
   (table) => {
     return {
-      userItemIdIdx: index("UserItemImbuement_userItemId_idx").on(table.userItemId),
       imbuementItemIdIdx: index("UserItemImbuement_imbuementItemId_idx").on(
         table.imbuementItemId,
       ),
@@ -3933,7 +3932,6 @@ export const auctionListing = mysqlTable(
       buyerIdIdx: index("AuctionListing_buyerId_idx").on(table.buyerId),
       userItemIdIdx: index("AuctionListing_userItemId_idx").on(table.userItemId),
       targetUserIdIdx: index("AuctionListing_targetUserId_idx").on(table.targetUserId),
-      statusIdx: index("AuctionListing_status_idx").on(table.status),
       expiresAtIdx: index("AuctionListing_expiresAt_idx").on(table.expiresAt),
       /** Supports browse + USER bidder-level visibility (status, type, min/max band). */
       statusListingBidderLevelsIdx: index(
@@ -4786,8 +4784,6 @@ export const kageDefendedChallenges = mysqlTable(
       table.userId,
       table.startedAt,
     ),
-    villageIdIdx: index("VillageKageChallenges_villageId_idx").on(table.villageId),
-    userIdIdx: index("VillageKageChallenges_userId_idx").on(table.userId),
     kageIDIdx: index("VillageKageChallenges_kageID_idx").on(table.kageId),
   }),
 );
@@ -4833,7 +4829,6 @@ export const dataBattleAction = mysqlTable(
         table.battleWon,
         table.relatedBloodlineId,
       ),
-      typeIdx: index("DataBattleActions_type_idx").on(table.type),
       battleWonIdx: index("DataBattleActions_battleWon_idx").on(table.battleWon),
       battleTypeIdx: index("DataBattleActions_battleType_idx").on(table.battleType),
       contentIdIdx: index("DataBattleActions_contentId_idx").on(table.contentId),
@@ -4934,7 +4929,6 @@ export const quest = mysqlTable(
   (table) => {
     return {
       tierLevel: unique("tierLevel").on(table.tierLevel),
-      questTypeIdx: index("Quest_questType_idx").on(table.questType),
       publicLocationsIdx: index("Quest_publicLocations_hidden_idx").on(
         table.publicLocations,
         table.hidden,
@@ -5050,10 +5044,8 @@ export const questHistory = mysqlTable(
         table.userId,
         table.questId,
       ),
-      userIdIdx: index("QuestHistory_userId_idx").on(table.userId),
       questTypeIdx: index("QuestHistory_questType_idx").on(table.questType),
       endAtIdx: index("QuestHistory_endedAt_idx").on(table.endAt),
-      questIdIdx: index("QuestHistory_questId_idx").on(table.questId),
       completedIdx: index("QuestHistory_completed_idx").on(table.completed),
       // Composite index for completedQuests: WHERE userId = ? AND completed >= 1
       userIdCompletedIdx: index("QuestHistory_userId_completed_idx").on(
@@ -5136,7 +5128,6 @@ export const raidParticipation = mysqlTable(
         table.questId,
         table.userId,
       ),
-      questIdIdx: index("RaidParticipation_questId_idx").on(table.questId),
       userIdIdx: index("RaidParticipation_userId_idx").on(table.userId),
       damageDealtIdx: index("RaidParticipation_damageDealt_idx").on(table.damageDealt),
       // Composite index for leaderboard queries: WHERE questId = ? ORDER BY damageDealt DESC
@@ -5231,7 +5222,6 @@ export const userRaidBuff = mysqlTable(
   },
   (table) => {
     return {
-      userIdIdx: index("UserRaidBuff_userId_idx").on(table.userId),
       questIdIdx: index("UserRaidBuff_questId_idx").on(table.questId),
       expiresAtIdx: index("UserRaidBuff_expiresAt_idx").on(table.expiresAt),
       // Composite index for loading active buffs: WHERE userId = ? AND expiresAt > NOW()
@@ -5376,7 +5366,6 @@ export const bankTransfers = mysqlTable(
   },
   (table) => {
     return {
-      senderIdIdx: index("BankTransfers_senderId_idx").on(table.senderId),
       receiverIdIdx: index("BankTransfers_receiverId_idx").on(table.receiverId),
       senderReceiverIdx: index("BankTransfers_senderId_receiverId_idx").on(
         table.senderId,
@@ -5417,7 +5406,6 @@ export const dailyBankInterest = mysqlTable(
         table.userId,
         table.date,
       ),
-      userIdIdx: index("DailyBankInterest_userId_idx").on(table.userId),
       dateIdx: index("DailyBankInterest_date_idx").on(table.date),
       updatedAtIdx: index("DailyBankInterest_updatedAt_idx").on(table.updatedAt),
       claimedUpdatedAtIdx: index("DailyBankInterest_claimed_updatedAt_idx").on(
@@ -5574,7 +5562,6 @@ export const userRequest = mysqlTable(
   (table) => {
     return {
       createdAtIdx: index("UserRequest_createdAt_idx").on(table.createdAt),
-      challengerIdIdx: index("UserRequest_senderId_idx").on(table.senderId),
       challengedIdIdx: index("UserRequest_receiverId_idx").on(table.receiverId),
       typeIdx: index("UserRequest_type_idx").on(table.type),
       relatedIdTypeCreatedAtIdx: index("UserRequest_relatedId_type_createdAt_idx").on(
@@ -5703,6 +5690,9 @@ export const userVote = mysqlTable(
   (table) => {
     return {
       userIdIdx: uniqueIndex("UserVote_userId_idx").on(table.userId),
+      // Vote-site postbacks find the row by secret. Not unique: claims re-roll the short random
+      // secret, and a collision must not fail the claim.
+      secretIdx: index("UserVote_secret_idx").on(table.secret),
     };
   },
 );
@@ -5839,7 +5829,6 @@ export const warAlly = mysqlTable(
   },
   (table) => {
     return {
-      warIdIdx: index("WarAlly_warId_idx").on(table.warId),
       villageIdIdx: index("WarAlly_villageId_idx").on(table.villageId),
       activeVillageUnique: uniqueIndex("WarAlly_active_village_key").on(
         table.warId,
@@ -5947,7 +5936,6 @@ export const villageElderVote = mysqlTable(
     endsAt: datetime("endsAt", { mode: "date", fsp: 3 }).notNull(),
   },
   (table) => ({
-    villageIdIdx: index("VillageElderVote_villageId_idx").on(table.villageId),
     typeIdx: index("VillageElderVote_type_idx").on(table.type),
     statusIdx: index("VillageElderVote_status_idx").on(table.status),
     endsAtIdx: index("VillageElderVote_endsAt_idx").on(table.endsAt),
@@ -5976,7 +5964,6 @@ export const villageElderVoteEntry = mysqlTable(
       .notNull(),
   },
   (table) => ({
-    voteIdIdx: index("VillageElderVoteEntry_voteId_idx").on(table.voteId),
     userIdIdx: index("VillageElderVoteEntry_userId_idx").on(table.userId),
     uniqueVoter: unique("VillageElderVoteEntry_voteId_userId_unique").on(
       table.voteId,
@@ -6172,7 +6159,6 @@ export const userPollVote = mysqlTable(
         table.userId,
         table.pollId,
       ),
-      userIdIdx: index("UserPollVote_userId_idx").on(table.userId),
       pollIdIdx: index("UserPollVote_pollId_idx").on(table.pollId),
       optionIdIdx: index("UserPollVote_optionId_idx").on(table.optionId),
     };
@@ -6285,7 +6271,6 @@ export const bountySignup = mysqlTable(
         table.bountyId,
         table.hunterUserId,
       ),
-      bountyIdx: index("BountySignup_bountyId_idx").on(table.bountyId),
       hunterIdx: index("BountySignup_hunterUserId_idx").on(table.hunterUserId),
     };
   },
@@ -6529,9 +6514,6 @@ export const staffApplicationApproval = mysqlTable(
   },
   (table) => {
     return {
-      applicationIdx: index("StaffApplicationApproval_applicationId_idx").on(
-        table.applicationId,
-      ),
       approverIdx: index("StaffApplicationApproval_approverUserId_idx").on(
         table.approverUserId,
       ),
@@ -6598,7 +6580,6 @@ export const abEvent = mysqlTable(
   (table) => {
     return {
       userIdIdx: index("AbEvent_userId_idx").on(table.userId),
-      experimentIdx: index("AbEvent_experiment_idx").on(table.experiment),
       eventIdx: index("AbEvent_event_idx").on(table.event),
       sourceIdx: index("AbEvent_source_idx").on(table.source),
       experimentEventIpHashUnique: uniqueIndex(
@@ -6744,7 +6725,6 @@ export const userTowerDefenseUpgrade = mysqlTable(
   },
   (table) => {
     return {
-      userIdIdx: index("UserTowerDefenseUpgrade_userId_idx").on(table.userId),
       upgradeIdIdx: index("UserTowerDefenseUpgrade_upgradeId_idx").on(table.upgradeId),
       userUpgradeKey: uniqueIndex("UserTowerDefenseUpgrade_userId_upgradeId_key").on(
         table.userId,
@@ -6789,7 +6769,6 @@ export const towerDefenseRun = mysqlTable(
   },
   (table) => {
     return {
-      userIdIdx: index("TowerDefenseRun_userId_idx").on(table.userId),
       statusIdx: index("TowerDefenseRun_status_idx").on(table.status),
       userStatusIdx: index("TowerDefenseRun_userId_status_idx").on(
         table.userId,
@@ -6928,7 +6907,6 @@ export const activityStreakReward = mysqlTable(
   },
   (table) => {
     return {
-      configIdIdx: index("ActivityStreakReward_configId_idx").on(table.configId),
       dayNumberIdx: index("ActivityStreakReward_dayNumber_idx").on(table.dayNumber),
       configDayKey: uniqueIndex("ActivityStreakReward_configId_dayNumber_key").on(
         table.configId,
@@ -6953,7 +6931,6 @@ export const userStreakProgress = mysqlTable(
   },
   (table) => {
     return {
-      userIdIdx: index("UserStreakProgress_userId_idx").on(table.userId),
       configIdIdx: index("UserStreakProgress_configId_idx").on(table.configId),
       userConfigKey: uniqueIndex("UserStreakProgress_userId_configId_key").on(
         table.userId,
@@ -7018,7 +6995,6 @@ export const farmPlot = mysqlTable(
   },
   (table) => {
     return {
-      userIdIdx: index("FarmPlot_userId_idx").on(table.userId),
       userSlotKey: uniqueIndex("FarmPlot_userId_slotIndex_key").on(
         table.userId,
         table.slotIndex,
@@ -7050,7 +7026,6 @@ export const farmCollectionLog = mysqlTable(
       .notNull(),
   },
   (table) => ({
-    userIdIdx: index("FarmCollectionLog_userId_idx").on(table.userId),
     itemIdIdx: index("FarmCollectionLog_itemId_idx").on(table.itemId),
     userItemKey: uniqueIndex("FarmCollectionLog_userId_itemId_key").on(
       table.userId,
@@ -7197,7 +7172,6 @@ export const userPushPreference = mysqlTable(
         table.userId,
         table.category,
       ),
-      userIdIdx: index("UserPushPreference_userId_idx").on(table.userId),
     };
   },
 );
@@ -7984,7 +7958,6 @@ export const webStoreOrder = mysqlTable(
     captureId: varchar("captureId", { length: 191 }),
   },
   (table) => [
-    index("WebStoreOrder_buyerId_idx").on(table.buyerId),
     index("WebStoreOrder_recipientId_idx").on(table.recipientId),
     index("WebStoreOrder_buyer_bundle_idx").on(table.buyerId, table.bundleId),
     uniqueIndex("WebStoreOrder_captureId_key").on(table.captureId),
