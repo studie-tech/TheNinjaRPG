@@ -12,10 +12,14 @@ afterEach(() => {
 it("follows the taverns of the signed-in player on the live connection", () => {
   const pusher = { id: "connection" };
   const userData = { userId: "me" };
-  vi.spyOn(context, "useUserData").mockReturnValue({ data: userData, pusher } as never);
+  const subscribe = vi
+    .spyOn(context, "useUserDataSelector")
+    .mockReturnValue({ data: userData, pusher } as never);
   const follow = vi
     .spyOn(tavernActivity, "useTavernActivity")
     .mockImplementation(() => {});
   render(<TavernActivity />);
+  // Movement never reaches the tavern subscriptions.
+  expect(subscribe).toHaveBeenCalledWith(context.selectUserWithoutPosition);
   expect(follow).toHaveBeenCalledWith(pusher, userData);
 });

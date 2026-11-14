@@ -55,14 +55,16 @@ const targets = [
   ["layout/battlearena/TrainingMode.tsx", ["TrainingMode"]],
   ["layout/battlearena/RankedMode.tsx", ["RankedMode"]],
   ["layout/battlearena/PyramidMode.tsx", ["PyramidMode", "TowerHeading"]],
+  ["layout/ChatConversation.tsx", ["ChatConversation"]],
+  ["layout/RichInput.tsx", ["RichInput"]],
+  ["layout/CombatActions.tsx", ["ActionSelector", "ActionOption"]],
+  ["app/[shell]/forum/[boardid]/[threadid]/thread.tsx", ["Thread", "ForumPost"]],
 ] as const;
 
 // Functions the compiler still skips, as "path#function". Fix one and remove it here.
 const compilerExceptions = [
   "app/[shell]/battlelog/[battleid]/page.tsx#BattleLog",
   "app/[shell]/error.tsx#ErrorBoundary",
-  "app/[shell]/forum/[boardid]/[threadid]/thread.tsx#ForumPost",
-  "app/[shell]/forum/[boardid]/[threadid]/thread.tsx#Thread",
   "app/[shell]/forum/manage/page.tsx#ForumRestrictions",
   "app/[shell]/forum/manage/page.tsx#ForumStaff",
   "app/[shell]/forum/manage/page.tsx#RemoveStructure",
@@ -101,9 +103,7 @@ const compilerExceptions = [
   "hooks/useTowerDefense.ts#useTowerDefense",
   "layout/BloodlineStatistics.tsx#BloodlineRollChart",
   "layout/CharacterPreview.tsx#CharacterPreview",
-  "layout/ChatConversation.tsx#ChatConversation",
   "layout/Combat.tsx#Combat",
-  "layout/CombatActions.tsx#ActionSelector",
   "layout/CombatResultScreen.tsx#CombatResultScreen",
   "layout/CombatTargetPreview.tsx#TargetingBattlefield",
   "layout/ConceptImage.tsx#ConceptImage",
@@ -134,7 +134,6 @@ const compilerExceptions = [
   "layout/PublicUserEdit.tsx#EditUserComponent",
   "layout/PvpRank.tsx#RankedLoadoutSelector",
   "layout/Report.tsx#ReportUser",
-  "layout/RichInput.tsx#RichInput",
   "layout/SearchSelect.tsx#SearchSelect",
   "layout/SeasonForm.tsx#SeasonForm",
   "layout/SeasonManager.tsx#SeasonManager",

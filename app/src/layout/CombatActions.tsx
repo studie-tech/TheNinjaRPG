@@ -107,7 +107,17 @@ interface ActionSelectorProps extends ActionSelectorSettingsProps {
 
 export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
   const { data: userData } = useUserDataSelector((u) => ({ role: u.role }));
-  const { items, counts, levels, renderItem, ...settings } = props;
+  // A ref callback read from `props` would make the compiler treat every prop as a ref.
+  const {
+    items,
+    counts,
+    levels,
+    renderItem,
+    setLastElement,
+    isLoading,
+    emptyText,
+    ...settings
+  } = props;
   const { combatMode, selectedId, currentRound, userActionPoints, onClick } = props;
   const filtered = items?.filter(
     (i) => !i.hidden || (userData && canChangeContent(userData.role)),
@@ -196,7 +206,7 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
             <div
               id={`tutorial-combat-action-${item.id}`}
               key={item.id}
-              ref={i === filtered.length - 1 ? props.setLastElement : null}
+              ref={i === filtered.length - 1 ? setLastElement : null}
               className="relative flex items-start justify-center"
               onContextMenu={
                 props.onAssignHotkey
@@ -245,9 +255,8 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
       {items?.length === 0 && (
         // Doubles as the pagination sentinel: a batch that was filtered down to nothing
         // can still have more batches behind it.
-        <div ref={props.setLastElement} className="flex flex-row text-base">
-          {!props.isLoading &&
-            (props.emptyText ? props.emptyText : "Nothing Available")}
+        <div ref={setLastElement} className="flex flex-row text-base">
+          {!isLoading && (emptyText ? emptyText : "Nothing Available")}
         </div>
       )}
     </>

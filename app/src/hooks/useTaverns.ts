@@ -3,15 +3,15 @@
 import { useMemo } from "react";
 import { api } from "@/app/_trpc/client";
 import { useSectorVillage } from "@/hooks/useSectorVillage";
-import type { UserWithRelations } from "@/routers/profile";
 import { findVillageUserRelationship } from "@/utils/alliance";
+import type { UserWithoutPosition } from "@/utils/UserContext";
 
 /**
  * Taverns the player may open: Global (when enabled, always for staff), their own
  * village or Syndicate tavern, an allied village's tavern while in its sector, and
  * for staff every village tavern.
  */
-export const useTaverns = (userData: UserWithRelations | null | undefined) => {
+export const useTaverns = (userData: UserWithoutPosition | null | undefined) => {
   // Only staff list every village tavern.
   const { data: villages } = api.village.getAll.useQuery(undefined, {
     enabled: !!userData && userData.role !== "USER",

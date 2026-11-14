@@ -9,7 +9,12 @@ import { useConversation } from "@/layout/Conversation";
 import { ConversationComments } from "@/layout/ConversationComments";
 import Loader from "@/layout/Loader";
 import RichInput from "@/layout/RichInput";
-import { type ChatStartUser, chatDraftsAtom } from "@/libs/chatPanel";
+import {
+  type ChatStartUser,
+  chatDraftsAtom,
+  clearSentChatDraft,
+  saveChatDraft,
+} from "@/libs/chatPanel";
 import { stripBlockquotes } from "@/utils/sanitize";
 import { stripHtmlPreview } from "@/utils/string";
 
@@ -61,11 +66,7 @@ export function ChatConversation({
     isInChatPanel: true,
     onCommentPosted: (submittedText) => {
       // A send can finish after closing chat saved its pending text as a draft.
-      setDrafts((current) => {
-        if (current[draftKey] !== submittedText) return current;
-        const { [draftKey]: _submitted, ...rest } = current;
-        return rest;
-      });
+      setDrafts((current) => clearSentChatDraft(current, draftKey, submittedText));
     },
   });
 
@@ -111,10 +112,7 @@ export function ChatConversation({
     if (savedDraft.current) setValue("comment", savedDraft.current);
     return () => {
       const text = getValues("comment") ?? "";
-      setDrafts((current) => {
-        const { [draftKey]: _previous, ...rest } = current;
-        return text.trim() ? { ...rest, [draftKey]: text } : rest;
-      });
+      setDrafts((current) => saveChatDraft(current, draftKey, text));
     };
   }, [draftKey, getValues, setValue, setDrafts]);
 

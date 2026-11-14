@@ -51,6 +51,8 @@ import "./RichInput.css";
 export const RichInput = (props: RichInputProps) => {
   const { field } = useController({ name: props.id, control: props.control });
   const value = (field.value as string) || "";
+  // The field object changes with every keystroke; its callbacks do not.
+  const { onChange: onFieldChange, onBlur: onFieldBlur } = field;
   const [sourceMode, setSourceMode] = useState(() => needsHtmlSource(value));
   const [toolbarOpen, setToolbarOpen] = useState(false);
   const [ready, setReady] = useState(false);
@@ -113,7 +115,7 @@ export const RichInput = (props: RichInputProps) => {
         ? editor.getSemanticHTML().replace(/((?:&nbsp;)*)&nbsp;/g, "$1 ")
         : "";
     lastValueRef.current = html;
-    field.onChange(html);
+    onFieldChange(html);
   });
   const onSelectionChange = useEffectEvent(() => {
     // Quill blanks the style select for plain text or a blurred editor; show Paragraph.
@@ -146,7 +148,7 @@ export const RichInput = (props: RichInputProps) => {
     const focusedBeforeLoad = document.activeElement;
     setReady(false);
     setLoadError(false);
-    void import("quill")
+    void loadQuill()
       .then(({ default: Editor, Delta }) => {
         if (disposed) return;
         const container = document.createElement("div");
@@ -211,7 +213,7 @@ export const RichInput = (props: RichInputProps) => {
         editor.on("text-change", onEditorChange);
         // editor-change also reports silent selection updates used by mentions.
         editor.on("editor-change", onSelectionChange);
-        editor.root.addEventListener("blur", field.onBlur);
+        editor.root.addEventListener("blur", onFieldBlur);
         setReady(true);
         // Lazy loading must not steal focus from a control chosen in the meantime.
         if (
@@ -230,7 +232,7 @@ export const RichInput = (props: RichInputProps) => {
       const editor = quillRef.current;
       editor?.off("text-change", onEditorChange);
       editor?.off("editor-change", onSelectionChange);
-      editor?.root.removeEventListener("blur", field.onBlur);
+      editor?.root.removeEventListener("blur", onFieldBlur);
       quillRef.current = null;
       host.replaceChildren();
     };
@@ -273,7 +275,7 @@ export const RichInput = (props: RichInputProps) => {
       editor.insertText(mention.start, text, "user");
       editor.setSelection(mention.start + text.length, 0, "silent");
     } else {
-      field.onChange(value.slice(0, mention.start) + text + value.slice(mention.end));
+      onFieldChange(value.slice(0, mention.start) + text + value.slice(mention.end));
       textareaRef.current?.focus();
     }
     setMention(null);
@@ -330,7 +332,7 @@ export const RichInput = (props: RichInputProps) => {
       : null;
     const visualRange = source ? null : editor?.getSelection(true);
     const focusedBeforeUpload = document.activeElement;
-    try {
+    const uploadAndInsert = async () => {
       const dimensions = await getImageDimensions(file);
       const result = (await startUpload([file]))?.[0]?.serverData;
       if (!result?.fileUrl || result.error)
@@ -353,7 +355,7 @@ export const RichInput = (props: RichInputProps) => {
             html +
             selection.value.slice(selection.end);
           lastValueRef.current = nextValue;
-          field.onChange(nextValue);
+          onFieldChange(nextValue);
           // Restore the caret after React enables the textarea, without taking
           // focus from another control chosen while the upload was pending.
           requestAnimationFrame(() => {
@@ -377,19 +379,22 @@ export const RichInput = (props: RichInputProps) => {
           });
         }
       }
-    } catch (error) {
-      showMutationToast({
-        success: false,
-        message: error instanceof Error ? error.message : "Image upload failed.",
+    };
+    await uploadAndInsert()
+      .catch((error: unknown) => {
+        showMutationToast({
+          success: false,
+          message: error instanceof Error ? error.message : "Image upload failed.",
+        });
+      })
+      .finally(() => {
+        uploadInFlightRef.current = false;
+        setUploading(false);
+        if (uploadPendingRef.current) {
+          uploadPendingRef.current = false;
+          props.onUploadPendingChange?.(false);
+        }
       });
-    } finally {
-      uploadInFlightRef.current = false;
-      setUploading(false);
-      if (uploadPendingRef.current) {
-        uploadPendingRef.current = false;
-        props.onUploadPendingChange?.(false);
-      }
-    }
   };
 
   useEffect(
@@ -544,7 +549,10 @@ export const RichInput = (props: RichInputProps) => {
                 const range = editor.getSelection(true);
                 editor.insertText(range.index, emoji, "user");
                 editor.setSelection(range.index + emoji.length, 0, "silent");
-              } else field.onChange(value + emoji);
+              } else {
+                // Read the draft at selection time so typing does not rebuild the toolbar.
+                onFieldChange(lastValueRef.current + emoji);
+              }
               setEmojiOpen(false);
             }}
           />
@@ -574,7 +582,7 @@ export const RichInput = (props: RichInputProps) => {
       name={field.name}
       aria-label={props.label || "Message"}
       value={value}
-      onBlur={field.onBlur}
+      onBlur={onFieldBlur}
       disabled={blocked}
       autoFocus={props.autoFocus ?? true}
       placeholder={props.placeholder}
@@ -601,7 +609,7 @@ export const RichInput = (props: RichInputProps) => {
       onChange={(event) => {
         // The author's own source edits are not outside changes to the draft.
         lastValueRef.current = event.target.value;
-        field.onChange(event);
+        onFieldChange(event);
         checkMention(event.target.value, event.target.selectionStart);
       }}
       onKeyDown={(event) => {
@@ -918,6 +926,9 @@ export const RichInput = (props: RichInputProps) => {
     </div>
   );
 };
+
+/** Quill touches the DOM on import, so it loads only once a visual editor mounts. */
+const loadQuill = () => import("quill");
 
 /** Touch screens without a precise pointer use soft keyboards. */
 const isCoarsePointer = () => window.matchMedia?.("(pointer: coarse)").matches ?? false;

@@ -398,6 +398,9 @@ export const useUserDataSelector = <T,>(
 export const selectUserWithoutPosition = (user: NonNullable<UserWithRelations>) =>
   withoutUserPosition(user);
 
+/** A cached profile without its movement coordinates and their commit timestamp. */
+export type UserWithoutPosition = ReturnType<typeof selectUserWithoutPosition>;
+
 /** Read current profile data inside scene callbacks without subscribing React to position changes. */
 export const useUserDataRef = (
   onChange?: (user: UserWithRelations, previous: UserWithRelations) => void,

@@ -13,10 +13,10 @@ import {
   isTavernMuted,
 } from "@/libs/chatPanel";
 import { subscribeConversation } from "@/libs/conversationEvents";
-import type { UserWithRelations } from "@/routers/profile";
+import type { UserWithoutPosition } from "@/utils/UserContext";
 
 /** Conversation ids of the taverns the player can open, with their names. */
-export const useTavernIds = (userData: UserWithRelations | null | undefined) => {
+export const useTavernIds = (userData: UserWithoutPosition | null | undefined) => {
   const { availTaverns, isLoading } = useTaverns(userData);
   const canRead =
     !!userData &&
@@ -37,7 +37,7 @@ export const useTavernIds = (userData: UserWithRelations | null | undefined) => 
  */
 export const useTavernActivity = (
   pusher: Pusher | undefined,
-  userData: UserWithRelations | null | undefined,
+  userData: UserWithoutPosition | null | undefined,
 ) => {
   const store = useStore();
   const { mutateAsync: fetchComment } =

@@ -64,7 +64,7 @@ import {
 import { cn } from "@/libs/shadui";
 import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
-import { useUserData, useUserDataSelector } from "@/utils/UserContext";
+import { selectUserWithoutPosition, useUserDataSelector } from "@/utils/UserContext";
 
 /**
  * The AI SDK (`ai`, `@ai-sdk/react` and its swr dependency) loads only when the Ask
@@ -268,7 +268,7 @@ function TavernPane({
   onMessageUser: (user: ChatStartUser) => void;
   onClose: () => void;
 }) {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector(selectUserWithoutPosition);
   const { availTaverns, localTavern, canAccessGlobal, isLoading } =
     useTaverns(userData);
   const tavernUnread = useTavernUnread();
@@ -710,7 +710,7 @@ function ConversationMenu({ convo, meId }: { convo: InboxConversation; meId: str
 
 /** Phone start screen: taverns, then private conversations. */
 function PhoneChatList({ onOpen }: { onOpen: (chat: PhoneChat) => void }) {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector(selectUserWithoutPosition);
   const setPanel = useSetAtom(chatPanelAtom);
   const mutes = useChatMutes();
   const { availTaverns, isLoading } = useTaverns(userData);
@@ -828,7 +828,7 @@ function PhoneChatList({ onOpen }: { onOpen: (chat: PhoneChat) => void }) {
  * Muted taverns keep only mentions and quotes.
  */
 function useTavernUnread() {
-  const { data: userData } = useUserData();
+  const { data: userData } = useUserDataSelector(selectUserWithoutPosition);
   const taverns = useTavernIds(userData);
   const mentions = useAtomValue(chatMentionsAtom);
   const tavernActivity = useAtomValue(chatTavernActivityAtom);
