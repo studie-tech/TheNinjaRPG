@@ -400,7 +400,12 @@ export const planHomeStorageMove = <T extends HomeStorageRow>({
       } else {
         const bucket = getInventoryBucket(ui.item);
         if ((used.get(bucket) ?? 0) >= getInventoryBucketCapacity(bucket, user)) {
-          return `does not fit: ${getInventoryBucketFullMessage(bucket, countHeldInventorySlots(rows, bucket))}`;
+          // Accepted withdrawals already occupy bag slots in this batch's projected inventory.
+          const held = countHeldInventorySlots(
+            [...rows, ...moving.map((row) => ({ ...row, storedAtHome: false }))],
+            bucket,
+          );
+          return `does not fit: ${getInventoryBucketFullMessage(bucket, held)}`;
         }
       }
       return null;

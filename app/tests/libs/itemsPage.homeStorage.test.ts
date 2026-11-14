@@ -148,6 +148,30 @@ describe("planHomeStorageMove", () => {
     ]);
   });
 
+  it.each([
+    [{ isInAuction: true }, "an auction listing or trade offer"],
+    [{ craftingFinishedAt: new Date(Date.now() + 3_600_000) }, "an unfinished craft"],
+  ] as const)("counts a held stack withdrawn earlier in the batch (%j)", (held, by) => {
+    const capacity = getInventoryBucketCapacity("normal", user);
+    const rows = [
+      ...Array.from({ length: capacity - 1 }, (_, index) => row(`carried-${index}`)),
+      row("held", { storedAtHome: true, ...held }),
+      row("stored", { storedAtHome: true }),
+    ];
+    const plan = planHomeStorageMove({
+      rows,
+      userItemIds: ["held", "stored"],
+      toHome: false,
+      user,
+      homeStorage: 12,
+    });
+    expect(plan.moving.map((ui) => ui.id)).toEqual(["held"]);
+    expect(plan.refused[0]?.reason).toBe(
+      `does not fit: Inventory is full (1 slot is held by ${by})`,
+    );
+    expect(rows.find((ui) => ui.id === "held")?.storedAtHome).toBe(true);
+  });
+
   it("refuses stacks that cannot move and names why", () => {
     const rows = [
       row("worn", { equipped: "HAND_1" }),
