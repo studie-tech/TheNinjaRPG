@@ -24,17 +24,13 @@ export const createInstanceCache = <Client extends object, T>(
   };
   invalidators.add(invalidate);
 
-  /** Read, caching the result unless an invalidation or a newer read superseded it. */
+  /** Read, caching the result unless an invalidation superseded it. */
   const loadSnapshot = async (client: Client) => {
     const startedGeneration = generation;
     // A slow read cannot claim freshness newer than its snapshot.
     const startedAt = Date.now();
     const value = await load(client);
-    const cached = snapshots.get(client);
-    if (
-      startedGeneration === generation &&
-      (!cached || cached.generation !== generation || cached.at <= startedAt)
-    )
+    if (startedGeneration === generation)
       snapshots.set(client, { value, at: startedAt, generation: startedGeneration });
     return value;
   };

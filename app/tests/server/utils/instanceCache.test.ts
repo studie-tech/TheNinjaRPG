@@ -3,6 +3,7 @@ import {
   createInstanceCache,
   invalidateInstanceCaches,
 } from "@/server/utils/instanceCache";
+import { deferred } from "../../setup/deferred";
 
 const start = new Date("2026-11-14T12:00:00Z");
 const TTL_MS = 60 * 1000;
@@ -14,14 +15,6 @@ const countingCache = (values: number[][]) => {
     ...(values[reads++] ?? []),
   ]);
   return { cache, reads: () => reads };
-};
-
-const deferred = () => {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
 };
 
 describe("createInstanceCache", () => {
