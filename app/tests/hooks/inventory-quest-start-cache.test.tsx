@@ -247,6 +247,31 @@ it.each([false, true])(
   },
 );
 
+it("refreshes discovery when a confirmed start crosses the daily quest period", async () => {
+  setSystemTime(new Date("2026-11-14T23:59:59Z"));
+  try {
+    const t = setup(),
+      hook = t.view.result.current.starts;
+    const profileKey = getQueryKey(api.profile.getUser, undefined, "query");
+    t.client.setQueryData(
+      profileKey,
+      { userData: { completedQuests: [], userQuests: [] } },
+      { updatedAt: Date.now() - 1000 },
+    );
+    const snapshot = hook.prepareQuestStartUpdate();
+    setSystemTime(new Date("2026-11-15T00:00:01Z"));
+    const opened = [{ ...t.candidate, id: "new-day-quest" }];
+    t.reads.slice(5).forEach((read) => read.mockResolvedValueOnce(opened as never));
+    await act(async () => hook.updateQuestStart(t.started, snapshot, true));
+    for (const key of t.keys.slice(5))
+      expect(t.client.getQueryData(key)).toEqual(opened);
+    t.reads.slice(5).forEach((read) => expect(read).toHaveBeenCalledTimes(1));
+    t.reads.slice(0, 5).forEach((read) => expect(read).not.toHaveBeenCalled());
+  } finally {
+    setSystemTime();
+  }
+});
+
 it("refetches listings read before the profile last changed", async () => {
   const t = setup(),
     hook = t.view.result.current.starts;

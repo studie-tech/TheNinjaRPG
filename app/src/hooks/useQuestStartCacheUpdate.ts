@@ -17,6 +17,7 @@ export const useQuestStartCacheUpdate = () => {
   const inventory = useInventoryCacheUpdate();
   /** Capture both inventory views, every loaded discovery listing and the completed quests. */
   const prepareQuestStartUpdate = () => ({
+    periodStartAt: periodStart("daily", new Date()).getTime(),
     inventory: inventory.prepareInventoryUpdate(),
     discovery: captureDiscovery(client),
     completedQuests: readProfile(client)?.completedQuests ?? [],
@@ -35,6 +36,9 @@ export const useQuestStartCacheUpdate = () => {
   ) => {
     const confirmed = result?.success && profileApplied ? result : undefined;
     const user = confirmed ? readProfile(client) : undefined;
+    // A new quest period can open candidates absent from the captured listings.
+    const isCurrentPeriod =
+      snapshot.periodStartAt === periodStart("daily", new Date()).getTime();
     const reopened = user
       ? getReopenedQuestIds(snapshot.completedQuests, user.completedQuests)
       : [];
@@ -51,7 +55,7 @@ export const useQuestStartCacheUpdate = () => {
           .findAll({ queryKey: key })
           .map(({ queryKey, queryHash }) => {
             const captured = snapshot.discovery.get(queryHash);
-            const settled = captured?.current ? user : undefined;
+            const settled = captured?.current && isCurrentPeriod ? user : undefined;
             const options = { revision: captured?.revision };
             return upcoming
               ? updateQueryCache<RouterOutputs["quests"]["upcomingQuests"]>(
