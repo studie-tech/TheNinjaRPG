@@ -21,7 +21,7 @@ export const seedLpcAssets = async (client: DrizzleClient) => {
     await Promise.all(
       batch.map((asset) => retryOnDeadlock(() => insertLpcSeedAsset(client, asset))),
     );
-  invalidateLpcCatalog();
+  await invalidateLpcCatalog();
   return {
     designs: assets.length,
     inserted: assets.length - existing.length,

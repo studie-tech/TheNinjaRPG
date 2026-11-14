@@ -1047,11 +1047,7 @@ export const combatRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       // Get information
       const [{ user, requiresProgressionRefresh }, selectedAI] = await Promise.all([
-        fetchUpdatedUser({
-          client: ctx.drizzle,
-          userId: ctx.userId,
-          includeNotifications: false,
-        }),
+        fetchUpdatedUser({ client: ctx.drizzle, userId: ctx.userId }),
         findUserDataForStartArenaBattle(ctx.drizzle, input),
       ]);
       // Check that user was found

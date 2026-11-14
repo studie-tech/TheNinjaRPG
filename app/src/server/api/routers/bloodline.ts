@@ -113,6 +113,7 @@ import {
 import { setEmptyStringsToNulls } from "@/server/utils/emptyStrings";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
+import { invalidateBloodlineCollectionCatalogue } from "@/server/utils/questCollections";
 import { fetchQueuedJutsuIds } from "@/server/utils/userQueue";
 import { getRandomElement } from "@/utils/array";
 import { calculateContentDiff } from "@/utils/diff";
@@ -588,11 +589,16 @@ export const bloodlineRouter = createTRPCRouter({
       }
       // Mutate
       const bloodrightRefund = bloodrightSwapRefund(null);
-      await Promise.all([
-        deleteBloodlineForDelete(ctx.drizzle, input),
+      // Shared invalidation must finish even when a sibling write fails.
+      const writes = await Promise.allSettled([
+        deleteBloodlineForDelete(ctx.drizzle, input).then(
+          invalidateBloodlineCollectionCatalogue,
+        ),
         updateUserDataForDelete(ctx.drizzle, bloodrightRefund, input),
         insertActionLogForDelete(ctx.drizzle, ctx, entry),
       ]);
+      const failed = writes.find((result) => result.status === "rejected");
+      if (failed) throw failed.reason;
       await outdateProposalsFor(
         ctx.drizzle,
         "BLOODLINE",
@@ -641,6 +647,7 @@ export const bloodlineRouter = createTRPCRouter({
       });
       // Update database
       await updateBloodlineForUpdate(ctx.drizzle, newData, input);
+      await invalidateBloodlineCollectionCatalogue();
       await Promise.all([
         insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
         outdateProposalsFor(

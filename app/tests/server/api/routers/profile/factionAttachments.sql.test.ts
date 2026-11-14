@@ -47,8 +47,13 @@ const raid = (
 });
 
 const fetchProfile = async (userId: string) =>
-  (await fetchUpdatedUser({ client: await getTestDatabase(), userId }))
-    .user as UserWithRelations;
+  (
+    await fetchUpdatedUser({
+      client: await getTestDatabase(),
+      userId,
+      includeNotifications: true,
+    })
+  ).user as UserWithRelations;
 
 describeWithDatabase("profile faction attachments", () => {
   beforeEach(async () => {

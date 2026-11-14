@@ -109,6 +109,7 @@ import {
   fetchViewerRole,
   findOwnedUserPet,
   findUserById,
+  invalidateAchievementCatalogue,
 } from "@/queries/profile";
 import {
   deleteOverworldAiPlacementQuestForDelete,
@@ -973,6 +974,7 @@ export const questsRouter = createTRPCRouter({
         : await updateQuestForUpdate(ctx.drizzle, input, updatedAt, entry);
       if (definitionWrite.rowsAffected === 0)
         return errorResponse("Quest changed while saving. Refresh and try again.");
+      await invalidateAchievementCatalogue();
       await Promise.all([
         // Village Missions retire personal attempts without granting completions
         // or reclassifying completed history as collective progress.
@@ -1080,6 +1082,7 @@ export const questsRouter = createTRPCRouter({
       if (!preparedBindings.success) return errorResponse(preparedBindings.message);
       questData.content.objectives = preparedBindings.objectives;
       await insertQuestForClone(ctx.drizzle, questData);
+      await invalidateAchievementCatalogue();
       await notifyMapLocationsChanged();
 
       return { success: true, message: questData.id };
@@ -1102,8 +1105,9 @@ export const questsRouter = createTRPCRouter({
         return errorResponse("Cannot delete tutorial quest");
       // Permission check
       if (canChangeContent(user.role)) {
-        await Promise.all([
-          deleteQuestForDelete(ctx.drizzle, input),
+        // Shared invalidation must finish even when independent cleanup fails.
+        const writes = await Promise.allSettled([
+          deleteQuestForDelete(ctx.drizzle, input).then(invalidateAchievementCatalogue),
           deleteQuestHistoryForDelete(ctx.drizzle, input),
           deleteRaidParticipationForDelete(ctx.drizzle, input),
           deleteRaidDamageThresholdForDelete(ctx.drizzle, input),
@@ -1112,6 +1116,8 @@ export const questsRouter = createTRPCRouter({
           deleteUserQuestAttemptForDelete(ctx.drizzle, input),
           insertActionLogForDelete(ctx.drizzle, ctx, entry),
         ]);
+        const failed = writes.find((result) => result.status === "rejected");
+        if (failed) throw failed.reason;
         await outdateProposalsFor(
           ctx.drizzle,
           "QUEST",

@@ -680,9 +680,11 @@ export const shrineRouter = createTRPCRouter({
         isHome,
         existingUserBattles,
       ] = await Promise.all([
+        // The response extends the village's loaded shrine lobbies.
         fetchUpdatedUser({
           client: ctx.drizzle,
           userId: ctx.userId,
+          includeNotifications: true,
         }),
         findSectorWithVillage(ctx.drizzle, input.sectorNumber),
         fetchActiveWars(ctx.drizzle),
@@ -982,10 +984,11 @@ export const shrineRouter = createTRPCRouter({
     .input(z.object({ shrineBattleId: z.string() }))
     .output(userDeltaResponseSchema)
     .mutation(async ({ ctx, input }) => {
-      // Fetch user data
+      // The response returns the village's loaded shrine lobbies.
       const { user, requiresUserRefresh } = await fetchUpdatedUser({
         client: ctx.drizzle,
         userId: ctx.userId,
+        includeNotifications: true,
       });
 
       // Guards

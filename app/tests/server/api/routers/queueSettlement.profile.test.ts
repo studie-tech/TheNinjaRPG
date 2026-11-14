@@ -22,7 +22,11 @@ import { jutsuRouter } from "@/server/api/routers/jutsu";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
 import { trainRouter } from "@/server/api/routers/train";
-import { EncountersAtLocation, QuestTracker } from "@/validators/objectives";
+import {
+  EncountersAtLocation,
+  QuestTracker,
+  TrainSpecificJutsu,
+} from "@/validators/objectives";
 import { ObjectiveReward } from "@/validators/rewards";
 import {
   insertDefaultAiProfile,
@@ -148,6 +152,42 @@ describeWithDatabase("Queue settlement response reconciliation", () => {
     expect(first.requiresUserRefresh).toBe(true);
     expect(first.requiresProgressionRefresh).toBe(true);
     expect(first.craftingItemsChanged).toBe(false);
+  });
+
+  it("includes newly learned queued jutsu in the first achievement snapshot", async () => {
+    const db = await getTestDatabase();
+    await db.update(jutsu).set({ hidden: false }).where(eq(jutsu.id, "hidden-drop"));
+    await insertQuests([
+      {
+        id: "learn-queued-jutsu",
+        questType: "achievement",
+        hidden: false,
+        content: {
+          objectives: [
+            TrainSpecificJutsu.parse({
+              id: "learn",
+              task: "train_specific_jutsu",
+              trainJutsuIds: ["hidden-drop"],
+              value: 1,
+            }),
+          ],
+        },
+      },
+    ]);
+
+    const result = await fetchUpdatedUser({ client: db, userId });
+
+    expect(result.startedQueuedJobs).toBe(1);
+    expect(
+      await db.query.userJutsu.findFirst({ where: eq(userJutsu.userId, userId) }),
+    ).toMatchObject({ jutsuId: "hidden-drop" });
+    expect(
+      result.user?.questData?.find((entry) => entry.id === "learn-queued-jutsu")?.goals,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "learn", value: 1, done: true }),
+      ]),
+    );
   });
 
   it.each([false, true])(

@@ -98,11 +98,9 @@ describe("scene character catalog loading", () => {
     const { result } = renderHook(() => useLpcCatalogInvalidation());
     await result.current();
     expect(request.discoveryInvalidation).toHaveBeenCalledTimes(1);
-    // Other server instances may still cache the previous artwork.
-    expect(request.freshQuery).toHaveBeenCalledWith(
-      { fresh: true },
-      { context: { skipBatch: true } },
-    );
+    expect(request.freshQuery).toHaveBeenCalledWith(undefined, {
+      context: { skipBatch: true },
+    });
     expect(request.setData).toHaveBeenCalledWith(undefined, buildLpcCatalog(lpcAssets));
     expect(request.sceneInvalidation).not.toHaveBeenCalled();
   });

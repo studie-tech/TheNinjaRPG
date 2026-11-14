@@ -314,6 +314,7 @@ import { consumeUserAnnouncements, fetchPublicUsers } from "@/server/utils/profi
 import { buildDerivedUserRegenUpdate } from "@/server/utils/profileRegen";
 import { insertNextQuest } from "@/server/utils/questAssignment";
 import {
+  fetchAchievementObjectiveJutsus,
   fetchBloodlineCollectionCatalogue,
   hydrateQuestCollections,
 } from "@/server/utils/questCollections";
@@ -840,6 +841,7 @@ export const profileRouter = createTRPCRouter({
           userIp: ctx.userIp,
           hideInformation: true,
           allowQuestPartySyncFallback: true,
+          includeNotifications: true,
         });
       // Query
       const [
@@ -2595,7 +2597,10 @@ const fetchUpdatedUserOnce = async (
     hideInformation?: boolean;
     /** Display reads may retain a loaded team snapshot; progression callers require synchronization. */
     allowQuestPartySyncFallback?: boolean;
-    /** Server actions can omit display-only alerts while retaining all readiness settlement. */
+    /**
+     * Load the display-only alerts (unvoted polls, the village's shrine lobbies and raids)
+     * that the profile shows. Readiness settlement never depends on them.
+     */
     includeNotifications?: boolean;
     /** Callers must atomically consume pending announcements and return them before projecting. */
     includeAnnouncementsInResponse?: boolean;
@@ -2614,7 +2619,7 @@ const fetchUpdatedUserOnce = async (
     userId,
     userIp,
     hideInformation = false,
-    includeNotifications = true,
+    includeNotifications = false,
   } = props;
   let { forceRegen } = props;
   let hasQuestPartySyncFailure = false;
@@ -2632,6 +2637,7 @@ const fetchUpdatedUserOnce = async (
   const queryUpdatedUser = () => findUserDataForQueryUpdatedUser(client, userId);
 
   // Ensure we can fetch the user
+  const achievementsRead = fetchAchievementCatalogue(client);
   const [
     achievements,
     settings,
@@ -2644,8 +2650,9 @@ const fetchUpdatedUserOnce = async (
     questBootstrap,
     bloodlineCollectionCatalogue,
     bloodlineCollectionRolls,
+    achievementObjectiveJutsus,
   ] = await Promise.all([
-    fetchAchievementCatalogue(client),
+    achievementsRead,
     fetchAllGameSettings(client),
     queryUpdatedUser(),
     includeNotifications ? fetchHasUnvotedPolls(client, userId, now) : [],
@@ -2659,6 +2666,10 @@ const fetchUpdatedUserOnce = async (
     // Collection ownership is independent of profile settlement and needed by active achievements.
     fetchBloodlineCollectionCatalogue(client),
     fetchBloodlineCollectionRolls(client, userId),
+    // Achievement jutsu targets come from the cached catalogue, so ownership needs no later wave.
+    achievementsRead.then((catalogue) =>
+      fetchAchievementObjectiveJutsus(client, userId, catalogue),
+    ),
   ]);
   const publishedAchievementIds = publishedAchievementsOf(achievements).map(
     (entry) => entry.id,
@@ -2687,6 +2698,12 @@ const fetchUpdatedUserOnce = async (
         requiresProgressionRefresh?: boolean;
       })
     | undefined = fetchedUser;
+
+  // Queued learning can create ownership after the opening snapshot was read.
+  const hasDueJutsuQueue = hasDueTimedJob(
+    user?.queue.filter((entry) => entry.kind === "JUTSU") ?? [],
+    now,
+  );
 
   // Start timed jobs (jutsu levels, crafts) whose turn has come, backdated to when it
   // came. The in-memory check keeps every other request free of extra queries. When a
@@ -2862,13 +2879,15 @@ const fetchUpdatedUserOnce = async (
     (user as NonNullable<UserWithRelations>).activeWars = allActiveWars.filter(
       (w) => (!mercenaryWarId || w.id === mercenaryWarId) && !!getWarSide(w, villageId),
     );
-    (user as NonNullable<UserWithRelations>).shrineBattles = activeShrineBattles.filter(
-      (b) => b.defenderEntityId === villageId || b.attackerEntityId === villageId,
-    );
+    if (includeNotifications)
+      (user as NonNullable<UserWithRelations>).shrineBattles =
+        activeShrineBattles.filter(
+          (b) => b.defenderEntityId === villageId || b.attackerEntityId === villageId,
+        );
   }
 
   // Filter and attach active raids
-  if (user) {
+  if (user && includeNotifications) {
     (user as NonNullable<UserWithRelations>).activeRaids = listVillageRaids(
       user,
       activeRaids,
@@ -3238,6 +3257,7 @@ const fetchUpdatedUserOnce = async (
     const trackerUser = await hydrateQuestCollections(client, user, false, {
       catalogue: bloodlineCollectionCatalogue,
       rolls: bloodlineCollectionRolls,
+      objectiveJutsus: hasDueJutsuQueue ? undefined : achievementObjectiveJutsus,
     });
     // Get the latest quest trackers
     const trackerResults = getNewTrackers(

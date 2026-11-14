@@ -20,6 +20,7 @@ import {
   listGameAssetForGetAllNames,
   listGameAssetForGetNameTags,
   listGameAssetForGetSceneAssets,
+  listLpcAssets,
   selectDistinctGameAssetTagForGetAllGameAssetContentTagNames,
   selectGameAssetForGetAll,
   selectGameAssetForGetAllFolders,
@@ -34,7 +35,7 @@ import {
   publicProcedure,
   serverError,
 } from "@/server/api/trpc";
-import { fetchLpcCatalog, invalidateLpcCatalog } from "@/server/utils/lpcCatalog";
+import { fetchLpcSceneCatalog, invalidateLpcCatalog } from "@/server/utils/lpcCatalog";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import { gameAssetValidator } from "@/validators/asset";
@@ -43,28 +44,16 @@ import { idSchema } from "@/validators/misc";
 
 /** Public asset discovery and authenticated staff mutations through asset query helpers. */
 export const gameAssetRouter = createTRPCRouter({
-  /**
-   * Publish referenceable artwork, including hidden designs still worn by existing characters.
-   * Design editors read it directly so a save on any instance shows at once.
-   */
+  /** Publish referenceable artwork, including hidden designs still worn by existing characters. */
   getLpcCatalog: publicProcedure
     .meta({
       mcp: { description: "Get LPC character designs, variants and attribution" },
     })
-    .query(
-      async ({ ctx }) => (await fetchLpcCatalog(ctx.drizzle, { fresh: true })).assets,
-    ),
-  /**
-   * Renderers share frame layouts and omit design-editor metadata from their network snapshot.
-   * Scenes read the instance cache; `fresh` reads past it after a staff save.
-   */
+    .query(({ ctx }) => listLpcAssets(ctx.drizzle)),
+  /** Renderers share frame layouts and omit design-editor metadata from their network snapshot. */
   getLpcSceneCatalog: publicProcedure
     .meta({ mcp: { description: "Get the compiled LPC scene artwork catalog" } })
-    .input(z.object({ fresh: z.boolean().optional() }).nullish())
-    .query(
-      async ({ ctx, input }) =>
-        (await fetchLpcCatalog(ctx.drizzle, { fresh: input?.fresh })).catalog,
-    ),
+    .query(({ ctx }) => fetchLpcSceneCatalog(ctx.drizzle)),
   /** Prepare immutable image files; only the separate asset save persists their design settings. */
   prepareLpcSheet: protectedProcedure
     .input(
@@ -254,13 +243,16 @@ export const gameAssetRouter = createTRPCRouter({
         ...input.data,
       });
       // Update database
-      await Promise.all([
+      const writes = await Promise.allSettled([
         updateGameAssetForUpdate(ctx.drizzle, input, entry).then(() => {
           // Saved artwork must replace the cache even if the independent log write fails.
-          if (entry.type === "LPC" || input.data.type === "LPC") invalidateLpcCatalog();
+          if (entry.type === "LPC" || input.data.type === "LPC")
+            return invalidateLpcCatalog();
         }),
         insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
       ]);
+      const failed = writes.find((result) => result.status === "rejected");
+      if (failed) throw failed.reason;
       await outdateProposalsFor(
         ctx.drizzle,
         "GAME_ASSET",
@@ -281,7 +273,7 @@ export const gameAssetRouter = createTRPCRouter({
       }
       const id = nanoid();
       await insertGameAssetForCreate(ctx.drizzle, id, ctx, input ?? undefined);
-      if (input?.type === "LPC") invalidateLpcCatalog();
+      if (input?.type === "LPC") await invalidateLpcCatalog();
       return { success: true, message: id };
     }),
   delete: protectedProcedure
@@ -327,8 +319,13 @@ export const gameAssetRouter = createTRPCRouter({
           return errorResponse(
             "This design is used by an item or variant. Reassign its appearances before deleting it.",
           );
-        invalidateLpcCatalog();
-        await insertActionLogForDelete(ctx.drizzle, ctx, entry);
+        // Finish shared invalidation before returning an independent log failure.
+        const writes = await Promise.allSettled([
+          invalidateLpcCatalog(),
+          insertActionLogForDelete(ctx.drizzle, ctx, entry),
+        ]);
+        const failed = writes.find((result) => result.status === "rejected");
+        if (failed) throw failed.reason;
       } else {
         await Promise.all([
           deleteGameAssetForDelete(ctx.drizzle, input),
