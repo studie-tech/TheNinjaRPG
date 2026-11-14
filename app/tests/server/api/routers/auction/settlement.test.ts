@@ -94,6 +94,8 @@ describeWithDatabase("auction settlement", () => {
       id: "auction",
       sellerId: "seller",
       userItemId: "escrow",
+      itemId: "lot",
+      quantity: 1,
       listingType: "AUCTION",
       startingPrice: 1,
       currentPrice: withBids ? 100 : 1,

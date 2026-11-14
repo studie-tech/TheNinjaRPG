@@ -4620,7 +4620,8 @@ export async function executeMergeStacksForItem(
     }
   }
 
-  const bucketResults = await Promise.all(
+  // Inventory refreshes must wait for every bucket, including when a sibling throws.
+  const settled = await Promise.allSettled(
     [...buckets.values()].map((bucket) =>
       executeMergeStacksForItemBucket(
         drizzle,
@@ -4633,6 +4634,11 @@ export async function executeMergeStacksForItem(
     ),
   );
 
+  const rejected = settled.find((result) => result.status === "rejected");
+  if (rejected) throw rejected.reason;
+  const bucketResults = settled.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : [],
+  );
   const failed = bucketResults.find((r) => !r.success);
   if (failed) {
     return failed;

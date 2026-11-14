@@ -144,6 +144,8 @@ it("shows only finished imbuements on an auction listing", () => {
           expiresAt: new Date(Date.now() + 60_000),
           bids: [],
           seller: { userId: "seller", username: "Seller", avatar: "/seller.webp" },
+          item: imbuedRow.item,
+          quantity: 1,
           userItem: imbuedRow,
         },
       }),

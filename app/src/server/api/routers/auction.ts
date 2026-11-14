@@ -69,6 +69,7 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient, DrizzleTransaction } from "@/server/db";
+import { mergeUserItemStacks, ownerOutOfBattle } from "@/server/utils/itemStacks";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { offsetPage } from "@/server/utils/pagination";
 import { deferPushToUsers } from "@/server/utils/push/defer";
@@ -376,6 +377,7 @@ export const auctionRouter = createTRPCRouter({
           auctionId,
           ctx,
           auctionUserItemId,
+          { itemId: userItemData.itemId, quantity: listingQuantity },
           listingType,
           targetUserId,
           startingPrice,
@@ -595,7 +597,12 @@ export const auctionRouter = createTRPCRouter({
               bidderGuard,
             }),
           );
-          await recordBidActivity(ctx.drizzle, bidLog, true);
+          await Promise.all([
+            recordBidActivity(ctx.drizzle, bidLog, true),
+            mergeDeliveredItems(ctx.drizzle, [
+              { ownerId: ctx.userId, itemId: auction.itemId },
+            ]),
+          ]);
           notifyAuctionSettlement(ctx.drizzle, settlement);
           return { success: true, message: "Buyout successful - auction completed" };
         }
@@ -651,6 +658,9 @@ export const auctionRouter = createTRPCRouter({
           }),
         );
         if (settlement) {
+          await mergeDeliveredItems(ctx.drizzle, [
+            { ownerId: ctx.userId, itemId: auction.itemId },
+          ]);
           notifyAuctionSettlement(ctx.drizzle, settlement);
           return { success: true, message: "Buyout successful - auction completed" };
         }
@@ -711,7 +721,12 @@ export const auctionRouter = createTRPCRouter({
         return errorResponse("Could not cancel listing");
       }
 
-      await insertActionLogForCancelAuction(ctx.drizzle, ctx, auctionId, auction);
+      await Promise.all([
+        insertActionLogForCancelAuction(ctx.drizzle, ctx, auctionId, auction),
+        mergeDeliveredItems(ctx.drizzle, [
+          { ownerId: ctx.userId, itemId: auction.itemId },
+        ]),
+      ]);
 
       return {
         success: true,
@@ -734,7 +749,14 @@ export const completeAuctionInternal = async (
         : drizzle.transaction((tx) => settleAuction(tx, auctionId)),
     );
     notifyAuctionSettlement(drizzle, settlement);
-    return settlement;
+    return {
+      ...settlement,
+      // Who received the listed item; the caller merges deliveries once per player.
+      delivery: {
+        ownerId: settlement.winningBid?.bidderId ?? auction.sellerId,
+        itemId: auction.itemId,
+      },
+    };
   } catch (error) {
     if (error instanceof Error && error.name === "AuctionSettlementConflict")
       return { ...errorResponse(error.message), winningBid: null };
@@ -939,6 +961,26 @@ const notifyAuctionSettlement = (
     settlement.participantIds,
     tradeUpdate(settlement.auctionId),
   );
+
+/**
+ * Join items that listings returned or delivered to the stacks their owners carry, one merge
+ * per owner so a player's deliveries never race each other's stack claims.
+ */
+export const mergeDeliveredItems = async (
+  drizzle: DrizzleClient,
+  deliveries: { ownerId: string; itemId: string | undefined }[],
+) => {
+  const byOwner = new Map<string, Set<string>>();
+  for (const { ownerId, itemId } of deliveries) {
+    if (!itemId) continue;
+    byOwner.set(ownerId, (byOwner.get(ownerId) ?? new Set()).add(itemId));
+  }
+  await Promise.all(
+    [...byOwner].map(([ownerId, itemIds]) =>
+      mergeUserItemStacks(drizzle, ownerId, itemIds, false, ownerOutOfBattle()),
+    ),
+  );
+};
 
 const throwAuctionSettlementConflict = (message: string): never => {
   throw Object.assign(new Error(message), { name: "AuctionSettlementConflict" });

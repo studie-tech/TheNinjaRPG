@@ -471,6 +471,7 @@ function OfferCard({
   const selected = available.find((row) => row.id === suppliedId);
   const isOwner = offer.ownerId === user?.userId;
   const offered = offer.offeredUserItem;
+  const offeredName = (offer.offeredItem ?? offered?.item)?.name ?? "Unavailable item";
   const offeredItem = offered && userItemDisplay(offered);
   return (
     <Card>
@@ -504,7 +505,7 @@ function OfferCard({
               Payment:{" "}
               {offer.offerType === "REQUEST"
                 ? `${offer.ryo.toLocaleString()} ryo (total)`
-                : `${offer.offeredQuantity?.toLocaleString()} × ${offered?.item.name ?? "Unavailable item"}`}
+                : `${offer.offeredQuantity?.toLocaleString()} × ${offeredName}`}
             </p>
           </div>
         )}
@@ -561,7 +562,7 @@ function OfferCard({
                     {offer.requestedItem?.name}. You receive{" "}
                     {offer.offerType === "REQUEST"
                       ? `${offer.ryo.toLocaleString()} ryo in your bank`
-                      : `${offer.offeredQuantity} × ${offered?.item.name}`}
+                      : `${offer.offeredQuantity} × ${offeredName}`}
                     .
                   </DialogDescription>
                 </DialogHeader>

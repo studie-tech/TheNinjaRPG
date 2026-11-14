@@ -34,6 +34,7 @@ import { fetchItem } from "@/queries/item";
 import { findUserById } from "@/queries/profile";
 import { errorResponse, protectedProcedure } from "@/server/api/trpc";
 import type { DrizzleClient, DrizzleTransaction } from "@/server/db";
+import { mergeUserItemStacks, ownerOutOfBattle } from "@/server/utils/itemStacks";
 import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { deferPushToUsers } from "@/server/utils/push/defer";
 import { tradeUpdate } from "@/server/utils/push/messages";
@@ -135,6 +136,7 @@ export const auctionOfferProcedures = {
           ctx,
           input,
           offeredUserItemId,
+          offered?.itemId ?? null,
         );
         await logOffer(tx, ctx.userId, id, "CREATE", input);
         return {
@@ -229,8 +231,27 @@ export const auctionOfferProcedures = {
           }),
         };
       });
-      if (result.success)
+      if (result.success) {
         deferPushToUsers(ctx.drizzle, [offer.ownerId], tradeUpdate(offer.id));
+        // Each side's delivery joins the stack that player already carries.
+        await Promise.all([
+          mergeUserItemStacks(
+            ctx.drizzle,
+            offer.ownerId,
+            [offer.requestedItemId],
+            false,
+            ownerOutOfBattle(),
+          ),
+          offer.offeredUserItem &&
+            mergeUserItemStacks(
+              ctx.drizzle,
+              ctx.userId,
+              [offer.offeredUserItem.itemId],
+              false,
+              ownerOutOfBattle(),
+            ),
+        ]);
+      }
       return result;
     }),
 
@@ -244,7 +265,7 @@ export const auctionOfferProcedures = {
         ctx,
       );
       if (offer?.status !== "ACTIVE") return errorResponse("Offer is no longer active");
-      return runOfferMutation(ctx.drizzle, async (tx) => {
+      const result = await runOfferMutation(ctx.drizzle, async (tx) => {
         const claim = await updateAuctionOfferForCancelAuctionOffer(tx, offer, ctx);
         requireOfferWrite(
           claim.rowsAffected,
@@ -271,6 +292,16 @@ export const auctionOfferProcedures = {
           }),
         };
       });
+      // The released item joins the stack its owner already carries.
+      if (result.success && offer.offeredUserItem)
+        await mergeUserItemStacks(
+          ctx.drizzle,
+          ctx.userId,
+          [offer.offeredUserItem.itemId],
+          false,
+          ownerOutOfBattle(),
+        );
+      return result;
     }),
 };
 

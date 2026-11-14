@@ -95,6 +95,7 @@ export const listAuctionOfferForGetAuctionOffers = (
     with: {
       owner: { columns: { userId: true, username: true } },
       requestedItem: true,
+      offeredItem: true,
       offeredUserItem: {
         with: { item: true, imbuements: { with: { item: true } } },
       },
@@ -136,6 +137,7 @@ export const insertAuctionOfferForCreateAuctionOffer = (
         offeredQuantity: number;
       },
   offeredUserItemId: null | string,
+  offeredItemId: null | string,
 ) =>
   client.insert(auctionOffer).values({
     id,
@@ -144,6 +146,7 @@ export const insertAuctionOfferForCreateAuctionOffer = (
     requestedItemId: input.requestedItemId,
     requestedQuantity: input.requestedQuantity,
     offeredUserItemId,
+    offeredItemId,
     offeredQuantity: input.offerType === "TRADE" ? input.offeredQuantity : null,
     ryo: input.offerType === "REQUEST" ? input.ryo : 0,
   });
@@ -186,7 +189,7 @@ export const updateUserDataForAcceptAuctionOffer = (
     .set({ bank: sql`${userData.bank} + ${offer.ryo}`, updatedAt: new Date() })
     .where(eq(userData.userId, ctx.userId));
 
-/** Build the `auctionOffer` lookup for `cancelAuctionOffer`, using predicates on `id` and `ownerId`. */
+/** Build the `auctionOffer` lookup for `cancelAuctionOffer` with the offered item's `itemId`, using predicates on `id` and `ownerId`. */
 export const findAuctionOfferForCancelAuctionOffer = (
   client: Pick<DrizzleClient, "query">,
   input: { offerId: string },
@@ -197,6 +200,7 @@ export const findAuctionOfferForCancelAuctionOffer = (
       eq(auctionOffer.id, input.offerId),
       eq(auctionOffer.ownerId, ctx.userId),
     ),
+    with: { offeredUserItem: { columns: { itemId: true } } },
   });
 
 /**

@@ -36,6 +36,8 @@ describeWithDatabase("furniture auction transfers", () => {
       id: "chair-auction",
       sellerId: "seller",
       userItemId: "placed-chair",
+      itemId: "chair",
+      quantity: 1,
       listingType: "AUCTION",
       startingPrice: 100,
       currentPrice: 100,

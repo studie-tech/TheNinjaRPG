@@ -256,46 +256,67 @@ describeWithDatabase("home.moveUserItems stacking", () => {
     ]);
   });
 
-  it("answers once every merge has settled, when one of them fails", async () => {
-    await insertItems([
-      { id: "ore", name: "Ore", itemType: "MATERIAL", canStack: true, stackSize: 10 },
-    ]);
-    await insertUserItems([
-      { id: "herb-carried", userId, itemId: "herb", quantity: 4 },
-      { id: "herb-stored", userId, itemId: "herb", quantity: 5, storedAtHome: true },
-      { id: "ore-carried", userId, itemId: "ore", quantity: 3 },
-      { id: "ore-stored", userId, itemId: "ore", quantity: 2, storedAtHome: true },
-    ]);
-    let claims = 0;
-    const firstClaimFails = aroundStatements(
-      await getTestDatabase(),
-      userItem,
-      async (run) => {
-        if (++claims === 1) throw new TypeError("fetch failed");
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        return run();
-      },
-      { when: (values) => "quantity" in values },
-    );
-    const home = callerForDatabase(homeRouter, userId, firstClaimFails);
-    const moved = await home.moveUserItems({
-      userItemIds: ["herb-carried", "ore-carried"],
-      toHome: true,
-    });
-    expect(moved.success).toBe(true);
-    expect(moved.movedUserItemIds).toBeUndefined();
-    const stacks = (
-      await (
-        await getTestDatabase()
-      ).query.userItem.findMany({
-        where: eq(userItem.userId, userId),
-      })
-    ).filter((row) => row.quantity > 0);
-    const stackCounts = ["herb", "ore"]
-      .map((itemId) => stacks.filter((row) => row.itemId === itemId).length)
-      .sort();
-    expect(stackCounts).toEqual([1, 2]);
-  });
+  it.each([false, true])(
+    "answers once every merge has settled when one fails (same item: %s)",
+    async (sameItem) => {
+      const secondaryItemId = sameItem ? "herb" : "ore";
+      const activeVariantId = sameItem ? "variant" : null;
+      await insertItems([
+        { id: "ore", name: "Ore", itemType: "MATERIAL", canStack: true, stackSize: 10 },
+      ]);
+      await insertUserItems([
+        { id: "herb-carried", userId, itemId: "herb", quantity: 4 },
+        { id: "herb-stored", userId, itemId: "herb", quantity: 5, storedAtHome: true },
+        {
+          id: "ore-carried",
+          userId,
+          itemId: secondaryItemId,
+          quantity: 3,
+          activeVariantId,
+        },
+        {
+          id: "ore-stored",
+          userId,
+          itemId: secondaryItemId,
+          quantity: 2,
+          storedAtHome: true,
+          activeVariantId,
+        },
+      ]);
+      let claims = 0;
+      const firstClaimFails = aroundStatements(
+        await getTestDatabase(),
+        userItem,
+        async (run) => {
+          if (++claims === 1) throw new TypeError("fetch failed");
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          return run();
+        },
+        { when: (values) => "quantity" in values },
+      );
+      const home = callerForDatabase(homeRouter, userId, firstClaimFails);
+      const moved = await home.moveUserItems({
+        userItemIds: ["herb-carried", "ore-carried"],
+        toHome: true,
+      });
+      expect(moved.success).toBe(true);
+      expect(moved.movedUserItemIds).toBeUndefined();
+      const stacks = (
+        await (
+          await getTestDatabase()
+        ).query.userItem.findMany({
+          where: eq(userItem.userId, userId),
+        })
+      ).filter((row) => row.quantity > 0);
+      const stackCounts = ["herb", activeVariantId ?? secondaryItemId]
+        .map(
+          (key) =>
+            stacks.filter((row) => (row.activeVariantId ?? row.itemId) === key).length,
+        )
+        .sort();
+      expect(stackCounts).toEqual([1, 2]);
+    },
+  );
 
   it("leaves the stacks apart when the player enters a battle before they merge", async () => {
     await insertUserItems([

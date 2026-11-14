@@ -99,7 +99,7 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
     isPending: isPlacingBid,
     variables: placeBidVariables,
   } = api.auction.placeBid.useMutation({
-    onSuccess: async (data) => {
+    onSuccess: async (data, variables) => {
       showMutationToast(data);
       if (data.success) {
         if ("amountToDeduct" in data && data.amountToDeduct && userData && listing) {
@@ -121,6 +121,10 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
         void Promise.all([
           utils.auction.getAuctionListings.invalidate(),
           utils.auction.getAuctionListing.invalidate(),
+          // A buyout delivers the item, which may join a carried stack.
+          listing?.buyoutPrice && variables.amount >= listing.buyoutPrice
+            ? utils.item.getUserItems.invalidate()
+            : undefined,
         ]);
       }
     },
@@ -166,7 +170,7 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
       </Modal>
     );
   }
-  if (!listing.userItem?.item) {
+  if (!listing.item) {
     return (
       <Modal title="Auction Details" isOpen={isOpen} setIsOpen={setIsOpen}>
         <div className="p-4 text-center">
@@ -192,8 +196,8 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   const isExpired = new Date(listing.expiresAt) < new Date();
   const isOwner = listing.sellerId === userData.userId;
   const isActive = listing.status === "ACTIVE";
-  const stackQuantity = listing.userItem.quantity;
-  const showPerUnitPricing = listing.userItem.item.canStack && stackQuantity > 1;
+  const stackQuantity = listing.quantity;
+  const showPerUnitPricing = listing.item.canStack && stackQuantity > 1;
 
   const { bidderMinLevel, bidderMaxLevel } = listing;
   const meetsAuctionHouseMinLevel = userData.level >= AUCTION_HOUSE_MIN_LEVEL;
@@ -256,9 +260,9 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
   return (
     <Modal
       title={
-        listing.userItem.item.canStack && listing.userItem.quantity > 1
-          ? `${listing.userItem.item.name} (${listing.userItem.quantity})`
-          : listing.userItem.item.name
+        listing.item.canStack && listing.quantity > 1
+          ? `${listing.item.name} (${listing.quantity})`
+          : listing.item.name
       }
       isOpen={isOpen}
       setIsOpen={setIsOpen}
@@ -282,9 +286,11 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
         <div className="[&>div]:!mb-1.5">
           <ItemWithEffects
             item={{
-              ...listing.userItem.item,
-              imbuements: finishedImbuementItems(listing.userItem),
-              curDurability: listing.userItem.durability,
+              ...listing.item,
+              imbuements: listing.userItem
+                ? finishedImbuementItems(listing.userItem)
+                : [],
+              curDurability: listing.userItem?.durability,
             }}
             showStatistic="item"
           />
@@ -615,8 +621,8 @@ export const AuctionDetailsDialog: React.FC<AuctionDetailsDialogProps> = ({
             <AlertDialogTitle>Cancel listing?</AlertDialogTitle>
             <AlertDialogDescription>
               This will end the listing and return{" "}
-              <span className="font-semibold">{listing.userItem.item.name}</span> to
-              your inventory. You can only do this while there are no bids.
+              <span className="font-semibold">{listing.item.name}</span> to your
+              inventory. You can only do this while there are no bids.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

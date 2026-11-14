@@ -3838,6 +3838,8 @@ export const auctionOffer = mysqlTable(
     requestedItemId: varchar("requestedItemId", { length: 191 }).notNull(),
     requestedQuantity: int("requestedQuantity", { unsigned: true }).notNull(),
     offeredUserItemId: varchar("offeredUserItemId", { length: 191 }),
+    /** The offered item, kept for history once the stack changes hands or joins another. */
+    offeredItemId: varchar("offeredItemId", { length: 191 }),
     offeredQuantity: int("offeredQuantity", { unsigned: true }),
     ryo: int("ryo", { unsigned: true }).default(0).notNull(),
     status: mysqlEnum("status", consts.AUCTION_LISTING_STATES)
@@ -3879,6 +3881,10 @@ export const auctionOfferRelations = relations(auctionOffer, ({ one }) => ({
     fields: [auctionOffer.offeredUserItemId],
     references: [userItem.id],
   }),
+  offeredItem: one(item, {
+    fields: [auctionOffer.offeredItemId],
+    references: [item.id],
+  }),
 }));
 
 // Auction House System Tables
@@ -3889,6 +3895,12 @@ export const auctionListing = mysqlTable(
     sellerId: varchar("sellerId", { length: 191 }).notNull(),
     buyerId: varchar("buyerId", { length: 191 }),
     userItemId: varchar("userItemId", { length: 191 }).notNull(),
+    /**
+     * The listed item and quantity, kept for history once the stack changes hands or joins
+     * another. Every listing sets them; the defaults let a build without them still insert.
+     */
+    itemId: varchar("itemId", { length: 191 }).default("").notNull(),
+    quantity: int("quantity", { unsigned: true }).default(0).notNull(),
     listingType: mysqlEnum("listingType", consts.AUCTION_LISTING_TYPES).notNull(),
     targetUserId: varchar("targetUserId", { length: 191 }),
     startingPrice: double("startingPrice").notNull(),
@@ -3948,6 +3960,10 @@ export const auctionListingRelations = relations(auctionListing, ({ one, many })
   userItem: one(userItem, {
     fields: [auctionListing.userItemId],
     references: [userItem.id],
+  }),
+  item: one(item, {
+    fields: [auctionListing.itemId],
+    references: [item.id],
   }),
   bids: many(auctionBid),
 }));

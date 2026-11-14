@@ -1,4 +1,3 @@
-import * as Sentry from "@sentry/nextjs";
 import { inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { HomeType, UserRequestState, UserStatus } from "@/drizzle/constants";
@@ -57,10 +56,9 @@ import {
   updateUserDataForToggleSleep,
   updateUserDataForUpgradeHome,
 } from "@/queries/home";
-import { listUserItemForMergeAllStacks } from "@/queries/item";
 import { fetchRequests, insertRequest } from "@/queries/sparring";
 import { fetchSectorVillage } from "@/queries/village";
-import { executeMergeStacksForItem, fetchUserItems } from "@/routers/item";
+import { fetchUserItems } from "@/routers/item";
 import { fetchUpdatedUser } from "@/routers/profile";
 import { fetchRequest, updateRequestState } from "@/routers/sparring";
 import {
@@ -70,9 +68,9 @@ import {
   protectedProcedure,
 } from "@/server/api/trpc";
 import type { DrizzleClient } from "@/server/db";
+import { mergeUserItemStacks } from "@/server/utils/itemStacks";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { getSectorTileType } from "@/server/utils/sectorMap";
-import { groupBy } from "@/utils/grouping";
 import { secondsFromNow } from "@/utils/time";
 import {
   type HomePlacement,
@@ -766,39 +764,13 @@ const mergeMovedStacks = async (
       )
       .map((row) => row.itemId),
   );
-  if (itemIds.size === 0) return [];
-  try {
-    const rows = await listUserItemForMergeAllStacks(client, { userId }, storedAtHome);
-    // Every merge settles before the move answers, so a client that reads the inventory again
-    // after a failed merge sees what the others did.
-    const settled = await Promise.allSettled(
-      [
-        ...groupBy(
-          rows.filter((row) => row.item && itemIds.has(row.itemId)),
-          "itemId",
-        ),
-      ].map(([itemId, itemRows]) =>
-        executeMergeStacksForItem(
-          client,
-          userId,
-          itemId,
-          { userItems: itemRows, item: itemRows[0]?.item },
-          inArray(userData.status, [...HOME_STORAGE_STATUSES]),
-        ),
-      ),
-    );
-    const failure = settled.find((result) => result.status === "rejected");
-    if (failure) throw failure.reason;
-    const results = settled.flatMap((result) =>
-      result.status === "fulfilled" ? [result.value] : [],
-    );
-    return results.every((result) => result.success && result.inventoryChanges)
-      ? results.flatMap((result) => result.inventoryChanges ?? [])
-      : undefined;
-  } catch (error) {
-    Sentry.captureException(error, { tags: { source: "home.mergeMovedStacks" } });
-    return undefined;
-  }
+  return mergeUserItemStacks(
+    client,
+    userId,
+    itemIds,
+    storedAtHome,
+    inArray(userData.status, [...HOME_STORAGE_STATUSES]),
+  );
 };
 
 type HomeFurnitureUser = NonNullable<
