@@ -31,10 +31,11 @@ import { showMutationToast } from "@/libs/toast";
 import type { UserWithRelations } from "@/routers/profile";
 import { canShowMapAttack, mapAttackRelation } from "@/utils/alliance";
 
-/** Scouted players in responsive rows, with persistent filters and eligible map actions. */
+/** Filter authenticated sector players into responsive rows while retaining eligible map actions. */
 export const SurroundingUsers: React.FC<SurroundingUsersProps> = (props) => {
   const { userData, storedBrackets, setStoredBrackets } = props;
   const { data: villages } = api.village.getAll.useQuery(undefined);
+  // Prepare eligibility and ordering once; visibility preferences only narrow this roster.
   const nearbyUsers = getScoutingUsers(props.users, userData.userId, null);
   const users = nearbyUsers.filter(
     (user) =>
@@ -79,6 +80,7 @@ export const SurroundingUsers: React.FC<SurroundingUsersProps> = (props) => {
                       : selected
                         ? storedBrackets.filter((value) => value !== bracket)
                         : [...storedBrackets, bracket];
+                  // All also includes players whose bracket is unknown in the snapshot.
                   setStoredBrackets(next.length === MAX_PVP_BRACKET + 1 ? null : next);
                 }}
               >
@@ -202,6 +204,7 @@ export const SurroundingUsers: React.FC<SurroundingUsersProps> = (props) => {
                           isRobImmune ? "Target is immune from being robbed" : undefined
                         }
                         onClick={() => {
+                          // Check at activation so immunity can expire without a rerender.
                           if (
                             user.robImmunityUntil &&
                             user.robImmunityUntil > new Date()
@@ -266,6 +269,7 @@ const ScoutAction = ({
   targetName: string;
   icon: string;
   onClick: () => void;
+  /** Advisory state: keep activation available for feedback and time-sensitive guards. */
   isUnavailable?: boolean;
   title?: string;
 }) => (
@@ -291,8 +295,10 @@ interface SurroundingUsersProps {
   allyAttack: boolean;
   wars: Parameters<typeof canShowMapAttack>[3];
   setAllyAttack: (newValue: boolean) => void;
+  /** Persisted bracket selection: null shows all; an empty array shows none. */
   storedBrackets: number[] | null;
   setStoredBrackets: (newValue: number[] | null) => void;
+  /** Hide combat-recognized allies independently of the friendly-attack preference. */
   excludeAllies: boolean;
   setExcludeAllies: (newValue: boolean) => void;
   attackUser: (userId: string) => void;

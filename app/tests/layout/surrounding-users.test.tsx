@@ -25,6 +25,7 @@ const viewer = {
     relationshipB: [],
   },
 } as unknown as NonNullable<UserWithRelations>;
+/** Sector snapshot fixture whose overrides exercise visibility and action eligibility. */
 const player = (username: string, patch: Partial<SectorUser> = {}) =>
   ({
     userId: username,
@@ -72,6 +73,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.clearAllMocks();
 });
+/** Mount parent-owned preferences and allow live roster updates through the shared tRPC setup. */
 const setup = (users: SectorUser[]) => {
   const Harness = ({ roster }: { roster: SectorUser[] }) => {
     const [brackets, setBrackets] = useState<number[] | null>(null);

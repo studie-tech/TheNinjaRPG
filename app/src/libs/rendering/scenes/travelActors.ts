@@ -1612,6 +1612,7 @@ export type TravelActorsSnapshot = {
   sector: number;
   viewer: UserWithRelations;
   users: SectorUser[];
+  /** Shared scouting selection; null shows all. Viewer, NPCs and duty copies bypass it. */
   bracketFilter: readonly number[] | null;
   showUsers: boolean;
   friendlyAttack: boolean;

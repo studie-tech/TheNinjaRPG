@@ -211,7 +211,10 @@ export const canAttackBracket = (
     ? Math.min(attackerBracket, targetBracket) >= ELITE_JONIN_BRACKET - 1
     : targetBracket >= attackerBracket - 1;
 
-/** Match selected scout/map brackets; null shows all, including unknown brackets. */
+/**
+ * Match scout/map brackets: null includes every player, while an empty selection matches none.
+ * Explicit selections exclude unknown XP unless Elite Jonin rank determines the bracket.
+ */
 export const passesBracketFilter = (
   user: { experience?: number | null; rank?: UserRank },
   filterBrackets: readonly number[] | null,
@@ -240,7 +243,10 @@ export const getKnownEffectiveLevel = (user: {
   return user.experience == null ? null : calcLevel(user.experience);
 };
 
-/** Awake players in the selected brackets, ordered by displayed level then name. */
+/**
+ * Return awake players other than the viewer, excluding NPCs and village-duty copies.
+ * Apply bracket selection and sort by displayed level then name without mutating the source.
+ */
 export const getScoutingUsers = <
   T extends Pick<
     SectorUser,
