@@ -7,8 +7,8 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-spacetimedb = "=2.13.0"
-log = "=0.4.34"
+spacetimedb = "=2.15.0"
+log = "=0.4.35"
 rand = { version = "=0.10.3", default-features = false }
 rand_chacha = { version = "=0.10.0", default-features = false }
 serde = { version = "=1.0.229", features = ["derive"] }

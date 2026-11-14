@@ -173,7 +173,7 @@ app.add_dependency(widget) unless app.dependencies.any? { |d| d.target == widget
 SWIFT_PACKAGES = [
   {
     url: "https://github.com/getsentry/sentry-cocoa.git",
-    requirement: { kind: "upToNextMajorVersion", minimumVersion: "9.31.0" },
+    requirement: { kind: "upToNextMajorVersion", minimumVersion: "9.34.0" },
     products: ["Sentry"],
   },
 ].freeze

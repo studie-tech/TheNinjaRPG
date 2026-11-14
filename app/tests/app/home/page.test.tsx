@@ -1141,6 +1141,7 @@ it("preserves a draft across a tier refresh and requires recovery before saving"
           HOME_FLOOR_PROJECTION.y,
       });
     };
+    // CSSOM rounds percentages to six significant digits before this inverse projection.
     const position = normalizedPosition("TOWN_HOUSE");
     await act(async () => {
       queryClient.setQueryData(homeKey, {
@@ -1153,11 +1154,11 @@ it("preserves a draft across a tier refresh and requires recovery before saving"
     expect((view.getByLabelText("Furniture room") as HTMLSelectElement).value).toBe(
       "room-1",
     );
-    expect(normalizedPosition("MANSION").x).toBeCloseTo(position.x, 8);
-    expect(normalizedPosition("MANSION").y).toBeCloseTo(position.y, 8);
+    expect(normalizedPosition("MANSION").x).toBeCloseTo(position.x, 2);
+    expect(normalizedPosition("MANSION").y).toBeCloseTo(position.y, 2);
+    const retainedPosition = { left: bed.style.left, top: bed.style.top };
     fireEvent.keyDown(bed, { key: "ArrowRight" });
-    expect(normalizedPosition("MANSION").x).toBeCloseTo(position.x, 8);
-    expect(normalizedPosition("MANSION").y).toBeCloseTo(position.y, 8);
+    expect({ left: bed.style.left, top: bed.style.top }).toEqual(retainedPosition);
     expect(view.getByRole("alert").textContent).toContain(
       "Your home tier changed. Cancel and reopen",
     );

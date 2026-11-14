@@ -1,14 +1,15 @@
+# MoviePy requires Pillow <12; keep the newest release satisfying its constraint.
 Pillow==11.3.0
-boto3==1.43.117
+boto3==1.44.3
 numpy==2.5.4
-pandas==3.0.6
-pyarrow==26.0.0
+pandas==3.1.1
+pyarrow==26.0.1
 seaborn==0.13.2
 ipykernel==7.4.0
-mysqlclient==2.3.0
-openai==3.36.1
+mysqlclient==2.3.1
+openai==3.51.0
 nanoid==2.0.0
-sqlalchemy==2.1.6
+sqlalchemy==2.1.8
 tqdm==4.70.1
 scikit-learn==1.9.1
 joblib==1.6.0

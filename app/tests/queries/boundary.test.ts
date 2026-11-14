@@ -46,8 +46,12 @@ const filesIn = (directory: string): string[] =>
   });
 
 /** Inspect syntax rather than comments, SQL text, whitespace or method-looking strings. */
-const databaseCalls = (source: string) => {
-  const tree = parse(source, { sourceType: "module", plugins: ["typescript", "jsx"] });
+const databaseCalls = (source: string, filename = "source.tsx") => {
+  const tree = parse(source, {
+    sourceType: "module",
+    sourceFilename: filename,
+    plugins: filename.endsWith(".tsx") ? ["typescript", "jsx"] : ["typescript"],
+  });
   const calls: string[] = [];
   const visit = (value: unknown) => {
     if (!value || typeof value !== "object") return;
@@ -110,7 +114,7 @@ describe("database query boundary", () => {
     const violations = filesIn(sourceRoot)
       .filter((file) => !relative(sourceRoot, file).startsWith("queries/"))
       .flatMap((file) => {
-        const calls = databaseCalls(readFileSync(file, "utf8"));
+        const calls = databaseCalls(readFileSync(file, "utf8"), file);
         return calls.length
           ? [`${relative(sourceRoot, file)}: ${calls.join(", ")}`]
           : [];

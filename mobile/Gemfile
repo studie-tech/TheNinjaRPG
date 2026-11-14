@@ -2,5 +2,5 @@ source "https://rubygems.org"
 
 # Release automation. `xcodeproj` is also what scripts/configure-xcode.rb uses to apply
 # capabilities and the widget target to the generated project.
-gem "fastlane", "2.241.1"
+gem "fastlane", "2.241.2"
 gem "xcodeproj", "1.28.1"

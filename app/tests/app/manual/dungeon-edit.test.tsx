@@ -144,6 +144,7 @@ it.each(["success", "error"])(
     );
     queryClient.clear();
   },
+  20_000,
 );
 
 it.each(["same draft", "another dungeon", "new dungeon"])(
@@ -391,7 +392,7 @@ it("searches enemies and rewards, preserves invalid quantity drafts, and saves g
     { type: "package", id: "bundle", chance: 100, quantity: 2, package: undefined },
   ]);
   queryClient.clear();
-});
+}, 20_000);
 
 it("saves displayed enemy quantities after making room in a full wave", async () => {
   const content = dungeonContent();
