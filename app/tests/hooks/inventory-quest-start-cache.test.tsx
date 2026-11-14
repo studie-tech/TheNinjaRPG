@@ -9,7 +9,10 @@ import * as appClient from "@/app/_trpc/client";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { quest, questHistory, userData } from "@/drizzle/schema";
 import { useItemConsumptionCacheUpdate } from "@/hooks/useItemConsumptionCacheUpdate";
-import { useQuestStartCacheUpdate } from "@/hooks/useQuestStartCacheUpdate";
+import {
+  trackQuestDiscoveryReads,
+  useQuestStartCacheUpdate,
+} from "@/hooks/useQuestStartCacheUpdate";
 import { profileRouter } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
 import { trainRouter } from "@/server/api/routers/train";
@@ -45,6 +48,7 @@ const setup = () => {
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
+  trackQuestDiscoveryReads(client);
   clients.push(client);
   const owned = { id: "stack", itemId: "herb", quantity: 3, variants: ["red"] };
   const candidate = {
@@ -204,7 +208,7 @@ it("refreshes loaded discovery inputs without inventory fan-out", async () => {
 });
 
 it.each([false, true])(
-  "patches listings read after the profile without discovery reads (reopened prerequisite: %p)",
+  "patches listings read against the same profile without discovery reads (reopened prerequisite: %p)",
   async (reopensPrerequisite) => {
     const t = setup(),
       hook = t.view.result.current.starts;
@@ -215,6 +219,8 @@ it.each([false, true])(
       { userData: { completedQuests: [completed], userQuests: [] } },
       { updatedAt: Date.now() - 1000 },
     );
+    await t.client.refetchQueries({ queryKey: [["quests"]] });
+    t.reads.slice(5).forEach((read) => read.mockClear());
     const snapshot = hook.prepareQuestStartUpdate();
     const attempt = {
       questId: t.candidate.id,
@@ -244,6 +250,20 @@ it.each([false, true])(
     ]);
     t.reads.slice(0, 7).forEach((read) => expect(read).not.toHaveBeenCalled());
     expect(t.reads[7]).toHaveBeenCalledTimes(reopensPrerequisite ? 1 : 0);
+    if (!reopensPrerequisite) {
+      const nextSnapshot = hook.prepareQuestStartUpdate();
+      t.client.setQueryData(profileKey, {
+        userData: {
+          completedQuests: [completed],
+          userQuests: [{ ...attempt, previousAttempts: 2 }],
+        },
+      });
+      await act(async () => hook.updateQuestStart(t.started, nextSnapshot, true));
+      expect(t.client.getQueryData(t.keys[5]!)).toEqual([
+        { ...started, previousAttempts: 2 },
+      ]);
+      t.reads.slice(5).forEach((read) => expect(read).not.toHaveBeenCalled());
+    }
   },
 );
 
@@ -258,6 +278,8 @@ it("refreshes discovery when a confirmed start crosses the daily quest period", 
       { userData: { completedQuests: [], userQuests: [] } },
       { updatedAt: Date.now() - 1000 },
     );
+    await t.client.refetchQueries({ queryKey: [["quests"]] });
+    t.reads.slice(5).forEach((read) => read.mockClear());
     const snapshot = hook.prepareQuestStartUpdate();
     setSystemTime(new Date("2026-11-15T00:00:01Z"));
     const opened = [{ ...t.candidate, id: "new-day-quest" }];
@@ -290,6 +312,64 @@ it("refetches listings read before the profile last changed", async () => {
     ),
   );
   t.reads.slice(5).forEach((read) => expect(read).toHaveBeenCalledTimes(1));
+});
+
+it("refreshes a listing whose read overlaps an eligibility update", async () => {
+  setSystemTime(new Date("2026-11-14T12:00:00Z"));
+  try {
+    const t = setup(),
+      hook = t.view.result.current.starts;
+    const profileKey = getQueryKey(api.profile.getUser, undefined, "query");
+    const profile = { completedQuests: [], userQuests: [], ninjutsuMastery: 10 };
+    t.client.setQueryData(profileKey, { userData: profile });
+    let resolveRead!: (rows: (typeof t.candidate)[]) => void;
+    t.reads[5]!.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    const pending = t.client.refetchQueries({ queryKey: t.keys[5]!, exact: true });
+    setSystemTime(new Date("2026-11-14T12:00:01Z"));
+    t.client.setQueryData(profileKey, {
+      userData: { ...profile, ninjutsuMastery: 50 },
+    });
+    setSystemTime(new Date("2026-11-14T12:00:02Z"));
+    resolveRead([]);
+    await pending;
+    const snapshot = hook.prepareQuestStartUpdate();
+    const unlocked = [{ ...t.candidate, id: "mastery-unlocked" }];
+    t.reads[5]!.mockResolvedValueOnce(unlocked as never);
+    await act(async () => hook.updateQuestStart(t.started, snapshot, true));
+    expect(t.client.getQueryData(t.keys[5]!)).toEqual(unlocked);
+    expect(t.reads[5]).toHaveBeenCalledTimes(2);
+    t.reads.slice(0, 5).forEach((read) => expect(read).not.toHaveBeenCalled());
+  } finally {
+    setSystemTime();
+  }
+});
+
+it("does not treat a canceled refetch as a current eligibility read", async () => {
+  const t = setup(),
+    hook = t.view.result.current.starts;
+  const profileKey = getQueryKey(api.profile.getUser, undefined, "query");
+  const profile = { completedQuests: [], userQuests: [], ninjutsuMastery: 10 };
+  t.client.setQueryData(profileKey, { userData: profile });
+  await t.client.refetchQueries({ queryKey: t.keys[5]!, exact: true });
+  t.client.setQueryData(profileKey, {
+    userData: { ...profile, ninjutsuMastery: 50 },
+  });
+  t.reads[5]!.mockImplementationOnce(() => new Promise(() => {}));
+  const filter = { queryKey: t.keys[5]!, exact: true };
+  const pending = t.client.refetchQueries(filter);
+  await t.client.cancelQueries(filter, { silent: true, revert: true });
+  await pending;
+  const snapshot = hook.prepareQuestStartUpdate();
+  const unlocked = [{ ...t.candidate, id: "mastery-unlocked" }];
+  t.reads[5]!.mockResolvedValueOnce(unlocked as never);
+  await act(async () => hook.updateQuestStart(t.started, snapshot, true));
+  expect(t.client.getQueryData(t.keys[5]!)).toEqual(unlocked);
+  expect(t.reads[5]).toHaveBeenCalledTimes(3);
 });
 
 it.each([

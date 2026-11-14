@@ -1,4 +1,5 @@
-import { type QueryClient, useQueryClient } from "@tanstack/react-query";
+import type { Query, QueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { api, type RouterOutputs } from "@/app/_trpc/client";
 import { getInventoryQuantities } from "@/deltas/item";
@@ -8,6 +9,7 @@ import {
   getReopenedQuestIds,
 } from "@/deltas/quests";
 import { useInventoryCacheUpdate } from "@/hooks/useInventoryCacheUpdate";
+import { trpcPathFromKey } from "@/libs/queryTelemetry";
 import { prepareQueryUpdate, updateQueryCache } from "@/utils/queryCache";
 import { periodStart } from "@/utils/time";
 
@@ -36,6 +38,7 @@ export const useQuestStartCacheUpdate = () => {
   ) => {
     const confirmed = result?.success && profileApplied ? result : undefined;
     const user = confirmed ? readProfile(client) : undefined;
+    const profileRevision = prepareQueryUpdate(client, profileKey());
     // A new quest period can open candidates absent from the captured listings.
     const isCurrentPeriod =
       snapshot.periodStartAt === periodStart("daily", new Date()).getTime();
@@ -53,11 +56,12 @@ export const useQuestStartCacheUpdate = () => {
         client
           .getQueryCache()
           .findAll({ queryKey: key })
-          .map(({ queryKey, queryHash }) => {
+          .map((query) => {
+            const { queryKey, queryHash } = query;
             const captured = snapshot.discovery.get(queryHash);
             const settled = captured?.current && isCurrentPeriod ? user : undefined;
             const options = { revision: captured?.revision };
-            return upcoming
+            const update = upcoming
               ? updateQueryCache<RouterOutputs["quests"]["upcomingQuests"]>(
                   client,
                   queryKey,
@@ -80,6 +84,18 @@ export const useQuestStartCacheUpdate = () => {
                     : undefined,
                   options,
                 );
+            return update.then((applied) => {
+              if (
+                applied &&
+                query.state.fetchStatus === "idle" &&
+                query.state.dataUpdateCount === (captured?.revision ?? -1) + 1
+              )
+                discoveryReads.get(client)?.set(query, {
+                  profileRevision,
+                  periodStartAt: snapshot.periodStartAt,
+                  listingRevision: query.state.dataUpdateCount,
+                });
+            });
           }),
       ),
     ]);
@@ -88,11 +104,16 @@ export const useQuestStartCacheUpdate = () => {
 };
 
 /** Listings filtered by the player's quest availability, across all of their inputs. */
-const discoveryListings = () => [
-  { key: getQueryKey(api.quests.missionHall, undefined, "query"), upcoming: false },
-  { key: getQueryKey(api.quests.specificQuests, undefined, "query"), upcoming: false },
-  { key: getQueryKey(api.quests.upcomingQuests, undefined, "query"), upcoming: true },
-];
+const discoveryProcedures = [
+  "missionHall",
+  "specificQuests",
+  "upcomingQuests",
+] as const;
+const discoveryListings = () =>
+  discoveryProcedures.map((name) => ({
+    key: getQueryKey(api.quests[name], undefined, "query"),
+    upcoming: name === "upcomingQuests",
+  }));
 
 /** The cached profile; after updateUser resolves it holds the settled start. */
 const readProfile = (client: QueryClient) =>
@@ -101,13 +122,51 @@ const readProfile = (client: QueryClient) =>
 
 const profileKey = () => getQueryKey(api.profile.getUser, undefined, "query");
 
+const discoveryReads = new WeakMap<QueryClient, WeakMap<Query, DiscoveryRead>>();
+
 /**
- * Capture each settled discovery listing. A listing is current when it was read after the
- * profile last changed and within today's quest period, so it reflects every eligibility
- * input the profile knows.
+ * Record discovery's profile baseline at fetch start for this client's lifetime. A read
+ * finishing after a profile change can still contain its earlier eligibility snapshot.
+ */
+export const trackQuestDiscoveryReads = (client: QueryClient) => {
+  if (discoveryReads.has(client)) return;
+  const reads = new WeakMap<Query, DiscoveryRead>();
+  discoveryReads.set(client, reads);
+  client.getQueryCache().subscribe((event) => {
+    const path = trpcPathFromKey(event.query.queryKey);
+    if (
+      event.type !== "updated" ||
+      !discoveryProcedures.some((name) => path === `quests.${name}`)
+    )
+      return;
+    if (event.action.type === "fetch")
+      reads.set(event.query, {
+        profileRevision: prepareQueryUpdate(client, profileKey()),
+        periodStartAt: periodStart("daily", new Date()).getTime(),
+      });
+    else if (
+      event.action.type === "error" ||
+      (event.action.type === "success" && event.action.manual)
+    )
+      reads.delete(event.query);
+    else if (event.action.type === "success") {
+      // Canceled reads can silently restore older rows; only a completed fetch has provenance.
+      const read = reads.get(event.query);
+      if (read)
+        reads.set(event.query, {
+          ...read,
+          listingRevision: event.query.state.dataUpdateCount,
+        });
+    }
+  });
+};
+
+/**
+ * Capture listings read against the unchanged profile in today's quest period. Untracked
+ * hydrated/manual data cannot establish its eligibility baseline and needs reconciliation.
  */
 const captureDiscovery = (client: QueryClient) => {
-  const profileUpdatedAt = client.getQueryState(profileKey())?.dataUpdatedAt ?? 0;
+  const profileRevision = prepareQueryUpdate(client, profileKey());
   const today = periodStart("daily", new Date()).getTime();
   const captured = new Map<
     string,
@@ -115,13 +174,14 @@ const captureDiscovery = (client: QueryClient) => {
   >();
   for (const { key } of discoveryListings())
     for (const query of client.getQueryCache().findAll({ queryKey: key })) {
-      const readAt = query.state.dataUpdatedAt;
+      const read = discoveryReads.get(client)?.get(query);
       captured.set(query.queryHash, {
         revision: prepareQueryUpdate(client, query.queryKey),
         current:
-          profileUpdatedAt > 0 &&
-          readAt > profileUpdatedAt &&
-          periodStart("daily", new Date(readAt)).getTime() === today,
+          profileRevision !== undefined &&
+          read?.profileRevision === profileRevision &&
+          read.listingRevision === query.state.dataUpdateCount &&
+          read.periodStartAt === today,
       });
     }
   return captured;
@@ -130,3 +190,9 @@ const captureDiscovery = (client: QueryClient) => {
 type DiscoveryRow =
   | RouterOutputs["quests"]["missionHall"][number]
   | RouterOutputs["quests"]["specificQuests"][number];
+
+type DiscoveryRead = {
+  profileRevision: number | undefined;
+  periodStartAt: number;
+  listingRevision?: number;
+};

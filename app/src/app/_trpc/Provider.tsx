@@ -23,6 +23,7 @@ import superjson from "superjson";
 import type { AppRouter } from "@/api/root";
 import { ToastAction } from "@/components/ui/toast";
 import { toast } from "@/components/ui/use-toast";
+import { trackQuestDiscoveryReads } from "@/hooks/useQuestStartCacheUpdate";
 import { BOTID_BLOCKED_MESSAGE, BOTID_RELOAD_REQUIRED_MESSAGE } from "@/libs/botid";
 import {
   BUILD_ID_HEADER,
@@ -135,6 +136,7 @@ const TrpcClientProvider = (props: {
     const fetchQuery = queryClient.fetchQuery.bind(queryClient);
     queryClient.fetchQuery = ((options) =>
       fetchQuery({ retry: false, ...options })) as typeof queryClient.fetchQuery;
+    trackQuestDiscoveryReads(queryClient);
     return { queryClient, queryMetricsTracker: createQueryMetricsTracker(queryClient) };
   });
   const [trpcClient] = useState(() => {
