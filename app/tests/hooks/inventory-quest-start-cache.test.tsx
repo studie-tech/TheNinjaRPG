@@ -9,7 +9,10 @@ import * as appClient from "@/app/_trpc/client";
 import { VILLAGE_SYNDICATE_ID } from "@/drizzle/constants";
 import { quest, questHistory, userData } from "@/drizzle/schema";
 import { useItemConsumptionCacheUpdate } from "@/hooks/useItemConsumptionCacheUpdate";
-import { useQuestStartCacheUpdate } from "@/hooks/useQuestStartCacheUpdate";
+import {
+  trackQuestDiscoveryReads,
+  useQuestStartCacheUpdate,
+} from "@/hooks/useQuestStartCacheUpdate";
 import { profileRouter } from "@/server/api/routers/profile";
 import { questsRouter } from "@/server/api/routers/quests";
 import { trainRouter } from "@/server/api/routers/train";
@@ -45,6 +48,7 @@ const setup = () => {
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
+  trackQuestDiscoveryReads(client);
   clients.push(client);
   const owned = { id: "stack", itemId: "herb", quantity: 3, variants: ["red"] };
   const candidate = {
@@ -203,6 +207,171 @@ it("refreshes loaded discovery inputs without inventory fan-out", async () => {
   t.reads.slice(5).forEach((read) => expect(read).toHaveBeenCalledTimes(1));
 });
 
+it.each([false, true])(
+  "patches listings read against the same profile without discovery reads (reopened prerequisite: %p)",
+  async (reopensPrerequisite) => {
+    const t = setup(),
+      hook = t.view.result.current.starts;
+    const profileKey = getQueryKey(api.profile.getUser, undefined, "query");
+    const completed = { id: "done", questId: "prior", completed: 1 };
+    t.client.setQueryData(
+      profileKey,
+      { userData: { completedQuests: [completed], userQuests: [] } },
+      { updatedAt: Date.now() - 1000 },
+    );
+    await t.client.refetchQueries({ queryKey: [["quests"]] });
+    t.reads.slice(5).forEach((read) => read.mockClear());
+    const snapshot = hook.prepareQuestStartUpdate();
+    const attempt = {
+      questId: t.candidate.id,
+      previousAttempts: 1,
+      previousCompletes: 0,
+      completed: 0,
+      periodCompletes: 0,
+      periodStartAt: null,
+    };
+    t.client.setQueryData(profileKey, {
+      userData: {
+        completedQuests: reopensPrerequisite ? [] : [completed],
+        userQuests: [attempt],
+      },
+    });
+    await act(async () =>
+      hook.updateQuestStart(
+        { ...t.started, inventoryChanges: t.inventoryChanges },
+        snapshot,
+        true,
+      ),
+    );
+    const started = { ...t.candidate, previousAttempts: 1 };
+    expect(t.client.getQueryData(t.keys[5]!)).toEqual([started]);
+    expect(t.client.getQueryData(t.keys[6]!)).toEqual([
+      { ...started, entryRequirements: [] },
+    ]);
+    t.reads.slice(0, 7).forEach((read) => expect(read).not.toHaveBeenCalled());
+    expect(t.reads[7]).toHaveBeenCalledTimes(reopensPrerequisite ? 1 : 0);
+    if (!reopensPrerequisite) {
+      const nextSnapshot = hook.prepareQuestStartUpdate();
+      t.client.setQueryData(profileKey, {
+        userData: {
+          completedQuests: [completed],
+          userQuests: [{ ...attempt, previousAttempts: 2 }],
+        },
+      });
+      await act(async () => hook.updateQuestStart(t.started, nextSnapshot, true));
+      expect(t.client.getQueryData(t.keys[5]!)).toEqual([
+        { ...started, previousAttempts: 2 },
+      ]);
+      t.reads.slice(5).forEach((read) => expect(read).not.toHaveBeenCalled());
+    }
+  },
+);
+
+it("refreshes discovery when a confirmed start crosses the daily quest period", async () => {
+  setSystemTime(new Date("2026-11-14T23:59:59Z"));
+  try {
+    const t = setup(),
+      hook = t.view.result.current.starts;
+    const profileKey = getQueryKey(api.profile.getUser, undefined, "query");
+    t.client.setQueryData(
+      profileKey,
+      { userData: { completedQuests: [], userQuests: [] } },
+      { updatedAt: Date.now() - 1000 },
+    );
+    await t.client.refetchQueries({ queryKey: [["quests"]] });
+    t.reads.slice(5).forEach((read) => read.mockClear());
+    const snapshot = hook.prepareQuestStartUpdate();
+    setSystemTime(new Date("2026-11-15T00:00:01Z"));
+    const opened = [{ ...t.candidate, id: "new-day-quest" }];
+    t.reads.slice(5).forEach((read) => read.mockResolvedValueOnce(opened as never));
+    await act(async () => hook.updateQuestStart(t.started, snapshot, true));
+    for (const key of t.keys.slice(5))
+      expect(t.client.getQueryData(key)).toEqual(opened);
+    t.reads.slice(5).forEach((read) => expect(read).toHaveBeenCalledTimes(1));
+    t.reads.slice(0, 5).forEach((read) => expect(read).not.toHaveBeenCalled());
+  } finally {
+    setSystemTime();
+  }
+});
+
+it("refetches listings read before the profile last changed", async () => {
+  const t = setup(),
+    hook = t.view.result.current.starts;
+  const profileKey = getQueryKey(api.profile.getUser, undefined, "query");
+  t.client.setQueryData(
+    profileKey,
+    { userData: { completedQuests: [], userQuests: [] } },
+    { updatedAt: Date.now() + 1000 },
+  );
+  const snapshot = hook.prepareQuestStartUpdate();
+  await act(async () =>
+    hook.updateQuestStart(
+      { ...t.started, inventoryChanges: t.inventoryChanges },
+      snapshot,
+      true,
+    ),
+  );
+  t.reads.slice(5).forEach((read) => expect(read).toHaveBeenCalledTimes(1));
+});
+
+it("refreshes a listing whose read overlaps an eligibility update", async () => {
+  setSystemTime(new Date("2026-11-14T12:00:00Z"));
+  try {
+    const t = setup(),
+      hook = t.view.result.current.starts;
+    const profileKey = getQueryKey(api.profile.getUser, undefined, "query");
+    const profile = { completedQuests: [], userQuests: [], ninjutsuMastery: 10 };
+    t.client.setQueryData(profileKey, { userData: profile });
+    let resolveRead!: (rows: (typeof t.candidate)[]) => void;
+    t.reads[5]!.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    const pending = t.client.refetchQueries({ queryKey: t.keys[5]!, exact: true });
+    setSystemTime(new Date("2026-11-14T12:00:01Z"));
+    t.client.setQueryData(profileKey, {
+      userData: { ...profile, ninjutsuMastery: 50 },
+    });
+    setSystemTime(new Date("2026-11-14T12:00:02Z"));
+    resolveRead([]);
+    await pending;
+    const snapshot = hook.prepareQuestStartUpdate();
+    const unlocked = [{ ...t.candidate, id: "mastery-unlocked" }];
+    t.reads[5]!.mockResolvedValueOnce(unlocked as never);
+    await act(async () => hook.updateQuestStart(t.started, snapshot, true));
+    expect(t.client.getQueryData(t.keys[5]!)).toEqual(unlocked);
+    expect(t.reads[5]).toHaveBeenCalledTimes(2);
+    t.reads.slice(0, 5).forEach((read) => expect(read).not.toHaveBeenCalled());
+  } finally {
+    setSystemTime();
+  }
+});
+
+it("does not treat a canceled refetch as a current eligibility read", async () => {
+  const t = setup(),
+    hook = t.view.result.current.starts;
+  const profileKey = getQueryKey(api.profile.getUser, undefined, "query");
+  const profile = { completedQuests: [], userQuests: [], ninjutsuMastery: 10 };
+  t.client.setQueryData(profileKey, { userData: profile });
+  await t.client.refetchQueries({ queryKey: t.keys[5]!, exact: true });
+  t.client.setQueryData(profileKey, {
+    userData: { ...profile, ninjutsuMastery: 50 },
+  });
+  t.reads[5]!.mockImplementationOnce(() => new Promise(() => {}));
+  const filter = { queryKey: t.keys[5]!, exact: true };
+  const pending = t.client.refetchQueries(filter);
+  await t.client.cancelQueries(filter, { silent: true, revert: true });
+  await pending;
+  const snapshot = hook.prepareQuestStartUpdate();
+  const unlocked = [{ ...t.candidate, id: "mastery-unlocked" }];
+  t.reads[5]!.mockResolvedValueOnce(unlocked as never);
+  await act(async () => hook.updateQuestStart(t.started, snapshot, true));
+  expect(t.client.getQueryData(t.keys[5]!)).toEqual(unlocked);
+  expect(t.reads[5]).toHaveBeenCalledTimes(3);
+});
+
 it.each([
   "profile recovery",
   "transport uncertainty",
@@ -229,92 +398,112 @@ it.each([
 });
 
 describeWithDatabase("quest-start discovery reconciliation", () => {
-  it("includes quests unlocked by mastery training before the start mutation", async () => {
-    const now = new Date("2026-11-02T12:00:00Z"),
-      playerId = "quest-start-discovery";
-    const startedAt = new Date(now.getTime() - 14 * 60000);
-    setSystemTime(now);
-    try {
-      await resetTables(questHistory, quest, userData);
-      await insertUsers([
-        {
-          userId: playerId,
-          username: playerId,
-          rank: "JONIN",
-          level: 50,
-          primaryElement: "Fire",
-          secondaryElement: "Water",
-          isOutlaw: true,
-          status: "AWAKE",
-          sector: 0,
-          regeneration: 0,
-          ninjutsuMastery: 10,
-          currentlyTrainingMastery: "ninjutsuMastery",
-          masteryTrainingStartedAt: startedAt,
-          masteryTrainingSpeed: "15min",
-        },
-      ]);
-      const content = {
-        objectives: [
-          SimpleObjective.parse({ id: "train", task: "stats_trained", value: 100000 }),
-        ],
-        reward: ObjectiveReward.parse({}),
-        sceneBackground: "",
-        sceneCharacters: [],
-      };
-      await insertQuests([
-        { id: "ordinary", questType: "mastery", content },
-        { id: "unlocked", questType: "mastery", requiredNinjutsuMastery: 50, content },
-      ]);
-      const quests = await callerFor(questsRouter, playerId),
-        profile = await callerFor(profileRouter, playerId);
-      const input = { level: 50, questType: "mastery" as const };
-      const before = await quests.specificQuests(input);
-      expect(before.map((row) => row.id)).toEqual(["ordinary"]);
-      const t = setup(),
-        hook = t.view.result.current.starts;
-      const profileKey = getQueryKey(api.profile.getUser, undefined, "query");
-      const discoveryKey = getQueryKey(api.quests.specificQuests, input, "query");
-      t.client.setQueryData(profileKey, await profile.getUser());
-      t.client.setQueryData(discoveryKey, before);
-      const read = vi.fn(() => quests.specificQuests(input));
-      stops.push(
-        new QueryObserver(t.client, {
-          queryKey: discoveryKey,
-          queryFn: read,
-        }).subscribe(() => {}),
-      );
-      const training = await (
-        await callerFor(trainRouter, playerId)
-      ).stopMasteryTraining({ stat: "ninjutsuMastery", startedAt });
-      expect(training.success, training.message).toBe(true);
-      expect(
-        await updateUserCache(t.client, profileKey, training, {
+  it.each(["before", "during"])(
+    "includes quests unlocked by mastery training %s the start mutation",
+    async (settlement) => {
+      const now = new Date("2026-11-02T12:00:00Z"),
+        playerId = "quest-start-discovery";
+      const startedAt = new Date(now.getTime() - 14 * 60000);
+      setSystemTime(now);
+      try {
+        await resetTables(questHistory, quest, userData);
+        await insertUsers([
+          {
+            userId: playerId,
+            username: playerId,
+            rank: "JONIN",
+            level: 50,
+            primaryElement: "Fire",
+            secondaryElement: "Water",
+            isOutlaw: true,
+            status: "AWAKE",
+            sector: 0,
+            regeneration: 0,
+            ninjutsuMastery: 10,
+            currentlyTrainingMastery: "ninjutsuMastery",
+            masteryTrainingStartedAt: startedAt,
+            masteryTrainingSpeed: "15min",
+          },
+        ]);
+        const content = {
+          objectives: [
+            SimpleObjective.parse({
+              id: "train",
+              task: "stats_trained",
+              value: 100000,
+            }),
+          ],
+          reward: ObjectiveReward.parse({}),
+          sceneBackground: "",
+          sceneCharacters: [],
+        };
+        await insertQuests([
+          { id: "ordinary", questType: "mastery", content },
+          {
+            id: "unlocked",
+            questType: "mastery",
+            requiredNinjutsuMastery: 50,
+            content,
+          },
+        ]);
+        const quests = await callerFor(questsRouter, playerId),
+          profile = await callerFor(profileRouter, playerId);
+        const input = { level: 50, questType: "mastery" as const };
+        const before = await quests.specificQuests(input);
+        expect(before.map((row) => row.id)).toEqual(["ordinary"]);
+        const t = setup(),
+          hook = t.view.result.current.starts;
+        const profileKey = getQueryKey(api.profile.getUser, undefined, "query");
+        const discoveryKey = getQueryKey(api.quests.specificQuests, input, "query");
+        t.client.setQueryData(profileKey, await profile.getUser());
+        t.client.setQueryData(discoveryKey, before);
+        const read = vi.fn(() => quests.specificQuests(input));
+        stops.push(
+          new QueryObserver(t.client, {
+            queryKey: discoveryKey,
+            queryFn: read,
+          }).subscribe(() => {}),
+        );
+        if (settlement === "before") {
+          const training = await (
+            await callerFor(trainRouter, playerId)
+          ).stopMasteryTraining({ stat: "ninjutsuMastery", startedAt });
+          expect(training.success, training.message).toBe(true);
+          expect(
+            await updateUserCache(t.client, profileKey, training, {
+              revision: prepareUserUpdate(t.client, profileKey),
+            }),
+          ).toBe(true);
+          expect(
+            t.client.getQueryData<RouterOutputs["profile"]["getUser"]>(profileKey)!
+              .userData!.ninjutsuMastery,
+          ).toBeGreaterThan(50);
+        } else {
+          await t.client.refetchQueries({ queryKey: discoveryKey, exact: true });
+          read.mockClear();
+        }
+        const snapshot = hook.prepareQuestStartUpdate();
+        if (settlement === "during") setSystemTime(new Date(now.getTime() + 2 * 60000));
+        const result = await quests.startQuest({
+          questId: "ordinary",
+          userSector: 0,
+          supportsAnnouncements: true,
+        });
+        expect(result.success, result.message).toBe(true);
+        if (settlement === "during")
+          expect(result.userPatch?.ninjutsuMastery).toBeGreaterThan(50);
+        const applied = await updateUserCache(t.client, profileKey, result, {
           revision: prepareUserUpdate(t.client, profileKey),
-        }),
-      ).toBe(true);
-      expect(
-        t.client.getQueryData<RouterOutputs["profile"]["getUser"]>(profileKey)!
-          .userData!.ninjutsuMastery,
-      ).toBeGreaterThan(50);
-      const snapshot = hook.prepareQuestStartUpdate();
-      const result = await quests.startQuest({
-        questId: "ordinary",
-        userSector: 0,
-        supportsAnnouncements: true,
-      });
-      expect(result.success, result.message).toBe(true);
-      const applied = await updateUserCache(t.client, profileKey, result, {
-        revision: prepareUserUpdate(t.client, profileKey),
-      });
-      expect(applied).toBe(true);
-      await act(async () => hook.updateQuestStart(result, snapshot, applied));
-      const refreshed = t.client.getQueryData<typeof before>(discoveryKey)!;
-      expect(refreshed.map((row) => row.id)).toContain("unlocked");
-      expect(refreshed).toEqual(await quests.specificQuests(input));
-      expect(read).toHaveBeenCalledTimes(1);
-    } finally {
-      setSystemTime();
-    }
-  });
+        });
+        expect(applied).toBe(true);
+        await act(async () => hook.updateQuestStart(result, snapshot, applied));
+        const refreshed = t.client.getQueryData<typeof before>(discoveryKey)!;
+        expect(refreshed.map((row) => row.id)).toContain("unlocked");
+        expect(refreshed).toEqual(await quests.specificQuests(input));
+        expect(read).toHaveBeenCalledTimes(1);
+      } finally {
+        setSystemTime();
+      }
+    },
+  );
 });
