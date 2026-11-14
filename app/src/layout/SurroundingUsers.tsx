@@ -278,7 +278,7 @@ const ScoutAction = ({
     size="sm"
     onClick={onClick}
     aria-disabled={isUnavailable}
-    className={isUnavailable ? "opacity-50" : undefined}
+    className={`gap-2 ${isUnavailable ? "opacity-50" : ""}`}
     title={title}
     aria-label={`${label} ${targetName}`}
   >
