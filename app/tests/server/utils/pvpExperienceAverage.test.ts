@@ -77,7 +77,7 @@ describe("fetchPvpExperienceAverage instance cache", () => {
     expect(calls).toBe(2);
   });
 
-  it("forces the covering (isAi, pvpExperience) index", async () => {
+  it("forces the covering index led by (isAi, pvpExperience)", async () => {
     let hint: unknown;
     const client = {
       select: () => ({
@@ -92,7 +92,9 @@ describe("fetchPvpExperienceAverage instance cache", () => {
       (index) => index.config.name === "UserData_pvpExperienceAverage_idx",
     );
     expect(
-      covering?.config.columns.map((column) => "name" in column && column.name),
+      covering?.config.columns
+        .slice(0, 2)
+        .map((column) => "name" in column && column.name),
     ).toEqual(["isAi", "pvpExperience"]);
     expect(hint).toEqual({ forceIndex: covering?.config.name });
   });

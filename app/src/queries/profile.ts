@@ -19,6 +19,7 @@ import {
   ne,
   notExists,
   notInArray,
+  notLike,
   or,
   type SQL,
   sql,
@@ -41,6 +42,7 @@ import {
   type TimedMasteryName,
   type TrainingSpeed,
   type UserRole,
+  UserRoles,
   VOTE_REWARD_REPUTATION,
 } from "@/drizzle/constants";
 import {
@@ -360,7 +362,8 @@ export const listPublicUserRows = (
       ...(input.ip ? [like(userData.lastIp, `%${input.ip}%`)] : []),
       ...(input.village !== undefined ? [eq(userData.villageId, input.village)] : []),
       ...(input.recruiterId ? [eq(userData.recruiterId, input.recruiterId)] : []),
-      ...(input.orderBy === "Staff" ? [notInArray(userData.role, ["USER"])] : []),
+      // A positive role list lets the planner range-scan the few staff rows on UserData_role_idx.
+      ...(input.orderBy === "Staff" ? [inArray(userData.role, STAFF_ROLES)] : []),
       ...(input.orderBy === "Outlaws" ? [eq(userData.isOutlaw, true)] : []),
       ...(input.inArena !== undefined ? [eq(userData.inArena, !!input.inArena)] : []),
       ...(input.isEvent !== undefined ? [eq(userData.isEvent, !!input.isEvent)] : []),
@@ -448,6 +451,9 @@ export const listPublicUserRows = (
     orderBy: getOrder(),
   });
 };
+
+/** Every non-player role, listed on the leaderboard's Staff tab. */
+const STAFF_ROLES = UserRoles.filter((role) => role !== "USER");
 
 /** Load the named attribute values belonging to one account. */
 export const fetchAttributes = async (client: DrizzleClient, userId: string) => {
@@ -1298,13 +1304,33 @@ export const deleteUserAttributeForDeleteAttribute = (
       ),
     );
 
-/** Build the `userData` listing for `searchUsers`, including predicates on `username`, `approvedTos`, `isAi`. */
+/**
+ * Build the `userData` listing for `searchUsers`, shortest usernames first: those starting with
+ * the term (a range on the username index), or those containing it elsewhere (a scan of that
+ * index). Candidates are chosen on the narrow index alone; only the shortlist reads full rows for
+ * the `approvedTos`, `isAi` and self filters, so a page comes back short only when nearly the
+ * whole shortlist is filtered out.
+ */
 export const listUserDataForSearchUsers = (
-  client: Pick<DrizzleClient, "query">,
+  client: Pick<DrizzleClient, "query" | "select">,
   input: { username: string; showAi: false | true; showYourself: false | true },
   ctx: { userId: string },
-) =>
-  client.query.userData.findMany({
+  match: "prefix" | "contains",
+  limit: number,
+) => {
+  const term = input.username.replace(/[\\%_]/g, "\\$&");
+  const matchesTerm = (column: typeof searchCandidate.username) =>
+    match === "prefix"
+      ? like(column, `${term}%`)
+      : and(like(column, `%${term}%`), notLike(column, `${term}%`));
+  const candidates = client
+    .select({ userId: searchCandidate.userId })
+    .from(searchCandidate, { forceIndex: "UserData_username_key" })
+    .where(matchesTerm(searchCandidate.username))
+    .orderBy(sql`LENGTH(${searchCandidate.username}) ASC`)
+    .limit(USER_SEARCH_CANDIDATES)
+    .as("candidates");
+  return client.query.userData.findMany({
     extras: (table) => ({
       displayTitle: displayTitleSql(table).as("displayTitle"),
     }),
@@ -1323,14 +1349,27 @@ export const listUserDataForSearchUsers = (
       },
     },
     where: and(
-      like(userData.username, `%${input.username}%`),
+      inArray(
+        userData.userId,
+        client.select({ userId: candidates.userId }).from(candidates),
+      ),
       eq(userData.approvedTos, true),
       ...(input.showAi ? [] : [eq(userData.isAi, false)]),
       ...(input.showYourself ? [] : [ne(userData.userId, ctx.userId)]),
     ),
-    orderBy: [sql`LENGTH(${userData.username}) asc`],
-    limit: 5,
+    orderBy: [sql`LENGTH(${userData.username}) ASC`],
+    limit,
   });
+};
+
+/** Results returned by one user search. */
+export const USER_SEARCH_LIMIT = 5;
+
+/** Shortest matching usernames read in full before the search filters apply. */
+const USER_SEARCH_CANDIDATES = 50;
+
+/** Table alias for the username-index candidate scan in user search. */
+const searchCandidate = alias(userData, "searchCandidate");
 
 /** Build the `userData` lookup for `getPublicUser`, including predicates on `userId`, `attackedId`, `battleType`. */
 export const findUserDataForGetPublicUser2 = (

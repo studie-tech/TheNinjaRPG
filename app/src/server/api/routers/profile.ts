@@ -245,6 +245,7 @@ import {
   selectUserItemImbuementForGetSidebarTimers,
   selectUserJutsuForFetchJutsuTimers,
   selectUserReportForGetUser,
+  USER_SEARCH_LIMIT,
   updateQuestHistoryForFetchUpdatedUserOnce,
   updateUserDataForAwardExperience,
   updateUserDataForAwardExperienceToAll,
@@ -1996,7 +1997,23 @@ export const profileRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      return listUserDataForSearchUsers(ctx.drizzle, input, ctx);
+      const prefixMatches = await listUserDataForSearchUsers(
+        ctx.drizzle,
+        input,
+        ctx,
+        "prefix",
+        USER_SEARCH_LIMIT,
+      );
+      if (prefixMatches.length >= USER_SEARCH_LIMIT) return prefixMatches;
+      // Substring matches scan the whole username index, so they only fill a short page.
+      const innerMatches = await listUserDataForSearchUsers(
+        ctx.drizzle,
+        input,
+        ctx,
+        "contains",
+        USER_SEARCH_LIMIT - prefixMatches.length,
+      );
+      return [...prefixMatches, ...innerMatches];
     }),
   // Get public information on a user
   getPublicUser: publicProcedure
