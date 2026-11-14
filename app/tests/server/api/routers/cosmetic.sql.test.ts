@@ -30,7 +30,9 @@ describeWithDatabase("cosmetic ownership and selection", () => {
       userData,
     );
     await insertUsers([{ userId: "cosmetic-owner", status: "AWAKE" }]);
-    await insertItems([{ id: "cosmetic-hat", slot: "HEAD", itemType: "ARMOR" }]);
+    await insertItems([
+      { id: "cosmetic-hat", name: "Cosmetic hat", slot: "HEAD", itemType: "ARMOR" },
+    ]);
     await insertUserItems([
       {
         id: "hat-stack",
@@ -101,7 +103,9 @@ describeWithDatabase("cosmetic ownership and selection", () => {
     const db = await getTestDatabase();
     const caller = await callerFor(cosmeticRouter, "cosmetic-owner");
     await caller.make({ userItemId: "hat-stack", expectedQuantity: 2 });
-    await insertItems([{ id: "other-hat", slot: "HEAD", itemType: "ARMOR" }]);
+    await insertItems([
+      { id: "other-hat", name: "Other hat", slot: "HEAD", itemType: "ARMOR" },
+    ]);
     await db.insert(itemVariant).values([
       {
         id: "hat-red",
