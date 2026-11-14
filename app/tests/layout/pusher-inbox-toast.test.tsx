@@ -179,6 +179,14 @@ it("counts a delivered private message in the cached profile without rereading i
     queryClient.getQueryData<UserCache>(profileKey)?.notifications?.[0]?.href,
   ).toBe("/news");
   expect(readProfile).not.toHaveBeenCalled();
+  // An older profile response must not supersede a list acknowledgement that finishes first.
+  const slowProfile = deferred<typeof profile>();
+  readProfile.mockImplementationOnce(() => slowProfile.promise);
+  const pendingProfile = queryClient.fetchQuery({
+    queryKey: profileKey,
+    staleTime: 0,
+  });
+  await waitFor(() => expect(readProfile).toHaveBeenCalledTimes(1));
   // A shown inbox list rereads instead, resetting the server count it would otherwise show.
   const listKey = getQueryKey(
     testApi.comments.getUserConversations,
@@ -194,26 +202,30 @@ it("counts a delivered private message in the cached profile without rereading i
   );
   await waitFor(() => expect(readList).toHaveBeenCalledTimes(2));
   expect(inboxNews()).toBe(2);
-  expect(readProfile).not.toHaveBeenCalled();
+  expect(readProfile).toHaveBeenCalledTimes(1);
   unsubscribeList();
+  await act(async () => {
+    slowProfile.resolve(profile);
+    await pendingProfile;
+  });
   // A delayed delivery after a list acknowledgement must not recreate the badge,
   // even after the list unmounts and the profile's older timestamp would accept it.
   await act(async () =>
     receiveEvent({ type: "newInbox", conversationId: "chat", countedAt: 10_000 }),
   );
-  await waitFor(() => expect(readProfile).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(readProfile).toHaveBeenCalledTimes(2));
   expect(inboxNews()).toBeUndefined();
   // A new authoritative profile restores the incremental path for later deliveries.
   await act(async () =>
     receiveEvent({ type: "newInbox", conversationId: "chat", countedAt: 20_000 }),
   );
   expect(inboxNews()).toBe(1);
-  expect(readProfile).toHaveBeenCalledTimes(1);
+  expect(readProfile).toHaveBeenCalledTimes(2);
   // A profile read just before the delivery may already count it, so the count is reread.
   await act(async () =>
     receiveEvent({ type: "newInbox", conversationId: "chat", countedAt: 1_500 }),
   );
-  await waitFor(() => expect(readProfile).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(readProfile).toHaveBeenCalledTimes(3));
   unsubscribe();
 });
 

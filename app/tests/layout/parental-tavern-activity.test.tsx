@@ -36,6 +36,7 @@ beforeEach(() => {
   vi.spyOn(toast, "showMutationToast").mockImplementation(() => undefined);
   Object.assign(vi.spyOn(client, "api" as never), {
     comments: testApi.comments,
+    profile: testApi.profile,
     parentalControls: testApi.parentalControls,
     tournament: testApi.tournament,
     useUtils: testApi.useUtils,
@@ -58,16 +59,14 @@ for (const source of ["save", "event"] as const) {
       let blocked = startingBlocked;
       let version = 0;
       const handlers = new Map<string, Handler>();
-      vi.spyOn(Pusher, "default").mockImplementation(function () {
-        return {
-          subscribe: (id: string) => ({
-            bind: (_name: string, handler: Handler) => handlers.set(id, handler),
-            unbind: () => handlers.delete(id),
-          }),
-          unsubscribe: (id: string) => handlers.delete(id),
-          disconnect: vi.fn(),
-        };
-      } as never);
+      vi.spyOn(Pusher, "default").mockImplementation((() => ({
+        subscribe: (id: string) => ({
+          bind: (_name: string, handler: Handler) => handlers.set(id, handler),
+          unbind: () => handlers.delete(id),
+        }),
+        unsubscribe: (id: string) => handlers.delete(id),
+        disconnect: vi.fn(),
+      })) as never);
       const readTaverns = vi.fn(() =>
         blocked ? [] : [{ id: "global", title: "Global" }],
       );
