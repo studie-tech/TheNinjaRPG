@@ -185,6 +185,21 @@ describeWithDatabase("granted items join compatible backpack stacks", () => {
     expect(await stacks()).toEqual([5, 97]);
   });
 
+  it("keeps grants out of a preloaded stack whose item changed", async () => {
+    await insertUserItems([
+      { id: "evolving", userId: PLAYER, itemId: "ore", quantity: 10 },
+    ]);
+    const db = await getTestDatabase();
+    const preloaded = await listItemForGrantUserItems(db, PLAYER, ["ore"], new Date());
+    await db
+      .update(userItem)
+      .set({ itemId: "pill" })
+      .where(eq(userItem.id, "evolving"));
+    await grant([{ itemId: "ore", quantity: 5 }], { preloaded });
+    expect(await stacks()).toEqual([5]);
+    expect(await stacks("pill")).toEqual([10]);
+  });
+
   it("keeps parallel grants within the stack size", async () => {
     await insertUserItems([
       { id: "existing", userId: PLAYER, itemId: "ore", quantity: 90 },

@@ -59,6 +59,7 @@ export const grantUserItems = async (
       const result = await updateUserItemForGrantUserItems(
         client,
         userId,
+        itemId,
         target.id,
         fill,
         now,
