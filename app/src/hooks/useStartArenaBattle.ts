@@ -1,5 +1,6 @@
 import type { RouterInputs, RouterOutputs } from "@/app/_trpc/client";
 import { api } from "@/app/_trpc/client";
+import { useCombatEntry } from "@/hooks/combatEntry";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import { showMutationToast } from "@/libs/toast";
@@ -16,11 +17,16 @@ export const useStartArenaBattle = (
   const { pusher, prepareUserUpdate, updateUser } = useRequiredUserInfo();
   const router = useRouter();
   const flight = useSingleFlight();
+  const { prepareCombatEntry, loadBattle } = useCombatEntry();
 
   const { mutate, isPending: isAttacking } = api.combat.startArenaBattle.useMutation({
-    onMutate: prepareUserUpdate,
+    onMutate: () => {
+      prepareCombatEntry();
+      return prepareUserUpdate();
+    },
     onSuccess: async (result, _variables, revision) => {
       if (result.success && result.battleId) {
+        loadBattle(result.battleId);
         await updateUser(result, { revision, refetch: false });
         pushToCombat(router, result.battleId);
         onStarted(result);

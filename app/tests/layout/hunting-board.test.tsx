@@ -4,6 +4,7 @@ import * as navigation from "next/navigation";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import * as client from "@/app/_trpc/client";
+import * as combatEntry from "@/hooks/combatEntry";
 import * as ContentBox from "@/layout/ContentBox";
 import { HuntingArrival } from "@/layout/HuntingArrival";
 import { HuntingBoard } from "@/layout/HuntingBoard";
@@ -42,6 +43,10 @@ let respond: (result: UserDeltaResponse) => Promise<void>;
 const updateUser = vi.fn(async () => undefined);
 
 beforeEach(() => {
+  vi.spyOn(combatEntry, "useCombatEntry").mockReturnValue({
+    prepareCombatEntry: vi.fn(),
+    loadBattle: vi.fn(),
+  });
   vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
     const info = UserContext.useRequiredUserData();
     return { ...info, data: info.data ? select(info.data) : undefined } as never;
@@ -253,6 +258,61 @@ it("enters a started hunt once when the battle event already navigated", async (
   );
   expect(router.push).toHaveBeenCalledTimes(1);
 });
+
+it.each([false, true])(
+  "starts battle loading before refreshes and preserves embedded refresh: %s",
+  async (isEmbedded) => {
+    let options!: {
+      onSuccess: (result: object, input: undefined, revision: number) => Promise<void>;
+    };
+    let finishRefresh!: () => void;
+    const refreshing = new Promise<void>((resolve) => {
+      finishRefresh = resolve;
+    });
+    const invalidate = vi.fn(() => refreshing);
+    const invalidateBattle = vi.fn(async () => undefined);
+    const loadBattle = vi.fn();
+    vi.spyOn(combatEntry, "useCombatEntry").mockReturnValue({
+      prepareCombatEntry: vi.fn(),
+      loadBattle,
+    });
+    Object.assign(client.api, {
+      useUtils: () => ({
+        hunting: { getBoard: { invalidate }, getSession: { invalidate } },
+        combat: { getBattle: { invalidate: invalidateBattle } },
+      }),
+    });
+    Object.assign(client.api.hunting.start, {
+      useMutation: (mutationOptions: typeof options) => {
+        options = mutationOptions;
+        return {};
+      },
+    });
+    const onStarted = isEmbedded ? vi.fn() : undefined;
+    render(<HuntingBoard onStarted={onStarted} />);
+    await act(async () => {
+      const started = options.onSuccess(
+        { success: true, message: "Started", battleId: "next-hunt-battle" },
+        undefined,
+        1,
+      );
+      // onSuccess is paused at the profile update before the refreshes begin.
+      if (isEmbedded) {
+        expect(loadBattle).not.toHaveBeenCalled();
+        expect(onStarted).toHaveBeenCalledTimes(1);
+      } else {
+        expect(loadBattle).toHaveBeenCalledWith("next-hunt-battle");
+      }
+      await Promise.resolve();
+      expect(invalidate).toHaveBeenCalledTimes(2);
+      expect(invalidateBattle).toHaveBeenCalledTimes(isEmbedded ? 1 : 0);
+      expect(navigation.useRouter().push).not.toHaveBeenCalled();
+      finishRefresh();
+      await started;
+    });
+    expect(navigation.useRouter().push).toHaveBeenCalledTimes(isEmbedded ? 0 : 1);
+  },
+);
 
 it("hides nonmatching habitats and combines rank, creature and material filters", () => {
   const view = render(<HuntingBoard />);

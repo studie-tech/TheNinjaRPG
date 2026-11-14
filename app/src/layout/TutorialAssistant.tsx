@@ -1,5 +1,6 @@
 "use client";
 
+import { useSetAtom } from "jotai";
 import {
   ArrowRight,
   Gift,
@@ -32,7 +33,7 @@ import {
 import type { UserQuest } from "@/drizzle/schema";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
-import { useTutorialStep } from "@/hooks/tutorial";
+import { tutorialPageGuidanceAtom, useTutorialStep } from "@/hooks/tutorial";
 import { useAbVariant } from "@/hooks/useAbVariant";
 import { useActivityDock } from "@/hooks/useActivityDock";
 import { ActivityDock } from "@/layout/ActivityDock";
@@ -195,6 +196,13 @@ const PlayerTutorialAssistant: React.FC<
   }));
   const pathname = usePublicPathname();
   const router = useRouter();
+
+  // While the lesson is open it leads the player to each step's page itself.
+  const setPageGuidance = useSetAtom(tutorialPageGuidanceAtom);
+  useEffect(() => {
+    setPageGuidance(true);
+    return () => setPageGuidance(false);
+  }, [setPageGuidance]);
 
   const {
     isDisablingTutorial,
