@@ -31,7 +31,7 @@ import { drizzleDB } from "@/server/db";
 import { enforceBotId } from "@/server/utils/botid";
 import { clientErrorMessage } from "@/server/utils/mysqlErrors";
 import { measureTrpcCall } from "@/server/utils/trpcMetrics";
-import { getClientIp } from "@/utils/network";
+import { getClientCountry, getClientIp } from "@/utils/network";
 
 /**
  * This is the actual context you will use in your router. It will be used to process every request
@@ -48,6 +48,7 @@ export const createAppTRPCContext = async (options: {
   // Get IP
   const { readHeaders } = options;
   const userIp = getClientIp(readHeaders);
+  const userCountry = getClientCountry(readHeaders);
   // Get agent
   const userAgent = readHeaders.get("user-agent") ?? undefined;
   // Optional for server-side callers and older clients, which have no browser attribution.
@@ -65,6 +66,7 @@ export const createAppTRPCContext = async (options: {
     ...telemetry,
     drizzle: drizzleDB,
     userIp,
+    userCountry,
     userId,
     userAgent,
     abLemuReplacementVariant,
@@ -81,6 +83,7 @@ export const createAppTRPCContext = async (options: {
 export const createCdnTRPCContext = (readHeaders: ReadonlyHeaders) => ({
   drizzle: drizzleDB,
   userIp: getClientIp(readHeaders),
+  userCountry: undefined,
   userId: null,
   userAgent: undefined,
   abLemuReplacementVariant: undefined,
@@ -250,6 +253,7 @@ export const cdnCachedProcedure = publicProcedure
         // Nulled after the rate limiter, which is the only thing that reads it: a
         // shared copy must not be able to depend on who asked for it.
         userIp: undefined,
+        userCountry: undefined,
         userAgent: undefined,
         abLemuReplacementVariant: undefined,
         wallpaperVariant: undefined,

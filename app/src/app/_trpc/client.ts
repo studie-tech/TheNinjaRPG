@@ -68,6 +68,8 @@ export const PUBLIC_MUTATIONS: string[] = [
   // Landing-page analytics: writes VisitorLog and the A/B "loaded" events. Only ever
   // runs for signed-out visitors, so blocking it here disabled recruitment tracking.
   "misc.trackVisitor",
+  // Declining marketing cookies forgets the visitor's ad click, signed in or not.
+  "misc.withdrawAdClickConsent",
   // Email preference links are followed straight from an email, usually signed out.
   "misc.toggleEmailReminder",
   "misc.deleteEmailReminder",

@@ -7,6 +7,7 @@ import {
   STARTING_REPUTATION_POINTS,
 } from "@/drizzle/constants";
 import {
+  adClick,
   auctionOffer,
   bloodline,
   farmPlot,
@@ -116,6 +117,7 @@ describeWithDatabase("staff user-id rename", () => {
       huntingSession,
       huntingProgress,
       huntingReceipt,
+      adClick,
       auctionOffer,
       bloodline,
       notification,
@@ -145,7 +147,7 @@ describeWithDatabase("staff user-id rename", () => {
   });
 
   it.each(["rename", "delete"] as const)(
-    "keeps hunting state aligned with character %s",
+    "keeps hunting state and ad clicks aligned with character %s",
     async (operation) => {
       const database = await getTestDatabase();
       await database.insert(huntingSession).values({
@@ -166,6 +168,14 @@ describeWithDatabase("staff user-id rename", () => {
         createdAt: new Date(),
         result: huntingVictoryReceipt(huntingBattleState(), "hunt", "Won"),
       });
+      await database.insert(adClick).values({
+        id: "ad-click",
+        clickId: "gclid-rename",
+        clickIdType: "gclid",
+        ipHash: "ip-hash",
+        userId: OLD_USER_ID,
+        adUserDataConsent: "granted",
+      });
       if (operation === "rename") {
         const caller = await callerFor(staffRouter, STAFF);
         expect(
@@ -173,7 +183,7 @@ describeWithDatabase("staff user-id rename", () => {
             .success,
         ).toBe(true);
       } else await deleteUser(database, OLD_USER_ID);
-      for (const table of [huntingSession, huntingProgress, huntingReceipt]) {
+      for (const table of [huntingSession, huntingProgress, huntingReceipt, adClick]) {
         expect(
           await database.select().from(table).where(eq(table.userId, OLD_USER_ID)),
         ).toHaveLength(0);

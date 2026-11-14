@@ -20,12 +20,18 @@ import {
   IMG_PIXEL_HERO_POSTER,
   TOTAL_PLAYERS_MILESTONE,
 } from "@/drizzle/constants";
-import { useCookieConsent } from "@/hooks/useCookieConsent";
+import { useCookieConsent, useMarketingConsent } from "@/hooks/useCookieConsent";
 import { IllustratedWelcome } from "@/layout/IllustratedWelcome";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import { WelcomeQuestions } from "@/layout/WelcomeQuestions";
-import { readCampaignSource, storeLandingAttribution } from "@/libs/campaignSource";
+import {
+  readCampaignSource,
+  readLandingAdClick,
+  readMarketingConsent,
+  storeAdClick,
+  storeLandingAttribution,
+} from "@/libs/campaignSource";
 import { getGameLayout } from "@/libs/gameLayouts";
 import { LEGAL_LINKS } from "@/libs/legalLinks";
 import { cn } from "@/libs/shadui";
@@ -711,35 +717,68 @@ const usePixelHeroVideoPlayback = (
 };
 
 // VisitorLog is keyed on a hash of the IP and deduplicated by the server, so the visit is
-// reported once per page load without keeping a marker on the device
+// reported once per page load without keeping a marker on the device. A Google Ads click
+// is reported once Cookiebot has read the visitor's choice, and again if the visitor then
+// accepts marketing cookies, since the server may have declined to keep it unanswered.
 let isVisitReported = false;
+let reportedClickConsent: "granted" | "unanswered" | null = null;
 
 const SetReferal = () => {
   const wallpaperVariant = useWallpaperVariant();
   const searchParams = useSearchParams();
   const { isSignedIn, isLoaded } = useUser();
   const hasStatisticsConsent = useCookieConsent("statistics");
+  const marketingConsent = useMarketingConsent();
+  // A transport failure stays silent: the device marker survives, so the next visit retries.
+  const { mutate: withdrawAdClick } = api.misc.withdrawAdClickConsent.useMutation({
+    meta: { handlesTransportError: true },
+  });
   const { mutate: trackVisitor } = api.misc.trackVisitor.useMutation({
-    // A failed report may be retried on the next render of the landing page
-    onSettled: (result) => {
-      if (!result?.success) isVisitReported = false;
+    onSettled: (result, _error, input) => {
+      // The device remembers a kept click until the visitor registers, unless the visitor
+      // declined marketing cookies while the report was on its way.
+      if (result?.isAdClickKept && input.adClick) {
+        if (readMarketingConsent() === "declined") {
+          withdrawAdClick({ clickId: input.adClick.clickId });
+        } else {
+          storeAdClick(input.adClick.clickId);
+        }
+      }
+      if (result?.success) return;
+      // A failed report may be retried on the next render of the landing page
+      isVisitReported = false;
+      if (input.adClick) reportedClickConsent = null;
     },
   });
   useEffect(() => {
     // Reruns once consent arrives to retain the campaign source for registration.
     storeLandingAttribution(searchParams);
-    const utmSource = searchParams?.get("utm_source") ?? undefined;
-    if (!isVisitReported && isLoaded && !isSignedIn) {
-      isVisitReported = true;
-      trackVisitor({
-        ref: safeLocalStorageGetItem("ref") ?? undefined,
-        utmSource: utmSource ?? readCampaignSource(),
-        wallpaperVariant,
-      });
-    }
+    // A decline withdraws the reported click, so a later grant reports it again.
+    if (marketingConsent === "declined") reportedClickConsent = null;
+    if (!isLoaded || isSignedIn) return;
+    const landingAdClick = readLandingAdClick(searchParams);
+    const clickConsent =
+      landingAdClick && marketingConsent !== "declined" ? marketingConsent : null;
+    const reportsClick =
+      clickConsent !== null &&
+      reportedClickConsent !== "granted" &&
+      clickConsent !== reportedClickConsent;
+    if (isVisitReported && !reportsClick) return;
+    isVisitReported = true;
+    if (reportsClick) reportedClickConsent = clickConsent;
+    trackVisitor({
+      ref: safeLocalStorageGetItem("ref") ?? undefined,
+      utmSource: searchParams?.get("utm_source") ?? readCampaignSource(),
+      wallpaperVariant,
+      ...(reportsClick &&
+        landingAdClick && {
+          adClick: { ...landingAdClick, marketingConsent: clickConsent },
+        }),
+    });
   }, [
     searchParams,
     hasStatisticsConsent,
+    marketingConsent,
     isLoaded,
     isSignedIn,
     trackVisitor,

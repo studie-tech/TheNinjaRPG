@@ -1,6 +1,11 @@
 import { z } from "zod";
-import { IMG_DEFAULT_PROFILE_PICTURE } from "@/drizzle/constants";
+import { AdClickConsents, IMG_DEFAULT_PROFILE_PICTURE } from "@/drizzle/constants";
 import type { userData } from "@/drizzle/schema";
+import {
+  findLatestUnlinkedAdClickByIp,
+  findUnlinkedAdClickByClickId,
+  linkAdClickToUser,
+} from "@/queries/adConversions";
 import { fetchBloodline } from "@/queries/bloodline";
 import { findUserEmailReminder } from "@/queries/emailReminder";
 import {
@@ -36,6 +41,7 @@ import {
   errorResponse,
   protectedProcedure,
 } from "@/server/api/trpc";
+import { adClickConsentFor } from "@/server/utils/adConversions";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { settleRecordedLedger } from "@/server/utils/purchases/grant";
 import { isDeletedStoreUserId } from "@/server/utils/purchases/storeIdentity";
@@ -88,9 +94,27 @@ export const registerRouter = createTRPCRouter({
   createCharacter: protectedProcedure
     .meta({ mcp: { description: "Create a new character" } })
     // Campaign attribution is recorded separately; open forms may still send this hint.
-    .input(registrationSchema.safeExtend({ utm_source: utmSourceSchema }))
-    .output(baseServerResponse.extend({ registrationId: z.string().optional() }))
+    .input(
+      registrationSchema.safeExtend({
+        utm_source: utmSourceSchema,
+        // The registrant's own marketing cookie choice decides whether an ad click is
+        // linked; clients that do not send it are treated as declined.
+        marketingConsent: z.enum([...AdClickConsents, "declined"]).optional(),
+        // The click remembered on the device since the visitor landed from an ad.
+        adClickId: z.string().max(512).optional(),
+      }),
+    )
+    .output(
+      baseServerResponse.extend({
+        registrationId: z.string().optional(),
+        isAdClickLinked: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
+      const adClickConsent = adClickConsentFor(
+        input.marketingConsent ?? "declined",
+        ctx.userCountry,
+      );
       // Query
       const [
         villageData,
@@ -106,6 +130,8 @@ export const registerRouter = createTRPCRouter({
         recruitEligibility,
         tombstones,
         carryoverReports,
+        storedAdClick,
+        ipAdClick,
       ] = await Promise.all([
         findVillageForCreateCharacter(ctx.drizzle),
         findUserById(ctx.drizzle, ctx.userId),
@@ -127,7 +153,15 @@ export const registerRouter = createTRPCRouter({
           : Promise.resolve(null),
         fetchActiveSanctionTombstones(ctx.drizzle),
         listUserReportForCreateCharacter(ctx.drizzle, ctx),
+        adClickConsent && input.adClickId
+          ? findUnlinkedAdClickByClickId(ctx.drizzle, input.adClickId)
+          : null,
+        adClickConsent && isKnownIp(ctx.userIp)
+          ? findLatestUnlinkedAdClickByIp(ctx.drizzle, ctx.userIp)
+          : null,
       ]);
+      // The click stored on the device is the registrant's own; the IP match is a fallback.
+      const adClick = storedAdClick ?? ipAdClick;
       // Whatever the ledger holds for this identity is settled once a character row exists,
       // on every path that reaches one. A tombstone seen here means receipts can still be
       // landing under it until it is removed below; payment history means there is
@@ -276,7 +310,14 @@ export const registerRouter = createTRPCRouter({
         return errorResponse("Character already created for this account");
       }
       await deleteUserAttributes(ctx.drizzle, ctx.userId);
-      await Promise.all([
+      const [adClickLink] = await Promise.all([
+        adClick && adClickConsent
+          ? linkAdClickToUser(ctx.drizzle, {
+              id: adClick.id,
+              userId: ctx.userId,
+              consent: adClickConsent,
+            })
+          : null,
         insertStarterHomeItems(ctx.drizzle, ctx.userId),
         insertQuestHistoryForCreateCharacter(ctx.drizzle, ctx),
         insertUserAttributeForCreateCharacter(ctx.drizzle, unique_attributes, ctx),
@@ -310,6 +351,7 @@ export const registerRouter = createTRPCRouter({
         success: true,
         message: "Character created",
         registrationId: ctx.userId,
+        isAdClickLinked: (adClickLink?.rowsAffected ?? 0) > 0,
       };
     }),
 });

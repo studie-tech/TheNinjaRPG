@@ -42,6 +42,10 @@ export const hasDeclinedCookieConsent = (category: ConsentCategory): boolean => 
   return cookiebot?.hasResponse === true && cookiebot.consent?.[category] !== true;
 };
 
+/** Whether Cookiebot has loaded and the visitor's stored choice, if any, is known. */
+export const isCookieConsentKnown = (): boolean =>
+  typeof window !== "undefined" && window.Cookiebot?.consent !== undefined;
+
 export const subscribeToCookieConsent = (onChange: () => void): (() => void) => {
   for (const event of CONSENT_EVENTS) window.addEventListener(event, onChange);
   return () => {

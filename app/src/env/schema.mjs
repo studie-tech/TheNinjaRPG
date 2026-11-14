@@ -89,6 +89,14 @@ export const serverSchema = z.object({
   TOWER_DEFENSE_CLAIMS_ENABLED: z.enum(["true", "false"]).optional(),
   // Key for the IP hashes in visitor analytics; changing it breaks every stored join
   IP_HASH_SECRET: z.string().optional(),
+  // Google Ads click conversions sent through the Data Manager API: the 10-digit
+  // customer ID, the two "Import from clicks" conversion action IDs, and a service
+  // account that is a user of the Ads account. The private key's newlines may be escaped.
+  GOOGLE_ADS_CUSTOMER_ID: z.string().regex(/^\d{10}$/).optional(),
+  GOOGLE_ADS_SIGNUP_CONVERSION_ACTION_ID: z.string().regex(/^\d+$/).optional(),
+  GOOGLE_ADS_TUTORIAL_CONVERSION_ACTION_ID: z.string().regex(/^\d+$/).optional(),
+  GOOGLE_DATA_MANAGER_CLIENT_EMAIL: z.email().optional(),
+  GOOGLE_DATA_MANAGER_PRIVATE_KEY: z.string().optional(),
   // Apple Push Notification service. APNS_PRIVATE_KEY holds the contents of the .p8
   // key file; newlines may be escaped as \n because most secret stores are single-line.
   APNS_KEY_ID: z.string().optional(),
@@ -195,6 +203,12 @@ export const serverEnv = {
   BOTID_ENFORCE: /** @type {"true" | "false" | undefined} */ (process.env.BOTID_ENFORCE),
   AI_TEST_USER_BROKER_TOKEN: process.env.AI_TEST_USER_BROKER_TOKEN,
   IP_HASH_SECRET: process.env.IP_HASH_SECRET,
+  GOOGLE_ADS_CUSTOMER_ID: process.env.GOOGLE_ADS_CUSTOMER_ID,
+  GOOGLE_ADS_SIGNUP_CONVERSION_ACTION_ID: process.env.GOOGLE_ADS_SIGNUP_CONVERSION_ACTION_ID,
+  GOOGLE_ADS_TUTORIAL_CONVERSION_ACTION_ID:
+    process.env.GOOGLE_ADS_TUTORIAL_CONVERSION_ACTION_ID,
+  GOOGLE_DATA_MANAGER_CLIENT_EMAIL: process.env.GOOGLE_DATA_MANAGER_CLIENT_EMAIL,
+  GOOGLE_DATA_MANAGER_PRIVATE_KEY: process.env.GOOGLE_DATA_MANAGER_PRIVATE_KEY,
   // Tower Defense HMAC secret for signing session data
   TOWER_DEFENSE_HMAC_SECRET: process.env.TOWER_DEFENSE_HMAC_SECRET,
   TOWER_DEFENSE_CLAIMS_ENABLED: /** @type {"true" | "false" | undefined} */ (

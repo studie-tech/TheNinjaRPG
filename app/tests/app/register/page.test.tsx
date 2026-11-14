@@ -8,6 +8,12 @@ import * as client from "@/app/_trpc/client";
 import * as carousel from "@/components/ui/carousel";
 import * as characterPreview from "@/layout/CharacterPreview";
 import { BOTID_BLOCKED_MESSAGE } from "@/libs/botid";
+import {
+  hasWithdrawnAdClickFor,
+  readStoredAdClick,
+  recordAdClickWithdrawn,
+  storeAdClick,
+} from "@/libs/campaignSource";
 import * as toast from "@/libs/toast";
 import {
   installBrowserGlobals,
@@ -17,7 +23,7 @@ import { mockUserContextValue } from "../../setup/userContext";
 
 const { default: RegisterPage } = await import("@/app/[shell]/register/page");
 
-type Outcome = { success: boolean; message: string };
+type Outcome = { success: boolean; message: string; isAdClickLinked?: boolean };
 
 const clients: QueryClient[] = [];
 
@@ -32,7 +38,7 @@ afterEach(() => {
 });
 
 /** Mount the real page with the form valid, so a submit reaches `createCharacter`. */
-const mount = (createCharacter: () => Promise<Outcome>) => {
+const mount = (createCharacter: (input: object) => Promise<Outcome>) => {
   const globalOnError = vi.fn();
   const queryClient = new QueryClient({
     defaultOptions: { mutations: { onError: globalOnError } },
@@ -163,6 +169,31 @@ it("clears the reason once a retry succeeds", async () => {
 
   fireEvent.submit(form);
   await waitFor(() => expect(view.queryByRole("alert")).toBeNull());
+});
+
+it("sends the device's ad click and consent, and marks the click linked", async () => {
+  const createCharacter = vi.fn(async (_input: object) => ({
+    success: true,
+    message: "Character created",
+    isAdClickLinked: true,
+  }));
+  const { form } = mount(createCharacter);
+  window.Cookiebot = { consent: { marketing: true }, hasResponse: true };
+  storeAdClick("Cj0KCQiA-device-click");
+  recordAdClickWithdrawn("player-who-declined-before");
+  try {
+    fireEvent.submit(form);
+    await waitFor(() => expect(readStoredAdClick()).toBeUndefined());
+    expect(createCharacter.mock.calls[0]?.[0]).toMatchObject({
+      marketingConsent: "granted",
+      adClickId: "Cj0KCQiA-device-click",
+    });
+    // A later decline must withdraw the newly linked click again.
+    expect(hasWithdrawnAdClickFor("player-who-declined-before")).toBe(false);
+  } finally {
+    delete window.Cookiebot;
+    localStorage.clear();
+  }
 });
 
 it("renders one trait picker per attribute slot, each showing its own choice", () => {

@@ -10,6 +10,7 @@ import {
 } from "@/deltas/staff";
 import type { UserStatus } from "@/drizzle/constants";
 import {
+  adClick,
   farmCollectionLog,
   farmExtraction,
   farmPlot,
@@ -835,7 +836,7 @@ export const staffRouter = createTRPCRouter({
         updateUserNindoForUpdateUserId(ctx.drizzle, input),
         updateUserItemForUpdateUserId(ctx.drizzle, input),
         updateUserHomeForUpdateUserId(ctx.drizzle, input),
-        ...[huntingSession, huntingProgress, huntingReceipt].map((table) =>
+        ...[huntingSession, huntingProgress, huntingReceipt, adClick].map((table) =>
           updateTableForUpdateUserId(ctx.drizzle, table, input),
         ),
         updateUserJutsuForUpdateUserId(ctx.drizzle, input),

@@ -24,6 +24,7 @@ import {
   WAR_KILL_RETENTION_DAYS,
 } from "@/drizzle/constants";
 import {
+  adClick,
   anbuSquad,
   automatedModeration,
   battle,
@@ -58,6 +59,7 @@ import { combatEnergyRecoverySql } from "@/libs/combat/database";
 import { nextSnapshotSql, selectClaimedRankedQueueEntry } from "@/queries/concurrency";
 import { withoutDungeonReservation } from "@/queries/dungeonReservation";
 import type { DrizzleClient } from "@/server/db";
+import { AD_CLICK_RETENTION_DAYS } from "@/server/utils/adConversions";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { DAY_S, secondsFromNow } from "@/utils/time";
 
@@ -484,6 +486,25 @@ export const deleteHistoricalIpForGET = (
     .delete(historicalIp)
     .where(lt(historicalIp.usedAt, sql`CURRENT_TIMESTAMP(3) - INTERVAL 90 DAY`))
     .orderBy(historicalIp.usedAt)
+    .limit(rangeCleanupBatchSize);
+
+/**
+ * Build the `adClick` deletion for `GET`: clicks past the window in which Google accepts
+ * their conversions, linked or not.
+ */
+export const deleteAdClickForGET = (
+  client: Pick<DrizzleClient, "delete">,
+  rangeCleanupBatchSize: number,
+) =>
+  client
+    .delete(adClick)
+    .where(
+      lt(
+        adClick.createdAt,
+        sql`CURRENT_TIMESTAMP(3) - INTERVAL ${AD_CLICK_RETENTION_DAYS} DAY`,
+      ),
+    )
+    .orderBy(adClick.createdAt)
     .limit(rangeCleanupBatchSize);
 
 /** Build the `userActivityEvent` deletion for `GET`, using predicates on `createdAt`. */

@@ -20,3 +20,11 @@ export const getClientIp = (headers: Headers | ReadonlyHeaders): string => {
   const realIp = headers.get("x-real-ip");
   return realIp ?? "unknown";
 };
+
+/**
+ * The visitor's ISO 3166-1 alpha-2 country, as Vercel geolocates the request.
+ * Undefined outside Vercel (local development) or when the lookup fails.
+ */
+export const getClientCountry = (
+  headers: Headers | ReadonlyHeaders,
+): string | undefined => headers.get("x-vercel-ip-country")?.toUpperCase() || undefined;

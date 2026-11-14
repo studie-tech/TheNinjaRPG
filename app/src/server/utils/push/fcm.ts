@@ -2,14 +2,16 @@
  * Firebase Cloud Messaging transport (HTTP v1).
  *
  * The legacy server key was switched off in 2024, so this authenticates with a service
- * account: an RS256 JWT is exchanged at Google's token endpoint for an OAuth2 access
- * token, which is cached until shortly before it expires.
+ * account, whose access token is cached until shortly before it expires.
  */
 
 import { env } from "@/env/server.mjs";
+import {
+  exchangeGoogleServiceAccountToken,
+  type GoogleAccessToken,
+} from "@/server/utils/googleServiceAccount";
 import { retryRejectedOnce } from "./authRetry";
 import { mapWithConcurrency } from "./batch";
-import { signJwt } from "./jwt";
 import { fcmMessage } from "./payloads";
 import {
   failAll,
@@ -19,37 +21,16 @@ import {
   toPublicResult,
 } from "./types";
 
-const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 const REQUEST_TIMEOUT_MS = 10_000;
 /** Refresh a minute early so a token cannot expire mid-flight. */
 const EXPIRY_SKEW_MS = 60_000;
 
-interface CachedAccessToken {
-  token: string;
-  expiresAt: number;
-}
-
-let cachedAccessToken: CachedAccessToken | null = null;
+let cachedAccessToken: GoogleAccessToken | null = null;
 let accessTokenPromise: Promise<string> | null = null;
 
 export const isConfigured = (): boolean =>
   Boolean(env.FCM_PROJECT_ID && env.FCM_CLIENT_EMAIL && env.FCM_PRIVATE_KEY);
-
-const buildAssertion = (): string => {
-  const issuedAt = Math.floor(Date.now() / 1000);
-  return signJwt({
-    algorithm: "RS256",
-    claims: {
-      iss: env.FCM_CLIENT_EMAIL ?? "",
-      scope: SCOPE,
-      aud: TOKEN_ENDPOINT,
-      iat: issuedAt,
-      exp: issuedAt + 3600,
-    },
-    privateKey: env.FCM_PRIVATE_KEY ?? "",
-  });
-};
 
 const getAccessToken = async (): Promise<string> => {
   const now = Date.now();
@@ -57,34 +38,19 @@ const getAccessToken = async (): Promise<string> => {
     return cachedAccessToken.token;
   }
   if (!accessTokenPromise) {
-    accessTokenPromise = (async () => {
-      const response = await fetch(TOKEN_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-          assertion: buildAssertion(),
-        }),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    accessTokenPromise = exchangeGoogleServiceAccountToken({
+      clientEmail: env.FCM_CLIENT_EMAIL ?? "",
+      privateKey: env.FCM_PRIVATE_KEY ?? "",
+      scope: SCOPE,
+      label: "FCM",
+    })
+      .then((accessToken) => {
+        cachedAccessToken = accessToken;
+        return accessToken.token;
+      })
+      .finally(() => {
+        accessTokenPromise = null;
       });
-      if (!response.ok) {
-        throw new Error(`FCM token exchange failed: ${response.status}`);
-      }
-      const payload = (await response.json()) as {
-        access_token?: string;
-        expires_in?: number;
-      };
-      if (!payload.access_token) {
-        throw new Error("FCM token exchange returned no access token");
-      }
-      cachedAccessToken = {
-        token: payload.access_token,
-        expiresAt: Date.now() + (payload.expires_in ?? 3600) * 1000,
-      };
-      return cachedAccessToken.token;
-    })().finally(() => {
-      accessTokenPromise = null;
-    });
   }
   return accessTokenPromise;
 };

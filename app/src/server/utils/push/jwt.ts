@@ -1,5 +1,5 @@
 /**
- * Minimal JWT signing for the two push providers. Both need a compact JWS with a raw
+ * Minimal JWT signing for the push providers and Google service accounts. Each needs a compact JWS with a raw
  * private key and nothing else — APNs signs its provider token with ES256, Google signs
  * its service-account assertion with RS256 — so this replaces a dependency that would
  * otherwise exist only to concatenate three base64url segments.

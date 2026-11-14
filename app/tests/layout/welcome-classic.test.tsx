@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as clerk from "@clerk/nextjs";
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
 import * as navigation from "next/navigation";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as client from "@/app/_trpc/client";
@@ -42,7 +42,10 @@ beforeEach(() => {
     />
   )) as never);
   Object.assign(vi.spyOn(client, "api" as never), {
-    misc: { trackVisitor: { useMutation: () => ({ mutate: vi.fn() }) } },
+    misc: {
+      trackVisitor: { useMutation: () => ({ mutate: vi.fn() }) },
+      withdrawAdClickConsent: { useMutation: () => ({ mutate: vi.fn() }) },
+    },
   });
 });
 
@@ -67,6 +70,60 @@ describe("classic welcome page", () => {
     } finally {
       if (storedRef === null) localStorage.removeItem("ref");
       else localStorage.setItem("ref", storedRef);
+    }
+  });
+
+  it("reports a landing ad click again after consent is declined and granted once more", () => {
+    const reports: { adClick?: { marketingConsent: string } }[] = [];
+    Object.assign(vi.spyOn(client, "api" as never), {
+      misc: {
+        trackVisitor: {
+          useMutation: (options: {
+            onSettled: (result: object, error: null, input: object) => void;
+          }) => ({
+            mutate: (input: (typeof reports)[number]) => {
+              reports.push(input);
+              options.onSettled(
+                { success: true, isAdClickKept: Boolean(input.adClick) },
+                null,
+                input,
+              );
+            },
+          }),
+        },
+        withdrawAdClickConsent: { useMutation: () => ({ mutate: vi.fn() }) },
+      },
+    });
+    vi.spyOn(clerk, "useUser").mockReturnValue({
+      isSignedIn: false,
+      isLoaded: true,
+    } as never);
+    vi.spyOn(navigation, "useSearchParams").mockReturnValue(
+      new URLSearchParams("gclid=Cj0KCQiA-landing-click") as never,
+    );
+    const answer = (marketing: boolean | undefined, event: string) => {
+      window.Cookiebot = {
+        consent: { marketing: marketing === true },
+        hasResponse: marketing !== undefined,
+      };
+      act(() => {
+        window.dispatchEvent(new window.Event(event));
+      });
+    };
+    try {
+      answer(undefined, "CookiebotOnConsentReady");
+      render(<Welcome />);
+      answer(true, "CookiebotOnAccept");
+      answer(false, "CookiebotOnDecline");
+      answer(true, "CookiebotOnAccept");
+      expect(reports.map((report) => report.adClick?.marketingConsent)).toEqual([
+        "unanswered",
+        "granted",
+        "granted",
+      ]);
+    } finally {
+      delete window.Cookiebot;
+      localStorage.removeItem("ad_click");
     }
   });
 
