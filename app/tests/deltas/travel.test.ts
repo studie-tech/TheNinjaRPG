@@ -19,7 +19,7 @@ it("adds arrivals, replaces returning players' stale rows and keeps others' live
   const walker = row("walker", 1, 1);
   const idle = row("idle", 4, 4);
   const returning = row("returning", 2, 2);
-  const current = snapshot([walker, idle, returning]);
+  const current = snapshot([walker, idle, returning, row("departed", 3, 3)]);
   const positions = new Map([
     ["walker", { longitude: 3, latitude: 2 }],
     ["idle", { longitude: 4, latitude: 4 }],

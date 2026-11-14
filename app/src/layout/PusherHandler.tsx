@@ -1,6 +1,6 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { getQueryKey } from "@trpc/react-query";
 import { useStore } from "jotai";
 import Pusher from "pusher-js";
@@ -58,7 +58,7 @@ export type UserEvent = {
   sector?: number;
   conversationId?: string;
   isPublic?: boolean;
-  /** Server time at which a delivered private message had been counted in inbox news. */
+  /** Server time just before a delivered private message starts counting in inbox news. */
   countedAt?: number;
 };
 
@@ -126,19 +126,30 @@ export const usePusherHandler = (
           (!conversationId || !store.get(chatViewedConversationsAtom)[conversationId])
         );
       };
+      const inboxKey = getQueryKey(
+        api.comments.getUserConversations,
+        undefined,
+        "query",
+      );
+      const inboxHash = hashKey(inboxKey);
+      const profileHash = hashKey(getQueryKey(api.profile.getUser, undefined, "query"));
+      // A list read resets inbox news, even when its observer unmounts before delivery.
+      // Successful server reads establish ordering without comparing client and server clocks.
+      let inboxAcknowledged = queryClient.getQueryData(inboxKey) !== undefined;
+      const unsubscribeInboxReads = queryClient.getQueryCache().subscribe((event) => {
+        if (
+          event.type !== "updated" ||
+          event.action.type !== "success" ||
+          event.action.manual
+        )
+          return;
+        if (event.query.queryHash === inboxHash) inboxAcknowledged = true;
+        else if (event.query.queryHash === profileHash) inboxAcknowledged = false;
+      });
       /** Whether a visible inbox list observes the conversation listing. */
-      const isInboxListShown = () =>
-        !!queryClient
-          .getQueryCache()
-          .find({
-            queryKey: getQueryKey(
-              api.comments.getUserConversations,
-              undefined,
-              "query",
-            ),
-            exact: true,
-          })
-          ?.isActive();
+      const inboxQuery = () =>
+        queryClient.getQueryCache().find({ queryKey: inboxKey, exact: true });
+      const isInboxListShown = () => !!inboxQuery()?.isActive();
       /** Wait for the initial profile before applying account, visibility and mute guards. */
       const resolveNotificationProfile = async (
         conversationId: string | undefined,
@@ -326,12 +337,15 @@ export const usePusherHandler = (
             // A shown list's reread also resets the server's inbox news, so no count appears.
             void utils.comments.getUserConversations.invalidate();
           } else if (
+            inboxAcknowledged ||
+            inboxQuery()?.state.fetchStatus === "fetching" ||
             !isInboxDeliveryAfterProfile(
               utils.profile.getUser.getData()?.serverTime,
               data.countedAt,
             )
           ) {
-            // A profile read near the delivery may already count it; read the count instead.
+            // Profile reads can include a delivery, and list reads can acknowledge it.
+            // Either uncertainty needs the authoritative count.
             void utils.comments.getUserConversations.invalidate();
             try {
               await utils.profile.getUser.invalidate(undefined, { refetchType: "all" });
@@ -455,6 +469,7 @@ export const usePusherHandler = (
       }
       // Cleanup
       return () => {
+        unsubscribeInboxReads();
         for (const unsubscribe of pendingBattleSubscriptions) unsubscribe();
         pusher.unsubscribe(userId);
         if (clanId) pusher.unsubscribe(clanId);

@@ -291,7 +291,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const remoteWalksRef = useRef(new Map<string, symbol>());
   /** Announced players missing from the snapshot; a burst resolves through one narrow read. */
   const arrivalsRef = useRef({
-    wanted: new Set<string>(),
+    wanted: new Map<string, { movement?: Pick<UserData, "longitude" | "latitude"> }>(),
     queued: new Set<string>(),
     timer: undefined as ReturnType<typeof setTimeout> | undefined,
   });
@@ -903,11 +903,27 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       for (const userId of userIds) arrivals.wanted.delete(userId);
       return reloadSectorPresence();
     }
+    // Entry identity distinguishes a return from an earlier arrival whose read is pending.
+    const requested = new Map(userIds.map((id) => [id, arrivals.wanted.get(id)]));
+    for (const pending of requested.values()) {
+      if (pending) pending.movement = undefined;
+    }
+    const clearRequested = () => {
+      for (const [id, pending] of requested) {
+        if (arrivals.wanted.get(id) === pending) arrivals.wanted.delete(id);
+      }
+    };
     try {
       const users = await utils.client.travel.getSectorUsers.query({ sector, userIds });
-      // Players who left while the read was pending stay off the map.
-      const arrived = users.filter((user) => arrivals.wanted.has(user.userId));
-      for (const userId of userIds) arrivals.wanted.delete(userId);
+      // A departure cancels this identity. Only movement received during the read can
+      // override its coordinates; all identity and disguise fields remain server-formatted.
+      const arrived = users.flatMap((user) => {
+        const pending = requested.get(user.userId);
+        return pending && arrivals.wanted.get(user.userId) === pending
+          ? [{ ...user, ...pending.movement }]
+          : [];
+      });
+      clearRequested();
       if (!mountedRef.current || sectorRef.current !== sector) return;
       const positions = new Map(
         usersRef.current.map((user) => [
@@ -917,7 +933,7 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
       );
       await addArrivals(snapshot, arrived, positions);
     } catch {
-      for (const userId of userIds) arrivals.wanted.delete(userId);
+      clearRequested();
       reloadSectorPresence();
     }
   };
@@ -929,8 +945,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const requestArrival = (data: UserData) => {
     if (!isSectorPresenceStatus(data.status)) return;
     const arrivals = arrivalsRef.current;
-    if (arrivals.wanted.has(data.userId)) return;
-    arrivals.wanted.add(data.userId);
+    const pending = arrivals.wanted.get(data.userId);
+    if (pending) {
+      pending.movement = { longitude: data.longitude, latitude: data.latitude };
+      return;
+    }
+    arrivals.wanted.set(data.userId, {});
     arrivals.queued.add(data.userId);
     arrivals.timer ??= setTimeout(() => void flushArrivals(), SECTOR_ARRIVAL_BATCH_MS);
   };

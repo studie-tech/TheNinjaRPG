@@ -118,7 +118,7 @@ export const getSectorUserUpdate = (
 /**
  * Add players who joined the sector after its snapshot, as the arrival read presents them,
  * replacing the stale row of a player who left and returned. Players already shown keep their
- * live map positions, so merging the snapshot moves nobody back.
+ * live map positions, and departed players remain absent from the merged snapshot.
  */
 export const addSectorArrivals = (
   current: RouterOutputs["travel"]["getSectorData"],
@@ -128,16 +128,19 @@ export const addSectorArrivals = (
   // A viewer who cannot scout has an empty snapshot, which no arrival changes.
   if (current.warData === null || arrivals.length === 0) return current;
   const arrived = new Map(arrivals.map((row) => [row.userId, row]));
-  const users = current.users.map((row) => {
-    const replacement = arrived.get(row.userId);
-    if (replacement) {
-      arrived.delete(row.userId);
-      return replacement;
-    }
-    const live = positions.get(row.userId);
-    return live && (live.longitude !== row.longitude || live.latitude !== row.latitude)
-      ? { ...row, longitude: live.longitude, latitude: live.latitude }
-      : row;
-  });
+  const users = current.users
+    .filter((row) => positions.has(row.userId) || arrived.has(row.userId))
+    .map((row) => {
+      const replacement = arrived.get(row.userId);
+      if (replacement) {
+        arrived.delete(row.userId);
+        return replacement;
+      }
+      const live = positions.get(row.userId);
+      return live &&
+        (live.longitude !== row.longitude || live.latitude !== row.latitude)
+        ? { ...row, longitude: live.longitude, latitude: live.latitude }
+        : row;
+    });
   return { ...current, users: [...users, ...arrived.values()] };
 };

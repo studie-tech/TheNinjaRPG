@@ -1287,7 +1287,7 @@ export const travelRouter = createTRPCRouter({
     }),
 });
 
-/** Quests whose objectives guide where onboarding players land after global travel. */
+/** Raw sector participant data before viewer-specific masking and sprite projection. */
 type SectorUserRow = Awaited<ReturnType<typeof fetchSectorWindowData>>[0][number];
 
 /**
@@ -1358,6 +1358,7 @@ const withCreatorBody = <T extends { username: string }>(
   );
 };
 
+/** Quests whose objectives guide where onboarding players land after global travel. */
 const ONBOARDING_QUEST_IDS = new Set([
   TUTORIAL_STARTER_QUEST_ID,
   TUTORIAL_GENIN_EXAM_QUEST_ID,
