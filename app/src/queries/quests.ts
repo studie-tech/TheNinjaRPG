@@ -70,6 +70,7 @@ import {
 import { getFarmingLevel } from "@/libs/farming";
 import { isSupportedOverworldBindingTask } from "@/libs/overworldAi";
 import { filterQuestTrackersForDbPersist, getUserQuests } from "@/libs/quest";
+import { summarizeAvailabilityObjectives } from "@/libs/quest/availability";
 import {
   type RewardChoiceOwnership,
   rewardChoiceContentIds,
@@ -2036,6 +2037,83 @@ export interface QuestDiscoveryOptions {
   ranks?: LetterRank[];
 }
 
+/** The player's attempt counters joined onto every discovery candidate. */
+const questDiscoveryHistoryColumns = {
+  previousAttempts: questHistory.previousAttempts,
+  previousCompletes: questHistory.previousCompletes,
+  completed: questHistory.completed,
+  periodCompletes: questHistory.periodCompletes,
+  periodStartAt: questHistory.periodStartAt,
+};
+
+/** Complete quest rows for listings that render quest content. */
+const questDiscoveryColumns = {
+  ...getTableColumns(quest),
+  ...questDiscoveryHistoryColumns,
+};
+
+/**
+ * Listing fields and availability inputs without objective content. The objective rules
+ * availability enforces are evaluated in SQL and returned as their summary.
+ */
+const questAvailabilityColumns = {
+  id: quest.id,
+  name: quest.name,
+  image: quest.image,
+  description: quest.description,
+  questType: quest.questType,
+  questRank: quest.questRank,
+  medicalRank: quest.medicalRank,
+  huntingRank: quest.huntingRank,
+  gatheringRank: quest.gatheringRank,
+  requiredLevel: quest.requiredLevel,
+  requiredFarmingLevel: quest.requiredFarmingLevel,
+  prerequisiteQuestId: quest.prerequisiteQuestId,
+  hidden: quest.hidden,
+  requiredVillage: quest.requiredVillage,
+  requiredBloodlineId: quest.requiredBloodlineId,
+  requiredSageModeId: quest.requiredSageModeId,
+  requiredSageRank: quest.requiredSageRank,
+  requiredNinjutsuMastery: quest.requiredNinjutsuMastery,
+  requiredGenjutsuMastery: quest.requiredGenjutsuMastery,
+  requiredTaijutsuMastery: quest.requiredTaijutsuMastery,
+  requiredBukijutsuMastery: quest.requiredBukijutsuMastery,
+  requiredBloodlineMastery: quest.requiredBloodlineMastery,
+  requiredSageMastery: quest.requiredSageMastery,
+  content: sql`JSON_OBJECT(
+    'reward', JSON_EXTRACT(${quest.content}, '$.reward'),
+    'rewardMode', JSON_EXTRACT(${quest.content}, '$.rewardMode'),
+    'concurrentWarTask', (
+      JSON_SEARCH(${quest.content}, 'one', 'espionage', NULL, '$.objectives[*].task') IS NOT NULL
+      OR JSON_SEARCH(${quest.content}, 'one', 'sabotage', NULL, '$.objectives[*].task') IS NOT NULL
+    ),
+    'eliteJoninReward', (
+      JSON_SEARCH(${quest.content}, 'one', 'ELITE JONIN', NULL, '$.objectives[*].reward_rank') IS NOT NULL
+      OR JSON_SEARCH(${quest.content}, 'one', 'ELITE JONIN', NULL, '$.objectives[*].reward_packages[*].rewards.reward_rank') IS NOT NULL
+    )
+  )`.mapWith((value: string) => {
+    const { concurrentWarTask, eliteJoninReward, ...content } =
+      quest.content.mapFromDriverValue(value) as unknown as Pick<
+        QuestContentType,
+        "reward" | "rewardMode"
+      > & { concurrentWarTask: number; eliteJoninReward: number };
+    return {
+      ...content,
+      objectives: summarizeAvailabilityObjectives({
+        concurrentWarTask: !!concurrentWarTask,
+        eliteJoninReward: !!eliteJoninReward,
+      }),
+    };
+  }),
+  maxLevel: quest.maxLevel,
+  maxAttempts: quest.maxAttempts,
+  maxCompletes: quest.maxCompletes,
+  retryDelay: quest.retryDelay,
+  startsAt: quest.startsAt,
+  endsAt: quest.endsAt,
+  ...questDiscoveryHistoryColumns,
+};
+
 /**
  * Shared candidate query for quest discovery screens. Availability remains the caller's
  * responsibility because each destination adds its own contextual rules (war state, structure,
@@ -2048,14 +2126,23 @@ export const fetchQuestDiscoveryCandidates = async (
   options: QuestDiscoveryOptions,
 ) =>
   client
-    .select({
-      ...getTableColumns(quest),
-      previousAttempts: questHistory.previousAttempts,
-      previousCompletes: questHistory.previousCompletes,
-      completed: questHistory.completed,
-      periodCompletes: questHistory.periodCompletes,
-      periodStartAt: questHistory.periodStartAt,
-    })
+    .select(questDiscoveryColumns)
+    .from(quest)
+    .leftJoin(
+      questHistory,
+      and(eq(quest.id, questHistory.questId), eq(questHistory.userId, userId)),
+    )
+    .where(buildQuestDiscoveryWhere(options))
+    .orderBy(asc(quest.name));
+
+/** Discovery candidates without objective content, for listings that do not render it. */
+export const fetchQuestAvailabilityCandidates = async (
+  client: DrizzleClient,
+  userId: string,
+  options: QuestDiscoveryOptions,
+) =>
+  client
+    .select(questAvailabilityColumns)
     .from(quest)
     .leftJoin(
       questHistory,

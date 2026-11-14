@@ -50,8 +50,9 @@ import { hasMasteryPromotion } from "@/validators/rewards";
  */
 export const isAvailableUserQuests = (
   questAndUserQuestInfo: MasteryRequirementFields & {
-    content?: Pick<QuestContentType, "reward" | "rewardMode"> &
-      Partial<Pick<QuestContentType, "objectives">>;
+    content?: Pick<QuestContentType, "reward" | "rewardMode"> & {
+      objectives?: readonly AvailabilityObjective[];
+    };
     hidden: boolean;
     maxAttempts: number;
     maxCompletes: number;
@@ -428,6 +429,26 @@ export const listUpcomingQuests = <
         : [];
     })
     .sort((a, b) => a.requiredLevel - b.requiredLevel || a.name.localeCompare(b.name));
+
+/**
+ * The objective facts availability reads, for listings that omit objective content: a
+ * concurrent war task, and an Elite Jonin promotion in any objective or its reward choices.
+ */
+export const summarizeAvailabilityObjectives = (facts: {
+  concurrentWarTask: boolean;
+  eliteJoninReward: boolean;
+}): AvailabilityObjective[] => [
+  ...(facts.concurrentWarTask ? [{ task: "espionage" as const }] : []),
+  ...(facts.eliteJoninReward ? [{ reward_rank: "ELITE JONIN" as const }] : []),
+];
+
+/** Objective fields that decide quest availability. */
+type AvailabilityObjective = Partial<
+  Pick<
+    QuestContentType["objectives"][number],
+    "task" | "reward_rank" | "reward_packages"
+  >
+>;
 
 /** Why a quest is not open yet, when the player can work towards it. */
 export type UpcomingBlock =
