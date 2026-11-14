@@ -432,7 +432,7 @@ export const homeStorageMoveBlockReason = <T extends HomeStorageRow>({
   return reason ? reason.charAt(0).toUpperCase() + reason.slice(1) : null;
 };
 
-/** Summarize a home storage move: how many stacks moved and why the others stayed. */
+/** Summarize moved stacks and group matching refusals to keep batch feedback compact. */
 export const homeStorageMoveMessage = (
   moved: number,
   toHome: boolean,
@@ -445,7 +445,15 @@ export const homeStorageMoveMessage = (
       : toHome
         ? `Stored ${items} in your home.`
         : `Took ${items} out of your home.`;
-  const stayed = refused.map(({ name, reason }) => `${name} ${reason}`).join("; ");
+  const groups = new Map<string, { name: string; count: number }>();
+  for (const { name, reason } of refused) {
+    groups.set(reason, { name, count: (groups.get(reason)?.count ?? 0) + 1 });
+  }
+  const stayed = [...groups]
+    .map(([reason, { name, count }]) =>
+      count === 1 ? `${name} ${reason}` : `${count} items (${reason})`,
+    )
+    .join("; ");
   return refused.length > 0 ? `${done} ${refused.length} stayed: ${stayed}.` : done;
 };
 

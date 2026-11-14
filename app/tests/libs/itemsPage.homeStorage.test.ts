@@ -209,6 +209,20 @@ describe("planHomeStorageMove", () => {
 });
 
 describe("homeStorageMoveMessage", () => {
+  it("summarizes repeated capacity refusals once while keeping other reasons", () => {
+    const reason =
+      "does not fit: Inventory is full (3 slots are held: 2 by auction listings or trade offers, 1 by an unfinished craft)";
+    const refused = [
+      ...Array.from({ length: 10 }, () => ({ name: "Minor Repair Kit", reason })),
+      { name: "Ore", reason: "is equipped" },
+    ];
+    expect(homeStorageMoveMessage(0, false, refused)).toBe(
+      `Nothing was moved. 11 stayed: 10 items (${reason}); Ore is equipped.`,
+    );
+    expect(refused).toHaveLength(11);
+    expect(refused[0]).toEqual({ name: "Minor Repair Kit", reason });
+  });
+
   it("counts what moved and names what stayed", () => {
     expect(homeStorageMoveMessage(3, true, [])).toBe("Stored 3 items in your home.");
     expect(homeStorageMoveMessage(1, false, [])).toBe("Took 1 item out of your home.");
