@@ -28,6 +28,7 @@ import {
 } from "@/libs/wallpaperExperiment";
 import { fetchIsolatedPyramid } from "@/queries/quests";
 import { drizzleDB } from "@/server/db";
+import { runBehindStatementGate } from "@/server/statementGate";
 import { enforceBotId } from "@/server/utils/botid";
 import { clientErrorMessage } from "@/server/utils/mysqlErrors";
 import { measureTrpcCall } from "@/server/utils/trpcMetrics";
@@ -273,29 +274,43 @@ const enforceUserIsAuthed = t.middleware(async ({ ctx: context, path, next }) =>
   return next({ ctx: { userId: context.userId } });
 });
 
-/** Enforce persisted isolation even when hidden content or stale client state omits its tracker. */
+/**
+ * Enforce persisted isolation even when hidden content or stale client state omits its tracker.
+ * The history lookup runs alongside the procedure's first reads; the statement gate holds
+ * every write and withholds every read result until the lookup clears the player.
+ */
 const enforcePyramidIsolation = t.middleware(async ({ ctx, path, type, next }) => {
-  if (type === "mutation" && ctx.userId && isPyramidRestrictedProcedure(path)) {
-    const isolated = await fetchIsolatedPyramid(ctx.drizzle, ctx.userId);
-    if (isolated) {
-      // Some activities allow ordinary BATTLE players. Restrict isolated runs to their
-      // own progression and combat controls. Answering with errorResponse without running
-      // the procedure needs tRPC's internal middlewareMarker result shape.
-      return {
-        ok: true,
-        data: errorResponse(ISOLATED_PYRAMID_MESSAGE),
-        marker: middlewareMarker,
-      };
-    }
+  if (type !== "mutation" || !ctx.userId || !isPyramidRestrictedProcedure(path)) {
+    return next();
   }
-  return next();
+  const clearance = fetchIsolatedPyramid(ctx.drizzle, ctx.userId).then((isolated) => {
+    if (isolated) throw new PyramidIsolationError();
+  });
+  const result = await runBehindStatementGate(clearance, next);
+  try {
+    await clearance;
+  } catch (error) {
+    if (!(error instanceof PyramidIsolationError)) throw error;
+    // Some activities allow ordinary BATTLE players. Restrict isolated runs to their
+    // own progression and combat controls. Answering with errorResponse in place of the
+    // procedure's result needs tRPC's internal middlewareMarker result shape.
+    return {
+      ok: true,
+      data: errorResponse(ISOLATED_PYRAMID_MESSAGE),
+      marker: middlewareMarker,
+    };
+  }
+  return result;
 });
+
+/** Rejects a gated procedure's statements for a player inside an isolated Pyramid run. */
+class PyramidIsolationError extends Error {}
 
 export const protectedProcedure = t.procedure
   .use(enforceUserIsAuthed)
-  .use(enforcePyramidIsolation)
   .use(botIdMiddleware)
-  .use(sentryMiddleware);
+  .use(sentryMiddleware)
+  .use(enforcePyramidIsolation);
 
 export const serverError = (code: TRPC_ERROR_CODE_KEY, message: string) => {
   return new TRPCError({

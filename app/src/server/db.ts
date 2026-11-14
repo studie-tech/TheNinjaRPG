@@ -5,6 +5,7 @@ import {
 import { env } from "@/env/server.mjs";
 import { createPlanetScaleClient } from "@/server/dbClient";
 import { createRetryingFetch } from "@/server/dbRetry";
+import { gateStatements } from "@/server/statementGate";
 import * as schema from "../../drizzle/schema";
 
 export type DrizzleClient = PlanetScaleDatabase<typeof schema>;
@@ -22,7 +23,7 @@ declare global {
 // (query.<table> is undefined). Rebuild it whenever the schema shape changes.
 const schemaKeys = Object.keys(schema).sort().join(",");
 
-export const drizzleDB =
+export const drizzleDB = gateStatements(
   global.drizzleClient && global.drizzleSchemaKeys === schemaKeys
     ? global.drizzleClient
     : createDrizzle(
@@ -33,7 +34,8 @@ export const drizzleDB =
           fetch: createRetryingFetch(),
         }),
         { schema },
-      );
+      ),
+);
 
 if (env.NODE_ENV !== "production") {
   global.drizzleClient = drizzleDB;

@@ -105,7 +105,7 @@ describeWithDatabase("Training queue atomic publication", () => {
       normal.updateMasteryTrainingQueue({ expectedEntries: [], entries: [genjutsu] }),
     );
     expect(saved.result.success).toBe(true);
-    expect(saved.roundTrips, saved.statements.join("\n")).toBe(7);
+    expect(saved.roundTrips, saved.statements.join("\n")).toBe(6);
     expect(
       (
         await normal.updateMasteryTrainingQueue({
@@ -186,7 +186,7 @@ describeWithDatabase("Training queue atomic publication", () => {
     },
   );
 
-  it("publishes an Energy entry with isolation validation in seven round trips", async () => {
+  it("publishes an Energy entry with isolation validation in six round trips", async () => {
     const normal = callerForDatabase(trainRouter, userId, await getTestDatabase());
     const saved = await recordQueries(() =>
       normal.updateEnergyTrainingQueue({
@@ -195,7 +195,7 @@ describeWithDatabase("Training queue atomic publication", () => {
       }),
     );
     expect(saved.result.success).toBe(true);
-    expect(saved.roundTrips, saved.statements.join("\n")).toBe(7);
+    expect(saved.roundTrips, saved.statements.join("\n")).toBe(6);
   });
 
   it.each(["ENERGY", "MASTERY"] as const)(
