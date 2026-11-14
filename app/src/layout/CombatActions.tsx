@@ -230,6 +230,7 @@ export const ActionSelector: React.FC<ActionSelectorProps> = (props) => {
                         ? "rounded-xl border-4 border-amber-500 bg-amber-300 text-black"
                         : "",
                       bgColor,
+                      bgColor && "text-slate-900",
                       isGreyed ? "opacity-20" : "",
                     )}
                     isGreyed={isGreyed}
