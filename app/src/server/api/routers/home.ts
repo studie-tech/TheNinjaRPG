@@ -23,6 +23,7 @@ import {
 import { getHomeRooms, homeRoomStylesError } from "@/libs/homeProperty";
 import {
   applyActiveVariant,
+  countInventoryBucketSlots,
   countsTowardInventoryStorage,
   getEffectiveStackSize,
   getHomeStorageBucket,
@@ -595,9 +596,7 @@ export const homeRouter = createTRPCRouter({
       // Mutate
       if (userItemResult.storedAtHome) {
         const inventoryBucket = getInventoryBucket(userItemResult.item);
-        const bucketCount = nonStoredItems.filter(
-          (ui) => getInventoryBucket(ui.item) === inventoryBucket,
-        ).length;
+        const bucketCount = countInventoryBucketSlots(nonStoredItems, inventoryBucket);
         if (bucketCount >= getInventoryBucketCapacity(inventoryBucket, user)) {
           return errorResponse(
             getInventoryBucketFullMessage(

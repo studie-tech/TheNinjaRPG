@@ -172,6 +172,39 @@ describe("planHomeStorageMove", () => {
     expect(rows.find((ui) => ui.id === "held")?.storedAtHome).toBe(true);
   });
 
+  it("takes stored stacks out into the slot listings of one item share", () => {
+    const capacity = getInventoryBucketCapacity("normal", user);
+    const stackable = {
+      itemType: "CONSUMABLE",
+      canStack: true,
+      stackSize: 10,
+    } as const;
+    const lot = (id: string) =>
+      row(
+        id,
+        { itemId: "pill", quantity: 2, isInAuction: true, imbuements: [], level: 1 },
+        stackable,
+      );
+    const rows = [
+      ...Array.from({ length: capacity - 2 }, (_, index) => row(`carried-${index}`)),
+      lot("lot-a"),
+      lot("lot-b"),
+      row("a", { storedAtHome: true }),
+      row("b", { storedAtHome: true }),
+    ];
+    const plan = planHomeStorageMove({
+      rows,
+      userItemIds: ["a", "b"],
+      toHome: false,
+      user,
+      homeStorage: 12,
+    });
+    expect(plan.moving.map((ui) => ui.id)).toEqual(["a"]);
+    expect(plan.refused[0]?.reason).toBe(
+      "does not fit: Inventory is full (1 slot is held by an auction listing or trade offer)",
+    );
+  });
+
   it("refuses stacks that cannot move and names why", () => {
     const rows = [
       row("worn", { equipped: "HAND_1" }),

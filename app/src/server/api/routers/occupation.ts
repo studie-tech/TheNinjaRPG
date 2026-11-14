@@ -33,7 +33,7 @@ import {
   getTotalItemQuantity,
 } from "@/libs/crafting";
 import {
-  countsTowardInventoryStorage,
+  countInventoryBucketSlots,
   getInventoryBucket,
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
@@ -269,11 +269,7 @@ export const occupationRouter = createTRPCRouter({
       // mutations.
       const outputBucket = getInventoryBucket(itemWithRequirements);
       if (outputBucket === "cooking") {
-        const carriedCookingStacks = useritems.filter(
-          (ui) =>
-            countsTowardInventoryStorage(ui) &&
-            getInventoryBucket(ui.item) === "cooking",
-        ).length;
+        const carriedCookingStacks = countInventoryBucketSlots(useritems, "cooking");
         const newStacksRequired = Math.ceil(
           outputQuantity / Math.max(1, itemWithRequirements.stackSize),
         );

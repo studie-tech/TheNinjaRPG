@@ -17,6 +17,8 @@ import {
   applyActiveVariant,
   byItemName,
   calcItemSellingPrice,
+  countInventoryBucketSlots,
+  countInventorySlots,
   countsTowardInventoryStorage,
   getEquipBlockReason,
   getHomeStorageBucket,
@@ -26,6 +28,7 @@ import {
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
   type InventoryBucket,
+  type InventorySlotRow,
   isCompatibleEquipSlot,
 } from "@/libs/item";
 import { needsInventoryRepair } from "@/libs/repair";
@@ -340,13 +343,13 @@ export const homeStorageBlockReason = (user: {
   return null;
 };
 
-type HomeStorageRow = {
+type HomeStorageRow = InventorySlotRow & {
   id: string;
-  equipped: ItemSlot;
-  storedAtHome: boolean;
-  isInAuction: boolean;
-  craftingFinishedAt: Date | null;
-  item: { name: string; itemType: ItemType; isEventItem: boolean };
+  item: NonNullable<InventorySlotRow["item"]> & {
+    name: string;
+    itemType: ItemType;
+    isEventItem: boolean;
+  };
 };
 
 /**
@@ -373,8 +376,14 @@ export const planHomeStorageMove = <T extends HomeStorageRow>({
   const bucketOf = (ui: T) =>
     toHome ? getHomeStorageBucket(ui.item) : getInventoryBucket(ui.item);
   for (const ui of rows) {
-    const counts = toHome ? ui.storedAtHome : countsTowardInventoryStorage(ui);
-    if (counts) used.set(bucketOf(ui), (used.get(bucketOf(ui)) ?? 0) + 1);
+    if (toHome && ui.storedAtHome)
+      used.set(bucketOf(ui), (used.get(bucketOf(ui)) ?? 0) + 1);
+    if (!toHome && !used.has(bucketOf(ui))) {
+      used.set(
+        bucketOf(ui),
+        countInventoryBucketSlots(rows, getInventoryBucket(ui.item)),
+      );
+    }
   }
   for (const userItemId of userItemIds) {
     const ui = rows.find((row) => row.id === userItemId);
@@ -458,20 +467,17 @@ export const homeStorageMoveMessage = (
 };
 
 /**
- * Carried stacks that use bag space but are left out of the backpack list: auction
- * escrow, then unfinished crafts (the same order as getEquipBlockReason).
+ * Bag slots used by carried stacks left out of the backpack list: the slots auction escrow
+ * adds (see `countInventorySlots`), then unfinished crafts (the order of getEquipBlockReason).
  */
-export const countUnlistedBagStacks = (
-  rows: {
-    storedAtHome: boolean;
-    equipped: ItemSlot;
-    isInAuction: boolean;
-    craftingFinishedAt: Date | null;
-  }[],
-  now: Date,
-) => {
+export const countUnlistedBagStacks = (rows: InventorySlotRow[], now: Date) => {
   const counted = rows.filter(countsTowardInventoryStorage);
-  const auction = counted.filter((ui) => ui.isInAuction).length;
+  const auction =
+    countInventorySlots(counted, now) -
+    countInventorySlots(
+      counted.filter((ui) => !ui.isInAuction),
+      now,
+    );
   const crafting = counted.filter(
     (ui) => !ui.isInAuction && !!ui.craftingFinishedAt && ui.craftingFinishedAt > now,
   ).length;
@@ -480,14 +486,12 @@ export const countUnlistedBagStacks = (
 
 /** Stacks of one inventory bucket that use bag space without showing in the backpack. */
 export const countHeldInventorySlots = (
-  rows: (Parameters<typeof countUnlistedBagStacks>[0][number] & {
-    item: Parameters<typeof getInventoryBucket>[0];
-  })[],
+  rows: InventorySlotRow[],
   bucket: InventoryBucket,
   now: Date = new Date(),
 ) =>
   countUnlistedBagStacks(
-    rows.filter((row) => getInventoryBucket(row.item) === bucket),
+    rows.filter((row) => !!row.item && getInventoryBucket(row.item) === bucket),
     now,
   );
 

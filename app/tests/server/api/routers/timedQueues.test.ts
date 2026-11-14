@@ -810,6 +810,71 @@ describeWithDatabase("crafting queue", () => {
     expect(await readCraftQueue()).toEqual([]);
   });
 
+  it("starts a queued cooking craft in the slot listings of one meal share", async () => {
+    await insertUser(CRAFTER);
+    await insertItems([
+      { id: "ore", name: "Ore", stackSize: 50 },
+      {
+        id: "stew",
+        name: "Stew",
+        itemType: "COOKING",
+        canBeCrafted: true,
+        stackSize: 1,
+      },
+      {
+        id: "broth",
+        name: "Broth",
+        itemType: "COOKING",
+        canStack: true,
+        stackSize: 10,
+      },
+    ]);
+    // Two listings of one meal share a slot, leaving one free for the craft.
+    await insertUserItems([
+      ...Array.from({ length: COOKING_BASE_SLOTS - 2 }, (_, i) => ({
+        id: `stew-${i}`,
+        userId: USER_ID,
+        itemId: "stew",
+        quantity: 1,
+      })),
+      {
+        id: "broth-a",
+        userId: USER_ID,
+        itemId: "broth",
+        quantity: 2,
+        isInAuction: true,
+      },
+      {
+        id: "broth-b",
+        userId: USER_ID,
+        itemId: "broth",
+        quantity: 3,
+        isInAuction: true,
+      },
+    ]);
+    const database = await getTestDatabase();
+    const startsAt = minutesFromNow(-1);
+    await database.insert(userQueue).values({
+      id: "cq-1",
+      userId: USER_ID,
+      kind: "CRAFT",
+      position: 1,
+      itemId: "stew",
+      quantity: 1,
+      materials: [
+        { userItemId: "gone", itemId: "ore", quantity: 3, storedAtHome: false },
+      ],
+      durationSeconds: 60,
+      startsAt,
+      finishesAt: new Date(startsAt.getTime() + 60_000),
+    });
+    expect(await settleCraftingQueue(database, USER_ID)).toBe(1);
+    const items = await readItems();
+    expect(items.filter((row) => row.itemId === "stew")).toHaveLength(
+      COOKING_BASE_SLOTS - 1,
+    );
+  });
+
   it("returns the materials of a cancelled craft", async () => {
     await insertUser(CRAFTER);
     await setupRecipe();

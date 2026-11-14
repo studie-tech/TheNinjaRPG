@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import type { ItemSlot } from "@/drizzle/constants";
+import type { ItemSlot, ItemType } from "@/drizzle/constants";
 import type { UserItemWithRelations } from "@/drizzle/schema";
+import type { InventorySlotRow } from "@/libs/item";
 import {
   backpackFilterChips,
   countHeldInventorySlots,
@@ -372,11 +373,16 @@ describe("countUnlistedBagStacks", () => {
     equipped?: ItemSlot;
     isInAuction?: boolean;
     craftingFinishedAt?: Date | null;
-  }) => ({
+  }): InventorySlotRow => ({
+    itemId: "item",
+    quantity: 1,
     storedAtHome: false,
     equipped: "NONE" as ItemSlot,
     isInAuction: false,
     craftingFinishedAt: null,
+    activeVariantId: null,
+    level: 1,
+    imbuements: [],
     ...fields,
   });
 
@@ -401,9 +407,12 @@ describe("countUnlistedBagStacks", () => {
   });
 
   it("counts held stacks in one inventory bucket", () => {
-    const inBucket = (fields: Parameters<typeof row>[0], itemType = "WEAPON") => ({
+    const inBucket = (
+      fields: Parameters<typeof row>[0],
+      itemType: ItemType = "WEAPON",
+    ): InventorySlotRow => ({
       ...row(fields),
-      item: { itemType, isEventItem: false },
+      item: { itemType, isEventItem: false, canStack: false, stackSize: 1 },
     });
     const rows = [
       inBucket({ isInAuction: true }),
