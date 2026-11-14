@@ -178,6 +178,7 @@ describe("bid and buyout confirmations", () => {
     const neverSettles = () => new Promise<void>(() => undefined);
     const listings = vi.fn(neverSettles);
     const details = vi.fn(neverSettles);
+    const inventory = vi.fn(neverSettles);
     placeBid.mockImplementationOnce(
       () =>
         Promise.resolve({
@@ -194,6 +195,7 @@ describe("bid and buyout confirmations", () => {
           getAuctionListings: { invalidate: listings },
           getAuctionListing: { invalidate: details },
         },
+        item: { getUserItems: { invalidate: inventory } },
       },
     );
     fireEvent.click(screen.getByRole("button", { name: "Buy it now — 500 ryo" }));
@@ -203,8 +205,12 @@ describe("bid and buyout confirmations", () => {
       );
     });
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    await waitFor(() =>
+      expect(queryClient.getMutationCache().getAll()[0]?.state.status).toBe("success"),
+    );
     expect(listings).toHaveBeenCalledTimes(1);
     expect(details).toHaveBeenCalledTimes(1);
+    expect(inventory).toHaveBeenCalledTimes(1);
   });
 
   it("closes an idle confirmation on cancel", () => {
