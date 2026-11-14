@@ -104,9 +104,11 @@ import {
   calcSP,
   canAssignExperience,
   clampStoredPools,
+  cloneAiUsernameCandidates,
   experienceAssignmentBlockMessage,
   getAssignedCombatStatTotal,
   levelUpBlockMessage,
+  pickCloneAiUsername,
   recruiterLevelReward,
   scaleUserStats,
 } from "@/libs/profile";
@@ -209,6 +211,7 @@ import {
   insertUserAttributeForInsertAttribute,
   insertUserBlackListForToggleBlacklistEntry,
   insertUserDataForCloneAi,
+  listTakenUsernamesForCloneAi,
   insertUserDataForCreate,
   insertUserItemForApplyUserContentChanges,
   insertUserItemForCloneAi,
@@ -304,7 +307,7 @@ import {
   elementalSnapshotConditions,
   masteryGainUpdates,
 } from "@/server/utils/masteryProgression";
-import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
+import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import { resumeBracketImmunitySql } from "@/server/utils/objectiveWar";
 import { offsetPage } from "@/server/utils/pagination";
 import { consumeUserAnnouncements, fetchPublicUsers } from "@/server/utils/profile";
@@ -1233,14 +1236,33 @@ export const profileRouter = createTRPCRouter({
       if (!aiData.isAi) return errorResponse("Not an AI");
       if (!canChangeContent(user.role)) return errorResponse("Not allowed");
 
+      // Pick a free name: "<name> - copy", then "<name> - copy 2", ...
+      const candidates = cloneAiUsernameCandidates(aiData.username);
+      const taken = await listTakenUsernamesForCloneAi(ctx.drizzle, candidates);
+      const username = pickCloneAiUsername(candidates, taken);
+      if (!username) {
+        return errorResponse(
+          "Too many copies of this AI already exist; rename or delete some first",
+        );
+      }
+
       // Create new AI with copied data
       aiData.userId = nanoid();
-      aiData.username = `${aiData.username} - copy`;
+      aiData.username = username;
       aiData.createdAt = new Date();
       aiData.updatedAt = new Date();
-      // Run all inserts at once
+      // Insert the AI first, so a failed insert leaves no orphaned jutsu, items or nindo
+      try {
+        await insertUserDataForCloneAi(ctx.drizzle, aiData);
+      } catch (error) {
+        if (isMysqlDuplicateKeyError(error)) {
+          return errorResponse(
+            `The name "${username}" was just taken; please try cloning again`,
+          );
+        }
+        throw error;
+      }
       await Promise.all([
-        insertUserDataForCloneAi(ctx.drizzle, aiData),
         // Clone the bindings, retaining the same immutable sheets in the shared library.
         ...(animationBindings.length
           ? [

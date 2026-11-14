@@ -898,6 +898,18 @@ export const listUserItemsByUserId = (
   userId: string,
 ) => client.query.userItem.findMany({ where: eq(userItem.userId, userId) });
 
+/** Usernames among `candidates` that are already taken, for `cloneAi`. */
+export const listTakenUsernamesForCloneAi = async (
+  client: Pick<DrizzleClient, "query">,
+  candidates: string[],
+) =>
+  (
+    await client.query.userData.findMany({
+      columns: { username: true },
+      where: inArray(userData.username, candidates),
+    })
+  ).map((row) => row.username);
+
 /** Build the `userData` insert for `cloneAi`. */
 export const insertUserDataForCloneAi = (
   client: Pick<DrizzleClient, "insert">,
