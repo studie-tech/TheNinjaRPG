@@ -76,7 +76,9 @@ beforeEach(() => {
     profile: testApi.profile,
     useUtils: testApi.useUtils,
   });
-  vi.spyOn(userContext, "useUserData").mockReturnValue({ data: user, pusher } as never);
+  vi.spyOn(userContext, "useUserDataSelector").mockImplementation(((
+    select: (profile: typeof user) => unknown,
+  ) => ({ data: select(user), pusher })) as never);
   vi.spyOn(pagination, "useInfinitePagination").mockImplementation(() => undefined);
   vi.spyOn(media, "useMediaQuery").mockReturnValue(false);
 });

@@ -37,6 +37,23 @@ export const chatPanelAtom = atom<{
 /** Unsent text per conversation, kept while the panel is closed or switches chats. */
 export const chatDraftsAtom = atom<Record<string, string>>({});
 
+/** Keep a conversation's unsent text, or forget it when only whitespace remains. */
+export const saveChatDraft = (
+  drafts: Record<string, string>,
+  key: string,
+  text: string,
+): Record<string, string> => {
+  const { [key]: _previous, ...rest } = drafts;
+  return text.trim() ? { ...rest, [key]: text } : rest;
+};
+
+/** Forget a saved draft once that exact text has been sent. */
+export const clearSentChatDraft = (
+  drafts: Record<string, string>,
+  key: string,
+  sentText: string,
+) => (drafts[key] === sentText ? saveChatDraft(drafts, key, "") : drafts);
+
 /** Number of visible chat surfaces showing each conversation. */
 export const chatViewedConversationsAtom = atom<Record<string, number>>({});
 
