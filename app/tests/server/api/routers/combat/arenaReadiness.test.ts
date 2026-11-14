@@ -30,6 +30,7 @@ import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { withRequestScope } from "@/server/requestScope";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import * as liveActivity from "@/server/utils/push/liveActivity";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { statSchema } from "@/validators/combat";
@@ -729,10 +730,14 @@ describeWithDatabase("arena readiness reads", () => {
           ...(race === "actor entered another battle"
             ? [
                 () =>
-                  client
-                    .update(userData)
-                    .set({ status: "BATTLE", battleId: "later-battle" })
-                    .where(eq(userData.userId, userId)),
+                  // The mysql2 fixture has no transport retry. This idempotent
+                  // update can deadlock with the parallel compensation writes.
+                  retryOnDeadlock(async () =>
+                    client
+                      .update(userData)
+                      .set({ status: "BATTLE", battleId: "later-battle" })
+                      .where(eq(userData.userId, userId)),
+                  ),
               ]
             : []),
         ]);
