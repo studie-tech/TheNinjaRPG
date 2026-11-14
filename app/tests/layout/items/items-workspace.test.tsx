@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, expect, it, type Mock, vi } from "bun:test";
 import {
   act,
   cleanup,
@@ -29,6 +29,7 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockCosmetics } from "../../setup/cosmetics";
 
 let equip: ReturnType<typeof vi.fn>;
 let settle: () => void;
@@ -47,7 +48,10 @@ const setFinePointer = (fine: boolean) =>
     }),
   });
 
+let cosmeticState: ReturnType<typeof mockCosmetics>;
+
 beforeEach(() => {
+  cosmeticState = mockCosmetics();
   window.localStorage.clear();
   equip = vi.fn();
   inspectorEquip = vi.fn();
@@ -188,6 +192,37 @@ const slotOf = (slot: ItemSlot) =>
   document.querySelector<HTMLButtonElement>(`[data-slot="${slot}"]`)!;
 const card = (name: string) =>
   screen.getByRole("button", { name: new RegExp(`^${name}`) });
+
+it("shows equipped gear in inventory and passes cosmetic selections to the character preview", () => {
+  cosmeticState.wardrobe.data.slots = [
+    {
+      userId: "user-1",
+      slot: "HAND_1",
+      itemId: "cosmetic-axe",
+      variantId: null,
+      item: {
+        id: "cosmetic-axe",
+        name: "Cosmetic Axe",
+        image: "https://example.com/axe.png",
+        slot: "HAND",
+        lpcProfile: null,
+        lpcColor: null,
+      },
+      variant: null,
+    },
+  ];
+  renderWorkspace();
+  const hand = slotOf("HAND_1");
+  expect(within(hand).getByText("Shadowsteel Katana art")).toBeDefined();
+  expect(hand.getAttribute("aria-label")).toBe("Hand: Shadowsteel Katana");
+  expect(screen.queryByText("Cosmetic Axe art")).toBeNull();
+  const preview = equipmentPreview.EquipmentPreview as Mock<
+    typeof equipmentPreview.EquipmentPreview
+  >;
+  expect(preview.mock.calls.at(-1)?.[0].user.cosmeticSlots).toEqual(
+    cosmeticState.wardrobe.data.slots,
+  );
+});
 
 it("opens the slot picker for a slot and the inspector for an item", () => {
   renderWorkspace();
@@ -535,6 +570,7 @@ it("puts the phone sheet's close button in the panel's own top bar", () => {
 const useRealInspector = () => {
   vi.spyOn(inspector, "ItemInspector").mockRestore();
   Object.assign(vi.spyOn(client, "api" as never), {
+    cosmetic: { get: { useQuery: () => cosmeticState.wardrobe } },
     item: { getEvolutions: { useQuery: () => ({ data: [] }) } },
   });
   vi.spyOn(itemWithEffects, "default").mockImplementation(() => <p>Item effects</p>);

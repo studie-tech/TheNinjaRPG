@@ -30,6 +30,7 @@ import { combatRouter, initiateBattle } from "@/server/api/routers/combat";
 import { fetchUpdatedUser } from "@/server/api/routers/profile";
 import type { DrizzleClient } from "@/server/db";
 import { withRequestScope } from "@/server/requestScope";
+import { retryOnDeadlock } from "@/server/utils/mysqlErrors";
 import * as liveActivity from "@/server/utils/push/liveActivity";
 import { prepareUserUpdate, updateUserCache } from "@/utils/userCache";
 import { statSchema } from "@/validators/combat";
@@ -46,7 +47,7 @@ import {
   insertUserVotes,
 } from "../../../../setup/factories";
 import { queueEnergy, queueMasteries } from "../../../../setup/queues";
-import { beforeStatements } from "../../../../setup/statements";
+import { aroundStatements, beforeStatements } from "../../../../setup/statements";
 import {
   describeWithDatabase,
   getTestDatabase,
@@ -720,16 +721,21 @@ describeWithDatabase("arena readiness reads", () => {
         ]);
         await queueEnergy(userId, [{ stat: "offence", energy: 100 }]);
         const initial = await fetchActionUser(client, userId);
-        const raced = beforeStatements(client, userData, [
+        // Production retries deadlocked autocommit statements at the transport.
+        // Either concurrent compensation write or the injected update can lose.
+        const retryingClient = aroundStatements(client, userData, (run) =>
+          retryOnDeadlock(run),
+        );
+        const raced = beforeStatements(retryingClient, userData, [
           () =>
-            client
+            retryingClient
               .update(userData)
               .set({ longitude: 6 })
               .where(eq(userData.userId, race === "actor moved" ? userId : targetId)),
           ...(race === "actor entered another battle"
             ? [
                 () =>
-                  client
+                  retryingClient
                     .update(userData)
                     .set({ status: "BATTLE", battleId: "later-battle" })
                     .where(eq(userData.userId, userId)),

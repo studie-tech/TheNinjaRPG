@@ -20,6 +20,7 @@ import { commentsRouter } from "./routers/comments";
 import { conceptartRouter } from "./routers/conceptart";
 import { contentReviewRouter } from "./routers/contentReview";
 import { coopRouter } from "./routers/coop";
+import { cosmeticRouter } from "./routers/cosmetic";
 import { dataRouter } from "./routers/data";
 import { discordRouter } from "./routers/discord";
 import { farmingRouter } from "./routers/farming";
@@ -86,6 +87,7 @@ import { createTRPCRouter, type ProcedureMeta } from "./trpc";
  * All routers added in /api/routers should be manually added here
  */
 export const appRouter = createTRPCRouter({
+  cosmetic: cosmeticRouter,
   accountDeletion: accountDeletionRouter,
   activityStreak: activityStreakRouter,
   ai: aiRouter,
