@@ -3,7 +3,7 @@ import {
   Assets,
   BufferImageSource,
   Container,
-  Graphics,
+  type Graphics,
   type Sprite,
   Texture,
 } from "pixi.js";
@@ -50,6 +50,7 @@ const setup = async (isAi = true, spriteAppearance?: SpriteAppearance) => {
     own: (cleanup: () => void) => owned.add(cleanup),
     disown: (cleanup: () => void) => owned.delete(cleanup),
     isDisposed: () => false,
+    invalidate: () => {},
     signal: new AbortController().signal,
   } as unknown as GameRenderer;
   cleanups.push(() => {

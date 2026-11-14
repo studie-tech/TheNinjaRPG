@@ -25,6 +25,11 @@ import {
   getHighlightTilesCacheKey,
   nextCombatHoverCursor,
 } from "@/libs/rendering/combatHover";
+import {
+  AMBIENT_FRAME_RATE,
+  MAX_FRAME_RATE,
+  STILL_FRAME_RATE,
+} from "@/libs/rendering/frameLoop";
 import { createMapControls } from "@/libs/rendering/mapControls";
 import {
   createWorldSprites,
@@ -61,6 +66,8 @@ const SEVERITY_ORDER: Record<HitSeverity, number> = { light: 0, heavy: 1, crushi
 
 /** Without a frame for this long the page is not rendering, so nothing is replaying. */
 const PRESENTATION_STALL_MS = 500;
+/** The follow camera has arrived once it is this many screen pixels from its target. */
+const CAMERA_SETTLED_PX = 0.5;
 
 /**
  * Owns a battle canvas and awaits its initial actors and first effect synchronization,
@@ -564,6 +571,7 @@ export const createCombatScene = async (options: {
         followedPosition = position;
         if (!controls.dragging()) hasManualCamera = false;
       }
+      let cameraSettled = true;
       if (zoom > 1.5 && !options.focus && !hasManualCamera) {
         const tile =
           user && data.grid.getHex({ col: user.longitude, row: user.latitude });
@@ -579,6 +587,9 @@ export const createCombatScene = async (options: {
             x: camera.x + (target.x - camera.x) * amount,
             y: camera.y + (target.y - camera.y) * amount,
           };
+          cameraSettled =
+            Math.hypot(target.x - camera.x, target.y - camera.y) * scale() <
+            CAMERA_SETTLED_PX;
         }
       }
       transform();
@@ -654,7 +665,33 @@ export const createCombatScene = async (options: {
         options.onHover(hover);
       }
       if (effectsKnown) effectsShown = true;
-      game.setAnimating(snapshot.active);
+      // Turns spend most of their time waiting, so idle fields slow to their decorative motion;
+      // battle updates, input and loaded artwork invalidate the scene and present at once.
+      const isAnimating =
+        moving ||
+        playback.isPlaying() ||
+        transformation.isPlaying() ||
+        feedback.active() > 0 ||
+        actors.isAnimating() ||
+        effects.isPlaying() ||
+        controls.dragging() ||
+        !cameraSettled;
+      const isFrozen =
+        frame.reducedMotion &&
+        (sourceFrame.reducedMotion ||
+          (!game.visualEffects.weather && !game.visualEffects.wind));
+      game.setAnimating(
+        snapshot.active,
+        isAnimating || options.advance || weather.isFalling()
+          ? MAX_FRAME_RATE
+          : isFrozen
+            ? STILL_FRAME_RATE
+            : Math.max(
+                AMBIENT_FRAME_RATE,
+                actors.clipFrameRate(),
+                effects.clipFrameRate(),
+              ),
+      );
     };
     game.setUpdate(updateFrame);
     game.setAnimating(initial.active);

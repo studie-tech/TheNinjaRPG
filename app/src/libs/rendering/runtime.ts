@@ -10,7 +10,7 @@ import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { createSceneAssets } from "@/libs/rendering/assets";
 import { createCharacterComposites } from "@/libs/rendering/characterComposites";
 import { premultipliedClearColor } from "@/libs/rendering/color";
-import { createFrameLoop } from "@/libs/rendering/frameLoop";
+import { createFrameLoop, MAX_FRAME_RATE } from "@/libs/rendering/frameLoop";
 import { observeRenderer, type RendererSurface } from "@/libs/rendering/telemetry";
 import { readVisualEffects, subscribeVisualEffects } from "@/libs/visualEffects";
 
@@ -26,6 +26,7 @@ const frames = createFrameLoop(
  * Owns the renderer, frame subscription, input listeners and texture leases together.
  * Abort or dispose releases them once. Initialization rejects; frame failures dispose
  * the scene and call onError. Hidden/offscreen canvases suspend their frame subscription.
+ * Every scene presents at most MAX_FRAME_RATE frames per second, on whole display refreshes.
  */
 export const createGameRenderer = async (options: {
   lpcCatalog?: LpcCatalog;
@@ -98,14 +99,19 @@ export const createGameRenderer = async (options: {
   let contextLost = false;
   let disposed = false;
   let continuous = true;
+  let frameRate = MAX_FRAME_RATE;
   let dirty = true;
   let unsubscribe: (() => void) | null = null;
   let previousTime: number | null = null;
-  let update: (frame: GameFrame) => void = () => {};
+  let presentedAt = Number.NEGATIVE_INFINITY;
+  /** The previous frame presented at the full rate; frame telemetry measures intervals from it. */
+  let measuredAt: number | null = null;
+  let wake: ReturnType<typeof setTimeout> | null = null;
+  let update: FrameUpdate = () => {};
   let resize: (width: number, height: number) => void = () => {};
   const listeners = new AbortController();
   const cleanups = new Set<() => void>();
-  /** Work waiting for the next presented frame; it resumes in a task after that frame. */
+  /** Work waiting for this scene's next display refresh; it resumes in a task after it. */
   const frameWaiters = new Set<() => void>();
 
   const markContextLost = () => {
@@ -122,33 +128,42 @@ export const createGameRenderer = async (options: {
       updateSubscription();
       return;
     }
+    // Skipped refreshes keep the subscription; changes made since wait for the next due frame.
+    if (
+      now - presentedAt <
+      frames.minimumInterval(dirty ? MAX_FRAME_RATE : frameRate)
+    ) {
+      resumeWaiters();
+      return;
+    }
+    const forced = dirty;
     dirty = false;
     const startedAt = performance.now();
-    const interval = previousTime === null ? 0 : now - previousTime;
     try {
       const reducedMotion = motion.matches;
       animation.uniforms.uTime =
         reducedMotion || !visualEffects.spriteAnimations ? 0 : now / 1000;
       animation.update();
-      update({
+      const changed = update({
         now,
         delta: previousTime === null ? 0 : Math.min(0.1, (now - previousTime) / 1000),
         reducedMotion,
       });
       previousTime = now;
+      resumeWaiters();
+      // A scene reporting an unchanged picture keeps its previous frame on screen.
+      if (changed === false && !forced) {
+        measuredAt = null;
+        return;
+      }
       characterComposites.flush();
       renderer.render({ container: stage });
-      if (frameWaiters.size) {
-        const waiters = [...frameWaiters];
-        frameWaiters.clear();
-        setTimeout(() => {
-          for (const resume of waiters) resume();
-        }, 0);
-      }
-      // On-demand scenes idle between frames, so their intervals are not frame pacing.
-      if (continuous && interval > 0) {
-        telemetry.frame(interval, performance.now() - startedAt);
-      }
+      presentedAt = now;
+      // Slower and on-demand frames follow their own cadence; only full-rate intervals are pacing.
+      const isMeasured = continuous && frameRate >= MAX_FRAME_RATE;
+      if (isMeasured && measuredAt !== null)
+        telemetry.frame(now - measuredAt, performance.now() - startedAt);
+      measuredAt = isMeasured ? now : null;
     } catch (error) {
       // Losing the context mid-frame surfaces as a GL TypeError (e.g. a null shader).
       if (renderer.context.isLost) {
@@ -163,14 +178,38 @@ export const createGameRenderer = async (options: {
     }
   };
   const updateSubscription = () => {
-    const active =
-      (continuous || dirty) && visible && !document.hidden && !contextLost && !disposed;
+    const drawable = visible && !document.hidden && !contextLost && !disposed;
+    // Slow continuous scenes sleep between frames instead of checking every refresh.
+    const sleeps = continuous && frameRate < TIMED_FRAME_RATE;
+    const active = drawable && (dirty || (continuous && !sleeps));
     if (active && !unsubscribe) unsubscribe = frames.subscribe(tick);
     else if (!active && unsubscribe) {
       unsubscribe();
       unsubscribe = null;
-      previousTime = null;
+      measuredAt = null;
+      // A sleeping scene's next delta spans its sleep; resumed and on-demand scenes restart at 0.
+      if (!sleeps || !drawable) previousTime = null;
     }
+    if (drawable && sleeps && !dirty) {
+      wake ??= setTimeout(
+        () => {
+          wake = null;
+          invalidate();
+        },
+        Math.max(0, presentedAt + 1000 / frameRate - performance.now()),
+      );
+    } else if (wake !== null) {
+      clearTimeout(wake);
+      wake = null;
+    }
+  };
+  const resumeWaiters = () => {
+    if (!frameWaiters.size) return;
+    const waiters = [...frameWaiters];
+    frameWaiters.clear();
+    setTimeout(() => {
+      for (const resume of waiters) resume();
+    }, 0);
   };
   // Previews are incidental to their page, so its decoration keeps running around them.
   const isScene = !options.surface.endsWith("-preview");
@@ -274,11 +313,18 @@ export const createGameRenderer = async (options: {
       renderer.background.alpha = backgroundAlpha;
       invalidate();
     },
-    /** False renders only after invalidation; true keeps visible scenes subscribed. */
-    setAnimating: (value: boolean) => {
-      if (continuous === value) return;
+    /**
+     * False renders only after invalidation; true keeps visible scenes presenting at
+     * frameRate, which slows ambient-only motion. Invalidations still present promptly.
+     */
+    setAnimating: (value: boolean, rate = MAX_FRAME_RATE) => {
+      const nextRate = Math.min(MAX_FRAME_RATE, rate);
+      if (continuous === value && frameRate === nextRate) return;
+      const resumed = continuous !== value;
       continuous = value;
-      invalidate();
+      frameRate = nextRate;
+      if (resumed) invalidate();
+      else updateSubscription();
     },
     dispose,
     /** Registers resource cleanup; registering after disposal runs it immediately. */
@@ -291,9 +337,9 @@ export const createGameRenderer = async (options: {
     },
     isDisposed: () => disposed,
     /**
-     * Resolves in a task after the next frame this scene presents, so long jobs split across
-     * it never run back to back without a frame between them. A scene that is not drawing
-     * resumes after a short timeout instead.
+     * Resolves in a task after the scene's next display refresh, whether or not it presents
+     * on it, so long jobs split across it never run back to back without a frame between
+     * them. A scene that is not drawing resumes after a short timeout instead.
      */
     afterFrame: () =>
       new Promise<void>((resolve) => {
@@ -315,7 +361,8 @@ export const createGameRenderer = async (options: {
     compileShaders: (...shaders: Shader[]) => {
       for (const shader of shaders) renderer.shader.bind(shader, true);
     },
-    setUpdate: (callback: typeof update) => {
+    /** A callback returning false reports an unchanged picture, which skips the render. */
+    setUpdate: (callback: FrameUpdate) => {
       update = callback;
     },
     /** Invokes the callback immediately, then on subsequent renderer resizes. */
@@ -328,6 +375,8 @@ export const createGameRenderer = async (options: {
 
 export type GameRenderer = Awaited<ReturnType<typeof createGameRenderer>>;
 
+/** Below this rate a continuous scene waits on a timer between frames, not on every refresh. */
+const TIMED_FRAME_RATE = 10;
 /** Work waiting for a frame resumes anyway after this long, e.g. while frames are slow. */
 const AFTER_FRAME_TIMEOUT_MS = 250;
 /**
@@ -336,3 +385,4 @@ const AFTER_FRAME_TIMEOUT_MS = 250;
  * preference; each scene applies the independent sprite, wind and weather settings.
  */
 export type GameFrame = { now: number; delta: number; reducedMotion: boolean };
+type FrameUpdate = (frame: GameFrame) => boolean | void;

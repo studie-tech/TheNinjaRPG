@@ -153,6 +153,64 @@ describe("renderer context loss", () => {
     expect(onError).toHaveBeenCalledWith(failure);
     expect(destroy).toHaveBeenCalled();
   });
+
+  it("presents a continuous scene on every second refresh of a 120 Hz display", async () => {
+    const { game, render } = await start(vi.fn());
+    render.mockImplementation(() => {});
+    const deltas: number[] = [];
+    game.setUpdate((frame) => {
+      deltas.push(frame.delta);
+    });
+    const refresh = 1000 / 120;
+    // The first refreshes also teach the shared loop the display's interval.
+    for (let tick = 1; tick <= 40; tick++) runFrame(1000 + tick * refresh);
+    render.mockClear();
+    deltas.length = 0;
+    for (let tick = 41; tick <= 60; tick++) runFrame(1000 + tick * refresh);
+    expect(render).toHaveBeenCalledTimes(10);
+    for (const delta of deltas) expect(delta).toBeCloseTo(2 * refresh * 0.001, 5);
+    // Invalidation never waits out a slower rate, but still respects the display cap.
+    game.setAnimating(true, 30);
+    for (let tick = 61; tick <= 84; tick++) runFrame(1000 + tick * refresh);
+    render.mockClear();
+    for (let tick = 85; tick <= 108; tick++) runFrame(1000 + tick * refresh);
+    expect(render).toHaveBeenCalledTimes(6);
+  });
+
+  it("keeps the previous frame when the scene reports no change until it is invalidated", async () => {
+    const { game, render } = await start(vi.fn());
+    render.mockImplementation(() => {});
+    let changed = true;
+    game.setUpdate(() => changed);
+    runFrame(5000);
+    expect(render).toHaveBeenCalledTimes(1);
+    changed = false;
+    runFrame(5100);
+    runFrame(5200);
+    expect(render).toHaveBeenCalledTimes(1);
+    game.invalidate();
+    runFrame(5300);
+    expect(render).toHaveBeenCalledTimes(2);
+    changed = true;
+    runFrame(5400);
+    expect(render).toHaveBeenCalledTimes(3);
+  });
+
+  it("sleeps between the frames of a slow scene and wakes on a timer", async () => {
+    const { game, render } = await start(vi.fn());
+    render.mockImplementation(() => {});
+    game.setAnimating(true, 5);
+    runFrame(performance.now());
+    expect(render).toHaveBeenCalledTimes(1);
+    // No refresh is requested until the next frame is due.
+    expect(frame).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 260));
+    expect(frame).not.toBeNull();
+    runFrame(performance.now());
+    expect(render).toHaveBeenCalledTimes(2);
+    game.setAnimating(true);
+    expect(frame).not.toBeNull();
+  });
 });
 
 describe("shared renderer frame loop", () => {
@@ -181,6 +239,36 @@ describe("shared renderer frame loop", () => {
     expect(cancelled).toEqual([3]);
     leaveB();
     expect(cancelled).toHaveLength(1);
+  });
+  it("paces frames on whole refreshes of the measured display rate", () => {
+    let callback: FrameRequestCallback = () => {};
+    const loop = createFrameLoop(
+      (next) => {
+        callback = next;
+        return 1;
+      },
+      () => {},
+    );
+    const leave = loop.subscribe(() => {});
+    let now = 0;
+    // Refreshes per presented frame at 60 fps: 60 and 90 Hz present every refresh,
+    // 120 and 144 Hz every second one (60 and 72 fps), 240 Hz every fourth.
+    for (const [hz, vsyncs] of [
+      [60, 1],
+      [90, 1],
+      [120, 2],
+      [144, 2],
+      [240, 4],
+    ] as const) {
+      for (let tick = 0; tick < 30; tick++) {
+        now += 1000 / hz;
+        callback(now);
+      }
+      const interval = loop.minimumInterval(60);
+      expect(interval).toBeLessThanOrEqual((vsyncs * 1000) / hz);
+      expect(interval).toBeGreaterThan(((vsyncs - 1) * 1000) / hz);
+    }
+    leave();
   });
   it("does not invoke a canvas removed by an earlier subscriber", () => {
     let callback: FrameRequestCallback = () => {};

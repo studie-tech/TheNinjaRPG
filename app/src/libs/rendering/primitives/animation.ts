@@ -78,6 +78,8 @@ export const createSpriteClip = async (
   return {
     sprite,
     dispose,
+    loop: clip.loop,
+    frameRate: 1000 / clip.frameDurationMs,
     renderAt: (elapsedMs: number, reducedMotion = false) => {
       const sample = sampleAnimationClip(clip, elapsedMs, reducedMotion);
       if (disposed) return sample;

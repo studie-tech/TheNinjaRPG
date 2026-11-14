@@ -79,15 +79,16 @@ export const createLpcCharacter = async (
     poseKey = "";
   /** Show the composited frame of the rig's current pose, requesting it when new or lost. */
   const present = () => {
-    if (!composites || !body) return;
-    if (shown?.key === poseKey && shownEpoch === composites.epoch()) return;
+    if (!composites || !body) return false;
+    if (shown?.key === poseKey && shownEpoch === composites.epoch()) return false;
     const next = composites.acquire(poseKey, rig);
     // A full atlas keeps the previous frame on screen rather than a blank figure.
-    if (!next) return;
+    if (!next) return false;
     if (shown) composites.release(shown);
     shown = next;
     shownEpoch = composites.epoch();
     body.texture = next.texture;
+    return true;
   };
   const durations: Partial<Record<LpcAnimation, number>> = {};
   const poseOwners = new Map<LpcAnimation, (typeof parts)[number]>();
@@ -127,7 +128,10 @@ export const createLpcCharacter = async (
     paintedDirection: LpcDirection | undefined;
   let paintedStep = -1,
     paintedReducedMotion = false;
-  /** Restart retriggers the same animation for a new cue; elapsed time comes from the scene clock. */
+  /**
+   * Restart retriggers the same animation for a new cue; elapsed time comes from the scene clock.
+   * Returns whether the figure's pose or composited frame changed.
+   */
   const render = (
     frame: GameFrame,
     nextState: LpcAnimation = "idle",
@@ -135,7 +139,7 @@ export const createLpcCharacter = async (
     restart = false,
     rate = 1,
   ) => {
-    if (disposed) return;
+    if (disposed) return false;
     if (state !== nextState || restart) {
       state = nextState;
       startedAt = frame.now;
@@ -170,10 +174,8 @@ export const createLpcCharacter = async (
       paintedDirection === direction &&
       paintedStep === sampleStep &&
       paintedReducedMotion === frame.reducedMotion
-    ) {
-      present();
-      return;
-    }
+    )
+      return present();
     paintedState = sampleState;
     paintedDirection = direction;
     paintedStep = sampleStep;
@@ -200,6 +202,7 @@ export const createLpcCharacter = async (
     }
     poseKey = painted.key;
     present();
+    return true;
   };
   /** Layer frames of one sampled pose, and its composite key. */
   const paint = (

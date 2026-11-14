@@ -22,7 +22,12 @@ export const createCharacterAnimation = (
   sprite: Sprite,
   size: number,
   animations: CharacterAnimations,
-  options: { maxTextureSize?: number; initialEventId?: string } = {},
+  options: {
+    maxTextureSize?: number;
+    initialEventId?: string;
+    /** A requested sheet finished loading or failed; the next render shows the result. */
+    onSettle?: () => void;
+  } = {},
 ) => {
   const original = {
     texture: sprite.texture,
@@ -86,6 +91,10 @@ export const createCharacterAnimation = (
     /** Whether this action's clip is on the sprite, past loading its sheet. */
     isPlaying: (actionKey: string) =>
       actionAt !== undefined && events[0]?.actionKey === actionKey,
+    /** An action clip is playing, rather than the idle or move loop. */
+    isActing: () => actionAt !== undefined,
+    /** Frame rate of the clip on the sprite, 0 while it shows its static image. */
+    frameRate: () => (current?.ready ? current.animation.fps : 0),
     /** Length of an action's clip, or 0 when it has none. */
     actionDuration: (key?: string) => {
       const action = key ? animations[key] : undefined;
@@ -188,9 +197,11 @@ export const createCharacterAnimation = (
               slot.contact = textureGroundContact(slot.views[0]!);
               slot.ready = true;
               slot.settled = true;
+              options.onSettle?.();
             },
             () => {
               slot.settled = true;
+              if (!disposed && pending === slot) options.onSettle?.();
             },
           );
         }

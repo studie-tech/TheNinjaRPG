@@ -16,6 +16,7 @@ import {
 } from "@/libs/overworldWander";
 import { createBakedVillageLighting } from "@/libs/rendering/bakedVillageLighting";
 import { getBackgroundColor } from "@/libs/rendering/biomes";
+import { MAX_FRAME_RATE, STILL_FRAME_RATE } from "@/libs/rendering/frameLoop";
 import { createMapControls } from "@/libs/rendering/mapControls";
 import { createWorldSprites } from "@/libs/rendering/primitives/sprites";
 import { createHexTerrain } from "@/libs/rendering/primitives/terrain";
@@ -791,7 +792,7 @@ export const createTravelScene = async (options: {
         .window.find((entry) => entry.sector === options.getSnapshot().sector)?.map;
       if (activeMap) setBackground(activeMap);
     };
-    // Presence and movement arrive through refs; poll their identities without redrawing an idle unlit map.
+    // Presence and movement arrive through refs; poll their identities without redrawing a frozen map.
     const snapshotTimer = setInterval(() => {
       if (disposed || !isStill) return;
       try {
@@ -816,15 +817,20 @@ export const createTravelScene = async (options: {
       const snapshot = options.getSnapshot(),
         entry = sectors.get(snapshot.sector);
       const isPreparing = snapshot.viewer?.status === "TRAVEL";
-      isStill =
-        isPreparing ||
-        (frame.reducedMotion &&
-          (sourceFrame.reducedMotion ||
-            (!game.visualEffects.weather && !game.visualEffects.wind)) &&
-          !game.visualEffects.sunlight &&
-          !game.visualEffects.dayNight &&
-          !game.visualEffects.localLights);
-      game.setAnimating(!isStill);
+      const isFrozen =
+        frame.reducedMotion &&
+        (sourceFrame.reducedMotion ||
+          (!game.visualEffects.weather && !game.visualEffects.wind));
+      // Frozen motion leaves only lighting, which follows the world clock over minutes.
+      const isLit =
+        game.visualEffects.sunlight ||
+        game.visualEffects.dayNight ||
+        game.visualEffects.localLights;
+      isStill = isPreparing || isFrozen;
+      game.setAnimating(
+        !isPreparing && (!isFrozen || isLit),
+        isFrozen ? STILL_FRAME_RATE : MAX_FRAME_RATE,
+      );
       lastFrameInputs = travelFrameInputs(snapshot);
       if (isPreparing) return;
       if (!entry) return;

@@ -3,16 +3,18 @@
 import { RotateCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useGameScene } from "@/hooks/game-scene";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { resolveSpriteAppearance, type SpriteUser } from "@/libs/lpc/appearance";
 import type { LpcCatalog } from "@/libs/lpc/catalog";
 import { reportRendererFailure } from "@/libs/rendering/telemetry";
 import { cn } from "@/libs/shadui";
-import type { LpcAnimation, LpcDirection, SpriteAppearance } from "@/validators/lpc";
+import type { LpcAnimation, SpriteAppearance } from "@/validators/lpc";
 
 /**
  * Preview drafts and saved appearances with the same renderer and atlas leases as the maps.
- * Recipe changes abort the previous render scope; load failures leave the surrounding form usable.
+ * One renderer serves the component's lifetime: a recipe change keeps the current figure on
+ * screen until its replacement loads. Load failures leave the surrounding form usable.
  */
 export const CharacterPreview = ({
   user,
@@ -31,81 +33,47 @@ export const CharacterPreview = ({
 }) => {
   const loadLpcCatalog = useLpcCatalogLoader();
   const mount = useRef<HTMLDivElement>(null);
-  const direction = useRef<LpcDirection>(2);
-  const [error, setError] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [ready, setReady] = useState(false);
   const signature = JSON.stringify(appearance ?? resolveSpriteAppearance(user));
-  useEffect(() => {
-    const element = mount.current;
-    if (!element) return;
-    const controller = new AbortController();
-    let dispose: (() => void) | undefined;
-    // Appearance edits return to the front; manual turns keep the current renderer and leases.
-    direction.current = 2;
-    setError(false);
-    setReady(false);
-    void Promise.all([
-      import("@/libs/rendering/runtime"),
-      import("@/libs/rendering/primitives/character"),
-    ])
-      .then(async ([{ createGameRenderer }, { createLpcCharacter }]) => {
-        if (controller.signal.aborted) return;
-        const game = await createGameRenderer({
-          lpcCatalog: catalog ?? (await loadLpcCatalog()),
-          surface: "character-preview",
-          mount: element,
-          signal: controller.signal,
-          width: 256,
-          height: () => 256,
-          onError: (cause) => {
-            reportRendererFailure(cause, {
-              surface: "character-preview",
-              phase: "frame",
-            });
-            setError(true);
-          },
-        });
-        dispose = game.dispose;
-        // Preserve the square aspect when the rem-sized mount follows the player's font scale.
-        game.canvas.style.height = "auto";
-        try {
-          const actor = await createLpcCharacter(
-            game,
-            JSON.parse(signature),
-            animation === "stand" || animation === "idle" || animation === "walk"
-              ? "travel"
-              : "all",
-          );
-          if (controller.signal.aborted) return;
-          actor.sprite.position.set(128, 125);
-          // Enlarge facial details within the compact preview without expanding the form.
-          actor.sprite.scale.set(160);
-          game.stage.addChild(actor.sprite);
-          game.setUpdate((frame) => {
-            actor.render(
-              game.visualEffects.spriteAnimations
-                ? frame
-                : { ...frame, reducedMotion: true },
-              animation,
-              direction.current,
-            );
-          });
-          setReady(true);
-        } catch (cause) {
-          game.dispose();
-          throw cause;
-        }
-      })
-      .catch((cause: unknown) => {
-        if (controller.signal.aborted) return;
-        reportRendererFailure(cause, { surface: "character-preview", phase: "init" });
-        setError(true);
+  const preview = useGameScene(
+    "character-preview",
+    mount,
+    async (element, signal, onError) => {
+      const [{ createCharacterPreviewScene }, lpcCatalog] = await Promise.all([
+        import("@/libs/rendering/scenes/characterPreview"),
+        catalog ?? loadLpcCatalog(),
+      ]);
+      return createCharacterPreviewScene({
+        lpcCatalog,
+        mount: element,
+        signal,
+        onError,
       });
+    },
+  );
+  const { scene: sceneRef, isReady } = preview;
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!isReady || !scene) return;
+    let isCurrent = true;
+    setFailed(false);
+    scene.show(JSON.parse(signature), animation, catalog).then(
+      () => {
+        if (isCurrent) setReady(true);
+      },
+      (cause: unknown) => {
+        if (!isCurrent) return;
+        reportRendererFailure(cause, { surface: "character-preview", phase: "init" });
+        setFailed(true);
+        setReady(false);
+      },
+    );
     return () => {
-      controller.abort();
-      dispose?.();
+      isCurrent = false;
     };
-  }, [signature, animation, catalog, loadLpcCatalog]);
+  }, [isReady, sceneRef, signature, animation, catalog]);
+  const error = preview.error || failed;
   return (
     <figure className={cn("mx-auto w-64 max-w-full text-center", className)}>
       <div
@@ -134,9 +102,7 @@ export const CharacterPreview = ({
           aria-label="Rotate character preview"
           hoverText="Rotate preview"
           disabled={!ready || error}
-          onClick={() => {
-            direction.current = ((direction.current + 1) % 4) as LpcDirection;
-          }}
+          onClick={() => sceneRef.current?.rotate()}
         >
           <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>

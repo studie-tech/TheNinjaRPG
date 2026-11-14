@@ -864,11 +864,12 @@ describe("layered LPC actors", () => {
         .mockImplementation(async (...args) => {
           const actor = await originalCreate(...args);
           const render = vi.fn((...input: Parameters<typeof actor.render>) => {
-            actor.render(...input);
+            const changed = actor.render(...input);
             if (input[1] === "walk") {
               const part = actor.sprite.children[0] as Sprite;
               poses.add(`${part.texture.frame.x},${part.texture.frame.y}`);
             }
+            return changed;
           });
           renders.push(render);
           return { ...actor, render };

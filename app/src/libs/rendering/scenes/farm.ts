@@ -5,6 +5,7 @@ import {
   IMG_FARM_PLOT_SOIL,
 } from "@/drizzle/constants";
 import { getLivePlotTiming } from "@/libs/farming";
+import { MAX_FRAME_RATE } from "@/libs/rendering/frameLoop";
 import { createGameRenderer } from "@/libs/rendering/runtime";
 import { farmLightingClock, nextFarmVisualAt } from "@/libs/rendering/scenes/farmClock";
 import {
@@ -165,6 +166,19 @@ export const createFarmScene = async (options: {
       night.width = width / scale;
       night.height = height / scale;
     };
+    /** Growth, effects and lighting fades animate fully; a ready crop's glow only pulses. */
+    const pace = (isTransitioning: boolean) => {
+      let isGrowing = !reducedMotion && effects.length > 0,
+        isGlowing = false;
+      for (const entry of reducedMotion ? [] : entries.values()) {
+        isGrowing ||= entry.expand < 1;
+        isGlowing ||= entry.ready;
+      }
+      game.setAnimating(
+        isTransitioning || isGrowing || isGlowing,
+        isTransitioning || isGrowing ? MAX_FRAME_RATE : GLOW_FRAME_RATE,
+      );
+    };
     const refresh = () => {
       if (game.isDisposed()) return;
       const now = clock();
@@ -235,12 +249,7 @@ export const createFarmScene = async (options: {
       const lighting = farmLightingClock(now, options.showDayNight());
       changed ||= night.alpha !== lighting.alpha;
       night.alpha = lighting.alpha;
-      game.setAnimating(
-        lighting.isTransitioning ||
-          (!reducedMotion &&
-            (effects.length > 0 ||
-              [...entries.values()].some((entry) => entry.ready || entry.expand < 1))),
-      );
+      pace(lighting.isTransitioning);
       if (changed) game.invalidate();
       if (wake !== null) clearTimeout(wake);
       const nextAt = nextFarmVisualAt(state.plots, now, options.showDayNight());
@@ -287,9 +296,7 @@ export const createFarmScene = async (options: {
         reducedMotion = frame.reducedMotion;
         refresh();
       }
-      let activeAnimations = effects.length;
       for (const entry of entries.values()) {
-        if (entry.ready || entry.expand < 1) activeAnimations++;
         entry.expand = reducedMotion
           ? 1
           : Math.min(1, entry.expand + frame.delta * 2.5);
@@ -312,10 +319,7 @@ export const createFarmScene = async (options: {
       }
       const lighting = farmLightingClock(clock(), options.showDayNight());
       night.alpha = lighting.alpha;
-      game.setAnimating(
-        lighting.isTransitioning ||
-          (!reducedMotion && (activeAnimations > 0 || effects.length > 0)),
-      );
+      pace(lighting.isTransitioning);
     });
     game.own(() => {
       if (wake !== null) clearTimeout(wake);
@@ -368,6 +372,9 @@ export const createFarmScene = async (options: {
     throw error;
   }
 };
+
+/** A ready crop's slow glow pulse stays smooth at this rate. */
+const GLOW_FRAME_RATE = 20;
 
 const squareSprite = (texture: Texture, size: number) => {
   const sprite = new Sprite(texture);

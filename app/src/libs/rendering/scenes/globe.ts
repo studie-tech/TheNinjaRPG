@@ -8,6 +8,11 @@ import {
 import type { Village } from "@/drizzle/schema";
 import { linearRenderColor } from "@/libs/rendering/color";
 import {
+  AMBIENT_FRAME_RATE,
+  MAX_FRAME_RATE,
+  STILL_FRAME_RATE,
+} from "@/libs/rendering/frameLoop";
+import {
   GLOBE_CLIMATE_HEIGHT,
   GLOBE_CLIMATE_WIDTH,
 } from "@/libs/rendering/globeClimate";
@@ -131,6 +136,7 @@ export const createGlobeScene = async (options: {
         climateTexels.set(texels);
         climate.update();
         hasClimate = true;
+        game.invalidate();
       },
       // The vertex climate colours stay on screen; the field is an enhancement.
       () => undefined,
@@ -442,6 +448,7 @@ export const createGlobeScene = async (options: {
         markers.set(nextMarkers);
       }
       updateRoute();
+      game.invalidate();
     };
     updateState(state);
     game.setResize((width, height) => {
@@ -480,6 +487,8 @@ export const createGlobeScene = async (options: {
       skyCheckedAt = -Infinity,
       lastClouds: boolean | null = null,
       lastDistance = Number.NaN;
+    /** Wakes a reduced-motion journey for its next one-second step. */
+    let stepTimer: ReturnType<typeof setTimeout> | null = null;
     // Last pointer and camera the hover pick ran for; it reruns only when one changes.
     const lastPick = {
       x: Number.NaN,
@@ -490,6 +499,7 @@ export const createGlobeScene = async (options: {
     };
     game.setUpdate((frame) => {
       elapsed += frame.delta;
+      let isJourneying = false;
       if (state.journey && journeyArc) {
         const progress = globeJourneyProgress(
           state.journey,
@@ -497,10 +507,19 @@ export const createGlobeScene = async (options: {
         );
         // Reduced motion advances in one-second steps instead of continuously rotating the globe.
         const seconds = state.journey.durationMs / 1000;
-        const visualProgress =
-          frame.reducedMotion && progress < 1 && seconds > 0
-            ? Math.floor(progress * seconds) / seconds
-            : progress;
+        const isStepping = frame.reducedMotion && progress < 1 && seconds > 0;
+        const visualProgress = isStepping
+          ? Math.floor(progress * seconds) / seconds
+          : progress;
+        isJourneying = progress < 1 && !frame.reducedMotion;
+        if (stepTimer !== null) clearTimeout(stepTimer);
+        stepTimer = isStepping
+          ? setTimeout(
+              game.invalidate,
+              ((Math.floor(progress * seconds) + 1) / seconds - progress) *
+                state.journey.durationMs,
+            )
+          : null;
         const point = journeyArc.at(visualProgress);
         markers.move("traveler", point);
         if (
@@ -511,8 +530,11 @@ export const createGlobeScene = async (options: {
           camera.latitude = Math.asin(point.y / Math.hypot(point.x, point.y, point.z));
         }
       }
-      if (elapsed - skyCheckedAt > 5 || lastClouds !== state.layers.clouds) {
-        skyCheckedAt = elapsed;
+      if (
+        frame.now - skyCheckedAt > SKY_CHECK_MS ||
+        lastClouds !== state.layers.clouds
+      ) {
+        skyCheckedAt = frame.now;
         lastClouds = state.layers.clouds;
         const now = Date.now() - state.timeDiff;
         updateLightColors(
@@ -520,14 +542,13 @@ export const createGlobeScene = async (options: {
           getWorldWeather("ground", now),
         );
       }
-      if (
+      const isRotating =
         state.autoRotate &&
         !state.journey &&
         !state.isTravelStep &&
         !frame.reducedMotion &&
-        !controls.isInteracting()
-      )
-        camera.longitude += (frame.delta * Math.PI) / 50;
+        !controls.isInteracting();
+      if (isRotating) camera.longitude += (frame.delta * Math.PI) / 50;
       const basis = globeCameraBasis(camera);
       right[0] = basis.right.x;
       right[1] = basis.right.y;
@@ -565,6 +586,19 @@ export const createGlobeScene = async (options: {
         : (1 - Math.cos(((Date.now() % 2000) / 2000) * Math.PI * 2)) / 2;
       uniforms.uniforms.uPhase = phase;
       uniforms.update();
+      // Without rotation, travel or input only water, clouds and marker pulses move; reduced
+      // motion freezes those too, leaving the slow sky colour and artwork that loads late.
+      game.setAnimating(
+        true,
+        isRotating ||
+          isJourneying ||
+          controls.isInteracting() ||
+          painted !== paintTarget
+          ? MAX_FRAME_RATE
+          : frame.reducedMotion
+            ? STILL_FRAME_RATE
+            : AMBIENT_FRAME_RATE,
+      );
       // A drag keeps its hover target: picking every dragged frame would only churn
       // the hover card and route under the moving globe.
       if (controls.isInteracting()) return;
@@ -591,12 +625,25 @@ export const createGlobeScene = async (options: {
       lastPick.distance = camera.distance;
       highlightSector(pick(pointer.x, pointer.y));
     });
-    return { dispose: game.dispose, updateState, zoom: controls.zoom };
+    game.own(() => {
+      if (stepTimer !== null) clearTimeout(stepTimer);
+    });
+    return {
+      dispose: game.dispose,
+      updateState,
+      zoom: (factor: number) => {
+        controls.zoom(factor);
+        game.invalidate();
+      },
+    };
   } catch (error) {
     game.dispose();
     throw error;
   }
 };
+
+/** The day's sky colour and cloud cover change slowly; recompute them this often. */
+const SKY_CHECK_MS = 5_000;
 
 /** A sector's centre on the surface in scaled globe units: where its markers stand. */
 const surfacePoint = (map: GlobalMapData, sector: number): GlobalPoint | null => {
