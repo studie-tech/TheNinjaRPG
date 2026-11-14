@@ -8,7 +8,6 @@ import {
   editedReason,
   outdateProposalsFor,
 } from "@/libs/contentReview/outdate";
-import { buildLpcCatalog } from "@/libs/lpc/catalog";
 import { prepareLpcSheet, validateLpcImages } from "@/libs/lpc/import";
 import { callDiscordContent } from "@/libs/socials";
 import {
@@ -21,7 +20,6 @@ import {
   listGameAssetForGetAllNames,
   listGameAssetForGetNameTags,
   listGameAssetForGetSceneAssets,
-  listLpcAssets,
   selectDistinctGameAssetTagForGetAllGameAssetContentTagNames,
   selectGameAssetForGetAll,
   selectGameAssetForGetAllFolders,
@@ -36,6 +34,7 @@ import {
   publicProcedure,
   serverError,
 } from "@/server/api/trpc";
+import { fetchLpcCatalog, invalidateLpcCatalog } from "@/server/utils/lpcCatalog";
 import { calculateContentDiff } from "@/utils/diff";
 import { canChangeContent } from "@/utils/permissions";
 import { gameAssetValidator } from "@/validators/asset";
@@ -44,16 +43,28 @@ import { idSchema } from "@/validators/misc";
 
 /** Public asset discovery and authenticated staff mutations through asset query helpers. */
 export const gameAssetRouter = createTRPCRouter({
-  /** Publish referenceable artwork, including hidden designs still worn by existing characters. */
+  /**
+   * Publish referenceable artwork, including hidden designs still worn by existing characters.
+   * Design editors read it directly so a save on any instance shows at once.
+   */
   getLpcCatalog: publicProcedure
     .meta({
       mcp: { description: "Get LPC character designs, variants and attribution" },
     })
-    .query(({ ctx }) => listLpcAssets(ctx.drizzle)),
-  /** Renderers share frame layouts and omit design-editor metadata from their network snapshot. */
+    .query(
+      async ({ ctx }) => (await fetchLpcCatalog(ctx.drizzle, { fresh: true })).assets,
+    ),
+  /**
+   * Renderers share frame layouts and omit design-editor metadata from their network snapshot.
+   * Scenes read the instance cache; `fresh` reads past it after a staff save.
+   */
   getLpcSceneCatalog: publicProcedure
     .meta({ mcp: { description: "Get the compiled LPC scene artwork catalog" } })
-    .query(async ({ ctx }) => buildLpcCatalog(await listLpcAssets(ctx.drizzle))),
+    .input(z.object({ fresh: z.boolean().optional() }).nullish())
+    .query(
+      async ({ ctx, input }) =>
+        (await fetchLpcCatalog(ctx.drizzle, { fresh: input?.fresh })).catalog,
+    ),
   /** Prepare immutable image files; only the separate asset save persists their design settings. */
   prepareLpcSheet: protectedProcedure
     .input(
@@ -244,7 +255,10 @@ export const gameAssetRouter = createTRPCRouter({
       });
       // Update database
       await Promise.all([
-        updateGameAssetForUpdate(ctx.drizzle, input, entry),
+        updateGameAssetForUpdate(ctx.drizzle, input, entry).then(() => {
+          // Saved artwork must replace the cache even if the independent log write fails.
+          if (entry.type === "LPC" || input.data.type === "LPC") invalidateLpcCatalog();
+        }),
         insertActionLogForUpdate(ctx.drizzle, ctx, diff, entry),
       ]);
       await outdateProposalsFor(
@@ -267,6 +281,7 @@ export const gameAssetRouter = createTRPCRouter({
       }
       const id = nanoid();
       await insertGameAssetForCreate(ctx.drizzle, id, ctx, input ?? undefined);
+      if (input?.type === "LPC") invalidateLpcCatalog();
       return { success: true, message: id };
     }),
   delete: protectedProcedure
@@ -312,6 +327,7 @@ export const gameAssetRouter = createTRPCRouter({
           return errorResponse(
             "This design is used by an item or variant. Reassign its appearances before deleting it.",
           );
+        invalidateLpcCatalog();
         await insertActionLogForDelete(ctx.drizzle, ctx, entry);
       } else {
         await Promise.all([
