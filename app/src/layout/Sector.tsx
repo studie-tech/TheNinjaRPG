@@ -308,6 +308,12 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
   const sectorRef = useRef(sector);
   useEffect(() => {
     sectorRef.current = sector;
+    // Pending arrivals belong to one visit; retire them before subscribing to the next sector.
+    const arrivals = arrivalsRef.current;
+    clearTimeout(arrivals.timer);
+    arrivals.timer = undefined;
+    arrivals.queued.clear();
+    arrivals.wanted.clear();
   }, [sector]);
   const routeTargetRef = useRef<TravelSnapshot["routeTarget"]>(
     target ? { sector, ...target } : null,

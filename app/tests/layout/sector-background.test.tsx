@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { readFileSync } from "node:fs";
 import { focusManager, onlineManager, QueryClient } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import { type PropsWithChildren, useRef } from "react";
+import { type PropsWithChildren, useEffect, useRef } from "react";
 import type { RouterOutputs } from "@/app/_trpc/client";
 import * as client from "@/app/_trpc/client";
 import { getSectorPresenceUpdate } from "@/deltas/travel";
@@ -53,6 +53,15 @@ if (updateStart < 0 || updateEnd < 0) throw new Error("Missing presence merge");
 const presenceMerge = new Function(
   "scope",
   `with (scope) { ${transpiler.transformSync(source.slice(updateStart, updateEnd))}; return { updateUsersList, cancelArrival }; }`,
+);
+const visitStart = source.indexOf(
+  "  useEffect(() => {\n    sectorRef.current = sector;",
+);
+const visitEnd = source.indexOf("  const routeTargetRef =", visitStart);
+if (visitStart < 0 || visitEnd < 0) throw new Error("Missing sector visit binding");
+const bindSectorVisit = new Function(
+  "scope",
+  `with (scope) { ${transpiler.transformSync(source.slice(visitStart, visitEnd))} }`,
 );
 const clients: QueryClient[] = [];
 let now: number;
@@ -144,6 +153,8 @@ const setup = (
         queued: new Set<string>(),
         timer: undefined as ReturnType<typeof setTimeout> | undefined,
       });
+      const sectorRef = useRef(props.sector);
+      bindSectorVisit({ useEffect, sector: props.sector, sectorRef, arrivalsRef });
       const { prepareSectorUpdate, isSectorFetching, addArrivals } =
         useSectorCacheUpdate(props.sector);
       if (observeParent)
@@ -162,7 +173,7 @@ const setup = (
         userRef: { current: { userId: "actor" } },
         userData: { userId: "actor" },
         usersRef: { current: [] },
-        sectorRef: { current: props.sector },
+        sectorRef,
         actorRevisionRef: { current: 0 },
         isActiveRef: { current: props.isActive },
         isUserCurrentlyStealthed: () => false,
@@ -440,3 +451,80 @@ it.each([false, true])(
     ]);
   },
 );
+
+it.each([
+  { destination: 4, fail: false },
+  { destination: 4, fail: true },
+  { destination: 3, fail: false },
+  { destination: 3, fail: true },
+])(
+  "resolves a following player in a new sector visit (destination: $destination, failure: $fail)",
+  async ({ destination, fail }) => {
+    const first = deferred<unknown[]>();
+    let reads = 0;
+    const test = setup(true, false, async () => {
+      if (++reads === 1) return first.promise;
+      return [{ userId: "following", sector: destination, longitude: 7, latitude: 7 }];
+    });
+    await settle();
+    await act(async () =>
+      test.result.current.updateRemote({
+        userId: "following",
+        sector: 3,
+        status: "AWAKE",
+      }),
+    );
+    await advance(SECTOR_ARRIVAL_BATCH_MS);
+    test.rerender({ isActive: true, sector: 4 });
+    await settle();
+    if (destination === 3) {
+      test.rerender({ isActive: true, sector: 3 });
+      await settle();
+    }
+    await act(async () =>
+      test.result.current.updateRemote({
+        userId: "following",
+        sector: destination,
+        status: "AWAKE",
+      }),
+    );
+    if (fail) first.reject(new Error("Old-sector lookup failed"));
+    else first.resolve([{ userId: "following", sector: 3, longitude: 1, latitude: 1 }]);
+    await settle();
+    await advance(SECTOR_ARRIVAL_BATCH_MS);
+    expect(test.calls("travel.getSectorUsers")).toBe(2);
+    expect(test.result.current.data.users).toEqual([
+      expect.objectContaining({
+        userId: "following",
+        sector: destination,
+        longitude: 7,
+      }),
+    ]);
+  },
+);
+
+it("retires a queued old-sector timer before accepting destination arrivals", async () => {
+  const test = setup(true);
+  await settle();
+  await act(async () =>
+    test.result.current.updateRemote({
+      userId: "following",
+      sector: 3,
+      status: "AWAKE",
+    }),
+  );
+  test.rerender({ isActive: true, sector: 4 });
+  await settle();
+  await act(async () =>
+    test.result.current.updateRemote({
+      userId: "following",
+      sector: 4,
+      status: "AWAKE",
+    }),
+  );
+  await advance(SECTOR_ARRIVAL_BATCH_MS);
+  expect(test.calls("travel.getSectorUsers")).toBe(1);
+  expect(
+    test.read.mock.calls.find(([path]) => path === "travel.getSectorUsers")?.[1],
+  ).toEqual({ sector: 4, userIds: ["following"] });
+});
