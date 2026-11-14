@@ -19,10 +19,14 @@ import {
   installBrowserGlobals,
   restoreBrowserGlobals,
 } from "../../setup/browserGlobals";
+import { mockCosmetics } from "../../setup/cosmetics";
 
 let equip: ReturnType<typeof vi.fn>;
 
+let cosmeticState: ReturnType<typeof mockCosmetics>;
+
 beforeEach(() => {
+  cosmeticState = mockCosmetics();
   installBrowserGlobals();
   equip = vi.fn();
   vi.spyOn(contentImage, "default").mockImplementation(({ alt }) => (
@@ -51,6 +55,7 @@ beforeEach(() => {
     isRepairingWithRyo: false,
   } as never);
   Object.assign(vi.spyOn(client, "api" as never), {
+    cosmetic: { get: { useQuery: () => cosmeticState.wardrobe } },
     item: { getEvolutions: { useQuery: () => ({ data: [] }) } },
   });
 });

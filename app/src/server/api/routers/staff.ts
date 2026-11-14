@@ -29,6 +29,7 @@ import { incrementAnbuMemberCount } from "@/queries/anbu";
 import { fetchBadge } from "@/queries/badge";
 import { deleteBattleQueueMembersForUser } from "@/queries/clan";
 import { deleteBattleById } from "@/queries/combat";
+import { renameCosmetics } from "@/queries/cosmetic";
 import { findHuntingSessionForUser } from "@/queries/hunting";
 import { renameParentalContact } from "@/queries/parentalControls";
 import {
@@ -787,6 +788,7 @@ export const staffRouter = createTRPCRouter({
           );
       }
       const moves = await Promise.allSettled([
+        renameCosmetics(ctx.drizzle, input.userId, input.newUserId),
         renameParentalContact(ctx.drizzle, input.userId, input.newUserId),
         updateUserTitleForUpdateUserId(ctx.drizzle, input),
         updateTitleForUpdateUserId(ctx.drizzle, input),

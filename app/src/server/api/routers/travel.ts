@@ -436,6 +436,7 @@ export const travelRouter = createTRPCRouter({
       if (user.status === "AWAKE" && !user.isAi) {
         users.push({
           attributes: user.attributes,
+          cosmeticSlots: user.cosmeticSlots,
           items: user.items,
           gender: user.gender,
           spriteBodyStyle: user.spriteBodyStyle,
@@ -472,6 +473,8 @@ export const travelRouter = createTRPCRouter({
       // Only draw battle markers for fights that still exist and are being played
       const liveBattleIds = new Set(liveBattles.map((b) => b.id));
 
+      // Filter out stealthed players (unless it's the current user)
+      // Then anonymize enemy ANBU squad members
       const processedUsers = toSectorParticipants(user, users, warData, liveBattleIds);
 
       const sectorMap =
@@ -1313,7 +1316,14 @@ const toSectorParticipants = (
       const disguise = getMapDisguise(viewer, u, warData);
       const warRelationship = getWarRelationship(warData, viewer, u) ?? null;
       const isMasked = disguise === "Mercenary";
-      const { attributes, items, gender, spriteBodyStyle, ...publicUser } = u;
+      const {
+        attributes,
+        items,
+        cosmeticSlots,
+        gender,
+        spriteBodyStyle,
+        ...publicUser
+      } = u;
       const participant = {
         ...publicUser,
         warRelationship,
@@ -1321,6 +1331,7 @@ const toSectorParticipants = (
         spriteAppearance: resolveSpriteAppearance({
           attributes,
           items,
+          cosmeticSlots,
           gender,
           spriteBodyStyle,
         }),

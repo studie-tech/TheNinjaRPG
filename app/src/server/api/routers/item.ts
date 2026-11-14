@@ -165,6 +165,7 @@ import {
   updateUserForActionReadiness,
 } from "@/queries/actionReadiness";
 import { fetchBloodlines, fetchItemBloodlineRolls } from "@/queries/bloodline";
+import { clearCosmeticVariant, deleteItemCosmetics } from "@/queries/cosmetic";
 import { listHuntingHabitats } from "@/queries/hunting";
 import type { UserItemMergeBucketRow } from "@/queries/item";
 import {
@@ -761,6 +762,7 @@ export const itemRouter = createTRPCRouter({
         await deleteItemVariantForDelete(ctx.drizzle, input);
       }
       await Promise.all([
+        deleteItemCosmetics(ctx.drizzle, input.id),
         deleteUserItemForDelete(ctx.drizzle, input),
         deleteUserItemImbuementForDelete(ctx.drizzle, input),
       ]);
@@ -1423,6 +1425,7 @@ export const itemRouter = createTRPCRouter({
       ]);
       // Step 2: delete the variant row itself (after FK dependents are cleared)
       await deleteItemVariantById(ctx.drizzle, input.variantId);
+      await clearCosmeticVariant(ctx.drizzle, input.variantId);
       if (variant?.item) {
         await outdateProposalsFor(
           ctx.drizzle,

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "bun:test";
+import { DrizzleQueryError } from "drizzle-orm";
 import { isMysqlDuplicateKeyError, retryOnDeadlock } from "@/server/utils/mysqlErrors";
 
 describe("isMysqlDuplicateKeyError", () => {
@@ -66,6 +67,22 @@ describe("retryOnDeadlock", () => {
     });
     expect(value).toBe("done");
     expect(calls).toBe(3);
+  });
+
+  it("retries a mysql2 deadlock wrapped by Drizzle", async () => {
+    let calls = 0;
+    const result = await retryOnDeadlock(async () => {
+      calls += 1;
+      if (calls === 1)
+        throw new DrizzleQueryError(
+          "update UserData set status = ?, battleId = ? where userId = ?",
+          ["BATTLE", "later-battle", "arena-ready"],
+          Object.assign(deadlock(), { code: "ER_LOCK_DEADLOCK", errno: 1213 }),
+        );
+      return { rowsAffected: 1 };
+    });
+    expect(result.rowsAffected).toBe(1);
+    expect(calls).toBe(2);
   });
 
   it("gives up after the last attempt", async () => {

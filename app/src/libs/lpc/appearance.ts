@@ -1,3 +1,5 @@
+import type { ItemSlot } from "@/drizzle/constants";
+import { isCompatibleEquipSlot } from "@/libs/item";
 import type { LpcColor, SpriteAppearance, SpriteLayer } from "@/validators/lpc";
 import type { LpcConfig } from "@/validators/lpcAsset";
 import { getCharacterAttributes } from "@/validators/register";
@@ -148,7 +150,7 @@ export const resolveSpriteAppearance = (user: SpriteUser): SpriteAppearance => {
       put(profile!, profile!, profile === "piercing" ? "silver" : "black");
   return withSpriteEquipment(
     { version: 1, body, layers: [...layers.values()] },
-    Object.values(resolveSpriteEquipment(user.items)),
+    Object.values(resolveSpriteEquipment(user.items, user.cosmeticSlots)),
   );
 };
 
@@ -156,7 +158,10 @@ export const resolveSpriteAppearance = (user: SpriteUser): SpriteAppearance => {
  * Resolve worn visuals by item-instance ID, preserving two equipped copies of one item.
  * Accept either a selected variant join or the full variant list; battle initiation captures this lookup.
  */
-export const resolveSpriteEquipment = (items: SpriteUser["items"]) => {
+export const resolveSpriteEquipment = (
+  items: SpriteUser["items"],
+  cosmetics?: SpriteUser["cosmeticSlots"],
+) => {
   const result: Record<string, SpriteLayer> = {};
   const equipped = [...(items ?? [])]
     .filter(
@@ -179,7 +184,15 @@ export const resolveSpriteEquipment = (items: SpriteUser["items"]) => {
     const variant =
       owned.activeVariant ??
       owned.item.variants?.find((v) => v.id === owned.activeVariantId);
-    const visual = resolveItemSprite(owned.item, variant);
+    const cosmetic = cosmetics?.find(
+      (entry) =>
+        entry.slot === owned.equipped &&
+        entry.item &&
+        isCompatibleEquipSlot(entry.slot as ItemSlot, entry.item.slot),
+    );
+    const visual = cosmetic?.item
+      ? resolveItemSprite(cosmetic.item, cosmetic.variant)
+      : resolveItemSprite(owned.item, variant);
     if (visual.profile === "NONE") continue;
     // Recipes retain physical equipment slots; the saved design controls clothing replacement at render time.
     const slot = owned.equipped;
@@ -221,6 +234,7 @@ export const anonymousSpriteAppearance = (anbu = false): SpriteAppearance => ({
 
 /** Visual fields shared by selected-variant joins and full catalogue entries. */
 export type SpriteVariant = {
+  image?: string | null;
   id?: string;
   name?: string;
   lpcProfile?: string | null;
@@ -235,6 +249,11 @@ export type SpriteItem = SpriteVariant & {
 };
 /** Resolver inputs shared by creation drafts and private server snapshots; never a public DTO. */
 export type SpriteUser = {
+  cosmeticSlots?: {
+    slot: string;
+    item?: SpriteItem | null;
+    variant?: SpriteVariant | null;
+  }[];
   gender?: string;
   spriteBodyStyle?: "male" | "female" | null;
   attributes?: (string | { attribute: string })[];

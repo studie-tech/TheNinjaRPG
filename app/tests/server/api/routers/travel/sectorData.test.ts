@@ -130,6 +130,46 @@ const makeCaller = (
 };
 
 describe("travel.getSectorData query scheduling", () => {
+  it.each(["snapshot", "arrivals"] as const)(
+    "projects cosmetic appearance without publishing its source rows for %s",
+    async (view) => {
+      const test = makeCaller();
+      const participant = {
+        userId: "cosmetic-player",
+        username: "Cosmetic player",
+        sector: SECTOR,
+        status: "AWAKE",
+        stealthActive: false,
+        anbuSquad: null,
+        items: [
+          {
+            id: "equipped-helmet",
+            equipped: "HEAD",
+            quantity: 1,
+            item: { slot: "HEAD", lpcProfile: "helmet" },
+          },
+        ],
+        cosmeticSlots: [{ slot: "HEAD", item: { slot: "HEAD", lpcProfile: "mask" } }],
+      };
+      test.reads.users.mockResolvedValue([participant]);
+      const users =
+        view === "snapshot"
+          ? (await test.caller.getSectorData({ sector: SECTOR })).users
+          : await test.caller.getSectorUsers({
+              sector: SECTOR,
+              userIds: [participant.userId],
+            });
+      const published = users.find((entry) => entry.userId === participant.userId);
+      expect(published?.spriteAppearance?.layers).toContainEqual({
+        slot: "HEAD",
+        profile: "mask",
+        color: "gray",
+      });
+      expect(published).not.toHaveProperty("items");
+      expect(published).not.toHaveProperty("cosmeticSlots");
+    },
+  );
+
   it("starts all sector, global and quest-history reads before the authoritative user lookup finishes", async () => {
     const test = makeCaller({ waitForUser: true });
     const pending = test.caller.getSectorData({ sector: SECTOR });
