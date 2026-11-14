@@ -115,7 +115,17 @@ it("combines multiple brackets, supports an empty selection and All, and keeps u
     player("Elite", { rank: "ELITE JONIN" }),
     player("Unknown", { experience: undefined }),
   ]);
+  expect(
+    screen
+      .getAllByRole("button", { pressed: true })
+      .map((button) => button.textContent),
+  ).toEqual(["All"]);
   fireEvent.click(screen.getByRole("button", { name: "Bracket 1" }));
+  expect(
+    screen
+      .getAllByRole("button", { pressed: true })
+      .map((button) => button.textContent),
+  ).toEqual(["1"]);
   expect(screen.getByRole("list").textContent).toContain("Low");
   expect(screen.getByRole("list").textContent).not.toContain("Elite");
   fireEvent.click(screen.getByRole("button", { name: "Bracket 8" }));
@@ -123,8 +133,14 @@ it("combines multiple brackets, supports an empty selection and All, and keeps u
   fireEvent.click(screen.getByRole("button", { name: "Bracket 1" }));
   fireEvent.click(screen.getByRole("button", { name: "Bracket 8" }));
   expect(screen.getByText(/No awake users match/)).toBeTruthy();
+  expect(screen.queryAllByRole("button", { pressed: true })).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "All" }));
   expect(screen.getAllByRole("listitem")).toHaveLength(3);
+  expect(
+    screen
+      .getAllByRole("button", { pressed: true })
+      .map((button) => button.textContent),
+  ).toEqual(["All"]);
 });
 
 it("excludes village, diplomatic and war allies while war enemies remain visible, independently of friendly attacks", () => {

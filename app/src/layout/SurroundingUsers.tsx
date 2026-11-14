@@ -60,8 +60,7 @@ export const SurroundingUsers: React.FC<SurroundingUsersProps> = (props) => {
             All
           </Button>
           {Array.from({ length: MAX_PVP_BRACKET + 1 }, (_, bracket) => {
-            const selected =
-              storedBrackets === null || storedBrackets.includes(bracket);
+            const selected = storedBrackets?.includes(bracket) ?? false;
             return (
               <Button
                 key={bracket}
