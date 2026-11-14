@@ -11,6 +11,7 @@ import {
 import * as client from "@/app/_trpc/client";
 import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import * as combatHooks from "@/hooks/combat";
+import * as combatEntry from "@/hooks/combatEntry";
 import * as navigation from "@/hooks/navigation";
 import * as sleep from "@/hooks/sleep";
 import * as tutorial from "@/hooks/tutorial";
@@ -29,6 +30,10 @@ let autoWakeUp = true;
 let tutorialStep: unknown;
 
 beforeEach(() => {
+  vi.spyOn(combatEntry, "useCombatEntry").mockReturnValue({
+    prepareCombatEntry: vi.fn(),
+    loadBattle: vi.fn(),
+  });
   mutate = vi.fn();
   toggleSleep = vi.fn();
   status = "AWAKE";

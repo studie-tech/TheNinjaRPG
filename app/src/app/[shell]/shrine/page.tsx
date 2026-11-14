@@ -11,6 +11,7 @@ import {
   WAR_SHRINE_IMAGE,
 } from "@/drizzle/constants";
 import type { War } from "@/drizzle/schema";
+import { useCombatEntry } from "@/hooks/combatEntry";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import ContentBox from "@/layout/ContentBox";
 import Image from "@/layout/Image";
@@ -54,13 +55,18 @@ export default function Shrine() {
 
   // Router for forwarding
   const router = useRouter();
+  const { prepareCombatEntry, loadBattle } = useCombatEntry();
 
   // Mutation for starting a fight
   const { mutate: attack, isPending: isAttacking } =
     api.combat.startShrineBattle.useMutation({
-      onMutate: prepareUserUpdate,
+      onMutate: () => {
+        prepareCombatEntry();
+        return prepareUserUpdate();
+      },
       onSuccess: async (result, _variables, revision) => {
         if (result.success && result.battleId) {
+          loadBattle(result.battleId);
           await updateUser(result, { revision, refetch: false });
           pushToCombat(router, result.battleId);
           showMutationToast({ ...result, message: "Attacking the Shrine" });

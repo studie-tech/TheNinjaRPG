@@ -15,6 +15,7 @@ import {
   TERRITORY_WAR_TEAM_SIZE,
   TERRITORY_WAR_TOKEN_REWARD,
 } from "@/drizzle/constants";
+import { useCombatEntry } from "@/hooks/combatEntry";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import ContentBox from "@/layout/ContentBox";
@@ -42,6 +43,7 @@ export default function TerritoryWarPage() {
     autoWakeUp: profile.autoWakeUp,
   }));
   const router = useRouter();
+  const { prepareCombatEntry, loadBattle } = useCombatEntry();
   const utils = api.useUtils();
   const ownTeamRef = useRef<HTMLDivElement>(null);
   const current = api.territoryWar.getCurrent.useQuery(undefined, {
@@ -70,9 +72,13 @@ export default function TerritoryWarPage() {
     onMutate: prepareUserUpdate,
   });
   const start = api.territoryWar.startBattle.useMutation({
-    onMutate: prepareUserUpdate,
+    onMutate: () => {
+      prepareCombatEntry();
+      return prepareUserUpdate();
+    },
     onSuccess: async (result, variables, revision) => {
       if (result.success && result.battleId) {
+        loadBattle(result.battleId);
         await updateUser(result, { revision, delta: result.userDelta });
         pushToCombat(router, result.battleId);
       } else await onSuccess(result, variables, revision);

@@ -22,6 +22,7 @@ import {
 } from "@/drizzle/constants";
 import type { UserData, VillageStructure } from "@/drizzle/schema";
 import { AUTO_ATTACK_SETTINGS, readAutoAttackSetting } from "@/hooks/autoAttack";
+import { useCombatEntry } from "@/hooks/combatEntry";
 import { useGameScene } from "@/hooks/game-scene";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useTutorialStep } from "@/hooks/tutorial";
@@ -1584,11 +1585,16 @@ const SectorScene = (props: SectorProps & { centerEntry: SectorWindowEntry }) =>
     },
   });
 
+  const { prepareCombatEntry, loadBattle } = useCombatEntry();
   const { mutate: attack, isPending: isAttacking } = api.combat.attackUser.useMutation({
-    onMutate: prepareUserUpdate,
+    onMutate: () => {
+      prepareCombatEntry();
+      return prepareUserUpdate();
+    },
     onSuccess: async (data, _variables, revision) => {
       document.body.style.cursor = "default";
       if (data.success) {
+        if (data.battleId) loadBattle(data.battleId);
         showActionReadinessToast(data);
         await updateUser(data, { revision, refetch: false });
       } else {

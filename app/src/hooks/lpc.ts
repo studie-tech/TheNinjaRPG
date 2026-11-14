@@ -51,14 +51,7 @@ export const useLpcCatalogLoader = ({
     const cached = revalidateInBackground
       ? utils.gameAsset.getLpcSceneCatalog.getData()
       : undefined;
-    // The catalog is slow to build and loads beside a scene's other data, not inside its batch.
-    // It has no observers, so it is kept for the page's lifetime for the next scene to reuse;
-    // a recent copy that no save invalidated answers without a request.
-    const latest = utils.gameAsset.getLpcSceneCatalog.fetch(undefined, {
-      staleTime: LPC_SCENE_CATALOG_STALE_MS,
-      gcTime: Infinity,
-      trpc: { context: { skipBatch: true } },
-    });
+    const latest = fetchLpcSceneCatalog(utils);
     if (cached) {
       // Cached artwork remains usable if revalidation fails; a later scene retries.
       void latest.catch(() => undefined);
@@ -82,3 +75,16 @@ export const useLpcCatalogLoader = ({
     return promise ?? request();
   }, [request]);
 };
+
+/**
+ * The catalog is slow to build and loads beside a scene's other data, not inside its batch.
+ * It has no observers, so it is kept for the page's lifetime for the next scene to reuse;
+ * a recent copy that no save invalidated answers without a request, and a scene that asks
+ * while a request is in flight shares it.
+ */
+export const fetchLpcSceneCatalog = (utils: ReturnType<typeof api.useUtils>) =>
+  utils.gameAsset.getLpcSceneCatalog.fetch(undefined, {
+    staleTime: LPC_SCENE_CATALOG_STALE_MS,
+    gcTime: Infinity,
+    trpc: { context: { skipBatch: true } },
+  });

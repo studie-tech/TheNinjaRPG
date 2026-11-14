@@ -18,6 +18,7 @@ import {
   WAR_POINT_CONVERSION_DAYS,
   WAR_POINT_PRESTIGE_RATE,
 } from "@/drizzle/constants";
+import * as combatEntry from "@/hooks/combatEntry";
 import * as modal from "@/layout/Modal";
 import { ObjectiveWarPanel } from "@/layout/ObjectiveWarPanel";
 import { WarDashboardNotices } from "@/layout/WarDashboardNotices";
@@ -174,6 +175,10 @@ const readyAttempt = (endsAt = new Date(NOW - 1000).toISOString()) => ({
 });
 
 beforeEach(() => {
+  vi.spyOn(combatEntry, "useCombatEntry").mockReturnValue({
+    prepareCombatEntry: vi.fn(),
+    loadBattle: vi.fn(),
+  });
   vi.spyOn(navigation, "useRouter").mockReturnValue(router);
   installBrowserGlobals();
   vi.clearAllMocks();

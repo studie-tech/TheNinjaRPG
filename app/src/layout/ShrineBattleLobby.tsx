@@ -12,6 +12,7 @@ import {
   SHRINE_BATTLE_MIN_ATTACKERS,
 } from "@/drizzle/constants";
 import type { UserRank } from "@/drizzle/schema";
+import { useCombatEntry } from "@/hooks/combatEntry";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import AvatarImage from "@/layout/Avatar";
 import Countdown from "@/layout/Countdown";
@@ -45,6 +46,7 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
   const utils = api.useUtils();
   const { updateUser, prepareUserUpdate } = useRequiredUserInfo();
   const router = useRouter();
+  const { prepareCombatEntry, loadBattle } = useCombatEntry();
 
   // Query for shrine battles
   const { data: shrineBattles, isLoading } = api.shrine.getShrineBattles.useQuery(
@@ -87,8 +89,12 @@ export const ShrineBattleLobby: React.FC<ShrineBattleLobbyProps> = ({
 
   const { mutate: initiateBattle, isPending: isInitiating } =
     api.shrine.initiateShrineBattle.useMutation({
-      onMutate: prepareUserUpdate,
+      onMutate: () => {
+        prepareCombatEntry();
+        return prepareUserUpdate();
+      },
       onSuccess: async (data, _variables, revision) => {
+        if (data.success && data.battleId) loadBattle(data.battleId);
         await applyLobbyResult(data, revision);
         if (data.success && data.battleId) pushToCombat(router, data.battleId);
       },

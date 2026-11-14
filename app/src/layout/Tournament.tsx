@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { IMG_AVATAR_DEFAULT, TOURNAMENT_ROUND_SECONDS } from "@/drizzle/constants";
 import type { TournamentMatch } from "@/drizzle/schema";
+import { useCombatEntry } from "@/hooks/combatEntry";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useNow } from "@/hooks/useNow";
 import AvatarImage from "@/layout/Avatar";
@@ -60,6 +61,7 @@ const Tournament: React.FC<TournamentProps> = (props) => {
 
   // Get router
   const router = useRouter();
+  const { prepareCombatEntry, loadBattle } = useCombatEntry();
 
   // Queries. Each read advances the bracket server-side, so poll only while rounds run.
   const {
@@ -105,8 +107,12 @@ const Tournament: React.FC<TournamentProps> = (props) => {
     isPending: isJoiningMatch,
     variables: joiningMatch,
   } = api.tournament.joinMatch.useMutation({
-    onMutate: prepareUserUpdate,
+    onMutate: () => {
+      prepareCombatEntry();
+      return prepareUserUpdate();
+    },
     onSuccess: async (data, _variables, revision) => {
+      if (data.success && data.battleId) loadBattle(data.battleId);
       if (data.success || data.userRecovery)
         await updateUser(data, { revision, refetch: false });
       showMutationToast(data);

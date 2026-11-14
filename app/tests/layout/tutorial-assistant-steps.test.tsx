@@ -165,9 +165,15 @@ beforeEach(() => {
     profile: {
       updatePreferences: { useMutation: () => ({ mutateAsync: state.disable }) },
       updateTutorialStep: {
-        useMutation: () => ({
+        // The step changes optimistically before the save, as the real mutation does.
+        useMutation: (options: {
+          onMutate?: (variables: { step: number }) => Promise<unknown>;
+        }) => ({
           mutate: state.updateStep,
-          mutateAsync: state.saveStep,
+          mutateAsync: async (variables: { step: number }) => {
+            await options.onMutate?.(variables);
+            return state.saveStep(variables);
+          },
           isPending: false,
         }),
       },

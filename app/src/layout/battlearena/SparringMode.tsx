@@ -6,6 +6,7 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MAX_PLAYER_LEVEL } from "@/drizzle/constants";
+import { useCombatEntry } from "@/hooks/combatEntry";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { BattleSetupPanel } from "@/layout/battlearena/BattleSetupPanel";
 import { OpponentFinder } from "@/layout/battlearena/OpponentFinder";
@@ -29,6 +30,7 @@ export function SparringMode() {
   }));
   const utils = api.useUtils();
   const router = useRouter();
+  const { prepareCombatEntry, loadBattle } = useCombatEntry();
   const [useRankedRules, setUseRankedRules] = useState(false);
   const [spectatable, setSpectatable] = useState(false);
 
@@ -47,8 +49,12 @@ export function SparringMode() {
 
   const { mutate: accept, isPending: isAccepting } =
     api.sparring.acceptChallenge.useMutation({
-      onMutate: prepareUserUpdate,
+      onMutate: () => {
+        prepareCombatEntry();
+        return prepareUserUpdate();
+      },
       onSuccess: async (data, _variables, revision) => {
+        if (data.success && data.battleId) loadBattle(data.battleId);
         showMutationToast(data);
         if (data.userRecovery || (data.success && data.battleId))
           await updateUser(data, { revision, refetch: false });

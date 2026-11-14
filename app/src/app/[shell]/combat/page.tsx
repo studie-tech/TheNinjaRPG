@@ -18,6 +18,7 @@ import {
   useAutoCombatSetting,
   useCombatPreferences,
 } from "@/hooks/combat";
+import { loadCombat } from "@/hooks/combatEntry";
 import { useLocalStorage } from "@/hooks/localstorage";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
@@ -62,7 +63,6 @@ import {
 } from "@/utils/UserContext";
 import type { StatSchemaType } from "@/validators/combat";
 
-const loadCombat = () => import("@/layout/Combat");
 const Combat = dynamic(loadCombat, {
   ssr: false,
   loading: () => <Loader explanation="Loading Battlefield" />,
