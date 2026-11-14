@@ -95,6 +95,22 @@ describe("createRuntimeCache", () => {
     expect(database.reads).toBe(2);
   });
 
+  it.each([false, true])(
+    "confirms concurrent invalidations without competing with other writers (separate instances: %s)",
+    async (separateInstances) => {
+      const { store } = memoryStore();
+      const database = { reads: 0, rows: [[1], [2]] };
+      const reader = instance(store, database);
+      expect(await reader.read({})).toEqual([1]);
+      const writers = Array.from({ length: 8 }, () =>
+        separateInstances ? instance(store, database) : reader,
+      );
+      await Promise.all(writers.map((writer) => writer.invalidate()));
+      expect(await reader.read({})).toEqual([2]);
+      expect(database.reads).toBe(2);
+    },
+  );
+
   it("retries an unpersisted version write before confirming invalidation", async () => {
     const { store } = memoryStore();
     const database = { reads: 0, rows: [[1], [2]] };
@@ -104,10 +120,11 @@ describe("createRuntimeCache", () => {
     store.set.mockClear().mockImplementationOnce(async () => undefined);
     await editor.invalidate();
     expect(store.set).toHaveBeenCalledTimes(2);
+    expect(new Set(store.set.mock.calls.map(([, version]) => version)).size).toBe(2);
     expect(await other.read({})).toEqual([2]);
   });
 
-  it.each(["resolved", "rejected"])(
+  it.each(["resolved", "rejected", "unreadable-baseline"])(
     "rejects an unconfirmed invalidation after %s cache failures and bypasses its stale payload",
     async (failure) => {
       const { store } = memoryStore();
@@ -116,8 +133,11 @@ describe("createRuntimeCache", () => {
       expect(await cache.read({})).toEqual([1]);
       const set = store.set.getMockImplementation()!;
       store.set.mockClear();
-      if (failure === "resolved") store.set.mockResolvedValue(undefined);
-      else store.set.mockRejectedValue(new Error("cache unavailable"));
+      if (failure === "rejected")
+        store.set.mockRejectedValue(new Error("cache unavailable"));
+      else store.set.mockResolvedValue(undefined);
+      if (failure === "unreadable-baseline")
+        store.get.mockImplementationOnce(async () => null);
       store.expireTag.mockResolvedValue(undefined);
       await expect(cache.invalidate()).rejects.toThrow("Could not invalidate");
       expect(store.set).toHaveBeenCalledTimes(3);

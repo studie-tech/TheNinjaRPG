@@ -141,11 +141,22 @@ export const createRuntimeCache = <Client, T>({
 
   /** Confirm a new shared version; the SDK can resolve failed writes without storing them. */
   const writeVersionKey = async () => {
-    const version = nanoid();
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
+        // Invalidation follows the database write. A change from this baseline is fresh
+        // even when another writer publishes it; a failed GET returning null proves nothing.
+        const previous = await cache.get(versionKey);
+        // Never restore a token whose payload another reader may already have loaded.
+        const version = nanoid();
         await cache.set(versionKey, version, { ttl: VERSION_TTL_SECONDS });
-        if ((await cache.get(versionKey)) === version) return;
+        const confirmed = await cache.get(versionKey);
+        if (
+          confirmed === version ||
+          (typeof previous === "string" &&
+            typeof confirmed === "string" &&
+            confirmed !== previous)
+        )
+          return;
       } catch {
         // Retry both rejected operations and writes that were not persisted.
       }
