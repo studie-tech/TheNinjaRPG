@@ -1,10 +1,10 @@
 "use client";
 
-import { atom, useAtomValue } from "jotai";
-import { useRouter } from "next/navigation";
+import { atom, useAtomValue, useStore } from "jotai";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { TUTORIAL_ITEM_ID, TUTORIAL_JUTSU_ID } from "@/drizzle/constants";
+import { useNavigationRouter } from "@/hooks/navigation";
 import {
   actionPointsAfterAction,
   availableUserActions,
@@ -32,6 +32,12 @@ const noBattleAtom = atom<ReturnedBattle | undefined>(undefined);
 const noSelectedActionAtom = atom<string | undefined>(undefined);
 
 /**
+ * Whether the open lesson is leading the player to the current step's page. It follows the
+ * saved step itself, so step changes navigate from here only while the lesson is collapsed.
+ */
+export const tutorialPageGuidanceAtom = atom(false);
+
+/**
  * Hook to get the current tutorial step
  * @returns
  */
@@ -48,7 +54,8 @@ export const useTutorialStep = () => {
     status: user.status,
   }));
   const pathname = usePublicPathname();
-  const router = useRouter();
+  const router = useNavigationRouter();
+  const store = useStore();
   const [isAssistantVisible, setIsAssistantVisible] = useState<boolean>(false);
 
   // Derived
@@ -163,22 +170,44 @@ export const useTutorialStep = () => {
     guidanceReason,
   ]);
 
-  // Saves the tutorial step: `mutate` for callers that fire and forget,
-  // the async form for `saveStep`, which rolls the optimistic step back.
+  /**
+   * Leads to the step's page. Battles keep the player until they end, and the battle
+   * start itself enters /combat.
+   */
+  const navigateToStep = (step: number) => {
+    if (store.get(tutorialPageGuidanceAtom)) return;
+    const stepPage = TUTORIAL_STEPS[step]?.page;
+    const involvesBattle = pathname === "/combat" || stepPage === "/combat";
+    if (stepPage && !involvesBattle && !isSamePage(stepPage, pathname)) {
+      router.push(stepPage);
+    }
+  };
+
+  // Saves the tutorial step: `mutate` for callers that fire and forget, the async
+  // form for `saveStep`. The step and its page change at once; a step the server
+  // does not take is put back.
   const {
     mutate: updateTutorialStep,
     mutateAsync: saveTutorialStep,
     isPending,
   } = api.profile.updateTutorialStep.useMutation({
-    onSuccess: async (data) => {
-      if (data.success && data.userPatch?.tutorialStep !== undefined) {
-        await updateUser({ tutorialStep: data.userPatch.tutorialStep });
-        const nextStepPage = TUTORIAL_STEPS[data.userPatch.tutorialStep]?.page;
-        const onBattlePage = pathname === "/combat";
-        if (nextStepPage && !onBattlePage && !isSamePage(nextStepPage, pathname)) {
-          router.push(nextStepPage);
-        }
+    onMutate: async ({ step }) => {
+      const previousStep = stepNumber;
+      await updateUser({ tutorialStep: step });
+      navigateToStep(step);
+      return { previousStep };
+    },
+    onSuccess: async (data, _variables, context) => {
+      const savedStep = data.success ? data.userPatch?.tutorialStep : undefined;
+      if (savedStep !== undefined) {
+        await updateUser({ tutorialStep: savedStep });
+      } else if (context) {
+        await updateUser({ tutorialStep: context.previousStep });
       }
+    },
+    // Settled rather than onError, which would replace the shared transport-failure feedback.
+    onSettled: async (_data, error, _variables, context) => {
+      if (error && context) await updateUser({ tutorialStep: context.previousStep });
     },
   });
 
@@ -196,13 +225,8 @@ export const useTutorialStep = () => {
   const saveStep = async (nextStep: number) => {
     if (nextStep >= TUTORIAL_STEPS.length) setIsAssistantVisible(false);
     if (isPending || nextStep === stepNumber) return;
-    const previousStep = stepNumber;
-    await updateUser({ tutorialStep: nextStep });
-    try {
-      await saveTutorialStep({ step: nextStep });
-    } catch {
-      await updateUser({ tutorialStep: previousStep });
-    }
+    // A failed save is already rolled back by the mutation.
+    await saveTutorialStep({ step: nextStep }).catch(() => undefined);
   };
 
   const handleNextStepAsync = async (forceStep?: string) => {

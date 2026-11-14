@@ -5,6 +5,7 @@ import { api } from "@/app/_trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { HUNTING_RANKS } from "@/drizzle/constants";
+import { useCombatEntry } from "@/hooks/combatEntry";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { HuntingRewards } from "@/layout/CombatRewards";
 import ContentBox from "@/layout/ContentBox";
@@ -41,6 +42,7 @@ export function HuntingBoard({
   sessionOnly?: boolean;
 }) {
   const router = useRouter();
+  const { prepareCombatEntry, loadBattle } = useCombatEntry();
   const utils = api.useUtils();
   const { updateUser, prepareUserUpdate, pusher } = useUserInfo();
   const [habitatId, setHabitatId] = useState("");
@@ -86,7 +88,10 @@ export function HuntingBoard({
     onError: (e) => setMessage(e.message),
   });
   const start = api.hunting.start.useMutation({
-    onMutate: prepareUserUpdate,
+    onMutate: () => {
+      if (!onStarted) prepareCombatEntry();
+      return prepareUserUpdate();
+    },
     onSuccess: async (result, _variables, revision) => {
       showActionReadinessToast(result);
       setMessage(result.message);
@@ -99,7 +104,10 @@ export function HuntingBoard({
           utils.hunting.getSession.invalidate(),
           utils.combat.getBattle.invalidate(),
         ]);
-        if (!onStarted) pushToCombat(router, result.battleId);
+        if (!onStarted) {
+          loadBattle(result.battleId);
+          pushToCombat(router, result.battleId);
+        }
       } else {
         if (result.userRecovery) await updateUser(result, { revision, refetch: false });
         await board.refetch();

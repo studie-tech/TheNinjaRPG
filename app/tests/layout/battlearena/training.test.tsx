@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "bun:test";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import * as client from "@/app/_trpc/client";
 import * as combatHooks from "@/hooks/combat";
+import * as combatEntry from "@/hooks/combatEntry";
 import * as navigation from "@/hooks/navigation";
 import * as sleep from "@/hooks/sleep";
 import * as loadoutNames from "@/hooks/useLoadoutNames";
@@ -19,6 +20,10 @@ const { maxValues } = createStatSchema(10, 10, undefined);
 let mutate: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
+  vi.spyOn(combatEntry, "useCombatEntry").mockReturnValue({
+    prepareCombatEntry: vi.fn(),
+    loadBattle: vi.fn(),
+  });
   installBrowserGlobals();
   mutate = vi.fn();
   Object.assign(vi.spyOn(client, "api" as never), {

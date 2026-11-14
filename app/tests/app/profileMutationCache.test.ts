@@ -216,6 +216,8 @@ const setup = (file: string, procedure: string) => {
     "available",
     "activeDungeonNotification",
     "showActionReadinessToast",
+    "prepareCombatEntry",
+    "loadBattle",
     `${factory}\nreturn callbackOptions();`,
   )(
     utils,
@@ -254,6 +256,8 @@ const setup = (file: string, procedure: string) => {
       refreshAvailability: invalidate,
     },
     activeDungeonNotification,
+    vi.fn(),
+    vi.fn(),
     vi.fn(),
   ) as {
     onMutate: () => unknown;

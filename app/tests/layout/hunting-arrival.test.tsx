@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/re
 import { createStore, Provider } from "jotai";
 import { useState } from "react";
 import * as client from "@/app/_trpc/client";
+import * as combatEntry from "@/hooks/combatEntry";
 import * as ActivityStreakPanel from "@/layout/ActivityStreakPanel";
 import ActivityStreakPopup from "@/layout/ActivityStreakPopup";
 import { HuntingArrival } from "@/layout/HuntingArrival";
@@ -38,6 +39,10 @@ const user = {
 };
 
 beforeEach(() => {
+  vi.spyOn(combatEntry, "useCombatEntry").mockReturnValue({
+    prepareCombatEntry: vi.fn(),
+    loadBattle: vi.fn(),
+  });
   vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
     const info = UserContext.useUserData();
     return { ...info, data: info.data ? select(info.data) : undefined } as never;

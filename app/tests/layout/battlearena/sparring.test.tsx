@@ -12,6 +12,7 @@ import type { ZodType } from "zod";
 import * as client from "@/app/_trpc/client";
 import type { UserUpdate, UserUpdateOptions } from "@/deltas/profile";
 import * as combatHooks from "@/hooks/combat";
+import * as combatEntry from "@/hooks/combatEntry";
 import * as navigation from "@/hooks/navigation";
 import * as loadoutNames from "@/hooks/useLoadoutNames";
 import { SparringMode } from "@/layout/battlearena/SparringMode";
@@ -88,6 +89,10 @@ const challenges = [
 ];
 
 beforeEach(() => {
+  vi.spyOn(combatEntry, "useCombatEntry").mockReturnValue({
+    prepareCombatEntry: vi.fn(),
+    loadBattle: vi.fn(),
+  });
   installBrowserGlobals();
   finderInputs = [];
   finderOptions = [];

@@ -4,6 +4,7 @@ import * as navigation from "next/navigation";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import * as client from "@/app/_trpc/client";
+import * as combatEntry from "@/hooks/combatEntry";
 import * as ContentBox from "@/layout/ContentBox";
 import { HuntingArrival } from "@/layout/HuntingArrival";
 import { HuntingBoard } from "@/layout/HuntingBoard";
@@ -42,6 +43,10 @@ let respond: (result: UserDeltaResponse) => Promise<void>;
 const updateUser = vi.fn(async () => undefined);
 
 beforeEach(() => {
+  vi.spyOn(combatEntry, "useCombatEntry").mockReturnValue({
+    prepareCombatEntry: vi.fn(),
+    loadBattle: vi.fn(),
+  });
   vi.spyOn(UserContext, "useUserDataSelector").mockImplementation((select) => {
     const info = UserContext.useRequiredUserData();
     return { ...info, data: info.data ? select(info.data) : undefined } as never;

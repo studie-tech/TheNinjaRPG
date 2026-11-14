@@ -22,6 +22,7 @@ import {
   CLAN_MPVP_MAX_USERS_PER_SIDE,
 } from "@/drizzle/constants";
 import type { UserRank } from "@/drizzle/schema";
+import { useCombatEntry } from "@/hooks/combatEntry";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { usePendingIds } from "@/hooks/usePendingIds";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
@@ -101,6 +102,7 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
 
   // Get router
   const router = useRouter();
+  const { prepareCombatEntry, loadBattle } = useCombatEntry();
 
   const { mutateAsync: removeBattle, isPending: isDeletingBattle } =
     api.clan.deleteClanBattle.useMutation({
@@ -280,8 +282,12 @@ export const ClanBattles: React.FC<ClanBattlesProps> = (props) => {
 
   const { mutate: initiate, isPending: isInitiating } =
     api.clan.initiateClanBattle.useMutation({
-      onMutate: prepareUserUpdate,
+      onMutate: () => {
+        prepareCombatEntry();
+        return prepareUserUpdate();
+      },
       onSuccess: async (data, _variables, revision) => {
+        if (data.success && data.battleId) loadBattle(data.battleId);
         if (data.success || data.userPatch) await updateUser(data, { revision });
         showMutationToast(data);
         if (data.success) {

@@ -7,6 +7,7 @@ import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/app/_trpc/client";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { type CombatLayoutComponentId, useCombatPreferences } from "@/hooks/combat";
+import { loadCombat } from "@/hooks/combatEntry";
 import { useLpcCatalogLoader } from "@/hooks/lpc";
 import ActionTimer from "@/layout/ActionTimer";
 import CombatHistory from "@/layout/CombatHistory";
@@ -17,7 +18,6 @@ import { UserCombatSettings } from "@/layout/UserCombatSettings";
 import type { BattleState } from "@/libs/combat/types";
 import { useRequiredUserData, userBattleAtom } from "@/utils/UserContext";
 
-const loadCombat = () => import("@/layout/Combat");
 const Combat = dynamic(loadCombat, {
   ssr: false,
   loading: () => <Loader explanation="Loading Battlefield" />,

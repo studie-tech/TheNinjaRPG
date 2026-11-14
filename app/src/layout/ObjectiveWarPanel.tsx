@@ -11,6 +11,7 @@ import {
   WAR_CAMP_INTERVAL_HOURS,
   WAR_ESPIONAGE_TARGET,
 } from "@/drizzle/constants";
+import { useCombatEntry } from "@/hooks/combatEntry";
 import { useNavigationRouter as useRouter } from "@/hooks/navigation";
 import { useRefreshAt } from "@/hooks/useRefreshAt";
 import Countdown from "@/layout/Countdown";
@@ -57,6 +58,7 @@ export const ObjectiveWarPanel = ({
     villageId: u.villageId,
   }));
   const router = useRouter();
+  const { prepareCombatEntry, loadBattle } = useCombatEntry();
   const utils = api.useUtils();
   const { data, error, isPending, refetch } = api.war.getObjectiveWarInfo.useQuery(
     { warId },
@@ -85,6 +87,7 @@ export const ObjectiveWarPanel = ({
     _variables: unknown,
     revision: number | undefined,
   ) => {
+    if (result.success && result.battleId) loadBattle(result.battleId);
     setFeedback(result);
     showActionReadinessToast(result);
     if (result.userRecovery || (result.success && result.battleId))
@@ -115,19 +118,23 @@ export const ObjectiveWarPanel = ({
     onError,
     onMutate,
   });
+  const onBattleMutate = () => {
+    prepareCombatEntry();
+    return onMutate();
+  };
   const attack = api.combat.startShrineBattle.useMutation({
     onSuccess: onBattleSuccess,
     onError: (error) => {
       onError(error);
     },
-    onMutate,
+    onMutate: onBattleMutate,
   });
   const camp = api.war.attackWarCamp.useMutation({
     onSuccess: onBattleSuccess,
     onError: (error) => {
       onError(error);
     },
-    onMutate,
+    onMutate: onBattleMutate,
   });
   const endsAt =
     data?.war.combatStartedAt && data.war.rules
