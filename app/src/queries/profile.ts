@@ -1306,8 +1306,8 @@ export const deleteUserAttributeForDeleteAttribute = (
 
 /**
  * Build eligible prefix or non-prefix substring search results, shortest usernames first.
- * Prefix matching uses a range on the username index. Eligibility filters run before the
- * result limit so hidden matches cannot displace users the caller can select.
+ * The covering username index supplies eligibility before the result limit, so hidden
+ * matches cannot displace selectable users or require full user-row scans.
  */
 export const listUserDataForSearchUsers = (
   client: Pick<DrizzleClient, "query" | "select">,
@@ -1323,7 +1323,7 @@ export const listUserDataForSearchUsers = (
       : and(like(column, `%${term}%`), notLike(column, `${term}%`));
   const candidates = client
     .select({ userId: searchCandidate.userId })
-    .from(searchCandidate, { forceIndex: "UserData_username_key" })
+    .from(searchCandidate, { forceIndex: "UserData_username_approvedTos_isAi_idx" })
     .where(
       and(
         matchesTerm(searchCandidate.username),

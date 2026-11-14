@@ -1,10 +1,13 @@
 import { beforeEach, expect, it } from "bun:test";
+import { getTableConfig } from "drizzle-orm/mysql-core";
 import { userData } from "@/drizzle/schema";
+import { listUserDataForSearchUsers } from "@/queries/profile";
 import { profileRouter } from "@/server/api/routers/profile";
 import { insertUsers } from "../../../../setup/factories";
 import {
   callerFor,
   describeWithDatabase,
+  getTestDatabase,
   resetTables,
 } from "../../../../setup/testDatabase";
 
@@ -51,6 +54,23 @@ describeWithDatabase("user search", () => {
 
   it("matches LIKE wildcards literally", async () => {
     expect(await search("a_r")).toEqual(["na_ru"]);
+  });
+
+  it("forces an index covering username and eligibility filters", async () => {
+    const { sql } = listUserDataForSearchUsers(
+      await getTestDatabase(),
+      { username: "naru", showAi: false, showYourself: false },
+      { userId: "viewer" },
+      "contains",
+      5,
+    ).toSQL();
+    const indexName = /FORCE INDEX \(([^)]+)\)/.exec(sql)?.[1];
+    const covering = getTableConfig(userData).indexes.find(
+      (index) => index.config.name === indexName,
+    );
+    expect(
+      covering?.config.columns.map((column) => "name" in column && column.name),
+    ).toEqual(["username", "approvedTos", "isAi"]);
   });
 
   for (const match of ["prefix", "substring"] as const) {
