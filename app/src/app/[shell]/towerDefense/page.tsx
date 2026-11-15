@@ -34,7 +34,6 @@ import type { TowerDefenseSceneView } from "@/libs/rendering/scenes/towerDefense
 import { TD_COORD_SCALE } from "@/libs/towerDefense/balance";
 import { TD_SEALS, TD_ULTIMATES } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
-import type { TdEvent } from "@/libs/towerDefense/sim";
 import { playPreloadedAudio, preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
 import { useUserDataSelector } from "@/utils/UserContext";
 
@@ -153,7 +152,6 @@ export default function TowerDefensePage() {
   const view = useRef<TowerDefenseSceneView>({
     state: null,
     pending: 0,
-    events: [],
     reticle: null,
     mode: "aim",
   });
@@ -162,7 +160,6 @@ export default function TowerDefensePage() {
     const next = view.current;
     next.state = current?.state ?? null;
     next.pending = current?.pending ?? 0;
-    next.events = current?.state.events ?? NO_EVENTS;
     next.reticle = reticle.current;
     next.mode = mode;
     return next;
@@ -387,9 +384,6 @@ const LeaderboardLink = () => (
     </Link>
   </Button>
 );
-
-/** The renderer drains its events in place, so the empty fallback is never refilled. */
-const NO_EVENTS: TdEvent[] = [];
 
 /** Aim at the thickest crowd when the player has not placed a reticle. */
 const nearestCrowd = (enemies: { x: number; y: number }[]) => {

@@ -326,7 +326,6 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
       const id = nanoid();
       const state = restored?.state ?? createRun(config);
       state.recordEvents = true;
-      state.events.length = 0;
       // A new run replaces whatever an earlier one left in storage.
       if (!restored) forget();
       session.current = {

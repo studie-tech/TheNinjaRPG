@@ -59,10 +59,10 @@ describe("tower defense scene", () => {
     const actors = actorLayer(game.stage);
     const crowd = state.enemies.length;
 
-    const events = view.events;
+    const events = state.events;
     events.push({ type: "wave", boss: false, titan: false, eras: [] });
     frame();
-    expect(view.events).toBe(events);
+    expect(state.events).toBe(events);
     expect(events).toHaveLength(0);
     // The hero plus one root per living enemy.
     expect(actors.children).toHaveLength(1 + crowd);
@@ -119,7 +119,7 @@ describe("tower defense clones", () => {
     });
     const travel = () => build.mock.calls.filter(([, , mode]) => mode === "travel");
     state.clonesUntil = state.tick + 100;
-    view.events.push({ type: "ultimate", ultimate: "clones", x: 0, y: 0 } as never);
+    state.events.push({ type: "ultimate", ultimate: "clones", x: 0, y: 0 } as never);
     for (let i = 0; i < 10; i++) frame();
     expect(travel()).toHaveLength(1);
     while (pending.length > 0) {
@@ -269,7 +269,6 @@ const sceneOptions = (view: TowerDefenseSceneView) => ({
 const viewOf = (state: TdState): TowerDefenseSceneView => ({
   state,
   pending: 0,
-  events: [],
   reticle: null,
   mode: "aim",
 });

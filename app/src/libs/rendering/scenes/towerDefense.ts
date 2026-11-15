@@ -71,7 +71,6 @@ export interface TowerDefenseSceneView {
   state: TdState | null;
   /** Real seconds simulated past `state.tick`, for smooth interpolation. */
   pending: number;
-  events: TdEvent[];
   reticle: { x: number; y: number } | null;
   mode: "aim" | "blink" | "trap";
 }
@@ -117,8 +116,8 @@ const NO_ENEMY_ART: EnemyArt = {
 
 /**
  * Renders a tower-defense run from the deterministic simulation. The scene only drains
- * the run's event queue: `onFrame` advances the run, `getView` exposes its state and
- * events, and taps come back as arena coordinates.
+ * the run's event queue: `onFrame` advances the run, `getView` exposes its state, and
+ * taps come back as arena coordinates.
  */
 export const createTowerDefenseScene = async (options: {
   mount: HTMLElement;
@@ -609,8 +608,8 @@ export const createTowerDefenseScene = async (options: {
       const stage = tdStageForWave(state.wave);
       const smoothing = 1 - Math.exp(-Math.min(0.1, frame.delta) * 18);
 
-      // Events from the simulation; the view's queue is drained in place.
-      const events = view.events;
+      // Events from the simulation; the run's queue is drained in place.
+      const events = state.events;
       for (let i = 0; i < events.length; i++) {
         const event = events[i];
         if (event) handleEvent(event, state, now);
