@@ -242,7 +242,13 @@ export default function MyItems() {
             bagTabs={
               <>
                 <BagTabs
-                  bags={[{ value: "all", count: carriedItems?.length ?? 0 }, ...bags]}
+                  bags={[
+                    {
+                      value: "all",
+                      count: bags.reduce((sum, bag) => sum + bag.count, 0),
+                    },
+                    ...bags,
+                  ]}
                   active={activeTab}
                   onChange={setActiveTab}
                 />

@@ -239,6 +239,51 @@ describe("planHomeStorageMove", () => {
     });
     expect(plan.moving.map((ui) => ui.id)).toEqual(["listed"]);
   });
+
+  it.each([0, 1])(
+    "recovers stored listings without spending the %s free backpack slots",
+    (freeSlots) => {
+      const capacity = getInventoryBucketCapacity("normal", user);
+      const lot = (id: string, storedAtHome = false) =>
+        row(
+          id,
+          {
+            itemId: "pill",
+            isInAuction: true,
+            storedAtHome,
+            imbuements: [],
+            level: 1,
+          },
+          { itemType: "CONSUMABLE", canStack: true, stackSize: 10 },
+        );
+      const rows = [
+        ...Array.from({ length: capacity - freeSlots - 1 }, (_, index) =>
+          row(`carried-${index}`),
+        ),
+        lot("carried-listing"),
+        lot("stored-listing-a", true),
+        lot("stored-listing-b", true),
+        row("stored-a", { storedAtHome: true }),
+        row("stored-b", { storedAtHome: true }),
+      ];
+      const plan = planHomeStorageMove({
+        rows,
+        userItemIds: ["stored-listing-a", "stored-listing-b", "stored-a", "stored-b"],
+        toHome: false,
+        user,
+        homeStorage: 12,
+      });
+      expect(plan.moving.map((ui) => ui.id)).toEqual([
+        "stored-listing-a",
+        "stored-listing-b",
+        ...(freeSlots ? ["stored-a"] : []),
+      ]);
+      expect(plan.refused.map((ui) => ui.userItemId)).toEqual(
+        freeSlots ? ["stored-b"] : ["stored-a", "stored-b"],
+      );
+      expect(rows.find((ui) => ui.id === "stored-listing-a")?.storedAtHome).toBe(true);
+    },
+  );
 });
 
 describe("homeStorageMoveMessage", () => {

@@ -316,4 +316,66 @@ describeWithDatabase("equipped items and backpack capacity", () => {
       ).toHaveLength(before + 1);
     },
   );
+
+  it.each(["toggleStoreItem", "moveUserItems"] as const)(
+    "%s recovers stored listings in a full backpack without using another slot",
+    async (procedure) => {
+      const db = await getTestDatabase();
+      await db
+        .update(item)
+        .set({ canStack: true, stackSize: 10 })
+        .where(eq(item.id, "gear"));
+      await fillBackpack("normal", 1);
+      await insertUserItems([
+        { id: "listed", userId, itemId: "gear", isInAuction: true },
+        {
+          id: "stored-listing-a",
+          userId,
+          itemId: "gear",
+          isInAuction: true,
+          storedAtHome: true,
+        },
+        {
+          id: "stored-listing-b",
+          userId,
+          itemId: "gear",
+          isInAuction: true,
+          storedAtHome: true,
+        },
+        { id: "stored", userId, itemId: "backpack-item", storedAtHome: true },
+      ]);
+      const home = await callerFor(homeRouter, userId);
+      if (procedure === "toggleStoreItem") {
+        for (const userItemId of ["stored-listing-a", "stored-listing-b"]) {
+          expect((await home.toggleStoreItem({ userItemId })).success).toBe(true);
+        }
+        expect(await home.toggleStoreItem({ userItemId: "stored" })).toMatchObject({
+          success: false,
+          message: getInventoryBucketFullMessage("normal", { auction: 1, crafting: 1 }),
+        });
+      } else {
+        expect(
+          await home.moveUserItems({
+            userItemIds: ["stored-listing-a", "stored-listing-b", "stored"],
+            toHome: false,
+          }),
+        ).toMatchObject({
+          success: true,
+          movedUserItemIds: ["stored-listing-a", "stored-listing-b"],
+          refused: [{ userItemId: "stored" }],
+        });
+      }
+      const rows = await db.query.userItem.findMany({
+        where: eq(userItem.userId, userId),
+      });
+      expect(rows.find((row) => row.id === "stored")?.storedAtHome).toBe(true);
+      for (const id of ["stored-listing-a", "stored-listing-b"]) {
+        expect(rows.find((row) => row.id === id)).toMatchObject({
+          storedAtHome: false,
+          isInAuction: true,
+          quantity: 1,
+        });
+      }
+    },
+  );
 });

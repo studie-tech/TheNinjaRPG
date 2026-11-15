@@ -354,8 +354,8 @@ type HomeStorageRow = InventorySlotRow & {
 
 /**
  * Split the requested stacks into those that move between backpack and home storage and
- * those that stay, in request order. Each accepted stack takes a slot in the destination
- * bucket, so a later stack of a filled bucket stays. Furniture is managed from the home.
+ * those that stay, in request order. Accepted stacks reserve their destination capacity;
+ * recovered listings can share backpack slots. Furniture is managed from the home.
  */
 export const planHomeStorageMove = <T extends HomeStorageRow>({
   rows,
@@ -373,17 +373,12 @@ export const planHomeStorageMove = <T extends HomeStorageRow>({
   const moving: T[] = [];
   const refused: { userItemId: string; name: string; reason: string }[] = [];
   const used = new Map<string, number>();
+  const projectedRows = [...rows];
   const bucketOf = (ui: T) =>
     toHome ? getHomeStorageBucket(ui.item) : getInventoryBucket(ui.item);
   for (const ui of rows) {
     if (toHome && ui.storedAtHome)
       used.set(bucketOf(ui), (used.get(bucketOf(ui)) ?? 0) + 1);
-    if (!toHome && !used.has(bucketOf(ui))) {
-      used.set(
-        bucketOf(ui),
-        countInventoryBucketSlots(rows, getInventoryBucket(ui.item)),
-      );
-    }
   }
   for (const userItemId of userItemIds) {
     const ui = rows.find((row) => row.id === userItemId);
@@ -408,12 +403,14 @@ export const planHomeStorageMove = <T extends HomeStorageRow>({
         }
       } else {
         const bucket = getInventoryBucket(ui.item);
-        if ((used.get(bucket) ?? 0) >= getInventoryBucketCapacity(bucket, user)) {
-          // Accepted withdrawals already occupy bag slots in this batch's projected inventory.
-          const held = countHeldInventorySlots(
-            [...rows, ...moving.map((row) => ({ ...row, storedAtHome: false }))],
+        if (
+          countInventoryBucketSlots(
+            [...projectedRows, { ...ui, storedAtHome: false }],
             bucket,
-          );
+          ) > getInventoryBucketCapacity(bucket, user)
+        ) {
+          // Accepted withdrawals already occupy bag slots in this batch's projected inventory.
+          const held = countHeldInventorySlots(projectedRows, bucket);
           return `does not fit: ${getInventoryBucketFullMessage(bucket, held)}`;
         }
       }
@@ -421,7 +418,8 @@ export const planHomeStorageMove = <T extends HomeStorageRow>({
     })();
     if (ui && !reason) {
       moving.push(ui);
-      used.set(bucketOf(ui), (used.get(bucketOf(ui)) ?? 0) + 1);
+      if (toHome) used.set(bucketOf(ui), (used.get(bucketOf(ui)) ?? 0) + 1);
+      else projectedRows.push({ ...ui, storedAtHome: false });
     } else {
       refused.push({ userItemId, name: ui?.item.name ?? "Item", reason: reason ?? "" });
     }

@@ -596,8 +596,11 @@ export const homeRouter = createTRPCRouter({
       // Mutate
       if (userItemResult.storedAtHome) {
         const inventoryBucket = getInventoryBucket(userItemResult.item);
-        const bucketCount = countInventoryBucketSlots(nonStoredItems, inventoryBucket);
-        if (bucketCount >= getInventoryBucketCapacity(inventoryBucket, user)) {
+        const bucketCount = countInventoryBucketSlots(
+          [...nonStoredItems, { ...userItemResult, storedAtHome: false }],
+          inventoryBucket,
+        );
+        if (bucketCount > getInventoryBucketCapacity(inventoryBucket, user)) {
           return errorResponse(
             getInventoryBucketFullMessage(
               inventoryBucket,
