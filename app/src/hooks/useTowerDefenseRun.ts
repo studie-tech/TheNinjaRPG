@@ -90,6 +90,7 @@ const RESUME_STEP_TICKS = 250;
 /** Room kept in the log for the retreat that ends a run at its length limit. */
 const LOG_RESERVE_CHARS = 64;
 const LOG_LIMITS = { maxTick: TD_MAX_TICKS, maxActions: TD_MAX_ACTIONS };
+const GUEST_STORAGE_KEY = "towerDefenseRun:guest";
 
 /**
  * Reconcile the Dojo progress query with confirmed purchases and claims. Callers take a
@@ -142,10 +143,10 @@ export const useTowerDefenseProgressCache = () => {
  * Drives a tower-defense run: steps the deterministic simulation from the render loop,
  * records every accepted action with its tick, saves the run locally so a reload resumes
  * it by replay, and claims the result once the hero falls or retreats. Guests play the
- * same game locally without a token, so nothing is claimed.
+ * same game locally without a token, so nothing is claimed or saved.
  */
 export const useTowerDefenseRun = (userId: string | undefined) => {
-  const storageKey = `towerDefenseRun:${userId ?? "guest"}`;
+  const storageKey = userId ? `towerDefenseRun:${userId}` : GUEST_STORAGE_KEY;
   const session = useRef<TowerDefenseSession | null>(null);
   const lastSave = useRef(0);
   /** What the latest published snapshot was taken at. */
@@ -183,7 +184,8 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   const persist = useCallback(
     (force = false) => {
       const current = session.current;
-      if (!current) return;
+      // A guest run could never be claimed, so it is not kept either.
+      if (!current?.token) return;
       const now = Date.now();
       if (!force && now - lastSave.current < SAVE_INTERVAL_MS) return;
       lastSave.current = now;
@@ -229,6 +231,10 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
   }, [storageKey]);
 
   useEffect(() => {
+    // Guest runs are never kept, so a guest save left in this browser is removed.
+    try {
+      clearRun(localStorage, GUEST_STORAGE_KEY);
+    } catch {}
     refreshSaved();
   }, [refreshSaved]);
 
