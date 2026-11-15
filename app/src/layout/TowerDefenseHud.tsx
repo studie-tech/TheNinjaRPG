@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/libs/shadui";
 import {
   TD_GAME_SPEEDS,
+  TD_HERO_BASE,
   TD_SEAL_GAP_TICKS,
   TD_TICK_SECONDS,
   TD_WAVE_TICKS,
@@ -55,6 +56,7 @@ import {
   tdSentryCost,
   tdShopCost,
   tdUltimateCooldown,
+  tdUltimateCooldownTicks,
   tdUltimateUnlocked,
 } from "@/libs/towerDefense/sim";
 
@@ -269,7 +271,7 @@ export const TowerDefenseActionBar = (props: {
         onClick={() => act(["sub"])}
         hotkey="Space"
         remaining={hero.subReadyAt - tick}
-        total={80}
+        total={TD_HERO_BASE.substitutionTicks}
         wide
       >
         <span className="text-xs font-semibold">Sub</span>
@@ -305,7 +307,7 @@ export const TowerDefenseActionBar = (props: {
             onClick={() => act(["ult", ultimate, ...props.aim()])}
             hotkey={`${TD_ULTIMATES.indexOf(ultimate) + 1}`}
             remaining={remaining}
-            total={info.cooldown * 10}
+            total={tdUltimateCooldownTicks(state, ultimate)}
             highlight={remaining <= 0}
             wide
           >
