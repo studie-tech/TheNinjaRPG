@@ -1763,6 +1763,10 @@ const densest = (
   return best;
 };
 
+/** The enemy at the heart of the thickest crowd the hero can see, where ultimates aim. */
+export const tdCrowdTarget = (state: TdState) =>
+  densest(state, state.hero.x, state.hero.y, TD_SPAWN_RADIUS, 3.5);
+
 const castJutsu = (state: TdState) => {
   if (state.tick < state.hero.silencedUntil) return;
   const hero = state.hero;
@@ -2245,7 +2249,7 @@ const autoCastUltimates = (state: TdState) => {
   for (const ultimate of TD_ULTIMATES) {
     if (!tdUltimateUnlocked(state.config, ultimate)) continue;
     if (state.tick < (state.ultReadyAt[ultimate] ?? 0)) continue;
-    const target = densest(state, state.hero.x, state.hero.y, TD_SPAWN_RADIUS, 3.5);
+    const target = tdCrowdTarget(state);
     if (!target) return;
     castUltimate(
       state,

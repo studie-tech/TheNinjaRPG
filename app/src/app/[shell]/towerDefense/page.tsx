@@ -34,6 +34,7 @@ import type { TowerDefenseSceneView } from "@/libs/rendering/scenes/towerDefense
 import { TD_COORD_SCALE } from "@/libs/towerDefense/balance";
 import { TD_SEALS, TD_ULTIMATES } from "@/libs/towerDefense/content";
 import { formatTdNumber } from "@/libs/towerDefense/format";
+import { tdCrowdTarget } from "@/libs/towerDefense/sim";
 import { playPreloadedAudio, preloadAudioBuffers, savedSfxVolume } from "@/utils/audio";
 import { useUserDataSelector } from "@/utils/UserContext";
 
@@ -122,7 +123,8 @@ export default function TowerDefensePage() {
   // Handlers depend on the run's stable members, never on the object returned per render.
   const { act, getSession } = run;
   const aim = useCallback((): [number, number] => {
-    const point = reticle.current ?? nearestCrowd(getSession()?.state.enemies ?? []);
+    const state = getSession()?.state;
+    const point = reticle.current ?? (state && tdCrowdTarget(state)) ?? { x: 0, y: 3 };
     return [Math.round(point.x * TD_COORD_SCALE), Math.round(point.y * TD_COORD_SCALE)];
   }, [getSession]);
 
@@ -384,19 +386,3 @@ const LeaderboardLink = () => (
     </Link>
   </Button>
 );
-
-/** Aim at the thickest crowd when the player has not placed a reticle. */
-const nearestCrowd = (enemies: { x: number; y: number }[]) => {
-  let best = { x: 0, y: 3 },
-    bestCount = 0;
-  for (const enemy of enemies.slice(0, 40)) {
-    let count = 0;
-    for (const other of enemies)
-      if (Math.abs(other.x - enemy.x) + Math.abs(other.y - enemy.y) < 3) count++;
-    if (count > bestCount) {
-      best = enemy;
-      bestCount = count;
-    }
-  }
-  return best;
-};
