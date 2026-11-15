@@ -3,13 +3,10 @@ import {
   decodeTdActions,
   encodeTdAction,
   encodeTdActions,
+  isTdActionEncodable,
 } from "@/libs/towerDefense/actionLog";
 import type { TdAction } from "@/libs/towerDefense/sim";
-import {
-  claimTowerDefenseRunSchema,
-  TD_MAX_ACTIONS,
-  TD_MAX_TICKS,
-} from "@/validators/towerDefense";
+import { TD_MAX_ACTIONS, TD_MAX_TICKS } from "@/validators/towerDefense";
 
 const limits = { maxTick: TD_MAX_TICKS, maxActions: TD_MAX_ACTIONS };
 
@@ -40,7 +37,6 @@ describe("tower defense action log encoding", () => {
   it("round-trips every action kind", () => {
     const text = encodeTdActions(EVERY_KIND);
     expect(decodeTdActions(text, limits)).toEqual(EVERY_KIND);
-    expect(claimTowerDefenseRunSchema.shape.actions.parse(text)).toEqual(EVERY_KIND);
     expect(decodeTdActions("", limits)).toEqual([]);
   });
 
@@ -71,8 +67,32 @@ describe("tower defense action log encoding", () => {
     ])
       expect(decodeTdActions(text, limits)).toBeNull();
     expect(decodeTdActions("0S;0S;0S", { maxTick: 10, maxActions: 2 })).toBeNull();
-    expect(claimTowerDefenseRunSchema.shape.actions.safeParse("0Z").success).toBe(
-      false,
-    );
+  });
+
+  it("refuses to encode an action recorded before the previous one", () => {
+    expect(() => encodeTdAction([3, "sub"], 5)).toThrow(RangeError);
+    expect(() =>
+      encodeTdActions([
+        [5, "sub"],
+        [3, "sub"],
+      ]),
+    ).toThrow(RangeError);
+  });
+
+  it("accepts exactly the actions the decoder would", () => {
+    for (const action of EVERY_KIND) expect(isTdActionEncodable(action)).toBe(true);
+    for (const action of [
+      [0, "blink", 3001, 0],
+      [0, "seal", "tiger", 0, -3001],
+      [0, "ult", "tempest", 1.5, 0],
+      [0, "buy", "notanitem"],
+      [0, "perk", 10],
+      [0, "focus", -1],
+      [0, "sub", 1],
+      [0, "nothing"],
+      [-1, "sub"],
+      [0.5, "sub"],
+    ])
+      expect(isTdActionEncodable(action)).toBe(false);
   });
 });

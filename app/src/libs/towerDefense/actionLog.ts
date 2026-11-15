@@ -78,6 +78,9 @@ const DECODERS = new Map(
     },
   ]),
 );
+const DECODERS_BY_KIND = new Map(
+  [...DECODERS.values()].map((decoder) => [decoder.kind, decoder.args]),
+);
 const INTEGER_ARGS = Object.fromEntries(
   Object.entries(FORMAT).map(([kind, format]) => [
     kind,
@@ -90,9 +93,38 @@ const INTEGER_ARGS = Object.fromEntries(
 const ACTION = /^([0-9a-z]{1,8})([A-Z])(.*)$/;
 const INTEGER = /^-?[0-9a-z]{1,11}$/;
 
-/** Encode one action placed after an action at `previousTick`. */
+/**
+ * Whether the log can carry an action exactly: every argument is one its kind accepts.
+ * The live run applies only actions that pass, so it never plays one a claim's decoder
+ * would refuse.
+ */
+export const isTdActionEncodable = (action: readonly unknown[]): action is TdAction => {
+  const [tick, kind, ...args] = action;
+  const format = typeof kind === "string" ? DECODERS_BY_KIND.get(kind) : undefined;
+  if (!format || typeof tick !== "number" || !Number.isSafeInteger(tick) || tick < 0)
+    return false;
+  if (args.length !== format.length) return false;
+  return args.every((value, index) => {
+    const spec = format[index];
+    if (!spec) return false;
+    if ("names" in spec) return typeof value === "string" && spec.names.has(value);
+    return (
+      typeof value === "number" &&
+      Number.isSafeInteger(value) &&
+      value >= spec.min &&
+      value <= spec.max
+    );
+  });
+};
+
+/**
+ * Encode one action placed after an action at `previousTick`. Actions are recorded in
+ * tick order, so an earlier tick throws: the log could never be decoded.
+ */
 export const encodeTdAction = (action: TdAction, previousTick: number): string => {
   const [tick, kind, ...args] = action;
+  if (tick < previousTick)
+    throw new RangeError(`Action at tick ${tick} recorded after tick ${previousTick}`);
   const integers = INTEGER_ARGS[kind];
   let encoded = `${(tick - previousTick).toString(36)}${FORMAT[kind].code}`;
   for (const [index, value] of args.entries())
