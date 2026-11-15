@@ -169,7 +169,7 @@ export const MUTATION_RATE_LIMIT_MESSAGE =
  * development fails open (the local shim may not be running) while production
  * fails closed. The SDK resolves its own timeout as success, so a slow Redis lets
  * requests through rather than failing every one;
- * tavern image uploads deliberately refuse that case instead.
+ * `strictRateLimit` callers deliberately refuse that case instead.
  */
 const enforceRateLimit = async (
   context: Pick<Awaited<ReturnType<typeof createAppTRPCContext>>, "userId" | "userIp">,

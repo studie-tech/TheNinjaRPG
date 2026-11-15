@@ -1,8 +1,7 @@
-import { afterEach, describe, expect, it, vi } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { nanoid } from "nanoid";
 import {
   checkTowerDefenseClaimTiming,
-  createTowerDefenseReplayGuard,
   TD_TOKEN_LIFETIME_MS,
   towerDefenseReplayCost,
   verifyTowerDefenseRun,
@@ -10,13 +9,6 @@ import {
 import { signRunToken, verifyRunToken } from "@/server/utils/towerDefenseCrypto";
 import { TD_MAX_TICKS, type TowerDefenseRunToken } from "@/validators/towerDefense";
 import { playBotRun } from "../../libs/towerDefense/bot";
-import { restoreEnvAfterEach } from "../../setup/env";
-
-const env = process.env as Record<string, string | undefined>;
-restoreEnvAfterEach("NODE_ENV");
-afterEach(() => {
-  vi.restoreAllMocks();
-});
 
 const token = (
   overrides: Partial<TowerDefenseRunToken> = {},
@@ -201,35 +193,4 @@ describe("tower defense claim pre-checks", () => {
     expect(towerDefenseReplayCost(50_001)).toBe(2);
     expect(towerDefenseReplayCost(TD_MAX_TICKS)).toBe(10);
   });
-});
-
-describe("tower defense replay allowance", () => {
-  it.each([true, false])("returns the player's allowance (%s)", async (success) => {
-    const limit = vi.fn(async () => ({ success }));
-    expect(await createTowerDefenseReplayGuard(limit)("td-user", 50_001)).toBe(success);
-    expect(limit).toHaveBeenCalledWith("td-user", 2);
-  });
-
-  it("rejects an SDK timeout even when the SDK marks it successful", async () => {
-    env.NODE_ENV = "production";
-    await expect(
-      createTowerDefenseReplayGuard(async () => ({ success: true, reason: "timeout" }))(
-        "td-user",
-        1,
-      ),
-    ).rejects.toThrow("Unable to verify");
-  });
-
-  it.each(["timeout", "unavailable"])(
-    "keeps local development usable when Redis is %s",
-    async (reason) => {
-      env.NODE_ENV = "development";
-      vi.spyOn(console, "warn").mockImplementation(() => {});
-      const limit = async () => {
-        if (reason === "unavailable") throw new Error("Redis unavailable");
-        return { success: true, reason: "timeout" };
-      };
-      expect(await createTowerDefenseReplayGuard(limit)("td-user", 1)).toBe(true);
-    },
-  );
 });

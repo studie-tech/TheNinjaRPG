@@ -18,6 +18,7 @@ import {
   type TdReplayResult,
   tdRunPoints,
 } from "@/libs/towerDefense/sim";
+import { strictRateLimit } from "@/server/utils/rateLimit";
 import type { TowerDefenseRunToken } from "@/validators/towerDefense";
 
 export const TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE =
@@ -53,35 +54,11 @@ const replayLimiter = new Ratelimit({
 export const towerDefenseReplayCost = (endTick: number): number =>
   Math.max(1, Math.ceil(endTick / TD_REPLAY_TICKS_PER_UNIT));
 
-/**
- * Reserve a claim replay of `endTick` ticks for a player through `limit`. Like the shared
- * tRPC limiter, an unreachable Redis fails open in development and closed elsewhere.
- */
-export const createTowerDefenseReplayGuard =
-  (
-    limit: (
-      userId: string,
-      rate: number,
-    ) => Promise<{ success: boolean; reason?: string }>,
-  ) =>
-  async (userId: string, endTick: number): Promise<boolean> => {
-    try {
-      const result = await limit(userId, towerDefenseReplayCost(endTick));
-      // The SDK resolves its timeout as success, so explicitly keep production closed.
-      if (result.reason === "timeout")
-        throw new Error("Unable to verify the replay allowance.");
-      return result.success;
-    } catch (error) {
-      if (process.env.NODE_ENV !== "development") throw error;
-      console.warn("Tower defense replay limiter unavailable in development", error);
-      return true;
-    }
-  };
-
-/** Reserve a claim replay through the shared Redis limiter. */
-export const reserveTowerDefenseReplay = createTowerDefenseReplayGuard((userId, rate) =>
-  replayLimiter.limit(userId, { rate }),
-);
+/** Reserve a claim replay of `endTick` ticks for a player through the shared Redis limiter. */
+export const reserveTowerDefenseReplay = (userId: string, endTick: number) =>
+  strictRateLimit("replay", () =>
+    replayLimiter.limit(userId, { rate: towerDefenseReplayCost(endTick) }),
+  );
 
 /**
  * Claims stay off unless `TOWER_DEFENSE_CLAIMS_ENABLED` is exactly "true". The switch is
