@@ -456,18 +456,24 @@ export const tdDojoCost = (id: TdDojoUpgrade, level: number) => {
 export const tdDojoAvailable = (id: TdDojoUpgrade, level: number, bestWave: number) =>
   level < TD_DOJO_INFO[id].max && bestWave >= TD_DOJO_INFO[id].unlockWave;
 
-export const tdSentryPosition = (slot: number) => {
-  const offsets = [
+const SQRT3_2 = Math.sqrt(3) / 2;
+
+/** Sentry posts on a hexagon around the arena centre, shared by every run. */
+const SENTRY_POSITIONS: readonly Readonly<{ x: number; y: number }>[] = (
+  [
     [1, 0],
     [0.5, SQRT3_2],
     [-0.5, SQRT3_2],
     [-1, 0],
     [-0.5, -SQRT3_2],
     [0.5, -SQRT3_2],
-  ] as const;
-  const [x, y] = offsets[slot % offsets.length] ?? [1, 0];
-  return { x: x * TD_SENTRY_RING, y: y * TD_SENTRY_RING };
-};
+  ] as const
+).map(([x, y]) => Object.freeze({ x: x * TD_SENTRY_RING, y: y * TD_SENTRY_RING }));
+
+/** Position of a sentry slot; the returned point is shared and must not be mutated. */
+export const tdSentryPosition = (slot: number) =>
+  SENTRY_POSITIONS[slot % SENTRY_POSITIONS.length] ??
+  (SENTRY_POSITIONS[0] as Readonly<{ x: number; y: number }>);
 
 export const tdJutsuUnlocked = (config: TdRunConfig, jutsu: TdJutsu) =>
   dojoLevel(config, `jt_${jutsu}`) > 0;
@@ -495,8 +501,6 @@ export const tdRunPoints = (state: TdState) => Math.floor(state.scrolls);
 // ============================================
 // Creation
 // ============================================
-
-const SQRT3_2 = Math.sqrt(3) / 2;
 
 export const createRun = (config: TdRunConfig, recordEvents = false): TdState => {
   const startWave = Math.max(1, Math.floor(config.startWave));
@@ -921,7 +925,7 @@ const spawnEnemy = (
   enemy.shield = enemy.maxShield;
   direction = null;
   state.enemies.push(enemy);
-  emit(state, { type: "spawn", id: enemy.id });
+  if (state.recordEvents) emit(state, { type: "spawn", id: enemy.id });
   return enemy;
 };
 
@@ -1385,11 +1389,7 @@ const vulnerability = (state: TdState, enemy: TdEnemy) => {
   if (state.tick < enemy.frozenUntil) multiplier *= 1.3;
   if (state.tick < state.tsukuyomiUntil) multiplier *= 1.5;
   if (enemy.id === state.focusId) multiplier *= 1.2;
-  if (
-    state.sentries.some((sentry) => sentry?.type === "sensor") &&
-    sensorCovers(state, enemy)
-  )
-    multiplier *= 1.15;
+  if (sensorCovers(state, enemy)) multiplier *= 1.15;
   return multiplier;
 };
 
@@ -1436,7 +1436,7 @@ const damageEnemy = (
     enemy.hp < enemy.maxHp * 0.1
   )
     enemy.hp = 0;
-  if (!options.dot)
+  if (!options.dot && state.recordEvents)
     emit(state, {
       type: "hit",
       targetId: enemy.id,
@@ -1509,7 +1509,7 @@ const damageHero = (
     amount +=
       state.stats.maxHp * tdPiercingShare(state.wave) * (source.enemy.boss ? 2 : 1);
   hero.hp -= amount;
-  emit(state, { type: "heroHit", amount, blocked: false });
+  if (state.recordEvents) emit(state, { type: "heroHit", amount, blocked: false });
   if (source.enemy && !source.enemy.dead) {
     const enemy = source.enemy;
     if (source.melee && state.stats.thorns > 0)
@@ -1558,7 +1558,11 @@ const SUPPORT_KINDS: ReadonlySet<TdEnemyKind> = new Set([
   "shieldbearer",
 ]);
 
-/** Up to `count` distinct targets within range, ordered by the aim mode. */
+/**
+ * Up to `count` distinct targets within range, ordered by the aim mode's score and then
+ * by enemy id. Enemy ids are unique, so that order is total and keeping the best `count`
+ * while scanning gives the same targets in the same order as sorting every candidate.
+ */
 const pickTargets = (
   state: TdState,
   fromX: number,
@@ -1567,7 +1571,8 @@ const pickTargets = (
   count: number,
   mode: TdTargetMode,
 ) => {
-  const candidates: { enemy: TdEnemy; dist: number; score: number }[] = [];
+  const selected: { enemy: TdEnemy; dist: number; score: number }[] = [];
+  if (count <= 0) return selected;
   for (const enemy of state.enemies) {
     if (!canSee(state, enemy, fromX, fromY)) continue;
     const dist = distance(enemy.x, enemy.y, fromX, fromY);
@@ -1590,11 +1595,27 @@ const pickTargets = (
         score = dist;
     }
     if (enemy.id === state.focusId) score = Number.NEGATIVE_INFINITY;
-    candidates.push({ enemy, dist, score });
+    const last = selected[selected.length - 1];
+    if (selected.length === count && last && !ranksBefore(score, enemy.id, last))
+      continue;
+    let index = selected.length;
+    while (index > 0) {
+      const previous = selected[index - 1];
+      if (!previous || !ranksBefore(score, enemy.id, previous)) break;
+      index--;
+    }
+    selected.splice(index, 0, { enemy, dist, score });
+    if (selected.length > count) selected.pop();
   }
-  candidates.sort((a, b) => a.score - b.score || a.enemy.id - b.enemy.id);
-  return candidates.slice(0, count);
+  return selected;
 };
+
+/** Whether a candidate with `score` and `id` comes before `other` in target order. */
+const ranksBefore = (
+  score: number,
+  id: number,
+  other: { enemy: TdEnemy; score: number },
+) => (score - other.score || id - other.enemy.id) < 0;
 
 const throwShuriken = (
   state: TdState,
@@ -1625,16 +1646,17 @@ const throwShuriken = (
     knockback: state.rng.next() < state.stats.knockback ? 0.6 : 0,
     source: from,
   });
-  emit(state, {
-    type: "throw",
-    from,
-    x: fromX,
-    y: fromY,
-    targetId: target.id,
-    due,
-    crit,
-    element: "physical",
-  });
+  if (state.recordEvents)
+    emit(state, {
+      type: "throw",
+      from,
+      x: fromX,
+      y: fromY,
+      targetId: target.id,
+      due,
+      crit,
+      element: "physical",
+    });
 };
 
 const heroAttack = (state: TdState) => {
@@ -2004,16 +2026,17 @@ const sentriesAttack = (state: TdState) => {
               due: state.tick + Math.max(2, Math.round((dist / 6) * TD_TPS)),
             }),
           );
-          emit(state, {
-            type: "throw",
-            from: "sentry",
-            x: at.x,
-            y: at.y,
-            targetId: target.id,
-            due: state.tick + Math.max(2, Math.round((dist / 6) * TD_TPS)),
-            crit: false,
-            element: "fire",
-          });
+          if (state.recordEvents)
+            emit(state, {
+              type: "throw",
+              from: "sentry",
+              x: at.x,
+              y: at.y,
+              targetId: target.id,
+              due: state.tick + Math.max(2, Math.round((dist / 6) * TD_TPS)),
+              crit: false,
+              element: "fire",
+            });
         }
         break;
       }
@@ -2029,15 +2052,16 @@ const sentriesAttack = (state: TdState) => {
         );
         if (points.length > 1) {
           fired = true;
-          emit(state, {
-            type: "jutsu",
-            jutsu: "lightning",
-            x: at.x,
-            y: at.y,
-            radius: 0,
-            evolved: false,
-            points,
-          });
+          if (state.recordEvents)
+            emit(state, {
+              type: "jutsu",
+              jutsu: "lightning",
+              x: at.x,
+              y: at.y,
+              radius: 0,
+              evolved: false,
+              points,
+            });
         }
         break;
       }
@@ -2085,16 +2109,22 @@ export const stepRun = (state: TdState) => {
   resolveTraps(state);
   if (state.eras.includes("meteor_shower") && tick % 15 === 0) dropMeteor(state);
   cleanupDead(state);
-  state.loot = state.loot.filter((item) => {
-    if (item.expires > tick) return true;
-    emit(state, { type: "loot", id: item.id, kind: item.kind, collected: false });
-    return false;
-  });
+  expireLoot(state);
   if (state.focusId && !state.enemies.some((enemy) => enemy.id === state.focusId))
     state.focusId = 0;
   // Drafts open at the end of the tick that earned them, so an answer recorded on this
   // tick finds the same open draft when replayed.
   openDraft(state);
+};
+
+/** Drop loot whose pickup window has closed, keeping the rest in order. */
+const expireLoot = (state: TdState) => {
+  let kept = 0;
+  for (const item of state.loot) {
+    if (item.expires > state.tick) state.loot[kept++] = item;
+    else emit(state, { type: "loot", id: item.id, kind: item.kind, collected: false });
+  }
+  state.loot.length = kept;
 };
 
 const spawnDue = (state: TdState) => {
@@ -2127,6 +2157,7 @@ const heroUpkeep = (state: TdState) => {
 };
 
 const updateVortices = (state: TdState) => {
+  if (state.vortices.length === 0) return;
   state.vortices = state.vortices.filter((vortex) => vortex.until > state.tick);
   for (const vortex of state.vortices) {
     const pulse = state.tick % 3 === 0;
@@ -2344,16 +2375,22 @@ const resolveHits = (state: TdState) => {
         if (hit.stun > 0) stun(enemy, state.tick + hit.stun);
         if (hit.knockback > 0) knockback(state, enemy, hit.knockback);
       }
-      emit(state, {
-        type: "explosion",
-        x: hit.x,
-        y: hit.y,
-        radius: hit.radius,
-        element: hit.element,
-      });
+      if (state.recordEvents)
+        emit(state, {
+          type: "explosion",
+          x: hit.x,
+          y: hit.y,
+          radius: hit.radius,
+          element: hit.element,
+        });
       continue;
     }
-    const target = state.enemies.find((enemy) => enemy.id === hit.targetId);
+    let target: TdEnemy | undefined;
+    for (const enemy of state.enemies)
+      if (enemy.id === hit.targetId) {
+        target = enemy;
+        break;
+      }
     if (!target || target.dead) continue;
     damageEnemy(state, target, hit.damage, hit.element, {
       source: hit.source,
@@ -2387,16 +2424,17 @@ const resolveHits = (state: TdState) => {
           hitIds: visited,
           knockback: 0,
         });
-        emit(state, {
-          type: "throw",
-          from: "clone",
-          x: target.x,
-          y: target.y,
-          targetId: next.id,
-          due: nextDue,
-          crit: hit.crit,
-          element: "physical",
-        });
+        if (state.recordEvents)
+          emit(state, {
+            type: "throw",
+            from: "clone",
+            x: target.x,
+            y: target.y,
+            targetId: next.id,
+            due: nextDue,
+            crit: hit.crit,
+            element: "physical",
+          });
       }
     }
   }
@@ -2521,15 +2559,16 @@ const cleanupDead = (state: TdState) => {
     );
     if (enemy.boss)
       state.scrolls += tdBossScrolls(state.wave, enemy.titan) * state.stats.scrollMult;
-    emit(state, {
-      type: "kill",
-      id: enemy.id,
-      x: enemy.x,
-      y: enemy.y,
-      boss: enemy.boss,
-      elite: enemy.elite,
-      kind: enemy.kind,
-    });
+    if (state.recordEvents)
+      emit(state, {
+        type: "kill",
+        id: enemy.id,
+        x: enemy.x,
+        y: enemy.y,
+        boss: enemy.boss,
+        elite: enemy.elite,
+        kind: enemy.kind,
+      });
     dropLoot(state, enemy);
     if (perk(state, "exploding_kunai")) {
       state.hits.push(
