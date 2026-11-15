@@ -106,8 +106,8 @@ import { collapseRewards } from "@/libs/rewards";
 import { callDiscordContent } from "@/libs/socials";
 import { fetchActionUser } from "@/queries/actionReadiness";
 import {
+  fetchContentViewerRole,
   fetchUser,
-  fetchViewerRole,
   findOwnedUserPet,
   findUserById,
   invalidateAchievementCatalogue,
@@ -285,7 +285,7 @@ export const questsRouter = createTRPCRouter({
     .query(async ({ ctx }) => {
       // Hidden quests only for content staff (as in `getAll`); signed-out callers skip the
       // role lookup.
-      const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);
+      const viewerRole = await fetchContentViewerRole(ctx.drizzle, ctx.userId);
       const results = await listQuestForGetAllNames(
         ctx.drizzle,
         canChangeContent(viewerRole),
@@ -304,7 +304,7 @@ export const questsRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const { skip, cursorAfter } = offsetPage(input);
-      const viewerRole = await fetchViewerRole(ctx.drizzle, ctx.userId);
+      const viewerRole = await fetchContentViewerRole(ctx.drizzle, ctx.userId);
       // Hidden quests are listed only for content staff; everyone else gets released quests,
       // whatever `hidden` filter they send.
       const allowHiddenFilter = canChangeContent(viewerRole);

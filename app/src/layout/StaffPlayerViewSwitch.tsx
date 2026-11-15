@@ -1,11 +1,11 @@
 "use client";
 
-import { type QueryKey, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { api } from "@/app/_trpc/client";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
+import { useStaffPlayerViewCacheUpdate } from "@/hooks/useStaffPlayerViewCacheUpdate";
 import { showMutationToast } from "@/libs/toast";
 import { useUserDataSelector } from "@/utils/UserContext";
 
@@ -14,13 +14,14 @@ import { useUserDataSelector } from "@/utils/UserContext";
  * of their game while staff tools keep working.
  */
 export const StaffPlayerViewSwitch = () => {
-  const { data: userData, updateUser } = useUserDataSelector((user) => ({
+  const { data: userData } = useUserDataSelector((user) => ({
     playsAsPlayer: user.playsAsPlayer,
   }));
-  const queryClient = useQueryClient();
-  const { mutateAsync: updatePreferences, isPending } =
+  const { updatePlayerView } = useStaffPlayerViewCacheUpdate();
+  const { mutateAsync: updatePreferences } =
     api.profile.updatePreferences.useMutation();
   const flight = useSingleFlight();
+  const isPending = flight.isPending;
 
   const onChange = (playsAsPlayer: boolean) =>
     flight.run(true, async () => {
@@ -28,11 +29,7 @@ export const StaffPlayerViewSwitch = () => {
         const result = await updatePreferences({ playsAsPlayer });
         showMutationToast(result);
         if (!result.success) return;
-        await updateUser({ playsAsPlayer });
-        // Every query may hold content loaded for the other view; the profile is patched.
-        await queryClient.invalidateQueries({
-          predicate: (query) => !isProfileQuery(query.queryKey),
-        });
+        await updatePlayerView(playsAsPlayer);
       } catch {
         // Mutation errors are surfaced by the shared tRPC error handler.
       }
@@ -59,10 +56,4 @@ export const StaffPlayerViewSwitch = () => {
       </p>
     </div>
   );
-};
-
-/** The profile query, already patched with the new setting. */
-const isProfileQuery = (queryKey: QueryKey) => {
-  const [path] = queryKey as [unknown];
-  return Array.isArray(path) && path[0] === "profile" && path[1] === "getUser";
 };
