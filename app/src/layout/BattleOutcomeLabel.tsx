@@ -21,7 +21,7 @@ export const BattleOutcomeLabel = ({ outcome }: { outcome: BattleOutcome | null 
     </span>
   );
 
-/** How a battle ended for each fighter of a history row whose result was recorded. */
+/** Keep recorded fighter results in the header, with long names yielding to their outcomes. */
 export const BattleResultSummary = ({
   entry,
 }: {
@@ -38,11 +38,17 @@ export const BattleResultSummary = ({
   ].filter((side) => side.outcome !== null);
   if (sides.length === 0) return null;
   return (
-    <p className="flex flex-wrap gap-x-4 gap-y-1 px-1 pb-2 text-sm">
+    <p className="flex flex-col items-end text-sm leading-tight">
       <span className="sr-only">Result:</span>
       {sides.map((side, index) => (
-        <span key={index === 0 ? "attacker" : "defender"}>
-          {side.name}: <BattleOutcomeLabel outcome={side.outcome} />
+        <span
+          key={index === 0 ? "attacker" : "defender"}
+          className="flex max-w-36 items-baseline gap-1 sm:max-w-64"
+        >
+          <span className="truncate" title={side.name}>
+            {side.name}:
+          </span>{" "}
+          <BattleOutcomeLabel outcome={side.outcome} />
         </span>
       ))}
     </p>

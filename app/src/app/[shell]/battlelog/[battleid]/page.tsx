@@ -217,8 +217,12 @@ export default function BattleLog(props: { params: Promise<{ battleid: string }>
         : "Battle not found";
 
   return (
-    <ContentBox title="Spectate" subtitle={subtitle} defaultBackHref="/profile">
-      {battleHistory && <BattleResultSummary entry={battleHistory} />}
+    <ContentBox
+      title="Spectate"
+      subtitle={subtitle}
+      defaultBackHref="/profile"
+      topRightContent={battleHistory && <BattleResultSummary entry={battleHistory} />}
+    >
       <div className="flex flex-col gap-1">
         {spectateLayoutOrder.map((id) => (
           <div key={id}>{renderComponent(id)}</div>
