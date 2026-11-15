@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { CDN_CACHED_QUERY_PATHS } from "@/api/root";
+import { appRouter } from "@/api/root";
+import { CDN_CACHED_QUERY_PATHS } from "@/server/api/cdnCachedQueries";
+import type { ProcedureMeta } from "@/server/api/trpc";
 
 /**
  * A query built with cdnCachedProcedure is answered by the CDN for up to a minute, so a
@@ -30,10 +32,16 @@ const sourceFiles = (directory: string): string[] =>
   });
 
 describe("CDN-cached queries", () => {
-  it("are derived from the router, so the client list cannot drift from it", () => {
-    expect(CDN_CACHED_QUERY_PATHS).toContain("profile.getStrongestUsers");
+  it("list exactly the router's cdnCachedProcedure queries", () => {
+    const routerPaths = Object.entries(appRouter._def.procedures)
+      .filter(([, procedure]) => {
+        const def = (procedure as { _def?: { type?: string; meta?: ProcedureMeta } })
+          ._def;
+        return def?.type === "query" && def.meta?.cdnCached === true;
+      })
+      .map(([path]) => path);
+    expect([...CDN_CACHED_QUERY_PATHS].sort()).toEqual(routerPaths.sort());
     expect(CDN_CACHED_QUERY_PATHS).not.toContain("profile.getUser");
-    expect(CDN_CACHED_QUERY_PATHS).not.toContain("profile.getPublicUsers");
   });
 
   it("are never invalidated or refetched by client code", () => {
