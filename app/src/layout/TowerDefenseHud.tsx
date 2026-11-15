@@ -14,6 +14,7 @@ import {
 import { type ReactNode, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Confirm from "@/layout/Confirm";
 import type { TowerDefenseSceneView } from "@/libs/rendering/scenes/towerDefense";
@@ -137,8 +138,14 @@ export const TowerDefenseOverlay = (props: {
                 </span>
               ))}
           </div>
-          <Meter value={state.hero.hp} max={state.stats.maxHp} color="bg-red-500" />
           <Meter
+            label="Health"
+            value={state.hero.hp}
+            max={state.stats.maxHp}
+            color="bg-red-500"
+          />
+          <Meter
+            label="Chakra"
             value={state.hero.chakra}
             max={state.stats.maxChakra}
             color="bg-sky-500"
@@ -601,13 +608,14 @@ const Sentries = ({
   </div>
 );
 
-const Meter = (props: { value: number; max: number; color: string }) => (
-  <div className="relative h-3 max-w-72 overflow-hidden rounded bg-black/50">
-    <div
-      className={cn("h-full transition-[width] duration-150", props.color)}
-      style={{
-        width: `${calculatePercent(props.value, props.max)}%`,
-      }}
+const Meter = (props: { label: string; value: number; max: number; color: string }) => (
+  <div className="relative max-w-72">
+    <Progress
+      value={calculatePercent(props.value, props.max)}
+      aria-label={props.label}
+      aria-valuetext={`${formatTdNumber(props.value)} / ${formatTdNumber(props.max)}`}
+      className="h-3 rounded bg-black/50"
+      indicatorClassName={props.color}
     />
     <span className="absolute inset-0 text-center text-[0.75rem] leading-3 font-semibold">
       {formatTdNumber(props.value)} / {formatTdNumber(props.max)}

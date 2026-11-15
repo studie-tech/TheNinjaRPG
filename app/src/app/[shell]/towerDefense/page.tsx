@@ -17,7 +17,7 @@ import {
 } from "@/hooks/useTowerDefenseRun";
 import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import ContentBox from "@/layout/ContentBox";
-import { type GameSettingsUser, useGameSettings } from "@/layout/GameSettings";
+import { useGameSettings } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
 import Loader from "@/layout/Loader";
 import {
@@ -63,6 +63,14 @@ export default function TowerDefensePage() {
     spriteBodyStyle: profile.spriteBodyStyle,
     attributes: profile.attributes,
     items: profile.items,
+    // Sound follows the same "Combat sounds" preference and volume as battles.
+    musicOn: profile.musicOn,
+    buttonSfxOn: profile.buttonSfxOn,
+    sfxOn: profile.sfxOn,
+    village: profile.village,
+    isOutlaw: profile.isOutlaw,
+    bloodlineId: profile.bloodlineId,
+    status: profile.status,
   }));
   const userId = user?.userId;
   const run = useTowerDefenseRun(userId);
@@ -75,19 +83,7 @@ export default function TowerDefensePage() {
   const { data: assets } = api.misc.getAllGameAssetNames.useQuery({
     ids: [ID_ANIMATION_HIT, ID_ANIMATION_SMOKE, ...Object.values(TD_SFX)],
   });
-  // Sound follows the same "Combat sounds" preference and volume as battles.
-  const { data: settingsUser } = useUserDataSelector(
-    (profile): GameSettingsUser => ({
-      musicOn: profile.musicOn,
-      buttonSfxOn: profile.buttonSfxOn,
-      sfxOn: profile.sfxOn,
-      village: profile.village,
-      isOutlaw: profile.isOutlaw,
-      bloodlineId: profile.bloodlineId,
-      status: profile.status,
-    }),
-  );
-  const { sfxOn, setSfxEnabled } = useGameSettings(settingsUser);
+  const { sfxOn, setSfxEnabled } = useGameSettings(user);
   const sounds = useMemo(() => {
     const urls = new Map<TdSfx, string>();
     for (const [cue, id] of Object.entries(TD_SFX) as [TdSfx, string][]) {

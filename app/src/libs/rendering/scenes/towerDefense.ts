@@ -165,7 +165,7 @@ export const createTowerDefenseScene = async (options: {
       .stroke({ color: 0xffffff, alpha: 0.8, width: 0.08 });
     const rageGlow = new Graphics().circle(0, 0, 1.2).fill(0xff3b3b);
     const sentryGround = new Graphics();
-    const sentryLayout = createSentryLayout();
+    let sentryKey = "";
     const groundFx = new Graphics();
     const actorLayer = new Container();
     actorLayer.sortableChildren = true;
@@ -553,6 +553,7 @@ export const createTowerDefenseScene = async (options: {
       };
     };
     const onPointer = (event: PointerEvent) => {
+      if (event.button !== 0) return;
       const view = options.getView();
       const state = view.state;
       if (!state) return;
@@ -1443,7 +1444,9 @@ export const createTowerDefenseScene = async (options: {
       rageGlow.position.set(heroX, heroY);
       rageGlow.alpha = 0.15 + Math.sin(now / 80) * 0.05;
       // Sentry slots, bases and posts; only their glows animate
-      if (sentryLayout.update(state)) {
+      const layoutKey = `${state.stats.sentrySlots}:${state.sentries.map((s) => s && `${s.type}${s.level}`).join()}`;
+      if (layoutKey !== sentryKey) {
+        sentryKey = layoutKey;
         sentryGround.clear();
         sentryPosts.clear();
         for (let slot = 0; slot < state.stats.sentrySlots; slot++) {
@@ -1856,29 +1859,6 @@ const meterSprite = (color: number, y: number, height: number) => {
   sprite.y = y;
   sprite.height = height;
   return sprite;
-};
-
-/** Reports whether the sentry slots, their occupants or levels changed since the last call. */
-const createSentryLayout = () => {
-  let slots = -1;
-  const types: (string | null)[] = [];
-  const levels: number[] = [];
-  return {
-    update: (state: TdState) => {
-      let changed = slots !== state.stats.sentrySlots;
-      slots = state.stats.sentrySlots;
-      for (let slot = 0; slot < slots; slot++) {
-        const sentry = state.sentries[slot];
-        const type = sentry?.type ?? null;
-        const level = sentry?.level ?? 0;
-        if (types[slot] === type && levels[slot] === level) continue;
-        types[slot] = type;
-        levels[slot] = level;
-        changed = true;
-      }
-      return changed;
-    },
-  };
 };
 
 interface EnemyArt {
