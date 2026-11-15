@@ -140,6 +140,9 @@ Sentry.init({
       // nothing the player can act on.
       return null;
     }
+    if (isEffectInterruptError(event)) {
+      return null; // Drop Effect-TS fiber interruption errors (UploadThing)
+    }
     if (isDataCloneError(event, hint)) {
       return null; // Drop DataCloneError from third-party scripts (gtag, mediafilter)
     }
@@ -502,6 +505,22 @@ const isThirdPartyInjectedError = (
   }
 
   return false;
+};
+
+/**
+ * Check if an error is from Effect-TS (`effect/Micro`, used by the UploadThing client).
+ * Effect-TS creates frozen error objects for fiber interruption, and Sentry
+ * throws when trying to modify the `stack` property of these frozen objects.
+ *
+ * UX: a failed upload still reaches the button's `onUploadError`, which shows the message.
+ */
+const isEffectInterruptError = (event: Sentry.ErrorEvent): boolean => {
+  const message = event.exception?.values?.[0]?.value ?? "";
+  return (
+    message.includes("MicroCause.Interrupt") ||
+    (message.includes("Cannot assign to read only property") &&
+      message.includes("stack"))
+  );
 };
 
 /**
