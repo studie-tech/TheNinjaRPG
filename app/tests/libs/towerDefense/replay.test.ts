@@ -305,7 +305,7 @@ describe("tower defense replay", () => {
     expect(state.offer).toBeNull();
   });
 
-  it("reports a stalled replay when a draft is never answered", () => {
+  it("stops short of the end tick when a draft is never answered", () => {
     const result = replayRun(
       { seed: "stall", startWave: 41, bestWave: 100, dojo: {} },
       [],
@@ -352,11 +352,11 @@ describe("tower defense replay", () => {
   });
 
   it("pins how recorded runs replay to TD_SIM_VERSION", () => {
-    // A new fingerprint means recorded runs replay differently: bump TD_SIM_VERSION with
-    // it, so pages still on the previous rules reload instead of failing their claims.
+    // A test bot change only repins the fingerprint. A rules change moves it too and needs
+    // a TD_SIM_VERSION bump, so pages still on the old rules reload instead of failing.
     expect({ version: TD_SIM_VERSION, fingerprint: rulesFingerprint() }).toEqual({
       version: 1,
-      fingerprint: "d7b0663a4580c3cad7e399885bf1487619808dd8cd78727e5d41a92991869808",
+      fingerprint: "a37aff05ea6d6578dcb9cca24eb9249a24d65696678c1f9ddeca6b7623a9e4f6",
     });
   });
 
@@ -385,19 +385,12 @@ const rulesFingerprint = () => {
     ["vet-c", 200, 0.6, 0],
     ["fuzz-1", 30, 0.3, 0.35],
   ] as const) {
-    const state = createRun(
+    const { hashes, final, log } = record(
       { seed, startWave, bestWave: startWave * 2, dojo: veteranDojo(scale) },
-      true,
+      { chaos, every: 500, maxTicks: 12_000 },
     );
-    const rng = alea(seed.length * 7919 + startWave);
-    const log: TdAction[] = [];
-    while (!state.over && state.tick < 12_000) {
-      log.push(...botAct(state, { rng, chaos }));
-      stepRun(state);
-      state.events.length = 0;
-      if (state.tick % 500 === 0) digest.update(tdStateHash(state));
-    }
-    digest.update(tdStateHash(state));
+    for (const hash of hashes.values()) digest.update(hash);
+    digest.update(final);
     digest.update(encodeLog(log));
   }
   return digest.digest("hex");

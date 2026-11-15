@@ -34,6 +34,7 @@ import {
   type TdReplayResult,
   type TdRunConfig,
   type TdState,
+  tdCrowdTarget,
   tdJutsuUnlocked,
   tdSealArtUnlocked,
   tdSentryCost,
@@ -198,7 +199,7 @@ export const botAct = (state: TdState, options: BotOptions = {}): TdAction[] => 
     if (medic) act(["focus", medic.id]);
   }
 
-  const crowd = densestPoint(state);
+  const crowd = tdCrowdTarget(state);
   if (crowd) {
     for (const ultimate of TD_ULTIMATES)
       if (
@@ -237,21 +238,6 @@ const chooseArt = (state: TdState): TdSealArt | null => {
     )
       return art;
   return null;
-};
-
-const densestPoint = (state: TdState) => {
-  let best: { x: number; y: number } | null = null,
-    bestCount = 0;
-  for (const enemy of state.enemies.slice(0, 40)) {
-    let count = 0;
-    for (const other of state.enemies)
-      if (Math.hypot(enemy.x - other.x, enemy.y - other.y) < 2.5) count++;
-    if (count > bestCount) {
-      best = { x: enemy.x, y: enemy.y };
-      bestCount = count;
-    }
-  }
-  return best;
 };
 
 /** A random, possibly invalid, command for fuzzing. */
