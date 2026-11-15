@@ -107,11 +107,10 @@ export const TowerDefenseOverlay = (props: {
   const nextEras = tdErasForWave(state.config.seed, nextBlock).filter(
     (era) => era !== "calm",
   );
-  const waveLeft = Math.max(
-    0,
-    Math.ceil((TD_WAVE_TICKS - state.waveTick) * TD_TICK_SECONDS),
-  );
   const opening = state.waveTick < 0;
+  const waveLeft = Math.ceil(
+    ((opening ? 0 : TD_WAVE_TICKS) - state.waveTick) * TD_TICK_SECONDS,
+  );
   const canCall = tdCanCallWave(state);
   const sealCount =
     state.tick - state.hero.lastSealAt <= TD_SEAL_GAP_TICKS
