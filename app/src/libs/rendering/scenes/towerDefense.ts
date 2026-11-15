@@ -825,7 +825,7 @@ export const createTowerDefenseScene = async (options: {
           return;
         }
         case "jutsu": {
-          cueHero("spellcast", now);
+          if (event.from === "hero") cueHero("spellcast", now);
           const color = ELEMENT_COLORS[TD_JUTSU_INFO[event.jutsu].element];
           switch (event.jutsu) {
             case "fire":

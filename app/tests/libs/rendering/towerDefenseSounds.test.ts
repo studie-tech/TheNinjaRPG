@@ -43,6 +43,7 @@ describe("tower defense sounds", () => {
       { type: "kill", id: 1, x: 0, y: 0, boss: false, elite: true, kind: "grunt" },
       {
         type: "jutsu",
+        from: "hero",
         jutsu: "fire",
         x: 0,
         y: 0,

@@ -280,6 +280,7 @@ export type TdEvent =
     }
   | {
       type: "jutsu";
+      from: "hero" | "sentry";
       jutsu: TdJutsu;
       x: number;
       y: number;
@@ -1891,7 +1892,7 @@ const castJutsu = (state: TdState) => {
       }
     }
     if (!cast) continue;
-    emit(state, { type: "jutsu", jutsu, evolved: isEvolved, ...cast });
+    emit(state, { type: "jutsu", from: "hero", jutsu, evolved: isEvolved, ...cast });
     state.jutsuReadyAt[jutsu] = state.tick + jutsuCooldownTicks(state, jutsu);
   }
 };
@@ -1984,6 +1985,7 @@ const sentriesAttack = (state: TdState) => {
           if (state.recordEvents)
             emit(state, {
               type: "jutsu",
+              from: "sentry",
               jutsu: "lightning",
               x: at.x,
               y: at.y,
