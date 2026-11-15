@@ -28,6 +28,7 @@ import {
   isConversationMuted,
 } from "@/libs/chatPanel";
 import { showMutationToast } from "@/libs/toast";
+import { createModuleLoader } from "@/utils/async";
 import {
   addUserInteractionListeners,
   playPreloadedAudio,
@@ -41,7 +42,10 @@ import { updateUserCache, updateUserNotifications } from "@/utils/userCache";
 import type { UserRecovery } from "@/validators/base";
 
 /** The websocket client, which loads once a player is signed in. */
-const loadPusherClient = () => import("pusher-js");
+const loadPusherClient = createModuleLoader(() => import("pusher-js"));
+
+/** Longest wait between attempts to download the websocket client. */
+const MAX_CLIENT_RETRY_MS = 30_000;
 
 // Events sent to the user from websockets
 export type UserEvent = {
@@ -464,7 +468,9 @@ export const usePusherHandler = (
       // pusher-js loads after hydration, and only for a signed-in player.
       let pusher: Pusher | undefined;
       let isCancelled = false;
-      void loadPusherClient().then(({ default: PusherClient }) => {
+      let retryTimer: ReturnType<typeof setTimeout> | undefined;
+      let failedAttempts = 0;
+      const connect = (PusherClient: typeof Pusher) => {
         // A sign-out or account switch during the download must not open a connection.
         if (isCancelled) return;
         const connection = new PusherClient(
@@ -490,10 +496,27 @@ export const usePusherHandler = (
         pusher = connection;
         setPusher(connection);
         subscribe(connection);
-      });
+      };
+      // A failed download (a flaky network, or a chunk a newer deploy removed) retries
+      // with backoff, so the tab does not stay without live updates.
+      const load = () => {
+        loadPusherClient().then(
+          ({ default: PusherClient }) => connect(PusherClient),
+          () => {
+            if (isCancelled) return;
+            failedAttempts += 1;
+            retryTimer = setTimeout(
+              load,
+              Math.min(MAX_CLIENT_RETRY_MS, 1000 * 2 ** failedAttempts),
+            );
+          },
+        );
+      };
+      load();
       // Cleanup
       return () => {
         isCancelled = true;
+        clearTimeout(retryTimer);
         unsubscribeInboxReads();
         for (const unsubscribe of pendingBattleSubscriptions) unsubscribe();
         if (!pusher) return;
