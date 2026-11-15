@@ -20,8 +20,11 @@ import {
   raidParticipation,
   rankedPvpQueue,
   rankedUserRewards,
+  towerDefenseClaimReceipt,
+  towerDefenseRun,
   userQuestAttempt,
   userSkill,
+  userTowerDefenseUpgrade,
 } from "@/drizzle/schema";
 import { getServerPusher, updateUserOnMap } from "@/libs/pusher";
 import { isBattleClaimId } from "@/libs/raids";
@@ -184,11 +187,6 @@ import {
   updateWebStoreOrderForUpdateUserId2,
   validateDevelopmentBackup,
 } from "@/queries/staff";
-import {
-  updateTowerDefenseClaimReceiptForUpdateUserId,
-  updateTowerDefenseRunForUpdateUserId,
-  updateUserTowerDefenseUpgradeForUpdateUserId,
-} from "@/queries/towerDefense";
 import {
   deleteSectorByNumber,
   fetchSector,
@@ -835,9 +833,6 @@ export const staffRouter = createTRPCRouter({
         updateReportLogForUpdateUserId2(ctx.drizzle, input),
         updateActionLogForUpdateUserId(ctx.drizzle, input),
         updateTrainingLogForUpdateUserId(ctx.drizzle, input),
-        updateUserTowerDefenseUpgradeForUpdateUserId(ctx.drizzle, input),
-        updateTowerDefenseRunForUpdateUserId(ctx.drizzle, input),
-        updateTowerDefenseClaimReceiptForUpdateUserId(ctx.drizzle, input),
         updateUserAttributeForUpdateUserId(ctx.drizzle, input),
         updateUserReviewForUpdateUserId(ctx.drizzle, input),
         updateUserRewardsForUpdateUserId(ctx.drizzle, input),
@@ -898,6 +893,9 @@ export const staffRouter = createTRPCRouter({
           rankedUserRewards,
           rankedPvpQueue,
           raidParticipation,
+          userTowerDefenseUpgrade,
+          towerDefenseRun,
+          towerDefenseClaimReceipt,
         ].map((table) => updateTableForUpdateUserId(ctx.drizzle, table, input)),
         updateStaffApplicationForUpdateUserId(ctx.drizzle, input),
         updateWarKillForUpdateUserId(ctx.drizzle, input),

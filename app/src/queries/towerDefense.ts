@@ -215,33 +215,3 @@ export const listTowerDefenseRoster = (
     orderBy: (table) => [desc(table.level), table.userId],
     limit: 64,
   });
-
-/** Build the Dojo level move for `updateUserId`. */
-export const updateUserTowerDefenseUpgradeForUpdateUserId = (
-  client: Pick<DrizzleClient, "update">,
-  input: { newUserId: string; userId: string },
-) =>
-  client
-    .update(userTowerDefenseUpgrade)
-    .set({ userId: input.newUserId })
-    .where(eq(userTowerDefenseUpgrade.userId, input.userId));
-
-/** Build the leaderboard entry move for `updateUserId`. */
-export const updateTowerDefenseRunForUpdateUserId = (
-  client: Pick<DrizzleClient, "update">,
-  input: { newUserId: string; userId: string },
-) =>
-  client
-    .update(towerDefenseRun)
-    .set({ userId: input.newUserId })
-    .where(eq(towerDefenseRun.userId, input.userId));
-
-/** Build the claim receipt move for `updateUserId`. */
-export const updateTowerDefenseClaimReceiptForUpdateUserId = (
-  client: Pick<DrizzleClient, "update">,
-  input: { newUserId: string; userId: string },
-) =>
-  client
-    .update(towerDefenseClaimReceipt)
-    .set({ userId: input.newUserId })
-    .where(eq(towerDefenseClaimReceipt.userId, input.userId));
