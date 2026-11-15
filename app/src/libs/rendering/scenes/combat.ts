@@ -251,15 +251,20 @@ export const createCombatScene = async (options: {
     let desiredCursor: CombatHoverCursor = "default";
     let zoomTimer: ReturnType<typeof setTimeout> | null = null;
     const scale = () => (game.renderer.width / width) * zoom;
+    /** Keep both camera positions and follow targets within the reachable viewport bounds. */
+    const clampCamera = (point: typeof camera) => {
+      const s = scale(),
+        halfWidth = game.renderer.width / (2 * s),
+        halfHeight = game.renderer.height / (2 * s);
+      return {
+        x: clamp(point.x, halfWidth, width - halfWidth),
+        y: clamp(point.y, halfHeight, width * ratio - halfHeight),
+      };
+    };
     const transform = () => {
       const s = scale();
       // Keep the viewport on the battlefield when dragging, zooming or resizing.
-      if (!options.focus) {
-        const halfWidth = game.renderer.width / (2 * s),
-          halfHeight = game.renderer.height / (2 * s);
-        camera.x = clamp(camera.x, halfWidth, width - halfWidth);
-        camera.y = clamp(camera.y, halfHeight, width * ratio - halfHeight);
-      }
+      if (!options.focus) camera = clampCamera(camera);
       world.scale.set(s, -s);
       world.position.set(
         game.renderer.width / 2 -
@@ -578,10 +583,10 @@ export const createCombatScene = async (options: {
         const actor = actors.container.getChildByLabel(snapshot.userId);
         if (tile && actor) {
           // Follow the rendered position so a long move cannot leave its walk cycle offscreen.
-          const target = {
+          const target = clampCamera({
             x: actor.x + tile.width / 2,
             y: actor.y + tile.height / 2,
-          };
+          });
           const amount = frame.reducedMotion ? 1 : 1 - 0.9 ** (frame.delta * 60);
           camera = {
             x: camera.x + (target.x - camera.x) * amount,

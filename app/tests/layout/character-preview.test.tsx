@@ -3,12 +3,14 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { Container } from "pixi.js";
 import * as lpcHooks from "@/hooks/lpc";
 import { CharacterPreview } from "@/layout/CharacterPreview";
+import type { LpcCatalog } from "@/libs/lpc/catalog";
 import type { LpcCharacter } from "@/libs/rendering/primitives/character";
 import * as character from "@/libs/rendering/primitives/character";
 import type { GameFrame, GameRenderer } from "@/libs/rendering/runtime";
 import * as runtime from "@/libs/rendering/runtime";
 import * as telemetry from "@/libs/rendering/telemetry";
 import { DEFAULT_VISUAL_EFFECTS } from "@/libs/visualEffects";
+import { deferred } from "../setup/deferred";
 import { lpcCatalog } from "../setup/lpc";
 
 const draw = vi.fn((..._input: Parameters<LpcCharacter["render"]>): boolean => true);
@@ -212,5 +214,38 @@ describe("character preview", () => {
     view.rerender(<CharacterPreview user={{ attributes: ["Glasses"] }} />);
     await waitFor(() => expect(rotateButton(view).disabled).toBe(false));
     expect(view.getByRole("status").textContent).toBe("Your ninja");
+  });
+
+  it("retries failed catalog loading after an appearance edit without rebuilding the renderer", async () => {
+    const load = vi
+      .fn(loadCatalog)
+      .mockRejectedValueOnce(new Error("Catalog unavailable"));
+    vi.spyOn(lpcHooks, "useLpcCatalogLoader").mockReturnValue(load);
+    const view = render(<CharacterPreview user={{}} />);
+    await waitFor(() =>
+      expect(view.getByRole("status").textContent).toContain(
+        "You can continue editing",
+      ),
+    );
+    expect(rotateButton(view).disabled).toBe(true);
+    view.rerender(<CharacterPreview user={{ attributes: ["Glasses"] }} />);
+    await waitFor(() => expect(rotateButton(view).disabled).toBe(false));
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(runtime.createGameRenderer).toHaveBeenCalledTimes(1);
+    expect(disposals[0]).not.toHaveBeenCalled();
+  });
+
+  it("ignores a catalog that finishes loading for an obsolete appearance", async () => {
+    const held = deferred<LpcCatalog>();
+    const load = vi.fn(loadCatalog).mockImplementationOnce(() => held.promise);
+    vi.spyOn(lpcHooks, "useLpcCatalogLoader").mockReturnValue(load);
+    const view = render(<CharacterPreview user={{ gender: "Male" }} />);
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(1));
+    view.rerender(<CharacterPreview user={{ gender: "Female" }} />);
+    await waitFor(() => expect(rotateButton(view).disabled).toBe(false));
+    held.resolve(lpcCatalog);
+    await Promise.resolve();
+    expect(createActor).toHaveBeenCalledTimes(1);
+    expect(createActor.mock.lastCall?.[1].body).toBe("female");
   });
 });

@@ -31,7 +31,7 @@ export const CharacterPreview = ({
   className?: string;
   label?: string;
 }) => {
-  const loadLpcCatalog = useLpcCatalogLoader();
+  const loadLpcCatalog = useLpcCatalogLoader({ preload: !catalog });
   const mount = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   const [ready, setReady] = useState(false);
@@ -40,12 +40,10 @@ export const CharacterPreview = ({
     "character-preview",
     mount,
     async (element, signal, onError) => {
-      const [{ createCharacterPreviewScene }, lpcCatalog] = await Promise.all([
-        import("@/libs/rendering/scenes/characterPreview"),
-        catalog ?? loadLpcCatalog(),
-      ]);
+      const { createCharacterPreviewScene } = await import(
+        "@/libs/rendering/scenes/characterPreview"
+      );
       return createCharacterPreviewScene({
-        lpcCatalog,
         mount: element,
         signal,
         onError,
@@ -58,7 +56,8 @@ export const CharacterPreview = ({
     if (!isReady || !scene) return;
     let isCurrent = true;
     setFailed(false);
-    scene.show(JSON.parse(signature), animation, catalog).then(
+    // Catalog failures belong to this appearance, so another edit can retry on the same renderer.
+    scene.show(JSON.parse(signature), animation, catalog ?? loadLpcCatalog()).then(
       () => {
         if (isCurrent) setReady(true);
       },
@@ -72,7 +71,7 @@ export const CharacterPreview = ({
     return () => {
       isCurrent = false;
     };
-  }, [isReady, sceneRef, signature, animation, catalog]);
+  }, [isReady, sceneRef, signature, animation, catalog, loadLpcCatalog]);
   const error = preview.error || failed;
   return (
     <figure className={cn("mx-auto w-64 max-w-full text-center", className)}>

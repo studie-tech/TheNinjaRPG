@@ -13,7 +13,6 @@ import type { LpcAnimation, LpcDirection, SpriteAppearance } from "@/validators/
  * replaces it. Frames present only when the figure's pose changes.
  */
 export const createCharacterPreviewScene = async (options: {
-  lpcCatalog: LpcCatalog;
   mount: HTMLElement;
   signal: AbortSignal;
   onError: (error: unknown) => void;
@@ -53,13 +52,17 @@ export const createCharacterPreviewScene = async (options: {
     show: async (
       appearance: SpriteAppearance,
       animation: LpcAnimation,
-      catalog?: LpcCatalog,
+      catalog: LpcCatalog | Promise<LpcCatalog>,
     ) => {
       const id = ++request;
-      // Scopes read the catalog when created, so later appearances use edited artwork.
-      if (catalog) game.lpcCatalog = catalog;
       const scope = createRenderScope(game);
       try {
+        // The appearance owns its catalog load and failure, independently of renderer readiness.
+        scope.lpcCatalog = await catalog;
+        if (id !== request || scope.isDisposed()) {
+          scope.dispose();
+          return;
+        }
         const actor = await createLpcCharacter(
           scope,
           appearance,
