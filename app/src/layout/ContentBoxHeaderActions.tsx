@@ -226,10 +226,11 @@ export function ContentBoxHeaderActions({
 }
 
 /**
- * Keep as many header controls in the row as fit, in their display order, and move the rest
- * behind a "More" menu. Controls leave the row by priority (lower stays longer), so the ones a
- * player needs at a moment's notice stay one tap away on narrow screens. Controls change place
- * only when the available width or the set of controls changes.
+ * Keep as many header controls in the row as fit, in their display order, and show the rest in
+ * a "More" menu. Controls leave the row by priority (lower stays longer), so the ones a player
+ * needs at a moment's notice stay one tap away on narrow screens. Every control keeps one parent
+ * element whether it sits in the row or in the menu: the menu is drawn around the controls it
+ * holds, so moving between the two never remounts a control or discards its state.
  */
 export function ContentBoxPriorityActions({
   items,
@@ -240,32 +241,41 @@ export function ContentBoxPriorityActions({
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const widths = useRef(new Map<string, number>());
-  const [hiddenKeys, setHiddenKeys] = useState("");
+  const [menu, setMenu] = useState<HeaderMenuLayout>(EMPTY_MENU);
   const [isOpen, setIsOpen] = useState(false);
-  const panelId = useId();
+  const baseId = useId();
   const keys = items.map((item) => `${item.key}:${item.priority}`).join(",");
 
-  // `keys` stands for the items: their nodes are new on every render, their keys only when
-  // the set of controls changes.
+  // `keys` stands for the items: their nodes are new on every render, their keys only change
+  // with the set of controls. Each control's wrapper is observed, so one that appears,
+  // disappears or changes width is measured again.
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
     const measure = () => {
+      const widths = new Map<string, number>();
       for (const element of root.querySelectorAll<HTMLElement>("[data-header-item]")) {
         // A control that renders nothing measures 0 and takes no room.
-        widths.current.set(
+        widths.set(
           element.dataset.headerItem ?? "",
           element.getBoundingClientRect().width,
         );
       }
+      const widthOf = (key: string) => widths.get(key) ?? HEADER_TOOL_WIDTH;
       const hidden = splitHeaderActions(
         items,
-        (key) => widths.current.get(key) ?? HEADER_TOOL_WIDTH,
+        widthOf,
         root.clientWidth,
         HEADER_TOOL_WIDTH,
       );
-      setHiddenKeys([...hidden].join(","));
+      const next = layoutHeaderMenu(
+        items.filter((item) => hidden.has(item.key)).map((item) => item.key),
+        widthOf,
+        Math.max(HEADER_TOOL_WIDTH, window.innerWidth - 32),
+      );
+      setMenu((previous) =>
+        JSON.stringify(previous) === JSON.stringify(next) ? previous : next,
+      );
     };
     measure();
     if (typeof ResizeObserver === "undefined") {
@@ -279,6 +289,14 @@ export function ContentBoxPriorityActions({
     }
     return () => observer.disconnect();
   }, [keys]);
+
+  const isMenuShown = Object.keys(menu.places).length > 0;
+  const isExpanded = isMenuShown && isOpen;
+
+  // A menu that empties (the screen grew) closes, so it does not reopen by itself later.
+  useEffect(() => {
+    if (!isMenuShown) setIsOpen(false);
+  }, [isMenuShown]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -297,7 +315,7 @@ export function ContentBoxPriorityActions({
   }, []);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isExpanded) return;
     const root = rootRef.current;
     if (!root) return;
     const dismissOutside = (event: Event) => {
@@ -315,18 +333,18 @@ export function ContentBoxPriorityActions({
       document.removeEventListener("pointerdown", dismissOutside);
       document.removeEventListener("focusin", dismissOutside);
     };
-  }, [isOpen]);
+  }, [isExpanded]);
 
-  const hidden = new Set(hiddenKeys ? hiddenKeys.split(",") : []);
-  const isMenuShown = hidden.size > 0;
-  const needsAttention = items.some((item) => hidden.has(item.key) && item.attention);
+  const needsAttention = items.some((item) => menu.places[item.key] && item.attention);
+  const menuId = `${baseId}-menu`;
+  const itemId = (key: string) => `${baseId}-${key}`;
   return (
     <div
       ref={rootRef}
       className="relative ml-auto flex min-w-0 flex-1 flex-row items-center justify-end"
       onKeyDownCapture={(event) => {
         if (
-          !isOpen ||
+          !isExpanded ||
           event.key !== "Escape" ||
           hasPortalledControlLayer(event.currentTarget)
         )
@@ -337,27 +355,55 @@ export function ContentBoxPriorityActions({
         triggerRef.current?.focus();
       }}
       data-content-box-actions
-      data-expanded={(isMenuShown && isOpen) || undefined}
+      data-expanded={isExpanded || undefined}
     >
-      {items
-        .filter((item) => !hidden.has(item.key))
-        .map((item) => (
+      {isMenuShown && (
+        <section
+          id={menuId}
+          aria-label={`More ${label} controls`}
+          aria-owns={Object.keys(menu.places).map(itemId).join(" ")}
+          className={cn(
+            "bg-popover absolute top-full right-0 z-[45] mt-1 rounded-md border shadow-md",
+            !isExpanded && "invisible",
+          )}
+          style={{ width: menu.width, height: menu.height }}
+        ></section>
+      )}
+      {items.map((item) => {
+        const place = menu.places[item.key];
+        const isFolded = !!place && !isExpanded;
+        return (
           <div
             key={item.key}
+            id={itemId(item.key)}
             data-header-item={item.key}
-            className="flex shrink-0 items-center"
+            aria-hidden={isFolded || undefined}
+            inert={isFolded}
+            className={cn(
+              "flex shrink-0 items-center",
+              place && "absolute z-[46]",
+              isFolded && "pointer-events-none invisible",
+            )}
+            style={
+              place
+                ? { top: `calc(100% + 4px + ${place.top}px)`, right: place.right }
+                : undefined
+            }
           >
-            {item.node}
+            <HeaderActionsFocusContext value={place ? triggerRef : null}>
+              {item.node}
+            </HeaderActionsFocusContext>
           </div>
-        ))}
+        );
+      })}
       <Button
         ref={triggerRef}
         variant="ghost"
         className={cn("relative size-[44px] shrink-0 p-0", !isMenuShown && "hidden")}
         hidden={!isMenuShown}
-        aria-label={`More ${label} controls${needsAttention ? " (one is changed)" : ""}`}
-        aria-controls={panelId}
-        aria-expanded={isMenuShown && isOpen}
+        aria-label={`More ${label} controls${needsAttention ? ", includes a changed setting" : ""}`}
+        aria-controls={isMenuShown ? menuId : undefined}
+        aria-expanded={isExpanded}
         onClick={() => setIsOpen((open) => !open)}
       >
         <Ellipsis className="size-7" aria-hidden />
@@ -369,33 +415,48 @@ export function ContentBoxPriorityActions({
           />
         )}
       </Button>
-      <section
-        id={panelId}
-        aria-label={`More ${label} controls`}
-        aria-hidden={!isOpen || undefined}
-        inert={!isOpen}
-        className={cn(
-          "bg-popover text-popover-foreground absolute top-full right-0 z-[45] mt-1 flex max-w-[calc(100vw-2rem)] flex-row flex-wrap items-center rounded-md border p-2 shadow-md",
-          (!isOpen || !isMenuShown) && "pointer-events-none invisible",
-        )}
-      >
-        <HeaderActionsFocusContext value={triggerRef}>
-          {items
-            .filter((item) => hidden.has(item.key))
-            .map((item) => (
-              <div
-                key={item.key}
-                data-header-item={item.key}
-                className="flex shrink-0 items-center"
-              >
-                {item.node}
-              </div>
-            ))}
-        </HeaderActionsFocusContext>
-      </section>
     </div>
   );
 }
+
+/**
+ * Places the menu's controls in rows, in display order, no wider than `maxWidth`. Offsets are
+ * measured from the menu's top and right edges, which sit under the root's right edge.
+ */
+export const layoutHeaderMenu = (
+  keys: string[],
+  widthOf: (key: string) => number,
+  maxWidth: number,
+): HeaderMenuLayout => {
+  if (keys.length === 0) return EMPTY_MENU;
+  const rows: { key: string; left: number; width: number }[][] = [[]];
+  let x = 0;
+  for (const key of keys) {
+    const width = widthOf(key);
+    const row = rows[rows.length - 1] ?? [];
+    if (row.length > 0 && x + width > maxWidth - 2 * MENU_PADDING) {
+      rows.push([{ key, left: 0, width }]);
+      x = width;
+    } else {
+      row.push({ key, left: x, width });
+      x += width;
+    }
+  }
+  const contentWidth = Math.max(
+    ...rows.map((row) => row.reduce((sum, entry) => sum + entry.width, 0)),
+  );
+  const width = contentWidth + 2 * MENU_PADDING;
+  const places: HeaderMenuLayout["places"] = {};
+  rows.forEach((row, index) => {
+    for (const entry of row) {
+      places[entry.key] = {
+        top: MENU_PADDING + index * HEADER_TOOL_WIDTH,
+        right: width - MENU_PADDING - entry.left - entry.width,
+      };
+    }
+  });
+  return { places, width, height: rows.length * HEADER_TOOL_WIDTH + 2 * MENU_PADDING };
+};
 
 /**
  * The controls that leave the header row: none when all fit; otherwise, with room kept for
@@ -421,8 +482,13 @@ export const splitHeaderActions = (
   return new Set(items.filter((item) => !kept.has(item.key)).map((item) => item.key));
 };
 
-/** Width of one header tool button and of the "More" trigger. */
+/** Width of one header tool button and of the "More" trigger, and the height of a menu row. */
 const HEADER_TOOL_WIDTH = 44;
+
+/** Space between the "More" menu's edge and its controls. */
+const MENU_PADDING = 8;
+
+const EMPTY_MENU: HeaderMenuLayout = { places: {}, width: 0, height: 0 };
 
 /** Portalled dialogs and selects own dismissal while their header trigger stays visible. */
 function hasPortalledControlLayer(root: HTMLElement) {
@@ -455,4 +521,11 @@ export type HeaderActionItem = {
   priority: number;
   /** Marks the "More" trigger while this control is hidden in it. */
   attention?: boolean;
+};
+
+/** Where each control in the "More" menu sits, and the menu's size. */
+export type HeaderMenuLayout = {
+  places: Record<string, { top: number; right: number }>;
+  width: number;
+  height: number;
 };

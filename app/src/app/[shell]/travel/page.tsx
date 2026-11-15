@@ -1152,8 +1152,9 @@ function Travel() {
         </TooltipProvider>
       ),
       priority: 6,
-      // Hidden players are easy to forget about once the switch sits in the menu.
-      attention: isSectorTools && !showOtherUsers,
+      // Hidden players are easy to forget about once the switch sits in the menu. The
+      // tutorial starts with them hidden on purpose.
+      attention: isSectorTools && !tutorialRunning && !showOtherUsers,
     },
     {
       key: "scout",
@@ -2092,7 +2093,6 @@ const SectorLoadingPlaceholder = () => (
 // Alias the procedure so its action name is not interpreted as a React hook.
 const activateSensory = api.stealth.useSensory;
 
-/** A 40px icon toggle in the map's title bar. */
 /** Every map tool in the same 44px box, so the header row stays even and each is easy to tap. */
 const mapToolClassName =
   "inline-flex size-[44px] shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";

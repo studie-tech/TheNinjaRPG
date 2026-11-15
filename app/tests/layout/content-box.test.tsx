@@ -6,6 +6,7 @@ import Confirm from "@/layout/Confirm";
 import ContentBox, * as contentBox from "@/layout/ContentBox";
 import {
   type HeaderActionItem,
+  layoutHeaderMenu,
   REVEAL_CONTENT_BOX_CONTROLS,
   splitHeaderActions,
 } from "@/layout/ContentBoxHeaderActions";
@@ -71,7 +72,8 @@ beforeEach(() => {
     this: Element,
   ) {
     const key = this.getAttribute("data-header-item");
-    const width = key === null ? 0 : key === "tabs" ? 90 : key === "nothing" ? 0 : 44;
+    const width =
+      key === null || this.childElementCount === 0 ? 0 : key === "tabs" ? 90 : 44;
     return new window.DOMRect(0, 0, width, 44);
   });
   vi.spyOn(Element.prototype, "getClientRects").mockImplementation(function (
@@ -335,12 +337,14 @@ const travelLikeItems = (
     ...overrides[key],
   }));
 
+const PriorityBox = ({ items }: { items: HeaderActionItem[] }) => (
+  <ContentBox title="Travel" topRightItems={items}>
+    Map
+  </ContentBox>
+);
+
 const setupPriority = (items = travelLikeItems()) =>
-  render(
-    <ContentBox title="Travel" topRightItems={items}>
-      Map
-    </ContentBox>,
-  );
+  render(<PriorityBox items={items} />);
 
 const resizeActions = (width: number) => {
   act(() => {
@@ -351,10 +355,17 @@ const resizeActions = (width: number) => {
 
 const rowNames = (view: ReturnType<typeof render>) =>
   Array.from(
-    view.container.querySelectorAll<HTMLElement>(
-      "[data-content-box-actions] > [data-header-item]",
-    ),
+    view.container.querySelectorAll<HTMLElement>("[data-header-item]:not(.absolute)"),
   ).map((element) => element.textContent);
+
+const menuNames = (view: ReturnType<typeof render>) =>
+  (
+    view
+      .getByRole("region", { name: "More Travel controls", hidden: true })
+      .getAttribute("aria-owns") ?? ""
+  )
+    .split(" ")
+    .map((id) => document.getElementById(id)?.textContent);
 
 it("keeps every priority control in the header row while they fit", () => {
   const view = setupPriority();
@@ -373,15 +384,54 @@ it("moves the lowest-priority controls behind More, keeping both lists in displa
   // Room for More (44) + stealth (44) + tabs (90): quick travel and show players leave.
   resizeActions(200);
   expect(rowNames(view)).toEqual(["Stealth", "", "Tabs"]);
+  expect(menuNames(view)).toEqual(["Show players", "Quick travel"]);
   const more = view.getByRole("button", { name: "More Travel controls" });
   expect(more.getAttribute("aria-expanded")).toBe("false");
+  const quickTravel = view.container.querySelector("#tool-quick-travel") as HTMLElement;
+  expect(quickTravel.closest("[inert]")).not.toBeNull();
   fireEvent.click(more);
-  const menu = view.getByRole("region", { name: "More Travel controls" });
-  expect(
-    Array.from(menu.querySelectorAll("[data-header-item]")).map((el) => el.textContent),
-  ).toEqual(["Show players", "Quick travel"]);
+  expect(more.getAttribute("aria-expanded")).toBe("true");
+  expect(quickTravel.closest("[inert]")).toBeNull();
   resizeActions(400);
   expect(view.queryByRole("button", { name: /More Travel controls/ })).toBeNull();
+});
+
+it("keeps the same control element when it moves between the row and More", () => {
+  const view = setupPriority();
+  const quickTravel = view.getByRole("button", { name: "Quick travel" });
+  resizeActions(200);
+  fireEvent.click(view.getByRole("button", { name: "More Travel controls" }));
+  expect(view.getByRole("button", { name: "Quick travel" })).toBe(quickTravel);
+  resizeActions(400);
+  expect(view.getByRole("button", { name: "Quick travel" })).toBe(quickTravel);
+});
+
+it("gives the row back the room of a control that stops rendering", () => {
+  const view = setupPriority();
+  resizeActions(200);
+  expect(menuNames(view)).toEqual(["Show players", "Quick travel"]);
+  view.rerender(
+    <PriorityBox items={travelLikeItems({ "quick-travel": { node: null } })} />,
+  );
+  act(() => {
+    for (const notify of resizeCallbacks) notify();
+  });
+  // Without quick travel everything fits again, so the menu goes away.
+  expect(view.queryByRole("button", { name: /More Travel controls/ })).toBeNull();
+  expect(rowNames(view)).toEqual(["Show players", "Stealth", "", "", "Tabs"]);
+});
+
+it("closes More when it empties, so it does not reopen by itself", () => {
+  const view = setupPriority();
+  resizeActions(200);
+  fireEvent.click(view.getByRole("button", { name: "More Travel controls" }));
+  resizeActions(400);
+  resizeActions(200);
+  expect(
+    view
+      .getByRole("button", { name: "More Travel controls" })
+      .getAttribute("aria-expanded"),
+  ).toBe("false");
 });
 
 it("marks More while a control that needs attention is hidden in it", () => {
@@ -389,7 +439,9 @@ it("marks More while a control that needs attention is hidden in it", () => {
   expect(view.container.querySelector("[data-attention]")).toBeNull();
   resizeActions(200);
   const more = view.getByRole("button", { name: /More Travel controls/ });
-  expect(more.getAttribute("aria-label")).toBe("More Travel controls (one is changed)");
+  expect(more.getAttribute("aria-label")).toBe(
+    "More Travel controls, includes a changed setting",
+  );
   expect(more.querySelector("[data-attention]")).not.toBeNull();
 });
 
@@ -424,4 +476,18 @@ it("keeps narrower controls by priority when a wider, more important one cannot 
   expect([...splitHeaderActions(items, width, 400, 44)]).toEqual([]);
   expect([...splitHeaderActions(items, width, 150, 44)]).toEqual(["wide"]);
   expect([...splitHeaderActions(items, width, 100, 44)]).toEqual(["wide", "b"]);
+});
+
+it("lays the More menu out in rows no wider than the screen", () => {
+  const layout = layoutHeaderMenu(["a", "b", "c"], () => 44, 120);
+  // Two controls fit in 120 - 2 x 8 padding; the third starts a second row.
+  expect(layout).toEqual({
+    places: {
+      a: { top: 8, right: 52 },
+      b: { top: 8, right: 8 },
+      c: { top: 52, right: 52 },
+    },
+    width: 104,
+    height: 104,
+  });
 });
