@@ -318,38 +318,7 @@ const BOSS_MOVE_WAVE: Record<TdBossMove, number> = {
   heal: 80,
 };
 
-export interface TdStats {
-  damage: number;
-  rate: number;
-  range: number;
-  crit: number;
-  critMult: number;
-  multishot: number;
-  ricochet: number;
-  maxHp: number;
-  regen: number;
-  block: number;
-  thorns: number;
-  lifesteal: number;
-  knockback: number;
-  ryoMult: number;
-  interest: number;
-  scrollMult: number;
-  enemyHpMult: number;
-  jutsuMult: number;
-  jutsuCdMult: number;
-  sentryMult: number;
-  sealMult: number;
-  maxChakra: number;
-  chakraRegen: number;
-  blinkTicks: number;
-  subWindow: number;
-  counterMult: number;
-  trapCharges: number;
-  trapMult: number;
-  sentrySlots: number;
-  perkChoices: number;
-}
+export type TdStats = ReturnType<typeof computeStats>;
 
 export interface TdState {
   config: TdRunConfig;
@@ -596,7 +565,7 @@ export const createRun = (config: TdRunConfig, recordEvents = false): TdState =>
 const perk = (state: TdState, id: TdPerk) => state.perks[id] ?? 0;
 const shop = (state: TdState, id: TdShopItem) => state.shop[id] ?? 0;
 
-const computeStats = (state: TdState): TdStats => {
+const computeStats = (state: TdState) => {
   const d = (id: TdDojoUpgrade) => dojoLevel(state.config, id);
   const eras = state.eras;
   const glass = powi(1.9, perk(state, "glass_cannon"));
