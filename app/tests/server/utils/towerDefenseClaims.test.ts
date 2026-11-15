@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import {
   applyAction,
   createRun,
@@ -7,6 +7,8 @@ import {
   type TdRunConfig,
 } from "@/libs/towerDefense/sim";
 import {
+  checkTowerDefenseClaimTiming,
+  reserveTowerDefenseReplay,
   TD_TOKEN_LIFETIME_MS,
   verifyTowerDefenseRun,
 } from "@/server/utils/towerDefenseClaims";
@@ -17,6 +19,7 @@ import {
 } from "@/server/utils/towerDefenseCrypto";
 import type { TowerDefenseRunToken } from "@/validators/towerDefense";
 import { botAct } from "../../libs/towerDefense/bot";
+import { stubRateLimitTransport } from "../../setup/rateLimit";
 
 const token = (
   overrides: Partial<TowerDefenseRunToken> = {},
@@ -175,5 +178,50 @@ describe("tower defense claim verification", () => {
       now: payload.issuedAt + TD_TOKEN_LIFETIME_MS + 1,
     });
     expect(result.ok).toBe(false);
+  });
+});
+
+describe("tower defense claim pre-checks", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("refuses an impossible length or an expired token from the token alone", () => {
+    const payload = token({ seed: "timing" });
+    const tenMinutes = payload.issuedAt + 10 * 60_000;
+    expect(
+      checkTowerDefenseClaimTiming({ token: payload, endTick: 6_000, now: tenMinutes }),
+    ).toBeNull();
+    // Ten minutes at 1x is 6,000 ticks; thirty seconds of slack is not twice that.
+    expect(
+      checkTowerDefenseClaimTiming({
+        token: payload,
+        endTick: 12_000,
+        now: tenMinutes,
+      }),
+    ).not.toBeNull();
+    expect(
+      checkTowerDefenseClaimTiming({
+        token: { ...payload, dojo: { speed: 4 } },
+        endTick: 12_000,
+        now: tenMinutes,
+      }),
+    ).toBeNull();
+    expect(
+      checkTowerDefenseClaimTiming({
+        token: payload,
+        endTick: 0,
+        now: payload.issuedAt + TD_TOKEN_LIFETIME_MS + 1,
+      }),
+    ).not.toBeNull();
+  });
+
+  it("reserves replays through their own limiter", async () => {
+    stubRateLimitTransport({ unexpectedRequestMessage: "Unexpected request" });
+    expect(await reserveTowerDefenseReplay("td-replay-open")).toBe(true);
+    vi.restoreAllMocks();
+    stubRateLimitTransport({
+      unexpectedRequestMessage: "Unexpected request",
+      remaining: () => -1,
+    });
+    expect(await reserveTowerDefenseReplay("td-replay-spent")).toBe(false);
   });
 });

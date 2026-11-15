@@ -6,6 +6,7 @@ import {
   huntingSession,
   userCosmetic,
   userCosmeticSlot,
+  towerDefenseClaimReceipt,
 } from "@/drizzle/schema";
 import { deleteUserReportEmbeddings } from "@/libs/moderation/reportSearch";
 import { deleteRowsForUser } from "@/queries/accountDeletion";
@@ -205,9 +206,10 @@ const deleteUserInternal = async (client: DrizzleClient, userId: string) => {
       huntingSession,
       huntingProgress,
       huntingReceipt,
-      adClick,
       userCosmetic,
       userCosmeticSlot,
+      towerDefenseClaimReceipt,
+      adClick,
     ].map((table) => deleteRowsForUser(client, table, userId)),
     deleteAiSpriteAnimationBindings(client, userId),
     deleteAiTransformationsFor(client, userId),

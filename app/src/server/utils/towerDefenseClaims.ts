@@ -7,6 +7,8 @@
  * way, and the elapsed-time check stops logs simulated faster than the game can be played.
  */
 
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 import { env } from "@/env/server.mjs";
 import { TD_TPS, tdMaxSpeed } from "@/libs/towerDefense/balance";
 import { replayRun, type TdAction, tdRunPoints } from "@/libs/towerDefense/sim";
@@ -19,6 +21,31 @@ export const TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE =
 export const TD_TOKEN_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 /** Allowance for clock skew and the request round trip in the elapsed-time check. */
 const TD_TIME_SLACK_MS = 30_000;
+/** Replays a player may request per window; each can cost a second or more of CPU. */
+const TD_REPLAYS_PER_WINDOW = 10;
+
+export const TOWER_DEFENSE_REPLAY_LIMIT_MESSAGE =
+  "Too many runs verified recently. Your run is saved; claim it again in a few minutes.";
+
+const replayLimiter = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(TD_REPLAYS_PER_WINDOW, "10 m"),
+  prefix: "trpc-ratelimit-td-replay",
+});
+
+/**
+ * Reserve one claim replay for a player. Like the shared tRPC limiter, an unreachable
+ * Redis fails open in development and closed elsewhere.
+ */
+export const reserveTowerDefenseReplay = async (userId: string): Promise<boolean> => {
+  try {
+    return (await replayLimiter.limit(userId)).success;
+  } catch (error) {
+    if (process.env.NODE_ENV !== "development") throw error;
+    console.warn("Tower defense replay limiter unavailable in development", error);
+    return true;
+  }
+};
 
 /**
  * Claims stay off unless `TOWER_DEFENSE_CLAIMS_ENABLED` is exactly "true". The switch is
@@ -34,6 +61,26 @@ export type TowerDefenseClaimResult =
   | { ok: true; wave: number; kills: number; points: number }
   | { ok: false; message: string };
 
+/**
+ * Refuse what the token and claimed length alone rule out: an expired token, or a run
+ * longer than the time since it started allows at the unlocked game speed. It costs
+ * nothing, so it runs before the replay.
+ */
+export const checkTowerDefenseClaimTiming = (input: {
+  token: TowerDefenseRunToken;
+  endTick: number;
+  now: number;
+}): string | null => {
+  const elapsed = input.now - input.token.issuedAt;
+  if (elapsed > TD_TOKEN_LIFETIME_MS) return "This run is too old to claim.";
+  const fastestMs =
+    (input.endTick * 1000) / TD_TPS / tdMaxSpeed(input.token.dojo.speed ?? 0) -
+    TD_TIME_SLACK_MS;
+  if (elapsed < fastestMs)
+    return "This run finished faster than the game can be played.";
+  return null;
+};
+
 /** Replay a claimed run and decide what it earned. */
 export const verifyTowerDefenseRun = (input: {
   token: TowerDefenseRunToken;
@@ -41,10 +88,9 @@ export const verifyTowerDefenseRun = (input: {
   endTick: number;
   now: number;
 }): TowerDefenseClaimResult => {
-  const { token, actions, endTick, now } = input;
-  const elapsed = now - token.issuedAt;
-  if (elapsed > TD_TOKEN_LIFETIME_MS)
-    return { ok: false, message: "This run is too old to claim." };
+  const { token, actions, endTick } = input;
+  const refused = checkTowerDefenseClaimTiming(input);
+  if (refused) return { ok: false, message: refused };
   const { state, stop, invalidAt } = replayRun(
     {
       seed: token.seed,
@@ -58,15 +104,9 @@ export const verifyTowerDefenseRun = (input: {
   );
   if (invalidAt !== null)
     return { ok: false, message: "The run's action log does not match its replay." };
+  // The timing check trusted the claimed end tick; the replay must end exactly there.
   if (stop !== "over" || state.tick !== endTick)
     return { ok: false, message: "This run has not ended yet." };
-  const fastestMs =
-    (state.tick * 1000) / TD_TPS / tdMaxSpeed(token.dojo.speed ?? 0) - TD_TIME_SLACK_MS;
-  if (elapsed < fastestMs)
-    return {
-      ok: false,
-      message: "This run finished faster than the game can be played.",
-    };
   return {
     ok: true,
     wave: state.wave,

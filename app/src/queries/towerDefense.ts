@@ -62,6 +62,16 @@ export const upsertUserTowerDefenseUpgrade = (
     .values({ id: nanoid(), userId: ctx.userId, upgradeId, level })
     .onDuplicateKeyUpdate({ set: { level } });
 
+/** Build the receipt lookup that answers a repeated claim without replaying it. */
+export const findTowerDefenseClaimReceipt = (
+  client: Pick<DrizzleClient, "query">,
+  claimKey: string,
+) =>
+  client.query.towerDefenseClaimReceipt.findFirst({
+    columns: { wave: true, score: true, pointsEarned: true },
+    where: eq(towerDefenseClaimReceipt.claimKey, claimKey),
+  });
+
 /** Build the claim receipt; its unique key on the run nonce makes each run claimable once. */
 export const insertTowerDefenseClaimReceipt = (
   client: Pick<DrizzleClient, "insert">,

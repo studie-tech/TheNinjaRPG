@@ -95,7 +95,11 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     const { state, log } = play(started.config as TdRunConfig);
     // Pretend the run took as long as it really plays.
     vi.spyOn(Date, "now").mockReturnValue(Date.now() + state.tick * 100 + 60_000);
-    const claim = { token: started.token, actions: log, endTick: state.tick };
+    const claim = {
+      token: started.token,
+      actions: log,
+      endTick: state.tick,
+    };
     const first = await api.claimRun(claim);
     expect(first).toMatchObject({
       success: true,
@@ -108,7 +112,17 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
       bestWave: Math.max(45, state.wave),
     });
     const again = await api.claimRun(claim);
-    expect(again).toMatchObject({ success: false, alreadyClaimed: true });
+    expect(again).toMatchObject({
+      success: false,
+      alreadyClaimed: true,
+      wave: state.wave,
+      pointsEarned: Math.floor(state.scrolls),
+    });
+    // A repeat is answered from the receipt before any replay: even a log that could
+    // never verify gets the same answer.
+    expect(await api.claimRun({ ...claim, actions: [] })).toMatchObject({
+      alreadyClaimed: true,
+    });
     expect(await progress("td-user")).toEqual({
       points: 500 + Math.floor(state.scrolls),
       bestWave: Math.max(45, state.wave),
@@ -149,7 +163,11 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     ).toBe(false);
     env.TOWER_DEFENSE_CLAIMS_ENABLED = undefined;
     expect(
-      await api.claimRun({ token: started.token, actions: log, endTick: state.tick }),
+      await api.claimRun({
+        token: started.token,
+        actions: log,
+        endTick: state.tick,
+      }),
     ).toMatchObject({ success: false, claimsPaused: true });
     expect(await progress("td-user")).toEqual({ points: 500, bestWave: 45 });
   });
@@ -162,6 +180,7 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
       level: 1,
       points: 500 - tdDojoCost("dmg", 0),
     });
+    expect((await api.getProgress()).points).toBe(500 - tdDojoCost("dmg", 0));
     expect((await api.getProgress()).dojo.dmg).toBe(1);
     expect((await api.purchaseDojoUpgrade({ upgradeId: "ul_tempest" })).success).toBe(
       false,

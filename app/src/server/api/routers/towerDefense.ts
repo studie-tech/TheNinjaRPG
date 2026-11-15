@@ -10,6 +10,7 @@ import {
 } from "@/libs/towerDefense/content";
 import { tdDojoAvailable, tdDojoCost } from "@/libs/towerDefense/sim";
 import {
+  findTowerDefenseClaimReceipt,
   findTowerDefenseProgress,
   insertTowerDefenseClaimReceipt,
   insertTowerDefenseRun,
@@ -27,13 +28,15 @@ import {
   createTRPCRouter,
   errorResponse,
   protectedProcedure,
-  publicProcedure,
   ratelimitMiddleware,
 } from "@/server/api/trpc";
 import { isMysqlDuplicateKeyError } from "@/server/utils/mysqlErrors";
 import {
   areTowerDefenseClaimsEnabled,
+  checkTowerDefenseClaimTiming,
+  reserveTowerDefenseReplay,
   TOWER_DEFENSE_CLAIMS_PAUSED_MESSAGE,
+  TOWER_DEFENSE_REPLAY_LIMIT_MESSAGE,
   towerDefenseClaimKey,
   verifyTowerDefenseRun,
 } from "@/server/utils/towerDefenseClaims";
@@ -129,8 +132,9 @@ export const towerDefenseRouter = createTRPCRouter({
 
   /**
    * Claim a finished run. The server replays the signed run with the submitted action log
-   * and pays out what the replay earned; the receipt keyed on the run nonce is inserted
-   * before anything is granted, so each run pays out once.
+   * and pays out what the replay earned. Everything that can refuse a claim without the
+   * replay runs first, and replays have their own tighter limit. The receipt keyed on
+   * the run nonce is inserted before anything is granted, so each run pays out once.
    */
   claimRun: protectedProcedure
     .meta({ mcp: { description: "Claim a finished tower defense run" } })
@@ -155,26 +159,41 @@ export const towerDefenseRouter = createTRPCRouter({
       if (!token) return errorResponse("This run's token is invalid.");
       if (token.userId !== ctx.userId)
         return errorResponse("This run belongs to another player.");
+      const now = Date.now();
+      const refused = checkTowerDefenseClaimTiming({
+        token,
+        endTick: input.endTick,
+        now,
+      });
+      if (refused) return errorResponse(refused);
+      const claimKey = towerDefenseClaimKey(token.nonce);
+      const [receipt, canReplay] = await Promise.all([
+        findTowerDefenseClaimReceipt(ctx.drizzle, claimKey),
+        reserveTowerDefenseReplay(ctx.userId),
+      ]);
+      if (receipt)
+        return alreadyClaimed({
+          wave: receipt.wave,
+          kills: receipt.score,
+          points: receipt.pointsEarned,
+        });
+      if (!canReplay) return errorResponse(TOWER_DEFENSE_REPLAY_LIMIT_MESSAGE);
       const result = verifyTowerDefenseRun({
         token,
         actions: input.actions,
         endTick: input.endTick,
-        now: Date.now(),
+        now,
       });
       if (!result.ok) return errorResponse(result.message);
       try {
         await insertTowerDefenseClaimReceipt(ctx.drizzle, ctx, {
-          claimKey: towerDefenseClaimKey(token.nonce),
+          claimKey,
           wave: result.wave,
           kills: result.kills,
           points: result.points,
         });
       } catch (error) {
-        if (isMysqlDuplicateKeyError(error))
-          return {
-            ...errorResponse("This run has already been claimed."),
-            alreadyClaimed: true,
-          };
+        if (isMysqlDuplicateKeyError(error)) return alreadyClaimed(result);
         throw error;
       }
       const [updated] = await Promise.all([
@@ -260,12 +279,21 @@ export const towerDefenseRouter = createTRPCRouter({
     }),
 
   /** This month's highest waves. */
-  getLeaderboard: publicProcedure
+  getLeaderboard: cdnCachedProcedure
     .meta({ mcp: { description: "Get tower defense leaderboard" } })
     .input(z.object({ limit: z.number().min(1).max(100).prefault(20) }))
     .query(async ({ ctx, input }) =>
       listTowerDefenseRunForGetLeaderboard(ctx.drizzle, input),
     ),
+});
+
+/** The answer to a run that has already paid out, with what it earned then. */
+const alreadyClaimed = (earned: { wave: number; kills: number; points: number }) => ({
+  ...errorResponse("This run has already been claimed."),
+  alreadyClaimed: true,
+  wave: earned.wave,
+  kills: earned.kills,
+  pointsEarned: earned.points,
 });
 
 /** Dojo levels keyed by upgrade, ignoring rows for upgrades that no longer exist. */

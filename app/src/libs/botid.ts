@@ -67,6 +67,7 @@ export const BOTID_PROTECTED_PROCEDURES = [
   "quests.collectPetTask",
   "coop.dungeon.claim",
   "pvpRank.claimSeasonRewards",
+  "towerDefense.claimRun",
   // Account creation and value transfer
   "register.createCharacter",
   "pets.acquirePet",
