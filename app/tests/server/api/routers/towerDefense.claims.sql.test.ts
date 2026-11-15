@@ -94,7 +94,7 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     const api = await callerFor(towerDefenseRouter, "td-user");
     const started = await api.startRun({ startWave: 1 });
     if (!started.token || !started.config) throw new Error("Run did not start");
-    const { state, log } = play(started.config as TdRunConfig);
+    const { state, log } = play(started.config);
     // Pretend the run took as long as it really plays.
     vi.spyOn(Date, "now").mockReturnValue(Date.now() + state.tick * 100 + 60_000);
     const claim = {
@@ -144,7 +144,7 @@ describeWithDatabase("tower defense runs and the Dojo", () => {
     const other = await callerFor(towerDefenseRouter, "td-other");
     const started = await api.startRun({ startWave: 1 });
     if (!started.token || !started.config) throw new Error("Run did not start");
-    const { state, log } = play(started.config as TdRunConfig);
+    const { state, log } = play(started.config);
     vi.spyOn(Date, "now").mockReturnValue(Date.now() + state.tick * 100 + 60_000);
     const claim = {
       token: started.token,

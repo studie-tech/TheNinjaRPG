@@ -439,7 +439,7 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
         return;
       }
       if (!isUnchanged()) return;
-      begin(result.config as TdRunConfig, result.token);
+      begin(result.config, result.token);
     },
     [begin, refreshSaved, saved, startRun, storageKey, userId],
   );

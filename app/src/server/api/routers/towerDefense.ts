@@ -51,6 +51,7 @@ import {
   TD_MAX_LOG_CHARS,
   TD_MAX_TICKS,
   type TowerDefenseRunToken,
+  towerDefenseDojoSchema,
 } from "@/validators/towerDefense";
 
 export const towerDefenseRouter = createTRPCRouter({
@@ -96,7 +97,7 @@ export const towerDefenseRouter = createTRPCRouter({
             seed: z.string(),
             startWave: z.int(),
             bestWave: z.int(),
-            dojo: z.record(z.string(), z.int()),
+            dojo: towerDefenseDojoSchema,
           })
           .optional(),
       }),
@@ -128,7 +129,7 @@ export const towerDefenseRouter = createTRPCRouter({
           seed: payload.seed,
           startWave: payload.startWave,
           bestWave: payload.bestWave,
-          dojo: payload.dojo as Record<string, number>,
+          dojo: payload.dojo,
         },
       };
     }),
