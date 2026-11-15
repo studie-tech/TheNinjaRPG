@@ -18,6 +18,7 @@ import Loader from "@/layout/Loader";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
 import { cn } from "@/libs/shadui";
 import { isTutorialActive } from "@/libs/tutorial";
+import { type GameFrameProps, GameLayout } from "./GameLayout";
 import { CHAT_BUTTON_LAYER, MobileSidebarStack } from "./shared/LayoutChrome";
 import { MobileNotificationsPopover } from "./shared/LayoutNotifications";
 import type { GameLayoutRenderProps } from "./shared/layoutTypes";
@@ -231,3 +232,8 @@ export function PanelGameLayout(props: GameLayoutRenderProps) {
     </div>
   );
 }
+
+/** The Panel frame around the game, as LayoutSwitcher loads it. */
+export const PanelGame = (props: GameFrameProps) => (
+  <GameLayout renderer={PanelGameLayout} {...props} />
+);

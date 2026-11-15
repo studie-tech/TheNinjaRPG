@@ -26,6 +26,7 @@ import Image from "@/layout/Image";
 import Link from "@/layout/Link";
 import LowerRightHelpBtn from "@/layout/LowerRightHelpBtn";
 import { cn } from "@/libs/shadui";
+import { type GameFrameProps, GameLayout } from "./GameLayout";
 import { LayoutBackground } from "./shared/LayoutBackground";
 import {
   FloatingHelpButton,
@@ -408,3 +409,8 @@ export const ClassicGameLayout: React.FC<GameLayoutRenderProps> = ({
     </div>
   );
 };
+
+/** The Classic frame around the game, as LayoutSwitcher loads it. */
+export const ClassicGame = (props: GameFrameProps) => (
+  <GameLayout renderer={ClassicGameLayout} {...props} />
+);

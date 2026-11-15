@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import type React from "react";
 import { useDeferredValue, useEffect, useState } from "react";
 import ReactDOM from "react-dom";
+import type { GameFrameProps } from "@/components/layout/GameLayout";
 import { LayoutParticles } from "@/components/layout/shared/LayoutParticles";
 import { applyGameLayout } from "@/hooks/useGameLayout";
-import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
+import { type GameLayout, type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import {
   applyFontScaleCookie,
   LAYOUT_PREFERENCE_COOKIE,
@@ -25,9 +26,20 @@ import { useUserInfo } from "@/utils/UserContext";
  * preloads the frame a variant shows, and the others never download. Without a loading
  * state the frames suspend into the switch below rather than into a fallback.
  */
-const GameLayout = dynamic(() =>
-  import("@/components/layout/GameLayout").then((module) => module.GameLayout),
+const ClassicGame = dynamic(() =>
+  import("@/components/layout/ClassicGameLayout").then((module) => module.ClassicGame),
 );
+const PixelGame = dynamic(() =>
+  import("@/components/layout/PixelGameLayout").then((module) => module.PixelGame),
+);
+const PanelGame = dynamic(() =>
+  import("@/components/layout/PanelGameLayout").then((module) => module.PanelGame),
+);
+const GAME_FRAMES = {
+  classic: ClassicGame,
+  pixel: PixelGame,
+  panel: PanelGame,
+} satisfies Record<GameLayout["frame"], React.ComponentType<GameFrameProps>>;
 const PanelPublicLayout = dynamic(() =>
   import("@/components/layout/PanelPublicLayout").then(
     (module) => module.PanelPublicLayout,
@@ -132,13 +144,14 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
     definition.publicFrame === "game"
       ? undefined
       : publicFrames[definition.publicFrame];
+  const GameFrame = GAME_FRAMES[definition.frame];
   const content =
     isKnownAnonymous &&
     PublicFrame &&
     (isPixelLanding || definition.publicFrame === "page") ? (
       <PublicFrame>{children}</PublicFrame>
     ) : (
-      <GameLayout initialIsSignedIn={initialIsSignedIn}>{children}</GameLayout>
+      <GameFrame initialIsSignedIn={initialIsSignedIn}>{children}</GameFrame>
     );
 
   return (

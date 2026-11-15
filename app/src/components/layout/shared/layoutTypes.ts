@@ -43,7 +43,7 @@ export interface GameLayoutRenderProps {
   showMobileNotifications: boolean;
 }
 
-export type GameLayoutRenderer = React.ComponentType<GameLayoutRenderProps>;
+export type GameLayoutRenderer = React.FC<GameLayoutRenderProps>;
 
 export interface GameLayoutControllerProps {
   variant: GameLayoutId;
