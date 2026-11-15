@@ -23,6 +23,7 @@ import type {
   ItemLoadout,
   ItemSlotType,
   UserData,
+  UserItem,
   UserItemWithItem,
   UserItemWithRelations,
   VillageStructure,
@@ -131,6 +132,73 @@ export const countsTowardInventoryStorage = (userItem: {
   storedAtHome: boolean;
   equipped: ItemSlot;
 }): boolean => !userItem.storedAtHome && userItem.equipped === "NONE";
+
+/**
+ * Backpack slots the carried rows use. Each row uses one slot, except auction listings and
+ * trade offers of a stackable item: escrow keeps every listing as its own row for delivery,
+ * but together they use only the stacks their combined quantity needs. Carried stacks are
+ * counted apart from them, so filling a carried stack never changes what listings use.
+ */
+export const countInventorySlots = (
+  rows: readonly InventorySlotRow[],
+  now: Date = new Date(),
+) => {
+  const listings = new Map<string, { stackSize: number; quantity: number }>();
+  let slots = 0;
+  for (const row of rows) {
+    if (!countsTowardInventoryStorage(row)) continue;
+    const stackSize = row.item ? getEffectiveStackSize(row.item) : 1;
+    const sharesStacks =
+      row.isInAuction &&
+      !!row.item &&
+      stackSize > 1 &&
+      row.quantity > 0 &&
+      row.imbuements.length === 0 &&
+      !(row.craftingFinishedAt && row.craftingFinishedAt >= now);
+    if (!row.item || !sharesStacks) {
+      slots += 1;
+      continue;
+    }
+    const key = `${row.itemId}:${getItemStackMergeBucketKey(row.item, row)}`;
+    const listing = listings.get(key) ?? { stackSize, quantity: 0 };
+    listing.quantity += row.quantity;
+    listings.set(key, listing);
+  }
+  for (const { stackSize, quantity } of listings.values()) {
+    slots += Math.ceil(quantity / stackSize);
+  }
+  return slots;
+};
+
+/** Backpack slots the carried rows of one inventory bucket use; see `countInventorySlots`. */
+export const countInventoryBucketSlots = (
+  rows: readonly InventorySlotRow[],
+  bucket: InventoryBucket,
+  now: Date = new Date(),
+) =>
+  countInventorySlots(
+    rows.filter((row) => !!row.item && getInventoryBucket(row.item) === bucket),
+    now,
+  );
+
+/** The fields of a user item that decide the backpack slots it uses. */
+export type InventorySlotRow = Pick<
+  UserItem,
+  | "itemId"
+  | "quantity"
+  | "equipped"
+  | "storedAtHome"
+  | "isInAuction"
+  | "craftingFinishedAt"
+  | "activeVariantId"
+  | "level"
+> & {
+  imbuements: readonly unknown[];
+  item?:
+    | (Pick<Item, "itemType" | "canStack" | "stackSize"> &
+        Pick<BucketItemFields, "isEventItem">)
+    | null;
+};
 
 /**
  * Classify a carried inventory item into its capacity bucket.

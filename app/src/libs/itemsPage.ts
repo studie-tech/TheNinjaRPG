@@ -17,6 +17,8 @@ import {
   applyActiveVariant,
   byItemName,
   calcItemSellingPrice,
+  countInventoryBucketSlots,
+  countInventorySlots,
   countsTowardInventoryStorage,
   getEquipBlockReason,
   getHomeStorageBucket,
@@ -26,6 +28,7 @@ import {
   getInventoryBucketCapacity,
   getInventoryBucketFullMessage,
   type InventoryBucket,
+  type InventorySlotRow,
   isCompatibleEquipSlot,
 } from "@/libs/item";
 import { needsInventoryRepair } from "@/libs/repair";
@@ -340,19 +343,19 @@ export const homeStorageBlockReason = (user: {
   return null;
 };
 
-type HomeStorageRow = {
+type HomeStorageRow = InventorySlotRow & {
   id: string;
-  equipped: ItemSlot;
-  storedAtHome: boolean;
-  isInAuction: boolean;
-  craftingFinishedAt: Date | null;
-  item: { name: string; itemType: ItemType; isEventItem: boolean };
+  item: NonNullable<InventorySlotRow["item"]> & {
+    name: string;
+    itemType: ItemType;
+    isEventItem: boolean;
+  };
 };
 
 /**
  * Split the requested stacks into those that move between backpack and home storage and
- * those that stay, in request order. Each accepted stack takes a slot in the destination
- * bucket, so a later stack of a filled bucket stays. Furniture is managed from the home.
+ * those that stay, in request order. Accepted stacks reserve their destination capacity;
+ * recovered listings can share backpack slots. Furniture is managed from the home.
  */
 export const planHomeStorageMove = <T extends HomeStorageRow>({
   rows,
@@ -370,11 +373,12 @@ export const planHomeStorageMove = <T extends HomeStorageRow>({
   const moving: T[] = [];
   const refused: { userItemId: string; name: string; reason: string }[] = [];
   const used = new Map<string, number>();
+  const projectedRows = [...rows];
   const bucketOf = (ui: T) =>
     toHome ? getHomeStorageBucket(ui.item) : getInventoryBucket(ui.item);
   for (const ui of rows) {
-    const counts = toHome ? ui.storedAtHome : countsTowardInventoryStorage(ui);
-    if (counts) used.set(bucketOf(ui), (used.get(bucketOf(ui)) ?? 0) + 1);
+    if (toHome && ui.storedAtHome)
+      used.set(bucketOf(ui), (used.get(bucketOf(ui)) ?? 0) + 1);
   }
   for (const userItemId of userItemIds) {
     const ui = rows.find((row) => row.id === userItemId);
@@ -399,12 +403,14 @@ export const planHomeStorageMove = <T extends HomeStorageRow>({
         }
       } else {
         const bucket = getInventoryBucket(ui.item);
-        if ((used.get(bucket) ?? 0) >= getInventoryBucketCapacity(bucket, user)) {
-          // Accepted withdrawals already occupy bag slots in this batch's projected inventory.
-          const held = countHeldInventorySlots(
-            [...rows, ...moving.map((row) => ({ ...row, storedAtHome: false }))],
+        if (
+          countInventoryBucketSlots(
+            [...projectedRows, { ...ui, storedAtHome: false }],
             bucket,
-          );
+          ) > getInventoryBucketCapacity(bucket, user)
+        ) {
+          // Accepted withdrawals already occupy bag slots in this batch's projected inventory.
+          const held = countHeldInventorySlots(projectedRows, bucket);
           return `does not fit: ${getInventoryBucketFullMessage(bucket, held)}`;
         }
       }
@@ -412,7 +418,8 @@ export const planHomeStorageMove = <T extends HomeStorageRow>({
     })();
     if (ui && !reason) {
       moving.push(ui);
-      used.set(bucketOf(ui), (used.get(bucketOf(ui)) ?? 0) + 1);
+      if (toHome) used.set(bucketOf(ui), (used.get(bucketOf(ui)) ?? 0) + 1);
+      else projectedRows.push({ ...ui, storedAtHome: false });
     } else {
       refused.push({ userItemId, name: ui?.item.name ?? "Item", reason: reason ?? "" });
     }
@@ -458,20 +465,15 @@ export const homeStorageMoveMessage = (
 };
 
 /**
- * Carried stacks that use bag space but are left out of the backpack list: auction
- * escrow, then unfinished crafts (the same order as getEquipBlockReason).
+ * Bag slots used by carried stacks left out of the backpack list: auction escrow slots
+ * (see `countInventorySlots`), then unfinished crafts (the order of getEquipBlockReason).
  */
-export const countUnlistedBagStacks = (
-  rows: {
-    storedAtHome: boolean;
-    equipped: ItemSlot;
-    isInAuction: boolean;
-    craftingFinishedAt: Date | null;
-  }[],
-  now: Date,
-) => {
+export const countUnlistedBagStacks = (rows: InventorySlotRow[], now: Date) => {
   const counted = rows.filter(countsTowardInventoryStorage);
-  const auction = counted.filter((ui) => ui.isInAuction).length;
+  const auction = countInventorySlots(
+    counted.filter((ui) => ui.isInAuction),
+    now,
+  );
   const crafting = counted.filter(
     (ui) => !ui.isInAuction && !!ui.craftingFinishedAt && ui.craftingFinishedAt > now,
   ).length;
@@ -480,14 +482,12 @@ export const countUnlistedBagStacks = (
 
 /** Stacks of one inventory bucket that use bag space without showing in the backpack. */
 export const countHeldInventorySlots = (
-  rows: (Parameters<typeof countUnlistedBagStacks>[0][number] & {
-    item: Parameters<typeof getInventoryBucket>[0];
-  })[],
+  rows: InventorySlotRow[],
   bucket: InventoryBucket,
   now: Date = new Date(),
 ) =>
   countUnlistedBagStacks(
-    rows.filter((row) => getInventoryBucket(row.item) === bucket),
+    rows.filter((row) => !!row.item && getInventoryBucket(row.item) === bucket),
     now,
   );
 

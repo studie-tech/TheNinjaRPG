@@ -172,6 +172,39 @@ describe("planHomeStorageMove", () => {
     expect(rows.find((ui) => ui.id === "held")?.storedAtHome).toBe(true);
   });
 
+  it("takes stored stacks out into the slot listings of one item share", () => {
+    const capacity = getInventoryBucketCapacity("normal", user);
+    const stackable = {
+      itemType: "CONSUMABLE",
+      canStack: true,
+      stackSize: 10,
+    } as const;
+    const lot = (id: string) =>
+      row(
+        id,
+        { itemId: "pill", quantity: 2, isInAuction: true, imbuements: [], level: 1 },
+        stackable,
+      );
+    const rows = [
+      ...Array.from({ length: capacity - 2 }, (_, index) => row(`carried-${index}`)),
+      lot("lot-a"),
+      lot("lot-b"),
+      row("a", { storedAtHome: true }),
+      row("b", { storedAtHome: true }),
+    ];
+    const plan = planHomeStorageMove({
+      rows,
+      userItemIds: ["a", "b"],
+      toHome: false,
+      user,
+      homeStorage: 12,
+    });
+    expect(plan.moving.map((ui) => ui.id)).toEqual(["a"]);
+    expect(plan.refused[0]?.reason).toBe(
+      "does not fit: Inventory is full (1 slot is held by an auction listing or trade offer)",
+    );
+  });
+
   it("refuses stacks that cannot move and names why", () => {
     const rows = [
       row("worn", { equipped: "HAND_1" }),
@@ -206,6 +239,51 @@ describe("planHomeStorageMove", () => {
     });
     expect(plan.moving.map((ui) => ui.id)).toEqual(["listed"]);
   });
+
+  it.each([0, 1])(
+    "recovers stored listings without spending the %s free backpack slots",
+    (freeSlots) => {
+      const capacity = getInventoryBucketCapacity("normal", user);
+      const lot = (id: string, storedAtHome = false) =>
+        row(
+          id,
+          {
+            itemId: "pill",
+            isInAuction: true,
+            storedAtHome,
+            imbuements: [],
+            level: 1,
+          },
+          { itemType: "CONSUMABLE", canStack: true, stackSize: 10 },
+        );
+      const rows = [
+        ...Array.from({ length: capacity - freeSlots - 1 }, (_, index) =>
+          row(`carried-${index}`),
+        ),
+        lot("carried-listing"),
+        lot("stored-listing-a", true),
+        lot("stored-listing-b", true),
+        row("stored-a", { storedAtHome: true }),
+        row("stored-b", { storedAtHome: true }),
+      ];
+      const plan = planHomeStorageMove({
+        rows,
+        userItemIds: ["stored-listing-a", "stored-listing-b", "stored-a", "stored-b"],
+        toHome: false,
+        user,
+        homeStorage: 12,
+      });
+      expect(plan.moving.map((ui) => ui.id)).toEqual([
+        "stored-listing-a",
+        "stored-listing-b",
+        ...(freeSlots ? ["stored-a"] : []),
+      ]);
+      expect(plan.refused.map((ui) => ui.userItemId)).toEqual(
+        freeSlots ? ["stored-b"] : ["stored-a", "stored-b"],
+      );
+      expect(rows.find((ui) => ui.id === "stored-listing-a")?.storedAtHome).toBe(true);
+    },
+  );
 });
 
 describe("homeStorageMoveMessage", () => {

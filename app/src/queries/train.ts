@@ -311,7 +311,20 @@ export const findUserDataForFetchQuestUser = (
       village: true,
       clan: true,
       items: {
-        with: { item: { columns: { id: true, itemType: true, maxDurability: true } } },
+        with: {
+          item: {
+            columns: {
+              id: true,
+              itemType: true,
+              maxDurability: true,
+              isEventItem: true,
+              canStack: true,
+              stackSize: true,
+            },
+          },
+          // Backpack slots count imbued listings apart (`countInventorySlots`).
+          imbuements: { columns: { id: true } },
+        },
       },
     },
   });

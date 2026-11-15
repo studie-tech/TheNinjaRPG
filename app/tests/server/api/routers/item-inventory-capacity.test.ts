@@ -203,7 +203,7 @@ describeWithDatabase("equipped items and backpack capacity", () => {
     );
 
     it("names held slots when a stackable purchase cannot fit and rolls back", async () => {
-      await fillBackpack("normal", 3);
+      await fillBackpack("normal", 2);
       await insertUserItems([
         { id: "potions", userId, itemId: "potion", quantity: 9 },
         { id: "listed-a", userId, itemId: "potion", isInAuction: true },
@@ -214,10 +214,28 @@ describeWithDatabase("equipped items and backpack capacity", () => {
       expect(await api.buy({ itemId: "potion", villageId, stack: 2 })).toMatchObject({
         success: false,
         message:
-          "Inventory is full (3 slots are held: 2 by auction listings or trade offers, 1 by an unfinished craft)",
+          "Inventory is full (2 slots are held: 1 by an auction listing or trade offer, 1 by an unfinished craft)",
       });
       expect(await potionRows()).toEqual(before);
       expect(await money()).toBe(10000);
+    });
+
+    it("buys into the slot left free by listings of one item sharing a stack", async () => {
+      await fillBackpack("normal", 3);
+      await insertUserItems([
+        { id: "potions", userId, itemId: "potion", quantity: 9 },
+        { id: "listed-a", userId, itemId: "potion", isInAuction: true },
+        { id: "listed-b", userId, itemId: "potion", isInAuction: true },
+      ]);
+      const api = await callerFor(itemRouter, userId);
+      expect((await api.buy({ itemId: "potion", villageId, stack: 2 })).success).toBe(
+        true,
+      );
+      const carried = (await potionRows()).filter(
+        ([id]) => !String(id).startsWith("listed"),
+      );
+      expect(carried.map(([, quantity]) => quantity).sort()).toEqual([1, 10]);
+      expect(await money()).toBe(10000 - 20);
     });
   });
 
@@ -270,6 +288,27 @@ describeWithDatabase("equipped items and backpack capacity", () => {
     });
   });
 
+  it("retrieves an item into the slot listings of one stackable item leave free", async () => {
+    const db = await getTestDatabase();
+    await db
+      .update(item)
+      .set({ canStack: true, stackSize: 10 })
+      .where(eq(item.id, "gear"));
+    await fillBackpack("normal", 2);
+    await insertUserItems([
+      { id: "listed-a", userId, itemId: "gear", quantity: 3, isInAuction: true },
+      { id: "listed-b", userId, itemId: "gear", quantity: 4, isInAuction: true },
+      { id: "stored", userId, itemId: "backpack-item", storedAtHome: true },
+      { id: "stored-next", userId, itemId: "backpack-item", storedAtHome: true },
+    ]);
+    const home = await callerFor(homeRouter, userId);
+    expect((await home.toggleStoreItem({ userItemId: "stored" })).success).toBe(true);
+    expect(await home.toggleStoreItem({ userItemId: "stored-next" })).toMatchObject({
+      success: false,
+      message: getInventoryBucketFullMessage("normal", { auction: 1, crafting: 1 }),
+    });
+  });
+
   it.each(["normal", "event"] as const)(
     "retrieves a %s item into space freed by equipped gear, then counts unequips again",
     async (bucket) => {
@@ -295,6 +334,68 @@ describeWithDatabase("equipped items and backpack capacity", () => {
       expect(
         (await api.getUserItems()).filter(countsTowardInventoryStorage),
       ).toHaveLength(before + 1);
+    },
+  );
+
+  it.each(["toggleStoreItem", "moveUserItems"] as const)(
+    "%s recovers stored listings in a full backpack without using another slot",
+    async (procedure) => {
+      const db = await getTestDatabase();
+      await db
+        .update(item)
+        .set({ canStack: true, stackSize: 10 })
+        .where(eq(item.id, "gear"));
+      await fillBackpack("normal", 1);
+      await insertUserItems([
+        { id: "listed", userId, itemId: "gear", isInAuction: true },
+        {
+          id: "stored-listing-a",
+          userId,
+          itemId: "gear",
+          isInAuction: true,
+          storedAtHome: true,
+        },
+        {
+          id: "stored-listing-b",
+          userId,
+          itemId: "gear",
+          isInAuction: true,
+          storedAtHome: true,
+        },
+        { id: "stored", userId, itemId: "backpack-item", storedAtHome: true },
+      ]);
+      const home = await callerFor(homeRouter, userId);
+      if (procedure === "toggleStoreItem") {
+        for (const userItemId of ["stored-listing-a", "stored-listing-b"]) {
+          expect((await home.toggleStoreItem({ userItemId })).success).toBe(true);
+        }
+        expect(await home.toggleStoreItem({ userItemId: "stored" })).toMatchObject({
+          success: false,
+          message: getInventoryBucketFullMessage("normal", { auction: 1, crafting: 1 }),
+        });
+      } else {
+        expect(
+          await home.moveUserItems({
+            userItemIds: ["stored-listing-a", "stored-listing-b", "stored"],
+            toHome: false,
+          }),
+        ).toMatchObject({
+          success: true,
+          movedUserItemIds: ["stored-listing-a", "stored-listing-b"],
+          refused: [{ userItemId: "stored" }],
+        });
+      }
+      const rows = await db.query.userItem.findMany({
+        where: eq(userItem.userId, userId),
+      });
+      expect(rows.find((row) => row.id === "stored")?.storedAtHome).toBe(true);
+      for (const id of ["stored-listing-a", "stored-listing-b"]) {
+        expect(rows.find((row) => row.id === id)).toMatchObject({
+          storedAtHome: false,
+          isInAuction: true,
+          quantity: 1,
+        });
+      }
     },
   );
 });

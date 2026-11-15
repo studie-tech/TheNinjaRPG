@@ -25,6 +25,7 @@ import { ItemsToolbar } from "@/layout/items/ItemsToolbar";
 import { type ItemsPlace, ItemsWorkspace } from "@/layout/items/ItemsWorkspace";
 import Loader from "@/layout/Loader";
 import {
+  countInventoryBucketSlots,
   countsTowardInventoryStorage,
   getHomeStorageBucket,
   getHomeStorageBucketCapacity,
@@ -114,8 +115,7 @@ export default function MyItems() {
   // usable-item list. Share the storage rule with server-side capacity guards.
   const carriedItems = userItems?.filter(countsTowardInventoryStorage);
   const bags = (["normal", "event", "materials", "cooking"] as const).map((value) => {
-    const count =
-      carriedItems?.filter((ui) => getInventoryBucket(ui.item) === value).length ?? 0;
+    const count = carriedItems ? countInventoryBucketSlots(carriedItems, value) : 0;
     const max = userData ? getInventoryBucketCapacity(value, userData) : 0;
     return { value, count, max, over: count > max };
   });
@@ -242,7 +242,13 @@ export default function MyItems() {
             bagTabs={
               <>
                 <BagTabs
-                  bags={[{ value: "all", count: carriedItems?.length ?? 0 }, ...bags]}
+                  bags={[
+                    {
+                      value: "all",
+                      count: bags.reduce((sum, bag) => sum + bag.count, 0),
+                    },
+                    ...bags,
+                  ]}
                   active={activeTab}
                   onChange={setActiveTab}
                 />

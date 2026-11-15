@@ -91,7 +91,7 @@ import {
   compatibleEquipSlots,
   computeAutoEquipAssignments,
   computeLoadoutAssignments,
-  countsTowardInventoryStorage,
+  countInventoryBucketSlots,
   findFreeEquipSlot,
   getEffectiveStackSize,
   getHomeStorageBucket,
@@ -3361,11 +3361,7 @@ export const itemRouter = createTRPCRouter({
       // Resolve auto-equip first: a purchase placed directly into an equipment
       // slot can succeed even when the backpack is full.
       if (!isFurniture && equipped === "NONE") {
-        const bucketCount = useritems.filter(
-          (ui) =>
-            countsTowardInventoryStorage(ui) &&
-            getInventoryBucket(ui.item) === purchaseBucket,
-        ).length;
+        const bucketCount = countInventoryBucketSlots(useritems, purchaseBucket);
         if (bucketCount >= getInventoryBucketCapacity(purchaseBucket, user)) {
           if (!isStackablePurchase) {
             return errorResponse(

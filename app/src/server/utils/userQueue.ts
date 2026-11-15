@@ -21,9 +21,10 @@ import {
 } from "@/drizzle/schema";
 import { getCraftingExperienceGain } from "@/libs/crafting";
 import {
-  countsTowardInventoryStorage,
+  countInventoryBucketSlots,
   getInventoryBucket,
   getInventoryBucketCapacity,
+  type InventorySlotRow,
   splitIntoStacks,
 } from "@/libs/item";
 import { jutsuMasteryTypes } from "@/libs/jutsuMastery";
@@ -838,13 +839,12 @@ const startQueuedCraft = async (
   }));
   // Cooking output must still fit the carried cooking bucket when the craft starts.
   if (getInventoryBucket(entry.item) === "cooking") {
-    const carried = user.items.filter(
-      (row) =>
-        row.quantity > 0 &&
-        countsTowardInventoryStorage(row) &&
-        row.item &&
-        getInventoryBucket(row.item) === "cooking",
-    ).length;
+    // The profile read loads each item's slot fields; `fetchQuestUser` types items loosely.
+    const items = user.items as unknown as InventorySlotRow[];
+    const carried = countInventoryBucketSlots(
+      items.filter((row) => row.quantity > 0),
+      "cooking",
+    );
     if (carried + outputs.length > getInventoryBucketCapacity("cooking", user)) {
       await returnCraftMaterials(client, entry.userId, entry.materials, true);
       return "dropped";

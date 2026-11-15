@@ -40,6 +40,7 @@ import {
   mapPlotToState,
 } from "@/libs/farming";
 import {
+  countInventoryBucketSlots,
   countsTowardInventoryStorage,
   getEffectiveStackSize,
   getInventoryBucket,
@@ -2290,11 +2291,8 @@ const guardItemAwardInventoryCapacity = (
     new Date(),
   );
 
-  const inventoryItems = userItems.filter(countsTowardInventoryStorage);
   const bucket = getInventoryBucket(itemInfo);
-  const bucketCount = inventoryItems.filter(
-    (ui) => getInventoryBucket(ui.item) === bucket,
-  ).length;
+  const bucketCount = countInventoryBucketSlots(userItems, bucket);
   if (bucketCount + newStacksRequired > getInventoryBucketCapacity(bucket, user)) {
     return errorResponse(
       getInventoryBucketFullMessage(bucket, countHeldInventorySlots(userItems, bucket)),
@@ -2339,9 +2337,7 @@ const guardBulkItemAwardInventoryCapacity = (
   for (const bucket of Object.keys(requiredStacks) as InventoryBucket[]) {
     const needed = requiredStacks[bucket];
     if (needed <= 0) continue;
-    const bucketCount = inventoryItems.filter(
-      (userItem) => getInventoryBucket(userItem.item) === bucket,
-    ).length;
+    const bucketCount = countInventoryBucketSlots(inventoryItems, bucket);
     if (bucketCount + needed > getInventoryBucketCapacity(bucket, user)) {
       return errorResponse(
         getInventoryBucketFullMessage(
