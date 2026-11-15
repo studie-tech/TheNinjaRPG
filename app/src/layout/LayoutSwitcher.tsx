@@ -10,6 +10,7 @@ import { LayoutParticles } from "@/components/layout/shared/LayoutParticles";
 import { Button } from "@/components/ui/button";
 import { applyGameLayout } from "@/hooks/useGameLayout";
 import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
+import { GlobalAudioProvider } from "@/layout/GlobalAudioProvider";
 import { type GameLayout, type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import {
   applyFontScaleCookie,
@@ -21,7 +22,7 @@ import type { WallpaperVariant } from "@/libs/wallpaperExperiment";
 import { LayoutContextProvider } from "@/utils/LayoutContext";
 import { usePublicPathname } from "@/utils/routing";
 import { safeLocalStorageGetItem } from "@/utils/storage";
-import { useUserInfo } from "@/utils/UserContext";
+import { useUserDataSelector, useUserInfo } from "@/utils/UserContext";
 
 /**
  * A visitor renders one of these frames, so each is its own chunk: the server render
@@ -179,15 +180,32 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
 
 export default LayoutSwitcher;
 
-/** The page without its frame, with a way back to the full layout. */
-const FrameLoadError: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="min-h-screen bg-background p-2 text-foreground">
-    <div role="alert" className="mb-2 flex items-center gap-2 text-sm">
-      <span>The page layout could not be loaded.</span>
-      <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
-        Reload
-      </Button>
-    </div>
-    {children}
-  </div>
-);
+/**
+ * The page without its frame, with a way back to the full layout. Pages read the audio
+ * settings the frames provide, so this provides them too; the tutorial assistant and the
+ * sidebars live in the frame and are absent until the reload.
+ */
+const FrameLoadError: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { data: audioUser } = useUserDataSelector((user) => ({
+    status: user.status,
+    village: user.village,
+    musicOn: user.musicOn,
+    buttonSfxOn: user.buttonSfxOn,
+    sfxOn: user.sfxOn,
+    isOutlaw: user.isOutlaw,
+    bloodlineId: user.bloodlineId,
+  }));
+  return (
+    <GlobalAudioProvider userData={audioUser}>
+      <div className="min-h-screen bg-background p-2 text-foreground">
+        <div role="alert" className="mb-2 flex items-center gap-2 text-sm">
+          <span>The page layout could not be loaded.</span>
+          <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+            Reload
+          </Button>
+        </div>
+        {children}
+      </div>
+    </GlobalAudioProvider>
+  );
+};
