@@ -522,8 +522,8 @@ export const TowerDefenseDraft = ({
             <Button
               variant="outline"
               onClick={() => {
-                // Take the first offer of every waiting draft.
-                for (let i = 0; i < 50 && act(["perk", 0]); i++);
+                // Take the first offer of every waiting draft; the last pick closes it.
+                while (act(["perk", 0]));
               }}
             >
               Pick for me ({state.drafts})

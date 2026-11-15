@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { decodeTdActions } from "@/libs/towerDefense/actionLog";
+import { tdStartingDrafts } from "@/libs/towerDefense/balance";
 import {
   TD_SEAL_ART_INFO,
   TD_SEAL_ARTS,
@@ -295,6 +296,19 @@ describe("tower defense replay", () => {
     while (state.offer) applyAction(state, [tick, "perk", 0]);
     stepRun(state);
     expect(state.tick).toBe(tick + 1);
+  });
+
+  it("closes every starting draft of a high checkpoint by taking first offers", () => {
+    const state = createRun({
+      seed: "drafts",
+      startWave: 2001,
+      bestWave: 2001,
+      dojo: {},
+    });
+    let picks = 0;
+    while (applyAction(state, [state.tick, "perk", 0])) picks++;
+    expect(picks).toBe(tdStartingDrafts(2001));
+    expect(state.offer).toBeNull();
   });
 
   it("reports a stalled replay when a draft is never answered", () => {
