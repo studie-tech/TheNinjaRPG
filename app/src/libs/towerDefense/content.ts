@@ -1615,13 +1615,27 @@ export const TD_DOJO_INFO: Record<TdDojoUpgrade, TdDojoInfo> = {
   },
 };
 
+/** A boss closes every this many waves, followed by a perk draft. */
+export const TD_BOSS_INTERVAL = 10;
+/** Every this many waves the boss is a titan. */
+export const TD_TITAN_INTERVAL = 50;
+/** Share of the best wave reached up to which checkpoints are offered. */
+export const TD_CHECKPOINT_SHARE = 0.7;
+/** Damage multiplier on the enemy the player has marked. */
+export const TD_FOCUS_DAMAGE = 1.2;
+
 /**
- * Waves a run may start from: just after each boss, up to 70% of the best wave reached.
- * Starting on a boss wave would drop an unprepared ninja straight into a boss fight.
+ * Waves a run may start from: just after each boss, up to `TD_CHECKPOINT_SHARE` of the
+ * best wave reached. Starting on a boss wave would drop an unprepared ninja straight
+ * into a boss fight.
  */
 export const tdCheckpoints = (bestWave: number) => {
   const checkpoints = [1];
-  for (let wave = 11; wave <= Math.floor(bestWave * 0.7); wave += 10)
+  for (
+    let wave = TD_BOSS_INTERVAL + 1;
+    wave <= Math.floor(bestWave * TD_CHECKPOINT_SHARE);
+    wave += TD_BOSS_INTERVAL
+  )
     checkpoints.push(wave);
   return checkpoints;
 };

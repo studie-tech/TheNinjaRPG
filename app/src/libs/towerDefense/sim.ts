@@ -51,12 +51,14 @@ import {
 } from "@/libs/towerDefense/balance";
 import {
   TD_AFFIXES,
+  TD_BOSS_INTERVAL,
   TD_DOJO_INFO,
   TD_ELEMENTS,
   TD_ENEMIES,
   TD_ERA_INFO,
   TD_ERAS,
   TD_EVOLUTION_LEVEL,
+  TD_FOCUS_DAMAGE,
   TD_JUTSU,
   TD_JUTSU_INFO,
   TD_PERK_INFO,
@@ -67,6 +69,7 @@ import {
   TD_SHOP,
   TD_SHOP_INFO,
   TD_SPEND_WEIGHTS,
+  TD_TITAN_INTERVAL,
   TD_ULTIMATE_INFO,
   TD_ULTIMATES,
   type TdAffix,
@@ -755,7 +758,7 @@ const startWave_ = (state: TdState) => {
       const cap = 60 * tdWaveBonus(completed);
       state.ryo += Math.floor(Math.min(cap, state.ryo * state.stats.interest));
     }
-    if (completed % 10 === 0) state.drafts += 1;
+    if (completed % TD_BOSS_INTERVAL === 0) state.drafts += 1;
   }
   state.wave += 1;
   state.waveTick = 0;
@@ -763,8 +766,8 @@ const startWave_ = (state: TdState) => {
   state.eras = tdErasForWave(state.config.seed, wave);
   refreshStats(state);
   const eras = state.eras;
-  const boss = wave % 10 === 0;
-  const titan = wave % 50 === 0;
+  const boss = wave % TD_BOSS_INTERVAL === 0;
+  const titan = wave % TD_TITAN_INTERVAL === 0;
   let count = tdWaveCount(wave);
   if (eras.includes("swarm")) count *= 2;
   if (eras.includes("titans")) count = Math.ceil(count / 2);
@@ -1397,7 +1400,7 @@ const vulnerability = (state: TdState, enemy: TdEnemy) => {
   if (state.tick < enemy.chillUntil) multiplier *= 1.2;
   if (state.tick < enemy.frozenUntil) multiplier *= 1.3;
   if (state.tick < state.tsukuyomiUntil) multiplier *= 1.5;
-  if (enemy.id === state.focusId) multiplier *= 1.2;
+  if (enemy.id === state.focusId) multiplier *= TD_FOCUS_DAMAGE;
   if (sensorCovers(state, enemy)) multiplier *= 1.15;
   return multiplier;
 };

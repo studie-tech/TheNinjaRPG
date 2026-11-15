@@ -25,12 +25,16 @@ import Confirm from "@/layout/Confirm";
 import Link from "@/layout/Link";
 import { cn } from "@/libs/shadui";
 import {
+  TD_BOSS_INTERVAL,
+  TD_CHECKPOINT_SHARE,
   TD_DOJO,
   TD_DOJO_CATEGORIES,
   TD_DOJO_INFO,
+  TD_FOCUS_DAMAGE,
   TD_SEAL_ART_INFO,
   TD_SEAL_ARTS,
   TD_STAGES,
+  TD_TITAN_INTERVAL,
   type TdDojoCategory,
   type TdDojoLevels,
   type TdDojoUpgrade,
@@ -198,7 +202,8 @@ export const TowerDefenseLobby = (props: {
                   )}
                 </div>
                 <p className="text-muted-foreground mt-1">
-                  Checkpoints follow each boss, up to 70% of your best wave. Scrolls
+                  Checkpoints follow each boss, up to{" "}
+                  {Math.round(TD_CHECKPOINT_SHARE * 100)}% of your best wave. Scrolls
                   come only from waves you clear.
                 </p>
               </div>
@@ -253,7 +258,7 @@ const Journey = ({ bestWave }: { bestWave: number }) => {
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-lg">
-          <MapIcon className="h-5 w-5" /> The road to wave 500
+          <MapIcon className="h-5 w-5" /> The road to wave {TD_STAGES.at(-1)?.wave}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
@@ -288,8 +293,8 @@ const Journey = ({ bestWave }: { bestWave: number }) => {
         <p className="text-muted-foreground">
           The sky darkens and the battlefield grows wilder with every stage: new enemy
           families, elite affixes, era rules stacking two and three at a time, and a
-          titan every 50 waves. Each run pushes a little further as the Dojo makes you
-          stronger.
+          titan every {TD_TITAN_INTERVAL} waves. Each run pushes a little further as the
+          Dojo makes you stronger.
         </p>
       </CardContent>
     </Card>
@@ -335,8 +340,8 @@ const HowToPlay = ({ bestWave }: { bestWave: number }) => (
           tone="bg-sky-500/15 text-sky-600 dark:text-sky-400"
           title="Tap to mark and loot"
         >
-          A marked enemy takes +20% damage and loses its camouflage. Grab loot orbs
-          before they fade.
+          A marked enemy takes +{Math.round((TD_FOCUS_DAMAGE - 1) * 100)}% damage and
+          loses its camouflage. Grab loot orbs before they fade.
         </Rule>
         <Rule
           icon={<Wind className="h-5 w-5" />}
@@ -352,8 +357,8 @@ const HowToPlay = ({ bestWave }: { bestWave: number }) => (
           tone="bg-orange-500/15 text-orange-600 dark:text-orange-400"
           title="Bosses, perks and eras"
         >
-          A boss every 10 waves, then pick a perk. From wave 21 an era bends the rules
-          every 10 waves: adapt your build.
+          A boss every {TD_BOSS_INTERVAL} waves, then pick a perk. From wave 21 an era
+          bends the rules every 10 waves: adapt your build.
         </Rule>
       </div>
       <div>
