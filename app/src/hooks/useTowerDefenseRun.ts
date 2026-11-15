@@ -292,7 +292,9 @@ export const useTowerDefenseRun = (userId: string | undefined) => {
           ? "This run's record could not be read, so it cannot be claimed."
           : error instanceof TRPCClientError && !isRetryableTrpcError(error)
             ? error.message
-            : "Could not reach the server. Your run is saved; try claiming again.",
+            : current.unsaved
+              ? "Could not reach the server. Keep this tab open and try claiming again."
+              : "Could not reach the server. Your run is saved; try claiming again.",
       });
       setPhase("over");
       return;

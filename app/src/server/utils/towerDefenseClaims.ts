@@ -41,7 +41,7 @@ const TD_REPLAY_TICKS_PER_UNIT = 50_000;
 const TD_REPLAY_SLICE_TICKS = 10_000;
 
 export const TOWER_DEFENSE_REPLAY_LIMIT_MESSAGE =
-  "Too many runs verified recently. Your run is saved; claim it again in a few minutes.";
+  "Too many runs verified recently. Claim this run again in a few minutes.";
 
 const replayLimiter = new Ratelimit({
   redis: Redis.fromEnv(),

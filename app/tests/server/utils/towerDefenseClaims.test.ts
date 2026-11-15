@@ -10,6 +10,7 @@ import {
   checkTowerDefenseClaimTiming,
   reserveTowerDefenseReplay,
   TD_TOKEN_LIFETIME_MS,
+  TOWER_DEFENSE_REPLAY_LIMIT_MESSAGE,
   towerDefenseReplayCost,
   verifyTowerDefenseRun,
 } from "@/server/utils/towerDefenseClaims";
@@ -270,5 +271,10 @@ describe("tower defense claim pre-checks", () => {
     const command = JSON.parse(body) as unknown[];
     const args = (Array.isArray(command[0]) ? command[0] : command) as unknown[];
     expect(args.at(-1)).toBe(3);
+  });
+
+  it("refuses an over-limit claim without asserting the run is saved", () => {
+    // The server cannot know whether the player's device still holds the run.
+    expect(TOWER_DEFENSE_REPLAY_LIMIT_MESSAGE).not.toMatch(/saved/i);
   });
 });

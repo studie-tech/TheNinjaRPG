@@ -12,6 +12,7 @@ import {
   type TdSfx,
 } from "@/drizzle/constants";
 import { useTowerDefenseRun } from "@/hooks/useTowerDefenseRun";
+import Confirm from "@/layout/Confirm";
 import ContentBox from "@/layout/ContentBox";
 import { type GameSettingsUser, useGameSettings } from "@/layout/GameSettings";
 import Link from "@/layout/Link";
@@ -273,6 +274,7 @@ export default function TowerDefensePage() {
               phase={run.phase}
               outcome={run.outcome}
               isGuest={!userId}
+              unsaved={run.unsaved}
               onRetry={run.retryClaim}
               onLeave={run.leave}
             />
@@ -305,44 +307,78 @@ const Results = (props: {
   phase: string;
   outcome: ReturnType<typeof useTowerDefenseRun>["outcome"];
   isGuest: boolean;
+  /** The run outgrew or failed its local save, so only this tab still holds it. */
+  unsaved: boolean;
   onRetry: () => void;
   onLeave: () => void;
-}) => (
-  <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 p-2">
-    <div className="bg-background w-full max-w-md space-y-3 rounded-xl border p-5 text-center shadow-xl">
-      {props.phase === "claiming" || !props.outcome ? (
-        <Loader explanation="Verifying your run..." />
-      ) : (
-        <>
-          <h3 className="text-2xl font-bold">
-            {props.outcome.quit ? "Retreated" : "Defeated"} at wave {props.outcome.wave}
-          </h3>
-          <p>
-            {formatTdNumber(props.outcome.kills)} enemies defeated
-            {props.isGuest ? "" : ` · ${formatTdNumber(props.outcome.points)} scrolls`}
-          </p>
-          {props.outcome.message && <p className="text-sm">{props.outcome.message}</p>}
-          {props.isGuest && (
-            <p className="text-sm">Log in to keep scrolls and train in the Dojo.</p>
-          )}
-          <div className="flex justify-center gap-2">
-            {!props.outcome.claimed && props.outcome.retryable && !props.isGuest && (
-              <Button variant="outline" onClick={props.onRetry}>
-                Retry claim
-              </Button>
+}) => {
+  const canRetry =
+    !!props.outcome &&
+    !props.outcome.claimed &&
+    props.outcome.retryable &&
+    !props.isGuest;
+  const onlyInTab = canRetry && props.unsaved;
+  return (
+    <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 p-2">
+      <div className="bg-background w-full max-w-md space-y-3 rounded-xl border p-5 text-center shadow-xl">
+        {props.phase === "claiming" || !props.outcome ? (
+          <Loader explanation="Verifying your run..." />
+        ) : (
+          <>
+            <h3 className="text-2xl font-bold">
+              {props.outcome.quit ? "Retreated" : "Defeated"} at wave{" "}
+              {props.outcome.wave}
+            </h3>
+            <p>
+              {formatTdNumber(props.outcome.kills)} enemies defeated
+              {props.isGuest
+                ? ""
+                : ` · ${formatTdNumber(props.outcome.points)} scrolls`}
+            </p>
+            {props.outcome.message && (
+              <p className="text-sm">{props.outcome.message}</p>
             )}
-            {props.outcome.reloadRequired && (
-              <Button variant="outline" onClick={() => window.location.reload()}>
-                Reload
-              </Button>
+            {props.isGuest && (
+              <p className="text-sm">Log in to keep scrolls and train in the Dojo.</p>
             )}
-            <Button onClick={props.onLeave}>Back to the Dojo</Button>
-          </div>
-        </>
-      )}
+            {onlyInTab && (
+              <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-sm">
+                This run could not be saved on this device. Claim it before leaving this
+                tab: leaving or reloading loses everything since its last save.
+              </p>
+            )}
+            <div className="flex justify-center gap-2">
+              {canRetry && (
+                <Button variant="outline" onClick={props.onRetry}>
+                  Retry claim
+                </Button>
+              )}
+              {props.outcome.reloadRequired && (
+                <Button variant="outline" onClick={() => window.location.reload()}>
+                  Reload
+                </Button>
+              )}
+              {onlyInTab ? (
+                <Confirm
+                  title="Leave without claiming?"
+                  button={<Button>Back to the Dojo</Button>}
+                  tone="destructive"
+                  proceed_label="Leave"
+                  onAccept={props.onLeave}
+                >
+                  This run is not saved on this device. Leaving before it is claimed
+                  loses its scrolls and everything since its last save.
+                </Confirm>
+              ) : (
+                <Button onClick={props.onLeave}>Back to the Dojo</Button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 /** The renderer drains its events in place, so the empty fallback is never refilled. */
 const NO_EVENTS: TdEvent[] = [];
