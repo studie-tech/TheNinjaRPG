@@ -228,6 +228,16 @@ const SERVER_SIGNED_OUT_REASONS = new Set<string>([
 ]);
 
 /**
+ * Clerk's OAuth (machine token) path reports a failed JWKS load with the same
+ * `token-verification-failed` code as a bad signature; only the message tells them apart.
+ */
+const isJwksLoadFailure = (reason: string | null, message: string | null) =>
+  reason === MachineTokenVerificationErrorCode.TokenVerificationFailed &&
+  /Failed to load JWKS|JWKS endpoint did not contain|Missing Clerk Secret Key/i.test(
+    message ?? "",
+  );
+
+/**
  * Verify a JWT bearer token with Clerk: OAuth access tokens (`typ: at+jwt`) issued to MCP
  * clients, and Clerk session tokens.
  *
@@ -237,8 +247,16 @@ const SERVER_SIGNED_OUT_REASONS = new Set<string>([
  */
 const verifyJwtToken = async (
   serverRequest: Request,
+  bearerToken: string,
 ): Promise<AuthInfo | undefined> => {
-  const requestState = await clerkClient.authenticateRequest(serverRequest, {
+  // mcp-handler accepts any casing of the Bearer scheme; Clerk only reads "Bearer <token>"
+  const headers = new Headers(serverRequest.headers);
+  headers.set("authorization", `Bearer ${bearerToken}`);
+  const clerkRequest = new Request(serverRequest.url, {
+    method: serverRequest.method,
+    headers,
+  });
+  const requestState = await clerkClient.authenticateRequest(clerkRequest, {
     acceptsToken: ["oauth_token", "session_token"],
     secretKey: process.env.CLERK_SECRET_KEY,
     publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
@@ -247,7 +265,10 @@ const verifyJwtToken = async (
 
   if (!requestState.isAuthenticated) {
     const { reason, message } = requestState;
-    if (reason && SERVER_SIGNED_OUT_REASONS.has(reason)) {
+    if (
+      (reason && SERVER_SIGNED_OUT_REASONS.has(reason)) ||
+      isJwksLoadFailure(reason, message)
+    ) {
       console.error("[MCP] Unexpected token verification failure:", reason, message);
       Sentry.captureMessage(`MCP token verification failed: ${reason}`, {
         level: "error",
@@ -323,7 +344,7 @@ const verifyToken = async (
     }
 
     // JWT: OAuth access token or Clerk session token
-    return await verifyJwtToken(serverRequest);
+    return await verifyJwtToken(serverRequest, bearerToken);
   } catch (error) {
     return handleTokenVerificationError(error);
   }

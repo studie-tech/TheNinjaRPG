@@ -56,11 +56,11 @@ const sessionToken = () =>
     },
   );
 
-const toolsListRequest = (bearerToken: string) =>
+const toolsListRequest = (bearerToken: string, scheme = "Bearer") =>
   new Request("http://localhost/api/mcp", {
     method: "POST",
     headers: {
-      authorization: `Bearer ${bearerToken}`,
+      authorization: `${scheme} ${bearerToken}`,
       "content-type": "application/json",
       accept: "application/json, text/event-stream",
     },
@@ -107,8 +107,10 @@ const stubUpstash = () =>
     );
   });
 
+let upstashFetch: ReturnType<typeof stubUpstash>;
+
 beforeEach(() => {
-  stubUpstash();
+  upstashFetch = stubUpstash();
   vi.spyOn(Sentry, "captureException").mockReturnValue("test-event");
   vi.spyOn(Sentry, "captureMessage").mockReturnValue("test-event");
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -126,17 +128,31 @@ it("answers an invalid bearer token with 401 without reporting it", async () => 
   expect(Sentry.captureMessage).not.toHaveBeenCalled();
 });
 
+/** Whether the per-user rate limiter ran for this user, i.e. auth put the userId in context. */
+const userRateLimited = (userId: string) =>
+  upstashFetch.mock.calls.some(([, init]) =>
+    String(init?.body).includes(`mcp-user-${userId}`),
+  );
+
 it("accepts a Clerk OAuth access token (at+jwt) from an MCP client", async () => {
   const response = await POST(toolsListRequest(oauthAccessToken()));
   expect(response.status).toBe(200);
   expect(await response.text()).toContain('"tools"');
+  expect(userRateLimited("user_oauth")).toBe(true);
   expect(Sentry.captureException).not.toHaveBeenCalled();
+});
+
+it("accepts an OAuth access token sent with a lowercase bearer scheme", async () => {
+  const response = await POST(toolsListRequest(oauthAccessToken(), "bearer"));
+  expect(response.status).toBe(200);
+  expect(userRateLimited("user_oauth")).toBe(true);
 });
 
 it("still accepts a Clerk session token", async () => {
   const response = await POST(toolsListRequest(sessionToken()));
   expect(response.status).toBe(200);
   expect(await response.text()).toContain('"tools"');
+  expect(userRateLimited("user_session")).toBe(true);
 });
 
 it("answers an OAuth access token signed by another key with 401 without reporting it", async () => {
