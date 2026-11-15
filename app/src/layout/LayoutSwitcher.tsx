@@ -7,7 +7,9 @@ import { useDeferredValue, useEffect, useState } from "react";
 import ReactDOM from "react-dom";
 import type { GameFrameProps } from "@/components/layout/GameLayout";
 import { LayoutParticles } from "@/components/layout/shared/LayoutParticles";
+import { Button } from "@/components/ui/button";
 import { applyGameLayout } from "@/hooks/useGameLayout";
+import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
 import { type GameLayout, type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import {
   applyFontScaleCookie,
@@ -145,14 +147,15 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
       ? undefined
       : publicFrames[definition.publicFrame];
   const GameFrame = GAME_FRAMES[definition.frame];
-  const content =
+  const showsPublicFrame =
     isKnownAnonymous &&
     PublicFrame &&
-    (isPixelLanding || definition.publicFrame === "page") ? (
-      <PublicFrame>{children}</PublicFrame>
-    ) : (
-      <GameFrame initialIsSignedIn={initialIsSignedIn}>{children}</GameFrame>
-    );
+    (isPixelLanding || definition.publicFrame === "page");
+  const content = showsPublicFrame ? (
+    <PublicFrame>{children}</PublicFrame>
+  ) : (
+    <GameFrame initialIsSignedIn={initialIsSignedIn}>{children}</GameFrame>
+  );
 
   return (
     <LayoutContextProvider
@@ -161,10 +164,30 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
       onLayoutChange={setDisplayedLayout}
       wallpaper={wallpaper}
     >
-      {content}
+      {/* A frame that fails to download leaves the page usable without it. A new frame
+          gets a fresh boundary; a failed one stays failed until the page reloads. */}
+      <ChunkErrorBoundary
+        key={showsPublicFrame ? definition.publicFrame : definition.frame}
+        fallback={() => <FrameLoadError>{children}</FrameLoadError>}
+      >
+        {content}
+      </ChunkErrorBoundary>
       <LayoutParticles />
     </LayoutContextProvider>
   );
 };
 
 export default LayoutSwitcher;
+
+/** The page without its frame, with a way back to the full layout. */
+const FrameLoadError: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="min-h-screen bg-background p-2 text-foreground">
+    <div role="alert" className="mb-2 flex items-center gap-2 text-sm">
+      <span>The page layout could not be loaded.</span>
+      <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+        Reload
+      </Button>
+    </div>
+    {children}
+  </div>
+);

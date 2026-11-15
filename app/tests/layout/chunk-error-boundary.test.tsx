@@ -1,0 +1,77 @@
+import { afterEach, expect, it, vi } from "bun:test";
+import * as Sentry from "@sentry/nextjs";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+// The App Router's next/dynamic, which wraps a component without a loading state in a
+// Fragment rather than a Suspense boundary; plain "next/dynamic" resolves to the Pages
+// Router loader under Bun.
+import dynamic from "next/dist/shared/lib/app-dynamic";
+import { Suspense } from "react";
+import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
+import { LazyParsedHtml } from "@/layout/LazyParsedHtml";
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+it("keeps the rest of the app when on-demand code fails to download", async () => {
+  vi.spyOn(Sentry, "captureException").mockImplementation(() => "");
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+  let attempts = 0;
+  const Frame = dynamic<{ label: string }>(() => {
+    attempts += 1;
+    return attempts === 1
+      ? Promise.reject(new Error("Failed to load chunk"))
+      : Promise.resolve(({ label }: { label: string }) => <p>{label}</p>);
+  });
+  const view = render(
+    <>
+      <main>game page</main>
+      <ChunkErrorBoundary
+        fallback={(retry) => (
+          <button type="button" onClick={retry}>
+            Try again
+          </button>
+        )}
+      >
+        <Suspense fallback={null}>
+          <Frame label="loaded" />
+        </Suspense>
+      </ChunkErrorBoundary>
+    </>,
+  );
+  await view.findByRole("button", { name: "Try again" });
+  expect(view.getByText("game page")).toBeTruthy();
+  expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+});
+
+it("retries children that can load again", async () => {
+  vi.spyOn(Sentry, "captureException").mockImplementation(() => "");
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+  let shouldFail = true;
+  const Flaky = () => {
+    if (shouldFail) throw new Error("Failed to load chunk");
+    return <p>profile</p>;
+  };
+  const view = render(
+    <ChunkErrorBoundary
+      fallback={(retry) => (
+        <button type="button" onClick={retry}>
+          Try again
+        </button>
+      )}
+    >
+      <Flaky />
+    </ChunkErrorBoundary>,
+  );
+  shouldFail = false;
+  act(() => fireEvent.click(view.getByRole("button", { name: "Try again" })));
+  expect(view.getByText("profile")).toBeTruthy();
+});
+
+it("renders stored HTML once the parser has loaded", async () => {
+  const view = render(<LazyParsedHtml html="An <strong>event</strong> starts." />);
+  await waitFor(() =>
+    expect(view.container.querySelector("strong")?.textContent).toBe("event"),
+  );
+});

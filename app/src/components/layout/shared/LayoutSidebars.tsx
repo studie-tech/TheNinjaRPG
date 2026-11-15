@@ -20,6 +20,7 @@ import {
   type UserStatus,
 } from "@/drizzle/constants";
 import AvatarImage from "@/layout/Avatar";
+import { ChunkErrorBoundary } from "@/layout/ChunkErrorBoundary";
 import { GameSettingsPopover, type GameSettingsUser } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
@@ -146,15 +147,26 @@ export const LayoutLeftSidebar: React.FC<LayoutLeftSidebarProps> = ({
               {userData.username} <Link2 className="inline-block h-5 w-5" />
             </Link>
           </SideBannerTitle>
-          <Suspense
-            fallback={
-              <SidebarLoadingSkeleton
-                className={layoutVariantClasses[variant].leftSidebarReservation}
-              />
-            }
+          <ChunkErrorBoundary
+            fallback={(retry) => (
+              <div className="p-2 text-sm">
+                <p>We couldn&apos;t load your profile.</p>
+                <Button variant="outline" onClick={retry}>
+                  Try again
+                </Button>
+              </div>
+            )}
           >
-            <MenuBoxProfile />
-          </Suspense>
+            <Suspense
+              fallback={
+                <SidebarLoadingSkeleton
+                  className={layoutVariantClasses[variant].leftSidebarReservation}
+                />
+              }
+            >
+              <MenuBoxProfile />
+            </Suspense>
+          </ChunkErrorBoundary>
         </>
       )}
       {showPublicContent && (
