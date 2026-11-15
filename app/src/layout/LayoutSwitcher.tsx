@@ -1,12 +1,10 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import ReactDOM from "react-dom";
-import { GameLayout } from "@/components/layout/GameLayout";
-import { PanelPublicLayout } from "@/components/layout/PanelPublicLayout";
-import PixelPublicLayout from "@/components/layout/PixelPublicLayout";
 import { LayoutParticles } from "@/components/layout/shared/LayoutParticles";
 import { applyGameLayout } from "@/hooks/useGameLayout";
 import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
@@ -21,6 +19,23 @@ import { LayoutContextProvider } from "@/utils/LayoutContext";
 import { usePublicPathname } from "@/utils/routing";
 import { safeLocalStorageGetItem } from "@/utils/storage";
 import { useUserInfo } from "@/utils/UserContext";
+
+/**
+ * A visitor renders one of these frames, so each is its own chunk: the server render
+ * preloads the frame a variant shows, and the others never download. Without a loading
+ * state the frames suspend into the switch below rather than into a fallback.
+ */
+const GameLayout = dynamic(() =>
+  import("@/components/layout/GameLayout").then((module) => module.GameLayout),
+);
+const PanelPublicLayout = dynamic(() =>
+  import("@/components/layout/PanelPublicLayout").then(
+    (module) => module.PanelPublicLayout,
+  ),
+);
+const PixelPublicLayout = dynamic(
+  () => import("@/components/layout/PixelPublicLayout"),
+);
 
 /**
  * The cookie repair below refreshes at most once per document, so a cookie the server
@@ -96,15 +111,20 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
     }
   }, [initialLayout, initialIsSignedIn, router]);
 
-  const isKnownAnonymous = isClerkLoaded ? !isSignedIn : !initialIsSignedIn;
+  // A sign-in, sign-out or layout choice can need a frame that has not downloaded yet.
+  // Deferred, the current frame stays on screen until the next one can render.
+  const isKnownAnonymous = useDeferredValue(
+    isClerkLoaded ? !isSignedIn : !initialIsSignedIn,
+  );
+  const shownLayout = useDeferredValue(displayedLayout);
   useEffect(() => {
-    applyGameLayout(displayedLayout);
+    applyGameLayout(shownLayout);
     // A change of shell variant mid-session remounts everything under <html>, and React
     // strips what the head script set on it; put the font scale back.
     applyFontScaleCookie();
-  }, [displayedLayout]);
+  }, [shownLayout]);
 
-  const definition = getGameLayout(displayedLayout);
+  const definition = getGameLayout(shownLayout);
   const isPixelLanding =
     definition.publicFrame === "landing" && pathname === "/" && isKnownAnonymous;
   const publicFrames = { landing: PixelPublicLayout, page: PanelPublicLayout };
@@ -124,7 +144,7 @@ const LayoutSwitcher: React.FC<LayoutSwitcherProps> = ({
   return (
     <LayoutContextProvider
       isPixelLanding={isPixelLanding}
-      value={displayedLayout}
+      value={shownLayout}
       onLayoutChange={setDisplayedLayout}
       wallpaper={wallpaper}
     >

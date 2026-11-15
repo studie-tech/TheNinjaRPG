@@ -23,7 +23,6 @@ import AvatarImage from "@/layout/Avatar";
 import { GameSettingsPopover, type GameSettingsUser } from "@/layout/GameSettings";
 import Image from "@/layout/Image";
 import Link from "@/layout/Link";
-import MenuBoxProfile from "@/layout/MenuBoxProfile";
 import { SideBannerTitle } from "@/layout/SideBannerTitle";
 import { type GameLayoutId, getGameLayout } from "@/libs/gameLayouts";
 import { getMainNavbarLinks, type NavBarDropdownLink } from "@/libs/menus";
@@ -97,6 +96,19 @@ const PARTICIPATE_LINKS = [
 const MenuBoxCombat = dynamic(() => import("@/layout/MenuBoxCombat"), {
   loading: () => <SidebarLoadingSkeleton />,
 });
+
+const loadMenuBoxProfile = () => import("@/layout/MenuBoxProfile");
+
+// Only a loaded character has a profile box; visitors never download it.
+const MenuBoxProfile = dynamic(loadMenuBoxProfile, {
+  loading: () => <SidebarLoadingSkeleton />,
+});
+
+/**
+ * Start the profile box download with the signed-in frame, so it arrives alongside the
+ * account rather than after it.
+ */
+export const preloadSignedInSidebar = () => void loadMenuBoxProfile();
 
 interface LayoutLeftSidebarProps {
   variant: GameLayoutId;
